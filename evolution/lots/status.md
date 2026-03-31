@@ -5,7 +5,7 @@
 - Lot 01: `DONE` (tests L1-T1..L1-T5 verts)
 - Lot 02: `DONE` (tests L2-T1..L2-T5 verts)
 - Lot 03: `DONE` (tests L3-T1..L3-T4 verts)
-- Lot 04: `READY_TO_START`
+- Lot 04: `DONE` (test L4-T1 vert)
 
 ## Grille de progression
 
@@ -30,8 +30,8 @@
 ### Lot 04 - createElement minimal
 
 - Tests prevus: `L4-T1`
-- Tests verts: `0/1`
-- Demo locale event->animation: `no`
+- Tests verts: `1/1`
+- Demo locale event->animation: `yes` (teste en integration)
 
 ## Regle de passage
 

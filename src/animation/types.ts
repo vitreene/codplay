@@ -5,7 +5,9 @@ export type SimpleAnimatedProperty = 'opacity' | 'x' | 'y' | 'scale' | 'rotate'
 export type AnimationAction = {
   target?: unknown
   targetId?: string
+  className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
+  attr?: Record<string, unknown>
 }
 
 export type AnimationResolvedAction = ResolvedAction<AnimationAction>
