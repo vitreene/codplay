@@ -1,0 +1,28 @@
+{
+  "name": "codplay",
+  "version": "0.0.1",
+  "description": "another player",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitreene/codplay.git"
+  },
+  "license": "ISC",
+  "author": "vitreene",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:lot1": "vitest run tests/lot1"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^8.0.1",
+    "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "animejs": "^4.3.6"
+  }
+}
