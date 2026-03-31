@@ -4,8 +4,8 @@
 
 - Lot 01: `DONE` (tests L1-T1..L1-T5 verts)
 - Lot 02: `DONE` (tests L2-T1..L2-T5 verts)
-- Lot 03: `READY_TO_START`
-- Lot 04: `NOT_STARTED`
+- Lot 03: `DONE` (tests L3-T1..L3-T4 verts)
+- Lot 04: `READY_TO_START`
 
 ## Grille de progression
 
@@ -24,8 +24,8 @@
 ### Lot 03 - Animation bridge
 
 - Tests prevus: `L3-T1..L3-T4`
-- Tests verts: `0/4`
-- Adapter mock valide: `no`
+- Tests verts: `4/4`
+- Adapter mock valide: `yes`
 
 ### Lot 04 - createElement minimal
 
