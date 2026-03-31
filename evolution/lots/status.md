@@ -2,9 +2,9 @@
 
 ## Etat courant
 
-- Lot 01: `DONE` (tests L1-T1..L1-T4 verts)
-- Lot 02: `READY_TO_START`
-- Lot 03: `NOT_STARTED`
+- Lot 01: `DONE` (tests L1-T1..L1-T5 verts)
+- Lot 02: `DONE` (tests L2-T1..L2-T5 verts)
+- Lot 03: `READY_TO_START`
 - Lot 04: `NOT_STARTED`
 
 ## Grille de progression
@@ -18,8 +18,8 @@
 ### Lot 02 - Events pipeline
 
 - Tests prevus: `L2-T1..L2-T5`
-- Tests verts: `0/5`
-- Determinisme 3 runs: `no`
+- Tests verts: `5/5`
+- Determinisme 3 runs: `yes` (verified on repeated sort assertions)
 
 ### Lot 03 - Animation bridge
 

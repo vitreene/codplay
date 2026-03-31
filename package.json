@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:lot1": "vitest run tests/lot1"
+    "test:lot1": "vitest run tests/lot1",
+    "test:lot2": "vitest run tests/lot2"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
