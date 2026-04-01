@@ -7,13 +7,14 @@ Phase 1 implementation target (Lot 03):
 - `run-batch.ts`
 - `types.ts`
 
-Current temporary limitation (Phase 1 / Lot 03):
+Current baseline behavior:
 
-- `derive-simple.ts` only supports `opacity`, `x`, `y`, `scale`, `rotate`.
+- `derive-simple.ts` forwards any valid `style` property without an allowlist.
+- animation targets can be html-like nodes or arbitrary objects.
 
-Roadmap to lift this limitation:
+Roadmap:
 
-- Phase 2 (planned Lot 05): replace the hardcoded subset with a configurable property registry.
+- Phase 2 (Lot 05): property-agnostic transition derivation (done).
 - Phase 3 (planned Lot 06+): support broader style transitions with stronger validation.
 
 Reference:

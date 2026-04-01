@@ -29,9 +29,11 @@ export function runAnimationBatch(
   }
 
   const startedHandles = animationAdapter.run(transitions)
+  const startedTransitionIds = new Set(startedHandles.map((handle) => handle.transitionId))
+  const appliedTransitions = transitions.filter((transition) => startedTransitionIds.has(transition.transitionId))
 
   return {
     appliedCount: startedHandles.length,
-    trace: transitions.map((transition, index) => toTraceEntry(transition, index))
+    trace: appliedTransitions.map((transition, index) => toTraceEntry(transition, index))
   }
 }

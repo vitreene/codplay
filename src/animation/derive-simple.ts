@@ -1,14 +1,5 @@
-import type { AnimationResolvedAction, SimpleAnimatedProperty, TransitionRequest } from './types'
+import type { AnimationResolvedAction, TransitionRequest } from './types'
 
-/**
- * TEMPORARY LIMITATION (Phase 1 / Lot 03):
- * Only a minimal subset of properties is supported while the pipeline is stabilized.
- *
- * This limit must be lifted in the upcoming phases documented in `src/animation/README.md`:
- * - Phase 2 (planned Lot 05): configurable property registry.
- * - Phase 3 (planned Lot 06+): broader style transition support.
- */
-const SIMPLE_PROPERTIES: readonly SimpleAnimatedProperty[] = ['opacity', 'x', 'y', 'scale', 'rotate']
 const DEFAULT_DURATION_MS = 300
 
 type StylePropertyDefinition = {
@@ -29,11 +20,8 @@ function resolveTarget(action: AnimationResolvedAction['action'], listenerId: st
  * Extracts one style property definition from an arbitrary style object.
  */
 function getStylePropertyDefinition(
-  style: Record<string, unknown>,
-  property: SimpleAnimatedProperty
+  rawValue: unknown
 ): StylePropertyDefinition | null {
-  const rawValue = style[property]
-
   if (rawValue === null || rawValue === undefined) {
     return null
   }
@@ -55,8 +43,8 @@ function getStylePropertyDefinition(
 }
 
 /**
- * Derives transition requests from resolved event actions using the temporary
- * minimal property subset defined by `SIMPLE_PROPERTIES`.
+ * Derives transition requests from resolved event actions by forwarding all
+ * valid style properties without a hardcoded property allowlist.
  */
 export function deriveSimpleTransitions(resolvedActions: AnimationResolvedAction[]): TransitionRequest[] {
   const transitions: TransitionRequest[] = []
@@ -69,8 +57,8 @@ export function deriveSimpleTransitions(resolvedActions: AnimationResolvedAction
 
     const target = resolveTarget(resolvedAction.action, resolvedAction.listenerId)
 
-    for (const property of SIMPLE_PROPERTIES) {
-      const definition = getStylePropertyDefinition(style, property)
+    for (const [property, rawValue] of Object.entries(style)) {
+      const definition = getStylePropertyDefinition(rawValue)
       if (definition === null || definition.to === undefined) {
         continue
       }

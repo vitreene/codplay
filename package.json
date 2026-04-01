@@ -11,6 +11,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:flip": "vite --open /flip-example.html",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -18,7 +19,11 @@
     "test:lot1": "vitest run tests/lot1",
     "test:lot2": "vitest run tests/lot2",
     "test:lot3": "vitest run tests/lot3",
-    "test:lot4": "vitest run tests/lot4"
+    "test:lot4": "vitest run tests/lot4",
+    "test:lot5": "vitest run tests/lot5",
+    "test:lot6": "vitest run tests/lot6",
+    "test:lot7": "vitest run tests/lot7",
+    "test:lot8": "vitest run tests/lot8"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

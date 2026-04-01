@@ -10,6 +10,7 @@ Ce dossier centralise la conception V1 et le plan d'implementation.
 - `09-catalogue-events-techniques-v1.md`
 - `10-table-transitions-v1.md`
 - `14-tests-acceptance-v1.md`
+- `17-guide-reconstruction-v1.md`
 
 ## Organisation par theme
 
@@ -42,6 +43,7 @@ Ce dossier centralise la conception V1 et le plan d'implementation.
 ### Validation
 
 - `14-tests-acceptance-v1.md`
+- `17-guide-reconstruction-v1.md`
 - `usage/`
 
 ### Plan implementation

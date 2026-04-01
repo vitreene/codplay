@@ -17,10 +17,22 @@ Lots actifs:
 - `evolution/lots/lot-02-events-pipeline.md`
 - `evolution/lots/lot-03-animation-bridge.md`
 - `evolution/lots/lot-04-create-element-minimal.md`
+- `evolution/lots/lot-05-animation-properties-extensibility.md`
+- `evolution/lots/lot-06-wait-flow-runtime.md`
+- `evolution/lots/lot-07-list-plugin-diff-flip-fallback.md`
+- `evolution/lots/lot-08-flip-engine-etude-spec.md`
 - suivi progression: `evolution/lots/status.md`
 
-Les lots 1 a 4 ne sont que le debut.
+Les lots 1 a 8 ne sont que le debut.
 Les lots suivants seront ajoutes dans `evolution/lots/backlog.md`.
+
+Notes post lots 05-08:
+
+- le pipeline animation est agnostique: aucune allowlist de proprietes
+- les cibles animees peuvent etre des nodes html-like ou des objets third-party
+- le wait flow runtime couvre `parallel` et `suspendSource` avec reprise `fromCursor`/`fromStart`
+- le plugin list couvre `diff + FLIP` avec fallback perf qui coupe les `move` en surcharge
+- le moteur FLIP generique est implemente avec orchestration anti-flicker (`FIRST/LAST/INVERT/rAF/PLAY`)
 
 ## 2) Regles d'avancement
 
@@ -51,8 +63,20 @@ src/
   trace/
     trace-store.ts
 tests/
-  lot1-ticker.spec.ts
-  lot2-events.spec.ts
-  lot3-animation-adapter.spec.ts
-  lot4-minimal-e2e.spec.ts
+  lot1/
+    ticker.spec.ts
+  lot2/
+    events-pipeline.spec.ts
+  lot3/
+    animation-bridge.spec.ts
+  lot4/
+    minimal-e2e.spec.ts
+  lot5/
+    animation-properties-extensibility.spec.ts
+  lot6/
+    wait-flow-runtime.spec.ts
+  lot7/
+    list-plugin.spec.ts
+  lot8/
+    flip-engine.spec.ts
 ```

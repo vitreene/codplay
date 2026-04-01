@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createAnimationAdapter } from '../../src/animation/adapter'
+import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { dispatchEvents } from '../../src/core/events/dispatch'
 import { flattenEventNodes } from '../../src/core/events/flatten'
 import { sortRuntimeEvents } from '../../src/core/events/sort'
@@ -64,15 +64,18 @@ describe('Lot 04 - minimal end-to-end', () => {
       ]
     })
 
-    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }))
+    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
     const animationAdapter = createAnimationAdapter(animeImplementation)
 
     const result = applyResolvedActions(resolvedActions, runtimeElements, animationAdapter)
 
     expect(animeImplementation).toHaveBeenCalledTimes(1)
-    const firstCallArguments = animeImplementation.mock.calls[0]?.[0] as Record<string, unknown>
+    const firstCallArguments = animeImplementation.mock.calls[0]?.[0]
+    if (firstCallArguments === undefined) {
+      throw new Error('Expected anime implementation to be called at least once')
+    }
 
-    expect(firstCallArguments.opacity).toEqual([0, 1])
+    expect(firstCallArguments.opacity).toEqual({ from: 0, to: 1 })
     expect(firstCallArguments.duration).toBe(500)
 
     const node = runtimeElement?.nodeRef as RuntimeNode

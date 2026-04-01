@@ -90,13 +90,19 @@ function applyStylePatch(node: MutableNode, stylePatch: unknown): void {
   }
 
   const patch = stylePatch as Record<string, unknown>
-  const style = (node.style as Record<string, unknown> | undefined) ?? {}
+  if (typeof node.style === 'object' && node.style !== null) {
+    const style = node.style as Record<string, unknown>
+    for (const [key, rawValue] of Object.entries(patch)) {
+      style[key] = resolveFinalStyleValue(rawValue)
+    }
 
-  for (const [key, rawValue] of Object.entries(patch)) {
-    style[key] = resolveFinalStyleValue(rawValue)
+    node.style = style
+    return
   }
 
-  node.style = style
+  for (const [key, rawValue] of Object.entries(patch)) {
+    node[key] = resolveFinalStyleValue(rawValue)
+  }
 }
 
 /**

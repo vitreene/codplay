@@ -1,3 +1,4 @@
+import { createListPlugin } from './list-plugin/create-list-plugin'
 import type { ItemDoc, RuntimeElement, RuntimeNode, RuntimeNodeFactory } from './types'
 
 export type CreateElementOptions = {
@@ -95,9 +96,20 @@ export function createElement(item: ItemDoc, options: CreateElementOptions = {})
 
   applyInitialState(nodeRef, item)
 
+  const plugins = item.type === 'list'
+    ? [
+        createListPlugin({
+          runtimeListId: item.id,
+          nodeRef,
+          autoAnimate: item.list?.autoAnimate,
+          perf: item.list?.perf
+        })
+      ]
+    : undefined
+
   return {
     runtimeItemId: item.id,
     nodeRef,
-    plugins: item.type === 'list' ? [] : undefined
+    plugins
   }
 }

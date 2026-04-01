@@ -5,6 +5,77 @@ import { deriveSimpleTransitions } from '../../src/animation/derive-simple'
 import { runAnimationBatch } from '../../src/animation/run-batch'
 import type { AnimationResolvedAction } from '../../src/animation/types'
 
+type NumericTween = {
+  target: Record<string, unknown>
+  property: string
+  from: number
+  to: number
+}
+
+/**
+ * Creates one controllable anime implementation for interpolation assertions.
+ */
+function createControllableAnime() {
+  const numericTweens: NumericTween[] = []
+  const calls: Array<Record<string, unknown>> = []
+
+  const animeImplementation = vi.fn((parameters: Record<string, unknown>) => {
+    calls.push(parameters)
+
+    const target = parameters.targets
+    if (typeof target === 'object' && target !== null) {
+      const targetObject = target as Record<string, unknown>
+
+      for (const [key, value] of Object.entries(parameters)) {
+        if (key === 'targets' || key === 'duration' || key === 'delay' || key === 'ease') {
+          continue
+        }
+
+        if (typeof value !== 'object' || value === null || !('to' in value)) {
+          continue
+        }
+
+        const tweenValue = value as { from?: unknown; to: unknown }
+        if (typeof tweenValue.to !== 'number') {
+          continue
+        }
+
+        const defaultFrom = targetObject[key]
+        const fromValue = tweenValue.from ?? defaultFrom
+        if (typeof fromValue !== 'number') {
+          continue
+        }
+
+        numericTweens.push({
+          target: targetObject,
+          property: key,
+          from: fromValue,
+          to: tweenValue.to
+        })
+      }
+    }
+
+    return {
+      pause: vi.fn()
+    }
+  })
+
+  /**
+   * Applies one normalized animation progress on captured tweens.
+   */
+  function tick(progress: number): void {
+    for (const tween of numericTweens) {
+      tween.target[tween.property] = tween.from + (tween.to - tween.from) * progress
+    }
+  }
+
+  return {
+    animeImplementation,
+    calls,
+    tick
+  }
+}
+
 /**
  * Creates one resolved action with sensible defaults for animation tests.
  */
@@ -104,5 +175,43 @@ describe('Lot 03 - animation bridge', () => {
       property: 'x',
       status: 'applied'
     })
+  })
+
+  it('L3-T5 interpolation is validated during animation progress', () => {
+    const controllableAnime = createControllableAnime()
+    const adapter = createAnimationAdapter(controllableAnime.animeImplementation)
+
+    const target = { x: 0 }
+    const result = runAnimationBatch(
+      [
+        {
+          transitionId: 'tr-mid-x',
+          eventId: 'evt-mid',
+          eventName: 'intro',
+          listenerId: 'item-mid',
+          property: 'x',
+          target,
+          from: 0,
+          to: 100,
+          duration: 1000,
+          easing: 'linear'
+        }
+      ],
+      adapter
+    )
+
+    const firstPayload = controllableAnime.calls[0]
+    if (firstPayload === undefined) {
+      throw new Error('Expected one anime payload to be captured')
+    }
+
+    expect(firstPayload.x).toEqual({ from: 0, to: 100 })
+
+    controllableAnime.tick(0.5)
+    expect(target.x).toBe(50)
+
+    controllableAnime.tick(1)
+    expect(target.x).toBe(100)
+    expect(result.appliedCount).toBe(1)
   })
 })

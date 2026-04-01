@@ -1,6 +1,6 @@
 import type { ResolvedAction } from '../core/events/types'
 
-export type SimpleAnimatedProperty = 'opacity' | 'x' | 'y' | 'scale' | 'rotate'
+export type AnimatedProperty = string
 
 export type AnimationAction = {
   target?: unknown
@@ -17,12 +17,14 @@ export type TransitionRequest = {
   eventId: string
   eventName: string
   listenerId: string
-  property: SimpleAnimatedProperty
+  property: AnimatedProperty
   target: unknown
   from?: number | string
   to: number | string
   duration: number
   easing?: string
+  delayMs?: number
+  composition?: 'merge' | 'replace'
 }
 
 export type AnimationTraceEntry = {
@@ -30,7 +32,7 @@ export type AnimationTraceEntry = {
   eventId: string
   eventName: string
   transitionId: string
-  property: SimpleAnimatedProperty
+  property: AnimatedProperty
   status: 'applied'
 }
 

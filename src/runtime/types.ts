@@ -18,10 +18,30 @@ export type ActionDoc = {
   targetId?: string
 }
 
+export type ListAutoAnimateConfig = {
+  insert?: boolean
+  remove?: boolean
+  move?: boolean
+  durationMs?: number
+  easing?: string
+  staggerMs?: number
+}
+
+export type ListPerfConfig = {
+  maxMoveAnimations?: number
+}
+
+export type ListConfig = {
+  autoAnimate?: ListAutoAnimateConfig
+  perf?: ListPerfConfig
+}
+
 export type ItemDoc = {
   id: string
   type: ItemType
   initial: ItemState
+  children?: string[]
+  list?: ListConfig
   actions: Record<string, ActionDoc>
 }
 
