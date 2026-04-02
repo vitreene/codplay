@@ -1,14 +1,38 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
 import type { AnimationAdapter, AnimationBatchResult, AnimationResolvedAction } from '../animation/types'
+import { resolveSameTickConflicts, type RuntimeConflictTraceEntry } from './resolve-same-tick-conflicts'
 import type { RuntimeElementMap } from './types'
 
 export type ApplyActionsResult = {
   appliedActionsCount: number
   animation: AnimationBatchResult
+  conflictTrace: RuntimeConflictTraceEntry[]
 }
 
 type MutableNode = Record<string, unknown>
+
+/**
+ * Checks whether one runtime node reference is a browser Element.
+ */
+function isDomElement(nodeRef: unknown): nodeRef is Element {
+  if (typeof globalThis.Element === 'undefined') {
+    return false
+  }
+
+  return nodeRef instanceof globalThis.Element
+}
+
+/**
+ * Checks whether one runtime node reference is a browser Node.
+ */
+function isDomNode(nodeRef: unknown): nodeRef is Node {
+  if (typeof globalThis.Node === 'undefined') {
+    return false
+  }
+
+  return nodeRef instanceof globalThis.Node
+}
 
 /**
  * Resolves the runtime target identifier for one resolved action.
@@ -114,9 +138,77 @@ function applyAttrPatch(node: MutableNode, attrPatch: unknown): void {
   }
 
   const patch = attrPatch as Record<string, unknown>
+
+  if (isDomElement(node)) {
+    for (const [key, rawValue] of Object.entries(patch)) {
+      if (rawValue === undefined || rawValue === null || rawValue === false) {
+        node.removeAttribute(key)
+        continue
+      }
+
+      node.setAttribute(key, String(rawValue))
+    }
+
+    return
+  }
+
   const attributes = (node.attributes as Record<string, unknown> | undefined) ?? {}
   Object.assign(attributes, patch)
   node.attributes = attributes
+}
+
+/**
+ * Resolves the move target id from one action move patch.
+ */
+function resolveMoveTargetId(movePatch: unknown): string | undefined {
+  if (typeof movePatch === 'string') {
+    return movePatch
+  }
+
+  if (typeof movePatch !== 'object' || movePatch === null) {
+    return undefined
+  }
+
+  const targetId = (movePatch as { targetId?: unknown }).targetId
+  if (typeof targetId === 'string') {
+    return targetId
+  }
+
+  return undefined
+}
+
+/**
+ * Applies one move patch by re-parenting the target node when possible.
+ */
+function applyMovePatch(
+  runtimeElements: RuntimeElementMap,
+  targetItemId: string,
+  movePatch: unknown
+): void {
+  const moveTargetId = resolveMoveTargetId(movePatch)
+  if (!moveTargetId) {
+    return
+  }
+
+  const runtimeElement = runtimeElements.get(targetItemId)
+  const targetNode = runtimeElement?.nodeRef
+  if (!targetNode) {
+    return
+  }
+
+  const runtimeParent = runtimeElements.get(moveTargetId)?.nodeRef
+  const domParent =
+    runtimeParent ??
+    (typeof globalThis.document !== 'undefined' ? globalThis.document.getElementById(moveTargetId) : null)
+
+  if (isDomNode(targetNode) && isDomNode(domParent)) {
+    domParent.appendChild(targetNode)
+    return
+  }
+
+  if (typeof targetNode === 'object' && targetNode !== null) {
+    ;(targetNode as Record<string, unknown>).parentId = moveTargetId
+  }
 }
 
 /**
@@ -127,10 +219,11 @@ export function applyResolvedActions(
   runtimeElements: RuntimeElementMap,
   animationAdapter: AnimationAdapter
 ): ApplyActionsResult {
+  const conflictResolution = resolveSameTickConflicts(resolvedActions)
   const animatableActions: AnimationResolvedAction[] = []
   let appliedActionsCount = 0
 
-  for (const resolvedAction of resolvedActions) {
+  for (const resolvedAction of conflictResolution.resolvedActions) {
     const targetItemId = resolveTargetItemId(resolvedAction)
     const runtimeElement = runtimeElements.get(targetItemId)
     if (!runtimeElement || typeof runtimeElement.nodeRef !== 'object' || runtimeElement.nodeRef === null) {
@@ -140,6 +233,7 @@ export function applyResolvedActions(
     const node = runtimeElement.nodeRef as MutableNode
 
     applyClassNamePatch(node, resolvedAction.action.className)
+    applyMovePatch(runtimeElements, targetItemId, resolvedAction.action.move)
     applyStylePatch(node, resolvedAction.action.style)
     applyAttrPatch(node, resolvedAction.action.attr)
 
@@ -159,6 +253,7 @@ export function applyResolvedActions(
 
   return {
     appliedActionsCount,
-    animation
+    animation,
+    conflictTrace: conflictResolution.trace
   }
 }

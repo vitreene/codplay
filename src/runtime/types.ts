@@ -4,6 +4,7 @@ export type ItemState = {
   id?: string
   tag?: string
   className?: string
+  move?: string
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
   content?: string
@@ -14,6 +15,7 @@ export type ActionDoc = {
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
+  move?: string | { mode?: string; targetId?: string }
   payload?: Record<string, unknown>
   targetId?: string
 }

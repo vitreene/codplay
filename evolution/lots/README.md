@@ -19,6 +19,14 @@ Ordre phase 1:
 - `lot-06-wait-flow-runtime.md`
 - `lot-07-list-plugin-diff-flip-fallback.md`
 - `lot-08-flip-engine-etude-spec.md`
+- `lot-09-trace-debug-retention-export.md`
+- `lot-10-conflits-same-tick-runtime.md`
+- `lot-11-media-sync-master-switching.md`
+- `lot-12-convertisseur-legacy-outillage.md`
+- `lot-13-create-player-api-state.md`
+- `lot-14-telco-locale-composant.md`
+- `lot-15-adaptation-script-eddy-manuel.md`
+- `lot-16-player-playback-minimal.md`
 - suivi: `status.md`
 
 Extension:

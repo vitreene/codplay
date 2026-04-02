@@ -6,7 +6,7 @@ Permettre de reconstruire le projet avec des fonctionnalites identiques a l'etat
 
 Perimetre couvert par ce guide:
 
-- lots 01 a 08 implementes et verifies
+- lots 01 a 16 implementes et verifies
 - invariants runtime associes
 - commandes de verification minimales
 
@@ -114,6 +114,89 @@ Une reconstruction est consideree identique si les points suivants sont vrais:
   - sequence anti-flicker: `FIRST/read -> LAST/write -> LAST/read -> INVERT/write -> rAF -> PLAY`
 - demo DOM: `flip-example.html` + `src/examples/flip-engine-dom-example.ts`
 
+### Lot 09 - trace/debug retention + export
+
+- `src/runtime/trace-store.ts`
+  - store in-memory avec retention FIFO
+  - export JSON et NDJSON
+  - filtres (`scope`, `eventName`, `status`, `sourceId`, `correlationId`, bornes temporelles)
+- adaptateurs de trace:
+  - `appendAnimationTraceEntries(...)`
+  - `appendWaitTraceEntries(...)`
+  - `appendListTraceEntries(...)`
+  - `appendMediaTraceEntries(...)`
+
+### Lot 10 - conflits same-tick runtime
+
+- `src/runtime/resolve-same-tick-conflicts.ts`
+  - resolution deterministe des conflits `style`, `attr`, `className` au meme tick
+  - derniere mutation gagne sur la meme cible + meme cle/token
+  - preservation des actions hors-conflit (`move`)
+  - production de traces conflit `applied/rejected`
+- `src/runtime/apply-actions.ts`
+  - applique la resolution de conflits avant patch runtime
+  - expose `conflictTrace` dans `ApplyActionsResult`
+
+### Lot 11 - media sync avancee + master switching
+
+- `src/runtime/media-sync.ts`
+  - selection d'un media master unique selon tracks actifs
+  - switch de master sans double playback (`pause` ancien puis `play` nouveau)
+  - correction de derive master avec seuil (`media:sync:corrected`)
+  - priorite du state player global sur playback media
+- `src/runtime/trace-store.ts`
+  - mapping traces media via `appendMediaTraceEntries(...)`
+
+### Lot 12 - convertisseur legacy outillage
+
+- `src/legacy-converter/convert-legacy-to-v1.ts`
+  - conversion deterministe `persos + eventtimes` -> scene V1
+  - dedupe `(ms,name)` + warnings de conversion
+  - parent synthese manquant (`list`)
+  - story/track/scenario minimaux en sortie
+
+### Lot 13 - createPlayer API + state runtime
+
+- `src/player/types.ts`
+  - API player publique (`init/play/pause/seek/rewind/rebuild/...`)
+  - format d'entree `SceneDoc`
+- `src/player/create-player.ts`
+  - cycle de vie player (`idle/ready/playing/...`)
+  - commandes asynchrones et rejections explicites
+  - subscriptions `onTrace` et `onStateChange`
+
+### Lot 14 - telco locale composant
+
+- `src/telco-local/types.ts`
+  - contrat commande/resultat local telco
+- `src/telco-local/create-local-telco.ts`
+  - dispatch commandes vers `createPlayer`
+  - requestId deterministic + stream resultats
+- `src/telco-local/create-local-telco-panel.ts`
+  - composant DOM de pilotage local (meme page)
+- `src/main.ts`
+  - demo locale player + telco
+
+### Lot 15 - adaptation script animation Eddy (manuel)
+
+- `src/integration/eddy-legacy-adapter.ts`
+  - adaptation `persos[]/eventtimes` vers convertisseur legacy
+  - mode preview pour `eventtimes` vide
+- `src/integration/fixtures/eddy-snapshot-manual.ts`
+  - fixture manuelle Eddy pour run local
+- `src/integration/render-initial-scene.ts`
+  - rendu initial de la scene convertie dans la page
+- `src/main.ts`
+  - integration run manuel fixture Eddy + style scope demande
+
+### Lot 16 - player playback timeline minimal
+
+- `src/player/create-player.ts`
+  - planification playback des events timeline scene
+  - execution pipeline `dispatch -> applyResolvedActions`
+  - gestion `pause` (annulation events futurs)
+  - reprise depuis curseur courant au `play`
+
 ## Matrice tests (DoD executable)
 
 - `tests/lot1/ticker.spec.ts` -> `L1-T1..L1-T5`
@@ -124,6 +207,14 @@ Une reconstruction est consideree identique si les points suivants sont vrais:
 - `tests/lot6/wait-flow-runtime.spec.ts` -> `L6-T1..L6-T6`
 - `tests/lot7/list-plugin.spec.ts` -> `L7-T1..L7-T5`
 - `tests/lot8/flip-engine.spec.ts` -> `L8-T1..L8-T10`
+- `tests/lot9/trace-store.spec.ts` -> `L9-T1..L9-T5`
+- `tests/lot10/same-tick-conflicts.spec.ts` -> `L10-T1..L10-T6`
+- `tests/lot11/media-sync.spec.ts` -> `L11-T1..L11-T6`
+- `tests/lot12/legacy-converter.spec.ts` -> `L12-T1..L12-T6`
+- `tests/lot13/create-player.spec.ts` -> `L13-T1..L13-T4`
+- `tests/lot14/telco-local.spec.ts` -> `L14-T1..L14-T4`
+- `tests/lot15/eddy-legacy-adapter.spec.ts` -> `L15-T1..L15-T4`
+- `tests/lot16/player-timeline-playback.spec.ts` -> `L16-T1..L16-T2`
 
 ## Verification reconstruction
 
@@ -137,6 +228,14 @@ Commandes minimales:
 - `npm run test:lot6`
 - `npm run test:lot7`
 - `npm run test:lot8`
+- `npm run test:lot9`
+- `npm run test:lot10`
+- `npm run test:lot11`
+- `npm run test:lot12`
+- `npm run test:lot13`
+- `npm run test:lot14`
+- `npm run test:lot15`
+- `npm run test:lot16`
 - `npm test`
 - `npm run build`
 

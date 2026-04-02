@@ -8,6 +8,7 @@ export type AnimationAction = {
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
+  move?: string | { mode?: string; targetId?: string }
 }
 
 export type AnimationResolvedAction = ResolvedAction<AnimationAction>

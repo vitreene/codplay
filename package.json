@@ -23,7 +23,15 @@
     "test:lot5": "vitest run tests/lot5",
     "test:lot6": "vitest run tests/lot6",
     "test:lot7": "vitest run tests/lot7",
-    "test:lot8": "vitest run tests/lot8"
+    "test:lot8": "vitest run tests/lot8",
+    "test:lot9": "vitest run tests/lot9",
+    "test:lot10": "vitest run tests/lot10",
+    "test:lot11": "vitest run tests/lot11",
+    "test:lot12": "vitest run tests/lot12",
+    "test:lot13": "vitest run tests/lot13",
+    "test:lot14": "vitest run tests/lot14",
+    "test:lot15": "vitest run tests/lot15",
+    "test:lot16": "vitest run tests/lot16"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

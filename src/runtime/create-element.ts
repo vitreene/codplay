@@ -6,6 +6,17 @@ export type CreateElementOptions = {
 }
 
 /**
+ * Checks whether a runtime node reference is a browser Element.
+ */
+function isDomElement(nodeRef: unknown): nodeRef is Element {
+  if (typeof globalThis.Element === 'undefined') {
+    return false
+  }
+
+  return nodeRef instanceof globalThis.Element
+}
+
+/**
  * Creates a default runtime node object when no browser DOM is available.
  */
 function createDefaultRuntimeNode(tagName: string): RuntimeNode {
@@ -78,6 +89,19 @@ function applyInitialState(nodeRef: unknown, item: ItemDoc): void {
     }
 
     if (state.attr !== undefined) {
+      if (isDomElement(nodeRef)) {
+        for (const [key, rawValue] of Object.entries(state.attr)) {
+          if (rawValue === undefined || rawValue === null || rawValue === false) {
+            nodeRef.removeAttribute(key)
+            continue
+          }
+
+          nodeRef.setAttribute(key, String(rawValue))
+        }
+
+        return
+      }
+
       const attributes = (mutableNode.attributes as Record<string, unknown> | undefined) ?? {}
       Object.assign(attributes, state.attr)
       mutableNode.attributes = attributes
