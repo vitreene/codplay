@@ -56,6 +56,7 @@ Ce dossier centralise la conception V1 et le plan d'implementation.
 - `lots/`: plan detaille par lot (phase 1 + backlog)
 - `usage/`: scenarios narratifs/metier
 - `scenario/`: proposition d'orchestration initiale
+- `formalisation-modele/`: cadrage du modele Scene/Story/Strap/Eventimes
 
 ## Positionnement
 
