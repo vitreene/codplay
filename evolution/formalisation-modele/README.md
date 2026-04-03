@@ -28,3 +28,6 @@ Les fichiers ci-dessous sont conserves comme historique de formalisation et refe
 - `06-runtime-contract.md`
 - `07-perso-compilation-boundary.md`
 - `08-perso-contract-v1.md`
+- `09-perso-custom-actions-v1.md`
+- `10-api-host-v1.md`
+- `11-runtime-context-mapping-v1.md`

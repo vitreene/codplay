@@ -334,6 +334,10 @@ Exemple directeur:
 
 ## 8.b) Modules perso custom (plugin API)
 
+Reference detaillee V1:
+
+- `09-perso-custom-actions-v1.md`
+
 Objectif:
 
 - permettre des types de persos custom sans modifier le coeur du player
@@ -354,12 +358,21 @@ Cycle d'integration module:
 2. resolution registry
 
 - chaque type custom doit correspondre a un module present dans le registry player
-- si un module manque: erreur de preload bloquante
+- si un module manque: le perso est ignore + warning runtime
 
 3. preload
 
 - le module peut charger ses ressources/SDK avant `start`
 - cette phase est asynchrone
+
+Resolution registry (decision V1):
+
+- table hote fournie au demarrage: complete la table interne
+- override autorise par meme nom de type
+- un seul module final par type
+- registry fige pendant la scene
+- modules integres: toujours montes
+- en mode debug: exposer types detectes, module choisi par type, persos ignores
 
 4. instanciation
 
@@ -421,12 +434,16 @@ Passage action -> module (V1):
 - un event story declenche une action item
 - si `cmd` existe, le player appelle `module.update({ command: cmd })`
 - le module peut publier un event via le callback `emit()` injecte
+- si la commande module est refusee, la partie visuelle standard continue
 
 Passage action -> noeud cible (V1):
 
 - si `targetId` vise le perso racine: application player sur le noeud racine
+- `targetId=root` peut etre resolu directement par le player
 - si `targetId` vise une cible exposee par module: application player sur cette cible interne
-- si la cible n'existe pas: action ignoree + diagnostic runtime
+- si la cible n'existe pas: patch standard ignore + warning runtime
+- en mode `root-only`, un `targetId` different de `root` est ignore + warning runtime
+- la resolution de cible est refaite a chaque action
 
 Cas avatar (exemple):
 
@@ -444,7 +461,9 @@ Cas div+svg (micro-animations):
 Events techniques vers module:
 
 - par defaut le module recoit ses actions
-- certains events techniques cibles (`viewport:*`) peuvent etre routes vers `update()` selon config
+- certains events techniques cibles (`viewport:*`) peuvent etre routes vers le module
+- ces events ne remplacent pas les actions de scene
+- ils ne changent pas l'ordre `cmd -> cible -> patch standard`
 
 Portee scenario/story:
 
@@ -495,23 +514,27 @@ L'adaptateur de compatibilite est hors coeur.
 - temporalite exprimee via domaines + scheduler
 - separation builder vs player
 - separation scene portable vs implementation plateforme
+- contrat API host minimale V1 formalise
+- mapping RuntimeContext -> scene.params.runtime formalise
 - consolidation documentaire autour de ce plan
 
 ## 12) Points a figer ensuite
 
-1. extensions du catalogue de mapping `RuntimeContext` -> params/events scene
-2. format des diagnostics compilation/execution
-3. details de contrat de l'API host (codes d'erreur, idempotence, lifecycle)
-4. contrat scene I/O pour orchestration parent (entrees/sorties/parametres)
-5. contrat registry des modules perso custom (resolution, preload, erreurs)
-6. format des exports builder (player package, legacy artifact)
+1. format des diagnostics compilation/execution
+2. contrat scene I/O pour orchestration parent (entrees/sorties/parametres)
+3. extension du contrat modules perso custom (au-dela du V1 deja fixe)
+4. format des exports builder (player package, legacy artifact)
 
 Priorite de cadrage immediate:
 
-- points 1, 3, 4, 5
-- point 6 reporte hors scope court terme
+- points 1, 2, 3
+- point 4 reporte hors scope court terme
 
 Mini-spec `RuntimeContext` V1:
+
+Reference detaillee V1:
+
+- `11-runtime-context-mapping-v1.md`
 
 - `replayMode`: `refaire | revoir`
 - `locale` (optionnel)
@@ -631,61 +654,35 @@ Non-objectifs `CompiledScene`:
 
 ## 14) API host minimale V1
 
+Reference detaillee V1:
+
+- `10-api-host-v1.md`
+
 Objectif:
 
 - fournir une surface de pilotage simple pour charger, lancer et observer une scene
 - garder la meme API entre mode player et mode debug
 
-Commandes minimales:
-
-1. `load(compiledScene, mountTarget, runtimeContext?)`
-
-- charge une scene compilee
-- prepare les params initiaux derives du `RuntimeContext`
-- `mountTarget` (fourni par host/player) designe la cible d'insertion du player
-- ce parametre reste hors `SceneDoc`
-- verifie les modules requis par les types custom et lance leur preload
-
-2. `start()`
-
-- demarre la scene courante
-- applique les params initiaux avant le premier tick
-
-3. `stop(reason?)`
-
-- arrete la scene
-- emet les traces de fin selon policy
-
-4. `emit(event)`
-
-- pousse un event externe sur le bus global scene
-
-5. `setSceneParams(params)`
-
-- equivalent fonctionnel de `scene:param:set`
-
-6. `patchSceneParams(patch)`
-
-- equivalent fonctionnel de `scene:param:patch`
-
-7. `getState()`
-
-- retourne un etat observable minimal (stories actives, node scenario, contexte scene)
-
-8. `subscribeTrace(listener)`
-
-- expose le flux de trace runtime
-
-9. `destroy()`
-
-- libere la scene chargee et les ressources runtime associees
-
 Regles V1:
 
+- commandes de base:
+  - `load(compiledScene, mountTarget, runtimeContext?)`
+  - `start()`
+  - `stop(reason?)`
+  - `emit(event)`
+  - `setSceneParams(params)`
+  - `patchSceneParams(patch)`
+  - `dispatchTechnicalEvent(event)`
+  - `getState()`
+  - `subscribeTrace(listener)`
+  - `subscribeWarning(listener)`
+  - `destroy()`
 - `start()` sans `load()` est invalide
 - `RuntimeContext` peut etre fourni a `load()` puis ajuste via params/events
 - `emit()` est deterministicement ordonne avec les autres sources runtime
-- le `ModuleRegistry` est fourni par l'integration player et valide au `load()`
+- `ModuleRegistry` est resolu au `load()`
+- type de perso inconnu: perso ignore + warning
+- `destroy()` idempotent
 
 ## 15) Exports builder - baseline V1
 
