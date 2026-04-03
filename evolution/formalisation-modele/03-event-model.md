@@ -43,6 +43,12 @@ Ce modele sert de contrat entre builder, player et scenario.
 - produits par le player, le media engine, la plateforme
 - ex: `player:play`, `media:ended`, `runtime:error`
 
+Vocabulaire viewport technique V1 (fige):
+
+- `viewport:resize`
+- `viewport:orientation`
+- `viewport:safe-area`
+
 5. Events d'orchestration externe
 
 - utilises entre une scene et son orchestrateur parent
@@ -58,7 +64,6 @@ Chaque event transporte la meme forme logique.
 
 `meta` doit couvrir au minimum:
 
-- `source`: `user | story | strap | eventime | player | system`
 - `source`: `user | story | strap | eventime | player | scene | system`
 - `sessionMs`: horloge session au moment de l'emission
 - `traceId` ou `correlationId` (si disponible)
@@ -118,8 +123,8 @@ Ce contrat doit rester identique entre mode player et mode debug.
 1. `listen` (story)
 
 - transforme uniquement le nom (`event` vers `as`)
-- ne filtre pas par payload
-- ne modifie pas le payload
+- ne filtre pas par `data`
+- ne modifie pas `data`
 
 2. Effets strap
 

@@ -67,6 +67,7 @@ Le builder core ne doit pas:
 ## Responsabilites du player runtime
 
 - charger `CompiledScene`
+- resoudre les modules de types custom via un registry runtime
 - maintenir l'etat runtime (stories, medias, scenario, tracks)
 - collecter/ordonner les events
 - transformer les cues eventimes franchis en events discrets
@@ -114,6 +115,7 @@ Entree player:
 - `CompiledScene`
 - `PlayerConfig` (mode debug/player, policies runtime)
 - `RuntimeContext` fourni par le player/environnement (post-compilation)
+- `ModuleRegistry` (types custom -> modules d'implementation)
 - events/parametres entrants depuis l'orchestrateur parent
 
 `RuntimeContext` (principes):
@@ -129,6 +131,34 @@ Entree player:
 - `sessionKind`: `live | replay` (optionnel)
 - `inputProfile`: `web | mobile | kiosk` (optionnel)
 - `seed` (optionnel)
+
+`ModuleRegistry` (principes):
+
+- hors `SceneDoc`
+- fourni par integration player
+- associe un `item.type` custom a un module executable
+
+Contrat module runtime V1:
+
+- une classe module est instanciee par perso runtime
+- cycle minimal: `init(initInput)` -> `start()` -> `update(updateInput)` -> `render(renderInput)` -> `destroy()`
+- `emit(event)` est injecte par le player pour publier sur le bus global
+- les commandes d'action arrivent via `action.cmd`
+- `action.cmd` porte ses champs metier directement (sans enveloppe `payload` dediee)
+- les events techniques cibles (`viewport:*`) peuvent etre routes vers `update()`
+- `render(renderInput)` retourne le noeud racine du module
+
+Routage player/module des actions standards:
+
+- mode `root-only`: player applique sur le noeud racine du module
+- mode `exposed-targets`: module expose des cibles internes adressables
+- le player applique `move/style/attr/class` sur la cible resolue
+- cible introuvable: action ignoree + diagnostic runtime
+
+Separation des responsabilites d'action:
+
+- player: applique les actions standard sur le noeud racine ou les cibles exposees (position, taille, style, classes)
+- module: orchestre ses sous-noeuds et son rendu interne (ex: canvas three.js, div+svg)
 
 Projection runtime vers la scene:
 
@@ -161,7 +191,7 @@ Sortie player:
 
 Commandes:
 
-- `load(compiledScene, runtimeContext?)`
+- `load(compiledScene, mountTarget, runtimeContext?)`
 - `start()`
 - `stop(reason?)`
 - `emit(event)`
@@ -176,6 +206,9 @@ Regles:
 - `start()` exige une scene chargee
 - `RuntimeContext` est consomme a `load()` puis complete via params/events
 - les commandes host entrent dans le meme pipeline deterministe que les autres events
+- `mountTarget` est fourni par le host et reste hors `SceneDoc`
+- le stage runtime est instancie par scene chargee (scope scene)
+- `load()` verifie les modules requis et execute leur preload avant `start()`
 
 ## Forme logique de `CompiledScene`
 
@@ -183,6 +216,7 @@ Regles:
 
 - manifeste minimal (`schemaVersion`, `sceneId`, `compiledAt`)
 - contrat scene I/O compile (`inputs`, `outputs`, params schema si present)
+- exigences modules (`requiredCustomTypes`, mapping type -> module attendu)
 - index d'entites par ID runtime
 - tables de liens de composition
 - tables de routage signal (source -> cibles)
@@ -191,6 +225,7 @@ Regles:
 - descripteurs de persos (etat initial + actions)
 - plan d'instances story -> persos instancies (sans reference partagee)
 - plan d'instances straps avec mode explicite (global partage ou local copie)
+- descripteur de stage runtime (cadre racine interne)
 
 Policy V1 straps globaux:
 
@@ -227,6 +262,13 @@ Objectif:
 - events host/user
 - signaux techniques player/media
 - emissions internes story/strap
+- signaux DOM globaux normalises par le player (`resize`, `orientation`, etc.)
+
+Vocabulaire viewport technique V1:
+
+- `viewport:resize`
+- `viewport:orientation`
+- `viewport:safe-area`
 
 2. Production temporelle
 

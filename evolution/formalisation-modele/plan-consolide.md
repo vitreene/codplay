@@ -96,6 +96,25 @@ Contexte utilisateur (hors SceneDoc):
 - il est fourni au runtime par le player ou l'environnement hote, apres compilation
 - le player peut le projeter en params/events scene selon les besoins (ex: mode replay, score initial)
 
+Conteneurs (distinction V1):
+
+- conteneur host: element DOM fourni au player comme cible de montage
+- conteneur scene: cadre racine interne ("stage") qui contient toute la scene active
+
+Regles:
+
+- le conteneur host est hors `SceneDoc` (decision d'integration)
+- le stage est une structure runtime liee a la scene chargee
+- pas de `container-id` dans le modele scene auteur
+- le stage est scope scene (pas scope chapter/app en V1)
+- un niveau superieur (chapter/app) peut encapsuler un ou plusieurs stages sans porter leur logique interne
+
+Note de conception:
+
+- le stage partage des similarites structurelles avec une story (hierarchie, contenu, style)
+- en V1 il reste distinct conceptuellement d'une story narrative
+- son cycle de vie depend du player/scene runtime, pas des transitions story
+
 Invariants de base:
 
 - IDs stables et uniques
@@ -182,6 +201,13 @@ Regles:
 - matching exact des noms d'events
 - ordonnancement deterministe
 - tracabilite de la source et du contexte
+- les signaux DOM globaux (`resize`, `orientation`) sont captes par le player, puis emis comme events techniques
+
+Vocabulaire viewport technique V1 (fige):
+
+- `viewport:resize`
+- `viewport:orientation`
+- `viewport:safe-area`
 
 ## 5) Eventime model
 
@@ -306,6 +332,126 @@ Exemple directeur:
 - intention scene: deplacement anime
 - adaptation plateforme: FLIP si disponible, sinon transform, sinon fallback degrade trace
 
+## 8.b) Modules perso custom (plugin API)
+
+Objectif:
+
+- permettre des types de persos custom sans modifier le coeur du player
+- garder un noyau standard (text/img/list) + extensions chargees par module
+
+Principe general:
+
+- un item de story declare son `type`
+- si le type est standard, le player utilise `create-element` standard
+- si le type est custom (ex: `avatar`), le player delegue a un module enregistre
+
+Cycle d'integration module:
+
+1. detection
+
+- au `load`, le player identifie les types custom utilises par la scene
+
+2. resolution registry
+
+- chaque type custom doit correspondre a un module present dans le registry player
+- si un module manque: erreur de preload bloquante
+
+3. preload
+
+- le module peut charger ses ressources/SDK avant `start`
+- cette phase est asynchrone
+
+4. instanciation
+
+- a la creation runtime des persos, le module produit un noeud racine via `render()`
+- le module peut exposer une logique d'interaction propre
+
+5. actions
+
+- les actions de story restent declenchees par events
+- l'interpretation des commandes custom est faite par le module cible
+
+6. teardown
+
+- au `stop/destroy`, le module libere ses ressources runtime
+
+Contrat minimal d'un module (V1):
+
+- `moduleId`
+- `itemType` supporte (ex: `avatar`)
+- `preload(context)` optionnel (async)
+- `init(initInput)` optionnel
+- `start()` optionnel
+- `update(updateInput)` obligatoire
+- `render(renderInput)` obligatoire (retourne le noeud racine du module)
+- `destroy(context)` optionnel
+- `emit(event)` injecte par le player
+
+Niveaux d'action (V1):
+
+- niveau player: actions standard sur le noeud racine (move/style/attr/size)
+- niveau module: orchestration interne (canvas, svg, sous-noeuds) via `update()`
+- un perso custom peut piloter plusieurs updates internes sans bijection 1:1 perso->node interne
+
+Modes de routage d'action (V1):
+
+- `root-only`: le player agit sur le noeud racine uniquement (cas avatar/canvas)
+- `exposed-targets`: le module expose des cibles internes adressables (ex: `root`, `svg`, `glyph-12`)
+- dans `exposed-targets`, le player peut appliquer ses actions standard sur chaque cible exposee
+
+Decision V1 (forme module):
+
+- une instance de classe par perso runtime (etat local isole)
+- le registry associe `item.type` -> classe module
+
+Format de donnees recommande pour les stories:
+
+- `item.type` selectionne le module (`avatar`, etc.)
+- configuration initiale module dans `item.module` (objet libre)
+- actions module via `actions[eventName].cmd`
+- le schema exact est defini par le module, pas par le coeur scene
+
+Contrainte V1 de verbosite:
+
+- `cmd` porte directement ses champs metier (pas de conteneur `payload`/`args` systematique)
+- exemple: `{ name: "set-mood", mood: "happy" }`
+
+Passage action -> module (V1):
+
+- un event story declenche une action item
+- si `cmd` existe, le player appelle `module.update({ command: cmd })`
+- le module peut publier un event via le callback `emit()` injecte
+
+Passage action -> noeud cible (V1):
+
+- si `targetId` vise le perso racine: application player sur le noeud racine
+- si `targetId` vise une cible exposee par module: application player sur cette cible interne
+- si la cible n'existe pas: action ignoree + diagnostic runtime
+
+Cas avatar (exemple):
+
+- `render()` retourne un `canvas` (noeud racine)
+- le player peut deplacer/redimensionner ce canvas
+- le rendu 3D interne du canvas est gere par le module (pas par le player)
+
+Cas div+svg (micro-animations):
+
+- `render()` retourne une `div` racine contenant un `svg`
+- le module expose `div` et `svg` (et eventuellement des sous-noeuds) comme cibles adressables
+- le player peut piloter les transitions standard sur ces cibles
+- le module orchestre les enchainements internes et leurs contraintes
+
+Events techniques vers module:
+
+- par defaut le module recoit ses actions
+- certains events techniques cibles (`viewport:*`) peuvent etre routes vers `update()` selon config
+
+Portee scenario/story:
+
+- les stories utilisent les types custom comme n'importe quel type de perso
+- le scenario ne connait pas l'implementation du module
+- le module est une capacite player, pas un concept narratif
+
 ## 9) Runtime contract
 
 Entree runtime:
@@ -357,12 +503,13 @@ L'adaptateur de compatibilite est hors coeur.
 2. format des diagnostics compilation/execution
 3. details de contrat de l'API host (codes d'erreur, idempotence, lifecycle)
 4. contrat scene I/O pour orchestration parent (entrees/sorties/parametres)
-5. format des exports builder (player package, legacy artifact)
+5. contrat registry des modules perso custom (resolution, preload, erreurs)
+6. format des exports builder (player package, legacy artifact)
 
 Priorite de cadrage immediate:
 
-- points 1, 3, 4
-- point 5 reporte hors scope court terme
+- points 1, 3, 4, 5
+- point 6 reporte hors scope court terme
 
 Mini-spec `RuntimeContext` V1:
 
@@ -431,6 +578,11 @@ Blocs minimaux attendus:
 - medias
 - eventimeGroups
 
+3.b exigences modules
+
+- liste des `item.type` custom detectes
+- mapping type custom -> module attendu
+
 4. plans de routage
 
 - composition (`contentLinks` resolves)
@@ -453,6 +605,11 @@ Blocs minimaux attendus:
 
 - politique multi-stories additives
 - parametres scene initiaux (si definis)
+
+8. descripteur de stage runtime
+
+- definition du cadre racine interne de scene
+- distinct des stories narratives
 
 Note:
 
@@ -481,10 +638,13 @@ Objectif:
 
 Commandes minimales:
 
-1. `load(compiledScene, runtimeContext?)`
+1. `load(compiledScene, mountTarget, runtimeContext?)`
 
 - charge une scene compilee
 - prepare les params initiaux derives du `RuntimeContext`
+- `mountTarget` (fourni par host/player) designe la cible d'insertion du player
+- ce parametre reste hors `SceneDoc`
+- verifie les modules requis par les types custom et lance leur preload
 
 2. `start()`
 
@@ -525,6 +685,7 @@ Regles V1:
 - `start()` sans `load()` est invalide
 - `RuntimeContext` peut etre fourni a `load()` puis ajuste via params/events
 - `emit()` est deterministicement ordonne avec les autres sources runtime
+- le `ModuleRegistry` est fourni par l'integration player et valide au `load()`
 
 ## 15) Exports builder - baseline V1
 

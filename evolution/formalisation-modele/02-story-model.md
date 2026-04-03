@@ -67,6 +67,11 @@ Regles de contenu:
 - les persos references par une story lui sont exclusifs
 - un meme perso ne peut pas etre monte dans deux stories en parallele
 - les straps peuvent etre locaux (copie par story) ou globaux (instance partagee)
+- un perso peut etre de type standard ou custom (`item.type`)
+- pour un type custom, le module player definit le schema de `item.module` et de `actions[*].cmd`
+- les events emis par le module repassent sur le bus global via `emit(event)` injecte par le player
+- les actions standard du perso s'appliquent au noeud racine; les mises a jour internes restent dans le module
+- pour un module `exposed-targets`, `targetId` peut viser une cible interne exposee par le module
 
 - orchestration locale
   - actions de story (optionnel)

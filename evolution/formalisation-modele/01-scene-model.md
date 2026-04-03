@@ -34,6 +34,14 @@ Contexte utilisateur:
 - fourni par le player/environnement apres compilation
 - applique au runtime via les entrees scene (`scene:param:*`, etc.)
 
+Conteneurs:
+
+- le conteneur DOM de montage est fourni par le host/player
+- le cadre racine de scene (stage) est une structure runtime interne
+- `SceneDoc` ne porte pas de `container-id`
+- le stage est lie a une scene chargee (scope scene)
+- un niveau superieur (chapter/app) peut encapsuler ce stage sans redefinir sa logique interne
+
 Vocabulaire scene I/O V1 (fige pour le cadrage):
 
 - entrees: `scene:start`, `scene:stop`, `scene:param:set`, `scene:param:patch`
@@ -90,6 +98,12 @@ Decision V1:
   - `medias`
   - `eventimeGroups`
 
+Note types de persos:
+
+- un perso peut utiliser un type standard (text/img/list) ou un type custom
+- le type custom est resolu par module cote player (hors `SceneDoc`)
+- la configuration module d'un item est portee par `item.module` (hors `initial`)
+
 - graphes
   - `contentLinks`: liens de composition
   - `signalLinks`: liens d'emission/consommation d'events
@@ -122,31 +136,36 @@ Decision V1:
 - un lien de type `time` ne transporte pas de regle narrative
 - un lien de type `signal` ne cree pas de relation de composition
 
-4. Determinisme declaratif
+4. Coherence des types custom
+
+- chaque `item.type` custom doit correspondre a un module resolvable au runtime
+- l'absence de module requis bloque le preload de scene
+
+5. Determinisme declaratif
 
 - ordre de declaration preserve pour les cas d'egalite de priorite
 - aucune ambiguite de cible au chargement
 - aucune execution implicite cachee dans la structure
 
-5. Coherence multi-stories
+6. Coherence multi-stories
 
 - les regles de scene doivent rester valides quand plusieurs stories sont actives simultanement
 - les collisions d'effets doivent etre resolues par policies explicites (pas implicites)
 - une transition qui ne mentionne pas d'arret ne doit pas retirer une story active
 - un perso ne doit jamais avoir deux stories proprietaires en meme temps
 
-6. Integrite d'instanciation
+7. Integrite d'instanciation
 
 - chaque instance de story possede ses propres IDs runtime de persos
 - aucune reference partagee de perso entre instances actives
 - les IDs runtime doivent etre derives de facon deterministe (pas d'IDs opaques aleatoires par defaut)
 
-7. Separation controle/runtime
+8. Separation controle/runtime
 
 - events metier et events techniques ne se melangent pas sans convention explicite
 - prefixes reserves runtime proteges (`player:*`, `runtime:*`, `system:*`, etc.)
 
-8. Integrite scene I/O
+9. Integrite scene I/O
 
 - les events declares en `inputs`/`outputs` doivent respecter les conventions de nommage
 - les parametres d'entree doivent etre validables

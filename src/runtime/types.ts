@@ -11,12 +11,21 @@ export type ItemState = {
   src?: string
 }
 
+export type ModuleCommandDoc = {
+  name: string
+} & Record<string, unknown>
+
+export type ActionPayloadDoc = Record<string, unknown>
+
+export type ItemModuleConfig = Record<string, unknown>
+
 export type ActionDoc = {
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
   move?: string | { mode?: string; targetId?: string }
-  payload?: Record<string, unknown>
+  cmd?: ModuleCommandDoc
+  payload?: ActionPayloadDoc
   targetId?: string
 }
 
@@ -41,6 +50,7 @@ export type ListConfig = {
 export type ItemDoc = {
   id: string
   type: ItemType
+  module?: ItemModuleConfig
   initial: ItemState
   children?: string[]
   list?: ListConfig

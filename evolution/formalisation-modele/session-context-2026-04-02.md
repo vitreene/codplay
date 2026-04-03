@@ -84,7 +84,7 @@ Ce document capture l'etat de la reflexion pour pouvoir reprendre rapidement.
 
 10. API host minimale V1
 
-- `load(compiledScene, runtimeContext?)`
+- `load(compiledScene, mountTarget, runtimeContext?)`
 - `start()`
 - `stop(reason?)`
 - `emit(event)`
@@ -97,6 +97,41 @@ Ce document capture l'etat de la reflexion pour pouvoir reprendre rapidement.
 ## Point clarifie explicitement
 
 - `load()` est une action du host/player, pas d'une scene vers une autre scene
+
+## Point ajoute ensuite
+
+- distinction de 2 conteneurs:
+  - `mountTarget` host (DOM, integration)
+  - `stage` scene runtime (racine interne de la scene)
+- pas de `container-id` dans `SceneDoc`
+- stage scope scene en V1 (un chapter/app peut encapsuler sans reprendre la logique interne)
+- les events DOM globaux (`resize`, `orientation`) sont captes par le player puis normalises en events techniques
+
+Vocabulaire viewport V1 fige:
+
+- `viewport:resize`
+- `viewport:orientation`
+- `viewport:safe-area`
+
+Modules perso custom (plugin API):
+
+- noyau standard dans `create-element` (text/img/list)
+- types custom resolus via `ModuleRegistry` cote player
+- cycle: detection types -> resolution module -> preload async -> createElement -> applyAction -> destroy
+- le scenario/story utilise `item.type`; l'implementation reste cote module
+
+Decisions module V1:
+
+- forme: classe instanciee par perso runtime
+- lifecycle cible: `init` / `start` / `update` / `render` / `destroy`
+- passage action -> module: `actions[*].cmd`
+- `cmd` porte directement ses champs metier (pas de conteneur `payload/args` systematique)
+- emission module -> scene: callback `emit(event)` injecte par le player
+- module peut recevoir des events techniques cibles (`viewport:*`) en plus de ses actions
+- `render(renderInput)` retourne le noeud racine du module
+- le player agit sur le noeud racine (move/size/style); le module gere son rendu interne et ses sous-noeuds
+- modes de routage actions: `root-only` et `exposed-targets`
+- en mode `exposed-targets`, le module expose des cibles internes adressables par `targetId`
 
 ## Note importante (non decidee)
 
