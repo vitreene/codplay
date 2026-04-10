@@ -1,192 +1,165 @@
-# Eventime model - domaines temporels et scheduler
+# Eventime model V1 - tracks et compilation minimale
 
 ## But
 
-Formaliser la gestion des events "times" (eventimes) dans un modele event-driven:
+Definir un modele Eventime simple et deterministe pour V1.
 
-- un cue est defini dans un temps local
-- le runtime le projette en event discret global
-- les stories consomment ensuite ces events comme n'importe quel autre event
+Le principe retenu:
 
-## Intention
+- expression auteur possible en structure recursive
+- compilation canonique par track
+- execution pilotee par events publics
 
-Decoupler la narration du temps session absolu.
+## Position dans le Player
 
-Un meme cue `atMs=1400` doit rester correct quel que soit:
+- les Eventimes sont traites cote `Director`
+- le `Director` compile/ordonne les emissions publiques
+- le `Renderer` ne consomme pas les Eventimes bruts
 
-- le moment ou l'utilisateur declenche la lecture
-- les pauses/reprises
-- les seeks
-- la vitesse de lecture
+## Entree auteur
 
-Donc un cue ne depend pas de "l'heure de la scene", mais d'un **domaine temporel** explicite.
+Le format auteur peut rester souple (y compris recursif).
 
-## Concepts
+Contrainte V1:
 
-1. Domaine temporel
+- toute entree Eventime est normalisee puis compilee en tracks canoniques
 
-Repere de temps local echantillonnable par le runtime.
+## Sortie compilee (canonique)
 
-Domaines cibles V1:
+La sortie utile runtime est orientee track.
 
-- `media` (playhead d'une instance media)
-- `story` (playhead logique d'une instance story, si expose)
-- `session` (temps global de session)
+Chaque track compilee porte au minimum:
 
-2. Eventime group
+- `trackId`
+- `active`
+- `events[]` ordonnes
 
-Ensemble ordonne de cues relies a un domaine unique.
+Chaque event compile porte le noyau Event V1:
 
-3. Cue
+- `eventId`
+- `name`
+- `applyAtMs`
+- `source`
+- `data?`
 
-Point temporel local qui emet un event quand il est franchi.
+Puis, a l'execution, le `Director` assigne `eventSeq`.
 
-## Structure logique
+## Regle de compilation par track
 
-Un eventime group contient:
+Regles V1:
 
-- identite (`id`)
-- domaine (`domainRef`)
-- liste de cues (`cues[]`)
+1. normaliser l'entree auteur
+2. aplatir/ordonner par track
+3. produire une suite d'events canoniques
+4. conserver un ordre stable a entree egale
 
-Un cue contient:
+Invariant:
 
-- identite (`id`)
-- position locale (`atMs`)
-- nom d'event a emettre (`event`)
-- data optionnelle (`data`)
-- politique de declenchement (`firePolicy`)
+- meme entree + meme config => meme resultat compile
 
-Politique V1 recommandee:
+## Ajout dynamique runtime
 
-- `firePolicy = on-cross-forward`
-- `once = true` par passage runtime (avec reset explicite en cas de rewind/rebuild selon policy)
+L'ajout dynamique est autorise en V1.
 
-## Regle fondamentale de declenchement
+Contraintes:
 
-A chaque tick, le scheduler lit la fenetre du domaine:
+- append-only
+- uniquement via events publics
+- pas de mutation directe externe des structures runtime
 
-- `prevDomainMs`
-- `nextDomainMs`
+Exemples d'ajout:
 
-Un cue est eligible si:
+- ajout d'events a une track existante
+- ajout d'une nouvelle track
 
-- `prevDomainMs < cue.atMs <= nextDomainMs` (mode forward)
+## Controle activation tracks
 
-Cette regle donne un comportement stable meme avec jitter de tick.
+Event canonique V1:
 
-## Exemple de projection (cas utilisateur)
+- `tracks:set`
+- payload: `{ activate: string[]; deactivate: string[]; reason?: string }`
 
-Cas:
+Validation V1:
 
-- click utilisateur a `tSession=5000ms`
-- media demarre a ce moment
-- cue media a `atMs=1400`
+- track inconnue => erreur auteur
+- meme `trackId` dans `activate` et `deactivate` => erreur sur cette track
+- traitement best-effort ordonne pour les autres operations
 
-Resultat:
+Semantique V1:
 
-- le cue est emis quand le playhead media franchit 1400ms
-- en session cela arrive vers `~6400ms` si rate=1 et sans pause
-- la regle reste valide meme si la session n'est pas lineaire
+- desactivation = hard gate immediat
+- reactivation sans rattrapage retroactif
+- un `tracks:set` de sequence `N` n'affecte que les events `> N`
 
-## Comportement par commande runtime
+## Ordonnancement runtime
 
-1. `play`
+Ordre canonique des events publics:
 
-- reprise de progression du domaine
-- les cues sont evalues a chaque tick
+1. `applyAtMs`
+2. `eventSeq` a egalite
 
-2. `pause`
+Les events issus des tracks rejoignent le flux public global du `Director`.
 
-- domaine fige
-- aucun nouveau cue emis tant que pas de progression
+## Replay, cache, seek
 
-3. `seek`
+### Replay
 
-- deplacement instantane du playhead domaine
-- policy V1:
-  - `seek forward`: emettre les cues franchis sur la fenetre de saut
-  - `seek backward`: ne pas reemettre automatiquement les cues deja tires
+- en `revoir`, la lecture se base sur le journal canonique
+- la regeneration n'est pas confiee aux straps generateurs (desactives en `revoir`)
 
-4. `rewind`
+### Cache
 
-- reset du domaine vers le debut
-- reset de l'etat de tir des cues (rearmement V1)
-- mode replay par defaut `refaire`; selection `refaire`/`revoir` pilotee par `RuntimeContext`
+- cache de lecture autorise
+- invalidation possible selon events de pilotage (ex: langue)
+- en V1, suppression physique des entrees invalides
 
-5. `rate change`
+### Seek
 
-- pas de changement de regle de franchissement
-- seule la correspondance domaine->session varie
+- `seek backward` par defaut: render-only
+- pas de rollback logique story dans ce mode
+- reset logique complet via `scene:replay-from-zero`
 
-6. `loop`
+## Erreurs minimales V1
 
-- chaque boucle cree un nouveau passage domaine
-- les cues se reemetent a chaque boucle (V1)
+Erreurs auteur typiques:
 
-## Determinisme et ordonnancement
+- track inconnue referencee
+- event sans `name`
+- `applyAtMs` invalide
 
-Quand plusieurs cues sont emis dans le meme tick:
+Reactions runtime:
 
-- trier d'abord par `atMs`
-- puis par ordre de declaration
-- puis par `cue.id`
+- pilotees par la policy d'execution (`author`/`user`) via configuration
 
-Les events issus des eventimes rejoignent ensuite le tri global runtime (meme contrat que les autres sources).
+## Invariants Eventime V1
 
-## Validation normative (eventimes)
+1. Compilation
 
-Erreurs bloquantes recommandees:
+- track-level canonique
+- ordre stable et deterministe
 
-- domaine inexistant
-- type de domaine inconnu
-- cue sans `event`
-- `atMs` negatif ou non numerique
-- IDs dupliques dans un meme group
+2. Activation
 
-Warnings recommandes:
+- gate immediat par `active`
+- pas de replay implicite des events manques
 
-- cues hors duree probable du domaine media
-- groups sans cues
-- event names jamais consommes
+3. Integrite
 
-## Observabilite minimale
+- ajout dynamique uniquement par events publics
 
-Chaque emission issue d'un cue doit tracer:
-
-- `groupId`, `cueId`, `domainRef`
-- `prevDomainMs`, `nextDomainMs`, `cueAtMs`
-- `sessionMs`
-- `emittedEventName`
-
-Objectif: diagnostiquer facilement les cas "pourquoi ce cue s'est declenche ici".
-
-## Interaction avec Story `listen`
-
-Les eventimes emettent des events globaux.
-
-Ensuite, pour chaque story active:
-
-- la story recoit l'event global
-- `listen` peut le convertir (`event -> as`, alias-only)
-- les persos/straps locaux reagissent sur l'alias interne
-
-Ainsi, eventime et interaction utilisateur convergent vers le meme pipeline event.
-
-## Diagramme conceptuel
+## Diagramme simple
 
 ```mermaid
 flowchart LR
-  DG[Domaine temporel\n(media/story/session)] --> SCH[Scheduler]
-  EG[Eventime group + cues] --> SCH
-  SCH --> EV[Event global discret]
-  EV --> BUS[Bus global]
-  BUS --> ST[Story ingress listen]
-  ST --> INT[Bus interne story]
-  INT --> ACT[Actions persos/straps]
+  A[Eventime auteur] --> C[Compilation par track]
+  C --> T[Tracks canoniques]
+  T --> D[Director]
+  D --> E[Events publics ordonnes]
+  E --> R[Renderer via commits]
 ```
 
-## Decisions V1 a figer ensuite
+## Lien avec les autres specs
 
-- format final `meta.domainRef` dans l'enveloppe event
-- details de mapping `RuntimeContext` -> params/events scene
+- `02-story-model.md`: consommation locale story
+- `03-event-model.md`: enveloppe minimale et journal canonique
+- `06-runtime-contract.md`: passage `Director -> Renderer`

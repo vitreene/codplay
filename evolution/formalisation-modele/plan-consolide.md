@@ -1,797 +1,263 @@
-# Plan consolide - modele scene event-driven
+# Plan consolide - socle V1 Player event-based
 
 ## Objectif
 
-Poser un cadre unique et lisible pour:
+Figer une base V1 deterministe pour le Player, avant d'ouvrir le sujet scripting auteur.
 
-- modeliser une scene independamment de la plateforme
-- compiler la scene en objet lisible par le player
-- executer un runtime deterministe pilote par events
+Ce plan consolide la direction de reference pour:
 
-Ce plan est la synthese evolutive du cadrage. Les notes detaillees peuvent continuer a exister pendant la phase de reflexion, puis etre consolidees ici.
+- la reecriture des specs detaillees
+- la reecriture du player runtime
+- la stabilisation des contrats entre composants
 
-Focus courant:
+## Perimetre V1
 
-- priorite au modele Scene (structure, orchestration, invariants)
-- sujets export/conversion traites plus tard
+Priorites:
 
-## 1) Perimetre global
+1. socle event-based deterministe
+2. separation claire orchestration/rendu
+3. replay reproductible
+4. policies par configuration
 
-Le systeme est compose de trois couches:
+Hors perimetre immediat:
 
-1. Scene model (auteur)
-- document declaratif serialisable
-- aucun code runtime embarque
+- API de scripting auteur complete
+- details d'implementation des bibliotheques tierces
+- micro-details de guards internes
 
-2. Builder (compilation)
-- transforme `SceneDoc` en `CompiledScene`
-- resout structure, routage, temps, scenario, persos
+## Vocabulaire de reference
 
-3. Player (execution)
-- consomme `CompiledScene`
-- pilote events, scenario, medias, actions, rendu
+- `Player`: systeme global
+- `Director`: orchestration eventielle, state, journal canonique
+- `Renderer`: execution rendu/media a partir de commits resolus
+- `Timer`: source de temps commune
+- `Ticker`: boucle(s) de tick consommant le `Timer`
 
-Regle directrice: le builder compile, le player execute.
+Composition cible:
 
-## 2) Scene model
+- `Player = Director + Renderer + Timer + Ticker`
 
-`SceneDoc` assemble quatre plans:
+## Principes d'architecture
 
-1. contenu
-- stories, persos, straps, medias
+1. Event public
 
-2. signal
-- emissions et consommation d'events
+- tout event est public et visible a l'echelle scene
+- pas de canal prive story->story
+- le filtrage est de la responsabilite des stories
 
-3. temps
-- groupes d'eventimes relies a des domaines temporels
+2. Frontiere Director/Renderer
 
-4. scenario
-- transitions narratives pilotees par events
+- flux principal one-way: `Director -> Renderer`
+- retour `Renderer -> Director`: erreurs uniquement, via canal API prive
+- le `Renderer` n'orchestre pas la logique metier des stories
 
-La scene est aussi une unite d'orchestration reusable par un niveau superieur (ex: `Chapter`).
+3. Temps commun
 
-- elle doit exposer des entrees (events entrants + parametres)
-- elle doit exposer des sorties (events scene)
-- elle peut donc etre pilotee depuis l'exterieur et piloter une transition externe
+- `Director` et `Renderer` partagent le meme `Timer`
+- les tickers restent distincts mais indexes sur ce temps commun
 
-Exemples d'entrees scene:
+4. Determinisme
 
-- `scene:start`
-- `scene:param:set` (ex: score, mode, variante)
+- ordre canonique base sur des sequences monotones
+- aucun comportement critique hardcode hors policy/config
 
-Exemples de sorties scene:
+## Frontiere SceneDoc/runtime
 
-- `scene:end`
-- `scene:request-next`
-
-Vocabulaire scene I/O V1 (fige pour le cadrage):
-
-- entrees:
-  - `scene:start`
-  - `scene:stop`
-  - `scene:param:set`
-  - `scene:param:patch`
-- sorties:
-  - `scene:ready`
-  - `scene:end`
-  - `scene:request-next`
-  - `scene:error`
-
-Note de cadrage (transition inter-scenes):
-
-- le niveau `Chapter` n'est pas encore formalise
-- la logique de transition inter-scenes est hors scope du modele Scene a ce stade
-- aucune decision n'est prise ici sur l'emplacement de l'etat de transition
-- ce choix dependra du projet auteur et sera traite plus tard
-
-Note sur les parametres:
-
-- les parametres (ex: `score`) sont portes par `scene:param:set` ou `scene:param:patch`
-- la scene valide ces parametres via son schema d'entree avant application
-
-Contexte utilisateur (hors SceneDoc):
-
-- le contexte utilisateur n'est pas stocke dans la scene de construction
-- il est fourni au runtime par le player ou l'environnement hote, apres compilation
-- le player peut le projeter en params/events scene selon les besoins (ex: mode replay, score initial)
-
-Conteneurs (distinction V1):
-
-- conteneur host: element DOM fourni au player comme cible de montage
-- conteneur scene: cadre racine interne ("stage") qui contient toute la scene active
-
-Regles:
-
-- le conteneur host est hors `SceneDoc` (decision d'integration)
-- le stage est une structure runtime liee a la scene chargee
-- pas de `container-id` dans le modele scene auteur
-- le stage est scope scene (pas scope chapter/app en V1)
-- un niveau superieur (chapter/app) peut encapsuler un ou plusieurs stages sans porter leur logique interne
-
-Note de conception:
-
-- le stage partage des similarites structurelles avec une story (hierarchie, contenu, style)
-- en V1 il reste distinct conceptuellement d'une story narrative
-- son cycle de vie depend du player/scene runtime, pas des transitions story
-
-Invariants de base:
-
-- IDs stables et uniques
-- references resolvables
-- separation stricte des semantiques contenu/signal/temps
-- contrat d'entree/sortie scene explicite et stable
-
-## 3) Story model (niveau general)
-
-Une story est une unite d'orchestration locale.
-
-- recoit des events du bus global
-- normalise ses entrees via son ingress local
-- expose un bus interne pour ses persos/straps
-- emet des events sortants vers le bus global
-
-Les persos restent reactifs via leurs actions par nom d'event.
-
-Regle de possession des persos:
-
-- un perso appartient a une seule story a la fois
-- un perso ne peut pas etre reference simultanement par plusieurs stories
-- un perso peut recevoir des events de sources multiples, sans changer sa story proprietaire
-
-Regle straps (2 modes):
-
-- strap global partage: meme instance et etat commun pour plusieurs stories
-- strap local: copie par story (etat separe)
-- le mode du strap doit etre explicite dans la definition scene
-- reset par defaut du strap global partage: au `scene:start`
-
-
-Decision V1:
-
-- une scene peut avoir plusieurs stories actives en parallele
-- ce mode multi-actif est le comportement nominal (pas une exception)
-
-Implications:
-
-- l'etat scene doit suivre un ensemble de stories actives, pas une story unique
-- les transitions scenario peuvent activer/desactiver plusieurs stories
-- les stories d'attente/overlay/interruption sont des cas natifs du modele
-
-Politique scenario V1:
-
-- comportement par defaut additif: une transition active ce qu'elle demande sans arreter implicitement les autres stories
-- l'arret d'une story est explicite (commande/transition de type stop)
-- une story peut aussi se terminer d'elle-meme et emettre son event de fin
-
-Regle d'instanciation:
-
-- instancier une story cree une copie logique complete de son contenu
-- les persos d'instance sont des copies identiques, pas des references partagees
-- deux instances d'une meme story ne partagent pas les memes IDs runtime de persos
-
-Convention IDs runtime V1:
-
-- `storyInstanceId`: `<storyId>#<n>` (n commence a 1)
-- `persoRuntimeId`: `<storyInstanceId>/<persoId>`
-- `strapRuntimeId` local: `<storyInstanceId>/<strapId>`
-- `strapRuntimeId` global: `global/<strapId>`
-- `mediaRuntimeId`: `<storyInstanceId>/<mediaId>`
-
-Regles associees:
-
-- les IDs auteur (`storyId`, `persoId`, `strapId`) restent inchanges dans la scene source
-- les IDs runtime sont derives de facon deterministe pour faciliter traces et debug
-- les compteurs d'instance sont reinitialises au `scene:start`
-
-## 4) Event model
-
-Tous les flux passent par une enveloppe event commune.
-
-Natures d'events:
-
-- utilisateur
-- metier contenu
-- temporel (issus d'eventimes)
-- technique player/runtime
-- orchestration externe (scene <-> parent orchestrateur)
-
-Regles:
-
-- matching exact des noms d'events
-- ordonnancement deterministe
-- tracabilite de la source et du contexte
-- les signaux DOM globaux (`resize`, `orientation`) sont captes par le player, puis emis comme events techniques
-
-Vocabulaire viewport technique V1 (fige):
-
-- `viewport:resize`
-- `viewport:orientation`
-- `viewport:safe-area`
-
-## 5) Eventime model
-
-Un eventime est defini dans un domaine de temps local, pas en temps scene absolu.
-
-Domaines cibles V1:
-
-- media
-- story (si expose)
-- session
-
-Regle de declenchement de base:
-
-- un cue tire quand son `atMs` est franchi dans la fenetre de progression du domaine
-
-Decision V1 (seek forward):
-
-- un `seek` vers l'avant emet les cues franchis une fois
-
-Decision V1 (rewind):
-
-- un `rewind` rearme les cues eventimes pour un nouveau passage
-- mode replay par defaut: `refaire`
-- le mode effectif (`refaire`/`revoir`) est pilote par le contexte utilisateur
-
-Decision V1 (loop):
-
-- les cues eventimes se reemetent a chaque boucle
-
-Modes replay:
-
-- `refaire`: nouvelle execution interactive (events utilisateur non rejoues automatiquement)
-- `revoir`: relecture avec events utilisateur enregistres (si disponibles)
-
-Consequence:
-
-- le moment session depend du moment de demarrage reel
-- la synchro reste correcte en pause/reprise/seek (selon policies fixees)
-
-## 6) Graph model
-
-Le graphe scene utilise des liens types:
-
-- `contentLink` pour la composition
-- `signalLink` pour la propagation d'events
-- `timeLink` pour relier eventimes et domaines
-
-Le scenario reste un bloc dedie (projection visuelle possible) pour V1.
-
-Validation attendue:
-
-- compatibilite type de lien vs type de noeud
-- detection de cycles non autorises dans le plan contenu
-- detection des references manquantes
-
-## 7) Builder boundary
-
-Le builder doit etre separe en deux sous-couches:
-
-1. Builder core (obligatoire)
-- compile SceneDoc en CompiledScene portable
-- construit les descripteurs de persos (pas les nodes)
-
-2. Builder presentation (optionnel)
-- derive artefacts de presentation (ex: CSS, tokens, classes)
-- remplacable selon cible
-
-Point cle:
-
-- la generation presentation ne doit pas polluer le coeur narratif.
-
-Le builder doit aussi permettre une sortie exportable et differee (creation -> diffusion):
-
-1. export diffusion player
-
-- package exploitable plus tard par le player
-- inclut `CompiledScene` + dependances requises (medias, fontes, styles, librairies tierces)
-- produit un manifeste de resolution des assets (integrite forte en phase diffusion)
-
-2. export legacy
-
-- transformation vers un format cible externe (ex: XML)
-- destine a un autre contexte d'execution
-- inclut un rapport de conversion (elements convertis, degrades, non supportes)
-
-## 8) Perso boundary (scene vs plateforme)
-
-La construction d'un perso est l'endroit le plus sensible du systeme, car elle touche a la fois:
-
-- la logique scene (intention narrative, actions, etat initial)
-- les contraintes plateforme (rendu, layout, perf, media backend)
-
-Le cadrage retenu est une separation en deux etapes de compilation avant execution:
-
-1. Construction logique (builder core)
-
-- lit la scene et produit une definition portable du perso
-- conserve uniquement des intentions (etat, actions, transitions attendues)
-- ne choisit pas de primitive de rendu concrete
-
-2. Adaptation plateforme (builder platform)
-
-- prend la definition logique + profil de capacites de la plateforme
-- transforme les intentions en plan concret executable
-- applique des fallbacks explicites quand une capacite manque
-
-Le player execute ensuite ce plan concret, sans redecider l'architecture du perso.
-
-Risque a eviter:
-
-- coupler trop tot la scene au web (DOM/CSS) ou a une cible unique
-- faire porter au player des decisions de compilation qui doivent rester en amont
-
-Regle directrice:
-
-- la scene decrit "quoi faire"
-- la couche plateforme decide "comment le faire"
-- le player se concentre sur "quand l'executer"
-
-Exemple directeur:
-
-- intention scene: deplacement anime
-- adaptation plateforme: FLIP si disponible, sinon transform, sinon fallback degrade trace
-
-## 8.b) Modules perso custom (plugin API)
-
-Reference detaillee V1:
-
-- `09-perso-custom-actions-v1.md`
-
-Objectif:
-
-- permettre des types de persos custom sans modifier le coeur du player
-- garder un noyau standard (text/img/list) + extensions chargees par module
-
-Principe general:
-
-- un item de story declare son `type`
-- si le type est standard, le player utilise `create-element` standard
-- si le type est custom (ex: `avatar`), le player delegue a un module enregistre
-
-Cycle d'integration module:
-
-1. detection
-
-- au `load`, le player identifie les types custom utilises par la scene
-
-2. resolution registry
-
-- chaque type custom doit correspondre a un module present dans le registry player
-- si un module manque: le perso est ignore + warning runtime
-
-3. preload
-
-- le module peut charger ses ressources/SDK avant `start`
-- cette phase est asynchrone
-
-Resolution registry (decision V1):
-
-- table hote fournie au demarrage: complete la table interne
-- override autorise par meme nom de type
-- un seul module final par type
-- registry fige pendant la scene
-- modules integres: toujours montes
-- en mode debug: exposer types detectes, module choisi par type, persos ignores
-
-4. instanciation
-
-- a la creation runtime des persos, le module produit un noeud racine via `render()`
-- le module peut exposer une logique d'interaction propre
-
-5. actions
-
-- les actions de story restent declenchees par events
-- l'interpretation des commandes custom est faite par le module cible
-
-6. teardown
-
-- au `stop/destroy`, le module libere ses ressources runtime
-
-Contrat minimal d'un module (V1):
-
-- `moduleId`
-- `itemType` supporte (ex: `avatar`)
-- `preload(context)` optionnel (async)
-- `init(initInput)` optionnel
-- `start()` optionnel
-- `update(updateInput)` obligatoire
-- `render(renderInput)` obligatoire (retourne le noeud racine du module)
-- `destroy(context)` optionnel
-- `emit(event)` injecte par le player
-
-Niveaux d'action (V1):
-
-- niveau player: actions standard sur le noeud racine (move/style/attr/size)
-- niveau module: orchestration interne (canvas, svg, sous-noeuds) via `update()`
-- un perso custom peut piloter plusieurs updates internes sans bijection 1:1 perso->node interne
-
-Modes de routage d'action (V1):
-
-- `root-only`: le player agit sur le noeud racine uniquement (cas avatar/canvas)
-- `exposed-targets`: le module expose des cibles internes adressables (ex: `root`, `svg`, `glyph-12`)
-- dans `exposed-targets`, le player peut appliquer ses actions standard sur chaque cible exposee
-
-Decision V1 (forme module):
-
-- une instance de classe par perso runtime (etat local isole)
-- le registry associe `item.type` -> classe module
-
-Format de donnees recommande pour les stories:
-
-- `item.type` selectionne le module (`avatar`, etc.)
-- configuration initiale module dans `item.module` (objet libre)
-- actions module via `actions[eventName].cmd`
-- le schema exact est defini par le module, pas par le coeur scene
-
-Contrainte V1 de verbosite:
-
-- `cmd` porte directement ses champs metier (pas de conteneur `payload`/`args` systematique)
-- exemple: `{ name: "set-mood", mood: "happy" }`
-
-Passage action -> module (V1):
-
-- un event story declenche une action item
-- si `cmd` existe, le player appelle `module.update({ command: cmd })`
-- le module peut publier un event via le callback `emit()` injecte
-- si la commande module est refusee, la partie visuelle standard continue
-
-Passage action -> noeud cible (V1):
-
-- si `targetId` vise le perso racine: application player sur le noeud racine
-- `targetId=root` peut etre resolu directement par le player
-- si `targetId` vise une cible exposee par module: application player sur cette cible interne
-- si la cible n'existe pas: patch standard ignore + warning runtime
-- en mode `root-only`, un `targetId` different de `root` est ignore + warning runtime
-- la resolution de cible est refaite a chaque action
-
-Cas avatar (exemple):
-
-- `render()` retourne un `canvas` (noeud racine)
-- le player peut deplacer/redimensionner ce canvas
-- le rendu 3D interne du canvas est gere par le module (pas par le player)
-
-Cas div+svg (micro-animations):
-
-- `render()` retourne une `div` racine contenant un `svg`
-- le module expose `div` et `svg` (et eventuellement des sous-noeuds) comme cibles adressables
-- le player peut piloter les transitions standard sur ces cibles
-- le module orchestre les enchainements internes et leurs contraintes
-
-Events techniques vers module:
-
-- par defaut le module recoit ses actions
-- certains events techniques cibles (`viewport:*`) peuvent etre routes vers le module
-- ces events ne remplacent pas les actions de scene
-- ils ne changent pas l'ordre `cmd -> cible -> patch standard`
-
-Portee scenario/story:
-
-- les stories utilisent les types custom comme n'importe quel type de perso
-- le scenario ne connait pas l'implementation du module
-- le module est une capacite player, pas un concept narratif
-
-## 9) Runtime contract
-
-Entree runtime:
-
-- `CompiledScene`
-- events/params entrants depuis l'orchestrateur parent
-
-Cycle runtime:
-
-1. ingestion des events
-2. production d'events temporels (scheduler)
-3. ordonnancement deterministic
-4. resolution actions + transitions scenario
-5. application et commit rendu
-6. trace
-
-Sorties runtime:
-
-- events scene emis vers l'orchestrateur parent
-- etat scene observable (si expose par policy)
-
-Etat scene attendu (minimum):
-
-- liste des stories actives
-- node scenario courant
-- contexte scene courant (parametres/runtime data)
-- map des instances actives avec leurs persos propres
-
-Le player ne doit pas recompiler en boucle la scene auteur.
-
-## 10) Adaptateur temporaire
-
-L'adaptateur de compatibilite est hors coeur.
-
-- usage: exemples/tests de conception (hors smoke)
-- pas de dependance structurelle du runtime cible
-
-## 11) Decisions deja stables
-
-- architecture event-driven
-- temporalite exprimee via domaines + scheduler
-- separation builder vs player
-- separation scene portable vs implementation plateforme
-- contrat API host minimale V1 formalise
-- mapping RuntimeContext -> scene.params.runtime formalise
-- consolidation documentaire autour de ce plan
-
-## 12) Points a figer ensuite
-
-1. format des diagnostics compilation/execution
-2. contrat scene I/O pour orchestration parent (entrees/sorties/parametres)
-3. extension du contrat modules perso custom (au-dela du V1 deja fixe)
-4. format des exports builder (player package, legacy artifact)
-
-Priorite de cadrage immediate:
-
-- points 1, 2, 3
-- point 4 reporte hors scope court terme
-
-Mini-spec `RuntimeContext` V1:
-
-Reference detaillee V1:
-
-- `11-runtime-context-mapping-v1.md`
-
-- `replayMode`: `refaire | revoir`
-- `locale` (optionnel)
-- `sessionKind`: `live | replay` (optionnel)
-- `inputProfile`: `web | mobile | kiosk` (optionnel)
-- `seed` (optionnel, determinisme)
-
-Regles V1:
-
-- `RuntimeContext` est fourni par le player/environnement apres compilation
-- il n'est ni stocke dans `SceneDoc`, ni persiste dans `CompiledScene`
-- champs absents: defaults runtime appliques (`replayMode=refaire`)
-- champs inconnus: ignores par defaut (trace debug possible)
-
-Mapping V1 vers la scene:
-
-- le player derive un `initialSceneParams` depuis `RuntimeContext`
-- le player publie ces parametres via `scene:param:set` avant `scene:start`
-- la scene valide ces params avec son schema d'entree
-
-Catalogue mapping V1 (minimal):
-
-- `RuntimeContext.replayMode` -> `scene.params.runtime.replayMode`
-- `RuntimeContext.locale` -> `scene.params.runtime.locale`
-- `RuntimeContext.sessionKind` -> `scene.params.runtime.sessionKind`
-- `RuntimeContext.inputProfile` -> `scene.params.runtime.inputProfile`
-- `RuntimeContext.seed` -> `scene.params.runtime.seed`
-
-Regles V1 de mapping:
-
-- les cles non mappees sont ignorees par defaut
-- toute cle mappee mais invalide produit un diagnostic runtime
-- les updates en cours de scene passent par `scene:param:patch`
-
-Pendant le cadrage, ces points peuvent etre explores dans plusieurs notes.
-La version finale doit ensuite etre consolidee proprement dans ce plan.
-
-## 13) CompiledScene minimal V1
-
-Objectif:
-
-- figer la forme minimale de l'objet compile consomme par le player
-- garantir un chargement differe hors contexte de creation
-
-Blocs minimaux attendus:
-
-1. manifeste
-
-- `schemaVersion`
-- `sceneId`
-- `compiledAt`
-
-2. contrat scene I/O compile
-
-- `inputs`
-- `outputs`
-- schema parametres d'entree (si present)
-
-3. registres compiles
-
-- stories
-- persos
-- straps (avec mode explicite global/local)
-- medias
-- eventimeGroups
-
-3.b exigences modules
-
-- liste des `item.type` custom detectes
-- mapping type custom -> module attendu
-
-4. plans de routage
-
-- composition (`contentLinks` resolves)
-- signal (`signalLinks` resolves)
-- temps (`timeLinks` resolves)
-
-5. scenario compile
-
-- `initialNodeId`
-- noeuds et transitions deja triees
-- commandes scenario explicites (start/stop/add)
-
-6. plan d'instanciation
-
-- convention IDs runtime (`storyInstanceId`, `persoRuntimeId`, `strapRuntimeId`)
-- policy compteur (`reset au scene:start`)
-- ownership persos (exclusif story/instance)
-
-7. defaults runtime
-
-- politique multi-stories additives
-- parametres scene initiaux (si definis)
-
-8. descripteur de stage runtime
-
-- definition du cadre racine interne de scene
-- distinct des stories narratives
+- le socle V1 exploite un modele deterministe
+- le conteneur de montage est hors `SceneDoc` (host)
+- `Perso` dans `SceneDoc` est descriptif (`type`, `initial`, `actions`, refs)
+- `node` et media pilotable (`play/pause/seek`) sont runtime
+- `Story.init` V1 est une phase runtime standard non scriptable
 
 Note:
 
-- `CompiledScene` ne contient pas les valeurs de contexte utilisateur
-- il contient le contrat d'entree necessaire a leur application au runtime
+- l'introduction de code auteur dans la scene est admise ensuite, mais non figee en V1
 
-Invariants `CompiledScene`:
+## Story model V1
 
-- aucune reference pendante (tout ID resolu)
-- aucun perso partage entre stories/instances
-- mode de strap explicite pour chaque strap
-- derivation d'IDs runtime deterministe
+### State
 
-Non-objectifs `CompiledScene`:
+- `Story.state` est runtime-only
+- en `pause/seek`, le state est conserve par defaut
 
-- pas de node concret de rendu
-- pas de state runtime mutable
-- pas de logique de tick embarquee
+### Fin de story
 
-## 14) API host minimale V1
+- fin explicite via event public `story:end` (idealement emis par la story)
+- etat terminal sticky
+- reactivation uniquement par reset explicite ou replay depuis zero
 
-Reference detaillee V1:
+### Listen
 
-- `10-api-host-v1.md`
+- `listen` est declaratif et compilable
+- supporte un mapping `1 -> N`
+- peut renommer et enrichir les donnees
+- produit des tokens internes story (non publics)
+- tokens internes non journalises (derivables)
 
-Objectif:
+### Emission
 
-- fournir une surface de pilotage simple pour charger, lancer et observer une scene
-- garder la meme API entre mode player et mode debug
+- un token interne peut emettre un event public
+- emission immediate dans le meme cycle `Director`
 
-Regles V1:
+## Strap model V1
 
-- commandes de base:
-  - `load(compiledScene, mountTarget, runtimeContext?)`
-  - `start()`
-  - `stop(reason?)`
-  - `emit(event)`
-  - `setSceneParams(params)`
-  - `patchSceneParams(patch)`
-  - `dispatchTechnicalEvent(event)`
-  - `getState()`
-  - `subscribeTrace(listener)`
-  - `subscribeWarning(listener)`
-  - `destroy()`
-- `start()` sans `load()` est invalide
-- `RuntimeContext` peut etre fourni a `load()` puis ajuste via params/events
-- `emit()` est deterministicement ordonne avec les autres sources runtime
-- `ModuleRegistry` est resolu au `load()`
-- type de perso inconnu: perso ignore + warning
-- `destroy()` idempotent
+- strap sans state propre
+- signature conceptuelle:
+  - `(eventOrToken, context) -> { statePatch, events, sideEffects }`
+- `context` est maintenu comme note ouverte (detail a figer plus tard)
 
-## 15) Exports builder - baseline V1
+Replay `revoir`:
 
-Sans figer encore le format final, on pose une baseline minimale.
+- straps generateurs desactives
+- side-effects externes bloques
 
-1. Export diffusion player (`PlayerExportPackage`)
+## Event model V1
 
-Objectif:
+### Identite
 
-- transporter un resultat de compilation exploitable plus tard, hors contexte de creation
+- `eventId` conserve s'il existe
+- sinon genere par le `Director`
 
-Contenu minimal attendu:
+### Ordre
 
-- `compiled-scene` (artefact principal)
-- index des assets (medias, fontes, styles, tiers)
-- manifeste d'export
-- metadata de build (version schema, date, cible runtime)
+- `eventSeq` monotone global
+- source de verite pour l'ordre canonique
+- a egalite temporelle, `eventSeq` tranche
 
-Capacites attendues:
+### Journal canonique
 
-- resolution deterministe des assets
-- compatibilite mode offline/online selon policy d'export
+- ecriture cote `Director`
+- ecriture apres normalisation
+- tous les events publics traites sont journalises
 
-Position de phase:
+## Eventime/track model V1
 
-- phase actuelle (debug conversion): priorite a la lisibilite des logs/rapports
-- phase diffusion (ulterieure): durcissement integrite (hash/signature) a ajouter
+- format auteur recursif possible
+- compilation canonique par track
+- ajout dynamique runtime autorise en append-only
+- ajout dynamique uniquement via events publics
 
-Decision V1 (phase debug):
+### Controle de tracks
 
-- mode par defaut: bundle complet autonome
-- versionnement: schema semver explicite dans le manifeste
-- resolution assets par defaut: offline-first (depuis le package)
-- integrite forte (hash/signature): reportee a la phase diffusion
+Event canonique:
 
-2. Export legacy (`LegacyExportArtifact`)
+- `tracks:set`
+- payload: `{ activate: string[]; deactivate: string[]; reason?: string }`
 
-Objectif:
+Validation:
 
-- projeter la scene vers un format d'execution externe (ex: XML)
+- track inconnue: erreur auteur
+- meme `trackId` dans `activate` et `deactivate`: erreur sur cette track
+- traitement best-effort ordonne sur le reste
 
-Contenu minimal attendu:
+Semantique:
 
-- artefact converti (ex: `scene.xml`)
-- rapport de conversion machine-readable
-- journal des degradations/non-supports
+- desactivation de track = hard gate immediat
+- pas de rattrapage retroactif a la reactivation
+- un `tracks:set` de sequence `N` n'affecte que les events `> N`
+
+## Replay, cache, seek
+
+### Modes
+
+- `refaire`: nouvelle execution interactive
+- `revoir`: relecture des events journalises
+
+### Cache
+
+- cache de lecture autorise
+- invalidation possible selon events/choix auteur (ex: changement de langue)
+- en V1: suppression physique des entrees invalides
+- `eventSeq` et `commitSeq` continuent de croitre apres invalidation
+
+### Seek
+
+- `seek backward` par defaut: render-only
+- pas de rollback logique en mode state preserve
+- rollback logique complet via event public `scene:replay-from-zero`
+- optimisation: une story terminale sticky peut etre exclue de recalcul rendu
+
+## Contrat commit Director -> Renderer
+
+### Contract minimal
+
+- commits deja resolus et ordonnes
+- `commitSeq` monotone global
+- `applyAtMs` base sur le `Timer` commun
+- `causeEventId` autorise pour debug
+
+### Regles d'application
+
+- commit en retard: applique a la prochaine frame
+- si buffer non vide: report au tick suivant en conservant l'ordre
+- au tick renderer: appliquer tous les commits prets
+- application atomique par frame
+
+### Adresse de cible
+
+- adressage composite:
+  - `(storyInstanceId, itemId, targetId?)`
+
+### Payload
+
+- lot d'operations ciblees (patch/diff)
+- payload d'action opaque pour le `Director`
+- interpretation par composant/type cote `Renderer`
+- logique specialisee (ex: list + mesure/FLIP) portee par les composants
+
+## Guards runtime (niveau macro)
+
+- garde-fou de cycle (ex: `maxEventsPerCycle`) supporte
+- depassement traite selon policy d'execution
+- separation claire entre guards runtime et operations metier dans l'organisation du code
+
+## Configuration et policies
+
+### Dossier de configuration
+
+- un dossier dedie centralise la configuration
+- une section `policies` est obligatoire dans cette configuration
+
+### Couches de priorite
+
+1. defaults framework
+2. preset environnement (`author` / `user`)
+3. config projet/scene
+4. patch runtime
+
+Regle:
+
+- aucune regle critique en dur
+- `author`/`user` sont des presets de config, pas des branches hardcodees
+
+## Regles code TypeScript V1 (recommandees)
+
+Portee:
+
+- ces regles s'appliquent a tout le projet TypeScript
+- elles sont des guidelines de reference en V1
 
 Regles:
 
-- la conversion legacy n'influence pas le modele coeur
-- toute perte de semantics doit etre explicite dans le rapport
+- les appels entre composants passent par une facade d'API explicite
+- toutes les fonctions et toutes les classes sont documentees
+- l'incorporation d'un element dans un composant passe par des methodes `register*`
+- les noms de fonctions sont de preference symboliques et courts
+- preferer les constantes et la configuration aux valeurs en dur
+- les fonctions sont verifiees par des tests smoke
+- les tests smoke sont organises en sous-ensembles par sujet
 
-Decision V1:
+## Contraintes implementation cible
 
-- en cas de non support: degradation + rapport (pas de blocage global par defaut)
-- mode strict optionnel: fail-fast activable par option d'export
+- `setTimeout` et `setInterval` sont proscrits pour la cible finale
+- execution cible: boucle dediee `rAF + queue + commit`
+- details d'API tierce hors spec macro
 
-3. Rapport de conversion (minimum commun)
+## Trajectoire de reecriture
 
-Le rapport doit au minimum exposer:
+Ordre recommande:
 
-- nombre d'elements convertis
-- nombre d'elements degrades
-- nombre d'elements rejetes
-- liste des codes de diagnostic
-
-Systeme de warning adapte au debug (V1):
-
-- un flux detaille `conversion-log.ndjson` (une ligne = un evenement de conversion)
-- un resume `conversion-report.json` (compteurs, severites, top codes)
-- une table de mapping `conversion-map.json` (id source -> id cible)
-- un extrait humain `conversion-report.md` pour lecture rapide
-
-Decisions debug V1:
-
-- verbosite par defaut: `trace + info + warn` (avec `error`/`fatal` implicites)
-- granularite mapping par defaut: niveau element (pas niveau champ)
-- rapports/logs inclus dans l'artefact exporte
-
-Severites recommandees:
-
-- `trace`: etape technique detaillee
-- `info`: conversion nominale
-- `warn`: conversion avec degradation/fallback
-- `error`: element non converti, export global continue
-- `fatal`: export interrompu
-
-Codes de warning:
-
-- tous les warnings/errors/fatals doivent avoir un code stable
-- categorie proposee: `LEGACY_PARSE_*`, `LEGACY_MAP_*`, `LEGACY_UNSUPPORTED_*`, `LEGACY_OUTPUT_*`
-
-Politique d'arret par defaut (debug):
-
-- continuer tant qu'il n'y a pas de `fatal`
-- accumuler un maximum de diagnostics utiles en un seul run
-
-4. Position architecture
-
-- ces exports font partie du builder
-- ils sont detaches du player runtime
-- ils reutilisent `CompiledScene` comme source de verite compilee
-
-## 16) Points encore ouverts sur les exports
-
-1. format exact du manifeste player package (champs obligatoires)
-2. format exact du rapport de conversion legacy (codes + severite + mapping)
-3. checklist de passage phase debug -> phase diffusion (integrite, signatures, policy CI)
-
-Note cadrage:
-
-- le detail des champs du manifeste player est volontairement reporte
+1. aligner les specs detaillees (`02`, `03`, `04`, `06`, `10`, `11`)
+2. aligner les types runtime sur `Director` et `Renderer`
+3. transformer le player actuel en `Renderer` pilote par commits
+4. ajouter le `Director` comme orchestrateur canonique des events/journal

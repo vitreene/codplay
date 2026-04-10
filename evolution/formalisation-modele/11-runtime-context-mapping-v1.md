@@ -1,104 +1,145 @@
-# RuntimeContext mapping V1
+# Runtime config mapping V1
 
 ## Statut
 
-Version de reference V1 pour le passage du contexte runtime vers les parametres scene.
+Reference V1 minimale pour le mapping de la configuration d'execution vers le Player runtime.
 
-## 1) Idee simple
+Le terme principal est `runtimeConfig`.
 
-Le contexte runtime vient de l'environnement (host/player).
-La scene ne lit pas ce contexte directement.
-Le player fait une traduction simple et explicite vers `scene.params.runtime`.
+## But
 
-## 2) Entree
+Traduire une configuration fournie par l'hote en configuration effective du Player:
+
+- sans hardcode
+- avec priorites explicites
+- avec comportement deterministe
+
+## Entree
 
 Objet d'entree:
 
-- `RuntimeContext`
+- `runtimeConfig`
 
-Champs V1:
+Champs V1 minimaux:
 
-- `replayMode`: `refaire | revoir`
-- `locale?`
+- `preset?`: `author | user`
+- `replayMode?`: `refaire | revoir`
+- `locale?`: string
 - `sessionKind?`: `live | replay`
 - `inputProfile?`: `web | mobile | kiosk`
-- `seed?`
+- `seed?`: string | number
+- `policies?`: objet libre versionne
 
-## 3) Sortie
+## Sortie
 
-Le player produit `initialSceneParams` avec ce bloc minimum:
+Objet cible:
 
-- `scene.params.runtime.replayMode`
-- `scene.params.runtime.locale`
-- `scene.params.runtime.sessionKind`
-- `scene.params.runtime.inputProfile`
-- `scene.params.runtime.seed`
+- `effectiveRuntimeConfig`
 
-## 4) Table de mapping V1
+Le resultat est applique au Player (`Director`, `Renderer`, `Timer`, `Ticker`) via `load(...)`.
 
-- `RuntimeContext.replayMode` -> `scene.params.runtime.replayMode`
-- `RuntimeContext.locale` -> `scene.params.runtime.locale`
-- `RuntimeContext.sessionKind` -> `scene.params.runtime.sessionKind`
-- `RuntimeContext.inputProfile` -> `scene.params.runtime.inputProfile`
-- `RuntimeContext.seed` -> `scene.params.runtime.seed`
+## Couches de priorite
 
-## 5) Regles de lecture
+Le mapping applique l'ordre suivant:
 
-- champ absent:
-  - valeur par defaut si definie (`replayMode=refaire`)
-- champ inconnu:
-  - ignore
-  - warning seulement en mode debug
-- champ connu mais invalide:
-  - warning
-  - fallback sur valeur par defaut si possible
+1. defaults framework
+2. preset environnement (`author` / `user`)
+3. config projet/scene
+4. patch runtime (fourni par l'hote)
 
-## 6) Sequence d'application
+Regle:
 
-Au `load(...)`:
+- la couche suivante surcharge la precedente sur les memes cles
 
-1. lire `RuntimeContext`
-2. construire `initialSceneParams`
-3. publier `scene:param:set` avant `scene:start`
+## Regles de mapping V1
 
-Pendant la scene:
+### Regles generales
 
-- modifications runtime -> `scene:param:patch`
-- ordre des patchs conserve
+- meme entree + memes couches => meme resultat
+- aucune decision critique en dur
+- cles inconnues: ignorees par defaut
 
-## 7) Warnings minimum
+### Regles champs connus
 
-- `W_RUNTIME_CONTEXT_FIELD_UNKNOWN`
-- `W_RUNTIME_CONTEXT_VALUE_INVALID`
-- `W_RUNTIME_CONTEXT_DEFAULT_APPLIED`
+- valeur valide: conservee
+- valeur absente: fallback selon couche inferieure
+- valeur invalide: warning + fallback
 
-Payload minimum recommande:
+### Replay
+
+- `replayMode` par defaut: `refaire`
+- `replayMode=revoir` active les contraintes V1:
+  - straps generateurs desactives
+  - side-effects externes bloques
+
+## Mapping vers composants
+
+### Director
+
+- mode replay
+- policy erreurs auteur/runtime
+- budgets de cycle (ex: guard max events)
+
+### Renderer
+
+- policy de traitement d'erreur commit
+- niveau de verbosite trace
+
+### Timer/Ticker
+
+- parametres de cadence runtime
+- options de pause/reprise selon contexte
+
+## Warnings minimaux
+
+- `W_RUNTIME_CONFIG_FIELD_UNKNOWN`
+- `W_RUNTIME_CONFIG_VALUE_INVALID`
+- `W_RUNTIME_CONFIG_DEFAULT_APPLIED`
+
+Payload recommande:
 
 - `field`
 - `value`
 - `fallback`
+- `layer`
 
-## 8) Invariants V1
+## Invariants V1
 
-- `RuntimeContext` n'est pas stocke dans `SceneDoc`
-- `RuntimeContext` n'est pas persiste dans `CompiledScene`
-- seul le resultat mappe (`scene.params.runtime`) est applique a la scene
-- meme `RuntimeContext` + meme scene = meme resultat de mapping
+- `runtimeConfig` n'est pas persiste dans `SceneDoc`
+- `runtimeConfig` ne remplace pas la scene compilee
+- seul `effectiveRuntimeConfig` pilote l'execution
+- les presets `author`/`user` sont des configurations, pas du code conditionnel hardcode
 
-## 9) Exemple simple
+## Exemple minimal
 
 Entree:
 
-- `RuntimeContext = { replayMode: "revoir", locale: "fr-FR", foo: 1 }`
+```ts
+{
+  preset: 'author',
+  replayMode: 'revoir',
+  locale: 'fr-FR',
+  unknownKey: true
+}
+```
 
-Sortie:
+Sortie (exemple):
 
-- `scene.params.runtime.replayMode = "revoir"`
-- `scene.params.runtime.locale = "fr-FR"`
-- `foo` ignore
+```ts
+{
+  preset: 'author',
+  replayMode: 'revoir',
+  locale: 'fr-FR',
+  policies: {
+    ...
+  }
+}
+```
 
-## 10) Hors perimetre V1
+`unknownKey` est ignoree avec warning en mode adapte.
 
-- mapping conditionnel par type de scene
-- transformations complexes de valeur
-- enrichissement par appels reseau
+## Hors perimetre V1
+
+- transformations conditionnelles complexes par type de scene
+- enrichissement externe via appels reseau
+- schema complet des policies internes

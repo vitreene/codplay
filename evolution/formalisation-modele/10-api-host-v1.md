@@ -1,179 +1,200 @@
-# API host V1
+# API host V1 - facade de pilotage Player
 
 ## Statut
 
-Version de reference V1 pour l'API d'integration du player dans une application hote.
+Reference V1 minimale pour l'integration du Player dans une application hote.
 
-## 1) Idee simple
+Cette API pilote un `Player` compose de:
 
-L'application hote doit pouvoir:
+- `Director`
+- `Renderer`
+- `Timer`
+- `Ticker`
 
-- charger une scene
-- la demarrer et l'arreter
-- envoyer des events/parametres
-- lire l'etat courant
-- ecouter les traces et warnings
-- liberer les ressources
+## Objectif
 
-Le but est d'avoir la meme API en mode normal et en mode debug.
+Permettre a l'hote de:
 
-## 2) Etats de fonctionnement
+- charger une scene compilee
+- demarrer / pauser / reprendre / stopper
+- injecter des events publics
+- observer l'etat et les traces
+- detruire proprement l'instance
 
-Noms techniques proposes:
+L'API reste identique entre presets `author` et `user`.
+
+## Etats de fonctionnement
 
 - `idle`: aucune scene chargee
-- `loaded`: scene chargee, pas encore demarree
-- `running`: scene en lecture
-- `stopped`: scene arretee mais encore chargee
-- `destroyed`: instance player liberee
+- `loaded`: scene chargee, non demarree
+- `running`: scene en execution
+- `paused`: execution suspendue
+- `stopped`: execution arretee, scene encore chargee
+- `destroyed`: instance liberee
 
-## 3) Commandes V1
+## Commandes V1
 
-## 3.1 `load(compiledScene, mountTarget, runtimeContext?)`
+### `load(compiledScene, mountTarget, runtimeConfig?)`
 
 Role:
 
 - charge la scene compilee
-- prepare les parametres initiaux depuis `runtimeContext`
-- valide les modules necessaires
+- initialise le Player avec la configuration d'execution
 
 Regles:
 
 - `mountTarget` est fourni par l'hote (hors `SceneDoc`)
-- les types de perso inconnus sont ignores avec warning (pas de blocage)
-- si une scene etait deja chargee, elle est remplacee proprement
+- `runtimeConfig` alimente policies et presets (`author`/`user`)
+- remplace proprement la scene precedente si necessaire
 
-## 3.2 `start()`
+### `start()`
 
 Role:
 
-- demarre la scene chargee
+- demarre l'execution depuis `loaded` ou `stopped`
+
+### `pause()`
+
+Role:
+
+- suspend l'execution sans perdre l'etat runtime
+
+### `resume()`
+
+Role:
+
+- reprend l'execution depuis `paused`
+
+### `stop(reason?)`
+
+Role:
+
+- arrete l'execution courante
+
+### `emit(event)`
+
+Role:
+
+- injecte un event public dans le `Director`
 
 Regles:
 
-- valide depuis `loaded` ou `stopped`
-- invalide depuis `idle` ou `destroyed`
+- event normalise et ordonne dans le flux canonique
+- `eventId` conserve s'il existe, sinon genere
+- `eventSeq` assigne par le `Director`
 
-## 3.3 `stop(reason?)`
-
-Role:
-
-- arrete la lecture de la scene courante
-
-Regles:
-
-- valide depuis `running`
-- depuis un autre etat: no-op autorise
-
-## 3.4 `emit(event)`
+### `replayFromZero(reason?)`
 
 Role:
 
-- envoie un event externe au bus scene
+- raccourci de pilotage pour emettre `scene:replay-from-zero`
 
-Regles:
+Note:
 
-- event ordonne de facon deterministe avec les autres sources
-- invalide si aucune scene n'est chargee
+- equivalent possible via `emit({ name: 'scene:replay-from-zero', ... })`
 
-## 3.5 `setSceneParams(params)`
-
-Role:
-
-- remplace l'etat des params scene (equivalent `scene:param:set`)
-
-## 3.6 `patchSceneParams(patch)`
+### `getState()`
 
 Role:
 
-- applique une mise a jour partielle (equivalent `scene:param:patch`)
-
-## 3.7 `dispatchTechnicalEvent(event)`
-
-Role:
-
-- transmet un evenement technique aux modules actifs
-
-Exemples V1:
-
-- `viewport:resize`
-- `viewport:orientation`
-- `viewport:safe-area`
-
-## 3.8 `getState()`
-
-Role:
-
-- retourne un etat lisible de la scene
+- retourne un etat lisible du Player
 
 Contenu minimum:
 
-- etat API (`idle/loaded/running/stopped/destroyed`)
+- `status`
+- `sceneId?`
 - stories actives
-- node scenario courant
-- contexte scene courant
+- compteurs runtime utiles (`eventSeq`, `commitSeq`) si exposes par policy
 
-## 3.9 `subscribeTrace(listener)`
+### `subscribeTrace(listener)`
 
 Role:
 
 - ecouter les traces runtime
 
-## 3.10 `subscribeWarning(listener)`
+### `subscribeWarning(listener)`
 
 Role:
 
 - ecouter les warnings runtime
 
-## 3.11 `destroy()`
+### `destroy()`
 
 Role:
 
 - libere scene et ressources runtime
 
-Regles:
+Regle:
 
-- idempotent (peut etre appele plusieurs fois)
+- idempotent
 
-## 4) Regles d'idempotence
+## Commandes via events publics
 
-- `destroy()` est idempotent
-- `stop()` est no-op hors `running`
-- `load()` remplace proprement la scene precedente
+Le pilotage metier passe preferentiellement par `emit(event)`.
 
-## 5) Format de resultat (commande)
+Events canoniques V1 deja fixes:
 
-Format simple recommande:
+- `tracks:set`
+  - payload: `{ activate: string[]; deactivate: string[]; reason?: string }`
+- `scene:replay-from-zero`
+
+## Contrat de resultat des commandes
+
+Format recommande:
 
 - succes: `{ ok: true, warnings?: [...] }`
-- echec: `{ ok: false, error: { code, message } }`
+- echec: `{ ok: false, error: { code, message, details? } }`
 
-## 6) Codes d'erreur minimum
+## Codes d'erreur minimaux
 
 - `HOST_INVALID_STATE`
 - `HOST_SCENE_INVALID`
 - `HOST_MOUNT_TARGET_INVALID`
 - `HOST_DESTROYED`
 
-## 7) Warnings minimum
+## Erreurs auteur minimales exposees
 
-- `W_MODULE_TYPE_NOT_FOUND`
-- `W_TARGET_FORBIDDEN_BY_ROUTE`
-- `W_TARGET_NOT_FOUND`
-- `W_CMD_REJECTED`
+- `AUTHOR_TRACK_UNKNOWN`
+- `AUTHOR_TRACK_CONFLICT_ACTIVATE_DEACTIVATE`
+- `AUTHOR_EVENT_INVALID`
 
-## 8) Sequence type
+La reaction runtime depend de la policy d'execution active.
+
+## Idempotence minimale
+
+- `destroy()` idempotent
+- `load()` remplace proprement la scene precedente
+- `stop()` peut etre no-op hors `running` selon policy
+
+## Policies et configuration
+
+`runtimeConfig` s'appuie sur un dossier de configuration dedie.
+
+Couches de priorite:
+
+1. defaults framework
+2. preset environnement (`author` / `user`)
+3. config projet/scene
+4. patch runtime
+
+Regle:
+
+- aucune decision critique en dur
+
+## Invariants V1
+
+- `mountTarget` reste externe au modele scene
+- `CompiledScene` reste la source compilee
+- le `Director` tient le journal canonique replay
+- le `Renderer` ne retourne vers `Director` que les erreurs (canal prive)
+- l'API host ne bypass pas le contrat event/commit interne
+
+## Sequence type
 
 1. `load(...)`
 2. `start()`
-3. `emit(...)`
-4. `patchSceneParams(...)`
-5. `stop()`
-6. `destroy()`
-
-## 9) Invariants V1
-
-- `mountTarget` reste externe au modele de scene
-- `CompiledScene` reste source de verite compilee
-- les commandes sont predictibles selon l'etat courant
-- les warnings n'arretent pas la scene
+3. `emit(...)` (ex: `tracks:set`)
+4. `pause()` / `resume()` selon besoin
+5. `replayFromZero()` ou `emit(scene:replay-from-zero)` si necessaire
+6. `stop()`
+7. `destroy()`

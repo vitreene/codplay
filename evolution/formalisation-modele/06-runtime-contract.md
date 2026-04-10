@@ -1,399 +1,207 @@
-# Runtime contract - builder et player
+# Runtime contract V1 - Builder, Director, Renderer
 
 ## But
 
-Definir la frontiere entre:
+Fixer le contrat runtime minimal V1 entre:
 
-- le `builder` (compilation de scene)
-- le `player` (execution runtime)
+- `Builder` (compilation)
+- `Director` (orchestration eventielle)
+- `Renderer` (execution rendu/media)
 
-Ce document fixe qui fait quoi, ce qui doit rester stable, et ce qui est optionnel selon l'integration.
+Le contrat privilegie la simplicite, le determinisme et la separation des responsabilites.
 
-## Intention
+## Architecture cible
 
-Eviter un bloc unique qui melange:
+Composition du Player:
 
-- modelisation auteur
-- compilation
-- execution temps reel
-- presentation web specifique
+- `Player = Director + Renderer + Timer + Ticker`
 
-Le contrat cible: `SceneDoc` -> `CompiledScene` -> execution player.
+Flux principal:
 
-## Composants
+1. `Builder` compile vers une structure consommable runtime
+2. `Director` traite les events publics, maintient le state, produit des commits
+3. `Renderer` applique les commits et retourne uniquement les erreurs
 
-1. Builder core (obligatoire)
+## Responsabilites
 
-- valide et compile `SceneDoc`
-- produit `CompiledScene`
-- ne depend pas du moteur de rendu final
+### Builder
 
-2. Builder presentation (optionnel)
+- valider les structures auteur
+- compiler Eventimes en tracks canoniques
+- preparer des descripteurs exploitables par le runtime
+- garantir un resultat deterministe a entree egale
 
-- derive des artefacts de presentation (ex: classes CSS, tokens style)
-- enrichit les refs de presentation dans `CompiledScene`
-- reste detachable du coeur narratif
+Le Builder ne doit pas:
 
-3. Player runtime (obligatoire)
+- executer la boucle runtime
+- faire du rendu
+- orchestrer les cycles d'events en temps reel
 
-- consomme `CompiledScene`
-- execute l'orchestration event-driven
-- pilote media, animation, scenario, rendu
+### Director
 
-4. Host adapter (integration)
+- normaliser tous les events publics
+- conserver ou generer `eventId`
+- assigner `eventSeq` monotone global
+- tenir le journal canonique replay
+- appliquer `listen`, state story, straps
+- emettre des events publics consequents
+- produire des commits resolus vers le Renderer
+- appliquer les policies runtime via configuration
 
-- pont avec UI, backend, telemetry, tooling
-- emet les events utilisateur
-- recupere traces/diagnostics
-- peut jouer le role d'orchestrateur parent de scene
+### Renderer
 
-## Responsabilites du builder core
+- recevoir des commits deja resolus et ordonnes
+- appliquer les operations ciblees par frame
+- respecter `commitSeq` et `applyAtMs`
+- retourner les erreurs via canal API prive vers Director
 
-- validation structurelle (IDs, refs, liens, scenario)
-- validation semantique (coherences contenu/signal/temps)
-- compilation des tables de composition
-- compilation du routage signal
-- compilation des plans eventimes (groupes, domaines, cues)
-- compilation du scenario (nodes, transitions, priorites)
-- production de diagnostics de compilation
+Le Renderer ne doit pas:
 
-Le builder core ne doit pas:
+- redecider la logique metier story
+- recompiler des tracks/eventimes
+- servir de source de verite replay
 
-- executer de tick runtime
-- instancier des nodes de rendu
-- lancer les medias
-- evaluer des transitions en temps reel
+## Contrat d'echange Director -> Renderer
 
-## Responsabilites du player runtime
+Chaque commit V1 inclut:
 
-- charger `CompiledScene`
-- resoudre les modules de types custom via un registry runtime
-- maintenir l'etat runtime (stories, medias, scenario, tracks)
-- collecter/ordonner les events
-- transformer les cues eventimes franchis en events discrets
-- dispatcher les events vers les listeners compiles
-- appliquer les actions resolues
-- gerer la boucle d'execution et le commit rendu
-- exposer trace et diagnostics runtime
+- `commitSeq` monotone global
+- `applyAtMs` (reference `Timer` commun)
+- operations ciblees (patch/diff)
+- adressage composite `(storyInstanceId, itemId, targetId?)`
+- `causeEventId` optionnel (debug)
 
-Le player runtime ne doit pas:
+Regles d'application:
 
-- refaire la compilation semantique complete de la scene
-- recalculer les graphes auteur a chaque tick
+- ordre strict par `commitSeq`
+- commit en retard applique a la prochaine frame
+- si buffer non vide, report au tick suivant en conservant l'ordre
+- tous les commits prets sont appliques au tick
+- application atomique par frame
 
-## Contrat d'entree/sortie
+## Contrat event runtime
 
-Entree builder:
+Enveloppe minimale V1:
 
-- `SceneDoc`
-- options de compilation (mode, validations strictes, flags)
-
-Sortie builder:
-
-- `CompiledScene`
-- `CompilationDiagnostics`
-- optionnel: `CompiledPresentation`
-
-Sorties export builder (differees):
-
-- `PlayerExportPackage`: package de diffusion pour player (scene compilee + dependances)
-- `LegacyExportArtifact`: sortie de conversion vers format legacy cible (ex: XML) + rapport de conversion
-
-Decisions V1:
-
-- `PlayerExportPackage` en mode par defaut bundle complet
-- versionnement d'artefact via schema semver
-- resolution assets par defaut offline-first
-- `LegacyExportArtifact` en mode par defaut degrade + rapport
-- mode strict legacy optionnel (fail-fast) activable par policy d'export
-- phase debug prioritaire: logs/rapports de conversion detailles
-- durcissement integrite (hash/signature) reporte a la phase diffusion
-- logs debug export legacy inclus dans l'artefact (ndjson + resume + mapping + rapport humain)
-
-Entree player:
-
-- `CompiledScene`
-- `PlayerConfig` (mode debug/player, policies runtime)
-- `RuntimeContext` fourni par le player/environnement (post-compilation)
-- `ModuleRegistry` (types custom -> modules d'implementation)
-- events/parametres entrants depuis l'orchestrateur parent
-
-`RuntimeContext` (principes):
-
-- ne fait pas partie du `SceneDoc`
-- ne fait pas partie des valeurs internes de `CompiledScene`
-- transporte les conditions d'execution (ex: mode replay, profil utilisateur, contexte de session)
-
-`RuntimeContext` minimal V1:
-
-- `replayMode`: `refaire | revoir` (defaut `refaire`)
-- `locale` (optionnel)
-- `sessionKind`: `live | replay` (optionnel)
-- `inputProfile`: `web | mobile | kiosk` (optionnel)
-- `seed` (optionnel)
-
-`ModuleRegistry` (principes):
-
-- hors `SceneDoc`
-- fourni par integration player
-- associe un `item.type` custom a un module executable
-
-Contrat module runtime V1:
-
-- une classe module est instanciee par perso runtime
-- cycle minimal: `init(initInput)` -> `start()` -> `update(updateInput)` -> `render(renderInput)` -> `destroy()`
-- `emit(event)` est injecte par le player pour publier sur le bus global
-- les commandes d'action arrivent via `action.cmd`
-- `action.cmd` porte ses champs metier directement (sans enveloppe `payload` dediee)
-- les events techniques cibles (`viewport:*`) peuvent etre routes vers `update()`
-- `render(renderInput)` retourne le noeud racine du module
-
-Routage player/module des actions standards:
-
-- mode `root-only`: player applique sur le noeud racine du module
-- mode `exposed-targets`: module expose des cibles internes adressables
-- le player applique `move/style/attr/class` sur la cible resolue
-- cible introuvable: action ignoree + diagnostic runtime
-
-Separation des responsabilites d'action:
-
-- player: applique les actions standard sur le noeud racine ou les cibles exposees (position, taille, style, classes)
-- module: orchestre ses sous-noeuds et son rendu interne (ex: canvas three.js, div+svg)
-
-Projection runtime vers la scene:
-
-- le player derive `initialSceneParams` depuis `RuntimeContext`
-- il injecte ces params via `scene:param:set` avant `scene:start`
-- validation des params par le contrat d'entree scene
-
-Catalogue mapping V1 (minimal):
-
-- `replayMode` -> `scene.params.runtime.replayMode`
-- `locale` -> `scene.params.runtime.locale`
-- `sessionKind` -> `scene.params.runtime.sessionKind`
-- `inputProfile` -> `scene.params.runtime.inputProfile`
-- `seed` -> `scene.params.runtime.seed`
-
-Regles de mapping V1:
-
-- cles runtime non mappees ignorees par defaut
-- valeur mappee invalide -> diagnostic runtime
-- changement en cours de scene via `scene:param:patch`
-
-Sortie player:
-
-- etat observable
-- traces runtime
-- events sortants pour l'hote
-- events scene vers orchestration parent (ex: `scene:end`, `scene:request-next`)
-
-## API host minimale V1
-
-Commandes:
-
-- `load(compiledScene, mountTarget, runtimeContext?)`
-- `start()`
-- `stop(reason?)`
-- `emit(event)`
-- `setSceneParams(params)`
-- `patchSceneParams(patch)`
-- `getState()`
-- `subscribeTrace(listener)`
-- `destroy()`
+- `eventId`
+- `eventSeq`
+- `name`
+- `applyAtMs`
+- `source`
+- `data?`
+- `meta?`
 
 Regles:
 
-- `start()` exige une scene chargee
-- `RuntimeContext` est consomme a `load()` puis complete via params/events
-- les commandes host entrent dans le meme pipeline deterministe que les autres events
-- `mountTarget` est fourni par le host et reste hors `SceneDoc`
-- le stage runtime est instancie par scene chargee (scope scene)
-- `load()` verifie les modules requis et execute leur preload avant `start()`
+- `eventId` conserve s'il existe en entree, sinon genere
+- `eventSeq` toujours assigne par le Director
+- ordre canonique: `applyAtMs`, puis `eventSeq`
 
-## Forme logique de `CompiledScene`
+## Tracks et Eventimes
 
-`CompiledScene` doit contenir des structures pre-resolues:
+- compilation canonique par track
+- ajout dynamique runtime append-only
+- ajout dynamique uniquement via events publics
 
-- manifeste minimal (`schemaVersion`, `sceneId`, `compiledAt`)
-- contrat scene I/O compile (`inputs`, `outputs`, params schema si present)
-- exigences modules (`requiredCustomTypes`, mapping type -> module attendu)
-- index d'entites par ID runtime
-- tables de liens de composition
-- tables de routage signal (source -> cibles)
-- plans eventimes relies a des domaines runtime
-- scenario compile (initial node + transitions triees + commandes explicites)
-- descripteurs de persos (etat initial + actions)
-- plan d'instances story -> persos instancies (sans reference partagee)
-- plan d'instances straps avec mode explicite (global partage ou local copie)
-- descripteur de stage runtime (cadre racine interne)
+Controle canonique:
 
-Policy V1 straps globaux:
+- `tracks:set`
+- payload: `{ activate: string[]; deactivate: string[]; reason?: string }`
 
-- reset d'etat par defaut au `scene:start`
+Validation:
 
-Objectif: minimiser le travail de resolution pendant l'execution.
+- track inconnue: erreur auteur
+- meme track dans `activate` et `deactivate`: erreur sur cette track
+- traitement best-effort ordonne pour le reste
 
-Invariant d'instanciation:
+Semantique:
 
-- deux instances actives d'une meme story n'utilisent pas les memes IDs runtime de persos
-- un perso runtime appartient a une seule instance de story
+- desactivation immediate (hard gate)
+- pas de rattrapage retroactif a la reactivation
+- un `tracks:set` de sequence `N` n'affecte que les events `> N`
 
-Convention IDs runtime V1:
+## Story lifecycle runtime
 
-- `storyInstanceId`: `<storyId>#<n>`
-- `persoRuntimeId`: `<storyInstanceId>/<persoId>`
-- `strapRuntimeId` local: `<storyInstanceId>/<strapId>`
-- `strapRuntimeId` global: `global/<strapId>`
+- `Story.state` runtime-only
+- `listen` declaratif compilable, mapping `1 -> N`
+- sorties `listen` internes (non publiques, non journalisees)
+- emission publique immediate possible depuis un token interne
+- fin explicite via `story:end`
+- etat terminal sticky apres `story:end`
 
-Policy compteur V1:
+## Replay, cache, seek
 
-- compteur `n` reinitialise au `scene:start`
+Journal canonique:
 
-Objectif:
+- tenu par le Director
+- ecriture apres normalisation
+- tous les events publics traites sont journalises
 
-- identifiants lisibles humainement
-- derivation deterministe
-- debuggage et corrrelation des traces simplifies
+Modes:
 
-## Cycle d'execution player (niveau general)
+- `refaire`
+- `revoir`
 
-1. Ingestion
+En `revoir`:
 
-- events host/user
-- signaux techniques player/media
-- emissions internes story/strap
-- signaux DOM globaux normalises par le player (`resize`, `orientation`, etc.)
+- straps generateurs desactives
+- side-effects externes bloques
 
-Vocabulaire viewport technique V1:
+Seek V1:
 
-- `viewport:resize`
-- `viewport:orientation`
-- `viewport:safe-area`
+- `seek backward` par defaut render-only
+- pas de rollback logique story en mode state preserve
+- rollback logique complet via `scene:replay-from-zero`
 
-2. Production temporelle
+Cache:
 
-- scheduler evalue les domaines
-- cues franchis convertis en events discrets
+- invalidation possible selon events de pilotage
+- suppression physique des entrees invalides en V1
+- `eventSeq` et `commitSeq` continuent de croitre
 
-3. Ordonnancement
+## Configuration et policies
 
-- fusion des events disponibles
-- tri deterministe selon regles runtime
+Les policies sont portees par un dossier de configuration dedie.
 
-4. Resolution
+Couches de priorite:
 
-- dispatch vers listeners compiles
-- resolution des actions
-- evaluation des transitions scenario
+1. defaults framework
+2. preset environnement (`author` / `user`)
+3. config projet/scene
+4. patch runtime
 
-Politique scenario runtime V1:
+Regles:
 
-- transitions additives par defaut
-- aucun stop implicite des stories actives
-- stop applique uniquement sur commande/transition explicite
+- aucune regle critique en dur
+- `author`/`user` sont des presets, pas des branches hardcodees
 
-Politique eventime runtime V1:
+## Contraintes implementation cible
 
-- `seek forward`: emet les cues franchis une fois
-- `seek backward`: ne reemet pas automatiquement les cues deja tires
-- `rewind`: rearme les cues pour un nouveau passage
-- `loop`: reemet les cues a chaque boucle
-- replay user events: mode par defaut `refaire`, selection finale via contexte utilisateur
+- `setTimeout` et `setInterval` proscrits pour la cible finale
+- boucle cible: `rAF + queue + commit`
+- details des bibliotheques tierces hors contrat V1
 
-Modes replay cibles:
+## API et code style (rappel V1 recommande)
 
-- `refaire`: restart interactif sans rejouer automatiquement les inputs user
-- `revoir`: rejouer la session avec events user enregistres
+- appels inter-composants via facades d'API
+- methodes `register*` pour incorporer des elements
+- fonctions/classes documentees
+- constantes/config privilegiees aux valeurs en dur
+- verification par tests smoke en sous-ensembles par sujet
 
-5. Application
-
-- application des actions aux persos runtime
-- commandes media/player
-- commit rendu
-
-6. Trace
-
-- journal des decisions et transitions
-
-## Garanties minimales de determinisme
-
-- meme `CompiledScene` + meme flux d'entree => meme ordre de decisions
-- tie-breakers stables definis et testables
-- absence d'effets caches hors pipeline
-
-## Gestion des erreurs
-
-1. Compilation (builder)
-
-- erreurs bloquantes: scene non compilable
-- warnings: scene compilable avec points a surveiller
-
-2. Execution (player)
-
-- erreurs recoverables: action ignoree / event rejete avec trace
-- erreurs fatales: etat runtime invalide necessitant stop/reload
-
-Les erreurs doivent rester codees et classables (pas uniquement textuelles).
-
-## Observabilite
-
-Le contrat doit exposer:
-
-- traces de compilation (builder)
-- traces runtime (events, transitions, actions, cues)
-- diagnostics consultables par l'hote
-
-Mode debug:
-
-- granularite forte
-
-Mode player:
-
-- logs minimaux orientes perf
-
-## Place de la construction des persos
-
-La construction des persos appartient au builder core, pas au player.
-
-- builder: prepare les descripteurs (type, etat initial, actions, refs presentation)
-- player: instancie les representations runtime a partir de ces descripteurs
-
-La creation de nodes concrets est de la responsabilite du player (ou de son backend de rendu), pas du builder.
-
-## Place de la generation CSS/config presentation
-
-Cette partie appartient au builder presentation (optionnel):
-
-- utile pour integration web/editeur
-- removable sans casser le contrat narratif
-- versionnee separement du coeur scene
-
-## Position sur l'adaptateur temporaire
-
-- hors coeur builder/player
-- place dans des exemples de validation et tests de conception
-- non requis pour la production du runtime cible
-
-## Diagramme de responsabilites
+## Diagramme simple
 
 ```mermaid
 flowchart LR
-  SD[SceneDoc] --> BC[Builder core]
-  BC --> CS[CompiledScene]
-  BC --> CD[Compilation diagnostics]
-  BC --> BP[Builder presentation optionnel]
-  BP --> CP[CompiledPresentation]
-
-  CS --> PR[Player runtime]
-  CP --> PR
-
-  H[Host/UI/API] -->|events| PR
-  PR -->|trace/state| H
+  SD[Scene compilee] --> DIR[Director]
+  DIR -->|commits ordonnes| REN[Renderer]
+  REN -->|erreurs privees| DIR
+  DIR -->|journal canonique| LOG[Replay log]
 ```
 
-## Decisions V1 a figer
+## Lien avec les autres specs
 
-- format exact de `CompiledScene`
-- format exact des diagnostics builder/runtime
-- politique de mise a jour a chaud (`update`/`rebuild state|full`)
-- surface API host minimale
+- `02-story-model.md`
+- `03-event-model.md`
+- `04-eventime-model.md`
+- `10-api-host-v1.md`

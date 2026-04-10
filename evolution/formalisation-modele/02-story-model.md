@@ -1,165 +1,198 @@
-# Story model - orchestration locale event-driven
+# Story model V1 - orchestration locale dans le Director
 
 ## But
 
-Definir la Story comme unite d'orchestration locale:
+Definir le role d'une `Story` dans le socle V1:
 
-- elle recoit des events externes (broadcast global)
-- elle convertit intentionnellement des events entrants via `listen`
-- elle expose un bus interne pour ses persos/straps
-- elle emet des events vers l'exterieur
+- orchestration locale deterministe
+- consommation d'events publics scene-level
+- production de tokens internes et d'events publics
+- compatibilite multi-stories actives
 
-La story ne porte pas la temporalite globale. Le temps est traite par les producteurs d'events (eventimes, media, timer, etc.).
+Le rendu est hors scope Story et reste de la responsabilite du `Renderer`.
+
+## Position dans l'architecture
+
+Le Player V1 est compose de `Director + Renderer + Timer + Ticker`.
+
+Dans ce cadre:
+
+- la `Story` est orchestree cote `Director`
+- le `Director` gere state, listen, dispatch interne et emission publique
+- le `Renderer` applique des commits deja resolus
+
+Flux principal:
+
+1. event public recu par le `Director`
+2. filtrage/mapping par les stories actives
+3. resolution locale (items/straps)
+4. emission d'events publics eventuels
+5. production de commits pour le `Renderer`
+
+## Frontiere StoryDoc / runtime
+
+`StoryDoc` reste descriptif.
+
+- decrit le contenu (items, actions, listen declaratif)
+- ne porte pas le state runtime mutable
+- ne contient pas de hook `init` scriptable en V1
+
+Le state d'execution est runtime-only.
 
 ## Role de la story
 
-1. Frontiere locale
+1. Unite locale de filtrage
 
-- delimite un contenu logique (persos + straps)
-- isole le vocabulaire interne de la story
+- recoit tous les events publics
+- decide ce qu'elle consomme via ses regles `listen`
 
-2. Adaptation d'entree
+2. Unite locale de transformation
 
-- `listen` est un convertisseur alias-only
-- il mappe des noms externes vers des noms internes
-- il n'est pas un systeme de filtrage avance
+- transforme un event public en un ou plusieurs tokens internes
+- peut enrichir les donnees des tokens internes
 
-3. Routage interne
+3. Unite locale d'emission
 
-- les persos reagissent via `actions[eventName]`
-- les straps de story reagissent selon le meme principe
+- peut emettre des events publics a partir de traitements internes
+- emission immediate dans le meme cycle `Director`
 
-4. Emission
+4. Unite locale de state
 
-- la story peut emettre des events metier (`story:*`, `quiz:*`, etc.)
-- ces events repartent sur le bus global
+- maintient son `Story.state` runtime-only
+- expose des transitions locales pilotables par events
 
-## Semantique `listen`
+## Semantique `listen` V1
 
-Contrat retenu:
+### Nature
 
-- une regle = `{ event, as }`
-- quand `event` externe est recu, la story emet l'event interne `as`
-- mode alias-only: l'event externe original n'est pas re-emis dans le bus interne
+- `listen` est declaratif et compilable
+- `listen` n'est pas scriptable en V1
+
+### Capacites
+
+- mapping `1 -> N`
+- renommage de signal
+- enrichment de donnees
 
 Exemple d'intention:
 
-- externe: `pointer:click`
-- interne: `form.submit.request`
-- ce sont les persos qui decident quoi faire sur `form.submit.request`
+- entree publique: `fire`
+- sorties internes:
+  - token `fire-base`
+  - token `firework.create` avec data `{ quantity: 5 }`
 
-## Structure conceptuelle de StoryDoc
+### Portee
 
-Une story est composee de:
+- les sorties `listen` sont des tokens internes story
+- ces tokens ne sont pas publics
+- ces tokens ne sont pas journalises (derivables)
 
-- identite
-  - `id`
+## Story state V1
 
-- ingress
-  - `listen[]` (regles `event -> as`)
+### Regle principale
 
-- contenu
-  - references vers persos
-  - references vers straps locaux
+- `Story.state` est runtime-only
 
-Regles de contenu:
+### Comportement seek/pause
 
-- les persos references par une story lui sont exclusifs
-- un meme perso ne peut pas etre monte dans deux stories en parallele
-- les straps peuvent etre locaux (copie par story) ou globaux (instance partagee)
-- un perso peut etre de type standard ou custom (`item.type`)
-- pour un type custom, le module player definit le schema de `item.module` et de `actions[*].cmd`
-- les events emis par le module repassent sur le bus global via `emit(event)` injecte par le player
-- les actions standard du perso s'appliquent au noeud racine; les mises a jour internes restent dans le module
-- pour un module `exposed-targets`, `targetId` peut viser une cible interne exposee par le module
+- en `pause/seek`, le state est conserve par defaut
+- `seek backward` par defaut est render-only (pas de rollback logique)
 
-- orchestration locale
-  - actions de story (optionnel)
-  - emission d'events sortants (optionnel)
+### Reset logique
 
-Note: pas de `clockMode` requis dans ce modele de base.
+- rollback logique complet via event public `scene:replay-from-zero`
 
-## Pipeline d'execution local (story)
+## Fin de story
 
-1. reception externe
+Regles V1:
 
-- un event global arrive depuis le bus runtime
+- une story se termine via event public explicite `story:end`
+- `story:end` est idealement emis par la story
+- etat terminal sticky apres `story:end`
+- une story sticky ne redevient active que par reset explicite ou replay depuis zero
 
-2. conversion ingress
+## Straps dans la story
 
-- evaluation des regles `listen` en ordre de declaration
-- production de zero, un, ou plusieurs events internes alias
+### Contrat V1
 
-3. dispatch interne
+- un strap n'a pas de state propre
+- un strap recoit un event/token + context
+- un strap retourne un resultat de type:
+  - `statePatch`
+  - `events`
+  - `sideEffects`
 
-- matching exact sur `actionsByEventName`
-- application aux persos et straps de la story
+### Replay `revoir`
 
-4. emission externe
+- straps generateurs desactives
+- side-effects externes bloques
 
-- les consequences peuvent emettre des events globaux
-- le scenario peut alors transitionner
+Note:
 
-## Regles de determinisme
+- le detail de `context` reste ouvert a ce stade
 
-- ordre de declaration des regles `listen` preserve
-- matching interne par egalite exacte de nom
-- ordre stable des listeners internes preserve
-- aucune evaluation implicite hors pipeline
+## Multi-stories et instanciation
 
-## Invariants de validation Story
+- plusieurs stories peuvent etre actives en parallele
+- les events publics sont diffuses globalement
+- un perso runtime appartient a une seule instance de story
+- l'adressage runtime des cibles reste composite:
+  - `(storyInstanceId, itemId, targetId?)`
 
-1. Integrite des regles
+## Determinisme et ordre
 
-- `listen.event` non vide
-- `listen.as` non vide
+Le `Director` garantit:
 
-2. Integrite du contenu
+- ordre canonique par `eventSeq` monotone global
+- a egalite temporelle, `eventSeq` tranche
+- emission d'events publics consequents dans le meme cycle avec `eventSeq` suivant
 
-- chaque reference de perso/strap doit exister
-- pas d'ID duplique dans l'espace local de story
+## Erreurs et policy
 
-3. Hygiene events
+- les erreurs de logique auteur sont tracees comme erreurs auteur
+- les reactions runtime (stop, continue, degrade) dependent de la policy d'execution
+- les presets `author` et `user` viennent de la configuration (pas de hardcode)
 
-- pas d'usage involontaire des prefixes reserves runtime
-- conventions de nommage event appliquees de facon uniforme
+## Invariants Story V1
 
-4. Coherence alias-only
+1. Coherence listen
 
-- le runtime ne reinjecte pas automatiquement l'event externe original dans le bus interne
+- regles `listen` compilables
+- aucune sortie interne vide
 
-## Relation avec le scenario
+2. Separation public/interne
 
-Le scenario observe les events globaux emis par stories/straps/player.
+- event public = scope scene
+- token interne = scope story uniquement
 
-- la story reste locale
-- le scenario reste global
-- la transition narrative ne depend pas d'une horloge de story, mais du flux d'events
+3. State ownership
 
-Dans une scene multi-stories actives:
+- state mutable de story uniquement cote runtime
+- pas de state story mutable persiste dans `StoryDoc`
 
-- plusieurs stories peuvent recevoir/emettre en parallele
-- le scenario peut maintenir des overlays et des interruptions sans changer de modele
-- par defaut, une transition scenario ajoute/active sans stopper implicitement les autres stories
-- l'arret d'une story reste une intention explicite
-- chaque instance conserve sa propre copie de persos, sans partage entre instances
+4. Fin sticky
 
-## Diagramme de flux (story)
+- `story:end` bascule la story en terminal sticky
+
+5. Determinisme
+
+- meme entree publique + meme state + meme policy => meme suite interne
+
+## Diagramme de flux
 
 ```mermaid
 flowchart LR
-  EXT[Bus global externe] --> IN[Story ingress]
-  IN --> L[listen: event -> as]
-  L --> IBUS[Bus interne story]
-  IBUS --> P[Persos actions[eventName]]
-  IBUS --> R[Straps locaux actions[eventName]]
-  P --> OUT[Events sortants]
-  R --> OUT
-  OUT --> EXT
+  PUB[Event public scene] --> L[Story listen declaratif]
+  L --> TOK[Tokens internes story]
+  TOK --> IT[Items actions]
+  TOK --> ST[Straps]
+  IT --> EP[Events publics emis]
+  ST --> EP
+  EP --> PUB
 ```
 
-## Points ouverts (a traiter dans les prochains docs)
+## Lien avec les autres specs
 
-- politique si plusieurs regles `listen` produisent le meme alias au meme tick
-- format canonique de l'enveloppe event (meta, correlation, trace)
-- regles de nommage et namespaces metier/technique
+- `03-event-model.md`: enveloppe event, ordre global, journal
+- `04-eventime-model.md`: compilation par track et production temporelle
+- `06-runtime-contract.md`: contrat `Director -> Renderer`

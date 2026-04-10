@@ -1,183 +1,126 @@
-# Event model - langage commun du runtime
+# Event model V1 - socle minimal
 
 ## But
 
-Definir un modele d'event unique pour tout le systeme:
+Definir un modele d'event minimal, deterministe et suffisant pour le socle V1.
 
-- entrees utilisateur
-- emissions story/strap
-- cues temporels (eventimes)
-- signaux techniques player/runtime
+Le principe est de rester simple:
 
-L'objectif est d'avoir un flux d'events unique, deterministe et traçable.
+- champs indispensables seulement
+- ordre canonique explicite
+- extension possible plus tard
 
-## Intention
+## Portee
 
-Le moteur doit rester event-driven de bout en bout.
+Le modele couvre:
 
-- la scene ne "avance" pas par magie
-- tout changement observable est cause par un event
-- les events sont transportes dans une enveloppe commune
+- events publics traites par le `Director`
+- journal canonique replay
+- ordre d'execution scene-level
 
-Ce modele sert de contrat entre builder, player et scenario.
+Il ne couvre pas encore:
 
-## Typologie des events
+- schema avance de correlation/telemetrie
+- details riches de tracing
 
-1. Events metier (contenu)
+## Principe global
 
-- noms libres choisis par l'auteur
-- ex: `form.submit.request`, `quiz.answer.correct`, `story:intro:end`
+- tout event est public a l'echelle scene
+- toutes les stories actives peuvent le recevoir
+- filtrage et mapping restent de la responsabilite des stories
 
-2. Events utilisateur
+## Enveloppe minimale V1
 
-- produits par l'interface hote
-- ex: `pointer:click`, `keyboard:enter`, `form:change`
+Champs requis:
 
-3. Events temporels (eventimes)
+- `eventId`: identifiant d'event
+- `eventSeq`: sequence monotone globale
+- `name`: nom d'event
+- `applyAtMs`: temps cible base sur le `Timer` commun
+- `source`: source logique (`user | director | system | replay`)
 
-- produits par le scheduler depuis un domaine de temps
-- ex: `media:intro:beat`, `chapter:marker:2`
+Champs optionnels:
 
-4. Events techniques runtime/player
+- `data`: payload metier/technique
+- `meta`: bloc optionnel de debug
 
-- produits par le player, le media engine, la plateforme
-- ex: `player:play`, `media:ended`, `runtime:error`
+Regles V1:
 
-Vocabulaire viewport technique V1 (fige):
+- si `eventId` existe en entree, il est conserve
+- sinon `eventId` est genere par le `Director`
+- `eventSeq` est toujours assigne par le `Director`
 
-- `viewport:resize`
-- `viewport:orientation`
-- `viewport:safe-area`
+## Ordonnancement canonique
 
-5. Events d'orchestration externe
+Regle d'ordre:
 
-- utilises entre une scene et son orchestrateur parent
-- ex: `scene:start`, `scene:param:set`, `scene:end`, `scene:request-next`
+1. `applyAtMs` croissant
+2. a egalite, `eventSeq` croissant
 
-## Enveloppe canonique
+Invariant:
 
-Chaque event transporte la meme forme logique.
+- `eventSeq` tranche toujours les egalites temporelles
 
-- `name`: nom d'event (obligatoire)
-- `data`: charge utile metier/technique (optionnel)
-- `meta`: informations d'observabilite et d'ordonnancement (optionnel)
+Regle track-specifique:
 
-`meta` doit couvrir au minimum:
+- un `tracks:set` de sequence `N` n'affecte que les events `> N`
 
-- `source`: `user | story | strap | eventime | player | scene | system`
-- `sessionMs`: horloge session au moment de l'emission
-- `traceId` ou `correlationId` (si disponible)
-- `storyId` / `instanceId` quand applicable
-- `domainRef` pour les events issus d'eventimes
+## Journal canonique V1
 
-## Namespaces et hygiene
+Le journal canonique est tenu par le `Director`.
 
-Deux familles coexistent:
+Regles:
 
-- plan metier: libre
-- plan technique: prefixes reserves
+- ecriture apres normalisation
+- journalisation de tous les events publics traites
+- tokens internes de `listen` non journalises (derivables)
 
-Prefixes reserves runtime:
+## Evenements internes vs publics
 
-- `player:*`
-- `runtime:*`
-- `system:*`
-- `media:*` (technique player/media)
+- events publics: scopes scene, journalises
+- tokens internes story: scopes story, non publics, non journalises
 
-Regle de base:
+Un token interne peut emettre un event public:
 
-- le contenu metier ne doit pas reutiliser involontairement ces prefixes
-- si un event technique est adapte vers le metier, cela passe par `listen` story
+- emission immediate dans le meme cycle `Director`
+- attribution du `eventSeq` suivant
 
-## Semantique de diffusion
+## Erreurs auteur et validation
 
-1. Bus global
-
-- tout event externe est diffuse aux stories actives
-- la diffusion garde un ordre deterministe
-
-2. Story ingress
-
-- `listen` convertit `event -> as` en alias-only
-- seul l'alias entre dans le bus interne story
-
-3. Dispatch interne
-
-- persos/straps reagissent par matching exact du nom
-- pas de wildcard implicite
-
-## Regles d'ordonnancement
-
-Le runtime applique un ordre stable quand plusieurs events tombent "au meme moment".
-
-Principes:
-
-- tri temporel principal (`ms` croissant)
-- tie-breakers stables (ordre de piste, index, source)
-- politique explicite pour user vs story/system a egalite
-
-Ce contrat doit rester identique entre mode player et mode debug.
-
-## Regles de transformation
-
-1. `listen` (story)
-
-- transforme uniquement le nom (`event` vers `as`)
-- ne filtre pas par `data`
-- ne modifie pas `data`
-
-2. Effets strap
-
-- peuvent emettre de nouveaux events globaux
-- doivent renseigner `meta.source='strap'`
-
-3. Scheduler eventime
-
-- emet des events discrets quand un cue est franchi
-- renseigne le domaine temporel dans `meta.domainRef`
-
-## Validation normative (niveau event)
-
-Erreurs bloquantes recommandee au chargement/compilation:
+Exemples d'erreurs auteur V1:
 
 - nom d'event vide
-- nom d'event invalide (format non conforme)
-- collision avec prefixe reserve cote contenu
-- regle `listen` incomplete (`event` ou `as` manquant)
+- format d'event invalide
+- `tracks:set` avec track inconnue
+- `tracks:set` avec meme track dans `activate` et `deactivate`
 
-Warnings recommandés:
+Reaction runtime:
 
-- alias redondant (`event === as`)
-- evenements definis mais jamais consommes
-- actions referencees sur des noms jamais emis
+- depend de la policy d'execution (`author`/`user`) via configuration
 
-## Observabilite
+## Extensions futures (hors V1 minimal)
 
-Le runtime doit pouvoir tracer chaque etape:
+Champs possibles plus tard:
 
-1. event recu (global)
-2. event alias produit par `listen`
-3. listeners internes resolves
-4. actions appliquees
-5. event(s) sortant(s) emis
+- correlation
+- domain/time refs enrichies
+- traces fines par etape
 
-Objectif: comprendre sans ambiguite "quel event a cause quoi".
+Ces extensions ne doivent pas casser le noyau minimal V1.
 
-## Diagramme de flux event
+## Diagramme simple
 
 ```mermaid
 flowchart LR
-  EXT[Event global entrant] --> S[Story ingress]
-  S --> L[listen alias-only]
-  L --> I[Event interne alias]
-  I --> D[Dispatch exact actions]
-  D --> A[Actions persos/straps]
-  A --> O[Event(s) sortant(s)]
-  O --> BUS[Bus global]
+  IN[Event public entrant] --> N[Normalisation Director]
+  N --> J[Journal canonique]
+  N --> D[Dispatch stories]
+  D --> OUT[Events publics sortants]
+  OUT --> N
 ```
 
-## Lien avec les prochains documents
+## Lien avec les autres specs
 
-- `04-eventime-model.md`: definition des domaines temporels et de la projection en events
-- `05-graph-model.md`: modelisation explicite des liens signal/temps/contenu
-- `06-runtime-contract.md`: frontiere builder vs player et responsabilites d'execution
+- `02-story-model.md`: consommation locale et tokens internes
+- `04-eventime-model.md`: production temporelle par track
+- `06-runtime-contract.md`: passage vers commits renderer
