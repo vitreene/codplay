@@ -1,3 +1,4 @@
+import type { RuntimeEventSource } from '../core/events/types'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import type { StoryDoc } from '../runtime/types'
 
@@ -26,6 +27,15 @@ export type PlayerStateSnapshot = {
   runtimeRevision: number
 }
 
+export type PlayerPublicEventInput = {
+  id?: string
+  name: string
+  ms?: number
+  payload?: Record<string, unknown>
+  source?: RuntimeEventSource
+  trackId?: string
+}
+
 export type PlayerCommandError = {
   code: string
   message: string
@@ -48,6 +58,7 @@ export type PlayerApi = {
   destroy: () => Promise<PlayerCommandResult>
   play: () => Promise<PlayerCommandResult>
   pause: () => Promise<PlayerCommandResult>
+  emit: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>
   seek: (targetTimelineMs: number) => Promise<PlayerCommandResult>
   rewind: () => Promise<PlayerCommandResult>
   rebuild: (mode?: RebuildMode) => Promise<PlayerCommandResult>

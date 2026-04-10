@@ -16,6 +16,7 @@ Specs V1 alignees sur ce plan:
 - `06-runtime-contract.md`
 - `10-api-host-v1.md`
 - `11-runtime-context-mapping-v1.md`
+- `12-runtime-migration-plan-v1.md` (objectif 2: plan de migration code)
 
 ## Notes de contexte / transition
 
@@ -24,10 +25,6 @@ Specs V1 alignees sur ce plan:
 - `18-socle-v1-grandes-lignes.md` (note de transition, consolidee dans le plan)
 - `session-context-2026-04-10.md` (plan de reprise de session)
 
-## Documents conserves (historique)
+## Nettoyage documentaire
 
-- `01-scene-model.md`
-- `05-graph-model.md`
-- `07-perso-compilation-boundary.md`
-- `08-perso-contract-v1.md`
-- `09-perso-custom-actions-v1.md`
+Les notes historiques pre-consolidation ont ete retirees du dossier pour eviter toute ambiguite sur la reference V1 active.

@@ -1,4 +1,4 @@
-import { createClock, type Clock } from './clock'
+import { TimeClock, type Clock } from './clock'
 
 export type TickPayload = {
   prevMs: number
@@ -83,21 +83,23 @@ export class TimeTicker implements Ticker {
   private readonly frameDurationMs: number
   private readonly marginMs: number
   private readonly scheduler: FrameScheduler
-  private readonly pauseOnDocumentHidden: boolean
-  private readonly visibilityController: VisibilityController | null
+
   private requestId: FrameRequestId | null = null
   private running = false
-  private pausedByVisibility = false
   private lastTickMs = 0
   private scheduledTickMs = 0
   private tickHandler: TickHandler | null = null
+
+  private pausedByVisibility = false
+  private readonly pauseOnDocumentHidden: boolean
+  private readonly visibilityController: VisibilityController | null
   private visibilityUnsubscribe: (() => void) | null = null
 
   /**
    * Configures the ticker instance with deterministic defaults.
    */
   constructor(options: TickerOptions = {}) {
-    this.clock = options.clock ?? createClock()
+    this.clock = options.clock ?? new TimeClock()
     this.frameDurationMs = Math.max(1, options.intervalMs ?? 16)
     this.marginMs = options.marginMs ?? 0
     this.scheduler = options.scheduler ?? createFrameScheduler()
@@ -145,70 +147,11 @@ export class TimeTicker implements Ticker {
   }
 
   /**
-   * Computes whether ticking should pause because the document is hidden.
-   */
-  private isVisibilityPaused(): boolean {
-    if (!this.pauseOnDocumentHidden || this.visibilityController === null) {
-      return false
-    }
-
-    return this.visibilityController.isHidden()
-  }
-
-  /**
    * Resets timing anchors before scheduling a fresh loop.
    */
   private resetTimingAnchor(): void {
     this.lastTickMs = this.clock.nowMs()
     this.scheduledTickMs = this.lastTickMs + this.frameDurationMs
-  }
-
-  /**
-   * Registers visibility listeners once while the ticker is active.
-   */
-  private attachVisibilityListener(): void {
-    if (!this.pauseOnDocumentHidden || this.visibilityController === null || this.visibilityUnsubscribe !== null) {
-      return
-    }
-
-    this.visibilityUnsubscribe = this.visibilityController.subscribe(() => {
-      this.handleVisibilityChange()
-    })
-  }
-
-  /**
-   * Removes visibility listeners when the ticker stops.
-   */
-  private detachVisibilityListener(): void {
-    if (this.visibilityUnsubscribe === null) {
-      return
-    }
-
-    this.visibilityUnsubscribe()
-    this.visibilityUnsubscribe = null
-  }
-
-  /**
-   * Reacts to document visibility changes while preserving time continuity.
-   */
-  private handleVisibilityChange(): void {
-    if (!this.running) {
-      return
-    }
-
-    if (this.isVisibilityPaused()) {
-      this.pausedByVisibility = true
-      this.cancelScheduledFrame()
-      return
-    }
-
-    if (!this.pausedByVisibility || this.tickHandler === null) {
-      return
-    }
-
-    this.pausedByVisibility = false
-    this.resetTimingAnchor()
-    this.requestId = this.scheduler.request(this.loop)
   }
 
   /**
@@ -272,11 +215,63 @@ export class TimeTicker implements Ticker {
   isRunning(): boolean {
     return this.running
   }
-}
 
-/**
- * Creates a ticker instance through a functional factory.
- */
-export function createTicker(options: TickerOptions = {}): Ticker {
-  return new TimeTicker(options)
+  /**
+   * Computes whether ticking should pause because the document is hidden.
+   */
+  private isVisibilityPaused(): boolean {
+    if (!this.pauseOnDocumentHidden || this.visibilityController === null) {
+      return false
+    }
+
+    return this.visibilityController.isHidden()
+  }
+
+  /**
+   * Registers visibility listeners once while the ticker is active.
+   */
+  private attachVisibilityListener(): void {
+    if (!this.pauseOnDocumentHidden || this.visibilityController === null || this.visibilityUnsubscribe !== null) {
+      return
+    }
+
+    this.visibilityUnsubscribe = this.visibilityController.subscribe(() => {
+      this.handleVisibilityChange()
+    })
+  }
+
+  /**
+   * Removes visibility listeners when the ticker stops.
+   */
+  private detachVisibilityListener(): void {
+    if (this.visibilityUnsubscribe === null) {
+      return
+    }
+
+    this.visibilityUnsubscribe()
+    this.visibilityUnsubscribe = null
+  }
+
+  /**
+   * Reacts to document visibility changes while preserving time continuity.
+   */
+  private handleVisibilityChange(): void {
+    if (!this.running) {
+      return
+    }
+
+    if (this.isVisibilityPaused()) {
+      this.pausedByVisibility = true
+      this.cancelScheduledFrame()
+      return
+    }
+
+    if (!this.pausedByVisibility || this.tickHandler === null) {
+      return
+    }
+
+    this.pausedByVisibility = false
+    this.resetTimingAnchor()
+    this.requestId = this.scheduler.request(this.loop)
+  }
 }

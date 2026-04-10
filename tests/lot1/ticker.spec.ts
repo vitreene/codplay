@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createClock } from '../../src/core/time/clock'
-import { createTicker, type TickPayload, type VisibilityController } from '../../src/core/time/ticker'
+import { TimeClock } from '../../src/core/time/clock'
+import { TimeTicker, type TickPayload, type VisibilityController } from '../../src/core/time/ticker'
 
 class VisibilityControllerStub implements VisibilityController {
   private hidden = true
@@ -50,8 +50,8 @@ describe('Lot 01 - timer/ticker', () => {
   })
 
   it('L1-T1 start/stop are idempotent', () => {
-    const clock = createClock(() => Date.now())
-    const ticker = createTicker({ clock, intervalMs: 10, marginMs: 5 })
+    const clock = new TimeClock(() => Date.now())
+    const ticker = new TimeTicker({ clock, intervalMs: 10, marginMs: 5 })
     const onTick = vi.fn<(payload: TickPayload) => void>()
 
     ticker.start(onTick)
@@ -68,8 +68,8 @@ describe('Lot 01 - timer/ticker', () => {
   })
 
   it('L1-T2 ticker payload remains monotonic', () => {
-    const clock = createClock(() => Date.now())
-    const ticker = createTicker({ clock, intervalMs: 10, marginMs: 2 })
+    const clock = new TimeClock(() => Date.now())
+    const ticker = new TimeTicker({ clock, intervalMs: 10, marginMs: 2 })
     const ticks: TickPayload[] = []
 
     ticker.start((payload) => {
@@ -87,8 +87,8 @@ describe('Lot 01 - timer/ticker', () => {
   })
 
   it('L1-T3 deltaMs equals nowMs - prevMs', () => {
-    const clock = createClock(() => Date.now())
-    const ticker = createTicker({ clock, intervalMs: 10, marginMs: 0 })
+    const clock = new TimeClock(() => Date.now())
+    const ticker = new TimeTicker({ clock, intervalMs: 10, marginMs: 0 })
     const ticks: TickPayload[] = []
 
     ticker.start((payload) => {
@@ -106,8 +106,8 @@ describe('Lot 01 - timer/ticker', () => {
   })
 
   it('L1-T4 ticker emits minimal payload including marginMs', () => {
-    const clock = createClock(() => Date.now())
-    const ticker = createTicker({ clock, intervalMs: 10, marginMs: 9 })
+    const clock = new TimeClock(() => Date.now())
+    const ticker = new TimeTicker({ clock, intervalMs: 10, marginMs: 9 })
     const ticks: TickPayload[] = []
 
     ticker.start((payload) => {
@@ -129,8 +129,8 @@ describe('Lot 01 - timer/ticker', () => {
   it('L1-T5 ticker pauses and resumes on visibility changes', () => {
     const visibilityController = new VisibilityControllerStub()
 
-    const clock = createClock(() => Date.now())
-    const ticker = createTicker({
+    const clock = new TimeClock(() => Date.now())
+    const ticker = new TimeTicker({
       clock,
       intervalMs: 10,
       marginMs: 0,

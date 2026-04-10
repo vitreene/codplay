@@ -60,9 +60,10 @@ Objectif atteint:
 
 ### Regles TypeScript (recommandees)
 
-- facade d'API entre composants
+- facade d'API formelle au niveau `Player` (API host)
+- communication interne inter-modules autorisee en mode plus direct (orientee performance)
 - fonctions/classes documentees
-- methodes `register*` pour incorporer les elements
+- methodes `register*` reservees aux besoins d'extensibilite
 - noms de fonctions courts et symboliques
 - constantes/configuration privilegiees aux valeurs en dur
 - tests smoke en sous-ensembles par sujet
@@ -83,13 +84,13 @@ Objectif atteint:
 
 1. Finaliser la passe documentaire V1
 
-- aligner les docs restants si necessaire (`01-scene-model.md`, `05-graph-model.md`)
+- retirer les notes obsoletes pre-consolidation pour eviter les ambiguities de reference
 - verifier la coherence transversale des termes (`Director`, `Renderer`, `runtimeConfig`, `tracks:set`)
 
 2. Preparer la migration code runtime
 
 - etablir le plan de transformation du player actuel vers un `Renderer`
-- definir les facades API minimales entre `Director` et `Renderer`
+- definir des contrats internes minimaux `Director`/`Renderer` (sans facade imposee)
 - poser la structure de configuration/policies dans le code
 
 3. Demarrer la reecriture runtime par etapes
@@ -108,6 +109,31 @@ Objectif atteint:
 
 - garder le socle V1 stable
 - traiter le scripting comme extension progressive via API auteur
+
+## Reprise effectuee (complement)
+
+Objectif 1 (passe documentaire V1) avance:
+
+- `README.md` precise explicitement le statut non normatif des documents historiques
+- les notes obsoletes `01-scene-model.md`, `05-graph-model.md`, `07-perso-compilation-boundary.md`, `08-perso-contract-v1.md` et `09-perso-custom-actions-v1.md` sont retirees
+- le dossier ne conserve que les references V1 actives et les notes de contexte utiles
+
+Objectif 2 (preparation migration code runtime) decrit:
+
+- plan de migration ajoute: `12-runtime-migration-plan-v1.md`
+- contrats internes minimaux `Director`/`Renderer` et structure `runtimeConfig` explicites
+- trajectoire de transformation en 5 etapes alignee vers l'objectif 3
+
+Objectif 2 (implementation) demarre:
+
+- extraction initiale du `Renderer` dans `src/renderer/create-renderer.ts`
+- `create-player` converti en orchestration de commits vers `Renderer`
+- alignement canonique V1: suppression des factories de compatibilite (`createPlayer`, `createRenderer`) au profit des classes (`PlayerFacade`, `RendererFacade`)
+- ajustement spec: facade formelle reservee au `Player` (API host), communication interne plus directe autorisee pour les hot paths
+- extraction initiale du `Director` dans `src/director/create-director.ts`
+- `PlayerFacade` delegue desormais la resolution d'events au `Director`
+- `PlayerFacade.emit(...)` ajoute pour injecter des events publics en test reel
+- demo POC simple ajoutee dans `src/main.ts` (bloc `DEMO` rouge + rotation `180deg` sur `2000ms`)
 
 ## Regle de reprise
 

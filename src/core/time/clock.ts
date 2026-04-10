@@ -43,10 +43,3 @@ export class TimeClock implements Clock {
     this.baseMs = nextBaseMs
   }
 }
-
-/**
- * Creates a clock instance through a functional factory.
- */
-export function createClock(nowProvider: NowProvider = () => Date.now()): Clock {
-  return new TimeClock(nowProvider)
-}

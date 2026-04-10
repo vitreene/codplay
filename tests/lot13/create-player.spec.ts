@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createPlayer } from '../../src/player/create-player'
+import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
 /**
@@ -32,7 +32,7 @@ function createSceneFixture(): SceneDoc {
 
 describe('Lot 13 - createPlayer API and state runtime', () => {
   it('L13-T1 init/destroy are idempotent and keep stable state', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
 
     expect(player.getState().status).toBe('idle')
 
@@ -55,7 +55,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
   })
 
   it('L13-T2 play/pause/seek update player state deterministically', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     await player.init(createSceneFixture())
 
     expect(await player.play()).toEqual({ ok: true })
@@ -78,7 +78,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
   })
 
   it('L13-T3 invalid state commands are rejected with explicit code', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
 
     const playBeforeInit = await player.play()
     expect(playBeforeInit).toMatchObject({
@@ -97,7 +97,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       }
     })
 
-    const restrictedPlayer = createPlayer({
+    const restrictedPlayer = new PlayerFacade({
       runtimePolicy: {
         allowedRebuildModes: ['state']
       }
@@ -113,7 +113,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
   })
 
   it('L13-T4 command traces and state subscriptions are emitted', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     const traceEvents: string[] = []
     const statuses: string[] = []
 

@@ -239,13 +239,22 @@ Portee:
 
 Regles:
 
-- les appels entre composants passent par une facade d'API explicite
+- la facade d'API formelle est requise au niveau `Player` (API host)
+- a l'interieur du `Player`, la communication inter-modules peut etre plus directe et orientee performance
+- V1 est canonique: aucune couche de retro-compatibilite n'est conservee
+- pour les composants runtime/facades, preferer les classes aux fonctions
+- ne pas ajouter de factory de compatibilite autour des classes cibles
 - toutes les fonctions et toutes les classes sont documentees
-- l'incorporation d'un element dans un composant passe par des methodes `register*`
+- utiliser `register*` seulement quand c'est utile pour l'extensibilite (non obligatoire partout)
 - les noms de fonctions sont de preference symboliques et courts
 - preferer les constantes et la configuration aux valeurs en dur
 - les fonctions sont verifiees par des tests smoke
 - les tests smoke sont organises en sous-ensembles par sujet
+
+Organisation interne des classes:
+
+- methodes metier critiques d'abord
+- methodes contextuelles (trace, listeners, telemetrie, debug) ensuite
 
 ## Contraintes implementation cible
 

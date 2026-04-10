@@ -193,9 +193,10 @@ Rappels:
 
 ## Regles ecriture TypeScript (V1)
 
-- les appels entre composants passent par une facade d'API explicite
+- facade d'API formelle requise au niveau `Player` (API host)
+- communication interne inter-modules autorisee en mode direct si cela simplifie/performe mieux
 - toutes les fonctions et toutes les classes sont documentees
-- l'incorporation d'un element dans un composant passe par des methodes `register*`
+- methodes `register*` reservees aux besoins d'extensibilite explicites
 - les noms de fonctions sont de preference symboliques et courts
 - preferer les constantes et la configuration aux valeurs en dur
 - les fonctions sont verifiees par des tests smoke

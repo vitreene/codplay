@@ -183,8 +183,10 @@ Regles:
 
 ## API et code style (rappel V1 recommande)
 
-- appels inter-composants via facades d'API
-- methodes `register*` pour incorporer des elements
+- facade d'API formelle requise au niveau `Player` (API host)
+- communication interne `Director`/`Renderer`/`Timer`/`Ticker` libre tant que le determinisme est preserve
+- pour les hot paths runtime, privilegier des appels directs et structures de donnees simples
+- methodes `register*` reservees aux besoins d'extensibilite explicites
 - fonctions/classes documentees
 - constantes/config privilegiees aux valeurs en dur
 - verification par tests smoke en sous-ensembles par sujet

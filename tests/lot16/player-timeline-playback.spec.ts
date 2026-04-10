@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
-import { createPlayer } from '../../src/player/create-player'
+import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
 describe('Lot 16 - playback timeline minimal', () => {
@@ -64,7 +64,7 @@ describe('Lot 16 - playback timeline minimal', () => {
 
     const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
     const animationAdapter = createAnimationAdapter(animeImplementation)
-    const player = createPlayer({
+    const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
         nodeFactory: () => runtimeNode
@@ -156,7 +156,7 @@ describe('Lot 16 - playback timeline minimal', () => {
 
     const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
     const animationAdapter = createAnimationAdapter(animeImplementation)
-    const player = createPlayer({
+    const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
         nodeFactory: () => runtimeNode

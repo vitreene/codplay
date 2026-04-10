@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createPlayer } from '../../src/player/create-player'
+import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 import { createLocalTelco } from '../../src/telco-local/create-local-telco'
 
@@ -32,7 +32,7 @@ function createSceneFixture(): SceneDoc {
 
 describe('Lot 14 - telco locale composant', () => {
   it('L14-T1 dispatch executes player commands with deterministic request ids', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     await player.init(createSceneFixture())
 
     const telco = createLocalTelco({ player })
@@ -59,7 +59,7 @@ describe('Lot 14 - telco locale composant', () => {
   })
 
   it('L14-T2 telco state subscription mirrors player state changes', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     await player.init(createSceneFixture())
 
     const telco = createLocalTelco({ player })
@@ -76,7 +76,7 @@ describe('Lot 14 - telco locale composant', () => {
   })
 
   it('L14-T3 invalid seek payload is rejected by telco', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     await player.init(createSceneFixture())
 
     const telco = createLocalTelco({ player })
@@ -97,7 +97,7 @@ describe('Lot 14 - telco locale composant', () => {
   })
 
   it('L14-T4 command result subscription receives applied and rejected outcomes', async () => {
-    const player = createPlayer()
+    const player = new PlayerFacade()
     await player.init(createSceneFixture())
 
     const telco = createLocalTelco({ player })
