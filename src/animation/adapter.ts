@@ -2,6 +2,7 @@ import type { AnimationAdapter, AnimationHandle, TransitionRequest } from './typ
 
 export type AnimeAnimationLike = {
   pause?: () => void
+  revert?: () => void
 }
 
 export type AnimeImplementation = (parameters: Record<string, unknown>) => AnimeAnimationLike | null | undefined
@@ -134,13 +135,22 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
         continue
       }
 
+      let isStopped = false
+      const stopAnimation = () => {
+        if (isStopped) {
+          return
+        }
+
+        isStopped = true
+        animation.revert?.()
+        animation.pause?.()
+      }
+
       for (const transition of transitionGroup.transitions) {
         const handle: AnimationHandle = {
           transitionId: transition.transitionId,
           target: transition.target,
-          stop: () => {
-            animation.pause?.()
-          }
+          stop: stopAnimation
         }
 
         activeHandles.push(handle)

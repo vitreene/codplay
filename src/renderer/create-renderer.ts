@@ -107,6 +107,7 @@ export class RendererFacade implements RendererApi {
    * Loads one story into renderer and mounts runtime elements.
    */
   load(input: RendererLoadInput): RendererCommandResult {
+    this.animationAdapter.stop()
     this.activeStory = input.story
     this.runtimeElements = mountSceneElements(input.story, this.options.createElementOptions)
     this.pendingCommits = []

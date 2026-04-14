@@ -1,239 +1,222 @@
 :root {
-  --bg-top: #f5f7fb;
-  --bg-bottom: #e7edf5;
-  --card: #ffffff;
-  --line: #cfd8e6;
-  --text: #1f2b3d;
-  --muted: #50627d;
-  --accent: #0b7a75;
-  --accent-strong: #095f5b;
-  --danger: #8c2f39;
-  --shadow: 0 12px 30px rgba(16, 38, 67, 0.12);
+	--bg-top: #f5f7fb;
+	--bg-bottom: #e7edf5;
+	--card: #ffffff;
+	--line: #cfd8e6;
+	--text: #1f2b3d;
+	--muted: #50627d;
+	--accent: #0b7a75;
+	--accent-strong: #095f5b;
+	--danger: #8c2f39;
+	--shadow: 0 12px 30px rgba(16, 38, 67, 0.12);
 }
 
 * {
-  box-sizing: border-box;
+	box-sizing: border-box;
 }
 
 body {
-  margin: 0;
-  height: 100svh;
-  overflow: hidden;
-  color: var(--text);
-  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
-  background: linear-gradient(165deg, var(--bg-top), var(--bg-bottom));
+	margin: 0;
+	height: 100svh;
+	overflow: hidden;
+	color: var(--text);
+	font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+	background: linear-gradient(165deg, var(--bg-top), var(--bg-bottom));
 }
 
 #app {
-  width: min(1220px, 100% - 1rem);
-  height: 100%;
-  margin: 0 auto;
-  padding: 0.5rem 0;
-}
-
-.demo-shell {
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  gap: 0.7rem;
-  grid-template-rows: auto auto auto auto 1fr;
+	width: min(1220px, 100% - 1rem);
+	height: 100%;
+	margin: 0 auto;
+	padding: 0.5rem 0;
 }
 
 .container {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	box-shadow: var(--shadow);
+	min-height: 0;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
 }
 
 .demo-box {
-  transform-origin: 50% 50%;
+	transform-origin: 50% 50%;
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 370px 1fr;
-  grid-template-rows: auto 1fr;
-  gap: 0.7rem;
-  height: 100%;
-  min-height: 0;
+	display: grid;
+	grid-template-columns: 370px 1fr;
+	grid-template-rows: auto 1fr;
+	gap: 0.7rem;
+	height: 100%;
+	min-height: 0;
 }
 
 .hero-card,
 .telco-panel,
 .scene-mount {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	box-shadow: var(--shadow);
 }
 
 .hero-card {
-  grid-column: 1 / -1;
-  padding: 0.75rem 1rem;
+	grid-column: 1 / -1;
+	padding: 0.75rem 1rem;
 }
 
 .eyebrow {
-  margin: 0;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--accent);
+	margin: 0;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--accent);
 }
 
 h1 {
-  margin: 0.35rem 0 0;
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
+	margin: 0.35rem 0 0;
+	font-size: clamp(1.5rem, 2.4vw, 2rem);
 }
 
 .subtitle {
-  margin: 0.3rem 0 0;
-  color: var(--muted);
-}
-
-.player-state {
-  margin-top: 0.45rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px dashed var(--line);
-  border-radius: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+	margin: 0.3rem 0 0;
+	color: var(--muted);
 }
 
 .telco-mount {
-  min-height: 0;
+	min-height: 0;
 }
 
 .scene-mount {
-  min-height: 0;
-  padding: 0.55rem;
-  overflow: hidden;
+	min-height: 0;
+	padding: 0.55rem;
+	overflow: hidden;
 }
 
 .legacy-scene-stage {
-  position: relative;
-  height: 100%;
-  display: grid;
+	position: relative;
+	height: 100%;
+	display: grid;
 }
 
 #container-scene {
-  display: grid;
-  grid-area: 1 / 1;
-  overflow: hidden;
+	display: grid;
+	grid-area: 1 / 1;
+	overflow: hidden;
 }
 
 .telco-panel {
-  height: 100%;
-  min-height: 0;
-  padding: 0.7rem;
-  display: flex;
-  flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	padding: 0.7rem;
+	display: flex;
+	flex-direction: column;
 }
 
 .telco-title {
-  margin: 0;
-  font-size: 1.05rem;
+	margin: 0;
+	font-size: 1.05rem;
 }
 
 .telco-state {
-  margin: 0.5rem 0 0;
-  color: var(--muted);
-  font-size: 0.92rem;
+	margin: 0.5rem 0 0;
+	color: var(--muted);
+	font-size: 0.92rem;
 }
 
 .telco-controls {
-  margin-top: 0.55rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+	margin-top: 0.55rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.45rem;
 }
 
 .telco-btn,
 .telco-input,
 .telco-select {
-  height: 2.15rem;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  font: inherit;
+	height: 2.15rem;
+	border-radius: 10px;
+	border: 1px solid var(--line);
+	font: inherit;
 }
 
 .telco-btn {
-  padding: 0 0.8rem;
-  background: var(--accent);
-  color: #fff;
-  border-color: transparent;
-  cursor: pointer;
+	padding: 0 0.8rem;
+	background: var(--accent);
+	color: #fff;
+	border-color: transparent;
+	cursor: pointer;
 }
 
 .telco-btn:hover {
-  background: var(--accent-strong);
+	background: var(--accent-strong);
 }
 
 .telco-btn:last-child {
-  background: var(--danger);
+	background: var(--danger);
 }
 
 .telco-input,
 .telco-select {
-  padding: 0 0.6rem;
-  background: #fff;
-  color: var(--text);
+	padding: 0 0.6rem;
+	background: #fff;
+	color: var(--text);
 }
 
 .telco-input {
-  width: 7rem;
+	width: 7rem;
 }
 
 .telco-log {
-  margin: 0.65rem 0 0;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #f7fafd;
-  min-height: 0;
-  flex: 1;
-  padding: 0.7rem;
-  white-space: pre-wrap;
-  font-size: 0.84rem;
-  line-height: 1.35;
-  color: #293b57;
-  overflow: auto;
+	margin: 0.65rem 0 0;
+	border-radius: 10px;
+	border: 1px solid var(--line);
+	background: #f7fafd;
+	min-height: 0;
+	flex: 1;
+	padding: 0.7rem;
+	white-space: pre-wrap;
+	font-size: 0.84rem;
+	line-height: 1.35;
+	color: #293b57;
+	overflow: auto;
 }
 
 @media (max-width: 760px) {
-  body {
-    overflow: auto;
-    height: auto;
-    min-height: 100svh;
-  }
+	body {
+		overflow: auto;
+		height: auto;
+		min-height: 100svh;
+	}
 
-  #app {
-    width: min(980px, 100% - 1rem);
-    height: auto;
-    margin: 0.6rem auto;
-    padding: 0;
-  }
+	#app {
+		width: min(980px, 100% - 1rem);
+		height: auto;
+		margin: 0.6rem auto;
+		padding: 0;
+	}
 
-  .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-    height: auto;
-  }
+	.app-shell {
+		grid-template-columns: 1fr;
+		grid-template-rows: auto auto auto;
+		height: auto;
+	}
 
-  .hero-card,
-  .telco-panel,
-  .scene-mount {
-    border-radius: 14px;
-  }
+	.hero-card,
+	.telco-panel,
+	.scene-mount {
+		border-radius: 14px;
+	}
 
-  .telco-controls {
-    gap: 0.45rem;
-  }
+	.telco-controls {
+		gap: 0.45rem;
+	}
 
-  .telco-btn {
-    flex: 1 1 calc(50% - 0.45rem);
-  }
+	.telco-btn {
+		flex: 1 1 calc(50% - 0.45rem);
+	}
 }

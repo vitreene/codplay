@@ -1,0 +1,133 @@
+:root {
+	--bg-top: #f5f7fb;
+	--bg-bottom: #e7edf5;
+	--card: #ffffff;
+	--line: #cfd8e6;
+	--text: #1f2b3d;
+	--muted: #50627d;
+	--accent: #0b7a75;
+	--shadow: 0 12px 30px rgba(16, 38, 67, 0.12);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	height: 100svh;
+	overflow: hidden;
+	color: var(--text);
+	font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+	background: linear-gradient(165deg, var(--bg-top), var(--bg-bottom));
+}
+
+#app {
+	width: min(1220px, 100% - 1rem);
+	height: 100%;
+	margin: 0 auto;
+	padding: 0.5rem 0;
+}
+
+.demo-shell {
+	height: 100%;
+	min-height: 0;
+	display: grid;
+	gap: 0.7rem;
+	grid-template-columns: 40% auto;
+}
+
+.container {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	box-shadow: var(--shadow);
+	min-height: 0;
+	display: grid;
+	place-items: center;
+	overflow: hidden;
+}
+
+.demo-box {
+	transform-origin: 50% 50%;
+}
+
+.eyebrow {
+	margin: 0;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--accent);
+}
+
+h1 {
+	margin: 0.35rem 0 0;
+	font-size: clamp(1.5rem, 2.4vw, 2rem);
+}
+
+.subtitle {
+	margin: 0.3rem 0 0;
+	color: var(--muted);
+}
+
+.demo-controls {
+	margin-top: 0.65rem;
+	display: flex;
+	gap: 0.45rem;
+}
+
+.demo-button {
+	appearance: none;
+	border: 1px solid var(--accent);
+	background: var(--accent);
+	color: #ffffff;
+	border-radius: 10px;
+	padding: 0.42rem 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: opacity 120ms ease;
+}
+
+.demo-button:hover {
+	opacity: 0.9;
+}
+
+.demo-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.demo-button-secondary {
+	background: #ffffff;
+	color: var(--accent);
+}
+
+.player-state {
+	margin-top: 0.45rem;
+	padding: 0.45rem 0.55rem;
+	border: 1px dashed var(--line);
+	border-radius: 10px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.71rem;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+@media (max-width: 760px) {
+	body {
+		overflow: auto;
+		height: auto;
+		min-height: 100svh;
+	}
+
+	#app {
+		width: min(980px, 100% - 1rem);
+		height: auto;
+		margin: 0.6rem auto;
+		padding: 0;
+	}
+
+	.demo-controls {
+		flex-wrap: wrap;
+	}
+}

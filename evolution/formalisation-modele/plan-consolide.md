@@ -73,6 +73,37 @@ Note:
 
 - l'introduction de code auteur dans la scene est admise ensuite, mais non figee en V1
 
+## Construction runtime des persos (section reouverte)
+
+Objectif:
+
+- clarifier la creation des elements runtime a partir de `item.type`
+- eviter une perte de specification sur un sujet critique de migration
+
+Regles V1:
+
+- `SceneDoc` decrit le perso (`id`, `type`, `initial`, `actions`) mais ne cree pas de node
+- la creation des nodes est une responsabilite `Renderer` au `load`
+- la sortie de creation est un `RuntimeElement` minimal: `{ runtimeItemId, nodeRef, plugins? }`
+
+Resolution par type:
+
+1. type custom via `ModuleRegistry` (si enregistre)
+2. types noyau `text`, `img`, `list`
+3. type inconnu: comportement determine par policy runtime (deterministe, non hardcode)
+
+Regles de possession du rendu:
+
+- le noyau (`Player`/`Renderer`) agit sur le node racine du perso (`move`, `className`, `style`, `attr`)
+- un module custom peut gerer ses sous-noeuds internes, mais expose un root stable au runtime
+- les actions `cmd` restent routees cote composant/module, pas dans le `Director`
+
+Cas `list`:
+
+- `type='list'` attache une logique composant dediee (plugin list)
+- la logique `diff + FLIP + fallback perf` reste localisee au composant `list`
+- cette logique ne doit pas migrer dans le pipeline runtime generique
+
 ## Story model V1
 
 ### State

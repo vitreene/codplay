@@ -138,3 +138,124 @@ Objectif 2 (implementation) demarre:
 ## Regle de reprise
 
 Reprendre a l'objectif 1 du plan de reprise, puis enchainer sur 2 et 3 avant d'ouvrir le scripting.
+
+## Reprise complementaire - noyau player + demo (2026-04-10)
+
+Contexte de reprise:
+
+- le noyau `PlayerFacade + DirectorCore + RendererFacade` est en place
+- une demo POC runtime est active dans `src/main.ts`
+- probleme constate en run manuel: la demo ne jouait pas de facon fiable au demarrage
+
+### Tracage effectue avec les methodes integrees
+
+- utilisation de `player.onTrace(...)` et `player.onStateChange(...)` dans la demo
+- enrichissement des traces player pour les points critiques de scheduling:
+  - `player:schedule:events` (curseur timeline, nombre d'events planifies/skippes)
+  - `player:event:triggered` (event execute, delai planifie, timeline runtime courante)
+- affichage multi-lignes des traces dans la demo pour relire la sequence complete
+- verification des transitions de commande (`init`, `play`) avec gestion explicite des retours `{ ok: false }`
+
+### Diagnostic principal (cause racine)
+
+- les events a `ms=0` pouvaient etre ignores au `play`
+- cause: le curseur de planification etait calcule via `resolveCurrentTimelineMs()` juste apres activation playback, ce qui introduisait un leger drift (> 0ms) via `performance.now()`
+- effet: un event `event.ms = 0` etait considere comme "deja passe" et non planifie
+
+Correction appliquee:
+
+- planification basee sur un curseur stable `timelineMs` (ancre player) au lieu du curseur runtime instantane
+- test de non-regression ajoute (`L17-T3`) pour couvrir le cas horloge perf non nulle/non stable
+
+### Ce qui reste a concevoir pour fiabiliser la demo
+
+Priorite immediate:
+
+1. tracer aussi le niveau `Director` et `Renderer` (pas seulement `player`) avec `correlationId` event/commit
+2. ajouter un panneau de debug demo lisant les traces detaillees (filtre, limite, export) sans polluer le noyau
+3. definir le comportement de fin de timeline (`story:end` / auto-stop / etat terminal) pour la demo et pour le noyau
+4. aligner la planification vers la cible V1 (`rAF + queue + commit`) en remplacant le scheduling `setTimeout` du POC
+
+### Separation stricte: noyau player vs demo
+
+Concerne la construction du player (a garder dans le noyau):
+
+- orchestration `Player -> Director -> Renderer`
+- modele d'etat player/director/renderer et validations de transitions
+- pipeline canonique `event -> resolvedActions -> commits -> renderer.tick`
+- traces runtime structurantes (statuts `applied/rejected/error/info`, payload utiles)
+- politiques runtime (`allowedRebuildModes`) et garanties de determinisme
+- tests de regression techniques (`tests/lot16`, `tests/lot17`)
+
+Specifique demo uniquement (a isoler hors noyau):
+
+- scene fixture "DEMO" (bloc rouge, wording UI, mise en page)
+- rendu des traces en texte dans la page de demo
+- presentation visuelle (`src/style.css`, shell de test manuel)
+- messages d'interface orientee validation manuelle
+
+Regle pratique:
+
+- toute logique necessaire en production multi-scene/multi-story reste dans `src/player`, `src/director`, `src/renderer`
+- tout ce qui sert uniquement a observer la POC manuellement reste dans `src/main.ts` et UI associee
+
+## Handoff rapide - interruption terminal (2026-04-10)
+
+Contexte interruption:
+
+- probleme console/terminal cote session courante
+- demande utilisateur: sauvegarder l'etat pour reprise immediate en nouvelle session
+
+### Avancement code depuis la section precedente
+
+- deplacement de la demo vers un dossier dedie:
+  - `src/demos/player-poc-demo.ts`
+  - `src/demos/player-poc-demo.css`
+- `src/main.ts` devient un point d'entree minimal qui lance `runPlayerPocDemo()`
+- correction rendu DOM: les styles runtime sont maintenant appliques proprement sur vrais elements DOM
+  - `src/runtime/create-element.ts`: application style initial via API style DOM (au lieu d'une reassignment fragile)
+  - `src/runtime/apply-actions.ts`: patch style runtime via ecriture propriete par propriete
+- enrichissement affichage traces demo pour lisibilite humaine:
+  - lignes horodatees relatives (`+Xms`)
+  - message specifique par type d'event player (`init`, `play`, `schedule`, `event:triggered`, `event:applied`)
+  - fallback compact sur payload
+
+### Verification avant interruption
+
+- `npm run test:lot17` -> OK (3/3)
+- `npm run build` -> OK
+
+### Etat git local a la coupure
+
+Fichiers modifies (non commit):
+
+- `evolution/formalisation-modele/session-context-2026-04-10.md`
+- `src/main.ts`
+- `src/player/create-player.ts`
+- `src/runtime/apply-actions.ts`
+- `src/runtime/create-element.ts`
+- `src/style.css`
+- `tests/lot17/player-demo-poc.spec.ts`
+- `src/demos/` (nouveau dossier)
+
+### Point de reprise recommande (prochaine session)
+
+1. lancer `npm test` pour validation globale apres les derniers changements de trace demo
+2. valider visuellement en `npm run dev` que les logs demo sont enfin exploitables pour le debug
+3. nettoyer/decider le sort de `src/style.css` (reste legacy potentiellement obsolete pour la demo isolee)
+4. si OK, preparer commit(s) separes:
+   - commit noyau runtime (style DOM + scheduling/trace player)
+   - commit demo (deplacement dossier `demos` + CSS + format logs)
+
+## Reouverture documentaire - creation des persos par type
+
+Motif:
+
+- nettoyage precedent juge trop agressif sur le sujet "creation d'elements depuis `item.type`"
+
+Action:
+
+- section re-ouverte dans la reference active pour expliciter:
+  - contrat `item.type -> RuntimeElement`
+  - separation custom module vs noyau (`text`/`img`/`list`)
+  - localisation stricte de `FLIP` dans le composant `list`

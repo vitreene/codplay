@@ -315,4 +315,67 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     expect(childNode.parentId).toBe('parent')
     expect(result.appliedActionsCount).toBe(1)
   })
+
+  it('L10-T7 move is applied before className patch on same action', () => {
+    const operationOrder: string[] = []
+    let parentIdValue = ''
+    let classNameValue = 'before-move'
+
+    const childNode: RuntimeNode & { parentId?: string } = {
+      tagName: 'DIV',
+      id: 'child',
+      className: classNameValue,
+      style: {},
+      attributes: {}
+    }
+
+    Object.defineProperty(childNode, 'parentId', {
+      configurable: true,
+      enumerable: true,
+      get: () => parentIdValue,
+      set: (value: unknown) => {
+        parentIdValue = String(value)
+        operationOrder.push(`move:${parentIdValue}`)
+      }
+    })
+
+    Object.defineProperty(childNode, 'className', {
+      configurable: true,
+      enumerable: true,
+      get: () => classNameValue,
+      set: (value: unknown) => {
+        classNameValue = String(value)
+        operationOrder.push(`class:${classNameValue}`)
+      }
+    })
+
+    const runtimeElements = makeRuntimeElements({
+      parent: {
+        tagName: 'DIV',
+        id: 'parent',
+        className: '',
+        style: {},
+        attributes: {}
+      },
+      child: childNode
+    })
+
+    const actions: AnimationResolvedAction[] = [
+      makeResolvedAction({
+        eventId: 'evt-1',
+        listenerId: 'child',
+        action: {
+          targetId: 'child',
+          move: 'parent',
+          className: { add: 'after-move' }
+        }
+      })
+    ]
+
+    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const adapter = createAnimationAdapter(animeImplementation)
+    applyResolvedActions(actions, runtimeElements, adapter)
+
+    expect(operationOrder).toEqual(['move:parent', 'class:before-move after-move'])
+  })
 })

@@ -78,6 +78,7 @@ Role:
 Sources de code a reutiliser en priorite:
 
 - `src/runtime/mount-elements.ts`
+- `src/runtime/create-element.ts`
 - `src/runtime/apply-actions.ts`
 - `src/runtime/list-plugin/*`
 - `src/runtime/media-sync.ts`
@@ -203,6 +204,12 @@ Sortie unique:
 
 - supprimer le scheduling events par `setTimeout` cote player/director
 - basculer totalement vers traitement a la frame (`rAF + queue + commit`)
+
+6. Etape F - consolider creation des persos par type
+
+- figer le contrat `item.type -> RuntimeElement` dans le `Renderer`
+- brancher explicitement le chemin type custom (`ModuleRegistry`) et le noyau (`text`/`img`/`list`)
+- garder `FLIP` et logique composee dans le composant `list`, pas dans le pipeline runtime generique
 
 ## Criteres de completion objectif 2
 

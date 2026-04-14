@@ -90,6 +90,13 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Resolves one stable scheduling cursor without playback jitter.
+   */
+  private resolveSchedulingCursorMs(): number {
+    return this.runtimePlanner.clampTimelineMs(this.timelineMs)
+  }
+
+  /**
    * Cancels all currently scheduled timeline events.
    */
   private clearScheduledEvents(): void {
@@ -177,11 +184,14 @@ export class PlayerFacade implements PlayerApi {
   private schedulePendingEvents(): void {
     this.clearScheduledEvents()
 
-    const fromTimelineMs = this.resolveCurrentTimelineMs()
+    const fromTimelineMs = this.resolveSchedulingCursorMs()
     const sortedEvents = this.director.getSortedEvents()
+    let scheduledEventCount = 0
+    let skippedPastEventCount = 0
 
     for (const event of sortedEvents) {
       if (event.ms < fromTimelineMs) {
+        skippedPastEventCount += 1
         continue
       }
 
@@ -191,10 +201,25 @@ export class PlayerFacade implements PlayerApi {
           return
         }
 
+        this.emitTrace('player:event:triggered', 'info', {
+          eventId: event.id,
+          eventName: event.name,
+          eventMs: event.ms,
+          scheduledDelayMs: delayMs,
+          runtimeTimelineMs: this.resolveCurrentTimelineMs()
+        })
+
         this.runTimelineEvent(event)
       }, delayMs)
       this.scheduledTimeoutIds.push(timeoutId)
+      scheduledEventCount += 1
     }
+
+    this.emitTrace('player:schedule:events', 'info', {
+      fromTimelineMs,
+      scheduledEventCount,
+      skippedPastEventCount
+    })
   }
 
   /**
@@ -292,7 +317,9 @@ export class PlayerFacade implements PlayerApi {
     this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs
     this.setStatus('playing')
     this.schedulePendingEvents()
-    this.emitTrace('player:play', 'applied')
+    this.emitTrace('player:play', 'applied', {
+      startTimelineMs: this.timelineMs
+    })
     return { ok: true }
   }
 
@@ -395,19 +422,76 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
+    if (this.scene === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before rewind', 'player:rewind')
+    }
+
     const previousStatus = this.status
     this.setStatus('rewinding')
     this.emitTrace('player:rewind:started', 'applied')
 
     this.timelineMs = 0
+    this.playbackStartMs = null
+    this.clearScheduledEvents()
+
+    const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene)
+    if (nextActiveStory === null) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        'Scene must provide at least one story',
+        'player:rewind:failed',
+        {
+          sceneId: this.scene.id
+        }
+      )
+    }
+
+    const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory)
+    this.director.load(runtimePlan)
+
+    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
+    if (!rendererLoadResult.ok) {
+      return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to rewind story', 'player:rewind:failed', {
+        sceneId: this.scene.id,
+        code: rendererLoadResult.error.code
+      })
+    }
+
+    if (previousStatus === 'playing' || previousStatus === 'paused') {
+      this.director.start()
+
+      const rendererStartResult = this.renderer.start()
+      if (!rendererStartResult.ok) {
+        return this.reject('RENDERER_INVALID_STATE', 'Renderer could not restore state after rewind', 'player:rewind:failed', {
+          sceneId: this.scene.id,
+          code: rendererStartResult.error.code,
+          previousStatus
+        })
+      }
+
+      if (previousStatus === 'paused') {
+        this.director.pause()
+
+        const rendererPauseResult = this.renderer.pause()
+        if (!rendererPauseResult.ok) {
+          return this.reject('RENDERER_INVALID_STATE', 'Renderer could not restore paused state after rewind', 'player:rewind:failed', {
+            sceneId: this.scene.id,
+            code: rendererPauseResult.error.code
+          })
+        }
+      }
+    }
+
     if (previousStatus === 'playing') {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs()
       this.schedulePendingEvents()
     }
 
     this.setStatus(previousStatus)
+    const rendererState = this.renderer.getState()
     this.emitTrace('player:rewind:done', 'applied', {
-      targetTimelineMs: 0
+      targetTimelineMs: 0,
+      runtimeRevision: rendererState.runtimeRevision
     })
 
     return { ok: true }

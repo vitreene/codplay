@@ -35,6 +35,41 @@ function isDomNode(nodeRef: unknown): nodeRef is Node {
 }
 
 /**
+ * Applies style entries directly on one DOM element style declaration.
+ */
+function applyDomStylePatch(node: Element, patch: Record<string, unknown>): void {
+  const style = (node as unknown as { style?: Record<string, unknown> }).style
+  if (style === undefined || style === null) {
+    return
+  }
+
+  const styleWithSetProperty = style as Record<string, unknown> & {
+    setProperty?: (propertyName: string, value: string) => void
+    removeProperty?: (propertyName: string) => void
+  }
+
+  for (const [key, rawValue] of Object.entries(patch)) {
+    const finalValue = resolveFinalStyleValue(rawValue)
+    if (finalValue === undefined || finalValue === null) {
+      if (key.includes('-')) {
+        styleWithSetProperty.removeProperty?.(key)
+      } else {
+        style[key] = ''
+      }
+      continue
+    }
+
+    const value = String(finalValue)
+    if (key.includes('-') && styleWithSetProperty.setProperty) {
+      styleWithSetProperty.setProperty(key, value)
+      continue
+    }
+
+    style[key] = value
+  }
+}
+
+/**
  * Resolves the runtime target identifier for one resolved action.
  */
 function resolveTargetItemId(action: AnimationResolvedAction): string {
@@ -114,13 +149,17 @@ function applyStylePatch(node: MutableNode, stylePatch: unknown): void {
   }
 
   const patch = stylePatch as Record<string, unknown>
+  if (isDomElement(node)) {
+    applyDomStylePatch(node, patch)
+    return
+  }
+
   if (typeof node.style === 'object' && node.style !== null) {
     const style = node.style as Record<string, unknown>
     for (const [key, rawValue] of Object.entries(patch)) {
       style[key] = resolveFinalStyleValue(rawValue)
     }
 
-    node.style = style
     return
   }
 
@@ -232,8 +271,9 @@ export function applyResolvedActions(
 
     const node = runtimeElement.nodeRef as MutableNode
 
-    applyClassNamePatch(node, resolvedAction.action.className)
+    // Move is applied first so this branch can rely on the pre-patch node state.
     applyMovePatch(runtimeElements, targetItemId, resolvedAction.action.move)
+    applyClassNamePatch(node, resolvedAction.action.className)
     applyStylePatch(node, resolvedAction.action.style)
     applyAttrPatch(node, resolvedAction.action.attr)
 

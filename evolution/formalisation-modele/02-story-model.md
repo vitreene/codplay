@@ -39,6 +39,19 @@ Flux principal:
 
 Le state d'execution est runtime-only.
 
+### Items/persos: creation runtime par type
+
+- `StoryDoc` decrit les persos (`id`, `type`, `initial`, `actions`) sans creer de node
+- la creation des elements runtime a partir de `item.type` est hors scope Story
+- cette creation est portee par le `Renderer` (au `load`) et retourne des `RuntimeElement`
+- ordre de resolution cible: module custom (`ModuleRegistry`) puis noyau (`text`/`img`/`list`)
+- en cas de type inconnu, le comportement depend de la policy runtime (deterministe)
+
+Important:
+
+- la logique `list` specialisee (`diff + FLIP + fallback perf`) reste dans le composant `list`
+- cette logique ne migre ni dans la Story ni dans le pipeline runtime generique
+
 ## Role de la story
 
 1. Unite locale de filtrage

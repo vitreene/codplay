@@ -61,6 +61,43 @@ Le Renderer ne doit pas:
 - recompiler des tracks/eventimes
 - servir de source de verite replay
 
+## Contrat de creation des elements par type
+
+Ce contrat est re-ouvert et reste dans le perimetre V1.
+
+Entree minimale cote runtime:
+
+- item compile: `id`, `type`, `initial`, `actions`, options composant eventuelles
+
+Sortie minimale cote runtime:
+
+- `RuntimeElement = { runtimeItemId, nodeRef, plugins? }`
+
+Resolution de `item.type` (ordre canonique):
+
+1. type custom resolu via `ModuleRegistry` (si declaration presente)
+2. fallback noyau: `text`, `img`, `list`
+3. type inconnu: comportement defini par policy runtime (strict/warn/fallback)
+
+Contraintes:
+
+- le `Director` ne connait pas la construction de node
+- le `Renderer` construit et detruit les nodes/modules dans son cycle de vie
+- le runtime manipule le root du perso; le module custom reste maitre de son rendu interne
+
+Extension custom (V1 cible):
+
+- forme recommandee: classe module instanciee par perso runtime
+- lifecycle cible: `init` / `start` / `update` / `render` / `destroy`
+- `render(...)` doit retourner un root stable pilotable par le runtime
+- `actions[*].cmd` est route vers le module, sans logique metier ajoutee au `Director`
+
+Cas `list`:
+
+- `type='list'` active un composant dedie
+- la logique `diff + FLIP + fallback perf` est portee par ce composant
+- le pipeline runtime generique reste limite a l'application des commits
+
 ## Contrat d'echange Director -> Renderer
 
 Chaque commit V1 inclut:

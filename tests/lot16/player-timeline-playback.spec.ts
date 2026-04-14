@@ -170,7 +170,7 @@ describe('Lot 16 - playback timeline minimal', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     expect(runtimeNode.style.opacity).toBe(1)
-    expect(runtimeNode.style.x).toBe(0)
+    expect(runtimeNode.style.x).toBeUndefined()
 
     vi.useRealTimers()
   })
