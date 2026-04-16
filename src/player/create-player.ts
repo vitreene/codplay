@@ -97,13 +97,6 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Resolves one stable scheduling cursor without playback jitter.
-   */
-  private resolveSchedulingCursorMs(): number {
-    return this.runtimePlanner.clampTimelineMs(this.timelineMs);
-  }
-
-  /**
    * Stops frame-driven playback scheduling when currently active.
    */
   private stopPlaybackLoop(): void {
@@ -240,50 +233,6 @@ export class PlayerFacade implements PlayerApi {
       appliedActionsCount: tickResult.appliedActionCount,
       animationAppliedCount: tickResult.animationAppliedCount,
       conflictCount: tickResult.conflictCount,
-    });
-  }
-
-  /**
-   * Schedules pending timeline events from current timeline cursor.
-   */
-  private schedulePendingEvents(): void {
-    this.clearScheduledEvents();
-
-    const fromTimelineMs = this.resolveSchedulingCursorMs();
-    const sortedEvents = this.director.getSortedEvents();
-    let scheduledEventCount = 0;
-    let skippedPastEventCount = 0;
-
-    for (const event of sortedEvents) {
-      if (event.ms < fromTimelineMs) {
-        skippedPastEventCount += 1;
-        continue;
-      }
-
-      const delayMs = this.runtimePlanner.clampTimelineMs(event.ms - fromTimelineMs);
-      const timeoutId = globalThis.setTimeout(() => {
-        if (this.status !== "playing") {
-          return;
-        }
-
-        this.emitTrace("player:event:triggered", "info", {
-          eventId: event.id,
-          eventName: event.name,
-          eventMs: event.ms,
-          scheduledDelayMs: delayMs,
-          runtimeTimelineMs: this.resolveCurrentTimelineMs(),
-        });
-
-        this.runTimelineEvent(event);
-      }, delayMs);
-      this.scheduledTimeoutIds.push(timeoutId);
-      scheduledEventCount += 1;
-    }
-
-    this.emitTrace("player:schedule:events", "info", {
-      fromTimelineMs,
-      scheduledEventCount,
-      skippedPastEventCount,
     });
   }
 
@@ -516,7 +465,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.timelineMs = 0;
     this.playbackStartMs = null;
-    this.clearScheduledEvents();
+    this.stopPlaybackLoop();
 
     const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene);
     if (nextActiveStory === null) {
@@ -581,6 +530,7 @@ export class PlayerFacade implements PlayerApi {
     if (previousStatus === "playing") {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs();
       this.runDueTimelineEvents(this.timelineMs);
+      this.startPlaybackLoop();
     }
 
     this.setStatus(previousStatus);
