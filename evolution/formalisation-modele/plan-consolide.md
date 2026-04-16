@@ -289,7 +289,7 @@ Organisation interne des classes:
 
 ## Contraintes implementation cible
 
-- `setTimeout` et `setInterval` sont proscrits pour la cible finale
+- les timers legacy sont proscrits pour la cible finale
 - execution cible: boucle dediee `rAF + queue + commit`
 - details d'API tierce hors spec macro
 

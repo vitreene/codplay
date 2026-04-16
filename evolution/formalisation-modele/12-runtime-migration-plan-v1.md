@@ -42,7 +42,7 @@ Principe V1 canonique:
 ### Gap principal
 
 - `src/player/create-player.ts` melange orchestration eventielle et execution rendu
-- la file temporelle runtime repose encore sur `setTimeout` pour jouer les events
+- la file temporelle runtime repose encore sur des timers legacy pour jouer les events
 - les notions `Director`, `Renderer`, `eventSeq`, `commitSeq`, journal canonique ne sont pas encore isolees en composants dedies
 - `runtimeConfig` est encore reduit a une policy locale (`allowedRebuildModes`)
 
@@ -95,7 +95,7 @@ Role:
 
 Note migration:
 
-- la cible finale retire `setTimeout`/`setInterval` des chemins critiques runtime
+- la cible finale retire les timers legacy des chemins critiques runtime
 - execution cible: `rAF + queue + commit`
 
 ## Contrats internes minimaux (orientes performance)
@@ -202,7 +202,7 @@ Sortie unique:
 
 5. Etape E - retirer scheduling a base de timeout
 
-- supprimer le scheduling events par `setTimeout` cote player/director
+- supprimer le scheduling events par timers legacy cote player/director
 - basculer totalement vers traitement a la frame (`rAF + queue + commit`)
 
 6. Etape F - consolider creation des persos par type

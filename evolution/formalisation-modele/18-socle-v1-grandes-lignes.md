@@ -187,7 +187,7 @@ Rappels:
 
 ## Contraintes implementation cible
 
-- `setTimeout` et `setInterval` sont proscrits pour la cible finale
+- les timers legacy sont proscrits pour la cible finale
 - execution cible: boucle dediee type `rAF + queue + commit`
 - details d'API tierce (ex: animejs) hors spec macro
 

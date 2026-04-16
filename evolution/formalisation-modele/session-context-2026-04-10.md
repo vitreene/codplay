@@ -55,7 +55,7 @@ Objectif atteint:
 
 ### Contraintes implementation cible
 
-- `setTimeout` et `setInterval` proscrits pour la cible finale
+- timers legacy proscrits pour la cible finale
 - cible execution: `rAF + queue + commit`
 
 ### Regles TypeScript (recommandees)

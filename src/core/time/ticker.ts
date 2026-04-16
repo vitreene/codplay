@@ -24,11 +24,54 @@ export type Ticker = {
   isRunning: () => boolean
 }
 
-export type FrameRequestId = number | ReturnType<typeof setTimeout>
+export type FrameRequestId = number
 
 export type FrameScheduler = {
   request: (callback: () => void) => FrameRequestId
   cancel: (requestId: FrameRequestId) => void
+}
+
+/**
+ * Creates one macrotask-based frame scheduler when requestAnimationFrame is unavailable.
+ */
+function createMessageChannelScheduler(): FrameScheduler | null {
+  if (typeof globalThis.MessageChannel !== 'function') {
+    return null
+  }
+
+  const channel = new globalThis.MessageChannel()
+  const pendingCallbacks = new Map<number, () => void>()
+  const queuedRequestIds: number[] = []
+  let nextRequestId = 1
+
+  channel.port1.onmessage = () => {
+    const requestId = queuedRequestIds.shift()
+    if (requestId === undefined) {
+      return
+    }
+
+    const callback = pendingCallbacks.get(requestId)
+    if (callback === undefined) {
+      return
+    }
+
+    pendingCallbacks.delete(requestId)
+    callback()
+  }
+
+  return {
+    request: (callback) => {
+      const requestId = nextRequestId
+      nextRequestId += 1
+      pendingCallbacks.set(requestId, callback)
+      queuedRequestIds.push(requestId)
+      channel.port2.postMessage(requestId)
+      return requestId
+    },
+    cancel: (requestId) => {
+      pendingCallbacks.delete(requestId)
+    }
+  }
 }
 
 export type VisibilityController = {
@@ -46,14 +89,16 @@ function createFrameScheduler(): FrameScheduler {
   ) {
     return {
       request: (callback) => globalThis.requestAnimationFrame(() => callback()),
-      cancel: (requestId) => globalThis.cancelAnimationFrame(requestId as number)
+      cancel: (requestId) => globalThis.cancelAnimationFrame(requestId)
     }
   }
 
-  return {
-    request: (callback) => setTimeout(callback, 1),
-    cancel: (requestId) => clearTimeout(requestId as ReturnType<typeof setTimeout>)
+  const messageChannelScheduler = createMessageChannelScheduler()
+  if (messageChannelScheduler !== null) {
+    return messageChannelScheduler
   }
+
+  throw new Error('TimeTicker requires requestAnimationFrame or MessageChannel support')
 }
 
 /**

@@ -256,7 +256,7 @@ function flushLayout(entries: FlipEntry[]): void {
 }
 
 /**
- * Waits for the next animation frame with a scheduler fallback.
+ * Waits for the next animation frame using the provided scheduler.
  */
 function waitNextFrame(requestFrame: (callback: () => void) => void): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -265,19 +265,21 @@ function waitNextFrame(requestFrame: (callback: () => void) => void): Promise<vo
 }
 
 /**
+ * Requests one frame using the browser animation frame scheduler.
+ */
+function requestAnimationFrameOnce(callback: () => void): void {
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    throw new Error('FLIP engine requires requestAnimationFrame support')
+  }
+
+  globalThis.requestAnimationFrame(() => callback())
+}
+
+/**
  * Creates one FLIP engine aligned with runtime move semantics.
  */
 export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
-  const requestFrame =
-    options.requestFrame ??
-    ((callback: () => void) => {
-      if (typeof globalThis.requestAnimationFrame === 'function') {
-        globalThis.requestAnimationFrame(() => callback())
-        return
-      }
-
-      setTimeout(callback, 0)
-    })
+  const requestFrame = options.requestFrame ?? requestAnimationFrameOnce
 
   const lastEndCoords = new Map<string, LastEndCoords>()
 

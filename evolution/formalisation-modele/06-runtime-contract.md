@@ -214,7 +214,7 @@ Regles:
 
 ## Contraintes implementation cible
 
-- `setTimeout` et `setInterval` proscrits pour la cible finale
+- timers legacy proscrits pour la cible finale
 - boucle cible: `rAF + queue + commit`
 - details des bibliotheques tierces hors contrat V1
 

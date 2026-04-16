@@ -17,6 +17,7 @@ Specs V1 alignees sur ce plan:
 - `10-api-host-v1.md`
 - `11-runtime-context-mapping-v1.md`
 - `12-runtime-migration-plan-v1.md` (objectif 2: plan de migration code)
+- `13-sequence-user-view-progress-v1.md` (progression percue sequence)
 
 ## Notes de contexte / transition
 

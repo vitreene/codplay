@@ -75,10 +75,25 @@ function createRecordingAnimationAdapter(onRun: (transitions: TransitionRequest[
 /**
  * Waits for the specified duration in milliseconds.
  */
-function sleep(durationMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, durationMs)
-  })
+async function sleep(durationMs: number): Promise<void> {
+  const startedAtMs = Date.now()
+
+  while (Date.now() - startedAtMs < durationMs) {
+    await new Promise<void>((resolve) => {
+      if (typeof globalThis.requestAnimationFrame === 'function') {
+        globalThis.requestAnimationFrame(() => resolve())
+        return
+      }
+
+      const withSetImmediate = globalThis as { setImmediate?: (callback: () => void) => unknown }
+      if (typeof withSetImmediate.setImmediate === 'function') {
+        withSetImmediate.setImmediate(() => resolve())
+        return
+      }
+
+      Promise.resolve().then(() => resolve())
+    })
+  }
 }
 
 /**
