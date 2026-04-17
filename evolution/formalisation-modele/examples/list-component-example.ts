@@ -13,13 +13,13 @@ export type SpecExampleInfo = {
  */
 export const LIST_COMPONENT_EXAMPLE_INFO: SpecExampleInfo = {
   id: 'list-component-example',
-  version: '0.2.0',
+  version: '0.4.0',
   status: 'draft',
   updatedAt: '2026-04-17'
 }
 
 /**
- * Represents one warning emitted by a permissive component.
+ * Represents one warning emitted by a permissive component/router.
  */
 export type ComponentWarning = {
   code: string
@@ -33,54 +33,18 @@ export type ComponentWarning = {
 export type WarningReporter = (warning: ComponentWarning) => void
 
 /**
- * Represents one geometric snapshot used for FLIP deltas.
+ * Defines one common move mode used by all components.
  */
-export type NodeRect = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
+export type MoveMode = 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
 
 /**
- * Represents one child FLIP delta from before/after snapshots.
+ * Defines one common move command used by all components.
  */
-export type FlipChildDelta = {
-  childId: string
-  from: NodeRect
-  to: NodeRect
-  translateX: number
-  translateY: number
-}
-
-/**
- * Represents one FLIP plan emitted by the list component.
- */
-export type ListFlipPlan = {
-  listId: string
-  eventId: string
-  eventSeq: number
-  movedChildId: string
-  reason: 'local-move' | 'transfer-in' | 'transfer-out' | 'auto'
-  deltas: FlipChildDelta[]
-}
-
-/**
- * Receives one FLIP plan emitted by the list component.
- */
-export type FlipPlanReporter = (plan: ListFlipPlan) => void
-
-/**
- * Defines the DOM adapter contract used by this list example.
- */
-export type DomListAdapter = {
-  createFragmentFromTemplate: (template: string) => DocumentFragment
-  appendChild: (parent: HTMLElement, child: HTMLElement) => void
-  removeChild: (parent: HTMLElement, child: HTMLElement) => void
-  applyStyle: (node: HTMLElement, patch: Record<string, unknown>) => void
-  applyClassName: (node: HTMLElement, patch: string | { add?: string; remove?: string }) => void
-  applyAttr: (node: HTMLElement, patch: Record<string, unknown>) => void
-  measureRect: (node: HTMLElement) => NodeRect
+export type MoveCommand = {
+  parentId: string
+  mode: MoveMode
+  flip?: boolean
+  reorder?: boolean
 }
 
 /**
@@ -103,36 +67,10 @@ export type BasePatch = {
 }
 
 /**
- * Defines list move mode values agreed in current study.
- */
-export type ListMoveMode = 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
-
-/**
- * Defines one list move command for one child perso.
- */
-export type ListMoveCommand = {
-  childId: string
-  mode: ListMoveMode
-  targetId?: string
-  flip?: boolean
-  reorder?: boolean
-}
-
-/**
- * Defines one child collection patch command.
- */
-export type ListChildrenPatch = {
-  add?: string[]
-  remove?: string[]
-}
-
-/**
- * Defines the full action shape supported by ListComponentExample.
+ * Defines the action shape supported by ListComponentExample.
  */
 export type ListAction = BasePatch & {
-  partId?: 'root' | 'items'
-  move?: ListMoveCommand
-  children?: ListChildrenPatch
+  move?: MoveCommand
 }
 
 /**
@@ -145,48 +83,107 @@ export type ListConfig = {
 }
 
 /**
- * Defines one minimal runtime registry used for transfers and child node resolution.
+ * Defines one child entry transmitted to the FLIP runtime.
+ */
+export type ListFlipEntry = {
+  childId: string
+  nodeRef: unknown
+}
+
+/**
+ * Defines one FLIP trigger payload emitted by the list component.
+ */
+export type ListFlipTrigger = {
+  listId: string
+  eventId: string
+  eventSeq: number
+  movedChildId: string
+  reason: 'local-move' | 'transfer-in' | 'transfer-out' | 'auto' | 'detach'
+  includeSize: boolean
+  includeTransformMatrix: boolean
+  entries: ListFlipEntry[]
+  mutate: () => void
+}
+
+/**
+ * Defines the bridge API used by list to delegate FLIP execution.
+ */
+export type ListFlipBridge = {
+  run: (trigger: ListFlipTrigger) => void
+}
+
+/**
+ * Defines one request to route a move for any runtime component.
+ */
+export type MoveRequest = {
+  persoId: string
+  move: MoveCommand
+  eventId: string
+  eventSeq: number
+}
+
+/**
+ * Defines one request to detach a component after one outro transition.
+ */
+export type DetachAfterOutroRequest = {
+  persoId: string
+  eventId: string
+  eventSeq: number
+  runOutro: (onDone: () => void) => void
+}
+
+/**
+ * Defines one minimal runtime registry for list routing.
  */
 export type ListComponentRegistry = {
   getListById: (persoId: string) => ListComponentExample | null
   getPersoNodeById: (persoId: string) => HTMLElement | null
+  getParentListId: (persoId: string) => string | null
+  setParentListId: (persoId: string, parentListId: string | null) => void
 }
 
 /**
- * Stores internal node references for one list instance.
+ * Defines one list move router contract.
  */
-type ListRefs = {
-  root: HTMLElement
-  byPartId: Map<'root' | 'items', HTMLElement>
+export type ListMoveRouter = {
+  applyMoveForPerso: (request: MoveRequest) => void
+  detachAfterOutro: (request: DetachAfterOutroRequest) => void
 }
 
 /**
- * Stores one persistent placement rule for one child item.
+ * Defines the DOM adapter contract used by this list example.
  */
+export type DomListAdapter = {
+  createFragmentFromTemplate: (template: string) => DocumentFragment
+  appendChild: (parent: HTMLElement, child: HTMLElement) => void
+  removeChild: (parent: HTMLElement, child: HTMLElement) => void
+  applyStyle: (node: HTMLElement, patch: Record<string, unknown>) => void
+  applyClassName: (node: HTMLElement, patch: string | { add?: string; remove?: string }) => void
+  applyAttr: (node: HTMLElement, patch: Record<string, unknown>) => void
+}
+
 type PersistentPlacementRule = {
   mode: 'first' | 'last'
   insertedOrder: number
 }
 
-/**
- * Stores mutable list state owned by one component instance.
- */
 type ListModel = {
-  childrenPersoIds: string[]
-  persistentPlacementByChildId: Map<string, PersistentPlacementRule>
+  orderedChildIds: string[]
   childNodeById: Map<string, HTMLElement>
+  persistentPlacementByChildId: Map<string, PersistentPlacementRule>
   nextPlacementOrder: number
   config: ListConfig
-  lastFlipPlan: ListFlipPlan | null
+}
+
+type ListRefs = {
+  root: HTMLElement
+  items: HTMLElement
 }
 
 /**
  * Applies shared style/className/attr patches.
  */
 class BasePatchLayer {
-  /**
-   * Keeps adapter used to apply DOM patches.
-   */
   private readonly adapter: DomListAdapter
 
   /**
@@ -215,382 +212,20 @@ class BasePatchLayer {
 }
 
 /**
- * Handles list move rules, reorder, transfer orchestration, and FLIP plans.
- */
-class ListMoveLayer {
-  /**
-   * Points to parent component instance.
-   */
-  private readonly parent: ListComponentExample
-
-  /**
-   * Points to shared mutable list model.
-   */
-  private readonly model: ListModel
-
-  /**
-   * Points to shared DOM references.
-   */
-  private readonly refs: ListRefs
-
-  /**
-   * Points to adapter used for DOM operations.
-   */
-  private readonly adapter: DomListAdapter
-
-  /**
-   * Creates one move layer bound to parent/model/refs/adapter.
-   */
-  constructor(parent: ListComponentExample, model: ListModel, refs: ListRefs, adapter: DomListAdapter) {
-    this.parent = parent
-    this.model = model
-    this.refs = refs
-    this.adapter = adapter
-  }
-
-  /**
-   * Applies one move command using current list policies.
-   */
-  apply(
-    command: ListMoveCommand,
-    eventSeq: number,
-    eventId: string,
-    reasonOverride: 'local-move' | 'transfer-in' = 'local-move'
-  ): void {
-    if (!this.model.childNodeById.has(command.childId)) {
-      this.parent.warnOnce(eventSeq, 'W_LIST_MOVE_CHILD_NOT_FOUND', {
-        persoId: this.parent.getPersoId(),
-        eventId,
-        childId: command.childId
-      })
-      return
-    }
-
-    const targetId = command.targetId ?? this.parent.getPersoId()
-    if (targetId !== this.parent.getPersoId()) {
-      this.transferToTargetList(command, targetId, eventSeq, eventId)
-      return
-    }
-
-    this.applyLocalMove(command, eventSeq, eventId, reasonOverride)
-  }
-
-  /**
-   * Applies one move command inside current list instance.
-   */
-  private applyLocalMove(
-    command: ListMoveCommand,
-    eventSeq: number,
-    eventId: string,
-    reason: 'local-move' | 'transfer-in'
-  ): void {
-    const flipEnabled = command.flip !== false
-    const beforeRects = flipEnabled ? this.captureRects() : new Map<string, NodeRect>()
-
-    if (command.mode === 'auto') {
-      this.clearPersistentRule(command.childId)
-      if (flipEnabled) {
-        this.emitFlipPlan(command.childId, eventSeq, eventId, 'auto', beforeRects)
-      }
-      return
-    }
-
-    if (command.mode === 'first' || command.mode === 'last') {
-      this.setPersistentRule(command.childId, command.mode)
-    } else {
-      this.clearPersistentRule(command.childId)
-    }
-
-    this.moveChildByMode(command.childId, command.mode)
-
-    // In current study, mode has priority over reorder override.
-    const shouldReorder = true
-    if (shouldReorder || this.model.config.reorderOnMove) {
-      this.rebuildChildrenFromRules()
-    }
-
-    if (flipEnabled) {
-      this.emitFlipPlan(command.childId, eventSeq, eventId, reason, beforeRects)
-    }
-  }
-
-  /**
-   * Applies one inter-list transfer using remove -> reparent -> add sequence.
-   */
-  private transferToTargetList(command: ListMoveCommand, targetListId: string, eventSeq: number, eventId: string): void {
-    const targetList = this.parent.getRegistry().getListById(targetListId)
-    if (targetList === null) {
-      this.parent.warnOnce(eventSeq, 'W_LIST_MOVE_TARGET_NOT_FOUND', {
-        persoId: this.parent.getPersoId(),
-        eventId,
-        targetId: targetListId,
-        childId: command.childId
-      })
-      return
-    }
-
-    const childNode = this.model.childNodeById.get(command.childId)
-    if (!childNode) {
-      this.parent.warnOnce(eventSeq, 'W_LIST_MOVE_CHILD_NOT_FOUND', {
-        persoId: this.parent.getPersoId(),
-        eventId,
-        childId: command.childId
-      })
-      return
-    }
-
-    const flipEnabled = command.flip !== false
-    const beforeRects = flipEnabled ? this.captureRects() : new Map<string, NodeRect>()
-
-    this.detachLocalChild(command.childId)
-
-    if (flipEnabled) {
-      this.emitFlipPlan(command.childId, eventSeq, eventId, 'transfer-out', beforeRects)
-    }
-
-    targetList.receiveTransferredChild({
-      childId: command.childId,
-      childNode,
-      mode: command.mode,
-      sourceListId: this.parent.getPersoId(),
-      flip: command.flip,
-      reorder: command.reorder,
-      eventSeq,
-      eventId
-    })
-  }
-
-  /**
-   * Detaches one child from this list model and DOM.
-   */
-  private detachLocalChild(childId: string): void {
-    const node = this.model.childNodeById.get(childId)
-    if (node) {
-      this.adapter.removeChild(this.refs.byPartId.get('items') as HTMLElement, node)
-    }
-
-    this.model.childNodeById.delete(childId)
-    this.model.childrenPersoIds = this.model.childrenPersoIds.filter((id) => id !== childId)
-    this.clearPersistentRule(childId)
-
-    if (this.model.config.reorderOnRemove) {
-      this.rebuildChildrenFromRules()
-    }
-  }
-
-  /**
-   * Moves one child id according to mode within current children array.
-   */
-  private moveChildByMode(childId: string, mode: ListMoveMode): void {
-    const currentIndex = this.model.childrenPersoIds.indexOf(childId)
-    if (currentIndex < 0) {
-      return
-    }
-
-    this.model.childrenPersoIds.splice(currentIndex, 1)
-
-    if (mode === 'first' || mode === 'prepend') {
-      this.model.childrenPersoIds.unshift(childId)
-      return
-    }
-
-    if (mode === 'last' || mode === 'append') {
-      this.model.childrenPersoIds.push(childId)
-      return
-    }
-
-    if (typeof mode === 'number') {
-      const maxIndex = this.model.childrenPersoIds.length
-      const nextIndex = clamp(Math.floor(mode), 0, maxIndex)
-      this.model.childrenPersoIds.splice(nextIndex, 0, childId)
-      return
-    }
-
-    this.model.childrenPersoIds.push(childId)
-  }
-
-  /**
-   * Rebuilds children order by applying persistent first/last rules.
-   */
-  private rebuildChildrenFromRules(): void {
-    const firstIds = [...this.model.persistentPlacementByChildId.entries()]
-      .filter((entry) => entry[1].mode === 'first')
-      .sort((left, right) => left[1].insertedOrder - right[1].insertedOrder)
-      .map((entry) => entry[0])
-
-    const lastIds = [...this.model.persistentPlacementByChildId.entries()]
-      .filter((entry) => entry[1].mode === 'last')
-      .sort((left, right) => left[1].insertedOrder - right[1].insertedOrder)
-      .map((entry) => entry[0])
-
-    const constrained = new Set([...firstIds, ...lastIds])
-    const middleIds = this.model.childrenPersoIds.filter((id) => !constrained.has(id))
-    this.model.childrenPersoIds = [...firstIds, ...middleIds, ...lastIds]
-
-    this.syncDomOrder()
-  }
-
-  /**
-   * Reorders child DOM nodes to match model children order.
-   */
-  private syncDomOrder(): void {
-    const itemsNode = this.refs.byPartId.get('items') as HTMLElement
-    for (const childId of this.model.childrenPersoIds) {
-      const node = this.model.childNodeById.get(childId)
-      if (node) {
-        this.adapter.appendChild(itemsNode, node)
-      }
-    }
-  }
-
-  /**
-   * Sets one persistent first/last rule for one child id.
-   */
-  private setPersistentRule(childId: string, mode: 'first' | 'last'): void {
-    this.model.persistentPlacementByChildId.set(childId, {
-      mode,
-      insertedOrder: this.model.nextPlacementOrder
-    })
-    this.model.nextPlacementOrder += 1
-  }
-
-  /**
-   * Clears one persistent placement rule for one child id.
-   */
-  private clearPersistentRule(childId: string): void {
-    this.model.persistentPlacementByChildId.delete(childId)
-  }
-
-  /**
-   * Captures one map of child rectangles from current DOM state.
-   */
-  private captureRects(): Map<string, NodeRect> {
-    const result = new Map<string, NodeRect>()
-    for (const childId of this.model.childrenPersoIds) {
-      const node = this.model.childNodeById.get(childId)
-      if (!node) {
-        continue
-      }
-
-      result.set(childId, this.adapter.measureRect(node))
-    }
-
-    return result
-  }
-
-  /**
-   * Builds and emits one FLIP plan from before/after snapshots.
-   */
-  private emitFlipPlan(
-    movedChildId: string,
-    eventSeq: number,
-    eventId: string,
-    reason: ListFlipPlan['reason'],
-    beforeRects: Map<string, NodeRect>
-  ): void {
-    const afterRects = this.captureRects()
-    const deltas: FlipChildDelta[] = []
-
-    for (const [childId, before] of beforeRects.entries()) {
-      const after = afterRects.get(childId)
-      if (!after) {
-        continue
-      }
-
-      const translateX = before.x - after.x
-      const translateY = before.y - after.y
-      if (translateX === 0 && translateY === 0) {
-        continue
-      }
-
-      deltas.push({
-        childId,
-        from: before,
-        to: after,
-        translateX,
-        translateY
-      })
-    }
-
-    if (deltas.length === 0) {
-      return
-    }
-
-    this.parent.pushFlipPlan({
-      listId: this.parent.getPersoId(),
-      eventId,
-      eventSeq,
-      movedChildId,
-      reason,
-      deltas
-    })
-  }
-}
-
-const LIST_TEMPLATE = `
-<section data-part="root" class="list-component">
-  <ul data-part="items" class="list-items"></ul>
-</section>
-`
-
-/**
- * Example list component using composition layers and one aggregated update entry point.
+ * Represents one list component instance aligned with child->parent routing.
  */
 export class ListComponentExample {
-  /**
-   * Declares action properties handled by this component.
-   */
-  static readonly handledProps = ['move', 'children']
+  static readonly handledProps = ['move']
 
-  /**
-   * Stores current runtime perso id for this list instance.
-   */
   private readonly persoId: string
-
-  /**
-   * Stores adapter used for all DOM operations.
-   */
   private readonly adapter: DomListAdapter
-
-  /**
-   * Stores warning reporter bound to player traces.
-   */
   private readonly warn: WarningReporter
-
-  /**
-   * Stores FLIP plan reporter bound to animation pipeline.
-   */
-  private readonly emitFlipPlan: FlipPlanReporter
-
-  /**
-   * Stores registry used for cross-list transfers and child node resolution.
-   */
-  private readonly registry: ListComponentRegistry
-
-  /**
-   * Stores root and part references after init.
-   */
-  private refs: ListRefs | null = null
-
-  /**
-   * Stores mutable list state updated by component actions.
-   */
+  private readonly flipBridge: ListFlipBridge
+  private readonly warningKeys = new Set<string>()
   private readonly model: ListModel
 
-  /**
-   * Applies shared base patch operations.
-   */
+  private refs: ListRefs | null = null
   private basePatchLayer: BasePatchLayer | null = null
-
-  /**
-   * Applies list move operations and transfer logic.
-   */
-  private moveLayer: ListMoveLayer | null = null
-
-  /**
-   * Deduplicates warnings by {eventSeq, code}.
-   */
-  private readonly warningKeys = new Set<string>()
 
   /**
    * Creates one list component instance for one runtime perso.
@@ -599,22 +234,19 @@ export class ListComponentExample {
     persoId: string
     adapter: DomListAdapter
     warn: WarningReporter
-    emitFlipPlan: FlipPlanReporter
-    registry: ListComponentRegistry
+    flipBridge: ListFlipBridge
     config?: Partial<ListConfig>
   }) {
     this.persoId = input.persoId
     this.adapter = input.adapter
     this.warn = input.warn
-    this.emitFlipPlan = input.emitFlipPlan
-    this.registry = input.registry
+    this.flipBridge = input.flipBridge
 
     this.model = {
-      childrenPersoIds: [],
-      persistentPlacementByChildId: new Map<string, PersistentPlacementRule>(),
+      orderedChildIds: [],
       childNodeById: new Map<string, HTMLElement>(),
+      persistentPlacementByChildId: new Map<string, PersistentPlacementRule>(),
       nextPlacementOrder: 1,
-      lastFlipPlan: null,
       config: {
         reorderOnMove: input.config?.reorderOnMove ?? true,
         reorderOnAdd: input.config?.reorderOnAdd ?? true,
@@ -624,41 +256,39 @@ export class ListComponentExample {
   }
 
   /**
-   * Initializes list root, parts, layers, and initial children state.
+   * Initializes list root and internal references.
    */
   init(initial: Record<string, unknown>): void {
-    const fragment = this.adapter.createFragmentFromTemplate(LIST_TEMPLATE)
+    const fragment = this.adapter.createFragmentFromTemplate(
+      '<section class="list-component"><ul class="list-items"></ul></section>'
+    )
+
     const rootNode = fragment.firstElementChild
     if (!(rootNode instanceof HTMLElement)) {
-      this.warnOnce(0, 'W_LIST_INIT_FAILED', {
-        persoId: this.persoId,
-        reason: 'root-missing'
-      })
+      this.warnOnce(0, 'W_LIST_INIT_FAILED', { persoId: this.persoId, reason: 'root-missing' })
+      return
+    }
+
+    const itemsNode = rootNode.firstElementChild
+    if (!(itemsNode instanceof HTMLElement)) {
+      this.warnOnce(0, 'W_LIST_INIT_FAILED', { persoId: this.persoId, reason: 'items-missing' })
       return
     }
 
     this.refs = {
       root: rootNode,
-      byPartId: collectListParts(rootNode)
+      items: itemsNode
     }
 
     this.basePatchLayer = new BasePatchLayer(this.adapter)
-    this.moveLayer = new ListMoveLayer(this, this.model, this.refs, this.adapter)
-
-    const initialChildren = Array.isArray(initial.children)
-      ? initial.children.filter((value): value is string => typeof value === 'string')
-      : []
-
-    for (const childId of initialChildren) {
-      this.addChild(childId)
-    }
+    this.basePatchLayer.apply(rootNode, initial as BasePatch)
   }
 
   /**
-   * Returns root node after successful initialization.
+   * Returns root node once initialization completed.
    */
   render(): HTMLElement {
-    if (!this.refs) {
+    if (this.refs === null) {
       throw new Error(`List component not initialized: ${this.persoId}`)
     }
 
@@ -666,11 +296,11 @@ export class ListComponentExample {
   }
 
   /**
-   * Applies one aggregated list action payload.
+   * Applies list-local actions (base patch + optional self move forwarding).
    */
-  update(input: ComponentUpdateInput): void {
+  update(input: ComponentUpdateInput, requestMove: (request: MoveRequest) => void): void {
     try {
-      if (!this.refs || !this.basePatchLayer || !this.moveLayer) {
+      if (this.refs === null || this.basePatchLayer === null) {
         this.warnOnce(input.eventSeq, 'W_LIST_NOT_INITIALIZED', {
           persoId: this.persoId,
           eventId: input.eventId
@@ -679,27 +309,16 @@ export class ListComponentExample {
       }
 
       const action = input.action as ListAction
-
-      if (action.children) {
-        this.applyChildrenPatch(action.children)
-      }
-
       if (action.move) {
-        this.moveLayer.apply(action.move, input.eventSeq, input.eventId)
-      }
-
-      const partId = action.partId ?? 'root'
-      const targetNode = this.refs.byPartId.get(partId)
-      if (!targetNode) {
-        this.warnOnce(input.eventSeq, 'W_LIST_PART_UNKNOWN', {
+        requestMove({
           persoId: this.persoId,
+          move: action.move,
           eventId: input.eventId,
-          partId
+          eventSeq: input.eventSeq
         })
-        return
       }
 
-      this.basePatchLayer.apply(targetNode, action)
+      this.basePatchLayer.apply(this.refs.root, action)
     } catch (error) {
       this.warnOnce(input.eventSeq, 'W_LIST_UPDATE_FAILED', {
         persoId: this.persoId,
@@ -710,55 +329,112 @@ export class ListComponentExample {
   }
 
   /**
-   * Receives one child transfer from another list instance.
+   * Attaches one child node and applies one placement mode in this list.
    */
-  receiveTransferredChild(input: {
+  attachChild(input: {
     childId: string
     childNode: HTMLElement
-    mode: ListMoveMode
-    sourceListId: string
+    mode: MoveMode
     flip?: boolean
-    reorder?: boolean
-    eventSeq: number
     eventId: string
+    eventSeq: number
+    reason: 'transfer-in' | 'local-move' | 'auto'
   }): void {
-    this.model.childNodeById.set(input.childId, input.childNode)
-    if (!this.model.childrenPersoIds.includes(input.childId)) {
-      this.model.childrenPersoIds.push(input.childId)
-    }
+    this.runFlipAwareMutation({
+      movedChildId: input.childId,
+      eventId: input.eventId,
+      eventSeq: input.eventSeq,
+      reason: input.reason,
+      flip: input.flip,
+      mutate: () => {
+        this.model.childNodeById.set(input.childId, input.childNode)
+        if (!this.model.orderedChildIds.includes(input.childId)) {
+          this.model.orderedChildIds.push(input.childId)
+        }
 
-    const itemsNode = this.refs?.byPartId.get('items')
-    if (itemsNode) {
-      this.adapter.appendChild(itemsNode, input.childNode)
-    }
-
-    if (this.moveLayer) {
-      this.moveLayer.apply(
-        {
-          childId: input.childId,
-          mode: input.mode,
-          flip: input.flip,
-          reorder: input.reorder
-        },
-        input.eventSeq,
-        input.eventId,
-        'transfer-in'
-      )
-    }
+        this.applyPlacementMode(input.childId, input.mode)
+        this.syncDomOrder()
+      }
+    })
   }
 
   /**
-   * Returns current list children snapshot.
+   * Repositions one already attached child inside this list.
    */
-  getChildrenSnapshot(): string[] {
-    return [...this.model.childrenPersoIds]
+  repositionChild(input: {
+    childId: string
+    mode: MoveMode
+    flip?: boolean
+    eventId: string
+    eventSeq: number
+    reason: 'local-move' | 'auto'
+  }): void {
+    if (!this.model.childNodeById.has(input.childId)) {
+      this.warnOnce(input.eventSeq, 'W_LIST_MOVE_CHILD_NOT_FOUND', {
+        persoId: this.persoId,
+        eventId: input.eventId,
+        childId: input.childId
+      })
+      return
+    }
+
+    this.runFlipAwareMutation({
+      movedChildId: input.childId,
+      eventId: input.eventId,
+      eventSeq: input.eventSeq,
+      reason: input.reason,
+      flip: input.flip,
+      mutate: () => {
+        this.applyPlacementMode(input.childId, input.mode)
+        this.syncDomOrder()
+      }
+    })
   }
 
   /**
-   * Returns last FLIP plan generated by this component.
+   * Detaches one child from this list and returns its node when available.
    */
-  getLastFlipPlan(): ListFlipPlan | null {
-    return this.model.lastFlipPlan
+  detachChild(input: {
+    childId: string
+    flip?: boolean
+    eventId: string
+    eventSeq: number
+    reason: 'transfer-out' | 'detach'
+  }): HTMLElement | null {
+    const node = this.model.childNodeById.get(input.childId) ?? null
+    if (node === null) {
+      return null
+    }
+
+    this.runFlipAwareMutation({
+      movedChildId: input.childId,
+      eventId: input.eventId,
+      eventSeq: input.eventSeq,
+      reason: input.reason,
+      flip: input.flip,
+      mutate: () => {
+        if (this.refs) {
+          this.adapter.removeChild(this.refs.items, node)
+        }
+
+        this.model.childNodeById.delete(input.childId)
+        this.model.orderedChildIds = this.model.orderedChildIds.filter((id) => id !== input.childId)
+        this.model.persistentPlacementByChildId.delete(input.childId)
+
+        if (this.model.config.reorderOnRemove) {
+          this.syncDomOrder()
+        }
+      }
+    })
+
+    return node
+  }
+
+  /**
+   * Returns whether one child is currently attached in this list.
+   */
+  hasChild(childId: string): boolean {
+    return this.model.childNodeById.has(childId)
   }
 
   /**
@@ -769,18 +445,10 @@ export class ListComponentExample {
   }
 
   /**
-   * Returns registry used for cross-list operations.
+   * Returns one stable snapshot of attached children order.
    */
-  getRegistry(): ListComponentRegistry {
-    return this.registry
-  }
-
-  /**
-   * Stores and emits one FLIP plan.
-   */
-  pushFlipPlan(plan: ListFlipPlan): void {
-    this.model.lastFlipPlan = plan
-    this.emitFlipPlan(plan)
+  getChildrenSnapshot(): string[] {
+    return [...this.model.orderedChildIds]
   }
 
   /**
@@ -797,88 +465,272 @@ export class ListComponentExample {
   }
 
   /**
-   * Applies one add/remove child patch command.
+   * Applies one placement mode on one child id.
    */
-  private applyChildrenPatch(patch: ListChildrenPatch): void {
-    const removeIds = patch.remove ?? []
-    for (const childId of removeIds) {
-      this.removeChild(childId)
+  private applyPlacementMode(childId: string, mode: MoveMode): void {
+    const currentIndex = this.model.orderedChildIds.indexOf(childId)
+    if (currentIndex >= 0) {
+      this.model.orderedChildIds.splice(currentIndex, 1)
     }
 
-    const addIds = patch.add ?? []
-    for (const childId of addIds) {
-      this.addChild(childId)
+    if (mode === 'auto') {
+      this.clearPersistentRule(childId)
+      this.model.orderedChildIds.push(childId)
+      return
+    }
+
+    if (mode === 'first') {
+      this.setPersistentRule(childId, 'first')
+      this.model.orderedChildIds.unshift(childId)
+      this.rebuildFromPersistentRules()
+      return
+    }
+
+    if (mode === 'last') {
+      this.setPersistentRule(childId, 'last')
+      this.model.orderedChildIds.push(childId)
+      this.rebuildFromPersistentRules()
+      return
+    }
+
+    this.clearPersistentRule(childId)
+
+    if (mode === 'prepend') {
+      this.model.orderedChildIds.unshift(childId)
+      return
+    }
+
+    if (mode === 'append') {
+      this.model.orderedChildIds.push(childId)
+      return
+    }
+
+    const maxIndex = this.model.orderedChildIds.length
+    const nextIndex = clamp(Math.floor(mode), 0, maxIndex)
+    this.model.orderedChildIds.splice(nextIndex, 0, childId)
+  }
+
+  /**
+   * Rebuilds one children order from persistent first/last rules.
+   */
+  private rebuildFromPersistentRules(): void {
+    const firstIds = [...this.model.persistentPlacementByChildId.entries()]
+      .filter((entry) => entry[1].mode === 'first')
+      .sort((left, right) => left[1].insertedOrder - right[1].insertedOrder)
+      .map((entry) => entry[0])
+
+    const lastIds = [...this.model.persistentPlacementByChildId.entries()]
+      .filter((entry) => entry[1].mode === 'last')
+      .sort((left, right) => left[1].insertedOrder - right[1].insertedOrder)
+      .map((entry) => entry[0])
+
+    const constrained = new Set([...firstIds, ...lastIds])
+    const middleIds = this.model.orderedChildIds.filter((childId) => !constrained.has(childId))
+    this.model.orderedChildIds = [...firstIds, ...middleIds, ...lastIds]
+  }
+
+  /**
+   * Synchronizes DOM order from model order.
+   */
+  private syncDomOrder(): void {
+    if (this.refs === null) {
+      return
+    }
+
+    for (const childId of this.model.orderedChildIds) {
+      const childNode = this.model.childNodeById.get(childId)
+      if (!childNode) {
+        continue
+      }
+
+      this.adapter.appendChild(this.refs.items, childNode)
     }
   }
 
   /**
-   * Adds one child perso id and attaches its existing perso node.
+   * Sets one persistent first/last rule for one child id.
    */
-  private addChild(childId: string): void {
-    if (this.model.childrenPersoIds.includes(childId)) {
-      return
-    }
-
-    const childNode = this.registry.getPersoNodeById(childId)
-    if (!childNode) {
-      this.warnOnce(0, 'W_LIST_CHILD_NODE_NOT_FOUND', {
-        persoId: this.persoId,
-        childId
-      })
-      return
-    }
-
-    this.model.childrenPersoIds.push(childId)
-    this.model.childNodeById.set(childId, childNode)
-
-    const itemsNode = this.refs?.byPartId.get('items')
-    if (itemsNode) {
-      this.adapter.appendChild(itemsNode, childNode)
-    }
+  private setPersistentRule(childId: string, mode: 'first' | 'last'): void {
+    this.model.persistentPlacementByChildId.set(childId, {
+      mode,
+      insertedOrder: this.model.nextPlacementOrder
+    })
+    this.model.nextPlacementOrder += 1
   }
 
   /**
-   * Removes one child id and its node from current list.
+   * Clears one persistent rule for one child id.
    */
-  private removeChild(childId: string): void {
-    const node = this.model.childNodeById.get(childId)
-    const itemsNode = this.refs?.byPartId.get('items')
-    if (node && itemsNode) {
-      this.adapter.removeChild(itemsNode, node)
-    }
-
-    this.model.childNodeById.delete(childId)
-    this.model.childrenPersoIds = this.model.childrenPersoIds.filter((id) => id !== childId)
+  private clearPersistentRule(childId: string): void {
     this.model.persistentPlacementByChildId.delete(childId)
+  }
+
+  /**
+   * Executes one mutation with FLIP bridge delegation when enabled.
+   */
+  private runFlipAwareMutation(input: {
+    movedChildId: string
+    eventId: string
+    eventSeq: number
+    reason: ListFlipTrigger['reason']
+    flip?: boolean
+    mutate: () => void
+  }): void {
+    const flipEnabled = input.flip !== false
+    if (!flipEnabled) {
+      input.mutate()
+      return
+    }
+
+    const entries: ListFlipEntry[] = []
+    for (const childId of this.model.orderedChildIds) {
+      const nodeRef = this.model.childNodeById.get(childId)
+      if (!nodeRef) {
+        continue
+      }
+
+      entries.push({ childId, nodeRef })
+    }
+
+    this.flipBridge.run({
+      listId: this.persoId,
+      eventId: input.eventId,
+      eventSeq: input.eventSeq,
+      movedChildId: input.movedChildId,
+      reason: input.reason,
+      includeSize: true,
+      includeTransformMatrix: true,
+      entries,
+      mutate: input.mutate
+    })
   }
 }
 
 /**
- * Collects list parts from data-part attributes.
+ * Creates one move router aligned with child->parent placement.
  */
-function collectListParts(root: HTMLElement): Map<'root' | 'items', HTMLElement> {
-  const byPartId = new Map<'root' | 'items', HTMLElement>()
-  const pending: HTMLElement[] = [root]
+export function createListMoveRouter(input: {
+  registry: ListComponentRegistry
+  warn: WarningReporter
+}): ListMoveRouter {
+  const warningKeys = new Set<string>()
 
-  while (pending.length > 0) {
-    const node = pending.pop()
-    if (!node) {
-      continue
+  /**
+   * Emits one deduplicated warning for one {eventSeq, code} key.
+   */
+  function warnOnce(eventSeq: number, code: string, details?: Record<string, unknown>): void {
+    const key = `${eventSeq}:${code}`
+    if (warningKeys.has(key)) {
+      return
     }
 
-    const partId = node.dataset.part
-    if (partId === 'root' || partId === 'items') {
-      byPartId.set(partId, node)
-    }
-
-    for (const child of [...node.children]) {
-      if (child instanceof HTMLElement) {
-        pending.push(child)
-      }
-    }
+    warningKeys.add(key)
+    input.warn({ code, message: code, details })
   }
 
-  return byPartId
+  /**
+   * Applies one move request for one arbitrary component instance.
+   */
+  function applyMoveForPerso(request: MoveRequest): void {
+    const sourceListId = input.registry.getParentListId(request.persoId)
+    const sourceList = sourceListId ? input.registry.getListById(sourceListId) : null
+    const targetList = input.registry.getListById(request.move.parentId)
+
+    if (targetList === null) {
+      if (sourceList) {
+        sourceList.detachChild({
+          childId: request.persoId,
+          flip: request.move.flip,
+          eventId: request.eventId,
+          eventSeq: request.eventSeq,
+          reason: 'detach'
+        })
+      }
+
+      input.registry.setParentListId(request.persoId, null)
+      warnOnce(request.eventSeq, 'W_LIST_MOVE_TARGET_NOT_FOUND', {
+        persoId: request.persoId,
+        parentId: request.move.parentId,
+        eventId: request.eventId
+      })
+      return
+    }
+
+    if (sourceList && sourceList.getPersoId() === targetList.getPersoId()) {
+      targetList.repositionChild({
+        childId: request.persoId,
+        mode: request.move.mode,
+        flip: request.move.flip,
+        eventId: request.eventId,
+        eventSeq: request.eventSeq,
+        reason: request.move.mode === 'auto' ? 'auto' : 'local-move'
+      })
+      input.registry.setParentListId(request.persoId, targetList.getPersoId())
+      return
+    }
+
+    let childNode: HTMLElement | null = null
+    if (sourceList) {
+      childNode = sourceList.detachChild({
+        childId: request.persoId,
+        flip: request.move.flip,
+        eventId: request.eventId,
+        eventSeq: request.eventSeq,
+        reason: 'transfer-out'
+      })
+    }
+
+    if (childNode === null) {
+      childNode = input.registry.getPersoNodeById(request.persoId)
+    }
+
+    if (childNode === null) {
+      input.registry.setParentListId(request.persoId, null)
+      warnOnce(request.eventSeq, 'W_LIST_CHILD_NODE_NOT_FOUND', {
+        persoId: request.persoId,
+        eventId: request.eventId
+      })
+      return
+    }
+
+    targetList.attachChild({
+      childId: request.persoId,
+      childNode,
+      mode: request.move.mode,
+      flip: request.move.flip,
+      eventId: request.eventId,
+      eventSeq: request.eventSeq,
+      reason: 'transfer-in'
+    })
+
+    input.registry.setParentListId(request.persoId, targetList.getPersoId())
+  }
+
+  /**
+   * Applies one outro-driven detach chain using one single public event.
+   */
+  function detachAfterOutro(request: DetachAfterOutroRequest): void {
+    request.runOutro(() => {
+      const sourceListId = input.registry.getParentListId(request.persoId)
+      const sourceList = sourceListId ? input.registry.getListById(sourceListId) : null
+      if (sourceList) {
+        sourceList.detachChild({
+          childId: request.persoId,
+          flip: true,
+          eventId: request.eventId,
+          eventSeq: request.eventSeq,
+          reason: 'detach'
+        })
+      }
+
+      input.registry.setParentListId(request.persoId, null)
+    })
+  }
+
+  return {
+    applyMoveForPerso,
+    detachAfterOutro
+  }
 }
 
 /**
@@ -945,21 +797,24 @@ export function createDefaultDomListAdapter(): DomListAdapter {
 
         node.setAttribute(key, String(value))
       }
-    },
-    measureRect: (node) => {
-      const rect = node.getBoundingClientRect()
-      return {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height
-      }
     }
   }
 }
 
 /**
- * Demonstrates one instantiation flow with two list components and one transfer.
+ * Creates one default FLIP bridge recorder for this example.
+ */
+export function createListFlipBridgeRecorder(trace: ListFlipTrigger[]): ListFlipBridge {
+  return {
+    run: (trigger) => {
+      trace.push(trigger)
+      trigger.mutate()
+    }
+  }
+}
+
+/**
+ * Demonstrates one child->parent move flow with detached-first lifecycle.
  */
 export function createListComponentInstantiationExample(): {
   listA: ListComponentExample
@@ -967,14 +822,17 @@ export function createListComponentInstantiationExample(): {
   rootA: HTMLElement
   rootB: HTMLElement
   warnings: ComponentWarning[]
-  flipPlans: ListFlipPlan[]
+  flipTriggers: ListFlipTrigger[]
+  parentByPersoId: Map<string, string | null>
 } {
   const warnings: ComponentWarning[] = []
-  const flipPlans: ListFlipPlan[] = []
+  const flipTriggers: ListFlipTrigger[] = []
   const adapter = createDefaultDomListAdapter()
+  const flipBridge = createListFlipBridgeRecorder(flipTriggers)
 
   const listById = new Map<string, ListComponentExample>()
   const nodeByPersoId = new Map<string, HTMLElement>()
+  const parentByPersoId = new Map<string, string | null>()
 
   const registry: ListComponentRegistry = {
     getListById: (persoId) => {
@@ -982,69 +840,95 @@ export function createListComponentInstantiationExample(): {
     },
     getPersoNodeById: (persoId) => {
       return nodeByPersoId.get(persoId) ?? null
+    },
+    getParentListId: (persoId) => {
+      return parentByPersoId.get(persoId) ?? null
+    },
+    setParentListId: (persoId, parentListId) => {
+      parentByPersoId.set(persoId, parentListId)
     }
   }
+
+  const moveRouter = createListMoveRouter({
+    registry,
+    warn: (warning) => {
+      warnings.push(warning)
+    }
+  })
 
   const listA = new ListComponentExample({
     persoId: 'list-a',
     adapter,
-    registry,
     warn: (warning) => {
       warnings.push(warning)
     },
-    emitFlipPlan: (plan) => {
-      flipPlans.push(plan)
-    }
+    flipBridge
   })
 
   const listB = new ListComponentExample({
     persoId: 'list-b',
     adapter,
-    registry,
     warn: (warning) => {
       warnings.push(warning)
     },
-    emitFlipPlan: (plan) => {
-      flipPlans.push(plan)
-    }
+    flipBridge
   })
 
   listById.set('list-a', listA)
   listById.set('list-b', listB)
 
-  nodeByPersoId.set('item-1', createExamplePersoNode('item-1'))
-  nodeByPersoId.set('item-2', createExamplePersoNode('item-2'))
-  nodeByPersoId.set('item-3', createExamplePersoNode('item-3'))
-  nodeByPersoId.set('item-9', createExamplePersoNode('item-9'))
+  nodeByPersoId.set('img-1', createExamplePersoNode('img-1'))
+  nodeByPersoId.set('img-2', createExamplePersoNode('img-2'))
+  nodeByPersoId.set('img-3', createExamplePersoNode('img-3'))
 
-  listA.init({ children: ['item-1', 'item-2', 'item-3'] })
-  listB.init({ children: ['item-9'] })
+  parentByPersoId.set('img-1', null)
+  parentByPersoId.set('img-2', null)
+  parentByPersoId.set('img-3', null)
+
+  listA.init({ className: 'gallery-a' })
+  listB.init({ className: 'gallery-b' })
 
   const rootA = listA.render()
   const rootB = listB.render()
 
-  listA.update({
-    persoId: 'list-a',
-    eventId: 'evt-transfer-1',
-    eventSeq: 1,
-    action: {
-      move: {
-        childId: 'item-2',
-        mode: 'append',
-        targetId: 'list-b'
-      }
-    }
+  // Detached -> mounted in list-a.
+  moveRouter.applyMoveForPerso({
+    persoId: 'img-1',
+    move: { parentId: 'list-a', mode: 'append' },
+    eventId: 'evt-1',
+    eventSeq: 1
   })
 
-  listB.update({
-    persoId: 'list-b',
-    eventId: 'evt-order-1',
-    eventSeq: 2,
-    action: {
-      move: {
-        childId: 'item-2',
-        mode: 'first'
-      }
+  moveRouter.applyMoveForPerso({
+    persoId: 'img-2',
+    move: { parentId: 'list-a', mode: 'append' },
+    eventId: 'evt-2',
+    eventSeq: 2
+  })
+
+  // Local reorder in same parent list.
+  moveRouter.applyMoveForPerso({
+    persoId: 'img-2',
+    move: { parentId: 'list-a', mode: 'first' },
+    eventId: 'evt-3',
+    eventSeq: 3
+  })
+
+  // Inter-list transfer.
+  moveRouter.applyMoveForPerso({
+    persoId: 'img-2',
+    move: { parentId: 'list-b', mode: 'append' },
+    eventId: 'evt-4',
+    eventSeq: 4
+  })
+
+  // One-event outro -> detached lifecycle.
+  moveRouter.detachAfterOutro({
+    persoId: 'img-2',
+    eventId: 'evt-5',
+    eventSeq: 5,
+    runOutro: (onDone) => {
+      onDone()
     }
   })
 
@@ -1054,12 +938,13 @@ export function createListComponentInstantiationExample(): {
     rootA,
     rootB,
     warnings,
-    flipPlans
+    flipTriggers,
+    parentByPersoId
   }
 }
 
 /**
- * Creates one sample perso node owned by one child perso.
+ * Creates one sample node owned by one runtime component.
  */
 function createExamplePersoNode(persoId: string): HTMLElement {
   const node = globalThis.document.createElement('li')

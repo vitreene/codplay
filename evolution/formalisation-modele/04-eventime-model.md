@@ -100,6 +100,22 @@ Ordre canonique des events publics:
 
 Les events issus des tracks rejoignent le flux public global du `Director`.
 
+## Events publics entrants (user/host)
+
+Les events publics entrants (ex: issus de `Perso.emit`) passent aussi par le `Director`.
+
+Pipeline V1:
+
+1. normalisation event (`eventId`, `eventSeq`, `applyAtMs`)
+2. routage vers gestionnaire Eventime
+3. application Eventime uniquement si event de pilotage (ex: `tracks:set`)
+4. insertion dans le flux public canonique
+5. journalisation canonique
+
+Invariant:
+
+- un event utilisateur n'est pas un bypass Eventime/Director
+
 ## Replay, cache, seek
 
 ### Replay

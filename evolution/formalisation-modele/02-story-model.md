@@ -41,7 +41,7 @@ Le state d'execution est runtime-only.
 
 ### Items/persos: creation runtime par type
 
-- `StoryDoc` decrit les persos (`id`, `type`, `initial`, `actions`) sans creer de node
+- `StoryDoc` decrit les persos (`id`, `type`, `initial`, `actions`, `emit?`) sans creer de node
 - la creation des elements runtime a partir de `item.type` est hors scope Story
 - cette creation est portee par le `Renderer` (au `load`) et retourne des `RuntimeElement`
 - ordre de resolution cible: module custom (`ModuleRegistry`) puis noyau (`text`/`img`/`list`)
