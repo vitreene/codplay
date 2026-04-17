@@ -173,3 +173,40 @@ Exception locale:
 - regles courantes considerees comme base de travail
 - validation finale a faire sur jeux de cas visuels concrets
 - ajuster la spec selon le rendu observe plutot que sur abstraction seule
+
+## Reprise ulterieure - checklist composant List (2026-04-17)
+
+### Etat courant
+
+- l'etude est centree sur le systeme de composants (List sert de cible de formalisation)
+- exemple video documente dans `evolution/formalisation-modele/examples/video-component-example.ts`
+- exemple list documente dans `evolution/formalisation-modele/examples/list-component-example.ts`
+- ajustements demandes valides:
+  - vocabulaire `parent` (pas `owner`)
+  - enfants list references par `persoId` (pas de creation de node enfant dans List)
+  - FLIP represente par etat/plan composant (pas de marquage data-* sur les nodes)
+
+### Checklist DoD - vrai composant List
+
+- [ ] verrouiller le contrat composant V1 final (`constructor/init/render/update` + payload `eventId/eventSeq/action`)
+- [ ] brancher registre composants player (`registerComponent` / `overrideComponent`) avant `load(scene)` uniquement
+- [ ] instancier un composant par `Perso` et router `update` vers la bonne instance
+- [ ] exposer un registry runtime stable `persoId -> nodeRef` et `persoId -> listComponent`
+- [ ] retirer le traitement `move` generique de `apply-actions` au profit du composant List
+- [ ] valider en amont Director: `move.mode`, `targetId` list, anti-cycle, normalisation des nombres
+- [ ] implementer la politique complete `move` (persistances, conflits, transfer remove->reparent->add)
+- [ ] integrer FLIP via `flipEngine.run(...)` depuis List (pas de calcul local simplifie)
+- [ ] FLIP: gerer `width/height` avec restauration/suppression propre apres animation
+- [ ] FLIP: gerer interaction avec transitions explicites (`style.to`) sans collisions
+- [ ] FLIP reparent: finaliser calcul parent->parent via `DOMMatrix` pour xy/wh fiables
+- [ ] definir contrat de transport des plans FLIP vers animation (`ListFlipPlan` -> transitions)
+- [ ] brancher la config list runtime (`reorderOnMove`, `reorderOnAdd`, `reorderOnRemove`, overrides locaux)
+- [ ] warnings: dedoublonnage strict (1 warning par `eventSeq`/code/item)
+- [ ] ajouter tests unitaires list (modes move, conflits, persistances, transfer)
+- [ ] ajouter tests integration player+list+flip (dont reparent et resize)
+- [ ] ajouter scenarios visuels de reference pour validation auteur
+
+### Point de reprise recommande
+
+- commencer par verrouiller le contrat V1 de transport FLIP (`ListFlipPlan`) et le wiring vers `createFlipEngine.run`
+- ensuite brancher l'execution List dans le player, puis couvrir par tests avant optimisation
