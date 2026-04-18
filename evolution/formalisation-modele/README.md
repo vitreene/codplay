@@ -23,6 +23,9 @@ Specs V1 alignees sur ce plan:
 - `19-text-component-v1.md` (spec composant text)
 - `22-image-component-v1.md` (spec composant image)
 - `23-list-component-v1.md` (spec composant list)
+- `24-runtime-log-policy-v1.md` (spec-cadre logs/traces runtime)
+- `25-flip-runtime-core-v1.md` (spec runtime FLIP, calcul unique)
+- `26-player-orchestration-v1.md` (orchestration Player, routing move)
 
 Pre-specs / cadrage evolutif:
 
@@ -36,8 +39,14 @@ Pre-specs / cadrage evolutif:
 - `14-component-system-v1-draft.md` (draft systeme composants)
 - `15-list-component-v1-checklist.md` (checklist deploiement composant List)
 - `18-socle-v1-grandes-lignes.md` (note de transition, consolidee dans le plan)
+- `session-context-2026-04-16.md` (journal de decisions recentes)
 - `session-context-2026-04-10.md` (plan de reprise de session)
 
 ## Nettoyage documentaire
 
 Les notes historiques pre-consolidation ont ete retirees du dossier pour eviter toute ambiguite sur la reference V1 active.
+
+Regle de lecture:
+
+- les `session-context-*` restent non normatifs
+- en cas de divergence, la reference est la section "Reference V1 active"

@@ -104,7 +104,7 @@ Contexte:
   - `append`
   - `prepend`
   - `number` (position absolue)
-- `targetId` optionnel:
+- `parentId` optionnel:
   - present => cible list explicite (transfert possible)
   - absent => liste courante de l'item
 - `flip`:
@@ -119,12 +119,12 @@ Contexte:
 - `number` = placement absolu (clamp `[0..n]`)
 - `first` / `last` = placement relatif persistant
 - `append` / `prepend` = placement relatif non persistant
-- `auto` sans `targetId` = positionnement visuel local (souvent combine CSS), sans reparenting
-- `auto` avec `targetId` = placement decide par la policy de la liste cible
+- `auto` sans `parentId` = positionnement visuel local (souvent combine CSS), sans reparenting
+- `auto` avec `parentId` = placement decide par la policy de la liste cible
 
 ### Reparenting et transfert inter-list
 
-- reparenting lie a `targetId` (ou objet equivalent futur)
+- reparenting lie a `parentId` (ou objet equivalent futur)
 - sequence transfert retenue:
   1. `remove` source
   2. reparenting
@@ -193,7 +193,7 @@ Exception locale:
 - [ ] instancier un composant par `Perso` et router `update` vers la bonne instance
 - [ ] exposer un registry runtime stable `persoId -> nodeRef` et `persoId -> listComponent`
 - [ ] retirer le traitement `move` generique de `apply-actions` au profit du composant List
-- [ ] valider en amont Director: `move.mode`, `targetId` list, anti-cycle, normalisation des nombres
+- [ ] valider en amont Director: `move.mode`, `parentId` list, anti-cycle, normalisation des nombres
 - [ ] implementer la politique complete `move` (persistances, conflits, transfer remove->reparent->add)
 - [ ] integrer FLIP via `flipEngine.run(...)` depuis List (pas de calcul local simplifie)
 - [ ] FLIP: gerer `width/height` avec restauration/suppression propre apres animation
@@ -405,9 +405,84 @@ Alignements transverses appliques:
 - `16-base-component-v1.md` mis a jour avec section `move` commune a tous les composants
 - `19-text-component-v1.md` et `22-image-component-v1.md` alignes pour reconnaitre `move` comme mecanisme commun d'insertion DOM
 
+Correction contrat FLIP list:
+
+- `includeSize` et `includeTransformMatrix` retires du contrat `ListFlipTrigger`
+- regle list V1: calcul size + transform matrix toujours actifs
+- si des flags existent dans le moteur FLIP, ils restent internes runtime (non exposes au contrat list)
+
+Preparation test FLIP validee:
+
+- cas de reference `A/B1/B2/C` retenu
+- validation en deux temps:
+  1. hors Player (moteur FLIP isole)
+  2. integration Player (scenario Perso/sequence)
+- le positionnement initial exact sera precise lors de l'elaboration concrete du test
+
 Execution complementaire:
 
 - `examples/list-component-example.ts` reecrit et aligne sur le modele enfant -> parent
 - suppression du contrat `children` dans l'exemple list
 - routage `move` par `parentId` via router runtime dedie
 - demonstration du cycle `detached -> mounted -> transfer -> detached` avec event unique de sortie
+
+Spec-cadre ajoutee:
+
+- `24-runtime-log-policy-v1.md` cree pour cadrer logs/traces runtime
+- objectif: couplage minimal, desactivation simple, dedoublonnage, points de trace limites
+- vocabulaire aligne: `touched` (pas `dirty`)
+
+Norme warning v0.1 ajoutee:
+
+- convention `AUTHOR_*` / `RUNTIME_*`
+- format warning minimal unifie
+- dedoublonnage par `{eventSeq, code, persoId?}`
+
+Spec FLIP ajoutee:
+
+- `25-flip-runtime-core-v1.md` cree comme reference precise de calcul FLIP
+- regle cardinale: chemin de calcul unique (size + matrix toujours actifs)
+- adaptation explicite des methodes de reference GSAP au runtime controle projet
+- contraintes formalisees: interruption/reprise, play/pause/seek, restore width/height, traces minimales
+
+Spec orchestration Player ajoutee:
+
+- `26-player-orchestration-v1.md` cree pour formaliser registre, instanciation, routage update/move
+- `move` route cote Player runtime
+- `initial.move` et `actions.*.move` unifies (meme routeur)
+- list cible existante mais non montee: execution sans FLIP
+- patches layout-impactants integres au `mutationPlan` FLIP
+
+Precisions complementaires validees:
+
+- `initial.move` est traite comme un append de montage (mode explicite ignore au chargement)
+- si un update combine `move` et interpolation layout-impactante, execution en une seule animation composee
+
+Alignement warning codes:
+
+- adoption de la convention `AUTHOR_*` / `RUNTIME_*` sur specs composants/FLIP (`19`, `22`, `23`, `25`)
+
+Point coherence global applique:
+
+- `19-text-component-v1.md` et `22-image-component-v1.md` alignes: type `Action` inclut desormais `move`
+- `14-component-system-v1-draft.md` aligne sur le modele enfant->parent (`move.parentId`)
+
+Note implementation FLIP ajoutee:
+
+- options animation alignees avec le pipeline global: `duration`, `easing`, `trajectory`
+- `trajectory` V1: `linear` par defaut
+- `trajectory: "curve"` prevue pour une trajectoire visuellement attiree vers le centre de scene
+- detail de fabrication de la courbe reporte a l'implementation concrete
+
+Precision technique ajoutee:
+
+- `animejs` n'anime pas la propriete `matrix`
+- la matrice transform est reservee aux calculs internes FLIP
+- les canaux animes runtime restent `x/y/width/height`
+
+Maintenance coherence documentaire:
+
+- `15-list-component-v1-checklist.md`: item Phase A warnings dedoublonnes marque termine
+- `15-list-component-v1-checklist.md`: artifacts de reference complets (`24`, `25`, `26`)
+- `README.md`: ajout de `session-context-2026-04-16.md` dans les notes de transition
+- `README.md`: rappel explicite `session-context-*` non normatifs (priorite aux specs V1 actives)

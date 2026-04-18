@@ -33,6 +33,7 @@ Ce document couvre:
 - `16-base-component-v1.md`
 - `17-user-events-emit-v1.md`
 - `21-text-micro-animations-v1.md`
+- `25-flip-runtime-core-v1.md`
 - `06-runtime-contract.md`
 
 ## Identite composant
@@ -85,7 +86,7 @@ Champs supportes:
   - `reorderOnMove` (defaut `true`)
   - `reorderOnAdd` (defaut `true`)
   - `reorderOnRemove` (defaut `true`)
-- `move?`: montage initial via `parentId` (optionnel)
+- `move?`: montage initial via `parentId` (optionnel, semantique append)
 
 Important:
 
@@ -97,6 +98,12 @@ Actions list supportees:
 
 - patch base root: `style`, `className`, `attr`
 - `move` si la list elle-meme doit se placer dans une list parente
+
+Regle `initial.move`:
+
+- `initial.move` sert uniquement a definir le parent de montage initial
+- normalisation en `append`
+- `mode` eventuel ignore au chargement
 
 Type recommande:
 
@@ -181,6 +188,7 @@ Regles:
 
 - FLIP source + cible par defaut
 - exception ponctuelle via `flip:false`
+- si la list cible existe mais n'est pas montee, transfer execute sans FLIP
 
 ## Detachement transitionnel (V1)
 
@@ -224,9 +232,12 @@ type ListFlipTrigger = {
   eventSeq: number
   movedChildId: string
   reason: 'local-move' | 'transfer-in' | 'transfer-out' | 'auto'
-  includeSize: boolean
-  includeTransformMatrix: boolean
-  entries: { childId: string; nodeRef: unknown }[]
+  animation?: {
+    durationMs?: number
+    easing?: string
+    trajectory?: 'linear' | 'curve'
+  }
+  entries: { childId: string; nodeRef: unknown }[] // touched set
   mutate: () => void
 }
 ```
@@ -236,6 +247,23 @@ Execution:
 - delegation via `ListFlipBridge.run(trigger)`
 - bridge relie ensuite `createFlipEngine.run(...)`
 - pipeline animation global (`animejs` via adapter runtime)
+- traces/logs suivent `24-runtime-log-policy-v1.md`
+
+Note importante:
+
+- les matrices transform sont utilisees pour le calcul FLIP interne uniquement
+- `animejs` n'anime pas la propriete `matrix`; les transitions envoyees restent sur des canaux compatibles (`x`, `y`, `width`, `height`)
+- `trajectory` est supportee (`linear` par defaut, `curve` optionnelle) selon la spec FLIP core
+
+Regles list V1:
+
+- le calcul `width/height` est toujours actif
+- le calcul matrice de transformation (parent/target) est toujours actif
+- ces points ne sont pas exposes comme options auteur dans `ListFlipTrigger`
+
+Note implementation:
+
+- si le moteur FLIP conserve des flags bas niveau (`includeSize`, `includeTransformMatrix`), ils restent internes au runtime et ne font pas partie du contrat list V1
 
 ## Seek pendant transition move (V1)
 
@@ -267,10 +295,11 @@ Alignement:
 
 ## update({ persoId, eventId, eventSeq, action })
 
-Ordre recommande:
+Regle d'execution:
 
-1. `move` (placement du composant)
-2. patch base root
+- pas d'ordre dur "move puis patch" par defaut
+- construction d'un `mutationPlan` unique incluant move + patch(es) layout-impactants
+- execution dans une seule animation composee quand interpolation demandee
 
 Regles:
 
@@ -295,12 +324,12 @@ Regle generale:
 
 Warnings recommandes:
 
-- `W_LIST_INIT_FAILED`
-- `W_LIST_UPDATE_FAILED`
-- `W_LIST_NOT_INITIALIZED`
-- `W_LIST_MOVE_TARGET_NOT_FOUND`
-- `W_LIST_MOVE_TARGET_NOT_LIST`
-- `W_LIST_MOVE_COMPONENT_DETACHED`
+- `RUNTIME_LIST_INIT_FAILED`
+- `RUNTIME_LIST_UPDATE_FAILED`
+- `RUNTIME_LIST_NOT_INITIALIZED`
+- `RUNTIME_LIST_MOVE_TARGET_NOT_FOUND`
+- `RUNTIME_LIST_MOVE_TARGET_NOT_LIST`
+- `RUNTIME_LIST_MOVE_COMPONENT_DETACHED`
 - `AUTHOR_LIST_MOVE_CONFLICT_SAME_TICK`
 - `AUTHOR_LIST_MOVE_INVALID_SERIES_DROPPED`
 

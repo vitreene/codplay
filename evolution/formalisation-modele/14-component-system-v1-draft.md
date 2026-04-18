@@ -7,6 +7,7 @@ Document de travail en mode etude active.
 Reference normative associee:
 
 - `16-base-component-v1.md`
+- `26-player-orchestration-v1.md`
 
 ## Intention
 
@@ -146,7 +147,7 @@ Regle V1:
 Exemples d'adapters de reference:
 
 - `video-component-example.ts` (fragment DOM + sous-couches)
-- `list-component-example.ts` (children par `persoId`, bridge FLIP)
+- `list-component-example.ts` (modele enfant->parent via `move.parentId`, bridge FLIP)
 
 ## Gestion d'erreur et warning
 

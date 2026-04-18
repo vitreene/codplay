@@ -19,7 +19,7 @@ Transformer le draft List en composant runtime reel, en gardant:
 - [x] definir un contrat de transport FLIP (`ListFlipTrigger`) depuis List vers le runtime animation
 - [x] figer la convention enfants List via `persoId -> nodeRef` (pas de creation de node enfant par List)
 - [x] confirmer le modele enfant -> parent (`move.parentId`, pas de `children` en contrat list)
-- [ ] figer les codes warning author dedoublonnes (`eventSeq`)
+- [x] figer les codes warning author dedoublonnes (`eventSeq`)
 - [x] figer le contrat de detachement transitionnel (1 event public + enchainement runtime)
 
 ## Phase B - integration Player/Director
@@ -55,6 +55,7 @@ Transformer le draft List en composant runtime reel, en gardant:
 - [ ] tests integration Player+List+Renderer+FLIP
 - [ ] scenarios visuels de reference (source de decision finale)
 - [ ] ajustements spec selon rendu observe
+- [ ] ajouter et valider le cas de reference FLIP `A/B1/B2/C` (hors Player puis integration sequence)
 
 ## Artifacts de reference
 
@@ -62,6 +63,9 @@ Transformer le draft List en composant runtime reel, en gardant:
 - `evolution/formalisation-modele/examples/video-component-example.ts`
 - `evolution/formalisation-modele/14-component-system-v1-draft.md`
 - `evolution/formalisation-modele/23-list-component-v1.md`
+- `evolution/formalisation-modele/24-runtime-log-policy-v1.md`
+- `evolution/formalisation-modele/25-flip-runtime-core-v1.md`
+- `evolution/formalisation-modele/26-player-orchestration-v1.md`
 
 Note:
 

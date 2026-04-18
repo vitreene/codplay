@@ -74,6 +74,12 @@ type TextAction = {
   className?: string | { add?: string; remove?: string }
   attr?: Record<string, unknown>
   content?: string
+  move?: {
+    parentId: string
+    mode: 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
+    flip?: boolean
+    reorder?: boolean
+  }
 }
 ```
 
@@ -138,8 +144,8 @@ Regle generale:
 
 Warnings recommandes:
 
-- `W_TEXT_INIT_FAILED`
-- `W_TEXT_UPDATE_FAILED`
+- `RUNTIME_TEXT_INIT_FAILED`
+- `RUNTIME_TEXT_UPDATE_FAILED`
 - `AUTHOR_TEXT_CONTENT_INVALID`
 - `AUTHOR_TEXT_ACTION_INVALID`
 

@@ -99,8 +99,6 @@ export type ListFlipTrigger = {
   eventSeq: number
   movedChildId: string
   reason: 'local-move' | 'transfer-in' | 'transfer-out' | 'auto' | 'detach'
-  includeSize: boolean
-  includeTransformMatrix: boolean
   entries: ListFlipEntry[]
   mutate: () => void
 }
@@ -598,8 +596,6 @@ export class ListComponentExample {
       eventSeq: input.eventSeq,
       movedChildId: input.movedChildId,
       reason: input.reason,
-      includeSize: true,
-      includeTransformMatrix: true,
       entries,
       mutate: input.mutate
     })

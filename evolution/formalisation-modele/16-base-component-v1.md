@@ -195,8 +195,14 @@ Comportement:
 
 Usage:
 
-- `initial.move` peut definir un parent de montage initial
+- `initial.move` definit uniquement le parent de montage initial (semantique append)
 - `actions.*.move` permet un replacement dynamique runtime
+
+Regles sur `initial.move`:
+
+- pas de position "avant" a evaluer au montage initial
+- normalisation: `initial.move` est traite comme un `append` vers `parentId`
+- si `mode` est present dans `initial.move`, il est ignore
 
 Etat de montage commun:
 
@@ -225,6 +231,14 @@ Regles:
 - aucune erreur composant ne doit casser le runtime global
 - les erreurs sont capturees et converties en warnings auteur
 - warnings dedoublonnes par `{eventSeq, code}`
+
+## Politique de trace/log
+
+Regle V1:
+
+- appliquer `24-runtime-log-policy-v1.md`
+- couplage minimal composant <-> logs
+- logs desactivables sans cout significatif
 
 ## Notes implementation
 

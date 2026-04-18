@@ -122,6 +122,12 @@ type ImageAction = {
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  move?: {
+    parentId: string
+    mode: 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
+    flip?: boolean
+    reorder?: boolean
+  }
 }
 ```
 
@@ -184,8 +190,8 @@ Regle generale:
 
 Warnings recommandes:
 
-- `W_IMAGE_INIT_FAILED`
-- `W_IMAGE_UPDATE_FAILED`
+- `RUNTIME_IMAGE_INIT_FAILED`
+- `RUNTIME_IMAGE_UPDATE_FAILED`
 - `AUTHOR_IMAGE_SRC_MISSING`
 - `AUTHOR_IMAGE_SRC_INVALID`
 - `AUTHOR_IMAGE_FIT_MODE_INVALID`
