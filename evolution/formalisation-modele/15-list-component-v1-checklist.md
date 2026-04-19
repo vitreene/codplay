@@ -9,8 +9,8 @@ Plan de sequence courant:
 - A: termine
 - B: termine
 - C: termine
-- D: prochain lot (FLIP reel)
-- E: ensuite (validation globale)
+- D: termine
+- E: termine
 
 ## Intention
 
@@ -51,19 +51,26 @@ Transformer le draft List en composant runtime reel, en gardant:
 
 ## Phase D - FLIP reel
 
-- [ ] brancher `ListFlipTrigger` vers `createFlipEngine.run(...)`
-- [ ] garantir la gestion `width/height`: appliquer pendant FLIP puis restaurer/supprimer proprement
-- [ ] gerer interaction FLIP avec transitions explicites `style.to`
-- [ ] finaliser le calcul reparent parent->parent via `DOMMatrix`
-- [ ] valider que le moteur ne depend pas d'un simple `getBoundingClientRect` brut
+- [x] brancher `ListFlipTrigger` vers `createFlipEngine.run(...)`
+- [x] garantir la gestion `width/height`: appliquer pendant FLIP puis restaurer/supprimer proprement
+- [x] gerer interaction FLIP avec transitions explicites `style.to`
+- [x] finaliser le calcul reparent parent->parent via `DOMMatrix`
+- [x] valider que le moteur ne depend pas d'un simple `getBoundingClientRect` brut
 
 ## Phase E - validation
 
-- [ ] tests unitaires List: modes, persistances, conflits, transfer
-- [ ] tests integration Player+List+Renderer+FLIP
-- [ ] scenarios visuels de reference (source de decision finale)
-- [ ] ajustements spec selon rendu observe
-- [ ] ajouter et valider le cas de reference FLIP `A/B1/B2/C` (hors Player puis integration sequence)
+- [x] tests unitaires List: modes, persistances, conflits, transfer
+- [x] tests integration Player+List+Renderer+FLIP
+- [x] scenarios visuels de reference (source de decision finale)
+- [x] ajustements spec selon rendu observe
+- [x] ajouter et valider le cas de reference FLIP `A/B1/B2/C` (hors Player puis integration sequence)
+
+## Cloture
+
+- validation automatique: `npm test` (95 tests) + `npm run build` OK
+- reference FLIP `A/B1/B2/C`: `tests/lot8/flip-engine.spec.ts` (L8-T12)
+- validation runtime move/overlay: `tests/lot18/move-phase-c.spec.ts`
+- demo visuelle validee: mode local conserve, mode `overlay-world` operationnel
 
 ## Artifacts de reference
 

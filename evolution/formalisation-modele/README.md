@@ -27,6 +27,7 @@ Specs V1 alignees sur ce plan:
 - `25-flip-runtime-core-v1.md` (spec runtime FLIP, calcul unique)
 - `26-player-orchestration-v1.md` (orchestration Player, routing move)
 - `28-flip-overlay-world-mode-v1.md` (variant FLIP optionnelle, mode auteur overlay-world)
+- `29-flip-deux-variantes-principe-et-implementation.md` (note technique implementation locale + overlay-world)
 
 Pre-specs / cadrage evolutif:
 
@@ -42,6 +43,7 @@ Pre-specs / cadrage evolutif:
 - `15-list-component-v1-checklist.md` (checklist deploiement composant List)
 - `18-socle-v1-grandes-lignes.md` (note de transition, consolidee dans le plan)
 - `session-context-2026-04-16.md` (journal de decisions recentes)
+- `session-context-2026-04-19.md` (cloture cycle FLIP + statut plan A-E)
 - `session-context-2026-04-10.md` (plan de reprise de session)
 
 ## Nettoyage documentaire

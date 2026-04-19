@@ -62,3 +62,25 @@ Le handoff ghost->node doit rester prioritaire pour eviter un saut visuel meme s
 - `src/animation/adapter.ts`
 - `src/animation/types.ts`
 - `src/demos/player-poc-demo.ts`
+
+## Mise a jour de cloture (fin de cycle FLIP)
+
+Etat final du plan A-E (checklist list component):
+
+- A: termine
+- B: termine
+- C: termine
+- D: termine
+- E: termine
+
+Validation finale executee:
+
+- `npm test` -> 18 files / 95 tests OK
+- `npm run build` -> OK
+
+Notes de cloture:
+
+- mode FLIP local conserve (pas de regression)
+- mode `move.flipMode = "overlay-world"` stabilise pour la demo
+- logs de diagnostic temporaires retires du runtime
+- reference technique ajoutee: `29-flip-deux-variantes-principe-et-implementation.md`
