@@ -238,7 +238,7 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Runs one frame tick when player is in playing state.
    */
-  private runPlaybackTick(): void {
+  private runPlaybackTick(frameNowMs?: number): void {
     if (this.status !== "playing") {
       return;
     }
@@ -246,6 +246,7 @@ export class PlayerFacade implements PlayerApi {
     const timelineMs = this.resolveCurrentTimelineMs();
     this.timelineMs = timelineMs;
     this.runDueTimelineEvents(timelineMs);
+    this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs());
     this.completePlaybackIfReachedEnd();
   }
 
@@ -291,8 +292,8 @@ export class PlayerFacade implements PlayerApi {
       return;
     }
 
-    this.ticker.start(() => {
-      this.runPlaybackTick();
+    this.ticker.start((tickPayload) => {
+      this.runPlaybackTick(tickPayload.nowMs);
     });
   }
 

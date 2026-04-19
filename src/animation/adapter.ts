@@ -10,6 +10,10 @@ export type AnimeAnimationLike = {
 
 export type AnimeImplementation = (parameters: Record<string, unknown>) => AnimeAnimationLike | null | undefined
 
+export type AnimationAdapterOptions = {
+  renderFrame?: (frameNowMs: number) => void
+}
+
 type TransitionGroup = {
   parameters: Record<string, unknown>
   transitions: TransitionRequest[]
@@ -179,7 +183,10 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
 /**
  * Creates an animation adapter that bridges transition requests to Anime.js.
  */
-export function createAnimationAdapter(animeImplementation: AnimeImplementation): AnimationAdapter {
+export function createAnimationAdapter(
+  animeImplementation: AnimeImplementation,
+  options: AnimationAdapterOptions = {}
+): AnimationAdapter {
   const activeHandles: AnimationHandle[] = []
   const activeAnimations: ActiveAnimation[] = []
 
@@ -379,5 +386,7 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
     }
   }
 
-  return { run, stop, pause, resume, seek }
+  const renderFrame = options.renderFrame
+
+  return { run, stop, pause, resume, seek, renderFrame }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
+import type { AnimationAdapter } from '../../src/animation/types'
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
@@ -298,6 +299,95 @@ describe('Lot 16 - playback timeline minimal', () => {
     ;(player as unknown as { runPlaybackTick: () => void }).runPlaybackTick()
     const stateAfterWait = player.getState()
     expect(stateAfterWait.timelineMs).toBe(120)
+
+    vi.useRealTimers()
+  })
+
+  it('L16-T4 playback ticker also drives animation adapter render frames', async () => {
+    vi.useFakeTimers()
+
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {}
+    }
+
+    const scene: SceneDoc = {
+      id: 'scene-main',
+      initialStoryId: 'story-main',
+      stories: {
+        'story-main': {
+          id: 'story-main',
+          items: {
+            title: {
+              id: 'title',
+              type: 'text',
+              initial: {
+                id: 'title'
+              },
+              actions: {
+                intro: {
+                  style: {
+                    opacity: {
+                      to: 1,
+                      duration: 400
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      tracks: {
+        'track-story-main': {
+          id: 'track-story-main',
+          source: 'story',
+          order: 0,
+          events: [
+            {
+              id: 'evt-1',
+              ms: 0,
+              name: 'intro',
+              index: 0,
+              source: 'story'
+            }
+          ]
+        }
+      }
+    }
+
+    const renderFrame = vi.fn<(frameNowMs: number) => void>()
+    const animationAdapter: AnimationAdapter = {
+      run: () => [],
+      stop: () => {
+        return
+      },
+      pause: () => {
+        return
+      },
+      resume: () => {
+        return
+      },
+      seek: () => {
+        return
+      },
+      renderFrame
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(scene)
+    await player.play()
+
+    ;(player as unknown as { runPlaybackTick: (frameNowMs?: number) => void }).runPlaybackTick(42)
+
+    expect(renderFrame).toHaveBeenCalled()
 
     vi.useRealTimers()
   })

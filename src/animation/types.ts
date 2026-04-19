@@ -57,6 +57,7 @@ export type AnimationAdapter = {
   pause?: (target?: unknown) => void
   resume?: (target?: unknown) => void
   seek?: (timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>, target?: unknown) => void
+  renderFrame?: (frameNowMs: number) => void
 }
 
 export type AnimationBatchResult = {

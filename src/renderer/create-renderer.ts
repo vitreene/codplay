@@ -238,6 +238,17 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
+   * Advances the external animation engine by one frame.
+   */
+  renderFrame(frameNowMs: number): void {
+    if (!this.isInitialized()) {
+      return
+    }
+
+    this.animationAdapter.renderFrame?.(frameNowMs)
+  }
+
+  /**
    * Stops renderer execution and clears pending commits.
    */
   stop(): RendererCommandResult {

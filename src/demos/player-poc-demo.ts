@@ -1,6 +1,6 @@
 import './player-poc-demo.css';
 
-import { animate } from 'animejs';
+import { animate, engine } from 'animejs';
 
 import { createAnimationAdapter, type AnimeImplementation } from '../animation/adapter';
 import { PlayerFacade } from '../player/create-player';
@@ -23,6 +23,8 @@ type SeekablePlayer = {
  * Builds an animejs wrapper compatible with runtime animation adapter.
  */
 function temp__createAnimeImplementation(): AnimeImplementation {
+	engine.useDefaultMainLoop = false;
+
 	return (parameters) => {
 		const targets = parameters.targets;
 		const animationParameters = { ...parameters };
@@ -32,6 +34,13 @@ function temp__createAnimeImplementation(): AnimeImplementation {
 		const typedAnimationParameters = animationParameters as Parameters<typeof animate>[1];
 		return animate(animationTargets, typedAnimationParameters);
 	};
+}
+
+/**
+ * Renders animejs animations from the player ticker loop.
+ */
+function temp__renderAnimeFrameFromPlayerTicker(): void {
+	engine.update();
 }
 
 /**
@@ -641,7 +650,11 @@ export async function runPlayerPocDemo(): Promise<void> {
 
 	containerNode.style.position = 'relative';
 
-	const animationAdapter = createAnimationAdapter(temp__createAnimeImplementation());
+	const animationAdapter = createAnimationAdapter(temp__createAnimeImplementation(), {
+		renderFrame: () => {
+			temp__renderAnimeFrameFromPlayerTicker();
+		},
+	});
 	const player = new PlayerFacade({
 		animationAdapter,
 	});
