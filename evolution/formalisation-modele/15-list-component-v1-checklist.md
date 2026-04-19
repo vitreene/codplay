@@ -8,8 +8,8 @@ Plan de sequence courant:
 
 - A: termine
 - B: termine
-- C: prochain lot d'implementation
-- D: ensuite (FLIP reel)
+- C: termine
+- D: prochain lot (FLIP reel)
 - E: ensuite (validation globale)
 
 ## Intention
@@ -41,13 +41,13 @@ Transformer le draft List en composant runtime reel, en gardant:
 
 ## Phase C - execution move
 
-- [ ] brancher les trois cas move: local, transfer out, transfer in
-- [ ] brancher le mode "detache" (aucun parent effectif) et la transition vers parent cible
-- [ ] conserver les nodes detaches pour reuse seek
-- [ ] appliquer la regle conflits meme tick: last-write-wins + warning author unique
-- [ ] appliquer `first/last` persistants et `append/prepend` non persistants
-- [ ] appliquer `mode:number` absolu (clamp)
-- [ ] appliquer regles `reorderOnMove/add/remove` + exception locale `reorder:false` (avec priorite `mode`)
+- [x] brancher les trois cas move: local, transfer out, transfer in
+- [x] brancher le mode "detache" (aucun parent effectif) et la transition vers parent cible
+- [x] conserver les nodes detaches pour reuse seek
+- [x] appliquer la regle conflits meme tick: last-write-wins + warning author unique
+- [x] appliquer `first/last` persistants et `append/prepend` non persistants
+- [x] appliquer `mode:number` absolu (clamp)
+- [x] appliquer regles `reorderOnMove/add/remove` + exception locale `reorder:false` (avec priorite `mode`)
 
 ## Phase D - FLIP reel
 

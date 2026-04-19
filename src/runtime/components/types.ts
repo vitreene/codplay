@@ -57,21 +57,26 @@ export type RuntimeListComponent = RuntimeComponent & {
     childId: string
     childNode: unknown
     mode: MoveCommand['mode']
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }) => void
   detachChild: (input: {
     childId: string
+    mode: MoveCommand['mode']
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }) => unknown | null
   repositionChild: (input: {
     childId: string
     mode: MoveCommand['mode']
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }) => void
   getPersoId: () => string
+  getChildrenSnapshot: () => string[]
 }
 
 /**

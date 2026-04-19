@@ -520,12 +520,41 @@ Etat phases:
 
 - Phase A: terminee
 - Phase B: terminee
-- Phase C: a executer
+- Phase C: terminee
 - Phase D: a executer
 - Phase E: a executer
 
 Plan d'execution:
 
-1. Phase C - execution `move` complete (local/transfer/detached, persistances, conflits same tick)
-2. Phase D - branchement FLIP reel (`ListFlipTrigger -> createFlipEngine.run`) + reparent matrix/size restore
-3. Phase E - validation complete (unit + integration + scenario visuel A/B1/B2/C)
+1. Phase D - branchement FLIP reel (`ListFlipTrigger -> createFlipEngine.run`) + reparent matrix/size restore
+2. Phase E - validation complete (unit + integration + scenario visuel A/B1/B2/C)
+
+## Avancement de reprise (2026-04-19 - Phase C executee)
+
+Implementation runtime effectuee:
+
+- routeur move global: local move, transfer out/in, detachement en cible invalide/non-list
+- conservation du node detache pour reuse (seek/reattache ultierieure)
+- resolution conflits move meme tick: `last-write-wins`
+- regle "derniere move invalide" appliquee: serie ignoree
+- warnings dedoublonnes par `{eventSeq, code, persoId}` dans l'orchestrateur
+- list runtime: politiques reorder (`reorderOnMove/add/remove`) + override local `reorder:false`
+- priorite `mode` sur `reorder:false` appliquee
+- list runtime: `first/last` persistants, `append/prepend` non persistants, `mode:number` clamp
+
+Tests ajoutes:
+
+- `tests/lot18/move-phase-c.spec.ts`
+  - local/transfer/detached/reattach
+  - conflits same tick + last invalid
+  - persistance + clamp + policies reorder
+
+Validation:
+
+- `npm test` OK (86/86)
+- `npm run build` OK
+
+Plan actif mis a jour:
+
+1. Phase D - FLIP reel
+2. Phase E - validation globale

@@ -31,7 +31,7 @@ function temp__createAnimeImplementation(): AnimeImplementation {
 }
 
 /**
- * Creates one demo scene with text/image/list simple animations.
+ * Creates one demo scene focused on list add/reorder/remove behavior.
  */
 function temp__createDemoScene(): SceneDoc {
   return {
@@ -41,118 +41,163 @@ function temp__createDemoScene(): SceneDoc {
       "story-demo": {
         id: "story-demo",
         items: {
-          "demo-text": {
-            id: "demo-text",
-            type: "text",
-            initial: {
-              id: "demo-text",
-              tag: "div",
-              className: "demo-card demo-text",
-              content: "TEXT",
-              style: {
-                position: "absolute",
-                left: "10%",
-                top: "14%",
-                backgroundColor: "#1f2b3d",
-                color: "#ffffff",
-                width: "190px",
-                height: "90px",
-                display: "grid",
-                placeItems: "center",
-                borderRadius: "14px",
-                boxShadow: "0 10px 24px rgba(16, 38, 67, 0.18)",
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-              },
-            },
-            actions: {
-              "demo:text:color": {
-                style: {
-                  backgroundColor: {
-                    to: "#0b7a75",
-                    easing: "easeInOutSine",
-                  },
-                },
-              },
-            },
-          },
-          "demo-image": {
-            id: "demo-image",
-            type: "img",
-            initial: {
-              id: "demo-image",
-              className: "demo-card demo-image",
-              src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 140'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='%23f2c94c'/><stop offset='100%' stop-color='%23eb5757'/></linearGradient></defs><rect width='240' height='140' fill='url(%23g)'/><circle cx='60' cy='55' r='26' fill='%23ffffff55'/><circle cx='170' cy='85' r='34' fill='%2300000022'/></svg>",
-              alt: "Gradient test image",
-              fitMode: "wallpaper",
-              style: {
-                position: "absolute",
-                left: "52%",
-                top: "16%",
-                width: "240px",
-                height: "140px",
-                borderRadius: "14px",
-                overflow: "hidden",
-                border: "2px solid #ffffff",
-                boxShadow: "0 10px 24px rgba(16, 38, 67, 0.22)",
-                rotate: 0,
-                transformOrigin: "center",
-              },
-            },
-            actions: {
-              "demo:image:rotate": {
-                style: {
-                  rotate: {
-                    from: 0,
-                    to: 120,
-                    easing: "easeInOutSine",
-                    duration: 2000,
-                  },
-                },
-              },
-              "demo:image:translate": {
-                style: {
-                  x: {
-                    from: 0,
-                    to: -200,
-                    easing: "easeInOutSine",
-                  },
-                  y: {
-                    from: 0,
-                    to: -200,
-                    easing: "easeInOutSine",
-                  },
-                },
-              },
-            },
-          },
           "demo-list": {
             id: "demo-list",
             type: "list",
             initial: {
               id: "demo-list",
-              className: "demo-card demo-list",
+              className: "demo-card demo-list-main",
               style: {
                 position: "absolute",
-                left: "28%",
-                top: "58%",
-                width: "250px",
-                height: "110px",
+                left: "50%",
+                top: "50%",
+                x: "-50%",
+                y: "-50%",
+                width: "380px",
+                minHeight: "320px",
+                padding: "16px",
                 backgroundColor: "#eef7f6",
                 border: "2px dashed #0b7a75",
                 borderRadius: "14px",
-                scale: 1,
+                boxShadow: "0 10px 24px rgba(16, 38, 67, 0.18)",
+              },
+            },
+            actions: {},
+          },
+          "demo-trash-list": {
+            id: "demo-trash-list",
+            type: "list",
+            initial: {
+              id: "demo-trash-list",
+              style: {
+                display: "none",
+              },
+            },
+            actions: {},
+          },
+          "demo-item-1": {
+            id: "demo-item-1",
+            type: "text",
+            initial: {
+              id: "demo-item-1",
+              tag: "div",
+              className: "demo-list-item",
+              content: "ITEM 1",
+              style: {
+                padding: "0.7rem 0.85rem",
+                marginBottom: "0.5rem",
+                borderRadius: "0.6rem",
+                color: "#ffffff",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                backgroundColor: "#f25f5c",
               },
             },
             actions: {
-              "demo:list:scale": {
-                style: {
-                  scale: {
-                    from: 1,
-                    to: 1.08,
-                    easing: "easeInOutSine",
-                  },
-                },
+              "demo:item-1:add": {
+                move: { parentId: "demo-list", mode: "append" },
+              },
+              "demo:item-1:remove-second": {
+                move: { parentId: "demo-trash-list", mode: "append" },
+              },
+            },
+          },
+          "demo-item-2": {
+            id: "demo-item-2",
+            type: "text",
+            initial: {
+              id: "demo-item-2",
+              tag: "div",
+              className: "demo-list-item",
+              content: "ITEM 2",
+              style: {
+                padding: "0.7rem 0.85rem",
+                marginBottom: "0.5rem",
+                borderRadius: "0.6rem",
+                color: "#ffffff",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                backgroundColor: "#f7b267",
+              },
+            },
+            actions: {
+              "demo:item-2:add": {
+                move: { parentId: "demo-list", mode: "append" },
+              },
+            },
+          },
+          "demo-item-3": {
+            id: "demo-item-3",
+            type: "text",
+            initial: {
+              id: "demo-item-3",
+              tag: "div",
+              className: "demo-list-item",
+              content: "ITEM 3",
+              style: {
+                padding: "0.7rem 0.85rem",
+                marginBottom: "0.5rem",
+                borderRadius: "0.6rem",
+                color: "#ffffff",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                backgroundColor: "#70c1b3",
+              },
+            },
+            actions: {
+              "demo:item-3:add": {
+                move: { parentId: "demo-list", mode: "append" },
+              },
+              "demo:item-3:to-first": {
+                move: { parentId: "demo-list", mode: "first" },
+              },
+            },
+          },
+          "demo-item-4": {
+            id: "demo-item-4",
+            type: "text",
+            initial: {
+              id: "demo-item-4",
+              tag: "div",
+              className: "demo-list-item",
+              content: "ITEM 4",
+              style: {
+                padding: "0.7rem 0.85rem",
+                marginBottom: "0.5rem",
+                borderRadius: "0.6rem",
+                color: "#ffffff",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                backgroundColor: "#247ba0",
+              },
+            },
+            actions: {
+              "demo:item-4:add": {
+                move: { parentId: "demo-list", mode: "append" },
+              },
+            },
+          },
+          "demo-item-5": {
+            id: "demo-item-5",
+            type: "text",
+            initial: {
+              id: "demo-item-5",
+              tag: "div",
+              className: "demo-list-item",
+              content: "ITEM 5",
+              style: {
+                padding: "0.7rem 0.85rem",
+                marginBottom: "0.5rem",
+                borderRadius: "0.6rem",
+                color: "#ffffff",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                backgroundColor: "#b388eb",
+              },
+            },
+            actions: {
+              "demo:item-5:add": {
+                move: { parentId: "demo-list", mode: "append" },
               },
             },
           },
@@ -167,19 +212,31 @@ function temp__createDemoScene(): SceneDoc {
         events: [
           {
             ms: 0,
-            name: "demo:text:color",
+            name: "demo:item-1:add",
           },
           {
-            ms: 240,
-            name: "demo:image:rotate",
+            ms: 1000,
+            name: "demo:item-2:add",
           },
           {
-            ms: 800,
-            name: "demo:image:translate",
+            ms: 2000,
+            name: "demo:item-3:add",
           },
           {
-            ms: 480,
-            name: "demo:list:scale",
+            ms: 3000,
+            name: "demo:item-4:add",
+          },
+          {
+            ms: 4000,
+            name: "demo:item-5:add",
+          },
+          {
+            ms: 5200,
+            name: "demo:item-3:to-first",
+          },
+          {
+            ms: 6200,
+            name: "demo:item-1:remove-second",
           },
         ],
       },
@@ -193,20 +250,25 @@ function temp__createDemoScene(): SceneDoc {
 function temp__createDemoNodeMap(containerNode: HTMLDivElement): Map<string, HTMLElement> {
   const nodeByItemId = new Map<string, HTMLElement>();
 
-  const textNode = globalThis.document.createElement("div");
-  textNode.dataset.demoItemId = "demo-text";
+  const itemIds = [
+    "demo-list",
+    "demo-trash-list",
+    "demo-item-1",
+    "demo-item-2",
+    "demo-item-3",
+    "demo-item-4",
+    "demo-item-5",
+  ];
 
-  const imageNode = globalThis.document.createElement("div");
-  imageNode.dataset.demoItemId = "demo-image";
+  for (const itemId of itemIds) {
+    const node = itemId.includes("list")
+      ? globalThis.document.createElement("section")
+      : globalThis.document.createElement("div");
 
-  const listNode = globalThis.document.createElement("section");
-  listNode.dataset.demoItemId = "demo-list";
-
-  containerNode.append(textNode, imageNode, listNode);
-
-  nodeByItemId.set("demo-text", textNode);
-  nodeByItemId.set("demo-image", imageNode);
-  nodeByItemId.set("demo-list", listNode);
+    node.dataset.demoItemId = itemId;
+    nodeByItemId.set(itemId, node);
+    containerNode.append(node);
+  }
 
   return nodeByItemId;
 }
@@ -327,7 +389,7 @@ export async function runPlayerPocDemo(): Promise<void> {
     <aside>
       <p class="eyebrow">Runtime V1</p>
       <h1>Player POC</h1>
-	      <p class="subtitle">Text, image et list avec animations couleur, rotation et scale.</p>
+	      <p class="subtitle">List: 5 ajouts (1s), puis #3 passe #1, puis suppression de #2.</p>
       <div class="demo-controls">
         <button id="demo-play-button" class="demo-button" type="button">Play</button>
         <button id="demo-rewind-button" class="demo-button demo-button-secondary" type="button">Rewind</button>

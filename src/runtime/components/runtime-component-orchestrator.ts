@@ -59,6 +59,7 @@ function toRuntimeElementMap(
  */
 export class RuntimeComponentOrchestrator {
   private readonly warn: RuntimeComponentWarningReporter
+  private readonly warningKeys = new Set<string>()
 
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
   private readonly componentByPersoId = new Map<string, RuntimeComponent>()
@@ -199,30 +200,33 @@ export class RuntimeComponentOrchestrator {
    * Routes resolved updates to component instances and move router.
    */
   routeUpdates(updates: RuntimeResolvedUpdate[]): RuntimeUpdateRoutingResult {
+    this.warningKeys.clear()
     const animatableActions: AnimationResolvedAction[] = []
     let appliedActionsCount = 0
+    const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates)
 
-    for (const update of updates) {
+    for (const [updateIndex, update] of updates.entries()) {
       const targetPersoId = this.resolveTargetPersoId(update.resolvedAction)
       const component = this.componentByPersoId.get(targetPersoId)
       if (!component) {
-        this.warn({
-          code: 'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-          message: 'Cannot route update to missing component instance',
-          details: {
+        this.warnOnce(
+          update.eventSeq,
+          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+          {
             targetPersoId,
             eventId: update.resolvedAction.eventId,
             eventSeq: update.eventSeq
-          }
-        })
+          },
+          targetPersoId
+        )
         continue
       }
 
-      const moveCommand = this.normalizeMoveCommand(update.resolvedAction.action.move, false)
-      if (moveCommand !== null) {
+      const moveDecision = moveDecisionsByUpdateIndex.get(updateIndex)
+      if (moveDecision !== undefined && moveDecision !== null) {
         this.applyMoveForPerso({
           persoId: targetPersoId,
-          move: moveCommand,
+          move: moveDecision,
           eventId: update.resolvedAction.eventId,
           eventSeq: update.eventSeq
         })
@@ -335,6 +339,8 @@ export class RuntimeComponentOrchestrator {
       if (sourceList !== null) {
         sourceList.detachChild({
           childId: request.persoId,
+          mode: request.move.mode,
+          reorder: request.move.reorder,
           eventId: request.eventId,
           eventSeq: request.eventSeq
         })
@@ -342,16 +348,17 @@ export class RuntimeComponentOrchestrator {
 
       this.parentListByPersoId.set(request.persoId, null)
       this.mountedByPersoId.set(request.persoId, false)
-      this.warn({
-        code: 'RUNTIME_LIST_MOVE_TARGET_NOT_FOUND',
-        message: 'Move target list was not found',
-        details: {
+      this.warnOnce(
+        request.eventSeq,
+        'AUTHOR_LIST_MOVE_TARGET_NOT_FOUND',
+        {
           persoId: request.persoId,
           parentId: request.move.parentId,
           eventId: request.eventId,
           eventSeq: request.eventSeq
-        }
-      })
+        },
+        request.persoId
+      )
       return
     }
 
@@ -359,6 +366,7 @@ export class RuntimeComponentOrchestrator {
       targetList.repositionChild({
         childId: request.persoId,
         mode: request.move.mode,
+        reorder: request.move.reorder,
         eventId: request.eventId,
         eventSeq: request.eventSeq
       })
@@ -372,6 +380,8 @@ export class RuntimeComponentOrchestrator {
     if (sourceList !== null) {
       childNode = sourceList.detachChild({
         childId: request.persoId,
+        mode: request.move.mode,
+        reorder: request.move.reorder,
         eventId: request.eventId,
         eventSeq: request.eventSeq
       })
@@ -384,15 +394,16 @@ export class RuntimeComponentOrchestrator {
     if (childNode === null) {
       this.parentListByPersoId.set(request.persoId, null)
       this.mountedByPersoId.set(request.persoId, false)
-      this.warn({
-        code: 'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-        message: 'Move source node was not found',
-        details: {
+      this.warnOnce(
+        request.eventSeq,
+        'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+        {
           persoId: request.persoId,
           eventId: request.eventId,
           eventSeq: request.eventSeq
-        }
-      })
+        },
+        request.persoId
+      )
       return
     }
 
@@ -400,6 +411,7 @@ export class RuntimeComponentOrchestrator {
       childId: request.persoId,
       childNode,
       mode: request.move.mode,
+      reorder: request.move.reorder,
       eventId: request.eventId,
       eventSeq: request.eventSeq
     })
@@ -421,5 +433,131 @@ export class RuntimeComponentOrchestrator {
       ;(childNode as Record<string, unknown>).parentId = targetList.getPersoId()
       this.nodeByPersoId.set(persoId, childNode)
     }
+  }
+
+  /**
+   * Emits one warning once per {eventSeq, code, persoId} key.
+   */
+  private warnOnce(
+    eventSeq: number,
+    code: string,
+    details: Record<string, unknown>,
+    persoId?: string
+  ): void {
+    const key = `${eventSeq}:${code}:${persoId ?? ''}`
+    if (this.warningKeys.has(key)) {
+      return
+    }
+
+    this.warningKeys.add(key)
+    this.warn({
+      code,
+      message: code,
+      details
+    })
+  }
+
+  /**
+   * Resolves one move command decision map with same-tick conflict policy.
+   */
+  private resolveMoveDecisions(updates: RuntimeResolvedUpdate[]): Map<number, MoveCommand | null> {
+    const decisions = new Map<number, MoveCommand | null>()
+    const candidatesByKey = new Map<
+      string,
+      Array<{
+        updateIndex: number
+        eventSeq: number
+        eventId: string
+        persoId: string
+        moveCommand: MoveCommand | null
+      }>
+    >()
+
+    for (const [updateIndex, update] of updates.entries()) {
+      const action = update.resolvedAction.action as Record<string, unknown>
+      if (!Object.prototype.hasOwnProperty.call(action, 'move')) {
+        continue
+      }
+
+      const persoId = this.resolveTargetPersoId(update.resolvedAction)
+      const moveCommand = this.normalizeMoveCommand(action.move, false)
+      const key = `${update.eventSeq}:${persoId}`
+      const candidates = candidatesByKey.get(key) ?? []
+      candidates.push({
+        updateIndex,
+        eventSeq: update.eventSeq,
+        eventId: update.resolvedAction.eventId,
+        persoId,
+        moveCommand
+      })
+      candidatesByKey.set(key, candidates)
+    }
+
+    for (const candidates of candidatesByKey.values()) {
+      if (candidates.length === 0) {
+        continue
+      }
+
+      const first = candidates[0]
+      if (first === undefined) {
+        continue
+      }
+
+      if (candidates.length === 1) {
+        decisions.set(first.updateIndex, first.moveCommand)
+        if (first.moveCommand === null) {
+          this.warnOnce(
+            first.eventSeq,
+            'AUTHOR_MOVE_COMMAND_INVALID',
+            {
+              persoId: first.persoId,
+              eventId: first.eventId
+            },
+            first.persoId
+          )
+        }
+
+        continue
+      }
+
+      const last = candidates[candidates.length - 1]
+      if (last === undefined) {
+        continue
+      }
+
+      this.warnOnce(
+        last.eventSeq,
+        'AUTHOR_MOVE_CONFLICT_SAME_TICK',
+        {
+          persoId: last.persoId,
+          eventId: last.eventId,
+          conflictCount: candidates.length
+        },
+        last.persoId
+      )
+
+      if (last.moveCommand === null) {
+        for (const candidate of candidates) {
+          decisions.set(candidate.updateIndex, null)
+        }
+
+        this.warnOnce(
+          last.eventSeq,
+          'AUTHOR_MOVE_LAST_INVALID_SAME_TICK',
+          {
+            persoId: last.persoId,
+            eventId: last.eventId
+          },
+          last.persoId
+        )
+        continue
+      }
+
+      for (const candidate of candidates) {
+        decisions.set(candidate.updateIndex, candidate.updateIndex === last.updateIndex ? last.moveCommand : null)
+      }
+    }
+
+    return decisions
   }
 }

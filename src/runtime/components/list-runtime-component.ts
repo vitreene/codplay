@@ -16,6 +16,14 @@ import type {
 } from './types'
 import type { MoveMode } from '../types'
 
+type ReorderOperation = 'move' | 'add' | 'remove'
+
+type ListReorderConfig = {
+  reorderOnMove: boolean
+  reorderOnAdd: boolean
+  reorderOnRemove: boolean
+}
+
 type PersistentPlacementRule = {
   mode: 'first' | 'last'
   insertedOrder: number
@@ -50,6 +58,11 @@ export class ListRuntimeComponent implements RuntimeListComponent {
   private orderedChildIds: string[] = []
   private readonly persistentPlacementByChildId = new Map<string, PersistentPlacementRule>()
   private nextPlacementOrder = 1
+  private reorderConfig: ListReorderConfig = {
+    reorderOnMove: true,
+    reorderOnAdd: true,
+    reorderOnRemove: true
+  }
 
   /**
    * Creates one list component instance for one specific item.
@@ -104,6 +117,8 @@ export class ListRuntimeComponent implements RuntimeListComponent {
           ? (initial.attr as Record<string, unknown>)
           : undefined
       )
+
+      this.reorderConfig = this.resolveReorderConfig(initial)
     } catch (error) {
       this.input.warn({
         code: 'RUNTIME_LIST_INIT_FAILED',
@@ -186,12 +201,20 @@ export class ListRuntimeComponent implements RuntimeListComponent {
   }
 
   /**
+   * Returns one stable snapshot of child ids currently attached.
+   */
+  getChildrenSnapshot(): string[] {
+    return [...this.orderedChildIds]
+  }
+
+  /**
    * Attaches one child node and applies requested placement mode.
    */
   attachChild(input: {
     childId: string
     childNode: unknown
     mode: MoveMode | undefined
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }): void {
@@ -203,7 +226,16 @@ export class ListRuntimeComponent implements RuntimeListComponent {
       this.orderedChildIds.push(input.childId)
     }
 
-    this.applyPlacementMode(input.childId, input.mode ?? 'append')
+    const mode = input.mode ?? 'append'
+    if (!this.shouldApplyReorder('add', mode, input.reorder)) {
+      if (this.itemsNode !== null) {
+        appendDomChild(this.itemsNode, input.childNode)
+      }
+
+      return
+    }
+
+    this.applyPlacementMode(input.childId, mode)
     this.syncDomOrder()
   }
 
@@ -213,6 +245,7 @@ export class ListRuntimeComponent implements RuntimeListComponent {
   repositionChild(input: {
     childId: string
     mode: MoveMode | undefined
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }): void {
@@ -231,7 +264,12 @@ export class ListRuntimeComponent implements RuntimeListComponent {
       return
     }
 
-    this.applyPlacementMode(input.childId, input.mode ?? 'append')
+    const mode = input.mode ?? 'append'
+    if (!this.shouldApplyReorder('move', mode, input.reorder)) {
+      return
+    }
+
+    this.applyPlacementMode(input.childId, mode)
     this.syncDomOrder()
   }
 
@@ -240,6 +278,8 @@ export class ListRuntimeComponent implements RuntimeListComponent {
    */
   detachChild(input: {
     childId: string
+    mode: MoveMode | undefined
+    reorder?: boolean
     eventId: string
     eventSeq: number
   }): unknown | null {
@@ -258,7 +298,12 @@ export class ListRuntimeComponent implements RuntimeListComponent {
     this.childNodeById.delete(input.childId)
     this.orderedChildIds = this.orderedChildIds.filter((childId) => childId !== input.childId)
     this.persistentPlacementByChildId.delete(input.childId)
-    this.syncDomOrder()
+
+    const mode = input.mode ?? 'append'
+    if (this.shouldApplyReorder('remove', mode, input.reorder)) {
+      this.syncDomOrder()
+    }
+
     return childNode
   }
 
@@ -361,5 +406,49 @@ export class ListRuntimeComponent implements RuntimeListComponent {
    */
   private clearPersistentPlacementRule(childId: string): void {
     this.persistentPlacementByChildId.delete(childId)
+  }
+
+  /**
+   * Resolves list reorder policy from initial config with safe defaults.
+   */
+  private resolveReorderConfig(initial: Record<string, unknown>): ListReorderConfig {
+    const rawConfig = initial.config
+    if (typeof rawConfig !== 'object' || rawConfig === null) {
+      return {
+        reorderOnMove: true,
+        reorderOnAdd: true,
+        reorderOnRemove: true
+      }
+    }
+
+    const config = rawConfig as Record<string, unknown>
+    return {
+      reorderOnMove: config.reorderOnMove !== false,
+      reorderOnAdd: config.reorderOnAdd !== false,
+      reorderOnRemove: config.reorderOnRemove !== false
+    }
+  }
+
+  /**
+   * Resolves whether reorder must run for one operation and move input.
+   */
+  private shouldApplyReorder(operation: ReorderOperation, mode: MoveMode, reorder: boolean | undefined): boolean {
+    if (mode !== 'auto') {
+      return true
+    }
+
+    if (reorder === false) {
+      return false
+    }
+
+    if (operation === 'move') {
+      return this.reorderConfig.reorderOnMove
+    }
+
+    if (operation === 'add') {
+      return this.reorderConfig.reorderOnAdd
+    }
+
+    return this.reorderConfig.reorderOnRemove
   }
 }

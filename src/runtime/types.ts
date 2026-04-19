@@ -19,6 +19,15 @@ export type MoveCommand = {
 }
 
 /**
+ * Defines list reorder policy values for runtime placement behavior.
+ */
+export type ListPlacementConfig = {
+  reorderOnMove?: boolean
+  reorderOnAdd?: boolean
+  reorderOnRemove?: boolean
+}
+
+/**
  * Defines one raw move value accepted from authored story docs.
  */
 export type MoveValue = MoveCommand | string | { mode?: string; targetId?: string; parentId?: string }
@@ -44,6 +53,7 @@ export type ItemState = {
   tag?: string
   className?: string
   move?: MoveValue
+  config?: ListPlacementConfig
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
   content?: string
