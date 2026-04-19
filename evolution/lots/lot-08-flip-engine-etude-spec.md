@@ -12,7 +12,7 @@ Ce lot couvre:
 - plan de validation
 - implementation runtime du moteur FLIP
 - integration animejs via le pipeline animation existant
-- exemple DOM reel executable (`flip-example.html`)
+- exemple DOM reel historique (supprime)
 
 ## Pourquoi un lot dedie
 
@@ -213,7 +213,7 @@ type FlipEngine = {
 - `src/runtime/flip-engine/types.ts`
   - contrat public du moteur FLIP
 - `src/examples/flip-engine-dom-example.ts`
-  - demo sur vrais nodes, declenchee via `flip-example.html`
+  - demo historique sur vrais nodes (non utilisee dans la demo active)
   - scenarios interactifs: `reorder`, `add`, `delete`
   - mode test `with transforms` (parent + cards) activable
 
@@ -223,7 +223,7 @@ type FlipEngine = {
 - moteur runtime FLIP implemente
 - integration animejs via `runAnimationBatch(..., createAnimationAdapter(...))`
 - tests lot 8 verts (`tests/lot8`)
-- exemple DOM reel executable (`npm run dev:flip`)
+- validation manuelle actuelle via demo player (`npm run dev:demo`)
 
 ## Scenarios de test (DoD)
 

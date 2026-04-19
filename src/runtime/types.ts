@@ -9,12 +9,18 @@ export type ItemType = 'text' | 'img' | 'list' | string
 export type MoveMode = 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
 
 /**
+ * Defines one FLIP rendering mode used for move transitions.
+ */
+export type MoveFlipMode = 'local' | 'overlay-world'
+
+/**
  * Defines one normalized move command payload.
  */
 export type MoveCommand = {
   parentId: string
   mode?: MoveMode
   flip?: boolean
+  flipMode?: MoveFlipMode
   reorder?: boolean
 }
 
@@ -30,7 +36,10 @@ export type ListPlacementConfig = {
 /**
  * Defines one raw move value accepted from authored story docs.
  */
-export type MoveValue = MoveCommand | string | { mode?: string; targetId?: string; parentId?: string }
+export type MoveValue =
+  | MoveCommand
+  | string
+  | { mode?: string; targetId?: string; parentId?: string; flip?: boolean; flipMode?: string; reorder?: boolean }
 
 /**
  * Defines one emit rule used by user interactions.

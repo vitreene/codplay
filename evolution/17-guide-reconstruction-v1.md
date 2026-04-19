@@ -112,7 +112,7 @@ Une reconstruction est consideree identique si les points suivants sont vrais:
   - `src/runtime/flip-engine/matrix-2d.ts`
   - `src/runtime/flip-engine/types.ts`
   - sequence anti-flicker: `FIRST/read -> LAST/write -> LAST/read -> INVERT/write -> rAF -> PLAY`
-- demo DOM: `flip-example.html` + `src/examples/flip-engine-dom-example.ts`
+- demo DOM active: `src/demos/player-poc-demo.ts` (via `src/main.ts`)
 
 ### Lot 09 - trace/debug retention + export
 
@@ -239,9 +239,9 @@ Commandes minimales:
 - `npm test`
 - `npm run build`
 
-Validation manuelle DOM (lot 08):
+Validation manuelle DOM (demo active):
 
-- `npm run dev:flip`
+- `npm run dev:demo`
 
 Criteres pass:
 

@@ -1,10 +1,10 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
 import type { RuntimeElementMap, StoryDoc } from '../types'
-import type { MoveCommand } from '../types'
-import { createFlipEngine, type FlipEntry, type Matrix2D } from '../flip-engine'
-import { createTranslateMatrix, invertMatrix, multiplyMatrix } from '../flip-engine/matrix-2d'
-import { isDomNode } from './dom-component-adapter'
+import type { MoveCommand, MoveFlipMode } from '../types'
+import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from '../flip-engine'
+import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from '../flip-engine/matrix-2d'
+import { isDomElement, isDomNode } from './dom-component-adapter'
 import { ImageRuntimeComponent } from './image-runtime-component'
 import { ListRuntimeComponent } from './list-runtime-component'
 import { TextRuntimeComponent } from './text-runtime-component'
@@ -25,6 +25,31 @@ const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   list: ListRuntimeComponent
 }
 
+const OVERLAY_LAYER_Z_INDEX = 2147483647
+
+type WorldRectSnapshot = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+type OverlayWorldPhoto = {
+  rect: WorldRectSnapshot
+  matrix: Matrix2D
+  localWidth?: number
+  localHeight?: number
+}
+
+type NodeBoxSnapshot = {
+  offsetWidth: number | null
+  offsetHeight: number | null
+  clientWidth: number | null
+  clientHeight: number | null
+  computedWidthPx: number | null
+  computedHeightPx: number | null
+}
+
 /**
  * Checks whether one move payload already matches the V1 move contract.
  */
@@ -35,6 +60,13 @@ function isMoveCommand(value: unknown): value is MoveCommand {
 
   const move = value as { parentId?: unknown }
   return typeof move.parentId === 'string' && move.parentId.length > 0
+}
+
+/**
+ * Resolves one strict move FLIP mode from authored payload.
+ */
+function normalizeMoveFlipMode(rawFlipMode: unknown): MoveFlipMode {
+  return rawFlipMode === 'overlay-world' ? 'overlay-world' : 'local'
 }
 
 /**
@@ -71,12 +103,16 @@ export class RuntimeComponentOrchestrator {
   private readonly listByPersoId = new Map<string, RuntimeListComponent>()
   private readonly parentListByPersoId = new Map<string, string | null>()
   private readonly mountedByPersoId = new Map<string, boolean>()
+  private overlayLayerNode: HTMLElement | null = null
+  private readonly overlayFinalizers = new Set<() => void>()
 
   private createElementOptions: import('../create-element').CreateElementOptions | undefined
 
   private readonly flipZeroTolerance = 1e-3
   private readonly flipCalibrationTolerancePx = 0.5
   private readonly flipCalibrationMaxIterations = 5
+  private readonly overlayGhostCalibrationTolerancePx = 0.2
+  private readonly overlayGhostCalibrationMaxIterations = 5
 
   /**
    * Creates one component orchestrator with default built-in components.
@@ -136,6 +172,7 @@ export class RuntimeComponentOrchestrator {
    * Loads one story by instantiating one component for each declared item.
    */
   loadStory(story: StoryDoc): RuntimeElementMap {
+    this.cleanupOverlayRuntime()
     this.componentByPersoId.clear()
     this.nodeByPersoId.clear()
     this.listByPersoId.clear()
@@ -201,6 +238,7 @@ export class RuntimeComponentOrchestrator {
    * Destroys current runtime maps and returns empty runtime elements.
    */
   destroy(): RuntimeElementMap {
+    this.cleanupOverlayRuntime()
     this.componentByPersoId.clear()
     this.nodeByPersoId.clear()
     this.listByPersoId.clear()
@@ -237,6 +275,14 @@ export class RuntimeComponentOrchestrator {
       }
 
       const moveDecision = moveDecisionsByUpdateIndex.get(updateIndex)
+      const movedNodeBeforeMove = this.nodeByPersoId.get(targetPersoId)
+      const movedNodeBoxBeforeMove =
+        moveDecision !== undefined && moveDecision !== null && isDomElement(movedNodeBeforeMove)
+          ? this.captureElementBoxSnapshot(movedNodeBeforeMove)
+          : null
+      const sourceListIdBeforeMove = moveDecision !== undefined && moveDecision !== null
+        ? this.parentListByPersoId.get(targetPersoId) ?? null
+        : null
       const flipEntries =
         moveDecision !== undefined && moveDecision !== null
           ? this.collectFlipEntriesForMove(targetPersoId, moveDecision)
@@ -262,30 +308,61 @@ export class RuntimeComponentOrchestrator {
       if (firstFlipSnapshots.length > 0) {
         const lastFlipSnapshots = this.flipEngine.capture(flipEntries)
         const flipPlan = this.flipEngine.plan(firstFlipSnapshots, lastFlipSnapshots)
-        this.flipEngine.applyInvert(flipPlan.transitions)
+
+        const isOverlayWorldMove = moveDecision?.flipMode === 'overlay-world'
+        const movedTransitionId = `flip-${targetPersoId}`
+        const localFlipPlanTransitions =
+          isOverlayWorldMove
+            ? flipPlan.transitions.filter((transition) => transition.transitionId !== movedTransitionId)
+            : flipPlan.transitions
+
+        this.flipEngine.applyInvert(localFlipPlanTransitions)
         this.flipEngine.flushLayout(flipEntries)
         let firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
 
-        for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
-          const residual = this.computeFlipResidual(
-            firstFlipSnapshots,
-            firstFlipAppliedSnapshots,
-            targetPersoId
-          )
+        if (!isOverlayWorldMove) {
+          for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
+            const residual = this.computeFlipResidual(
+              firstFlipSnapshots,
+              firstFlipAppliedSnapshots,
+              targetPersoId
+            )
 
-          if (residual <= this.flipCalibrationTolerancePx) {
-            break
+            if (residual <= this.flipCalibrationTolerancePx) {
+              break
+            }
+
+            this.calibrateFlipTransitions(firstFlipSnapshots, firstFlipAppliedSnapshots, localFlipPlanTransitions)
+            this.flipEngine.applyInvert(localFlipPlanTransitions)
+            this.flipEngine.flushLayout(flipEntries)
+            firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
           }
-
-          this.calibrateFlipTransitions(firstFlipSnapshots, firstFlipAppliedSnapshots, flipPlan.transitions)
-          this.flipEngine.applyInvert(flipPlan.transitions)
-          this.flipEngine.flushLayout(flipEntries)
-          firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
         }
 
-        const flipTransitions = this.flipEngine.toAnimationTransitions(flipPlan.transitions)
+        const flipTransitions = this.flipEngine.toAnimationTransitions(localFlipPlanTransitions)
+        const overlayWorldTransitions =
+          moveDecision !== undefined && moveDecision !== null
+            ? this.tryBuildOverlayWorldTransitions({
+                eventId: update.resolvedAction.eventId,
+                eventName: update.resolvedAction.eventName,
+                eventSeq: update.eventSeq,
+                movedPersoId: targetPersoId,
+                sourceListId: sourceListIdBeforeMove,
+                oldNodeBoxBeforeMove: movedNodeBoxBeforeMove,
+                move: moveDecision,
+                flipPlanTransitions: flipPlan.transitions,
+                firstSnapshots: firstFlipSnapshots,
+                lastSnapshots: lastFlipSnapshots
+              })
+            : null
 
-        for (const transition of flipTransitions) {
+        const movedTransitionPrefix = `flip-${targetPersoId}-`
+        const localFlipTransitions =
+          overlayWorldTransitions === null
+            ? flipTransitions
+            : flipTransitions.filter((transition) => !transition.transitionId.startsWith(movedTransitionPrefix))
+
+        for (const transition of localFlipTransitions) {
           directTransitions.push({
             ...transition,
             eventId: update.resolvedAction.eventId,
@@ -293,6 +370,10 @@ export class RuntimeComponentOrchestrator {
             listenerId: targetPersoId,
             transitionId: `${transition.transitionId}-${update.resolvedAction.eventId}`
           })
+        }
+
+        for (const transition of overlayWorldTransitions ?? []) {
+          directTransitions.push(transition)
         }
       }
 
@@ -376,6 +457,7 @@ export class RuntimeComponentOrchestrator {
       parentId: rawMove.parentId,
       mode: isInitialMove ? 'append' : rawMove.mode ?? 'append',
       flip: rawMove.flip,
+      flipMode: normalizeMoveFlipMode((rawMove as { flipMode?: unknown }).flipMode),
       reorder: rawMove.reorder
     }
   }
@@ -682,6 +764,809 @@ export class RuntimeComponentOrchestrator {
     }
 
     return entries
+  }
+
+  /**
+   * Attempts to build overlay-world transitions for one moved item.
+   */
+  private tryBuildOverlayWorldTransitions(input: {
+    eventId: string
+    eventName: string
+    eventSeq: number
+    movedPersoId: string
+    sourceListId: string | null
+    oldNodeBoxBeforeMove: NodeBoxSnapshot | null
+    move: MoveCommand
+    flipPlanTransitions: FlipTransitionRequest[]
+    firstSnapshots: FlipSnapshot[]
+    lastSnapshots: FlipSnapshot[]
+  }): TransitionRequest[] | null {
+    if (input.move.flipMode !== 'overlay-world') {
+      return null
+    }
+
+    const nodeRef = this.nodeByPersoId.get(input.movedPersoId)
+    if (!isDomElement(nodeRef)) {
+      this.warnOnce(
+        input.eventSeq,
+        'RUNTIME_FLIP_OVERLAY_MODE_UNAVAILABLE_FALLBACK_LOCAL',
+        {
+          persoId: input.movedPersoId,
+          eventId: input.eventId,
+          reason: 'NODE_NOT_DOM_ELEMENT'
+        },
+        input.movedPersoId
+      )
+      return null
+    }
+
+    if (typeof globalThis.HTMLElement === 'undefined' || !(nodeRef instanceof globalThis.HTMLElement)) {
+      return null
+    }
+
+    const movedNodeElement = nodeRef
+
+    const firstSnapshot = input.firstSnapshots.find((snapshot) => snapshot.id === input.movedPersoId)
+    const lastSnapshot = input.lastSnapshots.find((snapshot) => snapshot.id === input.movedPersoId)
+    const flipTransition = input.flipPlanTransitions.find((transition) => transition.transitionId === `flip-${input.movedPersoId}`)
+    if (firstSnapshot === undefined || lastSnapshot === undefined || flipTransition === undefined) {
+      return null
+    }
+
+    this.cleanupOverlayRuntime()
+
+    const authoritativeOldLocalSize = this.toPreferredLocalSize(input.oldNodeBoxBeforeMove)
+
+    const worldPhotos = this.computeOverlayWorldPhotosFromLocalFlip({
+      movedPersoId: input.movedPersoId,
+      movedNode: movedNodeElement,
+      flipTransition,
+      fallbackOldRect: this.toWorldRectSnapshot(firstSnapshot),
+      fallbackNextRect: this.toWorldRectSnapshot(lastSnapshot),
+      fallbackOldMatrix: multiplyMatrix(firstSnapshot.parentMatrix, firstSnapshot.matrix),
+      fallbackNextMatrix: multiplyMatrix(lastSnapshot.parentMatrix, lastSnapshot.matrix),
+      authoritativeOldLocalWidth: authoritativeOldLocalSize.width,
+      authoritativeOldLocalHeight: authoritativeOldLocalSize.height
+    })
+
+    const worldPhotoClones = this.createOverlayWorldPhotoClones({
+      movedNode: movedNodeElement,
+      oldPhoto: worldPhotos.old,
+      nextPhoto: worldPhotos.next
+    })
+    if (worldPhotoClones === null) {
+      this.warnOnce(
+        input.eventSeq,
+        'RUNTIME_FLIP_OVERLAY_MODE_UNAVAILABLE_FALLBACK_LOCAL',
+        {
+          persoId: input.movedPersoId,
+          eventId: input.eventId,
+          reason: 'OVERLAY_WORLD_PHOTO_CLONE_SETUP_FAILED'
+        },
+        input.movedPersoId
+      )
+      return null
+    }
+
+    worldPhotoClones.nextCloneNode.style.visibility = 'hidden'
+    const movedNodeVisibilityBeforeOverlay = movedNodeElement.style.visibility
+    movedNodeElement.style.visibility = 'hidden'
+
+    const overlayTransitions = this.buildOverlayWorldTransitions({
+      eventId: input.eventId,
+      eventName: input.eventName,
+      movedPersoId: input.movedPersoId,
+      animatedCloneNode: worldPhotoClones.oldCloneNode,
+      targetCloneNode: worldPhotoClones.nextCloneNode,
+      flipTransition,
+      onFinalize: () => {
+        movedNodeElement.style.visibility = movedNodeVisibilityBeforeOverlay
+        worldPhotoClones.finalize()
+      }
+    })
+
+    if (overlayTransitions.length === 0) {
+      movedNodeElement.style.visibility = movedNodeVisibilityBeforeOverlay
+      worldPhotoClones.finalize()
+      return []
+    }
+
+    return overlayTransitions
+  }
+
+  /**
+   * Builds one world-space transition set from old clone to next clone state.
+   */
+  private buildOverlayWorldTransitions(input: {
+    eventId: string
+    eventName: string
+    movedPersoId: string
+    animatedCloneNode: HTMLElement
+    targetCloneNode: HTMLElement
+    flipTransition: FlipTransitionRequest
+    onFinalize: (reason: 'completed' | 'stopped') => void
+  }): TransitionRequest[] {
+    const transitions: TransitionRequest[] = []
+    const transitionIdPrefix = `flip-overlay-${input.movedPersoId}-${input.eventId}`
+
+    const fromLeft = this.readInlinePxValue(input.animatedCloneNode, 'left')
+    const toLeft = this.readInlinePxValue(input.targetCloneNode, 'left')
+    const fromTop = this.readInlinePxValue(input.animatedCloneNode, 'top')
+    const toTop = this.readInlinePxValue(input.targetCloneNode, 'top')
+    const fromWidth = this.readInlinePxValue(input.animatedCloneNode, 'width')
+    const toWidth = this.readInlinePxValue(input.targetCloneNode, 'width')
+    const fromHeight = this.readInlinePxValue(input.animatedCloneNode, 'height')
+    const toHeight = this.readInlinePxValue(input.targetCloneNode, 'height')
+
+    const fromTransformValue = this.readElementTransformValue(input.animatedCloneNode)
+    const toTransformValue = this.readElementTransformValue(input.targetCloneNode)
+
+    let finalized = false
+    const finalize = (reason: 'completed' | 'stopped') => {
+      if (finalized) {
+        return
+      }
+
+      finalized = true
+      input.onFinalize(reason)
+    }
+
+    const pushTransition = (property: string, from: number | string, to: number | string) => {
+      transitions.push({
+        transitionId: `${transitionIdPrefix}-${property}`,
+        eventId: input.eventId,
+        eventName: input.eventName,
+        listenerId: input.movedPersoId,
+        property,
+        target: input.animatedCloneNode,
+        from,
+        to,
+        duration: input.flipTransition.duration,
+        easing: input.flipTransition.easing,
+        delayMs: input.flipTransition.delayMs,
+        composition: 'merge',
+        onFinalize: finalize
+      })
+    }
+
+    if (Math.abs(toLeft - fromLeft) > this.flipZeroTolerance) {
+      pushTransition('left', `${fromLeft}px`, `${toLeft}px`)
+    }
+
+    if (Math.abs(toTop - fromTop) > this.flipZeroTolerance) {
+      pushTransition('top', `${fromTop}px`, `${toTop}px`)
+    }
+
+    if (Math.abs(toWidth - fromWidth) > this.flipZeroTolerance) {
+      pushTransition('width', `${fromWidth}px`, `${toWidth}px`)
+    }
+
+    if (Math.abs(toHeight - fromHeight) > this.flipZeroTolerance) {
+      pushTransition('height', `${fromHeight}px`, `${toHeight}px`)
+    }
+
+    if (fromTransformValue !== toTransformValue) {
+      pushTransition('transform', fromTransformValue, toTransformValue)
+    }
+
+    return transitions
+  }
+
+  /**
+   * Converts one snapshot-like input into a plain world rectangle payload.
+   */
+  private toWorldRectSnapshot(input: { left: number; top: number; width: number; height: number }): WorldRectSnapshot {
+    return {
+      left: input.left,
+      top: input.top,
+      width: input.width,
+      height: input.height
+    }
+  }
+
+  /**
+   * Reads one computed transform value from one element.
+   */
+  private readElementTransformValue(nodeRef: Element): string {
+    if (typeof globalThis.getComputedStyle === 'function') {
+      const computedTransform = globalThis.getComputedStyle(nodeRef).transform
+      return computedTransform && computedTransform.length > 0 ? computedTransform : 'none'
+    }
+
+    if (typeof globalThis.HTMLElement !== 'undefined' && nodeRef instanceof globalThis.HTMLElement) {
+      const inlineTransform = nodeRef.style.transform
+      return inlineTransform && inlineTransform.length > 0 ? inlineTransform : 'none'
+    }
+
+    return 'none'
+  }
+
+  /**
+   * Reads one numeric inline px value from one HTMLElement style property.
+   */
+  private readInlinePxValue(nodeRef: HTMLElement, key: 'left' | 'top' | 'width' | 'height'): number {
+    const rawValue = nodeRef.style[key]
+    const parsed = Number.parseFloat(rawValue)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  /**
+   * Captures one box model snapshot for one element.
+   */
+  private captureElementBoxSnapshot(nodeRef: Element): NodeBoxSnapshot {
+    let computedWidthPx: number | null = null
+    let computedHeightPx: number | null = null
+
+    if (typeof globalThis.getComputedStyle === 'function') {
+      const computedStyle = globalThis.getComputedStyle(nodeRef)
+      const parsedWidth = Number.parseFloat(computedStyle.width)
+      const parsedHeight = Number.parseFloat(computedStyle.height)
+      computedWidthPx = Number.isFinite(parsedWidth) ? parsedWidth : null
+      computedHeightPx = Number.isFinite(parsedHeight) ? parsedHeight : null
+    }
+
+    if (typeof globalThis.HTMLElement !== 'undefined' && nodeRef instanceof globalThis.HTMLElement) {
+      return {
+        offsetWidth: nodeRef.offsetWidth,
+        offsetHeight: nodeRef.offsetHeight,
+        clientWidth: nodeRef.clientWidth,
+        clientHeight: nodeRef.clientHeight,
+        computedWidthPx,
+        computedHeightPx
+      }
+    }
+
+    return {
+      offsetWidth: null,
+      offsetHeight: null,
+      clientWidth: null,
+      clientHeight: null,
+      computedWidthPx,
+      computedHeightPx
+    }
+  }
+
+  /**
+   * Resolves one preferred local width/height pair from one captured box snapshot.
+   */
+  private toPreferredLocalSize(box: NodeBoxSnapshot | null): { width?: number; height?: number } {
+    if (box === null) {
+      return {}
+    }
+
+    const width = box.computedWidthPx ?? box.offsetWidth ?? box.clientWidth ?? undefined
+    const height = box.computedHeightPx ?? box.offsetHeight ?? box.clientHeight ?? undefined
+
+    return {
+      width,
+      height
+    }
+  }
+
+  /**
+   * Tunes one world matrix so fixed local width/height projects close to target world size.
+   */
+  private tuneMatrixToWorldSize(
+    matrix: Matrix2D,
+    localWidth: number,
+    localHeight: number,
+    targetWorldWidth: number,
+    targetWorldHeight: number
+  ): Matrix2D {
+    const safeLocalWidth = Math.max(1e-3, localWidth)
+    const safeLocalHeight = Math.max(1e-3, localHeight)
+    const aa = Math.abs(matrix.a) * safeLocalWidth
+    const bb = Math.abs(matrix.b) * safeLocalWidth
+    const cc = Math.abs(matrix.c) * safeLocalHeight
+    const dd = Math.abs(matrix.d) * safeLocalHeight
+    const determinant = aa * dd - bb * cc
+
+    let factorX = 1
+    let factorY = 1
+
+    if (Math.abs(determinant) > 1e-8) {
+      factorX = (targetWorldWidth * dd - targetWorldHeight * cc) / determinant
+      factorY = (targetWorldHeight * aa - targetWorldWidth * bb) / determinant
+    }
+
+    if (!Number.isFinite(factorX) || factorX <= 1e-6 || !Number.isFinite(factorY) || factorY <= 1e-6) {
+      const worldWidthFromMatrix = aa + cc
+      const worldHeightFromMatrix = bb + dd
+      const fallbackFactorX = worldWidthFromMatrix > 1e-8 ? targetWorldWidth / worldWidthFromMatrix : 1
+      const fallbackFactorY = worldHeightFromMatrix > 1e-8 ? targetWorldHeight / worldHeightFromMatrix : 1
+      const fallbackFactor = Math.max(1e-6, (fallbackFactorX + fallbackFactorY) / 2)
+
+      factorX = fallbackFactor
+      factorY = fallbackFactor
+    }
+
+    return {
+      a: matrix.a * factorX,
+      b: matrix.b * factorX,
+      c: matrix.c * factorY,
+      d: matrix.d * factorY,
+      e: matrix.e,
+      f: matrix.f
+    }
+  }
+
+  /**
+   * Applies one local FLIP state to the moved node and captures its world rectangle.
+   */
+  private captureWorldPhotoFromLocalFlipState(input: {
+    movedPersoId: string
+    movedNode: Element
+    flipTransition: FlipTransitionRequest
+    state: 'from' | 'to'
+  }): OverlayWorldPhoto {
+    const localState = input.state === 'from' ? input.flipTransition.from : input.flipTransition.to
+    const photoTransition: FlipTransitionRequest = {
+      ...input.flipTransition,
+      transitionId: `${input.flipTransition.transitionId}-photo-${input.state}`,
+      from: {
+        ...localState
+      },
+      to: {
+        ...localState
+      }
+    }
+
+    this.flipEngine.applyInvert([photoTransition])
+    this.flipEngine.flushLayout([
+      {
+        id: input.movedPersoId,
+        nodeRef: input.movedNode
+      }
+    ])
+
+    const rect = input.movedNode.getBoundingClientRect()
+    const boxSnapshot = this.captureElementBoxSnapshot(input.movedNode)
+    const localWidth =
+      boxSnapshot.computedWidthPx ??
+      boxSnapshot.offsetWidth ??
+      boxSnapshot.clientWidth ??
+      undefined
+    const localHeight =
+      boxSnapshot.computedHeightPx ??
+      boxSnapshot.offsetHeight ??
+      boxSnapshot.clientHeight ??
+      undefined
+
+    return {
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      },
+      matrix: this.captureCombinedMatrixForNode(input.movedNode),
+      localWidth,
+      localHeight
+    }
+  }
+
+  /**
+   * Calibrates one overlay photo transition so local `from` reproduces the expected old world rect.
+   */
+  private calibrateOverlayWorldPhotoFromState(input: {
+    movedPersoId: string
+    movedNode: Element
+    transition: FlipTransitionRequest
+    targetOldRect: WorldRectSnapshot
+  }): void {
+    const flipEntry: FlipEntry = {
+      id: input.movedPersoId,
+      nodeRef: input.movedNode
+    }
+
+    for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
+      const measuredPhoto = this.captureWorldPhotoFromLocalFlipState({
+        movedPersoId: input.movedPersoId,
+        movedNode: input.movedNode,
+        flipTransition: input.transition,
+        state: 'from'
+      })
+
+      const residual = Math.max(
+        Math.abs(input.targetOldRect.left - measuredPhoto.rect.left),
+        Math.abs(input.targetOldRect.top - measuredPhoto.rect.top),
+        Math.abs(input.targetOldRect.width - measuredPhoto.rect.width),
+        Math.abs(input.targetOldRect.height - measuredPhoto.rect.height)
+      )
+
+      if (residual <= this.flipCalibrationTolerancePx) {
+        break
+      }
+
+      const measuredSnapshot = this.flipEngine.capture([flipEntry])[0]
+      if (measuredSnapshot === undefined) {
+        break
+      }
+
+      this.calibrateFlipTransitions(
+        [
+          {
+            id: input.movedPersoId,
+            left: input.targetOldRect.left,
+            top: input.targetOldRect.top,
+            width: input.targetOldRect.width,
+            height: input.targetOldRect.height,
+            parentMatrix: measuredSnapshot.parentMatrix,
+            matrix: measuredSnapshot.matrix,
+            translateX: measuredSnapshot.translateX,
+            translateY: measuredSnapshot.translateY
+          }
+        ],
+        [measuredSnapshot],
+        [input.transition]
+      )
+    }
+  }
+
+  /**
+   * Captures one combined world matrix for one node from root to target.
+   */
+  private captureCombinedMatrixForNode(nodeRef: Element): Matrix2D {
+    let combinedMatrix = parseCssMatrix(this.readElementTransformValue(nodeRef))
+
+    let parentNodeRef: Node | null = nodeRef.parentNode
+    while (isDomElement(parentNodeRef)) {
+      const parentMatrix = parseCssMatrix(this.readElementTransformValue(parentNodeRef))
+      combinedMatrix = multiplyMatrix(parentMatrix, combinedMatrix)
+      parentNodeRef = parentNodeRef.parentNode
+    }
+
+    return combinedMatrix
+  }
+
+  /**
+   * Computes old/next world photos by transposing local FLIP states to world-space.
+   */
+  private computeOverlayWorldPhotosFromLocalFlip(input: {
+    movedPersoId: string
+    movedNode: Element
+    flipTransition: FlipTransitionRequest
+    fallbackOldRect: WorldRectSnapshot
+    fallbackNextRect: WorldRectSnapshot
+    fallbackOldMatrix: Matrix2D
+    fallbackNextMatrix: Matrix2D
+    authoritativeOldLocalWidth?: number
+    authoritativeOldLocalHeight?: number
+  }): {
+    old: OverlayWorldPhoto
+    next: OverlayWorldPhoto
+    source: 'local-transposed' | 'snapshot-fallback'
+  } {
+    if (!isDomElement(input.movedNode)) {
+      return {
+        old: {
+          rect: input.fallbackOldRect,
+          matrix: input.fallbackOldMatrix
+        },
+        next: {
+          rect: input.fallbackNextRect,
+          matrix: input.fallbackNextMatrix
+        },
+        source: 'snapshot-fallback'
+      }
+    }
+
+    const liveNextSize = this.toPreferredLocalSize(this.captureElementBoxSnapshot(input.movedNode))
+
+    const inlineStyleBefore = input.movedNode.getAttribute('style')
+
+    try {
+      const calibratedTransition: FlipTransitionRequest = {
+        ...input.flipTransition,
+        from: {
+          ...input.flipTransition.from
+        },
+        to: {
+          ...input.flipTransition.to
+        }
+      }
+
+      this.calibrateOverlayWorldPhotoFromState({
+        movedPersoId: input.movedPersoId,
+        movedNode: input.movedNode,
+        transition: calibratedTransition,
+        targetOldRect: input.fallbackOldRect
+      })
+
+      const oldRect = this.captureWorldPhotoFromLocalFlipState({
+        movedPersoId: input.movedPersoId,
+        movedNode: input.movedNode,
+        flipTransition: calibratedTransition,
+        state: 'from'
+      })
+
+      if (
+        typeof input.authoritativeOldLocalWidth === 'number' &&
+        Number.isFinite(input.authoritativeOldLocalWidth) &&
+        input.authoritativeOldLocalWidth > 1e-3
+      ) {
+        oldRect.localWidth = input.authoritativeOldLocalWidth
+      }
+
+      if (
+        typeof input.authoritativeOldLocalHeight === 'number' &&
+        Number.isFinite(input.authoritativeOldLocalHeight) &&
+        input.authoritativeOldLocalHeight > 1e-3
+      ) {
+        oldRect.localHeight = input.authoritativeOldLocalHeight
+      }
+
+      const nextRect = this.captureWorldPhotoFromLocalFlipState({
+        movedPersoId: input.movedPersoId,
+        movedNode: input.movedNode,
+        flipTransition: calibratedTransition,
+        state: 'to'
+      })
+
+      if (
+        typeof liveNextSize.width === 'number' &&
+        Number.isFinite(liveNextSize.width) &&
+        liveNextSize.width > 1e-3
+      ) {
+        nextRect.localWidth = liveNextSize.width
+      }
+
+      if (
+        typeof liveNextSize.height === 'number' &&
+        Number.isFinite(liveNextSize.height) &&
+        liveNextSize.height > 1e-3
+      ) {
+        nextRect.localHeight = liveNextSize.height
+      }
+
+      return {
+        old: oldRect,
+        next: nextRect,
+        source: 'local-transposed'
+      }
+    } catch {
+      return {
+        old: {
+          rect: input.fallbackOldRect,
+          matrix: input.fallbackOldMatrix
+        },
+        next: {
+          rect: input.fallbackNextRect,
+          matrix: input.fallbackNextMatrix
+        },
+        source: 'snapshot-fallback'
+      }
+    } finally {
+      if (inlineStyleBefore === null) {
+        input.movedNode.removeAttribute('style')
+      } else {
+        input.movedNode.setAttribute('style', inlineStyleBefore)
+      }
+
+      this.flipEngine.flushLayout([
+        {
+          id: input.movedPersoId,
+          nodeRef: input.movedNode
+        }
+      ])
+    }
+  }
+
+  /**
+   * Ensures one shared overlay layer exists for world-space transitions.
+   */
+  private ensureOverlayLayer(): HTMLElement | null {
+    if (typeof globalThis.document === 'undefined') {
+      return null
+    }
+
+    const existingLayer = this.overlayLayerNode
+    if (existingLayer !== null && existingLayer.isConnected) {
+      return existingLayer
+    }
+
+    const overlayLayer = globalThis.document.createElement('div')
+    overlayLayer.setAttribute('data-runtime-flip-overlay-layer', 'true')
+    overlayLayer.style.position = 'fixed'
+    overlayLayer.style.left = '0'
+    overlayLayer.style.top = '0'
+    overlayLayer.style.width = '100vw'
+    overlayLayer.style.height = '100vh'
+    overlayLayer.style.pointerEvents = 'none'
+    overlayLayer.style.overflow = 'visible'
+    overlayLayer.style.zIndex = String(OVERLAY_LAYER_Z_INDEX)
+
+    globalThis.document.body.appendChild(overlayLayer)
+    this.overlayLayerNode = overlayLayer
+    return overlayLayer
+  }
+
+  /**
+   * Creates two world-space photo clones mapped to projected old and next rectangles.
+   */
+  private createOverlayWorldPhotoClones(input: {
+    movedNode: Element
+    oldPhoto: OverlayWorldPhoto
+    nextPhoto: OverlayWorldPhoto
+  }): {
+    oldCloneNode: HTMLElement
+    nextCloneNode: HTMLElement
+    finalize: () => void
+  } | null {
+    const overlayLayer = this.ensureOverlayLayer()
+    if (overlayLayer === null || typeof globalThis.HTMLElement === 'undefined' || !(input.movedNode instanceof globalThis.HTMLElement)) {
+      return null
+    }
+
+    const oldCloneNode = input.movedNode.cloneNode(true)
+    const nextCloneNode = input.movedNode.cloneNode(true)
+    if (!(oldCloneNode instanceof globalThis.HTMLElement) || !(nextCloneNode instanceof globalThis.HTMLElement)) {
+      return null
+    }
+
+    const setupClone = (cloneNode: HTMLElement, photo: OverlayWorldPhoto, phase: 'old' | 'next') => {
+      const localWidth =
+        typeof photo.localWidth === 'number' && Number.isFinite(photo.localWidth) && photo.localWidth > 1e-3
+          ? photo.localWidth
+          : Math.max(1e-3, photo.rect.width)
+      const localHeight =
+        typeof photo.localHeight === 'number' && Number.isFinite(photo.localHeight) && photo.localHeight > 1e-3
+          ? photo.localHeight
+          : Math.max(1e-3, photo.rect.height)
+      const tunedMatrix = this.tuneMatrixToWorldSize(
+        photo.matrix,
+        localWidth,
+        localHeight,
+        Math.max(1e-3, photo.rect.width),
+        Math.max(1e-3, photo.rect.height)
+      )
+
+      cloneNode.removeAttribute('id')
+      cloneNode.setAttribute('aria-hidden', 'true')
+      cloneNode.setAttribute('data-runtime-flip-overlay-photo', phase)
+      cloneNode.style.position = 'fixed'
+      cloneNode.style.left = `${photo.rect.left}px`
+      cloneNode.style.top = `${photo.rect.top}px`
+      cloneNode.style.width = `${Math.max(1e-3, localWidth)}px`
+      cloneNode.style.height = `${Math.max(1e-3, localHeight)}px`
+      cloneNode.style.boxSizing = 'border-box'
+      cloneNode.style.margin = '0'
+      cloneNode.style.minWidth = '0'
+      cloneNode.style.minHeight = '0'
+      cloneNode.style.maxWidth = 'none'
+      cloneNode.style.maxHeight = 'none'
+      cloneNode.style.pointerEvents = 'none'
+      cloneNode.style.transformOrigin = '0px 0px'
+      cloneNode.style.transform = `matrix(${tunedMatrix.a}, ${tunedMatrix.b}, ${tunedMatrix.c}, ${tunedMatrix.d}, 0, 0)`
+      cloneNode.style.zIndex = String(OVERLAY_LAYER_Z_INDEX)
+      overlayLayer.appendChild(cloneNode)
+      this.calibrateOverlayGhostToWorldSnapshot(cloneNode, photo.rect, {
+        lockSize: true
+      })
+    }
+
+    setupClone(oldCloneNode, input.oldPhoto, 'old')
+    setupClone(nextCloneNode, input.nextPhoto, 'next')
+
+    let finalized = false
+    const finalize = () => {
+      if (finalized) {
+        return
+      }
+
+      finalized = true
+      if (oldCloneNode.parentNode !== null) {
+        oldCloneNode.parentNode.removeChild(oldCloneNode)
+      }
+      if (nextCloneNode.parentNode !== null) {
+        nextCloneNode.parentNode.removeChild(nextCloneNode)
+      }
+      this.overlayFinalizers.delete(finalize)
+    }
+
+    this.overlayFinalizers.add(finalize)
+
+    return {
+      oldCloneNode,
+      nextCloneNode,
+      finalize
+    }
+  }
+
+  /**
+   * Calibrates one overlay ghost to match one target world-space snapshot.
+   */
+  private calibrateOverlayGhostToWorldSnapshot(
+    ghostNode: HTMLElement,
+    targetSnapshot: { left: number; top: number; width: number; height: number },
+    options?: { lockSize?: boolean }
+  ): {
+    rect: { left: number; top: number; width: number; height: number }
+    styleLeftPx: number
+    styleTopPx: number
+    styleWidthPx: number
+    styleHeightPx: number
+  } {
+    let styleLeftPx = targetSnapshot.left
+    let styleTopPx = targetSnapshot.top
+    const lockSize = options?.lockSize === true
+    let styleWidthPx = Math.max(
+      1e-3,
+      Number.parseFloat(ghostNode.style.width || '') || targetSnapshot.width
+    )
+    let styleHeightPx = Math.max(
+      1e-3,
+      Number.parseFloat(ghostNode.style.height || '') || targetSnapshot.height
+    )
+
+    ghostNode.style.left = `${styleLeftPx}px`
+    ghostNode.style.top = `${styleTopPx}px`
+    ghostNode.style.width = `${styleWidthPx}px`
+    ghostNode.style.height = `${styleHeightPx}px`
+
+    let finalRect = ghostNode.getBoundingClientRect()
+
+    for (let index = 0; index < this.overlayGhostCalibrationMaxIterations; index += 1) {
+      const residualLeft = targetSnapshot.left - finalRect.left
+      const residualTop = targetSnapshot.top - finalRect.top
+      const residualWidth = targetSnapshot.width - finalRect.width
+      const residualHeight = targetSnapshot.height - finalRect.height
+
+      if (
+        Math.abs(residualLeft) <= this.overlayGhostCalibrationTolerancePx &&
+        Math.abs(residualTop) <= this.overlayGhostCalibrationTolerancePx &&
+        (lockSize || Math.abs(residualWidth) <= this.overlayGhostCalibrationTolerancePx) &&
+        (lockSize || Math.abs(residualHeight) <= this.overlayGhostCalibrationTolerancePx)
+      ) {
+        break
+      }
+
+      if (!lockSize && finalRect.width > 1e-3) {
+        styleWidthPx = Math.max(1e-3, styleWidthPx * (targetSnapshot.width / finalRect.width))
+      }
+
+      if (!lockSize && finalRect.height > 1e-3) {
+        styleHeightPx = Math.max(1e-3, styleHeightPx * (targetSnapshot.height / finalRect.height))
+      }
+
+      styleLeftPx += residualLeft
+      styleTopPx += residualTop
+
+      ghostNode.style.left = `${styleLeftPx}px`
+      ghostNode.style.top = `${styleTopPx}px`
+      ghostNode.style.width = `${styleWidthPx}px`
+      ghostNode.style.height = `${styleHeightPx}px`
+      finalRect = ghostNode.getBoundingClientRect()
+    }
+
+    return {
+      rect: {
+        left: finalRect.left,
+        top: finalRect.top,
+        width: finalRect.width,
+        height: finalRect.height
+      },
+      styleLeftPx,
+      styleTopPx,
+      styleWidthPx,
+      styleHeightPx
+    }
+  }
+
+  /**
+   * Finalizes all active overlay artifacts.
+   */
+  private cleanupOverlayRuntime(): void {
+    for (const finalize of [...this.overlayFinalizers]) {
+      finalize()
+    }
+
+    this.overlayFinalizers.clear()
+    if (this.overlayLayerNode !== null && this.overlayLayerNode.parentNode !== null) {
+      this.overlayLayerNode.parentNode.removeChild(this.overlayLayerNode)
+    }
+
+    this.overlayLayerNode = null
   }
 
   /**

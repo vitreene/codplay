@@ -32,6 +32,8 @@ export type TransitionRequest = {
   delayMs?: number
   composition?: 'merge' | 'replace'
   cleanupStyleProperty?: 'width' | 'height'
+  onFinalize?: (reason: 'completed' | 'stopped') => void
+  onFrame?: () => void
 }
 
 export type AnimationTraceEntry = {

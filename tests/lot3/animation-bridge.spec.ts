@@ -218,4 +218,57 @@ describe("Lot 03 - animation bridge", () => {
     adapter.seek?.(300, new Map([["evt-1", 0]]));
     expect(seekSpy).not.toHaveBeenCalled();
   });
+
+  it("L3-T6 transition finalize hook receives completion and stop reasons", () => {
+    const animeImplementation = vi.fn((parameters: Record<string, unknown>) => {
+      return {
+        pause: vi.fn(),
+        revert: vi.fn(),
+        seek: vi.fn(),
+      };
+    });
+    const adapter = createAnimationAdapter(animeImplementation);
+
+    const finalizeCompleted = vi.fn();
+    const finalizeStopped = vi.fn();
+
+    const completedTransition: TransitionRequest = {
+      transitionId: "tr-complete",
+      eventId: "evt-complete",
+      eventName: "intro",
+      listenerId: "item-complete",
+      property: "x",
+      target: { x: 0 },
+      from: 0,
+      to: 100,
+      duration: 200,
+      onFinalize: finalizeCompleted,
+    };
+
+    const stoppedTransition: TransitionRequest = {
+      transitionId: "tr-stop",
+      eventId: "evt-stop",
+      eventName: "intro",
+      listenerId: "item-stop",
+      property: "x",
+      target: { x: 0 },
+      from: 0,
+      to: 100,
+      duration: 200,
+      onFinalize: finalizeStopped,
+    };
+
+    adapter.run([completedTransition]);
+    const completedCall = animeImplementation.mock.calls[0]?.[0] as Record<string, unknown>;
+    const completeCallback =
+      (completedCall.onComplete as (() => void) | undefined) ??
+      (completedCall.complete as (() => void) | undefined);
+    completeCallback?.();
+
+    expect(finalizeCompleted).toHaveBeenCalledWith("completed");
+
+    const startedHandles = adapter.run([stoppedTransition]);
+    startedHandles[0]?.stop();
+    expect(finalizeStopped).toHaveBeenCalledWith("stopped");
+  });
 });

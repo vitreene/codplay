@@ -68,7 +68,7 @@
 - Tests prevus: `L8-T1..L8-T10`
 - Tests verts: `10/10`
 - Sequence anti-flicker read/write/rAF: `yes`
-- Exemple DOM reel (`flip-example.html`): `yes`
+- Exemple DOM reel historique supprime: `yes` (remplace par demo player active)
 
 ### Lot 09 - trace/debug retention + export
 

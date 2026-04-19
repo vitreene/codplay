@@ -369,4 +369,50 @@ describe('Lot 18 - move phase C orchestration', () => {
 
     expect(listA.getChildrenSnapshot()).toEqual(['item-c', 'item-b', 'item-a'])
   })
+
+  it('L18-T4 keeps move routing stable with flipMode opt-in and unknown values', () => {
+    const warnings: RuntimeComponentWarning[] = []
+    const orchestrator = new RuntimeComponentOrchestrator({
+      warn: (warning) => {
+        warnings.push(warning)
+      },
+      createElementOptions: {
+        nodeFactory: (item) => ({
+          tagName: item.type === 'list' ? 'SECTION' : 'DIV',
+          style: {},
+          attributes: {}
+        })
+      }
+    })
+
+    orchestrator.loadStory(temp__createStoryFixture())
+    const registry = orchestrator.getRuntimeRegistrySnapshot()
+
+    temp__routeMove(orchestrator, {
+      eventId: 'evt-overlay-world',
+      eventSeq: 40,
+      listenerId: 'item-a',
+      move: {
+        parentId: 'list-b',
+        mode: 'append',
+        flipMode: 'overlay-world'
+      }
+    })
+
+    expect(registry.getParentListId('item-a')).toBe('list-b')
+
+    temp__routeMove(orchestrator, {
+      eventId: 'evt-unknown-flip-mode',
+      eventSeq: 41,
+      listenerId: 'item-a',
+      move: {
+        parentId: 'list-a',
+        mode: 'append',
+        flipMode: 'some-future-mode'
+      }
+    })
+
+    expect(registry.getParentListId('item-a')).toBe('list-a')
+    expect(warnings.some((warning) => warning.code === 'AUTHOR_MOVE_COMMAND_INVALID')).toBe(false)
+  })
 })

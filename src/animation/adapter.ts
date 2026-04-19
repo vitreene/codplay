@@ -14,6 +14,7 @@ type TransitionGroup = {
   parameters: Record<string, unknown>
   transitions: TransitionRequest[]
   properties: Set<string>
+  onFrameCallbacks: Set<() => void>
 }
 
 type ActiveAnimation = {
@@ -23,6 +24,7 @@ type ActiveAnimation = {
   eventId: string
   duration: number
   delayMs: number
+  finalized: boolean
 }
 
 /**
@@ -57,6 +59,14 @@ function cleanupTransitionStyle(transition: TransitionRequest): void {
       delete styleRecord[cleanupProperty]
     }
   }
+}
+
+/**
+ * Applies transition finalization hooks with a deterministic reason.
+ */
+function finalizeTransition(transition: TransitionRequest, reason: 'completed' | 'stopped'): void {
+  cleanupTransitionStyle(transition)
+  transition.onFinalize?.(reason)
 }
 
 /**
@@ -147,7 +157,8 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
           composition: transition.composition
         },
         transitions: [],
-        properties: new Set<string>()
+        properties: new Set<string>(),
+        onFrameCallbacks: new Set<() => void>()
       }
 
       groupsByKey.set(groupKey, group)
@@ -156,6 +167,9 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
 
     group.parameters[propertyKey] = toTransitionValue(transition)
     group.properties.add(propertyKey)
+    if (transition.onFrame !== undefined) {
+      group.onFrameCallbacks.add(transition.onFrame)
+    }
     group.transitions.push(transition)
   }
 
@@ -193,25 +207,36 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
   }
 
   /**
+   * Finalizes one tracked animation exactly once.
+   */
+  function finalizeActiveAnimation(entry: ActiveAnimation, reason: 'completed' | 'stopped'): void {
+    if (entry.finalized) {
+      return
+    }
+
+    entry.finalized = true
+    for (const transition of entry.transitions) {
+      finalizeTransition(transition, reason)
+    }
+
+    removeHandlesForTransitions(entry.transitions)
+    removeActiveAnimation(entry)
+  }
+
+  /**
    * Stops one tracked animation and clears its handles.
    */
   function stopActiveAnimation(entry: ActiveAnimation): void {
     entry.animation.revert?.()
     entry.animation.pause?.()
-    removeHandlesForTransitions(entry.transitions)
-    removeActiveAnimation(entry)
+    finalizeActiveAnimation(entry, 'stopped')
   }
 
   /**
    * Marks one tracked animation as completed and applies cleanup markers.
    */
   function completeActiveAnimation(entry: ActiveAnimation): void {
-    for (const transition of entry.transitions) {
-      cleanupTransitionStyle(transition)
-    }
-
-    removeHandlesForTransitions(entry.transitions)
-    removeActiveAnimation(entry)
+    finalizeActiveAnimation(entry, 'completed')
   }
 
   /**
@@ -223,19 +248,21 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
 
     for (const transitionGroup of transitionGroups) {
       const transitionCleanupRunner = () => {
-        for (const transition of transitionGroup.transitions) {
-          cleanupTransitionStyle(transition)
-        }
-
         const activeAnimation = activeAnimations.find((entry) => entry.transitions === transitionGroup.transitions)
         if (activeAnimation !== undefined) {
-          removeHandlesForTransitions(activeAnimation.transitions)
-          removeActiveAnimation(activeAnimation)
+          completeActiveAnimation(activeAnimation)
         }
       }
 
       transitionGroup.parameters.onComplete = transitionCleanupRunner
       transitionGroup.parameters.complete = transitionCleanupRunner
+      if (transitionGroup.onFrameCallbacks.size > 0) {
+        transitionGroup.parameters.onUpdate = () => {
+          for (const callback of transitionGroup.onFrameCallbacks) {
+            callback()
+          }
+        }
+      }
 
       const animation = animeImplementation(transitionGroup.parameters)
       if (animation === null || animation === undefined) {
@@ -253,7 +280,8 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
         transitions: transitionGroup.transitions,
         eventId: firstTransition.eventId,
         duration: firstTransition.duration,
-        delayMs: firstTransition.delayMs ?? 0
+        delayMs: firstTransition.delayMs ?? 0,
+        finalized: false
       }
       activeAnimations.push(activeAnimation)
 
