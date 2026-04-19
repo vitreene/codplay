@@ -34,6 +34,7 @@ Ce document couvre:
 - `17-user-events-emit-v1.md`
 - `21-text-micro-animations-v1.md`
 - `25-flip-runtime-core-v1.md`
+- `28-flip-overlay-world-mode-v1.md` (variant optionnelle)
 - `06-runtime-contract.md`
 
 ## Identite composant
@@ -109,11 +110,13 @@ Type recommande:
 
 ```ts
 type ListMoveMode = 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
+type MoveFlipMode = 'local' | 'overlay-world'
 
 type MoveCommand = {
   parentId: string
   mode: ListMoveMode
   flip?: boolean
+  flipMode?: MoveFlipMode
   reorder?: boolean
 }
 
@@ -188,6 +191,8 @@ Regles:
 
 - FLIP source + cible par defaut
 - exception ponctuelle via `flip:false`
+- `flipMode` par defaut: `local`
+- `flipMode:'overlay-world'` active la variante lourde uniquement sur ce move
 - si la list cible existe mais n'est pas montee, transfer execute sans FLIP
 
 ## Detachement transitionnel (V1)

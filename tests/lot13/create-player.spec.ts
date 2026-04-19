@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
+import { createAnimationAdapter } from '../../src/animation/adapter'
+import type { AnimationAdapter, TransitionRequest } from '../../src/animation/types'
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
+
+type SeekableTween = {
+  target: Record<string, unknown>
+  property: string
+  from: number
+  to: number
+  durationMs: number
+}
 
 /**
  * Creates one minimal scene fixture for player API tests.
@@ -27,6 +37,125 @@ function temp__createSceneFixture(): SceneDoc {
       }
     },
     tracks: {}
+  }
+}
+
+/**
+ * Creates one scene fixture with a timed animation event for seek synchronization tests.
+ */
+function temp__createSeekSceneFixture(): SceneDoc {
+  return {
+    id: 'scene-seek',
+    initialStoryId: 'story-seek',
+    stories: {
+      'story-seek': {
+        id: 'story-seek',
+        items: {
+          box: {
+            id: 'box',
+            type: 'text',
+            initial: {
+              id: 'box',
+              content: 'seek-box'
+            },
+            actions: {
+              'box:move': {
+                style: {
+                  x: {
+                    from: 0,
+                    to: 100,
+                    duration: 1000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    tracks: {
+      'track-seek': {
+        id: 'track-seek',
+        source: 'story',
+        order: 0,
+        events: [
+          {
+            id: 'evt-box-move',
+            ms: 1000,
+            name: 'box:move',
+            index: 0,
+            source: 'story'
+          }
+        ]
+      }
+    }
+  }
+}
+
+/**
+ * Creates one scene fixture where the second animation depends on the first animation progress.
+ */
+function temp__createCascadeSeekSceneFixture(): SceneDoc {
+  return {
+    id: 'scene-seek-cascade',
+    initialStoryId: 'story-seek-cascade',
+    stories: {
+      'story-seek-cascade': {
+        id: 'story-seek-cascade',
+        items: {
+          box: {
+            id: 'box',
+            type: 'text',
+            initial: {
+              id: 'box',
+              content: 'seek-cascade'
+            },
+            actions: {
+              'box:move-1': {
+                style: {
+                  x: {
+                    from: 0,
+                    to: 100,
+                    duration: 2000
+                  }
+                }
+              },
+              'box:move-2': {
+                style: {
+                  x: {
+                    to: 200,
+                    duration: 1000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    tracks: {
+      'track-seek-cascade': {
+        id: 'track-seek-cascade',
+        source: 'story',
+        order: 0,
+        events: [
+          {
+            id: 'evt-box-move-1',
+            ms: 0,
+            name: 'box:move-1',
+            index: 0,
+            source: 'story'
+          },
+          {
+            id: 'evt-box-move-2',
+            ms: 1000,
+            name: 'box:move-2',
+            index: 1,
+            source: 'story'
+          }
+        ]
+      }
+    }
   }
 }
 
@@ -140,5 +269,240 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
         'applied:player:pause'
       ])
     )
+  })
+
+  it('L13-T5 seek rebuilds runtime, syncs active animations, and ends paused', async () => {
+    const seekCalls: Array<{ timelineMs: number; eventMs: number | undefined }> = []
+    let pauseCalls = 0
+
+    const animationAdapter: AnimationAdapter = {
+      run: (transitions: TransitionRequest[]) => {
+        return transitions.map((transition) => ({
+          transitionId: transition.transitionId,
+          target: transition.target,
+          stop: () => {
+            return
+          }
+        }))
+      },
+      stop: () => {
+        return
+      },
+      pause: () => {
+        pauseCalls += 1
+      },
+      seek: (timelineMs, eventMsByEventId) => {
+        seekCalls.push({
+          timelineMs,
+          eventMs: eventMsByEventId.get('evt-box-move')
+        })
+      }
+    }
+
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {}
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(temp__createSeekSceneFixture())
+    await player.play()
+
+    expect(await player.seek(1500)).toEqual({ ok: true })
+    expect(player.getState()).toMatchObject({
+      status: 'paused',
+      timelineMs: 1500
+    })
+
+    expect(pauseCalls).toBeGreaterThan(0)
+    expect(seekCalls).toHaveLength(2)
+    expect(seekCalls[0]).toEqual({
+      timelineMs: 1000,
+      eventMs: 1000
+    })
+    expect(seekCalls[1]).toEqual({
+      timelineMs: 1500,
+      eventMs: 1000
+    })
+  })
+
+  it('L13-T6 seek places animated properties at matching timeline progress', async () => {
+    const activeTweens: SeekableTween[] = []
+    const seekTimes: number[] = []
+    let runCount = 0
+
+    const animationAdapter = createAnimationAdapter((parameters) => {
+      runCount += 1
+      const target = parameters.targets
+      if (typeof target !== 'object' || target === null) {
+        return {
+          pause: () => {
+            return
+          },
+          seek: () => {
+            return
+          }
+        }
+      }
+
+      const targetObject = target as Record<string, unknown>
+      const durationMs = typeof parameters.duration === 'number' ? parameters.duration : 0
+      const delayMs = typeof parameters.delay === 'number' ? parameters.delay : 0
+
+      for (const [property, value] of Object.entries(parameters)) {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+          continue
+        }
+
+        if (typeof value !== 'object' || value === null || !('to' in value)) {
+          continue
+        }
+
+        const tweenValue = value as { from?: unknown; to: unknown }
+        if (typeof tweenValue.to !== 'number') {
+          continue
+        }
+
+        const from = typeof tweenValue.from === 'number' ? tweenValue.from : 0
+        activeTweens.push({
+          target: targetObject,
+          property,
+          from,
+          to: tweenValue.to,
+          durationMs,
+        })
+      }
+
+      return {
+        pause: () => {
+          return
+        },
+        seek: (time: number) => {
+          seekTimes.push(time)
+          const effectiveTimeMs = Math.max(0, time - delayMs)
+          for (const tween of activeTweens.filter((entry) => entry.target === targetObject)) {
+            const progress = tween.durationMs <= 0 ? 1 : Math.min(1, effectiveTimeMs / tween.durationMs)
+            tween.target[tween.property] = tween.from + (tween.to - tween.from) * progress
+          }
+        }
+      }
+    })
+
+    const runtimeNode: Record<string, unknown> = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {},
+      x: 0
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(temp__createSeekSceneFixture())
+    await player.play()
+    await player.seek(1500)
+
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 1500 })
+    expect(runCount).toBeGreaterThan(0)
+    expect(activeTweens.length).toBeGreaterThan(0)
+    expect(seekTimes).toEqual([500])
+    expect(runtimeNode.x).toBe(50)
+  })
+
+  it('L13-T7 seek replays intermediate animation state before later dynamic transitions', async () => {
+    const animationAdapter = createAnimationAdapter((parameters) => {
+      const target = parameters.targets
+      if (typeof target !== 'object' || target === null) {
+        return {
+          pause: () => {
+            return
+          },
+          seek: () => {
+            return
+          }
+        }
+      }
+
+      const targetObject = target as Record<string, unknown>
+      const durationMs = typeof parameters.duration === 'number' ? parameters.duration : 0
+      const delayMs = typeof parameters.delay === 'number' ? parameters.delay : 0
+      const localTweens: SeekableTween[] = []
+
+      for (const [property, value] of Object.entries(parameters)) {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+          continue
+        }
+
+        if (typeof value !== 'object' || value === null || !('to' in value)) {
+          continue
+        }
+
+        const tweenValue = value as { from?: unknown; to: unknown }
+        if (typeof tweenValue.to !== 'number') {
+          continue
+        }
+
+        const fallbackFrom = targetObject[property]
+        const from =
+          typeof tweenValue.from === 'number'
+            ? tweenValue.from
+            : typeof fallbackFrom === 'number'
+              ? fallbackFrom
+              : 0
+
+        localTweens.push({
+          target: targetObject,
+          property,
+          from,
+          to: tweenValue.to,
+          durationMs,
+        })
+      }
+
+      return {
+        pause: () => {
+          return
+        },
+        seek: (time: number) => {
+          const effectiveTimeMs = Math.max(0, time - delayMs)
+          for (const tween of localTweens) {
+            const progress = tween.durationMs <= 0 ? 1 : Math.min(1, effectiveTimeMs / tween.durationMs)
+            tween.target[tween.property] = tween.from + (tween.to - tween.from) * progress
+          }
+        }
+      }
+    })
+
+    const runtimeNode: Record<string, unknown> = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {},
+      x: 0
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(temp__createCascadeSeekSceneFixture())
+    await player.play()
+    await player.seek(1500)
+
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 1500 })
+    expect(runtimeNode.x).toBe(125)
   })
 })

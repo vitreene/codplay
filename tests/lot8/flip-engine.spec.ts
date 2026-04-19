@@ -637,4 +637,75 @@ describe('Lot 08 - generic FLIP engine', () => {
       }
     }
   })
+
+  it('L8-T12 reference A/B1/B2/C keeps transformed reparent channels stable', () => {
+    const engine = createFlipEngine()
+
+    const nodeA = temp__createFakeNode(
+      { left: 0, top: 0, width: 900, height: 600 },
+      'matrix(1.1276311, 0.4104241, -0.4104241, 1.1276311, 0, 0)'
+    )
+    const nodeB1 = temp__createFakeNode(
+      { left: 120, top: 140, width: 260, height: 260 },
+      'matrix(0.8426489, -0.7070664, 0.7070664, 0.8426489, 50, 0)',
+      '50% 50%',
+      nodeA
+    )
+    const nodeB2 = temp__createFakeNode(
+      { left: 440, top: 170, width: 240, height: 240 },
+      'matrix(1, 0, 0, 1, 200, 0)',
+      '50% 50%',
+      nodeA
+    )
+    const nodeC = temp__createFakeNode(
+      { left: 232, top: 260, width: 120, height: 90 },
+      'matrix(-0.6472136, 0.4702282, -0.4702282, -0.6472136, 0, 150)',
+      '50% 50%',
+      nodeB1
+    )
+
+    const first = engine.capture([{ id: 'item-c', nodeRef: nodeC }])
+
+    nodeC.parentNode = nodeB2
+    nodeC.setRect({ left: 470, top: 186, width: 164, height: 120 })
+
+    const last = engine.capture([{ id: 'item-c', nodeRef: nodeC }])
+    const withMatrix = engine.plan(first, last, {
+      includeSize: true,
+      includeTransformMatrix: true
+    })
+    const withoutMatrix = engine.plan(first, last, {
+      includeSize: true,
+      includeTransformMatrix: false
+    })
+
+    expect(withMatrix.transitions).toHaveLength(1)
+    expect(withoutMatrix.transitions).toHaveLength(1)
+
+    const withMatrixTransition = withMatrix.transitions[0]
+    const withoutMatrixTransition = withoutMatrix.transitions[0]
+    if (!withMatrixTransition || !withoutMatrixTransition) {
+      throw new Error('Expected one FLIP transition in both plans')
+    }
+
+    expect(withMatrixTransition.from.x).toBeTypeOf('number')
+    expect(withMatrixTransition.from.y).toBeTypeOf('number')
+    expect(withMatrixTransition.from.width).toBeTypeOf('number')
+    expect(withMatrixTransition.from.height).toBeTypeOf('number')
+    expect(withMatrixTransition.from.rotate).toBeTypeOf('number')
+    expect(withMatrixTransition.from.scaleX).toBeTypeOf('number')
+    expect(withMatrixTransition.from.scaleY).toBeTypeOf('number')
+
+    expect(Math.abs((withMatrixTransition.from.rotate as number) - 0)).toBeGreaterThan(1)
+    expect(Math.abs((withMatrixTransition.from.scaleX as number) - 1)).toBeGreaterThan(0.05)
+    expect(Math.abs((withMatrixTransition.from.scaleY as number) - 1)).toBeGreaterThan(0.05)
+
+    expect(Math.abs((withMatrixTransition.from.x as number) - (withoutMatrixTransition.from.x as number))).toBeGreaterThan(1)
+    expect(Math.abs((withMatrixTransition.from.y as number) - (withoutMatrixTransition.from.y as number))).toBeGreaterThan(1)
+
+    const properties = engine.toAnimationTransitions(withMatrix.transitions).map((transition) => transition.property)
+    expect(properties).toEqual(
+      expect.arrayContaining(['x', 'y', 'width', 'height', 'rotate', 'scaleX', 'scaleY'])
+    )
+  })
 })

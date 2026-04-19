@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAnimationAdapter } from "../../src/animation/adapter";
 import { deriveSimpleTransitions } from "../../src/animation/derive-simple";
 import { runAnimationBatch } from "../../src/animation/run-batch";
-import type { AnimationResolvedAction } from "../../src/animation/types";
+import type { AnimationResolvedAction, TransitionRequest } from "../../src/animation/types";
 
 type NumericTween = {
   target: Record<string, unknown>;
@@ -175,5 +175,47 @@ describe("Lot 03 - animation bridge", () => {
       property: "x",
       status: "applied",
     });
+  });
+
+  it("L3-T5 seek completion applies cleanup markers and removes finished transitions", () => {
+    const seekSpy = vi.fn();
+    const pauseSpy = vi.fn();
+    const animeImplementation = vi.fn(() => ({
+      seek: seekSpy,
+      pause: pauseSpy,
+    }));
+    const adapter = createAnimationAdapter(animeImplementation);
+
+    const target = {
+      style: {
+        width: "120px",
+      },
+    };
+
+    const transitions: TransitionRequest[] = [
+      {
+        transitionId: "flip-1-width",
+        eventId: "evt-1",
+        eventName: "flip:play",
+        listenerId: "item-1",
+        property: "width",
+        target,
+        from: "120px",
+        to: "160px",
+        duration: 100,
+        cleanupStyleProperty: "width",
+      },
+    ];
+
+    adapter.run(transitions);
+    adapter.seek?.(250, new Map([["evt-1", 0]]));
+
+    expect(seekSpy).toHaveBeenCalledWith(100);
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(target.style.width).toBeUndefined();
+
+    seekSpy.mockClear();
+    adapter.seek?.(300, new Map([["evt-1", 0]]));
+    expect(seekSpy).not.toHaveBeenCalled();
   });
 });

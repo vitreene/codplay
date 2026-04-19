@@ -206,6 +206,7 @@ export class RendererFacade implements RendererApi {
       })
     }
 
+    this.animationAdapter.pause?.()
     this.status = 'paused'
     return { ok: true }
   }
@@ -224,8 +225,16 @@ export class RendererFacade implements RendererApi {
       })
     }
 
+    this.animationAdapter.resume?.()
     this.status = 'running'
     return { ok: true }
+  }
+
+  /**
+   * Synchronizes active animations with one target timeline cursor.
+   */
+  syncAnimationsToTimeline(timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>): void {
+    this.animationAdapter.seek?.(timelineMs, eventMsByEventId)
   }
 
   /**

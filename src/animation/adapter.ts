@@ -2,6 +2,9 @@ import type { AnimationAdapter, AnimationHandle, TransitionRequest } from './typ
 
 export type AnimeAnimationLike = {
   pause?: () => void
+  resume?: () => void
+  play?: () => void
+  seek?: (time: number, muteCallbacks?: boolean | number, internalRender?: boolean | number) => void
   revert?: () => void
 }
 
@@ -11,6 +14,15 @@ type TransitionGroup = {
   parameters: Record<string, unknown>
   transitions: TransitionRequest[]
   properties: Set<string>
+}
+
+type ActiveAnimation = {
+  animation: AnimeAnimationLike
+  target: unknown
+  transitions: TransitionRequest[]
+  eventId: string
+  duration: number
+  delayMs: number
 }
 
 /**
@@ -107,7 +119,7 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
     }
 
     const targetKey = resolveTargetKey(transition.target, objectIds, nextObjectIdRef)
-    const timingKey = `${transition.duration}|${transition.easing ?? ''}|${transition.delayMs ?? 0}|${transition.composition ?? ''}`
+    const timingKey = `${transition.eventId}|${transition.duration}|${transition.easing ?? ''}|${transition.delayMs ?? 0}|${transition.composition ?? ''}`
     const baseGroupKey = `${targetKey}|${timingKey}`
 
     const propertyKey = transition.property
@@ -155,6 +167,52 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
  */
 export function createAnimationAdapter(animeImplementation: AnimeImplementation): AnimationAdapter {
   const activeHandles: AnimationHandle[] = []
+  const activeAnimations: ActiveAnimation[] = []
+
+  /**
+   * Removes active handles associated with one transition set.
+   */
+  function removeHandlesForTransitions(transitions: TransitionRequest[]): void {
+    const transitionIds = new Set(transitions.map((transition) => transition.transitionId))
+    for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
+      const handle = activeHandles[index]
+      if (transitionIds.has(handle.transitionId)) {
+        activeHandles.splice(index, 1)
+      }
+    }
+  }
+
+  /**
+   * Removes one active animation entry from internal tracking.
+   */
+  function removeActiveAnimation(entry: ActiveAnimation): void {
+    const index = activeAnimations.indexOf(entry)
+    if (index >= 0) {
+      activeAnimations.splice(index, 1)
+    }
+  }
+
+  /**
+   * Stops one tracked animation and clears its handles.
+   */
+  function stopActiveAnimation(entry: ActiveAnimation): void {
+    entry.animation.revert?.()
+    entry.animation.pause?.()
+    removeHandlesForTransitions(entry.transitions)
+    removeActiveAnimation(entry)
+  }
+
+  /**
+   * Marks one tracked animation as completed and applies cleanup markers.
+   */
+  function completeActiveAnimation(entry: ActiveAnimation): void {
+    for (const transition of entry.transitions) {
+      cleanupTransitionStyle(transition)
+    }
+
+    removeHandlesForTransitions(entry.transitions)
+    removeActiveAnimation(entry)
+  }
 
   /**
    * Starts a batch of transitions and stores stoppable handles.
@@ -168,6 +226,12 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
         for (const transition of transitionGroup.transitions) {
           cleanupTransitionStyle(transition)
         }
+
+        const activeAnimation = activeAnimations.find((entry) => entry.transitions === transitionGroup.transitions)
+        if (activeAnimation !== undefined) {
+          removeHandlesForTransitions(activeAnimation.transitions)
+          removeActiveAnimation(activeAnimation)
+        }
       }
 
       transitionGroup.parameters.onComplete = transitionCleanupRunner
@@ -178,6 +242,21 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
         continue
       }
 
+      const firstTransition = transitionGroup.transitions[0]
+      if (firstTransition === undefined) {
+        continue
+      }
+
+      const activeAnimation: ActiveAnimation = {
+        animation,
+        target: firstTransition.target,
+        transitions: transitionGroup.transitions,
+        eventId: firstTransition.eventId,
+        duration: firstTransition.duration,
+        delayMs: firstTransition.delayMs ?? 0
+      }
+      activeAnimations.push(activeAnimation)
+
       let isStopped = false
       const stopAnimation = () => {
         if (isStopped) {
@@ -185,8 +264,7 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
         }
 
         isStopped = true
-        animation.revert?.()
-        animation.pause?.()
+        stopActiveAnimation(activeAnimation)
       }
 
       for (const transition of transitionGroup.transitions) {
@@ -208,18 +286,70 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
    * Stops active animations either globally or for one specific target.
    */
   function stop(target?: unknown): void {
-    for (const handle of [...activeHandles]) {
-      if (target !== undefined && handle.target !== target) {
+    for (const activeAnimation of [...activeAnimations]) {
+      if (target !== undefined && activeAnimation.target !== target) {
         continue
       }
 
-      handle.stop()
-      const index = activeHandles.indexOf(handle)
-      if (index >= 0) {
-        activeHandles.splice(index, 1)
+      stopActiveAnimation(activeAnimation)
+    }
+  }
+
+  /**
+   * Pauses active animations either globally or for one specific target.
+   */
+  function pause(target?: unknown): void {
+    for (const activeAnimation of activeAnimations) {
+      if (target !== undefined && activeAnimation.target !== target) {
+        continue
+      }
+
+      activeAnimation.animation.pause?.()
+    }
+  }
+
+  /**
+   * Resumes active animations either globally or for one specific target.
+   */
+  function resume(target?: unknown): void {
+    for (const activeAnimation of activeAnimations) {
+      if (target !== undefined && activeAnimation.target !== target) {
+        continue
+      }
+
+      if (typeof activeAnimation.animation.resume === 'function') {
+        activeAnimation.animation.resume()
+        continue
+      }
+
+      activeAnimation.animation.play?.()
+    }
+  }
+
+  /**
+   * Seeks active animations to match the requested player timeline.
+   */
+  function seek(timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>, target?: unknown): void {
+    for (const activeAnimation of [...activeAnimations]) {
+      if (target !== undefined && activeAnimation.target !== target) {
+        continue
+      }
+
+      const eventMs = eventMsByEventId.get(activeAnimation.eventId)
+      if (eventMs === undefined) {
+        continue
+      }
+
+      const elapsedMs = timelineMs - eventMs - activeAnimation.delayMs
+      const clampedElapsedMs = Math.min(Math.max(0, elapsedMs), activeAnimation.duration)
+      activeAnimation.animation.seek?.(clampedElapsedMs)
+      activeAnimation.animation.pause?.()
+
+      if (elapsedMs >= activeAnimation.duration) {
+        completeActiveAnimation(activeAnimation)
       }
     }
   }
 
-  return { run, stop }
+  return { run, stop, pause, resume, seek }
 }

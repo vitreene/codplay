@@ -52,6 +52,9 @@ export type AnimationHandle = {
 export type AnimationAdapter = {
   run: (transitions: TransitionRequest[]) => AnimationHandle[]
   stop: (target?: unknown) => void
+  pause?: (target?: unknown) => void
+  resume?: (target?: unknown) => void
+  seek?: (timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>, target?: unknown) => void
 }
 
 export type AnimationBatchResult = {

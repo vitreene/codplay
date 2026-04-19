@@ -4,10 +4,14 @@ import { animate } from "animejs";
 
 import { createAnimationAdapter, type AnimeImplementation } from "../animation/adapter";
 import { PlayerFacade } from "../player/create-player";
-import type { SceneDoc } from "../player/types";
+import type { PlayerStateSnapshot, SceneDoc } from "../player/types";
 import type { RuntimeTraceRow } from "../runtime/trace-store";
 
 type TracePayload = Record<string, unknown>;
+
+type SeekablePlayer = {
+  seek?: (targetTimelineMs: number) => Promise<{ ok: boolean; error?: { code: string } }>;
+};
 
 /**
  * Session rule:
@@ -387,6 +391,93 @@ function temp__isDomNode(nodeRef: unknown): nodeRef is Node {
 }
 
 /**
+ * Reads one style transition object duration and delay in milliseconds.
+ */
+function temp__readTransitionDurationMs(value: unknown): number {
+  if (typeof value !== "object" || value === null) {
+    return 0;
+  }
+
+  const transition = value as Record<string, unknown>;
+  const duration = typeof transition.duration === "number" && Number.isFinite(transition.duration) ? transition.duration : 0;
+  const delay = typeof transition.delay === "number" && Number.isFinite(transition.delay) ? transition.delay : 0;
+  return Math.max(0, duration + delay);
+}
+
+/**
+ * Resolves one action payload max style transition duration.
+ */
+function temp__resolveActionDurationMs(action: unknown): number {
+  if (typeof action !== "object" || action === null) {
+    return 0;
+  }
+
+  const style = (action as { style?: unknown }).style;
+  if (typeof style !== "object" || style === null) {
+    return 0;
+  }
+
+  let maxDurationMs = 0;
+  for (const styleValue of Object.values(style as Record<string, unknown>)) {
+    maxDurationMs = Math.max(maxDurationMs, temp__readTransitionDurationMs(styleValue));
+  }
+
+  return maxDurationMs;
+}
+
+/**
+ * Resolves one deterministic seek horizon from event timeline and action durations.
+ */
+function temp__resolveSceneSeekMaxMs(scene: SceneDoc): number {
+  const actionDurationByEventName = new Map<string, number>();
+  for (const story of Object.values(scene.stories)) {
+    for (const item of Object.values(story.items)) {
+      for (const [eventName, action] of Object.entries(item.actions)) {
+        const currentDurationMs = actionDurationByEventName.get(eventName) ?? 0;
+        const nextDurationMs = temp__resolveActionDurationMs(action);
+        actionDurationByEventName.set(eventName, Math.max(currentDurationMs, nextDurationMs));
+      }
+    }
+  }
+
+  const tracks = scene.tracks;
+  if (typeof tracks !== "object" || tracks === null) {
+    return 1;
+  }
+
+  let maxTimelineMs = 0;
+  for (const rawTrack of Object.values(tracks)) {
+    if (typeof rawTrack !== "object" || rawTrack === null) {
+      continue;
+    }
+
+    const track = rawTrack as { events?: unknown };
+    const events = Array.isArray(track.events) ? track.events : [];
+    for (const rawEvent of events) {
+      if (typeof rawEvent !== "object" || rawEvent === null) {
+        continue;
+      }
+
+      const event = rawEvent as { ms?: unknown; name?: unknown };
+      const eventMsRaw = typeof event.ms === "number" && Number.isFinite(event.ms) ? event.ms : 0;
+      const eventMs = Math.max(0, eventMsRaw);
+      const eventName = typeof event.name === "string" ? event.name : "";
+      const actionDurationMs = actionDurationByEventName.get(eventName) ?? 0;
+      maxTimelineMs = Math.max(maxTimelineMs, eventMs + actionDurationMs);
+    }
+  }
+
+  return Math.max(1, Math.round(maxTimelineMs));
+}
+
+/**
+ * Formats one timeline value for the seek UI.
+ */
+function temp__formatTimelineMs(value: number): string {
+  return `${Math.max(0, Math.round(value))}ms`;
+}
+
+/**
  * Mounts top-level demo list components into the container.
  */
 function temp__mountDemoRootLists(containerNode: HTMLDivElement, player: PlayerFacade): void {
@@ -517,6 +608,9 @@ export async function runPlayerPocDemo(): Promise<void> {
     throw new Error("Expected #app root element");
   }
 
+  const demoScene = temp__createDemoScene();
+  const seekMaxMsFromScene = temp__resolveSceneSeekMaxMs(demoScene);
+
   appNode.innerHTML = `
     <main class="demo-shell">
     <aside>
@@ -526,6 +620,11 @@ export async function runPlayerPocDemo(): Promise<void> {
       <div class="demo-controls">
         <button id="demo-play-button" class="demo-button" type="button">Play</button>
         <button id="demo-rewind-button" class="demo-button demo-button-secondary" type="button">Rewind</button>
+        <label class="demo-progress-control" for="demo-seek-range">
+          <span>Seek</span>
+          <input id="demo-seek-range" class="demo-progress-range" type="range" min="0" max="${seekMaxMsFromScene}" step="10" value="0" />
+          <span id="demo-seek-label" class="demo-progress-label">0ms / ${temp__formatTimelineMs(seekMaxMsFromScene)}</span>
+        </label>
       </div>
       <div id="player-state" class="player-state"></div>
       <div id="player-trace" class="player-state player-trace"></div>
@@ -546,15 +645,17 @@ export async function runPlayerPocDemo(): Promise<void> {
     animationAdapter,
   });
 
-  const playerStateNode = globalThis.document.querySelector<HTMLDivElement>("#player-state");
-  if (playerStateNode === null) {
+  const playerState = globalThis.document.querySelector<HTMLDivElement>("#player-state");
+  if (playerState === null) {
     throw new Error("Expected #player-state element");
   }
+  const playerStateNode = playerState;
 
-  const playerTraceNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
-  if (playerTraceNode === null) {
+  const playerTrace = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
+  if (playerTrace === null) {
     throw new Error("Expected #player-trace element");
   }
+  const playerTraceNode = playerTrace;
 
   const playButton = globalThis.document.querySelector<HTMLButtonElement>("#demo-play-button");
   if (playButton === null) {
@@ -568,20 +669,88 @@ export async function runPlayerPocDemo(): Promise<void> {
   }
   const rewindButtonNode = rewindButton;
 
+  const seekRange = globalThis.document.querySelector<HTMLInputElement>("#demo-seek-range");
+  if (seekRange === null) {
+    throw new Error("Expected #demo-seek-range element");
+  }
+  const seekRangeNode = seekRange;
+
+  const seekLabel = globalThis.document.querySelector<HTMLSpanElement>("#demo-seek-label");
+  if (seekLabel === null) {
+    throw new Error("Expected #demo-seek-label element");
+  }
+  const seekLabelNode = seekLabel;
+
+  const playerAsSeekable = player as SeekablePlayer;
+  const seekCommand = typeof playerAsSeekable.seek === "function" ? playerAsSeekable.seek.bind(player) : null;
+
   const traceLines: string[] = [];
   let firstTraceMs: number | null = null;
   let mountedRuntimeRevision = -1;
   let commandInFlight = false;
+  let progressLoopFrameId: number | null = null;
+  const seekThrottleMs = 90;
+  let pendingSeekTargetMs: number | null = null;
+  let seekThrottleTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let lastSeekDispatchMs = 0;
+  let seekInteractionActive = false;
 
-  function syncControlState(): void {
-    const state = player.getState();
+  function syncSeekLabel(timelineMs: number, maxTimelineMs: number): void {
+    seekLabelNode.textContent = `${temp__formatTimelineMs(timelineMs)} / ${temp__formatTimelineMs(maxTimelineMs)}`;
+  }
+
+  function renderPlayerState(state: PlayerStateSnapshot): void {
+    playerStateNode.textContent = `status=${state.status} timelineMs=${Math.round(state.timelineMs)} revision=${state.runtimeRevision}`;
+  }
+
+  function syncControlState(state: PlayerStateSnapshot = player.getState()): void {
     const canPlay = state.status === "ready" || state.status === "paused";
     const canRewind =
       state.initialized &&
       (state.status === "ready" || state.status === "paused" || state.status === "playing");
+    const canSeek =
+      seekCommand !== null &&
+      state.initialized &&
+      (state.status === "ready" ||
+        state.status === "paused" ||
+        state.status === "playing" ||
+        state.status === "seeking");
+
+    const seekMaxMs = Math.max(seekMaxMsFromScene, Math.round(state.timelineMs));
+    const clampedTimelineMs = Math.min(Math.max(0, Math.round(state.timelineMs)), seekMaxMs);
+    const interactionTimelineMs = Math.min(readSeekTargetMsFromRange(), seekMaxMs);
+    const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs);
+    const displayedTimelineMs = seekInteractionActive
+      ? interactionTimelineMs
+      : pendingTimelineMs ?? clampedTimelineMs;
 
     playButtonNode.disabled = commandInFlight || !canPlay;
     rewindButtonNode.disabled = commandInFlight || !canRewind;
+    seekRangeNode.disabled = !canSeek;
+    seekRangeNode.max = String(seekMaxMs);
+    seekRangeNode.value = String(displayedTimelineMs);
+    syncSeekLabel(displayedTimelineMs, seekMaxMs);
+  }
+
+  function syncProgressLoop(): void {
+    if (typeof globalThis.requestAnimationFrame !== "function") {
+      return;
+    }
+
+    if (progressLoopFrameId !== null) {
+      return;
+    }
+
+    progressLoopFrameId = globalThis.requestAnimationFrame(() => {
+      progressLoopFrameId = null;
+      const state = player.getState();
+      renderPlayerState(state);
+      syncControlState(state);
+
+      if (state.status === "playing") {
+        syncProgressLoop();
+      }
+    });
   }
 
   async function runControlCommand(
@@ -623,14 +792,130 @@ export async function runPlayerPocDemo(): Promise<void> {
     void runRewindFlow();
   });
 
+  async function runSeekFlow(targetTimelineMs: number): Promise<void> {
+    const stateBefore = player.getState();
+    if (stateBefore.status === "playing") {
+      await runControlCommand("pause", () => player.pause());
+    }
+
+    if (seekCommand === null) {
+      return;
+    }
+
+    await runControlCommand("seek", () => seekCommand(targetTimelineMs));
+  }
+
+  function readSeekTargetMsFromRange(): number {
+    const rawValue = Number(seekRangeNode.value);
+    if (!Number.isFinite(rawValue)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.round(rawValue));
+  }
+
+  function resolveNowMs(): number {
+    if (typeof globalThis.performance !== "undefined") {
+      return globalThis.performance.now();
+    }
+
+    return Date.now();
+  }
+
+  function runPendingSeekNow(): void {
+    if (seekCommand === null || commandInFlight || pendingSeekTargetMs === null) {
+      return;
+    }
+
+    const targetTimelineMs = pendingSeekTargetMs;
+    pendingSeekTargetMs = null;
+    lastSeekDispatchMs = resolveNowMs();
+
+    void runSeekFlow(targetTimelineMs).finally(() => {
+      if (pendingSeekTargetMs !== null) {
+        scheduleThrottledSeekDispatch();
+      }
+    });
+  }
+
+  function scheduleThrottledSeekDispatch(): void {
+    if (seekCommand === null || pendingSeekTargetMs === null) {
+      return;
+    }
+
+    if (seekThrottleTimer !== null) {
+      return;
+    }
+
+    const nowMs = resolveNowMs();
+    const elapsedMs = nowMs - lastSeekDispatchMs;
+    const waitMs = Math.max(0, seekThrottleMs - elapsedMs);
+
+    seekThrottleTimer = globalThis.setTimeout(() => {
+      seekThrottleTimer = null;
+      runPendingSeekNow();
+    }, waitMs);
+  }
+
+  seekRangeNode.addEventListener("input", () => {
+    seekInteractionActive = true;
+    const clampedSeekValueMs = readSeekTargetMsFromRange();
+    pendingSeekTargetMs = clampedSeekValueMs;
+
+    const seekMaxMs = Number(seekRangeNode.max);
+    const clampedSeekMaxMs = Number.isFinite(seekMaxMs) ? seekMaxMs : seekMaxMsFromScene;
+    syncSeekLabel(clampedSeekValueMs, clampedSeekMaxMs);
+
+    scheduleThrottledSeekDispatch();
+  });
+
+  seekRangeNode.addEventListener("pointerdown", () => {
+    seekInteractionActive = true;
+  });
+
+  seekRangeNode.addEventListener("pointerup", () => {
+    seekInteractionActive = false;
+    syncControlState();
+  });
+
+  seekRangeNode.addEventListener("pointercancel", () => {
+    seekInteractionActive = false;
+    syncControlState();
+  });
+
+  seekRangeNode.addEventListener("blur", () => {
+    seekInteractionActive = false;
+    syncControlState();
+  });
+
+  seekRangeNode.addEventListener("change", () => {
+    seekInteractionActive = false;
+
+    if (seekCommand === null || commandInFlight) {
+      return;
+    }
+
+    pendingSeekTargetMs = readSeekTargetMsFromRange();
+    if (seekThrottleTimer !== null) {
+      globalThis.clearTimeout(seekThrottleTimer);
+      seekThrottleTimer = null;
+    }
+
+    runPendingSeekNow();
+  });
+
   player.onStateChange((state) => {
     if (state.runtimeRevision !== mountedRuntimeRevision) {
       temp__mountDemoRootLists(containerNode, player);
       mountedRuntimeRevision = state.runtimeRevision;
     }
 
-    playerStateNode.textContent = `status=${state.status} timelineMs=${Math.round(state.timelineMs)} revision=${state.runtimeRevision}`;
-    syncControlState();
+    renderPlayerState(state);
+    syncControlState(state);
+
+    if (state.status === "playing") {
+      syncProgressLoop();
+    }
   });
 
   player.onTrace((row) => {
@@ -646,13 +931,14 @@ export async function runPlayerPocDemo(): Promise<void> {
     playerTraceNode.textContent = traceLines.join("\n");
   });
 
-  const initResult = await player.init(temp__createDemoScene());
+  const initResult = await player.init(demoScene);
   if (!initResult.ok) {
     throw new Error(`[demo] init failed: ${initResult.error.code}`);
   }
 
   temp__mountDemoRootLists(containerNode, player);
-  mountedRuntimeRevision = player.getState().runtimeRevision;
-
-  syncControlState();
+  const initialState = player.getState();
+  mountedRuntimeRevision = initialState.runtimeRevision;
+  renderPlayerState(initialState);
+  syncControlState(initialState);
 }

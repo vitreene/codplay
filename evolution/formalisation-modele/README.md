@@ -26,11 +26,13 @@ Specs V1 alignees sur ce plan:
 - `24-runtime-log-policy-v1.md` (spec-cadre logs/traces runtime)
 - `25-flip-runtime-core-v1.md` (spec runtime FLIP, calcul unique)
 - `26-player-orchestration-v1.md` (orchestration Player, routing move)
+- `28-flip-overlay-world-mode-v1.md` (variant FLIP optionnelle, mode auteur overlay-world)
 
 Pre-specs / cadrage evolutif:
 
 - `20-text-advanced-pre-spec.md` (evolution texte enrichi, micro-animations, transitions)
 - `21-text-micro-animations-v1.md` (contrat micro-animations texte)
+- `27-flip-overlay-world-space-pre-spec.md` (options FLIP overlay/world-space pour overlap list)
 
 ## Notes de contexte / transition
 

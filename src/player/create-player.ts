@@ -53,6 +53,7 @@ export class PlayerFacade implements PlayerApi {
   private status: PlayerStatus = "idle";
   private scene: SceneDoc | null = null;
   private timelineMs = 0;
+  private timelineEndMs = 0;
   private playbackStartMs: number | null = null;
   private readonly ticker = new TimeTicker();
   private nextScheduledEventIndex = 0;
@@ -161,10 +162,13 @@ export class PlayerFacade implements PlayerApi {
    */
   private resolveCurrentTimelineMs(): number {
     if (this.playbackStartMs === null) {
-      return this.timelineMs;
+      return Math.min(this.timelineMs, this.timelineEndMs);
     }
 
-    return this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs);
+    return Math.min(
+      this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs),
+      this.timelineEndMs,
+    );
   }
 
   /**
@@ -194,6 +198,7 @@ export class PlayerFacade implements PlayerApi {
     this.renderer.destroy();
     this.scene = null;
     this.timelineMs = 0;
+    this.timelineEndMs = 0;
     this.playbackStartMs = null;
     this.nextScheduledEventIndex = 0;
     this.nextPublicEventIndex = 0;
@@ -241,6 +246,41 @@ export class PlayerFacade implements PlayerApi {
     const timelineMs = this.resolveCurrentTimelineMs();
     this.timelineMs = timelineMs;
     this.runDueTimelineEvents(timelineMs);
+    this.completePlaybackIfReachedEnd();
+  }
+
+  /**
+   * Stops frame playback when timeline reaches its deterministic end.
+   */
+  private completePlaybackIfReachedEnd(): void {
+    if (this.status !== "playing") {
+      return;
+    }
+
+    if (this.timelineMs < this.timelineEndMs) {
+      return;
+    }
+
+    this.timelineMs = this.timelineEndMs;
+    this.playbackStartMs = null;
+    this.stopPlaybackLoop();
+    this.director.pause();
+
+    const rendererPauseResult = this.renderer.pause();
+    if (!rendererPauseResult.ok) {
+      this.emitTrace("player:play:ended", "error", {
+        timelineMs: this.timelineMs,
+        code: rendererPauseResult.error.code,
+        message: rendererPauseResult.error.message,
+      });
+      this.setStatus("paused");
+      return;
+    }
+
+    this.setStatus("paused");
+    this.emitTrace("player:play:ended", "applied", {
+      timelineMs: this.timelineMs,
+    });
   }
 
   /**
@@ -334,6 +374,7 @@ export class PlayerFacade implements PlayerApi {
     const runtimePlan = this.runtimePlanner.createRuntimePlan(nextScene, nextActiveStory);
     this.director.load(runtimePlan);
     this.syncNextScheduledEventIndex(this.timelineMs);
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
 
     const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
     if (!rendererLoadResult.ok) {
@@ -408,7 +449,10 @@ export class PlayerFacade implements PlayerApi {
     const currentTimelineMs = this.resolveCurrentTimelineMs();
     this.timelineMs = currentTimelineMs;
     this.runDueTimelineEvents(currentTimelineMs);
-    this.startPlaybackLoop();
+    this.completePlaybackIfReachedEnd();
+    if (this.playbackStartMs !== null) {
+      this.startPlaybackLoop();
+    }
     this.emitTrace("player:play", "applied", {
       startTimelineMs: this.timelineMs,
     });
@@ -485,21 +529,100 @@ export class PlayerFacade implements PlayerApi {
       );
     }
 
-    const previousStatus = this.status;
     this.setStatus("seeking");
     this.emitTrace("player:seek:started", "applied", {
       targetTimelineMs,
     });
 
-    this.timelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs);
-    this.syncNextScheduledEventIndex(this.timelineMs);
-
-    if (previousStatus === "playing") {
-      this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs;
-      this.runDueTimelineEvents(this.timelineMs);
+    if (this.scene === null) {
+      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before seek", "player:seek");
     }
 
-    this.setStatus(previousStatus);
+    this.playbackStartMs = null;
+    this.stopPlaybackLoop();
+
+    const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene);
+    if (nextActiveStory === null) {
+      return this.reject(
+        "SCENE_STORY_NOT_FOUND",
+        "Scene must provide at least one story",
+        "player:seek:failed",
+        {
+          sceneId: this.scene.id,
+          targetTimelineMs,
+        },
+      );
+    }
+
+    const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
+    this.director.load(runtimePlan);
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
+
+    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
+    if (!rendererLoadResult.ok) {
+      return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to seek story", "player:seek:failed", {
+        sceneId: this.scene.id,
+        targetTimelineMs,
+        code: rendererLoadResult.error.code,
+      });
+    }
+
+    this.emitStateSnapshot();
+
+    this.timelineMs = Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs);
+    this.nextScheduledEventIndex = 0;
+
+    this.director.start();
+    const rendererStartResult = this.renderer.start();
+    if (!rendererStartResult.ok) {
+      return this.reject(
+        "RENDERER_INVALID_STATE",
+        "Renderer could not start for seek replay",
+        "player:seek:failed",
+        {
+          sceneId: this.scene.id,
+          targetTimelineMs,
+          code: rendererStartResult.error.code,
+        },
+      );
+    }
+
+    const eventMsByEventId = new Map<string, number>(
+      this.director.getSortedEvents().map((event) => [event.id, event.ms]),
+    );
+
+    const sortedEvents = this.director.getSortedEvents();
+    this.nextScheduledEventIndex = 0;
+    while (this.nextScheduledEventIndex < sortedEvents.length) {
+      const timelineEvent = sortedEvents[this.nextScheduledEventIndex];
+      if (timelineEvent.ms > this.timelineMs) {
+        break;
+      }
+
+      this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId);
+      this.runTimelineEvent(timelineEvent);
+      this.nextScheduledEventIndex += 1;
+    }
+
+    this.syncNextScheduledEventIndex(this.timelineMs);
+    this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId);
+
+    this.director.pause();
+    const rendererPauseResult = this.renderer.pause();
+    if (!rendererPauseResult.ok) {
+      return this.reject(
+        "RENDERER_INVALID_STATE",
+        "Renderer could not pause after seek replay",
+        "player:seek:failed",
+        {
+          sceneId: this.scene.id,
+          targetTimelineMs,
+          code: rendererPauseResult.error.code,
+        },
+      );
+    }
+
+    this.setStatus("paused");
     this.emitTrace("player:seek:done", "applied", {
       targetTimelineMs: this.timelineMs,
     });
@@ -552,6 +675,7 @@ export class PlayerFacade implements PlayerApi {
 
     const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
     this.director.load(runtimePlan);
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
 
     const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
     if (!rendererLoadResult.ok) {
@@ -656,6 +780,7 @@ export class PlayerFacade implements PlayerApi {
 
       const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
       this.director.load(runtimePlan);
+      this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
       this.syncNextScheduledEventIndex(this.timelineMs);
 
       const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });

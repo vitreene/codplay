@@ -38,6 +38,33 @@ export class PlayerRuntimePlanner {
   }
 
   /**
+   * Resolves one deterministic timeline end from events and action durations.
+   */
+  resolveTimelineEndMsFromPlan(plan: PlayerRuntimePlan): number {
+    if (plan.sortedEvents.length === 0) {
+      return Number.POSITIVE_INFINITY
+    }
+
+    const actionDurationByEventName = new Map<string, number>()
+
+    for (const listener of plan.listeners) {
+      for (const [eventName, action] of Object.entries(listener.actionsByEventName)) {
+        const currentDurationMs = actionDurationByEventName.get(eventName) ?? 0
+        const nextDurationMs = this.resolveActionDurationMs(action as Record<string, unknown>)
+        actionDurationByEventName.set(eventName, Math.max(currentDurationMs, nextDurationMs))
+      }
+    }
+
+    let timelineEndMs = 0
+    for (const event of plan.sortedEvents) {
+      const actionDurationMs = actionDurationByEventName.get(event.name) ?? 0
+      timelineEndMs = Math.max(timelineEndMs, this.clampTimelineMs(event.ms) + actionDurationMs)
+    }
+
+    return this.clampTimelineMs(timelineEndMs)
+  }
+
+  /**
    * Resolves the story used as active runtime story for one scene.
    */
   resolveActiveStory(scene: SceneDoc): StoryDoc | null {
@@ -83,6 +110,30 @@ export class PlayerRuntimePlanner {
       operations: [resolvedAction],
       causeEventId: event.id
     }
+  }
+
+  /**
+   * Resolves max transition duration from one action payload style block.
+   */
+  private resolveActionDurationMs(action: Record<string, unknown>): number {
+    const style = action.style
+    if (typeof style !== 'object' || style === null) {
+      return 0
+    }
+
+    let maxDurationMs = 0
+    for (const styleValue of Object.values(style as Record<string, unknown>)) {
+      if (typeof styleValue !== 'object' || styleValue === null) {
+        continue
+      }
+
+      const styleTransition = styleValue as Record<string, unknown>
+      const duration = Number.isFinite(styleTransition.duration) ? Number(styleTransition.duration) : 0
+      const delay = Number.isFinite(styleTransition.delay) ? Number(styleTransition.delay) : 0
+      maxDurationMs = Math.max(maxDurationMs, this.clampTimelineMs(duration + delay))
+    }
+
+    return maxDurationMs
   }
 
   /**
