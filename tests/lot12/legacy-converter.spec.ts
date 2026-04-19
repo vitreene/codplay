@@ -5,7 +5,7 @@ import { convertLegacyToV1, type LegacyInput } from '../../src/legacy-converter/
 /**
  * Creates a deterministic legacy fixture for converter tests.
  */
-function createLegacyFixture(): LegacyInput {
+function temp__createLegacyFixture(): LegacyInput {
   return {
     persos: {
       'capsule-key': {
@@ -55,7 +55,7 @@ function createLegacyFixture(): LegacyInput {
 
 describe('Lot 12 - convertisseur legacy outillage', () => {
   it('L12-T1 same input always yields same output JSON', () => {
-    const input = createLegacyFixture()
+    const input = temp__createLegacyFixture()
     const first = convertLegacyToV1(input)
     const second = convertLegacyToV1(input)
 
@@ -178,7 +178,7 @@ describe('Lot 12 - convertisseur legacy outillage', () => {
   })
 
   it('L12-T6 conversion always builds story-main and minimal scenario graph', () => {
-    const result = convertLegacyToV1(createLegacyFixture())
+    const result = convertLegacyToV1(temp__createLegacyFixture())
 
     expect(result.ok).toBe(true)
     if (!result.ok) {

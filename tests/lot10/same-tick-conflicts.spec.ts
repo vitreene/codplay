@@ -8,7 +8,7 @@ import type { RuntimeElementMap, RuntimeNode } from '../../src/runtime/types'
 /**
  * Creates one resolved action with predictable defaults.
  */
-function makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
+function temp__makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
   return {
     eventId: partial.eventId ?? 'evt-default',
     eventName: partial.eventName ?? 'intro',
@@ -21,7 +21,7 @@ function makeResolvedAction(partial: Partial<AnimationResolvedAction>): Animatio
 /**
  * Creates one runtime element map for the provided nodes.
  */
-function makeRuntimeElements(nodes: Record<string, RuntimeNode>): RuntimeElementMap {
+function temp__makeRuntimeElements(nodes: Record<string, RuntimeNode>): RuntimeElementMap {
   return new Map(
     Object.entries(nodes).map(([runtimeItemId, nodeRef]) => [
       runtimeItemId,
@@ -35,7 +35,7 @@ function makeRuntimeElements(nodes: Record<string, RuntimeNode>): RuntimeElement
 
 describe('Lot 10 - same-tick runtime conflicts', () => {
   it('L10-T1 style conflict keeps last property value and traces override', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       'item-1': {
         tagName: 'DIV',
         id: 'item-1',
@@ -46,7 +46,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'item-1',
         action: {
@@ -56,7 +56,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
           }
         }
       }),
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-2',
         listenerId: 'item-1',
         action: {
@@ -96,7 +96,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
   })
 
   it('L10-T2 style properties without key overlap remain co-applied', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       'item-1': {
         tagName: 'DIV',
         id: 'item-1',
@@ -107,7 +107,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'item-1',
         action: {
@@ -117,7 +117,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
           }
         }
       }),
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-2',
         listenerId: 'item-1',
         action: {
@@ -138,7 +138,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
   })
 
   it('L10-T3 attr conflict keeps last key value and traces override', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       'item-1': {
         tagName: 'DIV',
         id: 'item-1',
@@ -149,7 +149,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'item-1',
         action: {
@@ -159,7 +159,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
           }
         }
       }),
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-2',
         listenerId: 'item-1',
         action: {
@@ -186,7 +186,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
   })
 
   it('L10-T4 className token conflict keeps last operation for one token', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       'item-1': {
         tagName: 'DIV',
         id: 'item-1',
@@ -197,7 +197,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'item-1',
         action: {
@@ -205,7 +205,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
           className: { add: 'active' }
         }
       }),
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-2',
         listenerId: 'item-1',
         action: {
@@ -230,7 +230,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
   })
 
   it('L10-T5 same key on different targets does not conflict', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       'item-1': {
         tagName: 'DIV',
         id: 'item-1',
@@ -248,7 +248,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'item-1',
         action: {
@@ -258,7 +258,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
           }
         }
       }),
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-2',
         listenerId: 'item-2',
         action: {
@@ -279,7 +279,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
   })
 
   it('L10-T6 move-only action is preserved and updates runtime parent id', () => {
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       parent: {
         tagName: 'DIV',
         id: 'parent',
@@ -297,7 +297,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'child',
         action: {
@@ -349,7 +349,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
       }
     })
 
-    const runtimeElements = makeRuntimeElements({
+    const runtimeElements = temp__makeRuntimeElements({
       parent: {
         tagName: 'DIV',
         id: 'parent',
@@ -361,7 +361,7 @@ describe('Lot 10 - same-tick runtime conflicts', () => {
     })
 
     const actions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: 'evt-1',
         listenerId: 'child',
         action: {

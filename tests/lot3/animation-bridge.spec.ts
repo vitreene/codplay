@@ -15,7 +15,7 @@ type NumericTween = {
 /**
  * Creates one controllable anime implementation for interpolation assertions.
  */
-function createControllableAnime() {
+function temp__createControllableAnime() {
   const numericTweens: NumericTween[] = [];
   const calls: Array<Record<string, unknown>> = [];
 
@@ -79,7 +79,7 @@ function createControllableAnime() {
 /**
  * Creates one resolved action with sensible defaults for animation tests.
  */
-function makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
+function temp__makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
   return {
     eventId: partial.eventId ?? "evt-1",
     eventName: partial.eventName ?? "intro",
@@ -95,7 +95,7 @@ describe("Lot 03 - animation bridge", () => {
     const adapter = createAnimationAdapter(animeImplementation);
 
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         action: {
           target: "#item-1",
           style: {
@@ -118,7 +118,7 @@ describe("Lot 03 - animation bridge", () => {
     const adapter = createAnimationAdapter(animeImplementation);
 
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         action: {
           target: "#item-1",
           style: {
@@ -151,7 +151,7 @@ describe("Lot 03 - animation bridge", () => {
     const adapter = createAnimationAdapter(animeImplementation);
 
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         eventId: "evt-42",
         eventName: "intro",
         listenerId: "item-42",

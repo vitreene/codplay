@@ -9,7 +9,7 @@ import type { TimelineEvent } from '../../src/core/events/types'
 /**
  * Creates a timeline event with concise defaults for tests.
  */
-function makeEvent(partial: Partial<TimelineEvent> & Pick<TimelineEvent, 'id' | 'ms' | 'name' | 'index' | 'source'>): TimelineEvent {
+function temp__makeEvent(partial: Partial<TimelineEvent> & Pick<TimelineEvent, 'id' | 'ms' | 'name' | 'index' | 'source'>): TimelineEvent {
   return {
     id: partial.id,
     ms: partial.ms,
@@ -72,10 +72,10 @@ describe('Lot 02 - events pipeline', () => {
 
   it('L2-T2 sorts events deterministically by ms, track order, index, source', () => {
     const input: TimelineEvent[] = [
-      makeEvent({ id: 'e4', ms: 20, name: 'n', index: 0, source: 'user', trackId: 't-main' }),
-      makeEvent({ id: 'e3', ms: 20, name: 'n', index: 0, source: 'story', trackId: 't-main' }),
-      makeEvent({ id: 'e1', ms: 10, name: 'n', index: 2, source: 'story', trackId: 't-low' }),
-      makeEvent({ id: 'e2', ms: 10, name: 'n', index: 1, source: 'story', trackId: 't-high' })
+      temp__makeEvent({ id: 'e4', ms: 20, name: 'n', index: 0, source: 'user', trackId: 't-main' }),
+      temp__makeEvent({ id: 'e3', ms: 20, name: 'n', index: 0, source: 'story', trackId: 't-main' }),
+      temp__makeEvent({ id: 'e1', ms: 10, name: 'n', index: 2, source: 'story', trackId: 't-low' }),
+      temp__makeEvent({ id: 'e2', ms: 10, name: 'n', index: 1, source: 'story', trackId: 't-high' })
     ]
 
     const trackMeta = {
@@ -93,10 +93,10 @@ describe('Lot 02 - events pipeline', () => {
 
   it('L2-T3 collects events in window (prevMs, nowMs + marginMs]', () => {
     const events: TimelineEvent[] = [
-      makeEvent({ id: 'e0', ms: 0, name: 'n', index: 0, source: 'story' }),
-      makeEvent({ id: 'e1', ms: 10, name: 'n', index: 1, source: 'story' }),
-      makeEvent({ id: 'e2', ms: 15, name: 'n', index: 2, source: 'story' }),
-      makeEvent({ id: 'e3', ms: 20, name: 'n', index: 3, source: 'story' })
+      temp__makeEvent({ id: 'e0', ms: 0, name: 'n', index: 0, source: 'story' }),
+      temp__makeEvent({ id: 'e1', ms: 10, name: 'n', index: 1, source: 'story' }),
+      temp__makeEvent({ id: 'e2', ms: 15, name: 'n', index: 2, source: 'story' }),
+      temp__makeEvent({ id: 'e3', ms: 20, name: 'n', index: 3, source: 'story' })
     ]
 
     const noMargin = collectEventsWindow(events, 10, 15, 0)
@@ -108,8 +108,8 @@ describe('Lot 02 - events pipeline', () => {
 
   it('L2-T4 dispatches only exact event-name matches', () => {
     const events: TimelineEvent[] = [
-      makeEvent({ id: 'e1', ms: 10, name: 'pointer:click', index: 0, source: 'story' }),
-      makeEvent({ id: 'e2', ms: 20, name: 'pointer:down', index: 1, source: 'story' })
+      temp__makeEvent({ id: 'e1', ms: 10, name: 'pointer:click', index: 0, source: 'story' }),
+      temp__makeEvent({ id: 'e2', ms: 20, name: 'pointer:down', index: 1, source: 'story' })
     ]
 
     const resolved = dispatchEvents(events, {
@@ -131,7 +131,7 @@ describe('Lot 02 - events pipeline', () => {
 
   it('L2-T5 dispatches same event to listeners in declaration order', () => {
     const events: TimelineEvent[] = [
-      makeEvent({ id: 'e1', ms: 10, name: 'intro', index: 0, source: 'story' })
+      temp__makeEvent({ id: 'e1', ms: 10, name: 'intro', index: 0, source: 'story' })
     ]
 
     const resolved = dispatchEvents(events, {

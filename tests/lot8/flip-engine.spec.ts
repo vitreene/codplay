@@ -30,7 +30,7 @@ type FakeNode = {
 /**
  * Creates one measurable fake node with mutable geometry.
  */
-function createFakeNode(
+function temp__createFakeNode(
   initialRect: RectLike,
   transform = 'none',
   transformOrigin = '50% 50%',
@@ -54,7 +54,7 @@ function createFakeNode(
 /**
  * Creates one animation adapter stub that records started transitions.
  */
-function createRecordingAnimationAdapter(onRun: (transitions: TransitionRequest[]) => void): AnimationAdapter {
+function temp__createRecordingAnimationAdapter(onRun: (transitions: TransitionRequest[]) => void): AnimationAdapter {
   return {
     run: (transitions) => {
       onRun(transitions)
@@ -99,7 +99,7 @@ async function sleep(durationMs: number): Promise<void> {
 /**
  * Creates one real anime.js implementation compatible with the runtime adapter.
  */
-function createRealAnimeImplementation(): AnimeImplementation {
+function temp__createRealAnimeImplementation(): AnimeImplementation {
   return (parameters) => {
     const targets = parameters.targets
     const { targets: _ignoredTargets, ...rest } = parameters
@@ -113,7 +113,7 @@ function createRealAnimeImplementation(): AnimeImplementation {
 describe('Lot 08 - generic FLIP engine', () => {
   it('L8-T1 capture reads rect, matrix and transform-origin from nodes', () => {
     const engine = createFlipEngine()
-    const node = createFakeNode(
+    const node = temp__createFakeNode(
       {
         left: 10,
         top: 20,
@@ -150,7 +150,7 @@ describe('Lot 08 - generic FLIP engine', () => {
 
   it('L8-T2 plan prepares x/y/width/height interpolation', () => {
     const engine = createFlipEngine()
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 50 })
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 50 })
 
     const first = [
       {
@@ -219,9 +219,9 @@ describe('Lot 08 - generic FLIP engine', () => {
       }
     })
 
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
     const playedTransitions: TransitionRequest[][] = []
-    const animationAdapter = createRecordingAnimationAdapter((transitions) => {
+    const animationAdapter = temp__createRecordingAnimationAdapter((transitions) => {
       events.push('play:run')
       playedTransitions.push(transitions)
     })
@@ -256,8 +256,8 @@ describe('Lot 08 - generic FLIP engine', () => {
 
   it('L8-T4 plan converts world delta to local delta using transformed parent matrix', () => {
     const engine = createFlipEngine()
-    const parentNode = createFakeNode({ left: 0, top: 0, width: 400, height: 300 }, 'matrix(0, 1, -1, 0, 0, 0)')
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'none', '50% 50%', parentNode)
+    const parentNode = temp__createFakeNode({ left: 0, top: 0, width: 400, height: 300 }, 'matrix(0, 1, -1, 0, 0, 0)')
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'none', '50% 50%', parentNode)
 
     const first = [
       {
@@ -302,7 +302,7 @@ describe('Lot 08 - generic FLIP engine', () => {
 
   it('L8-T5 toAnimationTransitions emits additive channels with composition merge', () => {
     const engine = createFlipEngine()
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
 
     const transitions = engine.toAnimationTransitions([
       {
@@ -325,7 +325,7 @@ describe('Lot 08 - generic FLIP engine', () => {
   })
 
   it('L8-T6 integration uses real animejs and animates intermediate values', async () => {
-    const adapter = createAnimationAdapter(createRealAnimeImplementation())
+    const adapter = createAnimationAdapter(temp__createRealAnimeImplementation())
     const target = { x: 0 }
 
     const result = runAnimationBatch(
@@ -364,8 +364,8 @@ describe('Lot 08 - generic FLIP engine', () => {
       }
     })
 
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
-    const adapter = createAnimationAdapter(createRealAnimeImplementation())
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
+    const adapter = createAnimationAdapter(temp__createRealAnimeImplementation())
 
     const runPromise = engine.run({
       entries: [{ id: 'item-a', nodeRef: node }],
@@ -403,7 +403,7 @@ describe('Lot 08 - generic FLIP engine', () => {
 
   it('L8-T8 plan maps world delta with target pre-transform matrix', () => {
     const engine = createFlipEngine()
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'matrix(0, 1, -1, 0, 0, 0)')
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'matrix(0, 1, -1, 0, 0, 0)')
 
     const first = [
       {
@@ -454,9 +454,9 @@ describe('Lot 08 - generic FLIP engine', () => {
       }
     })
 
-    const node = createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'rotate(6deg)')
+    const node = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 }, 'rotate(6deg)')
     const playedTransitions: TransitionRequest[][] = []
-    const adapter = createRecordingAnimationAdapter((transitions) => {
+    const adapter = temp__createRecordingAnimationAdapter((transitions) => {
       playedTransitions.push(transitions)
     })
 
@@ -496,9 +496,9 @@ describe('Lot 08 - generic FLIP engine', () => {
       }
     })
 
-    const nodeA = createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
-    const nodeB = createFakeNode({ left: 100, top: 0, width: 100, height: 40 })
-    const adapter = createRecordingAnimationAdapter(() => {
+    const nodeA = temp__createFakeNode({ left: 0, top: 0, width: 100, height: 40 })
+    const nodeB = temp__createFakeNode({ left: 100, top: 0, width: 100, height: 40 })
+    const adapter = temp__createRecordingAnimationAdapter(() => {
       return
     })
 

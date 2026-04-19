@@ -7,7 +7,7 @@ import { createLocalTelco } from '../../src/telco-local/create-local-telco'
 /**
  * Creates one minimal scene fixture compatible with createPlayer.
  */
-function createSceneFixture(): SceneDoc {
+function temp__createSceneFixture(): SceneDoc {
   return {
     id: 'scene-main',
     initialStoryId: 'story-main',
@@ -33,7 +33,7 @@ function createSceneFixture(): SceneDoc {
 describe('Lot 14 - telco locale composant', () => {
   it('L14-T1 dispatch executes player commands with deterministic request ids', async () => {
     const player = new PlayerFacade()
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
 
     const telco = createLocalTelco({ player })
     const firstResult = await telco.dispatch({ name: 'play' })
@@ -60,7 +60,7 @@ describe('Lot 14 - telco locale composant', () => {
 
   it('L14-T2 telco state subscription mirrors player state changes', async () => {
     const player = new PlayerFacade()
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
 
     const telco = createLocalTelco({ player })
     const observedStates: string[] = []
@@ -77,7 +77,7 @@ describe('Lot 14 - telco locale composant', () => {
 
   it('L14-T3 invalid seek payload is rejected by telco', async () => {
     const player = new PlayerFacade()
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
 
     const telco = createLocalTelco({ player })
     const result = await telco.dispatch({
@@ -98,7 +98,7 @@ describe('Lot 14 - telco locale composant', () => {
 
   it('L14-T4 command result subscription receives applied and rejected outcomes', async () => {
     const player = new PlayerFacade()
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
 
     const telco = createLocalTelco({ player })
     const events: string[] = []

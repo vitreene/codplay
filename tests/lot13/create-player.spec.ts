@@ -6,7 +6,7 @@ import type { SceneDoc } from '../../src/player/types'
 /**
  * Creates one minimal scene fixture for player API tests.
  */
-function createSceneFixture(): SceneDoc {
+function temp__createSceneFixture(): SceneDoc {
   return {
     id: 'scene-main',
     initialStoryId: 'story-main',
@@ -36,7 +36,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
     expect(player.getState().status).toBe('idle')
 
-    expect(await player.init(createSceneFixture())).toEqual({ ok: true })
+    expect(await player.init(temp__createSceneFixture())).toEqual({ ok: true })
     expect(player.getState()).toMatchObject({
       initialized: true,
       status: 'ready',
@@ -44,7 +44,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       activeStoryId: 'story-main'
     })
 
-    expect(await player.init(createSceneFixture())).toEqual({ ok: true })
+    expect(await player.init(temp__createSceneFixture())).toEqual({ ok: true })
     expect(player.getState().status).toBe('ready')
 
     expect(await player.destroy()).toEqual({ ok: true })
@@ -56,7 +56,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
   it('L13-T2 play/pause/seek update player state deterministically', async () => {
     const player = new PlayerFacade()
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
 
     expect(await player.play()).toEqual({ ok: true })
     expect(player.getState().status).toBe('playing')
@@ -88,7 +88,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       }
     })
 
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
     const pauseFromReady = await player.pause()
     expect(pauseFromReady).toMatchObject({
       ok: false,
@@ -102,7 +102,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
         allowedRebuildModes: ['state']
       }
     })
-    await restrictedPlayer.init(createSceneFixture())
+    await restrictedPlayer.init(temp__createSceneFixture())
     const forbiddenRebuild = await restrictedPlayer.rebuild('full')
     expect(forbiddenRebuild).toMatchObject({
       ok: false,
@@ -124,7 +124,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       statuses.push(state.status)
     })
 
-    await player.init(createSceneFixture())
+    await player.init(temp__createSceneFixture())
     await player.play()
     await player.pause()
 

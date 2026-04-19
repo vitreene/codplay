@@ -1,4 +1,5 @@
 import type { RuntimeEventSource } from '../core/events/types'
+import type { RuntimeComponentClass, RuntimeRegistrySnapshot } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import type { StoryDoc } from '../runtime/types'
 
@@ -54,6 +55,9 @@ export type PlayerTraceListener = (row: RuntimeTraceRow) => void
 export type PlayerStateListener = (state: PlayerStateSnapshot) => void
 
 export type PlayerApi = {
+  registerComponent: (persoType: string, componentClass: RuntimeComponentClass) => PlayerCommandResult
+  overrideComponent: (persoType: string, componentClass: RuntimeComponentClass) => PlayerCommandResult
+  getRuntimeRegistry: () => RuntimeRegistrySnapshot
   init: (scene: SceneDoc) => Promise<PlayerCommandResult>
   destroy: () => Promise<PlayerCommandResult>
   play: () => Promise<PlayerCommandResult>

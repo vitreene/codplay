@@ -5,7 +5,7 @@ import { createWaitFlowRuntime, type StoryRef } from '../../src/runtime/wait-flo
 /**
  * Creates a story reference used across wait-flow tests.
  */
-function createStoryRef(storyId: string, instanceId: string): StoryRef {
+function temp__createStoryRef(storyId: string, instanceId: string): StoryRef {
   return {
     storyId,
     instanceId
@@ -18,8 +18,8 @@ describe('Lot 06 - wait flow runtime', () => {
 
     const result = waitFlow.startWait({
       mode: 'parallel',
-      fromStory: createStoryRef('story-main', 'story-main#1'),
-      waitStory: createStoryRef('story-wait', 'story-wait#1')
+      fromStory: temp__createStoryRef('story-main', 'story-main#1'),
+      waitStory: temp__createStoryRef('story-wait', 'story-wait#1')
     })
 
     expect(result.ok).toBe(true)
@@ -32,7 +32,7 @@ describe('Lot 06 - wait flow runtime', () => {
     expect(result.data.wait.disabledTrackIds).toEqual([])
     expect(result.data.operations).toContainEqual({
       type: 'story:start',
-      storyRef: createStoryRef('story-wait', 'story-wait#1')
+      storyRef: temp__createStoryRef('story-wait', 'story-wait#1')
     })
     expect(result.data.operations.some((operation) => operation.type === 'story:pause')).toBe(false)
     expect(result.data.trace.map((entry) => entry.eventName)).toEqual([
@@ -46,8 +46,8 @@ describe('Lot 06 - wait flow runtime', () => {
 
     const result = waitFlow.startWait({
       mode: 'suspendSource',
-      fromStory: createStoryRef('story-main', 'story-main#1'),
-      waitStory: createStoryRef('story-wait', 'story-wait#1'),
+      fromStory: temp__createStoryRef('story-main', 'story-main#1'),
+      waitStory: temp__createStoryRef('story-wait', 'story-wait#1'),
       fromStoryCursorMs: 1234,
       fromStoryTrackIds: ['track-main-a', 'track-main-b']
     })
@@ -61,7 +61,7 @@ describe('Lot 06 - wait flow runtime', () => {
     expect(result.data.wait.disabledTrackIds).toEqual(['track-main-a', 'track-main-b'])
     expect(result.data.operations).toContainEqual({
       type: 'story:pause',
-      storyRef: createStoryRef('story-main', 'story-main#1')
+      storyRef: temp__createStoryRef('story-main', 'story-main#1')
     })
     expect(result.data.operations).toContainEqual({ type: 'track:disable', trackId: 'track-main-a' })
     expect(result.data.operations).toContainEqual({ type: 'track:disable', trackId: 'track-main-b' })
@@ -72,8 +72,8 @@ describe('Lot 06 - wait flow runtime', () => {
 
     const startResult = waitFlow.startWait({
       mode: 'suspendSource',
-      fromStory: createStoryRef('story-main', 'story-main#1'),
-      waitStory: createStoryRef('story-wait', 'story-wait#1'),
+      fromStory: temp__createStoryRef('story-main', 'story-main#1'),
+      waitStory: temp__createStoryRef('story-wait', 'story-wait#1'),
       fromStoryCursorMs: 640,
       fromStoryTrackIds: ['track-main-a']
     })
@@ -96,7 +96,7 @@ describe('Lot 06 - wait flow runtime', () => {
     expect(resolveResult.data.operations).toContainEqual({ type: 'track:enable', trackId: 'track-main-a' })
     expect(resolveResult.data.operations).toContainEqual({
       type: 'story:resume',
-      storyRef: createStoryRef('story-main', 'story-main#1'),
+      storyRef: temp__createStoryRef('story-main', 'story-main#1'),
       atMs: 640
     })
     expect(waitFlow.getWait(startResult.data.wait.waitId)).toBeNull()
@@ -107,8 +107,8 @@ describe('Lot 06 - wait flow runtime', () => {
 
     const startResult = waitFlow.startWait({
       mode: 'suspendSource',
-      fromStory: createStoryRef('story-main', 'story-main#1'),
-      waitStory: createStoryRef('story-wait', 'story-wait#1'),
+      fromStory: temp__createStoryRef('story-main', 'story-main#1'),
+      waitStory: temp__createStoryRef('story-wait', 'story-wait#1'),
       fromStoryCursorMs: 640
     })
 
@@ -130,7 +130,7 @@ describe('Lot 06 - wait flow runtime', () => {
     expect(resolveResult.data.resumedAtMs).toBe(0)
     expect(resolveResult.data.operations).toContainEqual({
       type: 'story:resume',
-      storyRef: createStoryRef('story-main', 'story-main#1'),
+      storyRef: temp__createStoryRef('story-main', 'story-main#1'),
       atMs: 0
     })
   })
@@ -140,7 +140,7 @@ describe('Lot 06 - wait flow runtime', () => {
 
     const result = waitFlow.startWait({
       mode: 'suspendSource',
-      waitStory: createStoryRef('story-wait', 'story-wait#1')
+      waitStory: temp__createStoryRef('story-wait', 'story-wait#1')
     })
 
     expect(result.ok).toBe(false)

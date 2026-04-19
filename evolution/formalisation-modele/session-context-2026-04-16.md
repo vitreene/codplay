@@ -480,9 +480,52 @@ Precision technique ajoutee:
 - la matrice transform est reservee aux calculs internes FLIP
 - les canaux animes runtime restent `x/y/width/height`
 
+Implementation Phase B (Player/composant) executee:
+
+- runtime renderer reroute des updates via instances composants (plus via `apply-actions` dans le chemin Player)
+- ajout registre composants runtime avec APIs `registerComponent` / `overrideComponent` avant `init/load`
+- instanciation 1 composant par `Perso` au load story
+- exposition registre runtime stable (`node`, `list`, parentage, mounted)
+- routage global `move` enfant->parent dans l'orchestrateur composants
+- creation dossier runtime `src/runtime/components/` (text, image, list, orchestrateur, adapter)
+- implementation en reecriture propre des couches Player/Renderer ciblees (pas de patch legacy incremental)
+
 Maintenance coherence documentaire:
 
 - `15-list-component-v1-checklist.md`: item Phase A warnings dedoublonnes marque termine
 - `15-list-component-v1-checklist.md`: artifacts de reference complets (`24`, `25`, `26`)
 - `README.md`: ajout de `session-context-2026-04-16.md` dans les notes de transition
 - `README.md`: rappel explicite `session-context-*` non normatifs (priorite aux specs V1 actives)
+
+## Etat session courant (2026-04-18)
+
+Execution recente validee:
+
+- Phase B runtime Player/composants implementee et testee (build + test suite OK)
+- registry composant expose (`registerComponent`, `overrideComponent`, `getRuntimeRegistry`)
+- example demo remplace par scene simple text/img/list avec animations (sans `move`)
+- events demo simplifies cote auteur (`name` + `ms`), `id/index/source` normalises au runtime
+- config animation explicite ajoutee: duree par defaut centralisee (`ANIMATION_RUNTIME_CONFIG.defaultDurationMs`)
+- correction runtime: ne plus appliquer immediatement les valeurs de transition (`style.{prop}.to`) avant animation
+
+Directive de travail pour les prochaines etapes:
+
+- les tests temporaires d'etape se font dans `src/demos/player-poc-demo.ts`
+- conserver le cadre `appNode.innerHTML` et le CSS associe par defaut
+- toute modification de structure HTML/CSS ne se fait que sur demande explicite utilisateur
+
+## Plan de suite recommande (ordre)
+
+Etat phases:
+
+- Phase A: terminee
+- Phase B: terminee
+- Phase C: a executer
+- Phase D: a executer
+- Phase E: a executer
+
+Plan d'execution:
+
+1. Phase C - execution `move` complete (local/transfer/detached, persistances, conflits same tick)
+2. Phase D - branchement FLIP reel (`ListFlipTrigger -> createFlipEngine.run`) + reparent matrix/size restore
+3. Phase E - validation complete (unit + integration + scenario visuel A/B1/B2/C)

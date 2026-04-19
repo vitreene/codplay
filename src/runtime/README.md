@@ -5,6 +5,7 @@ Current implementation targets:
 - `create-element.ts`
 - `mount-elements.ts`
 - `apply-actions.ts`
+- `components/`
 - `wait-flow.ts`
 - `list-plugin/`
 - `flip-engine/`
@@ -22,3 +23,8 @@ Reference:
 - `evolution/lots/lot-09-trace-debug-retention-export.md`
 - `evolution/lots/lot-10-conflits-same-tick-runtime.md`
 - `evolution/lots/lot-11-media-sync-master-switching.md`
+
+Notes:
+
+- Renderer runtime now routes updates through `components/` orchestrator.
+- `apply-actions.ts` remains for compatibility tests and focused utility coverage.

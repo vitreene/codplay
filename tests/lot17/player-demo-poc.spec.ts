@@ -5,9 +5,52 @@ import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
 /**
+ * Creates one anime implementation that applies target end values immediately.
+ */
+function temp__createApplyingAnimeImplementation() {
+  return vi.fn<AnimeImplementation>((parameters) => {
+    const targets = parameters.targets
+    const targetList = Array.isArray(targets)
+      ? (targets as Record<string, unknown>[])
+      : [targets as Record<string, unknown>]
+
+    for (const target of targetList) {
+      if (typeof target !== 'object' || target === null) {
+        continue
+      }
+
+      const mutableTarget = target as Record<string, unknown>
+      const mutableStyle =
+        typeof mutableTarget.style === 'object' && mutableTarget.style !== null
+          ? (mutableTarget.style as Record<string, unknown>)
+          : null
+
+      for (const [property, value] of Object.entries(parameters)) {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+          continue
+        }
+
+        const resolvedValue =
+          typeof value === 'object' && value !== null && 'to' in value
+            ? (value as { to: unknown }).to
+            : value
+
+        if (mutableStyle !== null) {
+          mutableStyle[property] = resolvedValue
+        } else {
+          mutableTarget[property] = resolvedValue
+        }
+      }
+    }
+
+    return { pause: vi.fn() }
+  })
+}
+
+/**
  * Creates one scene fixture matching the red DEMO rotation proof of concept.
  */
-function createDemoSceneFixture(): SceneDoc {
+function temp__createDemoSceneFixture(): SceneDoc {
   return {
     id: 'scene-demo',
     initialStoryId: 'story-demo',
@@ -64,8 +107,8 @@ function createDemoSceneFixture(): SceneDoc {
 /**
  * Creates one scene fixture without timeline events for direct emit tests.
  */
-function createEmitOnlySceneFixture(): SceneDoc {
-  const scene = createDemoSceneFixture()
+function temp__createEmitOnlySceneFixture(): SceneDoc {
+	const scene = temp__createDemoSceneFixture()
   return {
     ...scene,
     tracks: {}
@@ -75,7 +118,7 @@ function createEmitOnlySceneFixture(): SceneDoc {
 /**
  * Creates one scene fixture that mutates class and attributes on playback.
  */
-function createRewindStateSceneFixture(): SceneDoc {
+function temp__createRewindStateSceneFixture(): SceneDoc {
   return {
     id: 'scene-rewind-state',
     initialStoryId: 'story-rewind-state',
@@ -142,7 +185,7 @@ describe('Lot 17 - real demo flow', () => {
       attributes: {}
     }
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -151,7 +194,7 @@ describe('Lot 17 - real demo flow', () => {
       }
     })
 
-    await player.init(createDemoSceneFixture())
+    await player.init(temp__createDemoSceneFixture())
     await player.play()
     await vi.runAllTimersAsync()
 
@@ -177,7 +220,7 @@ describe('Lot 17 - real demo flow', () => {
     }
 
     const traceEvents: string[] = []
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -190,7 +233,7 @@ describe('Lot 17 - real demo flow', () => {
       traceEvents.push(`${row.status}:${row.eventName}`)
     })
 
-    await player.init(createEmitOnlySceneFixture())
+    await player.init(temp__createEmitOnlySceneFixture())
     await player.emit({
       id: 'evt-public-1',
       name: 'demo:rotate',
@@ -222,7 +265,7 @@ describe('Lot 17 - real demo flow', () => {
       return nowValue
     })
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -231,7 +274,7 @@ describe('Lot 17 - real demo flow', () => {
       }
     })
 
-    await player.init(createDemoSceneFixture())
+    await player.init(temp__createDemoSceneFixture())
     await player.play()
     await vi.runAllTimersAsync()
 
@@ -250,7 +293,7 @@ describe('Lot 17 - real demo flow', () => {
       attributes: {}
     }
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -259,7 +302,7 @@ describe('Lot 17 - real demo flow', () => {
       }
     })
 
-    await player.init(createDemoSceneFixture())
+    await player.init(temp__createDemoSceneFixture())
     await player.play()
     await vi.runAllTimersAsync()
     await player.pause()
@@ -295,7 +338,7 @@ describe('Lot 17 - real demo flow', () => {
       attributes: {}
     }
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -304,7 +347,7 @@ describe('Lot 17 - real demo flow', () => {
       }
     })
 
-    await player.init(createRewindStateSceneFixture())
+    await player.init(temp__createRewindStateSceneFixture())
     await player.play()
     await vi.runAllTimersAsync()
     await player.pause()

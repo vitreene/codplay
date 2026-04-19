@@ -9,7 +9,7 @@ import type { ItemDoc } from '../../src/runtime/types'
 /**
  * Creates a list item fixture used in Lot 07 tests.
  */
-function createListItem(): ItemDoc {
+function temp__createListItem(): ItemDoc {
   return {
     id: 'list-1',
     type: 'list',
@@ -105,7 +105,7 @@ describe('Lot 07 - list plugin (diff + FLIP + fallback)', () => {
   })
 
   it('L7-T4 creates a list plugin instance from createElement', () => {
-    const listItem = createListItem()
+    const listItem = temp__createListItem()
     const runtimeElement = createElement(listItem)
     const listPlugin = runtimeElement.plugins?.[0] as ListPlugin
 

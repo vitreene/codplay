@@ -4,6 +4,49 @@ import { createAnimationAdapter, type AnimeImplementation } from '../../src/anim
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
+/**
+ * Creates one anime implementation that applies target end values immediately.
+ */
+function temp__createApplyingAnimeImplementation() {
+  return vi.fn<AnimeImplementation>((parameters) => {
+    const targets = parameters.targets
+    const targetList = Array.isArray(targets)
+      ? (targets as Record<string, unknown>[])
+      : [targets as Record<string, unknown>]
+
+    for (const target of targetList) {
+      if (typeof target !== 'object' || target === null) {
+        continue
+      }
+
+      const mutableTarget = target as Record<string, unknown>
+      const mutableStyle =
+        typeof mutableTarget.style === 'object' && mutableTarget.style !== null
+          ? (mutableTarget.style as Record<string, unknown>)
+          : null
+
+      for (const [property, value] of Object.entries(parameters)) {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+          continue
+        }
+
+        const resolvedValue =
+          typeof value === 'object' && value !== null && 'to' in value
+            ? (value as { to: unknown }).to
+            : value
+
+        if (mutableStyle !== null) {
+          mutableStyle[property] = resolvedValue
+        } else {
+          mutableTarget[property] = resolvedValue
+        }
+      }
+    }
+
+    return { pause: vi.fn() }
+  })
+}
+
 describe('Lot 16 - playback timeline minimal', () => {
   it('L16-T1 play schedules timeline events and applies mapped actions', async () => {
     vi.useFakeTimers()
@@ -62,7 +105,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       }
     }
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,
@@ -154,7 +197,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       }
     }
 
-    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
     const player = new PlayerFacade({
       animationAdapter,

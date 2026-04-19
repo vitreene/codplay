@@ -1,7 +1,8 @@
-import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
-import { applyResolvedActions } from '../runtime/apply-actions'
-import { mountSceneElements } from '../runtime/mount-elements'
-import type { RuntimeElementMap, StoryDoc } from '../runtime/types'
+import { deriveSimpleTransitions } from '../animation/derive-simple'
+import { runAnimationBatch } from '../animation/run-batch'
+import type { AnimationAdapter } from '../animation/types'
+import { resolveSameTickConflicts } from '../runtime/resolve-same-tick-conflicts'
+import { RuntimeComponentOrchestrator } from '../runtime/components'
 import type {
   CreateRendererOptions,
   RendererApi,
@@ -30,15 +31,15 @@ const EMPTY_TICK_RESULT: RendererTickResult = {
 }
 
 /**
- * Implements a renderer facade that applies ordered commits to runtime elements.
+ * Implements the renderer facade with component orchestration and action routing.
  */
 export class RendererFacade implements RendererApi {
   private readonly options: CreateRendererOptions
   private readonly animationAdapter: AnimationAdapter
+  private readonly orchestrator: RuntimeComponentOrchestrator
 
   private status: RendererStatus = 'idle'
-  private activeStory: StoryDoc | null = null
-  private runtimeElements: RuntimeElementMap = new Map()
+  private activeStoryId: string | null = null
   private pendingCommits: RuntimeCommit[] = []
   private lastAppliedCommitSeq = 0
   private runtimeRevision = 0
@@ -46,29 +47,39 @@ export class RendererFacade implements RendererApi {
   private readonly errorListeners = new Set<RendererErrorListener>()
 
   /**
-   * Configures one renderer facade from explicit options.
+   * Creates one renderer facade configured from explicit constructor options.
    */
   constructor(options: CreateRendererOptions = {}) {
     this.options = options
     this.animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
+    this.orchestrator = new RuntimeComponentOrchestrator({
+      warn: (warning) => {
+        this.emitError({
+          code: warning.code,
+          message: warning.message,
+          details: warning.details
+        })
+      },
+      createElementOptions: options.createElementOptions
+    })
   }
 
   /**
-   * Returns true when one story is currently loaded in renderer.
+   * Returns true when a story is currently loaded in renderer.
    */
   private isInitialized(): boolean {
-    return this.activeStory !== null
+    return this.activeStoryId !== null
   }
 
   /**
-   * Sorts pending commits according to monotonic commit sequence.
+   * Sorts pending commits by commit sequence to keep deterministic execution.
    */
   private sortPendingCommits(): void {
     this.pendingCommits.sort((left, right) => left.commitSeq - right.commitSeq)
   }
 
   /**
-   * Splits pending commits into ready and waiting groups.
+   * Splits pending commits into ready and waiting groups for one tick.
    */
   private takeReadyCommits(nowMs: number): RuntimeCommit[] {
     const readyCommits: RuntimeCommit[] = []
@@ -88,28 +99,74 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Flattens commit operations into one action batch preserving commit order.
+   * Resolves event sequence for a resolved action from ready commit metadata.
    */
-  private collectResolvedActions(commits: RuntimeCommit[]): AnimationResolvedAction[] {
-    const actions: AnimationResolvedAction[] = []
-
+  private buildEventSeqMap(commits: RuntimeCommit[]): Map<string, number> {
+    const eventSeqByEventId = new Map<string, number>()
     for (const commit of commits) {
-      actions.push(...commit.operations)
+      for (const operation of commit.operations) {
+        eventSeqByEventId.set(operation.eventId, commit.commitSeq)
+      }
+
       if (commit.commitSeq > this.lastAppliedCommitSeq) {
         this.lastAppliedCommitSeq = commit.commitSeq
       }
     }
 
-    return actions
+    return eventSeqByEventId
   }
 
   /**
-   * Loads one story into renderer and mounts runtime elements.
+   * Registers one component class before the first story load.
+   */
+  registerComponent(
+    persoType: string,
+    componentClass: import('../runtime/components').RuntimeComponentClass
+  ): import('../runtime/components').RuntimeRegistryCommandResult {
+    if (this.isInitialized()) {
+      return {
+        ok: false,
+        code: 'RENDERER_COMPONENT_REGISTRY_LOCKED',
+        message: 'registerComponent is only allowed before load'
+      }
+    }
+
+    return this.orchestrator.registerComponent(persoType, componentClass)
+  }
+
+  /**
+   * Overrides one component class before the first story load.
+   */
+  overrideComponent(
+    persoType: string,
+    componentClass: import('../runtime/components').RuntimeComponentClass
+  ): import('../runtime/components').RuntimeRegistryCommandResult {
+    if (this.isInitialized()) {
+      return {
+        ok: false,
+        code: 'RENDERER_COMPONENT_REGISTRY_LOCKED',
+        message: 'overrideComponent is only allowed before load'
+      }
+    }
+
+    return this.orchestrator.overrideComponent(persoType, componentClass)
+  }
+
+  /**
+   * Exposes one stable runtime registry for player-level integrations.
+   */
+  getRuntimeRegistry(): import('../runtime/components').RuntimeRegistrySnapshot {
+    return this.orchestrator.getRuntimeRegistrySnapshot()
+  }
+
+  /**
+   * Loads one story and instantiates one runtime component per item.
    */
   load(input: RendererLoadInput): RendererCommandResult {
     this.animationAdapter.stop()
-    this.activeStory = input.story
-    this.runtimeElements = mountSceneElements(input.story, this.options.createElementOptions)
+    this.orchestrator.setCreateElementOptions(this.options.createElementOptions)
+    this.orchestrator.loadStory(input.story)
+    this.activeStoryId = input.story.id
     this.pendingCommits = []
     this.lastAppliedCommitSeq = 0
     this.status = 'ready'
@@ -172,7 +229,7 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Stops renderer and clears pending commits while keeping mounted story.
+   * Stops renderer execution and clears pending commits.
    */
   stop(): RendererCommandResult {
     if (!this.isInitialized()) {
@@ -183,6 +240,7 @@ export class RendererFacade implements RendererApi {
     if (this.status !== 'idle') {
       this.status = 'ready'
     }
+
     return { ok: true }
   }
 
@@ -191,10 +249,10 @@ export class RendererFacade implements RendererApi {
    */
   destroy(): RendererCommandResult {
     this.pendingCommits = []
-    this.runtimeElements = new Map()
-    this.activeStory = null
+    this.activeStoryId = null
     this.status = 'idle'
     this.animationAdapter.stop()
+    this.orchestrator.destroy()
     this.runtimeRevision += 1
     return { ok: true }
   }
@@ -227,23 +285,26 @@ export class RendererFacade implements RendererApi {
       return EMPTY_TICK_RESULT
     }
 
-    const resolvedActions = this.collectResolvedActions(readyCommits)
-    if (resolvedActions.length === 0) {
-      return {
-        appliedCommitCount: readyCommits.length,
-        appliedActionCount: 0,
-        animationAppliedCount: 0,
-        conflictCount: 0
-      }
-    }
+    const eventSeqByEventId = this.buildEventSeqMap(readyCommits)
+    const resolvedActions = readyCommits.flatMap((commit) => commit.operations)
+    const conflictResolution = resolveSameTickConflicts(resolvedActions)
 
     try {
-      const applyResult = applyResolvedActions(resolvedActions, this.runtimeElements, this.animationAdapter)
+      const routed = this.orchestrator.routeUpdates(
+        conflictResolution.resolvedActions.map((resolvedAction) => ({
+          resolvedAction,
+          eventSeq: eventSeqByEventId.get(resolvedAction.eventId) ?? 0
+        }))
+      )
+
+      const transitions = deriveSimpleTransitions(routed.animatableActions)
+      const animation = runAnimationBatch(transitions, this.animationAdapter)
+
       return {
         appliedCommitCount: readyCommits.length,
-        appliedActionCount: applyResult.appliedActionsCount,
-        animationAppliedCount: applyResult.animation.appliedCount,
-        conflictCount: applyResult.conflictTrace.length
+        appliedActionCount: routed.appliedActionsCount,
+        animationAppliedCount: animation.appliedCount,
+        conflictCount: conflictResolution.trace.length
       }
     } catch (error) {
       this.emitError({
@@ -266,14 +327,15 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Returns one immutable snapshot of renderer state.
+   * Returns one immutable renderer state snapshot.
    */
   getState(): RendererStateSnapshot {
+    const runtimeElements = this.orchestrator.getRuntimeElements()
     return {
       status: this.status,
       initialized: this.isInitialized(),
-      activeStoryId: this.activeStory?.id,
-      runtimeElementCount: this.runtimeElements.size,
+      activeStoryId: this.activeStoryId ?? undefined,
+      runtimeElementCount: runtimeElements.size,
       pendingCommitCount: this.pendingCommits.length,
       lastAppliedCommitSeq: this.lastAppliedCommitSeq,
       runtimeRevision: this.runtimeRevision
@@ -281,7 +343,7 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Emits one renderer error to all subscribers.
+   * Emits one renderer warning/error to all listeners.
    */
   private emitError(error: RendererError): void {
     for (const listener of this.errorListeners) {
@@ -290,13 +352,9 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Builds one rejected command result and publishes the error.
+   * Builds one rejected command result and emits the error payload.
    */
-  private reject(
-    code: string,
-    message: string,
-    details?: Record<string, unknown>
-  ): RendererCommandResult {
+  private reject(code: string, message: string, details?: Record<string, unknown>): RendererCommandResult {
     this.emitError({ code, message, details })
     return {
       ok: false,
@@ -309,7 +367,7 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Subscribes to renderer errors.
+   * Subscribes to renderer errors and returns one unsubscribe callback.
    */
   onError(listener: RendererErrorListener): () => void {
     this.errorListeners.add(listener)

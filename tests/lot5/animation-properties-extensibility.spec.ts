@@ -9,7 +9,7 @@ import type { RuntimeElementMap, RuntimeNode } from '../../src/runtime/types'
 /**
  * Creates one resolved action with sensible defaults for animation tests.
  */
-function makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
+function temp__makeResolvedAction(partial: Partial<AnimationResolvedAction>): AnimationResolvedAction {
   return {
     eventId: partial.eventId ?? 'evt-1',
     eventName: partial.eventName ?? 'intro',
@@ -22,7 +22,7 @@ function makeResolvedAction(partial: Partial<AnimationResolvedAction>): Animatio
 describe('Lot 05 - animation properties extensibility', () => {
   it('L5-T1 deriveSimpleTransitions forwards arbitrary style properties', () => {
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         action: {
           target: '#item-1',
           style: {
@@ -72,7 +72,7 @@ describe('Lot 05 - animation properties extensibility', () => {
     ])
 
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         listenerId: 'item-1',
         action: {
           targetId: 'item-1',
@@ -117,7 +117,7 @@ describe('Lot 05 - animation properties extensibility', () => {
     ])
 
     const resolvedActions: AnimationResolvedAction[] = [
-      makeResolvedAction({
+      temp__makeResolvedAction({
         listenerId: 'rive-1',
         action: {
           targetId: 'rive-1',

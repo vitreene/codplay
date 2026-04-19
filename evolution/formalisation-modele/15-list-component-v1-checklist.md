@@ -4,6 +4,14 @@
 
 Document de pilotage en mode etude active.
 
+Plan de sequence courant:
+
+- A: termine
+- B: termine
+- C: prochain lot d'implementation
+- D: ensuite (FLIP reel)
+- E: ensuite (validation globale)
+
 ## Intention
 
 Transformer le draft List en composant runtime reel, en gardant:
@@ -24,12 +32,12 @@ Transformer le draft List en composant runtime reel, en gardant:
 
 ## Phase B - integration Player/Director
 
-- [ ] brancher `registerComponent` / `overrideComponent` avant `load(scene)`
-- [ ] instancier un composant par `Perso`
-- [ ] router `update` agrege vers l'instance cible
-- [ ] exposer un registry runtime stable `persoId -> nodeRef`
-- [ ] exposer un registry runtime `persoId -> listComponent`
-- [ ] retirer le `move` generique de `apply-actions` pour les items geres par List
+- [x] brancher `registerComponent` / `overrideComponent` avant `load(scene)`
+- [x] instancier un composant par `Perso`
+- [x] router `update` agrege vers l'instance cible
+- [x] exposer un registry runtime stable `persoId -> nodeRef`
+- [x] exposer un registry runtime `persoId -> listComponent`
+- [x] retirer le `move` generique de `apply-actions` pour les items geres par List
 
 ## Phase C - execution move
 

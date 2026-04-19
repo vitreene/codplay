@@ -1,4 +1,5 @@
 import type { ResolvedAction } from '../core/events/types'
+import type { MoveValue } from '../runtime/types'
 
 export type AnimatedProperty = string
 
@@ -8,7 +9,11 @@ export type AnimationAction = {
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
-  move?: string | { mode?: string; targetId?: string }
+  move?: MoveValue
+  content?: string
+  src?: string
+  alt?: string
+  fitMode?: 'wallpaper' | 'sprite'
 }
 
 export type AnimationResolvedAction = ResolvedAction<AnimationAction>

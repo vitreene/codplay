@@ -8,6 +8,7 @@ import {
   type RuntimeTraceRow,
   type RuntimeTraceStatus,
 } from "../runtime/trace-store";
+import type { RuntimeComponentClass } from "../runtime/components";
 import type { CreateElementOptions } from "../runtime/create-element";
 import { PlayerRuntimePlanner } from "./create-player-utils";
 import type {
@@ -83,6 +84,76 @@ export class PlayerFacade implements PlayerApi {
         ...(error.details ?? {}),
       });
     });
+  }
+
+  /**
+   * Registers one component class before scene load.
+   */
+  registerComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
+    if (this.isInitialized()) {
+      return this.reject(
+        "PLAYER_COMPONENT_REGISTRY_LOCKED",
+        "registerComponent is only allowed before init",
+        "player:register-component",
+        { persoType },
+      );
+    }
+
+    const result = this.renderer.registerComponent(persoType, componentClass);
+    if (!result.ok) {
+      return this.reject(
+        result.code,
+        result.message,
+        "player:register-component",
+        result.details,
+      );
+    }
+
+    this.emitTrace("player:register-component", "applied", {
+      persoType,
+      status: result.status,
+      code: result.code,
+    });
+
+    return { ok: true };
+  }
+
+  /**
+   * Overrides one component class before scene load.
+   */
+  overrideComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
+    if (this.isInitialized()) {
+      return this.reject(
+        "PLAYER_COMPONENT_REGISTRY_LOCKED",
+        "overrideComponent is only allowed before init",
+        "player:override-component",
+        { persoType },
+      );
+    }
+
+    const result = this.renderer.overrideComponent(persoType, componentClass);
+    if (!result.ok) {
+      return this.reject(
+        result.code,
+        result.message,
+        "player:override-component",
+        result.details,
+      );
+    }
+
+    this.emitTrace("player:override-component", "applied", {
+      persoType,
+      status: result.status,
+    });
+
+    return { ok: true };
+  }
+
+  /**
+   * Exposes one stable runtime registry for integration/editing flows.
+   */
+  getRuntimeRegistry(): import("../runtime/components").RuntimeRegistrySnapshot {
+    return this.renderer.getRuntimeRegistry();
   }
 
   /**

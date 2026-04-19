@@ -89,7 +89,7 @@ class ManualFrameScheduler implements FrameScheduler {
 /**
  * Advances virtual time and flushes exactly one frame callback per step.
  */
-function runFrames(
+function temp__runFrames(
   scheduler: ManualFrameScheduler,
   advanceNowMs: (deltaMs: number) => void,
   frameCount: number,
@@ -112,7 +112,7 @@ describe('Lot 01 - timer/ticker', () => {
     ticker.start(onTick)
     ticker.start(onTick)
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 3, 10)
     expect(onTick).toHaveBeenCalledTimes(3)
@@ -120,7 +120,7 @@ describe('Lot 01 - timer/ticker', () => {
     ticker.stop()
     ticker.stop()
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 3, 10)
     expect(onTick).toHaveBeenCalledTimes(3)
@@ -137,7 +137,7 @@ describe('Lot 01 - timer/ticker', () => {
       ticks.push(payload)
     })
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 5, 10)
     ticker.stop()
@@ -160,7 +160,7 @@ describe('Lot 01 - timer/ticker', () => {
       ticks.push(payload)
     })
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 4, 10)
     ticker.stop()
@@ -183,7 +183,7 @@ describe('Lot 01 - timer/ticker', () => {
       ticks.push(payload)
     })
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 1, 10)
     ticker.stop()
@@ -215,7 +215,7 @@ describe('Lot 01 - timer/ticker', () => {
 
     ticker.start(onTick)
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 3, 10)
     expect(onTick).toHaveBeenCalledTimes(0)
@@ -223,7 +223,7 @@ describe('Lot 01 - timer/ticker', () => {
     visibilityController.setHidden(false)
     visibilityController.triggerChange()
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 3, 10)
     expect(onTick).toHaveBeenCalledTimes(3)
@@ -231,7 +231,7 @@ describe('Lot 01 - timer/ticker', () => {
     visibilityController.setHidden(true)
     visibilityController.triggerChange()
 
-    runFrames(scheduler, (deltaMs) => {
+    temp__runFrames(scheduler, (deltaMs) => {
       nowMs += deltaMs
     }, 3, 10)
     expect(onTick).toHaveBeenCalledTimes(3)

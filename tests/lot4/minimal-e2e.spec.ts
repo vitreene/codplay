@@ -11,7 +11,7 @@ import type { ItemDoc, RuntimeNode, StoryDoc } from '../../src/runtime/types'
 /**
  * Creates a minimal text item used in Lot 04 integration tests.
  */
-function createTextItem(): ItemDoc {
+function temp__createTextItem(): ItemDoc {
   return {
     id: 'item-text-1',
     type: 'text',
@@ -38,7 +38,7 @@ describe('Lot 04 - minimal end-to-end', () => {
     const story: StoryDoc = {
       id: 'story-main',
       items: {
-        'item-text-1': createTextItem()
+          'item-text-1': temp__createTextItem()
       }
     }
 

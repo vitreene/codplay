@@ -1,6 +1,5 @@
+import { ANIMATION_RUNTIME_CONFIG } from './config'
 import type { AnimationResolvedAction, TransitionRequest } from './types'
-
-const DEFAULT_DURATION_MS = 300
 
 type StylePropertyDefinition = {
   from?: number | string
@@ -72,7 +71,7 @@ export function deriveSimpleTransitions(resolvedActions: AnimationResolvedAction
         target,
         from: definition.from,
         to: definition.to,
-        duration: definition.duration ?? DEFAULT_DURATION_MS,
+        duration: definition.duration ?? ANIMATION_RUNTIME_CONFIG.defaultDurationMs,
         easing: definition.easing
       })
     }
