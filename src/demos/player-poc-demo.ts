@@ -51,8 +51,8 @@ function temp__createDemoScene(): SceneDoc {
                 position: "absolute",
                 left: "50%",
                 top: "50%",
-                x: "-50%",
-                y: "-50%",
+                marginLeft: "-190px",
+                marginTop: "-160px",
                 width: "380px",
                 minHeight: "320px",
                 padding: "16px",
@@ -60,9 +60,82 @@ function temp__createDemoScene(): SceneDoc {
                 border: "2px dashed #0b7a75",
                 borderRadius: "14px",
                 boxShadow: "0 10px 24px rgba(16, 38, 67, 0.18)",
+                transform: "rotate(24deg) scale(0.77)",
+                transformOrigin: "center",
+                zIndex: 1,
               },
             },
-            actions: {},
+            actions: {
+              "demo:lists:drift": {
+                style: {
+                  x: {
+                    from: 0,
+                    to: 130,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                  y: {
+                    from: 0,
+                    to: -35,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                  rotate: {
+                    from: 24,
+                    to: 40,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                },
+              },
+            },
+          },
+          "demo-stage-list": {
+            id: "demo-stage-list",
+            type: "list",
+            initial: {
+              id: "demo-stage-list",
+              className: "demo-card",
+              style: {
+                position: "absolute",
+                left: "8%",
+                top: "16%",
+                width: "240px",
+                minHeight: "320px",
+                padding: "12px",
+                backgroundColor: "#fff4df",
+                border: "2px solid #f7b267",
+                borderRadius: "14px",
+                boxShadow: "0 10px 24px rgba(16, 38, 67, 0.12)",
+                transform: "rotate(-10deg) scale(1.1)",
+
+                zIndex: 0,
+              },
+            },
+            actions: {
+              "demo:lists:drift": {
+                style: {
+                  x: {
+                    from: 0,
+                    to: -95,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                  y: {
+                    from: 0,
+                    to: 28,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                  rotate: {
+                    from: -10,
+                    to: 6,
+                    duration: 12000,
+                    easing: "linear",
+                  },
+                },
+              },
+            },
           },
           "demo-trash-list": {
             id: "demo-trash-list",
@@ -81,6 +154,10 @@ function temp__createDemoScene(): SceneDoc {
             initial: {
               id: "demo-item-1",
               tag: "div",
+              move: {
+                parentId: "demo-stage-list",
+                mode: "append",
+              },
               className: "demo-list-item",
               content: "ITEM 1",
               style: {
@@ -91,14 +168,16 @@ function temp__createDemoScene(): SceneDoc {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 backgroundColor: "#f25f5c",
+                transform: "rotate(-4deg) scale(0.98)",
+                transformOrigin: "center",
               },
             },
             actions: {
               "demo:item-1:add": {
                 move: { parentId: "demo-list", mode: "append" },
               },
-              "demo:item-1:remove-second": {
-                move: { parentId: "demo-trash-list", mode: "append" },
+              "demo:item-1:return-origin": {
+                move: { parentId: "demo-stage-list", mode: "append" },
               },
             },
           },
@@ -108,6 +187,10 @@ function temp__createDemoScene(): SceneDoc {
             initial: {
               id: "demo-item-2",
               tag: "div",
+              move: {
+                parentId: "demo-stage-list",
+                mode: "append",
+              },
               className: "demo-list-item",
               content: "ITEM 2",
               style: {
@@ -118,11 +201,16 @@ function temp__createDemoScene(): SceneDoc {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 backgroundColor: "#f7b267",
+                transform: "rotate(3deg) scale(1.01)",
+                transformOrigin: "center",
               },
             },
             actions: {
               "demo:item-2:add": {
                 move: { parentId: "demo-list", mode: "append" },
+              },
+              "demo:item-2:return-origin": {
+                move: { parentId: "demo-stage-list", mode: "append" },
               },
             },
           },
@@ -132,6 +220,10 @@ function temp__createDemoScene(): SceneDoc {
             initial: {
               id: "demo-item-3",
               tag: "div",
+              move: {
+                parentId: "demo-stage-list",
+                mode: "append",
+              },
               className: "demo-list-item",
               content: "ITEM 3",
               style: {
@@ -142,6 +234,8 @@ function temp__createDemoScene(): SceneDoc {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 backgroundColor: "#70c1b3",
+                transform: "rotate(-2deg) scale(0.99)",
+                transformOrigin: "center",
               },
             },
             actions: {
@@ -151,6 +245,9 @@ function temp__createDemoScene(): SceneDoc {
               "demo:item-3:to-first": {
                 move: { parentId: "demo-list", mode: "first" },
               },
+              "demo:item-3:return-origin": {
+                move: { parentId: "demo-stage-list", mode: "append" },
+              },
             },
           },
           "demo-item-4": {
@@ -159,6 +256,10 @@ function temp__createDemoScene(): SceneDoc {
             initial: {
               id: "demo-item-4",
               tag: "div",
+              move: {
+                parentId: "demo-stage-list",
+                mode: "append",
+              },
               className: "demo-list-item",
               content: "ITEM 4",
               style: {
@@ -169,11 +270,16 @@ function temp__createDemoScene(): SceneDoc {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 backgroundColor: "#247ba0",
+                transform: "rotate(2deg) scale(1.02)",
+                transformOrigin: "center",
               },
             },
             actions: {
               "demo:item-4:add": {
                 move: { parentId: "demo-list", mode: "append" },
+              },
+              "demo:item-4:return-origin": {
+                move: { parentId: "demo-stage-list", mode: "append" },
               },
             },
           },
@@ -183,6 +289,10 @@ function temp__createDemoScene(): SceneDoc {
             initial: {
               id: "demo-item-5",
               tag: "div",
+              move: {
+                parentId: "demo-stage-list",
+                mode: "append",
+              },
               className: "demo-list-item",
               content: "ITEM 5",
               style: {
@@ -193,11 +303,16 @@ function temp__createDemoScene(): SceneDoc {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 backgroundColor: "#b388eb",
+                transform: "rotate(-3deg) scale(1)",
+                transformOrigin: "center",
               },
             },
             actions: {
               "demo:item-5:add": {
                 move: { parentId: "demo-list", mode: "append" },
+              },
+              "demo:item-5:return-origin": {
+                move: { parentId: "demo-stage-list", mode: "append" },
               },
             },
           },
@@ -212,31 +327,51 @@ function temp__createDemoScene(): SceneDoc {
         events: [
           {
             ms: 0,
-            name: "demo:item-1:add",
+            name: "demo:lists:drift",
           },
           {
             ms: 1000,
-            name: "demo:item-2:add",
+            name: "demo:item-1:add",
           },
           {
             ms: 2000,
-            name: "demo:item-3:add",
+            name: "demo:item-2:add",
           },
           {
             ms: 3000,
-            name: "demo:item-4:add",
+            name: "demo:item-3:add",
           },
           {
             ms: 4000,
+            name: "demo:item-4:add",
+          },
+          {
+            ms: 5000,
             name: "demo:item-5:add",
           },
           {
-            ms: 5200,
+            ms: 6200,
             name: "demo:item-3:to-first",
           },
           {
-            ms: 6200,
-            name: "demo:item-1:remove-second",
+            ms: 7200,
+            name: "demo:item-1:return-origin",
+          },
+          {
+            ms: 7600,
+            name: "demo:item-2:return-origin",
+          },
+          {
+            ms: 8000,
+            name: "demo:item-3:return-origin",
+          },
+          {
+            ms: 8400,
+            name: "demo:item-4:return-origin",
+          },
+          {
+            ms: 8800,
+            name: "demo:item-5:return-origin",
           },
         ],
       },
@@ -245,32 +380,30 @@ function temp__createDemoScene(): SceneDoc {
 }
 
 /**
- * Creates a fixed runtime node map reused by nodeFactory.
+ * Checks whether one reference is a DOM Node.
  */
-function temp__createDemoNodeMap(containerNode: HTMLDivElement): Map<string, HTMLElement> {
-  const nodeByItemId = new Map<string, HTMLElement>();
+function temp__isDomNode(nodeRef: unknown): nodeRef is Node {
+  return typeof globalThis.Node !== "undefined" && nodeRef instanceof globalThis.Node;
+}
 
-  const itemIds = [
-    "demo-list",
-    "demo-trash-list",
-    "demo-item-1",
-    "demo-item-2",
-    "demo-item-3",
-    "demo-item-4",
-    "demo-item-5",
-  ];
+/**
+ * Mounts top-level demo list components into the container.
+ */
+function temp__mountDemoRootLists(containerNode: HTMLDivElement, player: PlayerFacade): void {
+  const registry = player.getRuntimeRegistry();
+  const rootListIds = ["demo-stage-list", "demo-list", "demo-trash-list"];
+  const rootNodes: Node[] = [];
 
-  for (const itemId of itemIds) {
-    const node = itemId.includes("list")
-      ? globalThis.document.createElement("section")
-      : globalThis.document.createElement("div");
+  for (const rootListId of rootListIds) {
+    const nodeRef = registry.getNodeById(rootListId);
+    if (!temp__isDomNode(nodeRef)) {
+      continue;
+    }
 
-    node.dataset.demoItemId = itemId;
-    nodeByItemId.set(itemId, node);
-    containerNode.append(node);
+    rootNodes.push(nodeRef);
   }
 
-  return nodeByItemId;
+  containerNode.replaceChildren(...rootNodes);
 }
 
 /**
@@ -389,7 +522,7 @@ export async function runPlayerPocDemo(): Promise<void> {
     <aside>
       <p class="eyebrow">Runtime V1</p>
       <h1>Player POC</h1>
-	      <p class="subtitle">List: 5 ajouts (1s), puis #3 passe #1, puis suppression de #2.</p>
+	      <p class="subtitle">Cas dur: inserts, puis retour de tous les items vers l'origine; la list cible derive et tourne.</p>
       <div class="demo-controls">
         <button id="demo-play-button" class="demo-button" type="button">Play</button>
         <button id="demo-rewind-button" class="demo-button demo-button-secondary" type="button">Rewind</button>
@@ -407,16 +540,10 @@ export async function runPlayerPocDemo(): Promise<void> {
   }
 
   containerNode.style.position = "relative";
-  const demoNodeByItemId = temp__createDemoNodeMap(containerNode);
 
   const animationAdapter = createAnimationAdapter(temp__createAnimeImplementation());
   const player = new PlayerFacade({
     animationAdapter,
-    createElementOptions: {
-      nodeFactory: (item) => {
-        return demoNodeByItemId.get(item.id);
-      },
-    },
   });
 
   const playerStateNode = globalThis.document.querySelector<HTMLDivElement>("#player-state");
@@ -443,6 +570,7 @@ export async function runPlayerPocDemo(): Promise<void> {
 
   const traceLines: string[] = [];
   let firstTraceMs: number | null = null;
+  let mountedRuntimeRevision = -1;
   let commandInFlight = false;
 
   function syncControlState(): void {
@@ -496,6 +624,11 @@ export async function runPlayerPocDemo(): Promise<void> {
   });
 
   player.onStateChange((state) => {
+    if (state.runtimeRevision !== mountedRuntimeRevision) {
+      temp__mountDemoRootLists(containerNode, player);
+      mountedRuntimeRevision = state.runtimeRevision;
+    }
+
     playerStateNode.textContent = `status=${state.status} timelineMs=${Math.round(state.timelineMs)} revision=${state.runtimeRevision}`;
     syncControlState();
   });
@@ -517,6 +650,9 @@ export async function runPlayerPocDemo(): Promise<void> {
   if (!initResult.ok) {
     throw new Error(`[demo] init failed: ${initResult.error.code}`);
   }
+
+  temp__mountDemoRootLists(containerNode, player);
+  mountedRuntimeRevision = player.getState().runtimeRevision;
 
   syncControlState();
 }

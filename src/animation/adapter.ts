@@ -14,6 +14,40 @@ type TransitionGroup = {
 }
 
 /**
+ * Applies one style cleanup marker on one transition target.
+ */
+function cleanupTransitionStyle(transition: TransitionRequest): void {
+  const cleanupProperty = transition.cleanupStyleProperty
+  if (cleanupProperty === undefined) {
+    return
+  }
+
+  const target = transition.target
+  if (typeof globalThis.Element !== 'undefined' && target instanceof globalThis.Element) {
+    const style = (target as HTMLElement).style
+    if (cleanupProperty === 'width') {
+      style.width = ''
+      return
+    }
+
+    style.height = ''
+    return
+  }
+
+  if (typeof target === 'object' && target !== null) {
+    const targetObject = target as Record<string, unknown>
+    const styleRecord =
+      typeof targetObject.style === 'object' && targetObject.style !== null
+        ? (targetObject.style as Record<string, unknown>)
+        : null
+
+    if (styleRecord !== null) {
+      delete styleRecord[cleanupProperty]
+    }
+  }
+}
+
+/**
  * Checks whether one transition does not change any value.
  */
 function isNoOpTransition(transition: TransitionRequest): boolean {
@@ -130,6 +164,15 @@ export function createAnimationAdapter(animeImplementation: AnimeImplementation)
     const transitionGroups = groupTransitions(transitions)
 
     for (const transitionGroup of transitionGroups) {
+      const transitionCleanupRunner = () => {
+        for (const transition of transitionGroup.transitions) {
+          cleanupTransitionStyle(transition)
+        }
+      }
+
+      transitionGroup.parameters.onComplete = transitionCleanupRunner
+      transitionGroup.parameters.complete = transitionCleanupRunner
+
       const animation = animeImplementation(transitionGroup.parameters)
       if (animation === null || animation === undefined) {
         continue

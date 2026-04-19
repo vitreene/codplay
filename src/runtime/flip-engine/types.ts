@@ -29,6 +29,8 @@ export type FlipSnapshot = {
   translateY: number
   matrix: Matrix2D
   transformOrigin: string
+  hasInlineWidth?: boolean
+  hasInlineHeight?: boolean
 }
 
 export type FlipPlanOptions = {
@@ -44,6 +46,9 @@ export type FlipTransitionState = {
   y?: number
   width?: number
   height?: number
+  rotate?: number
+  scaleX?: number
+  scaleY?: number
 }
 
 export type FlipTransitionRequest = {
@@ -54,6 +59,8 @@ export type FlipTransitionRequest = {
   duration: number
   easing?: string
   delayMs?: number
+  cleanupWidthAfterPlay?: boolean
+  cleanupHeightAfterPlay?: boolean
 }
 
 export type FlipPlanResult = {
@@ -80,6 +87,8 @@ export type FlipEngine = {
   capture: (entries: FlipEntry[]) => FlipSnapshot[]
   plan: (first: FlipSnapshot[], last: FlipSnapshot[], options?: FlipPlanOptions) => FlipPlanResult
   toAnimationTransitions: (transitions: FlipTransitionRequest[]) => TransitionRequest[]
+  applyInvert: (transitions: FlipTransitionRequest[]) => void
+  flushLayout: (entries: FlipEntry[]) => void
   run: (options: FlipRunOptions) => Promise<FlipRunResult>
 }
 

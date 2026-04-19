@@ -23,6 +23,8 @@ type FakeNode = {
   parentNode?: FakeNode
   x?: number
   y?: number
+  scaleX?: number
+  scaleY?: number
   setRect: (rect: RectLike) => void
   getBoundingClientRect: () => RectLike
 }
@@ -488,7 +490,99 @@ describe('Lot 08 - generic FLIP engine', () => {
     expect(node.style.transform).toBe('rotate(6deg)')
   })
 
-  it('L8-T10 repeated reorder runs do not accumulate drift', async () => {
+  it('L8-T10 keeps size channels consistent under parent scale transform', () => {
+    const engine = createFlipEngine()
+    const node = temp__createFakeNode({ left: 20, top: 10, width: 50, height: 30 })
+
+    const first = [
+      {
+        id: 'item-a',
+        nodeRef: node,
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 60,
+        parentMatrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+        transformValue: 'none',
+        translateX: 0,
+        translateY: 0,
+        matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+        transformOrigin: '50% 50%'
+      }
+    ]
+
+    const last = [
+      {
+        id: 'item-a',
+        nodeRef: node,
+        left: 20,
+        top: 10,
+        width: 50,
+        height: 30,
+        parentMatrix: { a: 0.5, b: 0, c: 0, d: 0.5, e: 0, f: 0 },
+        transformValue: 'none',
+        translateX: 0,
+        translateY: 0,
+        matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+        transformOrigin: '50% 50%'
+      }
+    ]
+
+    const planResult = engine.plan(first, last, { includeSize: true, includeTransformMatrix: true })
+    expect(planResult.transitions).toHaveLength(1)
+
+    const transition = planResult.transitions[0]
+    if (transition === undefined) {
+      throw new Error('Expected one FLIP transition')
+    }
+
+    expect(transition.from).toMatchObject({
+      x: -20,
+      y: -10
+    })
+    expect(transition.to).toMatchObject({
+      x: 0,
+      y: 0
+    })
+    expect(transition.from.scaleX).toBe(2)
+    expect(transition.from.scaleY).toBe(2)
+    expect(transition.to.scaleX).toBe(1)
+    expect(transition.to.scaleY).toBe(1)
+
+    engine.applyInvert(planResult.transitions)
+
+    expect(node.x).toBe(-20)
+    expect(node.y).toBe(-10)
+    expect(node.scaleX).toBe(2)
+    expect(node.scaleY).toBe(2)
+
+    const parentScaleX = 0.5
+    const parentScaleY = 0.5
+    const scaleX = transition.from.scaleX ?? 1
+    const scaleY = transition.from.scaleY ?? 1
+
+    const projectedWorldDeltaX = (transition.from.x ?? 0) * parentScaleX * scaleX
+    const projectedWorldDeltaY = (transition.from.y ?? 0) * parentScaleY * scaleY
+    const projectedWorldWidth = last[0]!.width * parentScaleX * scaleX
+    const projectedWorldHeight = last[0]!.height * parentScaleY * scaleY
+
+    expect(projectedWorldDeltaX).toBe(first[0]!.left - last[0]!.left)
+    expect(projectedWorldDeltaY).toBe(first[0]!.top - last[0]!.top)
+
+    if (transition.from.width !== undefined) {
+      expect(projectedWorldWidth).toBe(first[0]!.width)
+    } else {
+      expect(projectedWorldWidth).toBe(last[0]!.width)
+    }
+
+    if (transition.from.height !== undefined) {
+      expect(projectedWorldHeight).toBe(first[0]!.height)
+    } else {
+      expect(projectedWorldHeight).toBe(last[0]!.height)
+    }
+  })
+
+  it('L8-T11 repeated reorder runs do not accumulate drift', async () => {
     const frameCallbacks: Array<() => void> = []
     const engine = createFlipEngine({
       requestFrame: (callback) => {

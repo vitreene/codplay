@@ -31,6 +31,7 @@ export type TransitionRequest = {
   easing?: string
   delayMs?: number
   composition?: 'merge' | 'replace'
+  cleanupStyleProperty?: 'width' | 'height'
 }
 
 export type AnimationTraceEntry = {

@@ -558,3 +558,18 @@ Plan actif mis a jour:
 
 1. Phase D - FLIP reel
 2. Phase E - validation globale
+
+## Avancement de reprise (2026-04-19 - Phase D en cours)
+
+Execution technique appliquee:
+
+- wiring FLIP branche dans le runtime move path (orchestrateur composants)
+- capture FIRST/LAST sur touched set (source+cible+moved child) autour de la mutation `move + update`
+- generation transitions FLIP via moteur (`capture/plan/toAnimationTransitions`)
+- fusion en une seule passe animation avec les transitions explicites derivees (`style.to`)
+- rule "target list connue mais non montee => sans FLIP" appliquee
+
+Etat D:
+
+- branchement runtime FLIP: actif
+- points restants: finalisation checklist D (notamment formalisation complete reparent matrix + validation reference A/B1/B2/C)

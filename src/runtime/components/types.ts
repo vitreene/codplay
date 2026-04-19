@@ -1,4 +1,5 @@
 import type { AnimationResolvedAction } from '../../animation/types'
+import type { TransitionRequest } from '../../animation/types'
 import type { CreateElementOptions } from '../create-element'
 import type { ItemDoc, MoveCommand } from '../types'
 
@@ -122,4 +123,5 @@ export type RuntimeResolvedUpdate = {
 export type RuntimeUpdateRoutingResult = {
   appliedActionsCount: number
   animatableActions: AnimationResolvedAction[]
+  directTransitions: TransitionRequest[]
 }

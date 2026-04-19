@@ -297,7 +297,7 @@ export class RendererFacade implements RendererApi {
         }))
       )
 
-      const transitions = deriveSimpleTransitions(routed.animatableActions)
+      const transitions = [...deriveSimpleTransitions(routed.animatableActions), ...routed.directTransitions]
       const animation = runAnimationBatch(transitions, this.animationAdapter)
 
       return {

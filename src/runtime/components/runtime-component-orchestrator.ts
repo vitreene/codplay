@@ -1,6 +1,9 @@
 import type { AnimationResolvedAction } from '../../animation/types'
+import type { TransitionRequest } from '../../animation/types'
 import type { RuntimeElementMap, StoryDoc } from '../types'
 import type { MoveCommand } from '../types'
+import { createFlipEngine, type FlipEntry, type Matrix2D } from '../flip-engine'
+import { createTranslateMatrix, invertMatrix, multiplyMatrix } from '../flip-engine/matrix-2d'
 import { isDomNode } from './dom-component-adapter'
 import { ImageRuntimeComponent } from './image-runtime-component'
 import { ListRuntimeComponent } from './list-runtime-component'
@@ -60,6 +63,7 @@ function toRuntimeElementMap(
 export class RuntimeComponentOrchestrator {
   private readonly warn: RuntimeComponentWarningReporter
   private readonly warningKeys = new Set<string>()
+  private readonly flipEngine = createFlipEngine()
 
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
   private readonly componentByPersoId = new Map<string, RuntimeComponent>()
@@ -69,6 +73,10 @@ export class RuntimeComponentOrchestrator {
   private readonly mountedByPersoId = new Map<string, boolean>()
 
   private createElementOptions: import('../create-element').CreateElementOptions | undefined
+
+  private readonly flipZeroTolerance = 1e-3
+  private readonly flipCalibrationTolerancePx = 0.5
+  private readonly flipCalibrationMaxIterations = 5
 
   /**
    * Creates one component orchestrator with default built-in components.
@@ -156,13 +164,18 @@ export class RuntimeComponentOrchestrator {
 
       component.init(item.initial)
       const rootNode = component.render()
+      const isListComponent = item.type === 'list' && this.isRuntimeListComponent(component)
+
+      if (!isListComponent) {
+        this.detachNodeFromParent(rootNode)
+      }
 
       this.componentByPersoId.set(item.id, component)
       this.nodeByPersoId.set(item.id, rootNode)
       this.parentListByPersoId.set(item.id, null)
-      this.mountedByPersoId.set(item.id, false)
+      this.mountedByPersoId.set(item.id, isListComponent)
 
-      if (item.type === 'list' && this.isRuntimeListComponent(component)) {
+      if (isListComponent) {
         this.listByPersoId.set(item.id, component)
       }
     }
@@ -202,6 +215,7 @@ export class RuntimeComponentOrchestrator {
   routeUpdates(updates: RuntimeResolvedUpdate[]): RuntimeUpdateRoutingResult {
     this.warningKeys.clear()
     const animatableActions: AnimationResolvedAction[] = []
+    const directTransitions: TransitionRequest[] = []
     let appliedActionsCount = 0
     const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates)
 
@@ -223,6 +237,12 @@ export class RuntimeComponentOrchestrator {
       }
 
       const moveDecision = moveDecisionsByUpdateIndex.get(updateIndex)
+      const flipEntries =
+        moveDecision !== undefined && moveDecision !== null
+          ? this.collectFlipEntriesForMove(targetPersoId, moveDecision)
+          : []
+      const firstFlipSnapshots = flipEntries.length > 0 ? this.flipEngine.capture(flipEntries) : []
+
       if (moveDecision !== undefined && moveDecision !== null) {
         this.applyMoveForPerso({
           persoId: targetPersoId,
@@ -238,6 +258,43 @@ export class RuntimeComponentOrchestrator {
         eventSeq: update.eventSeq,
         action: update.resolvedAction.action as Record<string, unknown>
       })
+
+      if (firstFlipSnapshots.length > 0) {
+        const lastFlipSnapshots = this.flipEngine.capture(flipEntries)
+        const flipPlan = this.flipEngine.plan(firstFlipSnapshots, lastFlipSnapshots)
+        this.flipEngine.applyInvert(flipPlan.transitions)
+        this.flipEngine.flushLayout(flipEntries)
+        let firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
+
+        for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
+          const residual = this.computeFlipResidual(
+            firstFlipSnapshots,
+            firstFlipAppliedSnapshots,
+            targetPersoId
+          )
+
+          if (residual <= this.flipCalibrationTolerancePx) {
+            break
+          }
+
+          this.calibrateFlipTransitions(firstFlipSnapshots, firstFlipAppliedSnapshots, flipPlan.transitions)
+          this.flipEngine.applyInvert(flipPlan.transitions)
+          this.flipEngine.flushLayout(flipEntries)
+          firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
+        }
+
+        const flipTransitions = this.flipEngine.toAnimationTransitions(flipPlan.transitions)
+
+        for (const transition of flipTransitions) {
+          directTransitions.push({
+            ...transition,
+            eventId: update.resolvedAction.eventId,
+            eventName: update.resolvedAction.eventName,
+            listenerId: targetPersoId,
+            transitionId: `${transition.transitionId}-${update.resolvedAction.eventId}`
+          })
+        }
+      }
 
       const targetNode = this.nodeByPersoId.get(targetPersoId)
       if (targetNode !== undefined) {
@@ -255,7 +312,8 @@ export class RuntimeComponentOrchestrator {
 
     return {
       appliedActionsCount,
-      animatableActions
+      animatableActions,
+      directTransitions
     }
   }
 
@@ -436,6 +494,20 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
+   * Detaches one DOM node from its current parent when present.
+   */
+  private detachNodeFromParent(nodeRef: unknown): void {
+    if (!isDomNode(nodeRef)) {
+      return
+    }
+
+    const parentNode = nodeRef.parentNode
+    if (parentNode !== null && parentNode !== undefined) {
+      parentNode.removeChild(nodeRef)
+    }
+  }
+
+  /**
    * Emits one warning once per {eventSeq, code, persoId} key.
    */
   private warnOnce(
@@ -560,4 +632,209 @@ export class RuntimeComponentOrchestrator {
 
     return decisions
   }
+
+  /**
+   * Collects touched runtime nodes used as FLIP entries for one move command.
+   */
+  private collectFlipEntriesForMove(persoId: string, move: MoveCommand): FlipEntry[] {
+    if (move.flip === false) {
+      return []
+    }
+
+    const sourceListId = this.parentListByPersoId.get(persoId) ?? null
+    const targetListId = move.parentId
+    if (sourceListId === null && !this.mountedByPersoId.get(targetListId)) {
+      return []
+    }
+
+    const sourceList = sourceListId ? this.listByPersoId.get(sourceListId) ?? null : null
+    const targetList = this.listByPersoId.get(targetListId) ?? null
+    if (targetList === null) {
+      return []
+    }
+
+    if (this.mountedByPersoId.get(targetListId) === false) {
+      return []
+    }
+
+    const touchedIds = new Set<string>()
+    touchedIds.add(persoId)
+
+    for (const childId of sourceList?.getChildrenSnapshot() ?? []) {
+      touchedIds.add(childId)
+    }
+
+    for (const childId of targetList.getChildrenSnapshot()) {
+      touchedIds.add(childId)
+    }
+
+    const entries: FlipEntry[] = []
+    for (const touchedId of touchedIds) {
+      const nodeRef = this.nodeByPersoId.get(touchedId)
+      if (nodeRef === undefined || nodeRef === null) {
+        continue
+      }
+
+      entries.push({
+        id: touchedId,
+        nodeRef
+      })
+    }
+
+    return entries
+  }
+
+  /**
+   * Computes max absolute residual in world-space for one moved item.
+   */
+  private computeFlipResidual(
+    oldSnapshots: Array<{
+      id: string
+      left: number
+      top: number
+      width: number
+      height: number
+    }>,
+    firstFlipSnapshots: Array<{
+      id: string
+      left: number
+      top: number
+      width: number
+      height: number
+    }>,
+    movedPersoId: string
+  ): number {
+    const oldSnapshot = oldSnapshots.find((snapshot) => snapshot.id === movedPersoId)
+    const firstFlipSnapshot = firstFlipSnapshots.find((snapshot) => snapshot.id === movedPersoId)
+    if (!oldSnapshot || !firstFlipSnapshot) {
+      return 0
+    }
+
+    const dx = Math.abs(oldSnapshot.left - firstFlipSnapshot.left)
+    const dy = Math.abs(oldSnapshot.top - firstFlipSnapshot.top)
+    const dw = Math.abs(oldSnapshot.width - firstFlipSnapshot.width)
+    const dh = Math.abs(oldSnapshot.height - firstFlipSnapshot.height)
+    return Math.max(dx, dy, dw, dh)
+  }
+
+  /**
+   * Applies one correction pass so first FLIP frame matches old world snapshot.
+   */
+  private calibrateFlipTransitions(
+    oldSnapshots: Array<{
+      id: string
+      left: number
+      top: number
+      width: number
+      height: number
+      parentMatrix: Matrix2D
+      matrix: Matrix2D
+      translateX: number
+      translateY: number
+    }>,
+    firstFlipSnapshots: Array<{
+      id: string
+      left: number
+      top: number
+      width: number
+      height: number
+      parentMatrix: Matrix2D
+      matrix: Matrix2D
+      translateX: number
+      translateY: number
+    }>,
+    transitions: Array<{
+      transitionId: string
+      from: {
+        x?: number
+        y?: number
+        width?: number
+        height?: number
+      }
+    }>
+  ): void {
+    const oldById = new Map(oldSnapshots.map((snapshot) => [snapshot.id, snapshot]))
+    const firstById = new Map(firstFlipSnapshots.map((snapshot) => [snapshot.id, snapshot]))
+
+    for (const transition of transitions) {
+      const itemId = transition.transitionId.replace('flip-', '')
+      const oldSnapshot = oldById.get(itemId)
+      const firstFlipSnapshot = firstById.get(itemId)
+      if (!oldSnapshot || !firstFlipSnapshot) {
+        continue
+      }
+
+      const residualX = oldSnapshot.left - firstFlipSnapshot.left
+      const residualY = oldSnapshot.top - firstFlipSnapshot.top
+      const residualWidth = oldSnapshot.width - firstFlipSnapshot.width
+      const residualHeight = oldSnapshot.height - firstFlipSnapshot.height
+
+      const matrixForTranslation = multiplyMatrix(firstFlipSnapshot.parentMatrix, firstFlipSnapshot.matrix)
+      const matrixForSize = multiplyMatrix(
+        multiplyMatrix(firstFlipSnapshot.parentMatrix, firstFlipSnapshot.matrix),
+        createTranslateMatrix(-firstFlipSnapshot.translateX, -firstFlipSnapshot.translateY)
+      )
+
+      if (Math.abs(residualX) > this.flipZeroTolerance || Math.abs(residualY) > this.flipZeroTolerance) {
+        const localResidual = this.worldDeltaToLocalDelta(matrixForTranslation, residualX, residualY)
+        transition.from.x = (transition.from.x ?? 0) + localResidual.x
+        transition.from.y = (transition.from.y ?? 0) + localResidual.y
+      }
+
+      if (
+        transition.from.width !== undefined &&
+        transition.from.height !== undefined &&
+        (Math.abs(residualWidth) > this.flipZeroTolerance || Math.abs(residualHeight) > this.flipZeroTolerance)
+      ) {
+        const desiredLocalSize = this.worldSizeToLocalSize(matrixForSize, oldSnapshot.width, oldSnapshot.height)
+        transition.from.width = desiredLocalSize.width
+        transition.from.height = desiredLocalSize.height
+      }
+    }
+  }
+
+  /**
+   * Converts world-space translation drift into local channels.
+   */
+  private worldDeltaToLocalDelta(matrix: Matrix2D, worldDeltaX: number, worldDeltaY: number): { x: number; y: number } {
+    const inverseMatrix = invertMatrix(matrix)
+    if (inverseMatrix === null) {
+      return {
+        x: worldDeltaX,
+        y: worldDeltaY
+      }
+    }
+
+    return {
+      x: inverseMatrix.a * worldDeltaX + inverseMatrix.c * worldDeltaY,
+      y: inverseMatrix.b * worldDeltaX + inverseMatrix.d * worldDeltaY
+    }
+  }
+
+  /**
+   * Converts world-space box size to local width/height channels.
+   */
+  private worldSizeToLocalSize(matrix: Matrix2D, worldWidth: number, worldHeight: number): { width: number; height: number } {
+    const aa = Math.abs(matrix.a)
+    const bb = Math.abs(matrix.b)
+    const cc = Math.abs(matrix.c)
+    const dd = Math.abs(matrix.d)
+
+    const determinant = aa * dd - bb * cc
+    if (Math.abs(determinant) < 1e-8) {
+      return {
+        width: worldWidth,
+        height: worldHeight
+      }
+    }
+
+    const localWidth = (worldWidth * dd - worldHeight * cc) / determinant
+    const localHeight = (worldHeight * aa - worldWidth * bb) / determinant
+
+    return {
+      width: Math.max(0, localWidth),
+      height: Math.max(0, localHeight)
+    }
+  }
+
 }

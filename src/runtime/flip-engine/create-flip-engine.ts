@@ -170,6 +170,34 @@ function readCurrentTranslate(nodeRef: unknown): { x: number; y: number } {
 }
 
 /**
+ * Checks whether one node has one inline style value already defined.
+ */
+function hasInlineStyleValue(nodeRef: unknown, property: 'width' | 'height'): boolean {
+  if (isElementTarget(nodeRef)) {
+    const elementStyle = (nodeRef as HTMLElement).style
+    const styleValue = property === 'width' ? elementStyle.width : elementStyle.height
+    return styleValue.trim().length > 0
+  }
+
+  if (typeof nodeRef === 'object' && nodeRef !== null) {
+    const targetObject = nodeRef as Record<string, unknown>
+    const styleRecord =
+      typeof targetObject.style === 'object' && targetObject.style !== null
+        ? (targetObject.style as Record<string, unknown>)
+        : null
+
+    if (styleRecord === null) {
+      return false
+    }
+
+    const styleValue = styleRecord[property]
+    return typeof styleValue === 'string' && styleValue.trim().length > 0
+  }
+
+  return false
+}
+
+/**
  * Converts one world-space translation vector to local-space using one matrix.
  */
 function toLocalDelta(matrix: Matrix2D, worldDeltaX: number, worldDeltaY: number): { x: number; y: number } {
@@ -185,10 +213,65 @@ function toLocalDelta(matrix: Matrix2D, worldDeltaX: number, worldDeltaY: number
 }
 
 /**
+ * Resolves local width/height needed to match one world-space bbox size.
+ */
+function worldSizeToLocalSize(
+  matrix: Matrix2D,
+  worldWidth: number,
+  worldHeight: number
+): { width: number; height: number } {
+  const aa = Math.abs(matrix.a)
+  const bb = Math.abs(matrix.b)
+  const cc = Math.abs(matrix.c)
+  const dd = Math.abs(matrix.d)
+
+  const determinant = aa * dd - bb * cc
+  if (Math.abs(determinant) < 1e-8) {
+    return {
+      width: worldWidth,
+      height: worldHeight
+    }
+  }
+
+  const localWidth = (worldWidth * dd - worldHeight * cc) / determinant
+  const localHeight = (worldHeight * aa - worldWidth * bb) / determinant
+
+  return {
+    width: Math.max(0, localWidth),
+    height: Math.max(0, localHeight)
+  }
+}
+
+/**
+ * Decomposes one affine matrix into rotate/scale channels.
+ */
+function decomposeMatrix(matrix: Matrix2D): { rotateDeg: number; scaleX: number; scaleY: number } {
+  const scaleX = Math.hypot(matrix.a, matrix.b)
+  const safeScaleX = scaleX > 1e-8 ? scaleX : 1
+  const rotateRad = Math.atan2(matrix.b, matrix.a)
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+  const scaleY = determinant / safeScaleX
+
+  return {
+    rotateDeg: (rotateRad * 180) / Math.PI,
+    scaleX: safeScaleX,
+    scaleY: Math.abs(scaleY) > 1e-8 ? scaleY : 1
+  }
+}
+
+/**
  * Determines whether one transition state contains at least one animatable key.
  */
 function hasTransitionState(state: { x?: number; y?: number; width?: number; height?: number }): boolean {
-  return state.x !== undefined || state.y !== undefined || state.width !== undefined || state.height !== undefined
+  return (
+    state.x !== undefined ||
+    state.y !== undefined ||
+    state.width !== undefined ||
+    state.height !== undefined ||
+    (state as { rotate?: number }).rotate !== undefined ||
+    (state as { scaleX?: number }).scaleX !== undefined ||
+    (state as { scaleY?: number }).scaleY !== undefined
+  )
 }
 
 /**
@@ -212,10 +295,19 @@ function applyChannelState(target: unknown, state: { x?: number; y?: number; wid
       payload.y = state.y
     }
     if (state.width !== undefined) {
-      payload.width = state.width
+      payload.width = toPx(state.width)
     }
     if (state.height !== undefined) {
-      payload.height = state.height
+      payload.height = toPx(state.height)
+    }
+    if ((state as { rotate?: number }).rotate !== undefined) {
+      payload.rotate = (state as { rotate?: number }).rotate
+    }
+    if ((state as { scaleX?: number }).scaleX !== undefined) {
+      payload.scaleX = (state as { scaleX?: number }).scaleX
+    }
+    if ((state as { scaleY?: number }).scaleY !== undefined) {
+      payload.scaleY = (state as { scaleY?: number }).scaleY
     }
 
     if (Object.keys(payload).length > 0) {
@@ -226,6 +318,11 @@ function applyChannelState(target: unknown, state: { x?: number; y?: number; wid
 
   if (typeof target === 'object' && target !== null) {
     const mutableTarget = target as Record<string, unknown>
+    const mutableStyle =
+      typeof mutableTarget.style === 'object' && mutableTarget.style !== null
+        ? (mutableTarget.style as Record<string, unknown>)
+        : null
+
     if (state.x !== undefined) {
       mutableTarget.x = state.x
     }
@@ -234,9 +331,24 @@ function applyChannelState(target: unknown, state: { x?: number; y?: number; wid
     }
     if (state.width !== undefined) {
       mutableTarget.width = state.width
+      if (mutableStyle !== null) {
+        mutableStyle.width = toPx(state.width)
+      }
     }
     if (state.height !== undefined) {
       mutableTarget.height = state.height
+      if (mutableStyle !== null) {
+        mutableStyle.height = toPx(state.height)
+      }
+    }
+    if ((state as { rotate?: number }).rotate !== undefined) {
+      mutableTarget.rotate = (state as { rotate?: number }).rotate
+    }
+    if ((state as { scaleX?: number }).scaleX !== undefined) {
+      mutableTarget.scaleX = (state as { scaleX?: number }).scaleX
+    }
+    if ((state as { scaleY?: number }).scaleY !== undefined) {
+      mutableTarget.scaleY = (state as { scaleY?: number }).scaleY
     }
   }
 }
@@ -318,7 +430,9 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
         translateX: currentTranslate.x,
         translateY: currentTranslate.y,
         matrix: parseCssMatrix(transformState.transform),
-        transformOrigin: transformState.transformOrigin
+        transformOrigin: transformState.transformOrigin,
+        hasInlineWidth: hasInlineStyleValue(entry.nodeRef, 'width'),
+        hasInlineHeight: hasInlineStyleValue(entry.nodeRef, 'height')
       })
     }
 
@@ -349,14 +463,21 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
       const px = lastSnapshot.translateX
       const py = lastSnapshot.translateY
 
-      const transformMatrix = includeTransformMatrix
-        ? multiplyMatrix(
-            multiplyMatrix(lastSnapshot.parentMatrix, lastSnapshot.matrix),
-            createTranslateMatrix(-px, -py)
-          )
+      const oldCombinedMatrix = multiplyMatrix(firstSnapshot.parentMatrix, firstSnapshot.matrix)
+      const lastCombinedMatrix = multiplyMatrix(lastSnapshot.parentMatrix, lastSnapshot.matrix)
+      const fromSizeMatrix = includeTransformMatrix
+        ? multiplyMatrix(oldCombinedMatrix, createTranslateMatrix(-px, -py))
         : createIdentityMatrix()
-
-      const localDiff = includeTransformMatrix ? toLocalDelta(transformMatrix, dx, dy) : { x: dx, y: dy }
+      const toSizeMatrix = includeTransformMatrix
+        ? multiplyMatrix(lastCombinedMatrix, createTranslateMatrix(-px, -py))
+        : createIdentityMatrix()
+      const localDiff = includeTransformMatrix ? toLocalDelta(oldCombinedMatrix, dx, dy) : { x: dx, y: dy }
+      const inverseLastCombinedMatrix = invertMatrix(lastCombinedMatrix)
+      const inheritedTransformDelta =
+        includeTransformMatrix && inverseLastCombinedMatrix !== null
+          ? multiplyMatrix(inverseLastCombinedMatrix, oldCombinedMatrix)
+          : createIdentityMatrix()
+      const inheritedTransformChannels = decomposeMatrix(inheritedTransformDelta)
 
       const moved = Math.abs(localDiff.x) > 1e-3 || Math.abs(localDiff.y) > 1e-3
       const resized = Math.abs(firstSnapshot.width - lastSnapshot.width) > 1e-3 || Math.abs(firstSnapshot.height - lastSnapshot.height) > 1e-3
@@ -372,10 +493,44 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
       }
 
       if (includeSize && resized) {
-        fromState.width = firstSnapshot.width
-        toState.width = lastSnapshot.width
-        fromState.height = firstSnapshot.height
-        toState.height = lastSnapshot.height
+        const fromSize = includeTransformMatrix
+          ? worldSizeToLocalSize(fromSizeMatrix, firstSnapshot.width, firstSnapshot.height)
+          : { width: firstSnapshot.width, height: firstSnapshot.height }
+
+        const toSize = includeTransformMatrix
+          ? worldSizeToLocalSize(toSizeMatrix, lastSnapshot.width, lastSnapshot.height)
+          : { width: lastSnapshot.width, height: lastSnapshot.height }
+
+        if (Math.abs(fromSize.width - toSize.width) > 1e-3) {
+          fromState.width = fromSize.width
+          toState.width = toSize.width
+        }
+
+        if (Math.abs(fromSize.height - toSize.height) > 1e-3) {
+          fromState.height = fromSize.height
+          toState.height = toSize.height
+        }
+      }
+
+      if (includeTransformMatrix) {
+        const rotateDiff = inheritedTransformChannels.rotateDeg
+        const scaleXDiff = inheritedTransformChannels.scaleX
+        const scaleYDiff = inheritedTransformChannels.scaleY
+
+        if (Math.abs(rotateDiff) > 1e-3) {
+          ;(fromState as { rotate?: number }).rotate = rotateDiff
+          ;(toState as { rotate?: number }).rotate = 0
+        }
+
+        if (Math.abs(scaleXDiff - 1) > 1e-3) {
+          ;(fromState as { scaleX?: number }).scaleX = scaleXDiff
+          ;(toState as { scaleX?: number }).scaleX = 1
+        }
+
+        if (Math.abs(scaleYDiff - 1) > 1e-3) {
+          ;(fromState as { scaleY?: number }).scaleY = scaleYDiff
+          ;(toState as { scaleY?: number }).scaleY = 1
+        }
       }
 
       if (!hasTransitionState(fromState)) {
@@ -389,7 +544,9 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
         to: toState,
         duration,
         easing,
-        delayMs: index * staggerMs
+        delayMs: index * staggerMs,
+        cleanupWidthAfterPlay: fromState.width !== undefined && lastSnapshot.hasInlineWidth !== true,
+        cleanupHeightAfterPlay: fromState.height !== undefined && lastSnapshot.hasInlineHeight !== true
       })
     }
 
@@ -454,7 +611,8 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
           duration: transition.duration,
           easing: transition.easing,
           delayMs: transition.delayMs,
-          composition: 'merge'
+          composition: 'merge',
+          cleanupStyleProperty: transition.cleanupWidthAfterPlay ? 'width' : undefined
         })
       }
 
@@ -471,9 +629,74 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
           duration: transition.duration,
           easing: transition.easing,
           delayMs: transition.delayMs,
+          composition: 'merge',
+          cleanupStyleProperty: transition.cleanupHeightAfterPlay ? 'height' : undefined
+        })
+      }
+
+      if (
+        transition.from.rotate !== undefined &&
+        transition.to.rotate !== undefined &&
+        transition.from.rotate !== transition.to.rotate
+      ) {
+        animationTransitions.push({
+          transitionId: `${transition.transitionId}-rotate`,
+          eventId,
+          eventName,
+          listenerId,
+          property: 'rotate',
+          target: transition.nodeRef,
+          from: transition.from.rotate,
+          to: transition.to.rotate,
+          duration: transition.duration,
+          easing: transition.easing,
+          delayMs: transition.delayMs,
           composition: 'merge'
         })
       }
+
+      if (
+        transition.from.scaleX !== undefined &&
+        transition.to.scaleX !== undefined &&
+        transition.from.scaleX !== transition.to.scaleX
+      ) {
+        animationTransitions.push({
+          transitionId: `${transition.transitionId}-scale-x`,
+          eventId,
+          eventName,
+          listenerId,
+          property: 'scaleX',
+          target: transition.nodeRef,
+          from: transition.from.scaleX,
+          to: transition.to.scaleX,
+          duration: transition.duration,
+          easing: transition.easing,
+          delayMs: transition.delayMs,
+          composition: 'merge'
+        })
+      }
+
+      if (
+        transition.from.scaleY !== undefined &&
+        transition.to.scaleY !== undefined &&
+        transition.from.scaleY !== transition.to.scaleY
+      ) {
+        animationTransitions.push({
+          transitionId: `${transition.transitionId}-scale-y`,
+          eventId,
+          eventName,
+          listenerId,
+          property: 'scaleY',
+          target: transition.nodeRef,
+          from: transition.from.scaleY,
+          to: transition.to.scaleY,
+          duration: transition.duration,
+          easing: transition.easing,
+          delayMs: transition.delayMs,
+          composition: 'merge'
+        })
+      }
+
     }
 
     return animationTransitions
@@ -490,6 +713,13 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
     for (const transition of transitions) {
       applyChannelState(transition.nodeRef, transition.from)
     }
+  }
+
+  /**
+   * Applies one invert state batch without triggering playback.
+   */
+  function applyInvert(transitions: FlipTransitionRequest[]): void {
+    applyInvertState(transitions, true)
   }
 
   /**
@@ -541,6 +771,8 @@ export function createFlipEngine(options: FlipEngineOptions = {}): FlipEngine {
     capture: (entries) => capture(entries, false),
     plan,
     toAnimationTransitions,
+    applyInvert,
+    flushLayout,
     run
   }
 }
