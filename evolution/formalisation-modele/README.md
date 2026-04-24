@@ -44,6 +44,7 @@ Pre-specs / cadrage evolutif:
 - `18-socle-v1-grandes-lignes.md` (note de transition, consolidee dans le plan)
 - `session-context-2026-04-16.md` (journal de decisions recentes)
 - `session-context-2026-04-19.md` (cloture cycle FLIP + statut plan A-E)
+- `session-context-2026-04-20.md` (plan general API story/tracks/eventimes pour reprise)
 - `session-context-2026-04-10.md` (plan de reprise de session)
 
 ## Nettoyage documentaire
