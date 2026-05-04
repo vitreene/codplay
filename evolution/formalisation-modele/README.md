@@ -28,6 +28,9 @@ Specs V1 alignees sur ce plan:
 - `26-player-orchestration-v1.md` (orchestration Player, routing move)
 - `28-flip-overlay-world-mode-v1.md` (variant FLIP optionnelle, mode auteur overlay-world)
 - `29-flip-deux-variantes-principe-et-implementation.md` (note technique implementation locale + overlay-world)
+- `30-api-frontiere-public-interne-v1.md` (cadrage Phase 1 API story/tracks/eventimes)
+- `31-perso-spec-v1.md` (contrat normalise Perso V1)
+- `32-strap-spec-v1.md` (contrat normalise Strap V1)
 
 Pre-specs / cadrage evolutif:
 
@@ -45,6 +48,7 @@ Pre-specs / cadrage evolutif:
 - `session-context-2026-04-16.md` (journal de decisions recentes)
 - `session-context-2026-04-19.md` (cloture cycle FLIP + statut plan A-E)
 - `session-context-2026-04-20.md` (plan general API story/tracks/eventimes pour reprise)
+- `session-context-2026-04-24.md` (cadrage Phase 1: frontiere API + invariants)
 - `session-context-2026-04-10.md` (plan de reprise de session)
 
 ## Nettoyage documentaire

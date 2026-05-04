@@ -6,7 +6,7 @@ Definir le role d'une `Story` dans le socle V1:
 
 - orchestration locale deterministe
 - consommation d'events publics scene-level
-- production de tokens internes et d'events publics
+- production de tokens internes et d'events exportes scene-level
 - compatibilite multi-stories actives
 
 Le rendu est hors scope Story et reste de la responsabilite du `Renderer`.
@@ -24,10 +24,11 @@ Dans ce cadre:
 Flux principal:
 
 1. event public recu par le `Director`
-2. filtrage/mapping par les stories actives
-3. resolution locale (items/straps)
-4. emission d'events publics eventuels
-5. production de commits pour le `Renderer`
+2. filtrage/mapping inbound par les stories actives
+3. resolution locale (items/straps) et emission interne story
+4. passage outbound story (republish tel quel, transforme, ou ignore)
+5. emission publique scene-level via `Director`
+6. production de commits pour le `Renderer`
 
 ## Frontiere StoryDoc / runtime
 
@@ -66,8 +67,10 @@ Important:
 
 3. Unite locale d'emission
 
-- peut emettre des events publics a partir de traitements internes
-- emission immediate dans le meme cycle `Director`
+- recoit les emissions internes des persos/straps
+- decide explicitement ce qui sort en scene-level
+- peut republier tel quel ou transformer avant publication
+- emission publique immediate dans le meme cycle `Director`
 
 4. Unite locale de state
 
@@ -86,6 +89,72 @@ Important:
 - mapping `1 -> N`
 - renommage de signal
 - enrichment de donnees
+
+### Pipeline inbound/outbound
+
+- inbound: `event public scene -> listen -> tokens/evenements internes`
+- outbound: `emission interne perso/strap -> gate Story -> event public exporte?`
+- par defaut, une emission interne n'est pas publique (`private-by-default`)
+- publication externe uniquement par regle explicite d'export (`explicit-export`)
+
+### Interlocuteur unique scene
+
+- la scene et le player ne consomment que des events publies par la `Story`
+- `item` et `strap` ne publient jamais directement vers la scene
+- la `Story` est l'unique frontiere de repercussion event sortant
+
+## Contrat TS canonique Story (Phase 2)
+
+Types cibles (contract-first):
+
+```ts
+type EventVisibility = 'internal' | 'public'
+
+type StoryRef = {
+  storyId: string
+  instanceId?: string
+}
+
+type EventEnvelope<TPayload = unknown> = {
+  type: string
+  payload?: TPayload
+  source?: 'scene' | 'story' | 'item' | 'strap' | 'system'
+  visibility: EventVisibility
+  atMs?: number
+  meta?: Record<string, unknown>
+}
+
+type StoryContext = {
+  storyRef: StoryRef
+  nowMs: number
+  policyPreset: 'author' | 'user'
+}
+
+type StoryPublishDecision =
+  | { kind: 'drop' }
+  | { kind: 'passthrough' }
+  | { kind: 'transform'; event: EventEnvelope }
+
+type StoryTransition = {
+  statePatch?: Record<string, unknown>
+  internalEvents?: EventEnvelope[]
+  publishedEvents?: EventEnvelope[]
+  warnings?: string[]
+}
+
+type StoryRuntimeApi = {
+  receive: (event: EventEnvelope, context: StoryContext) => StoryTransition
+  emitInternal: (event: EventEnvelope, context: StoryContext) => StoryTransition
+  publish: (event: EventEnvelope, context: StoryContext) => StoryPublishDecision
+}
+```
+
+Contraintes de contrat:
+
+- `receive(...)` traite uniquement des events `visibility='public'`
+- `emitInternal(...)` force `visibility='internal'` en entree et en sortie locale
+- `publish(...)` est la seule operation autorisee a produire `visibility='public'`
+- un event publie est normalise/journalise par le `Director` avant diffusion globale
 
 Exemple d'intention:
 
@@ -132,8 +201,13 @@ Regles V1:
 - un strap recoit un event/token + context
 - un strap retourne un resultat de type:
   - `statePatch`
-  - `events`
+  - `internalEvents`
   - `sideEffects`
+
+Regle:
+
+- un strap ne publie jamais directement en scene-level
+- ses `internalEvents` repassent par le gate `Story.publish(...)`
 
 ### Replay `revoir`
 
@@ -177,6 +251,7 @@ Le `Director` garantit:
 
 - event public = scope scene
 - token interne = scope story uniquement
+- event interne emis par perso/strap = scope story tant qu'il n'est pas exporte
 
 3. State ownership
 
@@ -191,16 +266,23 @@ Le `Director` garantit:
 
 - meme entree publique + meme state + meme policy => meme suite interne
 
+6. Frontiere sortante unique
+
+- aucune emission directe `item/strap -> scene`
+- toute publication scene-level passe par la decision `Story.publish(...)`
+
 ## Diagramme de flux
 
 ```mermaid
 flowchart LR
   PUB[Event public scene] --> L[Story listen declaratif]
-  L --> TOK[Tokens internes story]
+  L --> TOK[Tokens/evenements internes story]
   TOK --> IT[Items actions]
   TOK --> ST[Straps]
-  IT --> EP[Events publics emis]
-  ST --> EP
+  IT --> EI[Events internes emis]
+  ST --> EI
+  EI --> G[Story gate publish]
+  G --> EP[Events publics exportes]
   EP --> PUB
 ```
 
