@@ -139,12 +139,9 @@ const straps: StrapCollection = {
 }
 ```
 
-## Points a formaliser (suite)
+## Lien de reference
 
-- definir la spec des `helpers` (`delay`, `repeat`, `loop`, `stagger`): signature, contraintes, erreurs, determinisme
-- definir le fournisseur des `helpers` dans l'architecture runtime (facade `Player` vs `Director`)
-- definir l'implementation runtime des `helpers` (pilotage ticker, scheduling, annulation, replay/seek)
-- definir les regles de codage et de test des `helpers` (unitaires + integration determinisme)
+- `37-strap-helpers-spec-v1.md`: contrat detaille des helpers runtime
 
 ## Invariants Strap V1
 

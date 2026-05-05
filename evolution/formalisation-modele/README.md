@@ -31,6 +31,12 @@ Specs V1 alignees sur ce plan:
 - `30-api-frontiere-public-interne-v1.md` (cadrage Phase 1 API story/tracks/eventimes)
 - `31-perso-spec-v1.md` (contrat normalise Perso V1)
 - `32-strap-spec-v1.md` (contrat normalise Strap V1)
+- `33-story-spec-v1.md` (contrat normalise Story V1)
+- `34-builder-spec-v1.md` (contrat normalise Builder V1)
+- `35-scene-spec-v1.md` (contrat normalise Scene V1)
+- `36-event-spec-v1.md` (enveloppe canonique Event V1)
+- `37-strap-helpers-spec-v1.md` (contrat helpers Strap V1)
+- `38-runtime-policy-events-v1.md` (garde-fous runtime events V1)
 
 Pre-specs / cadrage evolutif:
 
