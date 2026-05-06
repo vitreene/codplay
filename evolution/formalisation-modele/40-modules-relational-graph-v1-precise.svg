@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1080" viewBox="0 0 1720 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Codplay V1 - Graphe relationnel precis des modules</title>
+  <desc id="desc">Graphe precis des liaisons entre Scene, Story, Perso, Strap, Event, Builder, Player, Director, Renderer, CompiledScene et ResourceManifest.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0b1120; }
+      .panel { rx: 12; ry: 12; stroke-width: 2; }
+      .box { rx: 10; ry: 10; stroke-width: 2; }
+      .title { fill: #f3f7ff; font: 700 28px sans-serif; }
+      .subtitle { fill: #c4cdec; font: 400 14px sans-serif; }
+      .h { fill: #f3f7ff; font: 700 15px sans-serif; }
+      .t { fill: #dbe4ff; font: 400 12px sans-serif; }
+      .edge { stroke: #d2daf7; stroke-width: 2.2; fill: none; marker-end: url(#a); }
+      .dash { stroke-dasharray: 8 7; }
+      .el { fill: #eef3ff; font: 500 12px sans-serif; }
+    </style>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="#d2daf7" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1720" height="1080" />
+  <text class="title" x="38" y="52">Codplay V1 - Graphe relationnel precis (modules specifiés)</text>
+  <text class="subtitle" x="38" y="78">Liaisons explicites. Noms de structures: Scene, Story, Perso, Strap, Event, Builder, Player, Director, Renderer.</text>
+
+  <!-- Author + Build -->
+  <rect class="panel" x="28" y="112" width="820" height="430" fill="#1a2442" stroke="#6487d7" />
+  <text class="h" x="48" y="142">Auteur + Compilation</text>
+
+  <rect class="box" x="56" y="178" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="74" y="208">Scene</text>
+  <text class="t" x="74" y="230">topLevelStories, initialStoryId</text>
+  <text class="t" x="74" y="248">initial, listen, straps, tracks</text>
+
+  <rect class="box" x="322" y="178" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="340" y="208">Story</text>
+  <text class="t" x="340" y="230">children, listen, straps</text>
+  <text class="t" x="340" y="248">initial, init, state?</text>
+
+  <rect class="box" x="588" y="178" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="606" y="208">Perso</text>
+  <text class="t" x="606" y="230">type, initial</text>
+  <text class="t" x="606" y="248">actions, emit</text>
+
+  <rect class="box" x="322" y="320" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="340" y="350">Strap</text>
+  <text class="t" x="340" y="372">fonction stateless par name</text>
+  <text class="t" x="340" y="390">input event/state/context</text>
+
+  <rect class="box" x="56" y="320" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="74" y="350">Builder</text>
+  <text class="t" x="74" y="372">compile Scene + Story + Perso</text>
+  <text class="t" x="74" y="390">resout liens Strap + tracks</text>
+
+  <rect class="box" x="588" y="320" width="230" height="110" fill="#243565" stroke="#86a8f6" />
+  <text class="h" x="606" y="350">StoryEvent</text>
+  <text class="t" x="606" y="372">name, data, cascade, context</text>
+  <text class="t" x="606" y="390">listen = filtres</text>
+
+  <!-- Delivery -->
+  <rect class="panel" x="28" y="570" width="820" height="470" fill="#3f2b17" stroke="#d09c5b" />
+  <text class="h" x="48" y="600">Diffusion + Ressources</text>
+
+  <rect class="box" x="56" y="638" width="250" height="120" fill="#5d3b1f" stroke="#f2be77" />
+  <text class="h" x="74" y="668">CompiledScene (JSON)</text>
+  <text class="t" x="74" y="690">schemaVersion + hash</text>
+  <text class="t" x="74" y="708">artefact immuable diffusion</text>
+
+  <rect class="box" x="338" y="638" width="250" height="120" fill="#5d3b1f" stroke="#f2be77" />
+  <text class="h" x="356" y="668">ResourceManifest</text>
+  <text class="t" x="356" y="690">url, type, policy</text>
+  <text class="t" x="356" y="708">media/font/css</text>
+
+  <rect class="box" x="620" y="638" width="198" height="120" fill="#5d3b1f" stroke="#f2be77" />
+  <text class="h" x="638" y="668">Exporters</text>
+  <text class="t" x="638" y="690">plugins externes</text>
+  <text class="t" x="638" y="708">xml / autres systems</text>
+
+  <rect class="box" x="56" y="792" width="762" height="214" fill="#5d3b1f" stroke="#f2be77" />
+  <text class="h" x="74" y="822">Preload Module (separe du Builder)</text>
+  <text class="t" x="74" y="844">consomme ResourceManifest; prepare medias, fonts, css avant lecture Player.</text>
+  <text class="t" x="74" y="864">mount target DOM: hors Scene, fourni a l instanciation Player.</text>
+
+  <!-- Runtime -->
+  <rect class="panel" x="878" y="112" width="814" height="928" fill="#193b31" stroke="#5dbfa1" />
+  <text class="h" x="898" y="142">Runtime Player</text>
+
+  <rect class="box" x="906" y="178" width="240" height="110" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="924" y="208">Player</text>
+  <text class="t" x="924" y="230">facade publique</text>
+  <text class="t" x="924" y="248">init/play/pause/seek/emit</text>
+
+  <rect class="box" x="1180" y="178" width="228" height="110" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="1198" y="208">Director</text>
+  <text class="t" x="1198" y="230">normalise RuntimeEvent</text>
+  <text class="t" x="1198" y="248">eventSeq, journal, commits</text>
+
+  <rect class="box" x="1442" y="178" width="220" height="110" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="1460" y="208">Renderer</text>
+  <text class="t" x="1460" y="230">applique commits</text>
+  <text class="t" x="1460" y="248">update nodes runtime</text>
+
+  <rect class="box" x="1180" y="320" width="228" height="98" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="1198" y="350">Clock / Ticker</text>
+  <text class="t" x="1198" y="372">reference temporelle unique</text>
+  <text class="t" x="1198" y="390">cycle play/pause/stop</text>
+
+  <rect class="box" x="906" y="320" width="240" height="98" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="924" y="350">schedule</text>
+  <text class="t" x="924" y="372">delay/repeat/loop/stagger</text>
+  <text class="t" x="924" y="390">destructurable + import alias</text>
+
+  <rect class="box" x="1442" y="320" width="220" height="98" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="1460" y="350">Runtime Policy</text>
+  <text class="t" x="1460" y="372">sameTickHandling</text>
+  <text class="t" x="1460" y="390">warnings/garde-fous</text>
+
+  <rect class="box" x="906" y="452" width="756" height="170" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="924" y="482">Pipeline event</text>
+  <text class="t" x="924" y="504">StoryEvent -> RuntimeEvent (eventId, eventSeq, applyAtMs, context)</text>
+  <text class="t" x="924" y="524">listen filtres; ordre: straps puis emit; collisions meme tick -> policy.</text>
+  <text class="t" x="924" y="544">bubbling enfant->parent auto; cascade=true jusqu a Scene sans interception intermediaire.</text>
+
+  <rect class="box" x="906" y="654" width="756" height="128" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="924" y="684">RuntimeEvent</text>
+  <text class="t" x="924" y="706">eventId, eventSeq, name, data, applyAtMs, cascade, context</text>
+  <text class="t" x="924" y="726">applyAtMs obligatoire, assigne par runtime/Director.</text>
+
+  <rect class="box" x="906" y="812" width="756" height="194" fill="#235548" stroke="#81e6ca" />
+  <text class="h" x="924" y="842">Contraintes V1</text>
+  <text class="t" x="924" y="864">- listen.on unique dans Story et Scene (doublon = erreur auteur)</text>
+  <text class="t" x="924" y="884">- tracks obligatoire en diffusion, peut etre vide</text>
+  <text class="t" x="924" y="904">- state runtime optionnel (undefined possible)</text>
+  <text class="t" x="924" y="924">- noms systeme reserves par convention (scene:*, story:*, runtime:*)</text>
+
+  <!-- precise edges author/build -->
+  <path class="edge" d="M286 233 L322 233" />
+  <text class="el" x="292" y="223">contient stories</text>
+
+  <path class="edge" d="M552 233 L588 233" />
+  <text class="el" x="556" y="223">contient persos</text>
+
+  <path class="edge" d="M437 288 L437 320" />
+  <text class="el" x="448" y="307">reference straps</text>
+
+  <path class="edge" d="M552 375 L588 375" />
+  <text class="el" x="558" y="365">produit/consomme</text>
+
+  <path class="edge" d="M286 375 L322 375" />
+  <text class="el" x="292" y="365">compile</text>
+
+  <path class="edge" d="M286 375 L286 638" />
+  <text class="el" x="296" y="510">produit</text>
+
+  <path class="edge" d="M286 375 L338 638" />
+  <text class="el" x="322" y="520">produit</text>
+
+  <path class="edge" d="M286 638 L620 638" />
+  <text class="el" x="434" y="626">source exporters</text>
+
+  <path class="edge" d="M588 698 L818 880" />
+  <text class="el" x="676" y="796">alimente preload</text>
+
+  <!-- cross edges to runtime -->
+  <path class="edge" d="M306 698 L906 233" />
+  <text class="el" x="558" y="454">load CompiledScene</text>
+
+  <path class="edge" d="M818 840 L906 369" />
+  <text class="el" x="830" y="620">ressources pretes</text>
+
+  <path class="edge dash" d="M818 864 L906 864" />
+  <text class="el" x="832" y="852">mount target (hors Scene)</text>
+
+  <!-- runtime edges -->
+  <path class="edge" d="M1146 233 L1180 233" />
+  <text class="el" x="1152" y="223">route commandes</text>
+
+  <path class="edge" d="M1408 233 L1442 233" />
+  <text class="el" x="1414" y="223">commits</text>
+
+  <path class="edge" d="M1294 288 L1294 320" />
+  <text class="el" x="1304" y="307">pilote temps</text>
+
+  <path class="edge" d="M1026 288 L1026 320" />
+  <text class="el" x="1036" y="307">expose</text>
+
+  <path class="edge" d="M1146 369 L1180 369" />
+  <text class="el" x="1136" y="357">meme scheduler</text>
+
+  <path class="edge" d="M1294 418 L1294 452" />
+  <text class="el" x="1304" y="438">cadence pipeline</text>
+
+  <path class="edge" d="M1552 418 L1552 452" />
+  <text class="el" x="1562" y="438">applique regles</text>
+
+  <path class="edge" d="M1026 418 L1026 452" />
+  <text class="el" x="1038" y="438">planifie events</text>
+
+  <path class="edge" d="M1294 622 L1294 654" />
+  <text class="el" x="1304" y="642">normalise vers</text>
+
+  <path class="edge dash" d="M1552 622 L1552 654" />
+  <text class="el" x="1562" y="642">trace decisions</text>
+
+  <path class="edge" d="M1294 782 L1294 812" />
+  <text class="el" x="1304" y="802">contraintes runtime</text>
+
+  <!-- legend -->
+  <rect class="box" x="28" y="20" width="0" height="0" fill="none" stroke="none" />
+</svg>

@@ -17,8 +17,21 @@ type ListenEmit = {
   cascade?: boolean
 }
 
+type ListenTransform = {
+  name: string
+  options?: Record<string, unknown>
+}
+
+type ListenRuntimeInput = {
+  event: ListenEmit
+  state: Record<string, unknown> | undefined
+  meta: Record<string, unknown>
+  context: Record<string, unknown>
+}
+
 type ListenRule = {
   on: string
+  transform?: ListenTransform[]
   emit?: ListenEmit[]
   straps?: string[]
 }
@@ -29,7 +42,7 @@ type SceneDef = {
   topLevelStories: string[]
   initialStoryId: string
   initial: Record<string, unknown> | undefined
-  straps: string[]
+  straps: string[] | undefined
   listen: ListenRule[]
   state?: Record<string, unknown> | undefined
   init: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
@@ -48,15 +61,20 @@ type SceneDef = {
 - l'organisation interne des stories composees est portee par chaque `Story` (champ `children`).
 - `Scene` expose une forme globale equivalente a une `Story`: `initial`, `straps`, `listen`, `init`, `state`.
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
-- `straps` est obligatoire dans le contrat, et peut etre vide (`[]`).
+- `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - dans `Scene.listen`, `straps` est facultatif sur chaque regle.
 - les regles `listen` de `Scene` sont des filtres.
 - dans `Scene`, `listen.on` doit etre unique par nom d'event.
 - doublon de `listen.on` dans `Scene`: erreur auteur.
+- `transform` est facultatif et peut contenir plusieurs etapes.
+- les etapes `transform` sont executees dans l'ordre de declaration.
+- `transform` consomme le meme `ListenRuntimeInput` que les `straps` de la regle.
+- `transform` ne renvoie que de la `data` (pas d'event).
 - `listen=[]` n'applique aucun filtrage: les events entrants sont redistribues tels quels.
 - quand `listen` contient des regles, seuls les events correspondants sont redistribues.
-- pour une regle `listen` qui declare `straps` et `emit`, l'ordre est: `straps` puis `emit`.
+- pour une regle `listen`, l'ordre est: `transform` puis `straps` puis `emit`.
+- `transform` et `straps` partagent la meme entree runtime; seule la sortie differe.
 - dans `straps`, les noms sont executes dans l'ordre de declaration (gauche -> droite).
 - en cas d'erreur strap, le mode par defaut V1 continue la chaine avec warning.
 - ce comportement reste pilotable par policy runtime.
@@ -134,7 +152,7 @@ Sortie Builder canonique:
 ```ts
 type CompiledScene = {
   schemaVersion: string
-  hash: string
+  createdAt: string
   scene: SceneDef
   resources: ResourceManifest
 }
@@ -146,6 +164,8 @@ Contraintes:
 - les validations d'integrite de hierarchie sont resolues au build.
 
 ## Invariants Scene V1
+
+Reference transversale: `102-final-v1-invariants-transverses.md`.
 
 - `Scene` orchestre le global; `Story` orchestre le local.
 - `topLevelStories` est la seule autorite scene-level sur la hierarchie narrative.

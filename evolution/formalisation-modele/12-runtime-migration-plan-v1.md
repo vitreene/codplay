@@ -4,6 +4,11 @@
 
 Plan de travail actif pour preparer la migration code runtime.
 
+Note de lecture V1 actuelle:
+
+- document de transition (non normatif face au corpus `31-38` et `43-50`)
+- la terminologie historique `events publics` se lit `events runtime`
+
 Ce document traduit les specs V1 en etapes d'implementation concretes:
 
 - `plan-consolide.md`

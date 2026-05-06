@@ -4,6 +4,11 @@
 
 Document de cadrage Phase 1 (contract-first) pour le chantier API `story` / `tracks` / `eventimes`.
 
+Note de lecture V1 actuelle:
+
+- document de transition (non normatif face au corpus `31-38` et `43-50`)
+- la terminologie historique `public/interne` decrit une etape de cadrage precedente
+
 Ce document fixe:
 
 - la frontiere API publique vs API runtime interne

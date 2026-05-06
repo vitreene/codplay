@@ -11,7 +11,7 @@ Figer une base unique pour:
 - la definition d'un `Strap`
 - sa signature d'execution dans une `Story`
 - l'usage des helpers temporels pilotes par runtime
-- la production d'events internes/publics via la `Story`
+- la production d'events runtime via la `Story`
 
 ## Definition
 
@@ -21,6 +21,7 @@ Un `Strap` est une fonction stateless enregistree dans une collection partagee.
 - un `Strap` est appele par la `Story` sur un event
 - un `Strap` ne met jamais a jour de node
 - un `Strap` retourne ou planifie des events a reinjecter dans le pipeline `Story`
+- la transformation pure de `data` est portee par `listen.transform` (pas par la sortie strap)
 
 ## Contrat canonique
 
@@ -62,7 +63,7 @@ type StrapOutput = {
   warnings?: string[]
 }
 
-type StrapFn = (input: StrapInput) => StrapOutput | void
+type StrapFn = (input: StrapInput) => Promise<StrapOutput | void>
 
 type StrapCollection = Record<string, StrapFn>
 ```
@@ -78,14 +79,21 @@ type StrapCollection = Record<string, StrapFn>
 
 - l'appel au `Strap` est declenche par la `Story`
 - le `Strap` est execute dans le cycle runtime courant
+- un `Strap` est asynchrone par defaut
 - les emissions differees passent uniquement par `helpers` (runtime/ticker)
+- un `Strap` renvoie des events, pas une donnee de retour metier directe
 
-3. Sorties
+3. Ordre d'execution
+
+- dans une meme regle, les `straps` sont executes et attends dans l'ordre de declaration
+- `emit` est evalue apres completion des `straps` de la regle
+
+4. Sorties
 
 - un `Strap` produit des events via `events` (immediat) ou `helpers` (differe)
-- la `Story` determine la portee finale (`internal` ou `public`) selon son pipeline
+- la `Story` determine la portee finale selon `cascade` et son pipeline
 
-4. Side-effects
+5. Side-effects
 
 - les side-effects externes passent par des events adresses a l'API Scene/runtime
 - un `Strap` n'accede pas directement a des IO externes hors API runtime exposee

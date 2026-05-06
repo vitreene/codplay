@@ -4,6 +4,11 @@
 
 Reference V1 pour l'emission d'events publics depuis les interactions utilisateur DOM.
 
+Note de lecture V1 actuelle:
+
+- document de transition (non normatif face au corpus `31-38` et `43-50`)
+- `event public` y designe `event runtime`
+
 ## Preambule - intention
 
 Un `Perso` peut declarer des interactions utilisateur sans script imperative.

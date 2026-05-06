@@ -5,6 +5,11 @@
 Document de cadrage macro V1.
 Il fixe les decisions principales deja validees avant la reecriture detaillee des specs et du player.
 
+Note de lecture V1 actuelle:
+
+- document de transition (non normatif face au corpus `31-38` et `43-50`)
+- la terminologie historique `event public` se lit `event runtime`
+
 Etat courant:
 
 - consolide dans `plan-consolide.md`

@@ -13,7 +13,7 @@ Definir un Builder capable de produire un artefact compact et stable pour la lec
 - livrable unique: `CompiledScene`
 - format canonique: `JSON`
 - artefact immuable apres compilation
-- artefact versionne (`schemaVersion`) et verifie (`hash`)
+- artefact versionne (`schemaVersion`) et date (`createdAt`)
 
 ## Contrat d'entree/sortie
 
@@ -58,7 +58,7 @@ Exigences V1:
 Meta obligatoire:
 
 - `schemaVersion`
-- `hash`
+- `createdAt`
 
 ## Exports externes
 
@@ -77,6 +77,7 @@ Contenu minimal V1:
 - `url`
 - `type` (video, audio, image, font, css)
 - `policy` (cache, version, hash, priority)
+- `hash` appartient uniquement a la policy ressource (pas a la meta `CompiledScene`)
 
 Exemple de forme:
 
@@ -121,7 +122,7 @@ Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 ## Invariants Builder V1
 
 - `CompiledScene` JSON est la source canonique de diffusion
-- `schemaVersion + hash` sont obligatoires
+- `schemaVersion + createdAt` sont obligatoires
 - le Builder ne charge pas les ressources; il produit leur manifeste
 - les exports externes passent par plugins, hors coeur canonique
 - l'artefact compile est immuable

@@ -8,12 +8,17 @@ Le principe retenu:
 
 - expression auteur possible en structure recursive
 - compilation canonique par track
-- execution pilotee par events publics
+- execution pilotee par events runtime
+
+## Cadre diffusion V1
+
+- `tracks` est obligatoire au niveau `Scene` en mode diffusion
+- `tracks` peut etre vide (`{}`) si la sequence est principalement event-driven
 
 ## Position dans le Player
 
 - les Eventimes sont traites cote `Director`
-- le `Director` compile/ordonne les emissions publiques
+- le `Director` compile/ordonne les emissions runtime
 - le `Renderer` ne consomme pas les Eventimes bruts
 
 ## Entree auteur
@@ -31,15 +36,18 @@ La sortie utile runtime est orientee track.
 Chaque track compilee porte au minimum:
 
 - `trackId`
+- `order`
+- `source`
 - `active`
 - `events[]` ordonnes
+
+Dans ce modele V1, un `track` est lui-meme la ligne d'events pilotable.
 
 Chaque event compile porte le noyau Event V1:
 
 - `eventId`
 - `name`
 - `applyAtMs`
-- `source`
 - `data?`
 
 Puis, a l'execution, le `Director` assigne `eventSeq`.
@@ -64,13 +72,14 @@ L'ajout dynamique est autorise en V1.
 Contraintes:
 
 - append-only
-- uniquement via events publics
+- uniquement via events runtime
 - pas de mutation directe externe des structures runtime
 
 Exemples d'ajout:
 
 - ajout d'events a une track existante
 - ajout d'une nouvelle track
+- ajout d'events "live" pendant l'execution
 
 ## Controle activation tracks
 
@@ -93,23 +102,23 @@ Semantique V1:
 
 ## Ordonnancement runtime
 
-Ordre canonique des events publics:
+Ordre canonique des events runtime:
 
 1. `applyAtMs`
 2. `eventSeq` a egalite
 
-Les events issus des tracks rejoignent le flux public global du `Director`.
+Les events issus des tracks rejoignent le flux runtime global du `Director`.
 
-## Events publics entrants (user/host)
+## Events entrants (user/host)
 
-Les events publics entrants (ex: issus de `Perso.emit`) passent aussi par le `Director`.
+Les events entrants (ex: issus de `Perso.emit`) passent aussi par le `Director`.
 
 Pipeline V1:
 
-1. normalisation event (`eventId`, `eventSeq`, `applyAtMs`)
+1. normalisation event (`eventId`, `eventSeq`, `applyAtMs`, `context`)
 2. routage vers gestionnaire Eventime
 3. application Eventime uniquement si event de pilotage (ex: `tracks:set`)
-4. insertion dans le flux public canonique
+4. insertion dans le flux runtime canonique
 5. journalisation canonique
 
 Invariant:
@@ -161,7 +170,11 @@ Reactions runtime:
 
 3. Integrite
 
-- ajout dynamique uniquement par events publics
+- ajout dynamique uniquement par events runtime
+
+4. Live
+
+- les events live ajoutes en runtime restent soumis au meme ordonnancement canonique
 
 ## Diagramme simple
 
@@ -170,7 +183,7 @@ flowchart LR
   A[Eventime auteur] --> C[Compilation par track]
   C --> T[Tracks canoniques]
   T --> D[Director]
-  D --> E[Events publics ordonnes]
+  D --> E[Events runtime ordonnes]
   E --> R[Renderer via commits]
 ```
 

@@ -14,9 +14,9 @@ Le principe est de rester simple:
 
 Le modele couvre:
 
-- events publics traites par le `Director`
+- events runtime traites par le `Director`
 - journal canonique replay
-- ordre d'execution scene-level
+- ordre d'execution scene-level et story-level
 
 Il ne couvre pas encore:
 
@@ -25,9 +25,10 @@ Il ne couvre pas encore:
 
 ## Principe global
 
-- tout event est public a l'echelle scene
-- toutes les stories actives peuvent le recevoir
-- filtrage et mapping restent de la responsabilite des stories
+- un event entre dans un flux runtime unique
+- les stories filtrent les events via `listen`
+- `cascade` porte la remontee de l'event jusqu'a `Scene`
+- aucun adressage nominatif de story
 
 ## Enveloppe minimale V1
 
@@ -37,7 +38,8 @@ Champs requis:
 - `eventSeq`: sequence monotone globale
 - `name`: nom d'event
 - `applyAtMs`: temps cible base sur le `Timer` commun
-- `source`: source logique (`user | director | system | replay`)
+- `context`: origine runtime (`source`, `storyId?`, `persoId?`, `userEvent?`)
+- `cascade`: propagation (`true` ou `false`)
 
 Champs optionnels:
 
@@ -72,15 +74,16 @@ Le journal canonique est tenu par le `Director`.
 Regles:
 
 - ecriture apres normalisation
-- journalisation de tous les events publics traites
+- journalisation de tous les events runtime traites
 - tokens internes de `listen` non journalises (derivables)
 
-## Evenements internes vs publics
+## Events locaux et remontee
 
-- events publics: scopes scene, journalises
-- tokens internes story: scopes story, non publics, non journalises
+- un event local reste dans le domaine story tant que `cascade=false`
+- `cascade=true` remonte jusqu'a `Scene` sans interception intermediaire
+- tokens internes story: scopes story, non journalises
 
-Un token interne peut emettre un event public:
+Un token interne peut emettre un event runtime:
 
 - emission immediate dans le meme cycle `Director`
 - attribution du `eventSeq` suivant
@@ -98,24 +101,26 @@ Reaction runtime:
 
 - depend de la policy d'execution (`author`/`user`) via configuration
 
-## Extensions futures (hors V1 minimal)
+## Extensions eventuelles (hors V1 minimal)
 
-Champs possibles plus tard:
+Ces extensions ne sont pas un objectif de version predefini.
+
+Elles seront introduites uniquement si un besoin concret apparait:
 
 - correlation
-- domain/time refs enrichies
+- references de contexte enrichies
 - traces fines par etape
 
-Ces extensions ne doivent pas casser le noyau minimal V1.
+Ces evolutions ne doivent pas casser le noyau minimal V1.
 
 ## Diagramme simple
 
 ```mermaid
 flowchart LR
-  IN[Event public entrant] --> N[Normalisation Director]
+  IN[Event entrant] --> N[Normalisation Director]
   N --> J[Journal canonique]
   N --> D[Dispatch stories]
-  D --> OUT[Events publics sortants]
+  D --> OUT[Events sortants]
   OUT --> N
 ```
 

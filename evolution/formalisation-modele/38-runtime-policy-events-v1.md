@@ -13,6 +13,7 @@ Poser un cadre minimal de garde-fous runtime, volontairement succinct en V1, pui
 Cette policy s'applique aux events:
 
 - entrants (`Player.emit`, `Perso.emit`)
+- produits par `listen.transform[]`
 - produits par `listen.emit[]`
 - produits par `Strap` (immediat ou helper)
 - produits par `player.schedule.*`

@@ -19,7 +19,7 @@ Composition du Player:
 Flux principal:
 
 1. `Builder` compile vers une structure consommable runtime
-2. `Director` traite les events publics, maintient le state, produit des commits
+2. `Director` traite les events runtime, maintient le state, produit des commits
 3. `Renderer` applique les commits et retourne uniquement les erreurs
 
 ## Responsabilites
@@ -39,12 +39,12 @@ Le Builder ne doit pas:
 
 ### Director
 
-- normaliser tous les events publics
+- normaliser tous les events runtime
 - conserver ou generer `eventId`
 - assigner `eventSeq` monotone global
 - tenir le journal canonique replay
 - appliquer `listen`, state story, straps
-- emettre des events publics consequents
+- emettre des events consequents
 - produire des commits resolus vers le Renderer
 - appliquer les policies runtime via configuration
 
@@ -124,7 +124,8 @@ Enveloppe minimale V1:
 - `eventSeq`
 - `name`
 - `applyAtMs`
-- `source`
+- `context`
+- `cascade`
 - `data?`
 - `meta?`
 
@@ -138,7 +139,9 @@ Regles:
 
 - compilation canonique par track
 - ajout dynamique runtime append-only
-- ajout dynamique uniquement via events publics
+- ajout dynamique uniquement via events runtime
+- support des events "live" pendant l'execution
+- en V1, un track est l'unite minimale pilotable (pas de sous-lignes dans le track)
 
 Controle canonique:
 
@@ -161,8 +164,9 @@ Semantique:
 
 - `Story.state` runtime-only
 - `listen` declaratif compilable, mapping `1 -> N`
+- `listen` fonctionne comme filtre declaratif
 - sorties `listen` internes (non publiques, non journalisees)
-- emission publique immediate possible depuis un token interne
+- emission immediate possible depuis un token interne
 - fin explicite via `story:end`
 - etat terminal sticky apres `story:end`
 
@@ -172,7 +176,7 @@ Journal canonique:
 
 - tenu par le Director
 - ecriture apres normalisation
-- tous les events publics traites sont journalises
+- tous les events runtime traites sont journalises
 
 Modes:
 

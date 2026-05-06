@@ -4,6 +4,11 @@
 
 Reference V1 minimale pour l'integration du Player dans une application hote.
 
+Note de lecture V1 actuelle:
+
+- document de transition (non normatif face au corpus `31-38` et `43-50`)
+- la terminologie historique `events publics` se lit `events runtime`
+
 Cette API pilote un `Player` compose de:
 
 - `Director`

@@ -1,67 +1,87 @@
 # Formalisation du modele
 
-Ce dossier formalise le modele cible oriente events pour le nouveau player.
+Ce dossier formalise le modele cible oriente events pour le player Codplay.
 
-## Reference V1 active
+## Documents finaux (100+)
 
-La source principale est:
+Point d'entree recommande:
 
-- `plan-consolide.md`
+- `100-final-v1-index.md`
 
-Specs V1 alignees sur ce plan:
+Syntheses finales:
+
+- `101-final-v1-glossaire.md`
+- `102-final-v1-invariants-transverses.md`
+- `103-final-v1-validation-minimale.md`
+
+## Corpus normatif V1
+
+Reference normative prioritaire:
+
+- `31-perso-spec-v1.md`
+- `32-strap-spec-v1.md`
+- `33-story-spec-v1.md`
+- `34-builder-spec-v1.md`
+- `35-scene-spec-v1.md`
+- `36-event-spec-v1.md`
+- `37-strap-helpers-spec-v1.md`
+- `38-runtime-policy-events-v1.md`
+- `43-authoring-api-v1.md`
+- `44-builder-api-v1.md`
+- `45-player-api-v1.md`
+- `46-preload-api-v1.md`
+- `47-scene-side-effects-api-v1.md`
+- `48-error-catalog-v1.md`
+- `49-track-manager-spec-v1.md`
+- `50-compiled-scene-schema-v1.md`
+
+Documents de support alignes au corpus (explication/contexte):
 
 - `02-story-model.md`
 - `03-event-model.md`
 - `04-eventime-model.md`
 - `06-runtime-contract.md`
+- `42-vue-ensemble-flux-projet-v1.md`
+
+## Documents de transition (non normatifs)
+
+Ces documents restent utiles pour le contexte, mais ne font pas autorite en cas de divergence:
+
+- `plan-consolide.md`
 - `10-api-host-v1.md`
 - `11-runtime-context-mapping-v1.md`
-- `12-runtime-migration-plan-v1.md` (objectif 2: plan de migration code)
-- `13-sequence-user-view-progress-v1.md` (progression percue sequence)
-- `16-base-component-v1.md` (contrat composant generique)
-- `17-user-events-emit-v1.md` (interactions utilisateur -> events publics)
-- `19-text-component-v1.md` (spec composant text)
-- `22-image-component-v1.md` (spec composant image)
-- `23-list-component-v1.md` (spec composant list)
-- `24-runtime-log-policy-v1.md` (spec-cadre logs/traces runtime)
-- `25-flip-runtime-core-v1.md` (spec runtime FLIP, calcul unique)
-- `26-player-orchestration-v1.md` (orchestration Player, routing move)
-- `28-flip-overlay-world-mode-v1.md` (variant FLIP optionnelle, mode auteur overlay-world)
-- `29-flip-deux-variantes-principe-et-implementation.md` (note technique implementation locale + overlay-world)
-- `30-api-frontiere-public-interne-v1.md` (cadrage Phase 1 API story/tracks/eventimes)
-- `31-perso-spec-v1.md` (contrat normalise Perso V1)
-- `32-strap-spec-v1.md` (contrat normalise Strap V1)
-- `33-story-spec-v1.md` (contrat normalise Story V1)
-- `34-builder-spec-v1.md` (contrat normalise Builder V1)
-- `35-scene-spec-v1.md` (contrat normalise Scene V1)
-- `36-event-spec-v1.md` (enveloppe canonique Event V1)
-- `37-strap-helpers-spec-v1.md` (contrat helpers Strap V1)
-- `38-runtime-policy-events-v1.md` (garde-fous runtime events V1)
+- `12-runtime-migration-plan-v1.md`
+- `13-sequence-user-view-progress-v1.md`
+- `14-component-system-v1-draft.md`
+- `15-list-component-v1-checklist.md`
+- `16-base-component-v1.md`
+- `17-user-events-emit-v1.md`
+- `18-socle-v1-grandes-lignes.md`
+- `19-text-component-v1.md`
+- `20-text-advanced-pre-spec.md`
+- `21-text-micro-animations-v1.md`
+- `22-image-component-v1.md`
+- `23-list-component-v1.md`
+- `24-runtime-log-policy-v1.md`
+- `25-flip-runtime-core-v1.md`
+- `26-player-orchestration-v1.md`
+- `27-flip-overlay-world-space-pre-spec.md`
+- `28-flip-overlay-world-mode-v1.md`
+- `29-flip-deux-variantes-principe-et-implementation.md`
+- `30-api-frontiere-public-interne-v1.md`
 
-Pre-specs / cadrage evolutif:
-
-- `20-text-advanced-pre-spec.md` (evolution texte enrichi, micro-animations, transitions)
-- `21-text-micro-animations-v1.md` (contrat micro-animations texte)
-- `27-flip-overlay-world-space-pre-spec.md` (options FLIP overlay/world-space pour overlap list)
-
-## Notes de contexte / transition
+## Notes de contexte
 
 - `00-bilan-orientation.md`
 - `00-perimetre-builder.md`
-- `14-component-system-v1-draft.md` (draft systeme composants)
-- `15-list-component-v1-checklist.md` (checklist deploiement composant List)
-- `18-socle-v1-grandes-lignes.md` (note de transition, consolidee dans le plan)
-- `session-context-2026-04-16.md` (journal de decisions recentes)
-- `session-context-2026-04-19.md` (cloture cycle FLIP + statut plan A-E)
-- `session-context-2026-04-20.md` (plan general API story/tracks/eventimes pour reprise)
-- `session-context-2026-04-24.md` (cadrage Phase 1: frontiere API + invariants)
-- `session-context-2026-04-10.md` (plan de reprise de session)
+- `session-context-2026-04-10.md`
+- `session-context-2026-04-16.md`
+- `session-context-2026-04-19.md`
+- `session-context-2026-04-20.md`
+- `session-context-2026-04-24.md`
 
-## Nettoyage documentaire
+## Regle de lecture
 
-Les notes historiques pre-consolidation ont ete retirees du dossier pour eviter toute ambiguite sur la reference V1 active.
-
-Regle de lecture:
-
+- en cas de divergence, le "Corpus normatif V1" prime
 - les `session-context-*` restent non normatifs
-- en cas de divergence, la reference est la section "Reference V1 active"
+- la terminologie historique "event public" des documents de transition se lit comme "event runtime" dans le corpus normatif

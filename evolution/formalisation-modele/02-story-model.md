@@ -5,8 +5,8 @@
 Definir le role d'une `Story` dans le socle V1:
 
 - orchestration locale deterministe
-- consommation d'events publics scene-level
-- production de tokens internes et d'events exportes scene-level
+- consommation d'events runtime
+- production de tokens internes et d'events runtime sortants
 - compatibilite multi-stories actives
 
 Le rendu est hors scope Story et reste de la responsabilite du `Renderer`.
@@ -23,27 +23,28 @@ Dans ce cadre:
 
 Flux principal:
 
-1. event public recu par le `Director`
+1. event runtime recu par le `Director`
 2. filtrage/mapping inbound par les stories actives
-3. resolution locale (items/straps) et emission interne story
-4. passage outbound story (republish tel quel, transforme, ou ignore)
-5. emission publique scene-level via `Director`
+3. resolution locale (persos/straps) et emission interne story
+4. execution `straps` puis `emit` (si regle `listen` match)
+5. propagation locale ou remontee parent/scene selon `cascade`
 6. production de commits pour le `Renderer`
 
 ## Frontiere StoryDoc / runtime
 
 `StoryDoc` reste descriptif.
 
-- decrit le contenu (items, actions, listen declaratif)
+- decrit le contenu (persos, actions, listen declaratif)
 - ne porte pas le state runtime mutable
-- ne contient pas de hook `init` scriptable en V1
+- contient les donnees statiques `initial` (potentiellement `undefined`)
+- contient `init(input?)` pour initialiser le state runtime
 
 Le state d'execution est runtime-only.
 
-### Items/persos: creation runtime par type
+### Persos: creation runtime par type
 
 - `StoryDoc` decrit les persos (`id`, `type`, `initial`, `actions`, `emit?`) sans creer de node
-- la creation des elements runtime a partir de `item.type` est hors scope Story
+- la creation des elements runtime a partir de `perso.type` est hors scope Story
 - cette creation est portee par le `Renderer` (au `load`) et retourne des `RuntimeElement`
 - ordre de resolution cible: module custom (`ModuleRegistry`) puis noyau (`text`/`img`/`list`)
 - en cas de type inconnu, le comportement depend de la policy runtime (deterministe)
@@ -57,20 +58,20 @@ Important:
 
 1. Unite locale de filtrage
 
-- recoit tous les events publics
+- recoit les events runtime entrants
 - decide ce qu'elle consomme via ses regles `listen`
 
 2. Unite locale de transformation
 
-- transforme un event public en un ou plusieurs tokens internes
+- transforme un event entrant en un ou plusieurs tokens internes
 - peut enrichir les donnees des tokens internes
 
 3. Unite locale d'emission
 
 - recoit les emissions internes des persos/straps
-- decide explicitement ce qui sort en scene-level
-- peut republier tel quel ou transformer avant publication
-- emission publique immediate dans le meme cycle `Director`
+- decide explicitement ce qui ressort en event runtime
+- peut republier tel quel ou transformer avant remontee
+- emission immediate dans le meme cycle `Director`
 
 4. Unite locale de state
 
@@ -83,82 +84,40 @@ Important:
 
 - `listen` est declaratif et compilable
 - `listen` n'est pas scriptable en V1
+- `listen` fonctionne comme filtre
 
 ### Capacites
 
 - mapping `1 -> N`
 - renommage de signal
 - enrichment de donnees
+- canal `transform` pour transformer uniquement la `data`
+- `straps` facultatifs sur chaque regle
+- ordre par regle: `transform` puis `straps` puis `emit`
+- ordre dans `straps`: gauche -> droite
+- `listen=[]` = aucun filtrage (pass-through)
 
 ### Pipeline inbound/outbound
 
-- inbound: `event public scene -> listen -> tokens/evenements internes`
-- outbound: `emission interne perso/strap -> gate Story -> event public exporte?`
-- par defaut, une emission interne n'est pas publique (`private-by-default`)
-- publication externe uniquement par regle explicite d'export (`explicit-export`)
+- inbound: `event runtime -> listen -> tokens/evenements internes`
+- outbound: `emission interne perso/strap -> event runtime sortant`
+- `cascade=false` (ou absent): portee locale
+- `cascade=true`: remontee jusqu'a `Scene` sans interception intermediaire
 
 ### Interlocuteur unique scene
 
-- la scene et le player ne consomment que des events publies par la `Story`
-- `item` et `strap` ne publient jamais directement vers la scene
+- `Perso` et `Strap` ne publient jamais directement vers la scene
 - la `Story` est l'unique frontiere de repercussion event sortant
 
-## Contrat TS canonique Story (Phase 2)
+## Contrat V1 de reference
 
-Types cibles (contract-first):
+Le contrat normatif detaille de `Story` est porte par:
 
-```ts
-type EventVisibility = 'internal' | 'public'
-
-type StoryRef = {
-  storyId: string
-  instanceId?: string
-}
-
-type EventEnvelope<TPayload = unknown> = {
-  type: string
-  payload?: TPayload
-  source?: 'scene' | 'story' | 'item' | 'strap' | 'system'
-  visibility: EventVisibility
-  atMs?: number
-  meta?: Record<string, unknown>
-}
-
-type StoryContext = {
-  storyRef: StoryRef
-  nowMs: number
-  policyPreset: 'author' | 'user'
-}
-
-type StoryPublishDecision =
-  | { kind: 'drop' }
-  | { kind: 'passthrough' }
-  | { kind: 'transform'; event: EventEnvelope }
-
-type StoryTransition = {
-  statePatch?: Record<string, unknown>
-  internalEvents?: EventEnvelope[]
-  publishedEvents?: EventEnvelope[]
-  warnings?: string[]
-}
-
-type StoryRuntimeApi = {
-  receive: (event: EventEnvelope, context: StoryContext) => StoryTransition
-  emitInternal: (event: EventEnvelope, context: StoryContext) => StoryTransition
-  publish: (event: EventEnvelope, context: StoryContext) => StoryPublishDecision
-}
-```
-
-Contraintes de contrat:
-
-- `receive(...)` traite uniquement des events `visibility='public'`
-- `emitInternal(...)` force `visibility='internal'` en entree et en sortie locale
-- `publish(...)` est la seule operation autorisee a produire `visibility='public'`
-- un event publie est normalise/journalise par le `Director` avant diffusion globale
+- `33-story-spec-v1.md`
 
 Exemple d'intention:
 
-- entree publique: `fire`
+- entree: `fire`
 - sorties internes:
   - token `fire-base`
   - token `firework.create` avec data `{ quantity: 5 }`
@@ -166,7 +125,6 @@ Exemple d'intention:
 ### Portee
 
 - les sorties `listen` sont des tokens internes story
-- ces tokens ne sont pas publics
 - ces tokens ne sont pas journalises (derivables)
 
 ## Story state V1
@@ -174,6 +132,7 @@ Exemple d'intention:
 ### Regle principale
 
 - `Story.state` est runtime-only
+- `Story.state` peut rester `undefined` s'il n'est pas utilise
 
 ### Comportement seek/pause
 
@@ -182,13 +141,13 @@ Exemple d'intention:
 
 ### Reset logique
 
-- rollback logique complet via event public `scene:replay-from-zero`
+- rollback logique complet via event `scene:replay-from-zero`
 
 ## Fin de story
 
 Regles V1:
 
-- une story se termine via event public explicite `story:end`
+- une story se termine via event explicite `story:end`
 - `story:end` est idealement emis par la story
 - etat terminal sticky apres `story:end`
 - une story sticky ne redevient active que par reset explicite ou replay depuis zero
@@ -199,15 +158,12 @@ Regles V1:
 
 - un strap n'a pas de state propre
 - un strap recoit un event/token + context
-- un strap retourne un resultat de type:
-  - `statePatch`
-  - `internalEvents`
-  - `sideEffects`
+- un strap retourne des events (ou rien), pas une donnee metier directe
 
 Regle:
 
 - un strap ne publie jamais directement en scene-level
-- ses `internalEvents` repassent par le gate `Story.publish(...)`
+- ses `internalEvents` repassent par la story
 
 ### Replay `revoir`
 
@@ -221,7 +177,8 @@ Note:
 ## Multi-stories et instanciation
 
 - plusieurs stories peuvent etre actives en parallele
-- les events publics sont diffuses globalement
+- un enfant remonte automatiquement vers son parent
+- une remontee globale passe par `cascade=true`
 - un perso runtime appartient a une seule instance de story
 - l'adressage runtime des cibles reste composite:
   - `(storyInstanceId, itemId, targetId?)`
@@ -232,7 +189,7 @@ Le `Director` garantit:
 
 - ordre canonique par `eventSeq` monotone global
 - a egalite temporelle, `eventSeq` tranche
-- emission d'events publics consequents dans le meme cycle avec `eventSeq` suivant
+- emission d'events consequents dans le meme cycle avec `eventSeq` suivant
 
 ## Erreurs et policy
 
@@ -247,9 +204,8 @@ Le `Director` garantit:
 - regles `listen` compilables
 - aucune sortie interne vide
 
-2. Separation public/interne
+2. Separation local/interne
 
-- event public = scope scene
 - token interne = scope story uniquement
 - event interne emis par perso/strap = scope story tant qu'il n'est pas exporte
 
@@ -264,25 +220,25 @@ Le `Director` garantit:
 
 5. Determinisme
 
-- meme entree publique + meme state + meme policy => meme suite interne
+- meme entree runtime + meme state + meme policy => meme suite interne
 
 6. Frontiere sortante unique
 
-- aucune emission directe `item/strap -> scene`
-- toute publication scene-level passe par la decision `Story.publish(...)`
+- aucune emission directe `perso/strap -> scene`
+- toute repercussion sortante passe par la story
 
 ## Diagramme de flux
 
 ```mermaid
 flowchart LR
-  PUB[Event public scene] --> L[Story listen declaratif]
+  PUB[Event runtime entrant] --> L[Story listen declaratif]
   L --> TOK[Tokens/evenements internes story]
-  TOK --> IT[Items actions]
+  TOK --> IT[Persos actions]
   TOK --> ST[Straps]
   IT --> EI[Events internes emis]
   ST --> EI
-  EI --> G[Story gate publish]
-  G --> EP[Events publics exportes]
+  EI --> G[Story gate event]
+  G --> EP[Events sortants + cascade]
   EP --> PUB
 ```
 

@@ -1,5 +1,13 @@
 # Plan consolide - socle V1 Player event-based
 
+## Statut
+
+Document de transition.
+
+- non normatif pour la V1 actuelle
+- utile comme trace de cadrage et de migration
+- en cas de divergence, le corpus normatif reference dans `README.md` prime
+
 ## Objectif
 
 Figer une base V1 deterministe pour le Player, avant d'ouvrir le sujet scripting auteur.

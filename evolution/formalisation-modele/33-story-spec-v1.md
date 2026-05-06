@@ -28,8 +28,21 @@ type ListenEmit = {
   cascade?: boolean
 }
 
+type ListenTransform = {
+  name: string
+  options?: Record<string, unknown>
+}
+
+type ListenRuntimeInput = {
+  event: StoryEvent
+  state: StoryState
+  meta: Record<string, unknown>
+  context: Record<string, unknown>
+}
+
 type ListenRule = {
   on: string
+  transform?: ListenTransform[]
   emit?: ListenEmit[]
   straps?: string[]
 }
@@ -42,7 +55,7 @@ type StoryDef = {
   children?: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
-  straps: string[]
+  straps: string[] | undefined
   listen: ListenRule[]
   state?: StoryState
   init: (input?: StoryInitInput) => StoryState
@@ -53,9 +66,8 @@ type StoryDef = {
 
 1. Structure
 
-- une `Story` declare `id`, `persos`, `straps`, `listen`, `init`.
 - une `Story` declare `id`, `initial`, `persos`, `straps`, `listen`, `init`.
-- `straps` est obligatoire dans le contrat, et peut etre vide (`[]`).
+- `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `children` reference ses stories enfants par identifiant.
@@ -80,6 +92,10 @@ type StoryDef = {
 - les regles `listen` sont des filtres.
 - dans une `Story`, `listen.on` doit etre unique par nom d'event.
 - doublon de `listen.on` dans une meme `Story`: erreur auteur.
+- `transform` est facultatif et peut contenir plusieurs etapes.
+- les etapes `transform` sont executees dans l'ordre de declaration.
+- `transform` consomme le meme `ListenRuntimeInput` que les `straps` de la regle.
+- `transform` ne renvoie que de la `data` (pas d'event).
 - `emit` est facultatif et permet la redistribution native `1 -> N`.
 - `straps` est facultatif sur une regle `listen`.
 - en absence de `emit`, l'event entrant est redistribue tel quel.
@@ -88,11 +104,13 @@ type StoryDef = {
 
 4. Pipeline d'execution
 
-- ordre canonique obligatoire: `listen -> straps -> persos`.
+- ordre canonique obligatoire: `listen -> transform -> straps -> emit -> persos`.
 - les events produits sont reinjectes dans le pipeline `Story`.
 - l'ordre de traitement est stable selon l'ordre de declaration des regles.
-- pour une regle `listen` qui declare `straps` et `emit`, l'ordre est: `straps` puis `emit`.
+- pour une regle `listen`, l'ordre est: `transform` puis `straps` puis `emit`.
+- `transform` et `straps` partagent la meme entree runtime; seule la sortie differe.
 - dans `straps`, les noms sont executes dans l'ordre de declaration (gauche -> droite).
+- les `straps` sont asynchrones par defaut et sont attendus sequentiellement.
 - en cas d'erreur strap, le mode par defaut V1 continue la chaine avec warning.
 - ce comportement reste pilotable par policy runtime.
 - en cas de collision de noms d'events au meme tick (sorties strap + `emit`), l'arbitrage suit `sameTickHandling` de la policy runtime.
@@ -111,10 +129,10 @@ type StoryDef = {
 - `story:start` et `story:end` sont les events lifecycle standard V1.
 - ces noms lifecycle sont reserves par convention pour les events systeme Story.
 
-7. Visibilite
+7. Sortie Story
 
-- la decision interne/public est prise en sortie `Story` (`outbound`).
 - la `Story` reste l'interlocuteur unique de la `Scene`.
+- la portee de sortie est portee par `cascade`.
 
 8. Determinisme
 
@@ -159,6 +177,8 @@ const storyCounter: StoryDef = {
 ```
 
 ## Invariants Story V1
+
+Reference transversale: `102-final-v1-invariants-transverses.md`.
 
 - une `Story` orchestre ses `persos` et ses `straps` sans bypass `Scene`.
 - `listen` redistribue nativement les events sans imposer un strap.
