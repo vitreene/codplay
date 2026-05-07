@@ -1,0 +1,97 @@
+# Event spec V1 - enveloppe canonique
+
+## Statut
+
+Spec normative V1 pour les events dans Codplay.
+
+## Objectif
+
+Figer une enveloppe unique d'event pour la compilation, l'execution runtime, le replay et l'observabilite.
+
+## Contrat canonique
+
+```ts
+type EventContext = {
+  source: "scene" | "story" | "perso" | "strap" | "system"
+  storyId?: string
+  persoId?: string
+  userEvent?: string
+}
+
+type StoryEvent = {
+  name: string
+  data?: Record<string, unknown>
+  cascade?: boolean
+  context?: EventContext
+}
+
+type RuntimeEvent = {
+  eventId: string
+  eventSeq: number
+  name: string
+  data?: Record<string, unknown>
+  cascade: boolean
+  applyAtMs: number
+  context: EventContext
+  meta?: Record<string, unknown>
+}
+```
+
+## Regles normatives
+
+1. Enveloppe unique
+
+- `StoryEvent` est la forme de travail dans le pipeline Story.
+- `RuntimeEvent` est la forme normalisee, journalisee par le Director.
+
+2. Nommage
+
+- `name` est obligatoire.
+- la convention V1 recommande un namespace explicite: `domaine:entite:action`.
+- les events cibles perso utilisent l'identifiant perso en `name`.
+- les noms systeme (`scene:*`, `story:*`, `runtime:*`) sont reserves par convention pour le moteur.
+- en V1, le nommage reste conventionnel: aucun blocage automatique compile-time n'est impose par cette spec.
+
+3. Propagation
+
+- `cascade` est booleen.
+- `cascade: false` ou absent: domaine local.
+- `cascade: true`: remontee vers `Scene` sans interception intermediaire.
+
+4. Context
+
+- `context` est rempli et preserve par le runtime.
+- `context` est obligatoire dans `RuntimeEvent`.
+- un event issu de `Perso.emit` renseigne `context.persoId` et `context.userEvent`.
+- les donnees metier et utilisateur (ex: `x`, `y` d'un `mousemove`) sont portees par `event.data`, pas par `context`.
+
+5. Determinisme
+
+- `eventSeq` est assigne uniquement par le Director.
+- `applyAtMs` est assigne par le runtime/Director pour tous les events normalises.
+- cette regle inclut les events utilisateur haute frequence.
+- a entree identique, l'ordre final des `RuntimeEvent` est identique.
+
+6. Payload
+
+- aucune limite normative de taille de payload n'est imposee en V1.
+
+## Exemple
+
+```json
+{
+  "name": "counter_progress",
+  "data": { "progress": 42.5 },
+  "cascade": true,
+  "context": {
+    "source": "strap",
+    "storyId": "story-counter"
+  }
+}
+```
+
+## Invariants Event V1
+
+- un event n'adresse jamais une story cible par identifiant.
+- `context` est present dans les events runtime.
+- `eventSeq` est l'autorite unique d'ordre runtime.

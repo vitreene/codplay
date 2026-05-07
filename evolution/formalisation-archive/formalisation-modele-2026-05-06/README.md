@@ -2,6 +2,18 @@
 
 Ce dossier formalise le modele cible oriente events pour le player Codplay.
 
+## Gouvernance documentaire
+
+Le point d'entree officiel est desormais a la racine projet:
+
+- `formalisation/README.md`
+
+Indexes de reference:
+
+- `formalisation/v1-index.md`
+- `formalisation/transitoire-index.md`
+- `formalisation/plan-ecartement.md`
+
 ## Documents finaux (100+)
 
 Point d'entree recommande:
