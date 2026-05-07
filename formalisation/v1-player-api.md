@@ -16,6 +16,13 @@ type PlayerApi = {
     mountTarget: unknown
     compiledScene: CompiledScene
     resourceManifest?: ResourceManifest
+    runtimePolicy?: {
+      masterClock?: {
+        unique?: boolean
+        previousMasterAction?: "pause" | "stop"
+        fallbackToTicker?: boolean
+      }
+    }
   }) => Promise<ApiResult<void>>
 
   play: () => Promise<ApiResult<void>>
@@ -34,6 +41,17 @@ type PlayerApi = {
 }
 ```
 
+Etat minimal complete:
+
+```ts
+type PlayerStateSnapshot = {
+  status: "idle" | "ready" | "playing" | "paused" | "seeking" | "error"
+  timelineMs: number
+  clockSource: "ticker" | "master"
+  activeMasterPersoId?: string
+}
+```
+
 ## Regles V1
 
 - `mountTarget` est fourni au `Player` et reste hors `Scene`.
@@ -42,6 +60,8 @@ type PlayerApi = {
 - `schedule` utilise le meme scheduler runtime que les straps.
 - l'execution de `schedule` suit le lifecycle `play/pause/resume/stop/destroy`.
 - toutes les emissions runtime passent par policies actives.
+- si un master est actif, `timelineMs` suit le temps de ce master.
+- si aucun master actif n'est disponible, `timelineMs` suit le ticker standard.
 
 ## Notes
 

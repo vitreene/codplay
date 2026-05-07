@@ -50,6 +50,13 @@ type ListenRule = {
 type StoryInitInput = Record<string, unknown>
 type StoryState = Record<string, unknown> | undefined
 
+type StoryEventimeNode = {
+  name: string
+  startAt: number
+  data?: Record<string, unknown>
+  events?: StoryEventimeNode[]
+}
+
 type StoryDef = {
   id: string
   children?: string[]
@@ -57,6 +64,7 @@ type StoryDef = {
   persos: Perso[]
   straps: string[] | undefined
   listen: ListenRule[]
+  eventimes?: StoryEventimeNode[]
   state?: StoryState
   init: (input?: StoryInitInput) => StoryState
 }
@@ -139,6 +147,23 @@ type StoryDef = {
 - a entree identique et configuration identique, la suite des events est identique.
 - en cas d'emissions multiples au meme tick, l'ordre est celui de declaration.
 
+9. Portabilite des eventimes
+
+- les eventimes de synchronisation sont portes par la `Story` via `eventimes`.
+- `startAt` est un offset relatif exprime en ms.
+- `startAt` est relatif au parent direct; pour la racine `eventimes`, il est relatif au point zero de la story.
+- `events` permet l'imbrication d'eventimes enfants.
+- la `Scene` orchestre l'instant de depart de la story; elle ne redefine pas le contenu synchronise portable de la story.
+- si le depart est deterministe sans interaction bloquante, les `applyAtMs` peuvent etre calcules au build.
+- si le depart depend d'une interaction runtime, les `applyAtMs` sont ancres au moment du trigger runtime.
+- le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant`.
+
+10. Zero temporel de story
+
+- chaque story possede un zero temporel implicite (`t=0`).
+- ce zero est decale par l'orchestration scene (scenario/trigger) au moment de l'ancrage.
+- le zero de story n'impose pas de seek global player.
+
 ## Exemple minimal
 
 ```ts
@@ -187,3 +212,4 @@ Reference transversale: `102-final-v1-invariants-transverses.md`.
 - les stories enfants sont referencees par leur parent et non adressees directement.
 - les stories enfants restent agnostiques de leur contexte d'usage.
 - aucun event n'est adresse a une `Story` cible par identifiant.
+- les eventimes restent portables avec la story lors d'une reutilisation inter-scenes.

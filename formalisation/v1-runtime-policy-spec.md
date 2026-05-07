@@ -32,6 +32,11 @@ type RuntimeEventPolicy = {
   strapErrorHandling?: {
     mode: "continue-with-warning" | "stop-chain"
   }
+  masterClock?: {
+    unique?: boolean
+    previousMasterAction?: "pause" | "stop"
+    fallbackToTicker?: boolean
+  }
   rejectUnknownPersoTarget?: boolean
   rejectInvalidPayload?: boolean
 }
@@ -76,6 +81,23 @@ type RuntimeEventPolicy = {
 - `AUTHOR_*`: erreurs de structure auteur a la compilation
 - `RUNTIME_*`: rejets ou degradations d'execution
 - `HOST_*`: erreurs d'appel facade publique
+
+7. Master clock
+
+- `masterClock.unique` est `true` par defaut en V1.
+- un seul master actif est autorise a un instant donne.
+- quand un nouveau master devient actif, le precedent est traite via `masterClock.previousMasterAction`.
+- `masterClock.previousMasterAction` vaut `pause` par defaut.
+- `masterClock.previousMasterAction=stop` est autorise pour des flows non resumables.
+- le dernier master active prend la priorite de reference temporelle runtime.
+- si aucun master n'est actif, ou si le master actif est indisponible/desactive/termine, le runtime revient immediatement au ticker standard.
+- `fallbackToTicker` est `true` par defaut.
+
+8. Separation synchro / etat media
+
+- la source temporelle runtime (master ou ticker) est distincte de l'etat lecture d'un composant media.
+- une pause/reprise globale player ne doit pas ecraser un etat media force par sequence (`broadcast` START/PAUSE/STOP).
+- un composant media conserve son etat interne sequence-level lors des transitions play/pause utilisateur du player.
 
 ## Invariants policy V1
 

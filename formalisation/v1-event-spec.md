@@ -35,6 +35,13 @@ type RuntimeEvent = {
   context: EventContext
   meta?: Record<string, unknown>
 }
+
+type StoryEventimeNode = {
+  name: string
+  startAt: number
+  data?: Record<string, unknown>
+  events?: StoryEventimeNode[]
+}
 ```
 
 ## Regles normatives
@@ -75,6 +82,13 @@ type RuntimeEvent = {
 6. Payload
 
 - aucune limite normative de taille de payload n'est imposee en V1.
+
+7. Eventimes relatifs
+
+- `StoryEventimeNode` decrit des emissions relatives portables.
+- `startAt` est en millisecondes relatives.
+- `events` porte les enfants relatifs du noeud parent.
+- le runtime ou le build convertit en `RuntimeEvent.applyAtMs` absolu via ancrage.
 
 ## Exemple
 

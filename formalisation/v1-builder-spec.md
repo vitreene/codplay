@@ -37,6 +37,8 @@ Le Builder:
 - prepare la description des persos/stories/listen/straps
 - prepare les structures temporelles compilees
 - produit un manifeste de ressources
+- preserve les eventimes portables de story (`Story.eventimes`)
+- peut projeter des offsets absolus au build quand le depart story est deterministe
 
 Le Builder ne fait pas:
 
@@ -126,3 +128,4 @@ Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 - le Builder ne charge pas les ressources; il produit leur manifeste
 - les exports externes passent par plugins, hors coeur canonique
 - l'artefact compile est immuable
+- la portabilite des eventimes de story est preservee en sortie compilee

@@ -36,6 +36,7 @@ type CompiledScene = {
 - `scene.initialStoryId` obligatoire et membre de `topLevelStories`.
 - `scene.straps` obligatoire et peut valoir `undefined`.
 - `scene.tracks` obligatoire (vide autorise).
+- `scene.tracks` orchestre la sequence globale; les eventimes portables d'une story restent portes par `scene.stories[*]`.
 - artefact immuable en runtime.
 
 ## Validation minimale V1

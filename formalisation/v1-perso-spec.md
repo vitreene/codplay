@@ -47,6 +47,27 @@ export type Perso<Id extends string = string, T extends PersoType = PersoType> =
 }
 ```
 
+Extension V1 pour la synchronisation master:
+
+```ts
+type PersoInitialCommon = {
+  master?: boolean
+}
+
+type BroadcastAction = {
+  type: "START" | "PAUSE" | "STOP"
+  transition?: {
+    from?: Record<string, unknown>
+    to?: Record<string, unknown>
+    duration?: number
+  }
+}
+
+type PersoActionCommon = {
+  broadcast?: BroadcastAction
+}
+```
+
 ## Regles normatives
 
 1. Identite
@@ -69,6 +90,22 @@ export type Perso<Id extends string = string, T extends PersoType = PersoType> =
 - `actions` est un dictionnaire `eventName -> action` type par `Perso.type`.
 - `actions` contient obligatoirement l'auto-reference `actions[id] = null`.
 - l'auto-reference est presente en sortie de normalisation.
+
+5. Master clock
+
+- `initial.master` est autorise pour tout `Perso` au niveau contrat.
+- en pratique V1, `master` est attendu principalement sur des persos media (`sound`, `video`).
+- `master: true` marque une source temporelle candidate pour l'horloge runtime.
+- un seul master peut etre actif a un instant donne.
+- quand plusieurs masters sont actives, le dernier active devient prioritaire.
+- l'arbitrage des masters precedents suit `masterClock.previousMasterAction` (policy runtime).
+
+6. Broadcast
+
+- `broadcast` est une action du `Perso` et non une API parallele.
+- `broadcast.type` accepte `START`, `PAUSE`, `STOP`.
+- `broadcast.transition` decrit une transition de lecture (ex: volume) appliquee au composant cible.
+- `broadcast` pilote l'etat de lecture du composant sans imposer une decision de propagation event.
 
 ## Contrat event applique a un Perso
 
@@ -165,3 +202,21 @@ Sortie runtime correspondante:
 - `actions[id] = null` est obligatoire apres normalisation.
 - un event cible perso transporte l'action dans `data`.
 - `emit` reste provisoire et produit des events runtime traces par `origin`.
+- `master` est une propriete `initial` de `Perso`.
+- l'unicite de master actif est garantie par policy runtime.
+
+## Exemple action master
+
+```ts
+action02: {
+  move: { to: ROOT, order: 10 },
+  broadcast: {
+    type: START,
+    transition: {
+      from: { volume: 0.2 },
+      to: { volume: 1 },
+      duration: 1000
+    }
+  }
+}
+```

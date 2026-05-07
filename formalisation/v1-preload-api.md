@@ -36,6 +36,8 @@ type PreloadApi = {
 - preload consomme uniquement le manifeste.
 - la policy de cache/version/hash est lue depuis chaque entree de manifeste.
 - `cancel()` arrete les chargements en attente et invalide le resultat courant.
+- pour tout `Perso` marque `master: true`, le preload doit verifier la disponibilite de la ressource cible avant activation runtime.
+- en cas d'indisponibilite master, un warning runtime est emis et le player revient sur horloge ticker.
 
 ## Notes
 

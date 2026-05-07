@@ -19,6 +19,8 @@ Socle unique des invariants partages par les specs V1.
 - `listen.on` est unique par scope (`Story` ou `Scene`)
 - dans une regle, les `straps` sont executes et attendus dans l'ordre de declaration
 - erreur strap par defaut: continuation avec warning
+- un seul master actif a la fois; le dernier active est prioritaire
+- si master indisponible/inactif: fallback immediat sur ticker standard
 
 ## Invariants de donnees
 
@@ -26,6 +28,7 @@ Socle unique des invariants partages par les specs V1.
 - `transform` retourne de la data uniquement
 - `strap` retourne des events (ou `void`), pas de payload metier final
 - `applyAtMs` est obligatoire sur `RuntimeEvent`
+- les eventimes portables de story utilisent des offsets relatifs (`startAt`)
 
 ## Invariants propagation
 
@@ -38,6 +41,7 @@ Socle unique des invariants partages par les specs V1.
 - `CompiledScene` est immuable au runtime
 - meta `CompiledScene`: `schemaVersion` + `createdAt`
 - `hash` n'est pas une meta `CompiledScene`; il est reserve a la policy ressource
+- `tracks` reste une orchestration scene-level et ne remplace pas la portabilite des eventimes story-level
 
 ## Invariants d'erreurs
 

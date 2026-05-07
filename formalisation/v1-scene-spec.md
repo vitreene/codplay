@@ -139,6 +139,9 @@ Note de contexte:
 - `tracks` porte la structure temporelle globale consommee par le runtime.
 - `tracks` est obligatoire en V1.
 - `tracks` peut etre vide par defaut (`{}`) si la scene est pilotee principalement par events.
+- `tracks` porte l'orchestration scene-level (activation, ordre, timing global), pas la definition metier portable des eventimes d'une story.
+- les eventimes portables d'une story restent dans `Story.eventimes`.
+- la scene fixe l'ancrage temporel de depart d'une story (deterministe au build ou interactif au runtime).
 
 9. Scope V1
 
