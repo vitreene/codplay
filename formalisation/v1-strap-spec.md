@@ -40,10 +40,15 @@ type StrapMeta = {
 }
 
 type StrapHelpers = {
-  delay: (ms: number, event: StoryEvent) => void
-  repeat: (opts: { everyMs: number; times: number }, factory: (index: number) => StoryEvent[]) => void
-  loop: (opts: { everyMs: number }, factory: (index: number) => StoryEvent[]) => void
-  stagger: (opts: { stepMs: number }, events: StoryEvent[]) => void
+  delay: (ms: number, event: StoryEvent) => HelperHandle
+  repeat: (opts: { everyMs: number; times: number }, factory: (index: number) => StoryEvent[]) => HelperHandle
+  loop: (opts: { everyMs: number }, factory: (index: number) => StoryEvent[]) => HelperHandle
+  stagger: (opts: { stepMs: number }, events: StoryEvent[]) => HelperHandle[]
+}
+
+type HelperHandle = {
+  id: string
+  cancel: () => void
 }
 
 type StrapContext = {
@@ -92,6 +97,7 @@ type StrapCollection = Record<string, StrapFn>
 
 - un `Strap` produit des events via `events` (immediat) ou `helpers` (differe)
 - la `Story` determine la portee finale selon `cascade` et son pipeline
+- au niveau `Scene`, un strap d'entree peut participer au bootstrap en declenchant des operations de montage indirectes puis des events de sequence.
 
 5. Side-effects
 
@@ -149,7 +155,7 @@ const straps: StrapCollection = {
 
 ## Lien de reference
 
-- `37-strap-helpers-spec-v1.md`: contrat detaille des helpers runtime
+- `v1-strap-helpers-spec.md`: contrat detaille des helpers runtime
 
 ## Invariants Strap V1
 

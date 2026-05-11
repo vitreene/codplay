@@ -212,12 +212,11 @@ studio.story.upsert({
 })
 ```
 
-## 5) Top-level stories
+## 5) Root stories
 
 ```ts
-studio.scene.topLevelStories.set({
-  value: ["story-intro", "story-quiz", "story-bravo", "story-dommage"],
-  initialStoryId: "story-intro"
+studio.scene.rootStories.set({
+  value: ["story-intro", "story-quiz", "story-bravo", "story-dommage"]
 })
 ```
 

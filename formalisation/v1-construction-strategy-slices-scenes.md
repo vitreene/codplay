@@ -54,6 +54,8 @@ Validation visuelle obligatoire:
 3. facade Player non alignee completement (`init` V1, `schedule`, `onChange`, `stop`, `resume`)
 4. runtime policy V1 partielle (same tick, straps, observabilite)
 5. `TrackManager` V1 non isole comme module explicite
+6. structure scene/story a aligner sur `rootStories` + `entries`
+7. bootstrap scene + demarrage par event a fermer proprement
 
 ## Arborescence cible a introduire
 
@@ -92,6 +94,11 @@ Champs obligatoires:
 - `scene`
 - `resources`
 
+Contraintes structurelles minimales:
+
+- `scene.rootStories`
+- `scene.stories[*].entries`
+
 ### Player
 
 Facade cible exposee:
@@ -105,6 +112,8 @@ Note d'integration:
 
 - implementation par adaptateur au-dessus du `PlayerFacade` existant
 - pas de rupture immediate des chemins internes qui alimentent la demo POC
+- `mount` reste une operation technique runtime
+- le demarrage logique passe par le pipeline d'events et `Scene.listen`
 
 ## Sequence d'execution obligatoire
 
@@ -155,8 +164,8 @@ Note d'integration:
 ### Actions
 
 1. Aligner structure `Scene`/`Story` V1 dans builder + adaptateur runtime.
-2. Valider `initialStoryId` et references de base.
-3. Garantir `topLevelStories`, `listen`, `tracks` dans l'artefact compile.
+2. Valider `rootStories`, `entries` et references de base.
+3. Garantir `rootStories`, `entries`, `listen`, `tracks` dans l'artefact compile.
 
 ### Commandes de sortie
 
@@ -177,6 +186,7 @@ Note d'integration:
 1. Verrouiller pipeline `listen -> transform -> straps -> emit -> persos`.
 2. Implementer `sameTickHandling` avec default `keep-all`.
 3. Ajouter trace policy (`eventId`, `eventSeq`, `decision`, `code`).
+4. Brancher les demarrages de sequence sur `Scene.listen` sans second cadre d'orchestration.
 
 ### Commandes de sortie
 
@@ -196,6 +206,7 @@ Note d'integration:
 1. Exposer `schedule` sur facade Player V1.
 2. Raccorder `schedule` au lifecycle player (`play/pause/resume/stop/destroy`).
 3. Verifier comportement strap en mode warning par defaut.
+4. Brancher le bootstrap scene via strap d'entree et montage technique des stories.
 
 ### Commandes de sortie
 

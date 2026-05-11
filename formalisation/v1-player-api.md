@@ -56,12 +56,17 @@ type PlayerStateSnapshot = {
 
 - `mountTarget` est fourni au `Player` et reste hors `Scene`.
 - `init(...)` est le point d'entree de chargement runtime.
+- `init(...)` couvre une lecture normale complete: chargement, preload, instanciation runtime puis bootstrap scene.
+- `init(...)` n'a vocation a etre execute qu'une seule fois par lecture normale.
+- `seek` n'entraine pas de nouvel appel a `init`.
 - `schedule` est destructurable et aliasable par import direct.
 - `schedule` utilise le meme scheduler runtime que les straps.
 - l'execution de `schedule` suit le lifecycle `play/pause/resume/stop/destroy`.
 - toutes les emissions runtime passent par policies actives.
 - si un master est actif, `timelineMs` suit le temps de ce master.
 - si aucun master actif n'est disponible, `timelineMs` suit le ticker standard.
+- les operations de montage des stories restent des operations techniques runtime, hors facade publique minimale V1.
+- les events de sequence utilisent les conventions de nommage existantes; la facade Player n'en fige aucun en dur.
 
 ## Notes
 

@@ -14,30 +14,30 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 
 ## Ordre de lecture final
 
-1. `101-final-v1-glossaire.md`
-2. `102-final-v1-invariants-transverses.md`
-3. `103-final-v1-validation-minimale.md`
-4. `31-perso-spec-v1.md`
-5. `32-strap-spec-v1.md`
-6. `33-story-spec-v1.md`
-7. `35-scene-spec-v1.md`
-8. `36-event-spec-v1.md`
-9. `37-strap-helpers-spec-v1.md`
-10. `38-runtime-policy-events-v1.md`
-11. `34-builder-spec-v1.md`
-12. `44-builder-api-v1.md`
-13. `45-player-api-v1.md`
-14. `46-preload-api-v1.md`
-15. `47-scene-side-effects-api-v1.md`
-16. `48-error-catalog-v1.md`
-17. `49-track-manager-spec-v1.md`
-18. `50-compiled-scene-schema-v1.md`
+1. `v1-glossaire.md`
+2. `v1-invariants.md`
+3. `v1-validation.md`
+4. `v1-perso-spec.md`
+5. `v1-strap-spec.md`
+6. `v1-story-spec.md`
+7. `v1-scene-spec.md`
+8. `v1-event-spec.md`
+9. `v1-strap-helpers-spec.md`
+10. `v1-runtime-policy-spec.md`
+11. `v1-builder-spec.md`
+12. `v1-builder-api.md`
+13. `v1-player-api.md`
+14. `v1-preload-api.md`
+15. `v1-scene-side-effects-api.md`
+16. `v1-error-catalog.md`
+17. `v1-track-manager-spec.md`
+18. `v1-compiled-scene-schema.md`
 
 ## Frontiere normative
 
-- les documents `100+` cadrent et synthetisent
-- les contrats de type et details d'API restent portes par `31-38` et `43-50`
-- les documents de transition (`10-30`, `plan-consolide.md`, `session-context-*`) restent non normatifs
+- les documents finals courants `v1-*.md` dans ce dossier sont normatifs
+- les contrats de type et details d'API sont portes par ces fichiers finals courants
+- les documents de transition et d'archive hors de ce dossier restent non normatifs
 
 ## Gel de terminologie V1
 

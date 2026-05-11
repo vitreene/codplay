@@ -51,8 +51,8 @@ type AuthoringApi = {
     tracks: {
       set?: (input: { value: Record<string, unknown> }) => ApiResult<void>
     }
-    topLevelStories: {
-      set: (input: { value: string[]; initialStoryId: string }) => ApiResult<void>
+    rootStories: {
+      set: (input: { value: string[] }) => ApiResult<void>
     }
   }
 
@@ -65,6 +65,7 @@ type AuthoringApi = {
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
   setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
   setStoryChildren: (input: { storyId: string; children: string[] }) => ApiResult<void>
+  setStoryEntries: (input: { storyId: string; entries: string[] }) => ApiResult<void>
 
   exportSceneDoc: () => ApiResult<SceneDef>
 }
@@ -75,12 +76,12 @@ type AuthoringApi = {
 - `straps`, `listen`, `tracks` sont obligatoires dans le modele final.
 - `straps` peut valoir `undefined` par defaut au niveau scene/story.
 - `scene.tracks.set` est facultatif: l'API initialise `tracks` avec une valeur par defaut.
-- `topLevelStories` est obligatoire et non vide en mode diffusion.
-- `initialStoryId` doit etre membre de `topLevelStories`.
+- `rootStories` est obligatoire et non vide en mode diffusion.
+- `entries` est obligatoire dans chaque `Story` et peut valoir `[]`.
 - `listen.on` doit etre unique dans une story et dans la scene.
 - `listen.transform` peut contenir plusieurs etapes, executees dans l'ordre.
 - en conflit parent/enfant multi-parents, warning auteur et premier parent gagne.
-- `topLevelStories` et `initialStoryId` sont definis de facon atomique dans un meme appel.
+- `rootStories` est defini explicitement au niveau scene.
 - `exportSceneDoc` retourne une scene prete pour compilation Builder.
 
 ## Notes

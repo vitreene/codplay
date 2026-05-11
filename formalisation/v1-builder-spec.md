@@ -35,6 +35,7 @@ Le Builder:
 - normalise la scene auteur
 - compile les structures narratives vers un format runtime compact
 - prepare la description des persos/stories/listen/straps
+- compile `rootStories` et `entries` comme structures de montage runtime
 - prepare les structures temporelles compilees
 - produit un manifeste de ressources
 - preserve les eventimes portables de story (`Story.eventimes`)
@@ -129,3 +130,5 @@ Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 - les exports externes passent par plugins, hors coeur canonique
 - l'artefact compile est immuable
 - la portabilite des eventimes de story est preservee en sortie compilee
+- `rootStories` et `entries` sont valides et explicites en sortie compilee
+- aucun mot-cle d'event n'est traite en dur; le Builder preserve les conventions de nommage deja etablies

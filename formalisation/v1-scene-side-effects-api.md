@@ -44,6 +44,7 @@ type SceneSideEffectBinding = {
 - les events retournes par un side-effect sont reinjectes dans le pipeline `Scene`.
 - en erreur side-effect, le runtime applique la policy (defaut V1: continue avec warning).
 - les executions et retours side-effects sont traces.
+- le bootstrap scene et les demarrages de sequence ne creent pas de systeme parallele: ils restent resolus par `Scene.listen`, straps scene-level et events ordinaires.
 
 ## Notes
 

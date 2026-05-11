@@ -47,8 +47,7 @@ type RuntimeEventPolicy = {
 1. Niveau V1
 
 - la policy runtime events est minimale en V1.
-- aucun seuil chiffre n'est impose en V1.
-- les seuils et limites precis seront figes apres premiers usages et tests.
+- les seuils par defaut V1 sont imposes pour proteger le runtime contre les emballements.
 
 2. Comportement par defaut V1
 
@@ -56,6 +55,9 @@ type RuntimeEventPolicy = {
 - payload invalide: warning par defaut.
 - erreur strap: `continue-with-warning` par defaut.
 - les modes "rejet strict" restent activables via policy.
+- `maxEventsPerTick` vaut `1000` par defaut.
+- `maxCascadeDepth` vaut `16` par defaut.
+- quand une limite est atteinte, le runtime coupe la propagation excedentaire du tick ou du chemin courant et emet un warning trace.
 
 3. Evenements repetes meme tick
 
@@ -75,6 +77,7 @@ type RuntimeEventPolicy = {
 
 - chaque decision policy trace: `eventId`, `eventSeq`, `decision`, `code`.
 - `decision` prend une des valeurs: `applied` | `rejected` | `ignored`.
+- les coupures dues aux garde-fous sont tracees avec `decision=ignored`.
 
 6. Codes
 

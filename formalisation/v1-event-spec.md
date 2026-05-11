@@ -55,6 +55,7 @@ type StoryEventimeNode = {
 
 - `name` est obligatoire.
 - la convention V1 recommande un namespace explicite: `domaine:entite:action`.
+- des conventions telles que `sequence:intro:start` sont valides, sans traitement compile-time special.
 - les events cibles perso utilisent l'identifiant perso en `name`.
 - les noms systeme (`scene:*`, `story:*`, `runtime:*`) sont reserves par convention pour le moteur.
 - en V1, le nommage reste conventionnel: aucun blocage automatique compile-time n'est impose par cette spec.
@@ -89,6 +90,12 @@ type StoryEventimeNode = {
 - `startAt` est en millisecondes relatives.
 - `events` porte les enfants relatifs du noeud parent.
 - le runtime ou le build convertit en `RuntimeEvent.applyAtMs` absolu via ancrage.
+
+8. Compatibilite `transform`
+
+- quand un event passe par `Scene.listen.transform` ou `Story.listen.transform`, la valeur retournee remplace `event.data`.
+- si un `transform` retourne `undefined`, `event.data` devient `undefined` et un warning runtime est emis.
+- `transform` ne modifie jamais `name`, `cascade`, `context` ou `meta`.
 
 ## Exemple
 

@@ -39,8 +39,7 @@ type ListenRule = {
 type SceneDef = {
   id: string
   stories: Record<string, StoryDef>
-  topLevelStories: string[]
-  initialStoryId: string
+  rootStories: string[]
   initial: Record<string, unknown> | undefined
   straps: string[] | undefined
   listen: ListenRule[]
@@ -56,8 +55,8 @@ type SceneDef = {
 
 - `Scene` est la racine globale de la sequence.
 - `Scene` declare les stories disponibles dans `stories`.
-- `Scene` pilote uniquement les stories de premier niveau via `topLevelStories`.
-- `topLevelStories` est obligatoire et non vide.
+- `Scene` pilote les stories montees a la racine de la scene via `rootStories`.
+- `rootStories` est obligatoire et non vide.
 - l'organisation interne des stories composees est portee par chaque `Story` (champ `children`).
 - `Scene` expose une forme globale equivalente a une `Story`: `initial`, `straps`, `listen`, `init`, `state`.
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
@@ -91,13 +90,12 @@ Note de contexte:
 - `storyId` est unique globalement dans `scene.stories`.
 - une story enfant appartient a un seul parent.
 
-3. Story initiale
+3. Stories racine
 
-- `initialStoryId` est obligatoire.
-- `initialStoryId` doit exister dans `stories`.
-- `initialStoryId` doit appartenir a `topLevelStories`.
-- absence de `initialStoryId` ou reference invalide: erreur de compilation.
-- `initialStoryId` est un membre de `topLevelStories`, sans contrainte de position.
+- `rootStories` designe les stories montees a la racine de la scene.
+- `rootStories` est une structure de montage scene-level, pas un declencheur temporel implicite.
+- chaque story referencee dans `rootStories` doit exister dans `stories`.
+- `rootStories` n'impose ni visibilite immediate, ni demarrage automatique.
 
 4. Hierarchie
 
@@ -126,24 +124,33 @@ Note de contexte:
 - `Scene.state` est runtime-only.
 - `Scene.state` peut rester `undefined` s'il n'est pas utilise.
 
-7. Lifecycle scene
+7. Bootstrap scene
+
+- apres chargement et preload, la `Scene` execute une phase de bootstrap avant la diffusion visuelle normale.
+- cette phase peut monter certaines `rootStories` avant le premier event visible de sequence.
+- le bootstrap peut etre pilote par un strap d'entree de scene.
+- les operations de montage sont techniques runtime et ne creent pas a elles seules d'ancrage temporel.
+- le demarrage logique de sequence passe ensuite par les events et leur resolution dans `Scene.listen`.
+
+8. Lifecycle scene
 
 - `Scene` peut emettre des events systeme lifecycle:
   - `scene:start`
   - `scene:ready`
   - `scene:end`
 - ces noms lifecycle sont reserves par convention pour les events systeme Scene.
+- les events de sequence suivent les conventions de nommage deja etablies et ne sont jamais listes en dur dans cette spec.
 
-8. Temps
+9. Temps
 
 - `tracks` porte la structure temporelle globale consommee par le runtime.
 - `tracks` est obligatoire en V1.
 - `tracks` peut etre vide par defaut (`{}`) si la scene est pilotee principalement par events.
 - `tracks` porte l'orchestration scene-level (activation, ordre, timing global), pas la definition metier portable des eventimes d'une story.
 - les eventimes portables d'une story restent dans `Story.eventimes`.
-- la scene fixe l'ancrage temporel de depart d'une story (deterministe au build ou interactif au runtime).
+- la scene fixe l'ancrage temporel de depart d'une story via la resolution runtime de ses events et le mecanisme existant d'offsets relatifs.
 
-9. Scope V1
+10. Scope V1
 
 - `scenario` est hors perimetre de definition V1 et reste non specifie a ce stade.
 - le conteneur de rendu (mount target DOM) est hors `Scene` et fourni a l'instanciation du Player.
@@ -168,9 +175,8 @@ Contraintes:
 
 ## Invariants Scene V1
 
-Reference transversale: `102-final-v1-invariants-transverses.md`.
+Reference transversale: `v1-invariants.md`.
 
 - `Scene` orchestre le global; `Story` orchestre le local.
-- `topLevelStories` est la seule autorite scene-level sur la hierarchie narrative.
-- `initialStoryId` est obligatoire et valide.
+- `rootStories` est l'autorite scene-level sur le montage des stories a la racine de la scene.
 - aucun couplage nominatif inter-stories par adressage direct.

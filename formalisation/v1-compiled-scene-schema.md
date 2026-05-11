@@ -17,8 +17,7 @@ type CompiledScene = {
   scene: {
     id: string
     stories: Record<string, StoryDef>
-    topLevelStories: string[]
-    initialStoryId: string
+    rootStories: string[]
     initial: Record<string, unknown> | undefined
     straps: string[] | undefined
     listen: ListenRule[]
@@ -32,10 +31,10 @@ type CompiledScene = {
 
 - `schemaVersion` obligatoire.
 - `createdAt` obligatoire.
-- `scene.topLevelStories` obligatoire et non vide en diffusion.
-- `scene.initialStoryId` obligatoire et membre de `topLevelStories`.
+- `scene.rootStories` obligatoire et non vide en diffusion.
 - `scene.straps` obligatoire et peut valoir `undefined`.
 - `scene.tracks` obligatoire (vide autorise).
+- `scene.rootStories` decrit le montage des stories a la racine de la scene, sans temporalite implicite.
 - `scene.tracks` orchestre la sequence globale; les eventimes portables d'une story restent portes par `scene.stories[*]`.
 - artefact immuable en runtime.
 
@@ -47,13 +46,13 @@ type CompiledScene = {
 
 ## Validation et catalogue erreurs
 
-La validation s'appuie sur le catalogue `48-error-catalog-v1.md`.
+La validation s'appuie sur le catalogue `v1-error-catalog.md`.
 
-- erreurs bloquantes: ex. `AUTHOR_DUPLICATE_LISTEN_ON`, `AUTHOR_INITIAL_STORY_INVALID`
+- erreurs bloquantes: ex. `AUTHOR_DUPLICATE_LISTEN_ON`, `AUTHOR_ROOT_STORIES_INVALID`, `AUTHOR_STORY_ENTRIES_INVALID`
 - warnings: ex. `AUTHOR_MULTI_PARENT_STORY`
 - V1 ne duplique pas ici la liste exhaustive des messages: ce fichier decrit le schema, le catalogue porte la taxonomie code/message.
 
 ## Notes
 
 - les schemas de version future peuvent ajouter des sections sans casser V1.
-- invariants transverses associes: `102-final-v1-invariants-transverses.md`.
+- invariants transverses associes: `v1-invariants.md`.

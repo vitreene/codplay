@@ -15,6 +15,7 @@ Executer les tracks en temps runtime, declencher les events dus, et appliquer le
 - retourner un flux stable d'events vers le Director
 - appliquer `tracks:set`
 - accepter des events live append-only
+- accepter des eventimes ancres au runtime lorsqu'une story demarre via le pipeline scene/story
 
 ## Contrat minimal V1
 
@@ -73,7 +74,9 @@ type TrackManagerApi = {
 - `appendAnchoredEventimes` convertit des eventimes relatifs de story en events absolus append-only.
 - `appendAnchoredEventimes` applique l'ancrage: `applyAtMs = anchorMs + somme des startAt`.
 - l'ordre d'aplatissement des eventimes est l'ordre de declaration parent puis enfants.
-- `appendAnchoredEventimes` est utilise quand une story demarre sur trigger runtime (ex: click).
+- `appendAnchoredEventimes` est utilise quand une story demarre sur trigger runtime (ex: event de sequence ou interaction).
+- le montage d'une story n'entraine pas a lui seul d'inscription temporelle dans le `TrackManager`.
+- il n'existe pas de deuxieme cadre temporel pour les demarrages: le `TrackManager` reutilise le mecanisme existant d'ancrage des `eventimes`.
 - `setActiveTracks` conserve un mode simple `activate/deactivate` en V1.
 - `collectDueEvents` peut retourner des references de provenance (`refs`) pour debug/telemetrie.
 - `refs` est desactivable (`emitRefs=false`) pour les contextes de diffusion sensibles a la performance.
@@ -84,6 +87,7 @@ type TrackManagerApi = {
 - la source metier des eventimes est `Story.eventimes`.
 - `Scene.tracks` orchestre l'activation et l'ancrage, sans dupliquer le contenu eventime de story.
 - un meme bloc `Story.eventimes` peut etre reimporte dans plusieurs scenes sans reecriture.
+- toute resolution de demarrage compatible `seek/rewind` se traduit par des inscriptions dans ce meme systeme temporel.
 
 ## Notes
 

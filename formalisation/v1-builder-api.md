@@ -43,6 +43,7 @@ type BuilderApi = {
 
 - `compile` produit toujours un artefact JSON de diffusion.
 - `CompiledScene` inclut `schemaVersion` et `createdAt`.
+- `compile` et `validate` couvrent la coherence de `rootStories` et `entries`.
 - `Builder` ne charge pas les ressources.
 - `validate` retourne toujours un objet avec `ok`, `errors`, `warnings`.
 - `validate` est non mutante sur l'entree.
@@ -53,3 +54,4 @@ type BuilderApi = {
 
 - l'ordre des diagnostics est stable a entree egale.
 - le detail des erreurs reste volontairement succinct en V1.
+- aucun nom d'event n'est interprete comme mot-cle compile-time par cette facade.

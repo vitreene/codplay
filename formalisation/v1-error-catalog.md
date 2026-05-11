@@ -68,7 +68,8 @@ Regles V1:
 Erreurs:
 
 - `AUTHOR_DUPLICATE_LISTEN_ON`: doublon `listen.on` dans une meme story/scene
-- `AUTHOR_INITIAL_STORY_INVALID`: `initialStoryId` manquant ou invalide en diffusion
+- `AUTHOR_ROOT_STORIES_INVALID`: `rootStories` manquant, vide ou invalide en diffusion
+- `AUTHOR_STORY_ENTRIES_INVALID`: `entries` absentes ou invalides dans une `Story`
 - `AUTHOR_TRACK_UNKNOWN`: track referencee inconnue
 - `RUNTIME_HELPER_INVALID_ARG`: argument helper invalide
 - `HOST_INVALID_PLAYER_STATE`: commande Player invalide dans l'etat courant
@@ -79,6 +80,7 @@ Warnings:
 - `RUNTIME_STRAP_CONTINUE_WARNING`: erreur strap, chaine continue
 - `RUNTIME_SAME_TICK_REPETITION`: repetitions meme tick preservees (mode keep-all)
 - `RUNTIME_EVENT_LIMIT_REACHED`: limite runtime atteinte si policy activee
+- `RUNTIME_CASCADE_DEPTH_REACHED`: profondeur de cascade limite atteinte, propagation tronquee
 
 Fallback unique:
 
@@ -90,4 +92,4 @@ Fallback unique:
 - les messages restent generiques en V1.
 - les details evoluent selon besoins terrain et campagne de tests.
 - en pratique, ces erreurs/warnings peuvent etre exposes via `console.error` / `console.warn` et/ou objets de retour d'appel.
-- invariants transverses associes: `102-final-v1-invariants-transverses.md`.
+- invariants transverses associes: `v1-invariants.md`.
