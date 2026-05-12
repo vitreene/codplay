@@ -1,4 +1,6 @@
-export type RuntimeEventSource = 'story' | 'user' | 'system'
+import { RUNTIME_EVENT_SOURCE } from './constants'
+
+export type RuntimeEventSource = typeof RUNTIME_EVENT_SOURCE[keyof typeof RUNTIME_EVENT_SOURCE]
 
 export type EventNode = {
   name: string

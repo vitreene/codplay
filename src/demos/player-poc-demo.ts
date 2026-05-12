@@ -3,8 +3,10 @@ import './player-poc-demo.css';
 import { animate, engine } from 'animejs';
 
 import { createAnimationAdapter, type AnimeImplementation } from '../animation/adapter';
+import { RUNTIME_EVENT_SOURCE } from '../core/events/constants';
 import { PlayerFacade } from '../player/create-player';
 import type { PersoDoc, PlayerStateSnapshot, SceneDoc } from '../player/types';
+import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants';
 import type { RuntimeTraceRow } from '../runtime/trace-store';
 
 type TracePayload = Record<string, unknown>;
@@ -368,7 +370,7 @@ function temp__createDemoScene(): SceneDoc {
 		tracks: {
 			'track-demo': {
 				id: 'track-demo',
-				source: 'story',
+					source: RUNTIME_EVENT_SOURCE.story,
 				order: 0,
 				events: [
 					{
@@ -579,7 +581,7 @@ function formatCompactPayload(payload: TracePayload): string {
 function formatTraceMessage(row: RuntimeTraceRow): string {
 	const payload = (row.payload ?? {}) as TracePayload;
 
-	if (row.status === 'rejected' || row.status === 'error') {
+		if (row.status === RUNTIME_TRACE_STATUS.rejected || row.status === RUNTIME_TRACE_STATUS.error) {
 		const code = readString(payload, 'code');
 		const message = readString(payload, 'message');
 		return `${row.eventName}${code ? ` code=${code}` : ''}${message ? ` message=${message}` : ''}`;

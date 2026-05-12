@@ -54,7 +54,7 @@ export function renderInitialScene(scene: SceneDoc, mountTarget: HTMLElement): R
   }
 
   const stage = globalThis.document.createElement('section')
-  stage.className = 'legacy-scene-stage aspect-video flex-1'
+  stage.className = 'scene-stage aspect-video flex-1'
   stage.id = 'container-scene'
   mountTarget.append(stage)
 

@@ -8,6 +8,7 @@ import {
   TrackManagerCodec,
   type TrackBucket
 } from './track-manager-validation'
+import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 
 /**
  * Implements one deterministic track manager for runtime timeline execution.
@@ -203,7 +204,7 @@ export class TrackManager implements TrackManagerApi {
     const nextTrack: TrackBucket = {
       id: trackId,
       order: this.trackById.size,
-      source: 'story',
+      source: RUNTIME_EVENT_SOURCE.story,
       active: true,
       events: [],
       nextIndex: 0

@@ -69,6 +69,7 @@ export type SceneDef = {
   listen: ListenRule[]
   state?: Record<string, unknown> | undefined
   init?: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
+  onStart?: (...args: any[]) => void
   tracks: Record<string, unknown>
 }
 

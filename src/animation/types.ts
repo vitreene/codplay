@@ -1,3 +1,4 @@
+import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import type { ResolvedAction } from '../core/events/types'
 import type { MoveValue } from '../runtime/types'
 
@@ -42,7 +43,7 @@ export type AnimationTraceEntry = {
   eventName: string
   transitionId: string
   property: AnimatedProperty
-  status: 'applied'
+  status: typeof RUNTIME_TRACE_STATUS.applied
 }
 
 export type AnimationHandle = {

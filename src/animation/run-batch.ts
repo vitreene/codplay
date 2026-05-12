@@ -1,3 +1,4 @@
+import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import type { AnimationAdapter, AnimationBatchResult, AnimationTraceEntry, TransitionRequest } from './types'
 
 /**
@@ -10,7 +11,7 @@ function toTraceEntry(transition: TransitionRequest, index: number): AnimationTr
     eventName: transition.eventName,
     transitionId: transition.transitionId,
     property: transition.property,
-    status: 'applied'
+    status: RUNTIME_TRACE_STATUS.applied
   }
 }
 

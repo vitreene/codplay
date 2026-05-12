@@ -2,6 +2,7 @@ import type { AnimationAction, AnimationResolvedAction } from '../animation/type
 import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
 import type { RuntimeCommit } from '../renderer/types'
 import type { ItemDoc, StoryDoc as RuntimeStoryDoc } from '../runtime/types'
+import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type {
   PersoDoc,
   PlayerSceneLifecycleOptions,
@@ -204,9 +205,9 @@ export function createSceneLifecycleOptions(options: PlayerSceneLifecycleOptions
  * Normalizes raw event source values into the runtime source domain.
  */
 export function sanitizeRuntimeEventSource(rawSource: unknown): RuntimeEventSource {
-  if (rawSource === 'user' || rawSource === 'system') {
+  if (rawSource === RUNTIME_EVENT_SOURCE.user || rawSource === RUNTIME_EVENT_SOURCE.system) {
     return rawSource
   }
 
-  return 'story'
+  return RUNTIME_EVENT_SOURCE.story
 }

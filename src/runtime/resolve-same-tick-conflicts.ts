@@ -1,4 +1,5 @@
 import type { AnimationResolvedAction } from '../animation/types'
+import { RUNTIME_TRACE_STATUS } from './trace-constants'
 
 export type RuntimeConflictReason =
   | 'STYLE_OVERRIDDEN_SAME_TICK'
@@ -8,7 +9,7 @@ export type RuntimeConflictReason =
 export type RuntimeConflictTraceEntry = {
   traceId: string
   eventName: string
-  status: 'applied' | 'rejected'
+  status: typeof RUNTIME_TRACE_STATUS.applied | typeof RUNTIME_TRACE_STATUS.rejected
   reason: RuntimeConflictReason
   targetItemId: string
   payload: {
@@ -112,7 +113,7 @@ function hasNonConflictMutation(action: AnimationResolvedAction): boolean {
  * Builds one deterministic conflict trace row.
  */
 function buildConflictTrace(
-  status: 'applied' | 'rejected',
+  status: typeof RUNTIME_TRACE_STATUS.applied | typeof RUNTIME_TRACE_STATUS.rejected,
   reason: RuntimeConflictReason,
   targetItemId: string,
   eventName: string,
@@ -176,7 +177,7 @@ export function resolveSameTickConflicts(
 
           traces.push(
             buildConflictTrace(
-              'rejected',
+              RUNTIME_TRACE_STATUS.rejected,
               'STYLE_OVERRIDDEN_SAME_TICK',
               targetItemId,
               action.eventName,
@@ -208,7 +209,7 @@ export function resolveSameTickConflicts(
 
           traces.push(
             buildConflictTrace(
-              'rejected',
+              RUNTIME_TRACE_STATUS.rejected,
               'ATTR_OVERRIDDEN_SAME_TICK',
               targetItemId,
               action.eventName,
@@ -241,7 +242,7 @@ export function resolveSameTickConflicts(
 
           traces.push(
             buildConflictTrace(
-              'rejected',
+              RUNTIME_TRACE_STATUS.rejected,
               'CLASSNAME_OVERRIDDEN_SAME_TICK',
               targetItemId,
               action.eventName,
@@ -272,7 +273,7 @@ export function resolveSameTickConflicts(
 
           traces.push(
             buildConflictTrace(
-              'rejected',
+              RUNTIME_TRACE_STATUS.rejected,
               'CLASSNAME_OVERRIDDEN_SAME_TICK',
               targetItemId,
               action.eventName,
@@ -316,7 +317,7 @@ export function resolveSameTickConflicts(
 
     traces.push(
       buildConflictTrace(
-        'applied',
+        RUNTIME_TRACE_STATUS.applied,
         reason,
         targetItemId,
         winnerAction.eventName,

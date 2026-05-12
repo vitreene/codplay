@@ -1,3 +1,5 @@
+import type { SceneDef } from '../builder/types'
+import { PLAYER_STATUS } from './player-constants'
 import type { RuntimeEventSource } from '../core/events/types'
 import type { RuntimeComponentClass, RuntimeRegistrySnapshot } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
@@ -9,7 +11,7 @@ import type {
   ListConfig
 } from '../runtime/types'
 
-export type PlayerStatus = 'idle' | 'preloading' | 'ready' | 'playing' | 'paused' | 'seeking' | 'rewinding' | 'error'
+export type PlayerStatus = typeof PLAYER_STATUS[keyof typeof PLAYER_STATUS]
 
 export type RebuildMode = 'state' | 'full'
 
@@ -85,6 +87,8 @@ export type StrictSceneDoc = {
 
 export type SceneDoc = StrictSceneDoc
 
+export type PlayerSceneInput = StrictSceneDoc | SceneDef
+
 export type PlayerStateSnapshot = {
   status: PlayerStatus
   initialized: boolean
@@ -101,6 +105,7 @@ export type PlayerPublicEventInput = {
   payload?: Record<string, unknown>
   source?: RuntimeEventSource
   trackId?: string
+  cascade?: boolean
 }
 
 export type PlayerCommandError = {
@@ -124,7 +129,7 @@ export type PlayerApi = {
   registerComponent: (persoType: string, componentClass: RuntimeComponentClass) => PlayerCommandResult
   overrideComponent: (persoType: string, componentClass: RuntimeComponentClass) => PlayerCommandResult
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
-  init: (scene: SceneDoc) => Promise<PlayerCommandResult>
+  init: (scene: PlayerSceneInput) => Promise<PlayerCommandResult>
   destroy: () => Promise<PlayerCommandResult>
   play: () => Promise<PlayerCommandResult>
   pause: () => Promise<PlayerCommandResult>

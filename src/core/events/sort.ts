@@ -1,3 +1,4 @@
+import { RUNTIME_EVENT_SOURCE } from './constants'
 import type { TimelineEvent, TrackMeta } from './types'
 
 export type TrackMetaMap = Record<string, TrackMeta>
@@ -17,7 +18,7 @@ function getTrackOrder(event: TimelineEvent, trackMeta: TrackMetaMap): number {
  * Resolves whether an event should be ordered after non-user events.
  */
 function getSourcePriority(event: TimelineEvent): number {
-  return event.source === 'user' ? 1 : 0
+  return event.source === RUNTIME_EVENT_SOURCE.user ? 1 : 0
 }
 
 /**

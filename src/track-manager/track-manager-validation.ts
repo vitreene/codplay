@@ -1,11 +1,12 @@
 import { sortRuntimeEvents } from '../core/events/sort'
+import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackMeta } from '../core/events/types'
 import type { TrackManagerEventimeNode, TrackManagerStoryEvent } from './types'
 
 export type TrackBucket = {
   id: string
   order: number
-  source: 'story' | 'user' | 'system'
+  source: TrackMeta['source']
   active: boolean
   events: TrackManagerStoryEvent[]
   nextIndex: number
@@ -41,9 +42,11 @@ export class TrackManagerCodec {
       ? (rawTrack as Record<string, unknown>)
       : {}
     const source =
-      trackRecord.source === 'user' || trackRecord.source === 'system' || trackRecord.source === 'story'
+      trackRecord.source === RUNTIME_EVENT_SOURCE.user ||
+      trackRecord.source === RUNTIME_EVENT_SOURCE.system ||
+      trackRecord.source === RUNTIME_EVENT_SOURCE.story
         ? trackRecord.source
-        : 'story'
+        : RUNTIME_EVENT_SOURCE.story
     const rawEvents = Array.isArray(trackRecord.events) ? trackRecord.events : []
     const events: TrackManagerStoryEvent[] = []
 
@@ -106,7 +109,7 @@ export class TrackManagerCodec {
         ms: anchorMs + currentOffsetMs,
         name: eventime.name,
         index: result.length,
-        source: 'story',
+        source: RUNTIME_EVENT_SOURCE.story,
         trackId,
         payload: eventime.data
       })

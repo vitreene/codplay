@@ -1,3 +1,4 @@
+import { RUNTIME_EVENT_SOURCE } from './constants'
 import type { EventNode, RuntimeEventSource, TimelineEvent } from './types'
 
 export type FlattenOptions = {
@@ -19,7 +20,7 @@ function buildEventId(index: number, ms: number): string {
  */
 export function flattenEventNodes(eventNodes: EventNode[], options: FlattenOptions = {}): TimelineEvent[] {
   const output: TimelineEvent[] = []
-  const source = options.source ?? 'story'
+  const source = options.source ?? RUNTIME_EVENT_SOURCE.story
   const trackId = options.trackId
   const baseMs = options.baseMs ?? 0
   let index = options.startIndex ?? 0

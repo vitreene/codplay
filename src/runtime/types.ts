@@ -177,7 +177,7 @@ export type RuntimeElement = {
 }
 
 /**
- * Defines the runtime element map used by legacy and current paths.
+ * Defines the runtime element map used by the current paths.
  */
 export type RuntimeElementMap = Map<string, RuntimeElement>
 

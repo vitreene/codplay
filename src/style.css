@@ -97,7 +97,7 @@ h1 {
 	overflow: hidden;
 }
 
-.legacy-scene-stage {
+.scene-stage {
 	position: relative;
 	height: 100%;
 	display: grid;

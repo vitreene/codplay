@@ -10,20 +10,23 @@ import {
 } from '../runtime/trace-store'
 import type { RuntimeComponentClass } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
+import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
+import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
 import { createSceneLifecycleOptions, PlayerRuntimePlanner } from './create-player-utils'
+import { PLAYER_STATUS } from './player-constants'
 import type {
   PlayerApi,
   PlayerCommandResult,
   PlayerPublicEventInput,
   PlayerRuntimePolicy,
   PlayerSceneLifecycleOptions,
+  PlayerSceneInput,
   PlayerStateListener,
   PlayerStateSnapshot,
   PlayerStatus,
   PlayerTraceListener,
   RebuildMode,
-  SceneDoc,
   SceneStoryDoc,
   StrictSceneDoc
 } from './types'
@@ -55,7 +58,7 @@ export class PlayerFacade implements PlayerApi {
   private readonly renderer: RendererFacade
   private readonly trackManager = new TrackManager()
 
-  private status: PlayerStatus = 'idle'
+  private status: PlayerStatus = PLAYER_STATUS.idle
   private scene: StrictSceneDoc | null = null
   private activeStoryId: string | null = null
   private timelineMs = 0
@@ -86,7 +89,7 @@ export class PlayerFacade implements PlayerApi {
     })
 
     this.renderer.onError((error) => {
-      this.emitTrace('renderer:error', 'error', {
+      this.emitTrace('renderer:error', RUNTIME_TRACE_STATUS.error, {
         code: error.code,
         message: error.message,
         ...(error.details ?? {})
@@ -117,7 +120,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.emitTrace('player:register-component', 'applied', {
+      this.emitTrace('player:register-component', RUNTIME_TRACE_STATUS.applied, {
       persoType,
       status: result.status,
       code: result.code
@@ -149,7 +152,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.emitTrace('player:override-component', 'applied', {
+      this.emitTrace('player:override-component', RUNTIME_TRACE_STATUS.applied, {
       persoType,
       status: result.status
     })
@@ -288,7 +291,7 @@ export class PlayerFacade implements PlayerApi {
     const runtimeStory = this.runtimePlanner.createRuntimeStory(nextStory)
     const rendererLoadResult = this.renderer.load({ story: runtimeStory })
     if (!rendererLoadResult.ok) {
-      this.emitTrace('player:mount:failed', 'error', {
+        this.emitTrace('player:mount:failed', RUNTIME_TRACE_STATUS.error, {
         storyId: nextStory.id,
         code: rendererLoadResult.error.code,
         message: rendererLoadResult.error.message
@@ -354,7 +357,7 @@ export class PlayerFacade implements PlayerApi {
    * Runs one frame tick when player is in playing state.
    */
   private runPlaybackTick(frameNowMs?: number): void {
-    if (this.status !== 'playing') {
+    if (this.status !== PLAYER_STATUS.playing) {
       return
     }
 
@@ -369,7 +372,7 @@ export class PlayerFacade implements PlayerApi {
    * Stops frame playback when timeline reaches its deterministic end.
    */
   private completePlaybackIfReachedEnd(): void {
-    if (this.status !== 'playing') {
+    if (this.status !== PLAYER_STATUS.playing) {
       return
     }
 
@@ -384,17 +387,17 @@ export class PlayerFacade implements PlayerApi {
 
     const rendererPauseResult = this.renderer.pause()
     if (!rendererPauseResult.ok) {
-      this.emitTrace('player:play:ended', 'error', {
+      this.emitTrace('player:play:ended', RUNTIME_TRACE_STATUS.error, {
         timelineMs: this.timelineMs,
         code: rendererPauseResult.error.code,
         message: rendererPauseResult.error.message
       })
-      this.setStatus('paused')
+      this.setStatus(PLAYER_STATUS.paused)
       return
     }
 
-    this.setStatus('paused')
-    this.emitTrace('player:play:ended', 'applied', {
+    this.setStatus(PLAYER_STATUS.paused)
+    this.emitTrace('player:play:ended', RUNTIME_TRACE_STATUS.applied, {
       timelineMs: this.timelineMs
     })
   }
@@ -425,7 +428,7 @@ export class PlayerFacade implements PlayerApi {
       name: input.name,
       payload: input.payload,
       index: this.nextPublicEventIndex,
-      source: input.source ?? 'user',
+      source: input.source ?? RUNTIME_EVENT_SOURCE.user,
       trackId: input.trackId
     }
 
@@ -452,7 +455,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const tickResult = this.renderer.tick(event.ms)
-    this.emitTrace('player:event:applied', 'applied', {
+    this.emitTrace('player:event:applied', RUNTIME_TRACE_STATUS.applied, {
       eventId: event.id,
       eventName: event.name,
       enqueuedCommitCount,
@@ -466,25 +469,27 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Initializes player runtime with one scene document.
    */
-  async init(nextScene: SceneDoc): Promise<PlayerCommandResult> {
-    this.emitTrace('player:init:started', 'applied', {
+  async init(nextScene: PlayerSceneInput): Promise<PlayerCommandResult> {
+    this.emitTrace('player:init:started', RUNTIME_TRACE_STATUS.applied, {
       sceneId: nextScene.id
     })
 
     this.resetRuntime()
 
-    this.scene = nextScene
+    const runtimeScene = nextScene as StrictSceneDoc
+
+    this.scene = runtimeScene
     this.timelineMs = 0
     this.playbackStartMs = null
     this.nextPublicEventIndex = 0
-    this.trackManager.load({ tracks: nextScene.tracks })
+    this.trackManager.load({ tracks: runtimeScene.tracks })
 
-    nextScene.init?.(nextScene, this.createLifecycleOptions())
-    this.setStatus('ready')
+    runtimeScene.init?.(runtimeScene, this.createLifecycleOptions())
+    this.setStatus(PLAYER_STATUS.ready)
 
     const rendererState = this.renderer.getState()
-    this.emitTrace('player:init:done', 'applied', {
-      sceneId: nextScene.id,
+    this.emitTrace('player:init:done', RUNTIME_TRACE_STATUS.applied, {
+      sceneId: runtimeScene.id,
       activeStoryId: this.activeStoryId ?? undefined,
       runtimeElementCount: rendererState.runtimeElementCount,
       runtimeRevision: rendererState.runtimeRevision
@@ -497,13 +502,13 @@ export class PlayerFacade implements PlayerApi {
    * Destroys player runtime resources and returns to idle state.
    */
   async destroy(): Promise<PlayerCommandResult> {
-    this.emitTrace('player:destroy:started', 'applied')
+    this.emitTrace('player:destroy:started', RUNTIME_TRACE_STATUS.applied)
 
     this.resetRuntime()
-    this.setStatus('idle')
+    this.setStatus(PLAYER_STATUS.idle)
 
     const rendererState = this.renderer.getState()
-    this.emitTrace('player:destroy:done', 'applied', {
+    this.emitTrace('player:destroy:done', RUNTIME_TRACE_STATUS.applied, {
       runtimeRevision: rendererState.runtimeRevision
     })
 
@@ -518,13 +523,13 @@ export class PlayerFacade implements PlayerApi {
       return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before play', 'player:play')
     }
 
-    if (this.status !== 'ready' && this.status !== 'paused') {
+    if (this.status !== PLAYER_STATUS.ready && this.status !== PLAYER_STATUS.paused) {
       return this.reject('INVALID_PLAYER_STATE', 'play is only allowed from ready or paused', 'player:play', {
         currentState: this.status
       })
     }
 
-    if (this.status === 'ready') {
+    if (this.status === PLAYER_STATUS.ready) {
       this.scene.onStart?.(this.scene, this.createLifecycleOptions())
       if (this.activeStoryId === null) {
         return this.reject(
@@ -544,7 +549,7 @@ export class PlayerFacade implements PlayerApi {
       this.director.resume()
     }
 
-    const rendererResult = this.status === 'ready' ? this.renderer.start() : this.renderer.resume()
+    const rendererResult = this.status === PLAYER_STATUS.ready ? this.renderer.start() : this.renderer.resume()
     if (!rendererResult.ok) {
       return this.reject('RENDERER_INVALID_STATE', 'Renderer rejected play transition', 'player:play', {
         currentState: this.status,
@@ -553,7 +558,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs
-    this.setStatus('playing')
+    this.setStatus(PLAYER_STATUS.playing)
     const currentTimelineMs = this.resolveCurrentTimelineMs()
     this.timelineMs = currentTimelineMs
     this.runDueTimelineEvents(currentTimelineMs)
@@ -561,7 +566,7 @@ export class PlayerFacade implements PlayerApi {
     if (this.playbackStartMs !== null) {
       this.startPlaybackLoop()
     }
-    this.emitTrace('player:play', 'applied', {
+    this.emitTrace('player:play', RUNTIME_TRACE_STATUS.applied, {
       startTimelineMs: this.timelineMs
     })
     return { ok: true }
@@ -575,7 +580,7 @@ export class PlayerFacade implements PlayerApi {
       return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before pause', 'player:pause')
     }
 
-    if (this.status !== 'playing') {
+    if (this.status !== PLAYER_STATUS.playing) {
       return this.reject('INVALID_PLAYER_STATE', 'pause is only allowed from playing', 'player:pause', {
         currentState: this.status
       })
@@ -594,8 +599,8 @@ export class PlayerFacade implements PlayerApi {
     this.timelineMs = this.resolveCurrentTimelineMs()
     this.playbackStartMs = null
     this.stopPlaybackLoop()
-    this.setStatus('paused')
-    this.emitTrace('player:pause', 'applied')
+    this.setStatus(PLAYER_STATUS.paused)
+    this.emitTrace('player:pause', RUNTIME_TRACE_STATUS.applied)
     return { ok: true }
   }
 
@@ -609,7 +614,7 @@ export class PlayerFacade implements PlayerApi {
 
     const timelineEvent = this.createTimelineEvent(event)
     this.runTimelineEvent(timelineEvent)
-    this.emitTrace('player:emit', 'applied', {
+    this.emitTrace('player:emit', RUNTIME_TRACE_STATUS.applied, {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
       eventMs: timelineEvent.ms
@@ -626,7 +631,11 @@ export class PlayerFacade implements PlayerApi {
       return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before seek', 'player:seek')
     }
 
-    if (this.status !== 'ready' && this.status !== 'paused' && this.status !== 'playing') {
+    if (
+      this.status !== PLAYER_STATUS.ready &&
+      this.status !== PLAYER_STATUS.paused &&
+      this.status !== PLAYER_STATUS.playing
+    ) {
       return this.reject(
         'INVALID_PLAYER_STATE',
         'seek is only allowed from ready, paused, or playing',
@@ -641,8 +650,8 @@ export class PlayerFacade implements PlayerApi {
       return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:seek')
     }
 
-    this.setStatus('seeking')
-    this.emitTrace('player:seek:started', 'applied', {
+    this.setStatus(PLAYER_STATUS.seeking)
+    this.emitTrace('player:seek:started', RUNTIME_TRACE_STATUS.applied, {
       targetTimelineMs
     })
 
@@ -718,8 +727,8 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.setStatus('paused')
-    this.emitTrace('player:seek:done', 'applied', {
+    this.setStatus(PLAYER_STATUS.paused)
+    this.emitTrace('player:seek:done', RUNTIME_TRACE_STATUS.applied, {
       targetTimelineMs: this.timelineMs
     })
 
@@ -734,7 +743,11 @@ export class PlayerFacade implements PlayerApi {
       return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before rewind', 'player:rewind')
     }
 
-    if (this.status !== 'ready' && this.status !== 'paused' && this.status !== 'playing') {
+    if (
+      this.status !== PLAYER_STATUS.ready &&
+      this.status !== PLAYER_STATUS.paused &&
+      this.status !== PLAYER_STATUS.playing
+    ) {
       return this.reject(
         'INVALID_PLAYER_STATE',
         'rewind is only allowed from ready, paused, or playing',
@@ -750,8 +763,8 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const previousStatus = this.status
-    this.setStatus('rewinding')
-    this.emitTrace('player:rewind:started', 'applied')
+    this.setStatus(PLAYER_STATUS.rewinding)
+    this.emitTrace('player:rewind:started', RUNTIME_TRACE_STATUS.applied)
 
     this.timelineMs = 0
     this.playbackStartMs = null
@@ -771,7 +784,7 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
-    if (previousStatus === 'playing' || previousStatus === 'paused') {
+    if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
       this.director.start()
 
       const rendererStartResult = this.renderer.start()
@@ -788,7 +801,7 @@ export class PlayerFacade implements PlayerApi {
         )
       }
 
-      if (previousStatus === 'paused') {
+      if (previousStatus === PLAYER_STATUS.paused) {
         this.director.pause()
 
         const rendererPauseResult = this.renderer.pause()
@@ -808,7 +821,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs })
 
-    if (previousStatus === 'playing') {
+    if (previousStatus === PLAYER_STATUS.playing) {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs()
       this.runDueTimelineEvents(this.timelineMs)
       this.startPlaybackLoop()
@@ -816,7 +829,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.setStatus(previousStatus)
     const rendererState = this.renderer.getState()
-    this.emitTrace('player:rewind:done', 'applied', {
+    this.emitTrace('player:rewind:done', RUNTIME_TRACE_STATUS.applied, {
       targetTimelineMs: 0,
       runtimeRevision: rendererState.runtimeRevision
     })
@@ -845,8 +858,8 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const previousStatus = this.status
-    this.setStatus('seeking')
-    this.emitTrace('player:rebuild:started', 'applied', {
+    this.setStatus(PLAYER_STATUS.seeking)
+    this.emitTrace('player:rebuild:started', RUNTIME_TRACE_STATUS.applied, {
       mode
     })
 
@@ -874,7 +887,7 @@ export class PlayerFacade implements PlayerApi {
         )
       }
 
-      if (previousStatus === 'playing' || previousStatus === 'paused') {
+      if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
         this.director.start()
 
         const rendererStartResult = this.renderer.start()
@@ -891,7 +904,7 @@ export class PlayerFacade implements PlayerApi {
           )
         }
 
-        if (previousStatus === 'paused') {
+        if (previousStatus === PLAYER_STATUS.paused) {
           this.director.pause()
 
           const rendererPauseResult = this.renderer.pause()
@@ -909,7 +922,7 @@ export class PlayerFacade implements PlayerApi {
           }
         }
 
-        if (previousStatus === 'playing') {
+        if (previousStatus === PLAYER_STATUS.playing) {
           this.runDueTimelineEvents(this.timelineMs)
           this.startPlaybackLoop()
         }
@@ -920,7 +933,7 @@ export class PlayerFacade implements PlayerApi {
     this.setStatus(previousStatus)
     const rendererState = this.renderer.getState()
 
-    this.emitTrace('player:rebuild:done', 'applied', {
+    this.emitTrace('player:rebuild:done', RUNTIME_TRACE_STATUS.applied, {
       mode,
       runtimeRevision: rendererState.runtimeRevision
     })
@@ -998,7 +1011,7 @@ export class PlayerFacade implements PlayerApi {
     eventName: string,
     details?: Record<string, unknown>
   ): PlayerCommandResult {
-    this.emitTrace(eventName, 'rejected', {
+    this.emitTrace(eventName, RUNTIME_TRACE_STATUS.rejected, {
       code,
       message,
       ...details

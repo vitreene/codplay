@@ -2,8 +2,9 @@ import type { AnimationTraceEntry } from '../animation/types'
 import type { ListTraceEntry } from './list-plugin/types'
 import type { MediaTraceEntry } from './media-sync'
 import type { WaitTraceEntry } from './wait-flow'
+import { RUNTIME_TRACE_STATUS } from './trace-constants'
 
-export type RuntimeTraceStatus = 'applied' | 'rejected' | 'info' | 'error'
+export type RuntimeTraceStatus = typeof RUNTIME_TRACE_STATUS[keyof typeof RUNTIME_TRACE_STATUS]
 
 export type RuntimeTraceRow = {
   traceId: string
@@ -239,7 +240,7 @@ export function appendWaitTraceEntries(
       traceId: entry.traceId,
       scope: 'scenario',
       eventName: entry.eventName,
-      status: 'applied',
+      status: RUNTIME_TRACE_STATUS.applied,
       sourceId: entry.waitId,
       correlationId,
       payload: {
@@ -263,7 +264,7 @@ export function appendListTraceEntries(
       traceId: entry.traceId,
       scope: 'list',
       eventName: entry.eventName,
-      status: 'applied',
+      status: RUNTIME_TRACE_STATUS.applied,
       sourceId: entry.runtimeListId,
       correlationId,
       payload: entry.payload
@@ -284,7 +285,7 @@ export function appendMediaTraceEntries(
       traceId: entry.traceId,
       scope: 'media',
       eventName: entry.eventName,
-      status: 'applied',
+      status: RUNTIME_TRACE_STATUS.applied,
       sourceId: entry.runtimeItemId,
       correlationId,
       payload: entry.payload

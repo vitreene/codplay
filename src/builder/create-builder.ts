@@ -1,4 +1,5 @@
 import { BuilderValidator } from './builder-validation'
+import { BuilderArtifactCloner } from './builder-artifact-cloner'
 import type {
   ApiResult,
   ApiWarning,
@@ -9,7 +10,6 @@ import type {
   CompiledScene,
   ResourceManifest,
   SceneDef,
-  StoryDef,
   ValidationReport
 } from './types'
 
@@ -25,6 +25,7 @@ export type BuilderOptions = {
 export class BuilderFacade implements BuilderApi {
   private readonly schemaVersion: string
   private readonly validator = new BuilderValidator()
+  private readonly cloner = new BuilderArtifactCloner()
 
   /**
    * Creates one builder instance from explicit options.
@@ -55,8 +56,8 @@ export class BuilderFacade implements BuilderApi {
     const compiledScene: CompiledScene = {
       schemaVersion: this.schemaVersion,
       createdAt: new Date().toISOString(),
-      scene: cloneSceneDef(input.scene),
-      resources: cloneResourceManifest(resourceManifest)
+      scene: this.cloner.cloneSceneDef(input.scene),
+      resources: this.cloner.cloneResourceManifest(resourceManifest)
     }
 
     return {
@@ -86,80 +87,12 @@ export class BuilderFacade implements BuilderApi {
     return {
       ok: true,
       data: {
-        output: {
-          exporterName: input.exporterName,
-          compiledScene: cloneCompiledScene(input.compiledScene)
-        },
-        warnings: []
+          output: {
+            exporterName: input.exporterName,
+            compiledScene: this.cloner.cloneCompiledScene(input.compiledScene)
+          },
+          warnings: []
+        }
       }
     }
-  }
-}
-
-/**
- * Clones one compiled scene while preserving plain object structure.
- */
-function cloneCompiledScene(compiledScene: CompiledScene): CompiledScene {
-  return {
-    schemaVersion: compiledScene.schemaVersion,
-    createdAt: compiledScene.createdAt,
-    scene: cloneSceneDef(compiledScene.scene),
-    resources: cloneResourceManifest(compiledScene.resources)
-  }
-}
-
-/**
- * Clones one resource manifest payload.
- */
-function cloneResourceManifest(manifest: ResourceManifest): ResourceManifest {
-  return cloneData(manifest)
-}
-
-/**
- * Clones one scene definition with stable arrays for validation and compile outputs.
- */
-function cloneSceneDef(scene: SceneDef): SceneDef {
-  const clonedStories: Record<string, StoryDef> = {}
-
-  for (const [storyId, story] of Object.entries(scene.stories)) {
-    clonedStories[storyId] = {
-      id: story.id,
-      children: cloneData(story.children),
-      entries: cloneData(story.entries),
-      initial: cloneData(story.initial),
-      persos: cloneData(story.persos),
-      straps: cloneData(story.straps),
-      listen: cloneData(story.listen),
-      eventimes: cloneData(story.eventimes),
-      state: cloneData(story.state),
-      init: story.init
-    }
-  }
-
-  return {
-    id: scene.id,
-    stories: clonedStories,
-    rootStories: cloneData(scene.rootStories),
-    initial: cloneData(scene.initial),
-    straps: cloneData(scene.straps),
-    listen: cloneData(scene.listen),
-    state: cloneData(scene.state),
-    init: scene.init,
-    tracks: cloneData(scene.tracks)
-  }
-}
-
-/**
- * Clones one data payload without mutating the caller-owned structure.
- */
-function cloneData<T>(value: T): T {
-  if (value === undefined) {
-    return value
-  }
-
-  if (typeof globalThis.structuredClone === 'function') {
-    return globalThis.structuredClone(value)
-  }
-
-  return JSON.parse(JSON.stringify(value)) as T
 }
