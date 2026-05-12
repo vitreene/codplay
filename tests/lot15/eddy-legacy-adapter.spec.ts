@@ -81,8 +81,8 @@ describe('Lot 15 - adaptation script animation Eddy', () => {
     }
 
     expect(converted.data.scene.id).toBe('scene-main')
-    expect(converted.data.scene.initialStoryId).toBe('story-main')
-    expect(Object.keys(converted.data.scene.stories['story-main']?.items ?? {})).toContain('capsule__1')
+    expect(converted.data.scene.rootStories).toEqual(['story-main'])
+    expect(converted.data.scene.stories['story-main']?.persos.map((perso) => perso.id)).toContain('capsule__1')
 
     const events = converted.data.scene.tracks?.['track-story-main'] as { events?: Array<{ name: string }> } | undefined
     expect(events?.events).toHaveLength(18)

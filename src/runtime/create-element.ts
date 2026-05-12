@@ -144,9 +144,7 @@ function applyInitialState(nodeRef: unknown, item: ItemDoc): void {
       resetObjectNodeState(mutableNode)
     }
 
-    if (state.id !== undefined) {
-      mutableNode.id = state.id
-    }
+    mutableNode.id = state.id ?? item.id
 
     if (state.className !== undefined) {
       mutableNode.className = state.className

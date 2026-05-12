@@ -4,30 +4,60 @@ import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 import { createLocalTelco } from '../../src/telco-local/create-local-telco'
 
+type PersoFixture = SceneDoc['stories'][string]['persos'][number]
+
+/**
+ * Creates one strict scene fixture with root mount/start hooks.
+ */
+function temp__createStrictSceneFixture(input: {
+  sceneId: string
+  storyId: string
+  persos: PersoFixture[]
+}): SceneDoc {
+  return {
+    id: input.sceneId,
+    rootStories: [input.storyId],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      [input.storyId]: {
+        id: input.storyId,
+        entries: input.persos.map((perso) => perso.id),
+        initial: undefined,
+        persos: input.persos,
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
+    tracks: {}
+  }
+}
+
 /**
  * Creates one minimal scene fixture compatible with createPlayer.
  */
 function temp__createSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-main',
-    initialStoryId: 'story-main',
-    stories: {
-      'story-main': {
-        id: 'story-main',
-        items: {
-          title: {
-            id: 'title',
-            type: 'text',
-            initial: {
-              id: 'title',
-              content: 'hello'
-            },
-            actions: {}
-          }
-        }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-main',
+    storyId: 'story-main',
+    persos: [
+      {
+        id: 'title',
+        type: 'text',
+        initial: {
+          content: 'hello'
+        },
+        actions: {}
       }
-    }
-  }
+    ]
+  })
 }
 
 describe('Lot 14 - telco locale composant', () => {

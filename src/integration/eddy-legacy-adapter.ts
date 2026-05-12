@@ -1,5 +1,5 @@
 import { convertLegacyToV1, type LegacyInput, type LegacyPerso } from '../legacy-converter/convert-legacy-to-v1'
-import type { SceneDoc } from '../player/types'
+import type { PersoDoc, SceneDoc } from '../player/types'
 
 export type EddyLegacySnapshot = {
   persos: unknown[]
@@ -173,6 +173,19 @@ export function adaptEddySnapshot(
 }
 
 /**
+ * Converts one converted runtime item record into strict scene persos.
+ */
+function convertItemsToPersos(items: Record<string, { id: string; type: string; initial: Record<string, unknown>; actions: Record<string, unknown>; children?: string[]; list?: unknown; media?: unknown }>) {
+  return Object.values(items).map((item): PersoDoc => ({
+    id: item.id,
+    type: item.type,
+    initial: item.initial,
+    children: item.children,
+    actions: item.actions as PersoDoc['actions']
+  }))
+}
+
+/**
  * Converts one Eddy snapshot into SceneDoc consumable by createPlayer.
  */
 export function convertEddySnapshotToScene(
@@ -202,11 +215,29 @@ export function convertEddySnapshotToScene(
     }
   }
 
+  const mainStory = converted.data.scene.stories['story-main']
   const playerScene: SceneDoc = {
     id: converted.data.scene.id,
-    stories: converted.data.scene.stories,
-    initialStoryId: 'story-main',
-    scenario: converted.data.scene.scenario,
+    rootStories: ['story-main'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      'story-main': {
+        id: mainStory.id,
+        entries: Object.keys(mainStory.items),
+        initial: undefined,
+        persos: convertItemsToPersos(mainStory.items),
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
     tracks: converted.data.scene.tracks
   }
 

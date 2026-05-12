@@ -69,9 +69,7 @@ export class ImageRuntimeComponent implements RuntimeComponent {
 
       resetRuntimeNodeState(this.mediaNode)
 
-      if (typeof initial.id === 'string') {
-        applyNodeId(this.rootNode, initial.id)
-      }
+      applyNodeId(this.rootNode, typeof initial.id === 'string' ? initial.id : this.item.id)
 
       applyClassNamePatch(
         this.rootNode,

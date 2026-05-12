@@ -1,7 +1,13 @@
 import type { RuntimeEventSource } from '../core/events/types'
 import type { RuntimeComponentClass, RuntimeRegistrySnapshot } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
-import type { StoryDoc } from '../runtime/types'
+import type {
+  ActionDoc,
+  EmitDeclaration,
+  ItemModuleConfig,
+  ItemState,
+  ListConfig
+} from '../runtime/types'
 
 export type PlayerStatus = 'idle' | 'preloading' | 'ready' | 'playing' | 'paused' | 'seeking' | 'rewinding' | 'error'
 
@@ -11,13 +17,73 @@ export type PlayerRuntimePolicy = {
   allowedRebuildModes: RebuildMode[]
 }
 
-export type SceneDoc = {
-  id: string
-  stories: Record<string, StoryDoc>
-  initialStoryId?: string
-  scenario?: Record<string, unknown>
-  tracks?: Record<string, unknown>
+export type ListenEmit = {
+  name: string
+  data?: Record<string, unknown>
+  cascade?: boolean
 }
+
+export type ListenTransform = {
+  name: string
+  options?: Record<string, unknown>
+}
+
+export type ListenRule = {
+  on: string
+  transform?: ListenTransform[]
+  emit?: ListenEmit[]
+  straps?: string[]
+}
+
+export type StoryEventimeDoc = {
+  name: string
+  startAt: number
+  data?: Record<string, unknown>
+  events?: StoryEventimeDoc[]
+}
+
+export type PersoDoc = {
+  id: string
+  type: string
+  module?: ItemModuleConfig
+  initial: ItemState
+  emit?: EmitDeclaration[]
+  children?: string[]
+  list?: ListConfig
+  actions: Record<string, ActionDoc | null>
+}
+
+export type SceneStoryDoc = {
+  id: string
+  children?: string[]
+  entries: string[]
+  initial: Record<string, unknown> | undefined
+  persos: PersoDoc[]
+  straps: string[] | undefined
+  listen: ListenRule[]
+  eventimes?: StoryEventimeDoc[]
+  state?: Record<string, unknown> | undefined
+}
+
+export type PlayerSceneLifecycleOptions = {
+  mount: (story: string | SceneStoryDoc) => void
+  start: (story: string | SceneStoryDoc) => void
+}
+
+export type StrictSceneDoc = {
+  id: string
+  stories: Record<string, SceneStoryDoc>
+  rootStories: string[]
+  initial: Record<string, unknown> | undefined
+  straps: string[] | undefined
+  listen: ListenRule[]
+  state?: Record<string, unknown> | undefined
+  init?: (scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) => void
+  onStart?: (scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) => void
+  tracks: Record<string, unknown>
+}
+
+export type SceneDoc = StrictSceneDoc
 
 export type PlayerStateSnapshot = {
   status: PlayerStatus

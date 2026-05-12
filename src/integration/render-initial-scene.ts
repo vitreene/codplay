@@ -1,5 +1,6 @@
 import { createElement } from '../runtime/create-element'
 import type { StoryDoc } from '../runtime/types'
+import { PlayerRuntimePlanner } from '../player/create-player-utils'
 import type { SceneDoc } from '../player/types'
 
 export type RenderInitialSceneResult = {
@@ -23,11 +24,18 @@ function isHtmlElement(nodeRef: unknown): nodeRef is HTMLElement {
  * Resolves active story used for initial scene rendering.
  */
 function resolveActiveStory(scene: SceneDoc): StoryDoc | null {
-  if (scene.initialStoryId) {
-    return scene.stories[scene.initialStoryId] ?? null
+  const planner = new PlayerRuntimePlanner()
+  const rootStoryId = planner.resolveRootStoryId(scene)
+  if (rootStoryId === null) {
+    return null
   }
 
-  return Object.values(scene.stories)[0] ?? null
+  const story = scene.stories[rootStoryId]
+  if (!story) {
+    return null
+  }
+
+  return planner.createRuntimeStory(story)
 }
 
 /**

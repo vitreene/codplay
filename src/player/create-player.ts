@@ -1,67 +1,74 @@
-import type { AnimationAdapter } from "../animation/types";
-import type { TimelineEvent } from "../core/events/types";
-import { TimeTicker } from "../core/time/ticker";
-import { DirectorCore } from "../director/create-director";
-import { RendererFacade } from "../renderer/create-renderer";
+import type { AnimationAdapter } from '../animation/types'
+import type { TimelineEvent } from '../core/events/types'
+import { TimeTicker } from '../core/time/ticker'
+import { DirectorCore } from '../director/create-director'
+import { RendererFacade } from '../renderer/create-renderer'
 import {
   createRuntimeTraceStore,
   type RuntimeTraceRow,
-  type RuntimeTraceStatus,
-} from "../runtime/trace-store";
-import type { RuntimeComponentClass } from "../runtime/components";
-import type { CreateElementOptions } from "../runtime/create-element";
-import { PlayerRuntimePlanner } from "./create-player-utils";
+  type RuntimeTraceStatus
+} from '../runtime/trace-store'
+import type { RuntimeComponentClass } from '../runtime/components'
+import type { CreateElementOptions } from '../runtime/create-element'
+import { TrackManager } from '../track-manager/create-track-manager'
+import { createSceneLifecycleOptions, PlayerRuntimePlanner } from './create-player-utils'
 import type {
   PlayerApi,
   PlayerCommandResult,
   PlayerPublicEventInput,
   PlayerRuntimePolicy,
+  PlayerSceneLifecycleOptions,
   PlayerStateListener,
   PlayerStateSnapshot,
   PlayerStatus,
   PlayerTraceListener,
   RebuildMode,
   SceneDoc,
-} from "./types";
+  SceneStoryDoc,
+  StrictSceneDoc
+} from './types'
 
 export type CreatePlayerOptions = {
-  runtimePolicy?: Partial<PlayerRuntimePolicy>;
-  createElementOptions?: CreateElementOptions;
-  animationAdapter?: AnimationAdapter;
-};
+  runtimePolicy?: Partial<PlayerRuntimePolicy>
+  createElementOptions?: CreateElementOptions
+  animationAdapter?: AnimationAdapter
+}
 
 const DEFAULT_RUNTIME_POLICY: PlayerRuntimePolicy = {
-  allowedRebuildModes: ["state", "full"],
-};
+  allowedRebuildModes: ['state', 'full']
+}
 
 const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
   run: () => [],
   stop: () => {
-    return;
-  },
-};
+    return
+  }
+}
 
 /**
  * Implements one player facade with lifecycle commands and subscriptions.
  */
 export class PlayerFacade implements PlayerApi {
-  private readonly runtimePolicy: PlayerRuntimePolicy;
-  private readonly runtimePlanner = new PlayerRuntimePlanner();
-  private readonly director = new DirectorCore();
-  private readonly renderer: RendererFacade;
+  private readonly runtimePolicy: PlayerRuntimePolicy
+  private readonly runtimePlanner = new PlayerRuntimePlanner()
+  private readonly director = new DirectorCore()
+  private readonly renderer: RendererFacade
+  private readonly trackManager = new TrackManager()
 
-  private status: PlayerStatus = "idle";
-  private scene: SceneDoc | null = null;
-  private timelineMs = 0;
-  private timelineEndMs = 0;
-  private playbackStartMs: number | null = null;
-  private readonly ticker = new TimeTicker();
-  private nextScheduledEventIndex = 0;
-  private nextPublicEventIndex = 0;
+  private status: PlayerStatus = 'idle'
+  private scene: StrictSceneDoc | null = null
+  private activeStoryId: string | null = null
+  private timelineMs = 0
+  private timelineEndMs = 0
+  private playbackStartMs: number | null = null
+  private readonly ticker = new TimeTicker()
+  private nextPublicEventIndex = 0
+  private readonly mountedStoryIds = new Set<string>()
+  private readonly startedStoryIds = new Set<string>()
 
-  private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 });
-  private readonly traceListeners = new Set<PlayerTraceListener>();
-  private readonly stateListeners = new Set<PlayerStateListener>();
+  private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 })
+  private readonly traceListeners = new Set<PlayerTraceListener>()
+  private readonly stateListeners = new Set<PlayerStateListener>()
 
   /**
    * Configures one player facade from explicit options.
@@ -69,22 +76,22 @@ export class PlayerFacade implements PlayerApi {
   constructor(options: CreatePlayerOptions = {}) {
     this.runtimePolicy = {
       allowedRebuildModes:
-        options.runtimePolicy?.allowedRebuildModes ?? DEFAULT_RUNTIME_POLICY.allowedRebuildModes,
-    };
+        options.runtimePolicy?.allowedRebuildModes ?? DEFAULT_RUNTIME_POLICY.allowedRebuildModes
+    }
 
-    const animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER;
+    const animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
     this.renderer = new RendererFacade({
       animationAdapter,
-      createElementOptions: options.createElementOptions,
-    });
+      createElementOptions: options.createElementOptions
+    })
 
     this.renderer.onError((error) => {
-      this.emitTrace("renderer:error", "error", {
+      this.emitTrace('renderer:error', 'error', {
         code: error.code,
         message: error.message,
-        ...(error.details ?? {}),
-      });
-    });
+        ...(error.details ?? {})
+      })
+    })
   }
 
   /**
@@ -93,30 +100,30 @@ export class PlayerFacade implements PlayerApi {
   registerComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
     if (this.isInitialized()) {
       return this.reject(
-        "PLAYER_COMPONENT_REGISTRY_LOCKED",
-        "registerComponent is only allowed before init",
-        "player:register-component",
-        { persoType },
-      );
+        'PLAYER_COMPONENT_REGISTRY_LOCKED',
+        'registerComponent is only allowed before init',
+        'player:register-component',
+        { persoType }
+      )
     }
 
-    const result = this.renderer.registerComponent(persoType, componentClass);
+    const result = this.renderer.registerComponent(persoType, componentClass)
     if (!result.ok) {
       return this.reject(
         result.code,
         result.message,
-        "player:register-component",
-        result.details,
-      );
+        'player:register-component',
+        result.details
+      )
     }
 
-    this.emitTrace("player:register-component", "applied", {
+    this.emitTrace('player:register-component', 'applied', {
       persoType,
       status: result.status,
-      code: result.code,
-    });
+      code: result.code
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
@@ -125,36 +132,36 @@ export class PlayerFacade implements PlayerApi {
   overrideComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
     if (this.isInitialized()) {
       return this.reject(
-        "PLAYER_COMPONENT_REGISTRY_LOCKED",
-        "overrideComponent is only allowed before init",
-        "player:override-component",
-        { persoType },
-      );
+        'PLAYER_COMPONENT_REGISTRY_LOCKED',
+        'overrideComponent is only allowed before init',
+        'player:override-component',
+        { persoType }
+      )
     }
 
-    const result = this.renderer.overrideComponent(persoType, componentClass);
+    const result = this.renderer.overrideComponent(persoType, componentClass)
     if (!result.ok) {
       return this.reject(
         result.code,
         result.message,
-        "player:override-component",
-        result.details,
-      );
+        'player:override-component',
+        result.details
+      )
     }
 
-    this.emitTrace("player:override-component", "applied", {
+    this.emitTrace('player:override-component', 'applied', {
       persoType,
-      status: result.status,
-    });
+      status: result.status
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Exposes one stable runtime registry for integration/editing flows.
    */
-  getRuntimeRegistry(): import("../runtime/components").RuntimeRegistrySnapshot {
-    return this.renderer.getRuntimeRegistry();
+  getRuntimeRegistry(): import('../runtime/components').RuntimeRegistrySnapshot {
+    return this.renderer.getRuntimeRegistry()
   }
 
   /**
@@ -162,13 +169,13 @@ export class PlayerFacade implements PlayerApi {
    */
   private resolveCurrentTimelineMs(): number {
     if (this.playbackStartMs === null) {
-      return Math.min(this.timelineMs, this.timelineEndMs);
+      return Math.min(this.timelineMs, this.timelineEndMs)
     }
 
     return Math.min(
       this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs),
-      this.timelineEndMs,
-    );
+      this.timelineEndMs
+    )
   }
 
   /**
@@ -176,62 +183,170 @@ export class PlayerFacade implements PlayerApi {
    */
   private stopPlaybackLoop(): void {
     if (!this.ticker.isRunning()) {
-      return;
+      return
     }
 
-    this.ticker.stop();
+    this.ticker.stop()
   }
 
   /**
    * Returns true when player has one initialized scene.
    */
   private isInitialized(): boolean {
-    return this.scene !== null;
+    return this.scene !== null
   }
 
   /**
    * Clears runtime references while preserving policy and subscribers.
    */
   private resetRuntime(): void {
-    this.stopPlaybackLoop();
-    this.director.destroy();
-    this.renderer.destroy();
-    this.scene = null;
-    this.timelineMs = 0;
-    this.timelineEndMs = 0;
-    this.playbackStartMs = null;
-    this.nextScheduledEventIndex = 0;
-    this.nextPublicEventIndex = 0;
+    this.stopPlaybackLoop()
+    this.director.destroy()
+    this.renderer.destroy()
+    this.trackManager.load({ tracks: {} })
+    this.scene = null
+    this.activeStoryId = null
+    this.timelineMs = 0
+    this.timelineEndMs = 0
+    this.playbackStartMs = null
+    this.nextPublicEventIndex = 0
+    this.mountedStoryIds.clear()
+    this.startedStoryIds.clear()
   }
 
   /**
-   * Recomputes the next timeline event cursor from one timeline position.
+   * Rebuilds the active runtime plan from the current mounted story and track manager state.
    */
-  private syncNextScheduledEventIndex(timelineMs: number): void {
-    const sortedEvents = this.director.getSortedEvents();
-    let nextIndex = 0;
-
-    while (nextIndex < sortedEvents.length && sortedEvents[nextIndex].ms < timelineMs) {
-      nextIndex += 1;
+  private syncActiveRuntimePlan(): PlayerCommandResult {
+    if (this.scene === null || this.activeStoryId === null) {
+      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:sync-runtime')
     }
 
-    this.nextScheduledEventIndex = nextIndex;
+    const runtimePlan = this.runtimePlanner.createRuntimePlan(
+      this.scene,
+      this.activeStoryId,
+      this.trackManager.getAllEvents()
+    )
+    this.director.load(runtimePlan)
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+    return { ok: true }
+  }
+
+  /**
+   * Resolves one existing scene story from id or direct reference.
+   */
+  private resolveSceneStory(story: string | SceneStoryDoc): SceneStoryDoc | null {
+    if (this.scene === null) {
+      return null
+    }
+
+    return this.runtimePlanner.resolveStory(this.scene, story)
+  }
+
+  /**
+   * Resolves one target track id for anchored eventimes of a started story.
+   */
+  private resolveStoryTrackId(storyId: string): string {
+    if (this.scene === null) {
+      return `track-${storyId}`
+    }
+
+    if (storyId in this.scene.tracks) {
+      return storyId
+    }
+
+    const exactTrackId = `track-${storyId}`
+    if (exactTrackId in this.scene.tracks) {
+      return exactTrackId
+    }
+
+    const loadedTrackIds = this.trackManager.state.loadedTrackIds
+    if (loadedTrackIds.length === 1) {
+      return loadedTrackIds[0]
+    }
+
+    return exactTrackId
+  }
+
+  /**
+   * Mounts one story into renderer/director without starting its portable eventimes.
+   */
+  private mountStory(story: string | SceneStoryDoc): void {
+    const nextStory = this.resolveSceneStory(story)
+    if (nextStory === null) {
+      return
+    }
+
+    this.activeStoryId = nextStory.id
+    this.mountedStoryIds.add(nextStory.id)
+
+    const syncResult = this.syncActiveRuntimePlan()
+    if (!syncResult.ok) {
+      return
+    }
+
+    const runtimeStory = this.runtimePlanner.createRuntimeStory(nextStory)
+    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
+    if (!rendererLoadResult.ok) {
+      this.emitTrace('player:mount:failed', 'error', {
+        storyId: nextStory.id,
+        code: rendererLoadResult.error.code,
+        message: rendererLoadResult.error.message
+      })
+      return
+    }
+  }
+
+  /**
+   * Starts one mounted story once per player cycle and anchors its portable eventimes.
+   */
+  private startStory(story: string | SceneStoryDoc): void {
+    const nextStory = this.resolveSceneStory(story)
+    if (nextStory === null) {
+      return
+    }
+
+    this.mountStory(nextStory)
+
+    if (this.startedStoryIds.has(nextStory.id)) {
+      return
+    }
+
+    this.startedStoryIds.add(nextStory.id)
+
+    if (Array.isArray(nextStory.eventimes) && nextStory.eventimes.length > 0) {
+      this.trackManager.appendAnchoredEventimes({
+        trackId: this.resolveStoryTrackId(nextStory.id),
+        anchorMs: this.resolveCurrentTimelineMs(),
+        storyId: nextStory.id,
+        eventimes: nextStory.eventimes
+      })
+    }
+
+    this.syncActiveRuntimePlan()
+  }
+
+  /**
+   * Builds lifecycle runtime options exposed to scene hooks.
+   */
+  private createLifecycleOptions(): PlayerSceneLifecycleOptions {
+    return createSceneLifecycleOptions({
+      mount: (story) => {
+        this.mountStory(story)
+      },
+      start: (story) => {
+        this.startStory(story)
+      }
+    })
   }
 
   /**
    * Applies all timeline events due at or before the provided timeline cursor.
    */
   private runDueTimelineEvents(timelineMs: number): void {
-    const sortedEvents = this.director.getSortedEvents();
-
-    while (this.nextScheduledEventIndex < sortedEvents.length) {
-      const event = sortedEvents[this.nextScheduledEventIndex];
-      if (event.ms > timelineMs) {
-        break;
-      }
-
-      this.runTimelineEvent(event);
-      this.nextScheduledEventIndex += 1;
+    const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events
+    for (const event of dueEvents) {
+      this.runTimelineEvent(event)
     }
   }
 
@@ -239,49 +354,49 @@ export class PlayerFacade implements PlayerApi {
    * Runs one frame tick when player is in playing state.
    */
   private runPlaybackTick(frameNowMs?: number): void {
-    if (this.status !== "playing") {
-      return;
+    if (this.status !== 'playing') {
+      return
     }
 
-    const timelineMs = this.resolveCurrentTimelineMs();
-    this.timelineMs = timelineMs;
-    this.runDueTimelineEvents(timelineMs);
-    this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs());
-    this.completePlaybackIfReachedEnd();
+    const timelineMs = this.resolveCurrentTimelineMs()
+    this.timelineMs = timelineMs
+    this.runDueTimelineEvents(timelineMs)
+    this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs())
+    this.completePlaybackIfReachedEnd()
   }
 
   /**
    * Stops frame playback when timeline reaches its deterministic end.
    */
   private completePlaybackIfReachedEnd(): void {
-    if (this.status !== "playing") {
-      return;
+    if (this.status !== 'playing') {
+      return
     }
 
     if (this.timelineMs < this.timelineEndMs) {
-      return;
+      return
     }
 
-    this.timelineMs = this.timelineEndMs;
-    this.playbackStartMs = null;
-    this.stopPlaybackLoop();
-    this.director.pause();
+    this.timelineMs = this.timelineEndMs
+    this.playbackStartMs = null
+    this.stopPlaybackLoop()
+    this.director.pause()
 
-    const rendererPauseResult = this.renderer.pause();
+    const rendererPauseResult = this.renderer.pause()
     if (!rendererPauseResult.ok) {
-      this.emitTrace("player:play:ended", "error", {
+      this.emitTrace('player:play:ended', 'error', {
         timelineMs: this.timelineMs,
         code: rendererPauseResult.error.code,
-        message: rendererPauseResult.error.message,
-      });
-      this.setStatus("paused");
-      return;
+        message: rendererPauseResult.error.message
+      })
+      this.setStatus('paused')
+      return
     }
 
-    this.setStatus("paused");
-    this.emitTrace("player:play:ended", "applied", {
-      timelineMs: this.timelineMs,
-    });
+    this.setStatus('paused')
+    this.emitTrace('player:play:ended', 'applied', {
+      timelineMs: this.timelineMs
+    })
   }
 
   /**
@@ -289,20 +404,20 @@ export class PlayerFacade implements PlayerApi {
    */
   private startPlaybackLoop(): void {
     if (this.ticker.isRunning()) {
-      return;
+      return
     }
 
     this.ticker.start((tickPayload) => {
-      this.runPlaybackTick(tickPayload.nowMs);
-    });
+      this.runPlaybackTick(tickPayload.nowMs)
+    })
   }
 
   /**
    * Builds one normalized timeline event from public event input.
    */
   private createTimelineEvent(input: PlayerPublicEventInput): TimelineEvent {
-    const eventMs = input.ms ?? this.resolveCurrentTimelineMs();
-    const eventId = input.id ?? `evt-public-${Math.round(eventMs)}-${this.nextPublicEventIndex}`;
+    const eventMs = input.ms ?? this.resolveCurrentTimelineMs()
+    const eventId = input.id ?? `evt-public-${Math.round(eventMs)}-${this.nextPublicEventIndex}`
 
     const event: TimelineEvent = {
       id: eventId,
@@ -310,154 +425,146 @@ export class PlayerFacade implements PlayerApi {
       name: input.name,
       payload: input.payload,
       index: this.nextPublicEventIndex,
-      source: input.source ?? "user",
-      trackId: input.trackId,
-    };
+      source: input.source ?? 'user',
+      trackId: input.trackId
+    }
 
-    this.nextPublicEventIndex += 1;
-    return event;
+    this.nextPublicEventIndex += 1
+    return event
   }
 
   /**
    * Executes one timeline event against runtime listeners and actions.
    */
   private runTimelineEvent(event: TimelineEvent): void {
-    const directorResult = this.director.runTimelineEvent(event);
+    const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
-      return;
+      return
     }
 
-    let enqueuedCommitCount = 0;
+    let enqueuedCommitCount = 0
 
     for (const commit of directorResult.commits) {
-      const enqueueResult = this.renderer.enqueueCommit(commit);
+      const enqueueResult = this.renderer.enqueueCommit(commit)
       if (enqueueResult.ok) {
-        enqueuedCommitCount += 1;
+        enqueuedCommitCount += 1
       }
     }
 
-    const tickResult = this.renderer.tick(event.ms);
-    this.emitTrace("player:event:applied", "applied", {
+    const tickResult = this.renderer.tick(event.ms)
+    this.emitTrace('player:event:applied', 'applied', {
       eventId: event.id,
       eventName: event.name,
       enqueuedCommitCount,
       appliedCommitCount: tickResult.appliedCommitCount,
       appliedActionsCount: tickResult.appliedActionCount,
       animationAppliedCount: tickResult.animationAppliedCount,
-      conflictCount: tickResult.conflictCount,
-    });
+      conflictCount: tickResult.conflictCount
+    })
   }
 
   /**
    * Initializes player runtime with one scene document.
    */
   async init(nextScene: SceneDoc): Promise<PlayerCommandResult> {
-    this.emitTrace("player:init:started", "applied", {
+    this.emitTrace('player:init:started', 'applied', {
+      sceneId: nextScene.id
+    })
+
+    this.resetRuntime()
+
+    this.scene = nextScene
+    this.timelineMs = 0
+    this.playbackStartMs = null
+    this.nextPublicEventIndex = 0
+    this.trackManager.load({ tracks: nextScene.tracks })
+
+    nextScene.init?.(nextScene, this.createLifecycleOptions())
+    this.setStatus('ready')
+
+    const rendererState = this.renderer.getState()
+    this.emitTrace('player:init:done', 'applied', {
       sceneId: nextScene.id,
-    });
-
-    const nextActiveStory = this.runtimePlanner.resolveActiveStory(nextScene);
-    if (nextActiveStory === null) {
-      return this.reject(
-        "SCENE_STORY_NOT_FOUND",
-        "Scene must provide at least one story",
-        "player:init:failed",
-        {
-          sceneId: nextScene.id,
-        },
-      );
-    }
-
-    this.scene = nextScene;
-    this.timelineMs = 0;
-    this.playbackStartMs = null;
-    this.nextPublicEventIndex = 0;
-    const runtimePlan = this.runtimePlanner.createRuntimePlan(nextScene, nextActiveStory);
-    this.director.load(runtimePlan);
-    this.syncNextScheduledEventIndex(this.timelineMs);
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
-
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
-    if (!rendererLoadResult.ok) {
-      return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to load story", "player:init:failed", {
-        sceneId: nextScene.id,
-        code: rendererLoadResult.error.code,
-      });
-    }
-
-    this.setStatus("ready");
-
-    const rendererState = this.renderer.getState();
-
-    this.emitTrace("player:init:done", "applied", {
-      sceneId: nextScene.id,
-      activeStoryId: runtimePlan.story.id,
+      activeStoryId: this.activeStoryId ?? undefined,
       runtimeElementCount: rendererState.runtimeElementCount,
-      runtimeRevision: rendererState.runtimeRevision,
-    });
+      runtimeRevision: rendererState.runtimeRevision
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Destroys player runtime resources and returns to idle state.
    */
   async destroy(): Promise<PlayerCommandResult> {
-    this.emitTrace("player:destroy:started", "applied");
+    this.emitTrace('player:destroy:started', 'applied')
 
-    this.resetRuntime();
-    this.setStatus("idle");
+    this.resetRuntime()
+    this.setStatus('idle')
 
-    const rendererState = this.renderer.getState();
+    const rendererState = this.renderer.getState()
+    this.emitTrace('player:destroy:done', 'applied', {
+      runtimeRevision: rendererState.runtimeRevision
+    })
 
-    this.emitTrace("player:destroy:done", "applied", {
-      runtimeRevision: rendererState.runtimeRevision,
-    });
-
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Starts playback when player is ready or paused.
    */
   async play(): Promise<PlayerCommandResult> {
-    if (!this.isInitialized()) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before play", "player:play");
+    if (!this.isInitialized() || this.scene === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before play', 'player:play')
     }
 
-    if (this.status !== "ready" && this.status !== "paused") {
-      return this.reject("INVALID_PLAYER_STATE", "play is only allowed from ready or paused", "player:play", {
-        currentState: this.status,
-      });
+    if (this.status !== 'ready' && this.status !== 'paused') {
+      return this.reject('INVALID_PLAYER_STATE', 'play is only allowed from ready or paused', 'player:play', {
+        currentState: this.status
+      })
     }
 
-    if (this.status === "ready") {
-      this.director.start();
+    if (this.status === 'ready') {
+      this.scene.onStart?.(this.scene, this.createLifecycleOptions())
+      if (this.activeStoryId === null) {
+        return this.reject(
+          'SCENE_STORY_NOT_FOUND',
+          'Scene must mount one story before play',
+          'player:play'
+        )
+      }
+
+      const syncResult = this.syncActiveRuntimePlan()
+      if (!syncResult.ok) {
+        return syncResult
+      }
+
+      this.director.start()
     } else {
-      this.director.resume();
+      this.director.resume()
     }
 
-    const rendererResult = this.status === "ready" ? this.renderer.start() : this.renderer.resume();
+    const rendererResult = this.status === 'ready' ? this.renderer.start() : this.renderer.resume()
     if (!rendererResult.ok) {
-      return this.reject("RENDERER_INVALID_STATE", "Renderer rejected play transition", "player:play", {
+      return this.reject('RENDERER_INVALID_STATE', 'Renderer rejected play transition', 'player:play', {
         currentState: this.status,
-        code: rendererResult.error.code,
-      });
+        code: rendererResult.error.code
+      })
     }
 
-    this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs;
-    this.setStatus("playing");
-    const currentTimelineMs = this.resolveCurrentTimelineMs();
-    this.timelineMs = currentTimelineMs;
-    this.runDueTimelineEvents(currentTimelineMs);
-    this.completePlaybackIfReachedEnd();
+    this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs
+    this.setStatus('playing')
+    const currentTimelineMs = this.resolveCurrentTimelineMs()
+    this.timelineMs = currentTimelineMs
+    this.runDueTimelineEvents(currentTimelineMs)
+    this.completePlaybackIfReachedEnd()
     if (this.playbackStartMs !== null) {
-      this.startPlaybackLoop();
+      this.startPlaybackLoop()
     }
-    this.emitTrace("player:play", "applied", {
-      startTimelineMs: this.timelineMs,
-    });
-    return { ok: true };
+    this.emitTrace('player:play', 'applied', {
+      startTimelineMs: this.timelineMs
+    })
+    return { ok: true }
   }
 
   /**
@@ -465,31 +572,31 @@ export class PlayerFacade implements PlayerApi {
    */
   async pause(): Promise<PlayerCommandResult> {
     if (!this.isInitialized()) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before pause", "player:pause");
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before pause', 'player:pause')
     }
 
-    if (this.status !== "playing") {
-      return this.reject("INVALID_PLAYER_STATE", "pause is only allowed from playing", "player:pause", {
-        currentState: this.status,
-      });
+    if (this.status !== 'playing') {
+      return this.reject('INVALID_PLAYER_STATE', 'pause is only allowed from playing', 'player:pause', {
+        currentState: this.status
+      })
     }
 
-    this.director.pause();
+    this.director.pause()
 
-    const rendererResult = this.renderer.pause();
+    const rendererResult = this.renderer.pause()
     if (!rendererResult.ok) {
-      return this.reject("RENDERER_INVALID_STATE", "Renderer rejected pause transition", "player:pause", {
+      return this.reject('RENDERER_INVALID_STATE', 'Renderer rejected pause transition', 'player:pause', {
         currentState: this.status,
-        code: rendererResult.error.code,
-      });
+        code: rendererResult.error.code
+      })
     }
 
-    this.timelineMs = this.resolveCurrentTimelineMs();
-    this.playbackStartMs = null;
-    this.stopPlaybackLoop();
-    this.setStatus("paused");
-    this.emitTrace("player:pause", "applied");
-    return { ok: true };
+    this.timelineMs = this.resolveCurrentTimelineMs()
+    this.playbackStartMs = null
+    this.stopPlaybackLoop()
+    this.setStatus('paused')
+    this.emitTrace('player:pause', 'applied')
+    return { ok: true }
   }
 
   /**
@@ -497,375 +604,345 @@ export class PlayerFacade implements PlayerApi {
    */
   async emit(event: PlayerPublicEventInput): Promise<PlayerCommandResult> {
     if (!this.isInitialized()) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before emit", "player:emit");
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before emit', 'player:emit')
     }
 
-    const timelineEvent = this.createTimelineEvent(event);
-    this.runTimelineEvent(timelineEvent);
-    this.emitTrace("player:emit", "applied", {
+    const timelineEvent = this.createTimelineEvent(event)
+    this.runTimelineEvent(timelineEvent)
+    this.emitTrace('player:emit', 'applied', {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
-      eventMs: timelineEvent.ms,
-    });
+      eventMs: timelineEvent.ms
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Seeks timeline to target position without forcing autoplay.
    */
   async seek(targetTimelineMs: number): Promise<PlayerCommandResult> {
-    if (!this.isInitialized()) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before seek", "player:seek");
+    if (!this.isInitialized() || this.scene === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before seek', 'player:seek')
     }
 
-    if (this.status !== "ready" && this.status !== "paused" && this.status !== "playing") {
+    if (this.status !== 'ready' && this.status !== 'paused' && this.status !== 'playing') {
       return this.reject(
-        "INVALID_PLAYER_STATE",
-        "seek is only allowed from ready, paused, or playing",
-        "player:seek",
+        'INVALID_PLAYER_STATE',
+        'seek is only allowed from ready, paused, or playing',
+        'player:seek',
         {
-          currentState: this.status,
-        },
-      );
+          currentState: this.status
+        }
+      )
     }
 
-    this.setStatus("seeking");
-    this.emitTrace("player:seek:started", "applied", {
-      targetTimelineMs,
-    });
-
-    if (this.scene === null) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before seek", "player:seek");
+    if (this.activeStoryId === null) {
+      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:seek')
     }
 
-    this.playbackStartMs = null;
-    this.stopPlaybackLoop();
+    this.setStatus('seeking')
+    this.emitTrace('player:seek:started', 'applied', {
+      targetTimelineMs
+    })
 
-    const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene);
-    if (nextActiveStory === null) {
-      return this.reject(
-        "SCENE_STORY_NOT_FOUND",
-        "Scene must provide at least one story",
-        "player:seek:failed",
-        {
-          sceneId: this.scene.id,
-          targetTimelineMs,
-        },
-      );
+    this.playbackStartMs = null
+    this.stopPlaybackLoop()
+
+    const syncResult = this.syncActiveRuntimePlan()
+    if (!syncResult.ok) {
+      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:seek:failed', {
+        sceneId: this.scene.id,
+        targetTimelineMs
+      })
     }
 
-    const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
-    this.director.load(runtimePlan);
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
-
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
+    const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
+    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
     if (!rendererLoadResult.ok) {
-      return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to seek story", "player:seek:failed", {
+      return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to seek story', 'player:seek:failed', {
         sceneId: this.scene.id,
         targetTimelineMs,
-        code: rendererLoadResult.error.code,
-      });
+        code: rendererLoadResult.error.code
+      })
     }
 
-    this.emitStateSnapshot();
+    this.emitStateSnapshot()
 
-    this.timelineMs = Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs);
-    this.nextScheduledEventIndex = 0;
+    this.timelineMs = Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs)
 
-    this.director.start();
-    const rendererStartResult = this.renderer.start();
+    this.director.start()
+    const rendererStartResult = this.renderer.start()
     if (!rendererStartResult.ok) {
       return this.reject(
-        "RENDERER_INVALID_STATE",
-        "Renderer could not start for seek replay",
-        "player:seek:failed",
+        'RENDERER_INVALID_STATE',
+        'Renderer could not start for seek replay',
+        'player:seek:failed',
         {
           sceneId: this.scene.id,
           targetTimelineMs,
-          code: rendererStartResult.error.code,
-        },
-      );
+          code: rendererStartResult.error.code
+        }
+      )
     }
 
     const eventMsByEventId = new Map<string, number>(
-      this.director.getSortedEvents().map((event) => [event.id, event.ms]),
-    );
+      this.director.getSortedEvents().map((event) => [event.id, event.ms])
+    )
 
-    const sortedEvents = this.director.getSortedEvents();
-    this.nextScheduledEventIndex = 0;
-    while (this.nextScheduledEventIndex < sortedEvents.length) {
-      const timelineEvent = sortedEvents[this.nextScheduledEventIndex];
+    const sortedEvents = this.director.getSortedEvents()
+    for (const timelineEvent of sortedEvents) {
       if (timelineEvent.ms > this.timelineMs) {
-        break;
+        break
       }
 
-      this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId);
-      this.runTimelineEvent(timelineEvent);
-      this.nextScheduledEventIndex += 1;
+      this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId)
+      this.runTimelineEvent(timelineEvent)
     }
 
-    this.syncNextScheduledEventIndex(this.timelineMs);
-    this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId);
+    this.trackManager.syncCursor({ nowMs: this.timelineMs })
+    this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId)
 
-    this.director.pause();
-    const rendererPauseResult = this.renderer.pause();
+    this.director.pause()
+    const rendererPauseResult = this.renderer.pause()
     if (!rendererPauseResult.ok) {
       return this.reject(
-        "RENDERER_INVALID_STATE",
-        "Renderer could not pause after seek replay",
-        "player:seek:failed",
+        'RENDERER_INVALID_STATE',
+        'Renderer could not pause after seek replay',
+        'player:seek:failed',
         {
           sceneId: this.scene.id,
           targetTimelineMs,
-          code: rendererPauseResult.error.code,
-        },
-      );
+          code: rendererPauseResult.error.code
+        }
+      )
     }
 
-    this.setStatus("paused");
-    this.emitTrace("player:seek:done", "applied", {
-      targetTimelineMs: this.timelineMs,
-    });
+    this.setStatus('paused')
+    this.emitTrace('player:seek:done', 'applied', {
+      targetTimelineMs: this.timelineMs
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Rewinds timeline to zero while preserving playback intent.
    */
   async rewind(): Promise<PlayerCommandResult> {
-    if (!this.isInitialized()) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before rewind", "player:rewind");
+    if (!this.isInitialized() || this.scene === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before rewind', 'player:rewind')
     }
 
-    if (this.status !== "ready" && this.status !== "paused" && this.status !== "playing") {
+    if (this.status !== 'ready' && this.status !== 'paused' && this.status !== 'playing') {
       return this.reject(
-        "INVALID_PLAYER_STATE",
-        "rewind is only allowed from ready, paused, or playing",
-        "player:rewind",
+        'INVALID_PLAYER_STATE',
+        'rewind is only allowed from ready, paused, or playing',
+        'player:rewind',
         {
-          currentState: this.status,
-        },
-      );
+          currentState: this.status
+        }
+      )
     }
 
-    if (this.scene === null) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before rewind", "player:rewind");
+    if (this.activeStoryId === null) {
+      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:rewind')
     }
 
-    const previousStatus = this.status;
-    this.setStatus("rewinding");
-    this.emitTrace("player:rewind:started", "applied");
+    const previousStatus = this.status
+    this.setStatus('rewinding')
+    this.emitTrace('player:rewind:started', 'applied')
 
-    this.timelineMs = 0;
-    this.playbackStartMs = null;
-    this.stopPlaybackLoop();
+    this.timelineMs = 0
+    this.playbackStartMs = null
+    this.stopPlaybackLoop()
 
-    const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene);
-    if (nextActiveStory === null) {
-      return this.reject(
-        "SCENE_STORY_NOT_FOUND",
-        "Scene must provide at least one story",
-        "player:rewind:failed",
-        {
-          sceneId: this.scene.id,
-        },
-      );
+    const syncResult = this.syncActiveRuntimePlan()
+    if (!syncResult.ok) {
+      return syncResult
     }
 
-    const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
-    this.director.load(runtimePlan);
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
-
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
+    const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
+    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
     if (!rendererLoadResult.ok) {
-      return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to rewind story", "player:rewind:failed", {
+      return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to rewind story', 'player:rewind:failed', {
         sceneId: this.scene.id,
-        code: rendererLoadResult.error.code,
-      });
+        code: rendererLoadResult.error.code
+      })
     }
 
-    if (previousStatus === "playing" || previousStatus === "paused") {
-      this.director.start();
+    if (previousStatus === 'playing' || previousStatus === 'paused') {
+      this.director.start()
 
-      const rendererStartResult = this.renderer.start();
+      const rendererStartResult = this.renderer.start()
       if (!rendererStartResult.ok) {
         return this.reject(
-          "RENDERER_INVALID_STATE",
-          "Renderer could not restore state after rewind",
-          "player:rewind:failed",
+          'RENDERER_INVALID_STATE',
+          'Renderer could not restore state after rewind',
+          'player:rewind:failed',
           {
             sceneId: this.scene.id,
             code: rendererStartResult.error.code,
-            previousStatus,
-          },
-        );
+            previousStatus
+          }
+        )
       }
 
-      if (previousStatus === "paused") {
-        this.director.pause();
+      if (previousStatus === 'paused') {
+        this.director.pause()
 
-        const rendererPauseResult = this.renderer.pause();
+        const rendererPauseResult = this.renderer.pause()
         if (!rendererPauseResult.ok) {
           return this.reject(
-            "RENDERER_INVALID_STATE",
-            "Renderer could not restore paused state after rewind",
-            "player:rewind:failed",
+            'RENDERER_INVALID_STATE',
+            'Renderer could not restore paused state after rewind',
+            'player:rewind:failed',
             {
               sceneId: this.scene.id,
-              code: rendererPauseResult.error.code,
-            },
-          );
+              code: rendererPauseResult.error.code
+            }
+          )
         }
       }
     }
 
-    this.syncNextScheduledEventIndex(this.timelineMs);
+    this.trackManager.syncCursor({ nowMs: this.timelineMs })
 
-    if (previousStatus === "playing") {
-      this.playbackStartMs = this.runtimePlanner.resolveNowMs();
-      this.runDueTimelineEvents(this.timelineMs);
-      this.startPlaybackLoop();
+    if (previousStatus === 'playing') {
+      this.playbackStartMs = this.runtimePlanner.resolveNowMs()
+      this.runDueTimelineEvents(this.timelineMs)
+      this.startPlaybackLoop()
     }
 
-    this.setStatus(previousStatus);
-    const rendererState = this.renderer.getState();
-    this.emitTrace("player:rewind:done", "applied", {
+    this.setStatus(previousStatus)
+    const rendererState = this.renderer.getState()
+    this.emitTrace('player:rewind:done', 'applied', {
       targetTimelineMs: 0,
-      runtimeRevision: rendererState.runtimeRevision,
-    });
+      runtimeRevision: rendererState.runtimeRevision
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Rebuilds runtime according to runtime policy constraints.
    */
-  async rebuild(mode: RebuildMode = "state"): Promise<PlayerCommandResult> {
-    if (!this.isInitialized() || this.scene === null) {
-      return this.reject("PLAYER_NOT_INITIALIZED", "init must be called before rebuild", "player:rebuild");
+  async rebuild(mode: RebuildMode = 'state'): Promise<PlayerCommandResult> {
+    if (!this.isInitialized() || this.scene === null || this.activeStoryId === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before rebuild', 'player:rebuild')
     }
 
     if (!this.runtimePolicy.allowedRebuildModes.includes(mode)) {
       return this.reject(
-        "MODE_NOT_ALLOWED_BY_POLICY",
-        "Requested rebuild mode is not allowed by policy",
-        "player:rebuild",
+        'MODE_NOT_ALLOWED_BY_POLICY',
+        'Requested rebuild mode is not allowed by policy',
+        'player:rebuild',
         {
           mode,
-          allowedModes: this.runtimePolicy.allowedRebuildModes,
-        },
-      );
+          allowedModes: this.runtimePolicy.allowedRebuildModes
+        }
+      )
     }
 
-    const previousStatus = this.status;
-    this.setStatus("seeking");
-    this.emitTrace("player:rebuild:started", "applied", {
-      mode,
-    });
+    const previousStatus = this.status
+    this.setStatus('seeking')
+    this.emitTrace('player:rebuild:started', 'applied', {
+      mode
+    })
 
-    if (mode === "full") {
-      const nextActiveStory = this.runtimePlanner.resolveActiveStory(this.scene);
-      if (nextActiveStory === null) {
-        return this.reject(
-          "SCENE_STORY_NOT_FOUND",
-          "Scene must provide at least one story",
-          "player:rebuild:failed",
-          {
-            sceneId: this.scene.id,
-            mode,
-          },
-        );
+    if (mode === 'full') {
+      const syncResult = this.syncActiveRuntimePlan()
+      if (!syncResult.ok) {
+        return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:rebuild:failed', {
+          sceneId: this.scene.id,
+          mode
+        })
       }
 
-      const runtimePlan = this.runtimePlanner.createRuntimePlan(this.scene, nextActiveStory);
-      this.director.load(runtimePlan);
-      this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan);
-      this.syncNextScheduledEventIndex(this.timelineMs);
-
-      const rendererLoadResult = this.renderer.load({ story: runtimePlan.story });
+      const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
+      const rendererLoadResult = this.renderer.load({ story: runtimeStory })
       if (!rendererLoadResult.ok) {
         return this.reject(
-          "RENDERER_LOAD_FAILED",
-          "Renderer failed to rebuild story",
-          "player:rebuild:failed",
+          'RENDERER_LOAD_FAILED',
+          'Renderer failed to rebuild story',
+          'player:rebuild:failed',
           {
             sceneId: this.scene.id,
             mode,
-            code: rendererLoadResult.error.code,
-          },
-        );
+            code: rendererLoadResult.error.code
+          }
+        )
       }
 
-      if (previousStatus === "playing" || previousStatus === "paused") {
-        this.director.start();
+      if (previousStatus === 'playing' || previousStatus === 'paused') {
+        this.director.start()
 
-        const rendererStartResult = this.renderer.start();
+        const rendererStartResult = this.renderer.start()
         if (!rendererStartResult.ok) {
           return this.reject(
-            "RENDERER_INVALID_STATE",
-            "Renderer could not resume after full rebuild",
-            "player:rebuild:failed",
+            'RENDERER_INVALID_STATE',
+            'Renderer could not resume after full rebuild',
+            'player:rebuild:failed',
             {
               sceneId: this.scene.id,
               mode,
-              code: rendererStartResult.error.code,
-            },
-          );
+              code: rendererStartResult.error.code
+            }
+          )
         }
 
-        if (previousStatus === "paused") {
-          this.director.pause();
+        if (previousStatus === 'paused') {
+          this.director.pause()
 
-          const rendererPauseResult = this.renderer.pause();
+          const rendererPauseResult = this.renderer.pause()
           if (!rendererPauseResult.ok) {
             return this.reject(
-              "RENDERER_INVALID_STATE",
-              "Renderer could not restore paused state after full rebuild",
-              "player:rebuild:failed",
+              'RENDERER_INVALID_STATE',
+              'Renderer could not restore paused state after full rebuild',
+              'player:rebuild:failed',
               {
                 sceneId: this.scene.id,
                 mode,
-                code: rendererPauseResult.error.code,
-              },
-            );
+                code: rendererPauseResult.error.code
+              }
+            )
           }
         }
 
-        if (previousStatus === "playing") {
-          this.runDueTimelineEvents(this.timelineMs);
-          this.startPlaybackLoop();
+        if (previousStatus === 'playing') {
+          this.runDueTimelineEvents(this.timelineMs)
+          this.startPlaybackLoop()
         }
       }
     }
 
-    this.setStatus(previousStatus);
-    const rendererState = this.renderer.getState();
+    this.trackManager.syncCursor({ nowMs: this.timelineMs })
+    this.setStatus(previousStatus)
+    const rendererState = this.renderer.getState()
 
-    this.emitTrace("player:rebuild:done", "applied", {
+    this.emitTrace('player:rebuild:done', 'applied', {
       mode,
-      runtimeRevision: rendererState.runtimeRevision,
-    });
+      runtimeRevision: rendererState.runtimeRevision
+    })
 
-    return { ok: true };
+    return { ok: true }
   }
 
   /**
    * Returns one immutable snapshot of current player state.
    */
   getState(): PlayerStateSnapshot {
-    const directorState = this.director.getState();
-    const rendererState = this.renderer.getState();
+    const directorState = this.director.getState()
+    const rendererState = this.renderer.getState()
 
     return {
       status: this.status,
       initialized: this.isInitialized(),
       sceneId: this.scene?.id,
-      activeStoryId: directorState.activeStoryId,
+      activeStoryId: this.activeStoryId ?? directorState.activeStoryId,
       timelineMs: this.resolveCurrentTimelineMs(),
-      runtimeRevision: rendererState.runtimeRevision,
-    };
+      runtimeRevision: rendererState.runtimeRevision
+    }
   }
 
   /**
@@ -873,20 +950,20 @@ export class PlayerFacade implements PlayerApi {
    */
   private setStatus(nextStatus: PlayerStatus): void {
     if (this.status === nextStatus) {
-      return;
+      return
     }
 
-    this.status = nextStatus;
-    this.emitStateSnapshot();
+    this.status = nextStatus
+    this.emitStateSnapshot()
   }
 
   /**
    * Emits one state snapshot to all state subscribers.
    */
   private emitStateSnapshot(): void {
-    const snapshot = this.getState();
+    const snapshot = this.getState()
     for (const listener of this.stateListeners) {
-      listener(snapshot);
+      listener(snapshot)
     }
   }
 
@@ -896,20 +973,20 @@ export class PlayerFacade implements PlayerApi {
   private emitTrace(
     eventName: string,
     statusValue: RuntimeTraceStatus,
-    payload?: Record<string, unknown>,
+    payload?: Record<string, unknown>
   ): RuntimeTraceRow {
     const row = this.traceStore.append({
-      scope: "player",
+      scope: 'player',
       eventName,
       status: statusValue,
-      payload,
-    });
+      payload
+    })
 
     for (const listener of this.traceListeners) {
-      listener(row);
+      listener(row)
     }
 
-    return row;
+    return row
   }
 
   /**
@@ -919,41 +996,41 @@ export class PlayerFacade implements PlayerApi {
     code: string,
     message: string,
     eventName: string,
-    details?: Record<string, unknown>,
+    details?: Record<string, unknown>
   ): PlayerCommandResult {
-    this.emitTrace(eventName, "rejected", {
+    this.emitTrace(eventName, 'rejected', {
       code,
       message,
-      ...details,
-    });
+      ...details
+    })
 
     return {
       ok: false,
       error: {
         code,
         message,
-        details,
-      },
-    };
+        details
+      }
+    }
   }
 
   /**
    * Subscribes to trace rows emitted by player commands.
    */
   onTrace(listener: PlayerTraceListener): () => void {
-    this.traceListeners.add(listener);
+    this.traceListeners.add(listener)
     return () => {
-      this.traceListeners.delete(listener);
-    };
+      this.traceListeners.delete(listener)
+    }
   }
 
   /**
    * Subscribes to player state changes.
    */
   onStateChange(listener: PlayerStateListener): () => void {
-    this.stateListeners.add(listener);
+    this.stateListeners.add(listener)
     return () => {
-      this.stateListeners.delete(listener);
-    };
+      this.stateListeners.delete(listener)
+    }
   }
 }

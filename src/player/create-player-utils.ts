@@ -1,12 +1,16 @@
 import type { AnimationAction, AnimationResolvedAction } from '../animation/types'
-import { sortRuntimeEvents } from '../core/events/sort'
-import type { EventListener, RuntimeEventSource, TimelineEvent, TrackMeta } from '../core/events/types'
-import type { StoryDoc } from '../runtime/types'
+import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
 import type { RuntimeCommit } from '../renderer/types'
-import type { SceneDoc } from './types'
+import type { ItemDoc, StoryDoc as RuntimeStoryDoc } from '../runtime/types'
+import type {
+  PersoDoc,
+  PlayerSceneLifecycleOptions,
+  SceneStoryDoc,
+  StrictSceneDoc
+} from './types'
 
 export type PlayerRuntimePlan = {
-  story: StoryDoc
+  story: RuntimeStoryDoc
   listeners: EventListener<AnimationAction>[]
   sortedEvents: TimelineEvent[]
 }
@@ -38,6 +42,24 @@ export class PlayerRuntimePlanner {
   }
 
   /**
+   * Resolves one story by identifier or direct story reference.
+   */
+  resolveStory(scene: StrictSceneDoc, story: string | SceneStoryDoc): SceneStoryDoc | null {
+    if (typeof story === 'string') {
+      return scene.stories[story] ?? null
+    }
+
+    return scene.stories[story.id] ?? story
+  }
+
+  /**
+   * Resolves one deterministic root story id for fallback flows.
+   */
+  resolveRootStoryId(scene: StrictSceneDoc): string | null {
+    return scene.rootStories[0] ?? Object.keys(scene.stories)[0] ?? null
+  }
+
+  /**
    * Resolves one deterministic timeline end from events and action durations.
    */
   resolveTimelineEndMsFromPlan(plan: PlayerRuntimePlan): number {
@@ -50,7 +72,7 @@ export class PlayerRuntimePlanner {
     for (const listener of plan.listeners) {
       for (const [eventName, action] of Object.entries(listener.actionsByEventName)) {
         const currentDurationMs = actionDurationByEventName.get(eventName) ?? 0
-        const nextDurationMs = this.resolveActionDurationMs(action as Record<string, unknown>)
+        const nextDurationMs = this.resolveActionDurationMs(action as Record<string, unknown> | null)
         actionDurationByEventName.set(eventName, Math.max(currentDurationMs, nextDurationMs))
       }
     }
@@ -65,28 +87,16 @@ export class PlayerRuntimePlanner {
   }
 
   /**
-   * Resolves the story used as active runtime story for one scene.
-   */
-  resolveActiveStory(scene: SceneDoc): StoryDoc | null {
-    if (scene.initialStoryId) {
-      return scene.stories[scene.initialStoryId] ?? null
-    }
-
-    const firstStory = Object.values(scene.stories)[0]
-    return firstStory ?? null
-  }
-
-  /**
    * Builds one sanitized runtime plan used by critical playback paths.
    */
-  createRuntimePlan(scene: SceneDoc, story: StoryDoc): PlayerRuntimePlan {
-    const trackMeta = this.resolveTrackMeta(scene)
-    const timelineEvents = this.resolveTimelineEvents(scene, story)
+  createRuntimePlan(scene: StrictSceneDoc, storyId: string, sortedEvents: TimelineEvent[]): PlayerRuntimePlan {
+    const story = scene.stories[storyId]
+    const runtimeStory = this.createRuntimeStory(story)
 
     return {
-      story,
-      listeners: this.resolveActionListeners(story),
-      sortedEvents: sortRuntimeEvents(timelineEvents, trackMeta)
+      story: runtimeStory,
+      listeners: this.resolveActionListeners(runtimeStory),
+      sortedEvents
     }
   }
 
@@ -113,9 +123,45 @@ export class PlayerRuntimePlanner {
   }
 
   /**
+   * Converts one strict story payload into the renderer/runtime item shape.
+   */
+  createRuntimeStory(story: SceneStoryDoc): RuntimeStoryDoc {
+    const items: Record<string, ItemDoc> = {}
+
+    for (const perso of story.persos) {
+      items[perso.id] = this.createRuntimeItem(perso)
+    }
+
+    return {
+      id: story.id,
+      items
+    }
+  }
+
+  /**
+   * Creates one runtime item from one strict perso definition.
+   */
+  private createRuntimeItem(perso: PersoDoc): ItemDoc {
+    return {
+      id: perso.id,
+      type: perso.type,
+      module: perso.module,
+      initial: perso.initial,
+      emit: perso.emit,
+      children: perso.children,
+      list: perso.list,
+      actions: perso.actions as ItemDoc['actions']
+    }
+  }
+
+  /**
    * Resolves max transition duration from one action payload style block.
    */
-  private resolveActionDurationMs(action: Record<string, unknown>): number {
+  private resolveActionDurationMs(action: Record<string, unknown> | null): number {
+    if (typeof action !== 'object' || action === null) {
+      return 0
+    }
+
     const style = action.style
     if (typeof style !== 'object' || style === null) {
       return 0
@@ -137,158 +183,30 @@ export class PlayerRuntimePlanner {
   }
 
   /**
-   * Resolves runtime listeners from story items and action maps.
+   * Resolves runtime listeners from story persos and action maps.
    */
-  private resolveActionListeners(story: StoryDoc): EventListener<AnimationAction>[] {
+  private resolveActionListeners(story: RuntimeStoryDoc): EventListener<AnimationAction>[] {
     return Object.values(story.items).map((item) => ({
       listenerId: item.id,
       actionsByEventName: item.actions
     }))
   }
+}
 
-  /**
-   * Resolves track ordering metadata from scene tracks payload.
-   */
-  private resolveTrackMeta(scene: SceneDoc): Record<string, TrackMeta> {
-    const result: Record<string, TrackMeta> = {}
-    const tracks = scene.tracks
-    if (typeof tracks !== 'object' || tracks === null) {
-      return result
-    }
+/**
+ * Creates one scene lifecycle options object from callbacks.
+ */
+export function createSceneLifecycleOptions(options: PlayerSceneLifecycleOptions): PlayerSceneLifecycleOptions {
+  return options
+}
 
-    for (const [trackId, rawTrack] of Object.entries(tracks)) {
-      if (typeof rawTrack !== 'object' || rawTrack === null) {
-        continue
-      }
-
-      const track = rawTrack as Record<string, unknown>
-      result[trackId] = {
-        order: Number.isFinite(track.order) ? Number(track.order) : 0,
-        source: this.sanitizeEventSource(track.source)
-      }
-    }
-
-    return result
+/**
+ * Normalizes raw event source values into the runtime source domain.
+ */
+export function sanitizeRuntimeEventSource(rawSource: unknown): RuntimeEventSource {
+  if (rawSource === 'user' || rawSource === 'system') {
+    return rawSource
   }
 
-  /**
-   * Resolves and sanitizes timeline events from scene tracks or story fallback.
-   */
-  private resolveTimelineEvents(scene: SceneDoc, story: StoryDoc): TimelineEvent[] {
-    const trackEvents = this.resolveTrackTimelineEvents(scene)
-    if (trackEvents.length > 0) {
-      return trackEvents
-    }
-
-    return this.resolveStoryTimelineEvents(story)
-  }
-
-  /**
-   * Resolves timeline events from scene tracks payload.
-   */
-  private resolveTrackTimelineEvents(scene: SceneDoc): TimelineEvent[] {
-    const timelineEvents: TimelineEvent[] = []
-    let fallbackIndex = 0
-    const tracks = scene.tracks
-
-    if (typeof tracks !== 'object' || tracks === null) {
-      return timelineEvents
-    }
-
-    for (const [trackId, rawTrack] of Object.entries(tracks)) {
-      if (typeof rawTrack !== 'object' || rawTrack === null) {
-        continue
-      }
-
-      const track = rawTrack as Record<string, unknown>
-      const rawEvents = Array.isArray(track.events) ? track.events : []
-      for (const rawEvent of rawEvents) {
-        if (typeof rawEvent !== 'object' || rawEvent === null) {
-          continue
-        }
-
-        const event = rawEvent as Record<string, unknown>
-        const normalizedEvent = this.normalizeTimelineEvent(event, fallbackIndex, trackId)
-        if (normalizedEvent === null) {
-          continue
-        }
-
-        timelineEvents.push(normalizedEvent)
-        fallbackIndex += 1
-      }
-    }
-
-    return timelineEvents
-  }
-
-  /**
-   * Resolves timeline events from story fallback payload.
-   */
-  private resolveStoryTimelineEvents(story: StoryDoc): TimelineEvent[] {
-    const timelineEvents: TimelineEvent[] = []
-    let fallbackIndex = 0
-    const rawStory = story as unknown as { events?: unknown }
-    const storyEvents = Array.isArray(rawStory.events) ? rawStory.events : []
-
-    for (const rawEvent of storyEvents) {
-      if (typeof rawEvent !== 'object' || rawEvent === null) {
-        continue
-      }
-
-      const event = rawEvent as Record<string, unknown>
-      const trackId = typeof event.trackId === 'string' ? event.trackId : undefined
-      const normalizedEvent = this.normalizeTimelineEvent(event, fallbackIndex, trackId)
-      if (normalizedEvent === null) {
-        continue
-      }
-
-      timelineEvents.push(normalizedEvent)
-      fallbackIndex += 1
-    }
-
-    return timelineEvents
-  }
-
-  /**
-   * Converts one raw event payload into one sanitized timeline event.
-   */
-  private normalizeTimelineEvent(
-    event: Record<string, unknown>,
-    fallbackIndex: number,
-    trackId?: string
-  ): TimelineEvent | null {
-    const eventName = typeof event.name === 'string' ? event.name : ''
-    if (eventName.length === 0) {
-      return null
-    }
-
-    const rawMs = Number.isFinite(event.ms) ? Number(event.ms) : 0
-    const ms = this.clampTimelineMs(rawMs)
-    const index = Number.isFinite(event.index) ? Number(event.index) : fallbackIndex
-    const id = typeof event.id === 'string' ? event.id : `evt-${ms}-${fallbackIndex}`
-    const payload = typeof event.payload === 'object' && event.payload !== null
-      ? (event.payload as Record<string, unknown>)
-      : undefined
-
-    return {
-      id,
-      ms,
-      name: eventName,
-      payload,
-      index,
-      source: this.sanitizeEventSource(event.source),
-      trackId
-    }
-  }
-
-  /**
-   * Sanitizes one runtime event source value.
-   */
-  private sanitizeEventSource(rawSource: unknown): RuntimeEventSource {
-    if (rawSource === 'user' || rawSource === 'system') {
-      return rawSource
-    }
-
-    return 'story'
-  }
+  return 'story'
 }

@@ -4,6 +4,43 @@ import { createAnimationAdapter, type AnimeImplementation } from '../../src/anim
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
+type PersoFixture = SceneDoc['stories'][string]['persos'][number]
+
+/**
+ * Creates one strict scene fixture with root mount/start hooks.
+ */
+function temp__createStrictSceneFixture(input: {
+  sceneId: string
+  storyId: string
+  persos: PersoFixture[]
+  tracks: Record<string, unknown>
+}): SceneDoc {
+  return {
+    id: input.sceneId,
+    rootStories: [input.storyId],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      [input.storyId]: {
+        id: input.storyId,
+        entries: input.persos.map((perso) => perso.id),
+        initial: undefined,
+        persos: input.persos,
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
+    tracks: input.tracks
+  }
+}
+
 /**
  * Creates one anime implementation that applies target end values immediately.
  */
@@ -51,40 +88,34 @@ function temp__createApplyingAnimeImplementation() {
  * Creates one scene fixture matching the red DEMO rotation proof of concept.
  */
 function temp__createDemoSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-demo',
-    initialStoryId: 'story-demo',
-    stories: {
-      'story-demo': {
-        id: 'story-demo',
-        items: {
-          'demo-box': {
-            id: 'demo-box',
-            type: 'text',
-            initial: {
-              id: 'demo-box',
-              tag: 'div',
-              className: 'demo-box',
-              content: 'DEMO',
-              style: {
-                backgroundColor: '#c80f17',
-                color: '#ffffff'
-              }
-            },
-            actions: {
-              'demo:rotate': {
-                style: {
-                  rotate: {
-                    to: 180,
-                    duration: 2000
-                  }
-                }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-demo',
+    storyId: 'story-demo',
+    persos: [
+      {
+        id: 'demo-box',
+        type: 'text',
+        initial: {
+          tag: 'div',
+          className: 'demo-box',
+          content: 'DEMO',
+          style: {
+            backgroundColor: '#c80f17',
+            color: '#ffffff'
+          }
+        },
+        actions: {
+          'demo:rotate': {
+            style: {
+              rotate: {
+                to: 180,
+                duration: 2000
               }
             }
           }
         }
       }
-    },
+    ],
     tracks: {
       'track-demo': {
         id: 'track-demo',
@@ -101,7 +132,7 @@ function temp__createDemoSceneFixture(): SceneDoc {
         ]
       }
     }
-  }
+  })
 }
 
 /**
@@ -119,43 +150,37 @@ function temp__createEmitOnlySceneFixture(): SceneDoc {
  * Creates one scene fixture that mutates class and attributes on playback.
  */
 function temp__createRewindStateSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-rewind-state',
-    initialStoryId: 'story-rewind-state',
-    stories: {
-      'story-rewind-state': {
-        id: 'story-rewind-state',
-        items: {
-          'state-box': {
-            id: 'state-box',
-            type: 'text',
-            initial: {
-              id: 'state-box',
-              className: 'state-initial',
-              content: 'STATE',
-              style: {
-                opacity: 0
-              },
-              attr: {
-                'data-state': 'initial'
-              }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-rewind-state',
+    storyId: 'story-rewind-state',
+    persos: [
+      {
+        id: 'state-box',
+        type: 'text',
+        initial: {
+          className: 'state-initial',
+          content: 'STATE',
+          style: {
+            opacity: 0
+          },
+          attr: {
+            'data-state': 'initial'
+          }
+        },
+        actions: {
+          'state:mutate': {
+            className: { add: 'state-mutated', remove: 'state-initial' },
+            style: {
+              opacity: { to: 1, duration: 200 }
             },
-            actions: {
-              'state:mutate': {
-                className: { add: 'state-mutated', remove: 'state-initial' },
-                style: {
-                  opacity: { to: 1, duration: 200 }
-                },
-                attr: {
-                  'data-state': 'mutated',
-                  'data-extra': 'transient'
-                }
-              }
+            attr: {
+              'data-state': 'mutated',
+              'data-extra': 'transient'
             }
           }
         }
       }
-    },
+    ],
     tracks: {
       'track-rewind-state': {
         id: 'track-rewind-state',
@@ -172,7 +197,7 @@ function temp__createRewindStateSceneFixture(): SceneDoc {
         ]
       }
     }
-  }
+  })
 }
 
 describe('Lot 17 - real demo flow', () => {

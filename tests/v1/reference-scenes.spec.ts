@@ -61,6 +61,27 @@ describe('V1 - reference scenes', () => {
     expect(referenceList?.getChildrenSnapshot()).toEqual(['reference-title', 'reference-caption'])
   })
 
+  it('starts S2 reference scene only when play triggers onStart', async () => {
+    const player = new PlayerFacade({
+      createElementOptions: {
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    const initResult = await player.init(createS2ReferenceScene())
+
+    expect(initResult.ok).toBe(true)
+
+    const listNodeBeforePlay = player.getRuntimeRegistry().getNodeById('reference-list') as RuntimeNodeFixture | null
+    expect(listNodeBeforePlay?.className).toBe('reference-list')
+
+    const playResult = await player.play()
+    expect(playResult.ok).toBe(true)
+
+    const listNodeAfterPlay = player.getRuntimeRegistry().getNodeById('reference-list') as RuntimeNodeFixture | null
+    expect(listNodeAfterPlay?.className).toContain('reference-list-live')
+  })
+
   it('loads S3 robustness scene and keeps transfer-ready list state', async () => {
     const player = new PlayerFacade({
       createElementOptions: {

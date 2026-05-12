@@ -6,16 +6,20 @@ import type { SceneDoc } from '../../player/types'
 export function createS1CanariScene(): SceneDoc {
   return {
     id: 's1-canari-scene',
-    initialStoryId: 's1-canari-story',
+    rootStories: ['s1-canari-story'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
     stories: {
       's1-canari-story': {
         id: 's1-canari-story',
-        items: {
-          'canari-title': {
+        entries: ['canari-title'],
+        initial: undefined,
+        persos: [
+          {
             id: 'canari-title',
             type: 'text',
             initial: {
-              id: 'canari-title',
               tag: 'h1',
               content: 'Canari',
               style: {
@@ -24,8 +28,13 @@ export function createS1CanariScene(): SceneDoc {
             },
             actions: {}
           }
-        }
+        ],
+        straps: undefined,
+        listen: []
       }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

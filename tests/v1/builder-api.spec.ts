@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createBuilder } from '../../src/builder/create-builder'
+import { BuilderFacade } from '../../src/builder/create-builder'
 import type { SceneDef } from '../../src/builder/types'
 
 /**
@@ -43,7 +43,7 @@ function createValidSceneFixture(): SceneDef {
 
 describe('Builder API V1', () => {
   it('returns blocking validation error when rootStories is missing or invalid', () => {
-    const builder = createBuilder()
+    const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
     invalidScene.rootStories = []
 
@@ -54,7 +54,7 @@ describe('Builder API V1', () => {
   })
 
   it('returns blocking validation error when story entries are invalid', () => {
-    const builder = createBuilder()
+    const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
     invalidScene.stories['story-main'].entries = ['unknown-perso']
 
@@ -65,7 +65,7 @@ describe('Builder API V1', () => {
   })
 
   it('returns blocking validation error when scene listen.on contains duplicates', () => {
-    const builder = createBuilder()
+    const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
     invalidScene.listen = [
       { on: 'sequence:start' },
@@ -79,7 +79,7 @@ describe('Builder API V1', () => {
   })
 
   it('returns a non-blocking warning when a child story is referenced by multiple parents', () => {
-    const builder = createBuilder()
+    const builder = new BuilderFacade()
     const scene = createValidSceneFixture()
 
     scene.stories['story-parent-a'] = {
@@ -130,7 +130,7 @@ describe('Builder API V1', () => {
   })
 
   it('compiles one valid scene with schemaVersion, createdAt and stable scene payload', () => {
-    const builder = createBuilder({ schemaVersion: 'v1-test' })
+    const builder = new BuilderFacade({ schemaVersion: 'v1-test' })
     const scene = createValidSceneFixture()
 
     const compileResult = builder.compile({ scene })
@@ -157,7 +157,7 @@ describe('Builder API V1', () => {
   })
 
   it('fails compile when validation contains blocking errors', () => {
-    const builder = createBuilder()
+    const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
     invalidScene.stories['story-main'].entries = ['missing-perso']
 

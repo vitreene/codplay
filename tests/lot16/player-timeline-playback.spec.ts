@@ -5,6 +5,43 @@ import type { AnimationAdapter } from '../../src/animation/types'
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
+type PersoFixture = SceneDoc['stories'][string]['persos'][number]
+
+/**
+ * Creates one strict scene fixture with root mount/start hooks.
+ */
+function temp__createStrictSceneFixture(input: {
+  sceneId: string
+  storyId: string
+  persos: PersoFixture[]
+  tracks: Record<string, unknown>
+}): SceneDoc {
+  return {
+    id: input.sceneId,
+    rootStories: [input.storyId],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      [input.storyId]: {
+        id: input.storyId,
+        entries: input.persos.map((perso) => perso.id),
+        initial: undefined,
+        persos: input.persos,
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
+    tracks: input.tracks
+  }
+}
+
 /**
  * Creates one anime implementation that applies target end values immediately.
  */
@@ -60,34 +97,27 @@ describe('Lot 16 - playback timeline minimal', () => {
       attributes: {}
     }
 
-    const scene: SceneDoc = {
-      id: 'scene-main',
-      initialStoryId: 'story-main',
-      stories: {
-        'story-main': {
-          id: 'story-main',
-          items: {
-            title: {
-              id: 'title',
-              type: 'text',
-              initial: {
-                id: 'title'
-              },
-              actions: {
-                intro: {
-                  style: {
-                    opacity: {
-                      from: 0,
-                      to: 1,
-                      duration: 300
-                    }
-                  }
+    const scene: SceneDoc = temp__createStrictSceneFixture({
+      sceneId: 'scene-main',
+      storyId: 'story-main',
+      persos: [
+        {
+          id: 'title',
+          type: 'text',
+          initial: {},
+          actions: {
+            intro: {
+              style: {
+                opacity: {
+                  from: 0,
+                  to: 1,
+                  duration: 300
                 }
               }
             }
           }
         }
-      },
+      ],
       tracks: {
         'track-story-main': {
           id: 'track-story-main',
@@ -104,7 +134,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       }
-    }
+    })
 
     const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
@@ -138,41 +168,34 @@ describe('Lot 16 - playback timeline minimal', () => {
       attributes: {}
     }
 
-    const scene: SceneDoc = {
-      id: 'scene-main',
-      initialStoryId: 'story-main',
-      stories: {
-        'story-main': {
-          id: 'story-main',
-          items: {
-            title: {
-              id: 'title',
-              type: 'text',
-              initial: {
-                id: 'title'
-              },
-              actions: {
-                intro: {
-                  style: {
-                    opacity: {
-                      to: 1,
-                      duration: 100
-                    }
-                  }
-                },
-                outro: {
-                  style: {
-                    x: {
-                      to: 100,
-                      duration: 100
-                    }
-                  }
+    const scene: SceneDoc = temp__createStrictSceneFixture({
+      sceneId: 'scene-main',
+      storyId: 'story-main',
+      persos: [
+        {
+          id: 'title',
+          type: 'text',
+          initial: {},
+          actions: {
+            intro: {
+              style: {
+                opacity: {
+                  to: 1,
+                  duration: 100
+                }
+              }
+            },
+            outro: {
+              style: {
+                x: {
+                  to: 100,
+                  duration: 100
                 }
               }
             }
           }
         }
-      },
+      ],
       tracks: {
         'track-story-main': {
           id: 'track-story-main',
@@ -196,7 +219,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       }
-    }
+    })
 
     const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
@@ -230,34 +253,27 @@ describe('Lot 16 - playback timeline minimal', () => {
       attributes: {}
     }
 
-    const scene: SceneDoc = {
-      id: 'scene-main',
-      initialStoryId: 'story-main',
-      stories: {
-        'story-main': {
-          id: 'story-main',
-          items: {
-            title: {
-              id: 'title',
-              type: 'text',
-              initial: {
-                id: 'title'
-              },
-              actions: {
-                intro: {
-                  style: {
-                    x: {
-                      from: 0,
-                      to: 100,
-                      duration: 120
-                    }
-                  }
+    const scene: SceneDoc = temp__createStrictSceneFixture({
+      sceneId: 'scene-main',
+      storyId: 'story-main',
+      persos: [
+        {
+          id: 'title',
+          type: 'text',
+          initial: {},
+          actions: {
+            intro: {
+              style: {
+                x: {
+                  from: 0,
+                  to: 100,
+                  duration: 120
                 }
               }
             }
           }
         }
-      },
+      ],
       tracks: {
         'track-story-main': {
           id: 'track-story-main',
@@ -274,7 +290,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       }
-    }
+    })
 
     const animeImplementation = temp__createApplyingAnimeImplementation()
     const animationAdapter = createAnimationAdapter(animeImplementation)
@@ -312,33 +328,26 @@ describe('Lot 16 - playback timeline minimal', () => {
       attributes: {}
     }
 
-    const scene: SceneDoc = {
-      id: 'scene-main',
-      initialStoryId: 'story-main',
-      stories: {
-        'story-main': {
-          id: 'story-main',
-          items: {
-            title: {
-              id: 'title',
-              type: 'text',
-              initial: {
-                id: 'title'
-              },
-              actions: {
-                intro: {
-                  style: {
-                    opacity: {
-                      to: 1,
-                      duration: 400
-                    }
-                  }
+    const scene: SceneDoc = temp__createStrictSceneFixture({
+      sceneId: 'scene-main',
+      storyId: 'story-main',
+      persos: [
+        {
+          id: 'title',
+          type: 'text',
+          initial: {},
+          actions: {
+            intro: {
+              style: {
+                opacity: {
+                  to: 1,
+                  duration: 400
                 }
               }
             }
           }
         }
-      },
+      ],
       tracks: {
         'track-story-main': {
           id: 'track-story-main',
@@ -355,7 +364,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       }
-    }
+    })
 
     const renderFrame = vi.fn<(frameNowMs: number) => void>()
     const animationAdapter: AnimationAdapter = {

@@ -6,16 +6,20 @@ import type { SceneDoc } from '../../player/types'
 export function createS2ReferenceScene(): SceneDoc {
   return {
     id: 's2-reference-scene',
-    initialStoryId: 's2-reference-story',
+    rootStories: ['s2-reference-story'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
     stories: {
       's2-reference-story': {
         id: 's2-reference-story',
-        items: {
-          'reference-list': {
+        entries: ['reference-list', 'reference-title', 'reference-caption'],
+        initial: undefined,
+        persos: [
+          {
             id: 'reference-list',
             type: 'list',
             initial: {
-              id: 'reference-list',
               className: 'reference-list',
               style: {
                 width: '360px',
@@ -28,11 +32,10 @@ export function createS2ReferenceScene(): SceneDoc {
               }
             }
           },
-          'reference-title': {
+          {
             id: 'reference-title',
             type: 'text',
             initial: {
-              id: 'reference-title',
               tag: 'h2',
               content: 'Reference Scene',
               move: {
@@ -52,11 +55,10 @@ export function createS2ReferenceScene(): SceneDoc {
               }
             }
           },
-          'reference-caption': {
+          {
             id: 'reference-caption',
             type: 'text',
             initial: {
-              id: 'reference-caption',
               tag: 'p',
               content: 'Ready for builder -> player integration.',
               move: {
@@ -66,24 +68,23 @@ export function createS2ReferenceScene(): SceneDoc {
             },
             actions: {}
           }
-        }
-      }
-    },
-    tracks: {
-      'track-reference': {
-        id: 'track-reference',
-        source: 'story',
-        order: 0,
-        events: [
+        ],
+        straps: undefined,
+        listen: [],
+        eventimes: [
           {
-            id: 'evt-reference-start',
-            ms: 0,
             name: 'sequence:reference:start',
-            index: 0,
-            source: 'story'
+            startAt: 0
           }
         ]
       }
-    }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
+    tracks: {}
   }
 }

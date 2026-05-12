@@ -13,66 +13,90 @@ type SeekableTween = {
   durationMs: number
 }
 
+type PersoFixture = SceneDoc['stories'][string]['persos'][number]
+
+/**
+ * Creates one strict scene fixture with root mount/start hooks.
+ */
+function temp__createStrictSceneFixture(input: {
+  sceneId: string
+  storyId: string
+  persos: PersoFixture[]
+  tracks?: Record<string, unknown>
+}): SceneDoc {
+  return {
+    id: input.sceneId,
+    rootStories: [input.storyId],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      [input.storyId]: {
+        id: input.storyId,
+        entries: input.persos.map((perso) => perso.id),
+        initial: undefined,
+        persos: input.persos,
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    onStart(scene, options) {
+      options.start(scene.rootStories[0])
+    },
+    tracks: input.tracks ?? {}
+  }
+}
+
 /**
  * Creates one minimal scene fixture for player API tests.
  */
 function temp__createSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-main',
-    initialStoryId: 'story-main',
-    stories: {
-      'story-main': {
-        id: 'story-main',
-        items: {
-          title: {
-            id: 'title',
-            type: 'text',
-            initial: {
-              id: 'title',
-              content: 'hello'
-            },
-            actions: {}
-          }
-        }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-main',
+    storyId: 'story-main',
+    persos: [
+      {
+        id: 'title',
+        type: 'text',
+        initial: {
+          content: 'hello'
+        },
+        actions: {}
       }
-    },
-    tracks: {}
-  }
+    ]
+  })
 }
 
 /**
  * Creates one scene fixture with a timed animation event for seek synchronization tests.
  */
 function temp__createSeekSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-seek',
-    initialStoryId: 'story-seek',
-    stories: {
-      'story-seek': {
-        id: 'story-seek',
-        items: {
-          box: {
-            id: 'box',
-            type: 'text',
-            initial: {
-              id: 'box',
-              content: 'seek-box'
-            },
-            actions: {
-              'box:move': {
-                style: {
-                  x: {
-                    from: 0,
-                    to: 100,
-                    duration: 1000
-                  }
-                }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-seek',
+    storyId: 'story-seek',
+    persos: [
+      {
+        id: 'box',
+        type: 'text',
+        initial: {
+          content: 'seek-box'
+        },
+        actions: {
+          'box:move': {
+            style: {
+              x: {
+                from: 0,
+                to: 100,
+                duration: 1000
               }
             }
           }
         }
       }
-    },
+    ],
     tracks: {
       'track-seek': {
         id: 'track-seek',
@@ -89,50 +113,44 @@ function temp__createSeekSceneFixture(): SceneDoc {
         ]
       }
     }
-  }
+  })
 }
 
 /**
  * Creates one scene fixture where the second animation depends on the first animation progress.
  */
 function temp__createCascadeSeekSceneFixture(): SceneDoc {
-  return {
-    id: 'scene-seek-cascade',
-    initialStoryId: 'story-seek-cascade',
-    stories: {
-      'story-seek-cascade': {
-        id: 'story-seek-cascade',
-        items: {
-          box: {
-            id: 'box',
-            type: 'text',
-            initial: {
-              id: 'box',
-              content: 'seek-cascade'
-            },
-            actions: {
-              'box:move-1': {
-                style: {
-                  x: {
-                    from: 0,
-                    to: 100,
-                    duration: 2000
-                  }
-                }
-              },
-              'box:move-2': {
-                style: {
-                  x: {
-                    to: 200,
-                    duration: 1000
-                  }
-                }
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-seek-cascade',
+    storyId: 'story-seek-cascade',
+    persos: [
+      {
+        id: 'box',
+        type: 'text',
+        initial: {
+          content: 'seek-cascade'
+        },
+        actions: {
+          'box:move-1': {
+            style: {
+              x: {
+                from: 0,
+                to: 100,
+                duration: 2000
+              }
+            }
+          },
+          'box:move-2': {
+            style: {
+              x: {
+                to: 200,
+                duration: 1000
               }
             }
           }
         }
       }
-    },
+    ],
     tracks: {
       'track-seek-cascade': {
         id: 'track-seek-cascade',
@@ -156,7 +174,7 @@ function temp__createCascadeSeekSceneFixture(): SceneDoc {
         ]
       }
     }
-  }
+  })
 }
 
 describe('Lot 13 - createPlayer API and state runtime', () => {

@@ -6,34 +6,36 @@ import type { SceneDoc } from '../../player/types'
 export function createS3RobustesseScene(): SceneDoc {
   return {
     id: 's3-robustesse-scene',
-    initialStoryId: 's3-robustesse-story',
+    rootStories: ['s3-robustesse-story'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
     stories: {
       's3-robustesse-story': {
         id: 's3-robustesse-story',
-        items: {
-          'robust-stage': {
+        entries: ['robust-stage', 'robust-overlay', 'robust-card'],
+        initial: undefined,
+        persos: [
+          {
             id: 'robust-stage',
             type: 'list',
             initial: {
-              id: 'robust-stage',
               className: 'robust-stage'
             },
             actions: {}
           },
-          'robust-overlay': {
+          {
             id: 'robust-overlay',
             type: 'list',
             initial: {
-              id: 'robust-overlay',
               className: 'robust-overlay'
             },
             actions: {}
           },
-          'robust-card': {
+          {
             id: 'robust-card',
             type: 'text',
             initial: {
-              id: 'robust-card',
               tag: 'div',
               content: 'CARD',
               move: {
@@ -58,8 +60,13 @@ export function createS3RobustesseScene(): SceneDoc {
               }
             }
           }
-        }
+        ],
+        straps: undefined,
+        listen: []
       }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }
