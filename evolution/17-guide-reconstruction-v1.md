@@ -220,22 +220,22 @@ Une reconstruction est consideree identique si les points suivants sont vrais:
 
 Commandes minimales:
 
-- `npm run test:lot1`
-- `npm run test:lot2`
-- `npm run test:lot3`
-- `npm run test:lot4`
-- `npm run test:lot5`
-- `npm run test:lot6`
-- `npm run test:lot7`
-- `npm run test:lot8`
-- `npm run test:lot9`
-- `npm run test:lot10`
-- `npm run test:lot11`
-- `npm run test:lot12`
-- `npm run test:lot13`
-- `npm run test:lot14`
-- `npm run test:lot15`
-- `npm run test:lot16`
+- `npm run test:lot -- lot1`
+- `npm run test:lot -- lot2`
+- `npm run test:lot -- lot3`
+- `npm run test:lot -- lot4`
+- `npm run test:lot -- lot5`
+- `npm run test:lot -- lot6`
+- `npm run test:lot -- lot7`
+- `npm run test:lot -- lot8`
+- `npm run test:lot -- lot9`
+- `npm run test:lot -- lot10`
+- `npm run test:lot -- lot11`
+- `npm run test:lot -- lot12`
+- `npm run test:lot -- lot13`
+- `npm run test:lot -- lot14`
+- `npm run test:lot -- lot15`
+- `npm run test:lot -- lot16`
 - `npm test`
 - `npm run build`
 

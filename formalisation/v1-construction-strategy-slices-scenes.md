@@ -35,9 +35,7 @@ Regle:
 
 Commandes a lancer pour chaque slice qui touche `src/player`, `src/director`, `src/renderer`, `src/runtime`, `src/demos`:
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npx vitest run tests/lot18`
+1. `npm run test:gates`
 
 Validation visuelle obligatoire:
 
@@ -121,16 +119,14 @@ Note d'integration:
 
 ### Actions
 
-1. Ajouter `test:lot18` dans `package.json`.
+1. Ajouter le lanceur commun `scripts/run-tests.mjs` et `npm run test:gates`.
 2. Creer `src/demos/scenes/` avec S1/S2/S3.
 3. Creer `tests/v1/reference-scenes.spec.ts` pour verifier chargement minimal des scenes.
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npm run test`
+1. `npm run test:gates`
+2. `npm run test`
 
 ### Critere de sortie
 
@@ -148,11 +144,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/builder-api.spec.ts`
-5. `npx vitest run tests/v1/player-api-v1-adapter.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/builder-api.spec.ts`
+3. `npx vitest run tests/v1/player-api-v1-adapter.spec.ts`
 
 ### Critere de sortie
 
@@ -169,11 +163,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/builder-api.spec.ts`
-5. `npx vitest run tests/v1/reference-scenes.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/builder-api.spec.ts`
+3. `npx vitest run tests/v1/reference-scenes.spec.ts`
 
 ### Critere de sortie
 
@@ -190,10 +182,8 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/runtime-policy.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/runtime-policy.spec.ts`
 
 ### Critere de sortie
 
@@ -210,11 +200,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/player-api-v1-adapter.spec.ts`
-5. `npx vitest run tests/v1/runtime-policy.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/player-api-v1-adapter.spec.ts`
+3. `npx vitest run tests/v1/runtime-policy.spec.ts`
 
 ### Critere de sortie
 
@@ -230,11 +218,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/runtime-policy.spec.ts`
-5. `npx vitest run tests/v1/reference-scenes.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/runtime-policy.spec.ts`
+3. `npx vitest run tests/v1/reference-scenes.spec.ts`
 
 ### Critere de sortie
 
@@ -251,11 +237,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/track-manager.spec.ts`
-5. `npx vitest run tests/v1/reference-scenes.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/track-manager.spec.ts`
+3. `npx vitest run tests/v1/reference-scenes.spec.ts`
 
 ### Critere de sortie
 
@@ -271,11 +255,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/builder-api.spec.ts`
-5. `npx vitest run tests/v1/runtime-policy.spec.ts`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/builder-api.spec.ts`
+3. `npx vitest run tests/v1/runtime-policy.spec.ts`
 
 ### Critere de sortie
 
@@ -291,11 +273,9 @@ Note d'integration:
 
 ### Commandes de sortie
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npx vitest run tests/v1/reference-scenes.spec.ts`
-5. `npm run test`
+1. `npm run test:gates`
+2. `npx vitest run tests/v1/reference-scenes.spec.ts`
+3. `npm run test`
 
 ### Critere de sortie
 
@@ -335,9 +315,7 @@ Pour fermer une phase:
 
 ## Commande de verification finale
 
-1. `npm run test:lot7`
-2. `npm run test:lot8`
-3. `npm run test:lot18`
-4. `npm run test`
-5. `npm run build`
-6. `npm run dev:demo` puis verification manuelle POC
+1. `npm run test:gates`
+2. `npm run test`
+3. `npm run build`
+4. `npm run dev:demo` puis verification manuelle POC
