@@ -33,6 +33,11 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 17. `v1-track-manager-spec.md`
 18. `v1-compiled-scene-schema.md`
 
+## Documents actifs de chantier
+
+- `v1-construction-strategy-slices-scenes.md`
+- `v1-move-separation-policy-state-backend-dom.md`
+
 ## Frontiere normative
 
 - les documents finals courants `v1-*.md` dans ce dossier sont normatifs

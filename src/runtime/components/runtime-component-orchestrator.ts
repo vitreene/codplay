@@ -1,6 +1,6 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
-import type { RuntimeElementMap, StoryDoc } from '../types'
+import type { ItemDoc, RuntimeElementMap, StoryDoc } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from '../flip-engine'
 import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from '../flip-engine/matrix-2d'
@@ -199,31 +199,7 @@ export class RuntimeComponentOrchestrator {
     for (const item of Object.values(story.items)) {
       const existingComponent = this.componentByPersoId.get(item.id)
       if (existingComponent) {
-        const previousRootNode = this.nodeByPersoId.get(item.id) ?? null
-        if (previousRootNode !== null) {
-          this.detachNodeFromParent(previousRootNode)
-        }
-
-        existingComponent.init(item.initial)
-        const nextRootNode = existingComponent.render()
-        const isExistingListComponent = this.isRuntimeListComponent(existingComponent)
-
-        if (!isExistingListComponent) {
-          this.detachNodeFromParent(nextRootNode)
-          this.listByPersoId.delete(item.id)
-        } else {
-          this.listByPersoId.set(item.id, existingComponent)
-        }
-
-        this.nodeByPersoId.set(item.id, nextRootNode)
-        this.parentListByPersoId.set(item.id, null)
-        this.mountedByPersoId.set(item.id, isExistingListComponent)
-        const existingResolver = this.renderMutationResolverByType.get(item.type)
-        if (existingResolver) {
-          this.renderMutationResolverByPersoId.set(item.id, existingResolver)
-        } else {
-          this.renderMutationResolverByPersoId.delete(item.id)
-        }
+        this.refreshLoadedRuntimeComponent(item, existingComponent)
         continue
       }
 
@@ -240,32 +216,7 @@ export class RuntimeComponentOrchestrator {
         continue
       }
 
-      const component = new componentClass({
-        item,
-        createElementOptions: this.createElementOptions,
-        warn: this.warn
-      })
-
-      component.init(item.initial)
-      const rootNode = component.render()
-      const isListComponent = item.type === 'list' && this.isRuntimeListComponent(component)
-
-      if (!isListComponent) {
-        this.detachNodeFromParent(rootNode)
-      }
-
-      this.componentByPersoId.set(item.id, component)
-      this.nodeByPersoId.set(item.id, rootNode)
-      this.parentListByPersoId.set(item.id, null)
-      this.mountedByPersoId.set(item.id, isListComponent)
-      const resolver = this.renderMutationResolverByType.get(item.type)
-      if (resolver) {
-        this.renderMutationResolverByPersoId.set(item.id, resolver)
-      }
-
-      if (isListComponent) {
-        this.listByPersoId.set(item.id, component)
-      }
+      this.mountLoadedRuntimeComponent(item, componentClass)
     }
 
     for (const item of Object.values(story.items)) {
@@ -283,6 +234,76 @@ export class RuntimeComponentOrchestrator {
     }
 
     return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId)
+  }
+
+  /**
+   * Refreshes one already-mounted runtime component in place.
+   */
+  private refreshLoadedRuntimeComponent(item: ItemDoc, component: RuntimeComponent): void {
+    const previousRootNode = this.nodeByPersoId.get(item.id) ?? null
+    if (previousRootNode !== null) {
+      this.detachNodeFromParent(previousRootNode)
+    }
+
+    component.init(item.initial)
+    const nextRootNode = component.render()
+    const isListComponent = this.isRuntimeListComponent(component)
+    const listComponent = isListComponent ? (component as RuntimeListComponent) : null
+
+    if (!isListComponent) {
+      this.detachNodeFromParent(nextRootNode)
+    }
+
+    this.storeLoadedRuntimeComponent(item, component, nextRootNode, listComponent)
+  }
+
+  /**
+   * Instantiates one new runtime component and stores its runtime maps.
+   */
+  private mountLoadedRuntimeComponent(item: ItemDoc, componentClass: RuntimeComponentClass): void {
+    const component = new componentClass({
+      item,
+      createElementOptions: this.createElementOptions,
+      warn: this.warn
+    })
+
+    component.init(item.initial)
+    const rootNode = component.render()
+    const listComponent = item.type === 'list' && this.isRuntimeListComponent(component) ? component : null
+
+    if (listComponent === null) {
+      this.detachNodeFromParent(rootNode)
+    }
+
+    this.storeLoadedRuntimeComponent(item, component, rootNode, listComponent)
+  }
+
+  /**
+   * Writes one runtime component snapshot into registry maps.
+   */
+  private storeLoadedRuntimeComponent(
+    item: ItemDoc,
+    component: RuntimeComponent,
+    rootNode: unknown,
+    listComponent: RuntimeListComponent | null
+  ): void {
+    this.componentByPersoId.set(item.id, component)
+    this.nodeByPersoId.set(item.id, rootNode)
+    this.parentListByPersoId.set(item.id, null)
+    this.mountedByPersoId.set(item.id, listComponent !== null)
+
+    if (listComponent !== null) {
+      this.listByPersoId.set(item.id, listComponent)
+    } else {
+      this.listByPersoId.delete(item.id)
+    }
+
+    const resolver = this.renderMutationResolverByType.get(item.type)
+    if (resolver) {
+      this.renderMutationResolverByPersoId.set(item.id, resolver)
+    } else if (this.renderMutationResolverByPersoId.has(item.id)) {
+      this.renderMutationResolverByPersoId.delete(item.id)
+    }
   }
 
   /**
@@ -310,137 +331,16 @@ export class RuntimeComponentOrchestrator {
     const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates)
 
     for (const [updateIndex, update] of updates.entries()) {
-      const targetPersoId = this.resolveTargetPersoId(update.resolvedAction)
-      const component = this.componentByPersoId.get(targetPersoId)
-      if (!component) {
-        this.warnOnce(
-          update.eventSeq,
-          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-          {
-            targetPersoId,
-            eventId: update.resolvedAction.eventId,
-            eventSeq: update.eventSeq
-          },
-          targetPersoId
-        )
-        continue
-      }
-
-      const moveDecision = moveDecisionsByUpdateIndex.get(updateIndex)
-      const movedNodeBeforeMove = this.nodeByPersoId.get(targetPersoId)
-      const movedNodeBoxBeforeMove =
-        moveDecision !== undefined && moveDecision !== null && isDomElement(movedNodeBeforeMove)
-          ? this.captureElementBoxSnapshot(movedNodeBeforeMove)
-          : null
-      const sourceListIdBeforeMove = moveDecision !== undefined && moveDecision !== null
-        ? this.parentListByPersoId.get(targetPersoId) ?? null
-        : null
-      const flipEntries =
-        moveDecision !== undefined && moveDecision !== null
-          ? this.collectFlipEntriesForMove(targetPersoId, moveDecision)
-          : []
-      const firstFlipSnapshots = flipEntries.length > 0 ? this.flipEngine.capture(flipEntries) : []
-
-      if (moveDecision !== undefined && moveDecision !== null) {
-        this.applyMoveForPerso({
-          persoId: targetPersoId,
-          move: moveDecision,
-          eventId: update.resolvedAction.eventId,
-          eventSeq: update.eventSeq
+      if (
+        this.routeResolvedUpdate({
+          update,
+          moveDecision: moveDecisionsByUpdateIndex.get(updateIndex),
+          animatableActions,
+          directTransitions
         })
+      ) {
+        appliedActionsCount += 1
       }
-
-      component.update({
-        persoId: targetPersoId,
-        eventId: update.resolvedAction.eventId,
-        eventSeq: update.eventSeq,
-        action: update.resolvedAction.action as Record<string, unknown>
-      })
-
-      if (firstFlipSnapshots.length > 0) {
-        const lastFlipSnapshots = this.flipEngine.capture(flipEntries)
-        const flipPlan = this.flipEngine.plan(firstFlipSnapshots, lastFlipSnapshots)
-
-        const isOverlayWorldMove = moveDecision?.flipMode === 'overlay-world'
-        const movedTransitionId = `flip-${targetPersoId}`
-        const localFlipPlanTransitions =
-          isOverlayWorldMove
-            ? flipPlan.transitions.filter((transition) => transition.transitionId !== movedTransitionId)
-            : flipPlan.transitions
-
-        this.flipEngine.applyInvert(localFlipPlanTransitions)
-        this.flipEngine.flushLayout(flipEntries)
-        let firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
-
-        if (!isOverlayWorldMove) {
-          for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
-            const residual = this.computeFlipResidual(
-              firstFlipSnapshots,
-              firstFlipAppliedSnapshots,
-              targetPersoId
-            )
-
-            if (residual <= this.flipCalibrationTolerancePx) {
-              break
-            }
-
-            this.calibrateFlipTransitions(firstFlipSnapshots, firstFlipAppliedSnapshots, localFlipPlanTransitions)
-            this.flipEngine.applyInvert(localFlipPlanTransitions)
-            this.flipEngine.flushLayout(flipEntries)
-            firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
-          }
-        }
-
-        const flipTransitions = this.flipEngine.toAnimationTransitions(localFlipPlanTransitions)
-        const overlayWorldTransitions =
-          moveDecision !== undefined && moveDecision !== null
-            ? this.tryBuildOverlayWorldTransitions({
-                eventId: update.resolvedAction.eventId,
-                eventName: update.resolvedAction.eventName,
-                eventSeq: update.eventSeq,
-                movedPersoId: targetPersoId,
-                sourceListId: sourceListIdBeforeMove,
-                oldNodeBoxBeforeMove: movedNodeBoxBeforeMove,
-                move: moveDecision,
-                flipPlanTransitions: flipPlan.transitions,
-                firstSnapshots: firstFlipSnapshots,
-                lastSnapshots: lastFlipSnapshots
-              })
-            : null
-
-        const movedTransitionPrefix = `flip-${targetPersoId}-`
-        const localFlipTransitions =
-          overlayWorldTransitions === null
-            ? flipTransitions
-            : flipTransitions.filter((transition) => !transition.transitionId.startsWith(movedTransitionPrefix))
-
-        for (const transition of localFlipTransitions) {
-          directTransitions.push({
-            ...transition,
-            eventId: update.resolvedAction.eventId,
-            eventName: update.resolvedAction.eventName,
-            listenerId: targetPersoId,
-            transitionId: `${transition.transitionId}-${update.resolvedAction.eventId}`
-          })
-        }
-
-        for (const transition of overlayWorldTransitions ?? []) {
-          directTransitions.push(transition)
-        }
-      }
-
-      const targetNode = this.nodeByPersoId.get(targetPersoId)
-      if (targetNode !== undefined) {
-        animatableActions.push({
-          ...update.resolvedAction,
-          action: {
-            ...update.resolvedAction.action,
-            target: targetNode
-          }
-        })
-      }
-
-      appliedActionsCount += 1
     }
 
     return {
@@ -448,6 +348,147 @@ export class RuntimeComponentOrchestrator {
       animatableActions,
       directTransitions
     }
+  }
+
+  /**
+   * Routes one resolved update to a runtime component and collect outputs.
+   */
+  private routeResolvedUpdate(input: {
+    update: RuntimeResolvedUpdate
+    moveDecision: MoveCommand | null | undefined
+    animatableActions: AnimationResolvedAction[]
+    directTransitions: TransitionRequest[]
+  }): boolean {
+    const targetPersoId = this.resolveTargetPersoId(input.update.resolvedAction)
+    const component = this.componentByPersoId.get(targetPersoId)
+    if (!component) {
+      this.warnOnce(
+        input.update.eventSeq,
+        'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+        {
+          targetPersoId,
+          eventId: input.update.resolvedAction.eventId,
+          eventSeq: input.update.eventSeq
+        },
+        targetPersoId
+      )
+      return false
+    }
+
+    const moveDecision = input.moveDecision ?? null
+    const movedNodeBeforeMove = this.nodeByPersoId.get(targetPersoId)
+    const movedNodeBoxBeforeMove =
+      moveDecision !== null && isDomElement(movedNodeBeforeMove)
+        ? this.captureElementBoxSnapshot(movedNodeBeforeMove)
+        : null
+    const sourceListIdBeforeMove = moveDecision !== null
+      ? this.parentListByPersoId.get(targetPersoId) ?? null
+      : null
+    const flipEntries = moveDecision !== null
+      ? this.collectFlipEntriesForMove(targetPersoId, moveDecision)
+      : []
+    const firstFlipSnapshots = flipEntries.length > 0 ? this.flipEngine.capture(flipEntries) : []
+
+    if (moveDecision !== null) {
+      this.applyMoveForPerso({
+        persoId: targetPersoId,
+        move: moveDecision,
+        eventId: input.update.resolvedAction.eventId,
+        eventSeq: input.update.eventSeq
+      })
+    }
+
+    component.update({
+      persoId: targetPersoId,
+      eventId: input.update.resolvedAction.eventId,
+      eventSeq: input.update.eventSeq,
+      action: input.update.resolvedAction.action as Record<string, unknown>
+    })
+
+    if (firstFlipSnapshots.length > 0) {
+      const lastFlipSnapshots = this.flipEngine.capture(flipEntries)
+      const flipPlan = this.flipEngine.plan(firstFlipSnapshots, lastFlipSnapshots)
+
+      const isOverlayWorldMove = input.moveDecision?.flipMode === 'overlay-world'
+      const movedTransitionId = `flip-${targetPersoId}`
+      const localFlipPlanTransitions =
+        isOverlayWorldMove
+          ? flipPlan.transitions.filter((transition) => transition.transitionId !== movedTransitionId)
+          : flipPlan.transitions
+
+      this.flipEngine.applyInvert(localFlipPlanTransitions)
+      this.flipEngine.flushLayout(flipEntries)
+      let firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
+
+      if (!isOverlayWorldMove) {
+        for (let calibrationStep = 0; calibrationStep < this.flipCalibrationMaxIterations; calibrationStep += 1) {
+          const residual = this.computeFlipResidual(
+            firstFlipSnapshots,
+            firstFlipAppliedSnapshots,
+            targetPersoId
+          )
+
+          if (residual <= this.flipCalibrationTolerancePx) {
+            break
+          }
+
+          this.calibrateFlipTransitions(firstFlipSnapshots, firstFlipAppliedSnapshots, localFlipPlanTransitions)
+          this.flipEngine.applyInvert(localFlipPlanTransitions)
+          this.flipEngine.flushLayout(flipEntries)
+          firstFlipAppliedSnapshots = this.flipEngine.capture(flipEntries)
+        }
+      }
+
+      const flipTransitions = this.flipEngine.toAnimationTransitions(localFlipPlanTransitions)
+      const overlayWorldTransitions =
+        moveDecision !== null
+          ? this.tryBuildOverlayWorldTransitions({
+              eventId: input.update.resolvedAction.eventId,
+              eventName: input.update.resolvedAction.eventName,
+              eventSeq: input.update.eventSeq,
+              movedPersoId: targetPersoId,
+              sourceListId: sourceListIdBeforeMove,
+              oldNodeBoxBeforeMove: movedNodeBoxBeforeMove,
+              move: moveDecision,
+              flipPlanTransitions: flipPlan.transitions,
+              firstSnapshots: firstFlipSnapshots,
+              lastSnapshots: lastFlipSnapshots
+            })
+          : null
+
+      const movedTransitionPrefix = `flip-${targetPersoId}-`
+      const localFlipTransitions =
+        overlayWorldTransitions === null
+          ? flipTransitions
+          : flipTransitions.filter((transition) => !transition.transitionId.startsWith(movedTransitionPrefix))
+
+      for (const transition of localFlipTransitions) {
+        input.directTransitions.push({
+          ...transition,
+          eventId: input.update.resolvedAction.eventId,
+          eventName: input.update.resolvedAction.eventName,
+          listenerId: targetPersoId,
+          transitionId: `${transition.transitionId}-${input.update.resolvedAction.eventId}`
+        })
+      }
+
+      for (const transition of overlayWorldTransitions ?? []) {
+        input.directTransitions.push(transition)
+      }
+    }
+
+    const targetNode = this.nodeByPersoId.get(targetPersoId)
+    if (targetNode !== undefined) {
+      input.animatableActions.push({
+        ...input.update.resolvedAction,
+        action: {
+          ...input.update.resolvedAction.action,
+          target: targetNode
+        }
+      })
+    }
+
+    return true
   }
 
   /**

@@ -13,8 +13,15 @@ import type { CreateElementOptions } from '../runtime/create-element'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
-import type { TrackAuthorMeta } from '../track-manager/types'
-import { createSceneLifecycleOptions, PlayerRuntimePlanner, type PlayerRuntimePlan } from './create-player-utils'
+import {
+  consolidateSceneTracks,
+  createSceneLifecycleOptions,
+  isTrackControlEventName,
+  PlayerRuntimePlanner,
+  PLAYER_TRACK_CONTROL_EVENTS,
+  readTrackControlIds,
+  type PlayerRuntimePlan
+} from './create-player-utils'
 import { PLAYER_STATUS } from './player-constants'
 import type {
   PlayerApi,
@@ -62,12 +69,6 @@ const PLAYER_TRACK = {
   global: 'global'
 } as const
 
-const PLAYER_TRACK_CONTROL_EVENT = {
-  activate: 'track:activate',
-  deactivate: 'track:deactivate',
-  toggle: 'track:toggle'
-} as const
-
 const PLAYER_RUNTIME_ERROR_MESSAGE = {
   mountedStoryRequired: 'Scene must provide at least one mounted story'
 } as const
@@ -97,53 +98,6 @@ export class PlayerFacade implements PlayerApi {
   private readonly stateListeners = new Set<PlayerStateListener>()
 
   /**
-   * Builds one frozen scene-level track registry with defaults and story contributions.
-   */
-  private consolidateSceneTracks(scene: StrictSceneDoc): Record<string, unknown> {
-    const consolidatedTracks: Record<string, unknown> = {
-      [PLAYER_TRACK.global]: {
-        active: true
-      }
-    }
-
-    for (const story of Object.values(scene.stories)) {
-      consolidatedTracks[story.id] = {
-        active: true
-      }
-    }
-
-    for (const [trackId, rawTrack] of Object.entries(scene.tracks)) {
-      consolidatedTracks[trackId] = this.mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
-    }
-
-    for (const story of Object.values(scene.stories)) {
-      for (const [trackId, rawTrack] of Object.entries(story.tracks ?? {})) {
-        consolidatedTracks[trackId] = this.mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
-      }
-    }
-
-    return consolidatedTracks
-  }
-
-  /**
-   * Merges one raw track declaration onto one existing scene-level track meta.
-   */
-  private mergeTrackMeta(existingTrack: unknown, nextTrack: unknown): TrackAuthorMeta {
-    const baseTrack = typeof existingTrack === 'object' && existingTrack !== null
-      ? (existingTrack as TrackAuthorMeta)
-      : {}
-    const incomingTrack = typeof nextTrack === 'object' && nextTrack !== null
-      ? (nextTrack as TrackAuthorMeta)
-      : {}
-
-    return {
-      ...baseTrack,
-      ...incomingTrack,
-      ...(incomingTrack.active !== undefined ? { active: incomingTrack.active } : {})
-    }
-  }
-
-  /**
    * Resolves the fallback track id for one event context.
    */
   private resolveDefaultTrackId(scopeStoryId?: string): string {
@@ -155,38 +109,22 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Parses one track control payload into one string id list.
-   */
-  private readTrackControlIds(payload: Record<string, unknown> | undefined): string[] {
-    const trackIds = payload?.trackIds
-    if (!Array.isArray(trackIds)) {
-      return []
-    }
-
-    return trackIds.filter((trackId): trackId is string => typeof trackId === 'string' && trackId.length > 0)
-  }
-
-  /**
    * Applies one scene-level track control event when supported.
    */
   private handleTrackControlEvent(event: TimelineEvent): boolean {
-    if (
-      event.name !== PLAYER_TRACK_CONTROL_EVENT.activate &&
-      event.name !== PLAYER_TRACK_CONTROL_EVENT.deactivate &&
-      event.name !== PLAYER_TRACK_CONTROL_EVENT.toggle
-    ) {
+    if (!isTrackControlEventName(event.name)) {
       return false
     }
 
-    const requestedTrackIds = this.readTrackControlIds(event.payload)
+    const requestedTrackIds = readTrackControlIds(event.payload)
     const knownTrackIds = new Set(this.trackManager.state.loadedTrackIds)
     const activeTrackIds = new Set(this.trackManager.state.activeTrackIds)
     const appliedTrackIds = requestedTrackIds.filter((trackId) => knownTrackIds.has(trackId))
     const ignoredTrackIds = requestedTrackIds.filter((trackId) => !knownTrackIds.has(trackId))
 
-    if (event.name === PLAYER_TRACK_CONTROL_EVENT.activate) {
+    if (event.name === PLAYER_TRACK_CONTROL_EVENTS.activate) {
       this.trackManager.setActiveTracks({ activate: appliedTrackIds, reason: event.name })
-    } else if (event.name === PLAYER_TRACK_CONTROL_EVENT.deactivate) {
+    } else if (event.name === PLAYER_TRACK_CONTROL_EVENTS.deactivate) {
       this.trackManager.setActiveTracks({ deactivate: appliedTrackIds, reason: event.name })
     } else {
       this.trackManager.setActiveTracks({
@@ -279,7 +217,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-      this.emitTrace('player:register-component', RUNTIME_TRACE_STATUS.applied, {
+    this.emitTrace('player:register-component', RUNTIME_TRACE_STATUS.applied, {
       persoType,
       status: result.status,
       code: result.code
@@ -311,7 +249,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-      this.emitTrace('player:override-component', RUNTIME_TRACE_STATUS.applied, {
+    this.emitTrace('player:override-component', RUNTIME_TRACE_STATUS.applied, {
       persoType,
       status: result.status
     })
@@ -410,9 +348,23 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
+    this.applyMountedRuntimePlan(runtimePlan)
+    return { ok: true }
+  }
+
+  /**
+   * Loads one mounted runtime plan into director state.
+   */
+  private applyMountedRuntimePlan(runtimePlan: PlayerRuntimePlan): void {
     this.director.load(runtimePlan)
     this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
-    return { ok: true }
+  }
+
+  /**
+   * Loads one mounted runtime story into the renderer.
+   */
+  private loadMountedRuntimeStory(runtimePlan: PlayerRuntimePlan): ReturnType<RendererFacade['load']> {
+    return this.renderer.load({ story: runtimePlan.story })
   }
 
   /**
@@ -453,10 +405,9 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    this.director.load(runtimePlan)
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+    this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
+    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
     if (!rendererLoadResult.ok) {
       this.emitTrace(PLAYER_TRACE_EVENT.mountFailed, RUNTIME_TRACE_STATUS.error, {
         storyId: nextStory.id,
@@ -661,15 +612,7 @@ export class PlayerFacade implements PlayerApi {
 
     const runtimeScene = nextScene as StrictSceneDoc
 
-    this.scene = runtimeScene
-    this.timelineMs = 0
-    this.playbackStartMs = null
-    this.nextPublicEventIndex = 0
-    runtimeScene.tracks = this.consolidateSceneTracks(runtimeScene)
-    this.trackManager.load({ tracks: runtimeScene.tracks })
-
-    this.initializeSceneStories(runtimeScene)
-    runtimeScene.init?.(runtimeScene, this.createLifecycleOptions())
+    this.prepareSceneRuntime(runtimeScene)
     this.setStatus(PLAYER_STATUS.ready)
 
     const rendererState = this.renderer.getState()
@@ -684,6 +627,21 @@ export class PlayerFacade implements PlayerApi {
     })
 
     return { ok: true }
+  }
+
+  /**
+   * Applies one scene document to runtime state before the player becomes ready.
+   */
+  private prepareSceneRuntime(runtimeScene: StrictSceneDoc): void {
+    this.scene = runtimeScene
+    this.timelineMs = 0
+    this.playbackStartMs = null
+    this.nextPublicEventIndex = 0
+    runtimeScene.tracks = consolidateSceneTracks(runtimeScene)
+    this.trackManager.load({ tracks: runtimeScene.tracks })
+
+    this.initializeSceneStories(runtimeScene)
+    runtimeScene.init?.(runtimeScene, this.createLifecycleOptions())
   }
 
   /**
@@ -866,10 +824,9 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.director.load(runtimePlan)
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+    this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
+    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to seek story', 'player:seek:failed', {
         sceneId: this.scene.id,
@@ -985,10 +942,9 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.director.load(runtimePlan)
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+    this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
+    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to rewind story', 'player:rewind:failed', {
         sceneId: this.scene.id,
@@ -1089,10 +1045,9 @@ export class PlayerFacade implements PlayerApi {
         )
       }
 
-      this.director.load(runtimePlan)
-      this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+      this.applyMountedRuntimePlan(runtimePlan)
 
-      const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
+      const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
       if (!rendererLoadResult.ok) {
         return this.reject(
           'RENDERER_LOAD_FAILED',

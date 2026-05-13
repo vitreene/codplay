@@ -3,6 +3,7 @@ import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/e
 import type { RuntimeCommit } from '../renderer/types'
 import type { ItemDoc, StoryDoc as RuntimeStoryDoc } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
+import type { TrackAuthorMeta } from '../track-manager/types'
 import type {
   PersoDoc,
   PlayerSceneLifecycleOptions,
@@ -17,6 +18,12 @@ export type PlayerRuntimePlan = {
 }
 
 const COMPOSED_RUNTIME_STORY_ID_FALLBACK = 'scene-runtime'
+const PLAYER_TRACK_GLOBAL_ID = 'global'
+export const PLAYER_TRACK_CONTROL_EVENTS = {
+  activate: 'track:activate',
+  deactivate: 'track:deactivate',
+  toggle: 'track:toggle'
+} as const
 
 /**
  * Sanitizes scene/runtime data and prepares deterministic player runtime plans.
@@ -211,6 +218,76 @@ export class PlayerRuntimePlanner {
       actionsByEventName: item.actions
     }))
   }
+}
+
+/**
+ * Builds one frozen scene-level track registry with defaults and story contributions.
+ */
+export function consolidateSceneTracks(scene: StrictSceneDoc): Record<string, unknown> {
+  const consolidatedTracks: Record<string, unknown> = {
+    [PLAYER_TRACK_GLOBAL_ID]: {
+      active: true
+    }
+  }
+
+  for (const story of Object.values(scene.stories)) {
+    consolidatedTracks[story.id] = {
+      active: true
+    }
+  }
+
+  for (const [trackId, rawTrack] of Object.entries(scene.tracks)) {
+    consolidatedTracks[trackId] = mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
+  }
+
+  for (const story of Object.values(scene.stories)) {
+    for (const [trackId, rawTrack] of Object.entries(story.tracks ?? {})) {
+      consolidatedTracks[trackId] = mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
+    }
+  }
+
+  return consolidatedTracks
+}
+
+/**
+ * Merges one raw track declaration onto one existing scene-level track meta.
+ */
+export function mergeTrackMeta(existingTrack: unknown, nextTrack: unknown): TrackAuthorMeta {
+  const baseTrack = typeof existingTrack === 'object' && existingTrack !== null
+    ? (existingTrack as TrackAuthorMeta)
+    : {}
+  const incomingTrack = typeof nextTrack === 'object' && nextTrack !== null
+    ? (nextTrack as TrackAuthorMeta)
+    : {}
+
+  return {
+    ...baseTrack,
+    ...incomingTrack,
+    ...(incomingTrack.active !== undefined ? { active: incomingTrack.active } : {})
+  }
+}
+
+/**
+ * Reads one track-control payload into one normalized track id list.
+ */
+export function readTrackControlIds(payload: Record<string, unknown> | undefined): string[] {
+  const trackIds = payload?.trackIds
+  if (!Array.isArray(trackIds)) {
+    return []
+  }
+
+  return trackIds.filter((trackId): trackId is string => typeof trackId === 'string' && trackId.length > 0)
+}
+
+/**
+ * Checks whether one event name belongs to the track-control policy.
+ */
+export function isTrackControlEventName(eventName: string): boolean {
+  return (
+    eventName === PLAYER_TRACK_CONTROL_EVENTS.activate ||
+    eventName === PLAYER_TRACK_CONTROL_EVENTS.deactivate ||
+    eventName === PLAYER_TRACK_CONTROL_EVENTS.toggle
+  )
 }
 
 /**

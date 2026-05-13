@@ -14,4 +14,5 @@ Lots apres la phase 1 (a ordonner lors de la prochaine revue):
 - telco locale (composant sur la meme page) -> DONE (lot 14)
 - adaptation script animation Eddy (validation visuelle manuelle) -> DONE (lot 15)
 - player playback timeline minimal (run manuel Eddy) -> DONE (lot 16)
+- separation `move` en `policy/state/backend DOM` avec conservation stricte de la demo -> `../../formalisation/v1-move-separation-policy-state-backend-dom.md`
 - telco websocket deportee (v2, exploration ulterieure)
