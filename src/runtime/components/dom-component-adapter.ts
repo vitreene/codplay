@@ -1,5 +1,11 @@
-import type { CreateElementOptions } from '../create-element'
-import type { ItemDoc, RuntimeNode } from '../types'
+import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../create-element'
+import type { ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../types'
+
+const SELF_PAYLOAD_KEY = 'self'
+
+type RuntimeObjectEventNode = Record<string, unknown> & {
+  [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
+}
 
 /**
  * Checks whether one runtime node reference is a browser Element.
@@ -58,6 +64,71 @@ function createObjectNode(tagName: string): RuntimeNode {
 }
 
 /**
+ * Creates one runtime self payload exposed during perso emit.
+ */
+function createRuntimeEmitSelf(item: ItemDoc): RuntimeEmitSelf {
+  return {
+    id: item.id,
+    name: item.name,
+    storyId: item.storyId
+  }
+}
+
+/**
+ * Emits all declared runtime events for one user interaction.
+ */
+function emitDeclaredRuntimeEvents(
+  item: ItemDoc,
+  userEvent: string,
+  emitRuntimeEvent: (event: RuntimeEmitEvent) => void
+): void {
+  const rule = item.emit?.[userEvent]
+  if (!rule) {
+    return
+  }
+
+  const self = createRuntimeEmitSelf(item)
+  const data = rule.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...rule.data, [SELF_PAYLOAD_KEY]: self }
+
+  for (const eventName of rule.events) {
+    emitRuntimeEvent({
+      name: eventName,
+      data,
+      scopeStoryId: item.storyId
+    })
+  }
+}
+
+/**
+ * Binds authored user event emits on DOM and object runtime nodes.
+ */
+function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: CreateElementOptions | undefined): void {
+  const emitRuntimeEvent = options?.emitRuntimeEvent
+  if (!emitRuntimeEvent || !item.emit) {
+    return
+  }
+
+  for (const userEvent of Object.keys(item.emit)) {
+    const emit = () => {
+      emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
+    }
+
+    if (isDomElement(nodeRef)) {
+      nodeRef.addEventListener(userEvent, emit)
+      continue
+    }
+
+    if (typeof nodeRef === 'object' && nodeRef !== null) {
+      const runtimeNode = nodeRef as RuntimeObjectEventNode
+      runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] = {
+        ...(runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] ?? {}),
+        [userEvent]: emit
+      }
+    }
+  }
+}
+
+/**
  * Creates one runtime node using nodeFactory, DOM, or plain object fallback.
  */
 export function createRuntimeNode(
@@ -67,14 +138,19 @@ export function createRuntimeNode(
 ): unknown {
   const customNode = options?.nodeFactory?.(item)
   if (customNode !== undefined) {
+    bindRuntimeEmitDeclarations(customNode, item, options)
     return customNode
   }
 
   if (typeof globalThis.document !== 'undefined') {
-    return globalThis.document.createElement(fallbackTagName)
+    const domNode = globalThis.document.createElement(fallbackTagName)
+    bindRuntimeEmitDeclarations(domNode, item, options)
+    return domNode
   }
 
-  return createObjectNode(fallbackTagName.toUpperCase())
+  const objectNode = createObjectNode(fallbackTagName.toUpperCase())
+  bindRuntimeEmitDeclarations(objectNode, item, options)
+  return objectNode
 }
 
 /**

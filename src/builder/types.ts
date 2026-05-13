@@ -41,6 +41,7 @@ export type ListenRule = {
 
 export type Perso = {
   id: string
+  name?: string
   type: string
   initial: Record<string, unknown> | undefined
   actions: Record<string, unknown>
@@ -49,7 +50,7 @@ export type Perso = {
 
 export type StoryDef = {
   id: string
-  children?: string[]
+  name?: string
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]

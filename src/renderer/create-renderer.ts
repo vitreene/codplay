@@ -30,16 +30,23 @@ const EMPTY_TICK_RESULT: RendererTickResult = {
   conflictCount: 0
 }
 
+const RENDERER_STATUS = {
+  idle: 'idle',
+  ready: 'ready',
+  running: 'running',
+  paused: 'paused'
+} as const
+
 /**
  * Implements the renderer facade with component orchestration and action routing.
  */
 export class RendererFacade implements RendererApi {
-  private readonly options: CreateRendererOptions
   private readonly animationAdapter: AnimationAdapter
   private readonly orchestrator: RuntimeComponentOrchestrator
+  private readonly runtimeCreateElementOptions: CreateRendererOptions['createElementOptions']
 
-  private status: RendererStatus = 'idle'
-  private activeStoryId: string | null = null
+  private status: RendererStatus = RENDERER_STATUS.idle
+  private loadedRuntimeId: string | null = null
   private pendingCommits: RuntimeCommit[] = []
   private lastAppliedCommitSeq = 0
   private runtimeRevision = 0
@@ -50,8 +57,11 @@ export class RendererFacade implements RendererApi {
    * Creates one renderer facade configured from explicit constructor options.
    */
   constructor(options: CreateRendererOptions = {}) {
-    this.options = options
     this.animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
+    this.runtimeCreateElementOptions = {
+      ...options.createElementOptions,
+      emitRuntimeEvent: options.emitRuntimeEvent
+    }
     this.orchestrator = new RuntimeComponentOrchestrator({
       warn: (warning) => {
         this.emitError({
@@ -60,7 +70,7 @@ export class RendererFacade implements RendererApi {
           details: warning.details
         })
       },
-      createElementOptions: options.createElementOptions
+      createElementOptions: this.runtimeCreateElementOptions
     })
   }
 
@@ -68,7 +78,7 @@ export class RendererFacade implements RendererApi {
    * Returns true when a story is currently loaded in renderer.
    */
   private isInitialized(): boolean {
-    return this.activeStoryId !== null
+    return this.loadedRuntimeId !== null
   }
 
   /**
@@ -164,12 +174,12 @@ export class RendererFacade implements RendererApi {
    */
   load(input: RendererLoadInput): RendererCommandResult {
     this.animationAdapter.stop()
-    this.orchestrator.setCreateElementOptions(this.options.createElementOptions)
+    this.orchestrator.setCreateElementOptions(this.runtimeCreateElementOptions)
     this.orchestrator.loadStory(input.story)
-    this.activeStoryId = input.story.id
+    this.loadedRuntimeId = input.story.id
     this.pendingCommits = []
     this.lastAppliedCommitSeq = 0
-    this.status = 'ready'
+    this.status = RENDERER_STATUS.ready
     this.runtimeRevision += 1
     return { ok: true }
   }
@@ -182,13 +192,13 @@ export class RendererFacade implements RendererApi {
       return this.reject('RENDERER_NOT_INITIALIZED', 'load must be called before start')
     }
 
-    if (this.status !== 'ready') {
+    if (this.status !== RENDERER_STATUS.ready) {
       return this.reject('RENDERER_INVALID_STATE', 'start is only allowed from ready', {
         currentState: this.status
       })
     }
 
-    this.status = 'running'
+    this.status = RENDERER_STATUS.running
     return { ok: true }
   }
 
@@ -200,14 +210,14 @@ export class RendererFacade implements RendererApi {
       return this.reject('RENDERER_NOT_INITIALIZED', 'load must be called before pause')
     }
 
-    if (this.status !== 'running') {
+    if (this.status !== RENDERER_STATUS.running) {
       return this.reject('RENDERER_INVALID_STATE', 'pause is only allowed from running', {
         currentState: this.status
       })
     }
 
     this.animationAdapter.pause?.()
-    this.status = 'paused'
+    this.status = RENDERER_STATUS.paused
     return { ok: true }
   }
 
@@ -219,14 +229,14 @@ export class RendererFacade implements RendererApi {
       return this.reject('RENDERER_NOT_INITIALIZED', 'load must be called before resume')
     }
 
-    if (this.status !== 'paused') {
+    if (this.status !== RENDERER_STATUS.paused) {
       return this.reject('RENDERER_INVALID_STATE', 'resume is only allowed from paused', {
         currentState: this.status
       })
     }
 
     this.animationAdapter.resume?.()
-    this.status = 'running'
+    this.status = RENDERER_STATUS.running
     return { ok: true }
   }
 
@@ -257,8 +267,8 @@ export class RendererFacade implements RendererApi {
     }
 
     this.pendingCommits = []
-    if (this.status !== 'idle') {
-      this.status = 'ready'
+    if (this.status !== RENDERER_STATUS.idle) {
+      this.status = RENDERER_STATUS.ready
     }
 
     return { ok: true }
@@ -269,8 +279,8 @@ export class RendererFacade implements RendererApi {
    */
   destroy(): RendererCommandResult {
     this.pendingCommits = []
-    this.activeStoryId = null
-    this.status = 'idle'
+    this.loadedRuntimeId = null
+    this.status = RENDERER_STATUS.idle
     this.animationAdapter.stop()
     this.orchestrator.destroy()
     this.runtimeRevision += 1
@@ -354,7 +364,6 @@ export class RendererFacade implements RendererApi {
     return {
       status: this.status,
       initialized: this.isInitialized(),
-      activeStoryId: this.activeStoryId ?? undefined,
       runtimeElementCount: runtimeElements.size,
       pendingCommitCount: this.pendingCommits.length,
       lastAppliedCommitSeq: this.lastAppliedCommitSeq,

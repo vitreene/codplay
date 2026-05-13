@@ -8,6 +8,7 @@ import { CodPlay } from '../../src'
 function createPersoFixture() {
   return {
     id: 'title',
+    name: 'title',
     type: 'text',
     initial: {
       content: 'hello'
@@ -24,7 +25,7 @@ function createStoryFixture() {
 
   return {
     id: 'story-main',
-    children: [],
+    name: 'main',
     entries: [perso.id],
     initial: undefined,
     persos: [perso],

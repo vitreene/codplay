@@ -1,8 +1,23 @@
 import { createListPlugin } from './list-plugin/create-list-plugin'
-import type { ItemDoc, RuntimeElement, RuntimeNode, RuntimeNodeFactory } from './types'
+import type {
+  ItemDoc,
+  RuntimeElement,
+  RuntimeEmitEvent,
+  RuntimeEmitSelf,
+  RuntimeNode,
+  RuntimeNodeFactory
+} from './types'
+
+export const RUNTIME_OBJECT_EVENT_HANDLERS = '__codplayEventHandlers'
+const SELF_PAYLOAD_KEY = 'self'
 
 export type CreateElementOptions = {
   nodeFactory?: RuntimeNodeFactory
+  emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
+}
+
+type RuntimeObjectEventNode = Record<string, unknown> & {
+  [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
 
 /**
@@ -190,6 +205,70 @@ function applyInitialState(nodeRef: unknown, item: ItemDoc): void {
 }
 
 /**
+ * Creates one runtime self payload exposed during perso emit.
+ */
+function createRuntimeEmitSelf(item: ItemDoc): RuntimeEmitSelf {
+  return {
+    id: item.id,
+    name: item.name,
+    storyId: item.storyId
+  }
+}
+
+/**
+ * Emits all declared runtime events for one user interaction.
+ */
+function emitDeclaredRuntimeEvents(
+  item: ItemDoc,
+  userEvent: string,
+  emitRuntimeEvent: (event: RuntimeEmitEvent) => void
+): void {
+  const rule = item.emit?.[userEvent]
+  if (!rule) {
+    return
+  }
+
+  const self = createRuntimeEmitSelf(item)
+  const data = rule.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...rule.data, [SELF_PAYLOAD_KEY]: self }
+
+  for (const eventName of rule.events) {
+    emitRuntimeEvent({
+      name: eventName,
+      data
+    })
+  }
+}
+
+/**
+ * Binds authored user event emits on DOM and object runtime nodes.
+ */
+function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: CreateElementOptions): void {
+  const emitRuntimeEvent = options.emitRuntimeEvent
+  if (!emitRuntimeEvent || !item.emit) {
+    return
+  }
+
+  for (const userEvent of Object.keys(item.emit)) {
+    const emit = () => {
+      emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
+    }
+
+    if (isDomElement(nodeRef)) {
+      nodeRef.addEventListener(userEvent, emit)
+      continue
+    }
+
+    if (typeof nodeRef === 'object' && nodeRef !== null) {
+      const runtimeNode = nodeRef as RuntimeObjectEventNode
+      runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] = {
+        ...(runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] ?? {}),
+        [userEvent]: emit
+      }
+    }
+  }
+}
+
+/**
  * Creates one runtime element for one item document.
  */
 export function createElement(item: ItemDoc, options: CreateElementOptions = {}): RuntimeElement {
@@ -199,6 +278,7 @@ export function createElement(item: ItemDoc, options: CreateElementOptions = {})
   const nodeRef = customNode ?? domNode ?? createDefaultRuntimeNode(tagName)
 
   applyInitialState(nodeRef, item)
+  bindRuntimeEmitDeclarations(nodeRef, item, options)
 
   const plugins = item.type === 'list'
     ? [

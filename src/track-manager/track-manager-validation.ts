@@ -111,7 +111,8 @@ export class TrackManagerCodec {
         index: result.length,
         source: RUNTIME_EVENT_SOURCE.story,
         trackId,
-        payload: eventime.data
+        payload: eventime.data,
+        scopeStoryId: storyId
       })
 
       if (Array.isArray(eventime.events) && eventime.events.length > 0) {

@@ -594,10 +594,10 @@ function formatTraceMessage(row: RuntimeTraceRow): string {
 		}
 
 		case 'player:init:done': {
-			const activeStoryId = readString(payload, 'activeStoryId');
+			const mountedStoryCount = readNumber(payload, 'mountedStoryCount');
 			const runtimeElementCount = readNumber(payload, 'runtimeElementCount');
 			const runtimeRevision = readNumber(payload, 'runtimeRevision');
-			return `init done story=${activeStoryId ?? '?'} nodes=${runtimeElementCount ?? '?'} rev=${runtimeRevision ?? '?'}`;
+			return `init done mounted=${mountedStoryCount ?? '?'} nodes=${runtimeElementCount ?? '?'} rev=${runtimeRevision ?? '?'}`;
 		}
 
 		case 'player:play': {

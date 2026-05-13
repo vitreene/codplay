@@ -14,6 +14,7 @@ export type TimelineEvent = {
   ms: number
   name: string
   payload?: Record<string, unknown>
+  scopeStoryId?: string
   index: number
   source: RuntimeEventSource
   trackId?: string
@@ -26,6 +27,7 @@ export type TrackMeta = {
 
 export type EventListener<Action = unknown> = {
   listenerId: string
+  scopeStoryId?: string
   actionsByEventName: Record<string, Action>
 }
 

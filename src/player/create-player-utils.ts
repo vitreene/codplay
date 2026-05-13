@@ -16,6 +16,8 @@ export type PlayerRuntimePlan = {
   sortedEvents: TimelineEvent[]
 }
 
+const COMPOSED_RUNTIME_STORY_ID_FALLBACK = 'scene-runtime'
+
 /**
  * Sanitizes scene/runtime data and prepares deterministic player runtime plans.
  */
@@ -54,13 +56,6 @@ export class PlayerRuntimePlanner {
   }
 
   /**
-   * Resolves one deterministic root story id for fallback flows.
-   */
-  resolveRootStoryId(scene: StrictSceneDoc): string | null {
-    return scene.rootStories[0] ?? Object.keys(scene.stories)[0] ?? null
-  }
-
-  /**
    * Resolves one deterministic timeline end from events and action durations.
    */
   resolveTimelineEndMsFromPlan(plan: PlayerRuntimePlan): number {
@@ -90,14 +85,36 @@ export class PlayerRuntimePlanner {
   /**
    * Builds one sanitized runtime plan used by critical playback paths.
    */
-  createRuntimePlan(scene: StrictSceneDoc, storyId: string, sortedEvents: TimelineEvent[]): PlayerRuntimePlan {
-    const story = scene.stories[storyId]
-    const runtimeStory = this.createRuntimeStory(story)
+  createRuntimePlan(scene: StrictSceneDoc, mountedStoryIds: string[], sortedEvents: TimelineEvent[]): PlayerRuntimePlan {
+    const runtimeStory = this.createComposedRuntimeStory(scene, mountedStoryIds)
 
     return {
       story: runtimeStory,
       listeners: this.resolveActionListeners(runtimeStory),
       sortedEvents
+    }
+  }
+
+  /**
+   * Composes one runtime story from all mounted authored stories.
+   */
+  private createComposedRuntimeStory(scene: StrictSceneDoc, mountedStoryIds: string[]): RuntimeStoryDoc {
+    const items: Record<string, ItemDoc> = {}
+
+    for (const storyId of mountedStoryIds) {
+      const story = scene.stories[storyId]
+      if (story === undefined) {
+        continue
+      }
+
+      for (const perso of story.persos) {
+        items[perso.id] = this.createRuntimeItem(story.id, perso)
+      }
+    }
+
+    return {
+      id: scene.id || COMPOSED_RUNTIME_STORY_ID_FALLBACK,
+      items
     }
   }
 
@@ -130,7 +147,7 @@ export class PlayerRuntimePlanner {
     const items: Record<string, ItemDoc> = {}
 
     for (const perso of story.persos) {
-      items[perso.id] = this.createRuntimeItem(perso)
+      items[perso.id] = this.createRuntimeItem(story.id, perso)
     }
 
     return {
@@ -142,14 +159,15 @@ export class PlayerRuntimePlanner {
   /**
    * Creates one runtime item from one strict perso definition.
    */
-  private createRuntimeItem(perso: PersoDoc): ItemDoc {
+  private createRuntimeItem(storyId: string, perso: PersoDoc): ItemDoc {
     return {
       id: perso.id,
+      name: perso.name,
+      storyId,
       type: perso.type,
       module: perso.module,
       initial: perso.initial,
       emit: perso.emit,
-      children: perso.children,
       list: perso.list,
       actions: perso.actions as ItemDoc['actions']
     }
@@ -189,6 +207,7 @@ export class PlayerRuntimePlanner {
   private resolveActionListeners(story: RuntimeStoryDoc): EventListener<AnimationAction>[] {
     return Object.values(story.items).map((item) => ({
       listenerId: item.id,
+      scopeStoryId: item.storyId,
       actionsByEventName: item.actions
     }))
   }

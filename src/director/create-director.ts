@@ -14,7 +14,14 @@ import type {
  * Implements one runtime director for event dispatch and commit production.
  */
 export class DirectorCore implements DirectorApi {
-  private status: DirectorStatus = 'idle'
+  private static readonly STATUS = {
+    idle: 'idle',
+    ready: 'ready',
+    running: 'running',
+    paused: 'paused'
+  } as const
+
+  private status: DirectorStatus = DirectorCore.STATUS.idle
   private runtimePlan: DirectorRuntimePlan | null = null
   private nextCommitSeq = 1
 
@@ -24,35 +31,35 @@ export class DirectorCore implements DirectorApi {
   load(plan: DirectorRuntimePlan): void {
     this.runtimePlan = plan
     this.nextCommitSeq = 1
-    this.status = 'ready'
+    this.status = DirectorCore.STATUS.ready
   }
 
   /**
    * Starts director execution from ready state.
    */
   start(): void {
-    this.status = 'running'
+    this.status = DirectorCore.STATUS.running
   }
 
   /**
    * Pauses director execution from running state.
    */
   pause(): void {
-    this.status = 'paused'
+    this.status = DirectorCore.STATUS.paused
   }
 
   /**
    * Resumes director execution from paused state.
    */
   resume(): void {
-    this.status = 'running'
+    this.status = DirectorCore.STATUS.running
   }
 
   /**
    * Stops director execution while keeping loaded plan.
    */
   stop(): void {
-    this.status = 'ready'
+    this.status = DirectorCore.STATUS.ready
   }
 
   /**
@@ -61,7 +68,7 @@ export class DirectorCore implements DirectorApi {
   destroy(): void {
     this.runtimePlan = null
     this.nextCommitSeq = 1
-    this.status = 'idle'
+    this.status = DirectorCore.STATUS.idle
   }
 
   /**
@@ -116,7 +123,6 @@ export class DirectorCore implements DirectorApi {
     return {
       status: this.status,
       initialized: this.isInitialized(),
-      activeStoryId: this.runtimePlan?.story.id,
       nextCommitSeq: this.nextCommitSeq
     }
   }

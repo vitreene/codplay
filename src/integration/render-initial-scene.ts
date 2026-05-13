@@ -25,7 +25,7 @@ function isHtmlElement(nodeRef: unknown): nodeRef is HTMLElement {
  */
 function resolveActiveStory(scene: SceneDoc): StoryDoc | null {
   const planner = new PlayerRuntimePlanner()
-  const rootStoryId = planner.resolveRootStoryId(scene)
+  const rootStoryId = scene.rootStories[0] ?? Object.keys(scene.stories)[0] ?? null
   if (rootStoryId === null) {
     return null
   }

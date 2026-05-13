@@ -31,7 +31,7 @@ export class TextRuntimeComponent implements RuntimeComponent {
   init(initial: Record<string, unknown>): void {
     try {
       const tagName = typeof initial.tag === 'string' && initial.tag.length > 0 ? initial.tag : 'p'
-      this.rootNode = createRuntimeNode(this.item, tagName, this.input.createElementOptions)
+      this.rootNode ??= createRuntimeNode(this.item, tagName, this.input.createElementOptions)
       resetRuntimeNodeState(this.rootNode)
 
       applyNodeId(this.rootNode, typeof initial.id === 'string' ? initial.id : this.item.id)

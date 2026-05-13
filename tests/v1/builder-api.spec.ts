@@ -22,11 +22,13 @@ function createValidSceneFixture(): SceneDef {
     stories: {
       'story-main': {
         id: 'story-main',
+        name: 'main',
         entries: ['title-perso'],
         initial: undefined,
         persos: [
           {
             id: 'title-perso',
+            name: 'title-perso',
             type: 'text',
             initial: { content: 'hello' },
             actions: {
@@ -78,55 +80,74 @@ describe('Builder API V1', () => {
     expect(report.errors.some((error) => error.code === 'AUTHOR_DUPLICATE_LISTEN_ON')).toBe(true)
   })
 
-  it('returns a non-blocking warning when a child story is referenced by multiple parents', () => {
+  it('returns blocking validation error when one story or perso identity is invalid', () => {
+    const builder = new BuilderFacade()
+    const invalidScene = createValidSceneFixture()
+    invalidScene.stories['story-main'].name = ' '
+    invalidScene.stories['story-main'].persos[0].name = ''
+
+    const report = builder.validate({ scene: invalidScene })
+
+    expect(report.ok).toBe(false)
+    expect(report.errors.some((error) => error.code === 'AUTHOR_IDENTITY_INVALID')).toBe(true)
+  })
+
+  it('returns blocking validation error when tracks is not a plain object', () => {
+    const builder = new BuilderFacade()
+    const invalidScene = createValidSceneFixture()
+    invalidScene.tracks = [] as unknown as Record<string, unknown>
+
+    const report = builder.validate({ scene: invalidScene })
+
+    expect(report.ok).toBe(false)
+    expect(report.errors.some((error) => error.code === 'AUTHOR_TRACKS_INVALID')).toBe(true)
+  })
+
+  it('compiles one valid scene while preserving story and perso names', () => {
     const builder = new BuilderFacade()
     const scene = createValidSceneFixture()
 
-    scene.stories['story-parent-a'] = {
-      id: 'story-parent-a',
-      entries: ['title-perso'],
-      initial: undefined,
+    const compileResult = builder.compile({ scene })
+    expect(compileResult.ok).toBe(true)
+
+    if (!compileResult.ok) {
+      return
+    }
+
+    expect(compileResult.data.compiledScene.scene.stories['story-main']).toMatchObject({
+      name: 'main',
       persos: [
         {
           id: 'title-perso',
-          type: 'text',
-          initial: { content: 'parent-a' },
-          actions: {
-            'title-perso': null
-          }
+          name: 'title-perso'
         }
-      ],
-      straps: undefined,
-      listen: [],
-      children: ['story-main']
+      ]
+    })
+  })
+
+  it('keeps compiled names immutable after source mutation', () => {
+    const builder = new BuilderFacade()
+    const scene = createValidSceneFixture()
+
+    const compileResult = builder.compile({ scene })
+    expect(compileResult.ok).toBe(true)
+
+    if (!compileResult.ok) {
+      return
     }
 
-    scene.stories['story-parent-b'] = {
-      id: 'story-parent-b',
-      entries: ['title-perso-b'],
-      initial: undefined,
+    scene.stories['story-main'].name = 'mutated-story'
+    scene.stories['story-main'].persos[0].name = 'mutated-perso'
+
+    expect(compileResult.data.compiledScene.scene.stories['story-main']).toMatchObject({
+      name: 'main',
       persos: [
         {
-          id: 'title-perso-b',
-          type: 'text',
-          initial: { content: 'parent-b' },
-          actions: {
-            'title-perso-b': null
-          }
+          id: 'title-perso',
+          name: 'title-perso'
         }
-      ],
-      straps: undefined,
-      listen: [],
-      children: ['story-main']
-    }
-
-    scene.rootStories = ['story-parent-a', 'story-parent-b']
-
-    const report = builder.validate({ scene })
-
-    expect(report.ok).toBe(true)
-    expect(report.errors).toEqual([])
-    expect(report.warnings.some((warning) => warning.code === 'AUTHOR_MULTI_PARENT_STORY')).toBe(true)
+      ]
+    })
   })
 
   it('compiles one valid scene with schemaVersion, createdAt and stable scene payload', () => {

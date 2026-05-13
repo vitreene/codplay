@@ -46,18 +46,18 @@ export type StoryEventimeDoc = {
 
 export type PersoDoc = {
   id: string
+  name?: string
   type: string
   module?: ItemModuleConfig
   initial: ItemState
-  emit?: EmitDeclaration[]
-  children?: string[]
+  emit?: EmitDeclaration
   list?: ListConfig
   actions: Record<string, ActionDoc | null>
 }
 
 export type SceneStoryDoc = {
   id: string
-  children?: string[]
+  name?: string
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: PersoDoc[]
@@ -65,6 +65,7 @@ export type SceneStoryDoc = {
   listen: ListenRule[]
   eventimes?: StoryEventimeDoc[]
   state?: Record<string, unknown> | undefined
+  init?: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
 }
 
 export type PlayerSceneLifecycleOptions = {
@@ -93,7 +94,6 @@ export type PlayerStateSnapshot = {
   status: PlayerStatus
   initialized: boolean
   sceneId?: string
-  activeStoryId?: string
   timelineMs: number
   runtimeRevision: number
 }
@@ -103,6 +103,7 @@ export type PlayerPublicEventInput = {
   name: string
   ms?: number
   payload?: Record<string, unknown>
+  scopeStoryId?: string
   source?: RuntimeEventSource
   trackId?: string
   cascade?: boolean

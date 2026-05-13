@@ -25,6 +25,11 @@ const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   list: ListRuntimeComponent
 }
 
+const INITIAL_LOAD_EVENT = {
+  id: 'init',
+  seq: 0
+} as const
+
 const OVERLAY_LAYER_Z_INDEX = 2147483647
 
 type WorldRectSnapshot = {
@@ -169,17 +174,36 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Loads one story by instantiating one component for each declared item.
+   * Synchronizes one runtime story without purging the existing registry.
    */
   loadStory(story: StoryDoc): RuntimeElementMap {
     this.cleanupOverlayRuntime()
-    this.componentByPersoId.clear()
-    this.nodeByPersoId.clear()
-    this.listByPersoId.clear()
-    this.parentListByPersoId.clear()
-    this.mountedByPersoId.clear()
 
     for (const item of Object.values(story.items)) {
+      const existingComponent = this.componentByPersoId.get(item.id)
+      if (existingComponent) {
+        const previousRootNode = this.nodeByPersoId.get(item.id) ?? null
+        if (previousRootNode !== null) {
+          this.detachNodeFromParent(previousRootNode)
+        }
+
+        existingComponent.init(item.initial)
+        const nextRootNode = existingComponent.render()
+        const isExistingListComponent = this.isRuntimeListComponent(existingComponent)
+
+        if (!isExistingListComponent) {
+          this.detachNodeFromParent(nextRootNode)
+          this.listByPersoId.delete(item.id)
+        } else {
+          this.listByPersoId.set(item.id, existingComponent)
+        }
+
+        this.nodeByPersoId.set(item.id, nextRootNode)
+        this.parentListByPersoId.set(item.id, null)
+        this.mountedByPersoId.set(item.id, isExistingListComponent)
+        continue
+      }
+
       const componentClass = this.componentClassByType.get(item.type)
       if (!componentClass) {
         this.warn({
@@ -226,8 +250,8 @@ export class RuntimeComponentOrchestrator {
       this.applyMoveForPerso({
         persoId: item.id,
         move: initialMove,
-        eventId: 'init',
-        eventSeq: 0
+        eventId: INITIAL_LOAD_EVENT.id,
+        eventSeq: INITIAL_LOAD_EVENT.seq
       })
     }
 

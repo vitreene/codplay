@@ -1,9 +1,10 @@
 import type { ApiWarning, SceneDef, StoryDef, ValidationError, ValidationReport } from './types'
 
 export const AUTHOR_DUPLICATE_LISTEN_ON = 'AUTHOR_DUPLICATE_LISTEN_ON'
+export const AUTHOR_IDENTITY_INVALID = 'AUTHOR_IDENTITY_INVALID'
 export const AUTHOR_ROOT_STORIES_INVALID = 'AUTHOR_ROOT_STORIES_INVALID'
 export const AUTHOR_STORY_ENTRIES_INVALID = 'AUTHOR_STORY_ENTRIES_INVALID'
-export const AUTHOR_MULTI_PARENT_STORY = 'AUTHOR_MULTI_PARENT_STORY'
+export const AUTHOR_TRACKS_INVALID = 'AUTHOR_TRACKS_INVALID'
 
 /**
  * Validates one authored scene against the V1 builder rules.
@@ -17,14 +18,29 @@ export class BuilderValidator {
     const warnings: ApiWarning[] = []
 
     this.validateRootStories(scene, errors)
+    this.validateTracks(scene, errors)
     this.validateSceneListenUniqueness(scene, errors)
     this.validateStories(scene, errors)
-    this.validateStoryParentCollisions(scene, warnings)
 
     return {
       ok: errors.length === 0,
       errors,
       warnings
+    }
+  }
+
+  /**
+   * Validates the scene track container shape.
+   */
+  private validateTracks(scene: SceneDef, errors: ValidationError[]): void {
+    if (typeof scene.tracks !== 'object' || scene.tracks === null || Array.isArray(scene.tracks)) {
+      errors.push({
+        code: AUTHOR_TRACKS_INVALID,
+        message: 'tracks must be a plain object.',
+        details: {
+          sceneId: scene.id
+        }
+      })
     }
   }
 
@@ -77,8 +93,45 @@ export class BuilderValidator {
    */
   private validateStories(scene: SceneDef, errors: ValidationError[]): void {
     for (const story of Object.values(scene.stories)) {
+      this.validateIdentity('story', story.id, story.name, errors)
+      for (const perso of story.persos) {
+        this.validateIdentity('perso', perso.id, perso.name, errors, {
+          storyId: story.id
+        })
+      }
+
       this.validateStoryEntries(story, errors)
       this.validateStoryListenUniqueness(story, errors)
+    }
+  }
+
+  /**
+   * Validates one runtime identity pair.
+   */
+  private validateIdentity(
+    kind: 'story' | 'perso',
+    id: string,
+    name: string | undefined,
+    errors: ValidationError[],
+    details?: Record<string, unknown>
+  ): void {
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      errors.push({
+        code: AUTHOR_IDENTITY_INVALID,
+        message: `${kind}.id must be a non-empty string.`,
+        details
+      })
+    }
+
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
+      errors.push({
+        code: AUTHOR_IDENTITY_INVALID,
+        message: `${kind}.name must be a non-empty string when provided.`,
+        details: {
+          ...details,
+          id
+        }
+      })
     }
   }
 
@@ -130,33 +183,6 @@ export class BuilderValidator {
         on: duplicatedKeys
       }
     })
-  }
-
-  /**
-   * Detects multi-parent story references and emits non-blocking warnings.
-   */
-  private validateStoryParentCollisions(scene: SceneDef, warnings: ApiWarning[]): void {
-    const parentByChildStoryId = new Map<string, string>()
-
-    for (const story of Object.values(scene.stories)) {
-      for (const childId of story.children ?? []) {
-        const existingParentId = parentByChildStoryId.get(childId)
-        if (existingParentId === undefined) {
-          parentByChildStoryId.set(childId, story.id)
-          continue
-        }
-
-        warnings.push({
-          code: AUTHOR_MULTI_PARENT_STORY,
-          message: 'A child story is referenced by multiple parents. First parent wins.',
-          details: {
-            childId,
-            firstParentId: existingParentId,
-            ignoredParentId: story.id
-          }
-        })
-      }
-    }
   }
 
   /**

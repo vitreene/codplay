@@ -7,6 +7,10 @@ import {
   createS3RobustesseScene
 } from '../../src/demos/scenes'
 
+const EXPECTED_PLAYER_STATUS = {
+  ready: 'ready'
+} as const
+
 type RuntimeNodeFixture = {
   tagName: string
   style: Record<string, unknown>
@@ -39,9 +43,8 @@ describe('V1 - reference scenes', () => {
     expect(initResult.ok).toBe(true)
     expect(player.getState()).toMatchObject({
       initialized: true,
-      status: 'ready',
-      sceneId: 's1-canari-scene',
-      activeStoryId: 's1-canari-story'
+      status: EXPECTED_PLAYER_STATUS.ready,
+      sceneId: 's1-canari-scene'
     })
     expect(player.getRuntimeRegistry().getNodeById('canari-title')).not.toBeNull()
   })

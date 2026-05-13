@@ -15,6 +15,7 @@ export type TrackManagerStoryEvent = {
   source: RuntimeEventSource
   trackId?: string
   payload?: Record<string, unknown>
+  scopeStoryId?: string
 }
 
 export type TrackEventRef = {

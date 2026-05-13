@@ -5,6 +5,13 @@ import type { AnimationAdapter, TransitionRequest } from '../../src/animation/ty
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 
+const EXPECTED_PLAYER_STATUS = {
+  idle: 'idle',
+  ready: 'ready',
+  playing: 'playing',
+  paused: 'paused'
+} as const
+
 type SeekableTween = {
   target: Record<string, unknown>
   property: string
@@ -181,24 +188,27 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
   it('L13-T1 init/destroy are idempotent and keep stable state', async () => {
     const player = new PlayerFacade()
 
-    expect(player.getState().status).toBe('idle')
+    expect(player.getState().status).toBe(EXPECTED_PLAYER_STATUS.idle)
 
     expect(await player.init(temp__createSceneFixture())).toEqual({ ok: true })
     expect(player.getState()).toMatchObject({
       initialized: true,
-      status: 'ready',
-      sceneId: 'scene-main',
-      activeStoryId: 'story-main'
+      status: EXPECTED_PLAYER_STATUS.ready,
+      sceneId: 'scene-main'
     })
 
     expect(await player.init(temp__createSceneFixture())).toEqual({ ok: true })
-    expect(player.getState().status).toBe('ready')
+    expect(player.getState().status).toBe(EXPECTED_PLAYER_STATUS.ready)
 
     expect(await player.destroy()).toEqual({ ok: true })
-    expect(player.getState()).toMatchObject({ initialized: false, status: 'idle', timelineMs: 0 })
+    expect(player.getState()).toMatchObject({
+      initialized: false,
+      status: EXPECTED_PLAYER_STATUS.idle,
+      timelineMs: 0
+    })
 
     expect(await player.destroy()).toEqual({ ok: true })
-    expect(player.getState().status).toBe('idle')
+    expect(player.getState().status).toBe(EXPECTED_PLAYER_STATUS.idle)
   })
 
   it('L13-T2 play/pause/seek update player state deterministically', async () => {
@@ -206,7 +216,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
     await player.init(temp__createSceneFixture())
 
     expect(await player.play()).toEqual({ ok: true })
-    expect(player.getState().status).toBe('playing')
+    expect(player.getState().status).toBe(EXPECTED_PLAYER_STATUS.playing)
 
     expect(await player.pause()).toEqual({ ok: true })
     expect(player.getState().status).toBe('paused')

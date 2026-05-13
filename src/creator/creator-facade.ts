@@ -45,6 +45,70 @@ export class CodPlay implements CodPlayApi {
     return { ok: true, data: undefined }
   }
 
+  /**
+   * Creates one empty story with one generated author name and runtime id.
+   */
+  createStory(input: { name?: string } = {}): ApiResult<{ storyId: string; storyName: string }> {
+    return this.withScene((scene) => {
+      const identity = this.createStoryIdentity(scene, input.name)
+      scene.stories[identity.storyId] = {
+        id: identity.storyId,
+        name: identity.storyName,
+        entries: [],
+        initial: undefined,
+        persos: [],
+        straps: undefined,
+        listen: [],
+        eventimes: undefined,
+        state: undefined,
+        init: undefined
+      }
+
+      return {
+        ok: true,
+        data: identity
+      }
+    })
+  }
+
+  /**
+   * Creates one empty perso in one story with one generated author name and runtime id.
+   */
+  createPerso(input: {
+    storyId: string
+    type: string
+    name?: string
+  }): ApiResult<{ persoId: string; persoName: string }> {
+    return this.withScene((scene) => {
+      const story = scene.stories[input.storyId]
+      if (story === undefined) {
+        return this.reject('CREATOR_STORY_NOT_FOUND', `Story '${input.storyId}' does not exist`)
+      }
+
+      const identity = this.createPersoIdentity(story, input.type, input.name)
+      const nextStory = this.cloneStory(story)
+      nextStory.persos = [
+        ...nextStory.persos,
+        {
+          id: identity.persoId,
+          name: identity.persoName,
+          type: input.type,
+          initial: undefined,
+          actions: {
+            [identity.persoId]: null
+          }
+        }
+      ]
+      nextStory.entries = [...nextStory.entries, identity.persoId]
+      scene.stories[input.storyId] = nextStory
+
+      return {
+        ok: true,
+        data: identity
+      }
+    })
+  }
+
   readonly scene = {
     initial: {
       set: (input: { value: Record<string, unknown> | undefined }): ApiResult<void> => {
@@ -82,6 +146,23 @@ export class CodPlay implements CodPlayApi {
       set: (input: { value: Record<string, unknown> }): ApiResult<void> => {
         return this.withScene((scene) => {
           scene.tracks = this.cloneData(input.value)
+          return { ok: true, data: undefined }
+        })
+      },
+      upsert: (input: { trackId: string; track: Record<string, unknown> }): ApiResult<void> => {
+        return this.withScene((scene) => {
+          scene.tracks = {
+            ...scene.tracks,
+            [input.trackId]: this.cloneData(input.track)
+          }
+          return { ok: true, data: undefined }
+        })
+      },
+      remove: (input: { trackId: string }): ApiResult<void> => {
+        return this.withScene((scene) => {
+          const nextTracks = this.cloneData(scene.tracks)
+          delete nextTracks[input.trackId]
+          scene.tracks = nextTracks
           return { ok: true, data: undefined }
         })
       }
@@ -167,16 +248,6 @@ export class CodPlay implements CodPlayApi {
   }
 
   /**
-   * Replaces one story child list.
-   */
-  setStoryChildren(input: { storyId: string; children: string[] }): ApiResult<void> {
-    return this.withStory(input.storyId, (story) => ({
-      ...this.cloneStory(story),
-      children: this.cloneData(input.children)
-    }))
-  }
-
-  /**
    * Replaces one story entries list.
    */
   setStoryEntries(input: { storyId: string; entries: string[] }): ApiResult<void> {
@@ -203,7 +274,7 @@ export class CodPlay implements CodPlayApi {
   /**
    * Runs one scene-aware operation and returns any creation error.
    */
-  private withScene(action: (scene: CodPlaySceneState) => ApiResult<void>): ApiResult<void> {
+  private withScene<T>(action: (scene: CodPlaySceneState) => ApiResult<T>): ApiResult<T> {
     if (this.currentScene === null) {
       return this.reject('CREATOR_NOT_INITIALIZED', 'create must be called before authoring updates')
     }
@@ -227,6 +298,54 @@ export class CodPlay implements CodPlayApi {
       scene.stories[storyId] = action(story)
       return { ok: true, data: undefined }
     })
+  }
+
+  /**
+   * Creates one stable story author name and runtime id pair.
+   */
+  private createStoryIdentity(
+    scene: CodPlaySceneState,
+    requestedName?: string
+  ): { storyId: string; storyName: string } {
+    const baseName = this.normalizeAuthorName(requestedName, 'story')
+    const usedStoryNames = new Set(Object.values(scene.stories).map((story) => story.name ?? story.id))
+
+    for (let index = 1; index < 10_000; index += 1) {
+      const storyName = index === 1 ? baseName : `${baseName}-${index}`
+      const storyId = `story-${this.slugify(storyName, 'story')}`
+      if (usedStoryNames.has(storyName) || storyId in scene.stories) {
+        continue
+      }
+
+      return { storyId, storyName }
+    }
+
+    throw new Error('Unable to allocate one unique story identity')
+  }
+
+  /**
+   * Creates one stable perso author name and runtime id pair inside one story.
+   */
+  private createPersoIdentity(
+    story: StoryDef,
+    persoType: string,
+    requestedName?: string
+  ): { persoId: string; persoName: string } {
+    const baseName = this.normalizeAuthorName(requestedName, this.slugify(persoType, 'perso'))
+    const usedPersoNames = new Set(story.persos.map((perso) => perso.name ?? perso.id))
+    const usedPersoIds = new Set(story.persos.map((perso) => perso.id))
+
+    for (let index = 1; index < 10_000; index += 1) {
+      const persoName = index === 1 ? baseName : `${baseName}-${index}`
+      const persoId = `${story.id}__${this.slugify(persoName, 'perso')}`
+      if (usedPersoNames.has(persoName) || usedPersoIds.has(persoId)) {
+        continue
+      }
+
+      return { persoId, persoName }
+    }
+
+    throw new Error('Unable to allocate one unique perso identity')
   }
 
   /**
@@ -258,7 +377,7 @@ export class CodPlay implements CodPlayApi {
   private cloneStory(story: StoryDef): StoryDef {
     return {
       id: story.id,
-      children: this.cloneData(story.children),
+      name: story.name ?? story.id,
       entries: this.cloneData(story.entries),
       initial: this.cloneData(story.initial),
       persos: story.persos.map((perso) => this.clonePerso(perso)),
@@ -276,11 +395,33 @@ export class CodPlay implements CodPlayApi {
   private clonePerso(perso: Perso): Perso {
     return {
       id: perso.id,
+      name: perso.name ?? perso.id,
       type: perso.type,
       initial: this.cloneData(perso.initial),
       actions: this.cloneData(perso.actions),
       emit: this.cloneData(perso.emit)
     }
+  }
+
+  /**
+   * Normalizes one optional author-visible name.
+   */
+  private normalizeAuthorName(value: string | undefined, fallback: string): string {
+    const trimmedValue = value?.trim()
+    return trimmedValue && trimmedValue.length > 0 ? trimmedValue : fallback
+  }
+
+  /**
+   * Converts one free-form label into one stable runtime-safe slug.
+   */
+  private slugify(value: string, fallback: string): string {
+    const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+    return normalized.length > 0 ? normalized : fallback
   }
 
   /**

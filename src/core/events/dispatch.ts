@@ -15,6 +15,10 @@ export function dispatchEvents<Action>(
 
   for (const event of events) {
     for (const listener of context.listeners) {
+      if (event.scopeStoryId !== undefined && listener.scopeStoryId !== event.scopeStoryId) {
+        continue
+      }
+
       const action = listener.actionsByEventName[event.name]
       if (action === undefined) {
         continue

@@ -56,15 +56,15 @@ export class ImageRuntimeComponent implements RuntimeComponent {
    */
   init(initial: Record<string, unknown>): void {
     try {
-      this.rootNode = createRuntimeNode(this.item, 'div', this.input.createElementOptions)
+      this.rootNode ??= createRuntimeNode(this.item, 'div', this.input.createElementOptions)
       resetRuntimeNodeState(this.rootNode)
 
       if (isDomElement(this.rootNode)) {
-        const existingMedia = this.rootNode.querySelector('img')
+        const existingMedia = this.mediaNode ?? this.rootNode.querySelector('img')
         this.mediaNode = existingMedia ?? globalThis.document.createElement('img')
         appendDomChild(this.rootNode, this.mediaNode)
       } else {
-        this.mediaNode = createObjectMediaNode()
+        this.mediaNode ??= createObjectMediaNode()
       }
 
       resetRuntimeNodeState(this.mediaNode)

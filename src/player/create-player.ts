@@ -13,7 +13,7 @@ import type { CreateElementOptions } from '../runtime/create-element'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
-import { createSceneLifecycleOptions, PlayerRuntimePlanner } from './create-player-utils'
+import { createSceneLifecycleOptions, PlayerRuntimePlanner, type PlayerRuntimePlan } from './create-player-utils'
 import { PLAYER_STATUS } from './player-constants'
 import type {
   PlayerApi,
@@ -35,6 +35,7 @@ export type CreatePlayerOptions = {
   runtimePolicy?: Partial<PlayerRuntimePolicy>
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
+  onRuntimeEmit?: (event: PlayerPublicEventInput) => void
 }
 
 const DEFAULT_RUNTIME_POLICY: PlayerRuntimePolicy = {
@@ -48,6 +49,16 @@ const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
   }
 }
 
+const PLAYER_TRACE_EVENT = {
+  mountFailed: 'player:mount:failed',
+  initStarted: 'player:init:started',
+  initDone: 'player:init:done'
+} as const
+
+const PLAYER_RUNTIME_ERROR_MESSAGE = {
+  mountedStoryRequired: 'Scene must provide at least one mounted story'
+} as const
+
 /**
  * Implements one player facade with lifecycle commands and subscriptions.
  */
@@ -60,7 +71,6 @@ export class PlayerFacade implements PlayerApi {
 
   private status: PlayerStatus = PLAYER_STATUS.idle
   private scene: StrictSceneDoc | null = null
-  private activeStoryId: string | null = null
   private timelineMs = 0
   private timelineEndMs = 0
   private playbackStartMs: number | null = null
@@ -85,7 +95,24 @@ export class PlayerFacade implements PlayerApi {
     const animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
     this.renderer = new RendererFacade({
       animationAdapter,
-      createElementOptions: options.createElementOptions
+      createElementOptions: options.createElementOptions,
+      emitRuntimeEvent: (event) => {
+        const runtimeEvent: PlayerPublicEventInput = {
+          name: event.name,
+          payload: event.data,
+          scopeStoryId: event.scopeStoryId,
+          source: RUNTIME_EVENT_SOURCE.user
+        }
+
+        if (options.onRuntimeEmit) {
+          options.onRuntimeEmit(runtimeEvent)
+          return
+        }
+
+        void this.emit({
+          ...runtimeEvent
+        })
+      }
     })
 
     this.renderer.onError((error) => {
@@ -208,7 +235,6 @@ export class PlayerFacade implements PlayerApi {
     this.renderer.destroy()
     this.trackManager.load({ tracks: {} })
     this.scene = null
-    this.activeStoryId = null
     this.timelineMs = 0
     this.timelineEndMs = 0
     this.playbackStartMs = null
@@ -218,18 +244,40 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Rebuilds the active runtime plan from the current mounted story and track manager state.
+   * Returns mounted story ids in deterministic insertion order.
    */
-  private syncActiveRuntimePlan(): PlayerCommandResult {
-    if (this.scene === null || this.activeStoryId === null) {
-      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:sync-runtime')
+  private getMountedStoryIds(): string[] {
+    return [...this.mountedStoryIds]
+  }
+
+  /**
+   * Builds one runtime plan from all currently mounted stories.
+   */
+  private createMountedRuntimePlan(): PlayerRuntimePlan | null {
+    if (this.scene === null || this.mountedStoryIds.size === 0) {
+      return null
     }
 
-    const runtimePlan = this.runtimePlanner.createRuntimePlan(
+    return this.runtimePlanner.createRuntimePlan(
       this.scene,
-      this.activeStoryId,
+      this.getMountedStoryIds(),
       this.trackManager.getAllEvents()
     )
+  }
+
+  /**
+   * Rebuilds the runtime plan from all mounted stories and current track state.
+   */
+  private syncMountedRuntimePlan(): PlayerCommandResult {
+    const runtimePlan = this.createMountedRuntimePlan()
+    if (runtimePlan === null) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:sync-runtime'
+      )
+    }
+
     this.director.load(runtimePlan)
     this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
     return { ok: true }
@@ -280,19 +328,21 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    this.activeStoryId = nextStory.id
     this.mountedStoryIds.add(nextStory.id)
 
-    const syncResult = this.syncActiveRuntimePlan()
-    if (!syncResult.ok) {
+    const runtimePlan = this.createMountedRuntimePlan()
+    if (runtimePlan === null) {
       return
     }
 
-    const runtimeStory = this.runtimePlanner.createRuntimeStory(nextStory)
-    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
+    this.director.load(runtimePlan)
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+
+    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
     if (!rendererLoadResult.ok) {
-        this.emitTrace('player:mount:failed', RUNTIME_TRACE_STATUS.error, {
+      this.emitTrace(PLAYER_TRACE_EVENT.mountFailed, RUNTIME_TRACE_STATUS.error, {
         storyId: nextStory.id,
+        mountedStoryIds: this.getMountedStoryIds(),
         code: rendererLoadResult.error.code,
         message: rendererLoadResult.error.message
       })
@@ -326,7 +376,7 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
-    this.syncActiveRuntimePlan()
+    this.syncMountedRuntimePlan()
   }
 
   /**
@@ -427,6 +477,7 @@ export class PlayerFacade implements PlayerApi {
       ms: eventMs,
       name: input.name,
       payload: input.payload,
+      scopeStoryId: input.scopeStoryId,
       index: this.nextPublicEventIndex,
       source: input.source ?? RUNTIME_EVENT_SOURCE.user,
       trackId: input.trackId
@@ -467,10 +518,19 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Initializes all scene stories before scene-level init logic runs.
+   */
+  private initializeSceneStories(scene: StrictSceneDoc): void {
+    for (const story of Object.values(scene.stories)) {
+      story.state = story.init?.(story.initial)
+    }
+  }
+
+  /**
    * Initializes player runtime with one scene document.
    */
   async init(nextScene: PlayerSceneInput): Promise<PlayerCommandResult> {
-    this.emitTrace('player:init:started', RUNTIME_TRACE_STATUS.applied, {
+    this.emitTrace(PLAYER_TRACE_EVENT.initStarted, RUNTIME_TRACE_STATUS.applied, {
       sceneId: nextScene.id
     })
 
@@ -484,13 +544,15 @@ export class PlayerFacade implements PlayerApi {
     this.nextPublicEventIndex = 0
     this.trackManager.load({ tracks: runtimeScene.tracks })
 
+    this.initializeSceneStories(runtimeScene)
     runtimeScene.init?.(runtimeScene, this.createLifecycleOptions())
     this.setStatus(PLAYER_STATUS.ready)
 
     const rendererState = this.renderer.getState()
-    this.emitTrace('player:init:done', RUNTIME_TRACE_STATUS.applied, {
+    this.emitTrace(PLAYER_TRACE_EVENT.initDone, RUNTIME_TRACE_STATUS.applied, {
       sceneId: runtimeScene.id,
-      activeStoryId: this.activeStoryId ?? undefined,
+      mountedStoryCount: this.mountedStoryIds.size,
+      initializedStoryCount: Object.keys(runtimeScene.stories).length,
       runtimeElementCount: rendererState.runtimeElementCount,
       runtimeRevision: rendererState.runtimeRevision
     })
@@ -531,15 +593,15 @@ export class PlayerFacade implements PlayerApi {
 
     if (this.status === PLAYER_STATUS.ready) {
       this.scene.onStart?.(this.scene, this.createLifecycleOptions())
-      if (this.activeStoryId === null) {
+      if (this.mountedStoryIds.size === 0) {
         return this.reject(
           'SCENE_STORY_NOT_FOUND',
-          'Scene must mount one story before play',
+          PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
           'player:play'
         )
       }
 
-      const syncResult = this.syncActiveRuntimePlan()
+      const syncResult = this.syncMountedRuntimePlan()
       if (!syncResult.ok) {
         return syncResult
       }
@@ -617,7 +679,9 @@ export class PlayerFacade implements PlayerApi {
     this.emitTrace('player:emit', RUNTIME_TRACE_STATUS.applied, {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
-      eventMs: timelineEvent.ms
+      eventMs: timelineEvent.ms,
+      payload: timelineEvent.payload,
+      source: timelineEvent.source
     })
 
     return { ok: true }
@@ -646,8 +710,12 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    if (this.activeStoryId === null) {
-      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:seek')
+    if (this.mountedStoryIds.size === 0) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:seek'
+      )
     }
 
     this.setStatus(PLAYER_STATUS.seeking)
@@ -658,16 +726,23 @@ export class PlayerFacade implements PlayerApi {
     this.playbackStartMs = null
     this.stopPlaybackLoop()
 
-    const syncResult = this.syncActiveRuntimePlan()
-    if (!syncResult.ok) {
-      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:seek:failed', {
-        sceneId: this.scene.id,
-        targetTimelineMs
-      })
+    const runtimePlan = this.createMountedRuntimePlan()
+    if (runtimePlan === null) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:seek:failed',
+        {
+          sceneId: this.scene.id,
+          targetTimelineMs
+        }
+      )
     }
 
-    const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
-    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
+    this.director.load(runtimePlan)
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+
+    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to seek story', 'player:seek:failed', {
         sceneId: this.scene.id,
@@ -758,8 +833,12 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    if (this.activeStoryId === null) {
-      return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:rewind')
+    if (this.mountedStoryIds.size === 0) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:rewind'
+      )
     }
 
     const previousStatus = this.status
@@ -770,13 +849,19 @@ export class PlayerFacade implements PlayerApi {
     this.playbackStartMs = null
     this.stopPlaybackLoop()
 
-    const syncResult = this.syncActiveRuntimePlan()
-    if (!syncResult.ok) {
-      return syncResult
+    const runtimePlan = this.createMountedRuntimePlan()
+    if (runtimePlan === null) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:rewind:failed'
+      )
     }
 
-    const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
-    const rendererLoadResult = this.renderer.load({ story: runtimeStory })
+    this.director.load(runtimePlan)
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+
+    const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to rewind story', 'player:rewind:failed', {
         sceneId: this.scene.id,
@@ -841,7 +926,7 @@ export class PlayerFacade implements PlayerApi {
    * Rebuilds runtime according to runtime policy constraints.
    */
   async rebuild(mode: RebuildMode = 'state'): Promise<PlayerCommandResult> {
-    if (!this.isInitialized() || this.scene === null || this.activeStoryId === null) {
+    if (!this.isInitialized() || this.scene === null || this.mountedStoryIds.size === 0) {
       return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before rebuild', 'player:rebuild')
     }
 
@@ -864,16 +949,23 @@ export class PlayerFacade implements PlayerApi {
     })
 
     if (mode === 'full') {
-      const syncResult = this.syncActiveRuntimePlan()
-      if (!syncResult.ok) {
-        return this.reject('SCENE_STORY_NOT_FOUND', 'Scene must provide one mounted story', 'player:rebuild:failed', {
-          sceneId: this.scene.id,
-          mode
-        })
+      const runtimePlan = this.createMountedRuntimePlan()
+      if (runtimePlan === null) {
+        return this.reject(
+          'SCENE_STORY_NOT_FOUND',
+          PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+          'player:rebuild:failed',
+          {
+            sceneId: this.scene.id,
+            mode
+          }
+        )
       }
 
-      const runtimeStory = this.runtimePlanner.createRuntimeStory(this.scene.stories[this.activeStoryId])
-      const rendererLoadResult = this.renderer.load({ story: runtimeStory })
+      this.director.load(runtimePlan)
+      this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+
+      const rendererLoadResult = this.renderer.load({ story: runtimePlan.story })
       if (!rendererLoadResult.ok) {
         return this.reject(
           'RENDERER_LOAD_FAILED',
@@ -945,14 +1037,12 @@ export class PlayerFacade implements PlayerApi {
    * Returns one immutable snapshot of current player state.
    */
   getState(): PlayerStateSnapshot {
-    const directorState = this.director.getState()
     const rendererState = this.renderer.getState()
 
     return {
       status: this.status,
       initialized: this.isInitialized(),
       sceneId: this.scene?.id,
-      activeStoryId: this.activeStoryId ?? directorState.activeStoryId,
       timelineMs: this.resolveCurrentTimelineMs(),
       runtimeRevision: rendererState.runtimeRevision
     }

@@ -1,7 +1,7 @@
 import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
 import type { RuntimeComponentClass, RuntimeRegistryCommandResult, RuntimeRegistrySnapshot } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
-import type { StoryDoc } from '../runtime/types'
+import type { RuntimeEmitEvent, StoryDoc } from '../runtime/types'
 
 /**
  * Defines renderer constructor options.
@@ -9,6 +9,7 @@ import type { StoryDoc } from '../runtime/types'
 export type CreateRendererOptions = {
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
+  emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
 }
 
 /**
@@ -71,7 +72,6 @@ export type RendererTickResult = {
 export type RendererStateSnapshot = {
   status: RendererStatus
   initialized: boolean
-  activeStoryId?: string
   runtimeElementCount: number
   pendingCommitCount: number
   lastAppliedCommitSeq: number

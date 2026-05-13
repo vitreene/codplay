@@ -19,7 +19,6 @@ export type DirectorEventResult = {
 export type DirectorStateSnapshot = {
   status: DirectorStatus
   initialized: boolean
-  activeStoryId?: string
   nextCommitSeq: number
 }
 

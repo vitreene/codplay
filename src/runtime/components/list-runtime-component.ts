@@ -77,14 +77,18 @@ export class ListRuntimeComponent implements RuntimeListComponent {
    */
   init(initial: Record<string, unknown>): void {
     try {
-      this.rootNode = createRuntimeNode(this.item, 'section', this.input.createElementOptions)
+      this.rootNode ??= createRuntimeNode(this.item, 'section', this.input.createElementOptions)
       resetRuntimeNodeState(this.rootNode)
+      this.childNodeById.clear()
+      this.orderedChildIds = []
+      this.persistentPlacementByChildId.clear()
+      this.nextPlacementOrder = 1
 
       if (isDomElement(this.rootNode)) {
-        this.itemsNode = globalThis.document.createElement('ul')
+        this.itemsNode ??= globalThis.document.createElement('ul')
         appendDomChild(this.rootNode, this.itemsNode)
       } else {
-        this.itemsNode = {
+        this.itemsNode ??= {
           tagName: 'UL',
           style: {},
           attributes: {}

@@ -49,6 +49,18 @@ export type EmitRule = {
   data?: Record<string, unknown>
 }
 
+export type RuntimeEmitSelf = {
+  id: string
+  name?: string
+  storyId: string
+}
+
+export type RuntimeEmitEvent = {
+  name: string
+  data?: Record<string, unknown>
+  scopeStoryId?: string
+}
+
 /**
  * Defines one emit declaration entry keyed by DOM event name.
  */
@@ -137,11 +149,12 @@ export type ListConfig = {
  */
 export type ItemDoc = {
   id: string
+  name?: string
+  storyId: string
   type: ItemType
   module?: ItemModuleConfig
   initial: ItemState
-  emit?: EmitDeclaration[]
-  children?: string[]
+  emit?: EmitDeclaration
   list?: ListConfig
   actions: Record<string, ActionDoc>
 }

@@ -6,6 +6,12 @@ export type CodPlayApi = {
   builder: BuilderApi
   player: Player
   create: (input: { id: string }) => ApiResult<void>
+  createStory: (input?: { name?: string }) => ApiResult<{ storyId: string; storyName: string }>
+  createPerso: (input: {
+    storyId: string
+    type: string
+    name?: string
+  }) => ApiResult<{ persoId: string; persoName: string }>
   scene: {
     initial: {
       set: (input: { value: Record<string, unknown> | undefined }) => ApiResult<void>
@@ -21,6 +27,8 @@ export type CodPlayApi = {
     }
     tracks: {
       set: (input: { value: Record<string, unknown> }) => ApiResult<void>
+      upsert: (input: { trackId: string; track: Record<string, unknown> }) => ApiResult<void>
+      remove: (input: { trackId: string }) => ApiResult<void>
     }
     rootStories: {
       set: (input: { value: string[] }) => ApiResult<void>
@@ -32,7 +40,6 @@ export type CodPlayApi = {
   removePerso: (input: { storyId: string; persoId: string }) => ApiResult<void>
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
   setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
-  setStoryChildren: (input: { storyId: string; children: string[] }) => ApiResult<void>
   setStoryEntries: (input: { storyId: string; entries: string[] }) => ApiResult<void>
   exportSceneDoc: () => ApiResult<SceneDef>
 }

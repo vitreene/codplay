@@ -32,7 +32,7 @@ export class BuilderArtifactCloner {
     for (const [storyId, story] of Object.entries(scene.stories)) {
       clonedStories[storyId] = {
         id: story.id,
-        children: this.cloneData(story.children),
+        name: story.name,
         entries: this.cloneData(story.entries),
         initial: this.cloneData(story.initial),
         persos: this.cloneData(story.persos),

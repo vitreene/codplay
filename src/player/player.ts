@@ -42,11 +42,30 @@ export class Player implements PlayerApi {
 
   readonly schedule: PlayerScheduleApi
 
+  private static readonly LIFECYCLE_EVENT = {
+    sceneReady: 'scene:ready',
+    sceneStart: 'scene:start',
+    sceneEnd: 'scene:end'
+  } as const
+
   /**
    * Keeps the public scheduler surface stable for runtime helpers.
    */
   constructor(options: CreatePlayerOptions = {}) {
-    this.player = new PlayerFacade(options)
+    this.player = new PlayerFacade({
+      ...options,
+      onRuntimeEmit: (event) => {
+        void this.routeSceneEvent(
+          {
+            name: event.name,
+            data: event.payload,
+            cascade: event.cascade
+          },
+          event.source ?? RUNTIME_EVENT_SOURCE.user,
+          event.scopeStoryId
+        )
+      }
+    })
     this.scheduleRuntime = new PlayerScheduleFacade({
       emitEvent: async (event) => {
         await this.routeSceneEvent(event, RUNTIME_EVENT_SOURCE.system)
@@ -72,7 +91,7 @@ export class Player implements PlayerApi {
       return initResult
     }
 
-    return this.routeSceneEvent({ name: 'scene:ready' }, RUNTIME_EVENT_SOURCE.system)
+    return this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneReady }, RUNTIME_EVENT_SOURCE.system)
   }
 
   /**
@@ -81,7 +100,7 @@ export class Player implements PlayerApi {
   play(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.play(), async () => {
       this.scheduleRuntime.resume()
-      await this.routeSceneEvent({ name: 'scene:start' }, RUNTIME_EVENT_SOURCE.system)
+      await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneStart }, RUNTIME_EVENT_SOURCE.system)
     })
   }
 
@@ -98,7 +117,7 @@ export class Player implements PlayerApi {
   resume(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.play(), async () => {
       this.scheduleRuntime.resume()
-      await this.routeSceneEvent({ name: 'scene:start' }, RUNTIME_EVENT_SOURCE.system)
+      await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneStart }, RUNTIME_EVENT_SOURCE.system)
     })
   }
 
@@ -107,7 +126,7 @@ export class Player implements PlayerApi {
    */
   stop(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.pause(), async () => {
-      await this.routeSceneEvent({ name: 'scene:end' }, RUNTIME_EVENT_SOURCE.system)
+      await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneEnd }, RUNTIME_EVENT_SOURCE.system)
       this.scheduleRuntime.stop()
     })
   }
@@ -117,7 +136,7 @@ export class Player implements PlayerApi {
    */
   destroy(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.destroy(), async () => {
-      await this.routeSceneEvent({ name: 'scene:end' }, RUNTIME_EVENT_SOURCE.system)
+      await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneEnd }, RUNTIME_EVENT_SOURCE.system)
       this.scheduleRuntime.destroy()
       this.currentScene = null
     })
@@ -197,6 +216,7 @@ export class Player implements PlayerApi {
   private async routeSceneEvent(
     event: StoryEvent,
     source: RuntimeEventSource,
+    scopeStoryId?: string,
     depth = 0
   ): Promise<ApiResult<void>> {
     if (depth > this.runtimePolicy.maxCascadeDepth) {
@@ -204,25 +224,47 @@ export class Player implements PlayerApi {
     }
 
     const scene = this.currentScene
-    const matchingRules = scene?.listen.filter((rule) => rule.on === event.name) ?? []
-
-    if (scene === null || matchingRules.length === 0) {
-      return this.normalizeResult(
-        await this.player.emit({
-          name: event.name,
-          payload: event.data,
-          cascade: event.cascade,
-          source
-        })
-      )
+    if (scene === null) {
+      return this.emitRuntimeEvent(event, source, scopeStoryId)
     }
 
-    const emittedEvents = matchingRules.flatMap((rule) => rule.emit ?? [])
+    const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
+
+    if (isLocalStoryEvent) {
+      const story = scene.stories[scopeStoryId]
+      const storyRules = story?.listen.filter((rule) => rule.on === event.name) ?? []
+      if (storyRules.length > 0) {
+        return this.routeMatchingRules(storyRules, event, source, scopeStoryId, depth)
+      }
+
+      return this.emitRuntimeEvent(event, source, scopeStoryId)
+    }
+
+    const sceneRules = scene.listen.filter((rule) => rule.on === event.name)
+    if (sceneRules.length > 0) {
+      return this.routeMatchingRules(sceneRules, event, source, undefined, depth)
+    }
+
+    return this.emitRuntimeEvent(event, source, undefined)
+  }
+
+  /**
+   * Routes one matching listen rule set and reinjects emitted events.
+   */
+  private async routeMatchingRules(
+    rules: NonNullable<CompiledScene['scene']>['listen'],
+    event: StoryEvent,
+    source: RuntimeEventSource,
+    scopeStoryId: string | undefined,
+    depth: number
+  ): Promise<ApiResult<void>> {
+    const emittedEvents = rules.flatMap((rule) => rule.emit ?? [])
     if (emittedEvents.length === 0) {
-      return { ok: true, data: undefined }
+      return this.emitRuntimeEvent(event, source, scopeStoryId)
     }
 
     for (const emittedEvent of emittedEvents) {
+      const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scopeStoryId
       const childResult = await this.routeSceneEvent(
         {
           name: emittedEvent.name,
@@ -230,6 +272,7 @@ export class Player implements PlayerApi {
           cascade: emittedEvent.cascade
         },
         RUNTIME_EVENT_SOURCE.system,
+        nextScopeStoryId,
         depth + 1
       )
 
@@ -239,5 +282,24 @@ export class Player implements PlayerApi {
     }
 
     return { ok: true, data: undefined }
+  }
+
+  /**
+   * Emits one routed event into the internal runtime facade.
+   */
+  private async emitRuntimeEvent(
+    event: StoryEvent,
+    source: RuntimeEventSource,
+    scopeStoryId?: string
+  ): Promise<ApiResult<void>> {
+    return this.normalizeResult(
+      await this.player.emit({
+        name: event.name,
+        payload: event.data,
+        scopeStoryId,
+        cascade: event.cascade,
+        source
+      })
+    )
   }
 }
