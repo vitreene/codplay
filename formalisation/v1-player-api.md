@@ -41,7 +41,7 @@ type PlayerApi = {
 }
 ```
 
-Etat minimal complete:
+Etat minimal complet:
 
 ```ts
 type PlayerStateSnapshot = {
@@ -57,16 +57,20 @@ type PlayerStateSnapshot = {
 - `mountTarget` est fourni au `Player` et reste hors `Scene`.
 - `init(...)` est le point d'entree de chargement runtime.
 - `init(...)` couvre une lecture normale complete: chargement, preload, instanciation runtime puis bootstrap scene.
+- `init(...)` initialise le runtime global de scene, y compris les stories non encore visibles dans le DOM.
 - `init(...)` n'a vocation a etre execute qu'une seule fois par lecture normale.
 - `seek` n'entraine pas de nouvel appel a `init`.
 - `schedule` est destructurable et aliasable par import direct.
 - `schedule` utilise le meme scheduler runtime que les straps.
-- l'execution de `schedule` suit le lifecycle `play/pause/resume/stop/destroy`.
+- l'execution de `schedule` suit le lifecycle `play/pause/resume/stop`; `destroy` reste une commande technique hors flux de lecture normal souhaite.
 - toutes les emissions runtime passent par policies actives.
 - si un master est actif, `timelineMs` suit le temps de ce master.
 - si aucun master actif n'est disponible, `timelineMs` suit le ticker standard.
-- les operations de montage des stories restent des operations techniques runtime, hors facade publique minimale V1.
+- `getState()` reste un etat technique du player et n'expose pas de donnees story-specific.
+- les operations de placement des stories et des persos restent des operations techniques runtime, hors facade publique minimale V1.
+- les elements peuvent entrer et sortir du DOM pendant la sequence sans etre purges du runtime.
 - les events de sequence utilisent les conventions de nommage existantes; la facade Player n'en fige aucun en dur.
+- `stop()` termine le flux normal de lecture; `destroy()` n'est pas une commande souhaitee pour le cycle normal et reste reservee aux cas techniques hote.
 
 ## Notes
 

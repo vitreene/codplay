@@ -102,7 +102,7 @@ Contraintes structurelles minimales:
 Facade cible exposee:
 
 - `init({ mountTarget, compiledScene, resourceManifest? })`
-- `play`, `pause`, `resume`, `stop`, `destroy`, `seek`, `emit`
+- `play`, `pause`, `resume`, `stop`, `seek`, `emit` (`destroy` restant une sortie technique a part)
 - `getState`, `onChange`, `onTrace`
 - `schedule`
 
@@ -194,7 +194,7 @@ Note d'integration:
 ### Actions
 
 1. Exposer `schedule` sur facade Player V1.
-2. Raccorder `schedule` au lifecycle player (`play/pause/resume/stop/destroy`).
+2. Raccorder `schedule` au lifecycle player (`play/pause/resume/stop`), avec `destroy` traite comme sortie technique a part.
 3. Verifier comportement strap en mode warning par defaut.
 4. Brancher le bootstrap scene via strap d'entree et montage technique des stories.
 

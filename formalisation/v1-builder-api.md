@@ -43,7 +43,8 @@ type BuilderApi = {
 
 - `compile` produit toujours un artefact JSON de diffusion.
 - `CompiledScene` inclut `schemaVersion` et `createdAt`.
-- `compile` et `validate` couvrent la coherence de `rootStories` et `entries`.
+- `compile` et `validate` couvrent la coherence de `rootStories`, `entries`, `listen` et de la structure des tracks.
+- `compile` preserve `Perso.name` et `Perso.id` sans reassigner silencieusement les identites d'elements.
 - `Builder` ne charge pas les ressources.
 - `validate` retourne toujours un objet avec `ok`, `errors`, `warnings`.
 - `validate` est non mutante sur l'entree.

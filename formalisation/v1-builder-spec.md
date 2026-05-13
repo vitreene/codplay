@@ -35,7 +35,9 @@ Le Builder:
 - normalise la scene auteur
 - compile les structures narratives vers un format runtime compact
 - prepare la description des persos/stories/listen/straps
-- compile `rootStories` et `entries` comme structures de montage runtime
+- compile `rootStories` et `entries` comme structures de placement runtime
+- preserve `Perso.name` et `Perso.id` tels qu'ils existent dans le document auteur normalise
+- ne reattribue pas silencieusement les `id` des elements
 - prepare les structures temporelles compilees
 - produit un manifeste de ressources
 - preserve les eventimes portables de story (`Story.eventimes`)
@@ -46,6 +48,7 @@ Le Builder ne fait pas:
 - execution runtime (`tick`, playback)
 - rendu
 - chargement effectif des ressources
+- arbitrage final des collisions effectives d'`id` d'elements detectees a `scene.init`
 
 ## Contrat `CompiledScene`
 
@@ -115,6 +118,13 @@ Perimetre preload V1:
 
 Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 
+## Tracks
+
+- le Builder preserve l'organisation explicite des tracks quand elle est fournie par l'auteur.
+- le modele conceptuel des tracks n'est pas fige a une seule strategie d'organisation.
+- un comportement par defaut simple peut etre applique en amont du Builder quand l'auteur n'a pas encore structure ses tracks.
+- en V1, un defaut `1 story = 1 track` est acceptable comme politique initiale, sans devenir une contrainte structurelle de spec.
+
 ## Mutabilite runtime
 
 `CompiledScene` est immuable en V1.
@@ -131,4 +141,5 @@ Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 - l'artefact compile est immuable
 - la portabilite des eventimes de story est preservee en sortie compilee
 - `rootStories` et `entries` sont valides et explicites en sortie compilee
+- `Perso.name` reste auteur-visible; `Perso.id` reste canonique pour le runtime
 - aucun mot-cle d'event n'est traite en dur; le Builder preserve les conventions de nommage deja etablies

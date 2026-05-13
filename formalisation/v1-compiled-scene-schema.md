@@ -34,22 +34,23 @@ type CompiledScene = {
 - `scene.rootStories` obligatoire et non vide en diffusion.
 - `scene.straps` obligatoire et peut valoir `undefined`.
 - `scene.tracks` obligatoire (vide autorise).
-- `scene.rootStories` decrit le montage des stories a la racine de la scene, sans temporalite implicite.
+- `scene.rootStories` decrit les stories autorisees a la racine de la scene, sans temporalite implicite.
 - `scene.tracks` orchestre la sequence globale; les eventimes portables d'une story restent portes par `scene.stories[*]`.
+- les `Perso` compiles preservent `name` et `id`.
 - artefact immuable en runtime.
 
 ## Validation minimale V1
 
 - validation de presence des champs obligatoires
 - validation de coherences de references de base
-- warning sur conflits multi-parents story (premier parent gagne)
+- les collisions effectives d'`id` d'elements sont verifiees a `player.init` et generent un warning runtime
 
 ## Validation et catalogue erreurs
 
 La validation s'appuie sur le catalogue `v1-error-catalog.md`.
 
 - erreurs bloquantes: ex. `AUTHOR_DUPLICATE_LISTEN_ON`, `AUTHOR_ROOT_STORIES_INVALID`, `AUTHOR_STORY_ENTRIES_INVALID`
-- warnings: ex. `AUTHOR_MULTI_PARENT_STORY`
+- warnings: ex. `RUNTIME_ELEMENT_ID_COLLISION`
 - V1 ne duplique pas ici la liste exhaustive des messages: ce fichier decrit le schema, le catalogue porte la taxonomie code/message.
 
 ## Notes

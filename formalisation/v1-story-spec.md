@@ -10,8 +10,8 @@ Figer une base unique pour:
 
 - la structure d'une `Story`
 - l'orchestration `listen -> transform -> straps -> emit -> persos`
-- la propagation hierarchique des events
-- la frontiere de publication `Story -> Scene`
+- la frontiere de publication locale `Story -> Scene`
+- la portabilite d'une story independamment de son placement visuel
 
 ## Contrat canonique
 
@@ -59,7 +59,6 @@ type StoryEventimeNode = {
 
 type StoryDef = {
   id: string
-  children?: string[]
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
@@ -76,23 +75,23 @@ type StoryDef = {
 1. Structure
 
 - une `Story` declare `id`, `entries`, `initial`, `persos`, `straps`, `listen`, `init`.
-- une `Story` ne porte pas de node ou de conteneur de rendu propre.
-- `entries` reference explicitement les persos d'entree de la story.
+- une `Story` ne porte pas de conteneur de rendu obligatoire propre.
+- `entries` reference explicitement les persos places a la racine de la story.
 - `entries` est obligatoire dans le contrat et peut etre vide (`[]`).
+- une story peut avoir plusieurs elements racine.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
-- `children` reference ses stories enfants par identifiant.
-- une `Story` enfant ne declare pas son parent dans son contrat auteur.
-- le lien parent est determine par la story qui reference l'enfant.
-- une story enfant appartient a un seul parent.
 - `state` est runtime-only et optionnel dans la definition.
 
-2. Montage
+2. Independance et placement
 
+- une `Story` est une unite independante.
 - monter une `Story` consiste a propager le placement vers ses `entries`.
 - le contexte de placement d'une `Story` ne vit pas dans `StoryDef`.
-- une `Story` reste portable et reutilisable dans des scenes ou sous-stories differentes.
+- une `Story` reste portable et reutilisable dans des scenes ou contextes visuels differents.
+- une story peut etre rendue visuellement dans une autre sans creer de lien structurel hierarchique.
+- ce placement inter-stories repose sur les `move` de ses elements et non sur une declaration de hierarchie entre stories.
 
 3. Initialisation
 
@@ -100,12 +99,15 @@ type StoryDef = {
 - `init` accepte `undefined` en V1.
 - `init(undefined)` signifie qu'aucun parametre externe n'est requis pour initialiser la story.
 - `initial` porte les donnees statiques de la story.
-- `init` est la fonction d'initialisation, peut recevoir un `input`, et peut definir un `state` runtime.
 - `state` peut rester `undefined` s'il n'est pas utilise.
-- `initial` des `Perso` sert uniquement a la construction des nodes.
+- `initial` des `Perso` sert uniquement a la construction et au placement des elements.
+- toutes les stories de la scene sont initialisees a `scene.init`.
+- une story initialisee peut exister dans le runtime sans etre visible dans le DOM.
 
 4. Listen
 
+- `story.listen` est un ecouteur local de story.
+- `story.listen` peut a son tour reemettre.
 - `listen` intercepte des events par nom exact (`on`).
 - les regles `listen` sont des filtres.
 - dans une `Story`, `listen.on` doit etre unique par nom d'event.
@@ -113,7 +115,7 @@ type StoryDef = {
 - `transform` est facultatif et peut contenir plusieurs etapes.
 - les etapes `transform` sont executees dans l'ordre de declaration.
 - `transform` consomme le meme `ListenRuntimeInput` que les `straps` de la regle.
-- `transform` ne renvoie que de la `data` (pas d'event).
+- `transform` ne renvoie que de la `data`.
 - `emit` est facultatif et permet la redistribution native `1 -> N`.
 - `straps` est facultatif sur une regle `listen`.
 - en absence de `emit`, l'event entrant est redistribue tel quel.
@@ -133,14 +135,14 @@ type StoryDef = {
 - ce comportement reste pilotable par policy runtime.
 - en cas de collision de noms d'events au meme tick (sorties strap + `emit`), l'arbitrage suit `sameTickHandling` de la policy runtime.
 
-6. Propagation
+6. Portee et propagation
 
 - `cascade` est booleen en V1.
-- `cascade: false` ou absent: portee locale de la `Story`.
-- un event local emis par un enfant remonte automatiquement vers son parent.
-- chaque parent peut intercepter, transformer et republier cet event.
-- `cascade: true`: remontee parent par parent jusqu'a `scene`, sans interception intermediaire.
-- aucun adressage nominatif de `Story` n'est autorise.
+- `cascade: false` ou absent: portee locale a la `Story`.
+- `cascade: true`: publication globale vers `Scene`.
+- la portee d'un event est decidee au cas par cas comme defini dans la spec.
+- un event n'est jamais cible explicitement vers une story par identifiant.
+- les interactions inter-stories passent par les events observes au niveau scene et les placements des elements, pas par une adresse de story cible.
 
 7. Lifecycle standard
 
@@ -149,8 +151,8 @@ type StoryDef = {
 
 8. Sortie Story
 
-- la `Story` reste l'interlocuteur unique de la `Scene`.
-- la portee de sortie est portee par `cascade`.
+- la `Story` reste l'interlocuteur de `Scene` pour ses emissions globales.
+- la publication globale passe par les regles de portee deja definies (`cascade`).
 
 9. Determinisme
 
@@ -161,13 +163,13 @@ type StoryDef = {
 
 - les eventimes de synchronisation sont portes par la `Story` via `eventimes`.
 - `startAt` est un offset relatif exprime en ms.
-- `startAt` est relatif au parent direct; pour la racine `eventimes`, il est relatif au point zero de la story.
+- `startAt` est relatif au point zero de la story ou du noeud parent d'eventimes.
 - `events` permet l'imbrication d'eventimes enfants.
-- la `Scene` orchestre l'instant de depart de la story; elle ne redefine pas le contenu synchronise portable de la story.
+- la `Scene` orchestre l'instant de depart de la story; elle ne redefinit pas le contenu synchronise portable de la story.
 - le montage d'une story ne fixe jamais a lui seul l'ancre temporelle de ses `eventimes`.
 - si le depart est deterministe sans interaction bloquante, les `applyAtMs` peuvent etre calcules au build.
 - si le depart depend d'une interaction runtime, les `applyAtMs` sont ancres au moment du trigger runtime.
-- le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant`.
+- le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant d'eventimes`.
 
 11. Zero temporel de story
 
@@ -180,15 +182,15 @@ type StoryDef = {
 ```ts
 const storyCounter: StoryDef = {
   id: "story-counter",
-  children: ["story-counter-birds"],
-  entries: ["counter-text"],
+  entries: ["story-counter__counter-text"],
   persos: [
     {
-      id: "counter-text",
+      id: "story-counter__counter-text",
+      name: "counter-text",
       type: "text",
       initial: { content: "20", color: "green" },
       actions: {
-        "counter-text": null,
+        "story-counter__counter-text": null,
         "counter_color": { color: "green" }
       }
     }
@@ -218,11 +220,9 @@ const storyCounter: StoryDef = {
 Reference transversale: `v1-invariants.md`.
 
 - une `Story` orchestre ses `persos` et ses `straps` sans bypass `Scene`.
-- `entries` expose les persos d'entree explicites de la story.
+- `entries` expose les persos d'entree explicites de la story et peut en contenir plusieurs.
 - `listen` redistribue nativement les events sans imposer un strap.
 - `straps` restent facultatifs dans les regles `listen`.
-- la propagation hierarchique combine bubbling parent automatique et `cascade` explicite.
-- les stories enfants sont referencees par leur parent et non adressees directement.
-- les stories enfants restent agnostiques de leur contexte d'usage.
+- la portee des events reste locale story ou globale scene selon `cascade`.
 - aucun event n'est adresse a une `Story` cible par identifiant.
 - les eventimes restent portables avec la story lors d'une reutilisation inter-scenes.

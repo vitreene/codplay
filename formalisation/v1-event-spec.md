@@ -56,15 +56,17 @@ type StoryEventimeNode = {
 - `name` est obligatoire.
 - la convention V1 recommande un namespace explicite: `domaine:entite:action`.
 - des conventions telles que `sequence:intro:start` sont valides, sans traitement compile-time special.
-- les events cibles perso utilisent l'identifiant perso en `name`.
+- les events qui ciblent directement un perso utilisent l'identifiant runtime du perso en `name`.
 - les noms systeme (`scene:*`, `story:*`, `runtime:*`) sont reserves par convention pour le moteur.
 - en V1, le nommage reste conventionnel: aucun blocage automatique compile-time n'est impose par cette spec.
 
 3. Propagation
 
 - `cascade` est booleen.
-- `cascade: false` ou absent: domaine local.
-- `cascade: true`: remontee vers `Scene` sans interception intermediaire.
+- `cascade: false` ou absent: domaine local story.
+- `cascade: true`: publication globale vers `Scene`.
+- la portee d'un event est decidee au cas par cas selon la spec locale story / globale scene.
+- un event n'adresse jamais une story cible par identifiant.
 
 4. Context
 

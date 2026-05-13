@@ -85,7 +85,8 @@ type StrapHelpers = {
 - le scheduler helper est synchronise avec le cycle de vie `Player`.
 - en `play` et `resume`, les plans helper continuent selon l'horloge runtime.
 - en `pause`, les plans helper sont geles sans perte d'ordre.
-- en `stop` et `destroy`, les plans helper en attente sont annules.
+- en `stop`, les plans helper en attente sont annules.
+- en `destroy`, si cette commande technique est utilisee, les plans helper en attente sont annules.
 - en `seek`, le comportement suit les regles runtime de replay/seek de la sequence.
 
 3. Validation
@@ -134,4 +135,4 @@ type StrapHelpers = {
 - annulation explicite par handle.
 - aucune emission helper hors scheduler runtime.
 - exposition publique via `player.schedule` sans acces direct au `Director`.
-- execution helper alignee sur les transitions `play/pause/resume/stop/destroy` du `Player`.
+- execution helper alignee sur les transitions `play/pause/resume/stop` du `Player`; `destroy` reste un cas technique a part.

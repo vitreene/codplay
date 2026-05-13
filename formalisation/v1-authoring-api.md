@@ -35,6 +35,18 @@ type ApiWarning = {
 type AuthoringApi = {
   create: (input: { id: string }) => ApiResult<void>
 
+  createStory: (input?: { name?: string }) => ApiResult<{ storyId: string; storyName: string }>
+  upsertStory: (input: { story: StoryDef }) => ApiResult<void>
+  removeStory: (input: { storyId: string }) => ApiResult<void>
+
+  createPerso: (input: {
+    storyId: string
+    type: PersoType
+    name?: string
+  }) => ApiResult<{ persoId: string; persoName: string }>
+  upsertPerso: (input: { storyId: string; perso: Perso }) => ApiResult<void>
+  removePerso: (input: { storyId: string; persoId: string }) => ApiResult<void>
+
   scene: {
     initial: {
       set: (input: { value: Record<string, unknown> | undefined }) => ApiResult<void>
@@ -50,21 +62,16 @@ type AuthoringApi = {
     }
     tracks: {
       set?: (input: { value: Record<string, unknown> }) => ApiResult<void>
+      upsert: (input: { trackId: string; track: Record<string, unknown> }) => ApiResult<void>
+      remove: (input: { trackId: string }) => ApiResult<void>
     }
     rootStories: {
       set: (input: { value: string[] }) => ApiResult<void>
     }
   }
 
-  upsertStory: (input: { story: StoryDef }) => ApiResult<void>
-  removeStory: (input: { storyId: string }) => ApiResult<void>
-
-  upsertPerso: (input: { storyId: string; perso: Perso }) => ApiResult<void>
-  removePerso: (input: { storyId: string; persoId: string }) => ApiResult<void>
-
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
   setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
-  setStoryChildren: (input: { storyId: string; children: string[] }) => ApiResult<void>
   setStoryEntries: (input: { storyId: string; entries: string[] }) => ApiResult<void>
 
   exportSceneDoc: () => ApiResult<SceneDef>
@@ -75,16 +82,23 @@ type AuthoringApi = {
 
 - `straps`, `listen`, `tracks` sont obligatoires dans le modele final.
 - `straps` peut valoir `undefined` par defaut au niveau scene/story.
-- `scene.tracks.set` est facultatif: l'API initialise `tracks` avec une valeur par defaut.
+- `scene.tracks.set` est facultatif: l'API peut initialiser `tracks` avec une valeur par defaut.
+- `scene.tracks.upsert/remove` couvrent la creation et la gestion explicite des tracks.
 - `rootStories` est obligatoire et non vide en mode diffusion.
+- `rootStories` reste defini explicitement au niveau scene.
 - `entries` est obligatoire dans chaque `Story` et peut valoir `[]`.
 - `listen.on` doit etre unique dans une story et dans la scene.
 - `listen.transform` peut contenir plusieurs etapes, executees dans l'ordre.
-- en conflit parent/enfant multi-parents, warning auteur et premier parent gagne.
-- `rootStories` est defini explicitement au niveau scene.
+- `createStory` peut appliquer un schema de nommage generique pour les stories instanciees (ex: `name + discriminant`).
+- `createPerso` peut appliquer un schema de nommage generique pour les persos instancies (ex: `name + discriminant`).
+- `createStory` et `createPerso` doivent rendre visibles a l'auteur le `name` effectif et l'`id` effectif apres creation.
+- l'`id` d'un element n'est pas modifiable apres creation.
+- toute tentative de modification d'`id` apres creation est une erreur auteur.
+- `upsertStory` et `upsertPerso` operent sur des objets existants dont l'`id` est deja fixe.
 - `exportSceneDoc` retourne une scene prete pour compilation Builder.
 
 ## Notes
 
 - V1 reste simple et orientee robustesse de flux auteur -> Builder.
 - le raffinement des erreurs/messages se fait en usage reel.
+- le runtime transige sur les `id`; les `name` restent auteurs et indicatifs.

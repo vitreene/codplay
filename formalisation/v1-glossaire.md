@@ -7,10 +7,12 @@ Glossaire final V1 de la terminologie normative.
 ## Termes principaux
 
 - `Scene`: racine globale d'orchestration
-- `rootStories`: stories montees a la racine de la scene
-- `Story`: unite d'orchestration locale
-- `entries`: persos d'entree explicites d'une story
+- `rootStories`: stories autorisees a la racine de la scene
+- `Story`: unite d'orchestration locale independante
+- `entries`: persos d'entree explicites d'une story; peuvent etre multiples
 - `Perso`: unite de rendu/action locale
+- `name`: identite auteur lisible d'un element
+- `id`: identifiant runtime canonique d'un element
 - `Strap`: fonction stateless asynchrone qui produit ou planifie des events
 - `Track`: unite minimale de timeline pilotable
 - `CompiledScene`: artefact de diffusion immuable
@@ -29,7 +31,7 @@ Glossaire final V1 de la terminologie normative.
 - `transform` remplace `event.data`
 - `straps` renvoient des events (immediats) ou en planifient (helpers runtime)
 
-## Bootstrap et montage
+## Bootstrap et placement
 
 - `init`: instanciation runtime initiale de la lecture
 - `bootstrap scene`: phase avant diffusion visible, pilotee par la scene
@@ -38,8 +40,8 @@ Glossaire final V1 de la terminologie normative.
 
 ## Propagation
 
-- bubbling enfant -> parent automatique
-- `cascade: true` force la remontee jusqu'a `Scene` sans interception intermediaire
+- portee locale story: event traite dans le perimetre de la story
+- portee globale scene: publication scene-level via `cascade`
 - aucun adressage nominatif direct d'une story cible
 
 ## Meta et ressources

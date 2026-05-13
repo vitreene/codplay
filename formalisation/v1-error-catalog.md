@@ -71,12 +71,13 @@ Erreurs:
 - `AUTHOR_ROOT_STORIES_INVALID`: `rootStories` manquant, vide ou invalide en diffusion
 - `AUTHOR_STORY_ENTRIES_INVALID`: `entries` absentes ou invalides dans une `Story`
 - `AUTHOR_TRACK_UNKNOWN`: track referencee inconnue
+- `AUTHOR_ELEMENT_ID_IMMUTABLE`: tentative de modification d'`id` apres creation
 - `RUNTIME_HELPER_INVALID_ARG`: argument helper invalide
 - `HOST_INVALID_PLAYER_STATE`: commande Player invalide dans l'etat courant
 
 Warnings:
 
-- `AUTHOR_MULTI_PARENT_STORY`: story enfant referencee par plusieurs parents (premier parent gagne)
+- `RUNTIME_ELEMENT_ID_COLLISION`: collision d'`id` d'elements detectee a `scene.init`
 - `RUNTIME_STRAP_CONTINUE_WARNING`: erreur strap, chaine continue
 - `RUNTIME_SAME_TICK_REPETITION`: repetitions meme tick preservees (mode keep-all)
 - `RUNTIME_EVENT_LIMIT_REACHED`: limite runtime atteinte si policy activee

@@ -92,7 +92,6 @@ studio.scene.listen.set({
 studio.story.upsert({
   story: {
     id: "story-intro",
-    children: [],
     initial: { mode: "intro" },
     straps: undefined,
     listen: [
@@ -121,7 +120,6 @@ studio.story.upsert({
 studio.story.upsert({
   story: {
     id: "story-quiz",
-    children: [],
     initial: {
       questionId: "q1",
       correctChoiceId: "c2"
@@ -170,7 +168,6 @@ studio.story.upsert({
 studio.story.upsert({
   story: {
     id: "story-bravo",
-    children: [],
     initial: { mode: "bravo" },
     straps: undefined,
     listen: [{ on: "scene:route:bravo", emit: [{ name: "bravo:play" }] }],
@@ -192,7 +189,6 @@ studio.story.upsert({
 studio.story.upsert({
   story: {
     id: "story-dommage",
-    children: [],
     initial: { mode: "dommage" },
     straps: undefined,
     listen: [{ on: "scene:route:dommage", emit: [{ name: "dommage:play" }] }],
