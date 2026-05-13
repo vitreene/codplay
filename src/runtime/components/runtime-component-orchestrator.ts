@@ -4,6 +4,7 @@ import type { RuntimeElementMap, StoryDoc } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from '../flip-engine'
 import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from '../flip-engine/matrix-2d'
+import type { RenderMutationResolver } from '../render-mutation-resolver'
 import { isDomElement, isDomNode } from './dom-component-adapter'
 import { ImageRuntimeComponent } from './image-runtime-component'
 import { ListRuntimeComponent } from './list-runtime-component'
@@ -103,11 +104,13 @@ export class RuntimeComponentOrchestrator {
   private readonly flipEngine = createFlipEngine()
 
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
+  private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>()
   private readonly componentByPersoId = new Map<string, RuntimeComponent>()
   private readonly nodeByPersoId = new Map<string, unknown>()
   private readonly listByPersoId = new Map<string, RuntimeListComponent>()
   private readonly parentListByPersoId = new Map<string, string | null>()
   private readonly mountedByPersoId = new Map<string, boolean>()
+  private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>()
   private overlayLayerNode: HTMLElement | null = null
   private readonly overlayFinalizers = new Set<() => void>()
 
@@ -130,8 +133,22 @@ export class RuntimeComponentOrchestrator {
     this.createElementOptions = input.createElementOptions
 
     for (const [persoType, componentClass] of Object.entries(DEFAULT_COMPONENT_CLASSES)) {
-      this.componentClassByType.set(persoType, componentClass)
+      this.setComponentClass(persoType, componentClass)
     }
+  }
+
+  /**
+   * Registers one component class and its optional mutation resolver.
+   */
+  private setComponentClass(persoType: string, componentClass: RuntimeComponentClass): void {
+    this.componentClassByType.set(persoType, componentClass)
+
+    if (componentClass.renderMutationResolver) {
+      this.renderMutationResolverByType.set(persoType, componentClass.renderMutationResolver)
+      return
+    }
+
+    this.renderMutationResolverByType.delete(persoType)
   }
 
   /**
@@ -155,7 +172,7 @@ export class RuntimeComponentOrchestrator {
       }
     }
 
-    this.componentClassByType.set(persoType, componentClass)
+    this.setComponentClass(persoType, componentClass)
     return {
       ok: true,
       status: 'registered'
@@ -166,7 +183,7 @@ export class RuntimeComponentOrchestrator {
    * Overrides one component class for one perso type.
    */
   overrideComponent(persoType: string, componentClass: RuntimeComponentClass): RuntimeRegistryCommandResult {
-    this.componentClassByType.set(persoType, componentClass)
+    this.setComponentClass(persoType, componentClass)
     return {
       ok: true,
       status: 'overridden'
@@ -201,6 +218,12 @@ export class RuntimeComponentOrchestrator {
         this.nodeByPersoId.set(item.id, nextRootNode)
         this.parentListByPersoId.set(item.id, null)
         this.mountedByPersoId.set(item.id, isExistingListComponent)
+        const existingResolver = this.renderMutationResolverByType.get(item.type)
+        if (existingResolver) {
+          this.renderMutationResolverByPersoId.set(item.id, existingResolver)
+        } else {
+          this.renderMutationResolverByPersoId.delete(item.id)
+        }
         continue
       }
 
@@ -235,6 +258,10 @@ export class RuntimeComponentOrchestrator {
       this.nodeByPersoId.set(item.id, rootNode)
       this.parentListByPersoId.set(item.id, null)
       this.mountedByPersoId.set(item.id, isListComponent)
+      const resolver = this.renderMutationResolverByType.get(item.type)
+      if (resolver) {
+        this.renderMutationResolverByPersoId.set(item.id, resolver)
+      }
 
       if (isListComponent) {
         this.listByPersoId.set(item.id, component)
@@ -268,6 +295,7 @@ export class RuntimeComponentOrchestrator {
     this.listByPersoId.clear()
     this.parentListByPersoId.clear()
     this.mountedByPersoId.clear()
+    this.renderMutationResolverByPersoId.clear()
     return new Map()
   }
 
@@ -430,6 +458,7 @@ export class RuntimeComponentOrchestrator {
       getNodeById: (persoId) => this.nodeByPersoId.get(persoId) ?? null,
       getComponentById: (persoId) => this.componentByPersoId.get(persoId) ?? null,
       getListById: (persoId) => this.listByPersoId.get(persoId) ?? null,
+      getRenderMutationResolverById: (persoId) => this.renderMutationResolverByPersoId.get(persoId) ?? null,
       getParentListId: (persoId) => this.parentListByPersoId.get(persoId) ?? null,
       setParentListId: (persoId, parentListId) => {
         this.parentListByPersoId.set(persoId, parentListId)
@@ -446,6 +475,13 @@ export class RuntimeComponentOrchestrator {
    */
   getRuntimeElements(): RuntimeElementMap {
     return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId)
+  }
+
+  /**
+   * Returns one registered mutation resolver for one runtime item when available.
+   */
+  getRenderMutationResolverById(persoId: string): RenderMutationResolver | null {
+    return this.renderMutationResolverByPersoId.get(persoId) ?? null
   }
 
   /**

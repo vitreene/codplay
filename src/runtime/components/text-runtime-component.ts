@@ -7,12 +7,15 @@ import {
   createRuntimeNode,
   resetRuntimeNodeState
 } from './dom-component-adapter'
+import { htmlRenderMutationResolver } from '../html-render-mutation-resolver'
 import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from './types'
 
 /**
  * Implements the runtime text component defined by the V1 component contract.
  */
 export class TextRuntimeComponent implements RuntimeComponent {
+  static readonly renderMutationResolver = htmlRenderMutationResolver
+
   private readonly input: RuntimeComponentClassInput
   private readonly item: RuntimeComponentClassInput['item']
   private rootNode: unknown | null = null

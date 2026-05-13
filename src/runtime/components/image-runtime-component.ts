@@ -11,6 +11,7 @@ import {
   isDomElement,
   resetRuntimeNodeState
 } from './dom-component-adapter'
+import { htmlRenderMutationResolver } from '../html-render-mutation-resolver'
 import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from './types'
 
 type FitMode = 'wallpaper' | 'sprite'
@@ -37,6 +38,8 @@ function createObjectMediaNode(): Record<string, unknown> {
  * Implements the runtime image component with root+media structure.
  */
 export class ImageRuntimeComponent implements RuntimeComponent {
+  static readonly renderMutationResolver = htmlRenderMutationResolver
+
   private readonly input: RuntimeComponentClassInput
   private readonly item: RuntimeComponentClassInput['item']
 

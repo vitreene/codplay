@@ -1,6 +1,7 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
 import type { CreateElementOptions } from '../create-element'
+import type { RenderMutationResolver } from '../render-mutation-resolver'
 import type { ItemDoc, MoveCommand } from '../types'
 
 /**
@@ -48,7 +49,10 @@ export type RuntimeComponent = {
 /**
  * Defines constructor signature for runtime component classes.
  */
-export type RuntimeComponentClass = new (input: RuntimeComponentClassInput) => RuntimeComponent
+export type RuntimeComponentClass = {
+  new (input: RuntimeComponentClassInput): RuntimeComponent
+  renderMutationResolver?: RenderMutationResolver
+}
 
 /**
  * Defines one list component API required by the global move router.
@@ -87,6 +91,7 @@ export type RuntimeRegistrySnapshot = {
   getNodeById: (persoId: string) => unknown | null
   getComponentById: (persoId: string) => RuntimeComponent | null
   getListById: (persoId: string) => RuntimeListComponent | null
+  getRenderMutationResolverById: (persoId: string) => RenderMutationResolver | null
   getParentListId: (persoId: string) => string | null
   setParentListId: (persoId: string, parentListId: string | null) => void
   isMounted: (persoId: string) => boolean

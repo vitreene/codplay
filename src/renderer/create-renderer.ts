@@ -1,7 +1,8 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
 import type { AnimationAdapter } from '../animation/types'
-import { resolveSameTickConflicts } from '../runtime/resolve-same-tick-conflicts'
+import type { RenderMutationTraceEntry, RenderMutationResolver, RuntimeResolvedMutation } from '../runtime/render-mutation-resolver'
+import { passThroughRenderMutationResolver } from '../runtime/render-mutation-resolver'
 import { RuntimeComponentOrchestrator } from '../runtime/components'
 import type {
   CreateRendererOptions,
@@ -52,6 +53,60 @@ export class RendererFacade implements RendererApi {
   private runtimeRevision = 0
 
   private readonly errorListeners = new Set<RendererErrorListener>()
+
+  /**
+   * Resolves one target runtime item id from one resolved mutation.
+   */
+  private resolveTargetItemId(mutation: RuntimeResolvedMutation): string {
+    return mutation.action.targetId ?? mutation.listenerId
+  }
+
+  /**
+   * Resolves one mutation resolver for one runtime target item.
+   */
+  private resolveMutationResolver(targetItemId: string): RenderMutationResolver {
+    return this.orchestrator.getRenderMutationResolverById(targetItemId) ?? passThroughRenderMutationResolver
+  }
+
+  /**
+   * Applies registered render mutation resolvers while preserving uncontrolled items.
+   */
+  private resolveRenderMutations(mutations: RuntimeResolvedMutation[]): {
+    resolvedMutations: RuntimeResolvedMutation[]
+    trace: RenderMutationTraceEntry[]
+  } {
+    const passThroughMutations: RuntimeResolvedMutation[] = []
+    const orderedResolvers: RenderMutationResolver[] = []
+    const mutationsByResolver = new Map<RenderMutationResolver, RuntimeResolvedMutation[]>()
+    const trace: RenderMutationTraceEntry[] = []
+
+    for (const mutation of mutations) {
+      const resolver = this.resolveMutationResolver(this.resolveTargetItemId(mutation))
+      if (resolver === passThroughRenderMutationResolver) {
+        passThroughMutations.push(mutation)
+        continue
+      }
+
+      if (!mutationsByResolver.has(resolver)) {
+        mutationsByResolver.set(resolver, [])
+        orderedResolvers.push(resolver)
+      }
+
+      mutationsByResolver.get(resolver)?.push(mutation)
+    }
+
+    const resolvedMutations: RuntimeResolvedMutation[] = [...passThroughMutations]
+    for (const resolver of orderedResolvers) {
+      const resolution = resolver.resolve(mutationsByResolver.get(resolver) ?? [])
+      resolvedMutations.push(...resolution.resolvedMutations)
+      trace.push(...resolution.trace)
+    }
+
+    return {
+      resolvedMutations,
+      trace
+    }
+  }
 
   /**
    * Creates one renderer facade configured from explicit constructor options.
@@ -317,11 +372,11 @@ export class RendererFacade implements RendererApi {
 
     const eventSeqByEventId = this.buildEventSeqMap(readyCommits)
     const resolvedActions = readyCommits.flatMap((commit) => commit.operations)
-    const conflictResolution = resolveSameTickConflicts(resolvedActions)
+    const conflictResolution = this.resolveRenderMutations(resolvedActions)
 
     try {
       const routed = this.orchestrator.routeUpdates(
-        conflictResolution.resolvedActions.map((resolvedAction) => ({
+        conflictResolution.resolvedMutations.map((resolvedAction) => ({
           resolvedAction,
           eventSeq: eventSeqByEventId.get(resolvedAction.eventId) ?? 0
         }))

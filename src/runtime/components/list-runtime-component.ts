@@ -9,6 +9,7 @@ import {
   removeDomChild,
   resetRuntimeNodeState
 } from './dom-component-adapter'
+import { htmlRenderMutationResolver } from '../html-render-mutation-resolver'
 import type {
   RuntimeComponentClassInput,
   RuntimeComponentUpdateInput,
@@ -48,6 +49,8 @@ function clamp(value: number, min: number, max: number): number {
  * Implements the runtime list component with internal child ordering.
  */
 export class ListRuntimeComponent implements RuntimeListComponent {
+  static readonly renderMutationResolver = htmlRenderMutationResolver
+
   private readonly input: RuntimeComponentClassInput
   private readonly item: RuntimeComponentClassInput['item']
 
