@@ -120,10 +120,12 @@ Le preload consomme `ResourceManifest` et prepare le runtime de lecture.
 
 ## Tracks
 
-- le Builder preserve l'organisation explicite des tracks quand elle est fournie par l'auteur.
-- le modele conceptuel des tracks n'est pas fige a une seule strategie d'organisation.
-- un comportement par defaut simple peut etre applique en amont du Builder quand l'auteur n'a pas encore structure ses tracks.
-- en V1, un defaut `1 story = 1 track` est acceptable comme politique initiale, sans devenir une contrainte structurelle de spec.
+- le Builder preserve les declarations auteur de tracks fournies au niveau scene et story.
+- `CompiledScene.scene.tracks` porte la declaration compilee qui sera consolidee a `scene.init` en registre runtime fige.
+- le Builder ne cree pas de tracks dynamiquement pendant la lecture.
+- un track `global` est toujours disponible dans le modele cible V1.
+- par defaut, chaque story dispose aussi d'un track `story.id`.
+- la seule metadata auteur normative d'un track est `active`.
 
 ## Mutabilite runtime
 

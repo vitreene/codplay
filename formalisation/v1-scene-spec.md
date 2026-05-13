@@ -144,12 +144,24 @@ Note de contexte:
 
 9. Temps
 
-- `tracks` porte la structure temporelle globale consommee par le runtime.
-- `tracks` porte l'orchestration scene-level (activation, ordre, timing global), pas la definition metier portable des eventimes d'une story.
+- `tracks` porte le registre scene-level de reference des tracks runtime.
+- ce registre est construit une seule fois a `scene.init`.
+- apres `scene.init`, la structure des tracks est figee.
+- aucun track ne peut etre ajoute ou supprime pendant la lecture.
+- `tracks` porte l'orchestration scene-level (activation, registre, timing global), pas la definition metier portable des eventimes d'une story.
 - les eventimes portables d'une story restent dans `Story.eventimes`.
 - la scene fixe l'ancrage temporel de depart d'une story via la resolution runtime de ses events et le mecanisme existant d'offsets relatifs.
-- l'organisation des tracks peut etre explicite auteur.
-- un comportement par defaut simple peut etre fourni, sans figer le modele conceptuel des tracks.
+- un track unique par defaut `global` existe toujours.
+- par defaut, chaque story dispose aussi d'un track portant exactement `story.id`.
+- si aucune indication de track n'est donnee pour un event de story, l'event utilise par defaut le track `story.id` de cette story.
+- si aucune indication exploitable n'est disponible hors story, l'event utilise le track `global`.
+- les stories peuvent declarer statiquement les tracks qu'elles comptent utiliser.
+- ces declarations story-level sont consolidees a `scene.init` dans `Scene.tracks`.
+- si deux stories declarent le meme nom de track, un seul track est cree et il est partage.
+- du point de vue auteur, la seule metadata normative d'un track est `active`.
+- les autres informations comme l'ordre runtime ou la source runtime relevent des ressources internes du moteur.
+- plusieurs events peuvent exister sur un meme track au meme instant.
+- a temps egal sur un meme track, ils s'executent selon leur ordre d'insertion.
 
 10. Scope V1
 

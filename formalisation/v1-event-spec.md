@@ -67,6 +67,9 @@ type StoryEventimeNode = {
 - `cascade: true`: publication globale vers `Scene`.
 - la portee d'un event est decidee au cas par cas selon la spec locale story / globale scene.
 - un event n'adresse jamais une story cible par identifiant.
+- les events de controle track (`track:activate`, `track:deactivate`, `track:toggle`) sont toujours interpretes au niveau scene.
+- leur forme canonique est `{ name, data }` avec `data.trackIds: string[]`.
+- un event de controle track ne cree jamais de nouveau track pendant la lecture.
 
 4. Context
 
@@ -118,3 +121,4 @@ type StoryEventimeNode = {
 - un event n'adresse jamais une story cible par identifiant.
 - `context` est present dans les events runtime.
 - `eventSeq` est l'autorite unique d'ordre runtime.
+- les events de controle track sont toujours scene-level.

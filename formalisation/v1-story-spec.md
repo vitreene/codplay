@@ -59,6 +59,7 @@ type StoryEventimeNode = {
 
 type StoryDef = {
   id: string
+  tracks?: Record<string, { active?: boolean }>
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
@@ -103,6 +104,10 @@ type StoryDef = {
 - `initial` des `Perso` sert uniquement a la construction et au placement des elements.
 - toutes les stories de la scene sont initialisees a `scene.init`.
 - une story initialisee peut exister dans le runtime sans etre visible dans le DOM.
+- une story peut declarer statiquement les tracks qu'elle compte utiliser via `tracks`.
+- cette declaration n'est pas un registre runtime autonome.
+- elle constitue une contribution a la construction finale de `Scene.tracks` a `scene.init`.
+- apres `scene.init`, une story ne cree ni ne supprime de track.
 
 4. Listen
 
@@ -170,6 +175,7 @@ type StoryDef = {
 - si le depart est deterministe sans interaction bloquante, les `applyAtMs` peuvent etre calcules au build.
 - si le depart depend d'une interaction runtime, les `applyAtMs` sont ancres au moment du trigger runtime.
 - le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant d'eventimes`.
+- si aucun track explicite n'est indique pour un event de story, le fallback est le track `story.id`.
 
 11. Zero temporel de story
 

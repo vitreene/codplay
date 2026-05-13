@@ -78,6 +78,7 @@ Erreurs:
 Warnings:
 
 - `RUNTIME_ELEMENT_ID_COLLISION`: collision d'`id` d'elements detectee a `scene.init`
+- `RUNTIME_TRACK_UNKNOWN_IGNORED`: track inconnu reference par un event de controle runtime, ignore avec warning
 - `RUNTIME_STRAP_CONTINUE_WARNING`: erreur strap, chaine continue
 - `RUNTIME_SAME_TICK_REPETITION`: repetitions meme tick preservees (mode keep-all)
 - `RUNTIME_EVENT_LIMIT_REACHED`: limite runtime atteinte si policy activee

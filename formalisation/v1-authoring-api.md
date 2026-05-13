@@ -84,6 +84,12 @@ type AuthoringApi = {
 - `straps` peut valoir `undefined` par defaut au niveau scene/story.
 - `scene.tracks.set` est facultatif: l'API peut initialiser `tracks` avec une valeur par defaut.
 - `scene.tracks.upsert/remove` couvrent la creation et la gestion explicite des tracks.
+- `scene.tracks` constitue le point canonique de declaration des tracks apres consolidation a `scene.init`.
+- une story peut declarer statiquement les tracks qu'elle compte utiliser, mais cette declaration contribue a `Scene.tracks` et ne forme pas un registre autonome.
+- `global` existe toujours comme track par defaut.
+- chaque story dispose aussi par defaut d'un track portant `story.id`.
+- la seule metadata auteur normative d'un track est `active`.
+- apres `scene.init`, la structure des tracks est figee.
 - `rootStories` est obligatoire et non vide en mode diffusion.
 - `rootStories` reste defini explicitement au niveau scene.
 - `entries` est obligatoire dans chaque `Story` et peut valoir `[]`.

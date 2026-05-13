@@ -15,6 +15,7 @@ Glossaire final V1 de la terminologie normative.
 - `id`: identifiant runtime canonique d'un element
 - `Strap`: fonction stateless asynchrone qui produit ou planifie des events
 - `Track`: unite minimale de timeline pilotable
+- `global`: track par defaut toujours present
 - `CompiledScene`: artefact de diffusion immuable
 
 ## Terminologie event
@@ -43,6 +44,7 @@ Glossaire final V1 de la terminologie normative.
 - portee locale story: event traite dans le perimetre de la story
 - portee globale scene: publication scene-level via `cascade`
 - aucun adressage nominatif direct d'une story cible
+- les events `track:*` sont des controles scene-level du registre de tracks
 
 ## Meta et ressources
 

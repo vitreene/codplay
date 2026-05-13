@@ -13,6 +13,9 @@ Socle unique des invariants partages par les specs V1.
 - une `Story` peut avoir plusieurs elements racine via `entries`
 - `Story.straps` et `Scene.straps` sont obligatoires comme proprietes et peuvent valoir `undefined`
 - `tracks` est obligatoire en diffusion et peut etre `{}`
+- le registre des tracks est fige apres `scene.init`
+- le track `global` existe toujours
+- chaque story dispose aussi par defaut d'un track `story.id`
 - `Perso.name` est auteur-visible; `Perso.id` est runtime-canonique et immuable
 
 ## Invariants execution
@@ -42,12 +45,14 @@ Socle unique des invariants partages par les specs V1.
 - `applyAtMs` est obligatoire sur `RuntimeEvent`
 - les eventimes portables de story utilisent des offsets relatifs (`startAt`)
 - le runtime transige sur les `id`, pas sur les `name`
+- la seule metadata auteur normative d'un track est `active`
 
 ## Invariants propagation
 
 - la portee d'un event reste locale story ou globale scene selon `cascade`
 - `scene.listen` recueille les events scene-level et side-effects sans ciblage explicite de story
 - aucun event n'est adresse a une `Story` cible par identifiant
+- les events de controle track sont toujours scene-level
 
 ## Invariants de diffusion
 
@@ -56,6 +61,7 @@ Socle unique des invariants partages par les specs V1.
 - `hash` n'est pas une meta `CompiledScene`; il est reserve a la policy ressource
 - `tracks` reste une orchestration scene-level et ne remplace pas la portabilite des eventimes story-level
 - `Scene.rootStories` porte une structure d'autorisation scene-level, pas une temporalite implicite
+- si aucun track explicite n'est indique pour un event de story, le fallback est le track `story.id`
 
 ## Invariants d'erreurs
 

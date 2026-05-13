@@ -35,7 +35,9 @@ type CompiledScene = {
 - `scene.straps` obligatoire et peut valoir `undefined`.
 - `scene.tracks` obligatoire (vide autorise).
 - `scene.rootStories` decrit les stories autorisees a la racine de la scene, sans temporalite implicite.
-- `scene.tracks` orchestre la sequence globale; les eventimes portables d'une story restent portes par `scene.stories[*]`.
+- `scene.tracks` porte la declaration compilee des tracks de scene qui sera consolidee a `scene.init` en registre runtime fige.
+- ce registre runtime contient toujours `global` et, par defaut, un track `story.id` par story.
+- les eventimes portables d'une story restent portes par `scene.stories[*]`.
 - les `Perso` compiles preservent `name` et `id`.
 - artefact immuable en runtime.
 
@@ -44,6 +46,7 @@ type CompiledScene = {
 - validation de presence des champs obligatoires
 - validation de coherences de references de base
 - les collisions effectives d'`id` d'elements sont verifiees a `player.init` et generent un warning runtime
+- les tracks inconnus references par un event de controle runtime ne modifient pas la structure et produisent un warning runtime
 
 ## Validation et catalogue erreurs
 
