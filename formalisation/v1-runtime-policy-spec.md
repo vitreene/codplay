@@ -67,6 +67,11 @@ type RuntimeEventPolicy = {
 - `coalesce-last` et `defer-next-tick` sont des modes opt-in explicites.
 - l'opt-in se fait par policy, idealement ciblee par `eventNames`.
 - cette regle couvre aussi les collisions entre events produits par `straps` et `emit` dans un meme tick.
+- la librairie ne fait pas de l'arbitrage same-tick un mecanisme obligatoire du coeur de rendu.
+- la resolution fine des conflits same-tick est une policy modulaire et fondamentalement facultative.
+- un renderer ou un type de composant peut choisir d'appliquer une policy de resolution, d'en fournir une autre, ou de la desactiver.
+- l'implementation HTML/CSS peut fournir une policy par defaut adaptee a ses propres notions de conflit (`style`, `attr`, `className`).
+- un renderer canvas, WebGL ou 3D n'est pas tenu de reprendre cette logique telle quelle.
 
 4. Determinisme
 
@@ -107,6 +112,7 @@ type RuntimeEventPolicy = {
 - policy minimale en V1, sans sur-anticipation de seuils.
 - warnings privilegies par defaut sur les cas invalides runtime.
 - toute evolution des seuils se base sur tests et usages reels.
+- la resolution same-tick reste injectable et optionnelle du point de vue de la librairie.
 
 ## Piste post-V1 - mode optimum events utilisateur
 
@@ -116,3 +122,10 @@ type RuntimeEventPolicy = {
   - preserver la reactivite percue
   - eviter la saturation du pipeline runtime
   - conserver le determinisme et la tracabilite des decisions de reduction/coalescence
+
+## Piste post-V1 - animation additive
+
+- l'animation additive ou ponderée (`weighted-blend`) est une piste d'evolution post-V1.
+- elle n'est pas normative pour V1.
+- V1 ne cherche pas a concurrencer les mecanismes natifs deja proposes par des moteurs ou bibliotheques de rendu specialises (ex: Three.js, Anime.js).
+- une telle evolution ne sera justifiee que par un besoin auteur explicite et demontre.

@@ -76,6 +76,7 @@ type SceneDef = {
 - en cas d'erreur strap, le mode par defaut V1 continue la chaine avec warning.
 - ce comportement reste pilotable par policy runtime.
 - en cas de collision de noms d'events au meme tick (sorties strap + `emit`), l'arbitrage suit `sameTickHandling` de la policy runtime.
+- une resolution plus fine des conflits d'actions au meme tick releve d'une policy modulaire de rendu, pas d'une obligation fixe du coeur Scene.
 
 Note de contexte:
 

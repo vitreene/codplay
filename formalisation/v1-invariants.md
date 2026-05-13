@@ -36,6 +36,7 @@ Socle unique des invariants partages par les specs V1.
 - garde-fous runtime par defaut: `maxEventsPerTick=1000`, `maxCascadeDepth=16`
 - depassement d'un garde-fou: coupure de la propagation excedentaire + warning trace
 - les elements peuvent quitter le DOM sans etre purges du runtime avant l'arret definitif de la scene
+- la resolution same-tick est une policy modulaire et facultative; elle n'est pas une obligation du coeur independamment du renderer
 
 ## Invariants de donnees
 

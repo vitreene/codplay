@@ -13,6 +13,7 @@ import type { CreateElementOptions } from '../runtime/create-element'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
+import type { TrackAuthorMeta } from '../track-manager/types'
 import { createSceneLifecycleOptions, PlayerRuntimePlanner, type PlayerRuntimePlan } from './create-player-utils'
 import { PLAYER_STATUS } from './player-constants'
 import type {
@@ -51,8 +52,20 @@ const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
 
 const PLAYER_TRACE_EVENT = {
   mountFailed: 'player:mount:failed',
+  trackControl: 'player:track-control',
+  trackControlWarning: 'player:track-control:warning',
   initStarted: 'player:init:started',
   initDone: 'player:init:done'
+} as const
+
+const PLAYER_TRACK = {
+  global: 'global'
+} as const
+
+const PLAYER_TRACK_CONTROL_EVENT = {
+  activate: 'track:activate',
+  deactivate: 'track:deactivate',
+  toggle: 'track:toggle'
 } as const
 
 const PLAYER_RUNTIME_ERROR_MESSAGE = {
@@ -82,6 +95,125 @@ export class PlayerFacade implements PlayerApi {
   private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 })
   private readonly traceListeners = new Set<PlayerTraceListener>()
   private readonly stateListeners = new Set<PlayerStateListener>()
+
+  /**
+   * Builds one frozen scene-level track registry with defaults and story contributions.
+   */
+  private consolidateSceneTracks(scene: StrictSceneDoc): Record<string, unknown> {
+    const consolidatedTracks: Record<string, unknown> = {
+      [PLAYER_TRACK.global]: {
+        active: true
+      }
+    }
+
+    for (const story of Object.values(scene.stories)) {
+      consolidatedTracks[story.id] = {
+        active: true
+      }
+    }
+
+    for (const [trackId, rawTrack] of Object.entries(scene.tracks)) {
+      consolidatedTracks[trackId] = this.mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
+    }
+
+    for (const story of Object.values(scene.stories)) {
+      for (const [trackId, rawTrack] of Object.entries(story.tracks ?? {})) {
+        consolidatedTracks[trackId] = this.mergeTrackMeta(consolidatedTracks[trackId], rawTrack)
+      }
+    }
+
+    return consolidatedTracks
+  }
+
+  /**
+   * Merges one raw track declaration onto one existing scene-level track meta.
+   */
+  private mergeTrackMeta(existingTrack: unknown, nextTrack: unknown): TrackAuthorMeta {
+    const baseTrack = typeof existingTrack === 'object' && existingTrack !== null
+      ? (existingTrack as TrackAuthorMeta)
+      : {}
+    const incomingTrack = typeof nextTrack === 'object' && nextTrack !== null
+      ? (nextTrack as TrackAuthorMeta)
+      : {}
+
+    return {
+      ...baseTrack,
+      ...incomingTrack,
+      ...(incomingTrack.active !== undefined ? { active: incomingTrack.active } : {})
+    }
+  }
+
+  /**
+   * Resolves the fallback track id for one event context.
+   */
+  private resolveDefaultTrackId(scopeStoryId?: string): string {
+    if (scopeStoryId && this.trackManager.state.loadedTrackIds.includes(scopeStoryId)) {
+      return scopeStoryId
+    }
+
+    return PLAYER_TRACK.global
+  }
+
+  /**
+   * Parses one track control payload into one string id list.
+   */
+  private readTrackControlIds(payload: Record<string, unknown> | undefined): string[] {
+    const trackIds = payload?.trackIds
+    if (!Array.isArray(trackIds)) {
+      return []
+    }
+
+    return trackIds.filter((trackId): trackId is string => typeof trackId === 'string' && trackId.length > 0)
+  }
+
+  /**
+   * Applies one scene-level track control event when supported.
+   */
+  private handleTrackControlEvent(event: TimelineEvent): boolean {
+    if (
+      event.name !== PLAYER_TRACK_CONTROL_EVENT.activate &&
+      event.name !== PLAYER_TRACK_CONTROL_EVENT.deactivate &&
+      event.name !== PLAYER_TRACK_CONTROL_EVENT.toggle
+    ) {
+      return false
+    }
+
+    const requestedTrackIds = this.readTrackControlIds(event.payload)
+    const knownTrackIds = new Set(this.trackManager.state.loadedTrackIds)
+    const activeTrackIds = new Set(this.trackManager.state.activeTrackIds)
+    const appliedTrackIds = requestedTrackIds.filter((trackId) => knownTrackIds.has(trackId))
+    const ignoredTrackIds = requestedTrackIds.filter((trackId) => !knownTrackIds.has(trackId))
+
+    if (event.name === PLAYER_TRACK_CONTROL_EVENT.activate) {
+      this.trackManager.setActiveTracks({ activate: appliedTrackIds, reason: event.name })
+    } else if (event.name === PLAYER_TRACK_CONTROL_EVENT.deactivate) {
+      this.trackManager.setActiveTracks({ deactivate: appliedTrackIds, reason: event.name })
+    } else {
+      this.trackManager.setActiveTracks({
+        activate: appliedTrackIds.filter((trackId) => !activeTrackIds.has(trackId)),
+        deactivate: appliedTrackIds.filter((trackId) => activeTrackIds.has(trackId)),
+        reason: event.name
+      })
+    }
+
+    this.emitTrace(PLAYER_TRACE_EVENT.trackControl, RUNTIME_TRACE_STATUS.applied, {
+      eventId: event.id,
+      eventName: event.name,
+      appliedTrackIds,
+      ignoredTrackIds
+    })
+
+    if (ignoredTrackIds.length > 0) {
+      this.emitTrace(PLAYER_TRACE_EVENT.trackControlWarning, RUNTIME_TRACE_STATUS.info, {
+        code: 'RUNTIME_TRACK_UNKNOWN_IGNORED',
+        eventId: event.id,
+        eventName: event.name,
+        ignoredTrackIds
+      })
+    }
+
+    return true
+  }
 
   /**
    * Configures one player facade from explicit options.
@@ -261,7 +393,7 @@ export class PlayerFacade implements PlayerApi {
     return this.runtimePlanner.createRuntimePlan(
       this.scene,
       this.getMountedStoryIds(),
-      this.trackManager.getAllEvents()
+      this.trackManager.getAllEvents({ activeOnly: true })
     )
   }
 
@@ -298,25 +430,11 @@ export class PlayerFacade implements PlayerApi {
    * Resolves one target track id for anchored eventimes of a started story.
    */
   private resolveStoryTrackId(storyId: string): string {
-    if (this.scene === null) {
-      return `track-${storyId}`
-    }
-
-    if (storyId in this.scene.tracks) {
+    if (this.scene !== null && storyId in this.scene.tracks) {
       return storyId
     }
 
-    const exactTrackId = `track-${storyId}`
-    if (exactTrackId in this.scene.tracks) {
-      return exactTrackId
-    }
-
-    const loadedTrackIds = this.trackManager.state.loadedTrackIds
-    if (loadedTrackIds.length === 1) {
-      return loadedTrackIds[0]
-    }
-
-    return exactTrackId
+    return PLAYER_TRACK.global
   }
 
   /**
@@ -471,6 +589,7 @@ export class PlayerFacade implements PlayerApi {
   private createTimelineEvent(input: PlayerPublicEventInput): TimelineEvent {
     const eventMs = input.ms ?? this.resolveCurrentTimelineMs()
     const eventId = input.id ?? `evt-public-${Math.round(eventMs)}-${this.nextPublicEventIndex}`
+    const trackId = input.trackId ?? this.resolveDefaultTrackId(input.scopeStoryId)
 
     const event: TimelineEvent = {
       id: eventId,
@@ -480,7 +599,7 @@ export class PlayerFacade implements PlayerApi {
       scopeStoryId: input.scopeStoryId,
       index: this.nextPublicEventIndex,
       source: input.source ?? RUNTIME_EVENT_SOURCE.user,
-      trackId: input.trackId
+      trackId
     }
 
     this.nextPublicEventIndex += 1
@@ -491,6 +610,10 @@ export class PlayerFacade implements PlayerApi {
    * Executes one timeline event against runtime listeners and actions.
    */
   private runTimelineEvent(event: TimelineEvent): void {
+    if (this.handleTrackControlEvent(event)) {
+      return
+    }
+
     const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
       return
@@ -542,6 +665,7 @@ export class PlayerFacade implements PlayerApi {
     this.timelineMs = 0
     this.playbackStartMs = null
     this.nextPublicEventIndex = 0
+    runtimeScene.tracks = this.consolidateSceneTracks(runtimeScene)
     this.trackManager.load({ tracks: runtimeScene.tracks })
 
     this.initializeSceneStories(runtimeScene)
@@ -553,6 +677,8 @@ export class PlayerFacade implements PlayerApi {
       sceneId: runtimeScene.id,
       mountedStoryCount: this.mountedStoryIds.size,
       initializedStoryCount: Object.keys(runtimeScene.stories).length,
+      loadedTrackCount: this.trackManager.state.loadedTrackIds.length,
+      activeTrackCount: this.trackManager.state.activeTrackIds.length,
       runtimeElementCount: rendererState.runtimeElementCount,
       runtimeRevision: rendererState.runtimeRevision
     })
@@ -680,6 +806,7 @@ export class PlayerFacade implements PlayerApi {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
       eventMs: timelineEvent.ms,
+      trackId: timelineEvent.trackId,
       payload: timelineEvent.payload,
       source: timelineEvent.source
     })

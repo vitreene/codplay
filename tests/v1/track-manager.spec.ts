@@ -59,7 +59,13 @@ describe('V1 - track manager', () => {
   it('anchors portable eventimes at runtime and resyncs cursor on seek-like jumps', () => {
     const trackManager = new TrackManager()
 
-    trackManager.load({ tracks: {} })
+    trackManager.load({
+      tracks: {
+        'track-story-main': {
+          active: true
+        }
+      }
+    })
 
     const appendResult = trackManager.appendAnchoredEventimes({
       trackId: 'track-story-main',
@@ -99,5 +105,29 @@ describe('V1 - track manager', () => {
       'story:start',
       'story:step'
     ])
+  })
+
+  it('rejects appending events to one unknown track after init freeze', () => {
+    const trackManager = new TrackManager()
+
+    trackManager.load({ tracks: { global: { active: true } } })
+
+    expect(trackManager.appendLiveEvents({
+      trackId: 'missing-track',
+      events: [
+        {
+          id: 'evt-missing',
+          ms: 0,
+          name: 'missing',
+          index: 0,
+          source: 'story'
+        }
+      ]
+    })).toMatchObject({
+      ok: false,
+      error: {
+        code: 'AUTHOR_TRACK_UNKNOWN'
+      }
+    })
   })
 })

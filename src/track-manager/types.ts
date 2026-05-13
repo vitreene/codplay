@@ -44,6 +44,10 @@ export type TrackManagerStateSnapshot = {
   loadedTrackIds: string[]
 }
 
+export type TrackAuthorMeta = {
+  active?: boolean
+} & Record<string, unknown>
+
 export type TrackManagerApi = {
   load: (input: {
     tracks: Record<string, unknown>
@@ -69,6 +73,6 @@ export type TrackManagerApi = {
     events: TrackManagerStoryEvent[]
     refs?: TrackEventRef[]
   }
-  getAllEvents: () => TrackManagerStoryEvent[]
+  getAllEvents: (options?: { activeOnly?: boolean }) => TrackManagerStoryEvent[]
   state: TrackManagerStateSnapshot
 }

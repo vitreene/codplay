@@ -58,6 +58,7 @@ export type PersoDoc = {
 export type SceneStoryDoc = {
   id: string
   name?: string
+  tracks?: Record<string, unknown>
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: PersoDoc[]

@@ -54,6 +54,7 @@ export class CodPlay implements CodPlayApi {
       scene.stories[identity.storyId] = {
         id: identity.storyId,
         name: identity.storyName,
+        tracks: undefined,
         entries: [],
         initial: undefined,
         persos: [],
@@ -378,6 +379,7 @@ export class CodPlay implements CodPlayApi {
     return {
       id: story.id,
       name: story.name ?? story.id,
+      tracks: this.cloneData(story.tracks),
       entries: this.cloneData(story.entries),
       initial: this.cloneData(story.initial),
       persos: story.persos.map((perso) => this.clonePerso(perso)),

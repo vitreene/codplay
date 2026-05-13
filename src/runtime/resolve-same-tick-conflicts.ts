@@ -106,7 +106,13 @@ function hasMutation(state: MutationState): boolean {
  * Checks whether one action still has non-conflict mutations to preserve.
  */
 function hasNonConflictMutation(action: AnimationResolvedAction): boolean {
-  return action.action.move !== undefined
+  return (
+    action.action.move !== undefined ||
+    action.action.content !== undefined ||
+    action.action.src !== undefined ||
+    action.action.alt !== undefined ||
+    action.action.fitMode !== undefined
+  )
 }
 
 /**

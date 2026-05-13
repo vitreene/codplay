@@ -8,7 +8,10 @@ import {
   TrackManagerCodec,
   type TrackBucket
 } from './track-manager-validation'
-import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
+
+const TRACK_MANAGER_ERROR = {
+  unknownTrack: 'AUTHOR_TRACK_UNKNOWN'
+} as const
 
 /**
  * Implements one deterministic track manager for runtime timeline execution.
@@ -58,7 +61,10 @@ export class TrackManager implements TrackManagerApi {
     reason?: string
   }): TrackManagerCommandResult {
     for (const trackId of input.activate ?? []) {
-      this.getOrCreateTrack(trackId).active = true
+      const track = this.trackById.get(trackId)
+      if (track) {
+        track.active = true
+      }
     }
 
     for (const trackId of input.deactivate ?? []) {
@@ -169,8 +175,11 @@ export class TrackManager implements TrackManagerApi {
   /**
    * Returns all loaded events in deterministic order.
    */
-  getAllEvents(): TrackManagerStoryEvent[] {
-    return this.codec.sortAllTrackEvents(this.trackById.values())
+  getAllEvents(options: { activeOnly?: boolean } = {}): TrackManagerStoryEvent[] {
+    const tracks = options.activeOnly
+      ? [...this.trackById.values()].filter((track) => track.active)
+      : this.trackById.values()
+    return this.codec.sortAllTrackEvents(tracks)
   }
 
   /**
@@ -193,32 +202,20 @@ export class TrackManager implements TrackManagerApi {
   }
 
   /**
-   * Returns one existing track or creates a minimal append-only bucket.
-   */
-  private getOrCreateTrack(trackId: string): TrackBucket {
-    const existingTrack = this.trackById.get(trackId)
-    if (existingTrack) {
-      return existingTrack
-    }
-
-    const nextTrack: TrackBucket = {
-      id: trackId,
-      order: this.trackById.size,
-      source: RUNTIME_EVENT_SOURCE.story,
-      active: true,
-      events: [],
-      nextIndex: 0
-    }
-    this.trackById.set(trackId, nextTrack)
-    this.syncState()
-    return nextTrack
-  }
-
-  /**
    * Appends one batch of events to a track and keeps deterministic ordering.
    */
   private appendEvents(trackId: string, events: TrackManagerStoryEvent[]): TrackManagerCommandResult {
-    const track = this.getOrCreateTrack(trackId)
+    const track = this.trackById.get(trackId)
+    if (!track) {
+      return {
+        ok: false,
+        error: {
+          code: TRACK_MANAGER_ERROR.unknownTrack,
+          message: `Track '${trackId}' does not exist.`
+        }
+      }
+    }
+
     track.events.push(
       ...events.map((event, index) => ({
         ...event,

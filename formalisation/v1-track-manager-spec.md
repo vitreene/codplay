@@ -92,6 +92,7 @@ type TrackManagerApi = {
 - `collectDueEvents` peut retourner des references de provenance (`refs`) pour debug/telemetrie.
 - `refs` est desactivable (`emitRefs=false`) pour les contextes de diffusion sensibles a la performance.
 - ordre deterministe: `applyAtMs`, puis ordre stable.
+- si un renderer applique une resolution same-tick plus fine sur les actions, cette resolution reste une policy modulaire externe au `TrackManager` lui-meme.
 
 ## Eventimes portables
 
