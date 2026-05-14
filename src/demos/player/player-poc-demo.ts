@@ -1,5 +1,5 @@
-import { RUNTIME_EVENT_SOURCE } from '../core/events/constants';
-import type { PersoDoc, SceneDoc } from '../player/types';
+import { RUNTIME_EVENT_SOURCE } from '../../core/events/constants';
+import type { PersoDoc, SceneDoc } from '../../player/types';
 import { runPlayerSceneDemo } from './run-player-scene-demo';
 
 /**

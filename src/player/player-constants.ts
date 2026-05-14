@@ -8,3 +8,7 @@ export const PLAYER_STATUS = {
   rewinding: 'rewinding',
   error: 'error'
 } as const
+
+export const PLAYER_RUNTIME_DEFAULTS = {
+  storyMinDurationMs: 1000
+} as const

@@ -9,7 +9,28 @@ export function createS4QuizReferenceScene(): SceneDoc {
     rootStories: ['s4-quiz-decor-story', 's4-quiz-intro-story'],
     initial: undefined,
     straps: undefined,
-    listen: [],
+    listen: [
+      {
+        on: 'quiz:answer:yes',
+        emit: [
+          {
+            name: 'story:start',
+            data: { storyId: 's4-quiz-success-story' },
+            cascade: true
+          }
+        ]
+      },
+      {
+        on: 'quiz:answer:no',
+        emit: [
+          {
+            name: 'story:start',
+            data: { storyId: 's4-quiz-failure-story' },
+            cascade: true
+          }
+        ]
+      }
+    ],
     stories: {
       's4-quiz-decor-story': {
         id: 's4-quiz-decor-story',
@@ -455,12 +476,32 @@ export function createS4QuizReferenceScene(): SceneDoc {
                     duration: 220
                   }
                 }
+              },
+              'quiz:result:correct:show': {
+                style: {
+                  opacity: {
+                    from: 0,
+                    to: 1,
+                    duration: 220
+                  },
+                  x: {
+                    from: 100,
+                    to: 0,
+                    duration: 220
+                  }
+                }
               }
             }
           }
         ],
         straps: undefined,
-        listen: []
+        listen: [],
+        eventimes: [
+          {
+            name: 'quiz:result:correct:show',
+            startAt: 0
+          }
+        ]
       },
       's4-quiz-failure-story': {
         id: 's4-quiz-failure-story',
@@ -500,12 +541,32 @@ export function createS4QuizReferenceScene(): SceneDoc {
                     duration: 220
                   }
                 }
+              },
+              'quiz:result:wrong:show': {
+                style: {
+                  opacity: {
+                    from: 0,
+                    to: 1,
+                    duration: 220
+                  },
+                  x: {
+                    from: 100,
+                    to: 0,
+                    duration: 220
+                  }
+                }
               }
             }
           }
         ],
         straps: undefined,
-        listen: []
+        listen: [],
+        eventimes: [
+          {
+            name: 'quiz:result:wrong:show',
+            startAt: 0
+          }
+        ]
       }
     },
     init(_scene, options) {

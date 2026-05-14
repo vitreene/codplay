@@ -1,6 +1,7 @@
 import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from '../builder/types'
 import { BuilderFacade } from '../builder/create-builder'
 import { Player } from '../player'
+import type { CreatePlayerOptions } from '../player/create-player'
 import type { CodPlayApi } from './types'
 
 type CodPlaySceneState = {
@@ -19,9 +20,16 @@ type CodPlaySceneState = {
  */
 export class CodPlay implements CodPlayApi {
   readonly builder = new BuilderFacade()
-  readonly player = new Player()
+  readonly player: Player
 
   private currentScene: CodPlaySceneState | null = null
+
+  /**
+   * Creates one CodPlay instance with one configurable public player facade.
+   */
+  constructor(options: CreatePlayerOptions = {}) {
+    this.player = new Player(options)
+  }
 
   /**
    * Creates one empty scene root ready for authoring.

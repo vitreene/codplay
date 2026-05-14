@@ -22,7 +22,7 @@ import {
   readTrackControlIds,
   type PlayerRuntimePlan
 } from './create-player-utils'
-import { PLAYER_STATUS } from './player-constants'
+import { PLAYER_RUNTIME_DEFAULTS, PLAYER_STATUS } from './player-constants'
 import type {
   PlayerApi,
   PlayerCommandResult,
@@ -148,6 +148,34 @@ export class PlayerFacade implements PlayerApi {
         eventName: event.name,
         ignoredTrackIds
       })
+    }
+
+    return true
+  }
+
+  /**
+   * Starts one story when a start-equivalent runtime event requests it.
+   */
+  private handleStoryStartEvent(event: TimelineEvent): boolean {
+    if (event.name !== 'story:start') {
+      return false
+    }
+
+    const storyId = event.payload?.storyId
+    if (typeof storyId !== 'string' || storyId.length === 0) {
+      return false
+    }
+
+    const previousTimelineEndMs = this.timelineEndMs
+    this.startStory(storyId)
+
+    if (this.timelineEndMs !== previousTimelineEndMs) {
+      this.emitTrace('player:timeline:end-changed', RUNTIME_TRACE_STATUS.applied, {
+        previousTimelineEndMs,
+        timelineEndMs: this.timelineEndMs,
+        storyId
+      })
+      this.emitStateSnapshot()
     }
 
     return true
@@ -429,6 +457,7 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
+    const storyStartTimelineMs = this.resolveCurrentTimelineMs()
     this.mountStory(nextStory)
 
     if (this.startedStoryIds.has(nextStory.id)) {
@@ -447,6 +476,12 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.syncMountedRuntimePlan()
+    this.runDueTimelineEvents(storyStartTimelineMs)
+
+    const minimumStoryEndMs = storyStartTimelineMs + PLAYER_RUNTIME_DEFAULTS.storyMinDurationMs
+    if (this.timelineEndMs < minimumStoryEndMs) {
+      this.timelineEndMs = minimumStoryEndMs
+    }
   }
 
   /**
@@ -569,6 +604,7 @@ export class PlayerFacade implements PlayerApi {
 
     const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
+      this.handleStoryStartEvent(event)
       return
     }
 
@@ -591,6 +627,8 @@ export class PlayerFacade implements PlayerApi {
       animationAppliedCount: tickResult.animationAppliedCount,
       conflictCount: tickResult.conflictCount
     })
+
+    this.handleStoryStartEvent(event)
   }
 
   /**
@@ -1129,6 +1167,7 @@ export class PlayerFacade implements PlayerApi {
       initialized: this.isInitialized(),
       sceneId: this.scene?.id,
       timelineMs: this.resolveCurrentTimelineMs(),
+      timelineEndMs: this.timelineEndMs,
       runtimeRevision: rendererState.runtimeRevision
     }
   }

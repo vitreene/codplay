@@ -228,6 +228,14 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
+
+    await player.emit({ name: 'story:start', payload: { storyId: 's4-quiz-success-story' } })
+    expect(await player.seek(5000)).toEqual({ ok: true })
+    const postSeekSuccessPanel = player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null
+    const postSeekFailurePanel = player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null
+
+    expect(postSeekSuccessPanel?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect(postSeekFailurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
   })
 
   it('routes S4 no button emit as one cascaded runtime event', async () => {
@@ -254,5 +262,13 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 0, x: 100 })
     expect(failurePanel?.style).toMatchObject({ opacity: 1, x: 0 })
+
+    await player.emit({ name: 'story:start', payload: { storyId: 's4-quiz-failure-story' } })
+    expect(await player.seek(5000)).toEqual({ ok: true })
+    const postSeekSuccessPanel = player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null
+    const postSeekFailurePanel = player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null
+
+    expect(postSeekSuccessPanel?.style).toMatchObject({ opacity: 0, x: 100 })
+    expect(postSeekFailurePanel?.style).toMatchObject({ opacity: 1, x: 0 })
   })
 })
