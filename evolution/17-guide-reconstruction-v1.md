@@ -128,7 +128,7 @@ Une reconstruction est consideree identique si les points suivants sont vrais:
 
 ### Lot 10 - conflits same-tick runtime
 
-- `src/runtime/resolve-same-tick-conflicts.ts`
+- `src/runtime/html-render-mutation-resolver.ts`
   - resolution deterministe des conflits `style`, `attr`, `className` au meme tick
   - derniere mutation gagne sur la meme cible + meme cle/token
   - preservation des actions hors-conflit (`move`)

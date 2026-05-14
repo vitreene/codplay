@@ -66,7 +66,9 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
             },
             emit: {
               click: {
-                events: ['title:clicked']
+                event: {
+                  name: 'title:clicked'
+                }
               }
             }
           }

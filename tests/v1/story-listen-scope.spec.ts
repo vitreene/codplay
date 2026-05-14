@@ -71,10 +71,14 @@ function createStoryListenScopeSceneFixture(): SceneDef {
             },
             emit: {
               click: {
-                events: [EVENT_NAME.localTrigger]
+                event: {
+                  name: EVENT_NAME.localTrigger
+                }
               },
               dblclick: {
-                events: [EVENT_NAME.globalTrigger]
+                event: {
+                  name: EVENT_NAME.globalTrigger
+                }
               }
             }
           }

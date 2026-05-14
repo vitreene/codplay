@@ -12,6 +12,9 @@
 ## Implementation process
 
 - Ask the user questions when implementation certainty is below 95%.
+- Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
+- If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
+- Demos exist to validate the project and reveal missing pieces; they must not hide gaps or be made to work at all costs.
 - Additional instructions may be added later and should be followed.
 
 ## Current workspace note

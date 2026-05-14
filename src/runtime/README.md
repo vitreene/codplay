@@ -10,7 +10,8 @@ Current implementation targets:
 - `list-plugin/`
 - `flip-engine/`
 - `trace-store.ts`
-- `resolve-same-tick-conflicts.ts`
+- `html-render-mutation-resolver.ts`
+- `render-mutation-resolver.ts`
 - `media-sync.ts`
 - `types.ts`
 
@@ -28,3 +29,4 @@ Notes:
 
 - Renderer runtime now routes updates through `components/` orchestrator.
 - `apply-actions.ts` remains for compatibility tests and focused utility coverage.
+- direct same-tick facade removal: `apply-actions.ts` now calls `resolveHtmlRenderMutations(...)` directly.

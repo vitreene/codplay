@@ -54,7 +54,9 @@ function createPersoEmitSceneFixture(): SceneDoc {
             },
             emit: {
               click: {
-                events: ['title:clicked'],
+                event: {
+                  name: 'title:clicked'
+                },
                 data: {
                   origin: 'user'
                 }

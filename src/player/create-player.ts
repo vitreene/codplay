@@ -170,7 +170,8 @@ export class PlayerFacade implements PlayerApi {
         const runtimeEvent: PlayerPublicEventInput = {
           name: event.name,
           payload: event.data,
-          scopeStoryId: event.scopeStoryId,
+          scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
+          cascade: event.cascade,
           source: RUNTIME_EVENT_SOURCE.user
         }
 
@@ -540,14 +541,15 @@ export class PlayerFacade implements PlayerApi {
   private createTimelineEvent(input: PlayerPublicEventInput): TimelineEvent {
     const eventMs = input.ms ?? this.resolveCurrentTimelineMs()
     const eventId = input.id ?? `evt-public-${Math.round(eventMs)}-${this.nextPublicEventIndex}`
-    const trackId = input.trackId ?? this.resolveDefaultTrackId(input.scopeStoryId)
+    const scopeStoryId = input.cascade === true ? undefined : input.scopeStoryId
+    const trackId = input.trackId ?? this.resolveDefaultTrackId(scopeStoryId)
 
     const event: TimelineEvent = {
       id: eventId,
       ms: eventMs,
       name: input.name,
       payload: input.payload,
-      scopeStoryId: input.scopeStoryId,
+      scopeStoryId,
       index: this.nextPublicEventIndex,
       source: input.source ?? RUNTIME_EVENT_SOURCE.user,
       trackId
@@ -766,7 +768,8 @@ export class PlayerFacade implements PlayerApi {
       eventMs: timelineEvent.ms,
       trackId: timelineEvent.trackId,
       payload: timelineEvent.payload,
-      source: timelineEvent.source
+      source: timelineEvent.source,
+      cascade: event.cascade
     })
 
     return { ok: true }

@@ -1,10 +1,17 @@
 import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../create-element'
-import type { ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../types'
+import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../types'
 
 const SELF_PAYLOAD_KEY = 'self'
 
 type RuntimeObjectEventNode = Record<string, unknown> & {
   [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
+}
+
+/**
+ * Normalizes one authored emit declaration into one action list.
+ */
+function normalizeEmitRuleActions(rule: EmitRule): EmitRuleAction[] {
+  return Array.isArray(rule) ? rule : [rule]
 }
 
 /**
@@ -88,13 +95,13 @@ function emitDeclaredRuntimeEvents(
   }
 
   const self = createRuntimeEmitSelf(item)
-  const data = rule.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...rule.data, [SELF_PAYLOAD_KEY]: self }
-
-  for (const eventName of rule.events) {
+  for (const action of normalizeEmitRuleActions(rule)) {
+    const data = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
     emitRuntimeEvent({
-      name: eventName,
+      name: action.event.name,
       data,
-      scopeStoryId: item.storyId
+      cascade: action.event.cascade,
+      scopeStoryId: action.event.cascade === true ? undefined : item.storyId
     })
   }
 }

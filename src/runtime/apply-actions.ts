@@ -1,13 +1,14 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
 import type { AnimationAdapter, AnimationBatchResult, AnimationResolvedAction } from '../animation/types'
-import { resolveSameTickConflicts, type RuntimeConflictTraceEntry } from './resolve-same-tick-conflicts'
+import { resolveHtmlRenderMutations } from './html-render-mutation-resolver'
+import type { RenderMutationTraceEntry } from './render-mutation-resolver'
 import type { RuntimeElementMap } from './types'
 
 export type ApplyActionsResult = {
   appliedActionsCount: number
   animation: AnimationBatchResult
-  conflictTrace: RuntimeConflictTraceEntry[]
+  conflictTrace: RenderMutationTraceEntry[]
 }
 
 type MutableNode = Record<string, unknown>
@@ -251,18 +252,22 @@ function applyMovePatch(
 }
 
 /**
- * Applies resolved actions to runtime nodes and triggers simple animation transitions.
+ * Applies resolved actions through the legacy runtime patch path kept for focused tests.
+ *
+ * Renderer playback now routes mutations through component-specific resolvers before
+ * commits reach the runtime. This helper stays intentionally narrow for older unit
+ * tests that still exercise direct node patching.
  */
 export function applyResolvedActions(
   resolvedActions: AnimationResolvedAction[],
   runtimeElements: RuntimeElementMap,
   animationAdapter: AnimationAdapter
 ): ApplyActionsResult {
-  const conflictResolution = resolveSameTickConflicts(resolvedActions)
+  const conflictResolution = resolveHtmlRenderMutations(resolvedActions)
   const animatableActions: AnimationResolvedAction[] = []
   let appliedActionsCount = 0
 
-  for (const resolvedAction of conflictResolution.resolvedActions) {
+  for (const resolvedAction of conflictResolution.resolvedMutations) {
     const targetItemId = resolveTargetItemId(resolvedAction)
     const runtimeElement = runtimeElements.get(targetItemId)
     if (!runtimeElement || typeof runtimeElement.nodeRef !== 'object' || runtimeElement.nodeRef === null) {

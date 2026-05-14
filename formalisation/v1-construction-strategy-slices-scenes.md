@@ -13,6 +13,8 @@ Ce document est suffisant pour demarrer l'integration V1 sans autre formalisatio
 3. Evolution par vertical slices, avec validation automatique + validation visuelle.
 4. Demo POC FLIP/list protegee comme reference de non regression.
 5. Layout demos impose: `main` = player, `aside` = controles + logs.
+6. Respect strict des specs etablies: si un manque ou une faille apparait, la spec doit etre enrichie avant tout patch opportuniste.
+7. Les demos servent a reveler les manques du projet; elles ne doivent jamais masquer un ecart de spec juste pour "fonctionner".
 
 ## Perimetre protege (obligatoire)
 

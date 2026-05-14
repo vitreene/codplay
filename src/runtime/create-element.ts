@@ -1,5 +1,7 @@
 import { createListPlugin } from './list-plugin/create-list-plugin'
 import type {
+  EmitRule,
+  EmitRuleAction,
   ItemDoc,
   RuntimeElement,
   RuntimeEmitEvent,
@@ -14,6 +16,13 @@ const SELF_PAYLOAD_KEY = 'self'
 export type CreateElementOptions = {
   nodeFactory?: RuntimeNodeFactory
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
+}
+
+/**
+ * Normalizes one authored emit declaration into one action list.
+ */
+function normalizeEmitRuleActions(rule: EmitRule): EmitRuleAction[] {
+  return Array.isArray(rule) ? rule : [rule]
 }
 
 type RuntimeObjectEventNode = Record<string, unknown> & {
@@ -229,12 +238,13 @@ function emitDeclaredRuntimeEvents(
   }
 
   const self = createRuntimeEmitSelf(item)
-  const data = rule.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...rule.data, [SELF_PAYLOAD_KEY]: self }
-
-  for (const eventName of rule.events) {
+  for (const action of normalizeEmitRuleActions(rule)) {
+    const data = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
     emitRuntimeEvent({
-      name: eventName,
-      data
+      name: action.event.name,
+      data,
+      cascade: action.event.cascade,
+      scopeStoryId: action.event.cascade === true ? undefined : item.storyId
     })
   }
 }

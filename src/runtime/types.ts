@@ -44,10 +44,23 @@ export type MoveValue =
 /**
  * Defines one emit rule used by user interactions.
  */
-export type EmitRule = {
-  events: string[]
+export type EmitRuleEvent = {
+  name: string
+  cascade?: boolean
+}
+
+/**
+ * Defines one runtime event declaration emitted from one user interaction.
+ */
+export type EmitRuleAction = {
+  event: EmitRuleEvent
   data?: Record<string, unknown>
 }
+
+/**
+ * Defines one authored user-event mapping to one or more runtime emits.
+ */
+export type EmitRule = EmitRuleAction | EmitRuleAction[]
 
 export type RuntimeEmitSelf = {
   id: string
@@ -58,6 +71,7 @@ export type RuntimeEmitSelf = {
 export type RuntimeEmitEvent = {
   name: string
   data?: Record<string, unknown>
+  cascade?: boolean
   scopeStoryId?: string
 }
 

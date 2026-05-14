@@ -6,13 +6,13 @@ Appliquer de facon effective les regles de resolution des conflits quand plusieu
 
 ## Fonctions noyau
 
-- `resolveSameTickConflicts(actions)`
+- `resolveHtmlRenderMutations(actions)`
   - detecte les conflits `style`, `attr`, `className` par cible
   - conserve le dernier gagnant selon l'ordre d'execution
   - supprime les mutations perdantes avant application runtime
   - produit des traces `applied/rejected` avec reason + `winnerEventId/loserEventId`
 - `applyResolvedActions(...)`
-  - execute d'abord `resolveSameTickConflicts`
+  - execute d'abord `resolveHtmlRenderMutations`
   - applique uniquement les mutations gagnantes
   - expose `conflictTrace` dans le resultat
 
