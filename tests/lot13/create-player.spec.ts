@@ -51,7 +51,7 @@ function temp__createStrictSceneFixture(input: {
       options.mount(scene.rootStories[0])
     },
     onStart(scene, options) {
-      options.start(scene.rootStories[0])
+      options.schedule(scene.rootStories[0])
     },
     tracks: input.tracks ?? {}
   }
@@ -385,7 +385,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       const delayMs = typeof parameters.delay === 'number' ? parameters.delay : 0
 
       for (const [property, value] of Object.entries(parameters)) {
-        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition' || property === 'stagger' || property === 'loopDelay' || property === 'reversed' || property === 'alternate' || property === 'loop') {
           continue
         }
 
@@ -468,7 +468,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       const localTweens: SeekableTween[] = []
 
       for (const [property, value] of Object.entries(parameters)) {
-        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition' || property === 'stagger' || property === 'loopDelay' || property === 'reversed' || property === 'alternate' || property === 'loop') {
           continue
         }
 
@@ -532,5 +532,128 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
     expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 1500 })
     expect(runtimeNode.x).toBe(125)
+  })
+
+  it('L13-T8 scheduling one already mounted story does not reload renderer during play', async () => {
+    const player = new PlayerFacade()
+
+    const scene: SceneDoc = {
+      id: 'scene-mounted-start',
+      rootStories: ['story-main'],
+      initial: undefined,
+      straps: undefined,
+      listen: [],
+      stories: {
+        'story-main': {
+          id: 'story-main',
+          entries: ['title-main'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'title-main',
+              type: 'text',
+              initial: { content: 'main' },
+              actions: {}
+            }
+          ],
+          straps: undefined,
+          listen: []
+        },
+        'story-wait': {
+          id: 'story-wait',
+          entries: ['title-wait'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'title-wait',
+              type: 'text',
+              initial: { content: 'wait' },
+              actions: {
+                reveal: {
+                  className: { add: 'revealed' }
+                }
+              }
+            }
+          ],
+          straps: undefined,
+          listen: [],
+          eventimes: [
+            {
+              name: 'reveal',
+              startAt: 0
+            }
+          ]
+        }
+      },
+      init(_scene, options) {
+        options.mount('story-main')
+        options.mount('story-wait')
+      },
+      onStart(_scene, options) {
+        options.schedule('story-main')
+        options.schedule('story-wait')
+      },
+      tracks: {}
+    }
+
+    expect(await player.init(scene)).toEqual({ ok: true })
+
+    const runtimeRevisionBefore = player.getState().runtimeRevision
+
+    expect(await player.play()).toEqual({ ok: true })
+
+    expect(player.getState().runtimeRevision).toBe(runtimeRevisionBefore)
+  })
+
+  it('L13-T9 paused user emit flushes one visible render frame immediately', async () => {
+    const pendingTransitions: TransitionRequest[] = []
+
+    const animationAdapter: AnimationAdapter = {
+      run: (transitions) => {
+        pendingTransitions.push(...transitions)
+        return transitions.map((transition) => ({
+          transitionId: transition.transitionId,
+          target: transition.target,
+          stop: () => {
+            return
+          }
+        }))
+      },
+      stop: () => {
+        pendingTransitions.length = 0
+      },
+      renderFrame: () => {
+        for (const transition of pendingTransitions.splice(0)) {
+          const target = transition.target as Record<string, unknown> & { style?: Record<string, unknown> }
+          if (typeof target.style === 'object' && target.style !== null) {
+            target.style[transition.property] = transition.to
+            continue
+          }
+
+          target[transition.property] = transition.to
+        }
+      }
+    }
+
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {}
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(temp__createSeekSceneFixture())
+    await player.play()
+    await player.pause()
+
+    expect(await player.emit({ name: 'box:move' })).toEqual({ ok: true })
+
+    expect(runtimeNode.style.x).toBe(100)
   })
 })

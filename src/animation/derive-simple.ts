@@ -5,7 +5,15 @@ type StylePropertyDefinition = {
   from?: number | string
   to?: number | string
   duration?: number
+  delay?: number
   easing?: string
+  ease?: string
+  stagger?: number
+  loopDelay?: number
+  reversed?: boolean
+  alternate?: boolean
+  loop?: boolean | number
+  ignoreDuration?: boolean
 }
 
 /**
@@ -72,7 +80,15 @@ export function deriveSimpleTransitions(resolvedActions: AnimationResolvedAction
         from: definition.from,
         to: definition.to,
         duration: definition.duration ?? ANIMATION_RUNTIME_CONFIG.defaultDurationMs,
-        easing: definition.easing
+        delayMs: definition.delay,
+        easing: definition.easing ?? definition.ease,
+        ease: definition.ease ?? definition.easing,
+        stagger: definition.stagger,
+        loopDelayMs: definition.loopDelay,
+        reversed: definition.reversed,
+        alternate: definition.alternate,
+        loop: definition.loop,
+        ignoreDuration: definition.ignoreDuration
       })
     }
   }

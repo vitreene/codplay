@@ -6,7 +6,7 @@ import { flattenEventNodes } from '../../src/core/events/flatten'
 import { sortRuntimeEvents } from '../../src/core/events/sort'
 import { applyResolvedActions } from '../../src/runtime/apply-actions'
 import { mountSceneElements } from '../../src/runtime/mount-elements'
-import type { ItemDoc, RuntimeNode, StoryDoc } from '../../src/runtime/types'
+import type { ItemDoc, RuntimeNode, RuntimePersos } from '../../src/runtime/types'
 
 /**
  * Creates a minimal text item used in Lot 04 integration tests.
@@ -35,14 +35,14 @@ function temp__createTextItem(): ItemDoc {
 
 describe('Lot 04 - minimal end-to-end', () => {
   it('L4-T1 event intro creates node and animates opacity 0 -> 1', () => {
-    const story: StoryDoc = {
+    const runtimePersos: RuntimePersos = {
       id: 'story-main',
-      items: {
+      persos: {
           'item-text-1': temp__createTextItem()
       }
     }
 
-    const runtimeElements = mountSceneElements(story)
+    const runtimeElements = mountSceneElements(runtimePersos)
     const runtimeElement = runtimeElements.get('item-text-1')
 
     expect(runtimeElement).toBeDefined()
@@ -59,7 +59,7 @@ describe('Lot 04 - minimal end-to-end', () => {
       listeners: [
         {
           listenerId: 'item-text-1',
-          actionsByEventName: story.items['item-text-1'].actions
+          actionsByEventName: runtimePersos.persos['item-text-1'].actions
         }
       ]
     })

@@ -68,7 +68,7 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
       options.mount(scene.rootStories[0])
     },
     onStart(scene, options) {
-      options.start(scene.rootStories[0])
+      options.schedule(scene.rootStories[0])
     },
     tracks: {}
   }

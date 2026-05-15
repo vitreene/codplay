@@ -35,7 +35,7 @@ function temp__createStrictSceneFixture(input: {
       options.mount(scene.rootStories[0])
     },
     onStart(scene, options) {
-      options.start(scene.rootStories[0])
+      options.schedule(scene.rootStories[0])
     },
     tracks: input.tracks
   }
@@ -63,7 +63,7 @@ function temp__createApplyingAnimeImplementation() {
           : null
 
       for (const [property, value] of Object.entries(parameters)) {
-        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition' || property === 'stagger' || property === 'loopDelay' || property === 'reversed' || property === 'alternate' || property === 'loop') {
           continue
         }
 

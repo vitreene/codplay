@@ -28,6 +28,10 @@ type ActiveAnimation = {
   eventId: string
   duration: number
   delayMs: number
+  loopDelayMs: number
+  reversed: boolean
+  alternate: boolean
+  loop: boolean | number
   finalized: boolean
 }
 
@@ -133,7 +137,7 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
     }
 
     const targetKey = resolveTargetKey(transition.target, objectIds, nextObjectIdRef)
-    const timingKey = `${transition.eventId}|${transition.duration}|${transition.easing ?? ''}|${transition.delayMs ?? 0}|${transition.composition ?? ''}`
+    const timingKey = `${transition.eventId}|${transition.duration}|${transition.ease ?? transition.easing ?? ''}|${transition.delayMs ?? 0}|${transition.loopDelayMs ?? 0}|${String(transition.reversed ?? false)}|${String(transition.alternate ?? false)}|${String(transition.loop ?? false)}|${transition.stagger ?? 0}|${transition.composition ?? ''}`
     const baseGroupKey = `${targetKey}|${timingKey}`
 
     const propertyKey = transition.property
@@ -156,8 +160,13 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
         parameters: {
           targets: transition.target,
           duration: transition.duration,
-          ease: transition.easing,
+          ease: transition.ease ?? transition.easing,
           delay: transition.delayMs,
+          stagger: transition.stagger,
+          loopDelay: transition.loopDelayMs,
+          reversed: transition.reversed,
+          alternate: transition.alternate,
+          loop: transition.loop,
           composition: transition.composition
         },
         transitions: [],
@@ -288,6 +297,10 @@ export function createAnimationAdapter(
         eventId: firstTransition.eventId,
         duration: firstTransition.duration,
         delayMs: firstTransition.delayMs ?? 0,
+        loopDelayMs: firstTransition.loopDelayMs ?? 0,
+        reversed: firstTransition.reversed === true,
+        alternate: firstTransition.alternate === true,
+        loop: firstTransition.loop ?? false,
         finalized: false
       }
       activeAnimations.push(activeAnimation)
@@ -376,11 +389,26 @@ export function createAnimationAdapter(
       }
 
       const elapsedMs = timelineMs - eventMs - activeAnimation.delayMs
-      const clampedElapsedMs = Math.min(Math.max(0, elapsedMs), activeAnimation.duration)
-      activeAnimation.animation.seek?.(clampedElapsedMs)
+      let seekElapsedMs = Math.min(Math.max(0, elapsedMs), activeAnimation.duration)
+
+      if ((activeAnimation.alternate || activeAnimation.loop) && activeAnimation.duration > 0) {
+        const cycleDurationMs = activeAnimation.alternate
+          ? activeAnimation.duration * 2 + activeAnimation.loopDelayMs
+          : activeAnimation.duration + activeAnimation.loopDelayMs
+        const cycledElapsedMs = Math.max(0, elapsedMs) % cycleDurationMs
+        seekElapsedMs = activeAnimation.alternate && cycledElapsedMs > activeAnimation.duration
+          ? (activeAnimation.duration * 2) - Math.min(cycledElapsedMs, activeAnimation.duration * 2)
+          : Math.min(cycledElapsedMs, activeAnimation.duration)
+      }
+
+      if (activeAnimation.reversed) {
+        seekElapsedMs = Math.max(0, activeAnimation.duration - seekElapsedMs)
+      }
+
+      activeAnimation.animation.seek?.(seekElapsedMs)
       activeAnimation.animation.pause?.()
 
-      if (elapsedMs >= activeAnimation.duration) {
+      if (!activeAnimation.alternate && !activeAnimation.loop && elapsedMs >= activeAnimation.duration) {
         completeActiveAnimation(activeAnimation)
       }
     }

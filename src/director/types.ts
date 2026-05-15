@@ -1,15 +1,15 @@
 import type { AnimationAction, AnimationResolvedAction } from '../animation/types'
 import type { EventListener, TimelineEvent } from '../core/events/types'
 import type { RuntimeCommit } from '../renderer/types'
-import type { StoryDoc } from '../runtime/types'
 
 export type DirectorStatus = 'idle' | 'ready' | 'running' | 'paused'
 
-export type DirectorRuntimePlan = {
-  story: StoryDoc
+export type RuntimeTimelinePlan = {
   listeners: EventListener<AnimationAction>[]
   sortedEvents: TimelineEvent[]
 }
+
+export type DirectorRuntimePlan = RuntimeTimelinePlan
 
 export type DirectorEventResult = {
   commits: RuntimeCommit[]

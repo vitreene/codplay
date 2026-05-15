@@ -132,6 +132,7 @@ Note de contexte:
 - apres chargement et preload, la `Scene` execute une phase de bootstrap avant la diffusion visuelle normale.
 - cette phase initialise le runtime global de scene avant le premier event visible de sequence.
 - le bootstrap peut preparer les placements autorises par `rootStories` sans introduire de demarrage temporel implicite.
+- en implementation, il est attendu que le montage structurel des persos et la mise en timeline de leurs `eventimes` restent deux operations distinctes.
 - le demarrage logique de sequence passe ensuite par les events et leur resolution dans `Scene.listen`.
 
 8. Lifecycle scene
@@ -152,6 +153,7 @@ Note de contexte:
 - `tracks` porte l'orchestration scene-level (activation, registre, timing global), pas la definition metier portable des eventimes d'une story.
 - les eventimes portables d'une story restent dans `Story.eventimes`.
 - la scene fixe l'ancrage temporel de depart d'une story via la resolution runtime de ses events et le mecanisme existant d'offsets relatifs.
+- cet ancrage temporel est distinct du simple montage des persos de la story dans le runtime.
 - un track unique par defaut `global` existe toujours.
 - par defaut, chaque story dispose aussi d'un track portant exactement `story.id`.
 - si aucune indication de track n'est donnee pour un event de story, l'event utilise par defaut le track `story.id` de cette story.

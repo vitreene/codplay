@@ -188,7 +188,8 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 	if (containerNode === null) {
 		throw new Error('Expected #demo-container element')
 	}
-	containerNode.style.position = 'relative'
+	const demoContainerNode = containerNode
+	demoContainerNode.style.position = 'relative'
 
 	const animationAdapter = createAnimationAdapter(createAnimeImplementation(), {
 		renderFrame: () => {
@@ -234,6 +235,35 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 	}
 
 	const traceLogPanel = createTraceLogPanel(playerTraceNode)
+	const compileResult = studio.builder.compile({ scene: config.scene as unknown as SceneDef })
+	if (!compileResult.ok) {
+		throw new Error(`[demo] compile failed: ${compileResult.error.code}`)
+	}
+	const compiledScene = compileResult.data.compiledScene
+	const resourceManifest = compileResult.data.resourceManifest
+
+	async function resetDemoRuntime(): Promise<void> {
+		mountedRuntimeRevision = -1
+		const destroyResult = await studio.player.destroy()
+		if (!destroyResult.ok) {
+			throw new Error(`[demo] destroy failed: ${destroyResult.error.code}`)
+		}
+
+		const replayInitResult = await studio.player.init({
+			mountTarget: demoContainerNode,
+			compiledScene,
+			resourceManifest,
+		})
+		if (!replayInitResult.ok) {
+			throw new Error(`[demo] init failed: ${replayInitResult.error.code}`)
+		}
+
+		mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds)
+		const nextState = studio.player.getState()
+		mountedRuntimeRevision = nextState.runtimeRevision
+		commandPanel.syncFromState(nextState)
+	}
+
 	const commandPanel = createSequenceCommandPanel({
 		player: studio.player,
 		seekMaxMsFromScene,
@@ -242,6 +272,7 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 		seekRangeNode,
 		seekLabelNode,
 		playerStateNode,
+		rewindAction: resetDemoRuntime,
 		actions: config.actions,
 		actionButtonNodes,
 	})
@@ -260,21 +291,16 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 		traceLogPanel.push(row)
 	})
 
-	const compileResult = studio.builder.compile({ scene: config.scene as unknown as SceneDef })
-	if (!compileResult.ok) {
-		throw new Error(`[demo] compile failed: ${compileResult.error.code}`)
-	}
-
 	const initResult = await studio.player.init({
-		mountTarget: containerNode,
-		compiledScene: compileResult.data.compiledScene,
-		resourceManifest: compileResult.data.resourceManifest,
+		mountTarget: demoContainerNode,
+		compiledScene,
+		resourceManifest,
 	})
 	if (!initResult.ok) {
 		throw new Error(`[demo] init failed: ${initResult.error.code}`)
 	}
 
-	mountDemoRootNodes(containerNode, studio, config.rootNodeIds)
+	mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds)
 	const initialState = studio.player.getState()
 	mountedRuntimeRevision = initialState.runtimeRevision
 	commandPanel.syncFromState(initialState)

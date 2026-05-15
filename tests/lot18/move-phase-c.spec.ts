@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AnimationResolvedAction } from '../../src/animation/types'
 import { RuntimeComponentOrchestrator } from '../../src/runtime/components'
 import type { RuntimeComponentWarning } from '../../src/runtime/components'
-import type { StoryDoc } from '../../src/runtime/types'
+import type { RuntimePersos } from '../../src/runtime/types'
 
 type RuntimeNodeFixture = {
   tagName: string
@@ -32,14 +32,14 @@ function temp__createRuntimeNodeFixtures(): Map<string, RuntimeNodeFixture> {
 }
 
 /**
- * Creates one baseline story fixture for Phase C move tests.
+ * Creates one baseline runtime perso fixture for Phase C move tests.
  */
 function temp__createStoryFixture(overrides?: {
   listAConfig?: { reorderOnMove?: boolean; reorderOnAdd?: boolean; reorderOnRemove?: boolean }
-}): StoryDoc {
+}): RuntimePersos {
   return {
     id: 'story-phase-c',
-    items: {
+    persos: {
       'list-a': {
         id: 'list-a',
         type: 'list',
@@ -158,7 +158,7 @@ describe('Lot 18 - move phase C orchestration', () => {
       }
     })
 
-    orchestrator.loadStory(temp__createStoryFixture())
+    orchestrator.loadPersos(temp__createStoryFixture())
     const registry = orchestrator.getRuntimeRegistrySnapshot()
 
     temp__routeMove(orchestrator, {
@@ -234,7 +234,7 @@ describe('Lot 18 - move phase C orchestration', () => {
       }
     })
 
-    orchestrator.loadStory(temp__createStoryFixture())
+    orchestrator.loadPersos(temp__createStoryFixture())
     const registry = orchestrator.getRuntimeRegistrySnapshot()
 
     orchestrator.routeUpdates([
@@ -316,7 +316,7 @@ describe('Lot 18 - move phase C orchestration', () => {
       }
     })
 
-    orchestrator.loadStory(
+    orchestrator.loadPersos(
       temp__createStoryFixture({
         listAConfig: {
           reorderOnMove: false
@@ -385,7 +385,7 @@ describe('Lot 18 - move phase C orchestration', () => {
       }
     })
 
-    orchestrator.loadStory(temp__createStoryFixture())
+    orchestrator.loadPersos(temp__createStoryFixture())
     const registry = orchestrator.getRuntimeRegistrySnapshot()
 
     temp__routeMove(orchestrator, {

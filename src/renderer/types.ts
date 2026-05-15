@@ -1,7 +1,7 @@
 import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
 import type { RuntimeComponentClass, RuntimeRegistryCommandResult, RuntimeRegistrySnapshot } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
-import type { RuntimeEmitEvent, StoryDoc } from '../runtime/types'
+import type { RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
 
 /**
  * Defines renderer constructor options.
@@ -40,7 +40,6 @@ export type RendererCommandResult =
  * Defines one runtime commit target payload emitted by Director.
  */
 export type RuntimeCommitTarget = {
-  storyInstanceId: string
   itemId: string
   targetId?: string
 }
@@ -96,7 +95,7 @@ export type RendererErrorListener = (error: RendererError) => void
  * Defines renderer load command payload.
  */
 export type RendererLoadInput = {
-  story: StoryDoc
+  runtimePersos: RuntimePersos
 }
 
 /**

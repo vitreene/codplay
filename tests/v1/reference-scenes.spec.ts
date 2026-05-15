@@ -44,7 +44,7 @@ function createApplyingAnimeImplementation() {
           : null
 
       for (const [property, value] of Object.entries(parameters)) {
-        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition' || property === 'stagger' || property === 'loopDelay' || property === 'reversed' || property === 'alternate' || property === 'loop') {
           continue
         }
 
@@ -202,6 +202,10 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(successPanel?.style).toMatchObject({ opacity: 0, x: 100 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
+    expect(player.getState().timelineEndMs).toBe(2550)
+
+    expect(await player.seek(6000)).toEqual({ ok: true })
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2550 })
   })
 
   it('routes S4 yes button emit as one cascaded runtime event', async () => {
@@ -228,14 +232,12 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
+    expect(player.getState().timelineEndMs).toBe(2620)
 
-    await player.emit({ name: 'story:start', payload: { storyId: 's4-quiz-success-story' } })
-    expect(await player.seek(5000)).toEqual({ ok: true })
-    const postSeekSuccessPanel = player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null
-    const postSeekFailurePanel = player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null
+    expect(await player.seek(6000)).toEqual({ ok: true })
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2620 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
 
-    expect(postSeekSuccessPanel?.style).toMatchObject({ opacity: 1, x: 0 })
-    expect(postSeekFailurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
   })
 
   it('routes S4 no button emit as one cascaded runtime event', async () => {
@@ -262,13 +264,38 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 0, x: 100 })
     expect(failurePanel?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect(player.getState().timelineEndMs).toBe(2620)
 
-    await player.emit({ name: 'story:start', payload: { storyId: 's4-quiz-failure-story' } })
-    expect(await player.seek(5000)).toEqual({ ok: true })
-    const postSeekSuccessPanel = player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null
-    const postSeekFailurePanel = player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null
+    expect(await player.seek(6000)).toEqual({ ok: true })
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2620 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
 
-    expect(postSeekSuccessPanel?.style).toMatchObject({ opacity: 0, x: 100 })
-    expect(postSeekFailurePanel?.style).toMatchObject({ opacity: 1, x: 0 })
+  })
+
+  it('rewind then play resets quiz choice state before replay', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    expect(await player.init(createS4QuizReferenceScene())).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+    expect(await player.seek(2400)).toEqual({ ok: true })
+
+    const yesButton = player.getRuntimeRegistry().getNodeById('quiz-answer-yes') as RuntimeNodeFixture | null
+    yesButton?.[RUNTIME_OBJECT_EVENT_HANDLERS]?.click?.()
+
+    expect((player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
+
+    expect(await player.rewind()).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+    expect(await player.seek(2400)).toEqual({ ok: true })
+
+    expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: 100 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: 100 })
   })
 })

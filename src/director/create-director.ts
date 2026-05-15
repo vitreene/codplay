@@ -138,13 +138,10 @@ export class DirectorCore implements DirectorApi {
    * Creates one runtime commit from one resolved action.
    */
   private createCommit(event: TimelineEvent, resolvedAction: AnimationResolvedAction): RuntimeCommit {
-    const storyInstanceId = this.runtimePlan!.story.id
-
     const commit: RuntimeCommit = {
       commitSeq: this.nextCommitSeq,
       applyAtMs: event.ms,
       target: {
-        storyInstanceId,
         itemId: resolvedAction.listenerId,
         targetId: resolvedAction.action.targetId
       },

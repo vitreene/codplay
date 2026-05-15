@@ -225,13 +225,13 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
-   * Loads one story and instantiates one runtime component per item.
+   * Loads one runtime perso graph and instantiates one runtime component per perso.
    */
   load(input: RendererLoadInput): RendererCommandResult {
     this.animationAdapter.stop()
     this.orchestrator.setCreateElementOptions(this.runtimeCreateElementOptions)
-    this.orchestrator.loadStory(input.story)
-    this.loadedRuntimeId = input.story.id
+    this.orchestrator.loadPersos(input.runtimePersos)
+    this.loadedRuntimeId = input.runtimePersos.id
     this.pendingCommits = []
     this.lastAppliedCommitSeq = 0
     this.status = RENDERER_STATUS.ready

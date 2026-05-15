@@ -174,11 +174,11 @@ export type ItemDoc = {
 }
 
 /**
- * Defines one authored story document loaded by renderer/player.
+ * Defines one runtime perso graph consumed by renderer integrations.
  */
-export type StoryDoc = {
+export type RuntimePersos = {
   id: string
-  items: Record<string, ItemDoc>
+  persos: Record<string, ItemDoc>
 }
 
 /**

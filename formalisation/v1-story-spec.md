@@ -150,10 +150,11 @@ type StoryDef = {
 - un event n'est jamais cible explicitement vers une story par identifiant.
 - les interactions inter-stories passent par les events observes au niveau scene et les placements des elements, pas par une adresse de story cible.
 
-7. Lifecycle standard
+7. Convention de nommage
 
-- `story:start` et `story:end` sont les events lifecycle standard V1.
-- ces noms lifecycle sont reserves par convention pour les events systeme Story.
+- une `Story` ne porte pas de phase de demarrage runtime implicite propre.
+- apres son montage runtime, une story peut recevoir des events comme n'importe quelle autre source de persos/action listeners.
+- un event nomme `story:start` peut exister par convention auteur, mais il n'a aucune semantique speciale implicite dans le moteur.
 
 8. Sortie Story
 
@@ -173,6 +174,7 @@ type StoryDef = {
 - `events` permet l'imbrication d'eventimes enfants.
 - la `Scene` orchestre l'instant de depart de la story; elle ne redefinit pas le contenu synchronise portable de la story.
 - le montage d'une story ne fixe jamais a lui seul l'ancre temporelle de ses `eventimes`.
+- l'inscription des `eventimes` d'une story dans la timeline runtime est une operation distincte du montage de ses persos.
 - si le depart est deterministe sans interaction bloquante, les `applyAtMs` peuvent etre calcules au build.
 - si le depart depend d'une interaction runtime, les `applyAtMs` sont ancres au moment du trigger runtime.
 - le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant d'eventimes`.

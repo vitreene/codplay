@@ -13,6 +13,7 @@ export function createSequenceCommandPanel(input: {
 	seekRangeNode: HTMLInputElement;
 	seekLabelNode: HTMLSpanElement;
 	playerStateNode: HTMLDivElement;
+	rewindAction?: () => Promise<void>;
 	actions?: PlayerSceneDemoAction[];
 	actionButtonNodes: Map<string, HTMLButtonElement>;
 }): {
@@ -60,11 +61,10 @@ export function createSequenceCommandPanel(input: {
 				state.status === 'playing' ||
 				state.status === 'seeking')
 
-		const seekMaxMs = Math.max(
-			input.seekMaxMsFromScene,
-			Math.round(state.timelineEndMs),
-			Math.round(state.timelineMs)
-		)
+		const seekMaxMs =
+			state.status === 'ready'
+				? Math.max(input.seekMaxMsFromScene, Math.round(state.timelineMs))
+				: Math.max(Math.round(state.timelineEndMs), Math.round(state.timelineMs))
 		const clampedTimelineMs = Math.min(Math.max(0, Math.round(state.timelineMs)), seekMaxMs)
 		const interactionTimelineMs = Math.min(readSeekTargetMsFromRange(), seekMaxMs)
 		const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs)
@@ -123,6 +123,11 @@ export function createSequenceCommandPanel(input: {
 	}
 
 	async function runRewindFlow(): Promise<void> {
+		if (input.rewindAction) {
+			await input.rewindAction()
+			return
+		}
+
 		const stateBefore = input.player.getState()
 		if (stateBefore.status === 'playing') {
 			await runControlCommand('pause', () => input.player.pause())

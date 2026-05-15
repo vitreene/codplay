@@ -71,7 +71,7 @@ export type SceneStoryDoc = {
 
 export type PlayerSceneLifecycleOptions = {
   mount: (story: string | SceneStoryDoc) => void
-  start: (story: string | SceneStoryDoc) => void
+  schedule: (story: string | SceneStoryDoc) => void
 }
 
 export type StrictSceneDoc = {

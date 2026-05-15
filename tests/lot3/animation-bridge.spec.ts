@@ -27,7 +27,7 @@ function temp__createControllableAnime() {
       const targetObject = target as Record<string, unknown>;
 
       for (const [key, value] of Object.entries(parameters)) {
-        if (key === "targets" || key === "duration" || key === "delay" || key === "ease") {
+        if (key === "targets" || key === "duration" || key === "delay" || key === "ease" || key === "stagger" || key === "loopDelay" || key === "reversed" || key === "alternate" || key === "loop") {
           continue;
         }
 
@@ -270,5 +270,117 @@ describe("Lot 03 - animation bridge", () => {
     const startedHandles = adapter.run([stoppedTransition]);
     startedHandles[0]?.stop();
     expect(finalizeStopped).toHaveBeenCalledWith("stopped");
+  });
+
+  it("L3-T7 persistent alternate transitions are forwarded to anime parameters", () => {
+    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }));
+    const adapter = createAnimationAdapter(animeImplementation);
+
+    const resolvedActions: AnimationResolvedAction[] = [
+      temp__makeResolvedAction({
+        eventId: "evt-loop",
+        eventName: "decor:drift",
+        listenerId: "item-loop",
+        action: {
+          target: { x: 0 },
+          style: {
+            x: { from: 0, to: 100, duration: 6000, alternate: true },
+          },
+        },
+      }),
+    ];
+
+    const transitions = deriveSimpleTransitions(resolvedActions);
+    runAnimationBatch(transitions, adapter);
+
+    expect(transitions[0]).toMatchObject({ alternate: true });
+    expect(animeImplementation.mock.calls[0]?.[0]).toMatchObject({ alternate: true });
+  });
+
+  it("L3-T8 seek keeps alternate transitions in-cycle instead of resetting", () => {
+    const seekSpy = vi.fn();
+    const pauseSpy = vi.fn();
+    const animeImplementation = vi.fn(() => ({
+      seek: seekSpy,
+      pause: pauseSpy,
+    }));
+    const adapter = createAnimationAdapter(animeImplementation);
+
+    const transitions: TransitionRequest[] = [
+      {
+        transitionId: "tr-alt",
+        eventId: "evt-alt",
+        eventName: "decor:drift",
+        listenerId: "item-alt",
+        property: "x",
+        target: { x: 0 },
+        from: 0,
+        to: 100,
+        duration: 6000,
+        alternate: true,
+      },
+    ];
+
+    adapter.run(transitions);
+    adapter.seek?.(6500, new Map([["evt-alt", 0]]));
+
+    expect(seekSpy).toHaveBeenCalledWith(5500);
+    expect(pauseSpy).toHaveBeenCalled();
+  });
+
+  it("L3-T9 forwards extended anime timer options from transition data", () => {
+    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }));
+    const adapter = createAnimationAdapter(animeImplementation);
+
+    const resolvedActions: AnimationResolvedAction[] = [
+      temp__makeResolvedAction({
+        eventId: "evt-opts",
+        eventName: "decor:opts",
+        listenerId: "item-opts",
+        action: {
+          target: { x: 0 },
+          style: {
+            x: {
+              to: 100,
+              duration: 6000,
+              delay: 200,
+              loopDelay: 300,
+              ease: "linear",
+              stagger: 50,
+              reversed: true,
+              alternate: true,
+              loop: true,
+              ignoreDuration: true,
+            },
+          },
+        },
+      }),
+    ];
+
+    const transitions = deriveSimpleTransitions(resolvedActions);
+    runAnimationBatch(transitions, adapter);
+
+    expect(transitions[0]).toMatchObject({
+      duration: 6000,
+      delayMs: 200,
+      loopDelayMs: 300,
+      ease: "linear",
+      stagger: 50,
+      reversed: true,
+      alternate: true,
+      loop: true,
+      ignoreDuration: true,
+    });
+
+    expect(animeImplementation.mock.calls[0]?.[0]).toMatchObject({
+      duration: 6000,
+      delay: 200,
+      loopDelay: 300,
+      ease: "linear",
+      stagger: 50,
+      reversed: true,
+      alternate: true,
+      loop: true,
+    });
   });
 });

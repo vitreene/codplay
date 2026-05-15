@@ -19,10 +19,9 @@ import {
   isTrackControlEventName,
   PlayerRuntimePlanner,
   PLAYER_TRACK_CONTROL_EVENTS,
-  readTrackControlIds,
-  type PlayerRuntimePlan
+  readTrackControlIds
 } from './create-player-utils'
-import { PLAYER_RUNTIME_DEFAULTS, PLAYER_STATUS } from './player-constants'
+import { PLAYER_STATUS } from './player-constants'
 import type {
   PlayerApi,
   PlayerCommandResult,
@@ -88,10 +87,11 @@ export class PlayerFacade implements PlayerApi {
   private timelineMs = 0
   private timelineEndMs = 0
   private playbackStartMs: number | null = null
+  private waitingForExternalEvent = false
   private readonly ticker = new TimeTicker()
   private nextPublicEventIndex = 0
   private readonly mountedStoryIds = new Set<string>()
-  private readonly startedStoryIds = new Set<string>()
+  private readonly scheduledStoryIds = new Set<string>()
 
   private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 })
   private readonly traceListeners = new Set<PlayerTraceListener>()
@@ -148,34 +148,6 @@ export class PlayerFacade implements PlayerApi {
         eventName: event.name,
         ignoredTrackIds
       })
-    }
-
-    return true
-  }
-
-  /**
-   * Starts one story when a start-equivalent runtime event requests it.
-   */
-  private handleStoryStartEvent(event: TimelineEvent): boolean {
-    if (event.name !== 'story:start') {
-      return false
-    }
-
-    const storyId = event.payload?.storyId
-    if (typeof storyId !== 'string' || storyId.length === 0) {
-      return false
-    }
-
-    const previousTimelineEndMs = this.timelineEndMs
-    this.startStory(storyId)
-
-    if (this.timelineEndMs !== previousTimelineEndMs) {
-      this.emitTrace('player:timeline:end-changed', RUNTIME_TRACE_STATUS.applied, {
-        previousTimelineEndMs,
-        timelineEndMs: this.timelineEndMs,
-        storyId
-      })
-      this.emitStateSnapshot()
     }
 
     return true
@@ -308,6 +280,60 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Traces one renderer lifecycle command around the current player state.
+   */
+  private traceRendererCommand(
+    commandName: 'start' | 'resume' | 'pause',
+    phase: 'requested' | 'result',
+    source: string,
+    result?: { ok: boolean; error?: { code: string; message: string; details?: unknown } }
+  ): void {
+    const rendererState = this.renderer.getState()
+
+    this.emitTrace(`player:renderer:${commandName}:${phase}`, result?.ok === false ? RUNTIME_TRACE_STATUS.error : RUNTIME_TRACE_STATUS.applied, {
+      source,
+      playerStatus: this.status,
+      timelineMs: this.timelineMs,
+      playbackActive: this.playbackStartMs !== null,
+      rendererStatus: rendererState.status,
+      runtimeRevision: rendererState.runtimeRevision,
+      code: result?.ok === false ? result.error?.code : undefined,
+      message: result?.ok === false ? result.error?.message : undefined,
+      details: result?.ok === false ? result.error?.details : undefined
+    })
+  }
+
+  /**
+   * Starts the renderer while tracing the transition source.
+   */
+  private startRenderer(source: string): ReturnType<RendererFacade['start']> {
+    this.traceRendererCommand('start', 'requested', source)
+    const result = this.renderer.start()
+    this.traceRendererCommand('start', 'result', source, result)
+    return result
+  }
+
+  /**
+   * Resumes the renderer while tracing the transition source.
+   */
+  private resumeRenderer(source: string): ReturnType<RendererFacade['resume']> {
+    this.traceRendererCommand('resume', 'requested', source)
+    const result = this.renderer.resume()
+    this.traceRendererCommand('resume', 'result', source, result)
+    return result
+  }
+
+  /**
+   * Pauses the renderer while tracing the transition source.
+   */
+  private pauseRenderer(source: string): ReturnType<RendererFacade['pause']> {
+    this.traceRendererCommand('pause', 'requested', source)
+    const result = this.renderer.pause()
+    this.traceRendererCommand('pause', 'result', source, result)
+    return result
+  }
+
+  /**
    * Stops frame-driven playback scheduling when currently active.
    */
   private stopPlaybackLoop(): void {
@@ -337,9 +363,10 @@ export class PlayerFacade implements PlayerApi {
     this.timelineMs = 0
     this.timelineEndMs = 0
     this.playbackStartMs = null
+    this.waitingForExternalEvent = false
     this.nextPublicEventIndex = 0
     this.mountedStoryIds.clear()
-    this.startedStoryIds.clear()
+    this.scheduledStoryIds.clear()
   }
 
   /**
@@ -352,7 +379,7 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Builds one runtime plan from all currently mounted stories.
    */
-  private createMountedRuntimePlan(): PlayerRuntimePlan | null {
+  private createMountedRuntimePlan() {
     if (this.scene === null || this.mountedStoryIds.size === 0) {
       return null
     }
@@ -382,18 +409,62 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Loads one mounted runtime plan into director state.
+   * Recomputes only the current deterministic timeline end.
    */
-  private applyMountedRuntimePlan(runtimePlan: PlayerRuntimePlan): void {
-    this.director.load(runtimePlan)
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan)
+  private refreshTimelineEndFromMountedPlan(): PlayerCommandResult {
+    const runtimePlan = this.createMountedRuntimePlan()
+    if (runtimePlan === null) {
+      return this.reject(
+        'SCENE_STORY_NOT_FOUND',
+        PLAYER_RUNTIME_ERROR_MESSAGE.mountedStoryRequired,
+        'player:refresh-timeline-end'
+      )
+    }
+
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan)
+    return { ok: true }
   }
 
   /**
-   * Loads one mounted runtime story into the renderer.
+   * Rebuilds one fresh scene runtime state for replay, optionally rescheduling initial eventimes.
    */
-  private loadMountedRuntimeStory(runtimePlan: PlayerRuntimePlan): ReturnType<RendererFacade['load']> {
-    return this.renderer.load({ story: runtimePlan.story })
+  private resetSceneForReplay(scheduleInitialStories: boolean): PlayerCommandResult {
+    if (this.scene === null) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before replay reset', 'player:reset-replay')
+    }
+
+    this.timelineMs = 0
+    this.playbackStartMs = null
+    this.waitingForExternalEvent = false
+    this.nextPublicEventIndex = 0
+    this.mountedStoryIds.clear()
+    this.scheduledStoryIds.clear()
+
+    this.scene.tracks = consolidateSceneTracks(this.scene)
+    this.trackManager.load({ tracks: this.scene.tracks })
+    this.initializeSceneStories(this.scene)
+    this.scene.init?.(this.scene, this.createLifecycleOptions())
+
+    if (scheduleInitialStories) {
+      this.scene.onStart?.(this.scene, this.createLifecycleOptions())
+    }
+
+    return { ok: true }
+  }
+
+  /**
+   * Loads one mounted runtime plan into director state.
+   */
+  private applyMountedRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
+    this.director.load(runtimePlan.timelinePlan)
+    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan)
+  }
+
+  /**
+   * Loads one mounted runtime perso graph into the renderer.
+   */
+  private loadMountedRuntimePersos(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): ReturnType<RendererFacade['load']> {
+    return this.renderer.load({ runtimePersos: runtimePlan.runtimePersos })
   }
 
   /**
@@ -436,7 +507,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
+    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan)
     if (!rendererLoadResult.ok) {
       this.emitTrace(PLAYER_TRACE_EVENT.mountFailed, RUNTIME_TRACE_STATUS.error, {
         storyId: nextStory.id,
@@ -449,22 +520,29 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Starts one mounted story once per player cycle and anchors its portable eventimes.
+   * Schedules one mounted story eventime tree once per player cycle.
    */
-  private startStory(story: string | SceneStoryDoc): void {
+  private scheduleStoryEventimes(story: string | SceneStoryDoc): void {
     const nextStory = this.resolveSceneStory(story)
     if (nextStory === null) {
       return
     }
 
-    const storyStartTimelineMs = this.resolveCurrentTimelineMs()
-    this.mountStory(nextStory)
-
-    if (this.startedStoryIds.has(nextStory.id)) {
+    if (!this.mountedStoryIds.has(nextStory.id)) {
+      this.emitTrace('player:schedule:skipped', RUNTIME_TRACE_STATUS.info, {
+        storyId: nextStory.id,
+        reason: 'story-not-mounted'
+      })
       return
     }
 
-    this.startedStoryIds.add(nextStory.id)
+    const storyStartTimelineMs = this.resolveCurrentTimelineMs()
+
+    if (this.scheduledStoryIds.has(nextStory.id)) {
+      return
+    }
+
+    this.scheduledStoryIds.add(nextStory.id)
 
     if (Array.isArray(nextStory.eventimes) && nextStory.eventimes.length > 0) {
       this.trackManager.appendAnchoredEventimes({
@@ -476,12 +554,13 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.syncMountedRuntimePlan()
-    this.runDueTimelineEvents(storyStartTimelineMs)
 
-    const minimumStoryEndMs = storyStartTimelineMs + PLAYER_RUNTIME_DEFAULTS.storyMinDurationMs
-    if (this.timelineEndMs < minimumStoryEndMs) {
-      this.timelineEndMs = minimumStoryEndMs
+    // During the first play bootstrap, zero-offset eventimes must be consumed by the
+    // normal play path so visual playback starts from the visible frame 0.
+    if (this.status === PLAYER_STATUS.playing || this.status === PLAYER_STATUS.paused) {
+      this.runDueTimelineEvents(storyStartTimelineMs)
     }
+
   }
 
   /**
@@ -492,8 +571,8 @@ export class PlayerFacade implements PlayerApi {
       mount: (story) => {
         this.mountStory(story)
       },
-      start: (story) => {
-        this.startStory(story)
+      schedule: (story) => {
+        this.scheduleStoryEventimes(story)
       }
     })
   }
@@ -535,12 +614,37 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
+    if (this.mountedStoryIds.size > this.scheduledStoryIds.size) {
+      this.timelineMs = this.timelineEndMs
+      this.playbackStartMs = null
+
+      if (!this.waitingForExternalEvent) {
+        this.waitingForExternalEvent = true
+        this.emitTrace('player:play:waiting', RUNTIME_TRACE_STATUS.applied, {
+          timelineMs: this.timelineMs,
+          timelineEndMs: this.timelineEndMs,
+          mountedStoryCount: this.mountedStoryIds.size,
+          scheduledStoryCount: this.scheduledStoryIds.size
+        })
+      }
+
+      return
+    }
+
     this.timelineMs = this.timelineEndMs
     this.playbackStartMs = null
+    this.waitingForExternalEvent = false
     this.stopPlaybackLoop()
     this.director.pause()
 
-    const rendererPauseResult = this.renderer.pause()
+    this.emitTrace('player:play:end-check', RUNTIME_TRACE_STATUS.applied, {
+      timelineMs: this.timelineMs,
+      timelineEndMs: this.timelineEndMs,
+      rendererStatus: this.renderer.getState().status,
+      tickerRunning: this.ticker.isRunning()
+    })
+
+    const rendererPauseResult = this.pauseRenderer('play-ended')
     if (!rendererPauseResult.ok) {
       this.emitTrace('player:play:ended', RUNTIME_TRACE_STATUS.error, {
         timelineMs: this.timelineMs,
@@ -604,7 +708,6 @@ export class PlayerFacade implements PlayerApi {
 
     const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
-      this.handleStoryStartEvent(event)
       return
     }
 
@@ -628,7 +731,6 @@ export class PlayerFacade implements PlayerApi {
       conflictCount: tickResult.conflictCount
     })
 
-    this.handleStoryStartEvent(event)
   }
 
   /**
@@ -735,7 +837,9 @@ export class PlayerFacade implements PlayerApi {
       this.director.resume()
     }
 
-    const rendererResult = this.status === PLAYER_STATUS.ready ? this.renderer.start() : this.renderer.resume()
+    const rendererResult = this.status === PLAYER_STATUS.ready
+      ? this.startRenderer('play')
+      : this.resumeRenderer('play')
     if (!rendererResult.ok) {
       return this.reject('RENDERER_INVALID_STATE', 'Renderer rejected play transition', 'player:play', {
         currentState: this.status,
@@ -774,7 +878,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.director.pause()
 
-    const rendererResult = this.renderer.pause()
+    const rendererResult = this.pauseRenderer('pause-command')
     if (!rendererResult.ok) {
       return this.reject('RENDERER_INVALID_STATE', 'Renderer rejected pause transition', 'player:pause', {
         currentState: this.status,
@@ -784,6 +888,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.timelineMs = this.resolveCurrentTimelineMs()
     this.playbackStartMs = null
+    this.waitingForExternalEvent = false
     this.stopPlaybackLoop()
     this.setStatus(PLAYER_STATUS.paused)
     this.emitTrace('player:pause', RUNTIME_TRACE_STATUS.applied)
@@ -799,7 +904,52 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const timelineEvent = this.createTimelineEvent(event)
+    const shouldPersistEvent = timelineEvent.source === RUNTIME_EVENT_SOURCE.user
+    const previousTimelineEndMs = this.timelineEndMs
+
+    if (shouldPersistEvent) {
+      const appendResult = this.trackManager.appendLiveEvents({
+        trackId: timelineEvent.trackId ?? PLAYER_TRACK.global,
+        events: [timelineEvent]
+      })
+      if (!appendResult.ok) {
+        return this.reject(appendResult.error.code, appendResult.error.message, 'player:emit', {
+          eventName: timelineEvent.name,
+          trackId: timelineEvent.trackId,
+          details: appendResult.error.details
+        })
+      }
+    }
+
     this.runTimelineEvent(timelineEvent)
+
+    if (shouldPersistEvent) {
+      this.trackManager.syncCursor({ nowMs: timelineEvent.ms })
+      const refreshResult = this.refreshTimelineEndFromMountedPlan()
+      if (!refreshResult.ok) {
+        return refreshResult
+      }
+
+      if (this.waitingForExternalEvent && this.timelineEndMs > previousTimelineEndMs) {
+        this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs
+        this.waitingForExternalEvent = false
+      }
+    }
+
+    if (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null) {
+      const runtimePlan = this.createMountedRuntimePlan()
+      if (runtimePlan !== null) {
+        const eventDurationMs = this.runtimePlanner.resolveEventDurationMsFromTimelinePlan(runtimePlan.timelinePlan, timelineEvent.name)
+        this.renderer.syncAnimationsToTimeline(timelineEvent.ms + eventDurationMs, new Map([[timelineEvent.id, timelineEvent.ms]]))
+      }
+
+      this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
+    }
+
+    if (!shouldPersistEvent || this.timelineEndMs !== previousTimelineEndMs || this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null) {
+      this.emitStateSnapshot()
+    }
+
     this.emitTrace('player:emit', RUNTIME_TRACE_STATUS.applied, {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
@@ -867,7 +1017,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
+    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan)
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to seek story', 'player:seek:failed', {
         sceneId: this.scene.id,
@@ -881,7 +1031,7 @@ export class PlayerFacade implements PlayerApi {
     this.timelineMs = Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs)
 
     this.director.start()
-    const rendererStartResult = this.renderer.start()
+    const rendererStartResult = this.startRenderer('seek-replay')
     if (!rendererStartResult.ok) {
       return this.reject(
         'RENDERER_INVALID_STATE',
@@ -913,7 +1063,7 @@ export class PlayerFacade implements PlayerApi {
     this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId)
 
     this.director.pause()
-    const rendererPauseResult = this.renderer.pause()
+    const rendererPauseResult = this.pauseRenderer('seek-replay')
     if (!rendererPauseResult.ok) {
       return this.reject(
         'RENDERER_INVALID_STATE',
@@ -970,9 +1120,12 @@ export class PlayerFacade implements PlayerApi {
     this.setStatus(PLAYER_STATUS.rewinding)
     this.emitTrace('player:rewind:started', RUNTIME_TRACE_STATUS.applied)
 
-    this.timelineMs = 0
-    this.playbackStartMs = null
     this.stopPlaybackLoop()
+
+    const resetResult = this.resetSceneForReplay(previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused)
+    if (!resetResult.ok) {
+      return resetResult
+    }
 
     const runtimePlan = this.createMountedRuntimePlan()
     if (runtimePlan === null) {
@@ -985,7 +1138,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.applyMountedRuntimePlan(runtimePlan)
 
-    const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
+    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan)
     if (!rendererLoadResult.ok) {
       return this.reject('RENDERER_LOAD_FAILED', 'Renderer failed to rewind story', 'player:rewind:failed', {
         sceneId: this.scene.id,
@@ -996,7 +1149,7 @@ export class PlayerFacade implements PlayerApi {
     if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
       this.director.start()
 
-      const rendererStartResult = this.renderer.start()
+      const rendererStartResult = this.startRenderer('rewind-restore')
       if (!rendererStartResult.ok) {
         return this.reject(
           'RENDERER_INVALID_STATE',
@@ -1013,7 +1166,7 @@ export class PlayerFacade implements PlayerApi {
       if (previousStatus === PLAYER_STATUS.paused) {
         this.director.pause()
 
-        const rendererPauseResult = this.renderer.pause()
+        const rendererPauseResult = this.pauseRenderer('rewind-restore')
         if (!rendererPauseResult.ok) {
           return this.reject(
             'RENDERER_INVALID_STATE',
@@ -1088,7 +1241,7 @@ export class PlayerFacade implements PlayerApi {
 
       this.applyMountedRuntimePlan(runtimePlan)
 
-      const rendererLoadResult = this.loadMountedRuntimeStory(runtimePlan)
+      const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan)
       if (!rendererLoadResult.ok) {
         return this.reject(
           'RENDERER_LOAD_FAILED',
@@ -1105,7 +1258,7 @@ export class PlayerFacade implements PlayerApi {
       if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
         this.director.start()
 
-        const rendererStartResult = this.renderer.start()
+        const rendererStartResult = this.startRenderer('rebuild-restore')
         if (!rendererStartResult.ok) {
           return this.reject(
             'RENDERER_INVALID_STATE',
@@ -1122,7 +1275,7 @@ export class PlayerFacade implements PlayerApi {
         if (previousStatus === PLAYER_STATUS.paused) {
           this.director.pause()
 
-          const rendererPauseResult = this.renderer.pause()
+          const rendererPauseResult = this.pauseRenderer('rebuild-restore')
           if (!rendererPauseResult.ok) {
             return this.reject(
               'RENDERER_INVALID_STATE',

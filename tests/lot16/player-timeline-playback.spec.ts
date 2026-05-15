@@ -36,7 +36,7 @@ function temp__createStrictSceneFixture(input: {
       options.mount(scene.rootStories[0])
     },
     onStart(scene, options) {
-      options.start(scene.rootStories[0])
+      options.schedule(scene.rootStories[0])
     },
     tracks: input.tracks
   }
@@ -64,7 +64,7 @@ function temp__createApplyingAnimeImplementation() {
           : null
 
       for (const [property, value] of Object.entries(parameters)) {
-        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition') {
+        if (property === 'targets' || property === 'duration' || property === 'delay' || property === 'ease' || property === 'composition' || property === 'stagger' || property === 'loopDelay' || property === 'reversed' || property === 'alternate' || property === 'loop') {
           continue
         }
 
@@ -399,5 +399,89 @@ describe('Lot 16 - playback timeline minimal', () => {
     expect(renderFrame).toHaveBeenCalled()
 
     vi.useRealTimers()
+  })
+
+  it('L16-T4 first-play zero-offset story start animations begin from playing state', async () => {
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {
+        opacity: 0
+      },
+      attributes: {}
+    }
+
+    const animationStatusesAtStart: string[] = []
+    let player: PlayerFacade
+
+    const animeImplementation = vi.fn<AnimeImplementation>(() => {
+      animationStatusesAtStart.push(player.getState().status)
+      runtimeNode.style.opacity = 1
+      return { pause: vi.fn() }
+    })
+
+    const scene: SceneDoc = {
+      id: 'scene-story-start-zero-offset',
+      rootStories: ['story-main'],
+      initial: undefined,
+      straps: undefined,
+      listen: [],
+      stories: {
+        'story-main': {
+          id: 'story-main',
+          entries: ['title'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'title',
+              type: 'text',
+              initial: {},
+              actions: {
+                intro: {
+                  style: {
+                    opacity: {
+                      from: 0,
+                      to: 1,
+                      duration: 300
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          straps: undefined,
+          listen: [],
+          eventimes: [
+            {
+              name: 'intro',
+              startAt: 0
+            }
+          ]
+        }
+      },
+      init(sceneDoc, options) {
+        options.mount(sceneDoc.rootStories[0])
+      },
+      onStart(sceneDoc, options) {
+        options.schedule(sceneDoc.rootStories[0])
+      },
+      tracks: {}
+    }
+
+    const animationAdapter = createAnimationAdapter(animeImplementation)
+    player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(scene)
+
+    expect(animationStatusesAtStart).toEqual([])
+
+    await player.play()
+
+    expect(animationStatusesAtStart).toEqual(['playing'])
+    expect(runtimeNode.style.opacity).toBe(1)
   })
 })

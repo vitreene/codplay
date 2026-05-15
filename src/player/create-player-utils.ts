@@ -1,9 +1,9 @@
-import type { AnimationAction, AnimationResolvedAction } from '../animation/types'
+import type { AnimationAction } from '../animation/types'
 import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
-import type { RuntimeCommit } from '../renderer/types'
-import type { ItemDoc, StoryDoc as RuntimeStoryDoc } from '../runtime/types'
+import type { RuntimePersos, ItemDoc } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackAuthorMeta } from '../track-manager/types'
+import type { RuntimeTimelinePlan } from '../director/types'
 import type {
   PersoDoc,
   PlayerSceneLifecycleOptions,
@@ -12,12 +12,11 @@ import type {
 } from './types'
 
 export type PlayerRuntimePlan = {
-  story: RuntimeStoryDoc
-  listeners: EventListener<AnimationAction>[]
-  sortedEvents: TimelineEvent[]
+  runtimePersos: RuntimePersos
+  timelinePlan: RuntimeTimelinePlan
 }
 
-const COMPOSED_RUNTIME_STORY_ID_FALLBACK = 'scene-runtime'
+const RUNTIME_PERSOS_ID_FALLBACK = 'scene-runtime'
 const PLAYER_TRACK_GLOBAL_ID = 'global'
 export const PLAYER_TRACK_CONTROL_EVENTS = {
   activate: 'track:activate',
@@ -65,7 +64,7 @@ export class PlayerRuntimePlanner {
   /**
    * Resolves one deterministic timeline end from events and action durations.
    */
-  resolveTimelineEndMsFromPlan(plan: PlayerRuntimePlan): number {
+  resolveTimelineEndMsFromPlan(plan: RuntimeTimelinePlan): number {
     if (plan.sortedEvents.length === 0) {
       return Number.POSITIVE_INFINITY
     }
@@ -90,23 +89,37 @@ export class PlayerRuntimePlanner {
   }
 
   /**
+   * Resolves the max action duration associated with one event name.
+   */
+  resolveEventDurationMsFromTimelinePlan(plan: RuntimeTimelinePlan, eventName: string): number {
+    let durationMs = 0
+
+    for (const listener of plan.listeners) {
+      const action = listener.actionsByEventName[eventName]
+      durationMs = Math.max(durationMs, this.resolveActionDurationMs(action as Record<string, unknown> | null))
+    }
+
+    return this.clampTimelineMs(durationMs)
+  }
+
+  /**
    * Builds one sanitized runtime plan used by critical playback paths.
    */
   createRuntimePlan(scene: StrictSceneDoc, mountedStoryIds: string[], sortedEvents: TimelineEvent[]): PlayerRuntimePlan {
-    const runtimeStory = this.createComposedRuntimeStory(scene, mountedStoryIds)
+    const runtimePersos = this.createRuntimePersos(scene, mountedStoryIds)
+    const timelinePlan = this.createTimelinePlan(runtimePersos, sortedEvents)
 
     return {
-      story: runtimeStory,
-      listeners: this.resolveActionListeners(runtimeStory),
-      sortedEvents
+      runtimePersos,
+      timelinePlan
     }
   }
 
   /**
-   * Composes one runtime story from all mounted authored stories.
+   * Composes one runtime perso graph from all mounted authored stories.
    */
-  private createComposedRuntimeStory(scene: StrictSceneDoc, mountedStoryIds: string[]): RuntimeStoryDoc {
-    const items: Record<string, ItemDoc> = {}
+  createRuntimePersos(scene: StrictSceneDoc, mountedStoryIds: string[]): RuntimePersos {
+    const persos: Record<string, ItemDoc> = {}
 
     for (const storyId of mountedStoryIds) {
       const story = scene.stories[storyId]
@@ -115,51 +128,39 @@ export class PlayerRuntimePlanner {
       }
 
       for (const perso of story.persos) {
-        items[perso.id] = this.createRuntimeItem(story.id, perso)
+        persos[perso.id] = this.createRuntimeItem(story.id, perso)
       }
     }
 
     return {
-      id: scene.id || COMPOSED_RUNTIME_STORY_ID_FALLBACK,
-      items
+      id: scene.id || RUNTIME_PERSOS_ID_FALLBACK,
+      persos
     }
   }
 
   /**
-   * Creates one renderer commit from one resolved action.
+   * Builds one timeline plan from one runtime perso graph and sorted events.
    */
-  createRuntimeCommit(
-    storyId: string,
-    event: TimelineEvent,
-    resolvedAction: AnimationResolvedAction,
-    commitSeq: number
-  ): RuntimeCommit {
+  createTimelinePlan(runtimePersos: RuntimePersos, sortedEvents: TimelineEvent[]): RuntimeTimelinePlan {
     return {
-      commitSeq,
-      applyAtMs: event.ms,
-      target: {
-        storyInstanceId: storyId,
-        itemId: resolvedAction.listenerId,
-        targetId: resolvedAction.action.targetId
-      },
-      operations: [resolvedAction],
-      causeEventId: event.id
+      listeners: this.resolveActionListeners(runtimePersos),
+      sortedEvents
     }
   }
 
   /**
-   * Converts one strict story payload into the renderer/runtime item shape.
+   * Converts one strict story payload into the runtime perso graph shape.
    */
-  createRuntimeStory(story: SceneStoryDoc): RuntimeStoryDoc {
-    const items: Record<string, ItemDoc> = {}
+  createRuntimePersosFromStory(story: SceneStoryDoc): RuntimePersos {
+    const persos: Record<string, ItemDoc> = {}
 
     for (const perso of story.persos) {
-      items[perso.id] = this.createRuntimeItem(story.id, perso)
+      persos[perso.id] = this.createRuntimeItem(story.id, perso)
     }
 
     return {
       id: story.id,
-      items
+      persos
     }
   }
 
@@ -200,6 +201,11 @@ export class PlayerRuntimePlanner {
       }
 
       const styleTransition = styleValue as Record<string, unknown>
+      const ignoreDuration = styleTransition.ignoreDuration === true
+      if (ignoreDuration) {
+        continue
+      }
+
       const duration = Number.isFinite(styleTransition.duration) ? Number(styleTransition.duration) : 0
       const delay = Number.isFinite(styleTransition.delay) ? Number(styleTransition.delay) : 0
       maxDurationMs = Math.max(maxDurationMs, this.clampTimelineMs(duration + delay))
@@ -211,8 +217,8 @@ export class PlayerRuntimePlanner {
   /**
    * Resolves runtime listeners from story persos and action maps.
    */
-  private resolveActionListeners(story: RuntimeStoryDoc): EventListener<AnimationAction>[] {
-    return Object.values(story.items).map((item) => ({
+  private resolveActionListeners(runtimePersos: RuntimePersos): EventListener<AnimationAction>[] {
+    return Object.values(runtimePersos.persos).map((item) => ({
       listenerId: item.id,
       scopeStoryId: item.storyId,
       actionsByEventName: item.actions

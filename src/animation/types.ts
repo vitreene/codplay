@@ -4,6 +4,18 @@ import type { MoveValue } from '../runtime/types'
 
 export type AnimatedProperty = string
 
+export type AnimationTimerOptions = {
+  duration?: number
+  delayMs?: number
+  loopDelayMs?: number
+  reversed?: boolean
+  alternate?: boolean
+  loop?: boolean | number
+  ease?: string
+  stagger?: number
+  ignoreDuration?: boolean
+}
+
 export type AnimationAction = {
   target?: unknown
   targetId?: string
@@ -28,9 +40,9 @@ export type TransitionRequest = {
   target: unknown
   from?: number | string
   to: number | string
-  duration: number
+} & Required<Pick<AnimationTimerOptions, 'duration'>> & {
   easing?: string
-  delayMs?: number
+} & AnimationTimerOptions & {
   composition?: 'merge' | 'replace'
   cleanupStyleProperty?: 'width' | 'height'
   onFinalize?: (reason: 'completed' | 'stopped') => void

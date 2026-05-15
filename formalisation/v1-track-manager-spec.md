@@ -15,7 +15,7 @@ Executer les tracks en temps runtime, declencher les events dus, et appliquer le
 - retourner un flux stable d'events vers le Director
 - charger une fois le registre fige des tracks a `scene.init`
 - accepter des events live append-only
-- accepter des eventimes ancres au runtime lorsqu'une story demarre via le pipeline scene/story
+- accepter des eventimes ancres au runtime lorsqu'une story est mise en timeline via le pipeline scene/story
 - consommer un registre de tracks consolide a partir de `Scene.tracks` et des declarations statiques des stories
 
 ## Contrat minimal V1
@@ -81,7 +81,7 @@ type TrackManagerApi = {
 - `appendAnchoredEventimes` convertit des eventimes relatifs de story en events absolus append-only.
 - `appendAnchoredEventimes` applique l'ancrage: `applyAtMs = anchorMs + somme des startAt`.
 - l'ordre d'aplatissement des eventimes est l'ordre de declaration parent puis enfants d'eventimes.
-- `appendAnchoredEventimes` est utilise quand une story demarre sur trigger runtime (ex: event de sequence ou interaction).
+- `appendAnchoredEventimes` est utilise quand les `eventimes` d'une story sont mis en timeline sur trigger runtime (ex: event de sequence ou interaction).
 - le montage d'une story n'entraine pas a lui seul d'inscription temporelle dans le `TrackManager`.
 - il n'existe pas de deuxieme cadre temporel pour les demarrages: le `TrackManager` reutilise le mecanisme existant d'ancrage des `eventimes`.
 - `setActiveTracks` conserve un mode simple `activate/deactivate` en V1.

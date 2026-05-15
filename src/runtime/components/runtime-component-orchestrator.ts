@@ -1,6 +1,6 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
-import type { ItemDoc, RuntimeElementMap, StoryDoc } from '../types'
+import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from '../flip-engine'
 import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from '../flip-engine/matrix-2d'
@@ -191,12 +191,12 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Synchronizes one runtime story without purging the existing registry.
+   * Synchronizes one runtime perso graph without purging the existing registry.
    */
-  loadStory(story: StoryDoc): RuntimeElementMap {
+  loadPersos(runtimePersos: RuntimePersos): RuntimeElementMap {
     this.cleanupOverlayRuntime()
 
-    for (const item of Object.values(story.items)) {
+    for (const item of Object.values(runtimePersos.persos)) {
       const existingComponent = this.componentByPersoId.get(item.id)
       if (existingComponent) {
         this.refreshLoadedRuntimeComponent(item, existingComponent)
@@ -219,7 +219,7 @@ export class RuntimeComponentOrchestrator {
       this.mountLoadedRuntimeComponent(item, componentClass)
     }
 
-    for (const item of Object.values(story.items)) {
+    for (const item of Object.values(runtimePersos.persos)) {
       const initialMove = this.normalizeMoveCommand(item.initial.move, true)
       if (initialMove === null) {
         continue
