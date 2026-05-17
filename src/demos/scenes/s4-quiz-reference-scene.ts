@@ -79,6 +79,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   x: {
                     to: 70,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -86,6 +87,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   y: {
                     to: 24,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -119,6 +121,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   x: {
                     to: 180,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -126,6 +129,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   y: {
                     to: 54,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -159,6 +163,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   x: {
                     to: 380,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -166,6 +171,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   y: {
                     to: 16,
                     duration: 6000,
+                    ease: 'inOutSine',
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,

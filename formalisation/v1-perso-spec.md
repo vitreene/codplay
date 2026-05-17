@@ -74,6 +74,18 @@ type EmitSelf = {
   name: string
   storyId: string
 }
+
+type PersoTransitionTiming = {
+  duration?: number
+  delay?: number
+  loopDelay?: number
+  reversed?: boolean
+  alternate?: boolean
+  loop?: boolean | number
+  ease?: string
+  stagger?: number
+  ignoreDuration?: boolean
+}
 ```
 
 ## Regles normatives
@@ -114,6 +126,10 @@ type EmitSelf = {
 - `actions` contient obligatoirement l'auto-reference `actions[id] = null`.
 - l'auto-reference est presente en sortie de normalisation.
 - quand un event cible directement un perso, le ciblage se fait par `id`, jamais par `name`.
+- quand une action `style` decrit une transition animee, elle peut transporter les options de timing compatibles runtime: `duration`, `delay`, `loopDelay`, `reversed`, `alternate`, `loop`, `ease`, `stagger`.
+- ces options sont purement descriptives et ne changent pas la semantique de portee ou de propagation des events.
+- `ignoreDuration: true` permet d'indiquer explicitement qu'une transition ne contribue pas au calcul de duree de sequence.
+- l'absence de `ignoreDuration` signifie que la transition contribue normalement au calcul de duree via sa `duration` et son `delay` quand ils existent.
 
 6. Master clock
 

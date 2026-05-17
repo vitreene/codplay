@@ -55,6 +55,9 @@ function readTransitionDurationMs(value: unknown): number {
 	}
 
 	const transition = value as Record<string, unknown>;
+	if (transition.ignoreDuration === true) {
+		return 0;
+	}
 	const duration =
 		typeof transition.duration === 'number' && Number.isFinite(transition.duration) ? transition.duration : 0;
 	const delay = typeof transition.delay === 'number' && Number.isFinite(transition.delay) ? transition.delay : 0;

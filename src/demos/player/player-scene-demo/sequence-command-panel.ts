@@ -60,13 +60,13 @@ export function createSequenceCommandPanel(input: {
 	 */
 	function syncControlState(state: PlayerStateSnapshot = input.player.getState()): void {
 		const canPlay = state.status === 'ready' || state.status === 'paused'
+		const canPause = state.status === 'playing'
 		const canRewind =
 			state.initialized && (state.status === 'ready' || state.status === 'paused' || state.status === 'playing')
 		const canSeek =
 			seekCommand !== null &&
 			state.initialized &&
-			(state.status === 'ready' ||
-				state.status === 'paused' ||
+			(state.status === 'paused' ||
 				state.status === 'playing' ||
 				state.status === 'seeking')
 
@@ -79,7 +79,8 @@ export function createSequenceCommandPanel(input: {
 		const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs)
 		const displayedTimelineMs = seekInteractionActive ? interactionTimelineMs : (pendingTimelineMs ?? clampedTimelineMs)
 
-		input.playButtonNode.disabled = commandInFlight || !canPlay
+		input.playButtonNode.disabled = commandInFlight || (!canPlay && !canPause)
+		input.playButtonNode.textContent = canPause ? 'Pause' : 'Play'
 		input.rewindButtonNode.disabled = commandInFlight || !canRewind
 		input.seekRangeNode.disabled = !canSeek
 		input.seekRangeNode.max = String(seekMaxMs)
@@ -230,6 +231,12 @@ export function createSequenceCommandPanel(input: {
 	}
 
 	input.playButtonNode.addEventListener('click', () => {
+		const state = input.player.getState()
+		if (state.status === 'playing') {
+			void runControlCommand('pause', () => input.player.pause())
+			return
+		}
+
 		void runControlCommand('play', () => input.player.play())
 	})
 
