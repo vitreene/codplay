@@ -6,8 +6,8 @@ import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitio
 import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from '../flip-engine/matrix-2d'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
 import { isDomElement, isDomNode } from './dom-component-adapter'
-import { ImageRuntimeComponent } from './image-runtime-component'
-import { ListRuntimeComponent } from './list-runtime-component'
+import { ImageComponent } from './image-component'
+import { ListComponent } from './list-component'
 import { TextComponent } from './text-component'
 import type {
   RuntimeComponent,
@@ -22,8 +22,8 @@ import type {
 
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   text: TextComponent,
-  img: ImageRuntimeComponent,
-  list: ListRuntimeComponent
+  img: ImageComponent,
+  list: ListComponent
 }
 
 const INITIAL_LOAD_EVENT = {

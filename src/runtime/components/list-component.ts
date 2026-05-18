@@ -1,20 +1,14 @@
+import { BaseComponent } from './base-component'
 import {
-  appendDomChild,
-  applyAttrPatch,
-  applyClassNamePatch,
-  applyNodeId,
-  applyStylePatch,
-  createRuntimeNode,
-  isDomElement,
-  removeDomChild,
-  resetRuntimeNodeState
-} from './dom-component-adapter'
-import { htmlRenderMutationResolver } from '../html-render-mutation-resolver'
-import type {
-  RuntimeComponentClassInput,
-  RuntimeComponentUpdateInput,
-  RuntimeListComponent
-} from './types'
+  applyAttrProps,
+  applyClassNameProps,
+  applyStyleProps,
+  createComponentRoot,
+  resetComponentRoot,
+  setComponentRootId
+} from './lib'
+import { appendDomChild, isDomElement, removeDomChild, resetRuntimeNodeState } from './dom-component-adapter'
+import type { RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
 import type { MoveMode } from '../types'
 
 type ReorderOperation = 'move' | 'add' | 'remove'
@@ -28,6 +22,14 @@ type ListReorderConfig = {
 type PersistentPlacementRule = {
   mode: 'first' | 'last'
   insertedOrder: number
+}
+
+type ListState = {
+  id?: unknown
+  className?: string | { add?: string; remove?: string }
+  style?: Record<string, unknown>
+  attr?: Record<string, unknown>
+  config?: unknown
 }
 
 /**
@@ -46,15 +48,20 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Implements the runtime list component with internal child ordering.
+ * Creates one non-DOM fallback node for list items.
  */
-export class ListRuntimeComponent implements RuntimeListComponent {
-  static readonly renderMutationResolver = htmlRenderMutationResolver
+function createObjectItemsNode(): Record<string, unknown> {
+  return {
+    tagName: 'UL',
+    style: {},
+    attributes: {}
+  }
+}
 
-  private readonly input: RuntimeComponentClassInput
-  private readonly item: RuntimeComponentClassInput['item']
-
-  private rootNode: unknown | null = null
+/**
+ * Implements the list component with internal child ordering.
+ */
+export class ListComponent extends BaseComponent implements RuntimeListComponent {
   private itemsNode: unknown | null = null
 
   private readonly childNodeById = new Map<string, unknown>()
@@ -68,79 +75,34 @@ export class ListRuntimeComponent implements RuntimeListComponent {
   }
 
   /**
-   * Creates one list component instance for one specific item.
-   */
-  constructor(input: RuntimeComponentClassInput) {
-    this.input = input
-    this.item = input.item
-  }
-
-  /**
    * Initializes root and items containers used by this list.
    */
   init(initial: Record<string, unknown>): void {
-    try {
-      this.rootNode ??= createRuntimeNode(this.item, 'section', this.input.createElementOptions)
-      resetRuntimeNodeState(this.rootNode)
-      this.childNodeById.clear()
-      this.orderedChildIds = []
-      this.persistentPlacementByChildId.clear()
-      this.nextPlacementOrder = 1
+    const state = initial as ListState
 
-      if (isDomElement(this.rootNode)) {
-        this.itemsNode ??= globalThis.document.createElement('ul')
-        appendDomChild(this.rootNode, this.itemsNode)
-      } else {
-        this.itemsNode ??= {
-          tagName: 'UL',
-          style: {},
-          attributes: {}
-        }
-      }
+    this.rootNode ??= createComponentRoot(this.item, 'section', this.createElementOptions)
+    resetComponentRoot(this.rootNode)
+    this.childNodeById.clear()
+    this.orderedChildIds = []
+    this.persistentPlacementByChildId.clear()
+    this.nextPlacementOrder = 1
 
-      resetRuntimeNodeState(this.itemsNode)
-
-      applyNodeId(this.rootNode, typeof initial.id === 'string' ? initial.id : this.item.id)
-
-      applyClassNamePatch(
-        this.rootNode,
-        typeof initial.className === 'string' || typeof initial.className === 'object'
-          ? (initial.className as string | { add?: string; remove?: string })
-          : undefined
-      )
-
-      applyStylePatch(
-        this.rootNode,
-        typeof initial.style === 'object' && initial.style !== null
-          ? (initial.style as Record<string, unknown>)
-          : undefined
-      )
-
-      applyAttrPatch(
-        this.rootNode,
-        typeof initial.attr === 'object' && initial.attr !== null
-          ? (initial.attr as Record<string, unknown>)
-          : undefined
-      )
-
-      this.reorderConfig = this.resolveReorderConfig(initial)
-    } catch (error) {
-      this.input.warn({
-        code: 'RUNTIME_LIST_INIT_FAILED',
-        message: 'List component init failed',
-        details: {
-          persoId: this.item.id,
-          error: error instanceof Error ? error.message : 'unknown_error'
-        }
-      })
+    if (isDomElement(this.rootNode)) {
+      const existingItemsNode = this.itemsNode ?? this.rootNode.querySelector('ul')
+      this.itemsNode = existingItemsNode ?? globalThis.document.createElement('ul')
+      appendDomChild(this.rootNode, this.itemsNode)
+    } else {
+      this.itemsNode ??= createObjectItemsNode()
     }
-  }
 
-  /**
-   * Returns the root node rendered by this list component.
-   */
-  render(): unknown {
-    return this.rootNode
+    resetRuntimeNodeState(this.itemsNode)
+
+    setComponentRootId(this.rootNode, this.item.id, state.id)
+    applyClassNameProps(this.rootNode, state.className)
+    applyStyleProps(this.rootNode, state.style)
+    applyAttrProps(this.rootNode, state.attr)
+
+    this.reorderConfig = this.resolveReorderConfig(initial)
   }
 
   /**
@@ -148,54 +110,20 @@ export class ListRuntimeComponent implements RuntimeListComponent {
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.input.warn({
-        code: 'RUNTIME_LIST_NOT_INITIALIZED',
-        message: 'List component update rejected because init is missing',
-        details: {
-          persoId: input.persoId,
-          eventId: input.eventId,
-          eventSeq: input.eventSeq
-        }
+      this.warn('RUNTIME_LIST_NOT_INITIALIZED', 'List component update rejected because init is missing', {
+        eventId: input.eventId,
+        eventSeq: input.eventSeq
       })
       return
     }
 
-    try {
-      applyClassNamePatch(
-        this.rootNode,
-        typeof input.action.className === 'string' || typeof input.action.className === 'object'
-          ? (input.action.className as string | { add?: string; remove?: string })
-          : undefined
-      )
+    const state = input.action as ListState
 
-      applyStylePatch(
-        this.rootNode,
-        typeof input.action.style === 'object' && input.action.style !== null
-          ? (input.action.style as Record<string, unknown>)
-          : undefined,
-        {
-          skipTransitionValues: true
-        }
-      )
-
-      applyAttrPatch(
-        this.rootNode,
-        typeof input.action.attr === 'object' && input.action.attr !== null
-          ? (input.action.attr as Record<string, unknown>)
-          : undefined
-      )
-    } catch (error) {
-      this.input.warn({
-        code: 'RUNTIME_LIST_UPDATE_FAILED',
-        message: 'List component update failed',
-        details: {
-          persoId: input.persoId,
-          eventId: input.eventId,
-          eventSeq: input.eventSeq,
-          error: error instanceof Error ? error.message : 'unknown_error'
-        }
-      })
-    }
+    applyClassNameProps(this.rootNode, state.className)
+    applyStyleProps(this.rootNode, state.style, {
+      skipTransitionValues: true
+    })
+    applyAttrProps(this.rootNode, state.attr)
   }
 
   /**
@@ -258,13 +186,9 @@ export class ListRuntimeComponent implements RuntimeListComponent {
     void input.eventSeq
 
     if (!this.childNodeById.has(input.childId)) {
-      this.input.warn({
-        code: 'RUNTIME_LIST_MOVE_COMPONENT_DETACHED',
-        message: 'List move cannot reposition a detached child',
-        details: {
-          listId: this.item.id,
-          childId: input.childId
-        }
+      this.warn('RUNTIME_LIST_MOVE_COMPONENT_DETACHED', 'List move cannot reposition a detached child', {
+        listId: this.item.id,
+        childId: input.childId
       })
       return
     }
@@ -417,7 +341,7 @@ export class ListRuntimeComponent implements RuntimeListComponent {
    * Resolves list reorder policy from initial config with safe defaults.
    */
   private resolveReorderConfig(initial: Record<string, unknown>): ListReorderConfig {
-    const rawConfig = initial.config
+    const rawConfig = (initial as ListState).config
     if (typeof rawConfig !== 'object' || rawConfig === null) {
       return {
         reorderOnMove: true,
