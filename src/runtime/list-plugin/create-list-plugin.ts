@@ -11,6 +11,9 @@ export type CreateListPluginOptions = {
 
 /**
  * Creates one list plugin instance bound to a runtime list element.
+ *
+ * @deprecated Legacy runtime path. The current component-based list runtime
+ * does not consume this plugin pipeline anymore.
  */
 export function createListPlugin(options: CreateListPluginOptions): ListPlugin {
   return {

@@ -290,6 +290,9 @@ export function createElement(item: ItemDoc, options: CreateElementOptions = {})
   applyInitialState(nodeRef, item)
   bindRuntimeEmitDeclarations(nodeRef, item, options)
 
+  // Deprecated legacy path: the current component-based list runtime does not
+  // consume these plugins anymore. Keep temporarily while validating POC/demo
+  // behavior before removal.
   const plugins = item.type === 'list'
     ? [
         createListPlugin({

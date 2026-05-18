@@ -75,6 +75,10 @@ export type ListPluginOutput = {
   }
 }
 
+/**
+ * @deprecated Legacy runtime path kept only while the old create-element flow
+ * still exists. Remove quickly once the POC/demo path confirms it is unused.
+ */
 export type ListPlugin = {
   name: 'list-plugin'
   runtimeListId: string

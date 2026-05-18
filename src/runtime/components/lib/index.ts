@@ -1,12 +1,21 @@
-export { applyAttrProps, applyAttrPropsToTargets } from './attr'
-export type { AttrProps, AttrPropsTarget } from './attr'
-export { applyClassNameProps, applyClassNamePropsToTargets } from './class-name'
-export type { ClassNameProps, ClassNamePropsTarget } from './class-name'
-export { createComponentRoot, resetComponentRoot, setComponentRootId } from './dom'
-export { applyToParts } from './parts'
-export type { PartTarget } from './parts'
-export { ensureImagePart, resetImagePart, resolveImageObjectFit, setImageAlt, setImageFitMode, setImageSource } from './image'
-export type { ImageFitMode } from './image'
-export { applyStyleProps, applyStylePropsToTargets } from './style'
-export type { StyleProps, StylePropsOptions, StylePropsTarget } from './style'
-export { setTextContent } from './text'
+export {
+  applyAttrProps,
+  applyClassNameProps,
+  applyStyleProps,
+  createComponentRoot,
+  ensureImagePart,
+  resetComponentRoot,
+  resetImagePart,
+  setComponentRootId,
+  setImageAlt,
+  setImageFitMode,
+  setImageSource,
+  setTextContent
+} from './dom'
+export type {
+  AttrProps,
+  ClassNameProps,
+  ImageFitMode,
+  StyleProps,
+  StylePropsOptions
+} from './dom'
