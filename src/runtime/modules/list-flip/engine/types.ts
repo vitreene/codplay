@@ -1,4 +1,4 @@
-import type { AnimationAdapter, AnimationBatchResult, TransitionRequest } from '../../animation/types'
+import type { AnimationAdapter, AnimationBatchResult, TransitionRequest } from '../../../../animation/types'
 
 export type Matrix2D = {
   a: number

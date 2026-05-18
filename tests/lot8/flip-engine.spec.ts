@@ -4,7 +4,7 @@ import { animate } from 'animejs'
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { runAnimationBatch } from '../../src/animation/run-batch'
 import type { AnimationAdapter, AnimationHandle, TransitionRequest } from '../../src/animation/types'
-import { createFlipEngine } from '../../src/runtime/flip-engine'
+import { createFlipEngine } from '../../src/runtime/modules/list-flip/engine'
 
 type RectLike = {
   left: number

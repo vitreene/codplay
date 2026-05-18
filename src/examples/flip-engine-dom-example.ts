@@ -1,7 +1,7 @@
 import { animate } from 'animejs'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../animation/adapter'
-import { createFlipEngine } from '../runtime/flip-engine'
+import { createFlipEngine } from '../runtime/modules/list-flip/engine'
 
 type DemoCard = {
   id: string

@@ -1,7 +1,7 @@
 import { utils } from 'animejs'
 
-import { runAnimationBatch } from '../../animation/run-batch'
-import type { TransitionRequest } from '../../animation/types'
+import { runAnimationBatch } from '../../../../animation/run-batch'
+import type { TransitionRequest } from '../../../../animation/types'
 import { createIdentityMatrix, createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from './matrix-2d'
 import type {
   FlipEngine,
