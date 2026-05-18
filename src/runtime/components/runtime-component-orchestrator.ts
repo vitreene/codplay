@@ -8,7 +8,7 @@ import type { RenderMutationResolver } from '../render-mutation-resolver'
 import { isDomElement, isDomNode } from './dom-component-adapter'
 import { ImageRuntimeComponent } from './image-runtime-component'
 import { ListRuntimeComponent } from './list-runtime-component'
-import { TextRuntimeComponent } from './text-runtime-component'
+import { TextComponent } from './text-component'
 import type {
   RuntimeComponent,
   RuntimeComponentClass,
@@ -21,7 +21,7 @@ import type {
 } from './types'
 
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
-  text: TextRuntimeComponent,
+  text: TextComponent,
   img: ImageRuntimeComponent,
   list: ListRuntimeComponent
 }
@@ -241,12 +241,15 @@ export class RuntimeComponentOrchestrator {
    */
   private refreshLoadedRuntimeComponent(item: ItemDoc, component: RuntimeComponent): void {
     const previousRootNode = this.nodeByPersoId.get(item.id) ?? null
+    const nextRootNode = this.tryInitComponent(item, component, 'refresh')
+    if (nextRootNode === null) {
+      return
+    }
+
     if (previousRootNode !== null) {
       this.detachNodeFromParent(previousRootNode)
     }
 
-    component.init(item.initial)
-    const nextRootNode = component.render()
     const isListComponent = this.isRuntimeListComponent(component)
     const listComponent = isListComponent ? (component as RuntimeListComponent) : null
 
@@ -267,8 +270,11 @@ export class RuntimeComponentOrchestrator {
       warn: this.warn
     })
 
-    component.init(item.initial)
-    const rootNode = component.render()
+    const rootNode = this.tryInitComponent(item, component, 'mount')
+    if (rootNode === null) {
+      return
+    }
+
     const listComponent = item.type === 'list' && this.isRuntimeListComponent(component) ? component : null
 
     if (listComponent === null) {
@@ -398,12 +404,14 @@ export class RuntimeComponentOrchestrator {
       })
     }
 
-    component.update({
+    if (!this.tryUpdateComponent(component, {
       persoId: targetPersoId,
       eventId: input.update.resolvedAction.eventId,
       eventSeq: input.update.eventSeq,
       action: input.update.resolvedAction.action as Record<string, unknown>
-    })
+    })) {
+      return false
+    }
 
     if (firstFlipSnapshots.length > 0) {
       const lastFlipSnapshots = this.flipEngine.capture(flipEntries)
@@ -489,6 +497,56 @@ export class RuntimeComponentOrchestrator {
     }
 
     return true
+  }
+
+  /**
+   * Initializes one component behind one global runtime warning boundary.
+   */
+  private tryInitComponent(item: ItemDoc, component: RuntimeComponent, phase: 'mount' | 'refresh'): unknown | null {
+    try {
+      component.init(item.initial)
+      return component.render()
+    } catch (error) {
+      this.warn({
+        code: 'RUNTIME_COMPONENT_INIT_FAILED',
+        message: 'Component init failed',
+        details: {
+          itemId: item.id,
+          itemType: item.type,
+          phase,
+          error: error instanceof Error ? error.message : 'unknown_error'
+        }
+      })
+      return null
+    }
+  }
+
+  /**
+   * Updates one component behind one global runtime warning boundary.
+   */
+  private tryUpdateComponent(component: RuntimeComponent, input: {
+    persoId: string
+    eventId: string
+    eventSeq: number
+    action: Record<string, unknown>
+  }): boolean {
+    try {
+      component.update(input)
+      return true
+    } catch (error) {
+      this.warnOnce(
+        input.eventSeq,
+        'RUNTIME_COMPONENT_UPDATE_FAILED',
+        {
+          persoId: input.persoId,
+          eventId: input.eventId,
+          eventSeq: input.eventSeq,
+          error: error instanceof Error ? error.message : 'unknown_error'
+        },
+        input.persoId
+      )
+      return false
+    }
   }
 
   /**

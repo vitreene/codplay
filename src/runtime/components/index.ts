@@ -1,7 +1,10 @@
+export { BaseComponent } from './base-component'
 export { ImageRuntimeComponent } from './image-runtime-component'
 export { ListRuntimeComponent } from './list-runtime-component'
 export { RuntimeComponentOrchestrator } from './runtime-component-orchestrator'
+export { TextComponent } from './text-component'
 export { TextRuntimeComponent } from './text-runtime-component'
+export * from './lib'
 export type {
   RuntimeComponent,
   RuntimeComponentClass,
