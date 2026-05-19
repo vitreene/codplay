@@ -68,4 +68,15 @@ export abstract class BaseComponent implements RuntimeComponent {
   protected getPart(partId: string): unknown | null {
     return this.parts.get(partId) ?? null
   }
+
+  /**
+   * Resolves one author-facing ref to the component root or one internal ref.
+   */
+  protected resolveRef(ref?: string): unknown | null {
+    if (ref === undefined || ref === 'root') {
+      return this.rootNode
+    }
+
+    return this.getPart(ref)
+  }
 }

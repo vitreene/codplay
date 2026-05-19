@@ -2,6 +2,7 @@ export {
   applyAttrProps,
   applyClassNameProps,
   applyStyleProps,
+  bindComponentEmitDeclarations,
   createComponentRoot,
   ensureImagePart,
   resetComponentRoot,

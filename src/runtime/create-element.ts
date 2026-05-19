@@ -25,6 +25,13 @@ function normalizeEmitRuleActions(rule: EmitRule): EmitRuleAction[] {
   return Array.isArray(rule) ? rule : [rule]
 }
 
+/**
+ * Keeps only emit actions that target the component root.
+ */
+function resolveRootEmitRule(rule: EmitRule): EmitRuleAction[] {
+  return normalizeEmitRuleActions(rule).filter((action) => action.ref === undefined || action.ref === 'root')
+}
+
 type RuntimeObjectEventNode = Record<string, unknown> & {
   [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
@@ -238,7 +245,7 @@ function emitDeclaredRuntimeEvents(
   }
 
   const self = createRuntimeEmitSelf(item)
-  for (const action of normalizeEmitRuleActions(rule)) {
+  for (const action of resolveRootEmitRule(rule)) {
     const data = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
     emitRuntimeEvent({
       name: action.event.name,

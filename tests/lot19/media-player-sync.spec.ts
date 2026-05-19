@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { MediaComponentApi } from '../../src/runtime/components/media-component'
 import type { AnimationResolvedAction } from '../../src/animation/types'
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
+import { RUNTIME_OBJECT_EVENT_HANDLERS } from '../../src/runtime/create-element'
 import { createMediaSyncModule } from '../../src/runtime/modules/media-sync'
 import type { RuntimePersos } from '../../src/runtime/types'
 
@@ -16,8 +18,11 @@ type RuntimeNodeFixture = {
   currentTime?: number
   duration?: number
   paused?: boolean
+  __mediaDurationSeconds?: number
+  mediaNode?: RuntimeNodeFixture
   play?: ReturnType<typeof vi.fn>
   pause?: ReturnType<typeof vi.fn>
+  [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
 
 /**
@@ -40,6 +45,10 @@ function createRuntimeNodeFixture(tagName: string, options: { durationSeconds?: 
     node.pause = vi.fn(() => {
       node.paused = true
     })
+  }
+
+  if (tagName === 'DIV' && options.durationSeconds !== undefined) {
+    node.__mediaDurationSeconds = options.durationSeconds
   }
 
   return node
@@ -143,6 +152,123 @@ function createMediaSyncScene(options: {
 }
 
 describe('Lot 19 - media player sync', () => {
+  it('emits one component event from media ref ended on wrapped video', async () => {
+    const scene: SceneDoc = {
+      id: 'media-emit-scene',
+      rootStories: ['story-media'],
+      initial: undefined,
+      straps: undefined,
+      listen: [],
+      stories: {
+        'story-media': {
+          id: 'story-media',
+          entries: ['media-item', 'text-item'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'media-item',
+              type: 'media',
+              initial: {
+                src: '/assets/1_7b_e.mp3'
+              },
+              emit: {
+                ended: {
+                  ref: 'media',
+                  event: { name: 'media:done' }
+                }
+              },
+              actions: {
+                'media-item': null
+              }
+            },
+            {
+              id: 'text-item',
+              type: 'text',
+              initial: {
+                content: 'pending'
+              },
+              actions: {
+                'media:done': {
+                  content: 'done'
+                },
+                'text-item': null
+              }
+            }
+          ],
+          straps: undefined,
+          listen: []
+        }
+      },
+      init(_scene, runtime) {
+        runtime.mount('story-media')
+      },
+      tracks: {}
+    }
+
+    const player = new PlayerFacade()
+    expect(await player.init(scene)).toEqual({ ok: true })
+
+    const mediaRoot = player.getRuntimeRegistry().getNodeById('media-item') as RuntimeNodeFixture | null
+    const mediaNode = mediaRoot?.mediaNode ?? null
+    expect(mediaNode).not.toBeNull()
+
+    mediaNode?.[RUNTIME_OBJECT_EVENT_HANDLERS]?.ended?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const textNode = player.getRuntimeRegistry().getNodeById('text-item') as HTMLElement | null
+    expect(textNode?.textContent).toBe('done')
+  })
+
+  it('warns when one emit ref is unknown on media component', async () => {
+    const traces: Array<{ eventName: string; payload?: Record<string, unknown> }> = []
+    const scene: SceneDoc = {
+      id: 'media-ref-warning-scene',
+      rootStories: ['story-media'],
+      initial: undefined,
+      straps: undefined,
+      listen: [],
+      stories: {
+        'story-media': {
+          id: 'story-media',
+          entries: ['media-item'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'media-item',
+              type: 'media',
+              initial: {
+                src: '/assets/1_7b_e.mp3'
+              },
+              emit: {
+                ended: {
+                  ref: 'missing-ref',
+                  event: { name: 'media:done' }
+                }
+              },
+              actions: {
+                'media-item': null
+              }
+            }
+          ],
+          straps: undefined,
+          listen: []
+        }
+      },
+      init(_scene, runtime) {
+        runtime.mount('story-media')
+      },
+      tracks: {}
+    }
+
+    const player = new PlayerFacade()
+    player.onTrace((row) => {
+      traces.push({ eventName: row.eventName, payload: row.payload as Record<string, unknown> | undefined })
+    })
+
+    expect(await player.init(scene)).toEqual({ ok: true })
+    expect(traces.some((row) => row.eventName === 'renderer:error' && row.payload?.code === 'AUTHOR_COMPONENT_REF_UNKNOWN')).toBe(true)
+  })
+
   it('does not re-seek or replay one media on every sync tick while playback is healthy', () => {
     const component = {
       currentTimeMs: 4000,
@@ -217,7 +343,7 @@ describe('Lot 19 - media player sync', () => {
     const player = new PlayerFacade({
       createElementOptions: {
         nodeFactory: (item) =>
-          createRuntimeNodeFixture(item.type === 'media' ? 'VIDEO' : item.type === 'list' ? 'SECTION' : 'DIV')
+          createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -225,16 +351,16 @@ describe('Lot 19 - media player sync', () => {
     expect(await player.play()).toEqual({ ok: true })
     expect(await player.seek(6000)).toEqual({ ok: true })
 
-    const mediaNode = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
-    expect(mediaNode?.currentTime).toBeCloseTo(8, 3)
-    expect(mediaNode?.paused).toBe(true)
+    const mediaComponent = player.getRuntimeRegistry().getComponentById('media-sync-item') as MediaComponentApi | null
+    expect(mediaComponent?.getCurrentTimeMs()).toBeCloseTo(8000, 0)
+    expect(mediaComponent?.isPaused()).toBe(true)
   })
 
   it('keeps one ended media stopped when sequence pause/play toggles later', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
         nodeFactory: (item) =>
-          createRuntimeNodeFixture(item.type === 'media' ? 'VIDEO' : item.type === 'list' ? 'SECTION' : 'DIV', {
+          createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV', {
             durationSeconds: 9
           })
       }
@@ -244,20 +370,21 @@ describe('Lot 19 - media player sync', () => {
     expect(await player.play()).toEqual({ ok: true })
     expect(await player.seek(10000)).toEqual({ ok: true })
 
-    const mediaNode = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
-    expect(mediaNode?.currentTime).toBeCloseTo(9, 3)
-    mediaNode?.play?.mockClear()
+    const mediaComponent = player.getRuntimeRegistry().getComponentById('media-sync-item') as MediaComponentApi | null
+    const mediaRoot = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
+    const mediaNode = mediaRoot?.mediaNode
+    expect(mediaComponent?.getCurrentTimeMs()).toBeCloseTo(9000, 0)
 
     expect(await player.play()).toEqual({ ok: true })
-    expect(mediaNode?.play).not.toHaveBeenCalled()
     expect(mediaNode?.paused).toBe(true)
+    expect(mediaComponent?.isPaused()).toBe(true)
   })
 
   it('uses active master media currentTime plus offset to resolve timeline', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
         nodeFactory: (item) =>
-          createRuntimeNodeFixture(item.type === 'media' ? 'VIDEO' : item.type === 'list' ? 'SECTION' : 'DIV')
+          createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -266,7 +393,8 @@ describe('Lot 19 - media player sync', () => {
     expect(await player.seek(6000)).toEqual({ ok: true })
     expect(await player.play()).toEqual({ ok: true })
 
-    const mediaNode = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
+    const mediaRoot = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
+    const mediaNode = mediaRoot?.mediaNode
     if (mediaNode) {
       mediaNode.currentTime = 8.8
     }

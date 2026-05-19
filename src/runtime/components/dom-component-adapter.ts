@@ -15,6 +15,13 @@ function normalizeEmitRuleActions(rule: EmitRule): EmitRuleAction[] {
 }
 
 /**
+ * Keeps only emit actions that target the component root.
+ */
+function resolveRootEmitRule(rule: EmitRule): EmitRuleAction[] {
+  return normalizeEmitRuleActions(rule).filter((action) => action.ref === undefined || action.ref === 'root')
+}
+
+/**
  * Checks whether one runtime node reference is a browser Element.
  */
 export function isDomElement(nodeRef: unknown): nodeRef is Element {
@@ -95,7 +102,7 @@ function emitDeclaredRuntimeEvents(
   }
 
   const self = createRuntimeEmitSelf(item)
-  for (const action of normalizeEmitRuleActions(rule)) {
+  for (const action of resolveRootEmitRule(rule)) {
     const data = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
     emitRuntimeEvent({
       name: action.event.name,

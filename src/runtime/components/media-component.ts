@@ -3,15 +3,17 @@ import {
   applyAttrProps,
   applyClassNameProps,
   applyStyleProps,
+  bindComponentEmitDeclarations,
   createComponentRoot,
   resetComponentRoot,
   setComponentRootId
 } from './lib'
-import { isDomElement } from './dom-component-adapter'
+import { appendDomChild, isDomElement, resetRuntimeNodeState } from './dom-component-adapter'
 import type { RuntimeComponentUpdateInput } from './types'
 
 type MediaState = {
   id?: unknown
+  ref?: unknown
   src?: unknown
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
@@ -38,6 +40,7 @@ export type MediaComponentApi = {
 }
 
 const MEDIA_TIME_SYNC_TOLERANCE_MS = 40
+const MEDIA_REF = 'media'
 
 /**
  * Checks whether one node can expose media playback methods.
@@ -47,7 +50,46 @@ function toMediaNodeLike(nodeRef: unknown): MediaNodeLike | null {
 }
 
 /**
- * Implements one simple media component rendered as one video tag.
+ * Creates or reuses one internal video node attached to the wrapper root.
+ */
+function ensureMediaNode(rootNode: unknown, currentNode: unknown | null): unknown {
+  if (isDomElement(rootNode)) {
+    const existingNode = currentNode ?? rootNode.querySelector('video') ?? globalThis.document.createElement('video')
+    appendDomChild(rootNode, existingNode)
+    return existingNode
+  }
+
+  const existingFallbackNode = currentNode as MediaNodeLike | null
+  const fallbackNode: MediaNodeLike = existingFallbackNode ?? {
+    tagName: 'VIDEO',
+    style: {},
+    attributes: {},
+    currentTime: 0,
+    duration:
+      typeof rootNode === 'object' &&
+      rootNode !== null &&
+      typeof (rootNode as { __mediaDurationSeconds?: unknown }).__mediaDurationSeconds === 'number'
+        ? (rootNode as { __mediaDurationSeconds: number }).__mediaDurationSeconds
+        : 12,
+    paused: true
+  }
+
+  fallbackNode.play ??= () => {
+    fallbackNode.paused = false
+  }
+  fallbackNode.pause ??= () => {
+    fallbackNode.paused = true
+  }
+
+  if (typeof rootNode === 'object' && rootNode !== null) {
+    ;(rootNode as Record<string, unknown>).mediaNode = fallbackNode
+  }
+
+  return fallbackNode
+}
+
+/**
+ * Implements one simple media component rendered as one wrapper + video.
  */
 export class MediaComponent extends BaseComponent implements MediaComponentApi {
   private playbackState: 'playing' | 'paused' = 'paused'
@@ -57,25 +99,36 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    */
   init(initial: Record<string, unknown>): void {
     const state = initial as MediaState
-    const rootNode = createComponentRoot(this.item, 'video', this.createElementOptions)
+    const rootNode = createComponentRoot(this.item, 'div', this.createElementOptions)
+    const mediaNode = ensureMediaNode(rootNode, this.getPart(MEDIA_REF))
 
     resetComponentRoot(rootNode)
+    resetRuntimeNodeState(mediaNode)
     setComponentRootId(rootNode, this.item.id, state.id)
 
-    applyClassNameProps(rootNode, state.className)
-    applyStyleProps(rootNode, state.style)
-    applyAttrProps(rootNode, state.attr)
+    this.setRoot(rootNode)
+    this.setPart(MEDIA_REF, mediaNode)
+
+    this.applyVisualState(state)
 
     if (typeof state.src === 'string') {
-      this.setMediaSource(rootNode, state.src)
+      this.setMediaSource(mediaNode, state.src)
     }
 
     this.playbackState = 'paused'
-    this.setRoot(rootNode)
+
+    bindComponentEmitDeclarations({
+      item: this.item,
+      createElementOptions: this.createElementOptions,
+      resolveRef: (ref) => this.resolveRef(ref),
+      warn: (warning) => {
+        this.warn(warning.code, warning.message, warning.details)
+      }
+    })
   }
 
   /**
-   * Applies one resolved runtime action on the media node.
+   * Applies one resolved runtime action on the media component.
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
@@ -87,34 +140,31 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     }
 
     const state = input.action as MediaState
-
-    applyStyleProps(this.rootNode, state.style, {
-      skipTransitionValues: true
+    this.applyVisualState(state, {
+      skipTransitionValues: true,
+      eventId: input.eventId,
+      eventSeq: input.eventSeq
     })
-    applyClassNameProps(this.rootNode, state.className)
-    applyAttrProps(this.rootNode, state.attr)
 
     if (state.src !== undefined && typeof state.src === 'string') {
-      this.setMediaSource(this.rootNode, state.src)
+      this.setMediaSource(this.getPart(MEDIA_REF), state.src)
     }
   }
 
   /**
-   * Starts playback from one target media position.
+   * Seeks media to one target position.
    */
   seekTo(mediaMs: number): void {
-    if (this.rootNode === null) {
-      return
-    }
-
-    this.setCurrentTimeMs(mediaMs)
+    const mediaNode = this.getPart(MEDIA_REF)
+    this.setCurrentTimeMs(mediaNode, mediaMs)
   }
 
   /**
    * Starts media playback without forcing a new seek.
    */
   play(): void {
-    if (this.rootNode === null) {
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
+    if (mediaNode === null) {
       return
     }
 
@@ -122,19 +172,19 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
       return
     }
 
-    const mediaNode = toMediaNodeLike(this.rootNode)
     this.playbackState = 'playing'
-    const playResult = mediaNode?.play?.()
+    const playResult = mediaNode.play?.()
     if (playResult && typeof playResult === 'object' && 'catch' in playResult && typeof playResult.catch === 'function') {
       void playResult.catch(() => undefined)
     }
   }
 
   /**
-   * Pauses playback without forcing a new seek.
+   * Pauses media playback without forcing a new seek.
    */
   pause(): void {
-    if (this.rootNode === null) {
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
+    if (mediaNode === null) {
       return
     }
 
@@ -142,9 +192,8 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
       return
     }
 
-    const mediaNode = toMediaNodeLike(this.rootNode)
     this.playbackState = 'paused'
-    mediaNode?.pause?.()
+    mediaNode.pause?.()
   }
 
   /**
@@ -159,7 +208,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * Returns the current media time in milliseconds.
    */
   getCurrentTimeMs(): number {
-    const mediaNode = this.rootNode === null ? null : toMediaNodeLike(this.rootNode)
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
     const currentTimeSeconds = typeof mediaNode?.currentTime === 'number' ? mediaNode.currentTime : 0
     return Math.max(0, currentTimeSeconds * 1000)
   }
@@ -168,7 +217,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * Returns the media duration in milliseconds when available.
    */
   getDurationMs(): number | null {
-    const mediaNode = this.rootNode === null ? null : toMediaNodeLike(this.rootNode)
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
     if (typeof mediaNode?.duration !== 'number' || !Number.isFinite(mediaNode.duration)) {
       return null
     }
@@ -180,7 +229,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * Returns true when the underlying media node is currently paused.
    */
   isPaused(): boolean {
-    const mediaNode = this.rootNode === null ? null : toMediaNodeLike(this.rootNode)
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
     if (typeof mediaNode?.paused === 'boolean') {
       return mediaNode.paused
     }
@@ -189,7 +238,29 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   }
 
   /**
-   * Applies one source url on the underlying video element.
+   * Applies root or internal ref visual props according to one optional author ref.
+   */
+  private applyVisualState(
+    state: MediaState,
+    styleOptions: { skipTransitionValues?: boolean; eventId?: string; eventSeq?: number } = {}
+  ): void {
+    if (state.ref !== undefined && state.ref !== 'root' && state.ref !== MEDIA_REF) {
+      this.warn('AUTHOR_COMPONENT_REF_UNKNOWN', 'Component ref is unknown', {
+        ref: state.ref,
+        eventId: styleOptions.eventId,
+        eventSeq: styleOptions.eventSeq
+      })
+      return
+    }
+
+    const targetNode = this.resolveRef(typeof state.ref === 'string' ? state.ref : undefined)
+    applyClassNameProps(targetNode, state.className)
+    applyStyleProps(targetNode, state.style, styleOptions)
+    applyAttrProps(targetNode, state.attr)
+  }
+
+  /**
+   * Applies one source url on the internal video element.
    */
   private setMediaSource(nodeRef: unknown, src: string): void {
     if (isDomElement(nodeRef) && typeof globalThis.HTMLMediaElement !== 'undefined' && nodeRef instanceof globalThis.HTMLMediaElement) {
@@ -206,8 +277,8 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   /**
    * Synchronizes the media current time when drift exceeds one small tolerance.
    */
-  private setCurrentTimeMs(mediaMs: number): void {
-    const mediaNode = this.rootNode === null ? null : toMediaNodeLike(this.rootNode)
+  private setCurrentTimeMs(nodeRef: unknown, mediaMs: number): void {
+    const mediaNode = toMediaNodeLike(nodeRef)
     if (mediaNode === null) {
       return
     }
@@ -220,5 +291,4 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
 
     mediaNode.currentTime = nextCurrentTimeSeconds
   }
-
 }

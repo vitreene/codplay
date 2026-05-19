@@ -63,6 +63,7 @@ export type EmitRuleEvent = {
  * Defines one runtime event declaration emitted from one user interaction.
  */
 export type EmitRuleAction = {
+  ref?: string
   event: EmitRuleEvent
   data?: Record<string, unknown>
 }
@@ -129,6 +130,7 @@ export type ItemModuleConfig = Record<string, unknown>
  * Defines one authored action payload resolved by Director dispatch.
  */
 export type ActionDoc = {
+  ref?: string
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>

@@ -19,6 +19,7 @@ export type AnimationTimerOptions = {
 export type AnimationAction = {
   target?: unknown
   targetId?: string
+  ref?: string
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>

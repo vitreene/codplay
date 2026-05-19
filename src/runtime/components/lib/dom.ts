@@ -1,4 +1,7 @@
-import type { RuntimeComponentClassInput } from '../types'
+import { RUNTIME_OBJECT_EVENT_HANDLERS } from '../../create-element'
+import type { CreateElementOptions } from '../../create-element'
+import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitSelf } from '../../types'
+import type { RuntimeComponentClassInput, RuntimeComponentWarningReporter } from '../types'
 import {
   appendDomChild,
   applyAttrPatch,
@@ -21,6 +24,10 @@ export type StylePropsOptions = {
 }
 export type ImageFitMode = 'wallpaper' | 'sprite'
 
+type RuntimeObjectEventNode = Record<string, unknown> & {
+  [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
+}
+
 /**
  * Checks whether one style entry uses one transition-like payload.
  */
@@ -33,6 +40,24 @@ function isTransitionStyleValue(rawValue: unknown): rawValue is { to: unknown } 
  */
 function resolveImageObjectFit(fitMode: ImageFitMode): 'cover' | 'contain' {
   return fitMode === 'sprite' ? 'contain' : 'cover'
+}
+
+/**
+ * Normalizes one authored emit declaration into one action list.
+ */
+function normalizeEmitRuleActions(rule: EmitRule): EmitRuleAction[] {
+  return Array.isArray(rule) ? rule : [rule]
+}
+
+/**
+ * Creates one runtime self payload exposed during perso emit.
+ */
+function createRuntimeEmitSelf(item: ItemDoc): RuntimeEmitSelf {
+  return {
+    id: item.id,
+    name: item.name,
+    storyId: item.storyId
+  }
 }
 
 /**
@@ -214,4 +239,81 @@ export function setImageAlt(nodeRef: unknown, alt: string): void {
  */
 export function setImageFitMode(nodeRef: unknown, fitMode: ImageFitMode): void {
   applyObjectFit(nodeRef, resolveImageObjectFit(fitMode))
+}
+
+/**
+ * Binds emit declarations on component refs using one handleEvent dispatcher per target.
+ */
+export function bindComponentEmitDeclarations(input: {
+  item: ItemDoc
+  createElementOptions: CreateElementOptions | undefined
+  resolveRef: (ref?: string) => unknown | null
+  warn: RuntimeComponentWarningReporter
+}): void {
+  const emitRuntimeEvent = input.createElementOptions?.emitRuntimeEvent
+  if (!emitRuntimeEvent || !input.item.emit) {
+    return
+  }
+
+  const handlersByTarget = new Map<unknown, Map<string, EmitRuleAction[]>>()
+
+  for (const [eventName, rule] of Object.entries(input.item.emit)) {
+    for (const action of normalizeEmitRuleActions(rule)) {
+      const targetNode = input.resolveRef(action.ref)
+      if (targetNode === null) {
+        input.warn({
+          code: 'AUTHOR_COMPONENT_REF_UNKNOWN',
+          message: 'Component ref is unknown',
+          details: {
+            persoId: input.item.id,
+            eventName,
+            ref: action.ref
+          }
+        })
+        continue
+      }
+
+      const eventRulesByName = handlersByTarget.get(targetNode) ?? new Map<string, EmitRuleAction[]>()
+      const existingActions = eventRulesByName.get(eventName) ?? []
+      existingActions.push(action)
+      eventRulesByName.set(eventName, existingActions)
+      handlersByTarget.set(targetNode, eventRulesByName)
+    }
+  }
+
+  const self = createRuntimeEmitSelf(input.item)
+
+  for (const [targetNode, eventRulesByName] of handlersByTarget) {
+    const eventHandler = {
+      handleEvent(event: Event): void {
+        const rules = eventRulesByName.get(event.type) ?? []
+        for (const action of rules) {
+          const data = action.data === undefined ? { self } : { ...action.data, self }
+          emitRuntimeEvent({
+            name: action.event.name,
+            data,
+            cascade: action.event.cascade,
+            scopeStoryId: action.event.cascade === true ? undefined : input.item.storyId
+          })
+        }
+      }
+    }
+
+    for (const eventName of eventRulesByName.keys()) {
+      if (isDomElement(targetNode)) {
+        targetNode.addEventListener(eventName, eventHandler)
+        continue
+      }
+
+      if (typeof targetNode === 'object' && targetNode !== null) {
+        const runtimeNode = targetNode as RuntimeObjectEventNode
+        runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] = {
+          ...(runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] ?? {}),
+          [eventName]: () => {
+            eventHandler.handleEvent({ type: eventName } as Event)
+          }
+        }
+      }
+    }
+  }
 }

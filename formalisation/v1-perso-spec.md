@@ -33,6 +33,7 @@ export type PersoActions<Id extends string, T extends PersoType> =
   Record<Id, null>
 
 export type PersoEmitAction = {
+  ref?: string
   event: { name: string }
   data?: Record<string, unknown>
 }
@@ -66,6 +67,7 @@ type BroadcastAction = {
 }
 
 type PersoActionCommon = {
+  ref?: string
   broadcast?: BroadcastAction
 }
 
@@ -126,6 +128,9 @@ type PersoTransitionTiming = {
 - `actions` contient obligatoirement l'auto-reference `actions[id] = null`.
 - l'auto-reference est presente en sortie de normalisation.
 - quand un event cible directement un perso, le ciblage se fait par `id`, jamais par `name`.
+- une action peut cibler une reference interne du composant via `ref`.
+- `ref` designe une reference interne exposee par le composant.
+- si `ref` est absent, l'action cible implicitement le `root` du composant.
 - quand une action `style` decrit une transition animee, elle peut transporter les options de timing compatibles runtime: `duration`, `delay`, `loopDelay`, `reversed`, `alternate`, `loop`, `ease`, `stagger`.
 - ces options sont purement descriptives et ne changent pas la semantique de portee ou de propagation des events.
 - `ignoreDuration: true` permet d'indiquer explicitement qu'une transition ne contribue pas au calcul de duree de sequence.
@@ -178,6 +183,9 @@ Exemple canonique:
 Regles:
 
 - la cle principale est le nom d'event utilisateur (`click`, `input`, `mouseenter`, ...).
+- cette cle peut aussi designer un event natif du composant ou d'une reference interne (`ended`, `loadedmetadata`, ...).
+- `emit.*.ref` permet d'indiquer sur quelle reference interne du composant le listener doit etre attache.
+- si `emit.*.ref` est absent, le listener est attache au `root` du composant.
 - chaque entree decrit l'event cree via `event.name` et `data`.
 - la sortie runtime ajoute une origine normalisee via `origin`.
 - au moment de l'emission, un contexte minimal `self` est disponible.
@@ -219,6 +227,17 @@ emit: {
 }
 ```
 
+Exemple avec reference interne de composant:
+
+```ts
+emit: {
+  ended: {
+    ref: "media",
+    event: { name: "sequence:end" }
+  }
+}
+```
+
 Sortie runtime correspondante:
 
 ```json
@@ -251,6 +270,7 @@ Sortie runtime correspondante:
 - `self.id`, `self.name` et `self.storyId` sont disponibles lors d'un `emit` perso.
 - `master` est une propriete `initial` de `Perso`.
 - l'unicite de master actif est garantie par policy runtime.
+- `ref` est la notion unifiee de ciblage interne auteur pour `actions` et `emit`.
 
 ## Exemple action master
 

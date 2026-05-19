@@ -100,7 +100,7 @@ describe('V1 - reference scenes', () => {
   it('loads S1 canari scene through the current player path', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -118,7 +118,7 @@ describe('V1 - reference scenes', () => {
   it('loads S2 reference scene with deterministic list child mounting', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -133,7 +133,7 @@ describe('V1 - reference scenes', () => {
   it('starts S2 reference scene only when play triggers onStart', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -154,7 +154,7 @@ describe('V1 - reference scenes', () => {
   it('loads S3 robustness scene and keeps transfer-ready list state', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -172,7 +172,7 @@ describe('V1 - reference scenes', () => {
   it('loads S4 quiz reference scene with persistent decor and layered content mounting', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -205,7 +205,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -234,7 +234,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -266,7 +266,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -298,7 +298,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
