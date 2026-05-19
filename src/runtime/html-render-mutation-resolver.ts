@@ -94,7 +94,8 @@ function hasNonHtmlMutation(action: RuntimeResolvedMutation): boolean {
     action.action.content !== undefined ||
     action.action.src !== undefined ||
     action.action.alt !== undefined ||
-    action.action.fitMode !== undefined
+    action.action.fitMode !== undefined ||
+    action.action.broadcast !== undefined
   )
 }
 

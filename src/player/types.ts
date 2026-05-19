@@ -84,6 +84,7 @@ export type StrictSceneDoc = {
   state?: Record<string, unknown> | undefined
   init?: (scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) => void
   onStart?: (scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) => void
+  onSequenceEnd?: (scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) => void
   tracks: Record<string, unknown>
 }
 

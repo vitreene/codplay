@@ -45,6 +45,8 @@ type SceneDef = {
   listen: ListenRule[]
   state?: Record<string, unknown> | undefined
   init: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
+  onStart?: (...args: unknown[]) => void
+  onSequenceEnd?: (...args: unknown[]) => void
   tracks: Record<string, unknown>
 }
 ```
@@ -144,7 +146,21 @@ Note de contexte:
 - ces noms lifecycle sont reserves par convention pour les events systeme Scene.
 - les events de sequence suivent les conventions de nommage deja etablies et ne sont jamais listes en dur dans cette spec.
 
-9. Temps
+9. Fin de sequence implicite et fin de scene auteur
+
+- `scene:end` est un event auteur explicite.
+- `scene:end` exprime une fin metier et n'implique pas necessairement l'arret des events restants.
+- une scene peut donc emettre `scene:end` puis continuer avec des stories de fin, des attentes d'interaction ou d'autres events techniques.
+- la fin technique de la sequence jouee est un signal distinct, implicite, note ici `sequence:end`.
+- `sequence:end` n'est pas un event auteur a produire manuellement.
+- `sequence:end` est detecte par le runtime quand la sequence deterministe en cours atteint sa fin effective.
+- a `sequence:end`, le runtime applique un cleanup implicite des actions en cours qui ne doivent pas survivre a la fin technique de lecture.
+- ce cleanup implicite concerne notamment l'arret des medias encore actifs.
+- `Scene.onSequenceEnd(scene, options)` permet a l'application hote d'attacher une logique sur cette fin technique.
+- `onSequenceEnd` est execute apres le cleanup implicite du runtime.
+- `onSequenceEnd` ne sert pas a monter ou scheduler une story de fin de cette meme sequence; cette logique releve d'un event auteur comme `scene:end`.
+
+10. Temps
 
 - `tracks` porte le registre scene-level de reference des tracks runtime.
 - ce registre est construit une seule fois a `scene.init`.
@@ -166,7 +182,7 @@ Note de contexte:
 - plusieurs events peuvent exister sur un meme track au meme instant.
 - a temps egal sur un meme track, ils s'executent selon leur ordre d'insertion.
 
-10. Scope V1
+11. Scope V1
 
 - `scenario` est hors perimetre de definition V1 et reste non specifie a ce stade.
 - le conteneur de rendu (mount target DOM) est hors `Scene` et fourni a l'instanciation du Player.

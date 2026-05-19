@@ -19,6 +19,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           "quiz-decor-circle-a",
           "quiz-decor-circle-b",
           "quiz-decor-circle-c",
+          "quiz-decor-media",
         ],
         initial: undefined,
         persos: [
@@ -180,6 +181,35 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
           },
+          {
+            id: "quiz-decor-media",
+            type: "media",
+            initial: {
+              tag: "video",
+              src: "/assets/1_7b_e.mp3",
+              master: false,
+              move: {
+                parentId: "quiz-decor-layer",
+                mode: "append",
+              },
+              style: {
+                position: "absolute",
+                left: "0",
+                top: "0",
+                width: "1px",
+                height: "1px",
+                opacity: 0,
+                pointerEvents: "none",
+              },
+            },
+            actions: {
+              "quiz:decor:media:start": {
+                broadcast: {
+                  type: "START",
+                },
+              },
+            },
+          },
         ],
         straps: undefined,
         listen: [],
@@ -187,6 +217,10 @@ export function createS4QuizReferenceScene(): SceneDoc {
           {
             name: "quiz:decor:drift",
             startAt: 0,
+          },
+          {
+            name: "quiz:decor:media:start",
+            startAt: 1000,
           },
         ],
       },

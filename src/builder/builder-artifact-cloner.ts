@@ -55,6 +55,7 @@ export class BuilderArtifactCloner {
       state: this.cloneData(scene.state),
       init: scene.init,
       onStart: scene.onStart,
+      onSequenceEnd: scene.onSequenceEnd,
       tracks: this.cloneData(scene.tracks)
     }
   }

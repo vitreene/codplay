@@ -1,7 +1,17 @@
 /**
  * Defines supported built-in item types while allowing custom types.
  */
-export type ItemType = 'text' | 'img' | 'list' | string
+export type ItemType = 'text' | 'img' | 'media' | 'list' | string
+
+export type BroadcastAction = {
+  type: 'START' | 'PAUSE' | 'STOP'
+  startAt?: number
+  transition?: {
+    from?: Record<string, unknown>
+    to?: Record<string, unknown>
+    duration?: number
+  }
+}
 
 /**
  * Defines one move mode accepted by the component runtime.
@@ -88,6 +98,7 @@ export type ItemState = {
   tag?: string
   className?: string
   move?: MoveValue
+  master?: boolean
   config?: ListPlacementConfig
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
@@ -126,6 +137,7 @@ export type ActionDoc = {
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  broadcast?: BroadcastAction
   cmd?: ModuleCommandDoc
   payload?: ActionPayloadDoc
   targetId?: string

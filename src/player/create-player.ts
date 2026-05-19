@@ -3,6 +3,8 @@ import type { TimelineEvent } from '../core/events/types'
 import { TimeTicker } from '../core/time/ticker'
 import { DirectorCore } from '../director/create-director'
 import { RendererFacade } from '../renderer/create-renderer'
+import { createMediaSyncModule } from '../runtime/modules/media-sync'
+import type { MediaSyncRuntimeComponent } from '../runtime/modules/media-sync'
 import {
   createRuntimeTraceStore,
   type RuntimeTraceRow,
@@ -10,6 +12,7 @@ import {
 } from '../runtime/trace-store'
 import type { RuntimeComponentClass } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
+import type { RuntimePersos } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
@@ -73,6 +76,30 @@ const PLAYER_RUNTIME_ERROR_MESSAGE = {
 } as const
 
 /**
+ * Checks whether one runtime component exposes the media sync bridge contract.
+ */
+function isMediaSyncRuntimeComponent(value: unknown): value is MediaSyncRuntimeComponent {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'seekTo' in value &&
+    typeof value.seekTo === 'function' &&
+    'play' in value &&
+    typeof value.play === 'function' &&
+    'pause' in value &&
+    typeof value.pause === 'function' &&
+    'stopAt' in value &&
+    typeof value.stopAt === 'function' &&
+    'getCurrentTimeMs' in value &&
+    typeof value.getCurrentTimeMs === 'function' &&
+    'getDurationMs' in value &&
+    typeof value.getDurationMs === 'function' &&
+    'isPaused' in value &&
+    typeof value.isPaused === 'function'
+  )
+}
+
+/**
  * Implements one player facade with lifecycle commands and subscriptions.
  */
 export class PlayerFacade implements PlayerApi {
@@ -81,6 +108,16 @@ export class PlayerFacade implements PlayerApi {
   private readonly director = new DirectorCore()
   private readonly renderer: RendererFacade
   private readonly trackManager = new TrackManager()
+  private readonly mediaSync = createMediaSyncModule({
+    getComponentById: (runtimeItemId) => {
+      const component = this.renderer.getRuntimeRegistry().getComponentById(runtimeItemId)
+      if (isMediaSyncRuntimeComponent(component)) {
+        return component
+      }
+
+      return null
+    }
+  })
 
   private status: PlayerStatus = PLAYER_STATUS.idle
   private scene: StrictSceneDoc | null = null
@@ -269,14 +306,33 @@ export class PlayerFacade implements PlayerApi {
    * Resolves current timeline cursor using playback clock when active.
    */
   private resolveCurrentTimelineMs(): number {
-    if (this.playbackStartMs === null) {
-      return Math.min(this.timelineMs, this.timelineEndMs)
+    const fallbackTimelineMs =
+      this.playbackStartMs === null
+        ? Math.min(this.timelineMs, this.timelineEndMs)
+        : Math.min(
+            this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs),
+            this.timelineEndMs
+          )
+
+    if (this.status !== PLAYER_STATUS.playing) {
+      return fallbackTimelineMs
     }
 
-    return Math.min(
-      this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs),
-      this.timelineEndMs
-    )
+    return Math.min(this.mediaSync.resolveTimelineMsFromActiveMaster(fallbackTimelineMs), this.timelineEndMs)
+  }
+
+  /**
+   * Synchronizes all registered media components to one target timeline.
+   */
+  private syncMediaTimeline(timelineMs: number): void {
+    this.mediaSync.syncTimeline(timelineMs, this.status === PLAYER_STATUS.playing ? 'playing' : 'paused')
+  }
+
+  /**
+   * Loads one runtime media registry from mounted runtime persos.
+   */
+  private loadMediaRuntime(runtimePersos: RuntimePersos): void {
+    this.mediaSync.loadRuntimePersos(runtimePersos)
   }
 
   /**
@@ -358,6 +414,7 @@ export class PlayerFacade implements PlayerApi {
     this.stopPlaybackLoop()
     this.director.destroy()
     this.renderer.destroy()
+    this.mediaSync.reset()
     this.trackManager.load({ tracks: {} })
     this.scene = null
     this.timelineMs = 0
@@ -457,6 +514,7 @@ export class PlayerFacade implements PlayerApi {
    */
   private applyMountedRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
     this.director.load(runtimePlan.timelinePlan)
+    this.loadMediaRuntime(runtimePlan.runtimePersos)
     this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan)
   }
 
@@ -578,6 +636,17 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Runs the scene-level sequence-end hook after implicit runtime cleanup.
+   */
+  private runSequenceEndHook(): void {
+    if (this.scene === null) {
+      return
+    }
+
+    this.scene.onSequenceEnd?.(this.scene, this.createLifecycleOptions())
+  }
+
+  /**
    * Applies all timeline events due at or before the provided timeline cursor.
    */
   private runDueTimelineEvents(timelineMs: number): void {
@@ -598,6 +667,7 @@ export class PlayerFacade implements PlayerApi {
     const timelineMs = this.resolveCurrentTimelineMs()
     this.timelineMs = timelineMs
     this.runDueTimelineEvents(timelineMs)
+    this.syncMediaTimeline(timelineMs)
     this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs())
     this.completePlaybackIfReachedEnd()
   }
@@ -656,6 +726,8 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.setStatus(PLAYER_STATUS.paused)
+    this.mediaSync.handleSequenceEnd(this.timelineMs)
+    this.runSequenceEndHook()
     this.emitTrace('player:play:ended', RUNTIME_TRACE_STATUS.applied, {
       timelineMs: this.timelineMs
     })
@@ -708,6 +780,7 @@ export class PlayerFacade implements PlayerApi {
 
     const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
+      this.mediaSync.applyResolvedActions(event.ms, directorResult.resolvedActions)
       return
     }
 
@@ -721,6 +794,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const tickResult = this.renderer.tick(event.ms)
+    this.mediaSync.applyResolvedActions(event.ms, directorResult.resolvedActions)
     this.emitTrace('player:event:applied', RUNTIME_TRACE_STATUS.applied, {
       eventId: event.id,
       eventName: event.name,
@@ -852,6 +926,7 @@ export class PlayerFacade implements PlayerApi {
     const currentTimelineMs = this.resolveCurrentTimelineMs()
     this.timelineMs = currentTimelineMs
     this.runDueTimelineEvents(currentTimelineMs)
+    this.syncMediaTimeline(currentTimelineMs)
     this.completePlaybackIfReachedEnd()
     if (this.playbackStartMs !== null) {
       this.startPlaybackLoop()
@@ -891,6 +966,7 @@ export class PlayerFacade implements PlayerApi {
     this.waitingForExternalEvent = false
     this.stopPlaybackLoop()
     this.setStatus(PLAYER_STATUS.paused)
+    this.syncMediaTimeline(this.timelineMs)
     this.emitTrace('player:pause', RUNTIME_TRACE_STATUS.applied)
     return { ok: true }
   }
@@ -945,6 +1021,8 @@ export class PlayerFacade implements PlayerApi {
 
       this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
     }
+
+    this.syncMediaTimeline(timelineEvent.ms)
 
     if (!shouldPersistEvent || this.timelineEndMs !== previousTimelineEndMs || this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null) {
       this.emitStateSnapshot()
@@ -1061,6 +1139,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs })
     this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId)
+    this.syncMediaTimeline(this.timelineMs)
 
     this.director.pause()
     const rendererPauseResult = this.pauseRenderer('seek-replay')
@@ -1190,6 +1269,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.setStatus(previousStatus)
+    this.syncMediaTimeline(this.timelineMs)
     const rendererState = this.renderer.getState()
     this.emitTrace('player:rewind:done', RUNTIME_TRACE_STATUS.applied, {
       targetTimelineMs: 0,
@@ -1299,6 +1379,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs })
     this.setStatus(previousStatus)
+    this.syncMediaTimeline(this.timelineMs)
     const rendererState = this.renderer.getState()
 
     this.emitTrace('player:rebuild:done', RUNTIME_TRACE_STATUS.applied, {

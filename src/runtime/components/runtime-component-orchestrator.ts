@@ -7,6 +7,7 @@ import type { RenderMutationResolver } from '../render-mutation-resolver'
 import { isDomNode } from './dom-component-adapter'
 import { ImageComponent } from './image-component'
 import { ListComponent } from './list-component'
+import { MediaComponent } from './media-component'
 import { TextComponent } from './text-component'
 import type {
   RuntimeComponent,
@@ -22,6 +23,7 @@ import type {
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   text: TextComponent,
   img: ImageComponent,
+  media: MediaComponent,
   list: ListComponent
 }
 

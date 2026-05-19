@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { PlayerFacade } from '../../src/player/create-player'
@@ -20,6 +20,12 @@ type RuntimeNodeFixture = {
   attributes: Record<string, unknown>
   className?: string
   textContent?: string
+  src?: string
+  currentTime?: number
+  duration?: number
+  paused?: boolean
+  play?: Mock
+  pause?: Mock
   [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
 
@@ -69,18 +75,32 @@ function createApplyingAnimeImplementation() {
  * Creates one plain runtime node fixture for one authored perso.
  */
 function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
-  return {
+  const node: RuntimeNodeFixture = {
     tagName,
     style: {},
     attributes: {}
   }
+
+  if (tagName === 'VIDEO') {
+    node.currentTime = 0
+    node.duration = 12
+    node.paused = true
+    node.play = vi.fn(() => {
+      node.paused = false
+    })
+    node.pause = vi.fn(() => {
+      node.paused = true
+    })
+  }
+
+  return node
 }
 
 describe('V1 - reference scenes', () => {
   it('loads S1 canari scene through the current player path', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -98,7 +118,7 @@ describe('V1 - reference scenes', () => {
   it('loads S2 reference scene with deterministic list child mounting', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -113,7 +133,7 @@ describe('V1 - reference scenes', () => {
   it('starts S2 reference scene only when play triggers onStart', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -134,7 +154,7 @@ describe('V1 - reference scenes', () => {
   it('loads S3 robustness scene and keeps transfer-ready list state', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -152,7 +172,7 @@ describe('V1 - reference scenes', () => {
   it('loads S4 quiz reference scene with persistent decor and layered content mounting', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -165,7 +185,8 @@ describe('V1 - reference scenes', () => {
     expect(registry.getListById('quiz-decor-layer')?.getChildrenSnapshot()).toEqual([
       'quiz-decor-circle-a',
       'quiz-decor-circle-b',
-      'quiz-decor-circle-c'
+      'quiz-decor-circle-c',
+      'quiz-decor-media'
     ])
     expect(registry.getListById('quiz-intro-panel')?.getChildrenSnapshot()).toEqual(['quiz-intro-title'])
     expect(registry.getListById('quiz-question-panel')?.getChildrenSnapshot()).toEqual([
@@ -184,7 +205,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -213,7 +234,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -245,7 +266,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -277,7 +298,7 @@ describe('V1 - reference scenes', () => {
     const player = new PlayerFacade({
       animationAdapter,
       createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'media' ? 'VIDEO' : perso.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
 
@@ -298,4 +319,5 @@ describe('V1 - reference scenes', () => {
     expect((player.getRuntimeRegistry().getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: 100 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: 100 })
   })
+
 })
