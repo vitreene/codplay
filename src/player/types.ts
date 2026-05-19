@@ -95,6 +95,7 @@ export type PlayerSceneInput = StrictSceneDoc | SceneDef
 export type PlayerStateSnapshot = {
   status: PlayerStatus
   initialized: boolean
+  sequenceEnded: boolean
   sceneId?: string
   timelineMs: number
   timelineEndMs: number

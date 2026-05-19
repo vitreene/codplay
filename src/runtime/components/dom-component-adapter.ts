@@ -108,7 +108,8 @@ function emitDeclaredRuntimeEvents(
       name: action.event.name,
       data,
       cascade: action.event.cascade,
-      scopeStoryId: action.event.cascade === true ? undefined : item.storyId
+      scopeStoryId: action.event.cascade === true ? undefined : item.storyId,
+      delayMs: typeof action.delayMs === 'number' ? Math.max(0, action.delayMs) : undefined
     })
   }
 }
@@ -197,6 +198,18 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
       nodeRef.alt = ''
     }
 
+    if (
+      typeof globalThis.HTMLMediaElement !== 'undefined' &&
+      nodeRef instanceof globalThis.HTMLMediaElement
+    ) {
+      nodeRef.pause()
+      try {
+        nodeRef.currentTime = 0
+      } catch {
+        return
+      }
+    }
+
     return
   }
 
@@ -212,6 +225,14 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
   mutableNode.alt = undefined
   mutableNode.style = {}
   mutableNode.attributes = {}
+
+  if ('currentTime' in mutableNode) {
+    mutableNode.currentTime = 0
+  }
+
+  if ('paused' in mutableNode) {
+    mutableNode.paused = true
+  }
 
   if ('parentId' in mutableNode) {
     delete mutableNode.parentId

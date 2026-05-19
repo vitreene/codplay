@@ -251,7 +251,8 @@ function emitDeclaredRuntimeEvents(
       name: action.event.name,
       data,
       cascade: action.event.cascade,
-      scopeStoryId: action.event.cascade === true ? undefined : item.storyId
+      scopeStoryId: action.event.cascade === true ? undefined : item.storyId,
+      delayMs: typeof action.delayMs === 'number' ? Math.max(0, action.delayMs) : undefined
     })
   }
 }

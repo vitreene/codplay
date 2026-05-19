@@ -59,12 +59,13 @@ export function createSequenceCommandPanel(input: {
 	 * Synchronizes all command controls from one player state snapshot.
 	 */
 	function syncControlState(state: PlayerStateSnapshot = input.player.getState()): void {
-		const canPlay = state.status === 'ready' || state.status === 'paused'
-		const canPause = state.status === 'playing'
+		const canPlay = state.sequenceEnded || state.status === 'ready' || state.status === 'paused'
+		const canPause = !state.sequenceEnded && state.status === 'playing'
 		const canRewind =
-			state.initialized && (state.status === 'ready' || state.status === 'paused' || state.status === 'playing')
+			!state.sequenceEnded && state.initialized && (state.status === 'ready' || state.status === 'paused' || state.status === 'playing')
 		const canSeek =
 			seekCommand !== null &&
+			!state.sequenceEnded &&
 			state.initialized &&
 			(state.status === 'paused' ||
 				state.status === 'playing' ||

@@ -605,7 +605,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
     expect(player.getState().runtimeRevision).toBe(runtimeRevisionBefore)
   })
 
-  it('L13-T9 paused user emit flushes one visible render frame immediately', async () => {
+  it('L13-T9 paused user emit is rejected explicitly', async () => {
     const pendingTransitions: TransitionRequest[] = []
 
     const animationAdapter: AnimationAdapter = {
@@ -652,8 +652,13 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
     await player.play()
     await player.pause()
 
-    expect(await player.emit({ name: 'box:move' })).toEqual({ ok: true })
+    expect(await player.emit({ name: 'box:move' })).toMatchObject({
+      ok: false,
+      error: {
+        code: 'PLAYER_USER_EVENTS_PAUSED'
+      }
+    })
 
-    expect(runtimeNode.style.x).toBe(100)
+    expect(runtimeNode.style.x).toBeUndefined()
   })
 })

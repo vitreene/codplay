@@ -89,6 +89,33 @@ class MediaSyncModuleInstance implements MediaSyncModule {
     this.nextActivationOrder = 1
   }
 
+  pauseActivePlayback(timelineMs: number): void {
+    for (const mediaState of this.mediaById.values()) {
+      if (mediaState.logicalState === 'idle' || mediaState.logicalState === 'stopped') {
+        continue
+      }
+
+      mediaState.frozenMediaMs = this.resolveExpectedMediaMs(mediaState, timelineMs)
+      mediaState.logicalState = 'paused'
+      mediaState.needsResync = true
+      this.context.getComponentById(mediaState.runtimeItemId)?.pause()
+    }
+  }
+
+  resetPlayback(): void {
+    for (const mediaState of this.mediaById.values()) {
+      this.context.getComponentById(mediaState.runtimeItemId)?.stopAt(0)
+      mediaState.logicalState = 'idle'
+      mediaState.sequenceStartMs = null
+      mediaState.sourceStartMs = 0
+      mediaState.frozenMediaMs = 0
+      mediaState.activationOrder = 0
+      mediaState.needsResync = false
+    }
+
+    this.nextActivationOrder = 1
+  }
+
   applyResolvedActions(timelineMs: number, resolvedActions: AnimationResolvedAction[]): void {
     for (const resolvedAction of resolvedActions) {
       const targetRuntimeItemId = resolvedAction.action.targetId ?? resolvedAction.listenerId

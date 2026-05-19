@@ -79,12 +79,6 @@ export function createS2ReferenceScene(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
-    onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
-    },
     tracks: {}
   }
 }

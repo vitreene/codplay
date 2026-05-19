@@ -242,7 +242,7 @@ describe('Lot 16 - playback timeline minimal', () => {
     vi.useRealTimers()
   })
 
-  it('L16-T3 playback auto-stops when timeline reaches deterministic end', async () => {
+  it('L16-T3 playback stays active after deterministic end until sequence:end', async () => {
     vi.useFakeTimers()
 
     const runtimeNode = {
@@ -308,13 +308,13 @@ describe('Lot 16 - playback timeline minimal', () => {
     ;(player as unknown as { runPlaybackTick: () => void }).runPlaybackTick()
 
     const stateAfterEnd = player.getState()
-    expect(stateAfterEnd.status).toBe('paused')
-    expect(stateAfterEnd.timelineMs).toBe(120)
+    expect(stateAfterEnd.status).toBe('playing')
+    expect(stateAfterEnd.timelineMs).toBeGreaterThanOrEqual(1000)
 
     await vi.advanceTimersByTimeAsync(1000)
     ;(player as unknown as { runPlaybackTick: () => void }).runPlaybackTick()
     const stateAfterWait = player.getState()
-    expect(stateAfterWait.timelineMs).toBe(120)
+    expect(stateAfterWait.timelineMs).toBeGreaterThan(stateAfterEnd.timelineMs)
 
     vi.useRealTimers()
   })

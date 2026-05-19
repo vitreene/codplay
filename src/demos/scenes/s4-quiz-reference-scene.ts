@@ -418,12 +418,21 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
             emit: {
-              click: {
-                event: {
-                  name: "quiz:answer:yes",
-                  cascade: true,
+              click: [
+                {
+                  event: {
+                    name: "quiz:answer:yes",
+                    cascade: true,
+                  },
                 },
-              },
+                {
+                  event: {
+                    name: "sequence:end",
+                    cascade: true,
+                  },
+                  delayMs: 1000,
+                },
+              ],
             },
             actions: {},
           },
@@ -450,12 +459,21 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
             emit: {
-              click: {
-                event: {
-                  name: "quiz:answer:no",
-                  cascade: true,
+              click: [
+                {
+                  event: {
+                    name: "quiz:answer:no",
+                    cascade: true,
+                  },
                 },
-              },
+                {
+                  event: {
+                    name: "sequence:end",
+                    cascade: true,
+                  },
+                  delayMs: 1000,
+                },
+              ],
             },
             actions: {},
           },
@@ -527,12 +545,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
         ],
         straps: undefined,
         listen: [],
-        eventimes: [
-          {
-            name: "quiz:result:correct:show",
-            startAt: 0,
-          },
-        ],
       },
       "s4-quiz-failure-story": {
         id: "s4-quiz-failure-story",
@@ -592,25 +604,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         ],
         straps: undefined,
         listen: [],
-        eventimes: [
-          {
-            name: "quiz:result:wrong:show",
-            startAt: 0,
-          },
-        ],
       },
-    },
-    init(_scene, options) {
-      options.mount("s4-quiz-decor-story");
-      options.mount("s4-quiz-intro-story");
-      options.mount("s4-quiz-question-story");
-      options.mount("s4-quiz-success-story");
-      options.mount("s4-quiz-failure-story");
-    },
-    onStart(_scene, options) {
-      options.schedule("s4-quiz-decor-story");
-      options.schedule("s4-quiz-intro-story");
-      options.schedule("s4-quiz-question-story");
     },
     tracks: {},
   };

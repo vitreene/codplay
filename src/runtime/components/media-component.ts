@@ -50,6 +50,13 @@ function toMediaNodeLike(nodeRef: unknown): MediaNodeLike | null {
 }
 
 /**
+ * Returns true when one media node is currently paused.
+ */
+function isMediaNodePaused(mediaNode: MediaNodeLike | null): boolean {
+  return mediaNode?.paused === true
+}
+
+/**
  * Creates or reuses one internal video node attached to the wrapper root.
  */
 function ensureMediaNode(rootNode: unknown, currentNode: unknown | null): unknown {
@@ -168,7 +175,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
       return
     }
 
-    if (this.playbackState === 'playing') {
+    if (this.playbackState === 'playing' && !isMediaNodePaused(mediaNode)) {
       return
     }
 
@@ -188,7 +195,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
       return
     }
 
-    if (this.playbackState === 'paused') {
+    if (this.playbackState === 'paused' && isMediaNodePaused(mediaNode)) {
       return
     }
 
@@ -264,6 +271,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    */
   private setMediaSource(nodeRef: unknown, src: string): void {
     if (isDomElement(nodeRef) && typeof globalThis.HTMLMediaElement !== 'undefined' && nodeRef instanceof globalThis.HTMLMediaElement) {
+      nodeRef.pause()
       nodeRef.src = src
       return
     }

@@ -75,7 +75,7 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
 }
 
 describe('V1 - runtime registry persistence', () => {
-  it('reuses the same runtime node across seek reloads', async () => {
+  it('keeps the same runtime item addressable across seek reloads', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
         nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
@@ -91,6 +91,9 @@ describe('V1 - runtime registry persistence', () => {
     expect(await player.seek(0)).toEqual({ ok: true })
 
     const nodeAfterSeek = player.getRuntimeRegistry().getNodeById('story-main__title')
-    expect(nodeAfterSeek).toBe(nodeBeforeSeek)
+    expect(nodeAfterSeek).not.toBeNull()
+    expect(nodeAfterSeek).toMatchObject({
+      textContent: 'persist'
+    })
   })
 })

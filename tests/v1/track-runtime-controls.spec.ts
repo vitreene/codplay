@@ -229,6 +229,7 @@ describe('V1 - track runtime controls', () => {
     expect(await player.rewind()).toEqual({ ok: true })
     expect(await player.emit({
       name: 'track:toggle',
+      source: 'system',
       payload: {
         trackIds: ['fr', 'en', 'missing']
       }

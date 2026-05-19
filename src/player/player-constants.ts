@@ -8,3 +8,10 @@ export const PLAYER_STATUS = {
   rewinding: 'rewinding',
   error: 'error'
 } as const
+
+export const PLAYER_SEQUENCE_EVENT = {
+  sceneReady: 'scene:ready',
+  sceneStart: 'scene:start',
+  sceneEnd: 'scene:end',
+  sequenceEnd: 'sequence:end'
+} as const

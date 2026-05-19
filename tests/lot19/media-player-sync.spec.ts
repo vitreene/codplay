@@ -356,6 +356,28 @@ describe('Lot 19 - media player sync', () => {
     expect(mediaComponent?.isPaused()).toBe(true)
   })
 
+  it('pauses active media before seek runtime reload', async () => {
+    const player = new PlayerFacade({
+      createElementOptions: {
+        nodeFactory: (item) =>
+          createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    expect(await player.init(createMediaSyncScene())).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+    expect(await player.seek(2500)).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+
+    const mediaRootBeforeSeek = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
+    const mediaNodeBeforeSeek = mediaRootBeforeSeek?.mediaNode
+    expect(mediaNodeBeforeSeek?.paused).toBe(false)
+
+    expect(await player.seek(6000)).toEqual({ ok: true })
+
+    expect(mediaNodeBeforeSeek?.paused).toBe(true)
+  })
+
   it('keeps one ended media stopped when sequence pause/play toggles later', async () => {
     const player = new PlayerFacade({
       createElementOptions: {
@@ -400,6 +422,32 @@ describe('Lot 19 - media player sync', () => {
     }
 
     expect(player.getState().timelineMs).toBeCloseTo(6800, 0)
+  })
+
+  it('rewind stops active media and resets currentTime before replay', async () => {
+    const player = new PlayerFacade({
+      createElementOptions: {
+        nodeFactory: (item) =>
+          createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    expect(await player.init(createMediaSyncScene())).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+    expect(await player.seek(6000)).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+
+    const mediaRootBeforeRewind = player.getRuntimeRegistry().getNodeById('media-sync-item') as RuntimeNodeFixture | null
+    const mediaNodeBeforeRewind = mediaRootBeforeRewind?.mediaNode
+    const mediaComponentBeforeRewind = player.getRuntimeRegistry().getComponentById('media-sync-item') as MediaComponentApi | null
+    expect(mediaComponentBeforeRewind?.getCurrentTimeMs()).toBeCloseTo(8000, 0)
+
+    expect(await player.rewind()).toEqual({ ok: true })
+
+    expect(mediaNodeBeforeRewind?.paused).toBe(true)
+    const mediaComponentAfterRewind = player.getRuntimeRegistry().getComponentById('media-sync-item') as MediaComponentApi | null
+    expect(mediaComponentAfterRewind?.getCurrentTimeMs()).toBe(0)
+    expect(mediaComponentAfterRewind?.isPaused()).toBe(true)
   })
 
   it('stops active media on sequence end cleanup', () => {

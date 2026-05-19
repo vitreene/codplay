@@ -66,6 +66,7 @@ export type EmitRuleAction = {
   ref?: string
   event: EmitRuleEvent
   data?: Record<string, unknown>
+  delayMs?: number
 }
 
 /**
@@ -84,6 +85,7 @@ export type RuntimeEmitEvent = {
   data?: Record<string, unknown>
   cascade?: boolean
   scopeStoryId?: string
+  delayMs?: number
 }
 
 /**
