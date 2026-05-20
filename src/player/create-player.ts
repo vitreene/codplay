@@ -46,6 +46,7 @@ export type CreatePlayerOptions = {
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
   onRuntimeEmit?: (event: PlayerPublicEventInput) => void
+  onTimelineEvent?: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>
 }
 
 const DEFAULT_RUNTIME_POLICY: PlayerRuntimePolicy = {
@@ -133,38 +134,63 @@ export class PlayerFacade implements PlayerApi {
   private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 })
   private readonly traceListeners = new Set<PlayerTraceListener>()
   private readonly stateListeners = new Set<PlayerStateListener>()
-  private readonly delayedRuntimeEmitHandles = new Set<ReturnType<typeof globalThis.setTimeout>>()
+  private readonly onTimelineEvent?: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>
+  private playbackTickPromise: Promise<void> = Promise.resolve()
 
   /**
-   * Cancels all delayed runtime emits still pending.
+   * Returns one loaded runtime track meta when available.
    */
-  private clearDelayedRuntimeEmits(): void {
-    for (const handle of this.delayedRuntimeEmitHandles) {
-      globalThis.clearTimeout(handle)
+  getTrackMeta(trackId: string): import('../track-manager/types').TrackRuntimeMeta | null {
+    return this.trackManager.getTrackMeta(trackId)
+  }
+
+  /**
+   * Ensures one helper-owned runtime track exists.
+   */
+  ensureRuntimeTrack(input: {
+    trackId: string
+    order?: number
+    source?: import('../core/events/types').RuntimeEventSource
+    active?: boolean
+    role?: string
+  }): PlayerCommandResult {
+    const result = this.trackManager.ensureTrack(input)
+    if (!result.ok) {
+      return this.reject(result.error.code, result.error.message, 'player:track:ensure')
     }
 
-    this.delayedRuntimeEmitHandles.clear()
+    return this.refreshTimelineEndFromMountedPlan()
   }
 
   /**
-   * Schedules one delayed runtime event emission on the shared player clock.
+   * Appends generated helper events into one runtime track.
    */
-  private scheduleDelayedRuntimeEmit(event: PlayerPublicEventInput, delayMs: number): void {
-    const handle = globalThis.setTimeout(() => {
-      this.delayedRuntimeEmitHandles.delete(handle)
+  appendGeneratedEvents(input: { trackId: string; events: TimelineEvent[] }): PlayerCommandResult {
+    const appendResult = this.trackManager.appendLiveEvents({
+      trackId: input.trackId,
+      events: input.events
+    })
+    if (!appendResult.ok) {
+      return this.reject(appendResult.error.code, appendResult.error.message, 'player:track:append-generated')
+    }
 
-      if (this.scene === null || this.sequenceEnded) {
-        return
-      }
-
-      void this.emit({
-        ...event,
-        source: RUNTIME_EVENT_SOURCE.system
-      })
-    }, Math.max(0, delayMs))
-
-    this.delayedRuntimeEmitHandles.add(handle)
+    return this.refreshTimelineEndFromMountedPlan()
   }
+
+  /**
+   * Resolves the current timeline end using both event/action durations and master media tracks.
+   */
+  private resolveTimelineEndMs(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): number {
+    return this.runtimePlanner.resolveTimelineEndMsFromRuntimePlan({
+      runtimePlan,
+      getTrackMeta: (trackId) => this.trackManager.getTrackMeta(trackId),
+      getMediaDurationMs: (runtimeItemId) => {
+        const component = this.renderer.getRuntimeRegistry().getComponentById(runtimeItemId)
+        return isMediaSyncRuntimeComponent(component) ? component.getDurationMs() : null
+      }
+    })
+  }
+
 
   /**
    * Resolves the fallback track id for one event context.
@@ -230,6 +256,7 @@ export class PlayerFacade implements PlayerApi {
       allowedRebuildModes:
         options.runtimePolicy?.allowedRebuildModes ?? DEFAULT_RUNTIME_POLICY.allowedRebuildModes
     }
+    this.onTimelineEvent = options.onTimelineEvent
 
     const animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
     this.renderer = new RendererFacade({
@@ -242,11 +269,6 @@ export class PlayerFacade implements PlayerApi {
           scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
           cascade: event.cascade,
           source: RUNTIME_EVENT_SOURCE.user
-        }
-
-        if (typeof event.delayMs === 'number' && event.delayMs > 0) {
-          this.scheduleDelayedRuntimeEmit(runtimeEvent, event.delayMs)
-          return
         }
 
         if (options.onRuntimeEmit) {
@@ -447,7 +469,6 @@ export class PlayerFacade implements PlayerApi {
    */
   private resetRuntime(): void {
     this.stopPlaybackLoop()
-    this.clearDelayedRuntimeEmits()
     this.director.destroy()
     this.mediaSync.resetPlayback()
     this.renderer.destroy()
@@ -554,7 +575,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan)
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
     return { ok: true }
   }
 
@@ -572,7 +593,6 @@ export class PlayerFacade implements PlayerApi {
     this.playbackStartMs = null
     this.sequenceEnded = false
     this.nextPublicEventIndex = 0
-    this.clearDelayedRuntimeEmits()
     this.mediaSync.resetPlayback()
 
     this.scene.tracks = consolidateSceneTracks(this.scene)
@@ -602,7 +622,7 @@ export class PlayerFacade implements PlayerApi {
   private applyMountedRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
     this.director.load(runtimePlan.timelinePlan)
     this.loadMediaRuntime(runtimePlan.runtimePersos)
-    this.timelineEndMs = this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan)
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
   }
 
   /**
@@ -627,8 +647,15 @@ export class PlayerFacade implements PlayerApi {
    * Resolves one target track id for anchored eventimes of a started story.
    */
   private resolveStoryTrackId(storyId: string): string {
-    if (this.scene !== null && storyId in this.scene.tracks) {
-      return storyId
+    if (this.scene !== null) {
+      const story = this.scene.stories[storyId]
+      if (story?.trackId) {
+        return story.trackId
+      }
+
+      if (storyId in this.scene.tracks) {
+        return storyId
+      }
     }
 
     return PLAYER_TRACK.global
@@ -666,6 +693,8 @@ export class PlayerFacade implements PlayerApi {
       })
       return
     }
+
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
   }
 
   /**
@@ -699,7 +728,7 @@ export class PlayerFacade implements PlayerApi {
     // During the first play bootstrap, zero-offset eventimes must be consumed by the
     // normal play path so visual playback starts from the visible frame 0.
     if (this.status === PLAYER_STATUS.playing || this.status === PLAYER_STATUS.paused) {
-      this.runDueTimelineEvents(storyStartTimelineMs)
+      void this.runDueTimelineEvents(storyStartTimelineMs)
     }
 
   }
@@ -730,10 +759,56 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Routes one due timeline event through the optional author-layer interceptor.
+   */
+  private async dispatchTimelineEvent(event: TimelineEvent): Promise<void> {
+    if (this.onTimelineEvent) {
+      const result = await this.onTimelineEvent({
+        id: event.id,
+        name: event.name,
+        ms: event.ms,
+        payload: event.payload,
+        scopeStoryId: event.scopeStoryId,
+        source: event.source,
+        trackId: event.trackId
+      })
+
+      if (!result.ok) {
+        this.emitTrace('player:event:route-failed', RUNTIME_TRACE_STATUS.rejected, {
+          eventId: event.id,
+          eventName: event.name,
+          code: result.error.code,
+          message: result.error.message
+        })
+      }
+      return
+    }
+
+    this.runTimelineEvent(event)
+  }
+
+  /**
+   * Applies all due timeline events synchronously when no author interceptor is active.
+   */
+  private runDueTimelineEventsSync(timelineMs: number): void {
+    let guard = 0
+    while (guard < 1000) {
+      guard += 1
+      const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events
+      if (dueEvents.length === 0) {
+        return
+      }
+
+      for (const event of dueEvents) {
+        this.runTimelineEvent(event)
+      }
+    }
+  }
+
+  /**
    * Locks the current sequence after one terminal sequence:end event.
    */
   private finalizeSequenceEnd(sequenceEndMs: number): void {
-    this.clearDelayedRuntimeEmits()
     this.sequenceEnded = true
     this.timelineMs = Math.min(sequenceEndMs, this.timelineEndMs)
     this.playbackStartMs = null
@@ -765,10 +840,23 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Applies all timeline events due at or before the provided timeline cursor.
    */
-  private runDueTimelineEvents(timelineMs: number): void {
-    const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events
-    for (const event of dueEvents) {
-      this.runTimelineEvent(event)
+  private async runDueTimelineEvents(timelineMs: number): Promise<void> {
+    if (!this.onTimelineEvent) {
+      this.runDueTimelineEventsSync(timelineMs)
+      return
+    }
+
+    let guard = 0
+    while (guard < 1000) {
+      guard += 1
+      const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events
+      if (dueEvents.length === 0) {
+        return
+      }
+
+      for (const event of dueEvents) {
+        await this.dispatchTimelineEvent(event)
+      }
     }
   }
 
@@ -780,12 +868,28 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    const timelineMs = this.resolveCurrentTimelineMs()
-    this.timelineMs = timelineMs
-    this.runDueTimelineEvents(timelineMs)
-    this.syncMediaTimeline(timelineMs)
-    this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs())
-    this.completePlaybackIfReachedEnd()
+    if (!this.onTimelineEvent) {
+      const timelineMs = this.resolveCurrentTimelineMs()
+      this.timelineMs = timelineMs
+      this.runDueTimelineEventsSync(timelineMs)
+      this.syncMediaTimeline(timelineMs)
+      this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs())
+      this.completePlaybackIfReachedEnd()
+      return
+    }
+
+    this.playbackTickPromise = this.playbackTickPromise.then(async () => {
+      if (this.status !== PLAYER_STATUS.playing) {
+        return
+      }
+
+      const timelineMs = this.resolveCurrentTimelineMs()
+      this.timelineMs = timelineMs
+      await this.runDueTimelineEvents(timelineMs)
+      this.syncMediaTimeline(timelineMs)
+      this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs())
+      this.completePlaybackIfReachedEnd()
+    })
   }
 
   /**
@@ -880,7 +984,14 @@ export class PlayerFacade implements PlayerApi {
    */
   private initializeSceneStories(scene: StrictSceneDoc): void {
     for (const story of Object.values(scene.stories)) {
-      story.state = story.init?.(story.initial)
+      const baseState =
+        typeof story.state === 'object' && story.state !== null
+          ? { ...story.state }
+          : typeof story.initial === 'object' && story.initial !== null
+            ? { ...story.initial }
+            : undefined
+
+      story.state = story.init?.(baseState) ?? baseState
     }
   }
 
@@ -941,6 +1052,8 @@ export class PlayerFacade implements PlayerApi {
           code: rendererLoadResult.error.code,
           message: rendererLoadResult.error.message
         })
+      } else {
+        this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
       }
     }
   }
@@ -995,6 +1108,8 @@ export class PlayerFacade implements PlayerApi {
         })
       }
 
+      this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+
       this.trackManager.syncCursor({ nowMs: 0 })
       this.timelineMs = 0
       this.playbackStartMs = null
@@ -1041,7 +1156,7 @@ export class PlayerFacade implements PlayerApi {
     this.setStatus(PLAYER_STATUS.playing)
     const currentTimelineMs = this.resolveCurrentTimelineMs()
     this.timelineMs = currentTimelineMs
-    this.runDueTimelineEvents(currentTimelineMs)
+    await this.runDueTimelineEvents(currentTimelineMs)
     this.syncMediaTimeline(currentTimelineMs)
     this.completePlaybackIfReachedEnd()
     if (this.playbackStartMs !== null) {
@@ -1238,9 +1353,13 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+
     this.emitStateSnapshot()
 
-    this.timelineMs = Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs)
+    this.timelineMs = this.onTimelineEvent
+      ? this.runtimePlanner.clampTimelineMs(targetTimelineMs)
+      : Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs)
 
     this.director.start()
     const rendererStartResult = this.startRenderer('seek-replay')
@@ -1257,37 +1376,50 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    const eventMsByEventId = new Map<string, number>(
-      this.director.getSortedEvents().map((event) => [event.id, event.ms])
-    )
+    let eventMsByEventId = new Map<string, number>()
+    if (!this.onTimelineEvent) {
+      eventMsByEventId = new Map<string, number>(
+        this.director.getSortedEvents().map((event) => [event.id, event.ms])
+      )
 
-    const sortedEvents = this.director.getSortedEvents()
-    for (const timelineEvent of sortedEvents) {
-      if (timelineEvent.ms > this.timelineMs) {
-        break
+      const sortedEvents = this.director.getSortedEvents()
+      for (const timelineEvent of sortedEvents) {
+        if (timelineEvent.ms > this.timelineMs) {
+          break
+        }
+
+        this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId)
+        this.runTimelineEvent(timelineEvent)
       }
-
-      this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId)
-      this.runTimelineEvent(timelineEvent)
+    } else {
+      this.trackManager.syncCursor({ nowMs: 0 })
+      await this.runDueTimelineEvents(this.timelineMs)
+      eventMsByEventId = new Map<string, number>(
+        this.trackManager.getAllEvents().map((event) => [event.id, event.ms])
+      )
     }
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs })
     this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId)
     this.syncMediaTimeline(this.timelineMs)
 
-    this.director.pause()
-    const rendererPauseResult = this.pauseRenderer('seek-replay')
-    if (!rendererPauseResult.ok) {
-      return this.reject(
-        'RENDERER_INVALID_STATE',
-        'Renderer could not pause after seek replay',
-        'player:seek:failed',
-        {
-          sceneId: this.scene.id,
-          targetTimelineMs,
-          code: rendererPauseResult.error.code
-        }
-      )
+    if (!this.sequenceEnded) {
+      this.director.pause()
+      const rendererPauseResult = this.renderer.getState().status === 'running'
+        ? this.pauseRenderer('seek-replay')
+        : { ok: true as const }
+      if (!rendererPauseResult.ok) {
+        return this.reject(
+          'RENDERER_INVALID_STATE',
+          'Renderer could not pause after seek replay',
+          'player:seek:failed',
+          {
+            sceneId: this.scene.id,
+            targetTimelineMs,
+            code: rendererPauseResult.error.code
+          }
+        )
+      }
     }
 
     this.setStatus(PLAYER_STATUS.paused)
@@ -1338,7 +1470,6 @@ export class PlayerFacade implements PlayerApi {
     this.emitTrace('player:rewind:started', RUNTIME_TRACE_STATUS.applied)
 
     this.stopPlaybackLoop()
-    this.clearDelayedRuntimeEmits()
 
     const resetResult = this.resetSceneForReplay(previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused)
     if (!resetResult.ok) {
@@ -1363,6 +1494,8 @@ export class PlayerFacade implements PlayerApi {
         code: rendererLoadResult.error.code
       })
     }
+
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
 
     if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
       this.director.start()
@@ -1403,7 +1536,7 @@ export class PlayerFacade implements PlayerApi {
 
     if (previousStatus === PLAYER_STATUS.playing) {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs()
-      this.runDueTimelineEvents(this.timelineMs)
+      await this.runDueTimelineEvents(this.timelineMs)
       this.startPlaybackLoop()
     }
 
@@ -1480,6 +1613,8 @@ export class PlayerFacade implements PlayerApi {
         )
       }
 
+      this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+
       if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
         this.director.start()
 
@@ -1516,7 +1651,7 @@ export class PlayerFacade implements PlayerApi {
         }
 
         if (previousStatus === PLAYER_STATUS.playing) {
-          this.runDueTimelineEvents(this.timelineMs)
+          await this.runDueTimelineEvents(this.timelineMs)
           this.startPlaybackLoop()
         }
       }

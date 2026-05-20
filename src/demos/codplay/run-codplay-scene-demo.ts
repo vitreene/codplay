@@ -256,6 +256,7 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 			mountTarget: demoContainerNode,
 			compiledScene,
 			resourceManifest,
+			strapCollection: config.strapCollection,
 		})
 		if (!replayInitResult.ok) {
 			throw new Error(`[demo] init failed: ${replayInitResult.error.code}`)
@@ -298,6 +299,7 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
 		mountTarget: demoContainerNode,
 		compiledScene,
 		resourceManifest,
+		strapCollection: config.strapCollection,
 	})
 	if (!initResult.ok) {
 		throw new Error(`[demo] init failed: ${initResult.error.code}`)

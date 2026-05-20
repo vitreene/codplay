@@ -1,4 +1,5 @@
 import type { PlayerPublicEventInput, SceneDoc } from '../../player/types'
+import type { StrapCollection } from '../../player'
 
 /**
  * Defines one navigation link rendered in the shared demo shell.
@@ -26,6 +27,7 @@ export type PlayerSceneDemoConfig = {
 	title: string;
 	subtitle: string;
 	scene: SceneDoc;
+	strapCollection?: StrapCollection;
 	rootNodeIds: string[];
 	demoLinks?: PlayerSceneDemoLink[];
 	actions?: PlayerSceneDemoAction[];

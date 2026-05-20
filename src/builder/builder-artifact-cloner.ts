@@ -33,6 +33,7 @@ export class BuilderArtifactCloner {
       clonedStories[storyId] = {
         id: story.id,
         name: story.name,
+        trackId: story.trackId,
         tracks: this.cloneData(story.tracks),
         entries: this.cloneData(story.entries),
         initial: this.cloneData(story.initial),

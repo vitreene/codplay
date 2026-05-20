@@ -121,6 +121,45 @@ export class TrackManager implements TrackManagerApi {
   }
 
   /**
+   * Ensures one runtime track exists for generated helper events.
+   */
+  ensureTrack(input: {
+    trackId: string
+    order?: number
+    source?: import('../core/events/types').RuntimeEventSource
+    active?: boolean
+    role?: string
+  }): TrackManagerCommandResult {
+    if (this.trackById.has(input.trackId)) {
+      return {
+        ok: true,
+        data: undefined
+      }
+    }
+
+    this.trackById.set(
+      input.trackId,
+      this.codec.normalizeTrackBucket(
+        input.trackId,
+        {
+          order: input.order,
+          source: input.source,
+          active: input.active,
+          role: input.role,
+          events: []
+        },
+        this.trackById.size,
+        () => this.createGeneratedEventId(input.trackId)
+      )
+    )
+    this.syncState()
+    return {
+      ok: true,
+      data: undefined
+    }
+  }
+
+  /**
    * Recomputes each track cursor from one target timeline position.
    */
   syncCursor(input: { nowMs: number }): void {
@@ -180,6 +219,24 @@ export class TrackManager implements TrackManagerApi {
       ? [...this.trackById.values()].filter((track) => track.active)
       : this.trackById.values()
     return this.codec.sortAllTrackEvents(tracks)
+  }
+
+  /**
+   * Returns runtime metadata for one track when available.
+   */
+  getTrackMeta(trackId: string): import('./types').TrackRuntimeMeta | null {
+    const track = this.trackById.get(trackId)
+    if (!track) {
+      return null
+    }
+
+    return {
+      trackId: track.id,
+      order: track.order,
+      source: track.source,
+      active: track.active,
+      role: track.role
+    }
   }
 
   /**

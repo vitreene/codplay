@@ -4,6 +4,21 @@ export type DispatchContext<Action = unknown> = {
   listeners: EventListener<Action>[]
 }
 
+function mergeActionWithEventPayload<Action>(action: Action, payload: Record<string, unknown> | undefined): Action {
+  if (payload === undefined) {
+    return action
+  }
+
+  if (typeof action !== 'object' || action === null) {
+    return payload as Action
+  }
+
+  return {
+    ...(action as Record<string, unknown>),
+    ...payload
+  } as Action
+}
+
 /**
  * Dispatches timeline events to listeners using exact action-key matching.
  */
@@ -29,7 +44,7 @@ export function dispatchEvents<Action>(
         eventName: event.name,
         listenerId: listener.listenerId,
         actionKey: event.name,
-        action
+        action: mergeActionWithEventPayload(action, event.payload)
       })
     }
   }

@@ -1,4 +1,4 @@
-import { createS4QuizReferenceScene } from '../scenes'
+import { createS4QuizReferenceScene, s4QuizStraps } from '../scenes'
 import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 
 /**
@@ -9,6 +9,7 @@ export async function runQuizReferenceDemo(): Promise<void> {
 		title: 'Quiz Reference',
 		subtitle: 'CodPlay compile la scene puis la joue via la facade publique avec un layout identique a la demo player.',
 		scene: createS4QuizReferenceScene(),
+		strapCollection: s4QuizStraps,
 		rootNodeIds: ['quiz-stage', 'quiz-intro-panel', 'quiz-question-panel', 'quiz-success-panel', 'quiz-failure-panel'],
 		demoLinks: [
 			{ label: 'Player POC', href: '?demo=poc' },

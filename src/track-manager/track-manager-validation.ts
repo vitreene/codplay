@@ -8,6 +8,7 @@ export type TrackBucket = {
   order: number
   source: TrackMeta['source']
   active: boolean
+  role?: string
   events: TrackManagerStoryEvent[]
   nextIndex: number
 }
@@ -82,6 +83,7 @@ export class TrackManagerCodec {
       order: Number.isFinite(trackRecord.order) ? Number(trackRecord.order) : fallbackOrder,
       source,
       active: trackRecord.active !== false,
+      role: typeof trackRecord.role === 'string' ? trackRecord.role : undefined,
       events,
       nextIndex: 0
     }

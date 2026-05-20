@@ -44,8 +44,17 @@ export type TrackManagerStateSnapshot = {
   loadedTrackIds: string[]
 }
 
+export type TrackRuntimeMeta = {
+  trackId: string
+  order: number
+  source: RuntimeEventSource
+  active: boolean
+  role?: string
+}
+
 export type TrackAuthorMeta = {
   active?: boolean
+  role?: string
 } & Record<string, unknown>
 
 export type TrackManagerApi = {
@@ -68,11 +77,19 @@ export type TrackManagerApi = {
     storyId: string
     eventimes: TrackManagerEventimeNode[]
   }) => TrackManagerCommandResult<{ appendedCount: number }>
+  ensureTrack: (input: {
+    trackId: string
+    order?: number
+    source?: RuntimeEventSource
+    active?: boolean
+    role?: string
+  }) => TrackManagerCommandResult
   syncCursor: (input: { nowMs: number }) => void
   collectDueEvents: (input: { nowMs: number }) => {
     events: TrackManagerStoryEvent[]
     refs?: TrackEventRef[]
   }
   getAllEvents: (options?: { activeOnly?: boolean }) => TrackManagerStoryEvent[]
+  getTrackMeta: (trackId: string) => TrackRuntimeMeta | null
   state: TrackManagerStateSnapshot
 }

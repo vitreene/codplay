@@ -25,3 +25,9 @@
 2. repartir sur un modele `offsetMs` event place immediatement dans la sequence, pas sur un timer runtime transitoire
 3. retirer ou remplacer l'experimentation d'emission differee non specifiee avant de poursuivre
 4. traiter le doublon audio comme un contrat runtime media global, avec `seek` qui pause les medias en lecture et `rewind` qui les stoppe
+
+## Etat courant
+
+- pipeline runtime strap implemente sur `Player` / `CodPlay`
+- `s4` valide le compteur strap avec events timeline + timeout + neutralisation par desactivation de tracks helper
+- media `seek/rewind` corriges cote runtime

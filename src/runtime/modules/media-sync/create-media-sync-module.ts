@@ -15,6 +15,7 @@ type MediaRuntimeState = {
   logicalState: MediaLogicalState
   sequenceStartMs: number | null
   sourceStartMs: number
+  sourceEndMs: number | null
   frozenMediaMs: number
   activationOrder: number
   needsResync: boolean
@@ -72,6 +73,7 @@ class MediaSyncModuleInstance implements MediaSyncModule {
         logicalState: 'idle',
         sequenceStartMs: null,
         sourceStartMs: 0,
+        sourceEndMs: null,
         frozenMediaMs: 0,
         activationOrder: 0,
         needsResync: false
@@ -108,6 +110,7 @@ class MediaSyncModuleInstance implements MediaSyncModule {
       mediaState.logicalState = 'idle'
       mediaState.sequenceStartMs = null
       mediaState.sourceStartMs = 0
+      mediaState.sourceEndMs = null
       mediaState.frozenMediaMs = 0
       mediaState.activationOrder = 0
       mediaState.needsResync = false
@@ -133,6 +136,9 @@ class MediaSyncModuleInstance implements MediaSyncModule {
         mediaState.logicalState = 'playing'
         mediaState.sequenceStartMs = timelineMs
         mediaState.sourceStartMs = clampMediaMs(typeof broadcast.startAt === 'number' ? broadcast.startAt : 0)
+        mediaState.sourceEndMs = Number.isFinite(broadcast.endAt)
+          ? Math.max(mediaState.sourceStartMs, clampMediaMs(Number(broadcast.endAt)))
+          : null
         mediaState.frozenMediaMs = mediaState.sourceStartMs
         mediaState.activationOrder = this.nextActivationOrder
         mediaState.needsResync = true
@@ -191,10 +197,11 @@ class MediaSyncModuleInstance implements MediaSyncModule {
 
       const expectedMediaMs = this.resolveExpectedMediaMs(mediaState, timelineMs)
       const durationMs = component.getDurationMs()
-      if (durationMs !== null && expectedMediaMs >= durationMs) {
+      const effectiveEndMs = mediaState.sourceEndMs ?? durationMs
+      if (effectiveEndMs !== null && expectedMediaMs >= effectiveEndMs) {
         mediaState.logicalState = 'stopped'
-        mediaState.frozenMediaMs = durationMs
-        component.stopAt(durationMs)
+        mediaState.frozenMediaMs = effectiveEndMs
+        component.stopAt(effectiveEndMs)
         mediaState.needsResync = false
         continue
       }

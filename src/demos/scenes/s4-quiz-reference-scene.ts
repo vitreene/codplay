@@ -1,3 +1,4 @@
+import type { StrapCollection } from "../../player";
 import type { SceneDoc } from "../../player/types";
 
 /**
@@ -376,6 +377,20 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
+              "perdu": {
+                style: {
+                  opacity: {
+                    from: 1,
+                    to: 0,
+                    duration: 200,
+                  },
+                  x: {
+                    from: 0,
+                    to: -80,
+                    duration: 200,
+                  },
+                },
+              },
             },
           },
           {
@@ -418,21 +433,11 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
             emit: {
-              click: [
-                {
-                  event: {
-                    name: "quiz:answer:yes",
-                    cascade: true,
-                  },
+              click: {
+                event: {
+                  name: "quiz:answer:yes",
                 },
-                {
-                  event: {
-                    name: "sequence:end",
-                    cascade: true,
-                  },
-                  delayMs: 1000,
-                },
-              ],
+              },
             },
             actions: {},
           },
@@ -459,33 +464,154 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
             emit: {
-              click: [
-                {
-                  event: {
-                    name: "quiz:answer:no",
-                    cascade: true,
-                  },
+              click: {
+                event: {
+                  name: "quiz:answer:no",
                 },
-                {
-                  event: {
-                    name: "sequence:end",
-                    cascade: true,
-                  },
-                  delayMs: 1000,
-                },
-              ],
+              },
             },
             actions: {},
           },
         ],
         straps: undefined,
-        listen: [],
+        listen: [
+          {
+            on: "quiz:question:show",
+            straps: ["quiz-countdown-start"],
+          },
+          {
+            on: "quiz:answer:yes",
+            straps: ["quiz-answer"],
+          },
+          {
+            on: "quiz:answer:no",
+            straps: ["quiz-answer"],
+          },
+        ],
         eventimes: [
           {
             name: "quiz:question:show",
             startAt: 2300,
           },
         ],
+        state: {
+          countdownTrackIds: [],
+        },
+      },
+      "s4-quiz-count-story": {
+        id: "s4-quiz-count-story",
+        entries: ["quiz-count-panel", "quiz-count-value"],
+        initial: undefined,
+        persos: [
+          {
+            id: "quiz-count-panel",
+            type: "list",
+            initial: {
+              move: {
+                parentId: "quiz-stage",
+                mode: "append",
+              },
+              style: {
+                position: "absolute",
+                left: "596px",
+                top: "188px",
+                width: "72px",
+                minHeight: "72px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(15, 23, 42, 0.84)",
+                border: "1px solid rgba(248, 250, 252, 0.24)",
+                borderRadius: "18px",
+                boxShadow: "0 16px 40px rgba(15, 23, 42, 0.28)",
+                opacity: 0,
+                scale: 0.92,
+              },
+            },
+            actions: {
+              "quiz:count:show": {
+                style: {
+                  opacity: {
+                    from: 0,
+                    to: 1,
+                    duration: 180,
+                  },
+                  scale: {
+                    from: 0.92,
+                    to: 1,
+                    duration: 180,
+                  },
+                },
+              },
+              "quiz:answer:yes": {
+                style: {
+                  opacity: {
+                    from: 1,
+                    to: 0,
+                    duration: 180,
+                  },
+                  scale: {
+                    from: 1,
+                    to: 0.92,
+                    duration: 180,
+                  },
+                },
+              },
+              "quiz:answer:no": {
+                style: {
+                  opacity: {
+                    from: 1,
+                    to: 0,
+                    duration: 180,
+                  },
+                  scale: {
+                    from: 1,
+                    to: 0.92,
+                    duration: 180,
+                  },
+                },
+              },
+              "perdu": {
+                style: {
+                  opacity: {
+                    from: 1,
+                    to: 0,
+                    duration: 180,
+                  },
+                  scale: {
+                    from: 1,
+                    to: 0.92,
+                    duration: 180,
+                  },
+                },
+              },
+            },
+          },
+          {
+            id: "quiz-count-value",
+            type: "text",
+            initial: {
+              tag: "strong",
+              content: "10",
+              move: {
+                parentId: "quiz-count-panel",
+                mode: "append",
+              },
+              style: {
+                color: "#f8fafc",
+                fontSize: "30px",
+                fontWeight: 800,
+                lineHeight: "1",
+              },
+            },
+            actions: {
+              "quiz-count": null,
+            },
+          },
+        ],
+        straps: undefined,
+        listen: [],
+        eventimes: [],
       },
       "s4-quiz-success-story": {
         id: "s4-quiz-success-story",
@@ -585,6 +711,20 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
+              "perdu": {
+                style: {
+                  opacity: {
+                    from: 0,
+                    to: 1,
+                    duration: 220,
+                  },
+                  x: {
+                    from: 100,
+                    to: 0,
+                    duration: 220,
+                  },
+                },
+              },
               "quiz:result:wrong:show": {
                 style: {
                   opacity: {
@@ -606,6 +746,66 @@ export function createS4QuizReferenceScene(): SceneDoc {
         listen: [],
       },
     },
-    tracks: {},
+    tracks: {
+      "s4-quiz-intro-story": {
+        role: "master",
+      },
+      "s4-quiz-question-story": {
+        role: "master",
+      },
+    },
   };
 }
+
+export const s4QuizStraps: StrapCollection = {
+  "quiz-countdown-start": ({ context }) => {
+    const countdownHandle = context.helpers.repeat({ everyMs: 1000, times: 11 }, (index) => {
+      return [
+        {
+          name: "quiz-count",
+          data: {
+            content: String(Math.max(0, 10 - index)),
+          },
+          cascade: true,
+        },
+      ];
+    });
+    const lostHandle = context.helpers.delay(10000, { name: "perdu", cascade: true });
+    const endHandle = context.helpers.delay(11000, { name: "sequence:end", cascade: true });
+
+    return {
+      events: [
+        {
+          name: "quiz:count:show",
+          cascade: true,
+        },
+      ],
+      update: {
+        countdownTrackIds: [countdownHandle.id, lostHandle.id, endHandle.id],
+      },
+    };
+  },
+  "quiz-answer": ({ event, state, context }) => {
+    const trackIds = Array.isArray(state.countdownTrackIds) ? state.countdownTrackIds : [];
+    context.helpers.delay(1000, { name: "sequence:end", cascade: true });
+
+    return {
+      events: [
+        {
+          name: "track:deactivate",
+          data: {
+            trackIds,
+          },
+          cascade: true,
+        },
+        {
+          name: event.name,
+          cascade: true,
+        },
+      ],
+      update: {
+        countdownTrackIds: [],
+      },
+    };
+  },
+};

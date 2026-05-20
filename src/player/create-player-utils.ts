@@ -89,6 +89,105 @@ export class PlayerRuntimePlanner {
   }
 
   /**
+   * Resolves one timeline end that also accounts for master tracks and master media segments.
+   */
+  resolveTimelineEndMsFromRuntimePlan(input: {
+    runtimePlan: PlayerRuntimePlan
+    getTrackMeta: (trackId: string) => { role?: string } | null
+    getMediaDurationMs: (runtimeItemId: string) => number | null
+  }): number {
+    const { runtimePlan } = input
+    const hasMasterTracks = runtimePlan.timelinePlan.sortedEvents.some((event) => {
+      const trackMeta = event.trackId ? input.getTrackMeta(event.trackId) : null
+      return trackMeta?.role === 'master'
+    })
+
+    const actionDurationByEventName = new Map<string, number>()
+    for (const listener of runtimePlan.timelinePlan.listeners) {
+      for (const [eventName, action] of Object.entries(listener.actionsByEventName)) {
+        const currentDurationMs = actionDurationByEventName.get(eventName) ?? 0
+        const nextDurationMs = this.resolveActionDurationMs(action as Record<string, unknown> | null)
+        actionDurationByEventName.set(eventName, Math.max(currentDurationMs, nextDurationMs))
+      }
+    }
+
+    const contributesToDuration = (trackId: string | undefined): boolean => {
+      if (!hasMasterTracks) {
+        return true
+      }
+
+      if (!trackId) {
+        return false
+      }
+
+      return input.getTrackMeta(trackId)?.role === 'master'
+    }
+
+    let timelineEndMs = 0
+    let hasContributingSource = false
+    for (const event of runtimePlan.timelinePlan.sortedEvents) {
+      if (!contributesToDuration(event.trackId)) {
+        continue
+      }
+
+      hasContributingSource = true
+      const actionDurationMs = actionDurationByEventName.get(event.name) ?? 0
+      timelineEndMs = Math.max(timelineEndMs, this.clampTimelineMs(event.ms) + actionDurationMs)
+    }
+
+    for (const event of runtimePlan.timelinePlan.sortedEvents) {
+      if (!contributesToDuration(event.trackId)) {
+        continue
+      }
+
+      for (const listener of runtimePlan.timelinePlan.listeners) {
+        if (event.scopeStoryId !== undefined && listener.scopeStoryId !== event.scopeStoryId) {
+          continue
+        }
+
+        const item = runtimePlan.runtimePersos.persos[listener.listenerId]
+        if (!item || item.type !== 'media' || item.initial.master !== true) {
+          continue
+        }
+
+        if (item.trackId !== event.trackId) {
+          continue
+        }
+
+        const action = listener.actionsByEventName[event.name] as Record<string, unknown> | undefined
+        const broadcast = typeof action?.broadcast === 'object' && action.broadcast !== null
+          ? (action.broadcast as { type?: unknown; startAt?: unknown; endAt?: unknown })
+          : null
+        if (!broadcast || broadcast.type !== 'START') {
+          continue
+        }
+
+        const mediaDurationMs = input.getMediaDurationMs(item.id)
+        const startAtMs = Number.isFinite(broadcast.startAt) ? Math.max(0, Number(broadcast.startAt)) : 0
+        const endAtMs = Number.isFinite(broadcast.endAt) ? Math.max(startAtMs, Number(broadcast.endAt)) : null
+        const effectiveDurationMs = endAtMs !== null
+          ? endAtMs - startAtMs
+          : mediaDurationMs !== null
+            ? Math.max(0, mediaDurationMs - startAtMs)
+            : null
+
+        if (effectiveDurationMs === null) {
+          continue
+        }
+
+        hasContributingSource = true
+        timelineEndMs = Math.max(timelineEndMs, this.clampTimelineMs(event.ms) + effectiveDurationMs)
+      }
+    }
+
+    if (!hasContributingSource) {
+      return Number.POSITIVE_INFINITY
+    }
+
+    return this.clampTimelineMs(timelineEndMs)
+  }
+
+  /**
    * Resolves the max action duration associated with one event name.
    */
   resolveEventDurationMsFromTimelinePlan(plan: RuntimeTimelinePlan, eventName: string): number {
@@ -128,7 +227,7 @@ export class PlayerRuntimePlanner {
       }
 
       for (const perso of story.persos) {
-        persos[perso.id] = this.createRuntimeItem(story.id, perso)
+        persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso)
       }
     }
 
@@ -155,7 +254,7 @@ export class PlayerRuntimePlanner {
     const persos: Record<string, ItemDoc> = {}
 
     for (const perso of story.persos) {
-      persos[perso.id] = this.createRuntimeItem(story.id, perso)
+      persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso)
     }
 
     return {
@@ -167,11 +266,12 @@ export class PlayerRuntimePlanner {
   /**
    * Creates one runtime item from one strict perso definition.
    */
-  private createRuntimeItem(storyId: string, perso: PersoDoc): ItemDoc {
+  private createRuntimeItem(storyId: string, trackId: string, perso: PersoDoc): ItemDoc {
     return {
       id: perso.id,
       name: perso.name,
       storyId,
+      trackId,
       type: perso.type,
       module: perso.module,
       initial: perso.initial,
@@ -237,9 +337,10 @@ export function consolidateSceneTracks(scene: StrictSceneDoc): Record<string, un
   }
 
   for (const story of Object.values(scene.stories)) {
-    consolidatedTracks[story.id] = {
+    const implicitTrackId = story.trackId ?? story.id
+    consolidatedTracks[implicitTrackId] = mergeTrackMeta(consolidatedTracks[implicitTrackId], {
       active: true
-    }
+    })
   }
 
   for (const [trackId, rawTrack] of Object.entries(scene.tracks)) {

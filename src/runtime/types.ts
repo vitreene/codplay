@@ -6,6 +6,7 @@ export type ItemType = 'text' | 'img' | 'media' | 'list' | string
 export type BroadcastAction = {
   type: 'START' | 'PAUSE' | 'STOP'
   startAt?: number
+  endAt?: number
   transition?: {
     from?: Record<string, unknown>
     to?: Record<string, unknown>
@@ -66,7 +67,6 @@ export type EmitRuleAction = {
   ref?: string
   event: EmitRuleEvent
   data?: Record<string, unknown>
-  delayMs?: number
 }
 
 /**
@@ -85,7 +85,6 @@ export type RuntimeEmitEvent = {
   data?: Record<string, unknown>
   cascade?: boolean
   scopeStoryId?: string
-  delayMs?: number
 }
 
 /**
@@ -181,6 +180,7 @@ export type ItemDoc = {
   id: string
   name?: string
   storyId: string
+  trackId?: string
   type: ItemType
   module?: ItemModuleConfig
   initial: ItemState

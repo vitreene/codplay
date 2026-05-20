@@ -293,8 +293,7 @@ export function bindComponentEmitDeclarations(input: {
             name: action.event.name,
             data,
             cascade: action.event.cascade,
-            scopeStoryId: action.event.cascade === true ? undefined : input.item.storyId,
-            delayMs: typeof action.delayMs === 'number' ? Math.max(0, action.delayMs) : undefined
+            scopeStoryId: action.event.cascade === true ? undefined : input.item.storyId
           })
         }
       }

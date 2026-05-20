@@ -51,6 +51,7 @@ export type Perso = {
 export type StoryDef = {
   id: string
   name?: string
+  trackId?: string
   tracks?: Record<string, unknown>
   entries: string[]
   initial: Record<string, unknown> | undefined

@@ -132,3 +132,15 @@ La spec finale devra couvrir explicitement:
 3. retirer les experimentations non contractuelles si elles ne correspondent pas a la spec retenue
 4. implementer les deux features en gardant `seek` et `rewind` deterministes
 5. ajouter des tests navigateur/reload reprodusant le doublon audio reel
+
+## Etat apres implementation strap runtime
+
+- l'experimentation `delayMs` a ete retiree du runtime auteur
+- la premiere implementation strap stable est portee par `Player` / `CodPlay`
+- les events timeline issus des tracks passent aussi par la couche auteur `listen/straps`
+- `story.listen.straps` et `scene.listen.straps` sont supportes
+- `update` est un patch shallow applique sur `story.state` ou `scene.state`
+- les helpers finis (`delay`, `repeat`, `stagger`) placent leurs events dans la sequence sur des tracks runtime dediees
+- la neutralisation d'un flux strap fini repose sur la desactivation de ces tracks dediees
+- `loop` est supporte via scheduler runtime local au `Player` public
+- `s4` est migree sur strap compteur et sert de test d'integration auteur
