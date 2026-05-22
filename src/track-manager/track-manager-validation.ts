@@ -8,6 +8,7 @@ export type TrackBucket = {
   order: number
   source: TrackMeta['source']
   active: boolean
+  initialActive: boolean
   role?: string
   events: TrackManagerStoryEvent[]
   nextIndex: number
@@ -78,11 +79,13 @@ export class TrackManagerCodec {
       })
     }
 
+    const initialActive = trackRecord.active !== false
     const track: TrackBucket = {
       id: trackId,
       order: Number.isFinite(trackRecord.order) ? Number(trackRecord.order) : fallbackOrder,
       source,
-      active: trackRecord.active !== false,
+      active: initialActive,
+      initialActive,
       role: typeof trackRecord.role === 'string' ? trackRecord.role : undefined,
       events,
       nextIndex: 0

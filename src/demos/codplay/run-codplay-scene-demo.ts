@@ -5,16 +5,10 @@ import { animate, engine } from 'animejs'
 import type { SceneDef } from '../../builder/types'
 import { createAnimationAdapter, type AnimeImplementation } from '../../animation/adapter'
 import { CodPlay } from '../../creator'
-import type { SceneDoc } from '../../player/types'
 import { createSequenceCommandPanel } from './codplay-scene-demo/sequence-command-panel'
 import { createTraceLogPanel } from '../shared/trace-log-panel'
+import { resolveSceneSeekMaxMs } from '../shared/resolve-scene-seek-max-ms'
 import type { PlayerSceneDemoConfig } from '../shared/demo-scene-types'
-
-type StoryEventimeLike = {
-	name: string;
-	startAt: number;
-	events?: StoryEventimeLike[];
-}
 
 function createAnimeImplementation(): AnimeImplementation {
 	engine.useDefaultMainLoop = false
@@ -36,98 +30,6 @@ function renderAnimeFrameFromPlayerTicker(): void {
 
 function isDomNode(nodeRef: unknown): nodeRef is Node {
 	return typeof globalThis.Node !== 'undefined' && nodeRef instanceof globalThis.Node
-}
-
-function readTransitionDurationMs(value: unknown): number {
-	if (typeof value !== 'object' || value === null) {
-		return 0
-	}
-
-	const transition = value as Record<string, unknown>
-	if (transition.ignoreDuration === true) {
-		return 0
-	}
-	const duration =
-		typeof transition.duration === 'number' && Number.isFinite(transition.duration) ? transition.duration : 0
-	const delay = typeof transition.delay === 'number' && Number.isFinite(transition.delay) ? transition.delay : 0
-	return Math.max(0, duration + delay)
-}
-
-function resolveActionDurationMs(action: unknown): number {
-	if (typeof action !== 'object' || action === null) {
-		return 0
-	}
-
-	const style = (action as { style?: unknown }).style
-	if (typeof style !== 'object' || style === null) {
-		return 0
-	}
-
-	let maxDurationMs = 0
-	for (const styleValue of Object.values(style as Record<string, unknown>)) {
-		maxDurationMs = Math.max(maxDurationMs, readTransitionDurationMs(styleValue))
-	}
-
-	return maxDurationMs
-}
-
-function visitEventimes(eventimes: StoryEventimeLike[] | undefined, parentStartAt: number, visitor: (eventName: string, eventMs: number) => void): void {
-	if (!Array.isArray(eventimes)) {
-		return
-	}
-
-	for (const eventime of eventimes) {
-		const eventMs = Math.max(0, parentStartAt + eventime.startAt)
-		visitor(eventime.name, eventMs)
-		visitEventimes(eventime.events, eventMs, visitor)
-	}
-}
-
-function resolveSceneSeekMaxMs(scene: SceneDoc): number {
-	const actionDurationByEventName = new Map<string, number>()
-	for (const story of Object.values(scene.stories)) {
-		for (const perso of story.persos) {
-			for (const [eventName, action] of Object.entries(perso.actions)) {
-				const currentDurationMs = actionDurationByEventName.get(eventName) ?? 0
-				const nextDurationMs = resolveActionDurationMs(action)
-				actionDurationByEventName.set(eventName, Math.max(currentDurationMs, nextDurationMs))
-			}
-		}
-	}
-
-	let maxTimelineMs = 0
-	for (const story of Object.values(scene.stories)) {
-		visitEventimes(story.eventimes, 0, (eventName, eventMs) => {
-			const actionDurationMs = actionDurationByEventName.get(eventName) ?? 0
-			maxTimelineMs = Math.max(maxTimelineMs, eventMs + actionDurationMs)
-		})
-	}
-
-	const tracks = scene.tracks
-	if (typeof tracks === 'object' && tracks !== null) {
-		for (const rawTrack of Object.values(tracks)) {
-			if (typeof rawTrack !== 'object' || rawTrack === null) {
-				continue
-			}
-
-			const track = rawTrack as { events?: unknown }
-			const events = Array.isArray(track.events) ? track.events : []
-			for (const rawEvent of events) {
-				if (typeof rawEvent !== 'object' || rawEvent === null) {
-					continue
-				}
-
-				const event = rawEvent as { ms?: unknown; name?: unknown }
-				const eventMsRaw = typeof event.ms === 'number' && Number.isFinite(event.ms) ? event.ms : 0
-				const eventMs = Math.max(0, eventMsRaw)
-				const eventName = typeof event.name === 'string' ? event.name : ''
-				const actionDurationMs = actionDurationByEventName.get(eventName) ?? 0
-				maxTimelineMs = Math.max(maxTimelineMs, eventMs + actionDurationMs)
-			}
-		}
-	}
-
-	return Math.max(1, Math.round(maxTimelineMs))
 }
 
 function mountDemoRootNodes(containerNode: HTMLDivElement, studio: CodPlay, rootNodeIds: string[]): void {

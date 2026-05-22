@@ -4,6 +4,8 @@ import { createAnimationAdapter, type AnimeImplementation } from '../../src/anim
 import { BuilderFacade } from '../../src/builder/create-builder'
 import { Player } from '../../src/player'
 import { PlayerFacade } from '../../src/player/create-player'
+import type { RuntimeTraceRow } from '../../src/runtime/trace-store'
+import type { SeekPolicy } from '../../src/player/types'
 import { RUNTIME_OBJECT_EVENT_HANDLERS } from '../../src/runtime/create-element'
 import {
   createS1CanariScene,
@@ -99,10 +101,14 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
   return node
 }
 
-async function createS4AuthorPlayer(animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())) {
+async function createS4AuthorPlayer(
+  animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation()),
+  seekPolicy?: SeekPolicy
+) {
   const builder = new BuilderFacade()
   const player = new Player({
     animationAdapter,
+    runtimePolicy: seekPolicy === undefined ? undefined : { seekPolicy },
     createElementOptions: {
       nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
     }
@@ -245,13 +251,13 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(successPanel?.style).toMatchObject({ opacity: 0, x: 100 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
-    expect(countPanel?.style).toMatchObject({ opacity: 1, scale: 1 })
+    expect(countPanel?.style).toMatchObject({ opacity: 0, scale: 0.92 })
     expect(countValue?.textContent).toBe('10')
-    expect(player.getState().timelineEndMs).toBe(2550)
+    expect(player.getState().horizon.progressEndMs).toBe(2550)
 
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
-    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 6000 })
-    expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('7')
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2550 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
   })
 
   it('routes S4 yes button emit as one cascaded runtime event', async () => {
@@ -274,7 +280,7 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0, x: 100 })
-    expect(player.getState().timelineEndMs).toBeGreaterThanOrEqual(2620)
+    expect(player.getState().horizon.progressEndMs).toBeGreaterThanOrEqual(2620)
 
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
     expect(player.getState().status).toBe('paused')
@@ -303,7 +309,7 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 0, x: -80 })
     expect(successPanel?.style).toMatchObject({ opacity: 0, x: 100 })
     expect(failurePanel?.style).toMatchObject({ opacity: 1, x: 0 })
-    expect(player.getState().timelineEndMs).toBeGreaterThanOrEqual(2620)
+    expect(player.getState().horizon.progressEndMs).toBeGreaterThanOrEqual(2620)
 
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
     expect(player.getState().status).toBe('paused')
@@ -319,10 +325,78 @@ describe('V1 - reference scenes', () => {
     expect(await player.play()).toEqual({ ok: true, data: undefined })
     expect(await player.seek({ timelineMs: 12600 })).toEqual({ ok: true, data: undefined })
 
-    expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: -80 })
-    expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect(player.getState().timelineMs).toBe(2550)
+    expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, x: 100 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, scale: 0.92 })
-    expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('0')
+    expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
+  })
+
+  it('clamps S4 seek to the played head when policy forbids seeking ahead', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = await createS4AuthorPlayer(animationAdapter, 'played-only')
+
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+    const playedHeadMs = player.getState().horizon.playedEndMs
+    expect(playedHeadMs).toBe(player.getState().horizon.seekEndMs)
+
+    expect(await player.seek({ timelineMs: playedHeadMs + 1000 })).toEqual({ ok: true, data: undefined })
+    expect(player.getState().timelineMs).toBe(playedHeadMs)
+  })
+
+  it('does not advance played-only seek head from non-master tracks', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = new PlayerFacade({
+      animationAdapter,
+      runtimePolicy: { seekPolicy: 'played-only' },
+      createElementOptions: {
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    const initResult = await player.init(createS4QuizReferenceScene())
+    expect(initResult.ok).toBe(true)
+
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+    const playedHeadMs = player.getState().horizon.playedEndMs
+
+    expect(await player.emit({
+      name: 'quiz:decor:probe',
+      trackId: 's4-quiz-decor-story'
+    })).toEqual({ ok: true, data: undefined })
+
+    expect(player.getState().horizon.playedEndMs).toBe(playedHeadMs)
+    expect(player.getState().horizon.seekEndMs).toBe(playedHeadMs)
+  })
+
+  it('traces that public seek replay bypasses the author pipeline before countdown helper tracks exist', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = await createS4AuthorPlayer(animationAdapter)
+    const traces: RuntimeTraceRow[] = []
+
+    player.onTrace((row) => {
+      traces.push(row)
+    })
+
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+    expect(await player.seek({ timelineMs: 2400 })).toEqual({ ok: true, data: undefined })
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+    expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+    const seekReplayRows = traces.filter((row) => row.eventName === 'player:seek:replay:event')
+    expect(seekReplayRows.length).toBeGreaterThan(0)
+    expect(seekReplayRows.some((row) => row.payload?.authorInterceptorConfigured === true)).toBe(true)
+    expect(seekReplayRows.every((row) => row.payload?.dispatchedThroughAuthor === false)).toBe(true)
+
+    const helperTrackRows = traces.filter((row) => row.eventName === 'player:track:ensure')
+    const generatedTrackRows = helperTrackRows.filter((row) => {
+      const trackId = row.payload?.trackId
+      return typeof trackId === 'string' && trackId.startsWith('strap-')
+    })
+
+    expect(generatedTrackRows.length).toBe(0)
   })
 
   it('prevents countdown timeout after one early yes answer', async () => {

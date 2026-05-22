@@ -50,7 +50,8 @@ export type CreatePlayerOptions = {
 }
 
 const DEFAULT_RUNTIME_POLICY: PlayerRuntimePolicy = {
-  allowedRebuildModes: ['state', 'full']
+  allowedRebuildModes: ['state', 'full'],
+  seekPolicy: 'author-unrestricted'
 }
 
 const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
@@ -64,6 +65,10 @@ const PLAYER_TRACE_EVENT = {
   mountFailed: 'player:mount:failed',
   trackControl: 'player:track-control',
   trackControlWarning: 'player:track-control:warning',
+  trackEnsure: 'player:track:ensure',
+  trackAppendGenerated: 'player:track:append-generated',
+  horizonSync: 'player:horizon:sync',
+  seekReplayEvent: 'player:seek:replay:event',
   initStarted: 'player:init:started',
   initDone: 'player:init:done'
 } as const
@@ -124,7 +129,10 @@ export class PlayerFacade implements PlayerApi {
   private scene: StrictSceneDoc | null = null
   private timelineMs = 0
   private timelineEndMs = 0
+  private projectedMasterEndMs = 0
+  private authorEndMs = 0
   private seekEndMs = 0
+  private playedEndMs = 0
   private playbackStartMs: number | null = null
   private sequenceEnded = false
   private readonly ticker = new TimeTicker()
@@ -161,6 +169,14 @@ export class PlayerFacade implements PlayerApi {
       return this.reject(result.error.code, result.error.message, 'player:track:ensure')
     }
 
+    this.emitTrace(PLAYER_TRACE_EVENT.trackEnsure, RUNTIME_TRACE_STATUS.applied, {
+      trackId: input.trackId,
+      order: input.order,
+      source: input.source,
+      active: input.active,
+      role: input.role
+    })
+
     return this.refreshTimelineEndFromMountedPlan()
   }
 
@@ -175,6 +191,14 @@ export class PlayerFacade implements PlayerApi {
     if (!appendResult.ok) {
       return this.reject(appendResult.error.code, appendResult.error.message, 'player:track:append-generated')
     }
+
+    this.emitTrace(PLAYER_TRACE_EVENT.trackAppendGenerated, RUNTIME_TRACE_STATUS.applied, {
+      trackId: input.trackId,
+      appendedCount: input.events.length,
+      firstEventMs: input.events[0]?.ms,
+      lastEventMs: input.events[input.events.length - 1]?.ms,
+      role: this.trackManager.getTrackMeta(input.trackId)?.role
+    })
 
     return this.refreshTimelineEndFromMountedPlan()
   }
@@ -194,13 +218,121 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Resolves the seek horizon from all currently known future events.
+   * Resolves the full author horizon from all currently known future events.
    */
-  private resolveSeekEndMs(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): number {
+  private resolveAuthorEndMs(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): number {
     return Math.max(
       this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan),
       this.resolveTimelineEndMs(runtimePlan)
     )
+  }
+
+  /**
+   * Resolves the current seek cap from live horizon values.
+   */
+  private resolveCurrentSeekEndMs(): number {
+    switch (this.runtimePolicy.seekPolicy) {
+      case 'disabled':
+        return 0
+      case 'played-only':
+        return this.playedEndMs
+      case 'master-projected':
+        return Math.max(this.playedEndMs, this.projectedMasterEndMs)
+      case 'author-unrestricted':
+      default:
+        return this.authorEndMs
+    }
+  }
+
+  /**
+   * Returns true when at least one loaded track is marked as master.
+   */
+  private hasLoadedMasterTracks(): boolean {
+    return this.trackManager.state.loadedTrackIds.some(
+      (trackId) => this.trackManager.getTrackMeta(trackId)?.role === 'master'
+    )
+  }
+
+  /**
+   * Returns true when one event belongs to a master track.
+   */
+  private isMasterTrackEvent(event: TimelineEvent): boolean {
+    if (!event.trackId) {
+      return false
+    }
+
+    return this.trackManager.getTrackMeta(event.trackId)?.role === 'master'
+  }
+
+  /**
+   * Returns true when one event is replayable for the current seek reconstruction.
+   */
+  private shouldReplayEventForSeek(event: TimelineEvent, playedReplayEndMs: number): boolean {
+    if (event.ms <= playedReplayEndMs) {
+      return true
+    }
+
+    if (!this.hasLoadedMasterTracks()) {
+      return true
+    }
+
+    return this.isMasterTrackEvent(event)
+  }
+
+  /**
+   * Records the furthest position that can contribute to the replayable played horizon.
+   */
+  private recordPlayedProgress(event: TimelineEvent): void {
+    if (this.timelineReplayInProgress) {
+      return
+    }
+
+    if (this.hasLoadedMasterTracks() && !this.isMasterTrackEvent(event)) {
+      return
+    }
+
+    this.playedEndMs = Math.max(this.playedEndMs, event.ms)
+    this.seekEndMs = this.resolveCurrentSeekEndMs()
+  }
+
+  /**
+   * Updates the current horizon snapshot from one mounted runtime plan.
+   */
+  private syncHorizonFromRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
+    const previousTimelineEndMs = this.timelineEndMs
+    const previousProjectedMasterEndMs = this.projectedMasterEndMs
+    const previousAuthorEndMs = this.authorEndMs
+    const previousSeekEndMs = this.seekEndMs
+
+    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.projectedMasterEndMs = this.timelineEndMs
+    this.authorEndMs = this.resolveAuthorEndMs(runtimePlan)
+    this.seekEndMs = this.resolveCurrentSeekEndMs()
+
+    if (
+      previousTimelineEndMs !== this.timelineEndMs ||
+      previousProjectedMasterEndMs !== this.projectedMasterEndMs ||
+      previousAuthorEndMs !== this.authorEndMs ||
+      previousSeekEndMs !== this.seekEndMs
+    ) {
+      this.emitTrace(PLAYER_TRACE_EVENT.horizonSync, RUNTIME_TRACE_STATUS.applied, {
+        timelineEndMs: this.timelineEndMs,
+        projectedMasterEndMs: this.projectedMasterEndMs,
+        authorEndMs: this.authorEndMs,
+        seekEndMs: this.seekEndMs,
+        playedEndMs: this.playedEndMs,
+        loadedTracks: this.trackManager.state.loadedTrackIds.map((trackId) => {
+          const meta = this.trackManager.getTrackMeta(trackId)
+          return {
+            trackId,
+            role: meta?.role,
+            active: meta?.active,
+            order: meta?.order,
+            source: meta?.source
+          }
+        })
+      })
+    }
   }
 
 
@@ -266,7 +398,8 @@ export class PlayerFacade implements PlayerApi {
   constructor(options: CreatePlayerOptions = {}) {
     this.runtimePolicy = {
       allowedRebuildModes:
-        options.runtimePolicy?.allowedRebuildModes ?? DEFAULT_RUNTIME_POLICY.allowedRebuildModes
+        options.runtimePolicy?.allowedRebuildModes ?? DEFAULT_RUNTIME_POLICY.allowedRebuildModes,
+      seekPolicy: options.runtimePolicy?.seekPolicy ?? DEFAULT_RUNTIME_POLICY.seekPolicy
     }
     this.onTimelineEvent = options.onTimelineEvent
 
@@ -489,7 +622,10 @@ export class PlayerFacade implements PlayerApi {
     this.scene = null
     this.timelineMs = 0
     this.timelineEndMs = 0
+    this.projectedMasterEndMs = 0
+    this.authorEndMs = 0
     this.seekEndMs = 0
+    this.playedEndMs = 0
     this.playbackStartMs = null
     this.sequenceEnded = false
     this.nextPublicEventIndex = 0
@@ -588,8 +724,7 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+    this.syncHorizonFromRuntimePlan(runtimePlan)
     return { ok: true }
   }
 
@@ -607,6 +742,7 @@ export class PlayerFacade implements PlayerApi {
     this.playbackStartMs = null
     this.sequenceEnded = false
     this.nextPublicEventIndex = 0
+    this.playedEndMs = 0
     this.mediaSync.resetPlayback()
 
     this.scene.tracks = consolidateSceneTracks(this.scene)
@@ -636,8 +772,7 @@ export class PlayerFacade implements PlayerApi {
   private applyMountedRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
     this.director.load(runtimePlan.timelinePlan)
     this.loadMediaRuntime(runtimePlan.runtimePersos)
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+    this.syncHorizonFromRuntimePlan(runtimePlan)
   }
 
   /**
@@ -709,7 +844,7 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.syncHorizonFromRuntimePlan(runtimePlan)
   }
 
   /**
@@ -878,12 +1013,11 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Replays due events for seek while deferring terminal sequence:end activation.
    */
-  private async replayDueTimelineEventsForSeek(timelineMs: number): Promise<number | null> {
-    if (!this.onTimelineEvent) {
-      this.runDueTimelineEventsSync(timelineMs)
-      return null
-    }
-
+  private async replayDueTimelineEventsForSeek(
+    timelineMs: number,
+    eventMsByEventId: ReadonlyMap<string, number>,
+    playedReplayEndMs: number
+  ): Promise<number | null> {
     this.timelineReplayInProgress = true
     try {
       let guard = 0
@@ -899,7 +1033,21 @@ export class PlayerFacade implements PlayerApi {
             return event.ms
           }
 
-          await this.dispatchTimelineEvent(event)
+          if (!this.shouldReplayEventForSeek(event, playedReplayEndMs)) {
+            continue
+          }
+
+          this.emitTrace(PLAYER_TRACE_EVENT.seekReplayEvent, RUNTIME_TRACE_STATUS.info, {
+            eventId: event.id,
+            eventName: event.name,
+            eventMs: event.ms,
+            trackId: event.trackId,
+            authorInterceptorConfigured: this.onTimelineEvent !== undefined,
+            dispatchedThroughAuthor: false
+          })
+
+          this.renderer.syncAnimationsToTimeline(event.ms, eventMsByEventId)
+          this.runTimelineEvent(event)
         }
       }
     } finally {
@@ -996,12 +1144,14 @@ export class PlayerFacade implements PlayerApi {
    */
   private runTimelineEvent(event: TimelineEvent): void {
     if (this.handleTrackControlEvent(event)) {
+      this.recordPlayedProgress(event)
       return
     }
 
     const directorResult = this.director.runTimelineEvent(event)
     if (directorResult.commits.length === 0) {
       this.mediaSync.applyResolvedActions(event.ms, directorResult.resolvedActions)
+      this.recordPlayedProgress(event)
       return
     }
 
@@ -1025,6 +1175,9 @@ export class PlayerFacade implements PlayerApi {
       animationAppliedCount: tickResult.animationAppliedCount,
       conflictCount: tickResult.conflictCount
     })
+
+    this.recordPlayedProgress(event)
+    this.seekEndMs = this.resolveCurrentSeekEndMs()
 
   }
 
@@ -1102,8 +1255,7 @@ export class PlayerFacade implements PlayerApi {
           message: rendererLoadResult.error.message
         })
       } else {
-        this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-        this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+        this.syncHorizonFromRuntimePlan(runtimePlan)
       }
     }
   }
@@ -1158,8 +1310,7 @@ export class PlayerFacade implements PlayerApi {
         })
       }
 
-      this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-      this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+      this.syncHorizonFromRuntimePlan(runtimePlan)
 
       this.trackManager.syncCursor({ nowMs: 0 })
       this.timelineMs = 0
@@ -1276,7 +1427,12 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const timelineEvent = this.createTimelineEvent(event)
-    const shouldPersistEvent = timelineEvent.source === RUNTIME_EVENT_SOURCE.user
+    const shouldPersistEvent =
+      timelineEvent.source === RUNTIME_EVENT_SOURCE.user ||
+      (timelineEvent.source === RUNTIME_EVENT_SOURCE.system &&
+        timelineEvent.name !== 'scene:ready' &&
+        timelineEvent.name !== 'scene:start' &&
+        timelineEvent.name !== 'scene:end')
     const previousTimelineEndMs = this.timelineEndMs
 
     if (shouldPersistEvent) {
@@ -1371,6 +1527,17 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
+    if (this.runtimePolicy.seekPolicy === 'disabled') {
+      return this.reject(
+        'HOST_INVALID_PLAYER_STATE',
+        'seek is disabled by policy',
+        'player:seek',
+        {
+          currentState: this.status
+        }
+      )
+    }
+
     this.setStatus(PLAYER_STATUS.seeking)
     this.emitTrace('player:seek:started', RUNTIME_TRACE_STATUS.applied, {
       targetTimelineMs
@@ -1404,14 +1571,13 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+    this.syncHorizonFromRuntimePlan(runtimePlan)
+
+    const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs)
 
     this.emitStateSnapshot()
 
-    this.timelineMs = this.onTimelineEvent
-      ? this.runtimePlanner.clampTimelineMs(targetTimelineMs)
-      : Math.min(this.runtimePlanner.clampTimelineMs(targetTimelineMs), this.timelineEndMs)
+    this.timelineMs = Math.min(boundedTargetTimelineMs, this.resolveCurrentSeekEndMs())
 
     this.director.start()
     const rendererStartResult = this.startRenderer('seek-replay')
@@ -1428,30 +1594,20 @@ export class PlayerFacade implements PlayerApi {
       )
     }
 
-    let eventMsByEventId = new Map<string, number>()
-    if (!this.onTimelineEvent) {
-      eventMsByEventId = new Map<string, number>(
-        this.director.getSortedEvents().map((event) => [event.id, event.ms])
-      )
+    const eventMsByEventId = new Map<string, number>(
+      this.trackManager.getAllEvents().map((event) => [event.id, event.ms])
+    )
+    const playedReplayEndMs = this.playedEndMs
 
-      const sortedEvents = this.director.getSortedEvents()
-      for (const timelineEvent of sortedEvents) {
-        if (timelineEvent.ms > this.timelineMs) {
-          break
-        }
-
-        this.renderer.syncAnimationsToTimeline(timelineEvent.ms, eventMsByEventId)
-        this.runTimelineEvent(timelineEvent)
-      }
-    } else {
-      this.trackManager.resetCursor()
-      const deferredSequenceEndMs = await this.replayDueTimelineEventsForSeek(this.timelineMs)
-      if (deferredSequenceEndMs !== null) {
-        this.timelineMs = Math.min(this.timelineMs, Math.max(0, deferredSequenceEndMs - 1))
-      }
-      eventMsByEventId = new Map<string, number>(
-        this.trackManager.getAllEvents().map((event) => [event.id, event.ms])
-      )
+    this.trackManager.resetActiveTracks()
+    this.trackManager.resetCursor()
+    const deferredSequenceEndMs = await this.replayDueTimelineEventsForSeek(
+      this.timelineMs,
+      eventMsByEventId,
+      playedReplayEndMs
+    )
+    if (deferredSequenceEndMs !== null) {
+      this.timelineMs = Math.min(this.timelineMs, Math.max(0, deferredSequenceEndMs - 1))
     }
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs })
@@ -1549,9 +1705,6 @@ export class PlayerFacade implements PlayerApi {
         code: rendererLoadResult.error.code
       })
     }
-
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
 
     if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
       this.director.start()
@@ -1669,8 +1822,7 @@ export class PlayerFacade implements PlayerApi {
         )
       }
 
-      this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-      this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
+      this.syncHorizonFromRuntimePlan(runtimePlan)
 
       if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
         this.director.start()
@@ -1739,8 +1891,13 @@ export class PlayerFacade implements PlayerApi {
       sequenceEnded: this.sequenceEnded,
       sceneId: this.scene?.id,
       timelineMs: this.resolveCurrentTimelineMs(),
-      timelineEndMs: this.timelineEndMs,
-      seekEndMs: this.seekEndMs,
+      horizon: {
+        playedEndMs: this.playedEndMs,
+        projectedMasterEndMs: this.projectedMasterEndMs,
+        authorEndMs: this.authorEndMs,
+        progressEndMs: this.timelineEndMs,
+        seekEndMs: this.resolveCurrentSeekEndMs()
+      },
       runtimeRevision: rendererState.runtimeRevision
     }
   }

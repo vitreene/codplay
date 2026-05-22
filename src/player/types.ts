@@ -15,8 +15,23 @@ export type PlayerStatus = typeof PLAYER_STATUS[keyof typeof PLAYER_STATUS]
 
 export type RebuildMode = 'state' | 'full'
 
+export type SeekPolicy = 'disabled' | 'played-only' | 'master-projected' | 'author-unrestricted'
+
+export type HorizonSnapshot = {
+  playedEndMs: number
+  projectedMasterEndMs: number
+  authorEndMs: number
+  progressEndMs: number
+  seekEndMs: number
+  segment?: {
+    startMs: number
+    endMs: number
+  }
+}
+
 export type PlayerRuntimePolicy = {
   allowedRebuildModes: RebuildMode[]
+  seekPolicy: SeekPolicy
 }
 
 export type ListenEmit = {
@@ -99,8 +114,7 @@ export type PlayerStateSnapshot = {
   sequenceEnded: boolean
   sceneId?: string
   timelineMs: number
-  timelineEndMs: number
-  seekEndMs: number
+  horizon: HorizonSnapshot
   runtimeRevision: number
 }
 

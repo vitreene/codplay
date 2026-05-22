@@ -160,6 +160,17 @@ export class TrackManager implements TrackManagerApi {
   }
 
   /**
+   * Restores loaded track activation flags before one fresh replay pass.
+   */
+  resetActiveTracks(): void {
+    for (const track of this.trackById.values()) {
+      track.active = track.initialActive
+    }
+
+    this.syncState()
+  }
+
+  /**
    * Resets all track cursors to the start of their event list.
    */
   resetCursor(): void {

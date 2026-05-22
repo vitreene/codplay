@@ -84,6 +84,7 @@ export type TrackManagerApi = {
     active?: boolean
     role?: string
   }) => TrackManagerCommandResult
+  resetActiveTracks: () => void
   resetCursor: () => void
   syncCursor: (input: { nowMs: number }) => void
   collectDueEvents: (input: { nowMs: number }) => {

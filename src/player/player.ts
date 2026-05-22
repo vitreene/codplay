@@ -188,11 +188,6 @@ export class Player implements PlayerApi {
         }
       }
 
-      const helperTrackResetResult = await this.deactivateGeneratedHelperTracks()
-      if (!helperTrackResetResult.ok) {
-        return helperTrackResetResult
-      }
-
       this.resetAuthorState()
 
       return this.normalizeResult(await this.player.seek(input.timelineMs))
@@ -287,24 +282,6 @@ export class Player implements PlayerApi {
     }
 
     this.strapLoopSchedulers.clear()
-  }
-
-  /**
-   * Deactivates all currently known helper-generated tracks before one seek rebuild.
-   */
-  private async deactivateGeneratedHelperTracks(): Promise<ApiResult<void>> {
-    if (this.generatedHelperTrackIds.size === 0) {
-      return { ok: true, data: undefined }
-    }
-
-    const trackIds = [...this.generatedHelperTrackIds]
-    this.generatedHelperTrackIds.clear()
-
-    return this.normalizeResult(await this.player.emit({
-      name: 'track:deactivate',
-      payload: { trackIds },
-      source: RUNTIME_EVENT_SOURCE.system
-    }))
   }
 
   /**
@@ -632,7 +609,7 @@ export class Player implements PlayerApi {
 
     const scene = this.currentScene
     if (scene === null) {
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
     }
 
     const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
@@ -644,7 +621,7 @@ export class Player implements PlayerApi {
         return this.routeMatchingRules(storyRules, event, source, scopeStoryId, depth, scope)
       }
 
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
     }
 
     const sceneRules = scene.listen.filter((rule) => rule.on === event.name)
@@ -655,7 +632,7 @@ export class Player implements PlayerApi {
       })
     }
 
-    return this.emitRuntimeEvent(event, source, undefined, scope.ms)
+    return this.emitRuntimeEvent(event, source, undefined, scope.ms, scope.trackId)
   }
 
   /**
@@ -685,7 +662,7 @@ export class Player implements PlayerApi {
     }
 
     if (emittedEvents.length === 0) {
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
     }
 
     for (const emittedEvent of emittedEvents) {
@@ -696,7 +673,7 @@ export class Player implements PlayerApi {
           data: emittedEvent.data,
           cascade: emittedEvent.cascade
         },
-        RUNTIME_EVENT_SOURCE.system,
+        RUNTIME_EVENT_SOURCE.user,
         nextScopeStoryId,
         depth + 1,
         {
@@ -720,7 +697,8 @@ export class Player implements PlayerApi {
     event: StoryEvent,
     source: RuntimeEventSource,
     scopeStoryId?: string,
-    ms?: number
+    ms?: number,
+    trackId?: string
   ): Promise<ApiResult<void>> {
     const result = this.normalizeResult(
       await this.player.emit({
@@ -729,7 +707,8 @@ export class Player implements PlayerApi {
         payload: event.data,
         scopeStoryId,
         cascade: event.cascade,
-        source
+        source,
+        trackId
       })
     )
 
