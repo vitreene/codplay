@@ -160,6 +160,15 @@ export class TrackManager implements TrackManagerApi {
   }
 
   /**
+   * Resets all track cursors to the start of their event list.
+   */
+  resetCursor(): void {
+    for (const track of this.trackById.values()) {
+      track.nextIndex = 0
+    }
+  }
+
+  /**
    * Recomputes each track cursor from one target timeline position.
    */
   syncCursor(input: { nowMs: number }): void {

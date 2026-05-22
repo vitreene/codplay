@@ -20,7 +20,8 @@ Un `Strap` est une fonction stateless enregistree dans une collection partagee.
 - un `Strap` est identifie par son `name` (cle de collection)
 - un `Strap` est appele par la `Story` sur un event
 - un `Strap` ne met jamais a jour de node
-- un `Strap` retourne ou planifie des events a reinjecter dans le pipeline `Story`
+- un `Strap` lit le `state` de sa story mais n'en est jamais le lieu de stockage
+- un `Strap` retourne des `events`, des mutations `update`, et des `effects`
 - la transformation pure de `data` est portee par `listen.transform` (pas par la sortie strap)
 
 ## Contrat canonique
@@ -40,10 +41,18 @@ type StrapMeta = {
 }
 
 type StrapHelpers = {
-  delay: (ms: number, event: StoryEvent) => HelperHandle
-  repeat: (opts: { everyMs: number; times: number }, factory: (index: number) => StoryEvent[]) => HelperHandle
+  delay: (ms: number, step: StrapStep | ((index: number) => StrapStep)) => HelperHandle
+  repeat: (
+    opts: { everyMs: number | ((index: number) => number); times: number },
+    step: StrapStep | ((index: number) => StrapStep)
+  ) => HelperHandle
   loop: (opts: { everyMs: number }, factory: (index: number) => StoryEvent[]) => HelperHandle
-  stagger: (opts: { stepMs: number }, events: StoryEvent[]) => HelperHandle[]
+  stagger: (opts: { stepMs: number }, steps: StrapStep[]) => HelperHandle[]
+}
+
+type StrapStep = {
+  event?: StoryEvent
+  update?: Record<string, unknown>
 }
 
 type HelperHandle = {
@@ -66,6 +75,8 @@ type StrapInput = {
 type StrapOutput = {
   events?: StoryEvent[]
   warnings?: string[]
+  update?: Record<string, unknown>
+  effects?: Array<{ name: string; data?: Record<string, unknown> }>
 }
 
 type StrapFn = (input: StrapInput) => Promise<StrapOutput | void>
@@ -86,7 +97,7 @@ type StrapCollection = Record<string, StrapFn>
 - le `Strap` est execute dans le cycle runtime courant
 - un `Strap` est asynchrone par defaut
 - les emissions differees passent uniquement par `helpers` (runtime/ticker)
-- un `Strap` renvoie des events, pas une donnee de retour metier directe
+- un `Strap` renvoie des `events`, des `update` et des `effects`, pas une donnee de retour metier directe
 
 3. Ordre d'execution
 
@@ -95,13 +106,16 @@ type StrapCollection = Record<string, StrapFn>
 
 4. Sorties
 
-- un `Strap` produit des events via `events` (immediat) ou `helpers` (differe)
+- un `Strap` produit des `events`, des `update` et des `effects`
+- `events` et `update` sont persistables/rejouables via les tracks
+- `effects` sont adresses au niveau `Scene`
 - la `Story` determine la portee finale selon `cascade` et son pipeline
 - au niveau `Scene`, un strap d'entree peut participer au bootstrap en declenchant des operations de montage indirectes puis des events de sequence.
 
-5. Side-effects
+5. Effects
 
-- les side-effects externes passent par des events adresses a l'API Scene/runtime
+- les `effects` externes passent par le niveau `Scene`
+- un `effect` peut emettre en retour des events pour la sequence
 - un `Strap` n'accede pas directement a des IO externes hors API runtime exposee
 
 ## Exemple applique - counter
@@ -126,29 +140,35 @@ const straps: StrapCollection = {
     const totalSteps = Math.abs((start - end) / step)
     const durationMs = totalSteps * 1000
 
-    context.helpers.delay(0, { name: "counter_color", data: { color: "green" } })
-    context.helpers.delay(Math.floor(durationMs / 3), { name: "counter_color", data: { color: "orange" } })
-    context.helpers.delay(Math.floor((2 * durationMs) / 3), { name: "counter_color", data: { color: "red" } })
+    context.helpers.delay(0, { event: { name: "counter_color", data: { color: "green" } } })
+    context.helpers.delay(Math.floor(durationMs / 3), { event: { name: "counter_color", data: { color: "orange" } } })
+    context.helpers.delay(Math.floor((2 * durationMs) / 3), { event: { name: "counter_color", data: { color: "red" } } })
 
     context.helpers.repeat({ everyMs: 1000, times: totalSteps + 1 }, (index) => {
       const value = start > end ? Math.max(end, start - index * step) : Math.min(end, start + index * step)
-      return [{ name: "counter-text", data: { content: String(value) } }]
+      return {
+        event: { name: "counter-text", data: { content: String(value) } },
+        update: { count: value }
+      }
     })
 
     const progressTimes = Math.max(1, Math.floor(durationMs / 100) + 1)
     context.helpers.repeat({ everyMs: 100, times: progressTimes }, (index) => {
       const elapsedMs = index * 100
       const progress = Math.min(100, Math.max(0, (elapsedMs / durationMs) * 100))
-      return [{ name: "counter_progress", data: { progress: Number(progress.toFixed(1)) } }]
-    })
-
-    context.helpers.delay(0, {
-      name: "scene_api_call",
-      data: {
-        action: "runtime.db.counter_started",
-        payload: { start, end, step, meta }
+      return {
+        event: { name: "counter_progress", data: { progress: Number(progress.toFixed(1)) } }
       }
     })
+
+    return {
+      effects: [
+        {
+          name: "runtime.db.counter_started",
+          data: { start, end, step, meta }
+        }
+      ]
+    }
   }
 }
 ```
@@ -161,5 +181,6 @@ const straps: StrapCollection = {
 
 - un `Strap` est stateless par design
 - un `Strap` est reference par `name` dans une collection partagee
-- les emissions temporelles passent uniquement par les helpers runtime
+- les emissions temporelles finies passent uniquement par les helpers runtime et sont materialisees en tracks rejouables
+- `effects` ne sont jamais rejoues au `seek`
 - la `Story` reste l'interlocuteur unique de la `Scene`

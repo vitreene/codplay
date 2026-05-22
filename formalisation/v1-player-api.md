@@ -47,6 +47,7 @@ Etat minimal complet:
 type PlayerStateSnapshot = {
   status: "idle" | "ready" | "playing" | "paused" | "seeking" | "error"
   timelineMs: number
+  horizon: HorizonSnapshot
   clockSource: "ticker" | "master"
   activeMasterPersoId?: string
 }
@@ -66,6 +67,9 @@ type PlayerStateSnapshot = {
 - toutes les emissions runtime passent par policies actives.
 - si un master est actif, `timelineMs` suit le temps de ce master.
 - si aucun master actif n'est disponible, `timelineMs` suit le ticker standard.
+- `getState().horizon` expose les bornes de progress, projection, seek et segment.
+- `seekEndMs` n'est pas necessairement egal a `progressEndMs`.
+- reference seek: `v1-seek-spec.md`.
 - `getState()` reste un etat technique du player et n'expose pas de donnees story-specific.
 - les operations de placement des stories et des persos restent des operations techniques runtime, hors facade publique minimale V1.
 - les elements peuvent entrer et sortir du DOM pendant la sequence sans etre purges du runtime.
@@ -77,3 +81,4 @@ type PlayerStateSnapshot = {
 - V1 se concentre sur la lisibilite de la facade.
 - les optimisations haute frequence restent post-V1 (selon besoin reel).
 - le caractere obligatoire/optionnel de `resourceManifest` sera ajuste apres premiers tests d'integration.
+- reference bornes de lecture: `v1-horizon-spec.md`.

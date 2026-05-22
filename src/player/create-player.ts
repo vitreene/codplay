@@ -124,12 +124,14 @@ export class PlayerFacade implements PlayerApi {
   private scene: StrictSceneDoc | null = null
   private timelineMs = 0
   private timelineEndMs = 0
+  private seekEndMs = 0
   private playbackStartMs: number | null = null
   private sequenceEnded = false
   private readonly ticker = new TimeTicker()
   private nextPublicEventIndex = 0
   private readonly mountedStoryIds = new Set<string>()
   private readonly scheduledStoryIds = new Set<string>()
+  private timelineReplayInProgress = false
 
   private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 })
   private readonly traceListeners = new Set<PlayerTraceListener>()
@@ -189,6 +191,16 @@ export class PlayerFacade implements PlayerApi {
         return isMediaSyncRuntimeComponent(component) ? component.getDurationMs() : null
       }
     })
+  }
+
+  /**
+   * Resolves the seek horizon from all currently known future events.
+   */
+  private resolveSeekEndMs(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): number {
+    return Math.max(
+      this.runtimePlanner.resolveTimelineEndMsFromPlan(runtimePlan.timelinePlan),
+      this.resolveTimelineEndMs(runtimePlan)
+    )
   }
 
 
@@ -477,6 +489,7 @@ export class PlayerFacade implements PlayerApi {
     this.scene = null
     this.timelineMs = 0
     this.timelineEndMs = 0
+    this.seekEndMs = 0
     this.playbackStartMs = null
     this.sequenceEnded = false
     this.nextPublicEventIndex = 0
@@ -576,6 +589,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
     return { ok: true }
   }
 
@@ -623,6 +637,7 @@ export class PlayerFacade implements PlayerApi {
     this.director.load(runtimePlan.timelinePlan)
     this.loadMediaRuntime(runtimePlan.runtimePersos)
     this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
   }
 
   /**
@@ -810,7 +825,7 @@ export class PlayerFacade implements PlayerApi {
    */
   private finalizeSequenceEnd(sequenceEndMs: number): void {
     this.sequenceEnded = true
-    this.timelineMs = Math.min(sequenceEndMs, this.timelineEndMs)
+    this.timelineMs = Math.min(sequenceEndMs, this.seekEndMs)
     this.playbackStartMs = null
     this.stopPlaybackLoop()
     this.director.pause()
@@ -858,6 +873,40 @@ export class PlayerFacade implements PlayerApi {
         await this.dispatchTimelineEvent(event)
       }
     }
+  }
+
+  /**
+   * Replays due events for seek while deferring terminal sequence:end activation.
+   */
+  private async replayDueTimelineEventsForSeek(timelineMs: number): Promise<number | null> {
+    if (!this.onTimelineEvent) {
+      this.runDueTimelineEventsSync(timelineMs)
+      return null
+    }
+
+    this.timelineReplayInProgress = true
+    try {
+      let guard = 0
+      while (guard < 1000) {
+        guard += 1
+        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events
+        if (dueEvents.length === 0) {
+          return null
+        }
+
+        for (const event of dueEvents) {
+          if (event.name === PLAYER_SEQUENCE_EVENT.sequenceEnd) {
+            return event.ms
+          }
+
+          await this.dispatchTimelineEvent(event)
+        }
+      }
+    } finally {
+      this.timelineReplayInProgress = false
+    }
+
+    return null
   }
 
   /**
@@ -1054,6 +1103,7 @@ export class PlayerFacade implements PlayerApi {
         })
       } else {
         this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+        this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
       }
     }
   }
@@ -1109,6 +1159,7 @@ export class PlayerFacade implements PlayerApi {
       }
 
       this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+      this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
 
       this.trackManager.syncCursor({ nowMs: 0 })
       this.timelineMs = 0
@@ -1252,7 +1303,7 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    if (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null) {
+    if (!this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
       const runtimePlan = this.createMountedRuntimePlan()
       if (runtimePlan !== null) {
         const eventDurationMs = this.runtimePlanner.resolveEventDurationMsFromTimelinePlan(runtimePlan.timelinePlan, timelineEvent.name)
@@ -1264,11 +1315,11 @@ export class PlayerFacade implements PlayerApi {
 
     this.syncMediaTimeline(timelineEvent.ms)
 
-    if (!shouldPersistEvent || this.timelineEndMs !== previousTimelineEndMs || this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null) {
+    if (!this.timelineReplayInProgress && (!shouldPersistEvent || this.timelineEndMs !== previousTimelineEndMs || this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
       this.emitStateSnapshot()
     }
 
-    if (timelineEvent.name === PLAYER_SEQUENCE_EVENT.sequenceEnd) {
+    if (timelineEvent.name === PLAYER_SEQUENCE_EVENT.sequenceEnd && this.status === PLAYER_STATUS.playing) {
       this.finalizeSequenceEnd(timelineEvent.ms)
     }
 
@@ -1354,6 +1405,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
 
     this.emitStateSnapshot()
 
@@ -1392,8 +1444,11 @@ export class PlayerFacade implements PlayerApi {
         this.runTimelineEvent(timelineEvent)
       }
     } else {
-      this.trackManager.syncCursor({ nowMs: 0 })
-      await this.runDueTimelineEvents(this.timelineMs)
+      this.trackManager.resetCursor()
+      const deferredSequenceEndMs = await this.replayDueTimelineEventsForSeek(this.timelineMs)
+      if (deferredSequenceEndMs !== null) {
+        this.timelineMs = Math.min(this.timelineMs, Math.max(0, deferredSequenceEndMs - 1))
+      }
       eventMsByEventId = new Map<string, number>(
         this.trackManager.getAllEvents().map((event) => [event.id, event.ms])
       )
@@ -1496,6 +1551,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+    this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
 
     if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
       this.director.start()
@@ -1614,6 +1670,7 @@ export class PlayerFacade implements PlayerApi {
       }
 
       this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
+      this.seekEndMs = this.resolveSeekEndMs(runtimePlan)
 
       if (previousStatus === PLAYER_STATUS.playing || previousStatus === PLAYER_STATUS.paused) {
         this.director.start()
@@ -1683,6 +1740,7 @@ export class PlayerFacade implements PlayerApi {
       sceneId: this.scene?.id,
       timelineMs: this.resolveCurrentTimelineMs(),
       timelineEndMs: this.timelineEndMs,
+      seekEndMs: this.seekEndMs,
       runtimeRevision: rendererState.runtimeRevision
     }
   }

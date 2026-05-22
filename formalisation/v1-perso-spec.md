@@ -59,6 +59,8 @@ type PersoInitialCommon = {
 
 type BroadcastAction = {
   type: "START" | "PAUSE" | "STOP"
+  startAt?: number
+  endAt?: number
   transition?: {
     from?: Record<string, unknown>
     to?: Record<string, unknown>
@@ -144,13 +146,17 @@ type PersoTransitionTiming = {
 - un seul master peut etre actif a un instant donne.
 - quand plusieurs masters sont actives, le dernier active devient prioritaire.
 - l'arbitrage des masters precedents suit `masterClock.previousMasterAction` (policy runtime).
+- `master` reste necessaire au niveau media pour piloter le ticker.
+- la participation au calcul de duree/progress releve de la track (`track.role: "master"`), pas uniquement du perso.
 
 7. Broadcast
 
 - `broadcast` est une action du `Perso` et non une API parallele.
 - `broadcast.type` accepte `START`, `PAUSE`, `STOP`.
+- `broadcast.startAt` et `broadcast.endAt` permettent de viser un segment de media.
 - `broadcast.transition` decrit une transition de lecture (ex: volume) appliquee au composant cible.
 - `broadcast` pilote l'etat de lecture du composant sans imposer une decision de propagation event.
+- la convention de fin media reste configurable; la convention V1 recommandee est `media:end`.
 
 ## Contrat event applique a un Perso
 
@@ -169,6 +175,7 @@ Regles d'application:
 - event sans data: `{ name: "actionName" }`.
 - event cible perso: `{ name: "persoId", data: PersoActionType }`.
 - quand `event.name === perso.id`, la valeur `event.data` est l'action appliquee au `Perso`.
+- plus generalement, `event.data` peut aussi alimenter une action non nulle selon la policy runtime de fusion shallow.
 
 Exemple canonique:
 

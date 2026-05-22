@@ -14,6 +14,7 @@ Definir la source, la signature et les regles d'execution de `delay`, `repeat`, 
 - ils sont fournis par le runtime `Director` via le scheduler pilote par `Ticker`.
 - le runtime expose une facade publique `player.schedule` pour les usages hors strap.
 - `Director` reste interne et n'est jamais adresse directement par l'API publique.
+- le contrat des helpers dans un `Strap` est distinct du contrat d'emission active de `player.schedule`.
 
 ## Exposition facade Player
 
@@ -51,16 +52,21 @@ type StoryEvent = {
   cascade?: boolean
 }
 
+type StrapStep = {
+  event?: StoryEvent
+  update?: Record<string, unknown>
+}
+
 type HelperHandle = {
   id: string
   cancel: () => void
 }
 
 type StrapHelpers = {
-  delay: (ms: number, event: StoryEvent) => HelperHandle
+  delay: (ms: number, step: StrapStep | ((index: number) => StrapStep)) => HelperHandle
   repeat: (
-    options: { everyMs: number; times: number },
-    factory: (index: number) => StoryEvent[]
+    options: { everyMs: number | ((index: number) => number); times: number },
+    step: StrapStep | ((index: number) => StrapStep)
   ) => HelperHandle
   loop: (
     options: { everyMs: number },
@@ -68,7 +74,7 @@ type StrapHelpers = {
   ) => HelperHandle
   stagger: (
     options: { stepMs: number },
-    events: StoryEvent[]
+    steps: StrapStep[]
   ) => HelperHandle[]
 }
 ```
@@ -87,7 +93,8 @@ type StrapHelpers = {
 - en `pause`, les plans helper sont geles sans perte d'ordre.
 - en `stop`, les plans helper en attente sont annules.
 - en `destroy`, si cette commande technique est utilisee, les plans helper en attente sont annules.
-- en `seek`, le comportement suit les regles runtime de replay/seek de la sequence.
+- en `seek`, les helpers de strap ne sont pas rejoues comme execution de code.
+- en `seek`, le runtime relit les `events` et `update` deja materialises dans les tracks.
 
 3. Validation
 
@@ -108,13 +115,13 @@ type StrapHelpers = {
 6. Replay / seek
 
 - `replay` regenere les emissions a partir du journal canonique ou du plan compile.
-- `seek backward` render-only ne rejoue pas les side-effects helper.
+- `seek backward` render-only ne rejoue pas les `effects` helper.
 - `scene:replay-from-zero` reconstruit integralement le plan helper.
 
-7. Side-effects
+7. Effects
 
-- les helpers n'executent pas de side-effects externes directement.
-- les side-effects passent par emission d'events vers l'API runtime/scene.
+- les helpers n'executent pas de `effects` externes directement.
+- les `effects` passent par emission d'events vers l'API runtime/scene.
 
 8. Policy runtime
 
@@ -123,16 +130,19 @@ type StrapHelpers = {
 
 ## Semantique par helper
 
-- `delay`: emet un event unique a `now + ms`.
-- `repeat`: emet `times` fois toutes les `everyMs`.
+- `delay`: produit un `StrapStep` unique a `now + ms`.
+- `repeat`: produit `times` occurrences d'un `StrapStep`.
+- quand `everyMs` est une fonction, sa valeur est un offset absolu depuis le depart du `repeat`.
 - `loop`: emet indefiniment toutes les `everyMs` jusqu'a annulation.
-- `stagger`: emet une liste d'events avec decalage progressif `index * stepMs`.
+- `stagger`: produit une liste de `StrapStep` avec decalage progressif `index * stepMs`.
+- la semantique "delai avant l'occurrence suivante" releve plutot de `stagger` que de `repeat`.
 
 ## Invariants helpers V1
 
 - source unique d'horloge runtime.
 - comportement deterministe a entree identique.
 - annulation explicite par handle.
-- aucune emission helper hors scheduler runtime.
+- dans un strap, les helpers finis ne jouent pas directement des `effects` runtime; ils construisent des sorties rejouables.
+- hors strap, `player.schedule` peut garder une semantique d'emission active.
 - exposition publique via `player.schedule` sans acces direct au `Director`.
 - execution helper alignee sur les transitions `play/pause/resume/stop` du `Player`; `destroy` reste un cas technique a part.

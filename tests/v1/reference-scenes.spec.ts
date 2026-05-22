@@ -381,13 +381,9 @@ describe('V1 - reference scenes', () => {
 
     expect(await player.seek({ timelineMs: 3600 })).toEqual({ ok: true, data: undefined })
     expect(player.getState().status).toBe('paused')
-    expect(player.getState().sequenceEnded).toBe(true)
-    expect(await player.seek({ timelineMs: 2600 })).toMatchObject({
-      ok: false,
-      error: {
-        code: 'PLAYER_SEQUENCE_ENDED'
-      }
-    })
+    expect(player.getState().sequenceEnded).toBe(false)
+
+    expect(await player.seek({ timelineMs: 2600 })).toEqual({ ok: true, data: undefined })
 
     expect(await player.play()).toEqual({ ok: true, data: undefined })
     expect(player.getState().sequenceEnded).toBe(false)

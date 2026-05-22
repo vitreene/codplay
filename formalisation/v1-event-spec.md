@@ -102,6 +102,13 @@ type StoryEventimeNode = {
 - si un `transform` retourne `undefined`, `event.data` devient `undefined` et un warning runtime est emis.
 - `transform` ne modifie jamais `name`, `cascade`, `context` ou `meta`.
 
+9. Application de `data` sur une action
+
+- `event.data` peut alimenter l'action appliquee de facon generale.
+- si `actions[event.name] === null`, `event.data` devient l'action appliquee.
+- si `actions[event.name]` existe deja, `event.data` peut etre fusionne shallow par-dessus selon la policy runtime de resolution.
+- le cas `event.name === perso.id` reste la convention la plus directe pour designer sans ambiguite un perso cible.
+
 ## Exemple
 
 ```json

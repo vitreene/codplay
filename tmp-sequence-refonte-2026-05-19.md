@@ -31,3 +31,9 @@
 - pipeline runtime strap implemente sur `Player` / `CodPlay`
 - `s4` valide le compteur strap avec events timeline + timeout + neutralisation par desactivation de tracks helper
 - media `seek/rewind` corriges cote runtime
+
+## Alerte reprise
+
+- plusieurs correctifs successifs sur `seek`, telco et straps ont rendu le comportement global moins lisible
+- reprendre a partir de `evolution/103-session-context-2026-05-20-strap-seek-regressions.md`
+- priorite: comparer le chemin `PlayerFacade` stable et le chemin `Player` + straps avant tout nouveau patch

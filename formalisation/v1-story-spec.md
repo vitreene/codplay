@@ -59,6 +59,7 @@ type StoryEventimeNode = {
 
 type StoryDef = {
   id: string
+  trackId?: string
   tracks?: Record<string, { active?: boolean }>
   entries: string[]
   initial: Record<string, unknown> | undefined
@@ -84,6 +85,7 @@ type StoryDef = {
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `state` est runtime-only et optionnel dans la definition.
+- `trackId` permet de designer explicitement la track cible principale de la story.
 
 2. Independance et placement
 
@@ -101,6 +103,8 @@ type StoryDef = {
 - `init(undefined)` signifie qu'aucun parametre externe n'est requis pour initialiser la story.
 - `initial` porte les donnees statiques de la story.
 - `state` peut rester `undefined` s'il n'est pas utilise.
+- `state` est la memoire auteur de la story.
+- `state` ne sert pas au runtime a stocker sa mecanique interne.
 - `initial` des `Perso` sert uniquement a la construction et au placement des elements.
 - toutes les stories de la scene sont initialisees a `scene.init`.
 - une story initialisee peut exister dans le runtime sans etre visible dans le DOM.
@@ -126,11 +130,15 @@ type StoryDef = {
 - en absence de `emit`, l'event entrant est redistribue tel quel.
 - `listen=[]` n'applique aucun filtrage: tous les events entrants sont redistribues tels quels.
 - quand `listen` contient des regles, seuls les events correspondants sont redistribues.
+- les `straps` peuvent produire `events`, `update` et `effects`.
+- `events` et `update` sont materialises dans les tracks.
+- `effects` ne sont jamais rejoues au `seek`.
 
 5. Pipeline d'execution
 
 - ordre canonique obligatoire: `listen -> transform -> straps -> emit -> persos`.
 - les events produits sont reinjectes dans le pipeline `Story`.
+- les mutations `update` produites par les straps sont rejouables au meme titre que les events.
 - l'ordre de traitement est stable selon l'ordre de declaration des regles.
 - pour une regle `listen`, l'ordre est: `transform` puis `straps` puis `emit`.
 - `transform` et `straps` partagent la meme entree runtime; seule la sortie differe.
@@ -178,7 +186,7 @@ type StoryDef = {
 - si le depart est deterministe sans interaction bloquante, les `applyAtMs` peuvent etre calcules au build.
 - si le depart depend d'une interaction runtime, les `applyAtMs` sont ancres au moment du trigger runtime.
 - le calcul absolu respecte: `applyAtMs = anchorMs + somme des startAt sur le chemin parent -> enfant d'eventimes`.
-- si aucun track explicite n'est indique pour un event de story, le fallback est le track `story.id`.
+- si aucun track explicite n'est indique pour un event de story, le fallback est `story.trackId` s'il existe, sinon `story.id`.
 
 11. Zero temporel de story
 

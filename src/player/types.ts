@@ -100,6 +100,7 @@ export type PlayerStateSnapshot = {
   sceneId?: string
   timelineMs: number
   timelineEndMs: number
+  seekEndMs: number
   runtimeRevision: number
 }
 

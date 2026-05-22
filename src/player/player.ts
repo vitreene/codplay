@@ -43,7 +43,10 @@ export class Player implements PlayerApi {
   private currentScene: CompiledScene['scene'] | null = null
   private strapCollection: StrapCollection = {}
   private readonly strapLoopSchedulers = new Set<PlayerScheduleFacade>()
+  private readonly generatedHelperTrackIds = new Set<string>()
   private nextStrapHelperIndex = 1
+  private initialSceneState: Record<string, unknown> | undefined
+  private initialStoryStateById = new Map<string, Record<string, unknown> | undefined>()
 
   readonly schedule: PlayerScheduleApi
 
@@ -95,6 +98,7 @@ export class Player implements PlayerApi {
     this.currentScene = input.compiledScene.scene
     this.strapCollection = input.strapCollection ?? {}
     this.nextStrapHelperIndex = 1
+    this.generatedHelperTrackIds.clear()
     this.destroyStrapLoopSchedulers()
     this.scheduleRuntime.reset()
     const initResult = this.normalizeResult(await this.player.init(input.compiledScene.scene))
@@ -102,13 +106,23 @@ export class Player implements PlayerApi {
       return initResult
     }
 
-    return this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneReady }, RUNTIME_EVENT_SOURCE.system)
+    const readyResult = await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneReady }, RUNTIME_EVENT_SOURCE.system)
+    if (readyResult.ok) {
+      this.captureInitialAuthorState()
+    }
+
+    return readyResult
   }
 
   /**
    * Starts playback.
    */
   play(): Promise<ApiResult<void>> {
+    if (this.player.getState().sequenceEnded) {
+      this.destroyStrapLoopSchedulers()
+      this.resetAuthorState()
+    }
+
     return this.normalizeAsyncResult(this.player.play(), async () => {
       this.scheduleRuntime.resume()
       this.resumeStrapLoopSchedulers()
@@ -166,7 +180,23 @@ export class Player implements PlayerApi {
    */
   seek(input: { timelineMs: number }): Promise<ApiResult<void>> {
     this.destroyStrapLoopSchedulers()
-    return this.normalizeAsyncResult(this.player.seek(input.timelineMs))
+    return (async () => {
+      if (this.player.getState().status === 'playing') {
+        const pauseResult = await this.pause()
+        if (!pauseResult.ok) {
+          return pauseResult
+        }
+      }
+
+      const helperTrackResetResult = await this.deactivateGeneratedHelperTracks()
+      if (!helperTrackResetResult.ok) {
+        return helperTrackResetResult
+      }
+
+      this.resetAuthorState()
+
+      return this.normalizeResult(await this.player.seek(input.timelineMs))
+    })()
   }
 
   /**
@@ -257,6 +287,69 @@ export class Player implements PlayerApi {
     }
 
     this.strapLoopSchedulers.clear()
+  }
+
+  /**
+   * Deactivates all currently known helper-generated tracks before one seek rebuild.
+   */
+  private async deactivateGeneratedHelperTracks(): Promise<ApiResult<void>> {
+    if (this.generatedHelperTrackIds.size === 0) {
+      return { ok: true, data: undefined }
+    }
+
+    const trackIds = [...this.generatedHelperTrackIds]
+    this.generatedHelperTrackIds.clear()
+
+    return this.normalizeResult(await this.player.emit({
+      name: 'track:deactivate',
+      payload: { trackIds },
+      source: RUNTIME_EVENT_SOURCE.system
+    }))
+  }
+
+  /**
+   * Clones one author-facing state payload when present.
+   */
+  private cloneState<T>(value: T): T {
+    if (value === undefined) {
+      return value
+    }
+
+    if (typeof globalThis.structuredClone === 'function') {
+      return globalThis.structuredClone(value)
+    }
+
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  /**
+   * Captures the stable author state baseline used by seek/replay reconstruction.
+   */
+  private captureInitialAuthorState(): void {
+    if (this.currentScene === null) {
+      return
+    }
+
+    this.initialSceneState = this.cloneState(this.currentScene.state)
+    this.initialStoryStateById.clear()
+
+    for (const [storyId, story] of Object.entries(this.currentScene.stories)) {
+      this.initialStoryStateById.set(storyId, this.cloneState(story.state))
+    }
+  }
+
+  /**
+   * Restores author-visible scene/story state to the last stable baseline.
+   */
+  private resetAuthorState(): void {
+    if (this.currentScene === null) {
+      return
+    }
+
+    this.currentScene.state = this.cloneState(this.initialSceneState)
+    for (const [storyId, story] of Object.entries(this.currentScene.stories)) {
+      story.state = this.cloneState(this.initialStoryStateById.get(storyId))
+    }
   }
 
   /**
@@ -386,9 +479,11 @@ export class Player implements PlayerApi {
         if (!placementResult.ok) {
           throw new Error(placementResult.error.code)
         }
+        this.generatedHelperTrackIds.add(trackId)
         return {
           id: trackId,
           cancel: () => {
+            this.generatedHelperTrackIds.delete(trackId)
             void this.player.emit({
               name: 'track:deactivate',
               payload: { trackIds: [trackId] },
@@ -413,9 +508,11 @@ export class Player implements PlayerApi {
         if (!placementResult.ok) {
           throw new Error(placementResult.error.code)
         }
+        this.generatedHelperTrackIds.add(trackId)
         return {
           id: trackId,
           cancel: () => {
+            this.generatedHelperTrackIds.delete(trackId)
             void this.player.emit({
               name: 'track:deactivate',
               payload: { trackIds: [trackId] },

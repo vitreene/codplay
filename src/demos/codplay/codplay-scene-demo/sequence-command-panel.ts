@@ -26,6 +26,8 @@ export function createSequenceCommandPanel(input: {
 	let seekThrottleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
 	let lastSeekDispatchMs = 0
 	let seekInteractionActive = false
+	// Keep the slider scale stable while the user scrubs, even if master-driven progress updates arrive.
+	let seekScaleLockMaxMs: number | null = null
 
 	function syncSeekLabel(timelineMs: number, maxTimelineMs: number): void {
 		input.seekLabelNode.textContent = `${formatTimelineMs(timelineMs)} / ${formatTimelineMs(maxTimelineMs)}`
@@ -62,10 +64,16 @@ export function createSequenceCommandPanel(input: {
 				state.status === 'playing' ||
 				state.status === 'seeking')
 
-		const seekMaxMs =
+		const progressMaxMs =
 			state.status === 'ready'
 				? Math.max(input.seekMaxMsFromScene, Math.round(state.timelineMs))
 				: Math.max(Math.round(state.timelineEndMs), Math.round(state.timelineMs))
+		const seekMaxMs =
+			seekScaleLockMaxMs !== null
+				? seekScaleLockMaxMs
+				: state.status === 'playing' && !seekInteractionActive
+				? progressMaxMs
+				: Math.max(Math.round(state.seekEndMs), Math.round(state.timelineMs))
 		const clampedTimelineMs = Math.min(Math.max(0, Math.round(state.timelineMs)), seekMaxMs)
 		const interactionTimelineMs = Math.min(readSeekTargetMsFromRange(), seekMaxMs)
 		const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs)
@@ -201,6 +209,10 @@ export function createSequenceCommandPanel(input: {
 	})
 
 	input.seekRangeNode.addEventListener('input', () => {
+		if (input.player.getState().status === 'playing' || commandInFlight) {
+			return
+		}
+
 		seekInteractionActive = true
 		const clampedSeekValueMs = readSeekTargetMsFromRange()
 		pendingSeekTargetMs = clampedSeekValueMs
@@ -213,25 +225,40 @@ export function createSequenceCommandPanel(input: {
 
 	input.seekRangeNode.addEventListener('pointerdown', () => {
 		seekInteractionActive = true
+
+		if (input.player.getState().status === 'playing' && !commandInFlight) {
+			// Lock the current progress scale before pausing so a live master update does not jump the handle.
+			seekScaleLockMaxMs = Number(input.seekRangeNode.max)
+			void runControlCommand('pause', () => input.player.pause())
+		}
 	})
 
 	input.seekRangeNode.addEventListener('pointerup', () => {
 		seekInteractionActive = false
+		seekScaleLockMaxMs = null
 		syncControlState()
 	})
 
 	input.seekRangeNode.addEventListener('pointercancel', () => {
 		seekInteractionActive = false
+		seekScaleLockMaxMs = null
 		syncControlState()
 	})
 
 	input.seekRangeNode.addEventListener('blur', () => {
 		seekInteractionActive = false
+		seekScaleLockMaxMs = null
 		syncControlState()
 	})
 
 	input.seekRangeNode.addEventListener('change', () => {
 		seekInteractionActive = false
+		seekScaleLockMaxMs = null
+		if (input.player.getState().status === 'playing' || commandInFlight) {
+			syncControlState()
+			return
+		}
+
 		if (commandInFlight) {
 			return
 		}

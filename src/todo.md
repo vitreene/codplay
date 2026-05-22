@@ -26,3 +26,6 @@ spec inactivite user a reprendre plus tard :
 [ ] definir si l'inactivite se base seulement sur les events recus par le track manager ou aussi sur des signaux globaux (souris, clavier)
 [ ] definir des events `idle` derivables a partir de seuils d'inactivite (ex: 30s -> assombrir la sequence)
 [ ] clarifier si les events idle sont places dans la sequence ou emis par un mecanisme runtime distinct
+
+observation runtime a revoir plus tard :
+[ ] separer clairement la phase de mise en place initiale avant t=0 du debut effectif de timeline; retard sporadique observe sur intro dans s4, a reconfirmer avant correction

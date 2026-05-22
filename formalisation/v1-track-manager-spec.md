@@ -67,12 +67,15 @@ type TrackManagerApi = {
 ## Regles V1
 
 - un track est l'unite minimale pilotable.
+- un track peut porter une metadata auteur `role`.
+- la valeur normative V1 retenue pour la contribution au progress est `role: "master"`.
 - `tracks` est obligatoire en diffusion, valeur vide autorisee.
 - le `TrackManager` ne prescrit pas l'organisation auteur des tracks; il consomme le registre fige fourni a `scene.init`.
+- les sorties rejouables des straps (`events`, mutations de `state`) sont materialisees dans les tracks.
 - ce registre contient toujours un track `global`.
 - par defaut, chaque story dispose aussi d'un track `story.id`.
 - aucune creation ni suppression de track n'est autorisee apres `scene.init`.
-- l'etat initial auteur pertinent d'un track est `active`.
+- les metadata auteur normatives d'un track sont `active` et `role`.
 - l'activation et la desactivation runtime s'appliquent uniquement a des tracks deja existants.
 - desactivation = effet immediat pour events futurs.
 - reactivation sans rattrapage retroactif.
@@ -100,7 +103,15 @@ type TrackManagerApi = {
 - `Scene.tracks` orchestre l'activation et l'ancrage, sans dupliquer le contenu eventime de story.
 - un meme bloc `Story.eventimes` peut etre reimporte dans plusieurs scenes sans reecriture.
 - toute resolution de demarrage compatible `seek/rewind` se traduit par des inscriptions dans ce meme systeme temporel.
-- si aucun track explicite n'est fourni pour un event de story, le fallback est le track `story.id` de la story emettrice.
+- si aucun track explicite n'est fourni pour un event de story, le fallback est `story.trackId` s'il existe, sinon `story.id` de la story emettrice.
+
+## Structure interne
+
+- le contrat auteur n'impose pas une structure interne particuliere.
+- l'implementation runtime peut utiliser des buckets indexes par `ms` (ex: `Map<number, EventBucket>`) tant qu'elle preserve:
+  - l'ordre stable intra-ms
+  - le scan croissant deterministe
+  - la relecture `seek/replay` coherente
 
 ## Notes
 

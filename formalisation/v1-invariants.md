@@ -42,16 +42,17 @@ Socle unique des invariants partages par les specs V1.
 
 - `transform` partage la meme entree runtime que `strap`
 - `transform` retourne de la data uniquement
-- `strap` retourne des events (ou `void`), pas de payload metier final
+- `strap` retourne `events`, `update`, `effects` (ou `void`)
+- `effects` ne sont jamais rejoues au `seek`
 - `applyAtMs` est obligatoire sur `RuntimeEvent`
 - les eventimes portables de story utilisent des offsets relatifs (`startAt`)
 - le runtime transige sur les `id`, pas sur les `name`
-- la seule metadata auteur normative d'un track est `active`
+- les metadata auteur normatives d'un track sont `active` et `role`
 
 ## Invariants propagation
 
 - la portee d'un event reste locale story ou globale scene selon `cascade`
-- `scene.listen` recueille les events scene-level et side-effects sans ciblage explicite de story
+- `scene.listen` recueille les events scene-level et `effects` sans ciblage explicite de story
 - aucun event n'est adresse a une `Story` cible par identifiant
 - les events de controle track sont toujours scene-level
 
@@ -63,6 +64,7 @@ Socle unique des invariants partages par les specs V1.
 - `tracks` reste une orchestration scene-level et ne remplace pas la portabilite des eventimes story-level
 - `Scene.rootStories` porte une structure d'autorisation scene-level, pas une temporalite implicite
 - si aucun track explicite n'est indique pour un event de story, le fallback est le track `story.id`
+- si `story.trackId` existe, il devient le fallback prioritaire des events de story
 
 ## Invariants d'erreurs
 

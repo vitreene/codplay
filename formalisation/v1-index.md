@@ -29,9 +29,11 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 13. `v1-player-api.md`
 14. `v1-preload-api.md`
 15. `v1-scene-side-effects-api.md`
-16. `v1-error-catalog.md`
-17. `v1-track-manager-spec.md`
-18. `v1-compiled-scene-schema.md`
+16. `v1-horizon-spec.md`
+17. `v1-seek-spec.md`
+18. `v1-error-catalog.md`
+19. `v1-track-manager-spec.md`
+20. `v1-compiled-scene-schema.md`
 
 ## Documents actifs de chantier
 

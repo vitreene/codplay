@@ -106,9 +106,9 @@ Note de contexte:
 - une story peut etre rendue visuellement dans le perimetre d'une autre sans creer de lien structurel runtime.
 - cette relation visuelle passe par les mecanismes existants de `move` appliques aux elements concernes.
 
-5. Ecoute et side-effects
+5. Ecoute et effects
 
-- `scene.listen` a vocation a recueillir des events produisant des side-effects.
+- `scene.listen` a vocation a recueillir des events produisant des `effects`.
 - `scene.listen` peut aussi recueillir des events de scene relies a des structures au-dessus de la scene.
 - `scene.listen` reste un pipeline d'ecoute, de transformation et de reemission; il n'introduit pas de systeme parallele.
 - `scene.listen` ne cible jamais explicitement une story par identifiant.
@@ -146,14 +146,16 @@ Note de contexte:
 - ces noms lifecycle sont reserves par convention pour les events systeme Scene.
 - les events de sequence suivent les conventions de nommage deja etablies et ne sont jamais listes en dur dans cette spec.
 
-9. Fin de sequence implicite et fin de scene auteur
+9. Fin de sequence et fin de scene auteur
 
 - `scene:end` est un event auteur explicite.
 - `scene:end` exprime une fin metier et n'implique pas necessairement l'arret des events restants.
 - une scene peut donc emettre `scene:end` puis continuer avec des stories de fin, des attentes d'interaction ou d'autres events techniques.
-- la fin technique de la sequence jouee est un signal distinct, implicite, note ici `sequence:end`.
-- `sequence:end` n'est pas un event auteur a produire manuellement.
-- `sequence:end` est detecte par le runtime quand la sequence deterministe en cours atteint sa fin effective.
+- la fin technique de la sequence jouee est un signal distinct, note ici `sequence:end`.
+- `sequence:end` reste un nom d'event conventionnel et configurable.
+- `sequence:end` est une convention d'event runtime terminale.
+- `sequence:end` ne s'active effectivement qu'en mode `play`.
+- en `seek`, si la borne `sequence:end` est franchie, elle n'est pas jouee; elle borne seulement la projection du replay.
 - a `sequence:end`, le runtime applique un cleanup implicite des actions en cours qui ne doivent pas survivre a la fin technique de lecture.
 - ce cleanup implicite concerne notamment l'arret des medias encore actifs.
 - `Scene.onSequenceEnd(scene, options)` permet a l'application hote d'attacher une logique sur cette fin technique.
@@ -181,6 +183,17 @@ Note de contexte:
 - les autres informations comme l'ordre runtime ou la source runtime relevent des ressources internes du moteur.
 - plusieurs events peuvent exister sur un meme track au meme instant.
 - a temps egal sur un meme track, ils s'executent selon leur ordre d'insertion.
+- `story.trackId` peut designer explicitement la track principale de la story.
+- `track.role: "master"` indique qu'une track participe au calcul de duree / progress.
+- plusieurs tracks `role: "master"` peuvent cohabiter.
+- l'unicite d'un media `master` actif reste distincte de la multiplicite des tracks `role: "master"`.
+
+12. Horizon
+
+- les bornes de progress, de seek et de segment sont formalisees par `horizon`.
+- `progressEndMs` et `seekEndMs` ne sont pas necessairement egaux.
+- la logique complete de `seek` est decrite dans `v1-seek-spec.md`.
+- reference horizon: `v1-horizon-spec.md`.
 
 11. Scope V1
 
