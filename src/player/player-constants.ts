@@ -15,3 +15,7 @@ export const PLAYER_SEQUENCE_EVENT = {
   sceneEnd: 'scene:end',
   sequenceEnd: 'sequence:end'
 } as const
+
+export const PLAYER_RUNTIME_EVENT = {
+  stateUpdate: 'runtime:state:update'
+} as const

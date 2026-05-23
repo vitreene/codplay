@@ -22,9 +22,16 @@ import {
   isTrackControlEventName,
   PlayerRuntimePlanner,
   PLAYER_TRACK_CONTROL_EVENTS,
-  readTrackControlIds
+  readTrackControlIds,
+  resolveDefaultStoryTrackId
 } from './create-player-utils'
-import { PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from './player-constants'
+import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from './player-constants'
+import {
+  hasMasterTracks,
+  isMasterTrackEvent,
+  resolveSeekEndMsFromPolicy,
+  shouldReplayEventForSeek
+} from './seek-runtime'
 import type {
   PlayerApi,
   PlayerCommandResult,
@@ -65,7 +72,6 @@ const PLAYER_TRACE_EVENT = {
   mountFailed: 'player:mount:failed',
   trackControl: 'player:track-control',
   trackControlWarning: 'player:track-control:warning',
-  trackEnsure: 'player:track:ensure',
   trackAppendGenerated: 'player:track:append-generated',
   horizonSync: 'player:horizon:sync',
   seekReplayEvent: 'player:seek:replay:event',
@@ -155,32 +161,6 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Ensures one helper-owned runtime track exists.
-   */
-  ensureRuntimeTrack(input: {
-    trackId: string
-    order?: number
-    source?: import('../core/events/types').RuntimeEventSource
-    active?: boolean
-    role?: string
-  }): PlayerCommandResult {
-    const result = this.trackManager.ensureTrack(input)
-    if (!result.ok) {
-      return this.reject(result.error.code, result.error.message, 'player:track:ensure')
-    }
-
-    this.emitTrace(PLAYER_TRACE_EVENT.trackEnsure, RUNTIME_TRACE_STATUS.applied, {
-      trackId: input.trackId,
-      order: input.order,
-      source: input.source,
-      active: input.active,
-      role: input.role
-    })
-
-    return this.refreshTimelineEndFromMountedPlan()
-  }
-
-  /**
    * Appends generated helper events into one runtime track.
    */
   appendGeneratedEvents(input: { trackId: string; events: TimelineEvent[] }): PlayerCommandResult {
@@ -228,55 +208,14 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Resolves the current seek cap from live horizon values.
+   * Resolves the current seek cap from canonical horizon values.
    */
   private resolveCurrentSeekEndMs(): number {
-    switch (this.runtimePolicy.seekPolicy) {
-      case 'disabled':
-        return 0
-      case 'played-only':
-        return this.playedEndMs
-      case 'master-projected':
-        return Math.max(this.playedEndMs, this.projectedMasterEndMs)
-      case 'author-unrestricted':
-      default:
-        return this.authorEndMs
-    }
-  }
-
-  /**
-   * Returns true when at least one loaded track is marked as master.
-   */
-  private hasLoadedMasterTracks(): boolean {
-    return this.trackManager.state.loadedTrackIds.some(
-      (trackId) => this.trackManager.getTrackMeta(trackId)?.role === 'master'
-    )
-  }
-
-  /**
-   * Returns true when one event belongs to a master track.
-   */
-  private isMasterTrackEvent(event: TimelineEvent): boolean {
-    if (!event.trackId) {
-      return false
-    }
-
-    return this.trackManager.getTrackMeta(event.trackId)?.role === 'master'
-  }
-
-  /**
-   * Returns true when one event is replayable for the current seek reconstruction.
-   */
-  private shouldReplayEventForSeek(event: TimelineEvent, playedReplayEndMs: number): boolean {
-    if (event.ms <= playedReplayEndMs) {
-      return true
-    }
-
-    if (!this.hasLoadedMasterTracks()) {
-      return true
-    }
-
-    return this.isMasterTrackEvent(event)
+    return resolveSeekEndMsFromPolicy(this.runtimePolicy.seekPolicy, {
+      playedEndMs: this.playedEndMs,
+      projectedMasterEndMs: this.projectedMasterEndMs,
+      authorEndMs: this.authorEndMs
+    })
   }
 
   /**
@@ -287,7 +226,10 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    if (this.hasLoadedMasterTracks() && !this.isMasterTrackEvent(event)) {
+    if (
+      hasMasterTracks(this.trackManager.state.loadedTrackIds, (trackId) => this.trackManager.getTrackMeta(trackId)) &&
+      !isMasterTrackEvent(event, (trackId) => this.trackManager.getTrackMeta(trackId))
+    ) {
       return
     }
 
@@ -340,11 +282,49 @@ export class PlayerFacade implements PlayerApi {
    * Resolves the fallback track id for one event context.
    */
   private resolveDefaultTrackId(scopeStoryId?: string): string {
-    if (scopeStoryId && this.trackManager.state.loadedTrackIds.includes(scopeStoryId)) {
-      return scopeStoryId
+    if (scopeStoryId && this.scene !== null) {
+      const story = this.scene.stories[scopeStoryId]
+      if (story) {
+        return resolveDefaultStoryTrackId(story)
+      }
     }
 
     return PLAYER_TRACK.global
+  }
+
+  /**
+   * Applies one replayable state patch event onto scene or story state.
+   */
+  private applyRuntimeStateUpdate(event: TimelineEvent): boolean {
+    if (event.name !== PLAYER_RUNTIME_EVENT.stateUpdate) {
+      return false
+    }
+
+    if (typeof event.payload !== 'object' || event.payload === null || this.scene === null) {
+      return true
+    }
+
+    if (event.scopeStoryId !== undefined) {
+      const story = this.scene.stories[event.scopeStoryId]
+      if (!story) {
+        return true
+      }
+
+      story.state = typeof story.state === 'object' && story.state !== null ? story.state : {}
+      Object.assign(story.state, event.payload)
+      return true
+    }
+
+    this.scene.state = typeof this.scene.state === 'object' && this.scene.state !== null ? this.scene.state : {}
+    Object.assign(this.scene.state, event.payload)
+    return true
+  }
+
+  /**
+   * Returns true when one runtime event is handled internally by the player core.
+   */
+  private isInternalRuntimeEvent(event: TimelineEvent): boolean {
+    return event.name === PLAYER_RUNTIME_EVENT.stateUpdate
   }
 
   /**
@@ -912,7 +892,7 @@ export class PlayerFacade implements PlayerApi {
    * Routes one due timeline event through the optional author-layer interceptor.
    */
   private async dispatchTimelineEvent(event: TimelineEvent): Promise<void> {
-    if (this.onTimelineEvent) {
+    if (this.onTimelineEvent && !this.isInternalRuntimeEvent(event)) {
       const result = await this.onTimelineEvent({
         id: event.id,
         name: event.name,
@@ -1033,7 +1013,14 @@ export class PlayerFacade implements PlayerApi {
             return event.ms
           }
 
-          if (!this.shouldReplayEventForSeek(event, playedReplayEndMs)) {
+          if (
+            !shouldReplayEventForSeek(
+              event,
+              playedReplayEndMs,
+              this.trackManager.state.loadedTrackIds,
+              (trackId) => this.trackManager.getTrackMeta(trackId)
+            )
+          ) {
             continue
           }
 
@@ -1143,6 +1130,11 @@ export class PlayerFacade implements PlayerApi {
    * Executes one timeline event against runtime listeners and actions.
    */
   private runTimelineEvent(event: TimelineEvent): void {
+    if (this.applyRuntimeStateUpdate(event)) {
+      this.recordPlayedProgress(event)
+      return
+    }
+
     if (this.handleTrackControlEvent(event)) {
       this.recordPlayedProgress(event)
       return
@@ -1480,6 +1472,51 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.emitTrace('player:emit', RUNTIME_TRACE_STATUS.applied, {
+      eventId: timelineEvent.id,
+      eventName: timelineEvent.name,
+      eventMs: timelineEvent.ms,
+      trackId: timelineEvent.trackId,
+      payload: timelineEvent.payload,
+      source: timelineEvent.source,
+      cascade: event.cascade
+    })
+
+    return { ok: true }
+  }
+
+  /**
+   * Applies one event already materialized in tracks without persisting it again.
+   */
+  async applyMaterializedEvent(event: PlayerPublicEventInput): Promise<PlayerCommandResult> {
+    if (!this.isInitialized()) {
+      return this.reject('PLAYER_NOT_INITIALIZED', 'init must be called before applyMaterializedEvent', 'player:apply-materialized-event')
+    }
+
+    const timelineEvent = this.createTimelineEvent(event)
+
+    this.runTimelineEvent(timelineEvent)
+
+    if (!this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
+      const runtimePlan = this.createMountedRuntimePlan()
+      if (runtimePlan !== null) {
+        const eventDurationMs = this.runtimePlanner.resolveEventDurationMsFromTimelinePlan(runtimePlan.timelinePlan, timelineEvent.name)
+        this.renderer.syncAnimationsToTimeline(timelineEvent.ms + eventDurationMs, new Map([[timelineEvent.id, timelineEvent.ms]]))
+      }
+
+      this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
+    }
+
+    this.syncMediaTimeline(timelineEvent.ms)
+
+    if (!this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
+      this.emitStateSnapshot()
+    }
+
+    if (timelineEvent.name === PLAYER_SEQUENCE_EVENT.sequenceEnd && this.status === PLAYER_STATUS.playing) {
+      this.finalizeSequenceEnd(timelineEvent.ms)
+    }
+
+    this.emitTrace('player:apply-materialized-event', RUNTIME_TRACE_STATUS.applied, {
       eventId: timelineEvent.id,
       eventName: timelineEvent.name,
       eventMs: timelineEvent.ms,

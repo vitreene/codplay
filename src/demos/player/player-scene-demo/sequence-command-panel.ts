@@ -76,7 +76,7 @@ export function createSequenceCommandPanel(input: {
 		const seekMaxMs =
 			seekScaleLockMaxMs !== null
 				? seekScaleLockMaxMs
-				: Math.round(state.horizon.seekEndMs)
+				: Math.round(state.horizon.progressEndMs)
 		const clampedTimelineMs = Math.min(Math.max(0, Math.round(state.timelineMs)), seekMaxMs)
 		const interactionTimelineMs = Math.min(readSeekTargetMsFromRange(), seekMaxMs)
 		const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs)

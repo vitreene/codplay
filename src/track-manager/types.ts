@@ -77,13 +77,6 @@ export type TrackManagerApi = {
     storyId: string
     eventimes: TrackManagerEventimeNode[]
   }) => TrackManagerCommandResult<{ appendedCount: number }>
-  ensureTrack: (input: {
-    trackId: string
-    order?: number
-    source?: RuntimeEventSource
-    active?: boolean
-    role?: string
-  }) => TrackManagerCommandResult
   resetActiveTracks: () => void
   resetCursor: () => void
   syncCursor: (input: { nowMs: number }) => void

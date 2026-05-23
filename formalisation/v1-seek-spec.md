@@ -112,6 +112,8 @@ type HorizonSnapshot = {
 - le seek ne reexecute pas les straps pour reconstruire le passe.
 - le seek ne reexecute pas les `effects`.
 - le seek reconstruit l'etat visible par application du flux de tracks deja enregistre.
+- pendant `seek`, aucun nouvel event ne doit etre emis: la relecture ne peut produire que des effets de reconstruction sur les persos deja enregistre.
+- pendant `seek`, toute logique de `listen` / strap / emission reactive est hors champ de la relecture.
 
 2. Role du master
 
@@ -126,6 +128,7 @@ type HorizonSnapshot = {
 - il collecte les events actifs dont `ms <= targetTimelineMs`.
 - il applique les events dans un ordre deterministe base sur l'ordre des tracks et l'ordre stable des events.
 - les mutations d'etat deja materialisees sont rejouees comme donnees, pas comme code.
+- le replay `seek` ne desactive pas artificiellement un media pour forcer son rechargement; il preserve la logique de synchronisation et de repositionnement runtime.
 
 4. `sequence:end`
 

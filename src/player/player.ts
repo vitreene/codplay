@@ -7,6 +7,8 @@ import { PlayerScheduleFacade, type StrapHelpers, type StoryEvent } from './play
 import { createRuntimeEventPolicy, type ResolvedRuntimeEventPolicy, type RuntimeEventPolicy } from './runtime-policy'
 import type { RuntimeEventSource } from '../core/events/types'
 import type { StrapCollection, StrapExecutionScope, StrapOutput } from './strap-types'
+import { createStrapTrackId } from './create-player-utils'
+import { PLAYER_RUNTIME_EVENT } from './player-constants'
 
 export type PlayerInitInput = {
   mountTarget: unknown
@@ -43,8 +45,6 @@ export class Player implements PlayerApi {
   private currentScene: CompiledScene['scene'] | null = null
   private strapCollection: StrapCollection = {}
   private readonly strapLoopSchedulers = new Set<PlayerScheduleFacade>()
-  private readonly generatedHelperTrackIds = new Set<string>()
-  private nextStrapHelperIndex = 1
   private initialSceneState: Record<string, unknown> | undefined
   private initialStoryStateById = new Map<string, Record<string, unknown> | undefined>()
 
@@ -97,8 +97,6 @@ export class Player implements PlayerApi {
 
     this.currentScene = input.compiledScene.scene
     this.strapCollection = input.strapCollection ?? {}
-    this.nextStrapHelperIndex = 1
-    this.generatedHelperTrackIds.clear()
     this.destroyStrapLoopSchedulers()
     this.scheduleRuntime.reset()
     const initResult = this.normalizeResult(await this.player.init(input.compiledScene.scene))
@@ -354,7 +352,8 @@ export class Player implements PlayerApi {
         scopeStoryId: event.scopeStoryId,
         source: event.source ?? RUNTIME_EVENT_SOURCE.story,
         ms: event.ms ?? this.player.getState().timelineMs,
-        trackId: event.trackId
+        trackId: event.trackId,
+        materialized: true
       }
     )
   }
@@ -381,42 +380,20 @@ export class Player implements PlayerApi {
   }
 
   /**
-   * Applies one shallow patch onto the targeted listen execution state.
+   * Resolves the dedicated runtime track used by one strap declaration.
    */
-  private applyStatePatch(scopeStoryId: string | undefined, patch: Record<string, unknown>): void {
-    const state = this.resolveStateTarget(scopeStoryId)
-    Object.assign(state, patch)
+  private resolveStrapTrackId(scopeStoryId: string | undefined, strapName: string): string {
+    return createStrapTrackId(scopeStoryId, strapName)
   }
 
   /**
-   * Creates one deterministic helper track identifier.
+   * Materializes one finite helper event batch on the owning strap track.
    */
-  private createHelperTrackId(scopeStoryId: string | undefined, eventName: string): string {
-    const scopeKey = scopeStoryId ?? 'scene'
-    const trackId = `strap-${scopeKey}-${eventName}-${this.nextStrapHelperIndex}`
-    this.nextStrapHelperIndex += 1
-    return trackId
-  }
-
-  /**
-   * Places one finite helper event batch into the runtime sequence on a dedicated track.
-   */
-  private placeHelperEvents(
+  private materializeHelperEvents(
     trackId: string,
     scope: StrapExecutionScope,
     events: Array<{ offsetMs: number; event: StoryEvent }>
   ): ApiResult<void> {
-    const sourceTrackMeta = this.player.getTrackMeta(scope.trackId ?? (scope.scopeStoryId ?? 'global'))
-    const ensureResult = this.player.ensureRuntimeTrack({
-      trackId,
-      order: sourceTrackMeta?.order ?? 0,
-      source: RUNTIME_EVENT_SOURCE.system,
-      active: true
-    })
-    if (!ensureResult.ok) {
-      return ensureResult
-    }
-
     const appendResult = this.player.appendGeneratedEvents({
       trackId,
       events: events.map(({ offsetMs, event }, index) => ({
@@ -439,9 +416,30 @@ export class Player implements PlayerApi {
   }
 
   /**
+   * Materializes one replayable author state patch on the owning strap track.
+   */
+  private async materializeStrapUpdate(
+    trackId: string,
+    scopeStoryId: string | undefined,
+    ms: number,
+    patch: Record<string, unknown>
+  ): Promise<ApiResult<void>> {
+    return this.normalizeResult(
+      await this.player.emit({
+        name: PLAYER_RUNTIME_EVENT.stateUpdate,
+        ms,
+        payload: patch,
+        scopeStoryId,
+        source: RUNTIME_EVENT_SOURCE.system,
+        trackId
+      })
+    )
+  }
+
+  /**
    * Creates the helper facade exposed to one strap execution.
    */
-  private createStrapHelpers(scope: StrapExecutionScope): StrapHelpers {
+  private createStrapHelpers(scope: StrapExecutionScope, strapTrackId: string): StrapHelpers {
     const validateNonNegative = (value: number): void => {
       if (!Number.isFinite(value) || value < 0) {
         throw new Error('AUTHOR_HELPER_INVALID_ARG')
@@ -451,21 +449,14 @@ export class Player implements PlayerApi {
     return {
       delay: (ms, event) => {
         validateNonNegative(ms)
-        const trackId = this.createHelperTrackId(scope.scopeStoryId, event.name)
-        const placementResult = this.placeHelperEvents(trackId, scope, [{ offsetMs: ms, event }])
+        const placementResult = this.materializeHelperEvents(strapTrackId, scope, [{ offsetMs: ms, event }])
         if (!placementResult.ok) {
           throw new Error(placementResult.error.code)
         }
-        this.generatedHelperTrackIds.add(trackId)
         return {
-          id: trackId,
+          id: strapTrackId,
           cancel: () => {
-            this.generatedHelperTrackIds.delete(trackId)
-            void this.player.emit({
-              name: 'track:deactivate',
-              payload: { trackIds: [trackId] },
-              source: RUNTIME_EVENT_SOURCE.system
-            })
+            return
           }
         }
       },
@@ -474,27 +465,20 @@ export class Player implements PlayerApi {
         if (!Number.isFinite(options.times) || options.times < 1) {
           throw new Error('AUTHOR_HELPER_INVALID_ARG')
         }
-        const trackId = this.createHelperTrackId(scope.scopeStoryId, 'repeat')
         const events = Array.from({ length: options.times }).flatMap((_, index) =>
           factory(index).map((event, eventIndex) => ({
             offsetMs: index * options.everyMs + eventIndex,
             event
           }))
         )
-        const placementResult = this.placeHelperEvents(trackId, scope, events)
+        const placementResult = this.materializeHelperEvents(strapTrackId, scope, events)
         if (!placementResult.ok) {
           throw new Error(placementResult.error.code)
         }
-        this.generatedHelperTrackIds.add(trackId)
         return {
-          id: trackId,
+          id: strapTrackId,
           cancel: () => {
-            this.generatedHelperTrackIds.delete(trackId)
-            void this.player.emit({
-              name: 'track:deactivate',
-              payload: { trackIds: [trackId] },
-              source: RUNTIME_EVENT_SOURCE.system
-            })
+            return
           }
         }
       },
@@ -524,7 +508,7 @@ export class Player implements PlayerApi {
       },
       stagger: (options, events) => {
         validateNonNegative(options.stepMs)
-        return events.map((event, index) => this.createStrapHelpers(scope).delay(index * options.stepMs, event))
+        return events.map((event, index) => this.createStrapHelpers(scope, strapTrackId).delay(index * options.stepMs, event))
       }
     }
   }
@@ -543,6 +527,8 @@ export class Player implements PlayerApi {
       return { ok: true, data: undefined }
     }
 
+    const strapTrackId = this.resolveStrapTrackId(scope.scopeStoryId, strapName)
+
     const output = await strap({
       event,
       state: this.resolveStateTarget(scope.scopeStoryId),
@@ -559,13 +545,21 @@ export class Player implements PlayerApi {
       },
       context: {
         api: {},
-        helpers: this.createStrapHelpers(scope)
+        helpers: this.createStrapHelpers(scope, strapTrackId)
       }
     })
 
     const resolvedOutput: StrapOutput = output ?? {}
     if (resolvedOutput.update) {
-      this.applyStatePatch(scope.scopeStoryId, resolvedOutput.update)
+      const updateResult = await this.materializeStrapUpdate(
+        strapTrackId,
+        scope.scopeStoryId,
+        scope.ms,
+        resolvedOutput.update
+      )
+      if (!updateResult.ok) {
+        return updateResult
+      }
     }
 
     for (const emittedEvent of resolvedOutput.events ?? []) {
@@ -577,6 +571,8 @@ export class Player implements PlayerApi {
         depth + 1,
         {
           ...scope,
+          materialized: false,
+          trackId: strapTrackId,
           scopeStoryId: nextScopeStoryId
         }
       )
@@ -609,7 +605,7 @@ export class Player implements PlayerApi {
 
     const scene = this.currentScene
     if (scene === null) {
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
     }
 
     const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
@@ -621,7 +617,7 @@ export class Player implements PlayerApi {
         return this.routeMatchingRules(storyRules, event, source, scopeStoryId, depth, scope)
       }
 
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
     }
 
     const sceneRules = scene.listen.filter((rule) => rule.on === event.name)
@@ -632,7 +628,7 @@ export class Player implements PlayerApi {
       })
     }
 
-    return this.emitRuntimeEvent(event, source, undefined, scope.ms, scope.trackId)
+    return this.emitRuntimeEvent(event, source, undefined, scope.ms, scope.trackId, scope.materialized === true)
   }
 
   /**
@@ -662,7 +658,7 @@ export class Player implements PlayerApi {
     }
 
     if (emittedEvents.length === 0) {
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
     }
 
     for (const emittedEvent of emittedEvents) {
@@ -678,6 +674,7 @@ export class Player implements PlayerApi {
         depth + 1,
         {
           ...scope,
+          materialized: false,
           scopeStoryId: nextScopeStoryId
         }
       )
@@ -698,18 +695,22 @@ export class Player implements PlayerApi {
     source: RuntimeEventSource,
     scopeStoryId?: string,
     ms?: number,
-    trackId?: string
+    trackId?: string,
+    materialized = false
   ): Promise<ApiResult<void>> {
+    const eventInput = {
+      name: event.name,
+      ms,
+      payload: event.data,
+      scopeStoryId,
+      cascade: event.cascade,
+      source,
+      trackId
+    }
     const result = this.normalizeResult(
-      await this.player.emit({
-        name: event.name,
-        ms,
-        payload: event.data,
-        scopeStoryId,
-        cascade: event.cascade,
-        source,
-        trackId
-      })
+      materialized
+        ? await this.player.applyMaterializedEvent(eventInput)
+        : await this.player.emit(eventInput)
     )
 
     if (result.ok && event.name === 'sequence:end') {

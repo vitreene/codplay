@@ -155,6 +155,55 @@ function createTrackToggleSceneFixture(): SceneDoc {
   }
 }
 
+/**
+ * Creates one scene fixture where one story keeps both its local track and one explicit main track.
+ */
+function createStoryAndMainTrackSceneFixture(): SceneDoc {
+  return {
+    id: 'scene-story-and-main-track',
+    rootStories: ['story-main'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      'story-main': {
+        id: 'story-main',
+        trackId: 'story-main__main-track',
+        entries: ['story-main__title'],
+        initial: undefined,
+        persos: [
+          {
+            id: 'story-main__title',
+            name: 'title',
+            type: 'text',
+            initial: { content: 'base' },
+            actions: {
+              'story-main__title': null
+            }
+          }
+        ],
+        straps: undefined,
+        listen: [],
+        eventimes: [
+          {
+            name: 'story-main__title',
+            startAt: 100,
+            data: { content: 'main-track' }
+          }
+        ]
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    tracks: {
+      'story-main__main-track': {
+        role: 'master'
+      }
+    }
+  }
+}
+
 describe('V1 - track runtime controls', () => {
   it('builds global and story default tracks at scene init', async () => {
     const traces: Array<Record<string, unknown>> = []
@@ -199,6 +248,23 @@ describe('V1 - track runtime controls', () => {
     expect(traces.at(-1)).toMatchObject({
       eventName: 'external:ping',
       trackId: 'global'
+    })
+  })
+
+  it('keeps one local story track alongside one explicit main track', async () => {
+    const player = new PlayerFacade({
+      createElementOptions: {
+        nodeFactory: (item) => createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    expect(await player.init(createStoryAndMainTrackSceneFixture())).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+    expect(await player.seek(150)).toEqual({ ok: true })
+
+    expect(player.getState().horizon.projectedMasterEndMs).toBe(100)
+    expect(player.getRuntimeRegistry().getNodeById('story-main__title')).toMatchObject({
+      textContent: 'main-track'
     })
   })
 

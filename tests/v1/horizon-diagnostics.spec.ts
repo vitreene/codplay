@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { BuilderFacade } from '../../src/builder/create-builder'
 import { Player } from '../../src/player'
+import { createStrapTrackId } from '../../src/player/create-player-utils'
 import type { StrapCollection } from '../../src/player/strap-types'
 import type { SceneDoc } from '../../src/player/types'
 import type { RuntimeTraceRow } from '../../src/runtime/trace-store'
@@ -17,7 +18,8 @@ function createApplyingAnimeImplementation() {
 /**
  * Creates one minimal scene where a support track schedules one future helper event.
  */
-function createSupportCounterScene(): SceneDoc {
+function createSupportCounterScene(input: { strapTrackRole?: string } = {}): SceneDoc {
+	const supportCounterTrackId = createStrapTrackId('support-story', 'support-counter')
 	return {
 		id: 'support-counter-scene',
 		rootStories: ['support-story'],
@@ -68,6 +70,9 @@ function createSupportCounterScene(): SceneDoc {
 			},
 			'support-track': {
 				role: 'support'
+			},
+			[supportCounterTrackId]: {
+				...(input.strapTrackRole ? { role: input.strapTrackRole } : {})
 			}
 		},
 		init(scene, options) {
@@ -86,8 +91,71 @@ const supportCounterStraps: StrapCollection = {
 	}
 }
 
+/**
+ * Creates one scene that persists strap updates and relies on them after seek.
+ */
+function createStateReplayScene(): SceneDoc {
+	return {
+		id: 'state-replay-scene',
+		rootStories: ['state-story'],
+		initial: undefined,
+		straps: undefined,
+		listen: [
+			{
+				on: 'arm',
+				straps: ['arm-state']
+			},
+			{
+				on: 'fire',
+				straps: ['render-state']
+			}
+		],
+		stories: {
+			'state-story': {
+				id: 'state-story',
+				entries: ['result-node'],
+				initial: undefined,
+				persos: [
+					{
+						id: 'result-node',
+						type: 'text',
+						initial: { content: 'idle' },
+						actions: {
+							'result-node': null
+						}
+					}
+				],
+				straps: undefined,
+				listen: []
+			}
+		},
+		tracks: {},
+		init(scene, options) {
+			options.mount(scene.rootStories[0])
+		}
+	}
+}
+
+const stateReplayStraps: StrapCollection = {
+	'arm-state': () => ({
+		update: {
+			armed: true
+		}
+	}),
+	'render-state': ({ state }) => ({
+		events: [
+			{
+				name: 'result-node',
+				data: {
+					content: state.armed === true ? 'armed' : 'disarmed'
+				}
+			}
+		]
+	})
+}
+
 describe('horizon diagnostics', () => {
-	it('shows that support helper tracks lose their role and can extend author horizon only', async () => {
+	it('predeclares one static strap track and lets it extend author horizon only by default', async () => {
 		const builder = new BuilderFacade()
 		const player = new Player({
 			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
@@ -116,8 +184,18 @@ describe('horizon diagnostics', () => {
 		expect(await player.play()).toEqual({ ok: true, data: undefined })
 		expect(await player.pause()).toEqual({ ok: true, data: undefined })
 
-		const helperTrackRow = traces.find((row) => row.eventName === 'player:track:ensure' && row.payload?.trackId === 'strap-support-story-support:future-1')
-		expect(helperTrackRow?.payload?.role).toBeUndefined()
+		const strapTrackId = createStrapTrackId('support-story', 'support-counter')
+		const strapTrackRow = traces.find((row) => {
+			if (row.eventName !== 'player:horizon:sync') {
+				return false
+			}
+
+			const loadedTracks = Array.isArray(row.payload?.loadedTracks)
+				? (row.payload?.loadedTracks as Array<{ trackId?: unknown; role?: unknown }>)
+				: []
+			return loadedTracks.some((track) => track.trackId === strapTrackId && track.role === undefined)
+		})
+		expect(strapTrackRow).toBeDefined()
 
 		const authorPollutionRow = traces.find((row) => {
 			if (row.eventName !== 'player:horizon:sync') {
@@ -214,5 +292,74 @@ describe('horizon diagnostics', () => {
 			authorEndMs: 1000,
 			seekEndMs: 200
 		})
+	})
+
+	it('lets one strap track extend projectedMasterEndMs only when its role is explicitly master', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createSupportCounterScene({ strapTrackRole: 'master' }) })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('support scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: supportCounterStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		expect(player.getState().horizon).toMatchObject({
+			projectedMasterEndMs: 1000,
+			authorEndMs: 1000
+		})
+	})
+
+	it('replays materialized strap updates so later interactions keep the rebuilt author state', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createStateReplayScene() })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('state replay scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: stateReplayStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({ name: 'arm' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+		const replayTargetMs = Math.max(1, Math.ceil(player.getState().timelineMs))
+		expect(await player.seek({ timelineMs: replayTargetMs })).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(await player.emit({ name: 'fire' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		const resultNode = player.getRuntimeRegistry().getNodeById('result-node') as { textContent?: string } | null
+		expect(resultNode?.textContent).toBe('armed')
 	})
 })

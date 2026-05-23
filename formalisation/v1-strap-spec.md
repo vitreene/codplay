@@ -98,6 +98,7 @@ type StrapCollection = Record<string, StrapFn>
 - un `Strap` est asynchrone par defaut
 - les emissions differees passent uniquement par `helpers` (runtime/ticker)
 - un `Strap` renvoie des `events`, des `update` et des `effects`, pas une donnee de retour metier directe
+- un `Strap` dispose d'une track dediee pour ses sorties rejouables
 
 3. Ordre d'execution
 
@@ -108,6 +109,10 @@ type StrapCollection = Record<string, StrapFn>
 
 - un `Strap` produit des `events`, des `update` et des `effects`
 - `events` et `update` sont persistables/rejouables via les tracks
+- `events` et `update` sont materialises sur la track dediee du strap
+- en V1, la granularite retenue est une seule track dediee par nom de strap et par story; pour `Scene.listen`, la granularite equivalente est une track par nom de strap et par scene
+- une fois materialises dans une track, ces `events` et `update` appartiennent au journal canonique et sont faits pour etre lus
+- un strap ne contribue aux bornes master que si sa track dediee est explicitement `role: "master"`
 - `effects` sont adresses au niveau `Scene`
 - la `Story` determine la portee finale selon `cascade` et son pipeline
 - au niveau `Scene`, un strap d'entree peut participer au bootstrap en declenchant des operations de montage indirectes puis des events de sequence.

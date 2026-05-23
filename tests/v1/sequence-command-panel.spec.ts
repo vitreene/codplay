@@ -104,7 +104,7 @@ function createFacadePlayerStub(state: PlayerStateSnapshot) {
 }
 
 describe('sequence command panels', () => {
-	it('uses the real seek ceiling while playing in the facade demo panel', () => {
+	it('uses the progress ceiling while playing in the facade demo panel', () => {
 		const state = createStateFixture({
 			status: 'playing',
 			timelineMs: 1800,
@@ -127,10 +127,10 @@ describe('sequence command panels', () => {
 
 		panel.syncFromState(state)
 
-		expect(seekRangeNode.max).toBe('2400')
+		expect(seekRangeNode.max).toBe('6000')
 	})
 
-	it('uses the real seek ceiling while playing in the public demo panel', () => {
+	it('uses the progress ceiling while playing in the public demo panel', () => {
 		const state = createStateFixture({
 			status: 'playing',
 			timelineMs: 1800,
@@ -153,6 +153,6 @@ describe('sequence command panels', () => {
 
 		panel.syncFromState(state)
 
-		expect(seekRangeNode.max).toBe('2400')
+		expect(seekRangeNode.max).toBe('6000')
 	})
 })

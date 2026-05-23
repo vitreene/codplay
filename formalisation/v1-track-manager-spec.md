@@ -68,17 +68,22 @@ type TrackManagerApi = {
 
 - un track est l'unite minimale pilotable.
 - un track peut porter une metadata auteur `role`.
-- la valeur normative V1 retenue pour la contribution au progress est `role: "master"`.
+- `role` est un type de track extensible ; la valeur normative V1 retenue pour la contribution au progress est `role: "master"`.
 - `tracks` est obligatoire en diffusion, valeur vide autorisee.
 - le `TrackManager` ne prescrit pas l'organisation auteur des tracks; il consomme le registre fige fourni a `scene.init`.
 - les sorties rejouables des straps (`events`, mutations de `state`) sont materialisees dans les tracks.
+- une fois materialisee dans une track, une entry appartient au journal canonique et est faite pour etre lue.
 - ce registre contient toujours un track `global`.
 - par defaut, chaque story dispose aussi d'un track `story.id`.
+- `story.trackId`, s'il existe, ajoute une track principale explicite mais ne remplace jamais la track `story.id`.
+- chaque strap declare dans une regle `listen` dispose aussi d'une track dediee creee a `scene.init`.
+- granularite V1: une seule track dediee par nom de strap et par story; pour `Scene.listen`, la granularite equivalente est une track par nom de strap et par scene.
 - aucune creation ni suppression de track n'est autorisee apres `scene.init`.
 - les metadata auteur normatives d'un track sont `active` et `role`.
 - l'activation et la desactivation runtime s'appliquent uniquement a des tracks deja existants.
 - desactivation = effet immediat pour events futurs.
 - reactivation sans rattrapage retroactif.
+- l'activation / desactivation de track reste une operation auteur explicite de permutation de scene ; ce n'est pas un mecanisme interne d'annulation runtime.
 - events live = append-only.
 - `appendLiveEvents` cible un seul track par appel.
 - `appendAnchoredEventimes` convertit des eventimes relatifs de story en events absolus append-only.
@@ -104,6 +109,7 @@ type TrackManagerApi = {
 - un meme bloc `Story.eventimes` peut etre reimporte dans plusieurs scenes sans reecriture.
 - toute resolution de demarrage compatible `seek/rewind` se traduit par des inscriptions dans ce meme systeme temporel.
 - si aucun track explicite n'est fourni pour un event de story, le fallback est `story.trackId` s'il existe, sinon `story.id` de la story emettrice.
+- les sorties rejouables d'un strap s'ecrivent sur la track dediee de ce strap, pas sur la track source de la story qui l'a declenche.
 
 ## Structure interne
 

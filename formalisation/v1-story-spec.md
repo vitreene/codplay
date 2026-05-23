@@ -86,6 +86,7 @@ type StoryDef = {
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `state` est runtime-only et optionnel dans la definition.
 - `trackId` permet de designer explicitement la track cible principale de la story.
+- `trackId` n'efface jamais la track locale `story.id` de la story.
 
 2. Independance et placement
 
@@ -111,6 +112,7 @@ type StoryDef = {
 - une story peut declarer statiquement les tracks qu'elle compte utiliser via `tracks`.
 - cette declaration n'est pas un registre runtime autonome.
 - elle constitue une contribution a la construction finale de `Scene.tracks` a `scene.init`.
+- les straps declares dans `story.listen` ajoutent aussi leurs tracks dediees a cette construction a `scene.init`.
 - apres `scene.init`, une story ne cree ni ne supprime de track.
 
 4. Listen
@@ -132,6 +134,7 @@ type StoryDef = {
 - quand `listen` contient des regles, seuls les events correspondants sont redistribues.
 - les `straps` peuvent produire `events`, `update` et `effects`.
 - `events` et `update` sont materialises dans les tracks.
+- les sorties rejouables d'un strap sont materialisees sur la track dediee de ce strap.
 - `effects` ne sont jamais rejoues au `seek`.
 
 5. Pipeline d'execution
@@ -148,6 +151,7 @@ type StoryDef = {
 - ce comportement reste pilotable par policy runtime.
 - en cas de collision de noms d'events au meme tick (sorties strap + `emit`), l'arbitrage suit `sameTickHandling` de la policy runtime.
 - une resolution plus fine des conflits d'actions au meme tick releve d'une policy modulaire de rendu, pas d'une obligation fixe du coeur Story.
+- granularite V1 des tracks de strap: une seule track dediee par nom de strap et par story, quel que soit le nombre d'invocations runtime de ce strap.
 
 6. Portee et propagation
 

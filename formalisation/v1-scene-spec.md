@@ -174,6 +174,9 @@ Note de contexte:
 - cet ancrage temporel est distinct du simple montage des persos de la story dans le runtime.
 - un track unique par defaut `global` existe toujours.
 - par defaut, chaque story dispose aussi d'un track portant exactement `story.id`.
+- `story.trackId`, s'il existe, ajoute une track principale explicite mais ne remplace jamais la track `story.id`.
+- a `scene.init`, le registre est aussi complete par les tracks dediees aux straps declares dans `Scene.listen` et `Story.listen`.
+- granularite V1: une seule track dediee par nom de strap et par story; pour `Scene.listen`, la granularite equivalente est une track par nom de strap et par scene.
 - si aucune indication de track n'est donnee pour un event de story, l'event utilise par defaut le track `story.id` de cette story.
 - si aucune indication exploitable n'est disponible hors story, l'event utilise le track `global`.
 - les stories peuvent declarer statiquement les tracks qu'elles comptent utiliser.
@@ -184,7 +187,8 @@ Note de contexte:
 - plusieurs events peuvent exister sur un meme track au meme instant.
 - a temps egal sur un meme track, ils s'executent selon leur ordre d'insertion.
 - `story.trackId` peut designer explicitement la track principale de la story.
-- `track.role: "master"` indique qu'une track participe au calcul de duree / progress.
+- `track.role` est un type de track extensible.
+- `track.role: "master"` indique qu'une track participe au calcul de duree / progress en V1.
 - plusieurs tracks `role: "master"` peuvent cohabiter.
 - l'unicite d'un media `master` actif reste distincte de la multiplicite des tracks `role: "master"`.
 
@@ -194,6 +198,7 @@ Note de contexte:
 - `progressEndMs` et `seekEndMs` ne sont pas necessairement egaux.
 - la logique complete de `seek` est decrite dans `v1-seek-spec.md`.
 - reference horizon: `v1-horizon-spec.md`.
+- le replay `seek` ne doit pas desactiver artificiellement un media pour forcer son rechargement; il preserve la logique de repositionnement et de synchronisation runtime deja materialisee.
 
 11. Scope V1
 

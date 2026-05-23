@@ -18,6 +18,7 @@ export type PlayerRuntimePlan = {
 
 const RUNTIME_PERSOS_ID_FALLBACK = 'scene-runtime'
 const PLAYER_TRACK_GLOBAL_ID = 'global'
+const PLAYER_STRAP_TRACK_PREFIX = 'strap'
 export const PLAYER_TRACK_CONTROL_EVENTS = {
   activate: 'track:activate',
   deactivate: 'track:deactivate',
@@ -147,10 +148,6 @@ export class PlayerRuntimePlanner {
 
         const item = runtimePlan.runtimePersos.persos[listener.listenerId]
         if (!item || item.type !== 'media' || item.initial.master !== true) {
-          continue
-        }
-
-        if (item.trackId !== event.trackId) {
           continue
         }
 
@@ -337,10 +334,19 @@ export function consolidateSceneTracks(scene: StrictSceneDoc): Record<string, un
   }
 
   for (const story of Object.values(scene.stories)) {
-    const implicitTrackId = story.trackId ?? story.id
-    consolidatedTracks[implicitTrackId] = mergeTrackMeta(consolidatedTracks[implicitTrackId], {
+    consolidatedTracks[story.id] = mergeTrackMeta(consolidatedTracks[story.id], {
       active: true
     })
+
+    if (story.trackId) {
+      consolidatedTracks[story.trackId] = mergeTrackMeta(consolidatedTracks[story.trackId], {
+        active: true
+      })
+    }
+  }
+
+  for (const [trackId, defaultTrack] of Object.entries(resolveDeclaredStrapTracks(scene))) {
+    consolidatedTracks[trackId] = mergeTrackMeta(consolidatedTracks[trackId], defaultTrack)
   }
 
   for (const [trackId, rawTrack] of Object.entries(scene.tracks)) {
@@ -372,6 +378,46 @@ export function mergeTrackMeta(existingTrack: unknown, nextTrack: unknown): Trac
     ...incomingTrack,
     ...(incomingTrack.active !== undefined ? { active: incomingTrack.active } : {})
   }
+}
+
+/**
+ * Builds one deterministic strap track id from its declaration scope.
+ */
+export function createStrapTrackId(scopeStoryId: string | undefined, strapName: string): string {
+  const scopeKey = scopeStoryId ?? 'scene'
+  return `${PLAYER_STRAP_TRACK_PREFIX}-${scopeKey}-${strapName}`
+}
+
+/**
+ * Returns the default event track for one story according to V1 track rules.
+ */
+export function resolveDefaultStoryTrackId(story: Pick<SceneStoryDoc, 'id' | 'trackId'>): string {
+  return story.trackId ?? story.id
+}
+
+/**
+ * Collects the statically declared strap tracks required at scene init.
+ */
+export function resolveDeclaredStrapTracks(scene: StrictSceneDoc): Record<string, TrackAuthorMeta> {
+  const strapTracks: Record<string, TrackAuthorMeta> = {}
+
+  for (const rule of scene.listen) {
+    for (const strapName of rule.straps ?? []) {
+      const trackId = createStrapTrackId(undefined, strapName)
+      strapTracks[trackId] = mergeTrackMeta(strapTracks[trackId], { active: true })
+    }
+  }
+
+  for (const story of Object.values(scene.stories)) {
+    for (const rule of story.listen) {
+      for (const strapName of rule.straps ?? []) {
+        const trackId = createStrapTrackId(story.id, strapName)
+        strapTracks[trackId] = mergeTrackMeta(strapTracks[trackId], { active: true })
+      }
+    }
+  }
+
+  return strapTracks
 }
 
 /**

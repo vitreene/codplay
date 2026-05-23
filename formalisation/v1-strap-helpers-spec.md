@@ -111,12 +111,14 @@ type StrapHelpers = {
 
 - chaque helper retourne un handle annulable.
 - `cancel()` empeche les emissions futures du handle.
+- `cancel()` ne supprime ni ne desactive des entries deja materialisees dans les tracks.
 
 6. Replay / seek
 
 - `replay` regenere les emissions a partir du journal canonique ou du plan compile.
 - `seek backward` render-only ne rejoue pas les `effects` helper.
 - `scene:replay-from-zero` reconstruit integralement le plan helper.
+- le replay `seek` ne neutralise pas artificiellement ces tracks materialisees pour simuler une annulation.
 
 7. Effects
 
@@ -143,6 +145,7 @@ type StrapHelpers = {
 - comportement deterministe a entree identique.
 - annulation explicite par handle.
 - dans un strap, les helpers finis ne jouent pas directement des `effects` runtime; ils construisent des sorties rejouables.
+- une fois ces sorties finies materialisees dans les tracks, elles appartiennent au journal canonique de sequence.
 - hors strap, `player.schedule` peut garder une semantique d'emission active.
 - exposition publique via `player.schedule` sans acces direct au `Director`.
 - execution helper alignee sur les transitions `play/pause/resume/stop` du `Player`; `destroy` reste un cas technique a part.
