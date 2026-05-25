@@ -225,6 +225,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.playedEndMs = Math.max(this.playedEndMs, event.ms)
+    this.timelineEndMs = Math.max(this.projectedMasterEndMs, this.playedEndMs)
     this.seekEndMs = this.resolveCurrentSeekEndMs()
   }
 
@@ -232,21 +233,16 @@ export class PlayerFacade implements PlayerApi {
    * Updates the current horizon snapshot from one mounted runtime plan.
    */
   private syncHorizonFromRuntimePlan(
-    runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>,
-    options: { includePlayedEndInProgress?: boolean } = {}
+    runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>
   ): void {
     const previousTimelineEndMs = this.timelineEndMs
     const previousProjectedMasterEndMs = this.projectedMasterEndMs
     const previousAuthorEndMs = this.authorEndMs
     const previousSeekEndMs = this.seekEndMs
-    const includePlayedEndInProgress = options.includePlayedEndInProgress === true
-
     const projectedMasterEndMs = this.resolveTimelineEndMs(runtimePlan)
 
     this.projectedMasterEndMs = projectedMasterEndMs
-    this.timelineEndMs = includePlayedEndInProgress
-      ? Math.max(projectedMasterEndMs, this.playedEndMs)
-      : projectedMasterEndMs
+    this.timelineEndMs = Math.max(projectedMasterEndMs, this.playedEndMs)
     this.authorEndMs = this.resolveAuthorEndMs(runtimePlan)
     this.seekEndMs = this.resolveCurrentSeekEndMs()
 
@@ -1607,7 +1603,7 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
-    this.syncHorizonFromRuntimePlan(runtimePlan, { includePlayedEndInProgress: true })
+    this.syncHorizonFromRuntimePlan(runtimePlan)
 
     const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs)
 

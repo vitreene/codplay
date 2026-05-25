@@ -38,7 +38,7 @@ export function createSequenceCommandPanel(input: {
 	 * Synchronizes the seek label with the displayed cursor and max horizon.
 	 */
 	function syncSeekLabel(timelineMs: number, maxTimelineMs: number): void {
-		input.seekLabelNode.textContent = `${formatTimelineMs(timelineMs)} / ${formatTimelineMs(maxTimelineMs)}`
+		input.seekLabelNode.textContent = formatProgressPercent(timelineMs, maxTimelineMs)
 	}
 
 	/**
@@ -336,4 +336,16 @@ export function createSequenceCommandPanel(input: {
  */
 function formatTimelineMs(value: number): string {
 	return `${Math.max(0, Math.round(value))}ms`
+}
+
+/**
+ * Formats one whole percent progress value for the seek label.
+ */
+function formatProgressPercent(timelineMs: number, maxTimelineMs: number): string {
+	if (maxTimelineMs <= 0) {
+		return '0%'
+	}
+
+	const percent = Math.max(0, Math.min(100, Math.round((timelineMs / maxTimelineMs) * 100)))
+	return `${percent}%`
 }

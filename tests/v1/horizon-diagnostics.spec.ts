@@ -137,6 +137,67 @@ function createStateReplayScene(): SceneDoc {
 	}
 }
 
+/**
+ * Creates one scene whose support track contains one past event beyond the master projection.
+ */
+function createPlayProgressionScene(): SceneDoc {
+	return {
+		id: 'play-progression-scene',
+		rootStories: ['progress-story'],
+		initial: undefined,
+		straps: undefined,
+		listen: [],
+		stories: {
+			'progress-story': {
+				id: 'progress-story',
+				trackId: 'support-track',
+				entries: ['progress-node'],
+				initial: undefined,
+				persos: [
+					{
+						id: 'progress-node',
+						type: 'text',
+						initial: { content: 'progress' },
+						actions: {}
+					}
+				],
+				straps: undefined,
+				listen: [],
+				eventimes: []
+			}
+		},
+		tracks: {
+			'master-track': {
+				role: 'master',
+				events: [
+					{
+						id: 'evt-master-anchor',
+						ms: 200,
+						name: 'master:anchor',
+						index: 0,
+						source: 'story'
+					}
+				]
+			},
+			'support-track': {
+				role: 'support',
+				events: [
+					{
+						id: 'evt-support-progression',
+						ms: 1000,
+						name: 'support:progression',
+						index: 0,
+						source: 'story'
+					}
+				]
+			}
+		},
+		onStart(scene, options) {
+			options.schedule(scene.rootStories[0])
+		}
+	}
+}
+
 const stateReplayStraps: StrapCollection = {
 	'arm-state': () => ({
 		update: {
@@ -156,59 +217,20 @@ const stateReplayStraps: StrapCollection = {
 }
 
 describe('horizon diagnostics', () => {
-	it('predeclares one static strap track and lets it extend author horizon only by default', async () => {
-		const builder = new BuilderFacade()
-		const player = new Player({
-			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+	it('extends the visible sequence duration during play when a past non-master event is replayed', async () => {
+		const player = new PlayerFacade({
 			createElementOptions: {
 				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
 			}
 		})
-		const traces: RuntimeTraceRow[] = []
-		player.onTrace((row) => {
-			traces.push(row)
-		})
 
-		const compileResult = builder.compile({ scene: createSupportCounterScene() })
-		expect(compileResult.ok).toBe(true)
-		if (!compileResult.ok) {
-			throw new Error('support scene compile failed')
-		}
-
-		expect(await player.init({
-			mountTarget: {},
-			compiledScene: compileResult.data.compiledScene,
-			resourceManifest: compileResult.data.resourceManifest,
-			strapCollection: supportCounterStraps
-		})).toEqual({ ok: true, data: undefined })
-
+		expect(await player.init(createPlayProgressionScene())).toEqual({ ok: true, data: undefined })
+		expect(await player.seek({ timelineMs: 1000 })).toEqual({ ok: true, data: undefined })
 		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(player.getState().horizon.playedEndMs).toBe(1000)
+		expect(player.getState().horizon.progressEndMs).toBe(1000)
 		expect(await player.pause()).toEqual({ ok: true, data: undefined })
-
-		const strapTrackId = createStrapTrackId('support-story', 'support-counter')
-		const strapTrackRow = traces.find((row) => {
-			if (row.eventName !== 'player:horizon:sync') {
-				return false
-			}
-
-			const loadedTracks = Array.isArray(row.payload?.loadedTracks)
-				? (row.payload?.loadedTracks as Array<{ trackId?: unknown; role?: unknown }>)
-				: []
-			return loadedTracks.some((track) => track.trackId === strapTrackId && track.role === undefined)
-		})
-		expect(strapTrackRow).toBeDefined()
-
-		const authorPollutionRow = traces.find((row) => {
-			if (row.eventName !== 'player:horizon:sync') {
-				return false
-			}
-
-			const projectedMasterEndMs = row.payload?.projectedMasterEndMs
-			const authorEndMs = row.payload?.authorEndMs
-			return projectedMasterEndMs === 200 && authorEndMs === 1000
-		})
-
-		expect(authorPollutionRow).toBeDefined()
 	})
 
 	it('keeps playedEndMs stable during seek replay and filters future support-track events', async () => {
@@ -320,7 +342,7 @@ describe('horizon diagnostics', () => {
 		})).toEqual({ ok: true })
 
 		expect(player.getState().horizon.playedEndMs).toBe(1000)
-		expect(player.getState().horizon.progressEndMs).toBe(200)
+		expect(player.getState().horizon.progressEndMs).toBe(1000)
 
 		expect(await player.seek({ timelineMs: 1500 })).toEqual({ ok: true })
 

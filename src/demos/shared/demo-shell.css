@@ -126,7 +126,8 @@ h1 {
 .demo-progress-label {
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 	font-size: 0.68rem;
-	min-width: 8.3rem;
+	width: 5ch;
+	flex: 0 0 5ch;
 	text-align: right;
 }
 
