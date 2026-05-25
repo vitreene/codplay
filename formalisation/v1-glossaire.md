@@ -9,6 +9,7 @@ Glossaire final V1 de la terminologie normative.
 - `Scene`: racine globale d'orchestration
 - `rootStories`: stories autorisees a la racine de la scene
 - `Story`: unite d'orchestration locale independante
+- `Story instance`: occurrence runtime d'une story dans un host unique
 - `entries`: persos d'entree explicites d'une story; peuvent etre multiples
 - `Perso`: unite de rendu/action locale
 - `name`: identite auteur lisible d'un element
@@ -37,6 +38,8 @@ Glossaire final V1 de la terminologie normative.
 - `init`: instanciation runtime initiale de la lecture
 - `bootstrap scene`: phase avant diffusion visible, pilotee par la scene
 - `mount`: operation technique de placement d'une story via ses `entries`
+- `story host`: parent de montage effectif d'une story instance
+- `rootToken`: alias de placement configurable qui cible le `story host`
 - `start`: depart logique d'une sequence/story par event; il fixe l'ancre temporelle
 
 ## Propagation

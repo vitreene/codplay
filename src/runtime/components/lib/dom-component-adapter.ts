@@ -224,6 +224,8 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
   mutableNode.alt = undefined
   mutableNode.style = {}
   mutableNode.attributes = {}
+  mutableNode.children = []
+  mutableNode.childNodes = []
 
   if ('currentTime' in mutableNode) {
     mutableNode.currentTime = 0
@@ -235,6 +237,10 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
 
   if ('parentId' in mutableNode) {
     delete mutableNode.parentId
+  }
+
+  if ('parentNode' in mutableNode) {
+    mutableNode.parentNode = null
   }
 }
 

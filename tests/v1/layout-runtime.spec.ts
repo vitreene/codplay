@@ -303,6 +303,61 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
   }
 }
 
+/**
+ * Creates one strict scene fixture proving list containers default to section.
+ */
+function createListContainerSceneFixture(input: { tag?: string } = {}): SceneDoc {
+  return {
+    id: 'scene-list-container',
+    rootStories: ['story-main'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      'story-main': {
+        id: 'story-main',
+        name: 'main',
+        entries: ['story-main__list', 'story-main__title'],
+        initial: undefined,
+        persos: [
+          {
+            id: 'story-main__list',
+            name: 'list',
+            type: 'list',
+            initial: {
+              tag: input.tag
+            },
+            actions: {
+              'story-main__list': null
+            }
+          },
+          {
+            id: 'story-main__title',
+            name: 'title',
+            type: 'text',
+            initial: {
+              content: 'hello',
+              move: {
+                parentId: 'story-main__list',
+                mode: 'append'
+              }
+            },
+            actions: {
+              'story-main__title': null
+            }
+          }
+        ],
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    tracks: {}
+  }
+}
+
 describe('V1 - layout runtime', () => {
   let restoreDom: (() => void) | null = null
 
@@ -375,4 +430,5 @@ describe('V1 - layout runtime', () => {
       traces.some((trace) => trace.eventName === 'renderer:error' && trace.payload?.code === 'AUTHOR_LAYOUT_OUTLET_NOT_FOUND')
     ).toBe(true)
   })
+
 })

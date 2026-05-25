@@ -7,7 +7,8 @@ import {
   resetComponentRoot,
   setComponentRootId
 } from './lib/dom'
-import { appendDomChild, isDomElement, removeDomChild, resetRuntimeNodeState } from './lib/dom-component-adapter'
+import { isDomNode, resetRuntimeNodeState } from './lib/dom-component-adapter'
+import { RUNTIME_CONFIG } from '../config'
 import type { RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
 import type { MoveMode } from '../types'
 
@@ -26,6 +27,7 @@ type PersistentPlacementRule = {
 
 type ListState = {
   id?: unknown
+  tag?: unknown
   className?: string | { add?: string; remove?: string }
   style?: Record<string, unknown>
   attr?: Record<string, unknown>
@@ -48,13 +50,59 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Creates one non-DOM fallback node for list items.
+ * Resolves the authored list root tag name.
  */
-function createObjectItemsNode(): Record<string, unknown> {
-  return {
-    tagName: 'UL',
-    style: {},
-    attributes: {}
+function resolveListRootTagName(rawTagName: unknown): string {
+  return typeof rawTagName === 'string' && rawTagName.trim().length > 0
+    ? rawTagName
+    : RUNTIME_CONFIG.list.defaultTagName
+}
+
+/**
+ * Appends one child node to a DOM or object parent.
+ */
+function appendChildToNode(parentNode: unknown, childNode: unknown): void {
+  if (isDomNode(parentNode) && isDomNode(childNode)) {
+    parentNode.appendChild(childNode)
+    return
+  }
+
+  if (typeof parentNode !== 'object' || parentNode === null || typeof childNode !== 'object' || childNode === null) {
+    return
+  }
+
+  const mutableParent = parentNode as Record<string, unknown>
+  const mutableChild = childNode as Record<string, unknown>
+
+  if (typeof mutableChild.parentNode === 'object' && mutableChild.parentNode !== null) {
+    removeChildFromNode(mutableChild.parentNode, mutableChild)
+  }
+
+  const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
+  mutableParent.children = currentChildren.filter((candidate) => candidate !== childNode).concat([childNode])
+  mutableChild.parentNode = parentNode
+}
+
+/**
+ * Removes one child node from a DOM or object parent.
+ */
+function removeChildFromNode(parentNode: unknown, childNode: unknown): void {
+  if (isDomNode(parentNode) && isDomNode(childNode)) {
+    parentNode.removeChild(childNode)
+    return
+  }
+
+  if (typeof parentNode !== 'object' || parentNode === null || typeof childNode !== 'object' || childNode === null) {
+    return
+  }
+
+  const mutableParent = parentNode as Record<string, unknown>
+  const mutableChild = childNode as Record<string, unknown>
+  const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
+  mutableParent.children = currentChildren.filter((candidate) => candidate !== childNode)
+
+  if (mutableChild.parentNode === parentNode) {
+    mutableChild.parentNode = null
   }
 }
 
@@ -62,8 +110,6 @@ function createObjectItemsNode(): Record<string, unknown> {
  * Implements the list component with internal child ordering.
  */
 export class ListComponent extends BaseComponent implements RuntimeListComponent {
-  private itemsNode: unknown | null = null
-
   private readonly childNodeById = new Map<string, unknown>()
   private orderedChildIds: string[] = []
   private readonly persistentPlacementByChildId = new Map<string, PersistentPlacementRule>()
@@ -79,23 +125,16 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    */
   init(initial: Record<string, unknown>): void {
     const state = initial as ListState
+    const rootTagName = resolveListRootTagName(state.tag)
 
-    this.rootNode ??= createComponentRoot(this.item, 'section', this.createElementOptions)
+    this.rootNode ??= createComponentRoot(this.item, rootTagName, this.createElementOptions)
     resetComponentRoot(this.rootNode)
     this.childNodeById.clear()
     this.orderedChildIds = []
     this.persistentPlacementByChildId.clear()
     this.nextPlacementOrder = 1
 
-    if (isDomElement(this.rootNode)) {
-      const existingItemsNode = this.itemsNode ?? this.rootNode.querySelector('ul')
-      this.itemsNode = existingItemsNode ?? globalThis.document.createElement('ul')
-      appendDomChild(this.rootNode, this.itemsNode)
-    } else {
-      this.itemsNode ??= createObjectItemsNode()
-    }
-
-    resetRuntimeNodeState(this.itemsNode)
+    resetRuntimeNodeState(this.rootNode)
 
     setComponentRootId(this.rootNode, this.item.id, state.id)
     applyClassNameProps(this.rootNode, state.className)
@@ -161,8 +200,8 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
 
     const mode = input.mode ?? 'append'
     if (!this.shouldApplyReorder('add', mode, input.reorder)) {
-      if (this.itemsNode !== null) {
-        appendDomChild(this.itemsNode, input.childNode)
+      if (this.rootNode !== null) {
+        appendChildToNode(this.rootNode, input.childNode)
       }
 
       return
@@ -220,8 +259,8 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
       return null
     }
 
-    if (this.itemsNode !== null) {
-      removeDomChild(this.itemsNode, childNode)
+    if (this.rootNode !== null) {
+      removeChildFromNode(this.rootNode, childNode)
     }
 
     this.childNodeById.delete(input.childId)
@@ -305,7 +344,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    * Synchronizes real DOM child order from runtime model order.
    */
   private syncDomOrder(): void {
-    if (this.itemsNode === null) {
+    if (this.rootNode === null) {
       return
     }
 
@@ -315,7 +354,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
         continue
       }
 
-      appendDomChild(this.itemsNode, childNode)
+      appendChildToNode(this.rootNode, childNode)
     }
   }
 

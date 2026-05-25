@@ -1,6 +1,7 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
 import { createListFlipModule } from '../modules/list-flip'
+import { RUNTIME_CONFIG } from '../config'
 import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
@@ -55,6 +56,22 @@ function normalizeMoveFlipMode(rawFlipMode: unknown): MoveFlipMode {
 }
 
 /**
+ * Checks whether one raw move payload targets the story host alias.
+ */
+function isStoryHostMove(rawMove: unknown): boolean {
+  if (rawMove === RUNTIME_CONFIG.move.rootToken) {
+    return true
+  }
+
+  if (typeof rawMove !== 'object' || rawMove === null) {
+    return false
+  }
+
+  const move = rawMove as { parentId?: unknown }
+  return move.parentId === RUNTIME_CONFIG.move.rootToken
+}
+
+/**
  * Builds one runtime map entry for a component root node.
  */
 function toRuntimeElementMap(
@@ -99,6 +116,10 @@ export class RuntimeComponentOrchestrator {
   private readonly mountedByPersoId = new Map<string, boolean>()
   private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>()
   private readonly layoutOutletIdsByLayoutId = new Map<string, string[]>()
+  private readonly storyIdByPersoId = new Map<string, string>()
+  private readonly storyEntriesByStoryId = new Map<string, string[]>()
+  private readonly storyMoveByStoryId = new Map<string, unknown>()
+  private readonly storyHostNodeByStoryId = new Map<string, unknown>()
 
   private createElementOptions: import('../create-element').CreateElementOptions | undefined
 
@@ -175,6 +196,16 @@ export class RuntimeComponentOrchestrator {
    */
   loadPersos(runtimePersos: RuntimePersos): RuntimeElementMap {
     this.listFlipModule.cleanup()
+    this.storyEntriesByStoryId.clear()
+    this.storyMoveByStoryId.clear()
+
+    for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
+      this.storyEntriesByStoryId.set(storyId, [...entryIds])
+    }
+
+    for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
+      this.storyMoveByStoryId.set(storyId, rawMove)
+    }
 
     for (const item of Object.values(runtimePersos.persos)) {
       const existingComponent = this.componentByPersoId.get(item.id)
@@ -199,7 +230,17 @@ export class RuntimeComponentOrchestrator {
       this.mountLoadedRuntimeComponent(item, componentClass)
     }
 
+    this.mountStoryHosts(runtimePersos)
+
     for (const item of Object.values(runtimePersos.persos)) {
+      const storyEntries = this.storyEntriesByStoryId.get(item.storyId) ?? []
+      const isStoryEntry = storyEntries.includes(item.id)
+      const rawInitialMove = item.initial.move
+
+      if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
+        continue
+      }
+
       const initialMove = this.normalizeMoveCommand(item.initial.move, true)
       if (initialMove === null) {
         continue
@@ -212,6 +253,8 @@ export class RuntimeComponentOrchestrator {
         eventSeq: INITIAL_LOAD_EVENT.seq
       })
     }
+
+    this.mountStoryEntriesToStoryHosts(runtimePersos)
 
     return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId)
   }
@@ -278,6 +321,7 @@ export class RuntimeComponentOrchestrator {
     this.nodeByPersoId.set(item.id, rootNode)
     this.parentListByPersoId.set(item.id, null)
     this.mountedByPersoId.set(item.id, listComponent !== null)
+    this.storyIdByPersoId.set(item.id, item.storyId)
 
     if (listComponent !== null) {
       this.listByPersoId.set(item.id, listComponent)
@@ -309,6 +353,10 @@ export class RuntimeComponentOrchestrator {
     this.mountedByPersoId.clear()
     this.renderMutationResolverByPersoId.clear()
     this.layoutOutletIdsByLayoutId.clear()
+    this.storyIdByPersoId.clear()
+    this.storyEntriesByStoryId.clear()
+    this.storyMoveByStoryId.clear()
+    this.storyHostNodeByStoryId.clear()
     return new Map()
   }
 
@@ -597,6 +645,115 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
+   * Creates one synthetic host node used to mount one story instance.
+   */
+  private createStoryHostNode(storyId: string, useDomNode: boolean): unknown {
+    if (useDomNode && typeof globalThis.document !== 'undefined') {
+      const hostNode = globalThis.document.createElement('div')
+      hostNode.id = storyId
+      return hostNode
+    }
+
+    return {
+      tagName: 'DIV',
+      id: storyId,
+      style: {},
+      attributes: {},
+      children: []
+    }
+  }
+
+  /**
+   * Resolves one synthetic host node for one story instance.
+   */
+  private resolveStoryHostNode(storyId: string, childNode?: unknown): unknown {
+    const existingHostNode = this.storyHostNodeByStoryId.get(storyId)
+    if (existingHostNode !== undefined) {
+      return existingHostNode
+    }
+
+    const hostNode = this.createStoryHostNode(storyId, isDomNode(childNode))
+    this.storyHostNodeByStoryId.set(storyId, hostNode)
+    return hostNode
+  }
+
+  /**
+   * Resolves one explicit parent node for one story host mount.
+   */
+  private resolveStoryMountTargetNode(parentId: string): unknown | null {
+    if (parentId === RUNTIME_CONFIG.move.rootToken) {
+      return null
+    }
+
+    return this.nodeByPersoId.get(parentId) ?? null
+  }
+
+  /**
+   * Mounts story hosts into declared parent outlets before child entries.
+   */
+  private mountStoryHosts(runtimePersos: RuntimePersos): void {
+    for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
+      const move = this.normalizeMoveCommand(rawMove, true)
+      if (move === null) {
+        continue
+      }
+
+      const targetNode = this.resolveStoryMountTargetNode(move.parentId)
+      if (targetNode === null) {
+        continue
+      }
+
+      const hostNode = this.resolveStoryHostNode(storyId, targetNode)
+      this.appendNodeToParent(targetNode, hostNode)
+    }
+  }
+
+  /**
+   * Resolves one parent node target from one move parent identifier.
+   */
+  private resolveMoveTargetNode(parentId: string, storyId: string | null, childNode?: unknown): unknown | null {
+    if (parentId === RUNTIME_CONFIG.move.rootToken) {
+      return storyId === null ? null : this.resolveStoryHostNode(storyId, childNode)
+    }
+
+    return this.nodeByPersoId.get(parentId) ?? null
+  }
+
+  /**
+   * Mounts the root entries of each story into their synthetic hosts.
+   */
+  private mountStoryEntriesToStoryHosts(runtimePersos: RuntimePersos): void {
+    for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
+      if (entryIds.length === 0) {
+        continue
+      }
+
+      const hostNode = this.resolveStoryHostNode(storyId, this.nodeByPersoId.get(entryIds[0]))
+
+      for (const entryId of entryIds) {
+        const item = runtimePersos.persos[entryId]
+        if (item === undefined) {
+          continue
+        }
+
+        const rawInitialMove = item.initial.move
+        if (rawInitialMove !== undefined && !isStoryHostMove(rawInitialMove)) {
+          continue
+        }
+
+        const entryNode = this.nodeByPersoId.get(entryId)
+        if (entryNode === undefined) {
+          continue
+        }
+
+        this.appendNodeToParent(hostNode, entryNode)
+        this.parentListByPersoId.set(entryId, null)
+        this.mountedByPersoId.set(entryId, true)
+      }
+    }
+  }
+
+  /**
    * Detaches one node from its current DOM or object parent.
    */
   private detachNodeFromParent(nodeRef: unknown): void {
@@ -638,6 +795,10 @@ export class RuntimeComponentOrchestrator {
       return
     }
 
+    if (isDomNode(parentNode) || isDomNode(childNode)) {
+      return
+    }
+
     const mutableParent = parentNode as Record<string, unknown>
     const mutableChild = childNode as Record<string, unknown>
     const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
@@ -660,6 +821,16 @@ export class RuntimeComponentOrchestrator {
    * Normalizes move payload into one strict move command.
    */
   private normalizeMoveCommand(rawMove: unknown, isInitialMove: boolean): MoveCommand | null {
+    if (typeof rawMove === 'string') {
+      return rawMove.length === 0
+        ? null
+        : {
+            parentId: rawMove,
+            mode: isInitialMove ? 'append' : 'append',
+            flipMode: 'local'
+          }
+    }
+
     if (!isMoveCommand(rawMove)) {
       return null
     }
@@ -683,11 +854,12 @@ export class RuntimeComponentOrchestrator {
     eventSeq: number
   }): void {
     const childNode = this.nodeByPersoId.get(request.persoId) ?? null
+    const storyId = this.storyIdByPersoId.get(request.persoId) ?? null
     const sourceListId = this.parentListByPersoId.get(request.persoId) ?? null
     const sourceList = sourceListId ? this.listByPersoId.get(sourceListId) ?? null : null
 
     const targetList = this.listByPersoId.get(request.move.parentId) ?? null
-    const targetNode = targetList === null ? (this.nodeByPersoId.get(request.move.parentId) ?? null) : null
+    const targetNode = targetList === null ? this.resolveMoveTargetNode(request.move.parentId, storyId, childNode) : null
 
     if (targetList === null && targetNode === null) {
       if (sourceList !== null) {

@@ -81,6 +81,12 @@ type StoryDef = {
 - `entries` reference explicitement les persos places a la racine de la story.
 - `entries` est obligatoire dans le contrat et peut etre vide (`[]`).
 - une story peut avoir plusieurs elements racine.
+- une `Story` est un template instanciable: chaque montage runtime produit une story instance.
+- une story instance possede un `story host` unique, resolu par le contexte de montage.
+- `story.initial.move` peut definir le parent de montage du `story host` de l'instance.
+- les persos listes dans `entries` sont montes directement dans ce `story host`, dans l'ordre de declaration.
+- le `story host` peut etre vise par l'alias de placement configurable `rootToken`.
+- le runtime peut conserver un index ordonne de `entries` par story pour instancier le montage de l'instance.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
@@ -92,10 +98,12 @@ type StoryDef = {
 
 - une `Story` est une unite independante.
 - monter une `Story` consiste a propager le placement vers ses `entries`.
+- monter une `Story` fixe un `story host` unique pour cette instance.
 - le contexte de placement d'une `Story` ne vit pas dans `StoryDef`.
 - une `Story` reste portable et reutilisable dans des scenes ou contextes visuels differents.
 - une story peut etre rendue visuellement dans une autre sans creer de lien structurel hierarchique.
 - ce placement inter-stories repose sur les `move` de ses elements et non sur une declaration de hierarchie entre stories.
+- l'alias `rootToken` resout le `story host` de l'instance courante; il ne remplace pas un identifiant runtime explicite.
 
 3. Initialisation
 

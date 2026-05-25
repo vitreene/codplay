@@ -204,6 +204,8 @@ export type ItemDoc = {
 export type RuntimePersos = {
   id: string
   persos: Record<string, ItemDoc>
+  entriesByStoryId?: Record<string, string[]>
+  storyMovesByStoryId?: Record<string, MoveValue>
 }
 
 /**

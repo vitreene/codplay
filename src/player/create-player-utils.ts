@@ -1,6 +1,6 @@
 import type { AnimationAction } from '../animation/types'
 import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
-import type { RuntimePersos, ItemDoc } from '../runtime/types'
+import type { MoveValue, RuntimePersos, ItemDoc } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackAuthorMeta } from '../track-manager/types'
 import type { RuntimeTimelinePlan } from '../director/types'
@@ -216,11 +216,20 @@ export class PlayerRuntimePlanner {
    */
   createRuntimePersos(scene: StrictSceneDoc, mountedStoryIds: string[]): RuntimePersos {
     const persos: Record<string, ItemDoc> = {}
+    const entriesByStoryId: Record<string, string[]> = {}
+    const storyMovesByStoryId: Record<string, MoveValue> = {}
 
     for (const storyId of mountedStoryIds) {
       const story = scene.stories[storyId]
       if (story === undefined) {
         continue
+      }
+
+      entriesByStoryId[story.id] = [...story.entries]
+      const storyInitial = story.initial as Record<string, unknown> | undefined
+      const storyMove = storyInitial?.move
+      if (storyMove !== undefined) {
+        storyMovesByStoryId[story.id] = storyMove as MoveValue
       }
 
       for (const perso of story.persos) {
@@ -230,7 +239,9 @@ export class PlayerRuntimePlanner {
 
     return {
       id: scene.id || RUNTIME_PERSOS_ID_FALLBACK,
-      persos
+      persos,
+      entriesByStoryId,
+      storyMovesByStoryId
     }
   }
 
@@ -256,7 +267,14 @@ export class PlayerRuntimePlanner {
 
     return {
       id: story.id,
-      persos
+      persos,
+      entriesByStoryId: {
+        [story.id]: [...story.entries]
+      },
+      storyMovesByStoryId:
+        story.initial === undefined || (story.initial as Record<string, unknown>).move === undefined
+          ? undefined
+          : { [story.id]: (story.initial as Record<string, unknown>).move as MoveValue }
     }
   }
 

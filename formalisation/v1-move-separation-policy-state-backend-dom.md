@@ -67,7 +67,12 @@ Fonctions/metadonnees a sortir du composant list:
 
 Ces invariants doivent etre documentes et testes avant toute bascule de responsabilite:
 
-- `initial.move` est applique pendant `loadStory(...)`.
+- `initial.move` est applique pendant le chargement runtime des persos (`loadPersos(...)`).
+- `story.initial.move` est applique pendant le chargement runtime pour positionner le `story host` de l'instance.
+- `initial.move` peut etre explicite (`parentId`) ou symbolique via le token configurable `rootToken`.
+- `rootToken` resout le `story host` courant; ce n'est pas un id runtime explicite.
+- le token `rootToken` sert a une assignation de placement, pas a un mouvement DOM en soi.
+- les persos d'`entries` peuvent etre montes dans le `story host` sans `move` explicite.
 - la cle de conflit same-tick pour `move` est `{ eventSeq, persoId }`.
 - en cas de conflit same-tick, le dernier `move` valide gagne.
 - si le dernier `move` du tick est invalide, aucun `move` du tick ne s'applique pour cet item.

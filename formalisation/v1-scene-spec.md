@@ -123,6 +123,8 @@ Note de contexte:
 - a `scene.init`, toutes les stories de la scene sont initialisees.
 - une story initialisee peut exister dans le runtime sans etre presente dans le DOM.
 - une story initialisee peut recevoir des events meme si elle n'est pas encore visible dans le DOM.
+- le runtime peut conserver pour chaque story l'ordre de ses `entries` afin de monter l'instance dans son `story host`.
+- `story.initial.move` peut positionner le `story host` de l'instance dans un outlet autorise.
 - si un event est emis avant qu'une story, un perso ou un placement ne soit pret pour le traitement attendu, cet event peut etre perdu.
 - les elements peuvent entrer dans le DOM ou en sortir pendant la sequence.
 - la sortie du DOM n'implique pas la suppression runtime de l'element.
@@ -170,6 +172,8 @@ Note de contexte:
 - aucun track ne peut etre ajoute ou supprime pendant la lecture.
 - `tracks` porte l'orchestration scene-level (activation, registre, timing global), pas la definition metier portable des eventimes d'une story.
 - les eventimes portables d'une story restent dans `Story.eventimes`.
+- le montage d'une story cree une story instance avec un `story host` unique.
+- ce `story host` est la cible de reference de l'alias configurable `rootToken` pour cette instance.
 - la scene fixe l'ancrage temporel de depart d'une story via la resolution runtime de ses events et le mecanisme existant d'offsets relatifs.
 - cet ancrage temporel est distinct du simple montage des persos de la story dans le runtime.
 - un track unique par defaut `global` existe toujours.

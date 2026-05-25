@@ -1,5 +1,8 @@
+import { createStrapTrackId } from "../../player/create-player-utils";
 import type { StrapCollection } from "../../player";
 import type { SceneDoc } from "../../player/types";
+
+const QUIZ_COUNTDOWN_STRAP_TRACK_ID = createStrapTrackId("s4-quiz-question-story", "quiz-countdown-start");
 
 /**
  * Creates one business-oriented reference scene with persistent decor and quiz branching.
@@ -264,14 +267,15 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-intro-story": {
         id: "s4-quiz-intro-story",
-        entries: ["quiz-intro-panel", "quiz-intro-title"],
+        entries: ["quiz-intro-title"],
         initial: undefined,
         persos: [
           {
-            id: "quiz-intro-panel",
-            type: "list",
+            id: "quiz-intro-title",
+            type: "text",
             initial: {
-              className: "quiz-intro-panel",
+              tag: "h1",
+              content: "Quiz",
               move: {
                 parentId: "quiz-layout:intro",
                 mode: "append",
@@ -282,6 +286,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 padding: "20px",
                 backgroundColor: "#f8fafc",
                 borderRadius: "18px",
+                color: "#0f172a",
                 opacity: 0,
               },
             },
@@ -316,22 +321,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               },
             },
           },
-          {
-            id: "quiz-intro-title",
-            type: "text",
-            initial: {
-              tag: "h1",
-              content: "Quiz",
-              move: {
-                parentId: "quiz-intro-panel",
-                mode: "append",
-              },
-              style: {
-                color: "#0f172a",
-              },
-            },
-            actions: {},
-          },
         ],
         straps: undefined,
         listen: [],
@@ -348,18 +337,20 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-question-story": {
         id: "s4-quiz-question-story",
-        entries: ["quiz-question-panel", "quiz-question-title", "quiz-answer-yes", "quiz-answer-no"],
-        initial: undefined,
+        entries: ["quiz-question-panel"],
+        initial: {
+          move: {
+            parentId: "quiz-layout:question",
+            mode: "append",
+          },
+        },
         persos: [
           {
             id: "quiz-question-panel",
             type: "list",
             initial: {
               className: "quiz-question-panel",
-              move: {
-                parentId: "quiz-layout:question",
-                mode: "append",
-              },
+              move: "root",
               style: {
                 width: "420px",
                 minHeight: "160px",
@@ -384,35 +375,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              "quiz:answer:yes": {
-                style: {
-                  opacity: {
-                    from: 1,
-                    to: 0,
-                    duration: 200,
-                  },
-                  x: {
-                    from: 0,
-                    to: -80,
-                    duration: 200,
-                  },
-                },
-              },
-              "quiz:answer:no": {
-                style: {
-                  opacity: {
-                    from: 1,
-                    to: 0,
-                    duration: 200,
-                  },
-                  x: {
-                    from: 0,
-                    to: -80,
-                    duration: 200,
-                  },
-                },
-              },
-              perdu: {
+              "quiz:question:hide": {
                 style: {
                   opacity: {
                     from: 1,
@@ -517,10 +480,16 @@ export function createS4QuizReferenceScene(): SceneDoc {
           {
             on: "quiz:answer:yes",
             straps: ["quiz-answer"],
+            emit: [{ name: "quiz:question:hide" }],
           },
           {
             on: "quiz:answer:no",
             straps: ["quiz-answer"],
+            emit: [{ name: "quiz:question:hide" }],
+          },
+          {
+            on: "perdu",
+            emit: [{ name: "quiz:question:hide" }],
           },
         ],
         eventimes: [
@@ -529,19 +498,18 @@ export function createS4QuizReferenceScene(): SceneDoc {
             startAt: 2300,
           },
         ],
-        state: {
-          countdownTrackIds: [],
-        },
       },
       "s4-quiz-count-story": {
         id: "s4-quiz-count-story",
-        entries: ["quiz-count-panel", "quiz-count-value"],
+        entries: ["quiz-count-value"],
         initial: undefined,
         persos: [
           {
-            id: "quiz-count-panel",
-            type: "list",
+            id: "quiz-count-value",
+            type: "text",
             initial: {
+              tag: "strong",
+              content: "10",
               move: {
                 parentId: "quiz-layout:count",
                 mode: "append",
@@ -556,6 +524,10 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 border: "1px solid rgba(248, 250, 252, 0.24)",
                 borderRadius: "18px",
                 boxShadow: "0 16px 40px rgba(15, 23, 42, 0.28)",
+                color: "#f8fafc",
+                fontSize: "30px",
+                fontWeight: 800,
+                lineHeight: "1",
                 opacity: 0,
               },
             },
@@ -616,26 +588,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-            },
-          },
-          {
-            id: "quiz-count-value",
-            type: "text",
-            initial: {
-              tag: "strong",
-              content: "10",
-              move: {
-                parentId: "quiz-count-panel",
-                mode: "append",
-              },
-              style: {
-                color: "#f8fafc",
-                fontSize: "30px",
-                fontWeight: 800,
-                lineHeight: "1",
-              },
-            },
-            actions: {
               "quiz-count": null,
             },
           },
@@ -788,7 +740,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
 
 export const s4QuizStraps: StrapCollection = {
   "quiz-countdown-start": ({ context }) => {
-    const countdownHandle = context.helpers.repeat({ everyMs: 1000, times: 11 }, (index) => {
+    void context.helpers.repeat({ everyMs: 1000, times: 11 }, (index) => {
       return [
         {
           name: "quiz-count",
@@ -799,8 +751,8 @@ export const s4QuizStraps: StrapCollection = {
         },
       ];
     });
-    const lostHandle = context.helpers.delay(10000, { name: "perdu", cascade: true });
-    const endHandle = context.helpers.delay(11000, { name: "sequence:end", cascade: true });
+    void context.helpers.delay(10000, { name: "perdu", cascade: true });
+    void context.helpers.delay(11000, { name: "sequence:end", cascade: true });
 
     return {
       events: [
@@ -809,13 +761,9 @@ export const s4QuizStraps: StrapCollection = {
           cascade: true,
         },
       ],
-      update: {
-        countdownTrackIds: [countdownHandle.id, lostHandle.id, endHandle.id],
-      },
     };
   },
-  "quiz-answer": ({ event, state, context }) => {
-    const trackIds = Array.isArray(state.countdownTrackIds) ? state.countdownTrackIds : [];
+  "quiz-answer": ({ event, context }) => {
     context.helpers.delay(1000, { name: "sequence:end", cascade: true });
 
     return {
@@ -823,7 +771,7 @@ export const s4QuizStraps: StrapCollection = {
         {
           name: "track:deactivate",
           data: {
-            trackIds,
+            trackIds: [QUIZ_COUNTDOWN_STRAP_TRACK_ID],
           },
           cascade: true,
         },
@@ -832,9 +780,6 @@ export const s4QuizStraps: StrapCollection = {
           cascade: true,
         },
       ],
-      update: {
-        countdownTrackIds: [],
-      },
     };
   },
 };

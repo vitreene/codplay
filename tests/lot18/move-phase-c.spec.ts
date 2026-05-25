@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AnimationResolvedAction } from '../../src/animation/types'
 import { RuntimeComponentOrchestrator } from '../../src/runtime/components'
 import type { RuntimeComponentWarning } from '../../src/runtime/components'
+import { ListComponent } from '../../src/runtime/components/list-component'
 import type { RuntimePersos } from '../../src/runtime/types'
 
 type RuntimeNodeFixture = {
@@ -216,7 +217,7 @@ describe('Lot 18 - move phase C orchestration', () => {
     expect(registry.isMounted('item-c')).toBe(true)
     expect(registry.getNodeById('item-c')).toBe(nodeBeforeDetach)
 
-    expect(warnings.some((warning) => warning.code === 'AUTHOR_LIST_MOVE_TARGET_NOT_FOUND')).toBe(true)
+    expect(warnings.some((warning) => warning.code === 'AUTHOR_LAYOUT_OUTLET_NOT_FOUND')).toBe(true)
   })
 
   it('L18-T2 resolves same-tick move conflicts with last-write-wins and invalid-last ignore', () => {
@@ -414,5 +415,52 @@ describe('Lot 18 - move phase C orchestration', () => {
 
     expect(registry.getParentListId('item-a')).toBe('list-a')
     expect(warnings.some((warning) => warning.code === 'AUTHOR_MOVE_COMMAND_INVALID')).toBe(false)
+  })
+
+  it('L18-T5 defaults list containers to section and accepts a custom tag', () => {
+    const listFixture = {
+      id: 'list-default',
+      type: 'list',
+      initial: {},
+      actions: {}
+    } as const
+
+    const defaultList = new ListComponent({
+      item: listFixture as never,
+      warn: () => {
+        return
+      }
+    } as never)
+    defaultList.init({})
+
+    const defaultRoot = defaultList.render() as { tagName: string; children?: Array<{ tagName: string }> }
+    expect(defaultRoot.tagName).toBe('SECTION')
+
+    defaultList.attachChild({
+      childId: 'child-a',
+      childNode: {
+        tagName: 'DIV',
+        style: {},
+        attributes: {}
+      },
+      mode: 'append',
+      eventId: 'evt-default-child',
+      eventSeq: 50
+    })
+
+    expect(defaultRoot.children?.[0]?.tagName).toBe('DIV')
+
+    const customList = new ListComponent({
+      item: {
+        ...listFixture,
+        id: 'list-custom'
+      } as never,
+      warn: () => {
+        return
+      }
+    } as never)
+    customList.init({ tag: 'nav' })
+
+    expect((customList.render() as { tagName: string }).tagName).toBe('NAV')
   })
 })

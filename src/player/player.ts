@@ -439,7 +439,12 @@ export class Player implements PlayerApi {
   /**
    * Creates the helper facade exposed to one strap execution.
    */
-  private createStrapHelpers(scope: StrapExecutionScope, strapTrackId: string): StrapHelpers {
+  private createStrapHelpers(
+    scope: StrapExecutionScope,
+    strapTrackId: string,
+    planHelperEvent: (offsetMs: number, event: StoryEvent) => void
+  ): StrapHelpers {
+
     const validateNonNegative = (value: number): void => {
       if (!Number.isFinite(value) || value < 0) {
         throw new Error('AUTHOR_HELPER_INVALID_ARG')
@@ -449,12 +454,9 @@ export class Player implements PlayerApi {
     return {
       delay: (ms, event) => {
         validateNonNegative(ms)
-        const placementResult = this.materializeHelperEvents(strapTrackId, scope, [{ offsetMs: ms, event }])
-        if (!placementResult.ok) {
-          throw new Error(placementResult.error.code)
-        }
+        planHelperEvent(ms, event)
         return {
-          id: strapTrackId,
+          id: `${strapTrackId}:delay:${ms}`,
           cancel: () => {
             return
           }
@@ -465,18 +467,13 @@ export class Player implements PlayerApi {
         if (!Number.isFinite(options.times) || options.times < 1) {
           throw new Error('AUTHOR_HELPER_INVALID_ARG')
         }
-        const events = Array.from({ length: options.times }).flatMap((_, index) =>
-          factory(index).map((event, eventIndex) => ({
-            offsetMs: index * options.everyMs + eventIndex,
-            event
-          }))
-        )
-        const placementResult = this.materializeHelperEvents(strapTrackId, scope, events)
-        if (!placementResult.ok) {
-          throw new Error(placementResult.error.code)
+        for (let index = 0; index < options.times; index += 1) {
+          for (const event of factory(index)) {
+            planHelperEvent(index * options.everyMs + index, event)
+          }
         }
         return {
-          id: strapTrackId,
+          id: `${strapTrackId}:repeat:${options.everyMs}:${options.times}`,
           cancel: () => {
             return
           }
@@ -508,7 +505,15 @@ export class Player implements PlayerApi {
       },
       stagger: (options, events) => {
         validateNonNegative(options.stepMs)
-        return events.map((event, index) => this.createStrapHelpers(scope, strapTrackId).delay(index * options.stepMs, event))
+        return events.map((event, index) => {
+          planHelperEvent(index * options.stepMs, event)
+          return {
+          id: `${strapTrackId}:stagger:${index}`,
+          cancel: () => {
+            return
+          }
+          }
+        })
       }
     }
   }
@@ -528,6 +533,7 @@ export class Player implements PlayerApi {
     }
 
     const strapTrackId = this.resolveStrapTrackId(scope.scopeStoryId, strapName)
+    const plannedHelperEvents: Array<{ offsetMs: number; event: StoryEvent }> = []
 
     const output = await strap({
       event,
@@ -545,11 +551,20 @@ export class Player implements PlayerApi {
       },
       context: {
         api: {},
-        helpers: this.createStrapHelpers(scope, strapTrackId)
+        helpers: this.createStrapHelpers(scope, strapTrackId, (offsetMs, plannedEvent) => {
+          plannedHelperEvents.push({ offsetMs, event: plannedEvent })
+        })
       }
     })
 
     const resolvedOutput: StrapOutput = output ?? {}
+    if (plannedHelperEvents.length > 0) {
+      const helperResult = this.materializeHelperEvents(strapTrackId, scope, plannedHelperEvents)
+      if (!helperResult.ok) {
+        return helperResult
+      }
+    }
+
     if (resolvedOutput.update) {
       const updateResult = await this.materializeStrapUpdate(
         strapTrackId,

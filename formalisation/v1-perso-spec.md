@@ -125,6 +125,16 @@ type PersoTransitionTiming = {
 - `initial` decrit l'etat de construction du node du `Perso`.
 - `initial` ne porte pas le state runtime mutable.
 
+4bis. Placement initial
+
+- `initial.move` decrit le parent de montage du perso.
+- `initial.move` accepte la forme objet existante (`parentId`, `mode`, `flip`, `flipMode`, `reorder`).
+- `initial.move` accepte aussi une forme string reservee aux aliases symboliques configures par runtime.
+- l'alias V1 `rootToken` cible le `story host` courant; sa valeur par defaut est configurable.
+- quand un perso appartient a `entries`, son montage peut etre resolu directement dans le `story host` sans `move` explicite.
+- la resolution de `rootToken` reste un contrat de placement, pas une identite runtime authorisee.
+- dans les stories composees, `initial.move` d'un perso de `entries` peut cibler `rootToken` pour se fixer sur le `story host` de la story.
+
 5. Actions
 
 - `actions` est un dictionnaire `eventName -> action` type par `Perso.type`.

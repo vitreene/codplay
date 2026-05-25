@@ -7,8 +7,11 @@ type RuntimeNodeFixture = {
   tagName: string
   style: Record<string, unknown>
   attributes: Record<string, unknown>
+  id?: string
   className?: string
   textContent?: string
+  parentNode?: RuntimeNodeFixture | null
+  children?: RuntimeNodeFixture[]
 }
 
 /**
@@ -80,6 +83,53 @@ function createMountedStoriesSceneFixture(): SceneDoc {
   }
 }
 
+/**
+ * Creates one strict scene fixture that mounts root entries into one shared story host.
+ */
+function createStoryHostSceneFixture(): SceneDoc {
+  return {
+    id: 'scene-story-host',
+    rootStories: ['story-a'],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    stories: {
+      'story-a': {
+        id: 'story-a',
+        name: 'a',
+        entries: ['story-a__lead', 'story-a__tail'],
+        initial: undefined,
+        persos: [
+          {
+            id: 'story-a__lead',
+            name: 'lead',
+            type: 'text',
+            initial: { content: 'lead', move: 'root' },
+            actions: {
+              'story-a__lead': null
+            }
+          },
+          {
+            id: 'story-a__tail',
+            name: 'tail',
+            type: 'text',
+            initial: { content: 'tail' },
+            actions: {
+              'story-a__tail': null
+            }
+          }
+        ],
+        straps: undefined,
+        listen: []
+      }
+    },
+    init(scene, options) {
+      options.mount(scene.rootStories[0])
+    },
+    tracks: {}
+  }
+}
+
 describe('V1 - mounted stories runtime', () => {
   it('keeps all mounted stories composed in the runtime registry', async () => {
     const player = new PlayerFacade({
@@ -93,5 +143,27 @@ describe('V1 - mounted stories runtime', () => {
     expect(initResult.ok).toBe(true)
     expect(player.getRuntimeRegistry().getNodeById('story-a__title')).not.toBeNull()
     expect(player.getRuntimeRegistry().getNodeById('story-b__title')).not.toBeNull()
+  })
+
+  it('mounts root entries into the story host when rootToken is used', async () => {
+    const player = new PlayerFacade({
+      createElementOptions: {
+        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
+      }
+    })
+
+    const initResult = await player.init(createStoryHostSceneFixture())
+
+    expect(initResult.ok).toBe(true)
+
+    const registry = player.getRuntimeRegistry()
+    const leadNode = registry.getNodeById('story-a__lead') as RuntimeNodeFixture | null
+    const tailNode = registry.getNodeById('story-a__tail') as RuntimeNodeFixture | null
+
+    expect(leadNode?.parentNode).toBe(tailNode?.parentNode)
+    expect(leadNode?.parentNode?.children?.map((child) => child.id)).toEqual([
+      'story-a__lead',
+      'story-a__tail'
+    ])
   })
 })
