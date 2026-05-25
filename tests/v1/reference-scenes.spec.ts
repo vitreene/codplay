@@ -345,7 +345,7 @@ describe('V1 - reference scenes', () => {
     expect(player.getState().timelineMs).toBe(playedHeadMs)
   })
 
-  it('does not advance played-only seek head from non-master tracks', async () => {
+	it('includes already materialized non-master events in played-only seek head', async () => {
     const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
     const player = new PlayerFacade({
       animationAdapter,
@@ -358,18 +358,20 @@ describe('V1 - reference scenes', () => {
     const initResult = await player.init(createS4QuizReferenceScene())
     expect(initResult.ok).toBe(true)
 
-    expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
 
-    const playedHeadMs = player.getState().horizon.playedEndMs
+		const playedHeadMs = player.getState().horizon.playedEndMs
 
-    expect(await player.emit({
-      name: 'quiz:decor:probe',
-      trackId: 's4-quiz-decor-story'
-    })).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({
+			name: 'quiz:decor:probe',
+			ms: 1000,
+			source: 'system',
+			trackId: 's4-quiz-decor-story'
+		})).toEqual({ ok: true, data: undefined })
 
-    expect(player.getState().horizon.playedEndMs).toBe(playedHeadMs)
-    expect(player.getState().horizon.seekEndMs).toBe(playedHeadMs)
-  })
+		expect(player.getState().horizon.playedEndMs).toBeGreaterThan(playedHeadMs)
+		expect(player.getState().horizon.seekEndMs).toBe(player.getState().horizon.playedEndMs)
+	})
 
   it('traces that public seek replay bypasses the author pipeline before countdown helper tracks exist', async () => {
     const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())

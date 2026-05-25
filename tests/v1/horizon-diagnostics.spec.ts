@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { BuilderFacade } from '../../src/builder/create-builder'
 import { Player } from '../../src/player'
+import { PlayerFacade } from '../../src/player/create-player'
 import { createStrapTrackId } from '../../src/player/create-player-utils'
 import type { StrapCollection } from '../../src/player/strap-types'
 import type { SceneDoc } from '../../src/player/types'
@@ -292,6 +293,41 @@ describe('horizon diagnostics', () => {
 			authorEndMs: 1000,
 			seekEndMs: 200
 		})
+	})
+
+	it('recomputes progressEndMs from playedEndMs when seek starts', async () => {
+		const player = new PlayerFacade({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const snapshots: Array<ReturnType<PlayerFacade['getState']>> = []
+		player.onStateChange((state) => {
+			snapshots.push(state)
+		})
+
+		expect(await player.init(createSupportCounterScene())).toEqual({ ok: true })
+
+		expect(await player.play()).toEqual({ ok: true })
+		expect(await player.pause()).toEqual({ ok: true })
+		expect(await player.emit({
+			name: 'quiz:decor:probe',
+			ms: 1000,
+			source: 'system',
+			trackId: 'support-track'
+		})).toEqual({ ok: true })
+
+		expect(player.getState().horizon.playedEndMs).toBe(1000)
+		expect(player.getState().horizon.progressEndMs).toBe(200)
+
+		expect(await player.seek({ timelineMs: 1500 })).toEqual({ ok: true })
+
+		const seekingSnapshots = snapshots.filter((state) => state.status === 'seeking')
+		const seekingSnapshot = seekingSnapshots[seekingSnapshots.length - 1]
+		expect(seekingSnapshot?.horizon.progressEndMs).toBe(1000)
+		expect(seekingSnapshot?.horizon.seekEndMs).toBe(1000)
 	})
 
 	it('lets one strap track extend projectedMasterEndMs only when its role is explicitly master', async () => {

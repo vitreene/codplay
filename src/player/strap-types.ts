@@ -54,4 +54,5 @@ export type StrapExecutionScope = {
   source: RuntimeEventSource
   ms: number
   trackId?: string
+  materialized?: boolean
 }

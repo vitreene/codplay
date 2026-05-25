@@ -27,8 +27,6 @@ import {
 } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from './player-constants'
 import {
-  hasMasterTracks,
-  isMasterTrackEvent,
   resolveSeekEndMsFromPolicy,
   shouldReplayEventForSeek
 } from './seek-runtime'
@@ -226,13 +224,6 @@ export class PlayerFacade implements PlayerApi {
       return
     }
 
-    if (
-      hasMasterTracks(this.trackManager.state.loadedTrackIds, (trackId) => this.trackManager.getTrackMeta(trackId)) &&
-      !isMasterTrackEvent(event, (trackId) => this.trackManager.getTrackMeta(trackId))
-    ) {
-      return
-    }
-
     this.playedEndMs = Math.max(this.playedEndMs, event.ms)
     this.seekEndMs = this.resolveCurrentSeekEndMs()
   }
@@ -240,14 +231,22 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Updates the current horizon snapshot from one mounted runtime plan.
    */
-  private syncHorizonFromRuntimePlan(runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>): void {
+  private syncHorizonFromRuntimePlan(
+    runtimePlan: ReturnType<PlayerRuntimePlanner['createRuntimePlan']>,
+    options: { includePlayedEndInProgress?: boolean } = {}
+  ): void {
     const previousTimelineEndMs = this.timelineEndMs
     const previousProjectedMasterEndMs = this.projectedMasterEndMs
     const previousAuthorEndMs = this.authorEndMs
     const previousSeekEndMs = this.seekEndMs
+    const includePlayedEndInProgress = options.includePlayedEndInProgress === true
 
-    this.timelineEndMs = this.resolveTimelineEndMs(runtimePlan)
-    this.projectedMasterEndMs = this.timelineEndMs
+    const projectedMasterEndMs = this.resolveTimelineEndMs(runtimePlan)
+
+    this.projectedMasterEndMs = projectedMasterEndMs
+    this.timelineEndMs = includePlayedEndInProgress
+      ? Math.max(projectedMasterEndMs, this.playedEndMs)
+      : projectedMasterEndMs
     this.authorEndMs = this.resolveAuthorEndMs(runtimePlan)
     this.seekEndMs = this.resolveCurrentSeekEndMs()
 
@@ -1608,7 +1607,7 @@ export class PlayerFacade implements PlayerApi {
       })
     }
 
-    this.syncHorizonFromRuntimePlan(runtimePlan)
+    this.syncHorizonFromRuntimePlan(runtimePlan, { includePlayedEndInProgress: true })
 
     const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs)
 
