@@ -489,7 +489,7 @@ describe('V1 - reference scenes', () => {
     expect(questionPanel?.style).toMatchObject({ opacity: 1, x: 0 })
     expect(successPanel?.style).toMatchObject({ opacity: 0 })
     expect(failurePanel?.style).toMatchObject({ opacity: 0 })
-    expect(countPanel?.style).toMatchObject({ opacity: 0, scale: 0.92 })
+    expect(countPanel?.style).toMatchObject({ opacity: 0 })
     expect(countValue?.textContent).toBe('10')
     expect(player.getState().horizon.progressEndMs).toBe(2550)
 
@@ -566,7 +566,7 @@ describe('V1 - reference scenes', () => {
     expect(player.getState().timelineMs).toBe(2550)
     expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })
-    expect((player.getRuntimeRegistry().getNodeById('quiz-count-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0, scale: 0.92 })
+    expect((player.getRuntimeRegistry().getNodeById('quiz-count-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
   })
 
@@ -672,6 +672,11 @@ describe('V1 - reference scenes', () => {
 
     expect(await player.seek({ timelineMs: 3500 })).toEqual({ ok: true, data: undefined })
     expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+    expect((player.getRuntimeRegistry().getNodeById('quiz-decor-circle-a') as RuntimeNodeFixture | null)?.style).toMatchObject({
+      y: 24
+    })
+
     expect(await player.seek({ timelineMs: 2400 })).toEqual({ ok: true, data: undefined })
 
     expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })

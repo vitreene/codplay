@@ -1299,7 +1299,6 @@ export class PlayerFacade implements PlayerApi {
 
       this.syncHorizonFromRuntimePlan(runtimePlan)
 
-      this.trackManager.syncCursor({ nowMs: 0 })
       this.timelineMs = 0
       this.playbackStartMs = null
       this.setStatus(PLAYER_STATUS.ready)
