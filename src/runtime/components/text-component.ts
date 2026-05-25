@@ -1,4 +1,4 @@
-import { BaseComponent } from './base-component'
+import { BaseComponent } from './lib/base-component'
 import {
   applyAttrProps,
   applyClassNameProps,
@@ -7,7 +7,7 @@ import {
   resetComponentRoot,
   setComponentRootId,
   setTextContent
-} from './lib'
+} from './lib/dom'
 import type { RuntimeComponentUpdateInput } from './types'
 
 type TextState = {

@@ -14,7 +14,7 @@ import {
   isDomElement,
   resetRuntimeNodeState,
   resolveFinalValue
-} from '../dom-component-adapter'
+} from './dom-component-adapter'
 
 export type ClassNameProps = string | { add?: string; remove?: string }
 export type AttrProps = Record<string, unknown>

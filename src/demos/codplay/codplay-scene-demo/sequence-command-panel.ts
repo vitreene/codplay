@@ -288,10 +288,6 @@ export function createSequenceCommandPanel(input: {
 	}
 }
 
-function formatTimelineMs(value: number): string {
-	return `${Math.max(0, Math.round(value))}ms`
-}
-
 /**
  * Formats one whole percent progress value for the seek label.
  */

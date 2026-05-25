@@ -18,22 +18,23 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 2. `v1-invariants.md`
 3. `v1-validation.md`
 4. `v1-perso-spec.md`
-5. `v1-strap-spec.md`
-6. `v1-story-spec.md`
-7. `v1-scene-spec.md`
-8. `v1-event-spec.md`
-9. `v1-strap-helpers-spec.md`
-10. `v1-runtime-policy-spec.md`
-11. `v1-builder-spec.md`
-12. `v1-builder-api.md`
-13. `v1-player-api.md`
-14. `v1-preload-api.md`
-15. `v1-scene-side-effects-api.md`
-16. `v1-horizon-spec.md`
-17. `v1-seek-spec.md`
-18. `v1-error-catalog.md`
-19. `v1-track-manager-spec.md`
-20. `v1-compiled-scene-schema.md`
+5. `v1-layout-spec.md`
+6. `v1-strap-spec.md`
+7. `v1-story-spec.md`
+8. `v1-scene-spec.md`
+9. `v1-event-spec.md`
+10. `v1-strap-helpers-spec.md`
+11. `v1-runtime-policy-spec.md`
+12. `v1-builder-spec.md`
+13. `v1-builder-api.md`
+14. `v1-player-api.md`
+15. `v1-preload-api.md`
+16. `v1-scene-side-effects-api.md`
+17. `v1-horizon-spec.md`
+18. `v1-seek-spec.md`
+19. `v1-error-catalog.md`
+20. `v1-track-manager-spec.md`
+21. `v1-compiled-scene-schema.md`
 
 ## Documents actifs de chantier
 

@@ -7,15 +7,64 @@ import type { SceneDoc } from "../../player/types";
 export function createS4QuizReferenceScene(): SceneDoc {
   return {
     id: "s4-quiz-reference-scene",
-    rootStories: ["s4-quiz-decor-story", "s4-quiz-intro-story"],
+    rootStories: ["s4-quiz-layout-story"],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
+      "s4-quiz-layout-story": {
+        id: "s4-quiz-layout-story",
+        entries: ["quiz-layout"],
+        initial: undefined,
+        persos: [
+          {
+            id: "quiz-layout",
+            type: "layout",
+            initial: {
+              markup: `
+                <section class="quiz-layout-shell">
+                  <div id="quiz-layout:decor" style="grid-column: 1/-1; grid-row: 1/-1; position: relative;"></div>
+                  <div id="quiz-layout:intro" style="grid-area: intro; position: relative;"></div>
+                  <div id="quiz-layout:question" style="grid-area: question; position: relative;"></div>
+                  <div id="quiz-layout:count" style="grid-area: count; position: relative; justify-self: end;"></div>
+                  <div id="quiz-layout:success" style="grid-area: result; position: relative;"></div>
+                  <div id="quiz-layout:failure" style="grid-area: result; position: relative;"></div>
+                </section>
+              `,
+              outlets: [
+                { id: "quiz-layout:decor" },
+                { id: "quiz-layout:intro" },
+                { id: "quiz-layout:question" },
+                { id: "quiz-layout:count" },
+                { id: "quiz-layout:success" },
+                { id: "quiz-layout:failure" },
+              ],
+              style: {
+                width: "100%",
+
+                display: "grid",
+                gridTemplateColumns: "2fr 1fr",
+                gridTemplateRows: "1fr 3fr 1fr",
+                gridTemplateAreas: ' "intro intro" "question count" "result result" ',
+                gap: "16px",
+                alignItems: "center",
+                padding: "24px",
+                position: "relative",
+                overflow: "hidden",
+                backgroundColor: "#0f172a",
+                borderRadius: "24px",
+                maxHeight: "100%",
+              },
+            },
+            actions: {},
+          },
+        ],
+        straps: undefined,
+        listen: [],
+      },
       "s4-quiz-decor-story": {
         id: "s4-quiz-decor-story",
         entries: [
-          "quiz-stage",
           "quiz-decor-layer",
           "quiz-decor-circle-a",
           "quiz-decor-circle-b",
@@ -25,33 +74,16 @@ export function createS4QuizReferenceScene(): SceneDoc {
         initial: undefined,
         persos: [
           {
-            id: "quiz-stage",
-            type: "list",
-            initial: {
-              className: "quiz-stage",
-              style: {
-                width: "720px",
-                minHeight: "420px",
-                padding: "24px",
-                position: "relative",
-                overflow: "hidden",
-                backgroundColor: "#0f172a",
-                borderRadius: "24px",
-              },
-            },
-            actions: {},
-          },
-          {
             id: "quiz-decor-layer",
             type: "list",
             initial: {
               className: "quiz-decor-layer",
               move: {
-                parentId: "quiz-stage",
+                parentId: "quiz-layout:decor",
                 mode: "append",
               },
               style: {
-                minHeight: "360px",
+                minHeight: "100%",
               },
             },
             actions: {},
@@ -61,7 +93,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
             type: "text",
             initial: {
               tag: "div",
-              content: "",
+              content: "a",
               move: {
                 parentId: "quiz-decor-layer",
                 mode: "append",
@@ -71,25 +103,30 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 height: "120px",
                 borderRadius: "999px",
                 backgroundColor: "rgba(56, 189, 248, 0.24)",
-                x: -30,
-                y: 0,
+                color: "white",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
               },
             },
             actions: {
               "quiz:decor:drift": {
                 style: {
                   x: {
+                    from: "70%",
                     to: 70,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
                   },
                   y: {
+                    from: "50%",
+
                     to: 24,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -113,8 +150,8 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 height: "88px",
                 borderRadius: "999px",
                 backgroundColor: "rgba(129, 140, 248, 0.22)",
-                x: 240,
-                y: 18,
+                x: "20%",
+                y: "20%",
               },
             },
             actions: {
@@ -123,7 +160,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   x: {
                     to: 180,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -131,7 +168,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   y: {
                     to: 54,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -155,8 +192,8 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 height: "160px",
                 borderRadius: "999px",
                 backgroundColor: "rgba(34, 197, 94, 0.14)",
-                x: 430,
-                y: -12,
+                x: "50%",
+                y: "40%",
               },
             },
             actions: {
@@ -165,7 +202,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   x: {
                     to: 380,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -173,7 +210,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   y: {
                     to: 16,
                     duration: 6000,
-                    ease: 'inOutSine',
+                    ease: "inOutSine",
                     alternate: true,
                     loop: true,
                     ignoreDuration: true,
@@ -235,18 +272,17 @@ export function createS4QuizReferenceScene(): SceneDoc {
             type: "list",
             initial: {
               className: "quiz-intro-panel",
+              move: {
+                parentId: "quiz-layout:intro",
+                mode: "append",
+              },
               style: {
-                position: "absolute",
-                left: "180px",
-                top: "84px",
                 width: "280px",
                 minHeight: "96px",
                 padding: "20px",
                 backgroundColor: "#f8fafc",
                 borderRadius: "18px",
                 opacity: 0,
-                x: -160,
-                y: 0,
               },
             },
             actions: {
@@ -320,18 +356,17 @@ export function createS4QuizReferenceScene(): SceneDoc {
             type: "list",
             initial: {
               className: "quiz-question-panel",
+              move: {
+                parentId: "quiz-layout:question",
+                mode: "append",
+              },
               style: {
-                position: "absolute",
-                left: "150px",
-                top: "196px",
                 width: "420px",
                 minHeight: "160px",
                 padding: "20px",
                 backgroundColor: "#ffffff",
                 borderRadius: "18px",
                 opacity: 0,
-                x: 120,
-                y: 0,
               },
             },
             actions: {
@@ -377,7 +412,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              "perdu": {
+              perdu: {
                 style: {
                   opacity: {
                     from: 1,
@@ -508,13 +543,10 @@ export function createS4QuizReferenceScene(): SceneDoc {
             type: "list",
             initial: {
               move: {
-                parentId: "quiz-stage",
+                parentId: "quiz-layout:count",
                 mode: "append",
               },
               style: {
-                position: "absolute",
-                left: "596px",
-                top: "188px",
                 width: "72px",
                 minHeight: "72px",
                 display: "flex",
@@ -525,7 +557,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
                 borderRadius: "18px",
                 boxShadow: "0 16px 40px rgba(15, 23, 42, 0.28)",
                 opacity: 0,
-                scale: 0.92,
               },
             },
             actions: {
@@ -571,7 +602,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              "perdu": {
+              perdu: {
                 style: {
                   opacity: {
                     from: 1,
@@ -624,17 +655,16 @@ export function createS4QuizReferenceScene(): SceneDoc {
             initial: {
               tag: "div",
               content: "Gagne",
+              move: {
+                parentId: "quiz-layout:success",
+                mode: "append",
+              },
               style: {
-                position: "absolute",
-                left: "200px",
-                top: "208px",
                 padding: "18px",
                 borderRadius: "16px",
                 backgroundColor: "#dcfce7",
                 color: "#166534",
                 opacity: 0,
-                x: 100,
-                y: 0,
               },
             },
             actions: {
@@ -683,17 +713,16 @@ export function createS4QuizReferenceScene(): SceneDoc {
             initial: {
               tag: "div",
               content: "Helas...",
+              move: {
+                parentId: "quiz-layout:failure",
+                mode: "append",
+              },
               style: {
-                position: "absolute",
-                left: "200px",
-                top: "208px",
                 padding: "18px",
                 borderRadius: "16px",
                 backgroundColor: "#fee2e2",
                 color: "#991b1b",
                 opacity: 0,
-                x: 100,
-                y: 0,
               },
             },
             actions: {
@@ -711,7 +740,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              "perdu": {
+              perdu: {
                 style: {
                   opacity: {
                     from: 0,

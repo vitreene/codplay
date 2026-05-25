@@ -58,6 +58,10 @@ export type RuntimeComponentClass = {
  * Defines one list component API required by the global move router.
  */
 export type RuntimeListComponent = RuntimeComponent & {
+  canAttachChild?: (input: {
+    childNode: unknown
+    mode: MoveCommand['mode']
+  }) => boolean
   attachChild: (input: {
     childId: string
     childNode: unknown
@@ -82,6 +86,21 @@ export type RuntimeListComponent = RuntimeComponent & {
   }) => void
   getPersoId: () => string
   getChildrenSnapshot: () => string[]
+}
+
+/**
+ * Describes one runtime outlet entry exposed by a layout component.
+ */
+export type RuntimeLayoutOutletSnapshot = {
+  outletId: string
+  nodeRef: unknown
+}
+
+/**
+ * Defines the runtime API exposed by a layout component.
+ */
+export type RuntimeLayoutComponent = RuntimeComponent & {
+  getOutletsSnapshot: () => RuntimeLayoutOutletSnapshot[]
 }
 
 /**

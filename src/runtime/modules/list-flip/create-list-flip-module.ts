@@ -1,5 +1,5 @@
 import type { TransitionRequest } from '../../../animation/types'
-import { isDomElement } from '../../components/dom-component-adapter'
+import { isDomElement } from '../../components/lib/dom-component-adapter'
 import type { MoveCommand } from '../../types'
 import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from './engine'
 import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from './engine/matrix-2d'

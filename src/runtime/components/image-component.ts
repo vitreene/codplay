@@ -1,4 +1,4 @@
-import { BaseComponent } from './base-component'
+import { BaseComponent } from './lib/base-component'
 import {
   applyAttrProps,
   applyClassNameProps,
@@ -11,8 +11,8 @@ import {
   setImageAlt,
   setImageFitMode,
   setImageSource
-} from './lib'
-import type { ImageFitMode } from './lib'
+} from './lib/dom'
+import type { ImageFitMode } from './lib/dom'
 import type { RuntimeComponentUpdateInput } from './types'
 
 type ImageState = {

@@ -1,5 +1,5 @@
-import { htmlRenderMutationResolver } from '../html-render-mutation-resolver'
-import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from './types'
+import { htmlRenderMutationResolver } from '../../html-render-mutation-resolver'
+import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
 
 /**
  * Provides one light base class for shared warnings and DOM part references.
@@ -60,6 +60,13 @@ export abstract class BaseComponent implements RuntimeComponent {
    */
   protected setPart(partId: string, nodeRef: unknown): void {
     this.parts.set(partId, nodeRef)
+  }
+
+  /**
+   * Clears all previously registered internal parts.
+   */
+  protected clearParts(): void {
+    this.parts.clear()
   }
 
   /**

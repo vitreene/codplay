@@ -78,6 +78,13 @@ Erreurs:
 Warnings:
 
 - `RUNTIME_ELEMENT_ID_COLLISION`: collision d'`id` d'elements detectee a `scene.init`
+- `AUTHOR_LAYOUT_FORMAT_INVALID`: `layout.initial.format` invalide, fallback applique
+- `AUTHOR_LAYOUT_MARKUP_INVALID`: `layout.initial.markup` invalide ou vide
+- `AUTHOR_LAYOUT_OUTLET_INVALID`: declaration d'`outlet` invalide
+- `AUTHOR_LAYOUT_OUTLET_DUPLICATE`: doublon d'`outlet.id` dans un meme `layout`
+- `AUTHOR_LAYOUT_OUTLET_NOT_FOUND`: `outlet.id` absent du `markup`
+- `AUTHOR_LAYOUT_OUTLET_ID_COLLISION`: collision entre `outlet.id` et un identifiant runtime existant
+- `AUTHOR_LAYOUT_OUTLET_CHILD_INCOMPATIBLE`: insertion refusee pour incompatibilite `html` / `svg`
 - `RUNTIME_TRACK_UNKNOWN_IGNORED`: track inconnu reference par un event de controle runtime, ignore avec warning
 - `RUNTIME_STRAP_CONTINUE_WARNING`: erreur strap, chaine continue
 - `RUNTIME_SAME_TICK_REPETITION`: repetitions meme tick preservees (mode keep-all)

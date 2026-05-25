@@ -24,6 +24,7 @@ export interface PersoTypeRegistry {
   sound: { initial: SoundInitial; action: SoundAction }
   list: { initial: ListInitial; action: ListAction }
   layer: { initial: LayerInitial; action: LayerAction }
+  layout: { initial: LayoutInitial; action: LayoutAction }
 }
 
 export type PersoType = keyof PersoTypeRegistry

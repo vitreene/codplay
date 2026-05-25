@@ -332,13 +332,6 @@ export function createSequenceCommandPanel(input: {
 }
 
 /**
- * Formats one timeline value for the seek UI.
- */
-function formatTimelineMs(value: number): string {
-	return `${Math.max(0, Math.round(value))}ms`
-}
-
-/**
  * Formats one whole percent progress value for the seek label.
  */
 function formatProgressPercent(timelineMs: number, maxTimelineMs: number): string {

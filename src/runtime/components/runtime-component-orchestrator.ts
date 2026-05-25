@@ -4,7 +4,8 @@ import { createListFlipModule } from '../modules/list-flip'
 import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
-import { isDomNode } from './dom-component-adapter'
+import { isDomNode } from './lib/dom-component-adapter'
+import { LayoutComponent } from './layout-component'
 import { ImageComponent } from './image-component'
 import { ListComponent } from './list-component'
 import { MediaComponent } from './media-component'
@@ -13,6 +14,7 @@ import type {
   RuntimeComponent,
   RuntimeComponentClass,
   RuntimeComponentWarningReporter,
+  RuntimeLayoutComponent,
   RuntimeListComponent,
   RuntimeRegistryCommandResult,
   RuntimeRegistrySnapshot,
@@ -24,7 +26,8 @@ const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   text: TextComponent,
   img: ImageComponent,
   media: MediaComponent,
-  list: ListComponent
+  list: ListComponent,
+  layout: LayoutComponent
 }
 
 const INITIAL_LOAD_EVENT = {
@@ -95,6 +98,7 @@ export class RuntimeComponentOrchestrator {
   private readonly parentListByPersoId = new Map<string, string | null>()
   private readonly mountedByPersoId = new Map<string, boolean>()
   private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>()
+  private readonly layoutOutletIdsByLayoutId = new Map<string, string[]>()
 
   private createElementOptions: import('../create-element').CreateElementOptions | undefined
 
@@ -269,6 +273,7 @@ export class RuntimeComponentOrchestrator {
     rootNode: unknown,
     listComponent: RuntimeListComponent | null
   ): void {
+    this.clearLayoutOutlets(item.id)
     this.componentByPersoId.set(item.id, component)
     this.nodeByPersoId.set(item.id, rootNode)
     this.parentListByPersoId.set(item.id, null)
@@ -286,6 +291,10 @@ export class RuntimeComponentOrchestrator {
     } else if (this.renderMutationResolverByPersoId.has(item.id)) {
       this.renderMutationResolverByPersoId.delete(item.id)
     }
+
+    if (this.isRuntimeLayoutComponent(component)) {
+      this.registerLayoutOutlets(item.id, component)
+    }
   }
 
   /**
@@ -299,6 +308,7 @@ export class RuntimeComponentOrchestrator {
     this.parentListByPersoId.clear()
     this.mountedByPersoId.clear()
     this.renderMutationResolverByPersoId.clear()
+    this.layoutOutletIdsByLayoutId.clear()
     return new Map()
   }
 
@@ -504,6 +514,142 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
+   * Checks whether one runtime component exposes the layout outlet bridge contract.
+   */
+  private isRuntimeLayoutComponent(component: RuntimeComponent): component is RuntimeLayoutComponent {
+    return 'getOutletsSnapshot' in component && typeof component.getOutletsSnapshot === 'function'
+  }
+
+  /**
+   * Clears layout outlet registrations for one layout component id.
+   */
+  private clearLayoutOutlets(layoutId: string): void {
+    const outletIds = this.layoutOutletIdsByLayoutId.get(layoutId)
+    if (!outletIds) {
+      return
+    }
+
+    for (const outletId of outletIds) {
+      if (this.nodeByPersoId.get(outletId) !== undefined) {
+        this.nodeByPersoId.delete(outletId)
+      }
+    }
+
+    this.layoutOutletIdsByLayoutId.delete(layoutId)
+  }
+
+  /**
+   * Registers all outlet containers exposed by one layout component.
+   */
+  private registerLayoutOutlets(layoutId: string, layoutComponent: RuntimeLayoutComponent): void {
+    const registeredOutletIds: string[] = []
+
+    for (const outlet of layoutComponent.getOutletsSnapshot()) {
+      const outletId = outlet.outletId
+      if (
+        this.componentByPersoId.has(outletId) ||
+        this.nodeByPersoId.has(outletId) ||
+        this.listByPersoId.has(outletId)
+      ) {
+        this.warn({
+          code: 'AUTHOR_LAYOUT_OUTLET_ID_COLLISION',
+          message: 'Layout outlet id collides with an existing runtime id',
+          details: {
+            layoutId,
+            outletId
+          }
+        })
+        continue
+      }
+
+      this.nodeByPersoId.set(outletId, outlet.nodeRef)
+      registeredOutletIds.push(outletId)
+    }
+
+    this.layoutOutletIdsByLayoutId.set(layoutId, registeredOutletIds)
+  }
+
+  /**
+   * Checks whether one runtime node is inside one SVG context.
+   */
+  private isSvgNode(nodeRef: unknown): boolean {
+    if (typeof globalThis.Element !== 'undefined' && isDomNode(nodeRef) && nodeRef instanceof globalThis.Element) {
+      return nodeRef.namespaceURI === 'http://www.w3.org/2000/svg' || nodeRef.tagName.toLowerCase() === 'svg'
+    }
+
+    if (typeof nodeRef !== 'object' || nodeRef === null) {
+      return false
+    }
+
+    const node = nodeRef as { namespaceURI?: unknown; tagName?: unknown }
+    return node.namespaceURI === 'http://www.w3.org/2000/svg' || node.tagName === 'svg'
+  }
+
+  /**
+   * Checks whether one child node can be attached to one target node.
+   */
+  private canAttachChildToNode(targetNode: unknown, childNode: unknown): boolean {
+    if (!this.isSvgNode(targetNode)) {
+      return true
+    }
+
+    return this.isSvgNode(childNode)
+  }
+
+  /**
+   * Detaches one node from its current DOM or object parent.
+   */
+  private detachNodeFromParent(nodeRef: unknown): void {
+    if (isDomNode(nodeRef)) {
+      const parentNode = nodeRef.parentNode
+      if (parentNode !== null && parentNode !== undefined) {
+        parentNode.removeChild(nodeRef)
+      }
+
+      return
+    }
+
+    if (typeof nodeRef !== 'object' || nodeRef === null) {
+      return
+    }
+
+    const childNode = nodeRef as Record<string, unknown>
+    const parentNode = childNode.parentNode
+    if (typeof parentNode !== 'object' || parentNode === null) {
+      return
+    }
+
+    const mutableParent = parentNode as Record<string, unknown>
+    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
+    mutableParent.children = currentChildren.filter((candidate) => candidate !== nodeRef)
+    childNode.parentNode = null
+  }
+
+  /**
+   * Appends one node to one DOM or object parent.
+   */
+  private appendNodeToParent(parentNode: unknown, childNode: unknown): void {
+    if (isDomNode(parentNode) && isDomNode(childNode)) {
+      parentNode.appendChild(childNode)
+      return
+    }
+
+    if (typeof parentNode !== 'object' || parentNode === null || typeof childNode !== 'object' || childNode === null) {
+      return
+    }
+
+    const mutableParent = parentNode as Record<string, unknown>
+    const mutableChild = childNode as Record<string, unknown>
+    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
+    if (typeof mutableChild.parentNode === 'object' && mutableChild.parentNode !== null) {
+      this.detachNodeFromParent(mutableChild)
+    }
+
+    mutableParent.children = currentChildren.filter((candidate) => candidate !== childNode).concat([childNode])
+    mutableChild.parentNode = parentNode
+  }
+
+  /**
    * Resolves action target id from action targetId override or listener id.
    */
   private resolveTargetPersoId(action: AnimationResolvedAction): string {
@@ -536,11 +682,14 @@ export class RuntimeComponentOrchestrator {
     eventId: string
     eventSeq: number
   }): void {
+    const childNode = this.nodeByPersoId.get(request.persoId) ?? null
     const sourceListId = this.parentListByPersoId.get(request.persoId) ?? null
     const sourceList = sourceListId ? this.listByPersoId.get(sourceListId) ?? null : null
 
     const targetList = this.listByPersoId.get(request.move.parentId) ?? null
-    if (targetList === null) {
+    const targetNode = targetList === null ? (this.nodeByPersoId.get(request.move.parentId) ?? null) : null
+
+    if (targetList === null && targetNode === null) {
       if (sourceList !== null) {
         sourceList.detachChild({
           childId: request.persoId,
@@ -555,7 +704,7 @@ export class RuntimeComponentOrchestrator {
       this.mountedByPersoId.set(request.persoId, false)
       this.warnOnce(
         request.eventSeq,
-        'AUTHOR_LIST_MOVE_TARGET_NOT_FOUND',
+        'AUTHOR_LAYOUT_OUTLET_NOT_FOUND',
         {
           persoId: request.persoId,
           parentId: request.move.parentId,
@@ -567,7 +716,7 @@ export class RuntimeComponentOrchestrator {
       return
     }
 
-    if (sourceList !== null && sourceList.getPersoId() === targetList.getPersoId()) {
+    if (targetList !== null && sourceList !== null && sourceList.getPersoId() === targetList.getPersoId()) {
       targetList.repositionChild({
         childId: request.persoId,
         mode: request.move.mode,
@@ -581,76 +730,98 @@ export class RuntimeComponentOrchestrator {
       return
     }
 
-    let childNode: unknown | null = null
-    if (sourceList !== null) {
-      childNode = sourceList.detachChild({
+    if (targetNode !== null) {
+      const movedChildNode = sourceList !== null
+        ? sourceList.detachChild({
+            childId: request.persoId,
+            mode: request.move.mode,
+            reorder: request.move.reorder,
+            eventId: request.eventId,
+            eventSeq: request.eventSeq
+          }) ?? childNode
+        : childNode
+
+      if (movedChildNode === null) {
+        this.parentListByPersoId.set(request.persoId, null)
+        this.mountedByPersoId.set(request.persoId, false)
+        this.warnOnce(
+          request.eventSeq,
+          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+          {
+            persoId: request.persoId,
+            eventId: request.eventId,
+            eventSeq: request.eventSeq
+          },
+          request.persoId
+        )
+        return
+      }
+
+      if (!this.canAttachChildToNode(targetNode, movedChildNode)) {
+        this.warnOnce(
+          request.eventSeq,
+          'AUTHOR_LAYOUT_OUTLET_CHILD_INCOMPATIBLE',
+          {
+            persoId: request.persoId,
+            parentId: request.move.parentId,
+            eventId: request.eventId,
+            eventSeq: request.eventSeq
+          },
+          request.persoId
+        )
+        return
+      }
+
+      this.detachNodeFromParent(movedChildNode)
+      this.appendNodeToParent(targetNode, movedChildNode)
+      this.parentListByPersoId.set(request.persoId, null)
+      this.mountedByPersoId.set(request.persoId, true)
+      return
+    }
+
+    if (targetList !== null) {
+      let movedChildNode: unknown | null = null
+      if (sourceList !== null) {
+        movedChildNode = sourceList.detachChild({
+          childId: request.persoId,
+          mode: request.move.mode,
+          reorder: request.move.reorder,
+          eventId: request.eventId,
+          eventSeq: request.eventSeq
+        })
+      }
+
+      if (movedChildNode === null) {
+        movedChildNode = childNode
+      }
+
+      if (movedChildNode === null) {
+        this.parentListByPersoId.set(request.persoId, null)
+        this.mountedByPersoId.set(request.persoId, false)
+        this.warnOnce(
+          request.eventSeq,
+          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+          {
+            persoId: request.persoId,
+            eventId: request.eventId,
+            eventSeq: request.eventSeq
+          },
+          request.persoId
+        )
+        return
+      }
+
+      targetList.attachChild({
         childId: request.persoId,
+        childNode: movedChildNode,
         mode: request.move.mode,
         reorder: request.move.reorder,
         eventId: request.eventId,
         eventSeq: request.eventSeq
       })
-    }
 
-    if (childNode === null) {
-      childNode = this.nodeByPersoId.get(request.persoId) ?? null
-    }
-
-    if (childNode === null) {
-      this.parentListByPersoId.set(request.persoId, null)
-      this.mountedByPersoId.set(request.persoId, false)
-      this.warnOnce(
-        request.eventSeq,
-        'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-        {
-          persoId: request.persoId,
-          eventId: request.eventId,
-          eventSeq: request.eventSeq
-        },
-        request.persoId
-      )
-      return
-    }
-
-    targetList.attachChild({
-      childId: request.persoId,
-      childNode,
-      mode: request.move.mode,
-      reorder: request.move.reorder,
-      eventId: request.eventId,
-      eventSeq: request.eventSeq
-    })
-
-    this.parentListByPersoId.set(request.persoId, targetList.getPersoId())
-    this.mountedByPersoId.set(request.persoId, true)
-    this.syncDomParentFallback(request.persoId, childNode, targetList)
-  }
-
-  /**
-   * Applies one non-list fallback parent reference for object runtime nodes.
-   */
-  private syncDomParentFallback(persoId: string, childNode: unknown, targetList: RuntimeListComponent): void {
-    if (isDomNode(childNode)) {
-      return
-    }
-
-    if (typeof childNode === 'object' && childNode !== null) {
-      ;(childNode as Record<string, unknown>).parentId = targetList.getPersoId()
-      this.nodeByPersoId.set(persoId, childNode)
-    }
-  }
-
-  /**
-   * Detaches one DOM node from its current parent when present.
-   */
-  private detachNodeFromParent(nodeRef: unknown): void {
-    if (!isDomNode(nodeRef)) {
-      return
-    }
-
-    const parentNode = nodeRef.parentNode
-    if (parentNode !== null && parentNode !== undefined) {
-      parentNode.removeChild(nodeRef)
+      this.parentListByPersoId.set(request.persoId, targetList.getPersoId())
+      this.mountedByPersoId.set(request.persoId, true)
     }
   }
 

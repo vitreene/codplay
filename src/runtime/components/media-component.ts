@@ -1,4 +1,4 @@
-import { BaseComponent } from './base-component'
+import { BaseComponent } from './lib/base-component'
 import {
   applyAttrProps,
   applyClassNameProps,
@@ -7,8 +7,8 @@ import {
   createComponentRoot,
   resetComponentRoot,
   setComponentRootId
-} from './lib'
-import { appendDomChild, isDomElement, resetRuntimeNodeState } from './dom-component-adapter'
+} from './lib/dom'
+import { appendDomChild, isDomElement, resetRuntimeNodeState } from './lib/dom-component-adapter'
 import type { RuntimeComponentUpdateInput } from './types'
 
 type MediaState = {

@@ -1,7 +1,13 @@
 /**
  * Defines supported built-in item types while allowing custom types.
  */
-export type ItemType = 'text' | 'img' | 'media' | 'list' | string
+export type ItemType = 'text' | 'img' | 'media' | 'list' | 'layout' | string
+
+export type LayoutFormat = 'html' | 'svg'
+
+export type LayoutOutletDoc = {
+  id: string
+}
 
 export type BroadcastAction = {
   type: 'START' | 'PAUSE' | 'STOP'
@@ -100,6 +106,9 @@ export type ItemState = {
   tag?: string
   className?: string
   move?: MoveValue
+  markup?: string
+  format?: LayoutFormat
+  outlets?: LayoutOutletDoc[]
   master?: boolean
   config?: ListPlacementConfig
   style?: Record<string, unknown>
@@ -208,6 +217,11 @@ export type RuntimeNode = {
   attributes: Record<string, unknown>
   textContent?: string
   src?: string
+  namespaceURI?: string
+  children?: unknown[]
+  parentNode?: unknown | null
+  appendChild?: (childNode: unknown) => unknown
+  removeChild?: (childNode: unknown) => unknown
 }
 
 /**

@@ -1,5 +1,5 @@
-import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../create-element'
-import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../types'
+import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../../create-element'
+import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../../types'
 
 const SELF_PAYLOAD_KEY = 'self'
 
