@@ -490,10 +490,10 @@ describe('V1 - reference scenes', () => {
     expect(failurePanel?.style).toMatchObject({ opacity: 0 })
     expect(countValue?.style).toMatchObject({ opacity: 0 })
     expect(countValue?.textContent).toBe('10')
-    expect(player.getState().horizon.progressEndMs).toBe(2550)
+    expect(player.getState().horizon.progressEndMs).toBe(13300)
 
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
-    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2550 })
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 6000 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
   })
 
@@ -562,7 +562,7 @@ describe('V1 - reference scenes', () => {
     expect(await player.play()).toEqual({ ok: true, data: undefined })
     expect(await player.seek({ timelineMs: 12600 })).toEqual({ ok: true, data: undefined })
 
-    expect(player.getState().timelineMs).toBe(2550)
+    expect(player.getState().timelineMs).toBe(12600)
     expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })

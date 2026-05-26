@@ -2,50 +2,67 @@
 
 ## Statut
 
-Spec normative V1 pour les helpers temporels utilises par les `Strap`.
+Spec normative V1 pour les helpers temporels internes, leurs wrappers publics `player.schedule`, et leurs wrappers auteur `context.helpers` dans les `Strap`.
 
 ## Objectif
 
-Definir la source, la signature et les regles d'execution de `delay`, `repeat`, `loop`, `stagger` sans usage de timers JS applicatifs.
+- separer strictement le noyau temporel interne de l'emission runtime
+- conserver `player.schedule` comme surface runtime active
+- definir `context.helpers` comme surface auteur adaptee aux `Strap`
+- supporter deux modes d'execution:
+  - `planned`
+  - `jit`
+- garantir le replay et le seek sans reexecution imperative des `Strap`
 
-## Fournisseur runtime
+## Architecture
 
-- les helpers sont exposes dans `StrapContext.helpers`.
-- ils sont fournis par le runtime `Director` via le scheduler pilote par `Ticker`.
-- le runtime expose une facade publique `player.schedule` pour les usages hors strap.
-- `Director` reste interne et n'est jamais adresse directement par l'API publique.
-- le contrat des helpers dans un `Strap` est distinct du contrat d'emission active de `player.schedule`.
+Il existe 3 couches distinctes.
+
+1. Helpers internes
+
+- noyau temporel neutre
+- gerent cadence, repetition, interruption, cancel, mode
+- ne publient aucun event
+- ne connaissent ni `player`, ni `scene`, ni `strap`
+
+2. Wrapper `player.schedule`
+
+- adapte les helpers internes au runtime actif
+- callback retourne des `StoryEvent`
+- emission au fil de l'eau via le runtime
+
+3. Wrapper `context.helpers`
+
+- adapte les helpers internes au runtime strap
+- callback retourne des `StrapStep`
+- materialisation en tracks
+- aucun emit imperatif direct dans le corps du strap
 
 ## Exposition facade Player
 
 La facade `player.schedule` est destructurable.
 
 ```ts
-const { delay, repeat, loop, stagger } = player.schedule
+const { wait, delay, repeat, loop, stagger } = player.schedule
 ```
 
-Les helpers sont aussi exposables en import direct.
+Les helpers peuvent aussi etre exposes en import direct.
 
 ```ts
-import { delay, repeat, loop, stagger } from "codplay/schedule"
+import { wait, delay, repeat, loop, stagger } from "codplay/schedule"
 ```
 
 L'import direct est un alias de la facade runtime `player.schedule`.
 
-Contrat:
-
-- `player.schedule.*` appelle le meme scheduler runtime que `StrapContext.helpers`.
-- `player.schedule.*` applique les memes policies runtime d'events.
-- l'import direct `codplay/schedule` appelle ce meme scheduler runtime.
-- `schedule` est agnostique de la diffusion: il ne decide ni le domaine event, ni la portee.
-- le contexte d'appel determine le domaine de diffusion:
-  - appel depuis `StrapContext.helpers`: domaine story local
-  - appel depuis `player.schedule`: domaine scene/system
-- `cascade` porte la remontee de portee, pas `schedule`.
-
-## Contrat canonique
+## Types partages
 
 ```ts
+type DeepReadonly<T> =
+  T extends (...args: never[]) => unknown ? T :
+  T extends readonly (infer U)[] ? readonly DeepReadonly<U>[] :
+  T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } :
+  T
+
 type StoryEvent = {
   name: string
   data?: Record<string, unknown>
@@ -62,90 +79,351 @@ type HelperHandle = {
   cancel: () => void
 }
 
-type StrapHelpers = {
-  delay: (ms: number, step: StrapStep | ((index: number) => StrapStep)) => HelperHandle
-  repeat: (
-    options: { everyMs: number | ((index: number) => number); times: number },
-    step: StrapStep | ((index: number) => StrapStep)
-  ) => HelperHandle
-  loop: (
-    options: { everyMs: number },
-    factory: (index: number) => StoryEvent[]
-  ) => HelperHandle
-  stagger: (
-    options: { stepMs: number },
-    steps: StrapStep[]
-  ) => HelperHandle[]
+type HelperMode = "planned" | "jit"
+
+type HelperTickContext = {
+  currentTimeMs: number
+  startedAtMs: number
+  elapsedMs: number
+  index: number
+  state: DeepReadonly<Record<string, unknown>>
 }
 ```
 
-## Regles normatives
+## Contrat de lecture d'etat
+
+- le `state` lu depuis un `Strap` est en lecture seule
+- le `state` lu dans les callbacks helper est en lecture seule
+- le `state` doit etre resolu a chaque invocation de callback
+- le `state` ne doit pas etre un snapshot stale capture a la creation du helper
+- toute mutation de `state` passe uniquement par `update`
+
+## Entrees et sorties callbacks
+
+Un helper peut accepter:
+
+- une valeur directe
+- une liste directe
+- une fonction
+
+### Runtime actif
+
+```ts
+type EventResult =
+  | StoryEvent
+  | StoryEvent[]
+  | void
+
+type EventFactory = (context: HelperTickContext) => EventResult
+
+type EventInput =
+  | StoryEvent
+  | StoryEvent[]
+  | EventFactory
+```
+
+### Runtime strap
+
+```ts
+type StrapStepResult =
+  | StrapStep
+  | StrapStep[]
+  | void
+
+type StrapStepFactory = (context: HelperTickContext) => StrapStepResult
+
+type StrapStepInput =
+  | StrapStep
+  | StrapStep[]
+  | StrapStepFactory
+```
+
+## API exposee
+
+### `player.schedule`
+
+```ts
+type RuntimeScheduleHelpers = {
+  wait: (
+    ms: number,
+    input: EventInput,
+    options?: { mode?: HelperMode }
+  ) => HelperHandle
+
+  delay: RuntimeScheduleHelpers["wait"]
+
+  repeat: (
+    options: { eachMs: number; times: number; mode?: HelperMode },
+    input: EventInput
+  ) => HelperHandle
+
+  stagger: (
+    options: { stepMs: number; mode?: HelperMode },
+    input: EventInput
+  ) => HelperHandle[]
+
+  loop: (
+    options: LoopOptions,
+    input: EventInput
+  ) => HelperHandle
+}
+```
+
+### `context.helpers`
+
+```ts
+type StrapScheduleHelpers = {
+  wait: (
+    ms: number,
+    input: StrapStepInput,
+    options?: { mode?: HelperMode }
+  ) => HelperHandle
+
+  delay: StrapScheduleHelpers["wait"]
+
+  repeat: (
+    options: { eachMs: number; times: number; mode?: HelperMode },
+    input: StrapStepInput
+  ) => HelperHandle
+
+  stagger: (
+    options: { stepMs: number; mode?: HelperMode },
+    input: StrapStepInput
+  ) => HelperHandle[]
+
+  loop: (
+    options: LoopOptions,
+    input: StrapStepInput
+  ) => HelperHandle
+}
+```
+
+## Helpers V1
+
+### `wait`
+
+- produit une occurrence unique a `startedAtMs + ms`
+- `delay` est un alias de `wait`
+
+### `repeat`
+
+- produit `times` occurrences
+- cadence `eachMs`
+- occurrence `0` a `t0`
+- occurrence `n` a `t0 + n * eachMs`
+
+### `stagger`
+
+- produit une suite de sorties decalees par `stepMs`
+- supporte valeur directe, liste directe, ou factory
+- si factory, chaque resolution se fait avec `HelperTickContext`
+
+### `loop`
+
+- produit une suite repetitive cadencee
+- doit obligatoirement avoir une condition de sortie
+- n'est jamais infini par construction
+
+## Spec `loop`
+
+```ts
+type LoopStopCondition =
+  | { type: "times"; max: number }
+  | { type: "duration"; maxMs: number }
+  | { type: "event"; name: string }
+
+type LoopOptions = {
+  eachMs: number
+  until: LoopStopCondition | LoopStopCondition[]
+  mode?: HelperMode
+}
+```
+
+### Regles normatives
+
+- `eachMs` est obligatoire et strictement `> 0`
+- `until` est obligatoire
+- premiere occurrence a `t0`
+- si `until` est un tableau, le loop s'arrete a la premiere condition satisfaite
+- `duration.maxMs` est inclusive
+- une occurrence est autorisee si `occurrenceMs <= maxMs`
+- `until: { type: "event", name }` n'interrompt que ce loop
+- l'event interceptant peut etre traite ailleurs normalement
+- `sequence:end` interrompt toujours tous les loops actifs
+- `pause` gele
+- `resume` et `play` reprennent
+- `stop`, `destroy`, `seek`, `rewind` interrompent les loops actifs
+
+## Modes d'execution
+
+Deux modes existent.
+
+### `planned`
+
+- le runtime calcule tout le plan a l'avance
+- adapte aux suites finies et resolvables statiquement
+
+### `jit`
+
+- le runtime produit les occurrences au fur et a mesure
+- adapte aux suites longues, interrompables, ou dependantes d'un event futur
+
+## Mode par defaut
+
+- `wait`: `planned`
+- `repeat`: `planned`
+- `stagger`: `planned`
+- `loop`: `jit`
+
+## Incompatibilite de mode
+
+Si un mode demande est incompatible:
+
+- le runtime emet un warning explicite
+- le runtime applique un fallback vers le mode compatible par defaut
+- dans un `Strap`, ce warning est:
+  - trace au runtime
+  - ajoute aux `warnings` agreges du strap
+
+Exemple:
+
+- `loop` avec `until.event` et `mode: "planned"`
+- warning
+- fallback vers `jit`
+
+## Cancelation
+
+- chaque helper retourne un `HelperHandle`
+- `cancel()` empeche uniquement les occurrences futures
+- `cancel()` ne supprime pas les occurrences deja materialisees
+- en `jit`, `cancel()` arrete la production future
+- en `planned`, `cancel()` neutralise les occurrences futures non encore materialisees si le runtime materialise progressivement
+- en V1, `wait`, `repeat`, `stagger` en `jit` sont interrompables par handle uniquement
+- `until.event` est reserve a `loop`
+
+## Regles normatives globales
 
 1. Horloge
 
-- tous les helpers utilisent la meme reference temporelle runtime.
-- aucune implementation helper ne s'appuie sur `setTimeout`/`setInterval` applicatifs.
+- tous les helpers utilisent la meme reference temporelle runtime
+- aucune implementation helper ne s'appuie sur `setTimeout` ou `setInterval` applicatifs
 
 2. Couplage lifecycle Player
 
-- le scheduler helper est synchronise avec le cycle de vie `Player`.
-- en `play` et `resume`, les plans helper continuent selon l'horloge runtime.
-- en `pause`, les plans helper sont geles sans perte d'ordre.
-- en `stop`, les plans helper en attente sont annules.
-- en `destroy`, si cette commande technique est utilisee, les plans helper en attente sont annules.
-- en `seek`, les helpers de strap ne sont pas rejoues comme execution de code.
-- en `seek`, le runtime relit les `events` et `update` deja materialises dans les tracks.
+- le scheduler helper est synchronise avec le cycle de vie `Player`
+- en `play` et `resume`, les plans helper continuent selon l'horloge runtime
+- en `pause`, les plans helper sont geles sans perte d'ordre
+- en `stop`, les plans helper en attente sont annules
+- en `destroy`, les plans helper en attente sont annules
+- en `seek`, les helpers de strap ne sont pas rejoues comme execution de code
+- en `seek`, le runtime relit les `event` et `update` deja materialises dans les tracks
 
-3. Validation
+3. Ordre
 
-- `ms`, `everyMs`, `stepMs` doivent etre >= 0.
-- `times` doit etre >= 1.
-- valeur invalide: rejet `AUTHOR_HELPER_INVALID_ARG`.
+- emissions a timestamp egal: ordre de declaration stable
+- emissions d'un meme helper: ordre d'index croissant
 
-4. Ordre
+4. Policy runtime
 
-- emissions a timestamp egal: ordre de declaration stable.
-- emissions d'un meme helper: ordre d'index croissant.
+- les emissions helper passent par les policies runtime events actives
+- les garde-fous `maxEventsPerTick`, `maxCascadeDepth` et validation payload s'appliquent a l'identique
 
-5. Cancelation
+## Semantique runtime `player.schedule`
 
-- chaque helper retourne un handle annulable.
-- `cancel()` empeche les emissions futures du handle.
-- `cancel()` ne supprime ni ne desactive des entries deja materialisees dans les tracks.
+- les callbacks produisent des `StoryEvent`
+- les events sont emis activement au fil de l'eau
+- les policies runtime s'appliquent normalement
+- `player.schedule` reste un wrapper des helpers internes, pas le noyau lui-meme
 
-6. Replay / seek
+## Semantique runtime `context.helpers`
 
-- `replay` regenere les emissions a partir du journal canonique ou du plan compile.
-- `seek backward` render-only ne rejoue pas les `effects` helper.
-- `scene:replay-from-zero` reconstruit integralement le plan helper.
-- le replay `seek` ne neutralise pas artificiellement ces tracks materialisees pour simuler une annulation.
+- les callbacks produisent des `StrapStep`
+- aucune emission imperative directe n'est autorisee depuis le helper
+- chaque occurrence helper est materialisee en sortie runtime rejouable
+- `event` devient un event tracke
+- `update` devient une mutation trackee
+- en `jit`, la materialisation se fait occurrence par occurrence au fil de l'eau
 
-7. Effects
+## Replay, seek, rewind
 
-- les helpers n'executent pas de `effects` externes directement.
-- les `effects` passent par emission d'events vers l'API runtime/scene.
+- `seek` ne reexecute jamais le code des helpers
+- le runtime rejoue uniquement les sorties deja materialisees
+- `rewind` et `seek` interrompent les loops actifs
+- les `effects` ne sont jamais rejoues
+- en V1, les helpers ne produisent pas d'`effect`
 
-8. Policy runtime
+## Regles V1 sur `effect`
 
-- les emissions helper passent par les policies runtime events actives.
-- les garde-fous (`maxEventsPerTick`, `maxCascadeDepth`, validation payload) s'appliquent a l'identique.
+- `effect` est interdit dans les sorties helper V1
+- seuls `event` et `update` sont autorises
+- extension future possible, hors present scope
 
-## Semantique par helper
+## Validation
 
-- `delay`: produit un `StrapStep` unique a `now + ms`.
-- `repeat`: produit `times` occurrences d'un `StrapStep`.
-- quand `everyMs` est une fonction, sa valeur est un offset absolu depuis le depart du `repeat`.
-- `loop`: emet indefiniment toutes les `everyMs` jusqu'a annulation.
-- `stagger`: produit une liste de `StrapStep` avec decalage progressif `index * stepMs`.
-- la semantique "delai avant l'occurrence suivante" releve plutot de `stagger` que de `repeat`.
+- `ms >= 0` pour `wait`
+- `eachMs > 0` pour `repeat` et `loop`
+- `stepMs >= 0` pour `stagger`
+- `times >= 1`
+- `until.times.max >= 1`
+- `until.duration.maxMs >= 0`
+- `until.event.name` non vide
+- mode invalide: warning + fallback si possible, sinon erreur auteur
+- argument invalide: erreur auteur explicite
+
+## Exemples
+
+### Runtime actif
+
+```ts
+player.schedule.loop(
+  {
+    eachMs: 1000,
+    until: [
+      { type: "times", max: 11 },
+      { type: "event", name: "quiz:stop" }
+    ]
+  },
+  ({ currentTimeMs, elapsedMs, index, state }) => ({
+    name: "quiz-count",
+    data: {
+      content: String(10 - index),
+      currentTimeMs,
+      elapsedMs,
+      armed: state.armed
+    }
+  })
+)
+```
+
+### Strap
+
+```ts
+context.helpers.repeat(
+  { eachMs: 1000, times: 11 },
+  ({ currentTimeMs, elapsedMs, index, state }) => ({
+    event: {
+      name: "quiz-count",
+      data: {
+        content: String(10 - index),
+        currentTimeMs,
+        elapsedMs
+      }
+    },
+    update: {
+      lastIndex: index,
+      lastValue: 10 - index,
+      armed: state.armed
+    }
+  })
+)
+```
 
 ## Invariants helpers V1
 
-- source unique d'horloge runtime.
-- comportement deterministe a entree identique.
-- annulation explicite par handle.
-- dans un strap, les helpers finis ne jouent pas directement des `effects` runtime; ils construisent des sorties rejouables.
-- une fois ces sorties finies materialisees dans les tracks, elles appartiennent au journal canonique de sequence.
-- hors strap, `player.schedule` peut garder une semantique d'emission active.
-- exposition publique via `player.schedule` sans acces direct au `Director`.
-- execution helper alignee sur les transitions `play/pause/resume/stop` du `Player`; `destroy` reste un cas technique a part.
+- source unique d'horloge runtime
+- comportement deterministe a entree identique
+- annulation explicite par handle
+- `player.schedule` reste un wrapper runtime actif, sans devenir le noyau helper
+- `context.helpers` reste un wrapper auteur materialisable, sans side effect helper direct
+- le `state` lu dans un `Strap` ou un callback helper est `DeepReadonly`
+- toute mutation de `state` passe par `update`

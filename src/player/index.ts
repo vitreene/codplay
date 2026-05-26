@@ -1,4 +1,5 @@
 export { Player } from './player'
 export type { PlayerApi, PlayerInitInput, PlayerScheduleApi } from './player'
+export type { DeepReadonly } from './helper-types'
 export type { RuntimeEventPolicy } from './runtime-policy'
 export type { StrapCollection, StrapContext, StrapFn, StrapHelpers, StrapInput, StrapOutput } from './strap-types'

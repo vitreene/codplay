@@ -1,0 +1,31 @@
+import type { DeepReadonly } from './helper-types'
+import type { StrapInput } from './strap-types'
+
+type ExampleState = DeepReadonly<{
+  armed: boolean
+  nested: {
+    value: number
+  }
+  items: Array<{
+    label: string
+  }>
+}>
+
+export function assertReadonlyStrapState(input: StrapInput, state: ExampleState): void {
+  void input.state
+  void state.armed
+  void state.nested.value
+  void state.items[0]?.label
+
+  // @ts-expect-error Strap state stays read-only.
+  input.state['armed'] = true
+
+  // @ts-expect-error Nested object values stay read-only.
+  state.nested.value = 1
+
+  // @ts-expect-error Arrays stay read-only.
+  state.items.push({ label: 'next' })
+
+  // @ts-expect-error Nested array entries stay read-only.
+  state.items[0]!.label = 'changed'
+}

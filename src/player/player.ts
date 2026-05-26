@@ -440,7 +440,6 @@ export class Player implements PlayerApi {
    * Creates the helper facade exposed to one strap execution.
    */
   private createStrapHelpers(
-    scope: StrapExecutionScope,
     strapTrackId: string,
     planHelperEvent: (offsetMs: number, event: StoryEvent) => void
   ): StrapHelpers {
@@ -468,8 +467,9 @@ export class Player implements PlayerApi {
           throw new Error('AUTHOR_HELPER_INVALID_ARG')
         }
         for (let index = 0; index < options.times; index += 1) {
-          for (const event of factory(index)) {
-            planHelperEvent(index * options.everyMs + index, event)
+          const events = factory(index)
+          for (const [eventIndex, event] of events.entries()) {
+            planHelperEvent(index * options.everyMs + eventIndex, event)
           }
         }
         return {
@@ -481,25 +481,11 @@ export class Player implements PlayerApi {
       },
       loop: (options, factory) => {
         validateNonNegative(options.everyMs)
-        const scheduler = new PlayerScheduleFacade({
-          emitEvent: async (event) => {
-            await this.routeSceneEvent(event, RUNTIME_EVENT_SOURCE.system, scope.scopeStoryId, 0, {
-              ...scope,
-              ms: this.player.getState().timelineMs
-            })
-          }
-        })
-        this.strapLoopSchedulers.add(scheduler)
-        const handle = scheduler.loop(options, factory)
-        if (this.player.getState().status === 'playing') {
-          scheduler.resume()
-        }
+        void factory
         return {
-          id: handle.id,
+          id: `${strapTrackId}:loop:${options.everyMs}`,
           cancel: () => {
-            handle.cancel()
-            scheduler.destroy()
-            this.strapLoopSchedulers.delete(scheduler)
+            return
           }
         }
       },
@@ -508,10 +494,10 @@ export class Player implements PlayerApi {
         return events.map((event, index) => {
           planHelperEvent(index * options.stepMs, event)
           return {
-          id: `${strapTrackId}:stagger:${index}`,
-          cancel: () => {
-            return
-          }
+            id: `${strapTrackId}:stagger:${index}`,
+            cancel: () => {
+              return
+            }
           }
         })
       }
@@ -551,7 +537,7 @@ export class Player implements PlayerApi {
       },
       context: {
         api: {},
-        helpers: this.createStrapHelpers(scope, strapTrackId, (offsetMs, plannedEvent) => {
+        helpers: this.createStrapHelpers(strapTrackId, (offsetMs, plannedEvent) => {
           plannedHelperEvents.push({ offsetMs, event: plannedEvent })
         })
       }

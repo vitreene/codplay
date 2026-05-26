@@ -1,4 +1,5 @@
 import type { RuntimeEventSource } from '../core/events/types'
+import type { DeepReadonly } from './helper-types'
 import type { StoryEvent } from './player-schedule'
 
 export type StrapMeta = {
@@ -34,7 +35,7 @@ export type StrapContext = {
 
 export type StrapInput = {
   event: StoryEvent
-  state: Record<string, unknown>
+  state: DeepReadonly<Record<string, unknown>>
   meta: StrapMeta
   context: StrapContext
 }
