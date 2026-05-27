@@ -10,7 +10,7 @@ Date: 2026-05-25
 - Il faut separer:
   1. un noyau helper interne neutre
   2. un wrapper runtime actif `player.schedule`
-  3. un wrapper auteur `context.helpers` pour straps
+  3. des wrappers auteurs `context.planned` / `context.live` pour straps
 
 ## Spec fixee
 
@@ -39,7 +39,7 @@ Date: 2026-05-25
 1. Ecrire et adapter les types partages helpers.
 2. Introduire le noyau helper interne partage.
 3. Garder `player.schedule` comme wrapper runtime actif.
-4. Refaire `context.helpers` comme wrapper strap materialisable.
+4. Refaire `context.planned` / `context.live` comme wrappers strap materialisables.
 5. Exposer `state` en `DeepReadonly` dans les straps.
 6. Corriger S4 pour reposer sur ces helpers.
 7. Remettre les tests S4 selon le comportement attendu reel.

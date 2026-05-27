@@ -319,6 +319,8 @@ Deux modes existent.
 - `repeat`: `planned`
 - `stagger`: `planned`
 - `loop`: `jit`
+- les retours `Strap` peuvent contenir des tableaux imbriques de chunks `context.planned`
+- le runtime aplatit ces tableaux recursivement avant materialisation
 
 ## Incompatibilite de mode
 

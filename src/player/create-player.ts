@@ -16,6 +16,7 @@ import type { RuntimePersos } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import { TrackManager } from '../track-manager/create-track-manager'
+import { normalizeSceneDef } from '../builder/scene-normalization'
 import {
   consolidateSceneTracks,
   createSceneLifecycleOptions,
@@ -1194,7 +1195,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.resetRuntime()
 
-    const runtimeScene = nextScene as StrictSceneDoc
+    const runtimeScene = normalizeSceneDef(nextScene as any) as StrictSceneDoc
 
     this.prepareSceneRuntime(runtimeScene)
     this.setStatus(PLAYER_STATUS.ready)
@@ -1407,8 +1408,11 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const eventSource = event.source ?? RUNTIME_EVENT_SOURCE.user
-    if (this.status === PLAYER_STATUS.paused && eventSource === RUNTIME_EVENT_SOURCE.user) {
-      return this.reject('PLAYER_USER_EVENTS_PAUSED', 'user events are disabled while player is paused', 'player:emit', {
+    if (
+      eventSource === RUNTIME_EVENT_SOURCE.user &&
+      (this.status === PLAYER_STATUS.paused || this.status === PLAYER_STATUS.seeking)
+    ) {
+      return this.reject('PLAYER_USER_EVENTS_PAUSED', 'user events are disabled while player is paused or seeking', 'player:emit', {
         eventName: event.name
       })
     }

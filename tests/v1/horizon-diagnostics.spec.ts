@@ -87,8 +87,7 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 
 const supportCounterStraps: StrapCollection = {
 	'support-counter': ({ context }) => {
-		context.helpers.wait(1000, { event: { name: 'support:future', cascade: true } })
-		return {}
+		return [context.planned.wait(1000, { event: { name: 'support:future', cascade: true } })]
 	}
 }
 
@@ -218,13 +217,11 @@ const stateReplayStraps: StrapCollection = {
 
 const helperStateReplayStraps: StrapCollection = {
 	'arm-state': ({ context }) => {
-		context.helpers.wait(0, {
+		return [context.planned.wait(0, {
 			update: {
 				armed: true
 			}
-		})
-
-		return {}
+		})]
 	},
 	'render-state': ({ state }) => ({
 		events: [
@@ -240,7 +237,7 @@ const helperStateReplayStraps: StrapCollection = {
 
 const helperJitStateReplayStraps: StrapCollection = {
 	'arm-state': ({ context }) => {
-		context.helpers.wait(0, {
+		context.live.wait(0, {
 			update: {
 				armed: true
 			}
@@ -262,7 +259,7 @@ const helperJitStateReplayStraps: StrapCollection = {
 
 const helperRepeatStateReplayStraps: StrapCollection = {
 	'arm-state': ({ context }) => {
-		context.helpers.repeat({ everyMs: 1, times: 2 }, ({ index }) => {
+		return [context.planned.repeat({ everyMs: 1, times: 2 }, ({ index }) => {
 			if (index === 0) {
 				return
 			}
@@ -272,9 +269,7 @@ const helperRepeatStateReplayStraps: StrapCollection = {
 					armed: true
 				}
 			}
-		})
-
-		return {}
+		})]
 	},
 	'render-state': ({ state }) => ({
 		events: [
@@ -290,7 +285,7 @@ const helperRepeatStateReplayStraps: StrapCollection = {
 
 const helperLoopStateReplayStraps: StrapCollection = {
 	'arm-state': ({ context }) => {
-		context.helpers.loop({
+		return [context.planned.loop({
 			eachMs: 1,
 			until: { type: 'times', max: 1 }
 		}, ({ index }) => {
@@ -303,9 +298,7 @@ const helperLoopStateReplayStraps: StrapCollection = {
 					armed: true
 				}
 			}
-		})
-
-		return {}
+		})]
 	},
 	'render-state': ({ state }) => ({
 		events: [

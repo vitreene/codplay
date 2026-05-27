@@ -661,4 +661,62 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
     expect(runtimeNode.style.x).toBeUndefined()
   })
+
+  it('L13-T10 seeking user emit is rejected explicitly', async () => {
+    const pendingTransitions: TransitionRequest[] = []
+
+    const animationAdapter: AnimationAdapter = {
+      run: (transitions) => {
+        pendingTransitions.push(...transitions)
+        return transitions.map((transition) => ({
+          transitionId: transition.transitionId,
+          target: transition.target,
+          stop: () => {
+            return
+          }
+        }))
+      },
+      stop: () => {
+        pendingTransitions.length = 0
+      },
+      renderFrame: () => {
+        for (const transition of pendingTransitions.splice(0)) {
+          const target = transition.target as Record<string, unknown> & { style?: Record<string, unknown> }
+          if (typeof target.style === 'object' && target.style !== null) {
+            target.style[transition.property] = transition.to
+            continue
+          }
+
+          target[transition.property] = transition.to
+        }
+      }
+    }
+
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {},
+      attributes: {}
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(temp__createSeekSceneFixture())
+    await player.play()
+
+    const seekPromise = player.seek(150)
+
+    expect(await player.emit({ name: 'box:move' })).toMatchObject({
+      ok: false,
+      error: {
+        code: 'PLAYER_USER_EVENTS_PAUSED'
+      }
+    })
+
+    await seekPromise
+  })
 })

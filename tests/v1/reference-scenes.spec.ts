@@ -467,6 +467,76 @@ describe('V1 - reference scenes', () => {
     expect(registry.getParentListId('quiz-count-value')).toBeNull()
   })
 
+  it('keeps S4 empty defaults implicit and routes perdu through quiz:answer:no', () => {
+    const scene = createS4QuizReferenceScene()
+    const questionStory = scene.stories['s4-quiz-question-story']
+    const countStory = scene.stories['s4-quiz-count-story']
+    const failureStory = scene.stories['s4-quiz-failure-story']
+
+    expect(scene).not.toHaveProperty('initial')
+    expect(scene).not.toHaveProperty('straps')
+    expect(scene).not.toHaveProperty('listen')
+    expect(questionStory).not.toHaveProperty('initial')
+    expect(questionStory).not.toHaveProperty('straps')
+    expect(countStory).not.toHaveProperty('initial')
+    expect(countStory).not.toHaveProperty('straps')
+    expect(countStory).not.toHaveProperty('listen')
+    expect(countStory).not.toHaveProperty('eventimes')
+    expect(failureStory).not.toHaveProperty('straps')
+    expect(failureStory).not.toHaveProperty('listen')
+
+    expect(questionStory.listen).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          on: 'perdu',
+          emit: [{ name: 'quiz:answer:no' }]
+        })
+      ])
+    )
+
+    const countActions = countStory.persos[0]?.actions ?? {}
+    expect(countActions).toHaveProperty('quiz-count', {})
+    expect(countActions).not.toHaveProperty('perdu')
+
+    const failureActions = failureStory.persos[0]?.actions ?? {}
+    expect(failureActions).not.toHaveProperty('perdu')
+
+    const quizAnswerResult = s4QuizStraps['quiz-answer']({
+      event: { name: 'quiz:answer:no' },
+      state: {},
+      meta: { originEventName: 'quiz:answer:no' },
+      context: {
+        api: {},
+        planned: {
+          wait: vi.fn(),
+          delay: vi.fn(() => []),
+          repeat: vi.fn(),
+          loop: vi.fn(),
+          stagger: vi.fn()
+        },
+        live: {
+          wait: vi.fn(),
+          delay: vi.fn(),
+          repeat: vi.fn(),
+          loop: vi.fn(),
+          stagger: vi.fn()
+        }
+      }
+    })
+
+    expect(quizAnswerResult).toEqual([
+      expect.any(Array),
+      {
+        events: [
+          {
+            name: 'quiz:answer:no',
+            cascade: true
+          }
+        ]
+      }
+    ])
+  })
+
   it('shows S4 intro on first play without requiring seek', async () => {
     const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
     const player = await createS4AuthorPlayer(animationAdapter)
@@ -509,6 +579,51 @@ describe('V1 - reference scenes', () => {
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
     expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2550 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
+  })
+
+  it('uses the live helper for S4 quiz-count countdown emissions', async () => {
+    const liveRepeat = vi.fn(() => ({ id: 'live-repeat', cancel: vi.fn() }))
+    const liveDelay = vi.fn(() => ({ id: 'live-delay', cancel: vi.fn() }))
+
+    const result = s4QuizStraps['quiz-countdown-start']({
+      event: { name: 'quiz:count:show' },
+      state: {},
+      meta: {
+        originEventName: 'quiz:count:show'
+      },
+      context: {
+        api: {},
+        planned: {
+          wait: vi.fn(),
+          delay: vi.fn(),
+          repeat: vi.fn(),
+          loop: vi.fn(),
+          stagger: vi.fn()
+        },
+        live: {
+          wait: vi.fn(),
+          delay: liveDelay,
+          repeat: liveRepeat,
+          loop: vi.fn(),
+          stagger: vi.fn()
+        }
+      }
+    })
+
+    expect(liveRepeat).toHaveBeenCalledWith(
+      { everyMs: 1000, times: 11 },
+      expect.any(Function)
+    )
+    expect(liveDelay).toHaveBeenNthCalledWith(1, 10000, { event: { name: 'perdu', cascade: true } })
+    expect(liveDelay).toHaveBeenNthCalledWith(2, 11000, { event: { name: 'sequence:end', cascade: true } })
+    expect(result).toEqual({
+      events: [
+        {
+          name: 'quiz:count:show',
+          cascade: true
+        }
+      ]
+    })
   })
 
   it('routes S4 yes button emit as one cascaded runtime event', async () => {
@@ -650,6 +765,25 @@ describe('V1 - reference scenes', () => {
     })
 
     expect(generatedTrackRows.length).toBe(0)
+  })
+
+  it('rejects author user emits while seek is in progress', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = await createS4AuthorPlayer(animationAdapter)
+
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+    const seekPromise = player.seek({ timelineMs: 2400 })
+    const emitResult = await player.emit({ name: 'quiz:answer:yes' })
+
+    expect(emitResult).toMatchObject({
+      ok: false,
+      error: {
+        code: 'PLAYER_USER_EVENTS_PAUSED'
+      }
+    })
+
+    await seekPromise
   })
 
   it('prevents countdown timeout after one early yes answer', async () => {

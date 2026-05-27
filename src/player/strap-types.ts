@@ -22,7 +22,32 @@ export type StrapStepFactory = (context: HelperTickContext) => StrapStepResult
 
 export type StrapStepInput = StrapStep | StrapStep[] | StrapStepFactory
 
-export type StrapHelpers = {
+export type PlannedStrapOccurrence = {
+  offsetMs: number
+  step: StrapStep
+}
+
+export type StrapRuntimeOutput = {
+  events?: StoryEvent[]
+  warnings?: string[]
+  update?: Record<string, unknown>
+}
+
+export type PlannedStrapHelpers = {
+  wait: (ms: number, input: StrapStepInput, options?: WaitOptions) => PlannedStrapOccurrence[]
+  delay: (ms: number, input: StrapStepInput, options?: WaitOptions) => PlannedStrapOccurrence[]
+  repeat: (
+    options: RepeatOptions,
+    input: StrapStepInput
+  ) => PlannedStrapOccurrence[]
+  loop: (
+    options: LoopOptions,
+    factory: StrapStepFactory
+  ) => PlannedStrapOccurrence[]
+  stagger: (options: StaggerOptions, input: StrapStepInput) => PlannedStrapOccurrence[]
+}
+
+export type LiveStrapHelpers = {
   wait: (ms: number, input: StrapStepInput, options?: WaitOptions) => StrapHelperHandle
   delay: (ms: number, input: StrapStepInput, options?: WaitOptions) => StrapHelperHandle
   repeat: (
@@ -36,9 +61,12 @@ export type StrapHelpers = {
   stagger: (options: StaggerOptions, input: StrapStepInput) => StrapHelperHandle[]
 }
 
+export type StrapHelpers = LiveStrapHelpers
+
 export type StrapContext = {
   api: unknown
-  helpers: StrapHelpers
+  planned: PlannedStrapHelpers
+  live: LiveStrapHelpers
 }
 
 export type StrapInput = {
@@ -48,13 +76,13 @@ export type StrapInput = {
   context: StrapContext
 }
 
-export type StrapOutput = {
-  events?: StoryEvent[]
-  warnings?: string[]
-  update?: Record<string, unknown>
-}
+export type StrapOutput = StrapRuntimeOutput
 
-export type StrapFn = (input: StrapInput) => Promise<StrapOutput | void> | StrapOutput | void
+export type StrapReturnChunk = StrapRuntimeOutput | PlannedStrapOccurrence[]
+
+export type StrapReturnValue = StrapReturnChunk | StrapReturnValue[] | void
+
+export type StrapFn = (input: StrapInput) => Promise<StrapReturnValue> | StrapReturnValue
 
 export type StrapCollection = Record<string, StrapFn>
 

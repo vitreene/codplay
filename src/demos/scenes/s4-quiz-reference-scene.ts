@@ -1,8 +1,5 @@
-import { createStrapTrackId } from "../../player/create-player-utils";
 import type { StrapCollection } from "../../player";
 import type { SceneDoc } from "../../player/types";
-
-const QUIZ_COUNTDOWN_STRAP_TRACK_ID = createStrapTrackId("s4-quiz-question-story", "quiz-countdown-start");
 
 /**
  * Creates one business-oriented reference scene with persistent decor and quiz branching.
@@ -11,14 +8,10 @@ export function createS4QuizReferenceScene(): SceneDoc {
   return {
     id: "s4-quiz-reference-scene",
     rootStories: ["s4-quiz-layout-story"],
-    initial: undefined,
-    straps: undefined,
-    listen: [],
     stories: {
       "s4-quiz-layout-story": {
         id: "s4-quiz-layout-story",
         entries: ["quiz-layout"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-layout",
@@ -62,8 +55,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
             actions: {},
           },
         ],
-        straps: undefined,
-        listen: [],
       },
       "s4-quiz-decor-story": {
         id: "s4-quiz-decor-story",
@@ -74,7 +65,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
           "quiz-decor-circle-c",
           "quiz-decor-media",
         ],
-        initial: undefined,
         persos: [
           {
             id: "quiz-decor-layer",
@@ -252,8 +242,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
             },
           },
         ],
-        straps: undefined,
-        listen: [],
         eventimes: [
           {
             name: "quiz:decor:drift",
@@ -268,7 +256,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       "s4-quiz-intro-story": {
         id: "s4-quiz-intro-story",
         entries: ["quiz-intro-title"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-intro-title",
@@ -322,8 +309,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
             },
           },
         ],
-        straps: undefined,
-        listen: [],
         eventimes: [
           {
             name: "quiz:intro:show",
@@ -338,7 +323,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       "s4-quiz-question-story": {
         id: "s4-quiz-question-story",
         entries: ["quiz-question-panel"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-question-panel",
@@ -469,7 +453,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
             actions: {},
           },
         ],
-        straps: undefined,
         listen: [
           {
             on: "quiz:question:show",
@@ -487,7 +470,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             on: "perdu",
-            emit: [{ name: "quiz:question:hide" }],
+            emit: [{ name: "quiz:answer:no" }],
           },
         ],
         eventimes: [
@@ -500,7 +483,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       "s4-quiz-count-story": {
         id: "s4-quiz-count-story",
         entries: ["quiz-count-value"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-count-value",
@@ -572,32 +554,14 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              perdu: {
-                style: {
-                  opacity: {
-                    from: 1,
-                    to: 0,
-                    duration: 180,
-                  },
-                  scale: {
-                    from: 1,
-                    to: 0.92,
-                    duration: 180,
-                  },
-                },
-              },
-              "quiz-count": null,
+              "quiz-count": {},
             },
           },
         ],
-        straps: undefined,
-        listen: [],
-        eventimes: [],
       },
       "s4-quiz-success-story": {
         id: "s4-quiz-success-story",
         entries: ["quiz-success-panel"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-success-panel",
@@ -632,30 +596,13 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              "quiz:result:correct:show": {
-                style: {
-                  opacity: {
-                    from: 0,
-                    to: 1,
-                    duration: 220,
-                  },
-                  x: {
-                    from: 100,
-                    to: 0,
-                    duration: 220,
-                  },
-                },
-              },
             },
           },
         ],
-        straps: undefined,
-        listen: [],
       },
       "s4-quiz-failure-story": {
         id: "s4-quiz-failure-story",
         entries: ["quiz-failure-panel"],
-        initial: undefined,
         persos: [
           {
             id: "quiz-failure-panel",
@@ -690,39 +637,9 @@ export function createS4QuizReferenceScene(): SceneDoc {
                   },
                 },
               },
-              perdu: {
-                style: {
-                  opacity: {
-                    from: 0,
-                    to: 1,
-                    duration: 220,
-                  },
-                  x: {
-                    from: 100,
-                    to: 0,
-                    duration: 220,
-                  },
-                },
-              },
-              "quiz:result:wrong:show": {
-                style: {
-                  opacity: {
-                    from: 0,
-                    to: 1,
-                    duration: 220,
-                  },
-                  x: {
-                    from: 100,
-                    to: 0,
-                    duration: 220,
-                  },
-                },
-              },
             },
           },
         ],
-        straps: undefined,
-        listen: [],
       },
     },
     tracks: {
@@ -733,12 +650,12 @@ export function createS4QuizReferenceScene(): SceneDoc {
         role: "master",
       },
     },
-  };
+  } as unknown as SceneDoc;
 }
 
 export const s4QuizStraps: StrapCollection = {
   "quiz-countdown-start": ({ context }) => {
-    void context.helpers.repeat({ everyMs: 1000, times: 11 }, ({ index }) => ({
+    void context.live.repeat({ everyMs: 1000, times: 11 }, ({ index }) => ({
       event: {
         name: "quiz-count",
         data: {
@@ -747,8 +664,8 @@ export const s4QuizStraps: StrapCollection = {
         cascade: true,
       },
     }));
-    void context.helpers.delay(10000, { event: { name: "perdu", cascade: true } });
-    void context.helpers.delay(11000, { event: { name: "sequence:end", cascade: true } });
+    void context.live.delay(10000, { event: { name: "perdu", cascade: true } });
+    void context.live.delay(11000, { event: { name: "sequence:end", cascade: true } });
 
     return {
       events: [
@@ -760,27 +677,21 @@ export const s4QuizStraps: StrapCollection = {
     };
   },
   "quiz-answer": ({ event, context }) => {
-    void context.helpers.delay(1000, {
-      event: {
-        name: "sequence:end",
-        cascade: true,
-      },
-    });
-
-    return {
-      events: [
-        {
-          name: "track:deactivate",
-          data: {
-            trackIds: [QUIZ_COUNTDOWN_STRAP_TRACK_ID],
+    return [
+      context.planned.delay(1000, {
+        event: {
+          name: "sequence:end",
+          cascade: true,
+        },
+      }),
+      {
+        events: [
+          {
+            name: event.name,
+            cascade: true,
           },
-          cascade: true,
-        },
-        {
-          name: event.name,
-          cascade: true,
-        },
-      ],
-    };
+        ],
+      },
+    ];
   },
 };

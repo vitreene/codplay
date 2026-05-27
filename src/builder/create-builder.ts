@@ -1,5 +1,6 @@
 import { BuilderValidator } from './builder-validation'
 import { BuilderArtifactCloner } from './builder-artifact-cloner'
+import { normalizeSceneDef } from './scene-normalization'
 import type {
   ApiResult,
   ApiWarning,
@@ -38,7 +39,8 @@ export class BuilderFacade implements BuilderApi {
    * Compiles one authored scene into the canonical diffusion artifact.
    */
   compile(input: BuilderCompileInput): ApiResult<BuilderCompileOutput> {
-    const report = this.validator.validate(input.scene)
+    const normalizedScene = normalizeSceneDef(input.scene)
+    const report = this.validator.validate(normalizedScene)
 
     if (!report.ok) {
       const firstError = report.errors[0]
@@ -53,12 +55,12 @@ export class BuilderFacade implements BuilderApi {
     }
 
     const resourceManifest: ResourceManifest = { entries: [] }
-    const compiledScene: CompiledScene = {
-      schemaVersion: this.schemaVersion,
-      createdAt: new Date().toISOString(),
-      scene: this.cloner.cloneSceneDef(input.scene),
-      resources: this.cloner.cloneResourceManifest(resourceManifest)
-    }
+      const compiledScene: CompiledScene = {
+        schemaVersion: this.schemaVersion,
+        createdAt: new Date().toISOString(),
+        scene: this.cloner.cloneSceneDef(normalizedScene),
+        resources: this.cloner.cloneResourceManifest(resourceManifest)
+      }
 
     return {
       ok: true,
@@ -77,7 +79,7 @@ export class BuilderFacade implements BuilderApi {
    * Validates one authored scene without mutating the caller payload.
    */
   validate(input: { scene: SceneDef }): ValidationReport {
-    return this.validator.validate(input.scene)
+    return this.validator.validate(normalizeSceneDef(input.scene))
   }
 
   /**

@@ -18,7 +18,18 @@ import { PlayerFacade, type CreatePlayerOptions } from './create-player'
 import { PlayerScheduleFacade, type StrapHelpers as RuntimeScheduleHelpers } from './player-schedule'
 import { createRuntimeEventPolicy, type ResolvedRuntimeEventPolicy, type RuntimeEventPolicy } from './runtime-policy'
 import type { RuntimeEventSource } from '../core/events/types'
-import type { StrapCollection, StrapExecutionScope, StrapHelpers, StrapOutput, StrapStep } from './strap-types'
+import { PLAYER_STATUS } from './player-constants'
+import type {
+  LiveStrapHelpers,
+  PlannedStrapHelpers,
+  PlannedStrapOccurrence,
+  StrapCollection,
+  StrapContext,
+  StrapExecutionScope,
+  StrapReturnValue,
+  StrapRuntimeOutput,
+  StrapStep
+} from './strap-types'
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
 
@@ -211,6 +222,17 @@ export class Player implements PlayerApi {
    * Emits one public runtime event.
    */
   emit(input: StoryEvent): Promise<ApiResult<void>> {
+    const currentStatus = this.player.getState().status
+    if (currentStatus === PLAYER_STATUS.paused || currentStatus === PLAYER_STATUS.seeking) {
+      return Promise.resolve({
+        ok: false,
+        error: {
+          code: 'PLAYER_USER_EVENTS_PAUSED',
+          message: 'user events are disabled while player is paused or seeking'
+        }
+      })
+    }
+
     return this.routeSceneEvent(input, RUNTIME_EVENT_SOURCE.user)
   }
 
@@ -458,7 +480,54 @@ export class Player implements PlayerApi {
   }
 
   /**
-   * Creates the helper facade exposed to one strap execution.
+   * Returns true when one return chunk is one planned occurrence list.
+   */
+  private isPlannedStrapOccurrence(value: unknown): value is PlannedStrapOccurrence {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'offsetMs' in value &&
+      typeof (value as { offsetMs?: unknown }).offsetMs === 'number' &&
+      'step' in value &&
+      typeof (value as { step?: unknown }).step === 'object' &&
+      (value as { step?: unknown }).step !== null
+    )
+  }
+
+  /**
+   * Flattens one strap return tree into ordered runtime and planned chunks.
+   */
+  private normalizeStrapReturnValue(value: StrapReturnValue): Array<StrapRuntimeOutput | PlannedStrapOccurrence[]> {
+    const chunks: Array<StrapRuntimeOutput | PlannedStrapOccurrence[]> = []
+
+    const visit = (entry: unknown): void => {
+      if (entry === undefined || entry === null) {
+        return
+      }
+
+      if (Array.isArray(entry)) {
+        if (entry.every((item) => this.isPlannedStrapOccurrence(item))) {
+          chunks.push(entry as PlannedStrapOccurrence[])
+          return
+        }
+
+        for (const item of entry) {
+          visit(item)
+        }
+        return
+      }
+
+      if (typeof entry === 'object') {
+        chunks.push(entry as StrapRuntimeOutput)
+      }
+    }
+
+    visit(value)
+    return chunks
+  }
+
+  /**
+   * Creates the strap context exposed to one strap execution.
    */
   private createStrapHelpers(
     strapTrackId: string,
@@ -466,15 +535,21 @@ export class Player implements PlayerApi {
     startedAtMs: number,
     scope: StrapExecutionScope,
     depth: number,
-    collectWarning: (warning: string) => void,
-    planHelperEvent: (offsetMs: number, step: StrapStep) => void
-  ): StrapHelpers {
+    collectWarning: (warning: string) => void
+  ): StrapContext {
     const resolveState = () => this.resolveStateTarget(scopeStoryId) as DeepReadonly<Record<string, unknown>>
 
     const emitWarnings = (warnings: string[]): void => {
       for (const warning of warnings) {
         collectWarning(warning)
       }
+    }
+
+    const toPlannedOccurrences = (steps: Array<{ offsetMs: number; step: StrapStep }>): PlannedStrapOccurrence[] => {
+      return steps.map(({ offsetMs, step }) => ({
+        offsetMs,
+        step
+      }))
     }
 
     const createJitScheduler = () => {
@@ -525,7 +600,7 @@ export class Player implements PlayerApi {
       return scheduler
     }
 
-    const toRuntimeLoopEvents = (factory: Parameters<StrapHelpers['loop']>[1]) => {
+    const toRuntimeLoopEvents = (factory: Parameters<LiveStrapHelpers['loop']>[1]) => {
       return (context: Parameters<RuntimeScheduleHelpers['loop']>[1] extends (context: infer T) => unknown ? T : never) => {
         return resolveStrapStepInput(factory, context).flatMap((step) => {
           const emitted: StoryEvent[] = []
@@ -546,137 +621,145 @@ export class Player implements PlayerApi {
       }
     }
 
-    const scheduleWait = (ms: number, input: Parameters<StrapHelpers['wait']>[1], options: Parameters<StrapHelpers['wait']>[2] = {}) => {
-      if (!isValidHelperDelayMs(ms)) {
-        throw new Error('AUTHOR_HELPER_INVALID_ARG')
-      }
-
-      const modeResolution = resolveHelperMode({
-        helperName: 'wait',
-        requestedMode: options?.mode,
-        defaultMode: 'planned',
-        compatibleModes: ['planned', 'jit']
-      })
-      emitWarnings(modeResolution.warnings)
-
-      if (modeResolution.mode === 'jit') {
-        const scheduler = createJitScheduler()
-        const handle = scheduler.wait(ms, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)), { mode: 'jit' })
-        return {
-          id: handle.id,
-          cancel: () => {
-            handle.cancel()
-            scheduler.destroy()
-            this.strapLoopSchedulers.delete(scheduler)
-          }
-        }
-      }
-
-      for (const occurrence of planWaitItems({
-        ms,
-        startedAtMs,
-        helperInput: input,
-        resolveState,
-        resolveItems: resolveStrapStepInput
-      })) {
-        planHelperEvent(occurrence.offsetMs, occurrence.item)
-      }
-
-      return {
-        id: `${strapTrackId}:wait:${ms}`,
-        cancel: () => {
-          return
-        }
-      }
+    const createPlannedWait = (
+      ms: number,
+      input: Parameters<PlannedStrapHelpers['wait']>[1],
+      _options: Parameters<PlannedStrapHelpers['wait']>[2] = {}
+    ) => {
+      return toPlannedOccurrences(
+        planWaitItems({
+          ms,
+          startedAtMs,
+          helperInput: input,
+          resolveState,
+          resolveItems: resolveStrapStepInput
+        }).map(({ offsetMs, item }) => ({
+          offsetMs,
+          step: item
+        }))
+      )
     }
 
-    return {
-      wait: scheduleWait,
-      delay: (ms, input, options) => {
-        return scheduleWait(ms, input, options)
-      },
-      repeat: (options, input) => {
-        if (!isValidHelperRepeatOptions(options)) {
-          throw new Error('AUTHOR_HELPER_INVALID_ARG')
-        }
-
-        const modeResolution = resolveHelperMode({
-          helperName: 'repeat',
-          requestedMode: options.mode,
-          defaultMode: 'planned',
-          compatibleModes: ['planned', 'jit']
-        })
-        emitWarnings(modeResolution.warnings)
-
-        if (modeResolution.mode === 'jit') {
-          const scheduler = createJitScheduler()
-          const handle = scheduler.repeat(options, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)))
-          return {
-            id: handle.id,
-            cancel: () => {
-              handle.cancel()
-              scheduler.destroy()
-              this.strapLoopSchedulers.delete(scheduler)
-            }
-          }
-        }
-
-        for (const occurrence of planRepeatItems({
+    const createPlannedRepeat = (options: Parameters<PlannedStrapHelpers['repeat']>[0], input: Parameters<PlannedStrapHelpers['repeat']>[1]) => {
+      return toPlannedOccurrences(
+        planRepeatItems({
           eachMs: options.everyMs,
           times: options.times,
           startedAtMs,
           helperInput: input,
           resolveState,
           resolveItems: resolveStrapStepInput
-        })) {
-          planHelperEvent(occurrence.offsetMs, occurrence.item)
+        }).map(({ offsetMs, item }) => ({
+          offsetMs,
+          step: item
+        }))
+      )
+    }
+
+    const createPlannedLoop = (options: Parameters<PlannedStrapHelpers['loop']>[0], factory: Parameters<PlannedStrapHelpers['loop']>[1]) => {
+      if (!Number.isFinite(options.eachMs) || options.eachMs <= 0) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
+
+      const plannedTimes = resolvePlannableLoopTimes(options)
+      if (plannedTimes === null) {
+        emitWarnings([
+          hasEventLoopStop(options)
+            ? 'helper loop mode planned falls back to jit because until.event requires jit'
+            : 'helper loop cannot be planned'
+        ])
+        return []
+      }
+
+      return toPlannedOccurrences(
+        planRepeatItems({
+          eachMs: options.eachMs,
+          times: plannedTimes,
+          startedAtMs,
+          helperInput: factory,
+          resolveState,
+          resolveItems: resolveStrapStepInput
+        }).map(({ offsetMs, item }) => ({
+          offsetMs,
+          step: item
+        }))
+      )
+    }
+
+    const createPlannedStagger = (options: Parameters<PlannedStrapHelpers['stagger']>[0], input: Parameters<PlannedStrapHelpers['stagger']>[1]) => {
+      if (!isValidHelperStaggerOptions(options)) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
+
+      const resolvedSteps = resolveStrapStepInput(input, {
+        currentTimeMs: startedAtMs,
+        startedAtMs,
+        elapsedMs: 0,
+        index: 0,
+        state: resolveState()
+      })
+
+      return toPlannedOccurrences(
+        planStaggerItems({ stepMs: options.stepMs, items: resolvedSteps }).map(({ offsetMs, item }) => ({
+          offsetMs,
+          step: item
+        }))
+      )
+    }
+
+    const scheduleWait = (ms: number, input: Parameters<LiveStrapHelpers['wait']>[1], options: Parameters<LiveStrapHelpers['wait']>[2] = {}) => {
+      if (!isValidHelperDelayMs(ms)) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
+
+      const scheduler = createJitScheduler()
+      const handle = scheduler.wait(ms, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)), options)
+      return {
+        id: handle.id,
+        cancel: () => {
+          handle.cancel()
+          scheduler.destroy()
+          this.strapLoopSchedulers.delete(scheduler)
         }
+      }
+    }
 
-        return {
-          id: `${strapTrackId}:repeat:${options.everyMs}:${options.times}`,
-          cancel: () => {
-            return
-          }
+    const scheduleRepeat = (options: Parameters<LiveStrapHelpers['repeat']>[0], input: Parameters<LiveStrapHelpers['repeat']>[1]) => {
+      if (!isValidHelperRepeatOptions(options)) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
+
+      const scheduler = createJitScheduler()
+      const handle = scheduler.repeat(options, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)))
+      return {
+        id: handle.id,
+        cancel: () => {
+          handle.cancel()
+          scheduler.destroy()
+          this.strapLoopSchedulers.delete(scheduler)
         }
-      },
-      loop: (options, factory) => {
-        if (!Number.isFinite(options.eachMs) || options.eachMs <= 0) {
-          throw new Error('AUTHOR_HELPER_INVALID_ARG')
-        }
+      }
+    }
 
-        const plannedTimes = resolvePlannableLoopTimes(options)
-        const modeResolution = resolveHelperMode({
-          helperName: 'loop',
-          requestedMode: options.mode,
-          defaultMode: 'jit',
-          compatibleModes: hasEventLoopStop(options) ? ['jit'] : ['planned', 'jit'],
-          fallbackMode: 'jit',
-          reason: hasEventLoopStop(options) ? 'until.event requires jit' : undefined
-        })
-        emitWarnings(modeResolution.warnings)
+    const scheduleLoop = (options: Parameters<LiveStrapHelpers['loop']>[0], factory: Parameters<LiveStrapHelpers['loop']>[1]) => {
+      if (!Number.isFinite(options.eachMs) || options.eachMs <= 0) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
 
-        if (modeResolution.mode === 'planned' && plannedTimes !== null) {
-          for (const occurrence of planRepeatItems({
-            eachMs: options.eachMs,
-            times: plannedTimes,
-            startedAtMs,
-            helperInput: factory,
-            resolveState,
-            resolveItems: resolveStrapStepInput
-          })) {
-            planHelperEvent(occurrence.offsetMs, occurrence.item)
-          }
+      const plannedTimes = resolvePlannableLoopTimes(options)
+      const modeResolution = resolveHelperMode({
+        helperName: 'loop',
+        requestedMode: options.mode,
+        defaultMode: 'jit',
+        compatibleModes: hasEventLoopStop(options) ? ['jit'] : ['planned', 'jit'],
+        fallbackMode: 'jit',
+        reason: hasEventLoopStop(options) ? 'until.event requires jit' : undefined
+      })
+      emitWarnings(modeResolution.warnings)
 
-          return {
-            id: `${strapTrackId}:loop:${options.eachMs}:planned`,
-            cancel: () => {
-              return
-            }
-          }
-        }
-
+      if (modeResolution.mode === 'planned' && plannedTimes !== null) {
         const scheduler = createJitScheduler()
-        const handle = scheduler.loop(options, toRuntimeLoopEvents(factory))
+        const handle = scheduler.repeat({ everyMs: options.eachMs, times: plannedTimes, mode: 'planned' }, toRuntimeLoopEvents(factory))
 
         return {
           id: handle.id,
@@ -686,53 +769,68 @@ export class Player implements PlayerApi {
             this.strapLoopSchedulers.delete(scheduler)
           }
         }
+      }
+
+      const scheduler = createJitScheduler()
+      const handle = scheduler.loop(options, toRuntimeLoopEvents(factory))
+
+      return {
+        id: handle.id,
+        cancel: () => {
+          handle.cancel()
+          scheduler.destroy()
+          this.strapLoopSchedulers.delete(scheduler)
+        }
+      }
+    }
+
+    const scheduleStagger = (options: Parameters<LiveStrapHelpers['stagger']>[0], input: Parameters<LiveStrapHelpers['stagger']>[1]) => {
+      if (!isValidHelperStaggerOptions(options)) {
+        throw new Error('AUTHOR_HELPER_INVALID_ARG')
+      }
+
+      const resolvedSteps = resolveStrapStepInput(input, {
+        currentTimeMs: startedAtMs,
+        startedAtMs,
+        elapsedMs: 0,
+        index: 0,
+        state: resolveState()
+      })
+
+      const scheduler = createJitScheduler()
+      const handles = planStaggerItems({ stepMs: options.stepMs, items: resolvedSteps }).map(({ offsetMs, item }) => {
+        return scheduler.wait(offsetMs, toRuntimeLoopEvents(() => item), options)
+      })
+
+      return handles.map((handle) => ({
+        id: handle.id,
+        cancel: () => {
+          handle.cancel()
+          scheduler.destroy()
+          this.strapLoopSchedulers.delete(scheduler)
+        }
+      }))
+    }
+
+    return {
+      api: {},
+      planned: {
+        wait: createPlannedWait,
+        delay: (ms, input, options) => {
+          return createPlannedWait(ms, input, options)
+        },
+        repeat: createPlannedRepeat,
+        loop: createPlannedLoop,
+        stagger: createPlannedStagger
       },
-      stagger: (options, input) => {
-        if (!isValidHelperStaggerOptions(options)) {
-          throw new Error('AUTHOR_HELPER_INVALID_ARG')
-        }
-
-        const modeResolution = resolveHelperMode({
-          helperName: 'stagger',
-          requestedMode: options.mode,
-          defaultMode: 'planned',
-          compatibleModes: ['planned', 'jit']
-        })
-        emitWarnings(modeResolution.warnings)
-
-        const resolvedSteps = resolveStrapStepInput(input, {
-          currentTimeMs: startedAtMs,
-          startedAtMs,
-          elapsedMs: 0,
-          index: 0,
-          state: resolveState()
-        })
-
-        if (modeResolution.mode === 'jit') {
-          const scheduler = createJitScheduler()
-          const handles = planStaggerItems({ stepMs: options.stepMs, items: resolvedSteps }).map(({ offsetMs, item }) => {
-            return scheduler.wait(offsetMs, toRuntimeLoopEvents(() => item), { mode: 'jit' })
-          })
-
-          return handles.map((handle) => ({
-            id: handle.id,
-            cancel: () => {
-              handle.cancel()
-              scheduler.destroy()
-              this.strapLoopSchedulers.delete(scheduler)
-            }
-          }))
-        }
-
-        return planStaggerItems({ stepMs: options.stepMs, items: resolvedSteps }).map(({ offsetMs, item }, index) => {
-          planHelperEvent(offsetMs, item)
-          return {
-            id: `${strapTrackId}:stagger:${index}`,
-            cancel: () => {
-              return
-            }
-          }
-        })
+      live: {
+        wait: scheduleWait,
+        delay: (ms, input, options) => {
+          return scheduleWait(ms, input, options)
+        },
+        repeat: scheduleRepeat,
+        loop: scheduleLoop,
+        stagger: scheduleStagger
       }
     }
   }
@@ -752,8 +850,11 @@ export class Player implements PlayerApi {
     }
 
     const strapTrackId = this.resolveStrapTrackId(scope.scopeStoryId, strapName)
-    const plannedHelperSteps: Array<{ offsetMs: number; step: StrapStep }> = []
     const helperWarnings: string[] = []
+
+    const strapContext = this.createStrapHelpers(strapTrackId, scope.scopeStoryId, scope.ms, scope, depth, (warning) => {
+      helperWarnings.push(warning)
+    })
 
     const output = await strap({
       event,
@@ -769,51 +870,50 @@ export class Player implements PlayerApi {
               }
             : undefined
       },
-      context: {
-        api: {},
-        helpers: this.createStrapHelpers(strapTrackId, scope.scopeStoryId, scope.ms, scope, depth, (warning) => {
-          helperWarnings.push(warning)
-        }, (offsetMs, plannedStep) => {
-          plannedHelperSteps.push({ offsetMs, step: plannedStep })
-        })
-      }
+      context: strapContext
     })
 
-    const resolvedOutput: StrapOutput = {
-      ...(output ?? {}),
-      warnings: [...(output?.warnings ?? []), ...helperWarnings]
-    }
-    if (plannedHelperSteps.length > 0) {
-      const helperResult = this.materializeHelperSteps(strapTrackId, scope, plannedHelperSteps)
-      if (!helperResult.ok) {
-        return helperResult
-      }
-    }
-
-    if (resolvedOutput.update) {
-      const updateResult = this.materializeHelperSteps(strapTrackId, scope, [{ offsetMs: 0, step: { update: resolvedOutput.update } }])
-      if (!updateResult.ok) {
-        return updateResult
-      }
-    }
-
-    for (const emittedEvent of resolvedOutput.events ?? []) {
-      const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scope.scopeStoryId
-      const childResult = await this.routeSceneEvent(
-        emittedEvent,
-        RUNTIME_EVENT_SOURCE.system,
-        nextScopeStoryId,
-        depth + 1,
-        {
-          ...scope,
-          materialized: false,
-          trackId: strapTrackId,
-          scopeStoryId: nextScopeStoryId
+    const resolvedChunks = this.normalizeStrapReturnValue(output)
+    for (const chunk of resolvedChunks) {
+      if (Array.isArray(chunk)) {
+        const helperResult = this.materializeHelperSteps(
+          strapTrackId,
+          scope,
+          chunk.map(({ offsetMs, step }) => ({ offsetMs, step }))
+        )
+        if (!helperResult.ok) {
+          return helperResult
         }
-      )
+        continue
+      }
 
-      if (!childResult.ok) {
-        return childResult
+      helperWarnings.push(...(chunk.warnings ?? []))
+
+      if (chunk.update) {
+        const updateResult = this.materializeHelperSteps(strapTrackId, scope, [{ offsetMs: 0, step: { update: chunk.update } }])
+        if (!updateResult.ok) {
+          return updateResult
+        }
+      }
+
+      for (const emittedEvent of chunk.events ?? []) {
+        const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scope.scopeStoryId
+        const childResult = await this.routeSceneEvent(
+          emittedEvent,
+          RUNTIME_EVENT_SOURCE.system,
+          nextScopeStoryId,
+          depth + 1,
+          {
+            ...scope,
+            materialized: false,
+            trackId: strapTrackId,
+            scopeStoryId: nextScopeStoryId
+          }
+        )
+
+        if (!childResult.ok) {
+          return childResult
+        }
       }
     }
 
@@ -834,6 +934,17 @@ export class Player implements PlayerApi {
       ms: this.player.getState().timelineMs
     }
   ): Promise<ApiResult<void>> {
+    const currentStatus = this.player.getState().status
+    if (source === RUNTIME_EVENT_SOURCE.user && (currentStatus === PLAYER_STATUS.paused || currentStatus === PLAYER_STATUS.seeking)) {
+      return {
+        ok: false,
+        error: {
+          code: 'PLAYER_USER_EVENTS_PAUSED',
+          message: 'user events are disabled while player is paused or seeking'
+        }
+      }
+    }
+
     this.notifyLoopSchedulers(event.name)
 
     if (depth > this.runtimePolicy.maxCascadeDepth) {

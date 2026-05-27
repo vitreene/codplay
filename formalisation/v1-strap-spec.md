@@ -105,7 +105,7 @@ type StrapReturnChunk =
 
 type StrapReturnValue =
   | StrapReturnChunk
-  | StrapReturnChunk[]
+  | StrapReturnValue[]
   | void
 
 type StrapFn = (input: StrapInput) => Promise<StrapReturnValue> | StrapReturnValue
@@ -145,6 +145,8 @@ type StrapCollection = Record<string, StrapFn>
 - un strap ne contribue aux bornes master que si sa track dediee est explicitement `role: "master"`
 - la `Story` determine la portee finale selon `cascade` et son pipeline
 - au niveau `Scene`, un strap d'entree peut participer au bootstrap en declenchant des operations de montage indirectes puis des events de sequence
+- la valeur de retour accepte des tableaux imbriques de `StrapReturnChunk`
+- le runtime aplatit recursivement ces tableaux avant materialisation
 
 5. Scene conventions
 

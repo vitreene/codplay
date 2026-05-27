@@ -36,3 +36,11 @@ export function assertReadonlyHelperState(context: HelperTickContext): void {
   // @ts-expect-error Helper callback state stays read-only.
   context.state['armed'] = true
 }
+
+export function assertStrapContextSurface(input: StrapInput): void {
+  void input.context.planned
+  void input.context.live
+
+  // @ts-expect-error Legacy helper surface is no longer canonical.
+  void input.context.helpers
+}
