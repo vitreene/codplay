@@ -87,7 +87,7 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 
 const supportCounterStraps: StrapCollection = {
 	'support-counter': ({ context }) => {
-		context.helpers.delay(1000, { name: 'support:future', cascade: true })
+		context.helpers.wait(1000, { event: { name: 'support:future', cascade: true } })
 		return {}
 	}
 }
@@ -204,6 +204,109 @@ const stateReplayStraps: StrapCollection = {
 			armed: true
 		}
 	}),
+	'render-state': ({ state }) => ({
+		events: [
+			{
+				name: 'result-node',
+				data: {
+					content: state.armed === true ? 'armed' : 'disarmed'
+				}
+			}
+		]
+	})
+}
+
+const helperStateReplayStraps: StrapCollection = {
+	'arm-state': ({ context }) => {
+		context.helpers.wait(0, {
+			update: {
+				armed: true
+			}
+		})
+
+		return {}
+	},
+	'render-state': ({ state }) => ({
+		events: [
+			{
+				name: 'result-node',
+				data: {
+					content: state.armed === true ? 'armed' : 'disarmed'
+				}
+			}
+		]
+	})
+}
+
+const helperJitStateReplayStraps: StrapCollection = {
+	'arm-state': ({ context }) => {
+		context.helpers.wait(0, {
+			update: {
+				armed: true
+			}
+		}, { mode: 'jit' })
+
+		return {}
+	},
+	'render-state': ({ state }) => ({
+		events: [
+			{
+				name: 'result-node',
+				data: {
+					content: state.armed === true ? 'armed' : 'disarmed'
+				}
+			}
+		]
+	})
+}
+
+const helperRepeatStateReplayStraps: StrapCollection = {
+	'arm-state': ({ context }) => {
+		context.helpers.repeat({ everyMs: 1, times: 2 }, ({ index }) => {
+			if (index === 0) {
+				return
+			}
+
+			return {
+				update: {
+					armed: true
+				}
+			}
+		})
+
+		return {}
+	},
+	'render-state': ({ state }) => ({
+		events: [
+			{
+				name: 'result-node',
+				data: {
+					content: state.armed === true ? 'armed' : 'disarmed'
+				}
+			}
+		]
+	})
+}
+
+const helperLoopStateReplayStraps: StrapCollection = {
+	'arm-state': ({ context }) => {
+		context.helpers.loop({
+			eachMs: 1,
+			until: { type: 'times', max: 1 }
+		}, ({ index }) => {
+			if (index !== 0) {
+				return
+			}
+
+			return {
+				update: {
+					armed: true
+				}
+			}
+		})
+
+		return {}
+	},
 	'render-state': ({ state }) => ({
 		events: [
 			{
@@ -403,6 +506,158 @@ describe('horizon diagnostics', () => {
 			compiledScene: compileResult.data.compiledScene,
 			resourceManifest: compileResult.data.resourceManifest,
 			strapCollection: stateReplayStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({ name: 'arm' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+		const replayTargetMs = Math.max(1, Math.ceil(player.getState().timelineMs))
+		expect(await player.seek({ timelineMs: replayTargetMs })).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(await player.emit({ name: 'fire' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		const resultNode = player.getRuntimeRegistry().getNodeById('result-node') as { textContent?: string } | null
+		expect(resultNode?.textContent).toBe('armed')
+	})
+
+	it('replays materialized helper updates so later interactions keep the rebuilt author state', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createStateReplayScene() })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('helper state replay scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: helperStateReplayStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({ name: 'arm' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+		const replayTargetMs = Math.max(1, Math.ceil(player.getState().timelineMs))
+		expect(await player.seek({ timelineMs: replayTargetMs })).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(await player.emit({ name: 'fire' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		const resultNode = player.getRuntimeRegistry().getNodeById('result-node') as { textContent?: string } | null
+		expect(resultNode?.textContent).toBe('armed')
+	})
+
+	it('replays materialized helper jit wait updates so later interactions keep the rebuilt author state', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createStateReplayScene() })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('helper jit state replay scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: helperJitStateReplayStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({ name: 'arm' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+		const replayTargetMs = Math.max(1, Math.ceil(player.getState().timelineMs))
+		expect(await player.seek({ timelineMs: replayTargetMs })).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(await player.emit({ name: 'fire' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		const resultNode = player.getRuntimeRegistry().getNodeById('result-node') as { textContent?: string } | null
+		expect(resultNode?.textContent).toBe('armed')
+	})
+
+	it('replays materialized helper repeat updates so later interactions keep the rebuilt author state', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createStateReplayScene() })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('helper repeat state replay scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: helperRepeatStateReplayStraps
+		})).toEqual({ ok: true, data: undefined })
+
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+		expect(await player.emit({ name: 'arm' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+		const replayTargetMs = Math.max(1, Math.ceil(player.getState().timelineMs))
+		expect(await player.seek({ timelineMs: replayTargetMs })).toEqual({ ok: true, data: undefined })
+		expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+		expect(await player.emit({ name: 'fire' })).toEqual({ ok: true, data: undefined })
+		await new Promise((resolve) => setTimeout(resolve, 0))
+		expect(await player.pause()).toEqual({ ok: true, data: undefined })
+
+		const resultNode = player.getRuntimeRegistry().getNodeById('result-node') as { textContent?: string } | null
+		expect(resultNode?.textContent).toBe('armed')
+	})
+
+	it('replays materialized helper loop updates so later interactions keep the rebuilt author state', async () => {
+		const builder = new BuilderFacade()
+		const player = new Player({
+			animationAdapter: createAnimationAdapter(createApplyingAnimeImplementation()),
+			createElementOptions: {
+				nodeFactory: () => ({ tagName: 'DIV', style: {}, attributes: {} }) as never
+			}
+		})
+
+		const compileResult = builder.compile({ scene: createStateReplayScene() })
+		expect(compileResult.ok).toBe(true)
+		if (!compileResult.ok) {
+			throw new Error('helper loop state replay scene compile failed')
+		}
+
+		expect(await player.init({
+			mountTarget: {},
+			compiledScene: compileResult.data.compiledScene,
+			resourceManifest: compileResult.data.resourceManifest,
+			strapCollection: helperLoopStateReplayStraps
 		})).toEqual({ ok: true, data: undefined })
 
 		expect(await player.play()).toEqual({ ok: true, data: undefined })

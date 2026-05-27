@@ -434,7 +434,11 @@ describe('Lot 16 - playback timeline minimal', () => {
             {
               id: 'title',
               type: 'text',
-              initial: {},
+              initial: {
+                style: {
+                  opacity: 0
+                }
+              },
               actions: {
                 intro: {
                   style: {
@@ -482,6 +486,116 @@ describe('Lot 16 - playback timeline minimal', () => {
     await player.play()
 
     expect(animationStatusesAtStart).toEqual(['playing'])
+    expect(runtimeNode.style.opacity).toBe(1)
+  })
+
+  it('L16-T5 first-play zero-offset transitions render on the initial play frame', async () => {
+    const runtimeNode = {
+      tagName: 'DIV',
+      style: {
+        opacity: 0
+      },
+      attributes: {}
+    }
+
+    const pendingFrames: Array<() => void> = []
+    const renderFrame = vi.fn<(frameNowMs: number) => void>(() => {
+      while (pendingFrames.length > 0) {
+        pendingFrames.shift()?.()
+      }
+    })
+
+    const animationAdapter: AnimationAdapter = {
+      run: (transitions) => {
+        for (const transition of transitions) {
+          pendingFrames.push(() => {
+            ;(transition.target as { style?: Record<string, unknown> }).style ??= {}
+            ;(transition.target as { style: Record<string, unknown> }).style[transition.property] = transition.to
+          })
+        }
+
+        return transitions.map((transition) => ({
+          transitionId: transition.transitionId,
+          target: transition.target,
+          stop: () => {
+            return
+          }
+        }))
+      },
+      stop: () => {
+        pendingFrames.length = 0
+      },
+      pause: () => {
+        return
+      },
+      resume: () => {
+        return
+      },
+      seek: () => {
+        return
+      },
+      renderFrame
+    }
+
+    const scene: SceneDoc = {
+      id: 'scene-story-start-zero-offset-render-frame',
+      rootStories: ['story-main'],
+      initial: undefined,
+      straps: undefined,
+      listen: [],
+      stories: {
+        'story-main': {
+          id: 'story-main',
+          entries: ['title'],
+          initial: undefined,
+          persos: [
+            {
+              id: 'title',
+              type: 'text',
+              initial: {},
+              actions: {
+                intro: {
+                  style: {
+                    opacity: {
+                      from: 0,
+                      to: 1,
+                      duration: 300
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          straps: undefined,
+          listen: [],
+          eventimes: [
+            {
+              name: 'intro',
+              startAt: 0
+            }
+          ]
+        }
+      },
+      init(sceneDoc, options) {
+        options.mount(sceneDoc.rootStories[0])
+      },
+      onStart(sceneDoc, options) {
+        options.schedule(sceneDoc.rootStories[0])
+      },
+      tracks: {}
+    }
+
+    const player = new PlayerFacade({
+      animationAdapter,
+      createElementOptions: {
+        nodeFactory: () => runtimeNode
+      }
+    })
+
+    await player.init(scene)
+    await player.play()
+
+    expect(renderFrame).toHaveBeenCalled()
     expect(runtimeNode.style.opacity).toBe(1)
   })
 })

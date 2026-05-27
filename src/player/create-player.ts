@@ -1345,6 +1345,7 @@ export class PlayerFacade implements PlayerApi {
     const currentTimelineMs = this.resolveCurrentTimelineMs()
     this.timelineMs = currentTimelineMs
     await this.runDueTimelineEvents(currentTimelineMs)
+    this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
     this.syncMediaTimeline(currentTimelineMs)
     this.completePlaybackIfReachedEnd()
     if (this.playbackStartMs !== null) {

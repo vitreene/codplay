@@ -2,13 +2,14 @@
 
 ## Statut
 
-Spec normative V1 pour les helpers temporels internes, leurs wrappers publics `player.schedule`, et leurs wrappers auteur `context.helpers` dans les `Strap`.
+Spec normative V1 pour les helpers temporels internes, leur wrapper public `player.schedule`, et leurs wrappers auteur `context.planned` / `context.live` dans les `Strap`.
 
 ## Objectif
 
 - separer strictement le noyau temporel interne de l'emission runtime
 - conserver `player.schedule` comme surface runtime active
-- definir `context.helpers` comme surface auteur adaptee aux `Strap`
+- definir `context.planned` comme surface auteur declarative pour les suites finies plannables
+- definir `context.live` comme surface auteur runtime pour les suites actives
 - supporter deux modes d'execution:
   - `planned`
   - `jit`
@@ -31,12 +32,19 @@ Il existe 3 couches distinctes.
 - callback retourne des `StoryEvent`
 - emission au fil de l'eau via le runtime
 
-3. Wrapper `context.helpers`
+3. Wrapper `context.planned`
 
-- adapte les helpers internes au runtime strap
+- adapte les helpers internes au runtime strap plannable
 - callback retourne des `StrapStep`
-- materialisation en tracks
-- aucun emit imperatif direct dans le corps du strap
+- retourne des occurrences planifiees datees
+- aucune emission imperative directe n'est autorisee dans le corps du strap via cette surface
+
+4. Wrapper `context.live`
+
+- adapte les helpers internes au runtime strap actif
+- callback retourne des `StrapStep`
+- materialisation en tracks occurrence par occurrence
+- `context.live` est la surface imperative explicite du runtime strap
 
 ## Exposition facade Player
 
@@ -72,6 +80,11 @@ type StoryEvent = {
 type StrapStep = {
   event?: StoryEvent
   update?: Record<string, unknown>
+}
+
+type PlannedStrapOccurrence = {
+  offsetMs: number
+  step: StrapStep
 }
 
 type HelperHandle = {
@@ -169,17 +182,46 @@ type RuntimeScheduleHelpers = {
 }
 ```
 
-### `context.helpers`
+### `context.planned`
 
 ```ts
-type StrapScheduleHelpers = {
+type PlannedStrapHelpers = {
+  wait: (
+    ms: number,
+    input: StrapStepInput,
+    options?: { mode?: HelperMode }
+  ) => PlannedStrapOccurrence[]
+
+  delay: PlannedStrapHelpers["wait"]
+
+  repeat: (
+    options: { eachMs: number; times: number; mode?: HelperMode },
+    input: StrapStepInput
+  ) => PlannedStrapOccurrence[]
+
+  stagger: (
+    options: { stepMs: number; mode?: HelperMode },
+    input: StrapStepInput
+  ) => PlannedStrapOccurrence[]
+
+  loop: (
+    options: LoopOptions,
+    input: StrapStepInput
+  ) => PlannedStrapOccurrence[]
+}
+```
+
+### `context.live`
+
+```ts
+type LiveStrapHelpers = {
   wait: (
     ms: number,
     input: StrapStepInput,
     options?: { mode?: HelperMode }
   ) => HelperHandle
 
-  delay: StrapScheduleHelpers["wait"]
+  delay: LiveStrapHelpers["wait"]
 
   repeat: (
     options: { eachMs: number; times: number; mode?: HelperMode },
@@ -262,11 +304,14 @@ Deux modes existent.
 
 - le runtime calcule tout le plan a l'avance
 - adapte aux suites finies et resolvables statiquement
+- `context.planned` retourne des `PlannedStrapOccurrence[]`
+- ces occurrences sont materialisees en tracks apres execution du strap
 
 ### `jit`
 
 - le runtime produit les occurrences au fur et a mesure
 - adapte aux suites longues, interrompables, ou dependantes d'un event futur
+- `context.live` materialise les occurrences une par une au fil de l'eau
 
 ## Mode par defaut
 
@@ -315,6 +360,7 @@ Exemple:
 - en `pause`, les plans helper sont geles sans perte d'ordre
 - en `stop`, les plans helper en attente sont annules
 - en `destroy`, les plans helper en attente sont annules
+- en `planned`, le runtime materialise les occurrences apres execution du strap, avant leur lecture normale par la timeline
 - en `seek`, les helpers de strap ne sont pas rejoues comme execution de code
 - en `seek`, le runtime relit les `event` et `update` deja materialises dans les tracks
 
@@ -335,10 +381,20 @@ Exemple:
 - les policies runtime s'appliquent normalement
 - `player.schedule` reste un wrapper des helpers internes, pas le noyau lui-meme
 
-## Semantique runtime `context.helpers`
+## Semantique runtime `context.planned`
 
 - les callbacks produisent des `StrapStep`
-- aucune emission imperative directe n'est autorisee depuis le helper
+- `context.planned` ne produit aucun effet de bord pendant l'execution du strap
+- `context.planned` retourne des `PlannedStrapOccurrence[]`
+- le strap peut retourner directement cette liste, ou un tableau contenant plusieurs listes et sorties immediates
+- chaque occurrence planifiee est materialisee en sortie runtime rejouable
+- `event` devient un event tracke
+- `update` devient une mutation trackee
+
+## Semantique runtime `context.live`
+
+- les callbacks produisent des `StrapStep`
+- `context.live` est la surface imperative explicite du runtime strap
 - chaque occurrence helper est materialisee en sortie runtime rejouable
 - `event` devient un event tracke
 - `update` devient une mutation trackee
@@ -349,14 +405,8 @@ Exemple:
 - `seek` ne reexecute jamais le code des helpers
 - le runtime rejoue uniquement les sorties deja materialisees
 - `rewind` et `seek` interrompent les loops actifs
-- les `effects` ne sont jamais rejoues
-- en V1, les helpers ne produisent pas d'`effect`
-
-## Regles V1 sur `effect`
-
-- `effect` est interdit dans les sorties helper V1
+- les helpers ne produisent jamais de propriete `effects`
 - seuls `event` et `update` sont autorises
-- extension future possible, hors present scope
 
 ## Validation
 
@@ -398,7 +448,7 @@ player.schedule.loop(
 ### Strap
 
 ```ts
-context.helpers.repeat(
+return context.planned.repeat(
   { eachMs: 1000, times: 11 },
   ({ currentTimeMs, elapsedMs, index, state }) => ({
     event: {
@@ -416,6 +466,18 @@ context.helpers.repeat(
     }
   })
 )
+
+context.live.loop(
+  {
+    eachMs: 100,
+    until: { type: "event", name: "quiz:stop" }
+  },
+  ({ elapsedMs }) => ({
+    update: {
+      pulseMs: elapsedMs
+    }
+  })
+)
 ```
 
 ## Invariants helpers V1
@@ -424,6 +486,7 @@ context.helpers.repeat(
 - comportement deterministe a entree identique
 - annulation explicite par handle
 - `player.schedule` reste un wrapper runtime actif, sans devenir le noyau helper
-- `context.helpers` reste un wrapper auteur materialisable, sans side effect helper direct
+- `context.planned` reste un wrapper auteur declaratif, sans side effect helper direct
+- `context.live` reste un wrapper auteur runtime explicite, materialisant ses occurrences en tracks
 - le `state` lu dans un `Strap` ou un callback helper est `DeepReadonly`
 - toute mutation de `state` passe par `update`

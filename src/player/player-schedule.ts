@@ -1,26 +1,55 @@
+import {
+  buildHelperTickContext,
+  isValidHelperDelayMs,
+  isValidHelperRepeatOptions,
+  isValidHelperStaggerOptions,
+  planStaggerItems,
+  resolveHelperItemsAtOffset
+} from './helper-finite-core'
+import { hasEventLoopStop, normalizeLoopStopConditions, resolvePlannableLoopTimes } from './helper-loop-core'
 import { TimeTicker, type TickerOptions } from '../core/time/ticker'
+import { resolveEventInput } from './helper-input'
+import { resolveHelperMode } from './helper-mode'
+import type {
+  DeepReadonly,
+  EventInput,
+  HelperHandle,
+  HelperMode,
+  HelperTickContext,
+  LoopOptions,
+  LoopStopCondition,
+  RepeatOptions,
+  StaggerOptions,
+  StoryEvent,
+  WaitOptions
+} from './helper-types'
 import { PLAYER_SCHEDULE_ERROR_CODE } from './schedule-constants'
 import { createRuntimeEventPolicy, type ResolvedRuntimeEventPolicy, type RuntimeEventPolicy } from './runtime-policy'
 
-export type StoryEvent = {
-  name: string
-  data?: Record<string, unknown>
-  cascade?: boolean
-}
-
-export type HelperHandle = {
-  id: string
-  cancel: () => void
-}
+export type {
+  EventFactory,
+  EventInput,
+  EventResult,
+  HelperHandle,
+  HelperMode,
+  HelperTickContext,
+  LoopOptions,
+  LoopStopCondition,
+  RepeatOptions,
+  StoryEvent,
+  StaggerOptions,
+  WaitOptions
+} from './helper-types'
 
 export type StrapHelpers = {
-  delay: (ms: number, event: StoryEvent) => HelperHandle
+  wait: (ms: number, input: EventInput, options?: WaitOptions) => HelperHandle
+  delay: (ms: number, input: EventInput, options?: WaitOptions) => HelperHandle
   repeat: (
-    options: { everyMs: number; times: number },
-    factory: (index: number) => StoryEvent[]
+    options: RepeatOptions,
+    input: EventInput
   ) => HelperHandle
-  loop: (options: { everyMs: number }, factory: (index: number) => StoryEvent[]) => HelperHandle
-  stagger: (options: { stepMs: number }, events: StoryEvent[]) => HelperHandle[]
+  loop: (options: LoopOptions, factory: (context: HelperTickContext) => StoryEvent[]) => HelperHandle
+  stagger: (options: StaggerOptions, input: EventInput) => HelperHandle[]
 }
 
 type ScheduleJob = {
@@ -30,10 +59,12 @@ type ScheduleJob = {
   kind: 'delay' | 'repeat' | 'loop'
   index: number
   cancelled: boolean
+  startedAtMs: number
   everyMs?: number
   timesRemaining?: number
-  factory?: (index: number) => StoryEvent[]
-  events?: StoryEvent[]
+  input?: EventInput
+  loopUntil?: LoopStopCondition[]
+  factory?: (context: HelperTickContext) => StoryEvent[]
 }
 
 type ScheduledEmission = {
@@ -44,7 +75,8 @@ type ScheduledEmission = {
   order: number
 }
 
-type EmitEvent = (event: StoryEvent) => Promise<void>
+type EmitEvent = (event: StoryEvent, context: HelperTickContext) => Promise<void>
+type EmitWarning = (warning: string) => void
 
 /**
  * Runs one deterministic helper scheduler for the public player facade.
@@ -52,6 +84,9 @@ type EmitEvent = (event: StoryEvent) => Promise<void>
 export class PlayerScheduleFacade implements StrapHelpers {
   private readonly ticker: TimeTicker
   private readonly emitEvent: EmitEvent
+  private readonly emitWarning?: EmitWarning
+  private readonly resolveState: () => DeepReadonly<Record<string, unknown>>
+  private readonly onIdle?: () => void
   private readonly jobs = new Map<string, ScheduleJob>()
   private policy: ResolvedRuntimeEventPolicy
 
@@ -63,8 +98,18 @@ export class PlayerScheduleFacade implements StrapHelpers {
   /**
    * Configures one helper scheduler with one event emitter and one ticker.
    */
-  constructor(options: { emitEvent: EmitEvent; tickerOptions?: TickerOptions; policy?: RuntimeEventPolicy }) {
+  constructor(options: {
+    emitEvent: EmitEvent
+    emitWarning?: EmitWarning
+    resolveState?: () => DeepReadonly<Record<string, unknown>>
+    onIdle?: () => void
+    tickerOptions?: TickerOptions
+    policy?: RuntimeEventPolicy
+  }) {
     this.emitEvent = options.emitEvent
+    this.emitWarning = options.emitWarning
+    this.resolveState = options.resolveState ?? (() => ({}))
+    this.onIdle = options.onIdle
     this.ticker = new TimeTicker(options.tickerOptions)
     this.policy = createRuntimeEventPolicy(options.policy)
   }
@@ -130,17 +175,48 @@ export class PlayerScheduleFacade implements StrapHelpers {
   }
 
   /**
-   * Schedules one event once after a relative delay.
+   * Notifies one routed runtime event so event-driven loops can stop.
    */
-  delay(ms: number, event: StoryEvent): HelperHandle {
-    this.assertValidDelay(ms, event)
+  notifyEvent(eventName: string): void {
+    if (eventName === 'sequence:end') {
+      for (const [jobId, job] of this.jobs.entries()) {
+        if (job.kind === 'loop') {
+          this.jobs.delete(jobId)
+        }
+      }
+      this.notifyIdleIfNeeded()
+      return
+    }
+
+    for (const [jobId, job] of this.jobs.entries()) {
+      if (job.kind !== 'loop') {
+        continue
+      }
+
+      if (job.loopUntil?.some((condition) => condition.type === 'event' && condition.name === eventName)) {
+        this.jobs.delete(jobId)
+      }
+    }
+
+    this.notifyIdleIfNeeded()
+  }
+
+  /**
+   * Schedules one event batch once after a relative delay.
+   */
+  wait(ms: number, input: EventInput, options: WaitOptions = {}): HelperHandle {
+    this.assertValidDelay(ms, input)
+    const mode = this.resolveFiniteHelperMode('wait', options.mode, 'planned')
 
     const job = this.createJob({
       kind: 'delay',
       dueAtMs: this.virtualNowMs + ms,
+      startedAtMs: this.virtualNowMs,
       index: 0,
-      events: [event]
+        input
     })
+
+    void mode
 
     this.jobs.set(job.id, job)
     if (this.running) {
@@ -150,22 +226,33 @@ export class PlayerScheduleFacade implements StrapHelpers {
   }
 
   /**
+   * Schedules one event batch once after a relative delay.
+   */
+  delay(ms: number, input: EventInput, options: WaitOptions = {}): HelperHandle {
+    return this.wait(ms, input, options)
+  }
+
+  /**
    * Schedules one finite repeated series of events.
    */
   repeat(
-    options: { everyMs: number; times: number },
-    factory: (index: number) => StoryEvent[]
+    options: RepeatOptions,
+    input: EventInput
   ): HelperHandle {
-    this.assertValidRepeat(options)
+    this.assertValidRepeat(options, input)
+    const mode = this.resolveFiniteHelperMode('repeat', options.mode, 'planned')
 
     const job = this.createJob({
       kind: 'repeat',
       dueAtMs: this.virtualNowMs,
+      startedAtMs: this.virtualNowMs,
       everyMs: Math.max(1, options.everyMs),
       timesRemaining: options.times,
       index: 0,
-      factory
+      input
     })
+
+    void mode
 
     this.jobs.set(job.id, job)
     if (this.running) {
@@ -177,14 +264,32 @@ export class PlayerScheduleFacade implements StrapHelpers {
   /**
    * Schedules one unbounded repeated series of events.
    */
-  loop(options: { everyMs: number }, factory: (index: number) => StoryEvent[]): HelperHandle {
+  loop(options: LoopOptions, factory: (context: HelperTickContext) => StoryEvent[]): HelperHandle {
     this.assertValidLoop(options)
+    const plannedTimes = resolvePlannableLoopTimes(options)
+    const modeResolution = resolveHelperMode({
+      helperName: 'loop',
+      requestedMode: options.mode,
+      defaultMode: 'jit',
+      compatibleModes: hasEventLoopStop(options) ? ['jit'] : ['planned', 'jit'],
+      fallbackMode: 'jit',
+      reason: hasEventLoopStop(options) ? 'until.event requires jit' : undefined
+    })
+    this.emitWarnings(modeResolution.warnings)
+
+    if (modeResolution.mode === 'planned' && plannedTimes !== null) {
+      return this.repeat({ everyMs: options.eachMs, times: plannedTimes, mode: 'planned' }, (context) => factory(context))
+    }
+
+    const loopUntil = normalizeLoopStopConditions(options.until)
 
     const job = this.createJob({
       kind: 'loop',
       dueAtMs: this.virtualNowMs,
-      everyMs: Math.max(1, options.everyMs),
+      startedAtMs: this.virtualNowMs,
+      everyMs: options.eachMs,
       index: 0,
+      loopUntil,
       factory
     })
 
@@ -198,10 +303,42 @@ export class PlayerScheduleFacade implements StrapHelpers {
   /**
    * Schedules one staggered batch of events and returns one handle per event.
    */
-  stagger(options: { stepMs: number }, events: StoryEvent[]): HelperHandle[] {
-    this.assertValidStagger(options, events)
+  stagger(options: StaggerOptions, input: EventInput): HelperHandle[] {
+    this.assertValidStagger(options, input)
+    const mode = this.resolveFiniteHelperMode('stagger', options.mode, 'planned')
 
-    return events.map((event, index) => this.delay(index * options.stepMs, event))
+    void mode
+    const items = resolveEventInput(input, buildHelperTickContext({
+      currentTimeMs: this.virtualNowMs,
+      startedAtMs: this.virtualNowMs,
+      index: 0,
+      resolveState: this.resolveState
+    }))
+    this.assertValidResolvedEvents(items, 'stagger')
+    return planStaggerItems({ stepMs: options.stepMs, items }).map(({ offsetMs, item }) => this.delay(offsetMs, item, { mode: options.mode }))
+  }
+
+  /**
+   * Resolves one finite helper mode and emits warnings when needed.
+   */
+  private resolveFiniteHelperMode(helperName: string, requestedMode: HelperMode | undefined, defaultMode: HelperMode): HelperMode {
+    const resolution = resolveHelperMode({
+      helperName,
+      requestedMode,
+      defaultMode,
+      compatibleModes: ['planned', 'jit']
+    })
+    this.emitWarnings(resolution.warnings)
+    return resolution.mode
+  }
+
+  /**
+   * Forwards helper warnings to the configured observer.
+   */
+  private emitWarnings(warnings: string[]): void {
+    for (const warning of warnings) {
+      this.emitWarning?.(warning)
+    }
   }
 
   /**
@@ -230,7 +367,17 @@ export class PlayerScheduleFacade implements StrapHelpers {
 
         job.cancelled = true
         this.jobs.delete(jobId)
+        this.notifyIdleIfNeeded()
       }
+    }
+  }
+
+  /**
+   * Calls the idle hook when no helper job remains.
+   */
+  private notifyIdleIfNeeded(): void {
+    if (this.jobs.size === 0) {
+      this.onIdle?.()
     }
   }
 
@@ -277,7 +424,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
       }
 
       for (const emission of currentEmissions) {
-        void this.emitEvent(this.normalizeEvent(emission.event))
+        void this.emitEvent(this.normalizeEvent(emission.event), this.createTickContext(emission.job, emission.dueAtMs))
         emittedCount += 1
       }
 
@@ -285,8 +432,9 @@ export class PlayerScheduleFacade implements StrapHelpers {
         const deferredJob = this.createJob({
           kind: 'delay',
           dueAtMs: batchDueAtMs + 1,
+          startedAtMs: batchDueAtMs,
           index: 0,
-          events: [emission.event]
+          input: emission.event
         })
         this.jobs.set(deferredJob.id, deferredJob)
       }
@@ -307,7 +455,18 @@ export class PlayerScheduleFacade implements StrapHelpers {
     const rawEmissions: ScheduledEmission[] = []
 
     for (const job of batchJobs) {
-      const events = job.kind === 'delay' ? job.events ?? [] : job.factory?.(job.index) ?? []
+      const context = this.createTickContext(job, dueAtMs)
+      const events = job.kind === 'loop'
+        ? job.factory?.(context) ?? []
+        : resolveHelperItemsAtOffset({
+            offsetMs: dueAtMs - job.startedAtMs,
+            startedAtMs: job.startedAtMs,
+            index: job.index,
+            helperInput: job.input ?? [],
+            resolveState: this.resolveState,
+            resolveItems: resolveEventInput
+          }).map(({ item }) => item)
+      this.assertValidResolvedEvents(events)
       for (const [eventIndex, event] of events.entries()) {
         rawEmissions.push({
           job,
@@ -399,16 +558,30 @@ export class PlayerScheduleFacade implements StrapHelpers {
   }
 
   /**
+   * Builds one helper callback context from the current runtime clock.
+   */
+  private createTickContext(job: ScheduleJob, currentTimeMs: number): HelperTickContext {
+    return buildHelperTickContext({
+      currentTimeMs,
+      startedAtMs: job.startedAtMs,
+      index: job.index,
+      resolveState: this.resolveState
+    })
+  }
+
+  /**
    * Advances one batch job after its due-time has been processed.
    */
   private advanceJobAfterBatch(job: ScheduleJob): void {
     if (job.cancelled) {
       this.jobs.delete(job.id)
+      this.notifyIdleIfNeeded()
       return
     }
 
     if (job.kind === 'delay') {
       this.jobs.delete(job.id)
+      this.notifyIdleIfNeeded()
       return
     }
 
@@ -417,11 +590,38 @@ export class PlayerScheduleFacade implements StrapHelpers {
       job.timesRemaining = Math.max(0, (job.timesRemaining ?? 0) - 1)
       if (job.timesRemaining === 0) {
         this.jobs.delete(job.id)
+        this.notifyIdleIfNeeded()
         return
       }
     }
 
+    if (job.kind === 'loop' && this.shouldStopLoop(job)) {
+      this.jobs.delete(job.id)
+      this.notifyIdleIfNeeded()
+      return
+    }
+
     job.dueAtMs += job.everyMs ?? 1
+  }
+
+  /**
+   * Returns true when one loop reached one terminal condition.
+   */
+  private shouldStopLoop(job: ScheduleJob): boolean {
+    const loopUntil = job.loopUntil ?? []
+    const nextOccurrenceElapsedMs = job.index * (job.everyMs ?? 1)
+
+    return loopUntil.some((condition) => {
+      if (condition.type === 'times') {
+        return job.index >= condition.max
+      }
+
+      if (condition.type === 'duration') {
+        return nextOccurrenceElapsedMs > condition.maxMs
+      }
+
+      return false
+    })
   }
 
   /**
@@ -457,36 +657,81 @@ export class PlayerScheduleFacade implements StrapHelpers {
   /**
    * Rejects invalid delay arguments.
    */
-  private assertValidDelay(ms: number, event: StoryEvent): void {
-    if (!Number.isFinite(ms) || ms < 0 || event.name.length === 0) {
+  private assertValidDelay(ms: number, input: EventInput): void {
+    if (!isValidHelperDelayMs(ms)) {
       throw this.createValidationError('delay')
     }
+
+    this.assertValidStaticInput('delay', input)
   }
 
   /**
    * Rejects invalid repeat arguments.
    */
-  private assertValidRepeat(options: { everyMs: number; times: number }): void {
-    if (!Number.isFinite(options.everyMs) || options.everyMs < 0 || !Number.isInteger(options.times) || options.times < 1) {
+  private assertValidRepeat(options: { everyMs: number; times: number }, input: EventInput): void {
+    if (!isValidHelperRepeatOptions(options)) {
       throw this.createValidationError('repeat')
     }
+
+    this.assertValidStaticInput('repeat', input)
   }
 
   /**
    * Rejects invalid loop arguments.
    */
-  private assertValidLoop(options: { everyMs: number }): void {
-    if (!Number.isFinite(options.everyMs) || options.everyMs < 0) {
+  private assertValidLoop(options: LoopOptions): void {
+    if (!Number.isFinite(options.eachMs) || options.eachMs <= 0) {
       throw this.createValidationError('loop')
+    }
+
+    const loopUntil = Array.isArray(options.until) ? options.until : [options.until]
+    if (loopUntil.length === 0) {
+      throw this.createValidationError('loop')
+    }
+
+    for (const condition of loopUntil) {
+      if (condition.type === 'times' && (!Number.isInteger(condition.max) || condition.max < 1)) {
+        throw this.createValidationError('loop')
+      }
+
+      if (condition.type === 'duration' && (!Number.isFinite(condition.maxMs) || condition.maxMs < 0)) {
+        throw this.createValidationError('loop')
+      }
+
+      if (condition.type === 'event' && condition.name.length === 0) {
+        throw this.createValidationError('loop')
+      }
     }
   }
 
   /**
    * Rejects invalid stagger arguments.
    */
-  private assertValidStagger(options: { stepMs: number }, events: StoryEvent[]): void {
-    if (!Number.isFinite(options.stepMs) || options.stepMs < 0 || events.some((event) => event.name.length === 0)) {
+  private assertValidStagger(options: { stepMs: number }, input: EventInput): void {
+    if (!isValidHelperStaggerOptions(options)) {
       throw this.createValidationError('stagger')
+    }
+
+    this.assertValidStaticInput('stagger', input)
+  }
+
+  /**
+   * Rejects invalid static helper inputs when they are authorable upfront.
+   */
+  private assertValidStaticInput(helperName: string, input: EventInput): void {
+    if (typeof input === 'function') {
+      return
+    }
+
+    this.assertValidResolvedEvents(Array.isArray(input) ? input : [input], helperName)
+  }
+
+  /**
+   * Rejects invalid resolved helper events.
+   */
+  private assertValidResolvedEvents(events: StoryEvent[], helperName = 'helper'): void {
+    if (events.some((event) => event.name.length === 0)) {
+      throw this.createValidationError(helperName)
     }
   }
 

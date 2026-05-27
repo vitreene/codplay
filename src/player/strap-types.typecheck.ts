@@ -1,4 +1,4 @@
-import type { DeepReadonly } from './helper-types'
+import type { DeepReadonly, HelperTickContext } from './helper-types'
 import type { StrapInput } from './strap-types'
 
 type ExampleState = DeepReadonly<{
@@ -28,4 +28,11 @@ export function assertReadonlyStrapState(input: StrapInput, state: ExampleState)
 
   // @ts-expect-error Nested array entries stay read-only.
   state.items[0]!.label = 'changed'
+}
+
+export function assertReadonlyHelperState(context: HelperTickContext): void {
+  void context.state['armed']
+
+  // @ts-expect-error Helper callback state stays read-only.
+  context.state['armed'] = true
 }

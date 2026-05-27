@@ -11,6 +11,7 @@ describe('V1 - public entry point', () => {
     expect(typeof studio.player.init).toBe('function')
     expect(typeof studio.player.resume).toBe('function')
     expect(typeof studio.player.stop).toBe('function')
+    expect(typeof studio.player.schedule.wait).toBe('function')
     expect(typeof studio.player.schedule.delay).toBe('function')
     expect(typeof studio.player.schedule.repeat).toBe('function')
     expect(typeof studio.player.schedule.loop).toBe('function')

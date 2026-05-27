@@ -1,29 +1,8 @@
+import { createStrapTrackId } from "../../player/create-player-utils";
 import type { StrapCollection } from "../../player";
-import type { SceneDoc, StoryEventimeDoc } from "../../player/types";
+import type { SceneDoc } from "../../player/types";
 
-function createQuestionCountdownEventimes(): StoryEventimeDoc[] {
-  const eventimes: StoryEventimeDoc[] = [
-    {
-      name: "quiz:question:show",
-      startAt: 2300,
-    },
-  ];
-
-  for (let index = 0; index <= 10; index += 1) {
-    eventimes.push({
-      name: "quiz-count",
-      data: {
-        content: String(Math.max(0, 10 - index)),
-      },
-      startAt: 2300 + index * 1000,
-    });
-  }
-
-  eventimes.push({ name: "perdu", startAt: 12300 });
-  eventimes.push({ name: "sequence:end", startAt: 13300 });
-
-  return eventimes;
-}
+const QUIZ_COUNTDOWN_STRAP_TRACK_ID = createStrapTrackId("s4-quiz-question-story", "quiz-countdown-start");
 
 /**
  * Creates one business-oriented reference scene with persistent decor and quiz branching.
@@ -359,19 +338,17 @@ export function createS4QuizReferenceScene(): SceneDoc {
       "s4-quiz-question-story": {
         id: "s4-quiz-question-story",
         entries: ["quiz-question-panel"],
-        initial: {
-          move: {
-            parentId: "quiz-layout:question",
-            mode: "append",
-          },
-        },
+        initial: undefined,
         persos: [
           {
             id: "quiz-question-panel",
             type: "list",
             initial: {
               className: "quiz-question-panel",
-              move: "root",
+              move: {
+                parentId: "quiz-layout:question",
+                mode: "append",
+              },
               style: {
                 width: "420px",
                 minHeight: "160px",
@@ -496,7 +473,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         listen: [
           {
             on: "quiz:question:show",
-            emit: [{ name: "quiz:count:show", cascade: true }],
+            straps: ["quiz-countdown-start"],
           },
           {
             on: "quiz:answer:yes",
@@ -513,7 +490,12 @@ export function createS4QuizReferenceScene(): SceneDoc {
             emit: [{ name: "quiz:question:hide" }],
           },
         ],
-        eventimes: createQuestionCountdownEventimes(),
+        eventimes: [
+          {
+            name: "quiz:question:show",
+            startAt: 2300,
+          },
+        ],
       },
       "s4-quiz-count-story": {
         id: "s4-quiz-count-story",
@@ -755,15 +737,47 @@ export function createS4QuizReferenceScene(): SceneDoc {
 }
 
 export const s4QuizStraps: StrapCollection = {
-  "quiz-answer": ({ event }) => {
+  "quiz-countdown-start": ({ context }) => {
+    void context.helpers.repeat({ everyMs: 1000, times: 11 }, ({ index }) => ({
+      event: {
+        name: "quiz-count",
+        data: {
+          content: String(Math.max(0, 10 - index)),
+        },
+        cascade: true,
+      },
+    }));
+    void context.helpers.delay(10000, { event: { name: "perdu", cascade: true } });
+    void context.helpers.delay(11000, { event: { name: "sequence:end", cascade: true } });
+
     return {
       events: [
         {
-          name: event.name,
+          name: "quiz:count:show",
+          cascade: true,
+        },
+      ],
+    };
+  },
+  "quiz-answer": ({ event, context }) => {
+    void context.helpers.delay(1000, {
+      event: {
+        name: "sequence:end",
+        cascade: true,
+      },
+    });
+
+    return {
+      events: [
+        {
+          name: "track:deactivate",
+          data: {
+            trackIds: [QUIZ_COUNTDOWN_STRAP_TRACK_ID],
+          },
           cascade: true,
         },
         {
-          name: "quiz:question:hide",
+          name: event.name,
           cascade: true,
         },
       ],

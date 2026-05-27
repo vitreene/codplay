@@ -1,6 +1,5 @@
 import type { RuntimeEventSource } from '../core/events/types'
-import type { DeepReadonly } from './helper-types'
-import type { StoryEvent } from './player-schedule'
+import type { DeepReadonly, HelperHandle, HelperTickContext, LoopOptions, RepeatOptions, StaggerOptions, StoryEvent, WaitOptions } from './helper-types'
 
 export type StrapMeta = {
   originEventName: string
@@ -10,22 +9,31 @@ export type StrapMeta = {
   }
 }
 
-export type StrapHelperHandle = {
-  id: string
-  cancel: () => void
+export type StrapHelperHandle = HelperHandle
+
+export type StrapStep = {
+  event?: StoryEvent
+  update?: Record<string, unknown>
 }
 
+export type StrapStepResult = StrapStep | StrapStep[] | void
+
+export type StrapStepFactory = (context: HelperTickContext) => StrapStepResult
+
+export type StrapStepInput = StrapStep | StrapStep[] | StrapStepFactory
+
 export type StrapHelpers = {
-  delay: (ms: number, event: StoryEvent) => StrapHelperHandle
+  wait: (ms: number, input: StrapStepInput, options?: WaitOptions) => StrapHelperHandle
+  delay: (ms: number, input: StrapStepInput, options?: WaitOptions) => StrapHelperHandle
   repeat: (
-    options: { everyMs: number; times: number },
-    factory: (index: number) => StoryEvent[]
+    options: RepeatOptions,
+    input: StrapStepInput
   ) => StrapHelperHandle
   loop: (
-    options: { everyMs: number },
-    factory: (index: number) => StoryEvent[]
+    options: LoopOptions,
+    factory: StrapStepFactory
   ) => StrapHelperHandle
-  stagger: (options: { stepMs: number }, events: StoryEvent[]) => StrapHelperHandle[]
+  stagger: (options: StaggerOptions, input: StrapStepInput) => StrapHelperHandle[]
 }
 
 export type StrapContext = {

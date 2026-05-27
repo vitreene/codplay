@@ -427,7 +427,6 @@ describe('V1 - reference scenes', () => {
     const countZone = registry.getNodeById('quiz-layout:count') as RuntimeNodeFixture | null
     const successZone = registry.getNodeById('quiz-layout:success') as RuntimeNodeFixture | null
     const failureZone = registry.getNodeById('quiz-layout:failure') as RuntimeNodeFixture | null
-    const questionHost = questionZone?.children?.[0] as RuntimeNodeFixture | undefined
 
     expect(layoutRoot?.children?.map((child) => child.id)).toEqual([
       'quiz-layout:decor',
@@ -439,7 +438,7 @@ describe('V1 - reference scenes', () => {
     ])
     expect(decorZone?.children?.map((child) => child.id)).toEqual(['quiz-decor-layer'])
     expect(introZone?.children?.map((child) => child.id)).toEqual(['quiz-intro-title'])
-    expect(questionZone?.children?.map((child) => child.id)).toEqual(['s4-quiz-question-story'])
+    expect(questionZone?.children?.map((child) => child.id)).toEqual(['quiz-question-panel'])
     expect(countZone?.children?.map((child) => child.id)).toEqual(['quiz-count-value'])
     expect(successZone?.children?.map((child) => child.id)).toEqual(['quiz-success-panel'])
     expect(failureZone?.children?.map((child) => child.id)).toEqual(['quiz-failure-panel'])
@@ -457,8 +456,7 @@ describe('V1 - reference scenes', () => {
     ])
     expect((registry.getNodeById('quiz-decor-layer') as RuntimeNodeFixture | null)?.parentNode).toBe(decorZone)
     expect((registry.getNodeById('quiz-intro-title') as RuntimeNodeFixture | null)?.parentNode).toBe(introZone)
-    expect(questionHost?.id).toBe('s4-quiz-question-story')
-    expect((registry.getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(questionHost)
+    expect((registry.getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(questionZone)
     expect((registry.getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.parentNode).toBe(countZone)
     expect((registry.getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(successZone)
     expect((registry.getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(failureZone)
@@ -467,6 +465,22 @@ describe('V1 - reference scenes', () => {
     expect(registry.getParentListId('quiz-failure-panel')).toBeNull()
     expect(registry.getParentListId('quiz-intro-title')).toBeNull()
     expect(registry.getParentListId('quiz-count-value')).toBeNull()
+  })
+
+  it('shows S4 intro on first play without requiring seek', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = await createS4AuthorPlayer(animationAdapter)
+
+    expect(await player.play()).toEqual({ ok: true, data: undefined })
+
+    const registry = player.getRuntimeRegistry()
+    const introTitle = registry.getNodeById('quiz-intro-title') as RuntimeNodeFixture | null
+    const questionPanel = registry.getNodeById('quiz-question-panel') as RuntimeNodeFixture | null
+    const countValue = registry.getNodeById('quiz-count-value') as RuntimeNodeFixture | null
+
+    expect(introTitle?.style).toMatchObject({ opacity: 1, x: 0 })
+    expect(questionPanel?.style).toMatchObject({ opacity: 0 })
+    expect(countValue?.style).toMatchObject({ opacity: 0 })
   })
 
   it('plays S4 quiz reference scene through intro then question timeline states', async () => {
@@ -490,10 +504,10 @@ describe('V1 - reference scenes', () => {
     expect(failurePanel?.style).toMatchObject({ opacity: 0 })
     expect(countValue?.style).toMatchObject({ opacity: 0 })
     expect(countValue?.textContent).toBe('10')
-    expect(player.getState().horizon.progressEndMs).toBe(13300)
+    expect(player.getState().horizon.progressEndMs).toBe(2550)
 
     expect(await player.seek({ timelineMs: 6000 })).toEqual({ ok: true, data: undefined })
-    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 6000 })
+    expect(player.getState()).toMatchObject({ status: 'paused', timelineMs: 2550 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
   })
 
@@ -562,7 +576,7 @@ describe('V1 - reference scenes', () => {
     expect(await player.play()).toEqual({ ok: true, data: undefined })
     expect(await player.seek({ timelineMs: 12600 })).toEqual({ ok: true, data: undefined })
 
-    expect(player.getState().timelineMs).toBe(12600)
+    expect(player.getState().timelineMs).toBe(2550)
     expect((player.getRuntimeRegistry().getNodeById('quiz-question-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 1, x: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.style).toMatchObject({ opacity: 0 })
