@@ -19,27 +19,32 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 3. `v1-validation.md`
 4. `v1-perso-spec.md`
 5. `v1-layout-spec.md`
-6. `v1-strap-spec.md`
-7. `v1-story-spec.md`
-8. `v1-scene-spec.md`
-9. `v1-event-spec.md`
-10. `v1-strap-helpers-spec.md`
-11. `v1-runtime-policy-spec.md`
-12. `v1-builder-spec.md`
-13. `v1-builder-api.md`
-14. `v1-player-api.md`
-15. `v1-preload-api.md`
-16. `v1-scene-side-effects-api.md`
-17. `v1-horizon-spec.md`
-18. `v1-seek-spec.md`
-19. `v1-error-catalog.md`
-20. `v1-track-manager-spec.md`
-21. `v1-compiled-scene-schema.md`
+6. `v1-list-spec.md`
+7. `v1-component-api.md`
+8. `v1-strap-spec.md`
+9. `v1-story-spec.md`
+10. `v1-scene-spec.md`
+11. `v1-event-spec.md`
+12. `v1-strap-helpers-spec.md`
+13. `v1-runtime-policy-spec.md`
+14. `v1-builder-spec.md`
+15. `v1-builder-api.md`
+16. `v1-player-api.md`
+17. `v1-registry-api.md`
+18. `v1-module-api.md`
+19. `v1-preload-api.md`
+20. `v1-scene-side-effects-api.md`
+21. `v1-horizon-spec.md`
+22. `v1-seek-spec.md`
+23. `v1-error-catalog.md`
+24. `v1-track-manager-spec.md`
+25. `v1-compiled-scene-schema.md`
 
 ## Documents actifs de chantier
 
 - `v1-construction-strategy-slices-scenes.md`
 - `v1-move-separation-policy-state-backend-dom.md`
+- `2026-05-27-runtime-module-implementation-plan.md`
 
 ## Frontiere normative
 

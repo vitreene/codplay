@@ -79,6 +79,9 @@ type PersoTypeRegistry = {
 - les ids d'`outlet` sont des identifiants declaratifs auteur; leur forme textuelle releve d'une convention auteur et non d'une contrainte normative du runtime.
 - un `outlet` est une cible de noeud, jamais une cible d'attribut.
 - un `outlet` vide conserve son noeud hote dans le rendu.
+- un `outlet` est declare par le perso `layout` lui-meme via `layout.initial.outlets`.
+- un `outlet` est employe ensuite par d'autres persos via `initial.move.parentId`.
+- un `outlet` ne designe pas un perso; il designe un noeud d'insertion du rendu du `layout`.
 
 6. Placement runtime
 
@@ -86,6 +89,7 @@ type PersoTypeRegistry = {
 - `move.parentId` peut donc referencer soit un container runtime existant (`list`, etc.), soit un `outlet` de `layout`.
 - plusieurs persos peuvent etre inseres dans un meme `outlet` selon les regles normales d'ordre de placement runtime.
 - tout type de composant peut etre insere dans un `outlet`, dans les limites du contexte `html` ou `svg`.
+- un `outlet` est donc relie aux persos consommateurs par la cle `move.parentId`.
 
 7. Compatibilite `html` / `svg`
 

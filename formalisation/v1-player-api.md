@@ -75,6 +75,8 @@ type PlayerStateSnapshot = {
 - les elements peuvent entrer et sortir du DOM pendant la sequence sans etre purges du runtime.
 - les events de sequence utilisent les conventions de nommage existantes; la facade Player n'en fige aucun en dur.
 - `stop()` termine le flux normal de lecture; `destroy()` n'est pas une commande souhaitee pour le cycle normal et reste reservee aux cas techniques hote.
+- l'enregistrement des composants, services et modules runtime releve du registry `codplay`, pas de la facade publique minimale `Player`.
+- reference registry: `v1-registry-api.md`.
 
 ## Notes
 
