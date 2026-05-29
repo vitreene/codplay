@@ -5,10 +5,6 @@ export type ItemType = 'text' | 'img' | 'media' | 'list' | 'layout' | string
 
 export type LayoutFormat = 'html' | 'svg'
 
-export type LayoutOutletDoc = {
-  id: string
-}
-
 export type BroadcastAction = {
   type: 'START' | 'PAUSE' | 'STOP'
   startAt?: number
@@ -108,7 +104,6 @@ export type ItemState = {
   move?: MoveValue
   markup?: string
   format?: LayoutFormat
-  outlets?: LayoutOutletDoc[]
   master?: boolean
   config?: ListPlacementConfig
   style?: Record<string, unknown>

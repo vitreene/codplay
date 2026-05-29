@@ -1,26 +1,18 @@
 import { BaseComponent } from './lib/base-component'
-import {
-  applyAttrProps,
-  applyClassNameProps,
-  applyStyleProps,
-  bindComponentEmitDeclarations
-} from './lib/dom'
+import { bindComponentEmitDeclarations } from './lib/dom'
 import { applyNodeId, isDomElement } from './lib/dom-component-adapter'
-import type { RuntimeComponentUpdateInput, RuntimeLayoutComponent, RuntimeLayoutOutletSnapshot } from './types'
+import type { RuntimeComponentClassInput } from './types'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeLayoutComponent, RuntimeLayoutOutletSnapshot } from './types'
 import type { LayoutFormat } from '../types'
 
 type LayoutState = {
   markup?: unknown
   format?: unknown
-  outlets?: unknown
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
 }
 
 type LayoutParsedTree = {
   rootNode: unknown
-  nodeById: Map<string, unknown>
+  nodeByPart: Map<string, unknown>
 }
 
 const DEFAULT_LAYOUT_FORMAT: LayoutFormat = 'html'
@@ -65,29 +57,19 @@ function readNodeId(nodeRef: unknown): string | null {
 }
 
 /**
- * Traverses one runtime node tree and collects ids.
+ * Scans one DOM element tree for data-part attributes, registers each found element and removes the attribute.
  */
-function collectNodeIds(nodeRef: unknown, nodeById: Map<string, unknown>): void {
-  const nodeId = readNodeId(nodeRef)
-  if (nodeId && !nodeById.has(nodeId)) {
-    nodeById.set(nodeId, nodeRef)
+function collectDataParts(rootNode: unknown, nodeByPart: Map<string, unknown>): void {
+  if (!(rootNode instanceof globalThis.Element)) {
+    return
   }
 
-  if (isDomElement(nodeRef)) {
-    for (const childNode of Array.from(nodeRef.children)) {
-      collectNodeIds(childNode, nodeById)
+  for (const el of Array.from(rootNode.querySelectorAll('[data-part]'))) {
+    const partName = el.getAttribute('data-part')
+    if (partName && !nodeByPart.has(partName)) {
+      el.removeAttribute('data-part')
+      nodeByPart.set(partName, el)
     }
-
-    return
-  }
-
-  if (typeof nodeRef !== 'object' || nodeRef === null) {
-    return
-  }
-
-  const objectNode = nodeRef as { children?: unknown[] }
-  for (const childNode of objectNode.children ?? []) {
-    collectNodeIds(childNode, nodeById)
   }
 }
 
@@ -139,19 +121,19 @@ function parseLayoutMarkup(markup: string, format: LayoutFormat): LayoutParsedTr
     const document = parser.parseFromString(`<svg xmlns="${SVG_NAMESPACE}">${markup}</svg>`, 'image/svg+xml')
     const wrapperNode = document.documentElement
     const childNodes = Array.from(wrapperNode.childNodes).filter((childNode) => {
-      return !(childNode.nodeType === Node.TEXT_NODE && childNode.textContent?.trim().length === 0)
+      return !(childNode.nodeType === 3 && childNode.textContent?.trim().length === 0)
     })
 
     const rootNode = childNodes.length === 1 ? childNodes[0] : wrapperNode
-    const nodeById = new Map<string, unknown>()
-    collectNodeIds(rootNode, nodeById)
-    return { rootNode, nodeById }
+    const nodeByPart = new Map<string, unknown>()
+    collectDataParts(rootNode, nodeByPart)
+    return { rootNode, nodeByPart }
   }
 
   const template = globalThis.document.createElement('template')
   template.innerHTML = markup
   const childNodes = Array.from(template.content.childNodes).filter((childNode) => {
-    return !(childNode.nodeType === Node.TEXT_NODE && childNode.textContent?.trim().length === 0)
+    return !(childNode.nodeType === 3 && childNode.textContent?.trim().length === 0)
   })
 
   const rootNode = childNodes.length === 1 ? childNodes[0] : createLayoutWrapper(format)
@@ -161,57 +143,29 @@ function parseLayoutMarkup(markup: string, format: LayoutFormat): LayoutParsedTr
     }
   }
 
-  const nodeById = new Map<string, unknown>()
-  collectNodeIds(rootNode, nodeById)
-  return { rootNode, nodeById }
+  const nodeByPart = new Map<string, unknown>()
+  collectDataParts(rootNode, nodeByPart)
+  return { rootNode, nodeByPart }
 }
 
 /**
- * Implements the static layout runtime with declarative outlets.
+ * Implements the static layout runtime with data-part anchors.
  */
 export class LayoutComponent extends BaseComponent implements RuntimeLayoutComponent {
-  private outletIds: string[] = []
+  private partIds: string[] = []
 
   /**
-   * Creates the parsed layout tree and registers declarative outlets.
+   * Declares services used for className, style and attr patches.
    */
-  init(initial: Record<string, unknown>): void {
-    const state = initial as LayoutState
-    const format = resolveLayoutFormat(state.format)
-    if (format === null) {
-      this.report('AUTHOR_LAYOUT_FORMAT_INVALID', 'Layout format must be html or svg', {
-        format: state.format
-      })
-    }
+  constructor(input: RuntimeComponentClassInput) {
+    super(input)
+    this.services.declare(['className', 'style', 'attr'])
+  }
 
-    const resolvedFormat = format ?? DEFAULT_LAYOUT_FORMAT
-    const markup = isNonEmptyString(state.markup) ? state.markup : ''
-    if (markup.length === 0) {
-      this.report('AUTHOR_LAYOUT_MARKUP_INVALID', 'Layout markup must be a non-empty string')
-    }
-
-    this.clearParts()
-    this.outletIds = []
-
-    const parsedTree = parseLayoutMarkup(markup, resolvedFormat)
-    const rootNode = parsedTree.rootNode
-
-    if (readNodeId(rootNode) === null) {
-      applyNodeId(rootNode, this.perso.id)
-    }
-
-    for (const [nodeId, nodeRef] of parsedTree.nodeById) {
-      this.setPart(nodeId, nodeRef)
-    }
-
-    this.registerOutlets(state.outlets, parsedTree.nodeById)
-
-    applyClassNameProps(rootNode, state.className)
-    applyStyleProps(rootNode, state.style)
-    applyAttrProps(rootNode, state.attr)
-
-    this.setRoot(rootNode)
-
+  /**
+   * Binds authored emit declarations once the root node is available.
+   */
+  init(): void {
     bindComponentEmitDeclarations({
       perso: this.perso,
       createElementOptions: this.createElementOptions,
@@ -223,71 +177,55 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
   }
 
   /**
-   * Applies one resolved runtime action on the root layout node.
-   */
-  update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
-      this.report('RUNTIME_LAYOUT_NOT_INITIALIZED', 'Layout component update rejected because init is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    const state = input.action as LayoutState
-    applyStyleProps(this.rootNode, state.style, {
-      skipTransitionValues: true
-    })
-    applyClassNameProps(this.rootNode, state.className)
-    applyAttrProps(this.rootNode, state.attr)
-  }
-
-  /**
-   * Returns one snapshot of the registered outlet nodes.
+   * Returns one snapshot of all data-part nodes registered in the current markup.
    */
   getOutletsSnapshot(): RuntimeLayoutOutletSnapshot[] {
-    return this.outletIds.map((outletId) => ({
-      outletId,
-      nodeRef: this.resolveRef(outletId)
+    return this.partIds.map((partId) => ({
+      outletId: partId,
+      nodeRef: this.resolveRef(partId)
     }))
   }
 
   /**
-   * Registers every declared outlet present in the parsed markup tree.
+   * Applies one resolved runtime action on the root layout node.
    */
-  private registerOutlets(outlets: unknown, nodeById: Map<string, unknown>): void {
-    if (!Array.isArray(outlets)) {
-      return
+  update(input: RuntimeComponentUpdateInput): void {
+    this.services.apply(this.node, input.action)
+  }
+
+  /**
+   * Creates the parsed layout tree and registers all data-part nodes.
+   */
+  render(): ComponentRenderResult {
+    const state = this.perso.initial as LayoutState
+    const format = resolveLayoutFormat(state.format)
+    if (format === null) {
+      this.report('AUTHOR_LAYOUT_FORMAT_INVALID', 'Layout format must be html or svg', { format: state.format })
     }
 
-    const seenOutletIds = new Set<string>()
-    for (const outlet of outlets) {
-      const outletId = typeof outlet === 'object' && outlet !== null ? (outlet as { id?: unknown }).id : undefined
-      if (!isNonEmptyString(outletId)) {
-        this.report('AUTHOR_LAYOUT_OUTLET_INVALID', 'Layout outlet id must be a non-empty string', {
-          outlet
-        })
-        continue
-      }
-
-      if (seenOutletIds.has(outletId)) {
-        this.report('AUTHOR_LAYOUT_OUTLET_DUPLICATE', 'Layout outlet ids must be unique', {
-          outletId
-        })
-        continue
-      }
-
-      const outletNode = nodeById.get(outletId)
-      if (outletNode === undefined) {
-        this.report('AUTHOR_LAYOUT_OUTLET_NOT_FOUND', 'Layout outlet id must exist in markup', {
-          outletId
-        })
-        continue
-      }
-
-      seenOutletIds.add(outletId)
-      this.outletIds.push(outletId)
-      this.setPart(outletId, outletNode)
+    const resolvedFormat = format ?? DEFAULT_LAYOUT_FORMAT
+    const markup = isNonEmptyString(state.markup) ? state.markup : ''
+    if (markup.length === 0) {
+      this.report('AUTHOR_LAYOUT_MARKUP_INVALID', 'Layout markup must be a non-empty string')
     }
+
+    this.clearParts()
+    this.partIds = []
+
+    const parsedTree = parseLayoutMarkup(markup, resolvedFormat)
+    const rootNode = parsedTree.rootNode
+
+    if (readNodeId(rootNode) === null) {
+      applyNodeId(rootNode, this.perso.id)
+    }
+
+    for (const [partId, partRef] of parsedTree.nodeByPart) {
+      this.setPart(partId, partRef)
+      this.partIds.push(partId)
+    }
+
+    this.services.apply(rootNode, this.perso.initial)
+
+    return rootNode as Node
   }
 }

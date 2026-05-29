@@ -1,24 +1,8 @@
 import { BaseComponent } from './lib/base-component'
-import {
-  applyAttrProps,
-  applyClassNameProps,
-  applyStyleProps,
-  bindComponentEmitDeclarations,
-  createComponentRoot,
-  resetComponentRoot,
-  setComponentRootId
-} from './lib/dom'
+import { bindComponentEmitDeclarations } from './lib/dom'
 import { appendDomChild, isDomElement, resetRuntimeNodeState } from './lib/dom-component-adapter'
-import type { RuntimeComponentUpdateInput } from './types'
-
-type MediaState = {
-  id?: unknown
-  ref?: unknown
-  src?: unknown
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
-}
+import type { RuntimeComponentClassInput } from './types'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
 type MediaNodeLike = Record<string, unknown> & {
   src?: string
@@ -102,28 +86,17 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   private playbackState: 'playing' | 'paused' = 'paused'
 
   /**
-   * Creates the component root and applies the authored initial state.
+   * Declares services used for className, style and attr patches.
    */
-  init(initial: Record<string, unknown>): void {
-    const state = initial as MediaState
-    const rootNode = createComponentRoot(this.perso, 'div', this.createElementOptions)
-    const mediaNode = ensureMediaNode(rootNode, this.getPart(MEDIA_REF))
+  constructor(input: RuntimeComponentClassInput) {
+    super(input)
+    this.services.declare(['className', 'style', 'attr'])
+  }
 
-    resetComponentRoot(rootNode)
-    resetRuntimeNodeState(mediaNode)
-    setComponentRootId(rootNode, this.perso.id, state.id)
-
-    this.setRoot(rootNode)
-    this.setPart(MEDIA_REF, mediaNode)
-
-    this.applyVisualState(state)
-
-    if (typeof state.src === 'string') {
-      this.setMediaSource(mediaNode, state.src)
-    }
-
-    this.playbackState = 'paused'
-
+  /**
+   * Binds authored emit declarations once the root node is available.
+   */
+  init(): void {
     bindComponentEmitDeclarations({
       perso: this.perso,
       createElementOptions: this.createElementOptions,
@@ -132,30 +105,6 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
         this.report(warning.code, warning.message, warning.details)
       }
     })
-  }
-
-  /**
-   * Applies one resolved runtime action on the media component.
-   */
-  update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
-      this.report('RUNTIME_MEDIA_NOT_INITIALIZED', 'Media component update rejected because init is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    const state = input.action as MediaState
-    this.applyVisualState(state, {
-      skipTransitionValues: true,
-      eventId: input.eventId,
-      eventSeq: input.eventSeq
-    })
-
-    if (state.src !== undefined && typeof state.src === 'string') {
-      this.setMediaSource(this.getPart(MEDIA_REF), state.src)
-    }
   }
 
   /**
@@ -245,28 +194,6 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   }
 
   /**
-   * Applies root or internal ref visual props according to one optional author ref.
-   */
-  private applyVisualState(
-    state: MediaState,
-    styleOptions: { skipTransitionValues?: boolean; eventId?: string; eventSeq?: number } = {}
-  ): void {
-    if (state.ref !== undefined && state.ref !== 'root' && state.ref !== MEDIA_REF) {
-      this.report('AUTHOR_COMPONENT_REF_UNKNOWN', 'Component ref is unknown', {
-        ref: state.ref,
-        eventId: styleOptions.eventId,
-        eventSeq: styleOptions.eventSeq
-      })
-      return
-    }
-
-    const targetNode = this.resolveRef(typeof state.ref === 'string' ? state.ref : undefined)
-    applyClassNameProps(targetNode, state.className)
-    applyStyleProps(targetNode, state.style, styleOptions)
-    applyAttrProps(targetNode, state.attr)
-  }
-
-  /**
    * Applies one source url on the internal video element.
    */
   private setMediaSource(nodeRef: unknown, src: string): void {
@@ -298,5 +225,45 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     }
 
     mediaNode.currentTime = nextCurrentTimeSeconds
+  }
+
+  /**
+   * Applies one resolved runtime action on the media component.
+   */
+  update(input: RuntimeComponentUpdateInput): void {
+    const action = input.action as { ref?: unknown; src?: unknown }
+    const targetNode = this.resolveRef(typeof action.ref === 'string' ? action.ref : undefined) ?? this.node
+    this.services.apply(targetNode, input.action)
+    if (typeof action.src === 'string') {
+      this.setMediaSource(this.getPart(MEDIA_REF), action.src)
+    }
+  }
+
+  /**
+   * Creates the component root and applies the authored initial state.
+   */
+  /**
+   * Prepares the media node: ensures it exists, resets its state and applies initial media props.
+   * ensureMediaNode handles non-DOM environments where data-part is not parsed by buildNode.
+   */
+  private setupMediaNode(rootNode: unknown): void {
+    const initial = this.perso.initial as { src?: unknown }
+    const mediaNode = ensureMediaNode(rootNode, this.getPart(MEDIA_REF))
+    resetRuntimeNodeState(mediaNode)
+    this.setPart(MEDIA_REF, mediaNode)
+    this.playbackState = 'paused'
+    if (typeof initial.src === 'string') {
+      this.setMediaSource(mediaNode, initial.src)
+    }
+  }
+
+  /**
+   * Creates the component root with an internal video part.
+   */
+  render(): ComponentRenderResult {
+    const rootNode = this.buildNode(`<div><video data-part="${MEDIA_REF}"/></div>`)
+    this.setupMediaNode(rootNode)
+    this.services.apply(rootNode, this.perso.initial)
+    return rootNode as Node
   }
 }

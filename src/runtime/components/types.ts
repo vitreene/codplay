@@ -3,6 +3,9 @@ import type { TransitionRequest } from '../../animation/types'
 import type { CreateElementOptions } from '../create-element'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
 import type { ItemDoc, MoveCommand } from '../types'
+import type { ComponentServices, ServiceInstance } from './lib/component-services'
+
+export type { ComponentServices, ServiceInstance }
 
 /**
  * Describes one warning emitted by runtime component orchestration.
@@ -35,14 +38,22 @@ export type RuntimeComponentClassInput = {
   perso: ItemDoc
   createElementOptions?: CreateElementOptions
   report: RuntimeComponentWarningReporter
+  services: ComponentServices
 }
+
+/**
+ * Describes the result returned by one component render call.
+ */
+export type ComponentRenderResult = Node
 
 /**
  * Defines the minimal component API expected by the renderer.
  */
 export type RuntimeComponent = {
-  init: (initial: Record<string, unknown>) => void
-  render: () => unknown
+  node: unknown
+  render: () => ComponentRenderResult
+  init?: () => void
+  _init: () => void
   update: (input: RuntimeComponentUpdateInput) => void
 }
 
@@ -118,20 +129,52 @@ export type RuntimeRegistrySnapshot = {
 }
 
 /**
- * Defines one action to register or override a runtime component class.
+ * Describes one registry operation error.
  */
-export type RuntimeRegistryCommandResult =
-  | {
-      ok: true
-      status: 'registered' | 'overridden' | 'ignored'
-      code?: string
-    }
-  | {
-      ok: false
-      code: string
-      message: string
-      details?: Record<string, unknown>
-    }
+export type RegistryError = {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * Describes the result of one registry register or override operation.
+ */
+export type RegistryResult =
+  | { ok: true; status: 'registered' | 'overridden' }
+  | { ok: false; error: RegistryError }
+
+/**
+ * Defines the input for one component register or override operation.
+ */
+export type ComponentRegisterInput = {
+  type: string
+  component: RuntimeComponentClass
+}
+
+/**
+ * Defines the input for one service register or override operation.
+ */
+export type ServiceRegisterInput = {
+  name: string
+  service: ServiceInstance
+}
+
+/**
+ * Defines the component registry API.
+ */
+export type ComponentRegistryApi = {
+  register: (input: ComponentRegisterInput) => RegistryResult
+  override: (input: ComponentRegisterInput) => RegistryResult
+}
+
+/**
+ * Defines the service registry API.
+ */
+export type ServiceRegistryApi = {
+  register: (input: ServiceRegisterInput) => RegistryResult
+  override: (input: ServiceRegisterInput) => RegistryResult
+}
 
 /**
  * Defines one resolved update routed to component instances.

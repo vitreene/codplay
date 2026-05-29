@@ -6,6 +6,10 @@ export { MediaComponent } from './media-component'
 export { RuntimeComponentOrchestrator } from './runtime-component-orchestrator'
 export { TextComponent } from './text-component'
 export type {
+  ComponentRegisterInput,
+  ComponentRegistryApi,
+  RegistryError,
+  RegistryResult,
   RuntimeComponent,
   RuntimeComponentClass,
   RuntimeComponentClassInput,
@@ -15,8 +19,9 @@ export type {
   RuntimeLayoutComponent,
   RuntimeLayoutOutletSnapshot,
   RuntimeListComponent,
-  RuntimeRegistryCommandResult,
   RuntimeRegistrySnapshot,
   RuntimeResolvedUpdate,
-  RuntimeUpdateRoutingResult
+  RuntimeUpdateRoutingResult,
+  ServiceRegisterInput,
+  ServiceRegistryApi
 } from './types'

@@ -10,7 +10,6 @@ import {
   type RuntimeTraceRow,
   type RuntimeTraceStatus
 } from '../runtime/trace-store'
-import type { RuntimeComponentClass } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
 import type { RuntimePersos } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
@@ -412,67 +411,50 @@ export class PlayerFacade implements PlayerApi {
     })
   }
 
-  /**
-   * Registers one component class before scene load.
-   */
-  registerComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
-    if (this.isInitialized()) {
-      return this.reject(
-        'PLAYER_COMPONENT_REGISTRY_LOCKED',
-        'registerComponent is only allowed before init',
-        'player:register-component',
-        { persoType }
-      )
+  readonly component: import('../runtime/components').ComponentRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_COMPONENT_REGISTRY_LOCKED', message: 'component.register is only allowed before init' } }
+      }
+      const result = this.renderer.component.register(input)
+      if (result.ok) {
+        this.emitTrace('player:register-component', RUNTIME_TRACE_STATUS.applied, { type: input.type, status: result.status })
+      }
+      return result
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_COMPONENT_REGISTRY_LOCKED', message: 'component.override is only allowed before init' } }
+      }
+      const result = this.renderer.component.override(input)
+      if (result.ok) {
+        this.emitTrace('player:override-component', RUNTIME_TRACE_STATUS.applied, { type: input.type, status: result.status })
+      }
+      return result
     }
-
-    const result = this.renderer.registerComponent(persoType, componentClass)
-    if (!result.ok) {
-      return this.reject(
-        result.code,
-        result.message,
-        'player:register-component',
-        result.details
-      )
-    }
-
-    this.emitTrace('player:register-component', RUNTIME_TRACE_STATUS.applied, {
-      persoType,
-      status: result.status,
-      code: result.code
-    })
-
-    return { ok: true }
   }
 
-  /**
-   * Overrides one component class before scene load.
-   */
-  overrideComponent(persoType: string, componentClass: RuntimeComponentClass): PlayerCommandResult {
-    if (this.isInitialized()) {
-      return this.reject(
-        'PLAYER_COMPONENT_REGISTRY_LOCKED',
-        'overrideComponent is only allowed before init',
-        'player:override-component',
-        { persoType }
-      )
+  readonly service: import('../runtime/components').ServiceRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_SERVICE_REGISTRY_LOCKED', message: 'service.register is only allowed before init' } }
+      }
+      const result = this.renderer.service.register(input)
+      if (result.ok) {
+        this.emitTrace('player:register-service', RUNTIME_TRACE_STATUS.applied, { name: input.name, status: result.status })
+      }
+      return result
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_SERVICE_REGISTRY_LOCKED', message: 'service.override is only allowed before init' } }
+      }
+      const result = this.renderer.service.override(input)
+      if (result.ok) {
+        this.emitTrace('player:override-service', RUNTIME_TRACE_STATUS.applied, { name: input.name, status: result.status })
+      }
+      return result
     }
-
-    const result = this.renderer.overrideComponent(persoType, componentClass)
-    if (!result.ok) {
-      return this.reject(
-        result.code,
-        result.message,
-        'player:override-component',
-        result.details
-      )
-    }
-
-    this.emitTrace('player:override-component', RUNTIME_TRACE_STATUS.applied, {
-      persoType,
-      status: result.status
-    })
-
-    return { ok: true }
   }
 
   /**

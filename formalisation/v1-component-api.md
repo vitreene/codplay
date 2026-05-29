@@ -69,7 +69,7 @@ Elle regroupe deux responsabilites distinctes:
 Elle est utilisee en deux moments du cycle de vie:
 
 - dans `_createRootNode()` — le `nodeFactory` entre en jeu pour produire le node physique a partir du retour de `render()`; si `render()` retourne une `string`, le runtime cree le node; si `render()` retourne un `Node`, le runtime l'utilise directement
-- dans `_init()` apres `_createRootNode()` — `emitRuntimeEvent` est utilise pour brancher les event listeners declares dans `perso.emit` sur le rootNode et ses parts internes
+- dans `_init()` apres `_createRootNode()` — `emitRuntimeEvent` est utilise pour brancher les event listeners declares dans `perso.emit` sur le node et ses parts internes
 
 Cette dependance ne fait pas partie de `ComponentServices`.
 
@@ -79,27 +79,91 @@ L'auteur n'a pas a connaitre ni a manipuler `createElementOptions`.
 
 ## `ComponentServices`
 
-`services` est une map ouverte injectee au composant.
+`services` est l'objet injecte au composant qui lui donne acces aux services enregistres.
 
-`services` ne constitue pas une liste fermee en V1.
+### Enregistrement
 
-Les cles de `services` doivent correspondre a des familles de proprietes auteur exposees par les persos.
-
-Exemples de cles canoniques V1:
+Codplay enregistre ses services core au bootstrap:
 
 - `className`
 - `style`
 - `attr`
 - `content`
 
-Regles:
+L'hote peut enregistrer des services supplementaires via `codplay.service.register({ name, service })`.
 
-- un composant consomme directement les services dont il a besoin
-- un composant ne declare pas lui-meme ses services via une liste ou une map de declaration supplementaire
-- le typecheck cote auteur vient du type du composant lui-meme
-- l'absence d'un service attendu est une erreur runtime explicite
+### Validation a l'initialisation de scene
 
-La creation d'un composant etant controlee pendant la lecture et l'instanciation d'une scene, l'injection de `services` peut etre validee a ce moment-la.
+Quand une scene est initialisee, tous les services declares par les composants presents doivent etre connus du registry. Si un service declare est absent, c'est une erreur explicite. Pas de resolution lazy.
+
+### Declaration dans le constructeur
+
+Le composant declare les services dont il a besoin en appelant `this.services.declare(names)` dans son constructeur, apres `super(input)`.
+
+```ts
+constructor(input: RuntimeComponentClassInput) {
+  super(input)
+  this.services.declare(['className', 'style', 'attr'])
+}
+```
+
+`declare()` resout les noms depuis le registry et les rend disponibles sur `this.services`. L'ordre de declaration est l'ordre d'execution lors d'un appel a `apply()`.
+
+Les services sont ainsi disponibles des `render()`, ce qui garantit une coherence entre la construction initiale et les mises a jour.
+
+Une variable de config peut proposer une liste par defaut pour les cas standard:
+
+```ts
+constructor(input: RuntimeComponentClassInput) {
+  super(input)
+  this.services.declare(COMPONENT_DEFAULT_SERVICES)
+}
+```
+
+### Usage dans `update()`
+
+L'auteur appelle les services dans `update()`. Deux formes:
+
+**Cas standard** — `apply()` passe le patch par tous les services declares, dans l'ordre de declaration:
+
+```ts
+update(input: RuntimeComponentUpdateInput): void {
+  this.services.apply(this.node, input.action)
+  // traitement specifique si besoin
+}
+```
+
+**Cas orchestre** — appel individuel pour controler l'ordre (ex. list + move):
+
+```ts
+update(input: RuntimeComponentUpdateInput): void {
+  this.prepareFlip()
+  this.resolveChildMove(input)
+  this.services.style.apply(this.node, input.action.style)
+  this.commitFlip()
+}
+```
+
+### Cohabitation avec les methodes auteur
+
+Si un composant auteur definit une methode portant le meme nom qu'un service (ex. `style()`), il n'y a pas de conflit: les services vivent sur `this.services.style`, la methode auteur s'appelle via `this.style()`. L'auteur appelle ce dont il a besoin explicitement dans `update()`.
+
+### `render()` utilise les services
+
+`render()` utilise les services pour appliquer les proprietes standard sur le node initial, avec la meme coherence que `update()`:
+
+```ts
+render(): ComponentRenderResult {
+  const rootNode = createComponentRoot(...)
+  resetComponentRoot(rootNode)
+  setComponentRootId(rootNode, ...)
+  this.services.apply(rootNode, this.perso.initial)
+  // traitements specifiques si besoin
+  return rootNode as Node
+}
+```
+
+Les helpers de construction du node (`createComponentRoot`, `resetComponentRoot`, `setComponentRootId`) restent des appels directs car ils ne relevent pas de la couche services.
 
 Un `service` reste distinct d'un `module`:
 
@@ -149,7 +213,10 @@ Si un auteur utilise une fonction externe de type `h(...)`, elle doit au final r
 
 `init()` ne remplace pas le constructeur.
 
-`init()` permet d'ecrire une mise en place personnalisee du composant apres creation du root runtime.
+`init()` est appelee apres `_createRootNode()`. C'est le moment ou l'auteur:
+
+1. declare les services dont il a besoin via `this.services.declare([...])`
+2. effectue toute mise en place personnalisee qui necessite que `node` existe (ex. branchement d'event listeners)
 
 `init()` ne retourne rien.
 
@@ -159,24 +226,83 @@ Si un auteur utilise une fonction externe de type `h(...)`, elle doit au final r
 
 `_init()` n'est pas une API auteur.
 
-`_init()` peut faire plusieurs operations internes, mais il appelle notamment `createRootNode()` puis `init()` si le composant l'implemente.
+Son role:
+
+1. appelle `render()`
+2. si le retour est une `string`, la convertit en node (parsing DOM ou objet de substitution)
+3. si le retour est deja un `node`, l'utilise directement
+4. assigne le resultat a `this.node`
+5. appelle `init()` si le composant l'implemente
 
 `_init()` ne retourne rien.
 
-## `createRootNode()`
+## `buildNode()`
 
-`createRootNode()` est une methode interne.
+`buildNode(tagOrTemplate)` est une methode protegee de `BaseComponent`, disponible pour les auteurs dans `render()`.
 
-Son role est:
+Elle accepte deux formes:
 
-1. appeler `render()`
-2. resoudre la forme retournee
-3. creer ou recuperer le node root runtime
-4. assigner ce node a `rootNode`
+### Forme tag
 
-`createRootNode()` ne fait pas partie de l'API auteur.
+```ts
+const rootNode = this.buildNode('div')
+```
 
-Le runtime ne cascade pas des methodes one-line inutiles: `_init()` appelle `createRootNode()` puis peut deleguer a `init()` sans se contenter d'un `return` direct de cette methode.
+- reutilise `this.node` si deja present (cas refresh), sinon cree un nouveau node via la factory runtime
+- remet le node a zero
+- applique l'id depuis `this.perso.initial.id` ou `this.perso.id` en fallback
+
+### Forme template
+
+```ts
+const rootNode = this.buildNode('<div><img data-part="media"/></div>')
+```
+
+- parse le template HTML
+- remet le node a zero
+- applique l'id sur le root
+- enregistre automatiquement les elements descendants portant `data-part` comme parts internes du composant via `setPart()`
+- supprime l'attribut `data-part` du DOM apres enregistrement
+
+### Convention `data-part`
+
+L'attribut `data-part` est la convention pour nommer les parts internes d'un composant dans un template.
+
+Regles:
+
+- `data-part` est temporaire: il est retire du DOM apres enregistrement
+- `data-part` ne doit pas etre confondu avec l'attribut `id`, qui reste reserve aux ancres publiques stables (ex. outlets de `layout`)
+- plusieurs elements peuvent porter `data-part` dans un meme template
+- le nom de la part doit etre unique dans le composant
+- une constante est recommandee pour eviter les doublons entre template et `getPart()`:
+
+```ts
+const MEDIA = 'media'
+
+render(): ComponentRenderResult {
+  const rootNode = this.buildNode(`<div><img data-part="${MEDIA}"/></div>`)
+  this.services.apply(rootNode, this.perso.initial)
+  this.applyMediaState(this.getPart(MEDIA), this.perso.initial)
+  return rootNode as Node
+}
+```
+
+La forme tag reste preferee pour les composants sans parts enfants (ex. `text`, `list`). La forme template est recommandee des qu'un composant a des parts internes nommees.
+
+## `update()`
+
+`update()` est la methode auteur pour appliquer un patch resolu sur le composant.
+
+`update()` est responsable de:
+
+1. consommer les services declares via `this.services.apply()` ou des appels individuels
+2. appliquer les traitements specifiques au composant (methodes propres, orchestration)
+
+L'auteur controle l'ordre d'application. Il n'y a pas de pipeline canonique imposee.
+
+`update()` recoit le patch brut resolu. Les services ont ete declares dans `init()` et sont disponibles via `this.services`.
+
+Il n'existe pas de `_update()`. La frontiere runtime autour de `update()` est assuree par l'orchestrateur (`tryUpdateComponent`).
 
 ## Separation des responsabilites
 
@@ -184,20 +310,27 @@ Le runtime ne cascade pas des methodes one-line inutiles: `_init()` appelle `cre
 
 - lit `perso`
 - decrit le rendu initial dans `render()`
-- ajoute sa mise en place personnalisee dans `init()`
-- ajoute sa logique de patch dans `update()`
+- declare les services et effectue la mise en place dans `init()`
+- applique les patches via services et traitements specifiques dans `update()`
 
 ### Runtime interne
 
 - appelle `_init()`
-- resolve le resultat de `render()`
-- assigne `rootNode`
+- resout le resultat de `render()`
+- assigne `node`
 - gere les details de cycle de vie
+- enveloppe `update()` dans une frontiere d'erreur (orchestrateur)
 
 ## Contrat type minimal
 
 ```ts
 type ComponentRenderResult = string | Node
+
+type ComponentServices = {
+  declare: (names: string[]) => void
+  apply: (node: unknown, patch: Record<string, unknown>) => void
+  [name: string]: ServiceInstance | unknown
+}
 
 type RuntimeComponentClassInput = {
   perso: DeepReadonly<ItemDoc>
@@ -207,6 +340,7 @@ type RuntimeComponentClassInput = {
 }
 
 type RuntimeComponent = {
+  node: unknown
   render: () => ComponentRenderResult
   init?: () => void
   _init: () => void
@@ -218,20 +352,21 @@ Note:
 
 - `Node` dans ce contrat designe un node runtime deja construit
 - la forme exacte du type `Node` reste a aligner avec les abstractions runtime existantes
-- `services` est une map ouverte; cette spec n'en fige pas une liste exhaustive
+- `ComponentServices` expose `declare()` et `apply()` comme surface principale; les services individuels sont accessibles par leur nom
 - la structure exacte de `runtime` est specifiee dans d'autres specs
 
 ## Regles V1
 
-- `render()` reste obligatoire dans tous les cas
-- `render()` ne retourne ni tableau, ni valeur arbitraire opaque hors `string` ou `node`
+- `render()` est obligatoire; elle retourne `string | Node`; elle n'utilise pas les services
 - le runtime ne lit pas automatiquement un template dans `perso`
-- `init()` est une methode auteur optionnelle de mise en place
-- `_init()` est interne et ne remplace pas le constructeur auteur
-- `_init()` appelle `createRootNode()` puis `init()` si elle existe
-- `createRootNode()` est interne et non exposee a l'auteur
-- `services` est injecte au moment de la creation du composant
-- l'absence d'un service attendu par le composant est une erreur runtime
+- `this.services.declare(names)` est appele dans le constructeur, apres `super(input)`; services disponibles des `render()`
+- `init()` est une methode auteur optionnelle; c'est le lieu de la mise en place post-node (ex. branchement d'event listeners)
+- `_init()` est interne; il appelle `render()`, resout le retour (`string | node`), assigne `this.node`, puis appelle `init()` si elle existe
+- `update()` est responsable de la consommation des services et des traitements specifiques; l'auteur controle l'ordre
+- il n'existe pas de `_update()`; la frontiere d'erreur autour de `update()` est assuree par l'orchestrateur
+- l'ordre de declaration dans `declare()` est l'ordre d'execution dans `apply()`
+- une variable de config peut proposer une liste de services par defaut
+- un service absent au moment de la declaration d'un composant dans une scene est une erreur explicite
 
 ## References
 

@@ -19,22 +19,14 @@ export function createS4QuizReferenceScene(): SceneDoc {
             initial: {
               markup: `
                 <section class="quiz-layout-shell">
-                  <div id="quiz-layout:decor" style="grid-column: 1/-1; grid-row: 1/-1; position: relative;"></div>
-                  <div id="quiz-layout:intro" style="grid-area: intro; position: relative;"></div>
-                  <div id="quiz-layout:question" style="grid-area: question; position: relative;"></div>
-                  <div id="quiz-layout:count" style="grid-area: count; position: relative; justify-self: end;"></div>
-                  <div id="quiz-layout:success" style="grid-area: result; position: relative;"></div>
-                  <div id="quiz-layout:failure" style="grid-area: result; position: relative;"></div>
+                  <div data-part="quiz-layout:decor" style="grid-column: 1/-1; grid-row: 1/-1; position: relative;"></div>
+                  <div data-part="quiz-layout:intro" style="grid-area: intro; position: relative;"></div>
+                  <div data-part="quiz-layout:question" style="grid-area: question; position: relative;"></div>
+                  <div data-part="quiz-layout:count" style="grid-area: count; position: relative; justify-self: end;"></div>
+                  <div data-part="quiz-layout:success" style="grid-area: result; position: relative;"></div>
+                  <div data-part="quiz-layout:failure" style="grid-area: result; position: relative;"></div>
                 </section>
               `,
-              outlets: [
-                { id: "quiz-layout:decor" },
-                { id: "quiz-layout:intro" },
-                { id: "quiz-layout:question" },
-                { id: "quiz-layout:count" },
-                { id: "quiz-layout:success" },
-                { id: "quiz-layout:failure" },
-              ],
               style: {
                 width: "100%",
 

@@ -1,39 +1,24 @@
 import { BaseComponent } from './lib/base-component'
-import {
-  applyAttrProps,
-  applyClassNameProps,
-  applyStyleProps,
-  createComponentRoot,
-  ensureImagePart,
-  resetComponentRoot,
-  resetImagePart,
-  setComponentRootId,
-  setImageAlt,
-  setImageFitMode,
-  setImageSource
-} from './lib/dom'
+import { setImageAlt, setImageFitMode, setImageSource } from './lib/dom'
 import type { ImageFitMode } from './lib/dom'
-import type { RuntimeComponentUpdateInput } from './types'
+import { RUNTIME_CONFIG } from '../config'
+import type { RuntimeComponentClassInput } from './types'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
 type ImageState = {
-  id?: unknown
   src?: unknown
   alt?: unknown
   fitMode?: unknown
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
 }
 
-const DEFAULT_IMAGE_FIT_MODE: ImageFitMode = 'wallpaper'
-const MEDIA_PART_ID = 'media'
+const MEDIA = 'media'
 
 /**
  * Resolves one authored fitMode into the image component domain.
  */
 function resolveImageFitMode(value: unknown): ImageFitMode | null {
   if (value === undefined) {
-    return DEFAULT_IMAGE_FIT_MODE
+    return RUNTIME_CONFIG.image.defaultFitMode
   }
 
   if (value === 'wallpaper' || value === 'sprite') {
@@ -48,96 +33,46 @@ function resolveImageFitMode(value: unknown): ImageFitMode | null {
  */
 export class ImageComponent extends BaseComponent {
   /**
-   * Creates the component root and the internal image part.
+   * Declares services used for className, style and attr patches.
    */
-  init(initial: Record<string, unknown>): void {
-    const state = initial as ImageState
-    const rootNode = createComponentRoot(this.perso, 'div', this.createElementOptions)
+  constructor(input: RuntimeComponentClassInput) {
+    super(input)
+    this.services.declare(['className', 'style', 'attr'])
+  }
 
-    resetComponentRoot(rootNode)
-    setComponentRootId(rootNode, this.perso.id, state.id)
+  /**
+   * Applies image-specific props on the internal media part.
+   */
+  private applyImageMediaState(mediaNode: unknown, state: ImageState): void {
+    if (typeof state.src === 'string') {
+      setImageSource(mediaNode, state.src)
+    }
 
-    const mediaNode = ensureImagePart(rootNode, this.getPart(MEDIA_PART_ID))
-    resetImagePart(mediaNode)
+    if (typeof state.alt === 'string') {
+      setImageAlt(mediaNode, state.alt)
+    }
 
-    applyClassNameProps(rootNode, state.className)
-    applyStyleProps(rootNode, state.style)
-    applyAttrProps(rootNode, state.attr)
-
-    this.applyImageMediaState(mediaNode, state)
-
-    this.setPart(MEDIA_PART_ID, mediaNode)
-    this.setRoot(rootNode)
+    const fitMode = resolveImageFitMode(state.fitMode)
+    if (fitMode !== null) {
+      setImageFitMode(mediaNode, fitMode)
+    }
   }
 
   /**
    * Applies one resolved runtime action on the image component.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
-      this.report('RUNTIME_IMAGE_NOT_INITIALIZED', 'Image component update rejected because init is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    const mediaNode = this.getPart(MEDIA_PART_ID)
-    if (mediaNode === null) {
-      this.report('RUNTIME_IMAGE_MEDIA_PART_MISSING', 'Image component media part is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    const state = input.action as ImageState
-
-    applyStyleProps(this.rootNode, state.style, {
-      skipTransitionValues: true
-    })
-    applyClassNameProps(this.rootNode, state.className)
-    applyAttrProps(this.rootNode, state.attr)
-
-    this.applyImageMediaState(mediaNode, state, {
-      eventId: input.eventId,
-      eventSeq: input.eventSeq
-    })
+    this.services.apply(this.node, input.action)
+    this.applyImageMediaState(this.getPart(MEDIA), input.action as ImageState)
   }
 
   /**
-   * Applies the image-specific props on the internal media part.
+   * Creates the component root with an internal image part.
    */
-  private applyImageMediaState(
-    mediaNode: unknown,
-    state: ImageState,
-    context?: { eventId: string; eventSeq: number }
-  ): void {
-    if (state.src !== undefined) {
-      if (typeof state.src !== 'string') {
-        this.report('AUTHOR_IMAGE_SRC_INVALID', 'Image src must be a string', context)
-      } else {
-        setImageSource(mediaNode, state.src)
-      }
-    }
-
-    if (state.alt !== undefined) {
-      if (typeof state.alt !== 'string') {
-        this.report('AUTHOR_IMAGE_ALT_INVALID', 'Image alt must be a string', context)
-      } else {
-        setImageAlt(mediaNode, state.alt)
-      }
-    }
-
-    const fitMode = resolveImageFitMode(state.fitMode)
-    if (fitMode === null) {
-      this.report('AUTHOR_IMAGE_FIT_MODE_INVALID', 'Image fitMode must be wallpaper or sprite', {
-        ...context,
-        fitMode: state.fitMode
-      })
-      return
-    }
-
-    setImageFitMode(mediaNode, fitMode)
+  render(): ComponentRenderResult {
+    const rootNode = this.buildNode(`<div><img data-part="${MEDIA}"/></div>`)
+    this.services.apply(rootNode, this.perso.initial)
+    this.applyImageMediaState(this.getPart(MEDIA), this.perso.initial as ImageState)
+    return rootNode as Node
   }
 }

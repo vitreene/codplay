@@ -1,107 +1,59 @@
 import { BaseComponent } from './lib/base-component'
-import {
-  applyAttrProps,
-  applyClassNameProps,
-  applyStyleProps,
-  createComponentRoot,
-  resetComponentRoot,
-  setComponentRootId,
-  setTextContent
-} from './lib/dom'
-import type { RuntimeComponentUpdateInput } from './types'
+import { setTextContent } from './lib/dom'
+import { RUNTIME_CONFIG } from '../config'
+import type { RuntimeComponentClassInput } from './types'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
-type TextState = {
-  id?: unknown
+type TextInitial = {
   tag?: unknown
   content?: unknown
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
-}
-
-const DEFAULT_TEXT_TAG = 'p'
-
-/**
- * Resolves the root tag used by the text component.
- */
-function resolveTextTag(value: unknown): string {
-  return typeof value === 'string' && value.length > 0 ? value : DEFAULT_TEXT_TAG
 }
 
 /**
- * Resolves one authored text content value into one renderable string.
- */
-function resolveTextContent(value: unknown): string | null {
-  if (typeof value === 'string' || typeof value === 'number') {
-    return String(value)
-  }
-
-  return null
-}
-
-/**
- * Implements one simple text component with separated shared visual helpers.
+ * Implements one simple text component.
  */
 export class TextComponent extends BaseComponent {
   /**
-   * Creates the component root and applies the authored initial state.
+   * Declares services used for className, style and attr patches.
    */
-  init(initial: Record<string, unknown>): void {
-    const state = initial as TextState
-    const rootNode = createComponentRoot(this.perso, resolveTextTag(state.tag), this.createElementOptions)
+  constructor(input: RuntimeComponentClassInput) {
+    super(input)
+    this.services.declare(['className', 'style', 'attr'])
+  }
 
-    resetComponentRoot(rootNode)
-    setComponentRootId(rootNode, this.perso.id, state.id)
-
-    applyClassNameProps(rootNode, state.className)
-    applyStyleProps(rootNode, state.style)
-    applyAttrProps(rootNode, state.attr)
-
-    if (state.content !== undefined) {
-      const content = resolveTextContent(state.content)
-      if (content === null) {
-        this.report('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number')
-      } else {
-        setTextContent(rootNode, content)
-      }
+  /**
+   * Applies a text content value on one node. Silently ignores non-string and non-number values.
+   */
+  private applyContent(node: unknown, value: unknown): void {
+    if (typeof value === 'string' || typeof value === 'number') {
+      setTextContent(node, String(value))
     }
-
-    this.setRoot(rootNode)
   }
 
   /**
    * Applies one resolved runtime action on the text node.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
-      this.report('RUNTIME_TEXT_NOT_INITIALIZED', 'Text component update rejected because init is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
+    this.services.apply(this.node, input.action)
+    const state = input.action as TextInitial
+    if (state.content !== undefined) {
+      this.applyContent(this.node, state.content)
     }
+  }
 
-    const state = input.action as TextState
-
-    applyStyleProps(this.rootNode, state.style, {
-      skipTransitionValues: true
-    })
-    applyClassNameProps(this.rootNode, state.className)
-    applyAttrProps(this.rootNode, state.attr)
-
-    if (state.content === undefined) {
-      return
+  /**
+   * Creates the component root and applies the authored initial state.
+   */
+  render(): ComponentRenderResult {
+    const state = this.perso.initial as TextInitial
+    const tag = typeof state.tag === 'string' && state.tag.length > 0
+      ? state.tag
+      : RUNTIME_CONFIG.text.defaultTagName
+    const rootNode = this.buildNode(tag)
+    this.services.apply(rootNode, this.perso.initial)
+    if (state.content !== undefined) {
+      this.applyContent(rootNode, state.content)
     }
-
-    const content = resolveTextContent(state.content)
-    if (content === null) {
-      this.report('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    setTextContent(this.rootNode, content)
+    return rootNode as Node
   }
 }

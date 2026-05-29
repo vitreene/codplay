@@ -181,40 +181,34 @@ export class RendererFacade implements RendererApi {
     return eventSeqByEventId
   }
 
-  /**
-   * Registers one component class before the first story load.
-   */
-  registerComponent(
-    persoType: string,
-    componentClass: import('../runtime/components').RuntimeComponentClass
-  ): import('../runtime/components').RuntimeRegistryCommandResult {
-    if (this.isInitialized()) {
-      return {
-        ok: false,
-        code: 'RENDERER_COMPONENT_REGISTRY_LOCKED',
-        message: 'registerComponent is only allowed before load'
+  readonly component: import('../runtime/components').ComponentRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_COMPONENT_REGISTRY_LOCKED', message: 'component.register is only allowed before load' } }
       }
+      return this.orchestrator.registerComponent(input)
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_COMPONENT_REGISTRY_LOCKED', message: 'component.override is only allowed before load' } }
+      }
+      return this.orchestrator.overrideComponent(input)
     }
-
-    return this.orchestrator.registerComponent(persoType, componentClass)
   }
 
-  /**
-   * Overrides one component class before the first story load.
-   */
-  overrideComponent(
-    persoType: string,
-    componentClass: import('../runtime/components').RuntimeComponentClass
-  ): import('../runtime/components').RuntimeRegistryCommandResult {
-    if (this.isInitialized()) {
-      return {
-        ok: false,
-        code: 'RENDERER_COMPONENT_REGISTRY_LOCKED',
-        message: 'overrideComponent is only allowed before load'
+  readonly service: import('../runtime/components').ServiceRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_SERVICE_REGISTRY_LOCKED', message: 'service.register is only allowed before load' } }
       }
+      return this.orchestrator.registerService(input)
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_SERVICE_REGISTRY_LOCKED', message: 'service.override is only allowed before load' } }
+      }
+      return this.orchestrator.overrideService(input)
     }
-
-    return this.orchestrator.overrideComponent(persoType, componentClass)
   }
 
   /**

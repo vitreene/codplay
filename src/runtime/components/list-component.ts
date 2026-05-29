@@ -1,15 +1,8 @@
 import { BaseComponent } from './lib/base-component'
-import {
-  applyAttrProps,
-  applyClassNameProps,
-  applyStyleProps,
-  createComponentRoot,
-  resetComponentRoot,
-  setComponentRootId
-} from './lib/dom'
 import { isDomNode, resetRuntimeNodeState } from './lib/dom-component-adapter'
 import { RUNTIME_CONFIG } from '../config'
-import type { RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
+import type { RuntimeComponentClassInput } from './types'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
 import type { MoveMode } from '../types'
 
 type ReorderOperation = 'move' | 'add' | 'remove'
@@ -25,12 +18,8 @@ type PersistentPlacementRule = {
   insertedOrder: number
 }
 
-type ListState = {
-  id?: unknown
+type ListInitial = {
   tag?: unknown
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
   config?: unknown
 }
 
@@ -38,24 +27,9 @@ type ListState = {
  * Clamps one numeric position into one inclusive range.
  */
 function clamp(value: number, min: number, max: number): number {
-  if (value < min) {
-    return min
-  }
-
-  if (value > max) {
-    return max
-  }
-
+  if (value < min) return min
+  if (value > max) return max
   return value
-}
-
-/**
- * Resolves the authored list root tag name.
- */
-function resolveListRootTagName(rawTagName: unknown): string {
-  return typeof rawTagName === 'string' && rawTagName.trim().length > 0
-    ? rawTagName
-    : RUNTIME_CONFIG.list.defaultTagName
 }
 
 /**
@@ -121,48 +95,11 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
   }
 
   /**
-   * Initializes root and items containers used by this list.
+   * Declares services used for className, style and attr patches.
    */
-  init(initial: Record<string, unknown>): void {
-    const state = initial as ListState
-    const rootTagName = resolveListRootTagName(state.tag)
-
-    this.rootNode ??= createComponentRoot(this.perso, rootTagName, this.createElementOptions)
-    resetComponentRoot(this.rootNode)
-    this.childNodeById.clear()
-    this.orderedChildIds = []
-    this.persistentPlacementByChildId.clear()
-    this.nextPlacementOrder = 1
-
-    resetRuntimeNodeState(this.rootNode)
-
-    setComponentRootId(this.rootNode, this.perso.id, state.id)
-    applyClassNameProps(this.rootNode, state.className)
-    applyStyleProps(this.rootNode, state.style)
-    applyAttrProps(this.rootNode, state.attr)
-
-    this.reorderConfig = this.resolveReorderConfig(initial)
-  }
-
-  /**
-   * Applies one aggregated root-level patch action.
-   */
-  update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
-      this.report('RUNTIME_LIST_NOT_INITIALIZED', 'List component update rejected because init is missing', {
-        eventId: input.eventId,
-        eventSeq: input.eventSeq
-      })
-      return
-    }
-
-    const state = input.action as ListState
-
-    applyClassNameProps(this.rootNode, state.className)
-    applyStyleProps(this.rootNode, state.style, {
-      skipTransitionValues: true
-    })
-    applyAttrProps(this.rootNode, state.attr)
+  constructor(input: RuntimeComponentClassInput) {
+    super(input)
+    this.services.declare(['className', 'style', 'attr'])
   }
 
   /**
@@ -200,10 +137,9 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
 
     const mode = input.mode ?? 'append'
     if (!this.shouldApplyReorder('add', mode, input.reorder)) {
-      if (this.rootNode !== null) {
-        appendChildToNode(this.rootNode, input.childNode)
+      if (this.node !== null) {
+        appendChildToNode(this.node, input.childNode)
       }
-
       return
     }
 
@@ -259,8 +195,8 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
       return null
     }
 
-    if (this.rootNode !== null) {
-      removeChildFromNode(this.rootNode, childNode)
+    if (this.node !== null) {
+      removeChildFromNode(this.node, childNode)
     }
 
     this.childNodeById.delete(input.childId)
@@ -344,7 +280,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    * Synchronizes real DOM child order from runtime model order.
    */
   private syncDomOrder(): void {
-    if (this.rootNode === null) {
+    if (this.node === null) {
       return
     }
 
@@ -353,8 +289,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
       if (childNode === undefined) {
         continue
       }
-
-      appendChildToNode(this.rootNode, childNode)
+      appendChildToNode(this.node, childNode)
     }
   }
 
@@ -379,14 +314,10 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
   /**
    * Resolves list reorder policy from initial config with safe defaults.
    */
-  private resolveReorderConfig(initial: Record<string, unknown>): ListReorderConfig {
-    const rawConfig = (initial as ListState).config
+  private resolveReorderConfig(state: ListInitial): ListReorderConfig {
+    const rawConfig = state.config
     if (typeof rawConfig !== 'object' || rawConfig === null) {
-      return {
-        reorderOnMove: true,
-        reorderOnAdd: true,
-        reorderOnRemove: true
-      }
+      return { reorderOnMove: true, reorderOnAdd: true, reorderOnRemove: true }
     }
 
     const config = rawConfig as Record<string, unknown>
@@ -401,22 +332,39 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    * Resolves whether reorder must run for one operation and move input.
    */
   private shouldApplyReorder(operation: ReorderOperation, mode: MoveMode, reorder: boolean | undefined): boolean {
-    if (mode !== 'auto') {
-      return true
-    }
-
-    if (reorder === false) {
-      return false
-    }
-
-    if (operation === 'move') {
-      return this.reorderConfig.reorderOnMove
-    }
-
-    if (operation === 'add') {
-      return this.reorderConfig.reorderOnAdd
-    }
-
+    if (mode !== 'auto') return true
+    if (reorder === false) return false
+    if (operation === 'move') return this.reorderConfig.reorderOnMove
+    if (operation === 'add') return this.reorderConfig.reorderOnAdd
     return this.reorderConfig.reorderOnRemove
+  }
+
+  /**
+   * Applies one aggregated root-level patch action.
+   */
+  update(input: RuntimeComponentUpdateInput): void {
+    this.services.apply(this.node, input.action)
+  }
+
+  /**
+   * Initializes root and child containers. Reuses the existing root node on refresh.
+   */
+  render(): ComponentRenderResult {
+    const state = this.perso.initial as ListInitial
+    const tag = typeof state.tag === 'string' && state.tag.trim().length > 0
+      ? state.tag
+      : RUNTIME_CONFIG.list.defaultTagName
+    const rootNode = this.buildNode(tag)
+
+    this.childNodeById.clear()
+    this.orderedChildIds = []
+    this.persistentPlacementByChildId.clear()
+    this.nextPlacementOrder = 1
+
+    resetRuntimeNodeState(rootNode)
+    this.services.apply(rootNode, this.perso.initial)
+    this.reorderConfig = this.resolveReorderConfig(state)
+
+    return rootNode as Node
   }
 }

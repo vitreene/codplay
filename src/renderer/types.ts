@@ -1,7 +1,8 @@
 import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
-import type { RuntimeComponentClass, RuntimeRegistryCommandResult, RuntimeRegistrySnapshot } from '../runtime/components'
+import type { ComponentRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
 import type { RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
+export type { ComponentRegistryApi, ServiceRegistryApi }
 
 /**
  * Defines renderer constructor options.
@@ -102,8 +103,8 @@ export type RendererLoadInput = {
  * Defines renderer facade API used by Player.
  */
 export type RendererApi = {
-  registerComponent: (persoType: string, componentClass: RuntimeComponentClass) => RuntimeRegistryCommandResult
-  overrideComponent: (persoType: string, componentClass: RuntimeComponentClass) => RuntimeRegistryCommandResult
+  component: ComponentRegistryApi
+  service: ServiceRegistryApi
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
   load: (input: RendererLoadInput) => RendererCommandResult
   start: () => RendererCommandResult

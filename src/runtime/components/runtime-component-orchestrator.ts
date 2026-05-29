@@ -5,6 +5,8 @@ import { RUNTIME_CONFIG } from '../config'
 import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
 import type { MoveCommand, MoveFlipMode } from '../types'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
+import { createComponentServices, CORE_SERVICES } from './lib/component-services'
+import type { ServiceInstance } from './lib/component-services'
 import { isDomNode } from './lib/dom-component-adapter'
 import { LayoutComponent } from './layout-component'
 import { ImageComponent } from './image-component'
@@ -12,15 +14,17 @@ import { ListComponent } from './list-component'
 import { MediaComponent } from './media-component'
 import { TextComponent } from './text-component'
 import type {
+  ComponentRegisterInput,
+  RegistryResult,
   RuntimeComponent,
   RuntimeComponentClass,
   RuntimeComponentWarningReporter,
   RuntimeLayoutComponent,
   RuntimeListComponent,
-  RuntimeRegistryCommandResult,
   RuntimeRegistrySnapshot,
   RuntimeResolvedUpdate,
-  RuntimeUpdateRoutingResult
+  RuntimeUpdateRoutingResult,
+  ServiceRegisterInput
 } from './types'
 
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
@@ -107,6 +111,7 @@ export class RuntimeComponentOrchestrator {
     isMounted: (persoId) => this.mountedByPersoId.get(persoId) ?? false
   })
 
+  private readonly serviceRegistry = new Map<string, ServiceInstance>(Object.entries(CORE_SERVICES))
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
   private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>()
   private readonly componentByPersoId = new Map<string, RuntimeComponent>()
@@ -162,33 +167,47 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Registers one component class for one perso type when not already present.
+   * Registers one component class for one perso type. Fails explicitly if the type is already registered.
    */
-  registerComponent(persoType: string, componentClass: RuntimeComponentClass): RuntimeRegistryCommandResult {
-    if (this.componentClassByType.has(persoType)) {
-      return {
-        ok: true,
-        status: 'ignored',
-        code: 'RUNTIME_COMPONENT_TYPE_ALREADY_REGISTERED'
-      }
+  registerComponent({ type, component }: ComponentRegisterInput): RegistryResult {
+    if (this.componentClassByType.has(type)) {
+      return { ok: false, error: { code: 'RUNTIME_COMPONENT_ALREADY_REGISTERED', message: 'Component type is already registered', details: { type } } }
     }
-
-    this.setComponentClass(persoType, componentClass)
-    return {
-      ok: true,
-      status: 'registered'
-    }
+    this.setComponentClass(type, component)
+    return { ok: true, status: 'registered' }
   }
 
   /**
-   * Overrides one component class for one perso type.
+   * Overrides one component class for one perso type. Fails explicitly if the type is not yet registered.
    */
-  overrideComponent(persoType: string, componentClass: RuntimeComponentClass): RuntimeRegistryCommandResult {
-    this.setComponentClass(persoType, componentClass)
-    return {
-      ok: true,
-      status: 'overridden'
+  overrideComponent({ type, component }: ComponentRegisterInput): RegistryResult {
+    if (!this.componentClassByType.has(type)) {
+      return { ok: false, error: { code: 'RUNTIME_COMPONENT_NOT_REGISTERED', message: 'Component type is not registered and cannot be overridden', details: { type } } }
     }
+    this.setComponentClass(type, component)
+    return { ok: true, status: 'overridden' }
+  }
+
+  /**
+   * Registers one service for one name. Fails explicitly if the name is already registered.
+   */
+  registerService({ name, service }: ServiceRegisterInput): RegistryResult {
+    if (this.serviceRegistry.has(name)) {
+      return { ok: false, error: { code: 'RUNTIME_SERVICE_ALREADY_REGISTERED', message: 'Service name is already registered', details: { name } } }
+    }
+    this.serviceRegistry.set(name, service)
+    return { ok: true, status: 'registered' }
+  }
+
+  /**
+   * Overrides one service for one name. Fails explicitly if the name is not yet registered.
+   */
+  overrideService({ name, service }: ServiceRegisterInput): RegistryResult {
+    if (!this.serviceRegistry.has(name)) {
+      return { ok: false, error: { code: 'RUNTIME_SERVICE_NOT_REGISTERED', message: 'Service name is not registered and cannot be overridden', details: { name } } }
+    }
+    this.serviceRegistry.set(name, service)
+    return { ok: true, status: 'overridden' }
   }
 
   /**
@@ -289,6 +308,7 @@ export class RuntimeComponentOrchestrator {
   private mountLoadedRuntimeComponent(perso: ItemDoc, componentClass: RuntimeComponentClass): void {
     const component = new componentClass({
       perso,
+      services: createComponentServices(this.serviceRegistry),
       createElementOptions: this.createElementOptions,
       report: this.warn
     })
@@ -468,8 +488,8 @@ export class RuntimeComponentOrchestrator {
    */
   private tryInitComponent(perso: ItemDoc, component: RuntimeComponent, phase: 'mount' | 'refresh'): unknown | null {
     try {
-      component.init(perso.initial)
-      return component.render()
+      component._init()
+      return component.node
     } catch (error) {
       this.warn({
         code: 'RUNTIME_COMPONENT_INIT_FAILED',
