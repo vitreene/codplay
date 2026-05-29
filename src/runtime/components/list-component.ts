@@ -127,7 +127,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
     const state = initial as ListState
     const rootTagName = resolveListRootTagName(state.tag)
 
-    this.rootNode ??= createComponentRoot(this.item, rootTagName, this.createElementOptions)
+    this.rootNode ??= createComponentRoot(this.perso, rootTagName, this.createElementOptions)
     resetComponentRoot(this.rootNode)
     this.childNodeById.clear()
     this.orderedChildIds = []
@@ -136,7 +136,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
 
     resetRuntimeNodeState(this.rootNode)
 
-    setComponentRootId(this.rootNode, this.item.id, state.id)
+    setComponentRootId(this.rootNode, this.perso.id, state.id)
     applyClassNameProps(this.rootNode, state.className)
     applyStyleProps(this.rootNode, state.style)
     applyAttrProps(this.rootNode, state.attr)
@@ -149,7 +149,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.warn('RUNTIME_LIST_NOT_INITIALIZED', 'List component update rejected because init is missing', {
+      this.report('RUNTIME_LIST_NOT_INITIALIZED', 'List component update rejected because init is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -169,7 +169,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    * Returns runtime list id associated with this component.
    */
   getPersoId(): string {
-    return this.item.id
+    return this.perso.id
   }
 
   /**
@@ -225,8 +225,8 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
     void input.eventSeq
 
     if (!this.childNodeById.has(input.childId)) {
-      this.warn('RUNTIME_LIST_MOVE_COMPONENT_DETACHED', 'List move cannot reposition a detached child', {
-        listId: this.item.id,
+      this.report('RUNTIME_LIST_MOVE_COMPONENT_DETACHED', 'List move cannot reposition a detached child', {
+        listId: this.perso.id,
         childId: input.childId
       })
       return

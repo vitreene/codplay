@@ -106,12 +106,12 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    */
   init(initial: Record<string, unknown>): void {
     const state = initial as MediaState
-    const rootNode = createComponentRoot(this.item, 'div', this.createElementOptions)
+    const rootNode = createComponentRoot(this.perso, 'div', this.createElementOptions)
     const mediaNode = ensureMediaNode(rootNode, this.getPart(MEDIA_REF))
 
     resetComponentRoot(rootNode)
     resetRuntimeNodeState(mediaNode)
-    setComponentRootId(rootNode, this.item.id, state.id)
+    setComponentRootId(rootNode, this.perso.id, state.id)
 
     this.setRoot(rootNode)
     this.setPart(MEDIA_REF, mediaNode)
@@ -125,11 +125,11 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     this.playbackState = 'paused'
 
     bindComponentEmitDeclarations({
-      item: this.item,
+      perso: this.perso,
       createElementOptions: this.createElementOptions,
       resolveRef: (ref) => this.resolveRef(ref),
-      warn: (warning) => {
-        this.warn(warning.code, warning.message, warning.details)
+      report: (warning) => {
+        this.report(warning.code, warning.message, warning.details)
       }
     })
   }
@@ -139,7 +139,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.warn('RUNTIME_MEDIA_NOT_INITIALIZED', 'Media component update rejected because init is missing', {
+      this.report('RUNTIME_MEDIA_NOT_INITIALIZED', 'Media component update rejected because init is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -252,7 +252,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     styleOptions: { skipTransitionValues?: boolean; eventId?: string; eventSeq?: number } = {}
   ): void {
     if (state.ref !== undefined && state.ref !== 'root' && state.ref !== MEDIA_REF) {
-      this.warn('AUTHOR_COMPONENT_REF_UNKNOWN', 'Component ref is unknown', {
+      this.report('AUTHOR_COMPONENT_REF_UNKNOWN', 'Component ref is unknown', {
         ref: state.ref,
         eventId: styleOptions.eventId,
         eventSeq: styleOptions.eventSeq

@@ -64,11 +64,11 @@ function createRuntimeEmitSelf(item: ItemDoc): RuntimeEmitSelf {
  * Creates one component root using the shared runtime node factory.
  */
 export function createComponentRoot(
-  item: RuntimeComponentClassInput['item'],
+  perso: RuntimeComponentClassInput['perso'],
   tagName: string,
   createElementOptions: RuntimeComponentClassInput['createElementOptions']
 ): unknown {
-  return createRuntimeNode(item, tagName, createElementOptions)
+  return createRuntimeNode(perso, tagName, createElementOptions)
 }
 
 /**
@@ -245,27 +245,27 @@ export function setImageFitMode(nodeRef: unknown, fitMode: ImageFitMode): void {
  * Binds emit declarations on component refs using one handleEvent dispatcher per target.
  */
 export function bindComponentEmitDeclarations(input: {
-  item: ItemDoc
+  perso: ItemDoc
   createElementOptions: CreateElementOptions | undefined
   resolveRef: (ref?: string) => unknown | null
-  warn: RuntimeComponentWarningReporter
+  report: RuntimeComponentWarningReporter
 }): void {
   const emitRuntimeEvent = input.createElementOptions?.emitRuntimeEvent
-  if (!emitRuntimeEvent || !input.item.emit) {
+  if (!emitRuntimeEvent || !input.perso.emit) {
     return
   }
 
   const handlersByTarget = new Map<unknown, Map<string, EmitRuleAction[]>>()
 
-  for (const [eventName, rule] of Object.entries(input.item.emit)) {
-    for (const action of normalizeEmitRuleActions(rule)) {
+  for (const [eventName, rule] of Object.entries(input.perso.emit)) {
+    for (const action of normalizeEmitRuleActions(rule as EmitRule)) {
       const targetNode = input.resolveRef(action.ref)
       if (targetNode === null) {
-        input.warn({
+        input.report({
           code: 'AUTHOR_COMPONENT_REF_UNKNOWN',
           message: 'Component ref is unknown',
           details: {
-            persoId: input.item.id,
+            persoId: input.perso.id,
             eventName,
             ref: action.ref
           }
@@ -281,7 +281,7 @@ export function bindComponentEmitDeclarations(input: {
     }
   }
 
-  const self = createRuntimeEmitSelf(input.item)
+  const self = createRuntimeEmitSelf(input.perso)
 
   for (const [targetNode, eventRulesByName] of handlersByTarget) {
     const eventHandler = {
@@ -293,7 +293,7 @@ export function bindComponentEmitDeclarations(input: {
             name: action.event.name,
             data,
             cascade: action.event.cascade,
-            scopeStoryId: action.event.cascade === true ? undefined : input.item.storyId
+            scopeStoryId: action.event.cascade === true ? undefined : input.perso.storyId
           })
         }
       }

@@ -48,10 +48,10 @@ export class TextComponent extends BaseComponent {
    */
   init(initial: Record<string, unknown>): void {
     const state = initial as TextState
-    const rootNode = createComponentRoot(this.item, resolveTextTag(state.tag), this.createElementOptions)
+    const rootNode = createComponentRoot(this.perso, resolveTextTag(state.tag), this.createElementOptions)
 
     resetComponentRoot(rootNode)
-    setComponentRootId(rootNode, this.item.id, state.id)
+    setComponentRootId(rootNode, this.perso.id, state.id)
 
     applyClassNameProps(rootNode, state.className)
     applyStyleProps(rootNode, state.style)
@@ -60,7 +60,7 @@ export class TextComponent extends BaseComponent {
     if (state.content !== undefined) {
       const content = resolveTextContent(state.content)
       if (content === null) {
-        this.warn('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number')
+        this.report('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number')
       } else {
         setTextContent(rootNode, content)
       }
@@ -74,7 +74,7 @@ export class TextComponent extends BaseComponent {
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.warn('RUNTIME_TEXT_NOT_INITIALIZED', 'Text component update rejected because init is missing', {
+      this.report('RUNTIME_TEXT_NOT_INITIALIZED', 'Text component update rejected because init is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -95,7 +95,7 @@ export class TextComponent extends BaseComponent {
 
     const content = resolveTextContent(state.content)
     if (content === null) {
-      this.warn('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number', {
+      this.report('AUTHOR_TEXT_CONTENT_INVALID', 'Text content must be a string or number', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })

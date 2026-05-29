@@ -52,10 +52,10 @@ export class ImageComponent extends BaseComponent {
    */
   init(initial: Record<string, unknown>): void {
     const state = initial as ImageState
-    const rootNode = createComponentRoot(this.item, 'div', this.createElementOptions)
+    const rootNode = createComponentRoot(this.perso, 'div', this.createElementOptions)
 
     resetComponentRoot(rootNode)
-    setComponentRootId(rootNode, this.item.id, state.id)
+    setComponentRootId(rootNode, this.perso.id, state.id)
 
     const mediaNode = ensureImagePart(rootNode, this.getPart(MEDIA_PART_ID))
     resetImagePart(mediaNode)
@@ -75,7 +75,7 @@ export class ImageComponent extends BaseComponent {
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.warn('RUNTIME_IMAGE_NOT_INITIALIZED', 'Image component update rejected because init is missing', {
+      this.report('RUNTIME_IMAGE_NOT_INITIALIZED', 'Image component update rejected because init is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -84,7 +84,7 @@ export class ImageComponent extends BaseComponent {
 
     const mediaNode = this.getPart(MEDIA_PART_ID)
     if (mediaNode === null) {
-      this.warn('RUNTIME_IMAGE_MEDIA_PART_MISSING', 'Image component media part is missing', {
+      this.report('RUNTIME_IMAGE_MEDIA_PART_MISSING', 'Image component media part is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -115,7 +115,7 @@ export class ImageComponent extends BaseComponent {
   ): void {
     if (state.src !== undefined) {
       if (typeof state.src !== 'string') {
-        this.warn('AUTHOR_IMAGE_SRC_INVALID', 'Image src must be a string', context)
+        this.report('AUTHOR_IMAGE_SRC_INVALID', 'Image src must be a string', context)
       } else {
         setImageSource(mediaNode, state.src)
       }
@@ -123,7 +123,7 @@ export class ImageComponent extends BaseComponent {
 
     if (state.alt !== undefined) {
       if (typeof state.alt !== 'string') {
-        this.warn('AUTHOR_IMAGE_ALT_INVALID', 'Image alt must be a string', context)
+        this.report('AUTHOR_IMAGE_ALT_INVALID', 'Image alt must be a string', context)
       } else {
         setImageAlt(mediaNode, state.alt)
       }
@@ -131,7 +131,7 @@ export class ImageComponent extends BaseComponent {
 
     const fitMode = resolveImageFitMode(state.fitMode)
     if (fitMode === null) {
-      this.warn('AUTHOR_IMAGE_FIT_MODE_INVALID', 'Image fitMode must be wallpaper or sprite', {
+      this.report('AUTHOR_IMAGE_FIT_MODE_INVALID', 'Image fitMode must be wallpaper or sprite', {
         ...context,
         fitMode: state.fitMode
       })

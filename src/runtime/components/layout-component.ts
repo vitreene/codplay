@@ -179,7 +179,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     const state = initial as LayoutState
     const format = resolveLayoutFormat(state.format)
     if (format === null) {
-      this.warn('AUTHOR_LAYOUT_FORMAT_INVALID', 'Layout format must be html or svg', {
+      this.report('AUTHOR_LAYOUT_FORMAT_INVALID', 'Layout format must be html or svg', {
         format: state.format
       })
     }
@@ -187,7 +187,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     const resolvedFormat = format ?? DEFAULT_LAYOUT_FORMAT
     const markup = isNonEmptyString(state.markup) ? state.markup : ''
     if (markup.length === 0) {
-      this.warn('AUTHOR_LAYOUT_MARKUP_INVALID', 'Layout markup must be a non-empty string')
+      this.report('AUTHOR_LAYOUT_MARKUP_INVALID', 'Layout markup must be a non-empty string')
     }
 
     this.clearParts()
@@ -197,7 +197,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     const rootNode = parsedTree.rootNode
 
     if (readNodeId(rootNode) === null) {
-      applyNodeId(rootNode, this.item.id)
+      applyNodeId(rootNode, this.perso.id)
     }
 
     for (const [nodeId, nodeRef] of parsedTree.nodeById) {
@@ -213,11 +213,11 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     this.setRoot(rootNode)
 
     bindComponentEmitDeclarations({
-      item: this.item,
+      perso: this.perso,
       createElementOptions: this.createElementOptions,
       resolveRef: (ref) => this.resolveRef(ref),
-      warn: (warning) => {
-        this.warn(warning.code, warning.message, warning.details)
+      report: (warning) => {
+        this.report(warning.code, warning.message, warning.details)
       }
     })
   }
@@ -227,7 +227,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
    */
   update(input: RuntimeComponentUpdateInput): void {
     if (this.rootNode === null) {
-      this.warn('RUNTIME_LAYOUT_NOT_INITIALIZED', 'Layout component update rejected because init is missing', {
+      this.report('RUNTIME_LAYOUT_NOT_INITIALIZED', 'Layout component update rejected because init is missing', {
         eventId: input.eventId,
         eventSeq: input.eventSeq
       })
@@ -264,14 +264,14 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     for (const outlet of outlets) {
       const outletId = typeof outlet === 'object' && outlet !== null ? (outlet as { id?: unknown }).id : undefined
       if (!isNonEmptyString(outletId)) {
-        this.warn('AUTHOR_LAYOUT_OUTLET_INVALID', 'Layout outlet id must be a non-empty string', {
+        this.report('AUTHOR_LAYOUT_OUTLET_INVALID', 'Layout outlet id must be a non-empty string', {
           outlet
         })
         continue
       }
 
       if (seenOutletIds.has(outletId)) {
-        this.warn('AUTHOR_LAYOUT_OUTLET_DUPLICATE', 'Layout outlet ids must be unique', {
+        this.report('AUTHOR_LAYOUT_OUTLET_DUPLICATE', 'Layout outlet ids must be unique', {
           outletId
         })
         continue
@@ -279,7 +279,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
 
       const outletNode = nodeById.get(outletId)
       if (outletNode === undefined) {
-        this.warn('AUTHOR_LAYOUT_OUTLET_NOT_FOUND', 'Layout outlet id must exist in markup', {
+        this.report('AUTHOR_LAYOUT_OUTLET_NOT_FOUND', 'Layout outlet id must exist in markup', {
           outletId
         })
         continue

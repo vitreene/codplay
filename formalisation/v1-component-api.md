@@ -18,6 +18,7 @@ Cette spec fixe uniquement:
 - les entrees principales du composant
 - le role de `render()`
 - le role de `init()`
+- le role de `_init()`
 - le role de `createRootNode()`
 - les formes autorisees du retour de `render()`
 
@@ -35,7 +36,10 @@ Le contrat auteur visible doit rester minimal:
 
 1. constructeur
 2. `render()`
-3. `update()`
+3. `init()`
+4. `update()`
+
+`init()` est une methode auteur optionnelle de mise en place personnalisee du composant.
 
 Les autres methodes specifiques du composant restent privees.
 
@@ -50,6 +54,28 @@ Principe:
 - l'auteur peut lire l'integralite du `perso`
 - le `perso` reste stable et readonly
 - le constructeur ne construit pas lui-meme le node root
+
+## `createElementOptions`
+
+`createElementOptions` est une dependance interne du runtime, non exposee a l'auteur.
+
+Elle regroupe deux responsabilites distinctes:
+
+1. `nodeFactory` — determine comment le node physique est cree (DOM browser ou objet de substitution en environnement sans DOM, typiquement les tests)
+2. `emitRuntimeEvent` — pont vers le systeme d'evenements runtime, utilise pour brancher les declarations `emit` auteur comme event listeners sur les nodes
+
+`createElementOptions` est transmis au constructeur de `BaseComponent` comme propriete interne.
+
+Elle est utilisee en deux moments du cycle de vie:
+
+- dans `_createRootNode()` — le `nodeFactory` entre en jeu pour produire le node physique a partir du retour de `render()`; si `render()` retourne une `string`, le runtime cree le node; si `render()` retourne un `Node`, le runtime l'utilise directement
+- dans `_init()` apres `_createRootNode()` — `emitRuntimeEvent` est utilise pour brancher les event listeners declares dans `perso.emit` sur le rootNode et ses parts internes
+
+Cette dependance ne fait pas partie de `ComponentServices`.
+
+Elle ne fait pas partie du contrat auteur.
+
+L'auteur n'a pas a connaitre ni a manipuler `createElementOptions`.
 
 ## `ComponentServices`
 
@@ -119,13 +145,23 @@ Si un auteur utilise une fonction externe de type `h(...)`, elle doit au final r
 
 ## `init()`
 
-`init()` est une methode interne du cycle de vie runtime.
+`init()` est une methode auteur optionnelle.
 
-`init()` n'est pas le point d'entree auteur principal.
+`init()` ne remplace pas le constructeur.
 
-`init()` peut faire plusieurs operations internes, mais il appelle notamment `createRootNode()`.
+`init()` permet d'ecrire une mise en place personnalisee du composant apres creation du root runtime.
 
 `init()` ne retourne rien.
+
+## `_init()`
+
+`_init()` est une methode interne du cycle de vie runtime.
+
+`_init()` n'est pas une API auteur.
+
+`_init()` peut faire plusieurs operations internes, mais il appelle notamment `createRootNode()` puis `init()` si le composant l'implemente.
+
+`_init()` ne retourne rien.
 
 ## `createRootNode()`
 
@@ -140,7 +176,7 @@ Son role est:
 
 `createRootNode()` ne fait pas partie de l'API auteur.
 
-Le runtime ne cascade pas des methodes one-line inutiles: `init()` appelle `createRootNode()` sans se contenter d'un `return` direct de cette methode.
+Le runtime ne cascade pas des methodes one-line inutiles: `_init()` appelle `createRootNode()` puis peut deleguer a `init()` sans se contenter d'un `return` direct de cette methode.
 
 ## Separation des responsabilites
 
@@ -148,11 +184,12 @@ Le runtime ne cascade pas des methodes one-line inutiles: `init()` appelle `crea
 
 - lit `perso`
 - decrit le rendu initial dans `render()`
+- ajoute sa mise en place personnalisee dans `init()`
 - ajoute sa logique de patch dans `update()`
 
 ### Runtime interne
 
-- appelle `init()`
+- appelle `_init()`
 - resolve le resultat de `render()`
 - assigne `rootNode`
 - gere les details de cycle de vie
@@ -170,8 +207,9 @@ type RuntimeComponentClassInput = {
 }
 
 type RuntimeComponent = {
-  init: () => void
   render: () => ComponentRenderResult
+  init?: () => void
+  _init: () => void
   update: (input: RuntimeComponentUpdateInput) => void
 }
 ```
@@ -188,7 +226,9 @@ Note:
 - `render()` reste obligatoire dans tous les cas
 - `render()` ne retourne ni tableau, ni valeur arbitraire opaque hors `string` ou `node`
 - le runtime ne lit pas automatiquement un template dans `perso`
-- `init()` est interne et ne remplace pas le constructeur auteur
+- `init()` est une methode auteur optionnelle de mise en place
+- `_init()` est interne et ne remplace pas le constructeur auteur
+- `_init()` appelle `createRootNode()` puis `init()` si elle existe
 - `createRootNode()` est interne et non exposee a l'auteur
 - `services` est injecte au moment de la creation du composant
 - l'absence d'un service attendu par le composant est une erreur runtime

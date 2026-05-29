@@ -32,9 +32,9 @@ export type RuntimeComponentUpdateInput = {
  * Defines shared constructor input used by all runtime components.
  */
 export type RuntimeComponentClassInput = {
-  item: ItemDoc
+  perso: ItemDoc
   createElementOptions?: CreateElementOptions
-  warn: RuntimeComponentWarningReporter
+  report: RuntimeComponentWarningReporter
 }
 
 /**

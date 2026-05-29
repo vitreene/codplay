@@ -16,6 +16,8 @@ Les decisions de reference sont portees en priorite par:
 - `report` remplace `warn`
 - `render()` est one-shot et retourne en V1 `string | node`
 - le runtime ne lit jamais implicitement un template dans `perso`
+- `init()` est une methode auteur optionnelle de mise en place personnalisee
+- `_init()` est une methode interne de cycle de vie
 - `update()` est la couche auteur et recoit le patch brut resolu
 - `_update()` est une methode interne et recoit le meme patch brut
 - le runtime garde la gestion interne des events utilisateur
@@ -26,6 +28,8 @@ Les decisions de reference sont portees en priorite par:
 ## Direction pour la base composant
 
 - la base garde `perso`, `services`, `report`, `rootNode`
+- la base peut exposer une methode runtime `_init(...)`
+- `_init(...)` appelle `createRootNode()` puis peut passer la main a `init()` auteur
 - la base peut exposer une methode runtime `_update(...)`
 - `_update(...)` peut appliquer une logique commune locale si utile, puis passer la main a `update(...)` auteur
 - il n'existe pas de pipeline commune canonique validee pour `_update()` en V1

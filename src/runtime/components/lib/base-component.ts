@@ -7,9 +7,9 @@ import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpda
 export abstract class BaseComponent implements RuntimeComponent {
   static readonly renderMutationResolver = htmlRenderMutationResolver
 
-  protected readonly item: RuntimeComponentClassInput['item']
+  protected readonly perso: RuntimeComponentClassInput['perso']
   protected readonly createElementOptions: RuntimeComponentClassInput['createElementOptions']
-  private readonly reportWarning: RuntimeComponentClassInput['warn']
+  private readonly reportWarning: RuntimeComponentClassInput['report']
 
   protected rootNode: unknown | null = null
   private readonly parts = new Map<string, unknown>()
@@ -18,11 +18,14 @@ export abstract class BaseComponent implements RuntimeComponent {
    * Stores runtime dependencies shared by all components.
    */
   constructor(input: RuntimeComponentClassInput) {
-    this.item = input.item
+    this.perso = input.perso
     this.createElementOptions = input.createElementOptions
-    this.reportWarning = input.warn
+    this.reportWarning = input.report
   }
 
+  /**
+   * Applies authored initial state and creates the component root node.
+   */
   abstract init(initial: Record<string, unknown>): void
 
   /**
@@ -32,17 +35,20 @@ export abstract class BaseComponent implements RuntimeComponent {
     return this.rootNode
   }
 
+  /**
+   * Applies one resolved runtime action patch on the component.
+   */
   abstract update(input: RuntimeComponentUpdateInput): void
 
   /**
    * Emits one normalized author warning scoped to the current component.
    */
-  protected warn(code: string, message: string, details?: Record<string, unknown>): void {
+  protected report(code: string, message: string, details?: Record<string, unknown>): void {
     this.reportWarning({
       code,
       message,
       details: {
-        persoId: this.item.id,
+        persoId: this.perso.id,
         ...details
       }
     })

@@ -207,47 +207,47 @@ export class RuntimeComponentOrchestrator {
       this.storyMoveByStoryId.set(storyId, rawMove)
     }
 
-    for (const item of Object.values(runtimePersos.persos)) {
-      const existingComponent = this.componentByPersoId.get(item.id)
+    for (const perso of Object.values(runtimePersos.persos)) {
+      const existingComponent = this.componentByPersoId.get(perso.id)
       if (existingComponent) {
-        this.refreshLoadedRuntimeComponent(item, existingComponent)
+        this.refreshLoadedRuntimeComponent(perso, existingComponent)
         continue
       }
 
-      const componentClass = this.componentClassByType.get(item.type)
+      const componentClass = this.componentClassByType.get(perso.type)
       if (!componentClass) {
         this.warn({
           code: 'AUTHOR_COMPONENT_TYPE_UNKNOWN',
           message: 'Unknown component type',
           details: {
-            itemId: item.id,
-            itemType: item.type
+            persoId: perso.id,
+            persoType: perso.type
           }
         })
         continue
       }
 
-      this.mountLoadedRuntimeComponent(item, componentClass)
+      this.mountLoadedRuntimeComponent(perso, componentClass)
     }
 
     this.mountStoryHosts(runtimePersos)
 
-    for (const item of Object.values(runtimePersos.persos)) {
-      const storyEntries = this.storyEntriesByStoryId.get(item.storyId) ?? []
-      const isStoryEntry = storyEntries.includes(item.id)
-      const rawInitialMove = item.initial.move
+    for (const perso of Object.values(runtimePersos.persos)) {
+      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? []
+      const isStoryEntry = storyEntries.includes(perso.id)
+      const rawInitialMove = perso.initial.move
 
       if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
         continue
       }
 
-      const initialMove = this.normalizeMoveCommand(item.initial.move, true)
+      const initialMove = this.normalizeMoveCommand(perso.initial.move, true)
       if (initialMove === null) {
         continue
       }
 
       this.applyMoveForPerso({
-        persoId: item.id,
+        persoId: perso.id,
         move: initialMove,
         eventId: INITIAL_LOAD_EVENT.id,
         eventSeq: INITIAL_LOAD_EVENT.seq
@@ -262,9 +262,9 @@ export class RuntimeComponentOrchestrator {
   /**
    * Refreshes one already-mounted runtime component in place.
    */
-  private refreshLoadedRuntimeComponent(item: ItemDoc, component: RuntimeComponent): void {
-    const previousRootNode = this.nodeByPersoId.get(item.id) ?? null
-    const nextRootNode = this.tryInitComponent(item, component, 'refresh')
+  private refreshLoadedRuntimeComponent(perso: ItemDoc, component: RuntimeComponent): void {
+    const previousRootNode = this.nodeByPersoId.get(perso.id) ?? null
+    const nextRootNode = this.tryInitComponent(perso, component, 'refresh')
     if (nextRootNode === null) {
       return
     }
@@ -280,64 +280,64 @@ export class RuntimeComponentOrchestrator {
       this.detachNodeFromParent(nextRootNode)
     }
 
-    this.storeLoadedRuntimeComponent(item, component, nextRootNode, listComponent)
+    this.storeLoadedRuntimeComponent(perso, component, nextRootNode, listComponent)
   }
 
   /**
    * Instantiates one new runtime component and stores its runtime maps.
    */
-  private mountLoadedRuntimeComponent(item: ItemDoc, componentClass: RuntimeComponentClass): void {
+  private mountLoadedRuntimeComponent(perso: ItemDoc, componentClass: RuntimeComponentClass): void {
     const component = new componentClass({
-      item,
+      perso,
       createElementOptions: this.createElementOptions,
-      warn: this.warn
+      report: this.warn
     })
 
-    const rootNode = this.tryInitComponent(item, component, 'mount')
+    const rootNode = this.tryInitComponent(perso, component, 'mount')
     if (rootNode === null) {
       return
     }
 
-    const listComponent = item.type === 'list' && this.isRuntimeListComponent(component) ? component : null
+    const listComponent = perso.type === 'list' && this.isRuntimeListComponent(component) ? component : null
 
     if (listComponent === null) {
       this.detachNodeFromParent(rootNode)
     }
 
-    this.storeLoadedRuntimeComponent(item, component, rootNode, listComponent)
+    this.storeLoadedRuntimeComponent(perso, component, rootNode, listComponent)
   }
 
   /**
    * Writes one runtime component snapshot into registry maps.
    */
   private storeLoadedRuntimeComponent(
-    item: ItemDoc,
+    perso: ItemDoc,
     component: RuntimeComponent,
     rootNode: unknown,
     listComponent: RuntimeListComponent | null
   ): void {
-    this.clearLayoutOutlets(item.id)
-    this.componentByPersoId.set(item.id, component)
-    this.nodeByPersoId.set(item.id, rootNode)
-    this.parentListByPersoId.set(item.id, null)
-    this.mountedByPersoId.set(item.id, listComponent !== null)
-    this.storyIdByPersoId.set(item.id, item.storyId)
+    this.clearLayoutOutlets(perso.id)
+    this.componentByPersoId.set(perso.id, component)
+    this.nodeByPersoId.set(perso.id, rootNode)
+    this.parentListByPersoId.set(perso.id, null)
+    this.mountedByPersoId.set(perso.id, listComponent !== null)
+    this.storyIdByPersoId.set(perso.id, perso.storyId)
 
     if (listComponent !== null) {
-      this.listByPersoId.set(item.id, listComponent)
+      this.listByPersoId.set(perso.id, listComponent)
     } else {
-      this.listByPersoId.delete(item.id)
+      this.listByPersoId.delete(perso.id)
     }
 
-    const resolver = this.renderMutationResolverByType.get(item.type)
+    const resolver = this.renderMutationResolverByType.get(perso.type)
     if (resolver) {
-      this.renderMutationResolverByPersoId.set(item.id, resolver)
-    } else if (this.renderMutationResolverByPersoId.has(item.id)) {
-      this.renderMutationResolverByPersoId.delete(item.id)
+      this.renderMutationResolverByPersoId.set(perso.id, resolver)
+    } else if (this.renderMutationResolverByPersoId.has(perso.id)) {
+      this.renderMutationResolverByPersoId.delete(perso.id)
     }
 
     if (this.isRuntimeLayoutComponent(component)) {
-      this.registerLayoutOutlets(item.id, component)
+      this.registerLayoutOutlets(perso.id, component)
     }
   }
 
@@ -466,17 +466,17 @@ export class RuntimeComponentOrchestrator {
   /**
    * Initializes one component behind one global runtime warning boundary.
    */
-  private tryInitComponent(item: ItemDoc, component: RuntimeComponent, phase: 'mount' | 'refresh'): unknown | null {
+  private tryInitComponent(perso: ItemDoc, component: RuntimeComponent, phase: 'mount' | 'refresh'): unknown | null {
     try {
-      component.init(item.initial)
+      component.init(perso.initial)
       return component.render()
     } catch (error) {
       this.warn({
         code: 'RUNTIME_COMPONENT_INIT_FAILED',
         message: 'Component init failed',
         details: {
-          itemId: item.id,
-          itemType: item.type,
+          persoId: perso.id,
+          persoType: perso.type,
           phase,
           error: error instanceof Error ? error.message : 'unknown_error'
         }

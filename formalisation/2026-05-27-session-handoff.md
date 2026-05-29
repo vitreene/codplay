@@ -163,6 +163,12 @@ Spec ecrite:
 
 - `formalisation/v1-component-api.md`
 
+Note de mise a jour ulterieure:
+
+- la spec a ensuite evolue pour distinguer `init()` auteur et `_init()` interne
+- la logique precedemment attribuee a `init()` interne est portee par `_init()`
+- `createRootNode()` reste interne
+
 ---
 
 ### 6. `ComponentServices`
