@@ -1,4 +1,5 @@
 import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../../create-element'
+import { startCaptureSession } from '../../capture-session'
 import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf } from '../../types'
 
 const SELF_PAYLOAD_KEY = 'self'
@@ -104,6 +105,24 @@ function emitDeclaredRuntimeEvents(
 }
 
 /**
+ * Reads the current translateX/translateY from one DOM element's computed transform.
+ */
+function readElementTranslation(element: Element): { x: number; y: number } {
+  const style = globalThis.getComputedStyle?.(element as HTMLElement)
+  const transform = style?.transform
+  if (!transform || transform === 'none') {
+    return { x: 0, y: 0 }
+  }
+
+  if (typeof globalThis.DOMMatrix === 'undefined') {
+    return { x: 0, y: 0 }
+  }
+
+  const matrix = new globalThis.DOMMatrix(transform)
+  return { x: matrix.m41, y: matrix.m42 }
+}
+
+/**
  * Binds authored user event emits on DOM and object runtime nodes.
  */
 function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: CreateElementOptions | undefined): void {
@@ -113,12 +132,28 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
   }
 
   for (const userEvent of Object.keys(item.emit)) {
-    const emit = () => {
-      emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
-    }
+    const rule = item.emit[userEvent]
+    const captureSpec = resolveRootEmitRule(rule).find((action) => action.capture !== undefined)?.capture
 
     if (isDomElement(nodeRef)) {
-      nodeRef.addEventListener(userEvent, emit)
+      nodeRef.addEventListener(userEvent, (domEvent) => {
+        emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
+
+        if (captureSpec !== undefined && domEvent instanceof PointerEvent) {
+          const base = readElementTranslation(nodeRef)
+          startCaptureSession({
+            capture: captureSpec,
+            startX: domEvent.clientX,
+            startY: domEvent.clientY,
+            baseX: base.x,
+            baseY: base.y,
+            startMs: Date.now(),
+            emitRuntimeEvent,
+            applyLiveUpdate: options?.applyLiveUpdate,
+            getCurrentTimelineMs: options?.getCurrentTimelineMs
+          })
+        }
+      })
       continue
     }
 
@@ -126,7 +161,9 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
       const runtimeNode = nodeRef as RuntimeObjectEventNode
       runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] = {
         ...(runtimeNode[RUNTIME_OBJECT_EVENT_HANDLERS] ?? {}),
-        [userEvent]: emit
+        [userEvent]: () => {
+          emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
+        }
       }
     }
   }

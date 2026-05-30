@@ -16,6 +16,8 @@ const SELF_PAYLOAD_KEY = 'self'
 export type CreateElementOptions = {
   nodeFactory?: RuntimeNodeFactory
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
+  applyLiveUpdate?: (event: RuntimeEmitEvent) => void
+  getCurrentTimelineMs?: () => number
 }
 
 /**

@@ -63,12 +63,25 @@ export type EmitRuleEvent = {
 }
 
 /**
+ * Defines one interaction capture session attached to one emit trigger.
+ */
+export type EmitCapture = {
+  event: EmitRuleEvent
+  trackEvent?: EmitRuleEvent
+  duration: number
+  snapAt: 'start' | 'end'
+  trackOn?: string[]
+  endOn?: string[]
+}
+
+/**
  * Defines one runtime event declaration emitted from one user interaction.
  */
 export type EmitRuleAction = {
   ref?: string
   event: EmitRuleEvent
   data?: Record<string, unknown>
+  capture?: EmitCapture
 }
 
 /**
@@ -87,6 +100,7 @@ export type RuntimeEmitEvent = {
   data?: Record<string, unknown>
   cascade?: boolean
   scopeStoryId?: string
+  ms?: number
 }
 
 /**

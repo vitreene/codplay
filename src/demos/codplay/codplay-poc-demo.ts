@@ -15,6 +15,7 @@ export async function runCodPlayPocDemo(): Promise<void> {
 			{ label: 'Player POC', href: '?demo=poc' },
 			{ label: 'CodPlay POC', href: '?demo=codplay-poc', active: true },
 			{ label: 'Quiz Reference', href: '?demo=quiz' },
+			{ label: 'Drag & Capture', href: '?demo=drag' },
 		],
 	})
 }

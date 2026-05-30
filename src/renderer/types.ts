@@ -11,6 +11,8 @@ export type CreateRendererOptions = {
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
+  applyLiveUpdate?: (event: RuntimeEmitEvent) => void
+  getCurrentTimelineMs?: () => number
 }
 
 /**

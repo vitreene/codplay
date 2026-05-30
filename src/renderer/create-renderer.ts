@@ -115,7 +115,9 @@ export class RendererFacade implements RendererApi {
     this.animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
     this.runtimeCreateElementOptions = {
       ...options.createElementOptions,
-      emitRuntimeEvent: options.emitRuntimeEvent
+      emitRuntimeEvent: options.emitRuntimeEvent,
+      applyLiveUpdate: options.applyLiveUpdate,
+      getCurrentTimelineMs: options.getCurrentTimelineMs
     }
     this.orchestrator = new RuntimeComponentOrchestrator({
       warn: (warning) => {

@@ -382,10 +382,20 @@ export class PlayerFacade implements PlayerApi {
     this.renderer = new RendererFacade({
       animationAdapter,
       createElementOptions: options.createElementOptions,
+      getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
+      applyLiveUpdate: (event) => {
+        void this.applyMaterializedEvent({
+          name: event.name,
+          payload: event.data,
+          cascade: event.cascade,
+          source: RUNTIME_EVENT_SOURCE.system
+        })
+      },
       emitRuntimeEvent: (event) => {
         const runtimeEvent: PlayerPublicEventInput = {
           name: event.name,
           payload: event.data,
+          ms: event.ms,
           scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
           cascade: event.cascade,
           source: RUNTIME_EVENT_SOURCE.user
@@ -1120,7 +1130,7 @@ export class PlayerFacade implements PlayerApi {
       scopeStoryId,
       index: this.nextPublicEventIndex,
       source: input.source ?? RUNTIME_EVENT_SOURCE.user,
-      trackId
+      trackId,
     }
 
     this.nextPublicEventIndex += 1
@@ -1445,15 +1455,17 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    const isFutureEvent = timelineEvent.ms > this.resolveCurrentTimelineMs()
+    const currentMs = this.resolveCurrentTimelineMs()
+    const isFutureEvent = timelineEvent.ms > currentMs
+    const isRetroactiveEvent = timelineEvent.ms < currentMs
 
-    if (!isFutureEvent) {
+    if (!isFutureEvent && !isRetroactiveEvent) {
       this.runTimelineEvent(timelineEvent)
     }
 
     if (shouldPersistEvent) {
       if (!isFutureEvent) {
-        this.trackManager.syncCursor({ nowMs: timelineEvent.ms })
+        this.trackManager.syncCursor({ nowMs: isRetroactiveEvent ? currentMs : timelineEvent.ms })
       } else if (!this.timelineReplayInProgress) {
         this.recordPlayedProgress(timelineEvent)
       }
@@ -1463,7 +1475,7 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    if (!isFutureEvent && !this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
+    if (!isRetroactiveEvent && !isFutureEvent && !this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
       const runtimePlan = this.createMountedRuntimePlan()
       if (runtimePlan !== null) {
         const eventDurationMs = this.runtimePlanner.resolveEventDurationMsFromTimelinePlan(runtimePlan.timelinePlan, timelineEvent.name)
@@ -1473,7 +1485,7 @@ export class PlayerFacade implements PlayerApi {
       this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
     }
 
-    if (!isFutureEvent) {
+    if (!isFutureEvent && !isRetroactiveEvent) {
       this.syncMediaTimeline(timelineEvent.ms)
     }
 

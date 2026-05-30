@@ -89,14 +89,21 @@ export class Player implements PlayerApi {
         return this.routeTimelineEvent(event)
       },
       onRuntimeEmit: (event) => {
+        const source = event.source ?? RUNTIME_EVENT_SOURCE.user
         void this.routeSceneEvent(
           {
             name: event.name,
             data: event.payload,
             cascade: event.cascade
           },
-          event.source ?? RUNTIME_EVENT_SOURCE.user,
-          event.scopeStoryId
+          source,
+          event.scopeStoryId,
+          0,
+          {
+            scopeStoryId: event.scopeStoryId,
+            source,
+            ms: event.ms ?? this.player.getState().timelineMs
+          }
         )
       }
     })
