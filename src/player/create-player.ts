@@ -457,6 +457,29 @@ export class PlayerFacade implements PlayerApi {
     }
   }
 
+  readonly module: import('../runtime/components').ModuleRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_MODULE_REGISTRY_LOCKED', message: 'module.register is only allowed before init' } }
+      }
+      const result = this.renderer.module.register(input)
+      if (result.ok) {
+        this.emitTrace('player:register-module', RUNTIME_TRACE_STATUS.applied, { name: input.name, status: result.status })
+      }
+      return result
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'PLAYER_MODULE_REGISTRY_LOCKED', message: 'module.override is only allowed before init' } }
+      }
+      const result = this.renderer.module.override(input)
+      if (result.ok) {
+        this.emitTrace('player:override-module', RUNTIME_TRACE_STATUS.applied, { name: input.name, status: result.status })
+      }
+      return result
+    }
+  }
+
   /**
    * Exposes one stable runtime registry for integration/editing flows.
    */

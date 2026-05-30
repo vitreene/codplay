@@ -1,8 +1,8 @@
 import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
-import type { ComponentRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
+import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
 import type { RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
-export type { ComponentRegistryApi, ServiceRegistryApi }
+export type { ComponentRegistryApi, ModuleRegistryApi, ServiceRegistryApi }
 
 /**
  * Defines renderer constructor options.
@@ -105,6 +105,7 @@ export type RendererLoadInput = {
 export type RendererApi = {
   component: ComponentRegistryApi
   service: ServiceRegistryApi
+  module: ModuleRegistryApi
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
   load: (input: RendererLoadInput) => RendererCommandResult
   start: () => RendererCommandResult

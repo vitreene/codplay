@@ -4,8 +4,10 @@ import type { CreateElementOptions } from '../create-element'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
 import type { ItemDoc, MoveCommand } from '../types'
 import type { ComponentServices, ServiceInstance } from './lib/component-services'
+import type { ComponentModules } from './lib/component-modules'
 
 export type { ComponentServices, ServiceInstance }
+export type { ComponentModules }
 
 /**
  * Describes one warning emitted by runtime component orchestration.
@@ -39,6 +41,7 @@ export type RuntimeComponentClassInput = {
   createElementOptions?: CreateElementOptions
   report: RuntimeComponentWarningReporter
   services: ComponentServices
+  modules: ComponentModules
 }
 
 /**
@@ -55,6 +58,7 @@ export type RuntimeComponent = {
   init?: () => void
   _init: () => void
   update: (input: RuntimeComponentUpdateInput) => void
+  readonly modules: ComponentModules
 }
 
 /**
@@ -192,3 +196,137 @@ export type RuntimeUpdateRoutingResult = {
   animatableActions: AnimationResolvedAction[]
   directTransitions: TransitionRequest[]
 }
+
+/**
+ * Defines the phases at which a runtime module hook can be invoked.
+ */
+export type RuntimeModuleHookPhase =
+  | 'onComponentMounted'
+  | 'onComponentUnmounted'
+  | 'onInitialPerso'
+  | 'beforeUpdate'
+  | 'afterUpdate'
+  | 'onDestroy'
+
+/**
+ * Collects mutable outputs written by module hooks during one routing cycle.
+ */
+export type RuntimeModuleHookOutput = {
+  directTransitions: TransitionRequest[]
+}
+
+/**
+ * Defines the context passed to every module hook invocation.
+ */
+export type RuntimeModuleHookPayload = {
+  perso?: DeepReadonly<ItemDoc>
+  component?: RuntimeComponent
+  rootNode?: unknown
+  resolvedAction?: AnimationResolvedAction
+  eventSeq?: number
+  moveCommand?: MoveCommand | null
+  output?: RuntimeModuleHookOutput
+}
+
+/**
+ * Defines one module hook function invoked by the dispatcher.
+ */
+export type RuntimeModuleHook = (payload: RuntimeModuleHookPayload) => void
+
+/**
+ * Declares the conditions under which a module runtime binding is dispatched.
+ */
+export type RuntimeModuleMatch = {
+  actionKeys?: readonly string[]
+  componentCapabilities?: readonly string[]
+}
+
+/**
+ * Defines the runtime face of an installed module.
+ */
+export type RuntimeModuleRuntimeBinding = {
+  hooks?: Partial<Record<RuntimeModuleHookPhase, RuntimeModuleHook>>
+  match?: RuntimeModuleMatch
+}
+
+/**
+ * Defines the full binding returned by a module after installation.
+ */
+export type RuntimeModuleBinding = {
+  runtime?: RuntimeModuleRuntimeBinding
+}
+
+/**
+ * Provides read access to the node registry for module hooks.
+ */
+export type RuntimeNodeRegistryRead = {
+  get(id: string): unknown | null
+}
+
+/**
+ * Provides read and write access to the container and parent-tracking registries.
+ */
+export type RuntimeContainerRegistry = {
+  get(id: string): RuntimeListComponent | null
+  set(id: string, list: RuntimeListComponent): void
+  delete(id: string): void
+  getParentId(childId: string): string | null
+  setParentId(childId: string, parentId: string | null): void
+}
+
+/**
+ * Provides read and write access to the mounted state registry.
+ */
+export type RuntimeMountedRegistry = {
+  get(id: string): boolean
+  set(id: string, mounted: boolean): void
+}
+
+/**
+ * Exposes the runtime registries and helpers injected into every module at install time.
+ */
+export type RuntimeModuleHost = {
+  report: RuntimeComponentWarningReporter
+  warnOnce(eventSeq: number, code: string, details: Record<string, unknown>, persoId: string): void
+  registries: {
+    node: RuntimeNodeRegistryRead
+    component: { get(id: string): RuntimeComponent | null }
+    container: RuntimeContainerRegistry
+    mounted: RuntimeMountedRegistry
+  }
+  helpers: {
+    getStoryId(persoId: string): string | null
+    resolveTargetNode(parentId: string, storyId: string | null, childNode?: unknown): unknown | null
+    canAttachChildToNode(parentNode: unknown, childNode: unknown): boolean
+    detachNode(nodeRef: unknown): void
+    appendNode(parentNode: unknown, childNode: unknown): void
+  }
+}
+
+/**
+ * Defines the contract of a runtime module registered via the module registry.
+ */
+export type RuntimeModule = {
+  install(host: RuntimeModuleHost): RuntimeModuleBinding
+}
+
+/**
+ * Defines the input for one module register or override operation.
+ */
+export type ModuleRegisterInput = {
+  name: string
+  module: RuntimeModule
+}
+
+/**
+ * Defines the module registry API.
+ */
+export type ModuleRegistryApi = {
+  register(input: ModuleRegisterInput): RegistryResult
+  override(input: ModuleRegisterInput): RegistryResult
+}
+
+/**
+ * Marks a deeply readonly value (shallow alias for type-level intent).
+ */
+type DeepReadonly<T> = Readonly<T>

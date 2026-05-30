@@ -1,26 +1,35 @@
 import type { AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
-import { createListFlipModule } from '../modules/list-flip'
 import { RUNTIME_CONFIG } from '../config'
 import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
-import type { MoveCommand, MoveFlipMode } from '../types'
+import type { MoveCommand } from '../types'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
 import { createComponentServices, CORE_SERVICES } from './lib/component-services'
 import type { ServiceInstance } from './lib/component-services'
+import { createComponentModules } from './lib/component-modules'
 import { isDomNode } from './lib/dom-component-adapter'
 import { LayoutComponent } from './layout-component'
 import { ImageComponent } from './image-component'
 import { ListComponent } from './list-component'
 import { MediaComponent } from './media-component'
 import { TextComponent } from './text-component'
+import { moveModule, normalizeMoveCommand, isStoryHostMove } from '../modules/move'
+import { listModule } from '../modules/list'
 import type {
   ComponentRegisterInput,
+  ModuleRegisterInput,
   RegistryResult,
   RuntimeComponent,
   RuntimeComponentClass,
   RuntimeComponentWarningReporter,
   RuntimeLayoutComponent,
   RuntimeListComponent,
+  RuntimeModule,
+  RuntimeModuleHookOutput,
+  RuntimeModuleHookPayload,
+  RuntimeModuleHookPhase,
+  RuntimeModuleHost,
+  RuntimeModuleRuntimeBinding,
   RuntimeRegistrySnapshot,
   RuntimeResolvedUpdate,
   RuntimeUpdateRoutingResult,
@@ -33,46 +42,6 @@ const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   media: MediaComponent,
   list: ListComponent,
   layout: LayoutComponent
-}
-
-const INITIAL_LOAD_EVENT = {
-  id: 'init',
-  seq: 0
-} as const
-
-/**
- * Checks whether one move payload already matches the V1 move contract.
- */
-function isMoveCommand(value: unknown): value is MoveCommand {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const move = value as { parentId?: unknown }
-  return typeof move.parentId === 'string' && move.parentId.length > 0
-}
-
-/**
- * Resolves one strict move FLIP mode from authored payload.
- */
-function normalizeMoveFlipMode(rawFlipMode: unknown): MoveFlipMode {
-  return rawFlipMode === 'overlay-world' ? 'overlay-world' : 'local'
-}
-
-/**
- * Checks whether one raw move payload targets the story host alias.
- */
-function isStoryHostMove(rawMove: unknown): boolean {
-  if (rawMove === RUNTIME_CONFIG.move.rootToken) {
-    return true
-  }
-
-  if (typeof rawMove !== 'object' || rawMove === null) {
-    return false
-  }
-
-  const move = rawMove as { parentId?: unknown }
-  return move.parentId === RUNTIME_CONFIG.move.rootToken
 }
 
 /**
@@ -101,17 +70,10 @@ function toRuntimeElementMap(
 export class RuntimeComponentOrchestrator {
   private readonly warn: RuntimeComponentWarningReporter
   private readonly warningKeys = new Set<string>()
-  private readonly listFlipModule = createListFlipModule({
-    warnOnce: (eventSeq, code, details, persoId) => {
-      this.warnOnce(eventSeq, code, details, persoId)
-    },
-    getNodeById: (persoId) => this.nodeByPersoId.get(persoId) ?? null,
-    getListById: (persoId) => this.listByPersoId.get(persoId) ?? null,
-    getParentListId: (persoId) => this.parentListByPersoId.get(persoId) ?? null,
-    isMounted: (persoId) => this.mountedByPersoId.get(persoId) ?? false
-  })
 
   private readonly serviceRegistry = new Map<string, ServiceInstance>(Object.entries(CORE_SERVICES))
+  private readonly moduleRegistry = new Map<string, RuntimeModule>()
+  private readonly installedModuleBindings: RuntimeModuleRuntimeBinding[] = []
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
   private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>()
   private readonly componentByPersoId = new Map<string, RuntimeComponent>()
@@ -141,6 +103,9 @@ export class RuntimeComponentOrchestrator {
     for (const [persoType, componentClass] of Object.entries(DEFAULT_COMPONENT_CLASSES)) {
       this.setComponentClass(persoType, componentClass)
     }
+
+    this.registerModule({ name: 'move', module: moveModule })
+    this.registerModule({ name: 'list', module: listModule })
   }
 
   /**
@@ -211,10 +176,122 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
+   * Registers one module. Fails explicitly if the name is already registered.
+   */
+  registerModule({ name, module }: ModuleRegisterInput): RegistryResult {
+    if (this.moduleRegistry.has(name)) {
+      return { ok: false, error: { code: 'RUNTIME_MODULE_ALREADY_REGISTERED', message: 'Module name is already registered', details: { name } } }
+    }
+    this.moduleRegistry.set(name, module)
+    return { ok: true, status: 'registered' }
+  }
+
+  /**
+   * Overrides one module. Fails explicitly if the name is not yet registered.
+   */
+  overrideModule({ name, module }: ModuleRegisterInput): RegistryResult {
+    if (!this.moduleRegistry.has(name)) {
+      return { ok: false, error: { code: 'RUNTIME_MODULE_NOT_REGISTERED', message: 'Module name is not registered and cannot be overridden', details: { name } } }
+    }
+    this.moduleRegistry.set(name, module)
+    return { ok: true, status: 'overridden' }
+  }
+
+  /**
+   * Installs all registered modules against the runtime host and collects their bindings.
+   */
+  private installModules(): void {
+    this.installedModuleBindings.length = 0
+    const host = this.createModuleHost()
+    for (const module of this.moduleRegistry.values()) {
+      const binding = module.install(host)
+      if (binding.runtime !== undefined) {
+        this.installedModuleBindings.push(binding.runtime)
+      }
+    }
+  }
+
+  /**
+   * Builds the module host that exposes registries and helpers to installed modules.
+   */
+  private createModuleHost(): RuntimeModuleHost {
+    return {
+      report: this.warn,
+      warnOnce: (eventSeq, code, details, persoId) => this.warnOnce(eventSeq, code, details, persoId),
+      registries: {
+        node: {
+          get: (id) => this.nodeByPersoId.get(id) ?? null
+        },
+        component: {
+          get: (id) => this.componentByPersoId.get(id) ?? null
+        },
+        container: {
+          get: (id) => this.listByPersoId.get(id) ?? null,
+          set: (id, list) => { this.listByPersoId.set(id, list) },
+          delete: (id) => { this.listByPersoId.delete(id) },
+          getParentId: (childId) => this.parentListByPersoId.get(childId) ?? null,
+          setParentId: (childId, parentId) => { this.parentListByPersoId.set(childId, parentId) }
+        },
+        mounted: {
+          get: (id) => this.mountedByPersoId.get(id) ?? false,
+          set: (id, mounted) => { this.mountedByPersoId.set(id, mounted) }
+        }
+      },
+      helpers: {
+        getStoryId: (persoId) => this.storyIdByPersoId.get(persoId) ?? null,
+        resolveTargetNode: (parentId, storyId, childNode) => this.resolveMoveTargetNode(parentId, storyId, childNode),
+        canAttachChildToNode: (parentNode, childNode) => this.canAttachChildToNode(parentNode, childNode),
+        detachNode: (nodeRef) => this.detachNodeFromParent(nodeRef),
+        appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode)
+      }
+    }
+  }
+
+  /**
+   * Dispatches one hook phase to all installed modules whose match is compatible.
+   */
+  private runHook(phase: RuntimeModuleHookPhase, payload: RuntimeModuleHookPayload): void {
+    for (const binding of this.installedModuleBindings) {
+      const hook = binding.hooks?.[phase]
+      if (hook === undefined) {
+        continue
+      }
+
+      const match = binding.match
+      if (match !== undefined) {
+        if (match.actionKeys !== undefined && match.actionKeys.length > 0) {
+          const action = payload.resolvedAction?.action as Record<string, unknown> | undefined
+          if (action !== undefined) {
+            const hasMatchingKey = match.actionKeys.some((key) => Object.prototype.hasOwnProperty.call(action, key))
+            if (!hasMatchingKey) {
+              continue
+            }
+          }
+        }
+
+        if (match.componentCapabilities !== undefined && match.componentCapabilities.length > 0) {
+          const component = payload.component
+          if (component === undefined) {
+            continue
+          }
+          const hasCapability = match.componentCapabilities.some((cap) =>
+            component.modules.declared.includes(cap)
+          )
+          if (!hasCapability) {
+            continue
+          }
+        }
+      }
+
+      hook(payload)
+    }
+  }
+
+  /**
    * Synchronizes one runtime perso graph without purging the existing registry.
    */
   loadPersos(runtimePersos: RuntimePersos): RuntimeElementMap {
-    this.listFlipModule.cleanup()
+    this.installModules()
     this.storyEntriesByStoryId.clear()
     this.storyMoveByStoryId.clear()
 
@@ -260,17 +337,12 @@ export class RuntimeComponentOrchestrator {
         continue
       }
 
-      const initialMove = this.normalizeMoveCommand(perso.initial.move, true)
-      if (initialMove === null) {
+      const moveCommand = normalizeMoveCommand(perso.initial.move, true)
+      if (moveCommand === null) {
         continue
       }
 
-      this.applyMoveForPerso({
-        persoId: perso.id,
-        move: initialMove,
-        eventId: INITIAL_LOAD_EVENT.id,
-        eventSeq: INITIAL_LOAD_EVENT.seq
-      })
+      this.runHook('onInitialPerso', { perso, moveCommand })
     }
 
     this.mountStoryEntriesToStoryHosts(runtimePersos)
@@ -292,14 +364,11 @@ export class RuntimeComponentOrchestrator {
       this.detachNodeFromParent(previousRootNode)
     }
 
-    const isListComponent = this.isRuntimeListComponent(component)
-    const listComponent = isListComponent ? (component as RuntimeListComponent) : null
-
-    if (!isListComponent) {
+    if (!this.isRuntimeListComponent(component)) {
       this.detachNodeFromParent(nextRootNode)
     }
 
-    this.storeLoadedRuntimeComponent(perso, component, nextRootNode, listComponent)
+    this.storeLoadedRuntimeComponent(perso, component, nextRootNode)
   }
 
   /**
@@ -309,6 +378,7 @@ export class RuntimeComponentOrchestrator {
     const component = new componentClass({
       perso,
       services: createComponentServices(this.serviceRegistry),
+      modules: createComponentModules(),
       createElementOptions: this.createElementOptions,
       report: this.warn
     })
@@ -318,13 +388,11 @@ export class RuntimeComponentOrchestrator {
       return
     }
 
-    const listComponent = perso.type === 'list' && this.isRuntimeListComponent(component) ? component : null
-
-    if (listComponent === null) {
+    if (!this.isRuntimeListComponent(component)) {
       this.detachNodeFromParent(rootNode)
     }
 
-    this.storeLoadedRuntimeComponent(perso, component, rootNode, listComponent)
+    this.storeLoadedRuntimeComponent(perso, component, rootNode)
   }
 
   /**
@@ -333,21 +401,17 @@ export class RuntimeComponentOrchestrator {
   private storeLoadedRuntimeComponent(
     perso: ItemDoc,
     component: RuntimeComponent,
-    rootNode: unknown,
-    listComponent: RuntimeListComponent | null
+    rootNode: unknown
   ): void {
     this.clearLayoutOutlets(perso.id)
     this.componentByPersoId.set(perso.id, component)
     this.nodeByPersoId.set(perso.id, rootNode)
     this.parentListByPersoId.set(perso.id, null)
-    this.mountedByPersoId.set(perso.id, listComponent !== null)
+    this.mountedByPersoId.set(perso.id, false)
     this.storyIdByPersoId.set(perso.id, perso.storyId)
+    this.listByPersoId.delete(perso.id)
 
-    if (listComponent !== null) {
-      this.listByPersoId.set(perso.id, listComponent)
-    } else {
-      this.listByPersoId.delete(perso.id)
-    }
+    this.runHook('onComponentMounted', { perso, component, rootNode })
 
     const resolver = this.renderMutationResolverByType.get(perso.type)
     if (resolver) {
@@ -365,7 +429,7 @@ export class RuntimeComponentOrchestrator {
    * Destroys current runtime maps and returns empty runtime elements.
    */
   destroy(): RuntimeElementMap {
-    this.listFlipModule.cleanup()
+    this.runHook('onDestroy', {})
     this.componentByPersoId.clear()
     this.nodeByPersoId.clear()
     this.listByPersoId.clear()
@@ -436,23 +500,14 @@ export class RuntimeComponentOrchestrator {
     }
 
     const moveDecision = input.moveDecision ?? null
-    const flipSession =
-      moveDecision !== null
-        ? this.listFlipModule.prepareMove({
-            persoId: targetPersoId,
-            move: moveDecision,
-            eventId: input.update.resolvedAction.eventId,
-            eventName: input.update.resolvedAction.eventName,
-            eventSeq: input.update.eventSeq
-          })
-        : null
+    const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] }
 
     if (moveDecision !== null) {
-      this.applyMoveForPerso({
-        persoId: targetPersoId,
-        move: moveDecision,
-        eventId: input.update.resolvedAction.eventId,
-        eventSeq: input.update.eventSeq
+      this.runHook('beforeUpdate', {
+        resolvedAction: input.update.resolvedAction,
+        eventSeq: input.update.eventSeq,
+        moveCommand: moveDecision,
+        output: hookOutput
       })
     }
 
@@ -465,9 +520,7 @@ export class RuntimeComponentOrchestrator {
       return false
     }
 
-    if (flipSession !== null) {
-      input.directTransitions.push(...flipSession.commit())
-    }
+    input.directTransitions.push(...hookOutput.directTransitions)
 
     const targetNode = this.nodeByPersoId.get(targetPersoId)
     if (targetNode !== undefined) {
@@ -713,7 +766,7 @@ export class RuntimeComponentOrchestrator {
    */
   private mountStoryHosts(runtimePersos: RuntimePersos): void {
     for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
-      const move = this.normalizeMoveCommand(rawMove, true)
+      const move = normalizeMoveCommand(rawMove, true)
       if (move === null) {
         continue
       }
@@ -838,186 +891,6 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Normalizes move payload into one strict move command.
-   */
-  private normalizeMoveCommand(rawMove: unknown, isInitialMove: boolean): MoveCommand | null {
-    if (typeof rawMove === 'string') {
-      return rawMove.length === 0
-        ? null
-        : {
-            parentId: rawMove,
-            mode: isInitialMove ? 'append' : 'append',
-            flipMode: 'local'
-          }
-    }
-
-    if (!isMoveCommand(rawMove)) {
-      return null
-    }
-
-    return {
-      parentId: rawMove.parentId,
-      mode: isInitialMove ? 'append' : rawMove.mode ?? 'append',
-      flip: rawMove.flip,
-      flipMode: normalizeMoveFlipMode((rawMove as { flipMode?: unknown }).flipMode),
-      reorder: rawMove.reorder
-    }
-  }
-
-  /**
-   * Applies one global move command from child component to parent list.
-   */
-  private applyMoveForPerso(request: {
-    persoId: string
-    move: MoveCommand
-    eventId: string
-    eventSeq: number
-  }): void {
-    const childNode = this.nodeByPersoId.get(request.persoId) ?? null
-    const storyId = this.storyIdByPersoId.get(request.persoId) ?? null
-    const sourceListId = this.parentListByPersoId.get(request.persoId) ?? null
-    const sourceList = sourceListId ? this.listByPersoId.get(sourceListId) ?? null : null
-
-    const targetList = this.listByPersoId.get(request.move.parentId) ?? null
-    const targetNode = targetList === null ? this.resolveMoveTargetNode(request.move.parentId, storyId, childNode) : null
-
-    if (targetList === null && targetNode === null) {
-      if (sourceList !== null) {
-        sourceList.detachChild({
-          childId: request.persoId,
-          mode: request.move.mode,
-          reorder: request.move.reorder,
-          eventId: request.eventId,
-          eventSeq: request.eventSeq
-        })
-      }
-
-      this.parentListByPersoId.set(request.persoId, null)
-      this.mountedByPersoId.set(request.persoId, false)
-      this.warnOnce(
-        request.eventSeq,
-        'AUTHOR_LAYOUT_OUTLET_NOT_FOUND',
-        {
-          persoId: request.persoId,
-          parentId: request.move.parentId,
-          eventId: request.eventId,
-          eventSeq: request.eventSeq
-        },
-        request.persoId
-      )
-      return
-    }
-
-    if (targetList !== null && sourceList !== null && sourceList.getPersoId() === targetList.getPersoId()) {
-      targetList.repositionChild({
-        childId: request.persoId,
-        mode: request.move.mode,
-        reorder: request.move.reorder,
-        eventId: request.eventId,
-        eventSeq: request.eventSeq
-      })
-
-      this.parentListByPersoId.set(request.persoId, targetList.getPersoId())
-      this.mountedByPersoId.set(request.persoId, true)
-      return
-    }
-
-    if (targetNode !== null) {
-      const movedChildNode = sourceList !== null
-        ? sourceList.detachChild({
-            childId: request.persoId,
-            mode: request.move.mode,
-            reorder: request.move.reorder,
-            eventId: request.eventId,
-            eventSeq: request.eventSeq
-          }) ?? childNode
-        : childNode
-
-      if (movedChildNode === null) {
-        this.parentListByPersoId.set(request.persoId, null)
-        this.mountedByPersoId.set(request.persoId, false)
-        this.warnOnce(
-          request.eventSeq,
-          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-          {
-            persoId: request.persoId,
-            eventId: request.eventId,
-            eventSeq: request.eventSeq
-          },
-          request.persoId
-        )
-        return
-      }
-
-      if (!this.canAttachChildToNode(targetNode, movedChildNode)) {
-        this.warnOnce(
-          request.eventSeq,
-          'AUTHOR_LAYOUT_OUTLET_CHILD_INCOMPATIBLE',
-          {
-            persoId: request.persoId,
-            parentId: request.move.parentId,
-            eventId: request.eventId,
-            eventSeq: request.eventSeq
-          },
-          request.persoId
-        )
-        return
-      }
-
-      this.detachNodeFromParent(movedChildNode)
-      this.appendNodeToParent(targetNode, movedChildNode)
-      this.parentListByPersoId.set(request.persoId, null)
-      this.mountedByPersoId.set(request.persoId, true)
-      return
-    }
-
-    if (targetList !== null) {
-      let movedChildNode: unknown | null = null
-      if (sourceList !== null) {
-        movedChildNode = sourceList.detachChild({
-          childId: request.persoId,
-          mode: request.move.mode,
-          reorder: request.move.reorder,
-          eventId: request.eventId,
-          eventSeq: request.eventSeq
-        })
-      }
-
-      if (movedChildNode === null) {
-        movedChildNode = childNode
-      }
-
-      if (movedChildNode === null) {
-        this.parentListByPersoId.set(request.persoId, null)
-        this.mountedByPersoId.set(request.persoId, false)
-        this.warnOnce(
-          request.eventSeq,
-          'RUNTIME_COMPONENT_NODE_NOT_FOUND',
-          {
-            persoId: request.persoId,
-            eventId: request.eventId,
-            eventSeq: request.eventSeq
-          },
-          request.persoId
-        )
-        return
-      }
-
-      targetList.attachChild({
-        childId: request.persoId,
-        childNode: movedChildNode,
-        mode: request.move.mode,
-        reorder: request.move.reorder,
-        eventId: request.eventId,
-        eventSeq: request.eventSeq
-      })
-
-      this.parentListByPersoId.set(request.persoId, targetList.getPersoId())
-      this.mountedByPersoId.set(request.persoId, true)
-    }
-  }
-
-  /**
    * Emits one warning once per {eventSeq, code, persoId} key.
    */
   private warnOnce(
@@ -1062,7 +935,7 @@ export class RuntimeComponentOrchestrator {
       }
 
       const persoId = this.resolveTargetPersoId(update.resolvedAction)
-      const moveCommand = this.normalizeMoveCommand(action.move, false)
+      const moveCommand = normalizeMoveCommand(action.move, false)
       const key = `${update.eventSeq}:${persoId}`
       const candidates = candidatesByKey.get(key) ?? []
       candidates.push({

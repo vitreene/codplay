@@ -1,7 +1,7 @@
 import type { SceneDef } from '../builder/types'
 import { PLAYER_STATUS } from './player-constants'
 import type { RuntimeEventSource } from '../core/events/types'
-import type { ComponentRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
+import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import type {
   ActionDoc,
@@ -149,6 +149,7 @@ export type PlayerStateListener = (state: PlayerStateSnapshot) => void
 export type PlayerApi = {
   component: ComponentRegistryApi
   service: ServiceRegistryApi
+  module: ModuleRegistryApi
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
   init: (scene: PlayerSceneInput) => Promise<PlayerCommandResult>
   destroy: () => Promise<PlayerCommandResult>

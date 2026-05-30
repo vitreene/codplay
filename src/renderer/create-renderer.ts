@@ -211,6 +211,21 @@ export class RendererFacade implements RendererApi {
     }
   }
 
+  readonly module: import('../runtime/components').ModuleRegistryApi = {
+    register: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_MODULE_REGISTRY_LOCKED', message: 'module.register is only allowed before load' } }
+      }
+      return this.orchestrator.registerModule(input)
+    },
+    override: (input) => {
+      if (this.isInitialized()) {
+        return { ok: false, error: { code: 'RENDERER_MODULE_REGISTRY_LOCKED', message: 'module.override is only allowed before load' } }
+      }
+      return this.orchestrator.overrideModule(input)
+    }
+  }
+
   /**
    * Exposes one stable runtime registry for player-level integrations.
    */

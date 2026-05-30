@@ -8,6 +8,8 @@ export { TextComponent } from './text-component'
 export type {
   ComponentRegisterInput,
   ComponentRegistryApi,
+  ModuleRegisterInput,
+  ModuleRegistryApi,
   RegistryError,
   RegistryResult,
   RuntimeComponent,

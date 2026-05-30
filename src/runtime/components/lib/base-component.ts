@@ -1,6 +1,6 @@
 import { htmlRenderMutationResolver } from '../../html-render-mutation-resolver'
 import { createComponentRoot, resetComponentRoot, setComponentRootId } from './dom'
-import type { ComponentRenderResult, ComponentServices, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
+import type { ComponentModules, ComponentRenderResult, ComponentServices, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
 
 /**
  * Provides one light base class for shared warnings and DOM part references.
@@ -10,6 +10,7 @@ export abstract class BaseComponent implements RuntimeComponent {
 
   protected readonly perso: RuntimeComponentClassInput['perso']
   protected readonly services: ComponentServices
+  readonly modules: ComponentModules
   protected readonly createElementOptions: RuntimeComponentClassInput['createElementOptions']
   private readonly reportWarning: RuntimeComponentClassInput['report']
 
@@ -22,6 +23,7 @@ export abstract class BaseComponent implements RuntimeComponent {
   constructor(input: RuntimeComponentClassInput) {
     this.perso = input.perso
     this.services = input.services
+    this.modules = input.modules
     this.createElementOptions = input.createElementOptions
     this.reportWarning = input.report
   }

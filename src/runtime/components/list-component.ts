@@ -95,10 +95,11 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
   }
 
   /**
-   * Declares services used for className, style and attr patches.
+   * Declares services and module capabilities.
    */
   constructor(input: RuntimeComponentClassInput) {
     super(input)
+    this.modules.declare(['list'])
     this.services.declare(['className', 'style', 'attr'])
   }
 
