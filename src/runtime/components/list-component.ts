@@ -362,7 +362,6 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
     this.persistentPlacementByChildId.clear()
     this.nextPlacementOrder = 1
 
-    resetRuntimeNodeState(rootNode)
     this.services.apply(rootNode, this.perso.initial)
     this.reorderConfig = this.resolveReorderConfig(state)
 

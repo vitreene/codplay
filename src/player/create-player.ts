@@ -1445,7 +1445,7 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    const isFutureEvent = timelineEvent.ms > this.timelineMs
+    const isFutureEvent = timelineEvent.ms > this.resolveCurrentTimelineMs()
 
     if (!isFutureEvent) {
       this.runTimelineEvent(timelineEvent)
@@ -1454,6 +1454,8 @@ export class PlayerFacade implements PlayerApi {
     if (shouldPersistEvent) {
       if (!isFutureEvent) {
         this.trackManager.syncCursor({ nowMs: timelineEvent.ms })
+      } else if (!this.timelineReplayInProgress) {
+        this.recordPlayedProgress(timelineEvent)
       }
       const refreshResult = this.refreshTimelineEndFromMountedPlan()
       if (!refreshResult.ok) {

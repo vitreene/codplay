@@ -656,7 +656,7 @@ export const s4QuizStraps: StrapCollection = {
         cascade: true,
       },
     }));
-    void context.live.delay(10000, { event: { name: "perdu" } });
+    void context.live.delay(10000, { event: { name: "perdu", cascade: true } });
     void context.live.delay(11000, { event: { name: "sequence:end", cascade: true } });
 
     return {

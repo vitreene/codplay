@@ -1,5 +1,5 @@
 import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../../create-element'
-import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf, RuntimeNode } from '../../types'
+import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf } from '../../types'
 
 const SELF_PAYLOAD_KEY = 'self'
 
@@ -66,16 +66,6 @@ function isTransitionStyleValue(rawValue: unknown): rawValue is { to: unknown } 
   return typeof rawValue === 'object' && rawValue !== null && 'to' in rawValue
 }
 
-/**
- * Creates one plain object node when browser DOM is unavailable.
- */
-function createObjectNode(tagName: string): RuntimeNode {
-  return {
-    tagName,
-    style: {},
-    attributes: {}
-  }
-}
 
 /**
  * Creates one runtime self payload exposed during perso emit.
@@ -162,7 +152,7 @@ export function createRuntimeNode(
     return domNode
   }
 
-  const objectNode = createObjectNode(fallbackTagName.toUpperCase())
+  const objectNode: Record<string, unknown> = { tagName: fallbackTagName.toUpperCase(), style: {}, attributes: {} }
   bindRuntimeEmitDeclarations(objectNode, item, options)
   return objectNode
 }
@@ -514,5 +504,41 @@ export function appendDomChild(parentNode: unknown, childNode: unknown): void {
 export function removeDomChild(parentNode: unknown, childNode: unknown): void {
   if (isDomNode(parentNode) && isDomNode(childNode)) {
     parentNode.removeChild(childNode)
+  }
+}
+
+/**
+ * Scans one node tree for data-part attributes, registers each found node and removes the attribute.
+ * Supports both real DOM elements (via querySelectorAll) and plain object nodes (via recursive traversal).
+ */
+export function collectDataParts(rootNode: unknown, nodeByPart: Map<string, unknown>): void {
+  if (isDomElement(rootNode)) {
+    for (const el of Array.from(rootNode.querySelectorAll('[data-part]'))) {
+      const partName = el.getAttribute('data-part')
+      if (partName && !nodeByPart.has(partName)) {
+        el.removeAttribute('data-part')
+        nodeByPart.set(partName, el)
+      }
+    }
+    return
+  }
+
+  if (typeof rootNode !== 'object' || rootNode === null) {
+    return
+  }
+
+  const objectNode = rootNode as Record<string, unknown>
+  const partName =
+    typeof (objectNode.attributes as Record<string, unknown> | undefined)?.['data-part'] === 'string'
+      ? (objectNode.attributes as Record<string, string>)['data-part']
+      : undefined
+  if (partName && !nodeByPart.has(partName)) {
+    delete (objectNode.attributes as Record<string, unknown>)['data-part']
+    objectNode.id = partName
+    nodeByPart.set(partName, rootNode)
+  }
+
+  for (const child of Array.isArray(objectNode.children) ? objectNode.children : []) {
+    collectDataParts(child, nodeByPart)
   }
 }

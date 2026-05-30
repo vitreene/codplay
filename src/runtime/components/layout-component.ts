@@ -1,6 +1,6 @@
 import { BaseComponent } from './lib/base-component'
 import { bindComponentEmitDeclarations } from './lib/dom'
-import { applyNodeId, isDomElement } from './lib/dom-component-adapter'
+import { applyNodeId, collectDataParts, isDomElement } from './lib/dom-component-adapter'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeLayoutComponent, RuntimeLayoutOutletSnapshot } from './types'
 import type { LayoutFormat } from '../types'
@@ -54,23 +54,6 @@ function readNodeId(nodeRef: unknown): string | null {
   }
 
   return null
-}
-
-/**
- * Scans one DOM element tree for data-part attributes, registers each found element and removes the attribute.
- */
-function collectDataParts(rootNode: unknown, nodeByPart: Map<string, unknown>): void {
-  if (!(rootNode instanceof globalThis.Element)) {
-    return
-  }
-
-  for (const el of Array.from(rootNode.querySelectorAll('[data-part]'))) {
-    const partName = el.getAttribute('data-part')
-    if (partName && !nodeByPart.has(partName)) {
-      el.removeAttribute('data-part')
-      nodeByPart.set(partName, el)
-    }
-  }
 }
 
 /**

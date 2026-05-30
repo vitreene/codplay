@@ -1,5 +1,6 @@
 import { htmlRenderMutationResolver } from '../../html-render-mutation-resolver'
 import { createComponentRoot, resetComponentRoot, setComponentRootId } from './dom'
+import { collectDataParts } from './dom-component-adapter'
 import type { ComponentModules, ComponentRenderResult, ComponentServices, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
 
 /**
@@ -81,15 +82,7 @@ export abstract class BaseComponent implements RuntimeComponent {
       })
       const rootNode = childNodes.length === 1 ? childNodes[0] : template.content
 
-      if (rootNode instanceof globalThis.Element) {
-        for (const el of Array.from(rootNode.querySelectorAll('[data-part]'))) {
-          const partName = el.getAttribute('data-part')
-          if (partName) {
-            el.removeAttribute('data-part')
-            nodeByPart.set(partName, el)
-          }
-        }
-      }
+      collectDataParts(rootNode, nodeByPart)
 
       return { rootNode, nodeByPart }
     }

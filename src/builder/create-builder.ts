@@ -79,7 +79,7 @@ export class BuilderFacade implements BuilderApi {
    * Validates one authored scene without mutating the caller payload.
    */
   validate(input: { scene: SceneDef }): ValidationReport {
-    return this.validator.validate(normalizeSceneDef(input.scene))
+    return this.validator.validate(input.scene as Parameters<BuilderValidator['validate']>[0])
   }
 
   /**

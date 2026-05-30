@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { PlayerFacade } from '../../src/player/create-player'
-import type { RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../../src/runtime/components'
+import type { ComponentModules, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../../src/runtime/components'
 import type { SceneDoc } from '../../src/player/types'
 
 type RuntimeNodeFixture = {
@@ -13,36 +13,39 @@ type RuntimeNodeFixture = {
 }
 
 class CounterRuntimeComponent implements RuntimeComponent {
-  private rootNode: RuntimeNodeFixture | null = null
+  public node: unknown = null
+  readonly modules: ComponentModules
 
   constructor(private readonly input: RuntimeComponentClassInput) {
-    void this.input
+    this.modules = input.modules
   }
 
-  init(initial: Record<string, unknown>): void {
-    this.rootNode ??= {
+  render(): RuntimeNodeFixture {
+    const initial = this.input.perso.initial as Record<string, unknown>
+    return {
       tagName: 'DIV',
       style: {},
-      attributes: {}
+      attributes: {},
+      textContent: typeof initial.content === 'string' ? initial.content : undefined,
+      updateCount: 0
     }
-    this.rootNode.textContent = typeof initial.content === 'string' ? initial.content : undefined
-    this.rootNode.updateCount = 0
   }
 
-  render(): unknown {
-    return this.rootNode
+  _init(): void {
+    this.node = this.render()
   }
 
   update(input: RuntimeComponentUpdateInput): void {
-    if (this.rootNode === null) {
+    const rootNode = this.node as RuntimeNodeFixture | null
+    if (rootNode === null) {
       return
     }
 
     if (typeof input.action.content === 'string') {
-      this.rootNode.textContent = input.action.content
+      rootNode.textContent = input.action.content
     }
 
-    this.rootNode.updateCount = (this.rootNode.updateCount ?? 0) + 1
+    rootNode.updateCount = (rootNode.updateCount ?? 0) + 1
   }
 }
 
@@ -108,7 +111,7 @@ function createNoResolverSceneFixture(): SceneDoc {
 describe('V1 - render mutation resolver', () => {
   it('passes through unresolved custom items without HTML conflict filtering', async () => {
     const player = new PlayerFacade()
-    expect(player.registerComponent('counter', CounterRuntimeComponent)).toEqual({ ok: true })
+    expect(player.component.register({ type: 'counter', component: CounterRuntimeComponent })).toMatchObject({ ok: true })
     expect(await player.init(createNoResolverSceneFixture())).toEqual({ ok: true })
     expect(await player.play()).toEqual({ ok: true })
 
