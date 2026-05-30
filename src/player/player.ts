@@ -203,7 +203,7 @@ export class Player implements PlayerApi {
    * Seeks the current timeline.
    */
   seek(input: { timelineMs: number }): Promise<ApiResult<void>> {
-    this.destroyStrapLoopSchedulers()
+    this.pauseStrapLoopSchedulers()
     return (async () => {
       if (this.player.getState().status === 'playing') {
         const pauseResult = await this.pause()

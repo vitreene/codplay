@@ -1422,17 +1422,23 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    this.runTimelineEvent(timelineEvent)
+    const isFutureEvent = timelineEvent.ms > this.timelineMs
+
+    if (!isFutureEvent) {
+      this.runTimelineEvent(timelineEvent)
+    }
 
     if (shouldPersistEvent) {
-      this.trackManager.syncCursor({ nowMs: timelineEvent.ms })
+      if (!isFutureEvent) {
+        this.trackManager.syncCursor({ nowMs: timelineEvent.ms })
+      }
       const refreshResult = this.refreshTimelineEndFromMountedPlan()
       if (!refreshResult.ok) {
         return refreshResult
       }
     }
 
-    if (!this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
+    if (!isFutureEvent && !this.timelineReplayInProgress && (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
       const runtimePlan = this.createMountedRuntimePlan()
       if (runtimePlan !== null) {
         const eventDurationMs = this.runtimePlanner.resolveEventDurationMsFromTimelinePlan(runtimePlan.timelinePlan, timelineEvent.name)
@@ -1442,13 +1448,15 @@ export class PlayerFacade implements PlayerApi {
       this.renderer.renderFrame(this.runtimePlanner.resolveNowMs())
     }
 
-    this.syncMediaTimeline(timelineEvent.ms)
+    if (!isFutureEvent) {
+      this.syncMediaTimeline(timelineEvent.ms)
+    }
 
     if (!this.timelineReplayInProgress && (!shouldPersistEvent || this.timelineEndMs !== previousTimelineEndMs || this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)) {
       this.emitStateSnapshot()
     }
 
-    if (timelineEvent.name === PLAYER_SEQUENCE_EVENT.sequenceEnd && this.status === PLAYER_STATUS.playing) {
+    if (!isFutureEvent && timelineEvent.name === PLAYER_SEQUENCE_EVENT.sequenceEnd && this.status === PLAYER_STATUS.playing) {
       this.finalizeSequenceEnd(timelineEvent.ms)
     }
 
