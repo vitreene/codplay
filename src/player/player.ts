@@ -28,7 +28,8 @@ import type {
   StrapExecutionScope,
   StrapReturnValue,
   StrapRuntimeOutput,
-  StrapStep
+  StrapStep,
+  TransformFn
 } from './strap-types'
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
@@ -90,6 +91,16 @@ export class Player implements PlayerApi {
       },
       onRuntimeEmit: (event) => {
         const source = event.source ?? RUNTIME_EVENT_SOURCE.user
+        const isLiveTracking = source === RUNTIME_EVENT_SOURCE.system && event.ms === undefined
+
+        if (isLiveTracking) {
+          this.applyLiveSceneEvent(
+            { name: event.name, data: event.payload, cascade: event.cascade },
+            event.scopeStoryId
+          )
+          return
+        }
+
         void this.routeSceneEvent(
           {
             name: event.name,
@@ -928,6 +939,46 @@ export class Player implements PlayerApi {
   }
 
   /**
+   * Applies one live tracking event synchronously through story listen transforms without timeline persistence.
+   * Used for per-pointermove capture events that drive real-time visual feedback.
+   */
+  private applyLiveSceneEvent(event: StoryEvent, scopeStoryId?: string): void {
+    const scene = this.currentScene
+    if (scene === null) {
+      return
+    }
+
+    const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
+    const rules = isLocalStoryEvent
+      ? (scene.stories[scopeStoryId!]?.listen.filter((r) => r.on === event.name) ?? [])
+      : scene.listen.filter((r) => r.on === event.name)
+
+    const emittedEvents: StoryEvent[] = []
+    for (const rule of rules) {
+      for (const transformFn of (rule.transform ?? []) as TransformFn[]) {
+        emittedEvents.push(...transformFn(event))
+      }
+      emittedEvents.push(
+        ...(rule.emit ?? []).map((e) => ({
+          name: e.name,
+          data: e.data ?? event.data,
+          cascade: e.cascade
+        }))
+      )
+    }
+
+    for (const emittedEvent of emittedEvents) {
+      void this.player.applyMaterializedEvent({
+        name: emittedEvent.name,
+        payload: emittedEvent.data,
+        cascade: emittedEvent.cascade,
+        scopeStoryId: emittedEvent.cascade === true ? undefined : scopeStoryId,
+        source: RUNTIME_EVENT_SOURCE.system
+      })
+    }
+  }
+
+  /**
    * Routes one scene event through scene.listen before falling back to runtime emission.
    */
   private async routeSceneEvent(
@@ -1009,6 +1060,9 @@ export class Player implements PlayerApi {
   ): Promise<ApiResult<void>> {
     const emittedEvents: StoryEvent[] = []
     for (const rule of rules) {
+      for (const transformFn of (rule.transform ?? []) as TransformFn[]) {
+        emittedEvents.push(...transformFn(event))
+      }
       for (const strapName of rule.straps ?? []) {
         const strapResult = await this.executeStrap(strapName, event, scope, depth)
         if (!strapResult.ok) {
@@ -1017,7 +1071,7 @@ export class Player implements PlayerApi {
       }
       emittedEvents.push(...(rule.emit ?? []).map((emittedEvent) => ({
         name: emittedEvent.name,
-        data: emittedEvent.data,
+        data: emittedEvent.data ?? event.data,
         cascade: emittedEvent.cascade
       })))
     }
@@ -1039,7 +1093,7 @@ export class Player implements PlayerApi {
           data: emittedEvent.data,
           cascade: emittedEvent.cascade
         },
-        RUNTIME_EVENT_SOURCE.user,
+        source,
         nextScopeStoryId,
         depth + 1,
         {

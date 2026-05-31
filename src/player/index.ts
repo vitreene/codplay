@@ -17,6 +17,7 @@ export type {
 } from './helper-types'
 export type { RuntimeEventPolicy } from './runtime-policy'
 export type {
+  TransformFn,
   StrapCollection,
   StrapContext,
   StrapFn,

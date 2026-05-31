@@ -39,7 +39,12 @@ export class BuilderArtifactCloner {
         initial: this.cloneData(story.initial),
         persos: this.cloneData(story.persos),
         straps: this.cloneData(story.straps),
-        listen: this.cloneData(story.listen),
+        listen: story.listen.map(rule => ({
+          on: rule.on,
+          transform: rule.transform,
+          emit: this.cloneData(rule.emit),
+          straps: this.cloneData(rule.straps)
+        })),
         eventimes: this.cloneData(story.eventimes),
         state: this.cloneData(story.state),
         init: story.init
@@ -52,7 +57,12 @@ export class BuilderArtifactCloner {
       rootStories: this.cloneData(scene.rootStories),
       initial: this.cloneData(scene.initial),
       straps: this.cloneData(scene.straps),
-      listen: this.cloneData(scene.listen),
+      listen: scene.listen.map(rule => ({
+        on: rule.on,
+        transform: rule.transform,
+        emit: this.cloneData(rule.emit),
+        straps: this.cloneData(rule.straps)
+      })),
       state: this.cloneData(scene.state),
       init: scene.init,
       onStart: scene.onStart,

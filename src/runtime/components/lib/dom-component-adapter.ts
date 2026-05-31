@@ -148,8 +148,8 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
             baseX: base.x,
             baseY: base.y,
             startMs: Date.now(),
+            scopeStoryId: item.storyId,
             emitRuntimeEvent,
-            applyLiveUpdate: options?.applyLiveUpdate,
             getCurrentTimelineMs: options?.getCurrentTimelineMs
           })
         }

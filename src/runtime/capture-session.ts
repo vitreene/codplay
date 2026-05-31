@@ -10,8 +10,8 @@ export type CaptureSessionInput = {
   baseX: number
   baseY: number
   startMs: number
+  scopeStoryId?: string
   emitRuntimeEvent: (event: RuntimeEmitEvent) => void
-  applyLiveUpdate?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
 }
 
@@ -20,7 +20,7 @@ export type CaptureSessionInput = {
  * Returns a cleanup function that removes all installed listeners immediately.
  */
 export function startCaptureSession(input: CaptureSessionInput): () => void {
-  const { capture, startX, startY, baseX, baseY, startMs, emitRuntimeEvent, applyLiveUpdate, getCurrentTimelineMs } = input
+  const { capture, startX, startY, baseX, baseY, startMs, scopeStoryId, emitRuntimeEvent, getCurrentTimelineMs } = input
   const endOn = capture.endOn ?? DEFAULT_END_ON
   const trackOn = capture.trackOn ?? DEFAULT_TRACK_ON
 
@@ -43,9 +43,13 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
     const deltaMs = Date.now() - startMs
     const eventMs = capture.snapAt === 'end' ? nowMs - capture.duration : nowMs
 
+    const endEventSpec = capture.endEvent ?? capture.event
+
     emitRuntimeEvent({
-      name: capture.event.name,
-      cascade: capture.event.cascade,
+      name: endEventSpec.name,
+      cascade: endEventSpec.cascade,
+      scopeStoryId: endEventSpec.cascade === true ? undefined : scopeStoryId,
+      source: 'system',
       ms: eventMs,
       data: {
         fromX: baseX,
@@ -60,22 +64,19 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
   }
 
   function onTrack(domEvent: Event): void {
-    if (!(domEvent instanceof PointerEvent) || applyLiveUpdate === undefined || capture.trackEvent === undefined) {
+    if (!(domEvent instanceof PointerEvent)) {
       return
     }
 
     const dx = domEvent.clientX - startX
     const dy = domEvent.clientY - startY
 
-    applyLiveUpdate({
-      name: capture.trackEvent.name,
-      cascade: capture.trackEvent.cascade,
-      data: {
-        style: {
-          x: { to: baseX + dx, duration: 0 },
-          y: { to: baseY + dy, duration: 0 }
-        }
-      }
+    emitRuntimeEvent({
+      name: capture.event.name,
+      cascade: capture.event.cascade,
+      scopeStoryId: capture.event.cascade === true ? undefined : scopeStoryId,
+      source: 'system',
+      data: { dx, dy, baseX, baseY, x: baseX + dx, y: baseY + dy }
     })
   }
 

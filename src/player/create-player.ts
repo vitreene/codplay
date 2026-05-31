@@ -383,14 +383,6 @@ export class PlayerFacade implements PlayerApi {
       animationAdapter,
       createElementOptions: options.createElementOptions,
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
-      applyLiveUpdate: (event) => {
-        void this.applyMaterializedEvent({
-          name: event.name,
-          payload: event.data,
-          cascade: event.cascade,
-          source: RUNTIME_EVENT_SOURCE.system
-        })
-      },
       emitRuntimeEvent: (event) => {
         const runtimeEvent: PlayerPublicEventInput = {
           name: event.name,
@@ -398,7 +390,7 @@ export class PlayerFacade implements PlayerApi {
           ms: event.ms,
           scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
           cascade: event.cascade,
-          source: RUNTIME_EVENT_SOURCE.user
+          source: event.source === 'system' ? RUNTIME_EVENT_SOURCE.system : RUNTIME_EVENT_SOURCE.user
         }
 
         if (options.onRuntimeEmit) {
@@ -409,7 +401,7 @@ export class PlayerFacade implements PlayerApi {
         void this.emit({
           ...runtimeEvent
         })
-      }
+      },
     })
 
     this.renderer.onError((error) => {

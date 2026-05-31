@@ -9,7 +9,7 @@ function createCapture(overrides?: Partial<EmitCapture>): EmitCapture {
   return {
     event: { name: 'drag:moved', cascade: true },
     duration: 400,
-    anchor: 'start',
+    snapAt: 'start',
     ...overrides
   }
 }
@@ -27,16 +27,12 @@ function firePointerEvent(target: EventTarget, type: string, coords: { clientX: 
 
 describe('Lot 20 — capture session', () => {
   let emittedEvents: RuntimeEmitEvent[]
-  let liveUpdates: RuntimeEmitEvent[]
   let emitRuntimeEvent: (event: RuntimeEmitEvent) => void
-  let applyLiveUpdate: (event: RuntimeEmitEvent) => void
   const activeCleanups: Array<() => void> = []
 
   beforeEach(() => {
     emittedEvents = []
-    liveUpdates = []
     emitRuntimeEvent = (event) => { emittedEvents.push(event) }
-    applyLiveUpdate = (event) => { liveUpdates.push(event) }
   })
 
   afterEach(() => {
@@ -88,7 +84,7 @@ describe('Lot 20 — capture session', () => {
     expect(data.toX).toBe(100)
     expect(data.toY).toBe(200)
     expect(data.duration).toBe(400)
-    expect(data.anchor).toBe('start')
+    expect(data.snapAt).toBe('start')
   })
 
   it('T3b — baseX/baseY non nuls sont pris en compte dans fromX/toX', () => {
@@ -111,11 +107,11 @@ describe('Lot 20 — capture session', () => {
     expect(data.toY).toBe(80)
   })
 
-  it('T4 — anchor:start émet avec ms = getCurrentTimelineMs()', () => {
+  it('T4 — snapAt:start émet avec ms = getCurrentTimelineMs()', () => {
     const getCurrentTimelineMs = vi.fn(() => 1500)
 
     startCaptureSession({
-      capture: createCapture({ anchor: 'start' }),
+      capture: createCapture({ snapAt: 'start' }),
       startX: 0, startY: 0, baseX: 0, baseY: 0,
       startMs: Date.now(),
       emitRuntimeEvent,
@@ -127,11 +123,11 @@ describe('Lot 20 — capture session', () => {
     expect(emittedEvents[0].ms).toBe(1500)
   })
 
-  it('T5 — anchor:end émet avec ms = getCurrentTimelineMs() - duration', () => {
+  it('T5 — snapAt:end émet avec ms = getCurrentTimelineMs() - duration', () => {
     const getCurrentTimelineMs = vi.fn(() => 2000)
 
     startCaptureSession({
-      capture: createCapture({ anchor: 'end', duration: 400 }),
+      capture: createCapture({ snapAt: 'end', duration: 400 }),
       startX: 0, startY: 0, baseX: 0, baseY: 0,
       startMs: Date.now(),
       emitRuntimeEvent,
@@ -160,42 +156,40 @@ describe('Lot 20 — capture session', () => {
     expect(removedEvents).toContain('pointermove')
   })
 
-  it('T7b — pointermove appelle applyLiveUpdate avec les coordonnées élément courantes', () => {
+  it('T7c — pointermove sans trackStrap émet capture.event via emitRuntimeEvent avec dx/dy/baseX/baseY', () => {
     const cleanup = startCaptureSession({
-      capture: createCapture({
-        trackOn: ['pointermove'],
-        trackEvent: { name: 'drag:tracking', cascade: true }
-      }),
+      capture: createCapture({ trackOn: ['pointermove'] }),
       startX: 50, startY: 30, baseX: 10, baseY: 5,
       startMs: Date.now(),
-      emitRuntimeEvent,
-      applyLiveUpdate
+      emitRuntimeEvent
     })
     activeCleanups.push(cleanup)
 
-    // dx = 80-50 = 30 ; toX = 10+30 = 40
-    // dy = 60-30 = 30 ; toY = 5+30 = 35
     firePointerEvent(window, 'pointermove', { clientX: 80, clientY: 60 })
 
-    expect(liveUpdates).toHaveLength(1)
-    const data = liveUpdates[0].data as Record<string, unknown>
-    const style = data.style as Record<string, unknown>
-    expect((style.x as Record<string, unknown>).to).toBe(40)
-    expect((style.y as Record<string, unknown>).to).toBe(35)
-    expect((style.x as Record<string, unknown>).duration).toBe(0)
+    expect(emittedEvents).toHaveLength(1)
+    const evt = emittedEvents[0]
+    expect(evt.name).toBe('drag:moved')
+    const data = evt.data as Record<string, unknown>
+    expect(data.dx).toBe(30)
+    expect(data.dy).toBe(30)
+    expect(data.baseX).toBe(10)
+    expect(data.baseY).toBe(5)
   })
 
-  it('T7c — pointermove sans applyLiveUpdate ni trackEvent ne provoque pas d\'erreur', () => {
+  it('T8 — endEvent présent : pointerup émet endEvent.name (pas capture.event.name)', () => {
     const cleanup = startCaptureSession({
-      capture: createCapture({ trackOn: ['pointermove'] }),
+      capture: createCapture({ endEvent: { name: 'drag:ended' } }),
       startX: 0, startY: 0, baseX: 0, baseY: 0,
       startMs: Date.now(),
       emitRuntimeEvent
     })
     activeCleanups.push(cleanup)
 
-    expect(() => firePointerEvent(window, 'pointermove', { clientX: 50, clientY: 50 })).not.toThrow()
-    expect(liveUpdates).toHaveLength(0)
+    firePointerEvent(window, 'pointerup', { clientX: 50, clientY: 50 })
+
+    expect(emittedEvents).toHaveLength(1)
+    expect(emittedEvents[0].name).toBe('drag:ended')
   })
 
   it('T7 — pointerup ne s\'émet qu\'une seule fois même si déclenché plusieurs fois', () => {

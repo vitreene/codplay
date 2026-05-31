@@ -116,7 +116,6 @@ export class RendererFacade implements RendererApi {
     this.runtimeCreateElementOptions = {
       ...options.createElementOptions,
       emitRuntimeEvent: options.emitRuntimeEvent,
-      applyLiveUpdate: options.applyLiveUpdate,
       getCurrentTimelineMs: options.getCurrentTimelineMs
     }
     this.orchestrator = new RuntimeComponentOrchestrator({

@@ -27,14 +27,9 @@ export type ListenEmit = {
   cascade?: boolean
 }
 
-export type ListenTransform = {
-  name: string
-  options?: Record<string, unknown>
-}
-
 export type ListenRule = {
   on: string
-  transform?: ListenTransform[]
+  transform?: ((event: unknown) => unknown[])[]
   emit?: ListenEmit[]
   straps?: string[]
 }

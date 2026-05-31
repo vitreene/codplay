@@ -86,6 +86,8 @@ export type StrapFn = (input: StrapInput) => Promise<StrapReturnValue> | StrapRe
 
 export type StrapCollection = Record<string, StrapFn>
 
+export type TransformFn = (event: StoryEvent) => StoryEvent[]
+
 export type StrapExecutionScope = {
   scopeStoryId?: string
   source: RuntimeEventSource

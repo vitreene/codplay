@@ -1,6 +1,7 @@
 import type { SceneDef } from '../builder/types'
 import { PLAYER_STATUS } from './player-constants'
 import type { RuntimeEventSource } from '../core/events/types'
+import type { TransformFn } from './strap-types'
 import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import type {
@@ -40,14 +41,9 @@ export type ListenEmit = {
   cascade?: boolean
 }
 
-export type ListenTransform = {
-  name: string
-  options?: Record<string, unknown>
-}
-
 export type ListenRule = {
   on: string
-  transform?: ListenTransform[]
+  transform?: TransformFn[]
   emit?: ListenEmit[]
   straps?: string[]
 }

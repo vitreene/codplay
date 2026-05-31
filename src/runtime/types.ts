@@ -66,11 +66,15 @@ export type EmitRuleEvent = {
  * Defines one interaction capture session attached to one emit trigger.
  */
 export type EmitCapture = {
+  /** Event emitted on each tracked pointer move (e.g. pointermove). Carries {dx, dy, baseX, baseY, x, y}. */
   event: EmitRuleEvent
-  trackEvent?: EmitRuleEvent
+  /** Event emitted on capture end (e.g. pointerup) with retroactive ms. Carries {fromX, fromY, toX, toY, duration, snapAt}. If absent, falls back to emitting `event` at capture end. */
+  endEvent?: EmitRuleEvent
   duration: number
   snapAt: 'start' | 'end'
+  /** DOM event names that trigger the live tracking on each tick. Defaults to ['pointermove']. */
   trackOn?: string[]
+  /** DOM event names that end the capture session. Defaults to ['pointerup']. */
   endOn?: string[]
 }
 
@@ -101,6 +105,7 @@ export type RuntimeEmitEvent = {
   cascade?: boolean
   scopeStoryId?: string
   ms?: number
+  source?: 'user' | 'system'
 }
 
 /**
