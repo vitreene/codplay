@@ -1,10 +1,14 @@
 import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from '../builder/types'
 import type { BuilderApi } from '../builder/types'
 import type { Player } from '../player'
+import type { StoryEvent } from '../player'
+import type { TelcoApi } from '../telco/types'
 
 export type CodPlayApi = {
   builder: BuilderApi
   player: Player
+  telco: TelcoApi
+  emit: (input: StoryEvent) => Promise<ApiResult<void>>
   create: (input: { id: string }) => ApiResult<void>
   createStory: (input?: { name?: string }) => ApiResult<{ storyId: string; storyName: string }>
   createPerso: (input: {

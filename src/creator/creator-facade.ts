@@ -1,7 +1,15 @@
 import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from '../builder/types'
 import { BuilderFacade } from '../builder/create-builder'
 import { Player } from '../player'
+import type { StoryEvent } from '../player'
 import type { CreatePlayerOptions } from '../player/create-player'
+import { createTelco } from '../telco/create-telco'
+import type { TelcoApi } from '../telco/types'
+
+function createRafTickSubscriber(callback: () => void): () => void {
+  const frameId = globalThis.requestAnimationFrame(callback)
+  return () => { globalThis.cancelAnimationFrame(frameId) }
+}
 import type { CodPlayApi } from './types'
 
 type CodPlaySceneState = {
@@ -21,6 +29,7 @@ type CodPlaySceneState = {
 export class CodPlay implements CodPlayApi {
   readonly builder = new BuilderFacade()
   readonly player: Player
+  readonly telco: TelcoApi
 
   private currentScene: CodPlaySceneState | null = null
 
@@ -29,6 +38,14 @@ export class CodPlay implements CodPlayApi {
    */
   constructor(options: CreatePlayerOptions = {}) {
     this.player = new Player(options)
+    this.telco = createTelco(this.player, { subscribeOnTick: createRafTickSubscriber })
+  }
+
+  /**
+   * Emits one scene event through the player.
+   */
+  emit(input: StoryEvent): Promise<ApiResult<void>> {
+    return this.player.emit(input)
   }
 
   /**

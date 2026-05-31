@@ -78,6 +78,10 @@ export function createS5DragScene(): SceneDoc {
                 },
               },
             },
+            // TODO: amélioration future — les actions vides sont requises pour que le director
+            // route les events vers le perso. Un perso sans action déclarée ignore l'event,
+            // même si le payload event contient un style valide. Envisager une déclaration
+            // implicite ou un mode "passthrough" pour les events portant un payload style.
             actions: {
               "drag:tracking": {},
               "drag:apply": {},
