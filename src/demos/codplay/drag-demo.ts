@@ -10,11 +10,6 @@ export async function runDragDemo(): Promise<void> {
 		subtitle: "Déplacement via capture de session pointer. Cliquer Play avant de dragger pour que le seek rejoue l'animation de substitution.",
 		scene: createS5DragScene(),
 		rootNodeIds: ['draggable'],
-		demoLinks: [
-			{ label: 'Player POC', href: '?demo=poc' },
-			{ label: 'CodPlay POC', href: '?demo=codplay-poc' },
-			{ label: 'Quiz Reference', href: '?demo=quiz' },
-			{ label: 'Drag & Capture', href: '?demo=drag', active: true },
-		],
+		activeDemo: 'drag',
 	})
 }

@@ -831,7 +831,19 @@ export class Player implements PlayerApi {
     }
 
     return {
-      api: {},
+      api: {
+        getPersoIdAt: (x: number, y: number, excludeId?: string): string | null => {
+          if (typeof globalThis.document?.elementsFromPoint !== 'function') return null
+          const elements = globalThis.document.elementsFromPoint(x, y) as Element[]
+          for (const element of elements) {
+            const id = (element as HTMLElement).id
+            if (id && id.length > 0 && id !== excludeId) {
+              return id
+            }
+          }
+          return null
+        }
+      },
       planned: {
         wait: createPlannedWait,
         delay: (ms, input, options) => {
@@ -914,6 +926,7 @@ export class Player implements PlayerApi {
         }
       }
 
+      const isRetroactiveScope = scope.ms !== undefined && scope.ms < this.player.getState().timelineMs
       for (const emittedEvent of chunk.events ?? []) {
         const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scope.scopeStoryId
         const childResult = await this.routeSceneEvent(
@@ -923,7 +936,7 @@ export class Player implements PlayerApi {
           depth + 1,
           {
             ...scope,
-            materialized: false,
+            materialized: isRetroactiveScope,
             trackId: strapTrackId,
             scopeStoryId: nextScopeStoryId
           }
@@ -948,9 +961,11 @@ export class Player implements PlayerApi {
       return
     }
 
-    const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
-    const rules = isLocalStoryEvent
-      ? (scene.stories[scopeStoryId!]?.listen.filter((r) => r.on === event.name) ?? [])
+    const storyRules = scopeStoryId !== undefined
+      ? (scene.stories[scopeStoryId]?.listen.filter((r) => r.on === event.name) ?? [])
+      : []
+    const rules = storyRules.length > 0
+      ? storyRules
       : scene.listen.filter((r) => r.on === event.name)
 
     const emittedEvents: StoryEvent[] = []
@@ -1014,7 +1029,7 @@ export class Player implements PlayerApi {
       return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
     }
 
-    const isLocalStoryEvent = scopeStoryId !== undefined && event.cascade !== true
+    const isLocalStoryEvent = scopeStoryId !== undefined
 
     if (isLocalStoryEvent) {
       const story = scene.stories[scopeStoryId]
@@ -1022,8 +1037,6 @@ export class Player implements PlayerApi {
       if (storyRules.length > 0) {
         return this.routeMatchingRules(storyRules, event, source, scopeStoryId, depth, scope)
       }
-
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
     }
 
     const sceneRules = scene.listen.filter((rule) => rule.on === event.name)
@@ -1034,7 +1047,8 @@ export class Player implements PlayerApi {
       })
     }
 
-    return this.emitRuntimeEvent(event, source, undefined, scope.ms, scope.trackId, scope.materialized === true)
+    const emitScopeStoryId = event.cascade === true ? undefined : scopeStoryId
+    return this.emitRuntimeEvent(event, source, emitScopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
   }
 
   /**

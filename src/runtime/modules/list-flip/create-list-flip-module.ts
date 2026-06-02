@@ -1,3 +1,5 @@
+import { utils } from 'animejs'
+
 import type { TransitionRequest } from '../../../animation/types'
 import { isDomElement } from '../../components/lib/dom-component-adapter'
 import type { MoveCommand } from '../../types'
@@ -116,6 +118,15 @@ class ListFlipModuleInstance implements ListFlipModule {
   }
 
   private commitPreparedMove(preparedMove: PreparedListFlipMove): TransitionRequest[] {
+    // Reset the moved item's anime.js translate to 0 before capturing "last".
+    // readCurrentTranslate uses utils.get which reads anime.js internal state —
+    // if not reset, the drag offset leaks into lastSnapshot.translateX, causing
+    // toState.x = dragOffset instead of 0 and a wrong FLIP endpoint.
+    const movedNode = this.context.getNodeById(preparedMove.input.persoId)
+    if (isDomElement(movedNode)) {
+      utils.set(movedNode as Element, { x: 0, y: 0 } as Parameters<typeof utils.set>[1])
+    }
+
     const lastFlipSnapshots = this.flipEngine.capture(preparedMove.flipEntries)
     const flipPlan = this.flipEngine.plan(preparedMove.firstSnapshots, lastFlipSnapshots)
 

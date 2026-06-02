@@ -10,6 +10,7 @@ export type CaptureSessionInput = {
   baseX: number
   baseY: number
   startMs: number
+  persoId?: string
   scopeStoryId?: string
   emitRuntimeEvent: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
@@ -20,7 +21,7 @@ export type CaptureSessionInput = {
  * Returns a cleanup function that removes all installed listeners immediately.
  */
 export function startCaptureSession(input: CaptureSessionInput): () => void {
-  const { capture, startX, startY, baseX, baseY, startMs, scopeStoryId, emitRuntimeEvent, getCurrentTimelineMs } = input
+  const { capture, startX, startY, baseX, baseY, startMs, persoId, scopeStoryId, emitRuntimeEvent, getCurrentTimelineMs } = input
   const endOn = capture.endOn ?? DEFAULT_END_ON
   const trackOn = capture.trackOn ?? DEFAULT_TRACK_ON
 
@@ -56,9 +57,12 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
         fromY: baseY,
         toX,
         toY,
+        clientX: endPointerX,
+        clientY: endPointerY,
         deltaMs,
         duration: capture.duration,
-        snapAt: capture.snapAt
+        snapAt: capture.snapAt,
+        persoId
       }
     })
   }
@@ -76,7 +80,7 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
       cascade: capture.event.cascade,
       scopeStoryId: capture.event.cascade === true ? undefined : scopeStoryId,
       source: 'system',
-      data: { dx, dy, baseX, baseY, x: baseX + dx, y: baseY + dy }
+      data: { dx, dy, baseX, baseY, x: baseX + dx, y: baseY + dy, persoId }
     })
   }
 

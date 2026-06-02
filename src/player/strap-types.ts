@@ -63,8 +63,12 @@ export type LiveStrapHelpers = {
 
 export type StrapHelpers = LiveStrapHelpers
 
+export type PlayerStrapApi = {
+  getPersoIdAt: (x: number, y: number, excludeId?: string) => string | null
+}
+
 export type StrapContext = {
-  api: unknown
+  api: PlayerStrapApi
   planned: PlannedStrapHelpers
   live: LiveStrapHelpers
 }

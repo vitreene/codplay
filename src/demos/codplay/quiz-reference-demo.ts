@@ -11,11 +11,6 @@ export async function runQuizReferenceDemo(): Promise<void> {
 		scene: createS4QuizReferenceScene(),
 		strapCollection: s4QuizStraps,
 		rootNodeIds: ['quiz-layout'],
-		demoLinks: [
-			{ label: 'Player POC', href: '?demo=poc' },
-			{ label: 'CodPlay POC', href: '?demo=codplay-poc' },
-			{ label: 'Quiz Reference', href: '?demo=quiz', active: true },
-			{ label: 'Drag & Capture', href: '?demo=drag' },
-		],
+		activeDemo: 'quiz',
 	})
 }

@@ -99,7 +99,7 @@ function emitDeclaredRuntimeEvents(
       name: action.event.name,
       data,
       cascade: action.event.cascade,
-      scopeStoryId: action.event.cascade === true ? undefined : item.storyId
+      scopeStoryId: item.storyId
     })
   }
 }
@@ -148,6 +148,7 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
             baseX: base.x,
             baseY: base.y,
             startMs: Date.now(),
+            persoId: item.id,
             scopeStoryId: item.storyId,
             emitRuntimeEvent,
             getCurrentTimelineMs: options?.getCurrentTimelineMs

@@ -7,6 +7,7 @@ import { PlayerFacade } from '../../player/create-player';
 import { createSequenceCommandPanel } from './player-scene-demo/sequence-command-panel';
 import { createTraceLogPanel } from '../shared/trace-log-panel';
 import { resolveSceneSeekMaxMs } from '../shared/resolve-scene-seek-max-ms';
+import { buildDemoLinksMarkup } from '../shared/demo-registry';
 import type { PlayerSceneDemoConfig } from '../shared/demo-scene-types';
 
 /**
@@ -69,12 +70,7 @@ export async function runPlayerSceneDemo(config: PlayerSceneDemoConfig): Promise
 	}
 
 	const seekMaxMsFromScene = resolveSceneSeekMaxMs(config.scene);
-	const demoLinksMarkup = (config.demoLinks ?? [])
-		.map(
-			(link) =>
-				`<a class="demo-link${link.active ? ' demo-link-active' : ''}" href="${link.href}">${link.label}</a>`,
-		)
-		.join('');
+	const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo);
 	const actionButtonsMarkup = (config.actions ?? [])
 		.map(
 			(action) =>

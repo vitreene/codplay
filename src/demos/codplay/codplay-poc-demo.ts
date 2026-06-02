@@ -11,11 +11,6 @@ export async function runCodPlayPocDemo(): Promise<void> {
 			"Meme cas dur que Player POC, compile puis joue via CodPlay; tout ecart sur le move est une regression.",
 		scene: createPlayerPocScene(),
 		rootNodeIds: playerPocRootNodeIds,
-		demoLinks: [
-			{ label: 'Player POC', href: '?demo=poc' },
-			{ label: 'CodPlay POC', href: '?demo=codplay-poc', active: true },
-			{ label: 'Quiz Reference', href: '?demo=quiz' },
-			{ label: 'Drag & Capture', href: '?demo=drag' },
-		],
+		activeDemo: 'codplay-poc',
 	})
 }
