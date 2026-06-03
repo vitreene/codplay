@@ -10,6 +10,8 @@ import { createComponentModules } from './lib/component-modules'
 import { isDomNode } from './lib/dom-component-adapter'
 import { LayoutComponent } from './layout-component'
 import { ImageComponent } from './image-component'
+import { FormComponent } from './form-component'
+import { InputComponent } from './input-component'
 import { ListComponent } from './list-component'
 import { MediaComponent } from './media-component'
 import { TextComponent } from './text-component'
@@ -39,6 +41,8 @@ import type {
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   text: TextComponent,
   img: ImageComponent,
+  form: FormComponent,
+  input: InputComponent,
   media: MediaComponent,
   list: ListComponent,
   layout: LayoutComponent

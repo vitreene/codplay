@@ -1,6 +1,6 @@
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import type { ResolvedAction } from '../core/events/types'
-import type { BroadcastAction, MoveValue } from '../runtime/types'
+import type { BroadcastAction, InputVisualStateValue, MoveValue } from '../runtime/types'
 
 export type AnimatedProperty = string
 
@@ -28,6 +28,14 @@ export type AnimationAction = {
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  checked?: boolean
+  disabled?: boolean
+  visualState?: InputVisualStateValue
+  canValidate?: boolean
+  disableAnswers?: boolean
+  showCorrection?: boolean
+  selectedAnswerIds?: string[]
+  correctAnswerIds?: string[]
   broadcast?: BroadcastAction
 }
 

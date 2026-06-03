@@ -60,6 +60,17 @@ function mountDemoRootNodes(containerNode: HTMLDivElement, player: PlayerFacade,
 	containerNode.replaceChildren(...rootNodes);
 }
 
+function syncInteractionLock(containerNode: HTMLDivElement, status: string): void {
+	const locked = status === 'paused' || status === 'seeking';
+	containerNode.style.pointerEvents = locked ? 'none' : 'auto';
+	if (locked) {
+		containerNode.setAttribute('inert', '');
+		return;
+	}
+
+	containerNode.removeAttribute('inert');
+}
+
 /**
  * Renders one shared player demo shell for one scene-based scenario.
  */
@@ -116,6 +127,18 @@ export async function runPlayerSceneDemo(config: PlayerSceneDemoConfig): Promise
 	});
 	const player = new PlayerFacade({
 		animationAdapter,
+		createElementOptions: {
+			emitRuntimeEvent: (event) => {
+				void player.emit({
+					name: event.name,
+					payload: event.data,
+					scopeStoryId: event.scopeStoryId,
+					source: event.source,
+					ms: event.ms,
+					cascade: event.cascade,
+				})
+			},
+		},
 	});
 
 	const playerState = globalThis.document.querySelector<HTMLDivElement>('#player-state');
@@ -183,6 +206,8 @@ export async function runPlayerSceneDemo(config: PlayerSceneDemoConfig): Promise
 			mountedRuntimeRevision = state.runtimeRevision;
 		}
 
+		syncInteractionLock(containerNode, state.status);
+
 		commandPanel.syncFromState(state);
 	});
 
@@ -198,5 +223,6 @@ export async function runPlayerSceneDemo(config: PlayerSceneDemoConfig): Promise
 	mountDemoRootNodes(containerNode, player, config.rootNodeIds);
 	const initialState = player.getState();
 	mountedRuntimeRevision = initialState.runtimeRevision;
+	syncInteractionLock(containerNode, initialState.status);
 	commandPanel.syncFromState(initialState);
 }

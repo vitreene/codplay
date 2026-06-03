@@ -133,6 +133,14 @@ export type ItemState = {
   fitMode?: 'wallpaper' | 'sprite'
 }
 
+export type InputVisualStateValue =
+  | 'idle'
+  | 'selected'
+  | 'disabled'
+  | 'revealed-correct'
+  | 'revealed-incorrect'
+  | 'revealed-missed-correct'
+
 /**
  * Defines one module command payload used by module integration.
  */
@@ -163,6 +171,14 @@ export type ActionDoc = {
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  checked?: boolean
+  disabled?: boolean
+  visualState?: InputVisualStateValue
+  canValidate?: boolean
+  disableAnswers?: boolean
+  showCorrection?: boolean
+  selectedAnswerIds?: string[]
+  correctAnswerIds?: string[]
   broadcast?: BroadcastAction
   cmd?: ModuleCommandDoc
   payload?: ActionPayloadDoc

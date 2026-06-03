@@ -86,6 +86,17 @@ export type PlayerSceneLifecycleOptions = {
   schedule: (story: string | SceneStoryDoc) => void
 }
 
+export type PlayerEmitInput = {
+  name: string
+  data?: Record<string, unknown>
+  payload?: Record<string, unknown>
+  ms?: number
+  scopeStoryId?: string
+  source?: RuntimeEventSource
+  trackId?: string
+  cascade?: boolean
+}
+
 export type StrictSceneDoc = {
   id: string
   stories: Record<string, SceneStoryDoc>
@@ -151,7 +162,7 @@ export type PlayerApi = {
   destroy: () => Promise<PlayerCommandResult>
   play: () => Promise<PlayerCommandResult>
   pause: () => Promise<PlayerCommandResult>
-  emit: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>
+  emit: (event: PlayerEmitInput) => Promise<PlayerCommandResult>
   seek: (targetTimelineMs: number) => Promise<PlayerCommandResult>
   rewind: () => Promise<PlayerCommandResult>
   rebuild: (mode?: RebuildMode) => Promise<PlayerCommandResult>

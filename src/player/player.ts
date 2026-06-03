@@ -13,7 +13,7 @@ import { hasEventLoopStop, resolvePlannableLoopTimes } from './helper-loop-core'
 import { resolveStrapStepInput } from './helper-input'
 import { resolveHelperMode } from './helper-mode'
 import type { DeepReadonly, StoryEvent } from './helper-types'
-import type { PlayerStateListener, PlayerStateSnapshot } from './types'
+import type { PlayerEmitInput, PlayerStateListener, PlayerStateSnapshot } from './types'
 import { PlayerFacade, type CreatePlayerOptions } from './create-player'
 import { PlayerScheduleFacade, type StrapHelpers as RuntimeScheduleHelpers } from './player-schedule'
 import { createRuntimeEventPolicy, type ResolvedRuntimeEventPolicy, type RuntimeEventPolicy } from './runtime-policy'
@@ -239,7 +239,7 @@ export class Player implements PlayerApi {
   /**
    * Emits one public runtime event.
    */
-  emit(input: StoryEvent): Promise<ApiResult<void>> {
+  emit(input: PlayerEmitInput): Promise<ApiResult<void>> {
     const currentStatus = this.player.getState().status
     if (currentStatus === PLAYER_STATUS.paused || currentStatus === PLAYER_STATUS.seeking) {
       return Promise.resolve({
@@ -251,7 +251,23 @@ export class Player implements PlayerApi {
       })
     }
 
-    return this.routeSceneEvent(input, RUNTIME_EVENT_SOURCE.user)
+    return this.routeSceneEvent(
+      {
+        name: input.name,
+        data: input.data ?? input.payload,
+        cascade: input.cascade
+      },
+      input.source ?? RUNTIME_EVENT_SOURCE.user,
+      input.scopeStoryId,
+      0,
+      {
+        scopeStoryId: input.scopeStoryId,
+        source: input.source ?? RUNTIME_EVENT_SOURCE.user,
+        ms: input.ms ?? this.player.getState().timelineMs,
+        trackId: input.trackId,
+        materialized: false
+      }
+    )
   }
 
   /**

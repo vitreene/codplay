@@ -1,5 +1,7 @@
 export { BaseComponent } from './lib/base-component'
 export { ImageComponent } from './image-component'
+export { FormComponent } from './form-component'
+export { InputComponent } from './input-component'
 export { LayoutComponent } from './layout-component'
 export { ListComponent } from './list-component'
 export { MediaComponent } from './media-component'

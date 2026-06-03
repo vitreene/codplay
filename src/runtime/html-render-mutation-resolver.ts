@@ -95,7 +95,15 @@ function hasNonHtmlMutation(action: RuntimeResolvedMutation): boolean {
     action.action.src !== undefined ||
     action.action.alt !== undefined ||
     action.action.fitMode !== undefined ||
-    action.action.broadcast !== undefined
+    action.action.broadcast !== undefined ||
+    action.action.checked !== undefined ||
+    action.action.disabled !== undefined ||
+    action.action.visualState !== undefined ||
+    action.action.canValidate !== undefined ||
+    action.action.disableAnswers !== undefined ||
+    action.action.showCorrection !== undefined ||
+    action.action.selectedAnswerIds !== undefined ||
+    action.action.correctAnswerIds !== undefined
   )
 }
 

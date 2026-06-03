@@ -1,5 +1,5 @@
 import { BaseComponent } from './lib/base-component'
-import { isDomNode, resetRuntimeNodeState } from './lib/dom-component-adapter'
+import { isDomNode } from './lib/dom-component-adapter'
 import { RUNTIME_CONFIG } from '../config'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
