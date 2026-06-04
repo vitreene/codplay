@@ -3,6 +3,15 @@ import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackMeta } from '../core/events/types'
 import type { TrackManagerEventimeNode, TrackManagerStoryEvent } from './types'
 
+const TRACK_TIME_QUANTUM_MS = 10
+
+/**
+ * Quantizes one timeline event time to the canonical track resolution.
+ */
+function quantizeTrackMs(value: number): number {
+  return Math.max(0, Math.floor(value / TRACK_TIME_QUANTUM_MS) * TRACK_TIME_QUANTUM_MS)
+}
+
 export type TrackBucket = {
   id: string
   order: number
@@ -63,7 +72,7 @@ export class TrackManagerCodec {
         continue
       }
 
-      const ms = Number.isFinite(event.ms) ? Math.max(0, Number(event.ms)) : 0
+      const ms = Number.isFinite(event.ms) ? quantizeTrackMs(Number(event.ms)) : 0
       const index = Number.isFinite(event.index) ? Number(event.index) : events.length
       events.push({
         id: typeof event.id === 'string' ? event.id : createGeneratedEventId(),
@@ -111,7 +120,7 @@ export class TrackManagerCodec {
       const currentOffsetMs = parentOffsetMs + Math.max(0, eventime.startAt)
       result.push({
         id: createGeneratedEventId(),
-        ms: anchorMs + currentOffsetMs,
+        ms: quantizeTrackMs(anchorMs + currentOffsetMs),
         name: eventime.name,
         index: result.length,
         source: RUNTIME_EVENT_SOURCE.story,

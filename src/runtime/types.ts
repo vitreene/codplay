@@ -131,6 +131,8 @@ export type ItemState = {
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  selectionIcon?: InputPartDefinition
+  correctionIcon?: InputCorrectionIconDefinition
 }
 
 export type InputVisualStateValue =
@@ -140,6 +142,25 @@ export type InputVisualStateValue =
   | 'revealed-correct'
   | 'revealed-incorrect'
   | 'revealed-missed-correct'
+
+/**
+ * Describes one decorative input part configured on the perso.
+ */
+export type InputPartDefinition = {
+  className?: string
+  style?: Record<string, unknown>
+  attr?: Record<string, unknown>
+  content?: string
+}
+
+/**
+ * Describes one correction icon definition with state-specific content.
+ */
+export type InputCorrectionIconDefinition = InputPartDefinition & {
+  correctContent?: string
+  incorrectContent?: string
+  missedCorrectContent?: string
+}
 
 /**
  * Defines one module command payload used by module integration.

@@ -58,6 +58,7 @@ export type RuntimeComponent = {
   init?: () => void
   _init: () => void
   update: (input: RuntimeComponentUpdateInput) => void
+  getOutletsSnapshot?: () => RuntimeLayoutOutletSnapshot[]
   readonly modules: ComponentModules
 }
 

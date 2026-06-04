@@ -1,6 +1,6 @@
 import type { AnimationAction } from '../animation/types'
 import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
-import type { MoveValue, RuntimePersos, ItemDoc } from '../runtime/types'
+import type { ActionDoc, MoveValue, RuntimePersos, ItemDoc } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackAuthorMeta } from '../track-manager/types'
 import type { RuntimeTimelinePlan } from '../director/types'
@@ -10,6 +10,7 @@ import type {
   SceneStoryDoc,
   StrictSceneDoc
 } from './types'
+import { resolveInputStandardActions } from '../runtime/components/input-component'
 
 export type PlayerRuntimePlan = {
   runtimePersos: RuntimePersos
@@ -282,6 +283,8 @@ export class PlayerRuntimePlanner {
    * Creates one runtime item from one strict perso definition.
    */
   private createRuntimeItem(storyId: string, trackId: string, perso: PersoDoc): ItemDoc {
+    const authoredActions = perso.actions as Record<string, ActionDoc> | undefined
+
     return {
       id: perso.id,
       name: perso.name,
@@ -292,7 +295,10 @@ export class PlayerRuntimePlanner {
       initial: perso.initial,
       emit: perso.emit,
       list: perso.list,
-      actions: perso.actions as ItemDoc['actions']
+      actions:
+        perso.type === 'input'
+          ? resolveInputStandardActions(authoredActions ?? {})
+          : (authoredActions ?? {})
     }
   }
 

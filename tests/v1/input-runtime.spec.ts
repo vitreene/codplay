@@ -25,6 +25,15 @@ function createInputItemFixture(): ItemDoc {
       value: 'hello',
       label: 'Answer',
       hint: 'Type one value',
+      selectionIcon: {
+        content: ''
+      },
+      correctionIcon: {
+        content: '',
+        correctContent: '+',
+        incorrectContent: '-',
+        missedCorrectContent: '+'
+      },
       visualState: 'idle'
     },
     actions: {
@@ -104,29 +113,25 @@ describe('V1 - input runtime', () => {
     expect(hint?.textContent).toBe('Type one value')
     expect(selectionIcon?.className).toContain('is-idle')
     expect(correctionIcon?.className).toContain('is-idle')
+    expect(selectionIcon?.textContent).toBe('')
+    expect(correctionIcon?.textContent).toBe('')
 
     component.update({
       persoId: 'story-main__answer',
       eventId: 'evt-1',
       eventSeq: 1,
       action: {
-        id: 'story-main__answer-control',
-        inputType: 'checkbox',
-        name: 'answer',
-        value: 'hello',
-        label: 'Answer',
-        hint: 'Type one value',
-        checked: true,
-        disabled: true,
-        visualState: 'revealed-correct'
+        selectedAnswerIds: ['hello'],
+        correctAnswerIds: ['hello'],
+        disableAnswers: true,
+        showCorrection: true
       }
     })
 
     expect(root?.id).toBe('story-main__answer')
     expect(root?.className).toContain('input--revealed-correct')
-    expect(root?.className).toContain('input--selected')
     expect(root?.className).toContain('input--disabled')
-    expect(control?.type).toBe('checkbox')
+    expect(control?.type).toBe('text')
     expect(control?.id).toBe('story-main__answer-control')
     expect(control?.checked).toBe(true)
     expect(control?.disabled).toBe(true)
@@ -134,6 +139,23 @@ describe('V1 - input runtime', () => {
     expect(control?.className).toContain('is-selected')
     expect(control?.className).toContain('is-disabled')
     expect(correctionIcon?.className).toContain('is-correct')
+    expect(selectionIcon?.textContent).toBe('')
+    expect(correctionIcon?.textContent).toBe('+')
+
+    component.update({
+      persoId: 'story-main__answer',
+      eventId: 'evt-2',
+      eventSeq: 2,
+      action: {
+        selectedAnswerIds: ['hello'],
+        correctAnswerIds: ['other'],
+        disableAnswers: true,
+        showCorrection: true
+      }
+    })
+
+    expect(selectionIcon?.textContent).toBe('')
+    expect(correctionIcon?.textContent).toBe('-')
   })
 
   it('mounts the built-in input component through the player bootstrap', async () => {

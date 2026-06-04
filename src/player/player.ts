@@ -940,6 +940,18 @@ export class Player implements PlayerApi {
         if (!updateResult.ok) {
           return updateResult
         }
+
+        const applyResult = await this.player.applyMaterializedEvent({
+          name: PLAYER_RUNTIME_EVENT.stateUpdate,
+          payload: chunk.update,
+          scopeStoryId: scope.scopeStoryId,
+          source: RUNTIME_EVENT_SOURCE.system,
+          ms: scope.ms,
+          trackId: strapTrackId
+        })
+        if (!applyResult.ok) {
+          return applyResult
+        }
       }
 
       const isRetroactiveScope = scope.ms !== undefined && scope.ms < this.player.getState().timelineMs

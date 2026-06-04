@@ -25,20 +25,54 @@ export type ResolvedQuizQuestion = {
   labels: QuizQuestionLabels
 }
 
-type FormSnapshot = {
-  questionIndex?: unknown
-  values?: unknown
-  selectedAnswerIds?: unknown
-  canValidate?: unknown
+export type QuizQuestionStoryConfig = {
+  showCorrection: boolean
+  showResult: boolean
+  maxRetries: number
+  disableValidateAfterSubmit: boolean
 }
 
-type QuizQuestionState = {
+export type QuizQuestionResolvedPayload = {
+  questionIndex: number
+  selectedAnswerIds: string[]
+  correctAnswerIds: string[]
+  isCorrect: boolean
+}
+
+export type QuizQuestionAnsweredPayload = QuizQuestionResolvedPayload
+
+type QuizQuestionSelectionPayload = {
+  answerId: string
+}
+
+export type QuizQuestionStoryState = {
   question: ResolvedQuizQuestion
+  config: QuizQuestionStoryConfig
+  selectedAnswerIds: string[]
+  revealed?: QuizQuestionResolvedPayload
+  resolved?: QuizQuestionResolvedPayload
+  disabled: boolean
+  retryCount: number
+}
+
+export type QuizSceneState = {
+  answers: QuizQuestionAnsweredPayload[]
+  answeredCount: number
+  correctCount: number
+  lastQuestionIndex?: number
+  lastResult?: boolean
 }
 
 const QUESTION_PANEL_ID = "quiz-question-panel"
 const QUESTION_STORY_ID = "quiz-question-story"
-const QUESTION_FORM_ID = "quiz-question-form"
+const QUESTION_SCENE_AGGREGATION_LOG = "[quiz-question-aggregate]"
+
+const DEFAULT_QUESTION_CONFIG: QuizQuestionStoryConfig = {
+  showCorrection: true,
+  showResult: true,
+  maxRetries: 0,
+  disableValidateAfterSubmit: true
+}
 
 /**
  * Returns the input type used by one resolved quiz question.
@@ -69,35 +103,107 @@ function hasSameAnswerSet(expectedIds: string[], actualIds: string[]): boolean {
 /**
  * Reads the question payload stored in the strap state.
  */
-function resolveQuestionState(state: Readonly<Record<string, unknown>>): QuizQuestionState | null {
+function resolveQuestionState(state: Readonly<Record<string, unknown>>): QuizQuestionStoryState | null {
   const question = state.question
   if (typeof question !== "object" || question === null) {
     return null
   }
 
-  return state as QuizQuestionState
+  return state as QuizQuestionStoryState
 }
 
 /**
- * Reads one form snapshot from one native form event payload.
+ * Resolves one scene aggregation state from one shallow runtime state bucket.
  */
-function resolveFormSnapshot(data: Record<string, unknown> | undefined): FormSnapshot {
-  if (data === undefined) {
-    return {}
-  }
+function resolveSceneState(state: Readonly<Record<string, unknown>>): QuizSceneState {
+  const answers = Array.isArray(state.answers)
+    ? state.answers.filter((answer): answer is QuizQuestionAnsweredPayload => {
+        if (typeof answer !== 'object' || answer === null) {
+          return false
+        }
 
-  return data as FormSnapshot
+        const payload = answer as Record<string, unknown>
+
+        return (
+          typeof payload.questionIndex === 'number' &&
+          Array.isArray(payload.selectedAnswerIds) &&
+          Array.isArray(payload.correctAnswerIds) &&
+          typeof payload.isCorrect === 'boolean'
+        )
+      })
+    : []
+
+  return {
+    answers,
+    answeredCount: typeof state.answeredCount === 'number' ? state.answeredCount : answers.length,
+    correctCount: typeof state.correctCount === 'number' ? state.correctCount : answers.filter((answer) => answer.isCorrect).length,
+    lastQuestionIndex: typeof state.lastQuestionIndex === 'number' ? state.lastQuestionIndex : undefined,
+    lastResult: typeof state.lastResult === 'boolean' ? state.lastResult : undefined
+  }
 }
 
 /**
- * Creates one visual panel that groups the quiz question story.
+ * Creates one story-owned title for one quiz question.
+ */
+function createQuestionTitle(question: ResolvedQuizQuestion): PersoDoc {
+  return {
+    id: 'quiz-question-title',
+    type: 'text',
+    initial: {
+      tag: 'span',
+      content: question.prompt,
+      style: {
+        fontWeight: 700
+      },
+      move: {
+        parentId: 'quiz-question:title',
+        mode: 'append'
+      }
+    } as unknown as PersoDoc['initial'],
+    actions: {}
+  }
+}
+
+/**
+ * Creates one story-owned hint for one quiz question.
+ */
+function createQuestionHint(question: ResolvedQuizQuestion): PersoDoc {
+  return {
+    id: 'quiz-question-hint',
+    type: 'text',
+    initial: {
+      tag: 'span',
+      content: question.type === 'multiple' ? question.labels.multipleHint : '',
+      style: {
+        color: '#475569'
+      },
+      move: {
+        parentId: 'quiz-question:hint',
+        mode: 'append'
+      }
+    } as unknown as PersoDoc['initial'],
+    actions: {}
+  }
+}
+
+/**
+ * Creates one layout panel that hosts the full quiz question.
  */
 function createQuestionPanel(): PersoDoc {
   return {
     id: QUESTION_PANEL_ID,
-    type: 'list',
+    type: 'layout',
     initial: {
-      className: 'quiz-question-panel',
+      markup: `
+        <fieldset class="quiz-question-fieldset">
+          <legend data-part="quiz-question:title"></legend>
+          <p data-part="quiz-question:hint"></p>
+          <div data-part="quiz-question:answers"></div>
+          <div data-part="quiz-question:controls"></div>
+          <p data-part="quiz-question:result" aria-live="polite"></p>
+          <div data-part="quiz-question:next"></div>
+        </fieldset>
+      `,
       style: {
         display: 'flex',
         flexDirection: 'column',
@@ -105,22 +211,35 @@ function createQuestionPanel(): PersoDoc {
         padding: '16px',
         border: '1px solid rgba(15, 23, 42, 0.12)',
         borderRadius: '12px',
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        margin: 0
+      },
+      attr: {
+        disabled: false
       }
-    },
-    actions: {}
+    } as unknown as PersoDoc['initial'],
+    actions: {
+      'quiz:question:resolved': {
+        attr: {
+          disabled: true
+        }
+      }
+    }
   }
 }
 
 /**
  * Creates one runtime answer item for one quiz question.
  */
-function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer): PersoDoc {
+function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer): PersoDoc[] {
   const inputType = resolveAnswerInputType(question.type)
   const groupName = resolveAnswerGroupName(question.index)
+  const answerRootId = `quiz-question-${question.index}__answer-${answer.id}`
+  const selectionIconId = `${answerRootId}__selection-icon`
+  const correctionIconId = `${answerRootId}__correction-icon`
 
-  return {
-    id: `quiz-question-${question.index}__answer-${answer.id}`,
+  const answerInput: PersoDoc = {
+    id: answerRootId,
     type: "input",
     initial: {
       inputType,
@@ -132,60 +251,136 @@ function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer
       disabled: false,
       visualState: "idle",
       move: {
-        parentId: QUESTION_FORM_ID,
+        parentId: 'quiz-question:answers',
         mode: "append"
       }
     } as unknown as PersoDoc['initial'],
-    actions: {
-      [`quiz:question:answer:${answer.id}:revealed-correct`]: {
-        checked: true,
-        disabled: true,
-        visualState: 'revealed-correct'
-      },
-      [`quiz:question:answer:${answer.id}:revealed-incorrect`]: {
-        checked: true,
-        disabled: true,
-        visualState: 'revealed-incorrect'
-      },
-      [`quiz:question:answer:${answer.id}:revealed-missed-correct`]: {
-        checked: false,
-        disabled: true,
-        visualState: 'revealed-missed-correct'
-      },
-      [`quiz:question:answer:${answer.id}:locked`]: {
-        checked: false,
-        disabled: true,
-        visualState: 'disabled'
+    actions: {},
+    emit: {
+      change: {
+        data: {
+          answerId: answer.id
+        },
+        event: {
+          name: 'quiz:question:answer:select'
+        }
       }
     }
   }
-}
 
-/**
- * Creates the form item that hosts one quiz question.
- */
-function createQuestionForm(question: ResolvedQuizQuestion): PersoDoc {
-  return {
-    id: QUESTION_FORM_ID,
-    type: "form",
+  const selectionIcon: PersoDoc = {
+    id: selectionIconId,
+    type: 'text',
     initial: {
-      questionIndex: question.index,
-      title: question.prompt,
-      hint: question.type === "multiple" ? question.labels.multipleHint : "",
-      validateLabel: question.labels.validate,
-      nextLabel: question.labels.next,
-      resultMessage: "",
-      canValidate: false,
-      showResult: false,
-      showNext: false,
+      tag: 'span',
+      content: '',
+      className: 'quiz-question-answer__selection-icon',
+      style: {
+        display: 'inline-block',
+        minWidth: '1ch',
+        marginInlineStart: '8px',
+        textAlign: 'center'
+      },
       move: {
-        parentId: QUESTION_PANEL_ID,
+        parentId: `${answerRootId}__selection-icon-slot`,
         mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {
+      [`quiz:question:answer:${answer.id}:selected`]: {
+        content: '•',
+        className: 'is-selected'
+      },
+      [`quiz:question:answer:${answer.id}:idle`]: {
+        content: '',
+        className: 'is-idle'
+      }
+    }
+  }
+
+  const correctionIcon: PersoDoc = {
+    id: correctionIconId,
+    type: 'text',
+    initial: {
+      tag: 'span',
+      content: '',
+      className: 'quiz-question-answer__correction-icon',
+      style: {
+        display: 'inline-block',
+        minWidth: '1ch',
+        marginInlineStart: '8px',
+        textAlign: 'center',
+        fontWeight: 700
+      },
+      move: {
+        parentId: `${answerRootId}__correction-icon-slot`,
+        mode: 'append'
+      }
+    } as unknown as PersoDoc['initial'],
+    actions: {
+      [`quiz:question:answer:${answer.id}:revealed-correct`]: {
+        content: '+',
+        className: 'is-correct'
+      },
+      [`quiz:question:answer:${answer.id}:revealed-incorrect`]: {
+        content: '-',
+        className: 'is-incorrect'
+      },
+      [`quiz:question:answer:${answer.id}:revealed-missed-correct`]: {
+        content: '+',
+        className: 'is-missed-correct'
+      }
+    }
+  }
+
+  return [answerInput, selectionIcon, correctionIcon]
+}
+
+/**
+ * Creates one story-owned validate button for one quiz question.
+ */
+function createQuestionValidate(question: ResolvedQuizQuestion): PersoDoc {
+  return {
+    id: 'quiz-question-validate',
+    type: 'text',
+    initial: {
+      tag: 'button',
+      content: question.labels.validate,
+      style: {
+        marginTop: '12px',
+        alignSelf: 'flex-start'
+      },
+      attr: {
+        type: 'button',
+        disabled: true
+      },
+      move: {
+        parentId: 'quiz-question:controls',
+        mode: 'append'
+      }
+    } as unknown as PersoDoc['initial'],
+    emit: {
+      click: {
+        event: {
+          name: 'quiz:question:validate'
+        }
+      }
+    },
+    actions: {
+      'quiz:question:selection:available': {
+        attr: {
+          disabled: false
+        }
+      },
+      'quiz:question:selection:empty': {
+        attr: {
+          disabled: true
+        }
+      },
       'quiz:question:resolved': {
-        canValidate: false
+        attr: {
+          disabled: true
+        }
       }
     }
   }
@@ -199,14 +394,17 @@ function createQuestionResult(question: ResolvedQuizQuestion): PersoDoc {
     id: 'quiz-question-result',
     type: 'text',
     initial: {
-      tag: 'p',
+      tag: 'span',
       content: '',
+      style: {
+        fontWeight: 600
+      },
       attr: {
         hidden: true,
         'aria-live': 'polite'
       },
       move: {
-        parentId: QUESTION_PANEL_ID,
+        parentId: 'quiz-question:result',
         mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
@@ -242,7 +440,7 @@ function createQuestionNext(question: ResolvedQuizQuestion): PersoDoc {
         hidden: true
       },
       move: {
-        parentId: QUESTION_PANEL_ID,
+        parentId: 'quiz-question:next',
         mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
@@ -272,19 +470,31 @@ function createQuestionStory(question: ResolvedQuizQuestion): SceneStoryDoc {
     entries: [QUESTION_PANEL_ID],
     initial: undefined,
     state: {
-      question
+      question,
+      config: DEFAULT_QUESTION_CONFIG,
+      selectedAnswerIds: [],
+      revealed: undefined,
+      resolved: undefined,
+      disabled: false,
+      retryCount: 0
     },
     straps: undefined,
     listen: [
       {
-        on: "native:form:submit",
-        straps: ["quiz-question-submit"]
+        on: 'quiz:question:answer:select',
+        straps: ['quiz-question-select']
+      },
+      {
+        on: 'quiz:question:validate',
+        straps: ['quiz-question-submit']
       }
     ],
     persos: [
       createQuestionPanel(),
-      createQuestionForm(question),
-      ...question.answers.map((answer) => createQuestionAnswer(question, answer)),
+      createQuestionTitle(question),
+      createQuestionHint(question),
+      ...question.answers.flatMap((answer) => createQuestionAnswer(question, answer)),
+      createQuestionValidate(question),
       createQuestionResult(question),
       createQuestionNext(question)
     ]
@@ -298,9 +508,20 @@ export function createQuizQuestionScene(question: ResolvedQuizQuestion): SceneDo
   return {
     id: `quiz-question-${question.index}-scene`,
     rootStories: [QUESTION_STORY_ID],
-    initial: undefined,
+    initial: {
+      answers: [],
+      answeredCount: 0,
+      correctCount: 0,
+      lastQuestionIndex: undefined,
+      lastResult: undefined
+    },
     straps: undefined,
-    listen: [],
+    listen: [
+      {
+        on: "quiz:question:answered",
+        straps: ["quiz-question-aggregate"]
+      }
+    ],
     stories: {
       [QUESTION_STORY_ID]: createQuestionStory(question)
     },
@@ -309,24 +530,83 @@ export function createQuizQuestionScene(question: ResolvedQuizQuestion): SceneDo
 }
 
 /**
- * Handles one submitted form snapshot and resolves the quiz answer result.
+ * Handles one user selection and updates the quiz answer snapshot.
  */
-function handleQuestionSubmit(state: Readonly<Record<string, unknown>>, eventData: Record<string, unknown> | undefined) {
+function handleQuestionSelect(state: Readonly<Record<string, unknown>>, eventData: Record<string, unknown> | undefined) {
   const questionState = resolveQuestionState(state)
   if (questionState === null) {
     return undefined
   }
 
-  const snapshot = resolveFormSnapshot(eventData)
-  const selectedAnswerIds = Array.isArray(snapshot.selectedAnswerIds)
-    ? snapshot.selectedAnswerIds.filter((answerId): answerId is string => typeof answerId === "string")
+  const selectPayload = eventData as QuizQuestionSelectionPayload | undefined
+  if (typeof selectPayload?.answerId !== 'string' || selectPayload.answerId.length === 0) {
+    return undefined
+  }
+
+  const answerId = selectPayload.answerId
+
+  const currentSelectedAnswerIds = Array.isArray(questionState.selectedAnswerIds)
+    ? questionState.selectedAnswerIds.filter((candidate): candidate is string => typeof candidate === 'string')
     : []
-  const values = typeof snapshot.values === "object" && snapshot.values !== null
-    ? (snapshot.values as Record<string, string | number | boolean | string[] | null>)
-    : {}
+  const isMultipleChoice = questionState.question.type === 'multiple'
+  const alreadySelected = currentSelectedAnswerIds.includes(answerId)
+
+  const selectedAnswerIds = isMultipleChoice
+    ? alreadySelected
+      ? currentSelectedAnswerIds.filter((candidate) => candidate !== answerId)
+      : [...currentSelectedAnswerIds, answerId]
+    : [answerId]
+
+  const selectionEventName = selectedAnswerIds.length > 0 ? 'quiz:question:selection:available' : 'quiz:question:selection:empty'
+  const selectedIds = new Set(selectedAnswerIds)
+  const answerEvents = questionState.question.answers.map((answer) => {
+    const isSelected = selectedIds.has(answer.id)
+    return {
+      name: `quiz:question:answer:${answer.id}:${isSelected ? 'selected' : 'idle'}`
+    }
+  })
+
+  return {
+    update: {
+      selectedAnswerIds,
+      revealed: questionState.revealed,
+      resolved: questionState.resolved,
+      disabled: questionState.disabled,
+      retryCount: typeof questionState.retryCount === 'number' ? questionState.retryCount : 0
+    },
+    events: [
+      {
+        name: selectionEventName,
+        data: {
+          selectedAnswerIds
+        }
+      },
+      ...answerEvents
+    ]
+  }
+}
+
+/**
+ * Handles one submitted selection and resolves the quiz answer result.
+ */
+function handleQuestionSubmit(state: Readonly<Record<string, unknown>>, _eventData: Record<string, unknown> | undefined) {
+  const questionState = resolveQuestionState(state)
+  if (questionState === null) {
+    return undefined
+  }
+
+  const selectedAnswerIds = Array.isArray(questionState.selectedAnswerIds)
+    ? questionState.selectedAnswerIds.filter((answerId): answerId is string => typeof answerId === 'string')
+    : []
   const correctAnswerIds = questionState.question.answers.filter((answer) => answer.isCorrect).map((answer) => answer.id)
   const isCorrect = hasSameAnswerSet(correctAnswerIds, selectedAnswerIds)
   const resultEventName = isCorrect ? "quiz:question:resolved:correct" : "quiz:question:resolved:incorrect"
+  const resolvedPayload: QuizQuestionResolvedPayload = {
+    questionIndex: questionState.question.index,
+    selectedAnswerIds,
+    correctAnswerIds,
+    isCorrect
+  }
 
   const answerEvents = questionState.question.answers.map((answer) => {
     const isSelected = selectedAnswerIds.includes(answer.id)
@@ -346,35 +626,32 @@ function handleQuestionSubmit(state: Readonly<Record<string, unknown>>, eventDat
   })
 
   return {
+    update: {
+      selectedAnswerIds,
+      revealed: resolvedPayload,
+      resolved: resolvedPayload,
+      disabled: true,
+      retryCount: typeof questionState.retryCount === 'number' ? questionState.retryCount : 0
+    },
     events: [
       {
         name: "quiz:question:answered",
         data: {
-          questionIndex: questionState.question.index,
-          selectedAnswerIds,
-          correctAnswerIds,
-          isCorrect,
-          values
+          ...resolvedPayload,
         }
       },
       {
         name: 'quiz:question:resolved',
         data: {
-          questionIndex: questionState.question.index,
-          selectedAnswerIds,
-          correctAnswerIds,
-          isCorrect,
-          values
+          ...resolvedPayload,
+          showCorrection: true,
+          disableAnswers: true
         }
       },
       {
         name: resultEventName,
         data: {
-          questionIndex: questionState.question.index,
-          selectedAnswerIds,
-          correctAnswerIds,
-          isCorrect,
-          values
+          ...resolvedPayload,
         }
       },
       ...answerEvents
@@ -382,6 +659,48 @@ function handleQuestionSubmit(state: Readonly<Record<string, unknown>>, eventDat
   }
 }
 
+/**
+ * Aggregates one answered quiz question at scene level.
+ */
+function handleQuestionAggregate(state: Readonly<Record<string, unknown>>, eventData: Record<string, unknown> | undefined) {
+  const payload = eventData as QuizQuestionResolvedPayload | undefined
+  if (payload === undefined) {
+    return undefined
+  }
+
+  const sceneState = resolveSceneState(state)
+  const nextAnswer: QuizQuestionAnsweredPayload = {
+    questionIndex: payload.questionIndex,
+    selectedAnswerIds: payload.selectedAnswerIds,
+    correctAnswerIds: payload.correctAnswerIds,
+    isCorrect: payload.isCorrect
+  }
+
+  const previousAnswers = sceneState.answers.filter((answer) => answer.questionIndex !== nextAnswer.questionIndex)
+  const answers = [...previousAnswers, nextAnswer].sort((left, right) => left.questionIndex - right.questionIndex)
+  const answeredCount = answers.length
+  const correctCount = answers.filter((answer) => answer.isCorrect).length
+
+  console.log(QUESTION_SCENE_AGGREGATION_LOG, {
+    answeredCount,
+    correctCount,
+    lastQuestionIndex: nextAnswer.questionIndex,
+    lastResult: nextAnswer.isCorrect
+  })
+
+  return {
+    update: {
+      answers,
+      answeredCount,
+      correctCount,
+      lastQuestionIndex: nextAnswer.questionIndex,
+      lastResult: nextAnswer.isCorrect
+    }
+  }
+}
+
 export const quizQuestionStraps: StrapCollection = {
-  "quiz-question-submit": ({ event, state }) => handleQuestionSubmit(state, event.data)
+  "quiz-question-select": ({ event, state }) => handleQuestionSelect(state, event.data),
+  "quiz-question-submit": ({ event, state }) => handleQuestionSubmit(state, event.data),
+  "quiz-question-aggregate": ({ event, state }) => handleQuestionAggregate(state, event.data)
 }

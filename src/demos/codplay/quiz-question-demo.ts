@@ -7,7 +7,7 @@ import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 export async function runQuizQuestionDemo(): Promise<void> {
 	await runCodPlaySceneDemo({
 		title: 'Quiz Question',
-		subtitle: 'Question V1 generee avec form/input et straps locaux.',
+		subtitle: 'Question V1 generee sans form dans la scene, avec inputs, boutons et straps locaux.',
 		scene: createQuizQuestionScene({
 			index: 1,
 			type: 'single',

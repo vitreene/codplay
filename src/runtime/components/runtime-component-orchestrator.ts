@@ -25,6 +25,7 @@ import type {
   RuntimeComponentClass,
   RuntimeComponentWarningReporter,
   RuntimeLayoutComponent,
+  RuntimeLayoutOutletSnapshot,
   RuntimeListComponent,
   RuntimeModule,
   RuntimeModuleHookOutput,
@@ -86,7 +87,7 @@ export class RuntimeComponentOrchestrator {
   private readonly parentListByPersoId = new Map<string, string | null>()
   private readonly mountedByPersoId = new Map<string, boolean>()
   private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>()
-  private readonly layoutOutletIdsByLayoutId = new Map<string, string[]>()
+  private readonly outletIdsByComponentId = new Map<string, string[]>()
   private readonly storyIdByPersoId = new Map<string, string>()
   private readonly storyEntriesByStoryId = new Map<string, string[]>()
   private readonly storyMoveByStoryId = new Map<string, unknown>()
@@ -407,7 +408,7 @@ export class RuntimeComponentOrchestrator {
     component: RuntimeComponent,
     rootNode: unknown
   ): void {
-    this.clearLayoutOutlets(perso.id)
+    this.clearComponentOutlets(perso.id)
     this.componentByPersoId.set(perso.id, component)
     this.nodeByPersoId.set(perso.id, rootNode)
     this.parentListByPersoId.set(perso.id, null)
@@ -424,8 +425,8 @@ export class RuntimeComponentOrchestrator {
       this.renderMutationResolverByPersoId.delete(perso.id)
     }
 
-    if (this.isRuntimeLayoutComponent(component)) {
-      this.registerLayoutOutlets(perso.id, component)
+    if (this.hasRuntimeOutlets(component)) {
+      this.registerComponentOutlets(perso.id, component)
     }
   }
 
@@ -440,7 +441,7 @@ export class RuntimeComponentOrchestrator {
     this.parentListByPersoId.clear()
     this.mountedByPersoId.clear()
     this.renderMutationResolverByPersoId.clear()
-    this.layoutOutletIdsByLayoutId.clear()
+    this.outletIdsByComponentId.clear()
     this.storyIdByPersoId.clear()
     this.storyEntriesByStoryId.clear()
     this.storyMoveByStoryId.clear()
@@ -641,15 +642,15 @@ export class RuntimeComponentOrchestrator {
   /**
    * Checks whether one runtime component exposes the layout outlet bridge contract.
    */
-  private isRuntimeLayoutComponent(component: RuntimeComponent): component is RuntimeLayoutComponent {
+  private hasRuntimeOutlets(component: RuntimeComponent): component is RuntimeComponent & { getOutletsSnapshot: () => RuntimeLayoutOutletSnapshot[] } {
     return 'getOutletsSnapshot' in component && typeof component.getOutletsSnapshot === 'function'
   }
 
   /**
    * Clears layout outlet registrations for one layout component id.
    */
-  private clearLayoutOutlets(layoutId: string): void {
-    const outletIds = this.layoutOutletIdsByLayoutId.get(layoutId)
+  private clearComponentOutlets(componentId: string): void {
+    const outletIds = this.outletIdsByComponentId.get(componentId)
     if (!outletIds) {
       return
     }
@@ -660,16 +661,16 @@ export class RuntimeComponentOrchestrator {
       }
     }
 
-    this.layoutOutletIdsByLayoutId.delete(layoutId)
+    this.outletIdsByComponentId.delete(componentId)
   }
 
   /**
    * Registers all outlet containers exposed by one layout component.
    */
-  private registerLayoutOutlets(layoutId: string, layoutComponent: RuntimeLayoutComponent): void {
+  private registerComponentOutlets(componentId: string, outletComponent: RuntimeLayoutComponent): void {
     const registeredOutletIds: string[] = []
 
-    for (const outlet of layoutComponent.getOutletsSnapshot()) {
+    for (const outlet of outletComponent.getOutletsSnapshot()) {
       const outletId = outlet.outletId
       if (
         this.componentByPersoId.has(outletId) ||
@@ -680,7 +681,7 @@ export class RuntimeComponentOrchestrator {
           code: 'AUTHOR_LAYOUT_OUTLET_ID_COLLISION',
           message: 'Layout outlet id collides with an existing runtime id',
           details: {
-            layoutId,
+            layoutId: componentId,
             outletId
           }
         })
@@ -691,7 +692,7 @@ export class RuntimeComponentOrchestrator {
       registeredOutletIds.push(outletId)
     }
 
-    this.layoutOutletIdsByLayoutId.set(layoutId, registeredOutletIds)
+    this.outletIdsByComponentId.set(componentId, registeredOutletIds)
   }
 
   /**

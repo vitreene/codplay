@@ -1074,39 +1074,6 @@ export class PlayerFacade implements PlayerApi {
         guard += 1;
         const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
 
-        console.log("[seek-loop]", {
-          targetTimelineMs: timelineMs,
-          playedReplayEndMs,
-          dueEventsCount: dueEvents.length,
-          dueEvents: dueEvents.map((event) => ({
-            name: event.name,
-            ms: event.ms,
-            trackId: event.trackId,
-          })),
-        });
-
-        const watchedDueEvents = dueEvents
-          .filter(
-            (event) =>
-              event.name === "native:form:submit" ||
-              event.name === "quiz:question:resolved" ||
-              event.name === "quiz:question:resolved:correct" ||
-              event.name === "quiz:question:resolved:incorrect",
-          )
-          .map((event) => ({
-            eventName: event.name,
-            eventMs: event.ms,
-            trackId: event.trackId,
-          }));
-
-        if (watchedDueEvents.length > 0) {
-          console.log("[seek-due-events]", {
-            targetTimelineMs: timelineMs,
-            playedReplayEndMs,
-            events: watchedDueEvents,
-          });
-        }
-
         if (dueEvents.length === 0) {
           return null;
         }
@@ -1116,30 +1083,14 @@ export class PlayerFacade implements PlayerApi {
             return event.ms;
           }
 
-          const watched =
-            event.name === "native:form:submit" ||
-            event.name === "quiz:question:resolved" ||
-            event.name === "quiz:question:resolved:correct" ||
-            event.name === "quiz:question:resolved:incorrect";
-          const allowed = shouldReplayEventForSeek(
-            event,
-            playedReplayEndMs,
-            this.trackManager.state.loadedTrackIds,
-            (trackId) => this.trackManager.getTrackMeta(trackId),
-          );
-          if (watched) {
-            console.log("[seek-check]", {
-              targetTimelineMs: timelineMs,
+          if (
+            !shouldReplayEventForSeek(
+              event,
               playedReplayEndMs,
-              eventName: event.name,
-              eventMs: event.ms,
-              trackId: event.trackId,
-              allowed,
-              loadedTrackIds: this.trackManager.state.loadedTrackIds,
-              trackMeta: event.trackId ? this.trackManager.getTrackMeta(event.trackId) : null,
-            });
-          }
-          if (!allowed) {
+              this.trackManager.state.loadedTrackIds,
+              (trackId) => this.trackManager.getTrackMeta(trackId),
+            )
+          ) {
             continue;
           }
 
