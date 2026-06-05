@@ -529,6 +529,10 @@ describe('V1 - reference scenes', () => {
       {
         events: [
           {
+            name: 'counter:stop',
+            cascade: true
+          },
+          {
             name: 'quiz:answer:no',
             cascade: true
           }
@@ -595,8 +599,7 @@ describe('V1 - reference scenes', () => {
   })
 
   it('uses the live helper for S4 quiz-count countdown emissions', async () => {
-    const liveRepeat = vi.fn(() => ({ id: 'live-repeat', cancel: vi.fn() }))
-    const liveDelay = vi.fn(() => ({ id: 'live-delay', cancel: vi.fn() }))
+    const liveLoop = vi.fn(() => ({ id: 'live-loop', cancel: vi.fn() }))
 
     const result = s4QuizStraps['quiz-countdown-start']({
       event: { name: 'quiz:count:show' },
@@ -615,20 +618,24 @@ describe('V1 - reference scenes', () => {
         },
         live: {
           wait: vi.fn(),
-          delay: liveDelay,
-          repeat: liveRepeat,
-          loop: vi.fn(),
+          delay: vi.fn(),
+          repeat: vi.fn(),
+          loop: liveLoop,
           stagger: vi.fn()
         }
       }
     })
 
-    expect(liveRepeat).toHaveBeenCalledWith(
-      { everyMs: 1000, times: 11 },
+    expect(liveLoop).toHaveBeenCalledWith(
+      {
+        eachMs: 1000,
+        until: [
+          { type: 'times', max: 11 },
+          { type: 'event', name: 'counter:stop' },
+        ],
+      },
       expect.any(Function)
     )
-    expect(liveDelay).toHaveBeenNthCalledWith(1, 10000, { event: { name: 'perdu' } })
-    expect(liveDelay).toHaveBeenNthCalledWith(2, 11000, { event: { name: 'sequence:end', cascade: true } })
     expect(result).toEqual({
       events: [
         {

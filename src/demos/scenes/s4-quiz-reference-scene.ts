@@ -647,17 +647,26 @@ export function createS4QuizReferenceScene(): SceneDoc {
 
 export const s4QuizStraps: StrapCollection = {
   "quiz-countdown-start": ({ context }) => {
-    void context.live.repeat({ everyMs: 1000, times: 11 }, ({ index }) => ({
-      event: {
-        name: "quiz-count",
-        data: {
-          content: String(Math.max(0, 10 - index)),
-        },
-        cascade: true,
+    void context.live.loop(
+      {
+        eachMs: 1000,
+        until: [
+          { type: "times", max: 11 },
+          { type: "event", name: "counter:stop" },
+        ],
       },
-    }));
-    void context.live.delay(10000, { event: { name: "perdu" } });
-    void context.live.delay(11000, { event: { name: "sequence:end", cascade: true } });
+      ({ index }) => {
+        const countStep = {
+          event: {
+            name: "quiz-count",
+            data: { content: String(Math.max(0, 10 - index)) },
+            cascade: true,
+          },
+        };
+        if (index === 10) return [countStep, { event: { name: "perdu" } }];
+        return countStep;
+      }
+    );
 
     return {
       events: [
@@ -678,6 +687,10 @@ export const s4QuizStraps: StrapCollection = {
       }),
       {
         events: [
+          {
+            name: "counter:stop",
+            cascade: true,
+          },
           {
             name: event.name,
             cascade: true,

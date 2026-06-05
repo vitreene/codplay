@@ -11,8 +11,6 @@ import { isDomNode } from "./lib/dom-component-adapter";
 import { InputComponent } from "./input-component";
 import { LayoutComponent } from "./layout-component";
 import { ImageComponent } from "./image-component";
-import { FormComponent } from "./form-component";
-import { InputComponent } from "./input-component";
 import { ListComponent } from "./list-component";
 import { MediaComponent } from "./media-component";
 import { TextComponent } from "./text-component";
