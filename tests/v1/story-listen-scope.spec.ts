@@ -157,6 +157,7 @@ describe('V1 - story.listen scope', () => {
     expect(nodeB).not.toBeNull()
 
     nodeA?.[RUNTIME_OBJECT_EVENT_HANDLERS]?.click?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(player.getRuntimeRegistry().getNodeById('story-a__title')).toMatchObject({
       className: 'local-a'
@@ -166,6 +167,7 @@ describe('V1 - story.listen scope', () => {
     })
 
     nodeA?.[RUNTIME_OBJECT_EVENT_HANDLERS]?.dblclick?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(player.getRuntimeRegistry().getNodeById('story-a__title')).toMatchObject({
       className: 'local-a global-a'

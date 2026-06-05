@@ -1,35 +1,43 @@
-import type { TransformFn } from "../../player"
-import type { PlayerSceneLifecycleOptions, SceneDoc, StrictSceneDoc } from "../../player/types"
+import type { TransformFn } from "../../player";
+import type { PlayerSceneLifecycleOptions, SceneDoc, StrictSceneDoc } from "../../player/types";
 
 const trackMove: TransformFn = (event) => {
-  const { dx, dy, baseX, baseY } = event.data as { dx: number; dy: number; baseX: number; baseY: number }
-  return [{
-    name: "drag:tracking",
-    cascade: true,
-    data: {
-      style: {
-        x: { to: baseX + dx, duration: 0 },
-        y: { to: baseY + dy, duration: 0 },
+  const { dx, dy, baseX, baseY } = event.data as { dx: number; dy: number; baseX: number; baseY: number };
+  return [
+    {
+      name: "drag:tracking",
+      cascade: true,
+      data: {
+        style: {
+          x: { to: baseX + dx, duration: 0 },
+          y: { to: baseY + dy, duration: 0 },
+        },
       },
     },
-  }]
-}
+  ];
+};
 
 const dragToStyle: TransformFn = (event) => {
   const { fromX, fromY, toX, toY, duration } = event.data as {
-    fromX: number; fromY: number; toX: number; toY: number; duration: number
-  }
-  return [{
-    name: "drag:apply",
-    cascade: true,
-    data: {
-      style: {
-        x: { from: fromX, to: toX, duration },
-        y: { from: fromY, to: toY, duration },
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    duration: number;
+  };
+  return [
+    {
+      name: "drag:apply",
+      cascade: true,
+      data: {
+        style: {
+          x: { from: fromX, to: toX, duration },
+          y: { from: fromY, to: toY, duration },
+        },
       },
     },
-  }]
-}
+  ];
+};
 
 export function createS5DragScene(): SceneDoc {
   return {
@@ -48,7 +56,7 @@ export function createS5DragScene(): SceneDoc {
           { on: "drag:moved", transform: [trackMove] },
           { on: "drag:ended", transform: [dragToStyle] },
         ],
-        eventimes: [{ name: "sequence:end", startAt: 60000 }],
+        eventimes: [{ name: "sequence:end", startAt: 6000 }],
         persos: [
           {
             id: "draggable",
@@ -91,8 +99,8 @@ export function createS5DragScene(): SceneDoc {
       },
     },
     init(scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) {
-      options.mount(scene.rootStories[0])
+      options.mount(scene.rootStories[0]);
     },
     tracks: {},
-  } as unknown as SceneDoc
+  } as unknown as SceneDoc;
 }

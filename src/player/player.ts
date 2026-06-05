@@ -113,7 +113,8 @@ export class Player implements PlayerApi {
           {
             scopeStoryId: event.scopeStoryId,
             source,
-            ms: event.ms ?? this.player.getState().timelineMs
+            ms: event.ms ?? this.player.getState().timelineMs,
+            eventInsertMode: event.mode
           }
         )
       }
@@ -936,6 +937,7 @@ export class Player implements PlayerApi {
       helperWarnings.push(...(chunk.warnings ?? []))
 
       if (chunk.update) {
+        Object.assign(this.resolveStateTarget(scope.scopeStoryId), chunk.update)
         const updateResult = this.materializeHelperSteps(strapTrackId, scope, [{ offsetMs: 0, step: { update: chunk.update } }])
         if (!updateResult.ok) {
           return updateResult
@@ -954,7 +956,6 @@ export class Player implements PlayerApi {
         }
       }
 
-      const isRetroactiveScope = scope.ms !== undefined && scope.ms < this.player.getState().timelineMs
       for (const emittedEvent of chunk.events ?? []) {
         const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scope.scopeStoryId
         const childResult = await this.routeSceneEvent(
@@ -964,9 +965,10 @@ export class Player implements PlayerApi {
           depth + 1,
           {
             ...scope,
-            materialized: isRetroactiveScope,
+            materialized: false,
             trackId: strapTrackId,
-            scopeStoryId: nextScopeStoryId
+            scopeStoryId: nextScopeStoryId,
+            eventInsertMode: undefined
           }
         )
 
@@ -1054,7 +1056,7 @@ export class Player implements PlayerApi {
 
     const scene = this.currentScene
     if (scene === null) {
-      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
+      return this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true, scope.eventInsertMode)
     }
 
     const isLocalStoryEvent = scopeStoryId !== undefined
@@ -1076,7 +1078,7 @@ export class Player implements PlayerApi {
     }
 
     const emitScopeStoryId = event.cascade === true ? undefined : scopeStoryId
-    return this.emitRuntimeEvent(event, source, emitScopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
+    return this.emitRuntimeEvent(event, source, emitScopeStoryId, scope.ms, scope.trackId, scope.materialized === true, scope.eventInsertMode)
   }
 
   /**
@@ -1100,10 +1102,13 @@ export class Player implements PlayerApi {
     depth: number,
     scope: StrapExecutionScope
   ): Promise<ApiResult<void>> {
-    const emittedEvents: StoryEvent[] = []
+    const emittedEvents: Array<{ event: StoryEvent; eventInsertMode: StrapExecutionScope['eventInsertMode'] }> = []
     for (const rule of rules) {
       for (const transformFn of (rule.transform ?? []) as TransformFn[]) {
-        emittedEvents.push(...transformFn(event))
+        emittedEvents.push(...transformFn(event).map((e) => ({
+          event: e,
+          eventInsertMode: scope.eventInsertMode
+        })))
       }
       for (const strapName of rule.straps ?? []) {
         const strapResult = await this.executeStrap(strapName, event, scope, depth)
@@ -1112,13 +1117,16 @@ export class Player implements PlayerApi {
         }
       }
       emittedEvents.push(...(rule.emit ?? []).map((emittedEvent) => ({
-        name: emittedEvent.name,
-        data: emittedEvent.data ?? event.data,
-        cascade: emittedEvent.cascade
+        event: {
+          name: emittedEvent.name,
+          data: emittedEvent.data ?? event.data,
+          cascade: emittedEvent.cascade
+        },
+        eventInsertMode: undefined as StrapExecutionScope['eventInsertMode']
       })))
     }
 
-    const runtimeResult = await this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true)
+    const runtimeResult = await this.emitRuntimeEvent(event, source, scopeStoryId, scope.ms, scope.trackId, scope.materialized === true, scope.eventInsertMode)
     if (!runtimeResult.ok) {
       return runtimeResult
     }
@@ -1127,7 +1135,8 @@ export class Player implements PlayerApi {
       return { ok: true, data: undefined }
     }
 
-    for (const emittedEvent of emittedEvents) {
+    for (const emitted of emittedEvents) {
+      const emittedEvent = emitted.event
       const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scopeStoryId
       const childResult = await this.routeSceneEvent(
         {
@@ -1141,7 +1150,8 @@ export class Player implements PlayerApi {
         {
           ...scope,
           materialized: false,
-          scopeStoryId: nextScopeStoryId
+          scopeStoryId: nextScopeStoryId,
+          eventInsertMode: emitted.eventInsertMode
         }
       )
 
@@ -1162,7 +1172,8 @@ export class Player implements PlayerApi {
     scopeStoryId?: string,
     ms?: number,
     trackId?: string,
-    materialized = false
+    materialized = false,
+    eventInsertMode?: StrapExecutionScope['eventInsertMode']
   ): Promise<ApiResult<void>> {
     const eventInput = {
       name: event.name,
@@ -1176,7 +1187,9 @@ export class Player implements PlayerApi {
     const result = this.normalizeResult(
       materialized
         ? await this.player.applyMaterializedEvent(eventInput)
-        : await this.player.emit(eventInput)
+        : eventInsertMode === 'persist-only'
+          ? this.player.persistTrackEvent(eventInput)
+          : await this.player.emit(eventInput)
     )
 
     if (result.ok && event.name === 'sequence:end') {

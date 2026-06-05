@@ -52,6 +52,7 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
       scopeStoryId: endEventSpec.cascade === true ? undefined : scopeStoryId,
       source: 'system',
       ms: eventMs,
+      mode: 'persist-only',
       data: {
         fromX: baseX,
         fromY: baseY,

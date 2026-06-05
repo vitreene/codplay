@@ -106,6 +106,7 @@ export type RuntimeEmitEvent = {
   scopeStoryId?: string
   ms?: number
   source?: 'user' | 'system'
+  mode?: 'persist-future' | 'persist-only'
 }
 
 /**

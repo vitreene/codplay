@@ -183,6 +183,47 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Persists one event into the track for seek replay without applying it to the live runtime.
+   * Advances the cursor past the event so the playback loop never executes it.
+   */
+  persistTrackEvent(event: PlayerPublicEventInput): PlayerCommandResult {
+    if (!this.isInitialized()) {
+      return this.reject(
+        "PLAYER_NOT_INITIALIZED",
+        "init must be called before persistTrackEvent",
+        "player:persist-track-event",
+      );
+    }
+
+    const timelineEvent = this.createTimelineEvent(event);
+    const shouldPersistEvent =
+      timelineEvent.source === RUNTIME_EVENT_SOURCE.user ||
+      (timelineEvent.source === RUNTIME_EVENT_SOURCE.system &&
+        timelineEvent.name !== "scene:ready" &&
+        timelineEvent.name !== "scene:start" &&
+        timelineEvent.name !== "scene:end");
+
+    if (!shouldPersistEvent) {
+      return { ok: true };
+    }
+
+    const appendResult = this.trackManager.appendLiveEvents({
+      trackId: timelineEvent.trackId ?? PLAYER_TRACK.global,
+      events: [timelineEvent],
+    });
+    if (!appendResult.ok) {
+      return this.reject(appendResult.error.code, appendResult.error.message, "player:persist-track-event", {
+        eventName: timelineEvent.name,
+        trackId: timelineEvent.trackId,
+      });
+    }
+
+    this.trackManager.syncCursor({ nowMs: this.resolveCurrentTimelineMs() });
+
+    return this.refreshTimelineEndFromMountedPlan();
+  }
+
+  /**
    * Resolves the current timeline end using both event/action durations and master media tracks.
    */
   private resolveTimelineEndMs(runtimePlan: ReturnType<PlayerRuntimePlanner["createRuntimePlan"]>): number {
@@ -392,6 +433,7 @@ export class PlayerFacade implements PlayerApi {
           scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
           cascade: event.cascade,
           source: event.source === "system" ? RUNTIME_EVENT_SOURCE.system : RUNTIME_EVENT_SOURCE.user,
+          mode: event.mode,
         };
 
         if (options.onRuntimeEmit) {
@@ -1482,6 +1524,10 @@ export class PlayerFacade implements PlayerApi {
       return this.reject("PLAYER_SEQUENCE_ENDED", "emit is not allowed after sequence:end", "player:emit");
     }
 
+    if (event.mode === "persist-only") {
+      return this.persistTrackEvent(event);
+    }
+
     const eventSource = event.source ?? RUNTIME_EVENT_SOURCE.user;
     if (
       eventSource === RUNTIME_EVENT_SOURCE.user &&
@@ -1523,8 +1569,7 @@ export class PlayerFacade implements PlayerApi {
     const currentMs = this.resolveCurrentTimelineMs();
     const isFutureEvent = timelineEvent.ms > currentMs;
     const isRetroactiveEvent = timelineEvent.ms < currentMs;
-
-    if (!isFutureEvent && !isRetroactiveEvent) {
+    if (!isFutureEvent) {
       this.runTimelineEvent(timelineEvent);
     }
 
@@ -1541,7 +1586,6 @@ export class PlayerFacade implements PlayerApi {
     }
 
     if (
-      !isRetroactiveEvent &&
       !isFutureEvent &&
       !this.timelineReplayInProgress &&
       (this.status !== PLAYER_STATUS.playing || this.playbackStartMs === null)
@@ -1561,7 +1605,7 @@ export class PlayerFacade implements PlayerApi {
       this.renderer.renderFrame(this.runtimePlanner.resolveNowMs());
     }
 
-    if (!isFutureEvent && !isRetroactiveEvent) {
+    if (!isFutureEvent) {
       this.syncMediaTimeline(timelineEvent.ms);
     }
 

@@ -581,6 +581,19 @@ describe('V1 - reference scenes', () => {
     expect((player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.textContent).toBe('10')
   })
 
+  // TODO: direct seek into strap-derived state requires seek to run through the author pipeline.
+  // Currently seek replays track events only — straps do not re-execute during seek reconstruction.
+  it.skip('shows S4 counter after direct seek into the question state', async () => {
+    const animationAdapter = createAnimationAdapter(createApplyingAnimeImplementation())
+    const player = await createS4AuthorPlayer(animationAdapter)
+
+    expect(await player.seek({ timelineMs: 2400 })).toEqual({ ok: true, data: undefined })
+
+    const countValue = player.getRuntimeRegistry().getNodeById('quiz-count-value') as RuntimeNodeFixture | null
+    expect(countValue?.style).toMatchObject({ opacity: 1 })
+    expect(countValue?.textContent).toBe('10')
+  })
+
   it('uses the live helper for S4 quiz-count countdown emissions', async () => {
     const liveRepeat = vi.fn(() => ({ id: 'live-repeat', cancel: vi.fn() }))
     const liveDelay = vi.fn(() => ({ id: 'live-delay', cancel: vi.fn() }))
@@ -614,7 +627,7 @@ describe('V1 - reference scenes', () => {
       { everyMs: 1000, times: 11 },
       expect.any(Function)
     )
-    expect(liveDelay).toHaveBeenNthCalledWith(1, 10000, { event: { name: 'perdu', cascade: true } })
+    expect(liveDelay).toHaveBeenNthCalledWith(1, 10000, { event: { name: 'perdu' } })
     expect(liveDelay).toHaveBeenNthCalledWith(2, 11000, { event: { name: 'sequence:end', cascade: true } })
     expect(result).toEqual({
       events: [

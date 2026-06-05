@@ -112,8 +112,10 @@ type HorizonSnapshot = {
 - le seek ne reexecute pas les straps pour reconstruire le passe.
 - le seek ne reexecute pas les `effects`.
 - le seek reconstruit l'etat visible par application du flux de tracks deja enregistre.
-- pendant `seek`, aucun nouvel event ne doit etre emis: la relecture ne peut produire que des effets de reconstruction sur les persos deja enregistre.
+- pendant le replay interne du seek, aucun nouvel event n'est emis par les straps ou listen: la relecture applique uniquement les sorties deja materialisees dans les tracks.
 - pendant `seek`, toute logique de `listen` / strap / emission reactive est hors champ de la relecture.
+- les loops helper actifs sont suspendus pendant le seek et reprennent a la reprise de lecture (`play` ou `resume`); ils ne sont pas detruits.
+- les events `persist-only` presentes dans les tracks sont rejoues normalement au seek: leur mode d'insertion ne s'applique que lors de l'emission live initiale.
 
 2. Role du master
 
@@ -184,3 +186,13 @@ Le seek selectionne uniquement des entries deja presentes dans les tracks:
 - le compteur peut avancer `playedEndMs` au fur et a mesure de la lecture.
 - si le compteur n'est pas sur une track `master`, il ne doit pas faire avancer `projectedMasterEndMs`.
 - en mode auteur, il peut quand meme faire avancer `authorEndMs` si ses events sont materialises dans les tracks.
+
+## Appendice V1 — cas ouvert : invalidation des events utilisateur apres seek-back
+
+Cas non couvert en V1 : lecture partielle avec interaction utilisateur, puis seek-back avant la position de l'interaction, puis nouvelle lecture.
+
+Les events utilisateur (et leurs cascades) deja persistees dans les tracks subsistent apres le seek-back. Si l'utilisateur interagit differemment lors de la seconde lecture, les anciens events entrent en conflit avec les nouveaux.
+
+Ce cas necessite un mecanisme d'invalidation des events persistees apres le point de seek. Il touche le contrat du track manager (suppression retroactive, marquage de revision, ou snapshot isole). Non adresse en V1.
+
+A specifier et implementer en post-V1.

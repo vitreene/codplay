@@ -125,6 +125,8 @@ export type PlayerStateSnapshot = {
   runtimeRevision: number
 }
 
+export type PlayerEventInsertMode = 'apply-now' | 'persist-future' | 'persist-only'
+
 export type PlayerPublicEventInput = {
   id?: string
   name: string
@@ -134,6 +136,7 @@ export type PlayerPublicEventInput = {
   source?: RuntimeEventSource
   trackId?: string
   cascade?: boolean
+  mode?: PlayerEventInsertMode
 }
 
 export type PlayerCommandError = {

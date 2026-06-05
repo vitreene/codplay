@@ -98,4 +98,5 @@ export type StrapExecutionScope = {
   ms: number
   trackId?: string
   materialized?: boolean
+  eventInsertMode?: 'apply-now' | 'persist-future' | 'persist-only'
 }

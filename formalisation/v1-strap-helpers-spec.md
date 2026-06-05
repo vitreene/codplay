@@ -294,7 +294,10 @@ type LoopOptions = {
 - `sequence:end` interrompt toujours tous les loops actifs
 - `pause` gele
 - `resume` et `play` reprennent
-- `stop`, `destroy`, `seek`, `rewind` interrompent les loops actifs
+- `stop` et `destroy` interrompent et suppriment les loops actifs
+- `seek` et `rewind` suspendent les loops sans les detruire; la progression reprend a la reprise de lecture
+- les events JIT dont le `ms` est strictement futur par rapport a la position courante sont differes: ils sont materialises dans le track mais non appliques immediatement; ils s'activent quand la timeline les atteint
+- les events JIT dont le `ms` est inferieur ou egal a la position courante (timer legerement en retard) sont appliques immediatement comme les events courants; le curseur avance jusqu'a la position courante sans reculer
 
 ## Modes d'execution
 
@@ -406,7 +409,7 @@ Exemple:
 
 - `seek` ne reexecute jamais le code des helpers
 - le runtime rejoue uniquement les sorties deja materialisees
-- `rewind` et `seek` interrompent les loops actifs
+- `rewind` et `seek` suspendent les loops actifs sans les detruire (cf. lifecycle Player)
 - les helpers ne produisent jamais de propriete `effects`
 - seuls `event` et `update` sont autorises
 
@@ -482,6 +485,41 @@ context.live.loop(
 )
 ```
 
+## Mode d'insertion des events emis par les straps (`eventInsertMode`)
+
+Tout event produit par un strap ou un `listen.transform` peut porter un mode d'insertion.
+
+### Valeurs
+
+- `apply-now` (defaut) : l'event est materialise dans le track et applique immediatement au runtime.
+- `persist-only` : l'event est materialise dans le track sans etre applique en live; il sera rejoue par `seek`.
+- `persist-future` : l'event est materialise dans le track et traite comme un event futur, quelle que soit sa position temporelle.
+
+### Regles d'heritage
+
+- un `listen.transform` herite du `eventInsertMode` de l'event parent; l'event transforme suit le meme mode.
+- un strap (body `Strap`) emet toujours en mode `apply-now`, independamment du mode de l'event declencheur.
+- un `listen.emit` n'herite pas le mode du parent; il utilise `apply-now`.
+
+### Cas d'usage `persist-only`
+
+`persist-only` est un mode exceptionnel, reserve aux situations ou le suivi live a deja produit l'effet visuel et ou appliquer l'event une deuxieme fois provoquerait un doublon ou un conflit.
+
+Ne pas utiliser par defaut. Un event en mode `apply-now` reste le comportement correct dans la grande majorite des cas.
+
+Cas legitime unique en V1 :
+
+- la capture de session (drag-end, drop-end) lorsque le suivi live (pointermove) a deja positionne le perso en position finale.
+- l'event de fin de capture est enregistre dans le track pour que le `seek` puisse reconstruire la position finale.
+- aucun effet visuel n'est declenche en live car le tracking live l'a deja produit.
+- au seek, l'event `persist-only` est rejoue normalement par le runtime de reconstruction.
+
+## Mise a jour d'etat auteur par les straps (`chunk.update`)
+
+- quand un strap retourne `{ update: {...} }`, le runtime applique immediatement la mutation a l'etat auteur en memoire (`Object.assign`).
+- la mutation est aussi materialisee dans le track comme un event `player:state:update` pour la reconstruction au seek.
+- cette application immediate garantit que les lectures de `state` dans les decisions live suivantes (prochain strap, prochain event) refletent la mutation sans attendre un cycle de replay.
+
 ## Invariants helpers V1
 
 - source unique d'horloge runtime
@@ -492,3 +530,4 @@ context.live.loop(
 - `context.live` reste un wrapper auteur runtime explicite, materialisant ses occurrences en tracks
 - le `state` lu dans un `Strap` ou un callback helper est `DeepReadonly`
 - toute mutation de `state` passe par `update`
+- les events emis par un strap sont toujours materialises dans le track, meme si l'event declencheur etait `persist-only`

@@ -1,22 +1,23 @@
-import type { AnimationResolvedAction } from '../../animation/types'
-import type { TransitionRequest } from '../../animation/types'
-import { RUNTIME_CONFIG } from '../config'
-import type { ItemDoc, RuntimeElementMap, RuntimePersos } from '../types'
-import type { MoveCommand } from '../types'
-import type { RenderMutationResolver } from '../render-mutation-resolver'
-import { createComponentServices, CORE_SERVICES } from './lib/component-services'
-import type { ServiceInstance } from './lib/component-services'
-import { createComponentModules } from './lib/component-modules'
-import { isDomNode } from './lib/dom-component-adapter'
-import { LayoutComponent } from './layout-component'
-import { ImageComponent } from './image-component'
-import { FormComponent } from './form-component'
-import { InputComponent } from './input-component'
-import { ListComponent } from './list-component'
-import { MediaComponent } from './media-component'
-import { TextComponent } from './text-component'
-import { moveModule, normalizeMoveCommand, isStoryHostMove } from '../modules/move'
-import { listModule } from '../modules/list'
+import type { AnimationResolvedAction } from "../../animation/types";
+import type { TransitionRequest } from "../../animation/types";
+import { RUNTIME_CONFIG } from "../config";
+import type { ItemDoc, RuntimeElementMap, RuntimePersos } from "../types";
+import type { MoveCommand } from "../types";
+import type { RenderMutationResolver } from "../render-mutation-resolver";
+import { createComponentServices, CORE_SERVICES } from "./lib/component-services";
+import type { ServiceInstance } from "./lib/component-services";
+import { createComponentModules } from "./lib/component-modules";
+import { isDomNode } from "./lib/dom-component-adapter";
+import { InputComponent } from "./input-component";
+import { LayoutComponent } from "./layout-component";
+import { ImageComponent } from "./image-component";
+import { FormComponent } from "./form-component";
+import { InputComponent } from "./input-component";
+import { ListComponent } from "./list-component";
+import { MediaComponent } from "./media-component";
+import { TextComponent } from "./text-component";
+import { moveModule, normalizeMoveCommand, isStoryHostMove } from "../modules/move";
+import { listModule } from "../modules/list";
 import type {
   ComponentRegisterInput,
   ModuleRegisterInput,
@@ -36,104 +37,103 @@ import type {
   RuntimeRegistrySnapshot,
   RuntimeResolvedUpdate,
   RuntimeUpdateRoutingResult,
-  ServiceRegisterInput
-} from './types'
+  ServiceRegisterInput,
+} from "./types";
 
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   text: TextComponent,
   img: ImageComponent,
-  form: FormComponent,
   input: InputComponent,
   media: MediaComponent,
   list: ListComponent,
-  layout: LayoutComponent
-}
+  layout: LayoutComponent,
+};
 
 /**
  * Builds one runtime map entry for a component root node.
  */
 function toRuntimeElementMap(
   componentByPersoId: Map<string, RuntimeComponent>,
-  nodeByPersoId: Map<string, unknown>
+  nodeByPersoId: Map<string, unknown>,
 ): RuntimeElementMap {
-  const runtimeElements: RuntimeElementMap = new Map()
+  const runtimeElements: RuntimeElementMap = new Map();
 
   for (const [persoId] of componentByPersoId) {
     runtimeElements.set(persoId, {
       runtimeItemId: persoId,
       nodeRef: nodeByPersoId.get(persoId),
-      plugins: undefined
-    })
+      plugins: undefined,
+    });
   }
 
-  return runtimeElements
+  return runtimeElements;
 }
 
 /**
  * Implements component instantiation, registry management, and move routing.
  */
 export class RuntimeComponentOrchestrator {
-  private readonly warn: RuntimeComponentWarningReporter
-  private readonly warningKeys = new Set<string>()
+  private readonly warn: RuntimeComponentWarningReporter;
+  private readonly warningKeys = new Set<string>();
 
-  private readonly serviceRegistry = new Map<string, ServiceInstance>(Object.entries(CORE_SERVICES))
-  private readonly moduleRegistry = new Map<string, RuntimeModule>()
-  private readonly installedModuleBindings: RuntimeModuleRuntimeBinding[] = []
-  private readonly componentClassByType = new Map<string, RuntimeComponentClass>()
-  private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>()
-  private readonly componentByPersoId = new Map<string, RuntimeComponent>()
-  private readonly nodeByPersoId = new Map<string, unknown>()
-  private readonly listByPersoId = new Map<string, RuntimeListComponent>()
-  private readonly parentListByPersoId = new Map<string, string | null>()
-  private readonly mountedByPersoId = new Map<string, boolean>()
-  private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>()
-  private readonly outletIdsByComponentId = new Map<string, string[]>()
-  private readonly storyIdByPersoId = new Map<string, string>()
-  private readonly storyEntriesByStoryId = new Map<string, string[]>()
-  private readonly storyMoveByStoryId = new Map<string, unknown>()
-  private readonly storyHostNodeByStoryId = new Map<string, unknown>()
+  private readonly serviceRegistry = new Map<string, ServiceInstance>(Object.entries(CORE_SERVICES));
+  private readonly moduleRegistry = new Map<string, RuntimeModule>();
+  private readonly installedModuleBindings: RuntimeModuleRuntimeBinding[] = [];
+  private readonly componentClassByType = new Map<string, RuntimeComponentClass>();
+  private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>();
+  private readonly componentByPersoId = new Map<string, RuntimeComponent>();
+  private readonly nodeByPersoId = new Map<string, unknown>();
+  private readonly listByPersoId = new Map<string, RuntimeListComponent>();
+  private readonly parentListByPersoId = new Map<string, string | null>();
+  private readonly mountedByPersoId = new Map<string, boolean>();
+  private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>();
+  private readonly outletIdsByComponentId = new Map<string, string[]>();
+  private readonly storyIdByPersoId = new Map<string, string>();
+  private readonly storyEntriesByStoryId = new Map<string, string[]>();
+  private readonly storyMoveByStoryId = new Map<string, unknown>();
+  private readonly storyHostNodeByStoryId = new Map<string, unknown>();
 
-  private createElementOptions: import('../create-element').CreateElementOptions | undefined
+  private createElementOptions: import("../create-element").CreateElementOptions | undefined;
 
   /**
    * Creates one component orchestrator with default built-in components.
    */
   constructor(input: {
-    warn: RuntimeComponentWarningReporter
-    createElementOptions?: import('../create-element').CreateElementOptions
+    warn: RuntimeComponentWarningReporter;
+    createElementOptions?: import("../create-element").CreateElementOptions;
   }) {
-    this.warn = input.warn
-    this.createElementOptions = input.createElementOptions
+    this.warn = input.warn;
+    this.createElementOptions = input.createElementOptions;
 
     for (const [persoType, componentClass] of Object.entries(DEFAULT_COMPONENT_CLASSES)) {
-      this.setComponentClass(persoType, componentClass)
+      this.setComponentClass(persoType, componentClass);
     }
 
-    this.registerModule({ name: 'move', module: moveModule })
-    this.registerModule({ name: 'list', module: listModule })
+    this.registerModule({ name: "move", module: moveModule });
+    this.registerModule({ name: "list", module: listModule });
   }
 
   /**
    * Registers one component class and its optional mutation resolver.
    */
   private setComponentClass(persoType: string, componentClass: RuntimeComponentClass): void {
-    this.componentClassByType.set(persoType, componentClass)
+    this.componentClassByType.set(persoType, componentClass);
 
     if (componentClass.renderMutationResolver) {
-      this.renderMutationResolverByType.set(persoType, componentClass.renderMutationResolver)
-      return
+      this.renderMutationResolverByType.set(persoType, componentClass.renderMutationResolver);
+      return;
     }
 
-    this.renderMutationResolverByType.delete(persoType)
+    this.renderMutationResolverByType.delete(persoType);
   }
 
   /**
    * Updates runtime node factory options used for future component creation.
    */
   setCreateElementOptions(
-    createElementOptions: import('../create-element').CreateElementOptions | undefined
+    createElementOptions: import("../create-element").CreateElementOptions | undefined,
   ): void {
-    this.createElementOptions = createElementOptions
+    this.createElementOptions = createElementOptions;
   }
 
   /**
@@ -141,10 +141,17 @@ export class RuntimeComponentOrchestrator {
    */
   registerComponent({ type, component }: ComponentRegisterInput): RegistryResult {
     if (this.componentClassByType.has(type)) {
-      return { ok: false, error: { code: 'RUNTIME_COMPONENT_ALREADY_REGISTERED', message: 'Component type is already registered', details: { type } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_COMPONENT_ALREADY_REGISTERED",
+          message: "Component type is already registered",
+          details: { type },
+        },
+      };
     }
-    this.setComponentClass(type, component)
-    return { ok: true, status: 'registered' }
+    this.setComponentClass(type, component);
+    return { ok: true, status: "registered" };
   }
 
   /**
@@ -152,10 +159,17 @@ export class RuntimeComponentOrchestrator {
    */
   overrideComponent({ type, component }: ComponentRegisterInput): RegistryResult {
     if (!this.componentClassByType.has(type)) {
-      return { ok: false, error: { code: 'RUNTIME_COMPONENT_NOT_REGISTERED', message: 'Component type is not registered and cannot be overridden', details: { type } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_COMPONENT_NOT_REGISTERED",
+          message: "Component type is not registered and cannot be overridden",
+          details: { type },
+        },
+      };
     }
-    this.setComponentClass(type, component)
-    return { ok: true, status: 'overridden' }
+    this.setComponentClass(type, component);
+    return { ok: true, status: "overridden" };
   }
 
   /**
@@ -163,10 +177,17 @@ export class RuntimeComponentOrchestrator {
    */
   registerService({ name, service }: ServiceRegisterInput): RegistryResult {
     if (this.serviceRegistry.has(name)) {
-      return { ok: false, error: { code: 'RUNTIME_SERVICE_ALREADY_REGISTERED', message: 'Service name is already registered', details: { name } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_SERVICE_ALREADY_REGISTERED",
+          message: "Service name is already registered",
+          details: { name },
+        },
+      };
     }
-    this.serviceRegistry.set(name, service)
-    return { ok: true, status: 'registered' }
+    this.serviceRegistry.set(name, service);
+    return { ok: true, status: "registered" };
   }
 
   /**
@@ -174,10 +195,17 @@ export class RuntimeComponentOrchestrator {
    */
   overrideService({ name, service }: ServiceRegisterInput): RegistryResult {
     if (!this.serviceRegistry.has(name)) {
-      return { ok: false, error: { code: 'RUNTIME_SERVICE_NOT_REGISTERED', message: 'Service name is not registered and cannot be overridden', details: { name } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_SERVICE_NOT_REGISTERED",
+          message: "Service name is not registered and cannot be overridden",
+          details: { name },
+        },
+      };
     }
-    this.serviceRegistry.set(name, service)
-    return { ok: true, status: 'overridden' }
+    this.serviceRegistry.set(name, service);
+    return { ok: true, status: "overridden" };
   }
 
   /**
@@ -185,10 +213,17 @@ export class RuntimeComponentOrchestrator {
    */
   registerModule({ name, module }: ModuleRegisterInput): RegistryResult {
     if (this.moduleRegistry.has(name)) {
-      return { ok: false, error: { code: 'RUNTIME_MODULE_ALREADY_REGISTERED', message: 'Module name is already registered', details: { name } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_MODULE_ALREADY_REGISTERED",
+          message: "Module name is already registered",
+          details: { name },
+        },
+      };
     }
-    this.moduleRegistry.set(name, module)
-    return { ok: true, status: 'registered' }
+    this.moduleRegistry.set(name, module);
+    return { ok: true, status: "registered" };
   }
 
   /**
@@ -196,22 +231,29 @@ export class RuntimeComponentOrchestrator {
    */
   overrideModule({ name, module }: ModuleRegisterInput): RegistryResult {
     if (!this.moduleRegistry.has(name)) {
-      return { ok: false, error: { code: 'RUNTIME_MODULE_NOT_REGISTERED', message: 'Module name is not registered and cannot be overridden', details: { name } } }
+      return {
+        ok: false,
+        error: {
+          code: "RUNTIME_MODULE_NOT_REGISTERED",
+          message: "Module name is not registered and cannot be overridden",
+          details: { name },
+        },
+      };
     }
-    this.moduleRegistry.set(name, module)
-    return { ok: true, status: 'overridden' }
+    this.moduleRegistry.set(name, module);
+    return { ok: true, status: "overridden" };
   }
 
   /**
    * Installs all registered modules against the runtime host and collects their bindings.
    */
   private installModules(): void {
-    this.installedModuleBindings.length = 0
-    const host = this.createModuleHost()
+    this.installedModuleBindings.length = 0;
+    const host = this.createModuleHost();
     for (const module of this.moduleRegistry.values()) {
-      const binding = module.install(host)
+      const binding = module.install(host);
       if (binding.runtime !== undefined) {
-        this.installedModuleBindings.push(binding.runtime)
+        this.installedModuleBindings.push(binding.runtime);
       }
     }
   }
@@ -225,31 +267,40 @@ export class RuntimeComponentOrchestrator {
       warnOnce: (eventSeq, code, details, persoId) => this.warnOnce(eventSeq, code, details, persoId),
       registries: {
         node: {
-          get: (id) => this.nodeByPersoId.get(id) ?? null
+          get: (id) => this.nodeByPersoId.get(id) ?? null,
         },
         component: {
-          get: (id) => this.componentByPersoId.get(id) ?? null
+          get: (id) => this.componentByPersoId.get(id) ?? null,
         },
         container: {
           get: (id) => this.listByPersoId.get(id) ?? null,
-          set: (id, list) => { this.listByPersoId.set(id, list) },
-          delete: (id) => { this.listByPersoId.delete(id) },
+          set: (id, list) => {
+            this.listByPersoId.set(id, list);
+          },
+          delete: (id) => {
+            this.listByPersoId.delete(id);
+          },
           getParentId: (childId) => this.parentListByPersoId.get(childId) ?? null,
-          setParentId: (childId, parentId) => { this.parentListByPersoId.set(childId, parentId) }
+          setParentId: (childId, parentId) => {
+            this.parentListByPersoId.set(childId, parentId);
+          },
         },
         mounted: {
           get: (id) => this.mountedByPersoId.get(id) ?? false,
-          set: (id, mounted) => { this.mountedByPersoId.set(id, mounted) }
-        }
+          set: (id, mounted) => {
+            this.mountedByPersoId.set(id, mounted);
+          },
+        },
       },
       helpers: {
         getStoryId: (persoId) => this.storyIdByPersoId.get(persoId) ?? null,
-        resolveTargetNode: (parentId, storyId, childNode) => this.resolveMoveTargetNode(parentId, storyId, childNode),
+        resolveTargetNode: (parentId, storyId, childNode) =>
+          this.resolveMoveTargetNode(parentId, storyId, childNode),
         canAttachChildToNode: (parentNode, childNode) => this.canAttachChildToNode(parentNode, childNode),
         detachNode: (nodeRef) => this.detachNodeFromParent(nodeRef),
-        appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode)
-      }
-    }
+        appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode),
+      },
+    };
   }
 
   /**
@@ -257,38 +308,40 @@ export class RuntimeComponentOrchestrator {
    */
   private runHook(phase: RuntimeModuleHookPhase, payload: RuntimeModuleHookPayload): void {
     for (const binding of this.installedModuleBindings) {
-      const hook = binding.hooks?.[phase]
+      const hook = binding.hooks?.[phase];
       if (hook === undefined) {
-        continue
+        continue;
       }
 
-      const match = binding.match
+      const match = binding.match;
       if (match !== undefined) {
         if (match.actionKeys !== undefined && match.actionKeys.length > 0) {
-          const action = payload.resolvedAction?.action as Record<string, unknown> | undefined
+          const action = payload.resolvedAction?.action as Record<string, unknown> | undefined;
           if (action !== undefined) {
-            const hasMatchingKey = match.actionKeys.some((key) => Object.prototype.hasOwnProperty.call(action, key))
+            const hasMatchingKey = match.actionKeys.some((key) =>
+              Object.prototype.hasOwnProperty.call(action, key),
+            );
             if (!hasMatchingKey) {
-              continue
+              continue;
             }
           }
         }
 
         if (match.componentCapabilities !== undefined && match.componentCapabilities.length > 0) {
-          const component = payload.component
+          const component = payload.component;
           if (component === undefined) {
-            continue
+            continue;
           }
           const hasCapability = match.componentCapabilities.some((cap) =>
-            component.modules.declared.includes(cap)
-          )
+            component.modules.declared.includes(cap),
+          );
           if (!hasCapability) {
-            continue
+            continue;
           }
         }
       }
 
-      hook(payload)
+      hook(payload);
     }
   }
 
@@ -296,84 +349,84 @@ export class RuntimeComponentOrchestrator {
    * Synchronizes one runtime perso graph without purging the existing registry.
    */
   loadPersos(runtimePersos: RuntimePersos): RuntimeElementMap {
-    this.installModules()
-    this.storyEntriesByStoryId.clear()
-    this.storyMoveByStoryId.clear()
+    this.installModules();
+    this.storyEntriesByStoryId.clear();
+    this.storyMoveByStoryId.clear();
 
     for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
-      this.storyEntriesByStoryId.set(storyId, [...entryIds])
+      this.storyEntriesByStoryId.set(storyId, [...entryIds]);
     }
 
     for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
-      this.storyMoveByStoryId.set(storyId, rawMove)
+      this.storyMoveByStoryId.set(storyId, rawMove);
     }
 
     for (const perso of Object.values(runtimePersos.persos)) {
-      const existingComponent = this.componentByPersoId.get(perso.id)
+      const existingComponent = this.componentByPersoId.get(perso.id);
       if (existingComponent) {
-        this.refreshLoadedRuntimeComponent(perso, existingComponent)
-        continue
+        this.refreshLoadedRuntimeComponent(perso, existingComponent);
+        continue;
       }
 
-      const componentClass = this.componentClassByType.get(perso.type)
+      const componentClass = this.componentClassByType.get(perso.type);
       if (!componentClass) {
         this.warn({
-          code: 'AUTHOR_COMPONENT_TYPE_UNKNOWN',
-          message: 'Unknown component type',
+          code: "AUTHOR_COMPONENT_TYPE_UNKNOWN",
+          message: "Unknown component type",
           details: {
             persoId: perso.id,
-            persoType: perso.type
-          }
-        })
-        continue
+            persoType: perso.type,
+          },
+        });
+        continue;
       }
 
-      this.mountLoadedRuntimeComponent(perso, componentClass)
+      this.mountLoadedRuntimeComponent(perso, componentClass);
     }
 
-    this.mountStoryHosts(runtimePersos)
+    this.mountStoryHosts(runtimePersos);
 
     for (const perso of Object.values(runtimePersos.persos)) {
-      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? []
-      const isStoryEntry = storyEntries.includes(perso.id)
-      const rawInitialMove = perso.initial.move
+      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
+      const isStoryEntry = storyEntries.includes(perso.id);
+      const rawInitialMove = perso.initial.move;
 
       if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
-        continue
+        continue;
       }
 
-      const moveCommand = normalizeMoveCommand(perso.initial.move, true)
+      const moveCommand = normalizeMoveCommand(perso.initial.move, true);
       if (moveCommand === null) {
-        continue
+        continue;
       }
 
-      this.runHook('onInitialPerso', { perso, moveCommand })
+      this.runHook("onInitialPerso", { perso, moveCommand });
     }
 
-    this.mountStoryEntriesToStoryHosts(runtimePersos)
+    this.mountStoryEntriesToStoryHosts(runtimePersos);
 
-    return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId)
+    return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId);
   }
 
   /**
    * Refreshes one already-mounted runtime component in place.
    */
   private refreshLoadedRuntimeComponent(perso: ItemDoc, component: RuntimeComponent): void {
-    const previousRootNode = this.nodeByPersoId.get(perso.id) ?? null
-    const nextRootNode = this.tryInitComponent(perso, component, 'refresh')
+    const previousRootNode = this.nodeByPersoId.get(perso.id) ?? null;
+    const nextRootNode = this.tryInitComponent(perso, component, "refresh");
     if (nextRootNode === null) {
-      return
+      return;
     }
 
     if (previousRootNode !== null) {
-      this.detachNodeFromParent(previousRootNode)
+      this.detachNodeFromParent(previousRootNode);
     }
 
     if (!this.isRuntimeListComponent(component)) {
-      this.detachNodeFromParent(nextRootNode)
+      this.detachNodeFromParent(nextRootNode);
     }
 
-    this.storeLoadedRuntimeComponent(perso, component, nextRootNode)
+    this.storeLoadedRuntimeComponent(perso, component, nextRootNode);
   }
 
   /**
@@ -385,48 +438,44 @@ export class RuntimeComponentOrchestrator {
       services: createComponentServices(this.serviceRegistry),
       modules: createComponentModules(),
       createElementOptions: this.createElementOptions,
-      report: this.warn
-    })
+      report: this.warn,
+    });
 
-    const rootNode = this.tryInitComponent(perso, component, 'mount')
+    const rootNode = this.tryInitComponent(perso, component, "mount");
     if (rootNode === null) {
-      return
+      return;
     }
 
     if (!this.isRuntimeListComponent(component)) {
-      this.detachNodeFromParent(rootNode)
+      this.detachNodeFromParent(rootNode);
     }
 
-    this.storeLoadedRuntimeComponent(perso, component, rootNode)
+    this.storeLoadedRuntimeComponent(perso, component, rootNode);
   }
 
   /**
    * Writes one runtime component snapshot into registry maps.
    */
-  private storeLoadedRuntimeComponent(
-    perso: ItemDoc,
-    component: RuntimeComponent,
-    rootNode: unknown
-  ): void {
-    this.clearComponentOutlets(perso.id)
-    this.componentByPersoId.set(perso.id, component)
-    this.nodeByPersoId.set(perso.id, rootNode)
-    this.parentListByPersoId.set(perso.id, null)
-    this.mountedByPersoId.set(perso.id, false)
-    this.storyIdByPersoId.set(perso.id, perso.storyId)
-    this.listByPersoId.delete(perso.id)
+  private storeLoadedRuntimeComponent(perso: ItemDoc, component: RuntimeComponent, rootNode: unknown): void {
+    this.clearComponentOutlets(perso.id);
+    this.componentByPersoId.set(perso.id, component);
+    this.nodeByPersoId.set(perso.id, rootNode);
+    this.parentListByPersoId.set(perso.id, null);
+    this.mountedByPersoId.set(perso.id, false);
+    this.storyIdByPersoId.set(perso.id, perso.storyId);
+    this.listByPersoId.delete(perso.id);
 
-    this.runHook('onComponentMounted', { perso, component, rootNode })
+    this.runHook("onComponentMounted", { perso, component, rootNode });
 
-    const resolver = this.renderMutationResolverByType.get(perso.type)
+    const resolver = this.renderMutationResolverByType.get(perso.type);
     if (resolver) {
-      this.renderMutationResolverByPersoId.set(perso.id, resolver)
+      this.renderMutationResolverByPersoId.set(perso.id, resolver);
     } else if (this.renderMutationResolverByPersoId.has(perso.id)) {
-      this.renderMutationResolverByPersoId.delete(perso.id)
+      this.renderMutationResolverByPersoId.delete(perso.id);
     }
 
     if (this.hasRuntimeOutlets(component)) {
-      this.registerComponentOutlets(perso.id, component)
+      this.registerComponentOutlets(perso.id, component);
     }
   }
 
@@ -434,30 +483,30 @@ export class RuntimeComponentOrchestrator {
    * Destroys current runtime maps and returns empty runtime elements.
    */
   destroy(): RuntimeElementMap {
-    this.runHook('onDestroy', {})
-    this.componentByPersoId.clear()
-    this.nodeByPersoId.clear()
-    this.listByPersoId.clear()
-    this.parentListByPersoId.clear()
-    this.mountedByPersoId.clear()
-    this.renderMutationResolverByPersoId.clear()
-    this.outletIdsByComponentId.clear()
-    this.storyIdByPersoId.clear()
-    this.storyEntriesByStoryId.clear()
-    this.storyMoveByStoryId.clear()
-    this.storyHostNodeByStoryId.clear()
-    return new Map()
+    this.runHook("onDestroy", {});
+    this.componentByPersoId.clear();
+    this.nodeByPersoId.clear();
+    this.listByPersoId.clear();
+    this.parentListByPersoId.clear();
+    this.mountedByPersoId.clear();
+    this.renderMutationResolverByPersoId.clear();
+    this.outletIdsByComponentId.clear();
+    this.storyIdByPersoId.clear();
+    this.storyEntriesByStoryId.clear();
+    this.storyMoveByStoryId.clear();
+    this.storyHostNodeByStoryId.clear();
+    return new Map();
   }
 
   /**
    * Routes resolved updates to component instances and move router.
    */
   routeUpdates(updates: RuntimeResolvedUpdate[]): RuntimeUpdateRoutingResult {
-    this.warningKeys.clear()
-    const animatableActions: AnimationResolvedAction[] = []
-    const directTransitions: TransitionRequest[] = []
-    let appliedActionsCount = 0
-    const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates)
+    this.warningKeys.clear();
+    const animatableActions: AnimationResolvedAction[] = [];
+    const directTransitions: TransitionRequest[] = [];
+    let appliedActionsCount = 0;
+    const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates);
 
     for (const [updateIndex, update] of updates.entries()) {
       if (
@@ -465,129 +514,138 @@ export class RuntimeComponentOrchestrator {
           update,
           moveDecision: moveDecisionsByUpdateIndex.get(updateIndex),
           animatableActions,
-          directTransitions
+          directTransitions,
         })
       ) {
-        appliedActionsCount += 1
+        appliedActionsCount += 1;
       }
     }
 
     return {
       appliedActionsCount,
       animatableActions,
-      directTransitions
-    }
+      directTransitions,
+    };
   }
 
   /**
    * Routes one resolved update to a runtime component and collect outputs.
    */
   private routeResolvedUpdate(input: {
-    update: RuntimeResolvedUpdate
-    moveDecision: MoveCommand | null | undefined
-    animatableActions: AnimationResolvedAction[]
-    directTransitions: TransitionRequest[]
+    update: RuntimeResolvedUpdate;
+    moveDecision: MoveCommand | null | undefined;
+    animatableActions: AnimationResolvedAction[];
+    directTransitions: TransitionRequest[];
   }): boolean {
-    const targetPersoId = this.resolveTargetPersoId(input.update.resolvedAction)
-    const component = this.componentByPersoId.get(targetPersoId)
+    const targetPersoId = this.resolveTargetPersoId(input.update.resolvedAction);
+    const component = this.componentByPersoId.get(targetPersoId);
     if (!component) {
       this.warnOnce(
         input.update.eventSeq,
-        'RUNTIME_COMPONENT_NODE_NOT_FOUND',
+        "RUNTIME_COMPONENT_NODE_NOT_FOUND",
         {
           targetPersoId,
           eventId: input.update.resolvedAction.eventId,
-          eventSeq: input.update.eventSeq
+          eventSeq: input.update.eventSeq,
         },
-        targetPersoId
-      )
-      return false
+        targetPersoId,
+      );
+      return false;
     }
 
-    const moveDecision = input.moveDecision ?? null
-    const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] }
+    const moveDecision = input.moveDecision ?? null;
+    const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] };
 
     if (moveDecision !== null) {
-      this.runHook('beforeUpdate', {
+      this.runHook("beforeUpdate", {
         resolvedAction: input.update.resolvedAction,
         eventSeq: input.update.eventSeq,
         moveCommand: moveDecision,
-        output: hookOutput
+        output: hookOutput,
+      });
+    }
+
+    if (
+      !this.tryUpdateComponent(component, {
+        persoId: targetPersoId,
+        eventId: input.update.resolvedAction.eventId,
+        eventSeq: input.update.eventSeq,
+        action: input.update.resolvedAction.action as Record<string, unknown>,
       })
+    ) {
+      return false;
     }
 
-    if (!this.tryUpdateComponent(component, {
-      persoId: targetPersoId,
-      eventId: input.update.resolvedAction.eventId,
-      eventSeq: input.update.eventSeq,
-      action: input.update.resolvedAction.action as Record<string, unknown>
-    })) {
-      return false
-    }
+    input.directTransitions.push(...hookOutput.directTransitions);
 
-    input.directTransitions.push(...hookOutput.directTransitions)
-
-    const targetNode = this.nodeByPersoId.get(targetPersoId)
+    const targetNode = this.nodeByPersoId.get(targetPersoId);
     if (targetNode !== undefined) {
       input.animatableActions.push({
         ...input.update.resolvedAction,
         action: {
           ...input.update.resolvedAction.action,
-          target: targetNode
-        }
-      })
+          target: targetNode,
+        },
+      });
     }
 
-    return true
+    return true;
   }
 
   /**
    * Initializes one component behind one global runtime warning boundary.
    */
-  private tryInitComponent(perso: ItemDoc, component: RuntimeComponent, phase: 'mount' | 'refresh'): unknown | null {
+  private tryInitComponent(
+    perso: ItemDoc,
+    component: RuntimeComponent,
+    phase: "mount" | "refresh",
+  ): unknown | null {
     try {
-      component._init()
-      return component.node
+      component._init();
+      return component.node;
     } catch (error) {
       this.warn({
-        code: 'RUNTIME_COMPONENT_INIT_FAILED',
-        message: 'Component init failed',
+        code: "RUNTIME_COMPONENT_INIT_FAILED",
+        message: "Component init failed",
         details: {
           persoId: perso.id,
           persoType: perso.type,
           phase,
-          error: error instanceof Error ? error.message : 'unknown_error'
-        }
-      })
-      return null
+          error: error instanceof Error ? error.message : "unknown_error",
+        },
+      });
+      return null;
     }
   }
 
   /**
    * Updates one component behind one global runtime warning boundary.
    */
-  private tryUpdateComponent(component: RuntimeComponent, input: {
-    persoId: string
-    eventId: string
-    eventSeq: number
-    action: Record<string, unknown>
-  }): boolean {
+  private tryUpdateComponent(
+    component: RuntimeComponent,
+    input: {
+      persoId: string;
+      eventId: string;
+      eventSeq: number;
+      action: Record<string, unknown>;
+    },
+  ): boolean {
     try {
-      component.update(input)
-      return true
+      component.update(input);
+      return true;
     } catch (error) {
       this.warnOnce(
         input.eventSeq,
-        'RUNTIME_COMPONENT_UPDATE_FAILED',
+        "RUNTIME_COMPONENT_UPDATE_FAILED",
         {
           persoId: input.persoId,
           eventId: input.eventId,
           eventSeq: input.eventSeq,
-          error: error instanceof Error ? error.message : 'unknown_error'
+          error: error instanceof Error ? error.message : "unknown_error",
         },
-        input.persoId
-      )
-      return false
+        input.persoId,
+      );
+      return false;
     }
   }
 
@@ -602,27 +660,27 @@ export class RuntimeComponentOrchestrator {
       getRenderMutationResolverById: (persoId) => this.renderMutationResolverByPersoId.get(persoId) ?? null,
       getParentListId: (persoId) => this.parentListByPersoId.get(persoId) ?? null,
       setParentListId: (persoId, parentListId) => {
-        this.parentListByPersoId.set(persoId, parentListId)
+        this.parentListByPersoId.set(persoId, parentListId);
       },
       isMounted: (persoId) => this.mountedByPersoId.get(persoId) ?? false,
       setMounted: (persoId, mounted) => {
-        this.mountedByPersoId.set(persoId, mounted)
-      }
-    }
+        this.mountedByPersoId.set(persoId, mounted);
+      },
+    };
   }
 
   /**
    * Returns one runtime elements map view for renderer state snapshots.
    */
   getRuntimeElements(): RuntimeElementMap {
-    return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId)
+    return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId);
   }
 
   /**
    * Returns one registered mutation resolver for one runtime item when available.
    */
   getRenderMutationResolverById(persoId: string): RenderMutationResolver | null {
-    return this.renderMutationResolverByPersoId.get(persoId) ?? null
+    return this.renderMutationResolverByPersoId.get(persoId) ?? null;
   }
 
   /**
@@ -630,85 +688,91 @@ export class RuntimeComponentOrchestrator {
    */
   private isRuntimeListComponent(component: RuntimeComponent): component is RuntimeListComponent {
     return (
-      'attachChild' in component &&
-      typeof component.attachChild === 'function' &&
-      'detachChild' in component &&
-      typeof component.detachChild === 'function' &&
-      'repositionChild' in component &&
-      typeof component.repositionChild === 'function'
-    )
+      "attachChild" in component &&
+      typeof component.attachChild === "function" &&
+      "detachChild" in component &&
+      typeof component.detachChild === "function" &&
+      "repositionChild" in component &&
+      typeof component.repositionChild === "function"
+    );
   }
 
   /**
    * Checks whether one runtime component exposes the layout outlet bridge contract.
    */
-  private hasRuntimeOutlets(component: RuntimeComponent): component is RuntimeComponent & { getOutletsSnapshot: () => RuntimeLayoutOutletSnapshot[] } {
-    return 'getOutletsSnapshot' in component && typeof component.getOutletsSnapshot === 'function'
+  private hasRuntimeOutlets(
+    component: RuntimeComponent,
+  ): component is RuntimeComponent & { getOutletsSnapshot: () => RuntimeLayoutOutletSnapshot[] } {
+    return "getOutletsSnapshot" in component && typeof component.getOutletsSnapshot === "function";
   }
 
   /**
    * Clears layout outlet registrations for one layout component id.
    */
   private clearComponentOutlets(componentId: string): void {
-    const outletIds = this.outletIdsByComponentId.get(componentId)
+    const outletIds = this.outletIdsByComponentId.get(componentId);
     if (!outletIds) {
-      return
+      return;
     }
 
     for (const outletId of outletIds) {
       if (this.nodeByPersoId.get(outletId) !== undefined) {
-        this.nodeByPersoId.delete(outletId)
+        this.nodeByPersoId.delete(outletId);
       }
     }
 
-    this.outletIdsByComponentId.delete(componentId)
+    this.outletIdsByComponentId.delete(componentId);
   }
 
   /**
    * Registers all outlet containers exposed by one layout component.
    */
   private registerComponentOutlets(componentId: string, outletComponent: RuntimeLayoutComponent): void {
-    const registeredOutletIds: string[] = []
+    const registeredOutletIds: string[] = [];
 
     for (const outlet of outletComponent.getOutletsSnapshot()) {
-      const outletId = outlet.outletId
+      const outletId = outlet.outletId;
       if (
         this.componentByPersoId.has(outletId) ||
         this.nodeByPersoId.has(outletId) ||
         this.listByPersoId.has(outletId)
       ) {
         this.warn({
-          code: 'AUTHOR_LAYOUT_OUTLET_ID_COLLISION',
-          message: 'Layout outlet id collides with an existing runtime id',
+          code: "AUTHOR_LAYOUT_OUTLET_ID_COLLISION",
+          message: "Layout outlet id collides with an existing runtime id",
           details: {
             layoutId: componentId,
-            outletId
-          }
-        })
-        continue
+            outletId,
+          },
+        });
+        continue;
       }
 
-      this.nodeByPersoId.set(outletId, outlet.nodeRef)
-      registeredOutletIds.push(outletId)
+      this.nodeByPersoId.set(outletId, outlet.nodeRef);
+      registeredOutletIds.push(outletId);
     }
 
-    this.outletIdsByComponentId.set(componentId, registeredOutletIds)
+    this.outletIdsByComponentId.set(componentId, registeredOutletIds);
   }
 
   /**
    * Checks whether one runtime node is inside one SVG context.
    */
   private isSvgNode(nodeRef: unknown): boolean {
-    if (typeof globalThis.Element !== 'undefined' && isDomNode(nodeRef) && nodeRef instanceof globalThis.Element) {
-      return nodeRef.namespaceURI === 'http://www.w3.org/2000/svg' || nodeRef.tagName.toLowerCase() === 'svg'
+    if (
+      typeof globalThis.Element !== "undefined" &&
+      isDomNode(nodeRef) &&
+      nodeRef instanceof globalThis.Element
+    ) {
+      return nodeRef.namespaceURI === "http://www.w3.org/2000/svg" || nodeRef.tagName.toLowerCase() === "svg";
     }
 
-    if (typeof nodeRef !== 'object' || nodeRef === null) {
-      return false
+    if (typeof nodeRef !== "object" || nodeRef === null) {
+      return false;
     }
 
-    const node = nodeRef as { namespaceURI?: unknown; tagName?: unknown }
-    return node.namespaceURI === 'http://www.w3.org/2000/svg' || node.tagName === 'svg'
+    const node = nodeRef as { namespaceURI?: unknown; tagName?: unknown };
+    return node.namespaceURI === "http://www.w3.org/2000/svg" || node.tagName === "svg";
   }
 
   /**
@@ -716,43 +780,43 @@ export class RuntimeComponentOrchestrator {
    */
   private canAttachChildToNode(targetNode: unknown, childNode: unknown): boolean {
     if (!this.isSvgNode(targetNode)) {
-      return true
+      return true;
     }
 
-    return this.isSvgNode(childNode)
+    return this.isSvgNode(childNode);
   }
 
   /**
    * Creates one synthetic host node used to mount one story instance.
    */
   private createStoryHostNode(storyId: string, useDomNode: boolean): unknown {
-    if (useDomNode && typeof globalThis.document !== 'undefined') {
-      const hostNode = globalThis.document.createElement('div')
-      hostNode.id = storyId
-      return hostNode
+    if (useDomNode && typeof globalThis.document !== "undefined") {
+      const hostNode = globalThis.document.createElement("div");
+      hostNode.id = storyId;
+      return hostNode;
     }
 
     return {
-      tagName: 'DIV',
+      tagName: "DIV",
       id: storyId,
       style: {},
       attributes: {},
-      children: []
-    }
+      children: [],
+    };
   }
 
   /**
    * Resolves one synthetic host node for one story instance.
    */
   private resolveStoryHostNode(storyId: string, childNode?: unknown): unknown {
-    const existingHostNode = this.storyHostNodeByStoryId.get(storyId)
+    const existingHostNode = this.storyHostNodeByStoryId.get(storyId);
     if (existingHostNode !== undefined) {
-      return existingHostNode
+      return existingHostNode;
     }
 
-    const hostNode = this.createStoryHostNode(storyId, isDomNode(childNode))
-    this.storyHostNodeByStoryId.set(storyId, hostNode)
-    return hostNode
+    const hostNode = this.createStoryHostNode(storyId, isDomNode(childNode));
+    this.storyHostNodeByStoryId.set(storyId, hostNode);
+    return hostNode;
   }
 
   /**
@@ -760,10 +824,10 @@ export class RuntimeComponentOrchestrator {
    */
   private resolveStoryMountTargetNode(parentId: string): unknown | null {
     if (parentId === RUNTIME_CONFIG.move.rootToken) {
-      return null
+      return null;
     }
 
-    return this.nodeByPersoId.get(parentId) ?? null
+    return this.nodeByPersoId.get(parentId) ?? null;
   }
 
   /**
@@ -771,30 +835,34 @@ export class RuntimeComponentOrchestrator {
    */
   private mountStoryHosts(runtimePersos: RuntimePersos): void {
     for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
-      const move = normalizeMoveCommand(rawMove, true)
+      const move = normalizeMoveCommand(rawMove, true);
       if (move === null) {
-        continue
+        continue;
       }
 
-      const targetNode = this.resolveStoryMountTargetNode(move.parentId)
+      const targetNode = this.resolveStoryMountTargetNode(move.parentId);
       if (targetNode === null) {
-        continue
+        continue;
       }
 
-      const hostNode = this.resolveStoryHostNode(storyId, targetNode)
-      this.appendNodeToParent(targetNode, hostNode)
+      const hostNode = this.resolveStoryHostNode(storyId, targetNode);
+      this.appendNodeToParent(targetNode, hostNode);
     }
   }
 
   /**
    * Resolves one parent node target from one move parent identifier.
    */
-  private resolveMoveTargetNode(parentId: string, storyId: string | null, childNode?: unknown): unknown | null {
+  private resolveMoveTargetNode(
+    parentId: string,
+    storyId: string | null,
+    childNode?: unknown,
+  ): unknown | null {
     if (parentId === RUNTIME_CONFIG.move.rootToken) {
-      return storyId === null ? null : this.resolveStoryHostNode(storyId, childNode)
+      return storyId === null ? null : this.resolveStoryHostNode(storyId, childNode);
     }
 
-    return this.nodeByPersoId.get(parentId) ?? null
+    return this.nodeByPersoId.get(parentId) ?? null;
   }
 
   /**
@@ -803,30 +871,30 @@ export class RuntimeComponentOrchestrator {
   private mountStoryEntriesToStoryHosts(runtimePersos: RuntimePersos): void {
     for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
       if (entryIds.length === 0) {
-        continue
+        continue;
       }
 
-      const hostNode = this.resolveStoryHostNode(storyId, this.nodeByPersoId.get(entryIds[0]))
+      const hostNode = this.resolveStoryHostNode(storyId, this.nodeByPersoId.get(entryIds[0]));
 
       for (const entryId of entryIds) {
-        const item = runtimePersos.persos[entryId]
+        const item = runtimePersos.persos[entryId];
         if (item === undefined) {
-          continue
+          continue;
         }
 
-        const rawInitialMove = item.initial.move
+        const rawInitialMove = item.initial.move;
         if (rawInitialMove !== undefined && !isStoryHostMove(rawInitialMove)) {
-          continue
+          continue;
         }
 
-        const entryNode = this.nodeByPersoId.get(entryId)
+        const entryNode = this.nodeByPersoId.get(entryId);
         if (entryNode === undefined) {
-          continue
+          continue;
         }
 
-        this.appendNodeToParent(hostNode, entryNode)
-        this.parentListByPersoId.set(entryId, null)
-        this.mountedByPersoId.set(entryId, true)
+        this.appendNodeToParent(hostNode, entryNode);
+        this.parentListByPersoId.set(entryId, null);
+        this.mountedByPersoId.set(entryId, true);
       }
     }
   }
@@ -836,28 +904,28 @@ export class RuntimeComponentOrchestrator {
    */
   private detachNodeFromParent(nodeRef: unknown): void {
     if (isDomNode(nodeRef)) {
-      const parentNode = nodeRef.parentNode
+      const parentNode = nodeRef.parentNode;
       if (parentNode !== null && parentNode !== undefined) {
-        parentNode.removeChild(nodeRef)
+        parentNode.removeChild(nodeRef);
       }
 
-      return
+      return;
     }
 
-    if (typeof nodeRef !== 'object' || nodeRef === null) {
-      return
+    if (typeof nodeRef !== "object" || nodeRef === null) {
+      return;
     }
 
-    const childNode = nodeRef as Record<string, unknown>
-    const parentNode = childNode.parentNode
-    if (typeof parentNode !== 'object' || parentNode === null) {
-      return
+    const childNode = nodeRef as Record<string, unknown>;
+    const parentNode = childNode.parentNode;
+    if (typeof parentNode !== "object" || parentNode === null) {
+      return;
     }
 
-    const mutableParent = parentNode as Record<string, unknown>
-    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
-    mutableParent.children = currentChildren.filter((candidate) => candidate !== nodeRef)
-    childNode.parentNode = null
+    const mutableParent = parentNode as Record<string, unknown>;
+    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : [];
+    mutableParent.children = currentChildren.filter((candidate) => candidate !== nodeRef);
+    childNode.parentNode = null;
   }
 
   /**
@@ -865,159 +933,164 @@ export class RuntimeComponentOrchestrator {
    */
   private appendNodeToParent(parentNode: unknown, childNode: unknown): void {
     if (isDomNode(parentNode) && isDomNode(childNode)) {
-      parentNode.appendChild(childNode)
-      return
+      parentNode.appendChild(childNode);
+      return;
     }
 
-    if (typeof parentNode !== 'object' || parentNode === null || typeof childNode !== 'object' || childNode === null) {
-      return
+    if (
+      typeof parentNode !== "object" ||
+      parentNode === null ||
+      typeof childNode !== "object" ||
+      childNode === null
+    ) {
+      return;
     }
 
     if (isDomNode(parentNode) || isDomNode(childNode)) {
-      return
+      return;
     }
 
-    const mutableParent = parentNode as Record<string, unknown>
-    const mutableChild = childNode as Record<string, unknown>
-    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : []
-    if (typeof mutableChild.parentNode === 'object' && mutableChild.parentNode !== null) {
-      this.detachNodeFromParent(mutableChild)
+    const mutableParent = parentNode as Record<string, unknown>;
+    const mutableChild = childNode as Record<string, unknown>;
+    const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : [];
+    if (typeof mutableChild.parentNode === "object" && mutableChild.parentNode !== null) {
+      this.detachNodeFromParent(mutableChild);
     }
 
-    mutableParent.children = currentChildren.filter((candidate) => candidate !== childNode).concat([childNode])
-    mutableChild.parentNode = parentNode
+    mutableParent.children = currentChildren
+      .filter((candidate) => candidate !== childNode)
+      .concat([childNode]);
+    mutableChild.parentNode = parentNode;
   }
 
   /**
    * Resolves action target id from action targetId override or listener id.
    */
   private resolveTargetPersoId(action: AnimationResolvedAction): string {
-    return action.action.targetId ?? action.listenerId
+    return action.action.targetId ?? action.listenerId;
   }
 
   /**
    * Emits one warning once per {eventSeq, code, persoId} key.
    */
-  private warnOnce(
-    eventSeq: number,
-    code: string,
-    details: Record<string, unknown>,
-    persoId?: string
-  ): void {
-    const key = `${eventSeq}:${code}:${persoId ?? ''}`
+  private warnOnce(eventSeq: number, code: string, details: Record<string, unknown>, persoId?: string): void {
+    const key = `${eventSeq}:${code}:${persoId ?? ""}`;
     if (this.warningKeys.has(key)) {
-      return
+      return;
     }
 
-    this.warningKeys.add(key)
+    this.warningKeys.add(key);
     this.warn({
       code,
       message: code,
-      details
-    })
+      details,
+    });
   }
 
   /**
    * Resolves one move command decision map with same-tick conflict policy.
    */
   private resolveMoveDecisions(updates: RuntimeResolvedUpdate[]): Map<number, MoveCommand | null> {
-    const decisions = new Map<number, MoveCommand | null>()
+    const decisions = new Map<number, MoveCommand | null>();
     const candidatesByKey = new Map<
       string,
       Array<{
-        updateIndex: number
-        eventSeq: number
-        eventId: string
-        persoId: string
-        moveCommand: MoveCommand | null
+        updateIndex: number;
+        eventSeq: number;
+        eventId: string;
+        persoId: string;
+        moveCommand: MoveCommand | null;
       }>
-    >()
+    >();
 
     for (const [updateIndex, update] of updates.entries()) {
-      const action = update.resolvedAction.action as Record<string, unknown>
-      if (!Object.prototype.hasOwnProperty.call(action, 'move')) {
-        continue
+      const action = update.resolvedAction.action as Record<string, unknown>;
+      if (!Object.prototype.hasOwnProperty.call(action, "move")) {
+        continue;
       }
 
-      const persoId = this.resolveTargetPersoId(update.resolvedAction)
-      const moveCommand = normalizeMoveCommand(action.move, false)
-      const key = `${update.eventSeq}:${persoId}`
-      const candidates = candidatesByKey.get(key) ?? []
+      const persoId = this.resolveTargetPersoId(update.resolvedAction);
+      const moveCommand = normalizeMoveCommand(action.move, false);
+      const key = `${update.eventSeq}:${persoId}`;
+      const candidates = candidatesByKey.get(key) ?? [];
       candidates.push({
         updateIndex,
         eventSeq: update.eventSeq,
         eventId: update.resolvedAction.eventId,
         persoId,
-        moveCommand
-      })
-      candidatesByKey.set(key, candidates)
+        moveCommand,
+      });
+      candidatesByKey.set(key, candidates);
     }
 
     for (const candidates of candidatesByKey.values()) {
       if (candidates.length === 0) {
-        continue
+        continue;
       }
 
-      const first = candidates[0]
+      const first = candidates[0];
       if (first === undefined) {
-        continue
+        continue;
       }
 
       if (candidates.length === 1) {
-        decisions.set(first.updateIndex, first.moveCommand)
+        decisions.set(first.updateIndex, first.moveCommand);
         if (first.moveCommand === null) {
           this.warnOnce(
             first.eventSeq,
-            'AUTHOR_MOVE_COMMAND_INVALID',
+            "AUTHOR_MOVE_COMMAND_INVALID",
             {
               persoId: first.persoId,
-              eventId: first.eventId
+              eventId: first.eventId,
             },
-            first.persoId
-          )
+            first.persoId,
+          );
         }
 
-        continue
+        continue;
       }
 
-      const last = candidates[candidates.length - 1]
+      const last = candidates[candidates.length - 1];
       if (last === undefined) {
-        continue
+        continue;
       }
 
       this.warnOnce(
         last.eventSeq,
-        'AUTHOR_MOVE_CONFLICT_SAME_TICK',
+        "AUTHOR_MOVE_CONFLICT_SAME_TICK",
         {
           persoId: last.persoId,
           eventId: last.eventId,
-          conflictCount: candidates.length
+          conflictCount: candidates.length,
         },
-        last.persoId
-      )
+        last.persoId,
+      );
 
       if (last.moveCommand === null) {
         for (const candidate of candidates) {
-          decisions.set(candidate.updateIndex, null)
+          decisions.set(candidate.updateIndex, null);
         }
 
         this.warnOnce(
           last.eventSeq,
-          'AUTHOR_MOVE_LAST_INVALID_SAME_TICK',
+          "AUTHOR_MOVE_LAST_INVALID_SAME_TICK",
           {
             persoId: last.persoId,
-            eventId: last.eventId
+            eventId: last.eventId,
           },
-          last.persoId
-        )
-        continue
+          last.persoId,
+        );
+        continue;
       }
 
       for (const candidate of candidates) {
-        decisions.set(candidate.updateIndex, candidate.updateIndex === last.updateIndex ? last.moveCommand : null)
+        decisions.set(
+          candidate.updateIndex,
+          candidate.updateIndex === last.updateIndex ? last.moveCommand : null,
+        );
       }
     }
 
-    return decisions
+    return decisions;
   }
 }

@@ -78,6 +78,31 @@ function temp__createSceneFixture(): SceneDoc {
 }
 
 /**
+ * Creates one scene fixture used to verify transient runtime event insert modes.
+ */
+function temp__createRuntimeEventSceneFixture(): SceneDoc {
+  return temp__createStrictSceneFixture({
+    sceneId: 'scene-runtime-event',
+    storyId: 'story-runtime-event',
+    persos: [
+      {
+        id: 'message',
+        type: 'text',
+        initial: {
+          content: 'base'
+        },
+        actions: {
+          reveal: {
+            content: 'revealed'
+          }
+        }
+      }
+    ]
+  })
+}
+
+
+/**
  * Creates one scene fixture with a timed animation event for seek synchronization tests.
  */
 function temp__createSeekSceneFixture(): SceneDoc {
@@ -719,4 +744,35 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
     await seekPromise
   })
+
+  it('L13-T11 persist-only stores one replay event without applying it immediately', async () => {
+    const player = new PlayerFacade()
+
+    expect(await player.init(temp__createRuntimeEventSceneFixture())).toEqual({ ok: true })
+
+    const messageNodeBeforeReplay = player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null
+    expect(messageNodeBeforeReplay?.textContent).toBe('base')
+
+    expect(await player.emit({ name: 'reveal', mode: 'persist-only' })).toEqual({ ok: true })
+    expect((player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null)?.textContent).toBe('base')
+
+    expect(await player.seek(0)).toEqual({ ok: true })
+    expect((player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null)?.textContent).toBe('revealed')
+  })
+
+  it('L13-T12 persist-future defers one replay event until its target time', async () => {
+    const player = new PlayerFacade()
+
+    expect(await player.init(temp__createRuntimeEventSceneFixture())).toEqual({ ok: true })
+    expect(await player.emit({ name: 'reveal', ms: 500, mode: 'persist-future' })).toEqual({ ok: true })
+
+    expect((player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null)?.textContent).toBe('base')
+
+    expect(await player.seek(499)).toEqual({ ok: true })
+    expect((player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null)?.textContent).toBe('base')
+
+    expect(await player.seek(500)).toEqual({ ok: true })
+    expect((player.getRuntimeRegistry().getNodeById('message') as { textContent?: string } | null)?.textContent).toBe('revealed')
+  })
+
 })
