@@ -7,3 +7,4 @@ export { createQuizQuestionScene, quizQuestionStraps } from './quiz-question-sce
 export type { ResolvedQuizQuestion } from './quiz-question-scene'
 export { createS5DragScene } from './s5-drag-scene'
 export { createS6DndListScene, s6Straps } from './s6-dnd-list-scene'
+export { createQuizSeriesScene, quizSeriesStraps } from './quiz-series-scene'

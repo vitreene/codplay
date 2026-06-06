@@ -239,33 +239,4 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
   mountedRuntimeRevision = initialState.runtimeRevision;
   syncInteractionLock(demoContainerNode, initialState.status);
   commandPanel.syncFromState(initialState);
-
-  //TEMP
-  studio.player.onTrace((row) => {
-    const interesting = [
-      "player:emit",
-      "player:seek:started",
-      "player:seek:replay:event",
-      "player:event:applied",
-    ];
-    const payload = row.payload ?? {};
-    const eventName = String(payload.eventName ?? "");
-    const watchedQuizEvent =
-      eventName === "native:form:submit" ||
-      eventName === "quiz:question:resolved" ||
-      eventName === "quiz:question:resolved:correct" ||
-      eventName === "quiz:question:resolved:incorrect";
-    if (interesting.includes(row.eventName) && watchedQuizEvent) {
-      console.log("[quiz-trace]", row.eventName, {
-        eventName: payload.eventName,
-        eventId: payload.eventId,
-        eventMs: payload.eventMs,
-        trackId: payload.trackId,
-        appliedActionsCount: payload.appliedActionsCount,
-        scopeStoryId: payload.scopeStoryId,
-        payload: payload.payload,
-      });
-    }
-    traceLogPanel.push(row);
-  });
 }

@@ -9,6 +9,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: 'codplay-poc', label: 'CodPlay POC',        href: '?demo=codplay-poc' },
   { id: 'quiz',        label: 'Quiz Reference',     href: '?demo=quiz' },
   { id: 'quiz-question', label: 'Quiz Question',    href: '?demo=quiz-question' },
+  { id: 'quiz-series',   label: 'Quiz Série',       href: '?demo=quiz-series' },
   { id: 'drag',        label: 'Drag & Capture',     href: '?demo=drag' },
   { id: 'dnd-list',   label: 'Drag & Drop listes', href: '?demo=dnd-list' },
 ]
