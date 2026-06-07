@@ -1,4 +1,5 @@
 import type { ApiResult, CompiledScene, ResourceManifest } from '../builder/types'
+import { createPreloadModule } from '../preload/create-preload-module'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import {
@@ -34,12 +35,19 @@ import type {
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
 
+export type PreloadPolicy = {
+  releaseOnSequenceEnd?: boolean
+  timeout?: number
+}
+
 export type PlayerInitInput = {
   mountTarget: unknown
   compiledScene: CompiledScene
   resourceManifest?: ResourceManifest
   runtimePolicy?: RuntimeEventPolicy
   strapCollection?: StrapCollection
+  mode?: 'author' | 'broadcast'
+  preloadPolicy?: PreloadPolicy
 }
 
 export type PlayerScheduleApi = RuntimeScheduleHelpers
@@ -65,12 +73,16 @@ export type PlayerApi = {
 export class Player implements PlayerApi {
   private readonly player: PlayerFacade
   private readonly scheduleRuntime: PlayerScheduleFacade
+  private readonly preload = createPreloadModule()
   private runtimePolicy: ResolvedRuntimeEventPolicy = createRuntimeEventPolicy()
   private currentScene: CompiledScene['scene'] | null = null
   private strapCollection: StrapCollection = {}
   private readonly strapLoopSchedulers = new Set<PlayerScheduleFacade>()
   private initialSceneState: Record<string, unknown> | undefined
   private initialStoryStateById = new Map<string, Record<string, unknown> | undefined>()
+  private playerMode: 'author' | 'broadcast' = 'broadcast'
+  private preloadPolicy: PreloadPolicy = {}
+  private activeManifest: ResourceManifest | null = null
 
   readonly schedule: PlayerScheduleApi
 
@@ -135,7 +147,16 @@ export class Player implements PlayerApi {
    */
   async init(input: PlayerInitInput): Promise<ApiResult<void>> {
     void input.mountTarget
-    void input.resourceManifest
+
+    this.playerMode = input.mode ?? 'broadcast'
+    this.preloadPolicy = input.preloadPolicy ?? {}
+    this.activeManifest = input.resourceManifest ?? input.compiledScene.resources
+
+    const preloadResult = await this.preload.load({
+      manifest: this.activeManifest,
+      options: { mode: this.playerMode, timeout: this.preloadPolicy.timeout }
+    })
+    if (!preloadResult.ok) return preloadResult
 
     this.runtimePolicy = createRuntimeEventPolicy(input.runtimePolicy)
     this.scheduleRuntime.configurePolicy(this.runtimePolicy)
@@ -1194,6 +1215,9 @@ export class Player implements PlayerApi {
 
     if (result.ok && event.name === 'sequence:end') {
       this.destroyStrapLoopSchedulers()
+      if (this.preloadPolicy.releaseOnSequenceEnd && this.activeManifest) {
+        this.preload.release(this.activeManifest.entries.map((e) => e.url))
+      }
     }
 
     return result

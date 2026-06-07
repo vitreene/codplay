@@ -81,18 +81,85 @@ function createSeriesContainerStory(): SceneStoryDoc {
         initial: {
           markup: `
             <div class="quiz-series-wrapper">
-              <div data-part="quiz-series:slot" style="position: relative; height: 100%;"></div>
+              <div data-part="quiz-series:progress" style="margin-bottom: 10px;"></div>
+              <div data-part="quiz-series:slot" style="position: relative; overflow: hidden; height: 500px;"></div>
             </div>
           `,
           style: {
-            position: "relative",
-            overflow: "hidden",
-            height: "520px",
             width: "100%",
             borderRadius: "12px"
           }
         } as unknown as PersoDoc["initial"],
         actions: {}
+      }
+    ]
+  }
+}
+
+// --- Progress story ---
+
+function createSeriesProgressStory(): SceneStoryDoc {
+  return {
+    id: "quiz-series-progress-story",
+    entries: ["quiz-series-progress-layout"],
+    initial: undefined,
+    straps: undefined,
+    listen: [],
+    persos: [
+      {
+        id: "quiz-series-progress-layout",
+        type: "layout",
+        initial: {
+          markup: `
+            <div class="quiz-series-progress" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(15,23,42,0.06); border-radius: 8px;">
+              <span data-part="quiz-series:progress-count"></span>
+              <div data-part="quiz-series:progress-track" style="flex: 1; height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden;"></div>
+              <span data-part="quiz-series:progress-rate"></span>
+            </div>
+          `,
+          style: {},
+          move: { parentId: "quiz-series:progress", mode: "append" }
+        } as unknown as PersoDoc["initial"],
+        actions: {}
+      },
+      {
+        id: "quiz-series-progress-count",
+        type: "text",
+        initial: {
+          tag: "span",
+          content: `0 / ${SERIES_TOTAL}`,
+          style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px" },
+          move: { parentId: "quiz-series:progress-count", mode: "append" }
+        } as unknown as PersoDoc["initial"],
+        actions: { "quiz:series:progress:count": {} }
+      },
+      {
+        id: "quiz-series-progress-fill",
+        type: "text",
+        initial: {
+          tag: "div",
+          content: "",
+          style: {
+            height: "100%",
+            width: "0%",
+            backgroundColor: "#2563eb",
+            borderRadius: "4px",
+            transition: "width 350ms ease"
+          },
+          move: { parentId: "quiz-series:progress-track", mode: "append" }
+        } as unknown as PersoDoc["initial"],
+        actions: { "quiz:series:progress:fill": {} }
+      },
+      {
+        id: "quiz-series-progress-rate",
+        type: "text",
+        initial: {
+          tag: "span",
+          content: "—",
+          style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right" },
+          move: { parentId: "quiz-series:progress-rate", mode: "append" }
+        } as unknown as PersoDoc["initial"],
+        actions: { "quiz:series:progress:rate": {} }
       }
     ]
   }
@@ -492,6 +559,7 @@ export function createQuizSeriesScene(): SceneDoc {
   }
 
   allStories["quiz-series-result-story"] = createSeriesResultStory()
+  allStories["quiz-series-progress-story"] = createSeriesProgressStory()
 
   return {
     id: "quiz-series-scene",
@@ -507,7 +575,7 @@ export function createQuizSeriesScene(): SceneDoc {
     straps: undefined,
     listen: [
       { on: "quiz:question:next", straps: ["quiz-series-advance"] },
-      { on: "quiz:question:answered", straps: ["quiz-question-aggregate"] },
+      { on: "quiz:question:answered", straps: ["quiz-series-aggregate"] },
       { on: "quiz:result:show", straps: ["quiz-result-render"] }
     ],
     stories: allStories,
@@ -564,8 +632,57 @@ function handleResultRender(state: Readonly<Record<string, unknown>>) {
   }
 }
 
+function handleSeriesAggregate(
+  state: Readonly<Record<string, unknown>>,
+  eventData: Record<string, unknown> | undefined
+) {
+  const payload = eventData as QuizQuestionAnsweredPayload | undefined
+  if (payload === undefined) return undefined
+
+  const previous = Array.isArray(state.answers)
+    ? (state.answers as QuizQuestionAnsweredPayload[]).filter(
+        (a) => a.questionIndex !== payload.questionIndex
+      )
+    : []
+  const answers = [...previous, {
+    questionIndex: payload.questionIndex,
+    selectedAnswerIds: payload.selectedAnswerIds,
+    correctAnswerIds: payload.correctAnswerIds,
+    isCorrect: payload.isCorrect
+  }].sort((a, b) => a.questionIndex - b.questionIndex)
+
+  const answeredCount = answers.length
+  const correctCount = answers.filter((a) => a.isCorrect).length
+  const progressPercent = Math.round((answeredCount / SERIES_TOTAL) * 100)
+  const successPercent = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0
+  const successColor = correctCount / SERIES_TOTAL >= SERIES_THRESHOLD / SERIES_TOTAL ? "#16a34a" : "#dc2626"
+
+  console.log("[quiz-series-aggregate]", {
+    answeredCount,
+    correctCount,
+    lastQuestionIndex: payload.questionIndex,
+    lastResult: payload.isCorrect
+  })
+
+  return {
+    update: {
+      answers,
+      answeredCount,
+      correctCount,
+      lastQuestionIndex: payload.questionIndex,
+      lastResult: payload.isCorrect
+    },
+    events: [
+      { name: "quiz:series:progress:count", data: { content: `${answeredCount} / ${SERIES_TOTAL}` } },
+      { name: "quiz:series:progress:fill", data: { style: { width: `${progressPercent}%` } } },
+      { name: "quiz:series:progress:rate", data: { content: `${successPercent} %`, style: { color: successColor } } }
+    ]
+  }
+}
+
 export const quizSeriesStraps: StrapCollection = {
   ...quizQuestionStraps,
   "quiz-series-advance": ({ state }) => handleSeriesAdvance(state),
+  "quiz-series-aggregate": ({ event, state }) => handleSeriesAggregate(state, event.data),
   "quiz-result-render": ({ state }) => handleResultRender(state)
 }

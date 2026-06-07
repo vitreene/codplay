@@ -1,6 +1,7 @@
 import { BuilderValidator } from './builder-validation'
 import { BuilderArtifactCloner } from './builder-artifact-cloner'
 import { normalizeSceneDef } from './scene-normalization'
+import { extractResourceManifest } from './extract-resource-manifest'
 import type {
   ApiResult,
   ApiWarning,
@@ -54,7 +55,7 @@ export class BuilderFacade implements BuilderApi {
       }
     }
 
-    const resourceManifest: ResourceManifest = { entries: [] }
+    const resourceManifest = extractResourceManifest(normalizedScene)
       const compiledScene: CompiledScene = {
         schemaVersion: this.schemaVersion,
         createdAt: new Date().toISOString(),
