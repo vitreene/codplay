@@ -118,7 +118,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
             </div>
           `,
           style: {},
-          move: { parentId: "quiz-series:progress", mode: "append" }
+          move: { parentId: "quiz-series:progress" }
         } as unknown as PersoDoc["initial"],
         actions: {}
       },
@@ -129,7 +129,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
           tag: "span",
           content: `0 / ${SERIES_TOTAL}`,
           style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px" },
-          move: { parentId: "quiz-series:progress-count", mode: "append" }
+          move: { parentId: "quiz-series:progress-count" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:count": {} }
       },
@@ -146,7 +146,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
             borderRadius: "4px",
             transition: "width 350ms ease"
           },
-          move: { parentId: "quiz-series:progress-track", mode: "append" }
+          move: { parentId: "quiz-series:progress-track" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:fill": {} }
       },
@@ -157,7 +157,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
           tag: "span",
           content: "—",
           style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right" },
-          move: { parentId: "quiz-series:progress-rate", mode: "append" }
+          move: { parentId: "quiz-series:progress-rate" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:rate": {} }
       }
@@ -198,7 +198,7 @@ function createSeriesQuestionStory(
           checked: false,
           disabled: false,
           visualState: "idle",
-          move: { parentId: `${prefix}:answers`, mode: "append" }
+          move: { parentId: `${prefix}:answers` }
         } as unknown as PersoDoc["initial"],
         actions: {},
         emit: {
@@ -220,7 +220,7 @@ function createSeriesQuestionStory(
             marginInlineStart: "8px",
             textAlign: "center"
           },
-          move: { parentId: `${answerRootId}__selection-icon-slot`, mode: "append" }
+          move: { parentId: `${answerRootId}__selection-icon-slot` }
         } as unknown as PersoDoc["initial"],
         actions: {
           [`quiz:question:answer:${answer.id}:selected`]: { content: "•" },
@@ -240,7 +240,7 @@ function createSeriesQuestionStory(
             textAlign: "center",
             fontWeight: 700
           },
-          move: { parentId: `${answerRootId}__correction-icon-slot`, mode: "append" }
+          move: { parentId: `${answerRootId}__correction-icon-slot` }
         } as unknown as PersoDoc["initial"],
         actions: {
           [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+" },
@@ -286,7 +286,7 @@ function createSeriesQuestionStory(
           boxSizing: "border-box",
           ...(position > 0 ? { transform: "translateX(100%)" } : {})
         },
-        move: { parentId: "quiz-series:slot", mode: "append" }
+        move: { parentId: "quiz-series:slot" }
       } as unknown as PersoDoc["initial"],
       actions: {
         [`quiz:question:${position}:hide`]: {
@@ -304,7 +304,7 @@ function createSeriesQuestionStory(
         tag: "span",
         content: question.prompt,
         style: { fontWeight: 700, color: borderColor },
-        move: { parentId: `${prefix}:title`, mode: "append" }
+        move: { parentId: `${prefix}:title` }
       } as unknown as PersoDoc["initial"],
       actions: {}
     },
@@ -315,7 +315,7 @@ function createSeriesQuestionStory(
         tag: "span",
         content: question.type === "multiple" ? question.labels.multipleHint : "",
         style: { color: "#475569", fontSize: "0.875rem" },
-        move: { parentId: `${prefix}:hint`, mode: "append" }
+        move: { parentId: `${prefix}:hint` }
       } as unknown as PersoDoc["initial"],
       actions: {}
     },
@@ -338,7 +338,7 @@ function createSeriesQuestionStory(
           fontWeight: 600
         },
         attr: { type: "button", disabled: true },
-        move: { parentId: `${prefix}:controls`, mode: "append" }
+        move: { parentId: `${prefix}:controls` }
       } as unknown as PersoDoc["initial"],
       emit: {
         click: { event: { name: "quiz:question:validate" } }
@@ -357,7 +357,7 @@ function createSeriesQuestionStory(
         content: "",
         style: { fontWeight: 600 },
         attr: { hidden: true },
-        move: { parentId: `${prefix}:result`, mode: "append" }
+        move: { parentId: `${prefix}:result` }
       } as unknown as PersoDoc["initial"],
       actions: {
         "quiz:question:resolved:correct": {
@@ -380,7 +380,7 @@ function createSeriesQuestionStory(
         content: question.labels.next,
         attr: { type: "button", hidden: true },
         style: { marginTop: "8px", cursor: "pointer" },
-        move: { parentId: `${prefix}:next`, mode: "append" }
+        move: { parentId: `${prefix}:next` }
       } as unknown as PersoDoc["initial"],
       emit: {
         click: { event: { name: "quiz:question:next" } }
@@ -425,7 +425,7 @@ function createSeriesResultStory(): SceneStoryDoc {
         tag: "p",
         content: `Question ${n}`,
         style: { margin: "4px 0", fontWeight: 500 },
-        move: { parentId: "quiz-series-result:items", mode: "append" }
+        move: { parentId: "quiz-series-result:items" }
       } as unknown as PersoDoc["initial"],
       actions: {
         [`quiz:result:item:${n}:correct`]: {
@@ -470,7 +470,7 @@ function createSeriesResultStory(): SceneStoryDoc {
             opacity: 0,
             pointerEvents: "none"
           },
-          move: { parentId: "quiz-series:slot", mode: "append" }
+          move: { parentId: "quiz-series:slot" }
         } as unknown as PersoDoc["initial"],
         actions: {
           "quiz:result:show": {
@@ -501,7 +501,7 @@ function createSeriesResultStory(): SceneStoryDoc {
             flexDirection: "column",
             gap: "8px"
           },
-          move: { parentId: "quiz-series-result:card", mode: "append" }
+          move: { parentId: "quiz-series-result:card" }
         } as unknown as PersoDoc["initial"],
         actions: {}
       },
@@ -513,7 +513,7 @@ function createSeriesResultStory(): SceneStoryDoc {
           tag: "p",
           content: "— / 3",
           style: { fontSize: "1.25rem", fontWeight: 700, margin: "12px 0 4px" },
-          move: { parentId: "quiz-series-result:score", mode: "append" }
+          move: { parentId: "quiz-series-result:score" }
         } as unknown as PersoDoc["initial"],
         actions: {
           "quiz:result:score": {}
@@ -526,7 +526,7 @@ function createSeriesResultStory(): SceneStoryDoc {
           tag: "p",
           content: "",
           style: { fontWeight: 700, fontSize: "1.125rem" },
-          move: { parentId: "quiz-series-result:verdict", mode: "append" }
+          move: { parentId: "quiz-series-result:verdict" }
         } as unknown as PersoDoc["initial"],
         actions: {
           "quiz:result:verdict:passed": {

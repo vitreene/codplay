@@ -1,4 +1,5 @@
 import { runCodPlayPocDemo } from './demos/codplay/codplay-poc-demo'
+import { runPreloadMediaDemo } from './demos/codplay/preload-media-demo'
 import { runDragDemo } from './demos/codplay/drag-demo'
 import { runDndListDemo } from './demos/codplay/dnd-list-demo'
 import { runQuizQuestionDemo } from './demos/codplay/quiz-question-demo'
@@ -20,6 +21,8 @@ if (demoName === 'quiz') {
 	void runDragDemo()
 } else if (demoName === 'dnd-list') {
 	void runDndListDemo()
+} else if (demoName === 'preload-media') {
+	void runPreloadMediaDemo()
 } else {
 	void runPlayerPocDemo()
 }

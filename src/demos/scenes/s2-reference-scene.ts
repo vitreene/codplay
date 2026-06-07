@@ -40,7 +40,6 @@ export function createS2ReferenceScene(): SceneDoc {
               content: 'Reference Scene',
               move: {
                 parentId: 'reference-list',
-                mode: 'append'
               }
             },
             actions: {
@@ -63,7 +62,6 @@ export function createS2ReferenceScene(): SceneDoc {
               content: 'Ready for builder -> player integration.',
               move: {
                 parentId: 'reference-list',
-                mode: 'append'
               }
             },
             actions: {}

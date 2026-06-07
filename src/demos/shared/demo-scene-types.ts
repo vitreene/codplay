@@ -1,5 +1,6 @@
 import type { PlayerPublicEventInput, SceneDoc } from '../../player/types'
 import type { StrapCollection } from '../../player'
+import type { ResourceManifestEntry } from '../../builder/types'
 
 /**
  * Defines one optional command button that emits one runtime event.
@@ -22,4 +23,5 @@ export type PlayerSceneDemoConfig = {
 	rootNodeIds: string[];
 	activeDemo?: string;
 	actions?: PlayerSceneDemoAction[];
+	extraResources?: ResourceManifestEntry[];
 };

@@ -34,7 +34,6 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
       initial: {
         move: {
           parentId: 'scene-layout:slot',
-          mode: 'append'
         },
         content: 'hello'
       },
@@ -52,7 +51,6 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
       initial: {
         move: {
           parentId: 'scene-layout:missing',
-          mode: 'append'
         },
         content: 'orphan'
       },

@@ -157,7 +157,6 @@ function createQuestionTitle(question: ResolvedQuizQuestion): PersoDoc {
       },
       move: {
         parentId: 'quiz-question:title',
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {}
@@ -179,7 +178,6 @@ function createQuestionHint(question: ResolvedQuizQuestion): PersoDoc {
       },
       move: {
         parentId: 'quiz-question:hint',
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {}
@@ -252,7 +250,6 @@ function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer
       visualState: "idle",
       move: {
         parentId: 'quiz-question:answers',
-        mode: "append"
       }
     } as unknown as PersoDoc['initial'],
     actions: {},
@@ -283,7 +280,6 @@ function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer
       },
       move: {
         parentId: `${answerRootId}__selection-icon-slot`,
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {
@@ -314,7 +310,6 @@ function createQuestionAnswer(question: ResolvedQuizQuestion, answer: QuizAnswer
       },
       move: {
         parentId: `${answerRootId}__correction-icon-slot`,
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {
@@ -356,7 +351,6 @@ function createQuestionValidate(question: ResolvedQuizQuestion): PersoDoc {
       },
       move: {
         parentId: 'quiz-question:controls',
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     emit: {
@@ -405,7 +399,6 @@ function createQuestionResult(question: ResolvedQuizQuestion): PersoDoc {
       },
       move: {
         parentId: 'quiz-question:result',
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     actions: {
@@ -441,7 +434,6 @@ function createQuestionNext(question: ResolvedQuizQuestion): PersoDoc {
       },
       move: {
         parentId: 'quiz-question:next',
-        mode: 'append'
       }
     } as unknown as PersoDoc['initial'],
     emit: {

@@ -20,7 +20,7 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 4. `v1-perso-spec.md`
 5. `v1-layout-spec.md`
 6. `v1-list-spec.md`
-7. `v1-component-api.md`
+7. `v1-component-api.md` — contrat composant, props d'element interne (`img`, `video`), base class `:where()`, deprecation fitMode
 8. `v1-strap-spec.md`
 9. `v1-story-spec.md`
 10. `v1-scene-spec.md`

@@ -1,6 +1,7 @@
 import { BaseComponent } from './lib/base-component'
 import { bindComponentEmitDeclarations } from './lib/dom'
-import { appendDomChild, isDomElement, resetRuntimeNodeState } from './lib/dom-component-adapter'
+import { appendDomChild, applyClassNamePatch, isDomElement, resetRuntimeNodeState } from './lib/dom-component-adapter'
+import { injectBaseStyle } from './lib/inject-base-style'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
@@ -25,6 +26,7 @@ export type MediaComponentApi = {
 
 const MEDIA_TIME_SYNC_TOLERANCE_MS = 40
 const MEDIA_REF = 'media'
+const VIDEO_BASE_CLASS = 'cp-video-inner'
 
 /**
  * Checks whether one node can expose media playback methods.
@@ -91,6 +93,10 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   constructor(input: RuntimeComponentClassInput) {
     super(input)
     this.services.declare(['className', 'style', 'attr'])
+    injectBaseStyle(
+      'cp-video-inner-style',
+      ':where(.cp-video-inner){width:100%;height:100%}'
+    )
   }
 
   /**
@@ -231,20 +237,17 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * Applies one resolved runtime action on the media component.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    const action = input.action as { ref?: unknown; src?: unknown }
+    const action = input.action as { ref?: unknown; src?: unknown; video?: unknown }
     const targetNode = this.resolveRef(typeof action.ref === 'string' ? action.ref : undefined) ?? this.node
     this.services.apply(targetNode, input.action)
     if (typeof action.src === 'string') {
       this.setMediaSource(this.getPart(MEDIA_REF), action.src)
     }
+    this.applyVideoProps(action.video)
   }
 
   /**
-   * Creates the component root and applies the authored initial state.
-   */
-  /**
-   * Prepares the media node: ensures it exists, resets its state and applies initial media props.
-   * ensureMediaNode handles non-DOM environments where data-part is not parsed by buildNode.
+   * Ensures the video part exists, resets its state, applies defaults and sets src.
    */
   private setupMediaNode(rootNode: unknown): void {
     const initial = this.perso.initial as { src?: unknown }
@@ -258,12 +261,28 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   }
 
   /**
+   * Applies video-specific props targeting the inner video element directly.
+   */
+  /**
+   * Applies video-specific props targeting the inner video element.
+   * The base class cp-video-inner is always re-ensured last so any authored
+   * CSS selector or inline style can override defaults without !important.
+   */
+  private applyVideoProps(videoProps: unknown): void {
+    if (videoProps !== null && typeof videoProps === 'object') {
+      this.services.apply(this.getPart(MEDIA_REF), videoProps as Record<string, unknown>)
+    }
+    applyClassNamePatch(this.getPart(MEDIA_REF), { add: VIDEO_BASE_CLASS })
+  }
+
+  /**
    * Creates the component root with an internal video part.
    */
   render(): ComponentRenderResult {
     const rootNode = this.buildNode(`<div><video data-part="${MEDIA_REF}"/></div>`)
     this.setupMediaNode(rootNode)
     this.services.apply(rootNode, this.perso.initial)
+    this.applyVideoProps((this.perso.initial as Record<string, unknown>).video)
     return rootNode as Node
   }
 }

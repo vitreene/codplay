@@ -2,7 +2,7 @@ import "../shared/demo-shell.css";
 
 import { animate, engine } from "animejs";
 
-import type { SceneDef } from "../../builder/types";
+import type { ResourceManifest, SceneDef } from "../../builder/types";
 import { createAnimationAdapter, type AnimeImplementation } from "../../animation/adapter";
 import { CodPlay } from "../../creator";
 import { createSequenceCommandPanel } from "./codplay-scene-demo/sequence-command-panel";
@@ -170,7 +170,9 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
     throw new Error(`[demo] compile failed: ${compileResult.error.code}`);
   }
   const compiledScene = compileResult.data.compiledScene;
-  const resourceManifest = compileResult.data.resourceManifest;
+  const resourceManifest: ResourceManifest = config.extraResources?.length
+    ? { entries: [...compileResult.data.resourceManifest.entries, ...config.extraResources] }
+    : compileResult.data.resourceManifest;
 
   async function resetDemoRuntime(): Promise<void> {
     mountedRuntimeRevision = -1;

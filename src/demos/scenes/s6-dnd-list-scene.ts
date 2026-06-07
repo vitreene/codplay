@@ -74,7 +74,7 @@ function makeItemPerso(
     initial: {
       tag: 'div',
       content: label,
-      move: { parentId: 'list-a', mode: 'append' },
+      move: { parentId: 'list-a' },
       style: {
         padding: '10px 14px',
         background,
@@ -100,11 +100,11 @@ function makeItemPerso(
       [`item:drag:tracking:${id}`]: {},
       // drop valide : même pattern que Player POC — flipMode seul, pas de reset x/y explicite
       [`item:drop:${id}:to-a`]: {
-        move: { parentId: 'list-a', mode: 'append', flipMode: 'overlay-world' },
+        move: { parentId: 'list-a', flipMode: 'overlay-world' },
         style: { zIndex: 'auto' },
       },
       [`item:drop:${id}:to-b`]: {
-        move: { parentId: 'list-b', mode: 'append', flipMode: 'overlay-world' },
+        move: { parentId: 'list-b', flipMode: 'overlay-world' },
         style: { zIndex: 'auto' },
       },
       // drop invalide ou même liste : retour à x/y=0
@@ -169,7 +169,7 @@ export function createS6DndListScene(): SceneDoc {
             id: 'list-a',
             type: 'list',
             initial: {
-              move: { parentId: 's6-shell', mode: 'append' },
+              move: { parentId: 's6-shell' },
               style: {
                 minHeight: '180px',
                 border: '2px dashed #94a3b8',
@@ -187,7 +187,7 @@ export function createS6DndListScene(): SceneDoc {
             id: 'list-b',
             type: 'list',
             initial: {
-              move: { parentId: 's6-shell', mode: 'append' },
+              move: { parentId: 's6-shell' },
               style: {
                 minHeight: '180px',
                 border: '2px dashed #94a3b8',
@@ -209,7 +209,7 @@ export function createS6DndListScene(): SceneDoc {
             initial: {
               tag: 'span',
               content: '3',
-              move: { parentId: 's6-shell', mode: 'append' },
+              move: { parentId: 's6-shell' },
               style: { fontSize: '13px', color: '#64748b', pointerEvents: 'none' },
             },
             actions: { 'count:update:a': {} },
@@ -220,7 +220,7 @@ export function createS6DndListScene(): SceneDoc {
             initial: {
               tag: 'span',
               content: '0',
-              move: { parentId: 's6-shell', mode: 'append' },
+              move: { parentId: 's6-shell' },
               style: { fontSize: '13px', color: '#64748b', pointerEvents: 'none' },
             },
             actions: { 'count:update:b': {} },

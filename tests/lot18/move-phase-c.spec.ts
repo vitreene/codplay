@@ -67,7 +67,6 @@ function temp__createStoryFixture(overrides?: {
           content: 'A',
           move: {
             parentId: 'list-a',
-            mode: 'append'
           }
         },
         actions: {}
@@ -80,7 +79,6 @@ function temp__createStoryFixture(overrides?: {
           content: 'B',
           move: {
             parentId: 'list-a',
-            mode: 'append'
           }
         },
         actions: {}
@@ -93,7 +91,6 @@ function temp__createStoryFixture(overrides?: {
           content: 'C',
           move: {
             parentId: 'list-a',
-            mode: 'append'
           }
         },
         actions: {}
@@ -180,7 +177,6 @@ describe('Lot 18 - move phase C orchestration', () => {
       listenerId: 'item-c',
       move: {
         parentId: 'list-b',
-        mode: 'append'
       }
     })
 
@@ -194,7 +190,6 @@ describe('Lot 18 - move phase C orchestration', () => {
       listenerId: 'item-c',
       move: {
         parentId: 'missing-list',
-        mode: 'append'
       }
     })
 
@@ -208,7 +203,6 @@ describe('Lot 18 - move phase C orchestration', () => {
       listenerId: 'item-c',
       move: {
         parentId: 'list-a',
-        mode: 'append'
       }
     })
 
@@ -245,7 +239,6 @@ describe('Lot 18 - move phase C orchestration', () => {
           action: {
             move: {
               parentId: 'list-a',
-              mode: 'append'
             }
           }
         }),
@@ -258,7 +251,6 @@ describe('Lot 18 - move phase C orchestration', () => {
           action: {
             move: {
               parentId: 'list-b',
-              mode: 'append'
             }
           }
         }),
@@ -277,7 +269,6 @@ describe('Lot 18 - move phase C orchestration', () => {
           action: {
             move: {
               parentId: 'list-b',
-              mode: 'append'
             }
           }
         }),
@@ -290,7 +281,6 @@ describe('Lot 18 - move phase C orchestration', () => {
           action: {
             move: {
               parentId: 42,
-              mode: 'append'
             }
           }
         }),
@@ -394,7 +384,6 @@ describe('Lot 18 - move phase C orchestration', () => {
       listenerId: 'item-a',
       move: {
         parentId: 'list-b',
-        mode: 'append',
         flipMode: 'overlay-world'
       }
     })
@@ -407,7 +396,6 @@ describe('Lot 18 - move phase C orchestration', () => {
       listenerId: 'item-a',
       move: {
         parentId: 'list-a',
-        mode: 'append',
         flipMode: 'some-future-mode'
       }
     })

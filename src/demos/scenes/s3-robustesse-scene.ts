@@ -40,21 +40,18 @@ export function createS3RobustesseScene(): SceneDoc {
               content: 'CARD',
               move: {
                 parentId: 'robust-stage',
-                mode: 'append'
               }
             },
             actions: {
               'sequence:robustesse:promote': {
                 move: {
                   parentId: 'robust-overlay',
-                  mode: 'append',
                   flipMode: 'overlay-world'
                 }
               },
               'sequence:robustesse:return': {
                 move: {
                   parentId: 'robust-stage',
-                  mode: 'append',
                   flipMode: 'overlay-world'
                 }
               }

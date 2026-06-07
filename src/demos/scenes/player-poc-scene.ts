@@ -139,7 +139,6 @@ export function createPlayerPocScene(): SceneDoc {
 				tag: 'div',
 				move: {
 					parentId: 'demo-stage-list',
-					mode: 'append',
 				},
 				className: 'demo-list-item',
 				content: 'ITEM 1',
@@ -157,10 +156,10 @@ export function createPlayerPocScene(): SceneDoc {
 			},
 			actions: {
 				'demo:item-1:add': {
-					move: { parentId: 'demo-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-list', flipMode: 'overlay-world' },
 				},
 				'demo:item-1:return-origin': {
-					move: { parentId: 'demo-stage-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-stage-list', flipMode: 'overlay-world' },
 				},
 			},
 		},
@@ -172,7 +171,6 @@ export function createPlayerPocScene(): SceneDoc {
 				tag: 'div',
 				move: {
 					parentId: 'demo-stage-list',
-					mode: 'append',
 				},
 				className: 'demo-list-item',
 				content: 'ITEM 2',
@@ -190,10 +188,10 @@ export function createPlayerPocScene(): SceneDoc {
 			},
 			actions: {
 				'demo:item-2:add': {
-					move: { parentId: 'demo-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-list', flipMode: 'overlay-world' },
 				},
 				'demo:item-2:return-origin': {
-					move: { parentId: 'demo-stage-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-stage-list', flipMode: 'overlay-world' },
 				},
 			},
 		},
@@ -205,7 +203,6 @@ export function createPlayerPocScene(): SceneDoc {
 				tag: 'div',
 				move: {
 					parentId: 'demo-stage-list',
-					mode: 'append',
 				},
 				className: 'demo-list-item',
 				content: 'ITEM 3',
@@ -223,13 +220,13 @@ export function createPlayerPocScene(): SceneDoc {
 			},
 			actions: {
 				'demo:item-3:add': {
-					move: { parentId: 'demo-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-list', flipMode: 'overlay-world' },
 				},
 				'demo:item-3:to-first': {
 					move: { parentId: 'demo-list', mode: 'first' },
 				},
 				'demo:item-3:return-origin': {
-					move: { parentId: 'demo-stage-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-stage-list', flipMode: 'overlay-world' },
 				},
 			},
 		},
@@ -241,7 +238,6 @@ export function createPlayerPocScene(): SceneDoc {
 				tag: 'div',
 				move: {
 					parentId: 'demo-stage-list',
-					mode: 'append',
 				},
 				className: 'demo-list-item',
 				content: 'ITEM 4',
@@ -259,10 +255,10 @@ export function createPlayerPocScene(): SceneDoc {
 			},
 			actions: {
 				'demo:item-4:add': {
-					move: { parentId: 'demo-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-list', flipMode: 'overlay-world' },
 				},
 				'demo:item-4:return-origin': {
-					move: { parentId: 'demo-stage-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-stage-list', flipMode: 'overlay-world' },
 				},
 			},
 		},
@@ -274,7 +270,6 @@ export function createPlayerPocScene(): SceneDoc {
 				tag: 'div',
 				move: {
 					parentId: 'demo-stage-list',
-					mode: 'append',
 				},
 				className: 'demo-list-item',
 				content: 'ITEM 5',
@@ -292,10 +287,10 @@ export function createPlayerPocScene(): SceneDoc {
 			},
 			actions: {
 				'demo:item-5:add': {
-					move: { parentId: 'demo-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-list', flipMode: 'overlay-world' },
 				},
 				'demo:item-5:return-origin': {
-					move: { parentId: 'demo-stage-list', mode: 'append', flipMode: 'overlay-world' },
+					move: { parentId: 'demo-stage-list', flipMode: 'overlay-world' },
 				},
 			},
 		},

@@ -368,6 +368,75 @@ Note:
 - une variable de config peut proposer une liste de services par defaut
 - un service absent au moment de la declaration d'un composant dans une scene est une erreur explicite
 
+## Props d'element interne : `img` et `video`
+
+Certains composants built-in exposent une prop de sous-ciblage qui transmet des valeurs directement a l'element enfant gere par le composant, et non au div wrapper racine.
+
+### Composants concernes
+
+| Composant | Type perso | Prop | Element cible |
+|---|---|---|---|
+| `ImageComponent` | `img` | `img` | `<img>` interne |
+| `MediaComponent` | `media` | `video` | `<video>` interne |
+
+La prop accepte les memes cles que toute action ordinaire : `style`, `className`, `attr`.
+
+```ts
+// Exemples
+initial: {
+  src: '/photo.jpg',
+  img: {
+    style: { objectFit: 'cover' },
+    className: 'hero-photo'
+  }
+}
+
+initial: {
+  src: '/clip.mp4',
+  video: {
+    style: { objectFit: 'cover', display: 'block' }
+  }
+}
+```
+
+### Dimensions par defaut et specifite CSS
+
+Les composants `ImageComponent` et `MediaComponent` injectent une feuille de style de base au premier rendu :
+
+```css
+/* ImageComponent */
+:where(.cp-img-inner) { width: 100%; height: 100%; display: block; }
+
+/* MediaComponent */
+:where(.cp-video-inner) { width: 100%; height: 100%; }
+```
+
+La pseudo-classe `:where()` a une specificite de zero. Toute regle CSS auteur, quel que soit son selecteur, prend la priorite sur ces valeurs par defaut sans recourir a `!important`. Les styles inline appliques via `img.style` ou `video.style` ont la priorite maximale.
+
+Tableau de priorite pour `width` sur l'element interne :
+
+| Source | Specifite | Resultat |
+|---|---|---|
+| `:where(.cp-img-inner)` | 0 | valeur par defaut |
+| `.ma-classe { width: 50px }` | 0,1,0 | ecrase le defaut |
+| `img: { style: { width: '50px' } }` | inline | ecrase tout |
+
+La classe de base (`cp-img-inner` / `cp-video-inner`) est toujours re-assuree en dernier lors de chaque cycle `render` et `update`. Si l'auteur fournit `img: { className: 'custom' }` (remplacement total), la classe de base est rajoutee apres. Pour ajouter une classe sans effacer les autres, utiliser la forme additive : `img: { className: { add: 'custom' } }`.
+
+### Note sur fitMode
+
+La propriete `fitMode` de `ImageComponent` (`'wallpaper'` / `'sprite'`) reste utilisable en V1 mais est consideree deprecated. Elle est un alias opaque de `object-fit: cover` et `object-fit: contain` respectivement. La forme directe est preferee :
+
+```ts
+// deprecated
+initial: { src: '/img.jpg', fitMode: 'wallpaper' }
+
+// prefere
+initial: { src: '/img.jpg', img: { style: { objectFit: 'cover' } } }
+```
+
+Si `fitMode` et `img.style.objectFit` sont tous deux presents, `img.style.objectFit` prend la priorite car il est applique apres.
+
 ## References
 
 - `formalisation/v1-registry-api.md`

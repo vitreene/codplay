@@ -12,6 +12,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: 'quiz-series',   label: 'Quiz Série',       href: '?demo=quiz-series' },
   { id: 'drag',        label: 'Drag & Capture',     href: '?demo=drag' },
   { id: 'dnd-list',   label: 'Drag & Drop listes', href: '?demo=dnd-list' },
+  { id: 'preload-media', label: 'Preload Media',  href: '?demo=preload-media' },
 ]
 
 export function buildDemoLinksMarkup(activeId: string | undefined): string {

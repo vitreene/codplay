@@ -65,7 +65,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               className: "quiz-decor-layer",
               move: {
                 parentId: "quiz-layout:decor",
-                mode: "append",
               },
               style: {
                 minHeight: "100%",
@@ -81,7 +80,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "a",
               move: {
                 parentId: "quiz-decor-layer",
-                mode: "append",
               },
               style: {
                 width: "120px",
@@ -128,7 +126,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "",
               move: {
                 parentId: "quiz-decor-layer",
-                mode: "append",
               },
               style: {
                 width: "88px",
@@ -170,7 +167,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "",
               move: {
                 parentId: "quiz-decor-layer",
-                mode: "append",
               },
               style: {
                 width: "160px",
@@ -213,7 +209,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               master: false,
               move: {
                 parentId: "quiz-decor-layer",
-                mode: "append",
               },
               style: {
                 position: "absolute",
@@ -257,7 +252,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "Quiz",
               move: {
                 parentId: "quiz-layout:intro",
-                mode: "append",
               },
               style: {
                 width: "280px",
@@ -323,7 +317,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               className: "quiz-question-panel",
               move: {
                 parentId: "quiz-layout:question",
-                mode: "append",
               },
               style: {
                 width: "420px",
@@ -373,7 +366,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "La V1 est-elle prete ? ",
               move: {
                 parentId: "quiz-question-panel",
-                mode: "append",
               },
               style: {
                 color: "#0f172a",
@@ -389,7 +381,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "Oui",
               move: {
                 parentId: "quiz-question-panel",
-                mode: "append",
               },
               style: {
                 display: "inline-block",
@@ -421,7 +412,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "Non",
               move: {
                 parentId: "quiz-question-panel",
-                mode: "append",
               },
               style: {
                 display: "inline-block",
@@ -484,7 +474,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "10",
               move: {
                 parentId: "quiz-layout:count",
-                mode: "append",
               },
               style: {
                 width: "72px",
@@ -563,7 +552,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "Gagne",
               move: {
                 parentId: "quiz-layout:success",
-                mode: "append",
               },
               style: {
                 padding: "18px",
@@ -604,7 +592,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
               content: "Helas...",
               move: {
                 parentId: "quiz-layout:failure",
-                mode: "append",
               },
               style: {
                 padding: "18px",
