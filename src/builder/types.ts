@@ -92,6 +92,8 @@ export type CompiledScene = {
   createdAt: string
   scene: SceneDef
   resources: ResourceManifest
+  /** IDs des persos racines à monter dans le conteneur hôte, calculés à la compilation. */
+  rootNodeIds: string[]
 }
 
 export type ValidationError = {

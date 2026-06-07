@@ -10,12 +10,26 @@ import type {
   BuilderCompileOutput,
   BuilderExportInput,
   CompiledScene,
-  ResourceManifest,
   SceneDef,
   ValidationReport
 } from './types'
 
 const DEFAULT_SCHEMA_VERSION = 'v1'
+
+/**
+ * Derives root node IDs from the compiled scene's rootStories.
+ * Root nodes are persos in root stories that have no initial.move (no parent).
+ */
+function deriveRootNodeIds(scene: SceneDef): string[] {
+  return scene.rootStories.flatMap((storyId) => {
+    const story = scene.stories[storyId]
+    if (story === undefined) return []
+    return story.entries.filter((persoId) => {
+      const perso = story.persos.find((p) => p.id === persoId)
+      return perso !== undefined && (perso.initial === undefined || (perso.initial as Record<string, unknown>).move === undefined)
+    })
+  })
+}
 
 export type BuilderOptions = {
   schemaVersion?: string
@@ -60,7 +74,8 @@ export class BuilderFacade implements BuilderApi {
         schemaVersion: this.schemaVersion,
         createdAt: new Date().toISOString(),
         scene: this.cloner.cloneSceneDef(normalizedScene),
-        resources: this.cloner.cloneResourceManifest(resourceManifest)
+        resources: this.cloner.cloneResourceManifest(resourceManifest),
+        rootNodeIds: deriveRootNodeIds(normalizedScene)
       }
 
     return {

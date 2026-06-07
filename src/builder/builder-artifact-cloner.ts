@@ -12,7 +12,8 @@ export class BuilderArtifactCloner {
       schemaVersion: compiledScene.schemaVersion,
       createdAt: compiledScene.createdAt,
       scene: this.cloneSceneDef(compiledScene.scene),
-      resources: this.cloneResourceManifest(compiledScene.resources)
+      resources: this.cloneResourceManifest(compiledScene.resources),
+      rootNodeIds: this.cloneData(compiledScene.rootNodeIds)
     }
   }
 
