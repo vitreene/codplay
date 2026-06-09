@@ -1,3 +1,4 @@
+import { runCarouselDemo } from './demos/codplay/carousel-demo'
 import { runCodPlayPocDemo } from './demos/codplay/codplay-poc-demo'
 import { runPreloadMediaDemo } from './demos/codplay/preload-media-demo'
 import { runDragDemo } from './demos/codplay/drag-demo'
@@ -23,6 +24,8 @@ if (demoName === 'quiz') {
 	void runDndListDemo()
 } else if (demoName === 'preload-media') {
 	void runPreloadMediaDemo()
+} else if (demoName === 'carousel') {
+	void runCarouselDemo()
 } else {
 	void runPlayerPocDemo()
 }

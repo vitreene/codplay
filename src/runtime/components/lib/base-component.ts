@@ -1,6 +1,6 @@
 import { htmlRenderMutationResolver } from '../../html-render-mutation-resolver'
 import { createComponentRoot, resetComponentRoot, setComponentRootId } from './dom'
-import { collectDataParts } from './dom-component-adapter'
+import { collectDataParts, resetRuntimeNodeStyleState } from './dom-component-adapter'
 import type { ComponentModules, ComponentRenderResult, ComponentServices, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
 
 /**
@@ -47,12 +47,28 @@ export abstract class BaseComponent implements RuntimeComponent {
   /**
    * Builds, resets and ids one root node from a tag name or an HTML template string.
    * For a tag: reuses the existing node on refresh.
-   * For a template: parses fresh and auto-registers descendant elements with data-part as parts.
+   * For a template: reuses the existing node on refresh (resets root and parts); parses only on first call.
    */
   protected buildNode(tagOrTemplate: string): unknown {
     const isTemplate = tagOrTemplate.trimStart().startsWith('<')
 
     if (isTemplate) {
+      if (this.node) {
+        // Reuse: wipe styles/attrs without touching children (preserve template structure
+        // and any moved perso nodes). Parts keep their data-part attribute so collectDataParts
+        // can find them again on the next seek.
+        resetRuntimeNodeStyleState(this.node)
+        setComponentRootId(this.node, this.perso.id, (this.perso.initial as Record<string, unknown>).id)
+        this.clearParts()
+        const nodeByPart = new Map<string, unknown>()
+        collectDataParts(this.node, nodeByPart)
+        for (const [partId, partNode] of nodeByPart) {
+          resetRuntimeNodeStyleState(partNode, true)
+          this.setPart(partId, partNode)
+        }
+        return this.node
+      }
+
       const { rootNode, nodeByPart } = this._parseTemplate(tagOrTemplate)
       resetComponentRoot(rootNode)
       setComponentRootId(rootNode, this.perso.id, (this.perso.initial as Record<string, unknown>).id)

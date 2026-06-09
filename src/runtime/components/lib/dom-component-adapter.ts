@@ -196,6 +196,74 @@ export function createRuntimeNode(
 }
 
 /**
+ * Resets style, className, and attributes on one runtime node without clearing its children.
+ * Used when reusing an existing template node across seeks: child structure and moved perso
+ * nodes are preserved, but authored state (inline styles, classes, attributes) is wiped.
+ * Pass preserveDataPart = true on part nodes so they remain discoverable on subsequent seeks.
+ */
+export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = false): void {
+  if (isDomElement(nodeRef)) {
+    const attributeNames =
+      typeof nodeRef.getAttributeNames === 'function'
+        ? nodeRef.getAttributeNames()
+        : []
+
+    for (const attributeName of attributeNames) {
+      if (preserveDataPart && attributeName === 'data-part') continue
+      nodeRef.removeAttribute(attributeName)
+    }
+
+    nodeRef.className = ''
+
+    const style = (nodeRef as unknown as { style?: { cssText?: string } }).style
+    if (style && typeof style.cssText === 'string') {
+      style.cssText = ''
+    }
+
+    if (
+      typeof globalThis.HTMLImageElement !== 'undefined' &&
+      nodeRef instanceof globalThis.HTMLImageElement
+    ) {
+      nodeRef.src = ''
+      nodeRef.alt = ''
+    }
+
+    if (
+      typeof globalThis.HTMLMediaElement !== 'undefined' &&
+      nodeRef instanceof globalThis.HTMLMediaElement
+    ) {
+      nodeRef.pause()
+      try {
+        nodeRef.currentTime = 0
+      } catch {
+        return
+      }
+    }
+
+    return
+  }
+
+  if (typeof nodeRef !== 'object' || nodeRef === null) {
+    return
+  }
+
+  const mutableNode = nodeRef as Record<string, unknown>
+  mutableNode.className = ''
+  mutableNode.src = undefined
+  mutableNode.alt = undefined
+  mutableNode.style = {}
+  if (!preserveDataPart) {
+    mutableNode.attributes = {}
+  }
+  if ('currentTime' in mutableNode) {
+    mutableNode.currentTime = 0
+  }
+  if ('paused' in mutableNode) {
+    mutableNode.paused = true
+  }
+}
+
+/**
  * Resets mutable state on one runtime node before applying initial values.
  */
 export function resetRuntimeNodeState(nodeRef: unknown): void {
