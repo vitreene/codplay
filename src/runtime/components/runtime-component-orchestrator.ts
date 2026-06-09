@@ -359,6 +359,13 @@ export class RuntimeComponentOrchestrator {
       this.storyMoveByStoryId.set(storyId, rawMove);
     }
 
+    // Pre-detach all currently mounted nodes before any refresh so that style/content
+    // resets never happen on nodes that are still visible in the document, regardless
+    // of perso iteration order.
+    for (const node of this.nodeByPersoId.values()) {
+      this.detachNodeFromParent(node);
+    }
+
     for (const perso of Object.values(runtimePersos.persos)) {
       const existingComponent = this.componentByPersoId.get(perso.id);
       if (existingComponent) {
@@ -411,13 +418,16 @@ export class RuntimeComponentOrchestrator {
    */
   private refreshLoadedRuntimeComponent(perso: ItemDoc, component: RuntimeComponent): void {
     const previousRootNode = this.nodeByPersoId.get(perso.id) ?? null;
+
+    // Detach before render so that style/content reset happens off-screen.
+    // When node identity is preserved (reuse), the second detach below is a no-op.
+    if (previousRootNode !== null) {
+      this.detachNodeFromParent(previousRootNode);
+    }
+
     const nextRootNode = this.tryInitComponent(perso, component, "refresh");
     if (nextRootNode === null) {
       return;
-    }
-
-    if (previousRootNode !== null) {
-      this.detachNodeFromParent(previousRootNode);
     }
 
     if (!this.isRuntimeListComponent(component)) {

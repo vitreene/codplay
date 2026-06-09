@@ -58,7 +58,7 @@ Le player peut détruire et recréer le nœud DOM (seek, re-init). Le cadre se r
 
 ## Plan d'implémentation
 
-### Étape 1 — Extraire les utilitaires matrix
+### Étape 1 — Extraire les utilitaires matrix ✓
 
 Extraire de `create-list-flip-module.ts` vers un nouveau fichier `src/runtime/modules/list-flip/engine/dom-matrix.ts` :
 

@@ -224,7 +224,9 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
       typeof globalThis.HTMLImageElement !== 'undefined' &&
       nodeRef instanceof globalThis.HTMLImageElement
     ) {
-      nodeRef.src = ''
+      // Do not clear src: blanking src discards the decoded texture even on detached nodes,
+      // causing a one-frame flash when the node is re-attached. applyImageMediaState sets
+      // the correct src immediately after, which is a no-op when the URL has not changed.
       nodeRef.alt = ''
     }
 
@@ -289,7 +291,7 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
       typeof globalThis.HTMLImageElement !== 'undefined' &&
       nodeRef instanceof globalThis.HTMLImageElement
     ) {
-      nodeRef.src = ''
+      // Do not clear src — see resetRuntimeNodeStyleState comment.
       nodeRef.alt = ''
     }
 

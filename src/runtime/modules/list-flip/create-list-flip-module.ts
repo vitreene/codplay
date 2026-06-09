@@ -4,7 +4,8 @@ import type { TransitionRequest } from '../../../animation/types'
 import { isDomElement } from '../../components/lib/dom-component-adapter'
 import type { MoveCommand } from '../../types'
 import { createFlipEngine, type FlipEntry, type FlipSnapshot, type FlipTransitionRequest, type Matrix2D } from './engine'
-import { createTranslateMatrix, invertMatrix, multiplyMatrix, parseCssMatrix } from './engine/matrix-2d'
+import { createTranslateMatrix, multiplyMatrix } from './engine/matrix-2d'
+import { captureCombinedMatrixForNode, readElementTransformValue, worldDeltaToLocalDelta, worldSizeToLocalSize } from './engine/dom-matrix'
 import type { ListFlipModule, ListFlipModuleContext, ListFlipSession, PrepareListFlipMoveInput } from './types'
 
 type WorldRectSnapshot = {
@@ -374,8 +375,8 @@ class ListFlipModuleInstance implements ListFlipModule {
     const toWidth = this.readInlinePxValue(input.targetCloneNode, 'width')
     const fromHeight = this.readInlinePxValue(input.animatedCloneNode, 'height')
     const toHeight = this.readInlinePxValue(input.targetCloneNode, 'height')
-    const fromTransformValue = this.readElementTransformValue(input.animatedCloneNode)
-    const toTransformValue = this.readElementTransformValue(input.targetCloneNode)
+    const fromTransformValue = readElementTransformValue(input.animatedCloneNode)
+    const toTransformValue = readElementTransformValue(input.targetCloneNode)
 
     let finalized = false
     const finalize = (reason: 'completed' | 'stopped') => {
@@ -431,20 +432,6 @@ class ListFlipModuleInstance implements ListFlipModule {
       width: input.width,
       height: input.height
     }
-  }
-
-  private readElementTransformValue(nodeRef: Element): string {
-    if (typeof globalThis.getComputedStyle === 'function') {
-      const computedTransform = globalThis.getComputedStyle(nodeRef).transform
-      return computedTransform && computedTransform.length > 0 ? computedTransform : 'none'
-    }
-
-    if (typeof globalThis.HTMLElement !== 'undefined' && nodeRef instanceof globalThis.HTMLElement) {
-      const inlineTransform = nodeRef.style.transform
-      return inlineTransform && inlineTransform.length > 0 ? inlineTransform : 'none'
-    }
-
-    return 'none'
   }
 
   private readInlinePxValue(nodeRef: HTMLElement, key: 'left' | 'top' | 'width' | 'height'): number {
@@ -568,7 +555,7 @@ class ListFlipModuleInstance implements ListFlipModule {
         width: rect.width,
         height: rect.height
       },
-      matrix: this.captureCombinedMatrixForNode(input.movedNode),
+      matrix: captureCombinedMatrixForNode(input.movedNode),
       localWidth: boxSnapshot.computedWidthPx ?? boxSnapshot.offsetWidth ?? boxSnapshot.clientWidth ?? undefined,
       localHeight: boxSnapshot.computedHeightPx ?? boxSnapshot.offsetHeight ?? boxSnapshot.clientHeight ?? undefined
     }
@@ -627,19 +614,6 @@ class ListFlipModuleInstance implements ListFlipModule {
         [input.transition]
       )
     }
-  }
-
-  private captureCombinedMatrixForNode(nodeRef: Element): Matrix2D {
-    let combinedMatrix = parseCssMatrix(this.readElementTransformValue(nodeRef))
-
-    let parentNodeRef: Node | null = nodeRef.parentNode
-    while (isDomElement(parentNodeRef)) {
-      const parentMatrix = parseCssMatrix(this.readElementTransformValue(parentNodeRef))
-      combinedMatrix = multiplyMatrix(parentMatrix, combinedMatrix)
-      parentNodeRef = parentNodeRef.parentNode
-    }
-
-    return combinedMatrix
   }
 
   private computeOverlayWorldPhotosFromLocalFlip(input: {
@@ -990,7 +964,7 @@ class ListFlipModuleInstance implements ListFlipModule {
       )
 
       if (Math.abs(residualX) > this.flipZeroTolerance || Math.abs(residualY) > this.flipZeroTolerance) {
-        const localResidual = this.worldDeltaToLocalDelta(matrixForTranslation, residualX, residualY)
+        const localResidual = worldDeltaToLocalDelta(matrixForTranslation, residualX, residualY)
         transition.from.x = (transition.from.x ?? 0) + localResidual.x
         transition.from.y = (transition.from.y ?? 0) + localResidual.y
       }
@@ -1000,44 +974,13 @@ class ListFlipModuleInstance implements ListFlipModule {
         transition.from.height !== undefined &&
         (Math.abs(residualWidth) > this.flipZeroTolerance || Math.abs(residualHeight) > this.flipZeroTolerance)
       ) {
-        const desiredLocalSize = this.worldSizeToLocalSize(matrixForSize, oldSnapshot.width, oldSnapshot.height)
+        const desiredLocalSize = worldSizeToLocalSize(matrixForSize, oldSnapshot.width, oldSnapshot.height)
         transition.from.width = desiredLocalSize.width
         transition.from.height = desiredLocalSize.height
       }
     }
   }
 
-  private worldDeltaToLocalDelta(matrix: Matrix2D, worldDeltaX: number, worldDeltaY: number): { x: number; y: number } {
-    const inverseMatrix = invertMatrix(matrix)
-    if (inverseMatrix === null) {
-      return { x: worldDeltaX, y: worldDeltaY }
-    }
-
-    return {
-      x: inverseMatrix.a * worldDeltaX + inverseMatrix.c * worldDeltaY,
-      y: inverseMatrix.b * worldDeltaX + inverseMatrix.d * worldDeltaY
-    }
-  }
-
-  private worldSizeToLocalSize(matrix: Matrix2D, worldWidth: number, worldHeight: number): { width: number; height: number } {
-    const aa = Math.abs(matrix.a)
-    const bb = Math.abs(matrix.b)
-    const cc = Math.abs(matrix.c)
-    const dd = Math.abs(matrix.d)
-    const determinant = aa * dd - bb * cc
-
-    if (Math.abs(determinant) < 1e-8) {
-      return { width: worldWidth, height: worldHeight }
-    }
-
-    const localWidth = (worldWidth * dd - worldHeight * cc) / determinant
-    const localHeight = (worldHeight * aa - worldWidth * bb) / determinant
-
-    return {
-      width: Math.max(0, localWidth),
-      height: Math.max(0, localHeight)
-    }
-  }
 }
 
 export function createListFlipModule(context: ListFlipModuleContext): ListFlipModule {

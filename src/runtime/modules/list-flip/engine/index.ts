@@ -1,4 +1,11 @@
 export { createFlipEngine } from './create-flip-engine'
+export {
+  captureCombinedMatrixForNode,
+  extractRotationMatrix,
+  readElementTransformValue,
+  worldDeltaToLocalDelta,
+  worldSizeToLocalSize,
+} from './dom-matrix'
 export type {
   FlipEngine,
   FlipEngineOptions,
