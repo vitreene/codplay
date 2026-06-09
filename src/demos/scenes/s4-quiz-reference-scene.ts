@@ -74,7 +74,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-decor-circle-a",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "div",
               content: "a",
@@ -120,7 +120,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-decor-circle-b",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "div",
               content: "",
@@ -161,7 +161,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-decor-circle-c",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "div",
               content: "",
@@ -246,7 +246,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         persos: [
           {
             id: "quiz-intro-title",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "h1",
               content: "Quiz",
@@ -360,7 +360,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-question-title",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "p",
               content: "La V1 est-elle prete ? ",
@@ -375,7 +375,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-answer-yes",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "button",
               content: "Oui",
@@ -406,7 +406,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
           },
           {
             id: "quiz-answer-no",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "button",
               content: "Non",
@@ -468,7 +468,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         persos: [
           {
             id: "quiz-count-value",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "strong",
               content: "10",
@@ -546,7 +546,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         persos: [
           {
             id: "quiz-success-panel",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "div",
               content: "Gagne",
@@ -586,7 +586,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
         persos: [
           {
             id: "quiz-failure-panel",
-            type: "text",
+            type: "tag",
             initial: {
               tag: "div",
               content: "Helas...",

@@ -58,7 +58,7 @@ function createStoryListenScopeSceneFixture(): SceneDef {
           {
             id: 'story-a__title',
             name: 'title-a',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'A' },
             actions: {
               'story-a__title': null,
@@ -104,7 +104,7 @@ function createStoryListenScopeSceneFixture(): SceneDef {
           {
             id: 'story-b__title',
             name: 'title-b',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'B' },
             actions: {
               'story-b__title': null,

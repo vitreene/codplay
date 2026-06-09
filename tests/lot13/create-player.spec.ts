@@ -67,7 +67,7 @@ function temp__createSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'title',
-        type: 'text',
+        type: 'tag',
         initial: {
           content: 'hello'
         },
@@ -87,7 +87,7 @@ function temp__createRuntimeEventSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'message',
-        type: 'text',
+        type: 'tag',
         initial: {
           content: 'base'
         },
@@ -112,7 +112,7 @@ function temp__createSeekSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'box',
-        type: 'text',
+        type: 'tag',
         initial: {
           content: 'seek-box'
         },
@@ -158,7 +158,7 @@ function temp__createCascadeSeekSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'box',
-        type: 'text',
+        type: 'tag',
         initial: {
           content: 'seek-cascade'
         },
@@ -576,7 +576,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
           persos: [
             {
               id: 'title-main',
-              type: 'text',
+              type: 'tag',
               initial: { content: 'main' },
               actions: {}
             }
@@ -591,7 +591,7 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
           persos: [
             {
               id: 'title-wait',
-              type: 'text',
+              type: 'tag',
               initial: { content: 'wait' },
               actions: {
                 reveal: {

@@ -60,7 +60,7 @@ export function createS5DragScene(): SceneDoc {
         persos: [
           {
             id: "draggable",
-            type: "text",
+            type: "tag",
             initial: {
               content: "Déplacez-moi",
               style: {

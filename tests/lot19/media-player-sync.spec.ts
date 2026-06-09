@@ -102,7 +102,7 @@ function createMediaSyncScene(options: {
           },
           {
             id: 'media-sync-hold',
-            type: 'text',
+            type: 'tag',
             initial: {
               tag: 'div',
               content: '',
@@ -183,7 +183,7 @@ describe('Lot 19 - media player sync', () => {
             },
             {
               id: 'text-item',
-              type: 'text',
+              type: 'tag',
               initial: {
                 content: 'pending'
               },

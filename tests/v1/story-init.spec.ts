@@ -27,7 +27,7 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
           {
             id: 'story-a__title',
             name: 'title-a',
-            type: 'text',
+            type: 'tag',
             initial: {
               content: 'A'
             },
@@ -56,7 +56,7 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
           {
             id: 'story-b__title',
             name: 'title-b',
-            type: 'text',
+            type: 'tag',
             initial: {
               content: 'B'
             },

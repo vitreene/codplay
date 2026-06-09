@@ -42,7 +42,7 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
           {
             id: 'story-main__title',
             name: 'title',
-            type: 'text',
+            type: 'tag',
             initial: {
               content: 'persist'
             },

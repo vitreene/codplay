@@ -45,7 +45,7 @@ function createMountedStoriesSceneFixture(): SceneDoc {
           {
             id: 'story-a__title',
             name: 'title-a',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'A' },
             actions: {
               'story-a__title': null
@@ -64,7 +64,7 @@ function createMountedStoriesSceneFixture(): SceneDoc {
           {
             id: 'story-b__title',
             name: 'title-b',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'B' },
             actions: {
               'story-b__title': null
@@ -103,7 +103,7 @@ function createStoryHostSceneFixture(): SceneDoc {
           {
             id: 'story-a__lead',
             name: 'lead',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'lead', move: 'root' },
             actions: {
               'story-a__lead': null
@@ -112,7 +112,7 @@ function createStoryHostSceneFixture(): SceneDoc {
           {
             id: 'story-a__tail',
             name: 'tail',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'tail' },
             actions: {
               'story-a__tail': null

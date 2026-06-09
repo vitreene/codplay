@@ -44,7 +44,7 @@ function createPersoEmitSceneFixture(): SceneDoc {
           {
             id: 'story-main__title',
             name: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'hello' },
             actions: {
               'story-main__title': null,

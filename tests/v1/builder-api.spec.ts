@@ -29,7 +29,7 @@ function createValidSceneFixture(): SceneDef {
           {
             id: 'title-perso',
             name: 'title-perso',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'hello' },
             actions: {
               'title-perso': null

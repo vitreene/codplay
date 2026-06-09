@@ -13,6 +13,7 @@ import { LayoutComponent } from "./layout-component";
 import { ImageComponent } from "./image-component";
 import { ListComponent } from "./list-component";
 import { MediaComponent } from "./media-component";
+import { TagComponent } from "./tag-component";
 import { TextComponent } from "./text-component";
 import { moveModule, normalizeMoveCommand, isStoryHostMove } from "../modules/move";
 import { listModule } from "../modules/list";
@@ -39,6 +40,7 @@ import type {
 } from "./types";
 
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
+  tag: TagComponent,
   text: TextComponent,
   img: ImageComponent,
   input: InputComponent,

@@ -10,7 +10,7 @@ function createPersoFixture(): Perso {
   return {
     id: 'title',
     name: 'title',
-    type: 'text',
+    type: 'tag',
     initial: {
       content: 'hello'
     },
@@ -53,7 +53,7 @@ describe('Creator API V1', () => {
 
     const persoResult = creator.createPerso({
       storyId: 'story-intro',
-      type: 'text',
+      type: 'tag',
       name: 'title'
     })
     expect(persoResult).toEqual({
@@ -79,7 +79,7 @@ describe('Creator API V1', () => {
         {
           id: 'story-intro__title',
           name: 'title',
-          type: 'text',
+          type: 'tag',
           actions: {
             'story-intro__title': null
           }
@@ -118,7 +118,7 @@ describe('Creator API V1', () => {
             {
               id: 'title',
               name: 'title',
-              type: 'text',
+              type: 'tag',
               initial: { content: 'hello' },
               actions: {}
             }

@@ -54,7 +54,7 @@ function createBootstrapSceneFixture(): SceneDef {
         persos: [
           {
             id: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'bootstrap' },
             actions: {
               'story:start': {
@@ -95,7 +95,7 @@ function createStoryListenPassthroughSceneFixture(): SceneDef {
         persos: [
           {
             id: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'bootstrap' },
             actions: {
               intro: {
@@ -147,7 +147,7 @@ function createPersistOnlyParentSceneFixture(): SceneDef {
         persos: [
           {
             id: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'bootstrap' },
             actions: {
               reveal: {
@@ -190,7 +190,7 @@ function createPersistOnlyTransformSceneFixture(): SceneDef {
         persos: [
           {
             id: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'bootstrap' },
             actions: {
               reveal: {
@@ -236,7 +236,7 @@ function createImmediateStrapUpdateSceneFixture(): SceneDef {
         persos: [
           {
             id: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'bootstrap' },
             actions: {
               reveal: {
@@ -512,7 +512,7 @@ describe('V1 - scene bootstrap', () => {
             initial: undefined,
             persos: [{
               id: 'title',
-              type: 'text',
+              type: 'tag',
               initial: { content: 'base' },
               actions: {
                 resolved: { className: { add: 'resolved' } }

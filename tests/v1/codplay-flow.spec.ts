@@ -9,7 +9,7 @@ function createPersoFixture() {
   return {
     id: 'title',
     name: 'title',
-    type: 'text',
+    type: 'tag',
     initial: {
       content: 'hello'
     },

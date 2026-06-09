@@ -36,7 +36,7 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 				persos: [
 					{
 						id: 'support-node',
-						type: 'text',
+						type: 'tag',
 						initial: { content: 'support' },
 						actions: {}
 					}
@@ -118,7 +118,7 @@ function createStateReplayScene(): SceneDoc {
 				persos: [
 					{
 						id: 'result-node',
-						type: 'text',
+						type: 'tag',
 						initial: { content: 'idle' },
 						actions: {
 							'result-node': null
@@ -155,7 +155,7 @@ function createPlayProgressionScene(): SceneDoc {
 				persos: [
 					{
 						id: 'progress-node',
-						type: 'text',
+						type: 'tag',
 						initial: { content: 'progress' },
 						actions: {}
 					}

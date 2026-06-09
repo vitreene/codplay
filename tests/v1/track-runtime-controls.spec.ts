@@ -56,7 +56,7 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
           {
             id: 'story-main__title',
             name: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'hello' },
             actions: {
               'story-main__title': null,
@@ -104,7 +104,7 @@ function createTrackToggleSceneFixture(): SceneDoc {
           {
             id: 'story-main__title',
             name: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'base' },
             actions: {
               'story-main__title': null,
@@ -175,7 +175,7 @@ function createStoryAndMainTrackSceneFixture(): SceneDoc {
           {
             id: 'story-main__title',
             name: 'title',
-            type: 'text',
+            type: 'tag',
             initial: { content: 'base' },
             actions: {
               'story-main__title': null

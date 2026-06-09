@@ -50,7 +50,7 @@ function temp__createSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'title',
-        type: 'text',
+        type: 'tag',
         initial: {
           content: 'hello'
         },

@@ -14,7 +14,7 @@ import type { ItemDoc, RuntimeNode, RuntimePersos } from '../../src/runtime/type
 function temp__createTextItem(): ItemDoc {
   return {
     id: 'item-text-1',
-    type: 'text',
+    type: 'tag',
     initial: {
       id: 'item-text-1',
       tag: 'p',

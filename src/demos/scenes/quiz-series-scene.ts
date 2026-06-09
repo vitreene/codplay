@@ -124,7 +124,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
       },
       {
         id: "quiz-series-progress-count",
-        type: "text",
+        type: "tag",
         initial: {
           tag: "span",
           content: `0 / ${SERIES_TOTAL}`,
@@ -135,7 +135,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
       },
       {
         id: "quiz-series-progress-fill",
-        type: "text",
+        type: "tag",
         initial: {
           tag: "div",
           content: "",
@@ -152,7 +152,7 @@ function createSeriesProgressStory(): SceneStoryDoc {
       },
       {
         id: "quiz-series-progress-rate",
-        type: "text",
+        type: "tag",
         initial: {
           tag: "span",
           content: "—",
@@ -210,7 +210,7 @@ function createSeriesQuestionStory(
       },
       {
         id: `${answerRootId}__selection-icon`,
-        type: "text",
+        type: "tag",
         initial: {
           tag: "span",
           content: "",
@@ -229,7 +229,7 @@ function createSeriesQuestionStory(
       },
       {
         id: `${answerRootId}__correction-icon`,
-        type: "text",
+        type: "tag",
         initial: {
           tag: "span",
           content: "",
@@ -299,7 +299,7 @@ function createSeriesQuestionStory(
     },
     {
       id: `${prefix}-title`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "span",
         content: question.prompt,
@@ -310,7 +310,7 @@ function createSeriesQuestionStory(
     },
     {
       id: `${prefix}-hint`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "span",
         content: question.type === "multiple" ? question.labels.multipleHint : "",
@@ -322,7 +322,7 @@ function createSeriesQuestionStory(
     ...answerPersos,
     {
       id: `${prefix}-validate`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "button",
         content: question.labels.validate,
@@ -351,7 +351,7 @@ function createSeriesQuestionStory(
     },
     {
       id: `${prefix}-result`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "span",
         content: "",
@@ -374,7 +374,7 @@ function createSeriesQuestionStory(
     },
     {
       id: `${prefix}-next`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "button",
         content: question.labels.next,
@@ -420,7 +420,7 @@ function createSeriesResultStory(): SceneStoryDoc {
     const n = i + 1
     return {
       id: `quiz-series-result-item-${n}`,
-      type: "text",
+      type: "tag",
       initial: {
         tag: "p",
         content: `Question ${n}`,
@@ -508,7 +508,7 @@ function createSeriesResultStory(): SceneStoryDoc {
       ...itemPersos,
       {
         id: "quiz-series-result-score",
-        type: "text",
+        type: "tag",
         initial: {
           tag: "p",
           content: "— / 3",
@@ -521,7 +521,7 @@ function createSeriesResultStory(): SceneStoryDoc {
       },
       {
         id: "quiz-series-result-verdict",
-        type: "text",
+        type: "tag",
         initial: {
           tag: "p",
           content: "",

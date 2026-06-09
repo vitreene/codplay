@@ -5,6 +5,7 @@ export { LayoutComponent } from "./layout-component";
 export { ListComponent } from "./list-component";
 export { MediaComponent } from "./media-component";
 export { RuntimeComponentOrchestrator } from "./runtime-component-orchestrator";
+export { TagComponent } from "./tag-component";
 export { TextComponent } from "./text-component";
 export type {
   ComponentRegisterInput,

@@ -103,7 +103,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       persos: [
         {
           id: 'title',
-          type: 'text',
+          type: 'tag',
           initial: {},
           actions: {
             intro: {
@@ -174,7 +174,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       persos: [
         {
           id: 'title',
-          type: 'text',
+          type: 'tag',
           initial: {},
           actions: {
             intro: {
@@ -259,7 +259,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       persos: [
         {
           id: 'title',
-          type: 'text',
+          type: 'tag',
           initial: {},
           actions: {
             intro: {
@@ -334,7 +334,7 @@ describe('Lot 16 - playback timeline minimal', () => {
       persos: [
         {
           id: 'title',
-          type: 'text',
+          type: 'tag',
           initial: {},
           actions: {
             intro: {
@@ -433,7 +433,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           persos: [
             {
               id: 'title',
-              type: 'text',
+              type: 'tag',
               initial: {
                 style: {
                   opacity: 0
@@ -551,7 +551,7 @@ describe('Lot 16 - playback timeline minimal', () => {
           persos: [
             {
               id: 'title',
-              type: 'text',
+              type: 'tag',
               initial: {},
               actions: {
                 intro: {

@@ -61,7 +61,7 @@ function temp__createStoryFixture(overrides?: {
       },
       'item-a': {
         id: 'item-a',
-        type: 'text',
+        type: 'tag',
         initial: {
           id: 'item-a',
           content: 'A',
@@ -73,7 +73,7 @@ function temp__createStoryFixture(overrides?: {
       },
       'item-b': {
         id: 'item-b',
-        type: 'text',
+        type: 'tag',
         initial: {
           id: 'item-b',
           content: 'B',
@@ -85,7 +85,7 @@ function temp__createStoryFixture(overrides?: {
       },
       'item-c': {
         id: 'item-c',
-        type: 'text',
+        type: 'tag',
         initial: {
           id: 'item-c',
           content: 'C',

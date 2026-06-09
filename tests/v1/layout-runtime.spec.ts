@@ -30,7 +30,7 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
     {
       id: 'story-main__title',
       name: 'title',
-      type: 'text',
+      type: 'tag',
       initial: {
         move: {
           parentId: 'scene-layout:slot',
@@ -47,7 +47,7 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
     persos.push({
       id: 'story-main__orphan',
       name: 'orphan',
-      type: 'text',
+      type: 'tag',
       initial: {
         move: {
           parentId: 'scene-layout:missing',

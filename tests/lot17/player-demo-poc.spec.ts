@@ -94,7 +94,7 @@ function temp__createDemoSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'demo-box',
-        type: 'text',
+        type: 'tag',
         initial: {
           tag: 'div',
           className: 'demo-box',
@@ -156,7 +156,7 @@ function temp__createRewindStateSceneFixture(): SceneDoc {
     persos: [
       {
         id: 'state-box',
-        type: 'text',
+        type: 'tag',
         initial: {
           className: 'state-initial',
           content: 'STATE',
