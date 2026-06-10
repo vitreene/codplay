@@ -105,7 +105,7 @@ export type RuntimeEmitEvent = {
   cascade?: boolean
   scopeStoryId?: string
   ms?: number
-  source?: 'user' | 'system'
+  source?: 'user' | 'system' | 'module'
   mode?: 'persist-future' | 'persist-only'
 }
 

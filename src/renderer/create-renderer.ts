@@ -441,6 +441,18 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
+   * Dispatches one module-internal event to registered module event handlers.
+   */
+  dispatchModuleEvent(name: string, payload: Record<string, unknown>, ms: number): void {
+    this.orchestrator.dispatchModuleEvent(name, {
+      name,
+      payload,
+      insertMode: 'persist-only',
+      ms,
+    })
+  }
+
+  /**
    * Emits one renderer warning/error to all listeners.
    */
   private emitError(error: RendererError): void {

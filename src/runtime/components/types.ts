@@ -255,6 +255,7 @@ export type RuntimeModuleRuntimeBinding = {
  */
 export type RuntimeModuleBinding = {
   runtime?: RuntimeModuleRuntimeBinding
+  events?: Record<string, (payload: RuntimeModuleEventPayload) => void>
 }
 
 /**
@@ -284,6 +285,30 @@ export type RuntimeMountedRegistry = {
 }
 
 /**
+ * Defines the input for one event emitted by a module into the runtime pipeline.
+ */
+export type ModuleEmitInput = {
+  name: string
+  payload: Record<string, unknown>
+  insertMode?: 'persist-only' | 'persist-future'
+  scopePersoId?: string
+  scopeStoryId?: string
+  ms?: number
+}
+
+/**
+ * Defines the payload received by a module event handler.
+ */
+export type RuntimeModuleEventPayload = {
+  name: string
+  payload: Record<string, unknown>
+  insertMode: 'apply-now' | 'persist-only'
+  scopePersoId?: string
+  scopeStoryId?: string
+  ms: number
+}
+
+/**
  * Exposes the runtime registries and helpers injected into every module at install time.
  */
 export type RuntimeModuleHost = {
@@ -302,6 +327,8 @@ export type RuntimeModuleHost = {
     detachNode(nodeRef: unknown): void
     appendNode(parentNode: unknown, childNode: unknown): void
   }
+  emit(input: ModuleEmitInput): void
+  timeline: { readonly currentMs: number }
 }
 
 /**

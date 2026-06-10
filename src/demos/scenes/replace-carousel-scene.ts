@@ -1,19 +1,13 @@
 import type { SceneDoc } from "../../player/types";
 
-const CONTAINER_ID = "replace-carousel-container";
-const IMG_ID = "replace-carousel-img";
-
 const IMAGES = [
   "/assets/35c8ec5a07fc.jpg",
   "/assets/28970388742_2f75d527d6_z.jpg",
-  "/assets/28999069391_5893263112_z.jpg",
 ];
 
-/**
- * Creates a 6-second replace-carousel scene: one image perso whose src
- * changes every 2 seconds via replace-simple (swipe-left transition).
- * Validates the replace module in place of the multi-perso carousel approach.
- */
+const TEXT_A = "La lumière du matin";
+const TEXT_B = "Le silence du soir";
+
 export function createReplaceCarouselScene(): SceneDoc {
   return {
     id: "replace-carousel-scene",
@@ -21,51 +15,191 @@ export function createReplaceCarouselScene(): SceneDoc {
     stories: {
       "replace-carousel-story": {
         id: "replace-carousel-story",
-        entries: [CONTAINER_ID],
+        entries: ["demo-grid"],
         persos: [
+          // ── Grid container ──────────────────────────────────────────────
           {
-            id: CONTAINER_ID,
+            id: "demo-grid",
             type: "layout",
             initial: {
-              markup: '<div></div>',
+              markup: "<div></div>",
               style: {
-                width: "80%",
-                aspectRatio: "1",
-                position: "relative",
-                margin: "0 auto",
-                background: "#1a1a2e",
-                borderRadius: "16px",
-                overflow: "hidden",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gridTemplateRows: "1fr 1fr",
+                gap: "16px",
+                padding: "16px",
+                background: "#0f0f1a",
+                height: "100%",
+                boxSizing: "border-box",
               },
             },
             actions: {},
           },
+
+          // ── Cellule 1 : texte simple ─────────────────────────────────
           {
-            id: IMG_ID,
-            type: "img",
+            id: "cell-text-simple",
+            type: "layout",
             initial: {
-              src: IMAGES[0],
-              move: { parentId: CONTAINER_ID },
-              img: {
-                style: { objectFit: "cover", width: "100%", height: "100%", display: "block" },
+              move: { parentId: "demo-grid" },
+              markup: `<div style="display:flex;flex-direction:column;gap:8px;background:#1a1a2e;border-radius:12px;padding:16px;overflow:hidden;">
+                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Texte simple</span>
+              </div>`,
+            },
+            actions: {},
+          },
+          {
+            id: "demo-text-simple",
+            type: "tag",
+            initial: {
+              move: { parentId: "cell-text-simple" },
+              tag: "p",
+              content: TEXT_A,
+              style: {
+                margin: "0",
+                fontSize: "20px",
+                fontFamily: "Georgia, serif",
+                color: "#e8e8f0",
+                lineHeight: "1.4",
               },
             },
             actions: {
-              "replace-img-2": {
-                src: IMAGES[1],
-                replace: { transition: "swipe-left", duration: 400 },
+              "replace-1": {
+                content: TEXT_B,
+                replace: { transition: "swipe-left", duration: 500 },
               },
-              "replace-img-3": {
-                src: IMAGES[2],
-                replace: { transition: "swipe-left", duration: 400 },
+              "replace-2": {
+                content: TEXT_A,
+                replace: { transition: "swipe-left", duration: 500 },
+              },
+            },
+          },
+
+          // ── Cellule 2 : texte letter ─────────────────────────────────
+          {
+            id: "cell-text-letter",
+            type: "layout",
+            initial: {
+              move: { parentId: "demo-grid" },
+              markup: `<div style="display:flex;flex-direction:column;gap:8px;background:#1a1a2e;border-radius:12px;padding:16px;overflow:hidden;">
+                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Texte · split letter</span>
+              </div>`,
+            },
+            actions: {},
+          },
+          {
+            id: "demo-text-letter",
+            type: "text",
+            initial: {
+              move: { parentId: "cell-text-letter" },
+              tag: "p",
+              content: TEXT_A,
+              style: {
+                margin: "0",
+                fontSize: "20px",
+                fontFamily: "Georgia, serif",
+                color: "#e8e8f0",
+                lineHeight: "1.4",
+              },
+            },
+            actions: {
+              "replace-1": {
+                content: TEXT_B,
+                replace: { transition: "swipe-up", duration: 500, split: "letter" },
+              },
+              "replace-2": {
+                content: TEXT_A,
+                replace: { transition: "swipe-up", duration: 500, split: "letter" },
+              },
+            },
+          },
+
+          // ── Cellule 3 : image simple ─────────────────────────────────
+          {
+            id: "cell-img-simple",
+            type: "layout",
+            initial: {
+              move: { parentId: "demo-grid" },
+              markup: `<div style="display:flex;flex-direction:column;gap:8px;background:#1a1a2e;border-radius:12px;padding:16px;overflow:hidden;">
+                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Image simple</span>
+              </div>`,
+            },
+            actions: {},
+          },
+          {
+            id: "demo-img-simple",
+            type: "img",
+            initial: {
+              move: { parentId: "cell-img-simple" },
+              src: IMAGES[0],
+              img: {
+                style: {
+                  objectFit: "cover",
+                  width: "100%",
+                  aspectRatio: "16/9",
+                  display: "block",
+                  borderRadius: "6px",
+                },
+              },
+            },
+            actions: {
+              "replace-1": {
+                src: IMAGES[1],
+                replace: { transition: "swipe-left", duration: 500 },
+              },
+              "replace-2": {
+                src: IMAGES[0],
+                replace: { transition: "swipe-left", duration: 500 },
+              },
+            },
+          },
+
+          // ── Cellule 4 : image split cells ────────────────────────────
+          {
+            id: "cell-img-cells",
+            type: "layout",
+            initial: {
+              move: { parentId: "demo-grid" },
+              markup: `<div style="display:flex;flex-direction:column;gap:8px;background:#1a1a2e;border-radius:12px;padding:16px;overflow:hidden;">
+                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Image · split cells</span>
+              </div>`,
+            },
+            actions: {},
+          },
+          {
+            id: "demo-img-cells",
+            type: "img",
+            initial: {
+              move: { parentId: "cell-img-cells" },
+              src: IMAGES[0],
+              img: {
+                style: {
+                  objectFit: "cover",
+                  width: "100%",
+                  aspectRatio: "16/9",
+                  display: "block",
+                  borderRadius: "6px",
+                },
+              },
+            },
+            actions: {
+              "replace-1": {
+                src: IMAGES[1],
+                replace: { transition: "swipe-left", duration: 500, split: "cells", cellX: 16, cellY: 9 },
+              },
+              "replace-2": {
+                src: IMAGES[0],
+                replace: { transition: "swipe-left", duration: 500, split: "cells", cellX: 16, cellY: 9 },
               },
             },
           },
         ],
+
         eventimes: [
-          { name: "replace-img-2", startAt: 1000 },
-          { name: "replace-img-3", startAt: 2000 },
-          { name: "sequence:end", startAt: 6000 },
+          { name: "replace-1", startAt: 1500 },
+          { name: "replace-2", startAt: 4000 },
+          { name: "sequence:end", startAt: 7000 },
         ],
       },
     },

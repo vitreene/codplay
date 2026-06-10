@@ -434,7 +434,11 @@ export class PlayerFacade implements PlayerApi {
           ms: event.ms,
           scopeStoryId: event.cascade === true ? undefined : event.scopeStoryId,
           cascade: event.cascade,
-          source: event.source === "system" ? RUNTIME_EVENT_SOURCE.system : RUNTIME_EVENT_SOURCE.user,
+          source: event.source === "system"
+            ? RUNTIME_EVENT_SOURCE.system
+            : event.source === "module"
+              ? RUNTIME_EVENT_SOURCE.module
+              : RUNTIME_EVENT_SOURCE.user,
           mode: event.mode,
         };
 
@@ -1266,6 +1270,12 @@ export class PlayerFacade implements PlayerApi {
     }
 
     if (this.handleTrackControlEvent(event)) {
+      this.recordPlayedProgress(event);
+      return;
+    }
+
+    if (event.source === RUNTIME_EVENT_SOURCE.module) {
+      this.renderer.dispatchModuleEvent(event.name, event.payload ?? {}, event.ms);
       this.recordPlayedProgress(event);
       return;
     }

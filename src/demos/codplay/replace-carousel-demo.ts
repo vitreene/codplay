@@ -8,11 +8,11 @@ import { runCodPlaySceneDemo } from "./run-codplay-scene-demo";
 export async function runReplaceCarouselDemo(): Promise<void> {
   await runCodPlaySceneDemo({
     title: "Replace Carousel",
-    subtitle: "1 image, src remplacé toutes les 2s via replace-simple (swipe-left).",
+    subtitle: "4 cas : texte simple · texte letter · image simple · image cells",
     scene: createReplaceCarouselScene(),
-    rootNodeIds: ["replace-carousel-container"],
+    rootNodeIds: ["demo-grid"],
     activeDemo: "replace-carousel",
-    onReady: ({ player, telco }) => {
+    onReady: ({ player }) => {
       let paused = false;
       player.onTrace((row) => {
         if (

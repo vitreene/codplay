@@ -20,6 +20,7 @@ import { listModule } from "../modules/list";
 import { replaceModule } from "../modules/replace";
 import type {
   ComponentRegisterInput,
+  ModuleEmitInput,
   ModuleRegisterInput,
   RegistryResult,
   RuntimeComponent,
@@ -29,6 +30,7 @@ import type {
   RuntimeLayoutOutletSnapshot,
   RuntimeListComponent,
   RuntimeModule,
+  RuntimeModuleEventPayload,
   RuntimeModuleHookOutput,
   RuntimeModuleHookPayload,
   RuntimeModuleHookPhase,
@@ -80,6 +82,7 @@ export class RuntimeComponentOrchestrator {
   private readonly serviceRegistry = new Map<string, ServiceInstance>(Object.entries(CORE_SERVICES));
   private readonly moduleRegistry = new Map<string, RuntimeModule>();
   private readonly installedModuleBindings: RuntimeModuleRuntimeBinding[] = [];
+  private readonly installedModuleEventHandlers = new Map<string, Array<(payload: RuntimeModuleEventPayload) => void>>();
   private readonly componentClassByType = new Map<string, RuntimeComponentClass>();
   private readonly renderMutationResolverByType = new Map<string, RenderMutationResolver>();
   private readonly componentByPersoId = new Map<string, RuntimeComponent>();
@@ -251,12 +254,31 @@ export class RuntimeComponentOrchestrator {
    */
   private installModules(): void {
     this.installedModuleBindings.length = 0;
+    this.installedModuleEventHandlers.clear();
     const host = this.createModuleHost();
     for (const module of this.moduleRegistry.values()) {
       const binding = module.install(host);
       if (binding.runtime !== undefined) {
         this.installedModuleBindings.push(binding.runtime);
       }
+      if (binding.events !== undefined) {
+        for (const [eventName, handler] of Object.entries(binding.events)) {
+          const handlers = this.installedModuleEventHandlers.get(eventName) ?? [];
+          handlers.push(handler);
+          this.installedModuleEventHandlers.set(eventName, handlers);
+        }
+      }
+    }
+  }
+
+  /**
+   * Dispatches one module-internal event to all registered module event handlers.
+   */
+  dispatchModuleEvent(name: string, payload: RuntimeModuleEventPayload): void {
+    const handlers = this.installedModuleEventHandlers.get(name);
+    if (handlers === undefined) return;
+    for (const handler of handlers) {
+      handler(payload);
     }
   }
 
@@ -264,6 +286,7 @@ export class RuntimeComponentOrchestrator {
    * Builds the module host that exposes registries and helpers to installed modules.
    */
   private createModuleHost(): RuntimeModuleHost {
+    const getTimelineMs = () => this.createElementOptions?.getCurrentTimelineMs?.() ?? 0;
     return {
       report: this.warn,
       warnOnce: (eventSeq, code, details, persoId) => this.warnOnce(eventSeq, code, details, persoId),
@@ -301,6 +324,30 @@ export class RuntimeComponentOrchestrator {
         canAttachChildToNode: (parentNode, childNode) => this.canAttachChildToNode(parentNode, childNode),
         detachNode: (nodeRef) => this.detachNodeFromParent(nodeRef),
         appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode),
+      },
+      emit: (input: ModuleEmitInput) => {
+        const ms = input.ms ?? getTimelineMs();
+        this.createElementOptions?.emitRuntimeEvent?.({
+          name: input.name,
+          data: input.payload,
+          ms,
+          mode: input.insertMode ?? 'persist-only',
+          scopeStoryId: input.scopeStoryId,
+          source: 'module',
+        });
+        this.dispatchModuleEvent(input.name, {
+          name: input.name,
+          payload: input.payload,
+          insertMode: (input.insertMode ?? 'apply-now') as 'apply-now' | 'persist-only',
+          scopePersoId: input.scopePersoId,
+          scopeStoryId: input.scopeStoryId,
+          ms,
+        });
+      },
+      timeline: {
+        get currentMs() {
+          return getTimelineMs();
+        },
       },
     };
   }

@@ -1,7 +1,6 @@
 import type {
 	AutoCapsuleDiagnostic,
 	AutoCapsuleResolvedChildEvents,
-	AutoCapsuleResolvedEvent
 } from "../types/public";
 import { DIAGNOSTIC_LEVEL, EVENT_ACTION } from "../types/public";
 import type {
