@@ -192,12 +192,19 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
 /**
  * Creates an animation adapter that bridges transition requests to Anime.js.
  */
+type GroupEntry = {
+  remaining: number
+  hasStop: boolean
+  onGroupFinalize: (reason: 'completed' | 'stopped') => void
+}
+
 export function createAnimationAdapter(
   animeImplementation: AnimeImplementation,
   options: AnimationAdapterOptions = {}
 ): AnimationAdapter {
   const activeHandles: AnimationHandle[] = []
   const activeAnimations: ActiveAnimation[] = []
+  const groupEntries = new Map<string, GroupEntry>()
 
   /**
    * Removes active handles associated with one transition set.
@@ -223,6 +230,26 @@ export function createAnimationAdapter(
   }
 
   /**
+   * Resolves one group entry counter and fires onGroupFinalize when all members are done.
+   */
+  function finalizeGroup(groupId: string, reason: 'completed' | 'stopped'): void {
+    const entry = groupEntries.get(groupId)
+    if (entry === undefined) {
+      return
+    }
+
+    if (reason === 'stopped') {
+      entry.hasStop = true
+    }
+
+    entry.remaining -= 1
+    if (entry.remaining <= 0) {
+      groupEntries.delete(groupId)
+      entry.onGroupFinalize(entry.hasStop ? 'stopped' : 'completed')
+    }
+  }
+
+  /**
    * Finalizes one tracked animation exactly once.
    */
   function finalizeActiveAnimation(entry: ActiveAnimation, reason: 'completed' | 'stopped'): void {
@@ -233,6 +260,9 @@ export function createAnimationAdapter(
     entry.finalized = true
     for (const transition of entry.transitions) {
       finalizeTransition(transition, reason)
+      if (transition.group !== undefined) {
+        finalizeGroup(transition.group.id, reason)
+      }
     }
 
     removeHandlesForTransitions(entry.transitions)
@@ -256,9 +286,30 @@ export function createAnimationAdapter(
   }
 
   /**
+   * Registers group entries for transitions that declare a group.
+   */
+  function registerGroups(transitions: TransitionRequest[]): void {
+    for (const transition of transitions) {
+      const group = transition.group
+      if (group === undefined) {
+        continue
+      }
+
+      if (!groupEntries.has(group.id)) {
+        groupEntries.set(group.id, {
+          remaining: group.total,
+          hasStop: false,
+          onGroupFinalize: group.onGroupFinalize
+        })
+      }
+    }
+  }
+
+  /**
    * Starts a batch of transitions and stores stoppable handles.
    */
   function run(transitions: TransitionRequest[]): AnimationHandle[] {
+    registerGroups(transitions)
     const startedHandles: AnimationHandle[] = []
     const transitionGroups = groupTransitions(transitions)
 

@@ -17,6 +17,7 @@ import { TagComponent } from "./tag-component";
 import { TextComponent } from "./text-component";
 import { moveModule, normalizeMoveCommand, isStoryHostMove } from "../modules/move";
 import { listModule } from "../modules/list";
+import { replaceModule } from "../modules/replace";
 import type {
   ComponentRegisterInput,
   ModuleRegisterInput,
@@ -111,6 +112,7 @@ export class RuntimeComponentOrchestrator {
 
     this.registerModule({ name: "move", module: moveModule });
     this.registerModule({ name: "list", module: listModule });
+    this.registerModule({ name: "replace", module: replaceModule });
   }
 
   /**
@@ -566,14 +568,13 @@ export class RuntimeComponentOrchestrator {
     const moveDecision = input.moveDecision ?? null;
     const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] };
 
-    if (moveDecision !== null) {
-      this.runHook("beforeUpdate", {
-        resolvedAction: input.update.resolvedAction,
-        eventSeq: input.update.eventSeq,
-        moveCommand: moveDecision,
-        output: hookOutput,
-      });
-    }
+    this.runHook("beforeUpdate", {
+      resolvedAction: input.update.resolvedAction,
+      eventSeq: input.update.eventSeq,
+      moveCommand: moveDecision,
+      component,
+      output: hookOutput,
+    });
 
     if (
       !this.tryUpdateComponent(component, {
@@ -585,6 +586,13 @@ export class RuntimeComponentOrchestrator {
     ) {
       return false;
     }
+
+    this.runHook("afterUpdate", {
+      resolvedAction: input.update.resolvedAction,
+      eventSeq: input.update.eventSeq,
+      component,
+      output: hookOutput,
+    });
 
     input.directTransitions.push(...hookOutput.directTransitions);
 

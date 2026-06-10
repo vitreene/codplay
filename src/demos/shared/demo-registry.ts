@@ -13,7 +13,8 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: 'drag',        label: 'Drag & Capture',     href: '?demo=drag' },
   { id: 'dnd-list',   label: 'Drag & Drop listes', href: '?demo=dnd-list' },
   { id: 'preload-media', label: 'Preload Media',  href: '?demo=preload-media' },
-  { id: 'carousel',     label: 'Carrousel',       href: '?demo=carousel' },
+  { id: 'carousel',         label: 'Carrousel',          href: '?demo=carousel' },
+  { id: 'replace-carousel', label: 'Replace Carousel',   href: '?demo=replace-carousel' },
 ]
 
 export function buildDemoLinksMarkup(activeId: string | undefined): string {

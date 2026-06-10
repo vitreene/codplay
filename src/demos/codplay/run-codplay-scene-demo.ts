@@ -10,6 +10,12 @@ import { createTraceLogPanel } from "../shared/trace-log-panel";
 import { resolveSceneSeekMaxMs } from "../shared/resolve-scene-seek-max-ms";
 import { buildDemoLinksMarkup } from "../shared/demo-registry";
 import type { PlayerSceneDemoConfig } from "../shared/demo-scene-types";
+import type { Player } from "../../player/player";
+import type { TelcoApi } from "../../telco/types";
+
+type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
+  onReady?: (context: { player: Player; telco: TelcoApi }) => void
+};
 
 function createAnimeImplementation(): AnimeImplementation {
   engine.useDefaultMainLoop = false;
@@ -63,7 +69,7 @@ function syncInteractionLock(containerNode: HTMLDivElement, status: string): voi
 /**
  * Renders one shared CodPlay demo shell for one scene-based scenario.
  */
-export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promise<void> {
+export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promise<void> {
   const appNode = globalThis.document.querySelector<HTMLDivElement>("#app");
   if (appNode === null) {
     throw new Error("Expected #app root element");
@@ -225,6 +231,8 @@ export async function runCodPlaySceneDemo(config: PlayerSceneDemoConfig): Promis
   studio.player.onTrace((row) => {
     traceLogPanel.push(row);
   });
+
+  config.onReady?.({ player: studio.player, telco: studio.telco });
 
   const initResult = await studio.player.init({
     mountTarget: demoContainerNode,

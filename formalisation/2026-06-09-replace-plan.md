@@ -121,7 +121,7 @@ Ce refactoring est un **prérequis bloquant pour `replace-split-text`**. `replac
 
 **Stratégie de découpe — adaptation de l'approche anime.js v4 :**
 
-anime.js v4 (`animejs ^4.3.6`) expose une interface de splitting texte ([`utils` / text](https://animejs.com/documentation/text)) qui enveloppe les caractères, mots ou lignes dans des `<span>`. On adapte cette logique en tentant d'intégrer un maximum de ses transitions. En cas d'échec ou de paramètre non reconnu, l'effet est ignoré silencieusement.
+anime.js v4 (`animejs ^4.3.6`) expose une interface de splitting texte ([`utils` / text](https://animejs.com/documentation/text)) qui enveloppe les caractères, mots ou lignes dans des `<span>`. On adapte cette logique de découpe pour `replace-split-text`.
 
 **Règle de découpe sur texte enrichi :**
 

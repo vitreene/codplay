@@ -37,6 +37,7 @@ export type AnimationAction = {
   selectedAnswerIds?: string[]
   correctAnswerIds?: string[]
   broadcast?: BroadcastAction
+  replace?: string | Record<string, unknown>
 }
 
 export type AnimationResolvedAction = ResolvedAction<AnimationAction>
@@ -57,6 +58,11 @@ export type TransitionRequest = {
   cleanupStyleProperty?: 'width' | 'height'
   onFinalize?: (reason: 'completed' | 'stopped') => void
   onFrame?: () => void
+  group?: {
+    id: string
+    total: number
+    onGroupFinalize: (reason: 'completed' | 'stopped') => void
+  }
 }
 
 export type AnimationTraceEntry = {
