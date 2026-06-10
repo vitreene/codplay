@@ -62,6 +62,8 @@ export type PlayerApi = {
   seek: (input: { timelineMs: number }) => Promise<ApiResult<void>>
   emit: (input: StoryEvent) => Promise<ApiResult<void>>
   getState: () => PlayerStateSnapshot
+  getRate: () => number
+  setRate: (rate: number) => void
   onChange: (listener: PlayerStateListener) => () => void
   onTrace: (listener: (row: RuntimeTraceRow) => void) => () => void
   schedule: PlayerScheduleApi
@@ -297,6 +299,18 @@ export class Player implements PlayerApi {
    */
   getState(): PlayerStateSnapshot {
     return this.player.getState()
+  }
+
+  getRate(): number {
+    return this.player.getRate()
+  }
+
+  setRate(rate: number): void {
+    this.player.setRate(rate)
+    this.scheduleRuntime.setRate(rate)
+    for (const scheduler of this.strapLoopSchedulers) {
+      scheduler.setRate(rate)
+    }
   }
 
   /**

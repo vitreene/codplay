@@ -34,6 +34,8 @@ type PlayerApi = {
   emit: (input: StoryEvent) => Promise<ApiResult<void>>
 
   getState: () => PlayerStateSnapshot
+  getRate: () => number
+  setRate: (rate: number) => void
   onChange: (listener: (state: PlayerStateSnapshot) => void) => () => void
   onTrace: (listener: (row: RuntimeTraceRow) => void) => () => void
 
@@ -84,3 +86,4 @@ type PlayerStateSnapshot = {
 - les optimisations haute frequence restent post-V1 (selon besoin reel).
 - le caractere obligatoire/optionnel de `resourceManifest` sera ajuste apres premiers tests d'integration.
 - reference bornes de lecture: `v1-horizon-spec.md`.
+- reference vitesse de lecture: `v1-rate-spec.md`.

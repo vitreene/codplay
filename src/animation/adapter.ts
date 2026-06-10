@@ -12,6 +12,7 @@ export type AnimeImplementation = (parameters: Record<string, unknown>) => Anime
 
 export type AnimationAdapterOptions = {
   renderFrame?: (frameNowMs: number) => void
+  setRate?: (rate: number) => void
 }
 
 type TransitionGroup = {
@@ -466,6 +467,7 @@ export function createAnimationAdapter(
   }
 
   const renderFrame = options.renderFrame
+  const setRate = options.setRate
 
-  return { run, stop, pause, resume, seek, renderFrame }
+  return { run, stop, pause, resume, seek, renderFrame, setRate }
 }

@@ -135,6 +135,8 @@ export class PlayerFacade implements PlayerApi {
   private seekEndMs = 0;
   private playedEndMs = 0;
   private playbackStartMs: number | null = null;
+  private rateAnchorMs = 0;
+  private _rate = 1;
   private sequenceEnded = false;
   private readonly ticker = new TimeTicker();
   private nextPublicEventIndex = 0;
@@ -593,7 +595,7 @@ export class PlayerFacade implements PlayerApi {
     const fallbackTimelineMs =
       this.playbackStartMs === null ?
         this.runtimePlanner.clampTimelineMs(this.timelineMs)
-      : this.runtimePlanner.clampTimelineMs(this.runtimePlanner.resolveNowMs() - this.playbackStartMs);
+      : this.runtimePlanner.clampTimelineMs(this.rateAnchorMs + (this.runtimePlanner.resolveNowMs() - this.playbackStartMs) * this._rate);
 
     if (this.status !== PLAYER_STATUS.playing) {
       return this.sequenceEnded ? Math.min(fallbackTimelineMs, this.timelineEndMs) : fallbackTimelineMs;
@@ -601,6 +603,19 @@ export class PlayerFacade implements PlayerApi {
 
     const resolvedTimelineMs = this.mediaSync.resolveTimelineMsFromActiveMaster(fallbackTimelineMs);
     return this.sequenceEnded ? Math.min(resolvedTimelineMs, this.timelineEndMs) : resolvedTimelineMs;
+  }
+
+  getRate(): number {
+    return this._rate;
+  }
+
+  setRate(rate: number): void {
+    if (this.playbackStartMs !== null) {
+      this.rateAnchorMs = this.resolveCurrentTimelineMs();
+      this.playbackStartMs = this.runtimePlanner.resolveNowMs();
+    }
+    this._rate = rate;
+    this.renderer.setRate(rate);
   }
 
   /**
@@ -1461,7 +1476,8 @@ export class PlayerFacade implements PlayerApi {
       });
     }
 
-    this.playbackStartMs = this.runtimePlanner.resolveNowMs() - this.timelineMs;
+    this.playbackStartMs = this.runtimePlanner.resolveNowMs();
+    this.rateAnchorMs = this.timelineMs;
     this.setStatus(PLAYER_STATUS.playing);
     const currentTimelineMs = this.resolveCurrentTimelineMs();
     this.timelineMs = currentTimelineMs;
@@ -1959,6 +1975,7 @@ export class PlayerFacade implements PlayerApi {
 
     if (previousStatus === PLAYER_STATUS.playing) {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs();
+      this.rateAnchorMs = this.timelineMs;
       await this.runDueTimelineEvents(this.timelineMs);
       this.startPlaybackLoop();
     }

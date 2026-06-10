@@ -81,6 +81,14 @@ export function createTelco(player: PlayerApi, options?: CreateTelcoOptions): Te
       return _commandInFlight
     },
 
+    get rate(): number {
+      return player.getRate()
+    },
+
+    setRate(rate: number): void {
+      player.setRate(rate)
+    },
+
     play() {
       return runCommand(() => player.play())
     },

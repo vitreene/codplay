@@ -15,6 +15,8 @@ export type TelcoApi = {
 
   getState: () => PlayerStateSnapshot
   readonly commandInFlight: boolean
+  readonly rate: number
+  setRate: (rate: number) => void
 
   play: () => Promise<TelcoCommandResult>
   pause: () => Promise<TelcoCommandResult>

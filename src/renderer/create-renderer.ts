@@ -323,6 +323,10 @@ export class RendererFacade implements RendererApi {
     this.animationAdapter.renderFrame?.(frameNowMs)
   }
 
+  setRate(rate: number): void {
+    this.animationAdapter.setRate?.(rate)
+  }
+
   /**
    * Stops renderer execution and clears pending commits.
    */

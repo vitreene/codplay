@@ -100,6 +100,11 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
             <span id="demo-seek-label" class="demo-progress-label">0ms / ${Math.max(0, Math.round(seekMaxMsFromScene))}ms</span>
           </label>
         </div>
+        <div class="demo-controls demo-rate-controls">
+          <button id="demo-rate-x1" class="demo-button demo-button-secondary demo-rate-active" type="button">x1</button>
+          <button id="demo-rate-x2" class="demo-button demo-button-secondary" type="button">x2</button>
+          <button id="demo-rate-x025" class="demo-button demo-button-secondary" type="button">x1/4</button>
+        </div>
         ${actionButtonsMarkup.length > 0 ? `<div class="demo-controls demo-actions">${actionButtonsMarkup}</div>` : ""}
         <div id="player-state" class="player-state"></div>
         <div id="player-trace" class="player-state player-trace"></div>
@@ -118,6 +123,9 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const animationAdapter = createAnimationAdapter(createAnimeImplementation(), {
     renderFrame: () => {
       renderAnimeFrameFromPlayerTicker();
+    },
+    setRate: (rate: number) => {
+      engine.speed = rate;
     },
   });
   const studio = new CodPlay({
@@ -216,6 +224,26 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     actions: config.actions,
     actionButtonNodes,
   });
+
+  const rateButtons: Array<{ node: HTMLButtonElement; rate: number }> = [
+    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x1")!, rate: 1 },
+    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x2")!, rate: 2 },
+    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x025")!, rate: 0.25 },
+  ];
+
+  function syncRateButtons(): void {
+    const currentRate = studio.telco.rate;
+    for (const btn of rateButtons) {
+      btn.node.classList.toggle("demo-rate-active", btn.rate === currentRate);
+    }
+  }
+
+  for (const btn of rateButtons) {
+    btn.node.addEventListener("click", () => {
+      studio.telco.setRate(btn.rate);
+      syncRateButtons();
+    });
+  }
 
   let mountedRuntimeRevision = -1;
 

@@ -92,6 +92,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
 
   private running = false
   private virtualNowMs = 0
+  private _rate = 1
   private nextJobId = 1
   private nextJobOrder = 1
 
@@ -130,6 +131,10 @@ export class PlayerScheduleFacade implements StrapHelpers {
     this.virtualNowMs = 0
   }
 
+  setRate(rate: number): void {
+    this._rate = rate
+  }
+
   /**
    * Starts helper ticking when the player is active.
    */
@@ -140,7 +145,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
 
     this.running = true
     this.ticker.start((payload) => {
-      this.virtualNowMs += payload.deltaMs
+      this.virtualNowMs += payload.deltaMs * this._rate
       this.processDueJobs()
     })
     this.processDueJobs()

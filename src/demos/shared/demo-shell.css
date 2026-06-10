@@ -157,6 +157,11 @@ h1 {
 	color: var(--accent);
 }
 
+.demo-button-secondary.demo-rate-active {
+	background: var(--accent);
+	color: #ffffff;
+}
+
 .player-state {
 	margin-top: 0.45rem;
 	padding: 0.45rem 0.55rem;

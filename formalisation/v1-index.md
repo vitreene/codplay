@@ -30,6 +30,7 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 14. `v1-builder-spec.md`
 15. `v1-builder-api.md`
 16. `v1-player-api.md`
+16a. `v1-rate-spec.md` — multiplicateur de vitesse, propagation setRate, hook AnimationAdapter
 17. `v1-registry-api.md`
 18. `v1-module-api.md`
 19. `v1-preload-api.md` — modes author/broadcast, strategies par type, cache session, eviction sequence:end
