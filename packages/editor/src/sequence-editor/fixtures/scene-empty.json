@@ -1,0 +1,10 @@
+{
+  "id": "scene-empty",
+  "title": "Scène vide",
+  "durationMs": 10000,
+  "durationSource": "arbitrary",
+  "tracks": [],
+  "decors": {},
+  "cues": [],
+  "markers": []
+}

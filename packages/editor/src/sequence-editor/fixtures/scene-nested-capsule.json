@@ -1,0 +1,78 @@
+{
+  "id": "scene-nested-capsule",
+  "title": "Capsule avec éléments imbriqués",
+  "durationMs": 8000,
+  "durationSource": "arbitrary",
+  "tracks": [
+    {
+      "id": "track-bg",
+      "kind": "element",
+      "contentType": "image",
+      "label": "Fond",
+      "visible": true,
+      "keyframes": [
+        { "id": "kf-bg-01", "timeMs": 0, "decorId": "decor-bg", "transitionOut": { "kind": "named", "name": "fade", "durationMs": 400 } }
+      ]
+    },
+    {
+      "id": "track-capsule-01",
+      "kind": "capsule",
+      "capsuleType": "liste",
+      "label": "Liste",
+      "visible": true,
+      "keyframes": [
+        { "id": "kf-cap-01", "timeMs": 1000, "decorId": null, "transitionOut": { "kind": "named", "name": "swipe-left", "durationMs": 500 } },
+        { "id": "kf-cap-02", "timeMs": 7000, "decorId": null, "transitionOut": { "kind": "named", "name": "swipe-right", "durationMs": 500 } }
+      ],
+      "children": [
+        {
+          "id": "track-item-01",
+          "kind": "element",
+          "contentType": "text",
+          "label": "Item 1",
+          "visible": true,
+          "keyframes": [
+            { "id": "kf-it1-01", "timeMs": 1000, "decorId": "decor-item1-a" },
+            { "id": "kf-it1-02", "timeMs": 3000, "decorId": "decor-item1-b", "transitionOut": { "kind": "interpolated", "durationMs": 300, "easing": "ease-out" } }
+          ]
+        },
+        {
+          "id": "track-item-02",
+          "kind": "element",
+          "contentType": "text",
+          "label": "Item 2",
+          "visible": true,
+          "keyframes": [
+            { "id": "kf-it2-01", "timeMs": 2000, "decorId": "decor-item2-a" },
+            { "id": "kf-it2-02", "timeMs": 4000, "decorId": "decor-item2-b", "transitionOut": { "kind": "interpolated", "durationMs": 300, "easing": "ease-out" } }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "track-cta",
+      "kind": "element",
+      "contentType": "text",
+      "label": "CTA",
+      "visible": true,
+      "keyframes": [
+        { "id": "kf-cta-01", "timeMs": 5000, "decorId": "decor-cta", "transitionOut": { "kind": "named", "name": "zoom", "durationMs": 400 } }
+      ]
+    }
+  ],
+  "decors": {
+    "decor-bg": { "id": "decor-bg", "data": {} },
+    "decor-item1-a": { "id": "decor-item1-a", "data": {} },
+    "decor-item1-b": { "id": "decor-item1-b", "data": {} },
+    "decor-item2-a": { "id": "decor-item2-a", "data": {} },
+    "decor-item2-b": { "id": "decor-item2-b", "data": {} },
+    "decor-cta": { "id": "decor-cta", "data": {} }
+  },
+  "cues": [
+    { "id": "cue-01", "timeMs": 1000, "label": "Entrée liste" },
+    { "id": "cue-02", "timeMs": 5000, "label": "CTA" }
+  ],
+  "markers": [
+    { "id": "marker-01", "timeMs": 3500, "label": "Milieu", "color": "#f59e0b" }
+  ]
+}
