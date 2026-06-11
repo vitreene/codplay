@@ -12,21 +12,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Development
-npm run dev          # Vite dev server
-npm run dev:demo     # Vite dev server, opens browser at root
+# Development (from repo root)
+npm run dev:demos    # Vite dev server for demos (port 5173)
+npm run dev:editor   # Vite dev server for editor (port 5174)
 
-# Build
-npm run build        # tsc + vite build
+# Build (from repo root)
+npm run build        # build the codplay library
 
-# Tests
+# Tests (from repo root)
 npm run test                          # all tests
 npm run test:gates                    # critical gate tests only (lot7, lot8, lot18)
+
+# Tests (from packages/codplay)
 npm run test:lot lot3                 # one specific lot
 npm run test:lot lot3 lot12           # multiple lots
 node scripts/run-tests.mjs watch      # watch mode
 
-# Run a single test file directly
+# Run a single test file directly (from packages/codplay)
 npx vitest run tests/v1/reference-scenes.spec.ts
 npx vitest run tests/lot13/create-player.spec.ts
 ```
@@ -44,11 +46,11 @@ A `SceneDoc` is the top-level authored artifact. It contains:
 - `tracks`: optional metadata per story (e.g. `role: "master"` for horizon projection).
 - `rootStories`: which stories auto-initialize.
 
-The builder (`src/builder/`) normalizes a `SceneDoc` into a `CompiledScene` with fully resolved IDs, validated perso types, and a flat event schedule. This is a pure transformation — no side effects.
+The builder (`packages/codplay/src/builder/`) normalizes a `SceneDoc` into a `CompiledScene` with fully resolved IDs, validated perso types, and a flat event schedule. This is a pure transformation — no side effects.
 
 ### Player lifecycle
 
-`PlayerApi` (`src/player/player.ts`):
+`PlayerApi` (`packages/codplay/src/player/player.ts`):
 ```
 init → play ↔ pause/resume → stop → destroy
                 ↕
@@ -91,7 +93,7 @@ Every event and state mutation emitted by a strap is written to a **track** as a
 
 ### Runtime components
 
-`src/runtime/components/` contains typed component classes: `TextComponent`, `ImageComponent`, `MediaComponent`, `ListComponent`, `LayoutComponent`, `InputComponent`. The `RuntimeComponentOrchestrator` dispatches mutations to the correct component based on perso type.
+`packages/codplay/src/runtime/components/` contains typed component classes: `TextComponent`, `ImageComponent`, `MediaComponent`, `ListComponent`, `LayoutComponent`, `InputComponent`. The `RuntimeComponentOrchestrator` dispatches mutations to the correct component based on perso type.
 
 Each component responds to action payloads (style, content, broadcast, etc.) resolved by the director from `perso.actions[eventName]`.
 
@@ -99,21 +101,22 @@ Each component responds to action payloads (style, content, broadcast, etc.) res
 
 | Area | Path |
 |---|---|
-| Player API + lifecycle | `src/player/player.ts`, `src/player/create-player.ts` |
-| Strap types | `src/player/strap-types.ts` |
-| Helper scheduling | `src/player/helper-finite-core.ts`, `helper-loop-core.ts` |
-| Builder normalization | `src/builder/` |
-| Runtime orchestration | `src/runtime/components/runtime-component-orchestrator.ts` |
-| Component types | `src/runtime/types.ts` |
-| Track management | `src/track-manager/` |
-| Authoring API | `src/creator/` |
-| Demo scenes | `src/demos/scenes/` |
-| Demo entry points | `src/demos/codplay/` |
-| Specifications | `formalisation/` |
+| Player API + lifecycle | `packages/codplay/src/player/player.ts`, `create-player.ts` |
+| Strap types | `packages/codplay/src/player/strap-types.ts` |
+| Helper scheduling | `packages/codplay/src/player/helper-finite-core.ts`, `helper-loop-core.ts` |
+| Builder normalization | `packages/codplay/src/builder/` |
+| Runtime orchestration | `packages/codplay/src/runtime/components/runtime-component-orchestrator.ts` |
+| Component types | `packages/codplay/src/runtime/types.ts` |
+| Track management | `packages/codplay/src/track-manager/` |
+| Authoring API | `packages/codplay/src/creator/` |
+| Demo scenes | `packages/demos/src/scenes/` |
+| Demo entry points | `packages/demos/src/codplay/` |
+| Authoring helpers | `packages/authoring/capsule-automation/src/` |
+| Specifications | `docs/formalisation/` |
 
 ### Specifications
 
-All normative behavior is documented in `formalisation/`. Key files:
+All normative behavior is documented in `docs/formalisation/`. Key files:
 - `v1-index.md` — index of all specs
 - `v1-scene-spec.md`, `v1-story-spec.md`, `v1-perso-spec.md` — core domain model
 - `v1-strap-helpers-spec.md` — scheduling helpers, `eventInsertMode`, `chunk.update`

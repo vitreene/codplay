@@ -1,7 +1,7 @@
 {
-  "name": "codplay",
+  "name": "codplay-monorepo",
   "version": "0.0.1",
-  "description": "another player",
+  "description": "Codplay monorepo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vitreene/codplay.git"
@@ -9,23 +9,21 @@
   "license": "ISC",
   "author": "vitreene",
   "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/codplay",
+    "packages/demos",
+    "packages/editor",
+    "packages/authoring/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "dev:demo": "vite --open /",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "test": "node scripts/run-tests.mjs all",
-    "test:watch": "node scripts/run-tests.mjs watch",
-    "test:lot": "node scripts/run-tests.mjs",
-    "test:gates": "node scripts/run-tests.mjs gates"
+    "dev:demos": "npm run dev --workspace=packages/demos",
+    "dev:editor": "npm run dev --workspace=packages/editor",
+    "test": "npm run test --workspace=packages/codplay",
+    "test:gates": "npm run test:gates --workspace=packages/codplay",
+    "build": "npm run build --workspace=packages/codplay"
   },
   "devDependencies": {
-    "jsdom": "^29.1.1",
-    "typescript": "~5.9.3",
-    "vite": "^8.0.1",
-    "vitest": "^4.1.2"
-  },
-  "dependencies": {
-    "animejs": "^4.3.6"
+    "typescript": "~5.9.3"
   }
 }
