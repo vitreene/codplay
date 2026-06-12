@@ -1,0 +1,847 @@
+import { setup, assign } from 'xstate'
+import type {
+  EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, AudioTrack,
+  WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
+} from './types'
+import {
+  ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
+  DEFAULT_TRANSITION_DURATION_MS, TIME_STEP_MS,
+} from './constants'
+import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
+import { DISPLAY_CONFIG_DEFAULT } from './display-config'
+import { flattenTracks } from './utils'
+
+// ─── Machine-specific types (§3.1) ──────────────────────────────────────────
+
+export interface MachineViewport {
+  startMs: number
+  endMs: number
+  pixelsPerMs: number
+  viewWidthPx: number
+  viewHeightPx: number
+}
+
+export interface MachineSelection {
+  trackId: string | null
+  keyframeId: string | null
+}
+
+export type MachineSnapPoint = {
+  timeMs: number
+  kind: 'cue-start' | 'cue-end' | 'marker' | 'keyframe'
+  sourceId: string
+}
+
+export type MachineInteraction =
+  | { kind: 'dragging-keyframe'; trackId: string; keyframeId: string; originMs: number; currentMs: number }
+  | { kind: 'dragging-playhead'; originMs: number; currentMs: number }
+  | { kind: 'panning'; originPx: number; originStartMs: number }
+  | { kind: 'drawing-window'; trackId: string; startMs: number; currentMs: number }
+
+export type PlayRange = { inMs: number; outMs: number }
+
+export interface MachineContext {
+  scene: EditorScene
+  viewport: MachineViewport
+  playheadMs: number
+  isPlaying: boolean
+  playRange: PlayRange | null
+  followPlayhead: boolean
+  selection: MachineSelection
+  interaction: MachineInteraction | null
+  layoutProfile: LayoutProfile
+  displayConfig: DisplayConfig
+  viewMode: 'full-sequence' | 'text-priority'
+  snapGrid: MachineSnapPoint[]
+}
+
+export type MachineInput = {
+  scene: EditorScene
+  viewWidthPx?: number
+  viewHeightPx?: number
+}
+
+// ─── Events (§3.4) ──────────────────────────────────────────────────────────
+
+export type SequenceEditorEvent =
+  | { type: 'TRACK.SELECT'; trackId: string | null }
+  | { type: 'KEYFRAME.SELECT'; trackId: string; keyframeId: string | null }
+  | { type: 'KEYFRAME.ADD'; trackId: string; timeMs: number; id?: string }
+  | { type: 'KEYFRAME.REMOVE'; trackId: string; keyframeId: string }
+  | { type: 'KEYFRAME.RENAME'; trackId: string; keyframeId: string; name: string | null }
+  | { type: 'KEYFRAME.ASSIGN_DECOR'; trackId: string; keyframeId: string; decorId: string | null }
+  | { type: 'DECOR.REGISTER'; decorId: string; data: Record<string, unknown> }
+  | { type: 'KEYFRAME.SET_TRANSITION_IN'; trackId: string; keyframeId: string; def: TransitionDef | null }
+  | { type: 'KEYFRAME.SET_TRANSITION_OUT'; trackId: string; keyframeId: string; def: TransitionDef | null }
+  | { type: 'DRAG.START_KEYFRAME'; trackId: string; keyframeId: string }
+  | { type: 'DRAG.MOVE'; pointerMs: number }
+  | { type: 'DRAG.END' }
+  | { type: 'WINDOW.START_DRAW'; trackId: string; pointerMs: number }
+  | { type: 'WINDOW.DRAW_MOVE'; pointerMs: number }
+  | { type: 'WINDOW.DRAW_END'; pointerMs: number }
+  | { type: 'PLAYHEAD.SET'; timeMs: number }
+  | { type: 'PLAYHEAD.START_PLAY' }
+  | { type: 'PLAYHEAD.PAUSE' }
+  | { type: 'PLAYHEAD.STOP' }
+  | { type: 'PLAYHEAD.TICK'; deltaMs: number }
+  | { type: 'VIEWPORT.PAN_START'; pointerPx: number }
+  | { type: 'VIEWPORT.PAN_MOVE'; pointerPx: number }
+  | { type: 'VIEWPORT.PAN_END' }
+  | { type: 'VIEWPORT.SCROLL'; startMs: number }
+  | { type: 'VIEWPORT.ZOOM'; factor: number; focusMs: number }
+  | { type: 'PLAYRANGE.SET'; inMs: number; outMs: number }
+  | { type: 'PLAYRANGE.CLEAR' }
+  | { type: 'FOLLOW.TOGGLE' }
+  | { type: 'VIEWPORT.RESIZE'; widthPx: number; heightPx: number }
+  | { type: 'VIEWPORT.SET_MODE'; mode: 'full-sequence' | 'text-priority' }
+  | { type: 'VIEWPORT.SET_LAYOUT_PROFILE'; profile: LayoutProfile }
+  | { type: 'VIEWPORT.SET_DISPLAY_CONFIG'; config: DisplayConfig }
+  | { type: 'TRACK.ADD'; node: Omit<TrackNode, 'keyframes'> & { id: string }; afterId?: string }
+  | { type: 'TRACK.REMOVE'; trackId: string }
+  | { type: 'TRACK.MOVE'; trackId: string; afterId: string | null; parentId?: string }
+  | { type: 'TRACK.TOGGLE_VISIBILITY'; trackId: string }
+  | { type: 'TRACK.NEST_IN_CAPSULE'; trackId: string; capsuleId: string }
+  | { type: 'TRACK.RESET_KEYFRAMES'; trackId: string }
+  | { type: 'CUE.ADD'; cue: TextCue & { id: string } }
+  | { type: 'CUE.REMOVE'; cueId: string }
+  | { type: 'MARKER.ADD'; marker: AuthorMarker & { id: string } }
+  | { type: 'MARKER.MOVE'; markerId: string; timeMs: number }
+  | { type: 'MARKER.REMOVE'; markerId: string }
+  | { type: 'KEYFRAME.ATTACH_MARKER'; trackId: string; keyframeId: string; markerId: string }
+  | { type: 'KEYFRAME.DETACH_MARKER'; trackId: string; keyframeId: string }
+  | { type: 'AUDIO.SET'; track: AudioTrack }
+  | { type: 'AUDIO.CLEAR' }
+  | { type: 'AUDIO.SET_WAVEFORM'; waveform: WaveformDataV1 }
+  | { type: 'SCENE.LOAD'; scene: EditorScene }
+  | { type: 'SCENE.SET_DURATION'; durationMs: number; source?: EditorScene['durationSource'] }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_PX_PER_MS = ZOOM_DEFAULT_PX_PER_SEC / 1000
+const MIN_PX_PER_MS = ZOOM_MIN_PX_PER_SEC / 1000
+const MAX_PX_PER_MS = ZOOM_MAX_PX_PER_SEC / 1000
+
+function computeEndMs(vp: MachineViewport): number {
+  return vp.startMs + vp.viewWidthPx / vp.pixelsPerMs
+}
+
+function clampViewportStart(startMs: number, vp: MachineViewport, durationMs: number): number {
+  const viewDurationMs = vp.viewWidthPx / vp.pixelsPerMs
+  return Math.max(0, Math.min(startMs, durationMs - viewDurationMs))
+}
+
+function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
+  const points: MachineSnapPoint[] = []
+  for (const cue of scene.cues) {
+    points.push({ timeMs: cue.timeMs, kind: 'cue-start', sourceId: cue.id })
+  }
+  for (const marker of scene.markers) {
+    points.push({ timeMs: marker.timeMs, kind: 'marker', sourceId: marker.id })
+  }
+  for (const track of flattenTracks(scene.tracks)) {
+    for (const kf of track.keyframes) {
+      points.push({ timeMs: kf.timeMs, kind: 'keyframe', sourceId: kf.id })
+    }
+  }
+  return points.sort((a, b) => a.timeMs - b.timeMs)
+}
+
+function findNearestSnap(snapGrid: MachineSnapPoint[], timeMs: number): MachineSnapPoint | null {
+  let nearest: MachineSnapPoint | null = null
+  let minDist = Infinity
+  for (const pt of snapGrid) {
+    const d = Math.abs(pt.timeMs - timeMs)
+    if (d < minDist) { minDist = d; nearest = pt }
+  }
+  return nearest
+}
+
+export function applySnapToMs(
+  rawMs: number,
+  snapGrid: MachineSnapPoint[],
+  thresholdMs: number,
+): number {
+  const nearest = findNearestSnap(snapGrid, rawMs)
+  if (nearest && Math.abs(nearest.timeMs - rawMs) <= thresholdMs) return nearest.timeMs
+  return Math.round(rawMs / TIME_STEP_MS) * TIME_STEP_MS
+}
+
+function updateTrackInScene(
+  scene: EditorScene,
+  trackId: string,
+  updater: (track: TrackNode) => TrackNode,
+): EditorScene {
+  function walk(tracks: TrackNode[]): TrackNode[] {
+    return tracks.map(t => {
+      if (t.id === trackId) return updater(t)
+      if (t.children) return { ...t, children: walk(t.children) }
+      return t
+    })
+  }
+  return { ...scene, tracks: walk(scene.tracks) }
+}
+
+function insertKeyframeSorted(keyframes: Keyframe[], kf: Keyframe): Keyframe[] {
+  return [...keyframes, kf].sort((a, b) => a.timeMs - b.timeMs)
+}
+
+function adjacentDecorId(keyframes: Keyframe[], timeMs: number): string | null {
+  const sorted = [...keyframes].sort((a, b) => a.timeMs - b.timeMs)
+  let prev: Keyframe | null = null
+  for (const k of sorted) {
+    if (k.timeMs <= timeMs) prev = k
+    else break
+  }
+  return prev?.decorId ?? sorted[0]?.decorId ?? null
+}
+
+// ─── Machine ─────────────────────────────────────────────────────────────────
+
+export const sequenceEditorMachine = setup({
+  types: {} as {
+    context: MachineContext
+    events: SequenceEditorEvent
+    input: MachineInput
+  },
+
+  guards: {
+    canCommitDrag: ({ context }) => {
+      const i = context.interaction
+      if (!i || i.kind !== 'dragging-keyframe') return false
+      return i.currentMs >= 0 && i.currentMs <= context.scene.durationMs
+    },
+    snapThresholdReached: ({ context }) => {
+      const i = context.interaction
+      if (!i || (i.kind !== 'dragging-keyframe' && i.kind !== 'dragging-playhead')) return false
+      const nearest = findNearestSnap(context.snapGrid, i.currentMs)
+      if (!nearest) return false
+      const thresholdMs = context.layoutProfile.snapThresholdPx / context.viewport.pixelsPerMs
+      return Math.abs(nearest.timeMs - i.currentMs) <= thresholdMs
+    },
+  },
+
+  actions: {
+    assignSnapGrid: assign(({ context }) => ({
+      snapGrid: computeSnapGrid(context.scene),
+    })),
+  },
+
+}).createMachine({
+  id: 'sequence-editor',
+  initial: 'idle',
+
+  // These events are handled in all states
+  on: {
+    'PLAYRANGE.SET': {
+      actions: assign(({ event }) => ({
+        playRange: { inMs: event.inMs, outMs: event.outMs },
+      })),
+    },
+    'PLAYRANGE.CLEAR': {
+      actions: assign(() => ({ playRange: null as PlayRange | null })),
+    },
+    'FOLLOW.TOGGLE': {
+      actions: assign(({ context }) => ({ followPlayhead: !context.followPlayhead })),
+    },
+    'VIEWPORT.SCROLL': {
+      actions: assign(({ context, event }) => {
+        const startMs = clampViewportStart(event.startMs, context.viewport, context.scene.durationMs)
+        return {
+          viewport: {
+            ...context.viewport,
+            startMs,
+            endMs: computeEndMs({ ...context.viewport, startMs }),
+          },
+        }
+      }),
+    },
+    'VIEWPORT.ZOOM': {
+      actions: assign(({ context, event }) => {
+        const { pixelsPerMs, viewWidthPx, startMs } = context.viewport
+        const newPxPerMs = Math.max(MIN_PX_PER_MS, Math.min(MAX_PX_PER_MS, pixelsPerMs * event.factor))
+        const focusPx = (event.focusMs - startMs) * pixelsPerMs
+        const newStartMs = Math.max(0, event.focusMs - focusPx / newPxPerMs)
+        const viewport: MachineViewport = {
+          ...context.viewport,
+          pixelsPerMs: newPxPerMs,
+          startMs: newStartMs,
+          endMs: newStartMs + viewWidthPx / newPxPerMs,
+        }
+        return { viewport }
+      }),
+    },
+  },
+
+  context: ({ input }) => {
+    const viewWidthPx = input.viewWidthPx ?? 800
+    const viewHeightPx = input.viewHeightPx ?? 600
+    const pixelsPerMs = DEFAULT_PX_PER_MS
+    return {
+      scene: input.scene,
+      viewport: {
+        startMs: 0,
+        endMs: viewWidthPx / pixelsPerMs,
+        pixelsPerMs,
+        viewWidthPx,
+        viewHeightPx,
+      },
+      playheadMs: 0,
+      isPlaying: false,
+      playRange: null,
+      followPlayhead: false,
+      selection: { trackId: null, keyframeId: null },
+      interaction: null,
+      layoutProfile: LAYOUT_PROFILE_DEFAULT,
+      displayConfig: DISPLAY_CONFIG_DEFAULT,
+      viewMode: 'full-sequence',
+      snapGrid: computeSnapGrid(input.scene),
+    }
+  },
+
+  states: {
+
+    // ── idle ────────────────────────────────────────────────────────────────
+    idle: {
+      on: {
+        'TRACK.SELECT': {
+          actions: assign(({ event }) => ({
+            selection: { trackId: event.trackId, keyframeId: null },
+          })),
+        },
+        'KEYFRAME.SELECT': {
+          actions: assign(({ event }) => ({
+            selection: { trackId: event.trackId, keyframeId: event.keyframeId },
+          })),
+        },
+
+        'KEYFRAME.ADD': {
+          actions: assign(({ context, event }) => {
+            const timeMs = Math.round(
+              Math.max(0, Math.min(event.timeMs, context.scene.durationMs)) / TIME_STEP_MS,
+            ) * TIME_STEP_MS
+            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
+            const decorId = track ? adjacentDecorId(track.keyframes, timeMs) : null
+            const newKf: Keyframe = { id: event.id ?? `kf-${Date.now()}`, timeMs, decorId }
+            const scene = updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: insertKeyframeSorted(t.keyframes, newKf),
+            }))
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'KEYFRAME.REMOVE': {
+          actions: assign(({ context, event }) => {
+            const removedKf = flattenTracks(context.scene.tracks)
+              .find(t => t.id === event.trackId)
+              ?.keyframes.find(k => k.id === event.keyframeId)
+            const removedDecorId = removedKf?.decorId ?? null
+
+            const sceneAfterRemove = updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.filter(k => k.id !== event.keyframeId),
+            }))
+
+            // Remove orphan decor — only if no other kf still references it
+            let decors = sceneAfterRemove.decors
+            if (removedDecorId) {
+              const stillUsed = flattenTracks(sceneAfterRemove.tracks)
+                .flatMap(t => t.keyframes)
+                .some(k => k.decorId === removedDecorId)
+              if (!stillUsed) {
+                decors = Object.fromEntries(
+                  Object.entries(decors).filter(([id]) => id !== removedDecorId),
+                )
+              }
+            }
+
+            const scene = { ...sceneAfterRemove, decors }
+            const selection: MachineSelection =
+              context.selection.keyframeId === event.keyframeId
+                ? { trackId: null, keyframeId: null }
+                : context.selection
+            return { scene, selection, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'KEYFRAME.RENAME': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId ? { ...k, name: event.name ?? undefined } : k,
+              ),
+            })),
+          })),
+        },
+
+        'KEYFRAME.ASSIGN_DECOR': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId ? { ...k, decorId: event.decorId } : k,
+              ),
+            })),
+          })),
+        },
+
+        'DECOR.REGISTER': {
+          actions: assign(({ context, event }) => ({
+            scene: {
+              ...context.scene,
+              decors: {
+                ...context.scene.decors,
+                [event.decorId]: { id: event.decorId, data: event.data },
+              },
+            },
+          })),
+        },
+
+        'KEYFRAME.SET_TRANSITION_IN': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId
+                  ? { ...k, transitionIn: event.def ?? undefined }
+                  : k,
+              ),
+            })),
+          })),
+        },
+
+        'KEYFRAME.SET_TRANSITION_OUT': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId
+                  ? { ...k, transitionOut: event.def ?? undefined }
+                  : k,
+              ),
+            })),
+          })),
+        },
+
+        'DRAG.START_KEYFRAME': {
+          target: 'dragging-keyframe',
+          actions: assign(({ context, event }) => {
+            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
+            const kf = track?.keyframes.find(k => k.id === event.keyframeId)
+            return {
+              interaction: {
+                kind: 'dragging-keyframe' as const,
+                trackId: event.trackId,
+                keyframeId: event.keyframeId,
+                originMs: kf?.timeMs ?? 0,
+                currentMs: kf?.timeMs ?? 0,
+              },
+              selection: { trackId: event.trackId, keyframeId: event.keyframeId },
+            }
+          }),
+        },
+
+        'WINDOW.START_DRAW': {
+          target: 'drawing-window',
+          actions: assign(({ event }) => ({
+            interaction: {
+              kind: 'drawing-window' as const,
+              trackId: event.trackId,
+              startMs: event.pointerMs,
+              currentMs: event.pointerMs,
+            },
+          })),
+        },
+
+        'PLAYHEAD.SET': {
+          actions: assign(({ context, event }) => ({
+            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.durationMs)),
+          })),
+        },
+
+        'PLAYHEAD.STOP': {
+          actions: assign({ isPlaying: false, playheadMs: 0 }),
+        },
+
+        'PLAYHEAD.START_PLAY': {
+          target: 'playing',
+          actions: assign(({ context }) => ({
+            isPlaying: true,
+            playheadMs: context.playRange ? context.playRange.inMs : context.playheadMs,
+          })),
+        },
+
+        'VIEWPORT.PAN_START': {
+          target: 'panning',
+          actions: assign(({ context, event }) => ({
+            interaction: {
+              kind: 'panning' as const,
+              originPx: event.pointerPx,
+              originStartMs: context.viewport.startMs,
+            },
+          })),
+        },
+
+        'VIEWPORT.RESIZE': {
+          actions: assign(({ context, event }) => {
+            const vp: MachineViewport = {
+              ...context.viewport,
+              viewWidthPx: event.widthPx,
+              viewHeightPx: event.heightPx,
+              endMs: context.viewport.startMs + event.widthPx / context.viewport.pixelsPerMs,
+            }
+            return { viewport: vp }
+          }),
+        },
+
+        'VIEWPORT.SET_MODE': {
+          actions: assign(({ context, event }) => {
+            const viewMode = event.mode
+            let viewport = context.viewport
+            if (viewMode === 'full-sequence') {
+              const pixelsPerMs = context.viewport.viewWidthPx / context.scene.durationMs
+              viewport = { ...viewport, pixelsPerMs, startMs: 0, endMs: context.scene.durationMs }
+            }
+            return { viewMode, viewport }
+          }),
+        },
+
+        'VIEWPORT.SET_LAYOUT_PROFILE': {
+          actions: assign(({ event }) => ({ layoutProfile: event.profile })),
+        },
+
+        'VIEWPORT.SET_DISPLAY_CONFIG': {
+          actions: assign(({ event }) => ({ displayConfig: event.config })),
+        },
+
+        'TRACK.ADD': {
+          actions: assign(({ context, event }) => {
+            const newTrack: TrackNode = { ...event.node, keyframes: [] }
+            let tracks: TrackNode[]
+            if (event.afterId) {
+              const idx = context.scene.tracks.findIndex(t => t.id === event.afterId)
+              if (idx >= 0) {
+                tracks = [...context.scene.tracks]
+                tracks.splice(idx + 1, 0, newTrack)
+              } else {
+                tracks = [...context.scene.tracks, newTrack]
+              }
+            } else {
+              tracks = [...context.scene.tracks, newTrack]
+            }
+            return { scene: { ...context.scene, tracks } }
+          }),
+        },
+
+        'TRACK.REMOVE': {
+          actions: assign(({ context, event }) => {
+            function removeFromList(tracks: TrackNode[]): TrackNode[] {
+              return tracks
+                .filter(t => t.id !== event.trackId)
+                .map(t => t.children ? { ...t, children: removeFromList(t.children) } : t)
+            }
+            const tracks = removeFromList(context.scene.tracks)
+            const scene = { ...context.scene, tracks }
+            const snapGrid = computeSnapGrid(scene)
+            const selection: MachineSelection =
+              context.selection.trackId === event.trackId
+                ? { trackId: null, keyframeId: null }
+                : context.selection
+            return { scene, snapGrid, selection }
+          }),
+        },
+
+        'TRACK.TOGGLE_VISIBILITY': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t, visible: !t.visible,
+            })),
+          })),
+        },
+
+        'TRACK.RESET_KEYFRAMES': {
+          actions: assign(({ context, event }) => {
+            const scene = updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t, keyframes: [],
+            }))
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'CUE.ADD': {
+          actions: assign(({ context, event }) => {
+            const scene = { ...context.scene, cues: [...context.scene.cues, event.cue] }
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'CUE.REMOVE': {
+          actions: assign(({ context, event }) => {
+            const scene = { ...context.scene, cues: context.scene.cues.filter(c => c.id !== event.cueId) }
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'MARKER.ADD': {
+          actions: assign(({ context, event }) => {
+            const scene = { ...context.scene, markers: [...context.scene.markers, event.marker] }
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'MARKER.MOVE': {
+          actions: assign(({ context, event }) => {
+            // propagate to attached keyframes
+            function propagate(tracks: TrackNode[]): TrackNode[] {
+              return tracks.map(t => ({
+                ...t,
+                keyframes: t.keyframes.map(k =>
+                  k.markerId === event.markerId ? { ...k, timeMs: event.timeMs } : k,
+                ),
+                children: t.children ? propagate(t.children) : undefined,
+              }))
+            }
+            const markers = context.scene.markers.map(m =>
+              m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m,
+            )
+            const tracks = propagate(context.scene.tracks)
+            const scene = { ...context.scene, markers, tracks }
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'MARKER.REMOVE': {
+          actions: assign(({ context, event }) => {
+            function detach(tracks: TrackNode[]): TrackNode[] {
+              return tracks.map(t => ({
+                ...t,
+                keyframes: t.keyframes.map(k =>
+                  k.markerId === event.markerId ? { ...k, markerId: undefined } : k,
+                ),
+                children: t.children ? detach(t.children) : undefined,
+              }))
+            }
+            const markers = context.scene.markers.filter(m => m.id !== event.markerId)
+            const tracks = detach(context.scene.tracks)
+            const scene = { ...context.scene, markers, tracks }
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'KEYFRAME.ATTACH_MARKER': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId ? { ...k, markerId: event.markerId } : k,
+              ),
+            })),
+          })),
+        },
+
+        'KEYFRAME.DETACH_MARKER': {
+          actions: assign(({ context, event }) => ({
+            scene: updateTrackInScene(context.scene, event.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k =>
+                k.id === event.keyframeId ? { ...k, markerId: undefined } : k,
+              ),
+            })),
+          })),
+        },
+
+        'AUDIO.SET': {
+          actions: assign(({ context, event }) => ({
+            scene: { ...context.scene, audio: event.track },
+          })),
+        },
+
+        'AUDIO.CLEAR': {
+          actions: assign(({ context }) => ({
+            scene: { ...context.scene, audio: undefined },
+          })),
+        },
+
+        'AUDIO.SET_WAVEFORM': {
+          actions: assign(({ context, event }) => {
+            if (!context.scene.audio) return {}
+            return {
+              scene: {
+                ...context.scene,
+                audio: { ...context.scene.audio, waveform: event.waveform },
+              },
+            }
+          }),
+        },
+
+        'SCENE.LOAD': {
+          actions: assign(({ event }) => ({
+            scene: event.scene,
+            snapGrid: computeSnapGrid(event.scene),
+            playheadMs: 0,
+            selection: { trackId: null, keyframeId: null },
+            interaction: null,
+          })),
+        },
+
+        'SCENE.SET_DURATION': {
+          actions: assign(({ context, event }) => ({
+            scene: {
+              ...context.scene,
+              durationMs: event.durationMs,
+              durationSource: event.source ?? context.scene.durationSource,
+            },
+          })),
+        },
+      },
+    },
+
+    // ── playing ─────────────────────────────────────────────────────────────
+    playing: {
+      on: {
+        'PLAYHEAD.TICK': [
+          {
+            // End of play: transition to idle so START_PLAY becomes available again
+            guard: ({ context, event }) => {
+              const stopMs = context.playRange?.outMs ?? context.scene.durationMs
+              return context.playheadMs + event.deltaMs >= stopMs
+            },
+            target: 'idle',
+            actions: assign(({ context }) => ({
+              isPlaying: false,
+              playheadMs: context.playRange?.outMs ?? context.scene.durationMs,
+            })),
+          },
+          {
+            actions: assign(({ context, event }) => ({
+              playheadMs: context.playheadMs + event.deltaMs,
+            })),
+          },
+        ],
+        'PLAYHEAD.PAUSE': {
+          target: 'idle',
+          actions: assign({ isPlaying: false }),
+        },
+        'PLAYHEAD.STOP': {
+          target: 'idle',
+          actions: assign({ isPlaying: false, playheadMs: 0 }),
+        },
+        'PLAYHEAD.SET': {
+          actions: assign(({ context, event }) => ({
+            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.durationMs)),
+          })),
+        },
+      },
+    },
+
+    // ── panning ──────────────────────────────────────────────────────────────
+    panning: {
+      on: {
+        'VIEWPORT.PAN_MOVE': {
+          actions: assign(({ context, event }) => {
+            const i = context.interaction
+            if (!i || i.kind !== 'panning') return {}
+            const deltaPx = event.pointerPx - i.originPx
+            const deltaMs = deltaPx / context.viewport.pixelsPerMs
+            const startMs = clampViewportStart(
+              i.originStartMs - deltaMs,
+              context.viewport,
+              context.scene.durationMs,
+            )
+            const viewport: MachineViewport = {
+              ...context.viewport,
+              startMs,
+              endMs: computeEndMs({ ...context.viewport, startMs }),
+            }
+            return { viewport }
+          }),
+        },
+        'VIEWPORT.PAN_END': {
+          target: 'idle',
+          actions: assign({ interaction: null }),
+        },
+      },
+    },
+
+    // ── dragging-keyframe ────────────────────────────────────────────────────
+    'dragging-keyframe': {
+      on: {
+        'DRAG.MOVE': {
+          actions: assign(({ context, event }) => {
+            const i = context.interaction
+            if (!i || i.kind !== 'dragging-keyframe') return {}
+            const thresholdMs = context.layoutProfile.snapThresholdPx / context.viewport.pixelsPerMs
+            const snapped = applySnapToMs(event.pointerMs, context.snapGrid, thresholdMs)
+            const currentMs = Math.max(0, Math.min(snapped, context.scene.durationMs))
+            return { interaction: { ...i, currentMs } }
+          }),
+        },
+        'DRAG.END': {
+          target: 'idle',
+          guard: 'canCommitDrag',
+          actions: assign(({ context }) => {
+            const i = context.interaction
+            if (!i || i.kind !== 'dragging-keyframe') return { interaction: null }
+            const timeMs = i.currentMs
+            const scene = updateTrackInScene(context.scene, i.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes
+                .map(k => k.id === i.keyframeId ? { ...k, timeMs } : k)
+                .sort((a, b) => a.timeMs - b.timeMs),
+            }))
+            return { scene, snapGrid: computeSnapGrid(scene), interaction: null }
+          }),
+        },
+      },
+    },
+
+    // ── drawing-window ───────────────────────────────────────────────────────
+    'drawing-window': {
+      on: {
+        'WINDOW.DRAW_MOVE': {
+          actions: assign(({ context, event }) => {
+            const i = context.interaction
+            if (!i || i.kind !== 'drawing-window') return {}
+            return { interaction: { ...i, currentMs: event.pointerMs } }
+          }),
+        },
+        'WINDOW.DRAW_END': {
+          target: 'idle',
+          actions: assign(({ context }) => {
+            const i = context.interaction
+            if (!i || i.kind !== 'drawing-window') return { interaction: null }
+
+            const minMs = Math.min(i.startMs, i.currentMs)
+            const maxMs = Math.max(i.startMs, i.currentMs)
+            const durationMs = Math.max(DEFAULT_TRANSITION_DURATION_MS, maxMs - minMs)
+
+            const track = flattenTracks(context.scene.tracks).find(t => t.id === i.trackId)
+            if (!track || track.keyframes.length === 0) return { interaction: null }
+
+            const sorted = [...track.keyframes].sort((a, b) => a.timeMs - b.timeMs)
+            const firstKf = sorted[0]!
+            const lastKf = sorted[sorted.length - 1]!
+
+            const isIntro = firstKf.timeMs >= minMs && firstKf.timeMs <= maxMs
+            const isOutro = lastKf.timeMs >= minMs && lastKf.timeMs <= maxMs
+
+            const def: TransitionDef = { kind: 'named', name: 'fade', durationMs }
+
+            const scene = updateTrackInScene(context.scene, i.trackId, t => ({
+              ...t,
+              keyframes: t.keyframes.map(k => {
+                if (isIntro && k.id === firstKf.id) return { ...k, transitionOut: def }
+                if (isOutro && k.id === lastKf.id && !isIntro) return { ...k, transitionOut: def }
+                return k
+              }),
+            }))
+
+            return { scene, interaction: null }
+          }),
+        },
+      },
+    },
+
+  },
+})

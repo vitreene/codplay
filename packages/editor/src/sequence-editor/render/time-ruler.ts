@@ -1,5 +1,5 @@
-import type { SequenceEditorContext } from '../types'
-import { computeGraduationInterval, msToPixel } from '../utils'
+import type { MachineContext } from '../machine'
+import { computeGraduationInterval } from '../utils'
 import { formatTimeMs, RULER_GRADUATION_LEVELS_MS, MIN_GRADUATION_GAP_PX } from '../constants'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -11,10 +11,10 @@ export function createTimeRuler(): SVGSVGElement {
   return svg
 }
 
-export function renderTimeRuler(svg: SVGSVGElement, ctx: SequenceEditorContext): void {
-  const { viewport, scene, displayConfig } = ctx
-  const { pxPerSec, scrollLeftMs, visibleDurationMs } = viewport
-  const width = msToPixel(visibleDurationMs, pxPerSec) || svg.clientWidth
+export function renderTimeRuler(svg: SVGSVGElement, ctx: MachineContext): void {
+  const { viewport, scene, displayConfig, playRange } = ctx
+  const { pixelsPerMs, startMs, viewWidthPx } = viewport
+  const width = viewWidthPx || svg.clientWidth
   const height = svg.clientHeight || 28
 
   svg.setAttribute('width', String(width))
@@ -23,12 +23,38 @@ export function renderTimeRuler(svg: SVGSVGElement, ctx: SequenceEditorContext):
 
   while (svg.firstChild) svg.removeChild(svg.firstChild)
 
-  const intervalMs = computeGraduationInterval(pxPerSec, RULER_GRADUATION_LEVELS_MS, MIN_GRADUATION_GAP_PX)
-  const startMs = Math.floor(scrollLeftMs / intervalMs) * intervalMs
-  const endMs = scrollLeftMs + visibleDurationMs + intervalMs
+  // Play range highlight band
+  if (playRange) {
+    const rx = (playRange.inMs - startMs) * pixelsPerMs
+    const rw = (playRange.outMs - playRange.inMs) * pixelsPerMs
+    const band = document.createElementNS(SVG_NS, 'rect')
+    band.setAttribute('x', String(rx))
+    band.setAttribute('y', '0')
+    band.setAttribute('width', String(Math.max(0, rw)))
+    band.setAttribute('height', String(height))
+    band.classList.add('seq-ruler__range')
+    svg.appendChild(band)
 
-  for (let t = startMs; t <= Math.min(endMs, scene.durationMs); t += intervalMs) {
-    const x = msToPixel(t - scrollLeftMs, pxPerSec)
+    // In/out edge markers
+    for (const [edgeMs, cls] of [[playRange.inMs, 'seq-ruler__range-in'], [playRange.outMs, 'seq-ruler__range-out']] as const) {
+      const ex = (edgeMs - startMs) * pixelsPerMs
+      const edge = document.createElementNS(SVG_NS, 'line')
+      edge.setAttribute('x1', String(ex))
+      edge.setAttribute('x2', String(ex))
+      edge.setAttribute('y1', '0')
+      edge.setAttribute('y2', String(height))
+      edge.classList.add(cls)
+      svg.appendChild(edge)
+    }
+  }
+
+  const pxPerSec = pixelsPerMs * 1000
+  const intervalMs = computeGraduationInterval(pxPerSec, RULER_GRADUATION_LEVELS_MS, MIN_GRADUATION_GAP_PX)
+  const gradStart = Math.floor(startMs / intervalMs) * intervalMs
+  const gradEnd = startMs + width / pixelsPerMs + intervalMs
+
+  for (let t = gradStart; t <= Math.min(gradEnd, scene.durationMs); t += intervalMs) {
+    const x = (t - startMs) * pixelsPerMs
 
     const line = document.createElementNS(SVG_NS, 'line')
     line.setAttribute('x1', String(x))

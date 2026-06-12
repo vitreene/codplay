@@ -1,5 +1,4 @@
-import type { SequenceEditorContext } from '../types'
-import { msToPixel } from '../utils'
+import type { MachineContext } from '../machine'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -10,16 +9,17 @@ export function createCueRow(): SVGSVGElement {
   return svg
 }
 
-export function renderCueRow(svg: SVGSVGElement, ctx: SequenceEditorContext): void {
+export function renderCueRow(svg: SVGSVGElement, ctx: MachineContext): void {
   while (svg.firstChild) svg.removeChild(svg.firstChild)
 
   const { viewport, scene, layoutProfile } = ctx
+  const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightCues
 
   svg.setAttribute('height', String(h))
 
   for (const cue of scene.cues) {
-    const x = msToPixel(cue.timeMs - viewport.scrollLeftMs, viewport.pxPerSec)
+    const x = (cue.timeMs - startMs) * pixelsPerMs
 
     const line = document.createElementNS(SVG_NS, 'line')
     line.setAttribute('x1', String(x))

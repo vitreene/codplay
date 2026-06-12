@@ -1,5 +1,4 @@
-import type { SequenceEditorContext } from '../types'
-import { msToPixel } from '../utils'
+import type { MachineContext } from '../machine'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -10,16 +9,17 @@ export function createMarkerRow(): SVGSVGElement {
   return svg
 }
 
-export function renderMarkerRow(svg: SVGSVGElement, ctx: SequenceEditorContext): void {
+export function renderMarkerRow(svg: SVGSVGElement, ctx: MachineContext): void {
   while (svg.firstChild) svg.removeChild(svg.firstChild)
 
   const { viewport, scene, layoutProfile } = ctx
+  const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightMarkers
 
   svg.setAttribute('height', String(h))
 
   for (const marker of scene.markers) {
-    const x = msToPixel(marker.timeMs - viewport.scrollLeftMs, viewport.pxPerSec)
+    const x = (marker.timeMs - startMs) * pixelsPerMs
     const color = marker.color ?? 'var(--seq-marker-default-color)'
 
     const flag = document.createElementNS(SVG_NS, 'polygon')

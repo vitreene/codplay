@@ -1,5 +1,4 @@
-import type { SequenceEditorContext } from '../types'
-import { msToPixel } from '../utils'
+import type { MachineContext } from '../machine'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -22,9 +21,9 @@ export function createPlayheadOverlay(): SVGSVGElement {
   return svg
 }
 
-export function renderPlayhead(svg: SVGSVGElement, ctx: SequenceEditorContext): void {
+export function renderPlayhead(svg: SVGSVGElement, ctx: MachineContext): void {
   const { viewport, playheadMs } = ctx
-  const x = msToPixel(playheadMs - viewport.scrollLeftMs, viewport.pxPerSec)
+  const x = (playheadMs - viewport.startMs) * viewport.pixelsPerMs
   const h = svg.clientHeight || 400
 
   const line = svg.querySelector<SVGLineElement>('#seq-playhead-line')
@@ -38,8 +37,6 @@ export function renderPlayhead(svg: SVGSVGElement, ctx: SequenceEditorContext): 
   }
 
   if (head) {
-    const hw = 6
-    const hh = 8
-    head.setAttribute('points', `${x - hw},0 ${x + hw},0 ${x},${hh}`)
+    head.setAttribute('points', `${x - 6},0 ${x + 6},0 ${x},8`)
   }
 }

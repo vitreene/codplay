@@ -93,6 +93,9 @@
 
 .seq-ruler__tick { stroke: var(--seq-ruler-tick); stroke-width: 1; }
 .seq-ruler__label { fill: var(--seq-ruler-text); font-size: var(--seq-font-size-sm); font-family: var(--seq-font); }
+.seq-ruler__range { fill: rgba(251,191,36,0.18); pointer-events: none; }
+.seq-ruler__range-in  { stroke: #fbbf24; stroke-width: 2; pointer-events: none; }
+.seq-ruler__range-out { stroke: #fbbf24; stroke-width: 2; pointer-events: none; }
 
 /* ── Labels column ──────────────────────────────────────────────────────── */
 .seq-labels {
@@ -113,18 +116,40 @@
   box-sizing: border-box;
 }
 .seq-label-row:hover { background: var(--seq-label-row-hover); }
-.seq-label-row--selected { background: color-mix(in srgb, var(--seq-selected) 15%, transparent); }
-.seq-label-row[data-has-children] { padding-left: calc(var(--seq-label-indent) + 8px); }
+.seq-label-row--selected {
+  background: rgba(245, 158, 11, 0.18);
+  box-shadow: inset 3px 0 0 var(--seq-selected);
+}
+.seq-label-row--hidden .seq-label-row__name,
+.seq-label-row--hidden .seq-label-row__kind { opacity: 0.35; }
+.seq-label-row[data-depth="1"] { padding-left: calc(var(--seq-label-indent) + 8px); }
+.seq-label-row[data-depth="2"] { padding-left: calc(var(--seq-label-indent) * 2 + 8px); }
+
+.seq-label-row__collapse {
+  background: none;
+  border: none;
+  color: var(--seq-text-muted);
+  cursor: pointer;
+  font-size: 8px;
+  line-height: 1;
+  padding: 0 3px 0 0;
+  flex-shrink: 0;
+}
+.seq-label-row__collapse:hover { color: var(--seq-text); }
 
 .seq-label-row__vis {
   background: none;
   border: none;
   color: var(--seq-text-muted);
   cursor: pointer;
-  font-size: 8px;
-  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 3px;
   flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.5;
 }
+.seq-label-row__vis:hover { opacity: 1; color: var(--seq-text); }
 .seq-label-row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .seq-label-row__kind {
   font-size: 9px;
@@ -175,7 +200,7 @@
   cursor: crosshair;
 }
 .seq-row[data-kind="capsule"] { background: color-mix(in srgb, var(--seq-accent) 4%, transparent); }
-.seq-row[data-has-children] { padding-left: var(--seq-label-indent); }
+.seq-row--hidden { opacity: 0.25; pointer-events: none; }
 
 .seq-row__svg {
   display: block;
@@ -189,6 +214,11 @@
   stroke-width: 0;
   rx: 2;
 }
+
+/* Transition bands */
+.seq-row__transition { opacity: 0.35; pointer-events: none; rx: 2; }
+.seq-row__transition--named  { fill: #fbbf24; }
+.seq-row__transition--interp { fill: #60a5fa; }
 
 /* Keyframes */
 .seq-kf__diamond {
@@ -265,6 +295,8 @@
   border-radius: 4px;
   font-size: var(--seq-font-size-sm);
   font-family: var(--seq-font);
+  min-width: 28px;
+  text-align: center;
 }
 .seq-toolbar__btn:hover { border-color: var(--seq-accent); color: var(--seq-accent); }
 .seq-toolbar__btn--active { background: var(--seq-accent); border-color: var(--seq-accent); color: #fff; }
@@ -285,6 +317,56 @@
   color: var(--seq-text-muted);
 }
 .seq-toolbar__zoom input[type=range] { width: 80px; accent-color: var(--seq-accent); }
+
+/* ── Main area (editor left + output right) ─────────────────────────────── */
+.seq-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.seq-left {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── JSON output panel ──────────────────────────────────────────────────── */
+.seq-output {
+  width: 300px;
+  flex-shrink: 0;
+  overflow: auto;
+  background: #0d1117;
+  border-left: 1px solid var(--seq-border);
+  padding: 8px 12px;
+  margin: 0;
+  font-family: var(--seq-font);
+  font-size: 10px;
+  color: #e6edf3;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── Drag overlay (covers viewport during keyframe drag) ────────────────── */
+.seq-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  cursor: grabbing;
+}
+.seq-drag-overlay.active { pointer-events: auto; }
+
+/* Dragging keyframe visual */
+.seq-kf--dragging .seq-kf__diamond {
+  fill: var(--seq-selected);
+  opacity: 0.8;
+  cursor: grabbing;
+}
 
 /* ── Selection info bar ─────────────────────────────────────────────────── */
 .seq-infobar {
