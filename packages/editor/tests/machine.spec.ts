@@ -144,46 +144,52 @@ describe('drag keyframe', () => {
   })
 })
 
-// ─── Window draw → intro / outro ────────────────────────────────────────────
+// ─── Clip draw → intro / outro ───────────────────────────────────────────────
 
-describe('window draw', () => {
-  it('WINDOW.START_DRAW → state drawing-window', () => {
+describe('clip draw', () => {
+  it('CLIP.START_DRAW → state drawing-clip', () => {
     const actor = boot(ONE_TRACK)
-    actor.send({ type: 'WINDOW.START_DRAW', trackId: 'track-01', pointerMs: 0 })
-    expect(actor.getSnapshot().value).toBe('drawing-window')
+    actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 0, introId: 'i1', outroId: 'o1' })
+    expect(actor.getSnapshot().value).toBe('drawing-clip')
     actor.stop()
   })
 
-  it('draw sur le premier kf → transitionOut named sur kf-01', () => {
+  it('CLIP.DRAW_MOVE met à jour currentMs', () => {
     const actor = boot(ONE_TRACK)
-    // kf-01 est à t=0. On dessine de 0 à 800 ms (englobe le kf-01)
-    actor.send({ type: 'WINDOW.START_DRAW', trackId: 'track-01', pointerMs: 0 })
-    actor.send({ type: 'WINDOW.DRAW_MOVE', pointerMs: 800 })
-    actor.send({ type: 'WINDOW.DRAW_END', pointerMs: 800 })
+    actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 0, introId: 'i1', outroId: 'o1' })
+    actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
+    const i = actor.getSnapshot().context.interaction!
+    if (i.kind === 'drawing-clip') expect(i.currentMs).toBe(2000)
+    actor.stop()
+  })
+
+  it('CLIP.DRAW_END → idle, crée intro et outro avec les bons ids et timeMs', () => {
+    const actor = boot(ONE_TRACK)
+    actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 1000, introId: 'new-intro', outroId: 'new-outro' })
+    actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 3000 })
+    actor.send({ type: 'CLIP.DRAW_END' })
     expect(actor.getSnapshot().value).toBe('idle')
-    const kf = actor.getSnapshot().context.scene.tracks[0]!.keyframes.find(k => k.id === 'kf-01')!
-    expect(kf.transitionOut?.kind).toBe('named')
+    const kfs = actor.getSnapshot().context.scene.tracks[0]!.keyframes
+    const intro = kfs.find(k => k.id === 'new-intro')
+    const outro = kfs.find(k => k.id === 'new-outro')
+    expect(intro?.timeMs).toBe(1000)
+    expect(outro?.timeMs).toBe(3000)
+    expect(intro?.name).toBe('intro')
+    expect(outro?.name).toBe('outro')
     actor.stop()
   })
 
-  it('draw sur le dernier kf → transitionOut named sur kf-03', () => {
+  it('CLIP.DRAW_END normalise les bornes (start > end)', () => {
     const actor = boot(ONE_TRACK)
-    // kf-03 est à t=9000. On dessine de 8500 à 9000 (englobe kf-03)
-    actor.send({ type: 'WINDOW.START_DRAW', trackId: 'track-01', pointerMs: 8500 })
-    actor.send({ type: 'WINDOW.DRAW_MOVE', pointerMs: 9000 })
-    actor.send({ type: 'WINDOW.DRAW_END', pointerMs: 9000 })
-    const kf = actor.getSnapshot().context.scene.tracks[0]!.keyframes.find(k => k.id === 'kf-03')!
-    expect(kf.transitionOut?.kind).toBe('named')
-    actor.stop()
-  })
-
-  it('durationMs de la transition = longueur du dessin', () => {
-    const actor = boot(ONE_TRACK)
-    actor.send({ type: 'WINDOW.START_DRAW', trackId: 'track-01', pointerMs: 0 })
-    actor.send({ type: 'WINDOW.DRAW_MOVE', pointerMs: 700 })
-    actor.send({ type: 'WINDOW.DRAW_END', pointerMs: 700 })
-    const kf = actor.getSnapshot().context.scene.tracks[0]!.keyframes.find(k => k.id === 'kf-01')!
-    expect(kf.transitionOut?.durationMs).toBe(700)
+    // Dessin en sens inverse : start=4000 → move=2000
+    actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 4000, introId: 'rev-i', outroId: 'rev-o' })
+    actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
+    actor.send({ type: 'CLIP.DRAW_END' })
+    const kfs = actor.getSnapshot().context.scene.tracks[0]!.keyframes
+    const intro = kfs.find(k => k.id === 'rev-i')
+    const outro = kfs.find(k => k.id === 'rev-o')
+    expect(intro?.timeMs).toBe(2000)   // min
+    expect(outro?.timeMs).toBe(4000)   // max
     actor.stop()
   })
 })

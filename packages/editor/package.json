@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "codplay": "*",
-    "@codplay/capsule-automation": "*"
+    "@codplay/capsule-automation": "*",
+    "xstate": "^5.32.0"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^4.1.8"
   }
 }

@@ -1,0 +1,1035 @@
+{
+  "id": "scene-avatar-poc",
+  "title": "Avatar POC — Risque électrique (FR)",
+  "durationMs": 19000,
+  "durationSource": "audio-primary",
+  "audio": {
+    "id": "audio-fr",
+    "label": "Voix FR",
+    "srcUrl": "/audio/1_7b_e.mp3",
+    "durationMs": 18000
+  },
+  "tracks": [
+    {
+      "id": "track-avatar",
+      "kind": "element",
+      "label": "Avatar",
+      "visible": true,
+      "contentType": "image",
+      "keyframes": [
+        {
+          "id": "kf-avatar-intro",
+          "timeMs": 0,
+          "name": "intro",
+          "decorId": null
+        },
+        {
+          "id": "kf-avatar-outro",
+          "timeMs": 18000,
+          "name": "outro",
+          "decorId": null
+        }
+      ]
+    },
+    {
+      "id": "track-subtitles",
+      "kind": "element",
+      "label": "Sous-titres",
+      "visible": true,
+      "contentType": "text",
+      "keyframes": [
+        {
+          "id": "kf-sub-001",
+          "timeMs": 180,
+          "name": "Vous",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-002",
+          "timeMs": 330,
+          "name": "l'avez",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-003",
+          "timeMs": 570,
+          "name": "donc",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-004",
+          "timeMs": 810,
+          "name": "vu,",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-005",
+          "timeMs": 1200,
+          "name": "l'électricité",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-006",
+          "timeMs": 1890,
+          "name": "présente",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-007",
+          "timeMs": 2340,
+          "name": "des",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-008",
+          "timeMs": 2490,
+          "name": "risques.",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-009",
+          "timeMs": 3390,
+          "name": "Si",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-010",
+          "timeMs": 3630,
+          "name": "nous",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-011",
+          "timeMs": 3810,
+          "name": "connaissons",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-012",
+          "timeMs": 4290,
+          "name": "ces",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-013",
+          "timeMs": 4440,
+          "name": "risques,",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-014",
+          "timeMs": 4890,
+          "name": "nous",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-015",
+          "timeMs": 5100,
+          "name": "pouvons",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-016",
+          "timeMs": 5400,
+          "name": "les",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-017",
+          "timeMs": 5490,
+          "name": "prévenir.",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-018",
+          "timeMs": 6480,
+          "name": "C'est",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-019",
+          "timeMs": 6660,
+          "name": "pourquoi",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-020",
+          "timeMs": 6960,
+          "name": "il",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-021",
+          "timeMs": 7080,
+          "name": "est",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-022",
+          "timeMs": 7200,
+          "name": "essentiel",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-023",
+          "timeMs": 7740,
+          "name": "d'évaluer",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-024",
+          "timeMs": 8190,
+          "name": "le",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-025",
+          "timeMs": 8310,
+          "name": "risque",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-026",
+          "timeMs": 8610,
+          "name": "électrique",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-027",
+          "timeMs": 9060,
+          "name": "dans",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-028",
+          "timeMs": 9210,
+          "name": "le",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-029",
+          "timeMs": 9300,
+          "name": "travail",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-030",
+          "timeMs": 9690,
+          "name": "que",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-031",
+          "timeMs": 9870,
+          "name": "vous",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-032",
+          "timeMs": 10020,
+          "name": "effectuez.",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-033",
+          "timeMs": 11220,
+          "name": "Cette",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-034",
+          "timeMs": 11520,
+          "name": "évaluation",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-035",
+          "timeMs": 12030,
+          "name": "des",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-036",
+          "timeMs": 12150,
+          "name": "risques",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-037",
+          "timeMs": 12450,
+          "name": "en",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-038",
+          "timeMs": 12540,
+          "name": "général",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-039",
+          "timeMs": 13170,
+          "name": "et",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-040",
+          "timeMs": 13320,
+          "name": "du",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-041",
+          "timeMs": 13440,
+          "name": "risque",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-042",
+          "timeMs": 13740,
+          "name": "électrique",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-043",
+          "timeMs": 14190,
+          "name": "en",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-044",
+          "timeMs": 14280,
+          "name": "particulier",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-045",
+          "timeMs": 15090,
+          "name": "est",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-046",
+          "timeMs": 15330,
+          "name": "obligatoire.",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-047",
+          "timeMs": 16560,
+          "name": "Nous",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-048",
+          "timeMs": 16800,
+          "name": "allons",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-049",
+          "timeMs": 17010,
+          "name": "en",
+          "decorId": null
+        },
+        {
+          "id": "kf-sub-050",
+          "timeMs": 17070,
+          "name": "parler.",
+          "decorId": null
+        }
+      ]
+    },
+    {
+      "id": "track-phonemes",
+      "kind": "element",
+      "label": "Phonèmes (Preston Blair)",
+      "visible": true,
+      "keyframes": [
+        {
+          "id": "kf-ph-001",
+          "timeMs": 0,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-002",
+          "timeMs": 80,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-003",
+          "timeMs": 150,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-004",
+          "timeMs": 290,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-005",
+          "timeMs": 500,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-006",
+          "timeMs": 570,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-007",
+          "timeMs": 710,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-008",
+          "timeMs": 920,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-009",
+          "timeMs": 1150,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-010",
+          "timeMs": 1320,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-011",
+          "timeMs": 1530,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-012",
+          "timeMs": 2090,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-013",
+          "timeMs": 2230,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-014",
+          "timeMs": 2300,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-015",
+          "timeMs": 2440,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-016",
+          "timeMs": 2930,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-017",
+          "timeMs": 3300,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-018",
+          "timeMs": 3540,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-019",
+          "timeMs": 3890,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-020",
+          "timeMs": 4100,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-021",
+          "timeMs": 4170,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-022",
+          "timeMs": 4800,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-023",
+          "timeMs": 4940,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-024",
+          "timeMs": 5020,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-025",
+          "timeMs": 5170,
+          "name": "G",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-026",
+          "timeMs": 5240,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-027",
+          "timeMs": 5310,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-028",
+          "timeMs": 5520,
+          "name": "G",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-029",
+          "timeMs": 5590,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-030",
+          "timeMs": 5800,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-031",
+          "timeMs": 6010,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-032",
+          "timeMs": 6390,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-033",
+          "timeMs": 6490,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-034",
+          "timeMs": 6570,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-035",
+          "timeMs": 6890,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-036",
+          "timeMs": 7240,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-037",
+          "timeMs": 7310,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-038",
+          "timeMs": 7380,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-039",
+          "timeMs": 7450,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-040",
+          "timeMs": 7590,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-041",
+          "timeMs": 7800,
+          "name": "G",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-042",
+          "timeMs": 7870,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-043",
+          "timeMs": 8080,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-044",
+          "timeMs": 8220,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-045",
+          "timeMs": 8640,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-046",
+          "timeMs": 8720,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-047",
+          "timeMs": 8850,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-048",
+          "timeMs": 8920,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-049",
+          "timeMs": 9000,
+          "name": "D",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-050",
+          "timeMs": 9130,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-051",
+          "timeMs": 9200,
+          "name": "D",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-052",
+          "timeMs": 9410,
+          "name": "H",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-053",
+          "timeMs": 9480,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-054",
+          "timeMs": 9550,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-055",
+          "timeMs": 9900,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-056",
+          "timeMs": 10040,
+          "name": "G",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-057",
+          "timeMs": 10110,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-058",
+          "timeMs": 10390,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-059",
+          "timeMs": 10460,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-060",
+          "timeMs": 10530,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-061",
+          "timeMs": 11160,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-062",
+          "timeMs": 11460,
+          "name": "G",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-063",
+          "timeMs": 11530,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-064",
+          "timeMs": 11600,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-065",
+          "timeMs": 11880,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-066",
+          "timeMs": 11950,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-067",
+          "timeMs": 12090,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-068",
+          "timeMs": 12160,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-069",
+          "timeMs": 12230,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-070",
+          "timeMs": 12440,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-071",
+          "timeMs": 12510,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-072",
+          "timeMs": 12580,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-073",
+          "timeMs": 12720,
+          "name": "D",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-074",
+          "timeMs": 12820,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-075",
+          "timeMs": 12860,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-076",
+          "timeMs": 12930,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-077",
+          "timeMs": 12990,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-078",
+          "timeMs": 13070,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-079",
+          "timeMs": 13160,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-080",
+          "timeMs": 13300,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-081",
+          "timeMs": 13380,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-082",
+          "timeMs": 13680,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-083",
+          "timeMs": 13750,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-084",
+          "timeMs": 14030,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-085",
+          "timeMs": 14100,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-086",
+          "timeMs": 14180,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-087",
+          "timeMs": 14300,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-088",
+          "timeMs": 14440,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-089",
+          "timeMs": 14580,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-090",
+          "timeMs": 14860,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-091",
+          "timeMs": 15060,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-092",
+          "timeMs": 15260,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-093",
+          "timeMs": 15340,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-094",
+          "timeMs": 15600,
+          "name": "H",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-095",
+          "timeMs": 15740,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-096",
+          "timeMs": 15880,
+          "name": "E",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-097",
+          "timeMs": 15950,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-098",
+          "timeMs": 16020,
+          "name": "X",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-099",
+          "timeMs": 16460,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-100",
+          "timeMs": 16530,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-101",
+          "timeMs": 16600,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-102",
+          "timeMs": 16650,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-103",
+          "timeMs": 16770,
+          "name": "F",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-104",
+          "timeMs": 16840,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-105",
+          "timeMs": 16910,
+          "name": "A",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-106",
+          "timeMs": 16990,
+          "name": "D",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-107",
+          "timeMs": 17150,
+          "name": "C",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-108",
+          "timeMs": 17190,
+          "name": "B",
+          "decorId": null
+        },
+        {
+          "id": "kf-ph-109",
+          "timeMs": 17380,
+          "name": "X",
+          "decorId": null
+        }
+      ]
+    }
+  ],
+  "decors": {},
+  "cues": [
+    {
+      "id": "cue-p1",
+      "timeMs": 180,
+      "label": "Vous l'avez donc vu, l'électricité présente des risques."
+    },
+    {
+      "id": "cue-p2",
+      "timeMs": 3390,
+      "label": "Si nous connaissons ces risques, nous pouvons les prévenir."
+    },
+    {
+      "id": "cue-p3",
+      "timeMs": 6480,
+      "label": "C'est pourquoi il est essentiel d'évaluer le risque électrique dans le travail que vous effectuez."
+    },
+    {
+      "id": "cue-p4",
+      "timeMs": 11220,
+      "label": "Cette évaluation des risques en général et du risque électrique en particulier est obligatoire."
+    },
+    {
+      "id": "cue-p5",
+      "timeMs": 16560,
+      "label": "Nous allons en parler."
+    }
+  ],
+  "markers": []
+}

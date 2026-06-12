@@ -1,0 +1,45 @@
+{
+  "id": "scene-carousel",
+  "title": "Carousel d'images",
+  "durationMs": 9000,
+  "durationSource": "arbitrary",
+  "tracks": [
+    {
+      "id": "track-carousel",
+      "kind": "capsule",
+      "capsuleType": "carrousel",
+      "label": "Carousel",
+      "visible": true,
+      "keyframes": [],
+      "children": [
+        {
+          "id": "track-img-0",
+          "kind": "element",
+          "contentType": "image",
+          "label": "Image 1",
+          "visible": true,
+          "keyframes": []
+        },
+        {
+          "id": "track-img-1",
+          "kind": "element",
+          "contentType": "image",
+          "label": "Image 2",
+          "visible": true,
+          "keyframes": []
+        },
+        {
+          "id": "track-img-2",
+          "kind": "element",
+          "contentType": "image",
+          "label": "Image 3",
+          "visible": true,
+          "keyframes": []
+        }
+      ]
+    }
+  ],
+  "decors": {},
+  "cues": [],
+  "markers": []
+}

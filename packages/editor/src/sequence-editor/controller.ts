@@ -86,9 +86,10 @@ export class SequenceEditorController {
 
   zoom(factor: number, focusPx?: number): void {
     const vp = this.getViewport()
+    const ppm = vp.pixelsPerMs > 0 ? vp.pixelsPerMs : 0.001
     const focusMs = focusPx !== undefined
-      ? vp.startMs + focusPx / vp.pixelsPerMs
-      : vp.startMs + vp.viewWidthPx / (2 * vp.pixelsPerMs)
+      ? vp.startMs + focusPx / ppm
+      : vp.startMs + vp.viewWidthPx / (2 * ppm)
     this.send({ type: 'VIEWPORT.ZOOM', factor, focusMs })
   }
 
@@ -256,6 +257,14 @@ export class SequenceEditorController {
 
   removeKeyframe(trackId: string, keyframeId: string): void {
     this.send({ type: 'KEYFRAME.REMOVE', trackId, keyframeId })
+  }
+
+  clearTrack(trackId: string): void {
+    this.send({ type: 'KEYFRAME.CLEAR_TRACK', trackId })
+  }
+
+  clearCapsule(trackId: string): void {
+    this.send({ type: 'KEYFRAME.CLEAR_CAPSULE', trackId })
   }
 
   moveKeyframe(trackId: string, keyframeId: string, timeMs: number): void {

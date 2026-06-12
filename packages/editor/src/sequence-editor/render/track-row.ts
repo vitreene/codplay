@@ -1,4 +1,4 @@
-import type { MachineContext } from '../machine'
+import type { MachineContext, VirtualKeyframe } from '../machine'
 import type { TrackNode } from '../types'
 import { getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
@@ -35,6 +35,7 @@ export function renderTrackRows(
   onSelectKeyframe: (trackId: string, kfId: string) => void,
   collapsedIds?: ReadonlySet<string>,
   onDragStart?: (trackId: string, kfId: string, e: PointerEvent) => void,
+  onMaterializeVirtual?: (vkf: VirtualKeyframe) => void,
 ): void {
   container.innerHTML = ''
 
@@ -150,6 +151,24 @@ export function renderTrackRows(
         })
       }
 
+      svg.appendChild(handle)
+    }
+
+    // Virtual keyframes (hollow diamonds — distribution-computed, not stored)
+    const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === track.id)
+    for (const vkf of vkfsForTrack) {
+      const x = (vkf.timeMs - startMs) * pixelsPerMs
+      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: null }
+      const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile)
+      handle.classList.add('seq-kf--virtual')
+      if (!vkf.visible) handle.classList.add('seq-kf--out-of-bounds')
+      if (onMaterializeVirtual) {
+        handle.style.cursor = 'pointer'
+        handle.addEventListener('dblclick', (e: MouseEvent) => {
+          e.stopPropagation()
+          onMaterializeVirtual(vkf)
+        })
+      }
       svg.appendChild(handle)
     }
 

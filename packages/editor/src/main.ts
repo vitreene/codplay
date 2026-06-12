@@ -1,7 +1,7 @@
 import './sequence-editor/sequence-editor.css'
 
 import type { EditorScene } from './sequence-editor/types'
-import type { MachineContext } from './sequence-editor/machine'
+import type { MachineContext, VirtualKeyframe } from './sequence-editor/machine'
 import { SequenceEditorController } from './sequence-editor/controller'
 import { flattenTracks } from './sequence-editor/utils'
 import { formatTimeMs } from './sequence-editor/constants'
@@ -16,27 +16,50 @@ import { createWaveformRow, renderWaveformRow } from './sequence-editor/render/w
 import sceneEddy from './sequence-editor/fixtures/scene-eddy-ref.json'
 import sceneOneTrack from './sequence-editor/fixtures/scene-one-track.json'
 import sceneNested from './sequence-editor/fixtures/scene-nested-capsule.json'
+import sceneCarousel from './sequence-editor/fixtures/scene-carousel.json'
 import sceneEmpty from './sequence-editor/fixtures/scene-empty.json'
+import sceneAvatarPoc from './sequence-editor/fixtures/scene-avatar-poc.json'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
 const FIXTURES: Record<string, EditorScene> = {
-  'eddy-ref':        sceneEddy     as unknown as EditorScene,
-  'one-track':       sceneOneTrack as unknown as EditorScene,
-  'nested-capsule':  sceneNested   as unknown as EditorScene,
-  'empty':           sceneEmpty    as unknown as EditorScene,
+  'eddy-ref':        sceneEddy      as unknown as EditorScene,
+  'one-track':       sceneOneTrack  as unknown as EditorScene,
+  'nested-capsule':  sceneNested    as unknown as EditorScene,
+  'carousel':        sceneCarousel  as unknown as EditorScene,
+  'empty':           sceneEmpty     as unknown as EditorScene,
+  'avatar-poc':      sceneAvatarPoc as unknown as EditorScene,
 }
 const FIXTURE_LABELS: Record<string, string> = {
   'eddy-ref':       'Eddy scène 02',
   'one-track':      'Un élément texte',
   'nested-capsule': 'Capsule imbriquée',
+  'carousel':       'Carousel (kf virtuels)',
   'empty':          'Scène vide',
+  'avatar-poc':     'Avatar POC (FR)',
 }
 
 // ── Controller ────────────────────────────────────────────────────────────────
 
 let ctrl = new SequenceEditorController(FIXTURES['eddy-ref']!)
 let unsubscribe: (() => void) | null = null
+
+// ── Proximity guard ──────────────────────────────────────────────────────────
+
+function isTooCloseToExisting(trackId: string, rawMs: number, ctx: MachineContext): boolean {
+  const { pixelsPerMs } = ctx.viewport
+  const thresholdMs = ctx.layoutProfile.keyframeHandleSizePx / pixelsPerMs
+  const track = flattenTracks(ctx.scene.tracks).find(t => t.id === trackId)
+  if (track) {
+    for (const kf of track.keyframes) {
+      if (Math.abs(kf.timeMs - rawMs) < thresholdMs) return true
+    }
+  }
+  for (const vkf of ctx.virtualKeyframes) {
+    if (vkf.trackId === trackId && Math.abs(vkf.timeMs - rawMs) < thresholdMs) return true
+  }
+  return false
+}
 
 // ── Collapse state (UI-only) ──────────────────────────────────────────────────
 
@@ -462,6 +485,7 @@ function render(snap: { context: MachineContext }): void {
     trackRows,
     ctx,
     (trackId, rawMs) => {
+      if (isTooCloseToExisting(trackId, rawMs, ctx)) return
       console.log('[seq] keyframe:add', trackId, rawMs.toFixed(0), 'ms')
       ctrl.addKeyframe(trackId, rawMs)
     },
@@ -471,6 +495,11 @@ function render(snap: { context: MachineContext }): void {
     },
     collapsedCapsuleIds,
     startKeyframeDrag,
+    (vkf: VirtualKeyframe) => {
+      const id = ctrl.addKeyframe(vkf.trackId, vkf.timeMs)
+      ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
+      console.log('[seq] virtual:materialize', vkf.trackId, vkf.name, vkf.timeMs.toFixed(0), 'ms')
+    },
   )
   renderCueRow(cueRow, ctx)
   renderMarkerRow(markerRow, ctx)
@@ -481,21 +510,54 @@ function render(snap: { context: MachineContext }): void {
 }
 
 function renderInfobar(bar: HTMLElement, ctx: MachineContext): void {
+  bar.innerHTML = ''
   const { selection, scene, displayConfig } = ctx
   const allTracks = flattenTracks(scene.tracks)
+
+  function btn(label: string, action: () => void): HTMLButtonElement {
+    const b = document.createElement('button')
+    b.className = 'seq-infobar__btn'
+    b.textContent = label
+    b.addEventListener('click', action)
+    return b
+  }
+  function span(text: string): HTMLSpanElement {
+    const s = document.createElement('span')
+    s.textContent = text
+    return s
+  }
+
   if (selection.keyframeId) {
     const track = allTracks.find(t => t.id === selection.trackId)
     const kf = track?.keyframes.find(k => k.id === selection.keyframeId)
-    bar.textContent = kf
-      ? `kf: ${formatTimeMs(kf.timeMs, displayConfig.timeUnit)}${kf.name ? ' — ' + kf.name : ''}  décor: ${kf.decorId ?? '∅'}`
-      : ''
+    if (!kf || !track) return
+    bar.append(
+      span(`kf: ${formatTimeMs(kf.timeMs, displayConfig.timeUnit)}${kf.name ? ' — ' + kf.name : ''}  décor: ${kf.decorId ?? '∅'}`),
+      btn('Supprimer', () => ctrl.removeKeyframe(track.id, kf.id)),
+      btn('Vider la ligne', () => ctrl.clearTrack(track.id)),
+    )
   } else if (selection.trackId) {
     const track = allTracks.find(t => t.id === selection.trackId)
-    bar.textContent = track ? `track: ${track.label}  (${track.kind})  kf: ${track.keyframes.length}` : ''
-  } else {
-    bar.textContent = ''
+    if (!track) return
+    bar.append(
+      span(`${track.label}  (${track.kind})  ${track.keyframes.length} kf`),
+      btn('Vider la ligne', () => ctrl.clearTrack(track.id)),
+    )
+    if (track.kind === 'capsule') {
+      bar.append(btn('Vider la capsule', () => ctrl.clearCapsule(track.id)))
+    }
   }
 }
+
+// Delete / Backspace → remove selected kf
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return
+  if ((e.target as HTMLElement).closest('input, textarea, select')) return
+  const { selection } = ctrl.getSnapshot().context
+  if (selection.keyframeId && selection.trackId) {
+    ctrl.removeKeyframe(selection.trackId, selection.keyframeId)
+  }
+})
 
 // ── Scroll sync ───────────────────────────────────────────────────────────────
 

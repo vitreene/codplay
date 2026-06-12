@@ -382,9 +382,26 @@
 }
 .seq-drag-overlay.active { pointer-events: auto; }
 
+/* Virtual keyframe — hollow diamond. Specificity [0,3,0] beats .seq-kf[data-kf-name] [0,3,0]
+   because this rule appears later in the sheet (equal specificity → last wins). */
+.seq-kf.seq-kf--virtual .seq-kf__diamond {
+  fill: transparent;
+  stroke: var(--seq-kf-fill-named);
+  stroke-width: 1.5;
+  opacity: 0.75;
+}
+
 /* Keyframe outside parent clip bounds — specificity [0,3,0] to beat .seq-kf[data-kf-name] */
 .seq-kf.seq-kf--out-of-bounds .seq-kf__diamond {
   fill: #ef4444;
+  opacity: 0.85;
+}
+
+/* Virtual kf out-of-bounds — hollow red, [0,4,0] beats both rules above */
+.seq-kf.seq-kf--virtual.seq-kf--out-of-bounds .seq-kf__diamond {
+  fill: transparent;
+  stroke: #ef4444;
+  stroke-width: 1.5;
   opacity: 0.85;
 }
 
@@ -408,3 +425,14 @@
   flex-shrink: 0;
 }
 .seq-infobar:empty { display: none; }
+.seq-infobar__btn {
+  background: none;
+  border: 1px solid var(--seq-border);
+  color: var(--seq-text-muted);
+  cursor: pointer;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: var(--seq-font-size-sm);
+  font-family: var(--seq-font);
+}
+.seq-infobar__btn:hover { border-color: var(--seq-accent); color: var(--seq-accent); }

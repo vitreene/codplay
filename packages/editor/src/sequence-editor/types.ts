@@ -42,6 +42,13 @@ export interface Keyframe {
   transitionOut?: TransitionDef
 }
 
+export interface TrackDistribution {
+  mode: 'sequential' | 'stagger'
+  order?: 'forward' | 'backward'
+  staggerInMs?: number
+  staggerOutMs?: number
+}
+
 export interface TrackNode {
   id: string
   kind: 'element' | 'capsule'
@@ -49,6 +56,7 @@ export interface TrackNode {
   visible: boolean
   contentType?: 'text' | 'image' | 'media' | 'video'
   capsuleType?: CapsuleKind
+  distribution?: TrackDistribution
   children?: TrackNode[]
   keyframes: Keyframe[]
 }

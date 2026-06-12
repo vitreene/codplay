@@ -24,6 +24,7 @@ export function createPlayheadOverlay(): SVGSVGElement {
 export function renderPlayhead(svg: SVGSVGElement, ctx: MachineContext): void {
   const { viewport, playheadMs } = ctx
   const x = (playheadMs - viewport.startMs) * viewport.pixelsPerMs
+  if (!isFinite(x)) return
   const h = svg.clientHeight || 400
 
   const line = svg.querySelector<SVGLineElement>('#seq-playhead-line')
