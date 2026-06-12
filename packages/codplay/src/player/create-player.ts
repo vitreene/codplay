@@ -1,4 +1,5 @@
 import type { AnimationAdapter } from "../animation/types";
+import { createDefaultAnimationAdapter } from "../animation/create-default-adapter";
 import type { TimelineEvent } from "../core/events/types";
 import { TimeTicker } from "../core/time/ticker";
 import { DirectorCore } from "../director/create-director";
@@ -46,7 +47,11 @@ import type {
 export type CreatePlayerOptions = {
   runtimePolicy?: Partial<PlayerRuntimePolicy>;
   createElementOptions?: CreateElementOptions;
+  /** Hook called each ticker frame after animejs — use for Three.js or similar external renderers. */
+  renderFrame?: (nowMs: number) => void;
+  /** Override the animation adapter entirely (for tests or custom engines). */
   animationAdapter?: AnimationAdapter;
+  components?: Record<string, import("../runtime/components").RuntimeComponentClass>;
   onRuntimeEmit?: (event: PlayerPublicEventInput) => void;
   onTimelineEvent?: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>;
 };
@@ -56,12 +61,6 @@ const DEFAULT_RUNTIME_POLICY: PlayerRuntimePolicy = {
   seekPolicy: "author-unrestricted",
 };
 
-const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
-  run: () => [],
-  stop: () => {
-    return;
-  },
-};
 
 const PLAYER_TRACE_EVENT = {
   mountFailed: "player:mount:failed",
@@ -422,7 +421,8 @@ export class PlayerFacade implements PlayerApi {
     };
     this.onTimelineEvent = options.onTimelineEvent;
 
-    const animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER;
+    const animationAdapter = options.animationAdapter
+      ?? createDefaultAnimationAdapter({ renderFrame: options.renderFrame });
     this.renderer = new RendererFacade({
       animationAdapter,
       createElementOptions: options.createElementOptions,
@@ -460,6 +460,10 @@ export class PlayerFacade implements PlayerApi {
         ...(error.details ?? {}),
       });
     });
+
+    for (const [type, componentClass] of Object.entries(options.components ?? {})) {
+      this.component.register({ type, component: componentClass });
+    }
   }
 
   readonly component: import("../runtime/components").ComponentRegistryApi = {

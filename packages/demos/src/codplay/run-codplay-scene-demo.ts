@@ -1,9 +1,6 @@
 import "../shared/demo-shell.css";
 
-import { animate, engine } from "animejs";
-
 import type { ResourceManifest, SceneDef } from "codplay/builder/types";
-import { createAnimationAdapter, type AnimeImplementation } from "codplay/animation/adapter";
 import { CodPlay } from "codplay/creator";
 import { createSequenceCommandPanel } from "./codplay-scene-demo/sequence-command-panel";
 import { createTraceLogPanel } from "../shared/trace-log-panel";
@@ -15,25 +12,9 @@ import type { TelcoApi } from "codplay/telco/types";
 
 type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
   onReady?: (context: { player: Player; telco: TelcoApi }) => void
+  /** Called after each mount cycle with the live registry — use for extra node placement. */
+  onAfterMount?: (registry: ReturnType<Player['getRuntimeRegistry']>) => void
 };
-
-function createAnimeImplementation(): AnimeImplementation {
-  engine.useDefaultMainLoop = false;
-
-  return (parameters) => {
-    const targets = parameters.targets;
-    const animationParameters = { ...parameters };
-    delete animationParameters.targets;
-
-    const animationTargets = targets as Parameters<typeof animate>[0];
-    const typedAnimationParameters = animationParameters as Parameters<typeof animate>[1];
-    return animate(animationTargets, typedAnimationParameters);
-  };
-}
-
-function renderAnimeFrameFromPlayerTicker(): void {
-  engine.update();
-}
 
 function isDomNode(nodeRef: unknown): nodeRef is Node {
   return typeof globalThis.Node !== "undefined" && nodeRef instanceof globalThis.Node;
@@ -120,16 +101,9 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const demoContainerNode = containerNode;
   demoContainerNode.style.position = "relative";
 
-  const animationAdapter = createAnimationAdapter(createAnimeImplementation(), {
-    renderFrame: () => {
-      renderAnimeFrameFromPlayerTicker();
-    },
-    setRate: (rate: number) => {
-      engine.speed = rate;
-    },
-  });
   const studio = new CodPlay({
-    animationAdapter,
+    renderFrame: config.renderFrame,
+    components: config.components,
     createElementOptions: {
       emitRuntimeEvent: (event) => {
         void studio.player.emit({
@@ -206,6 +180,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     }
 
     mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds);
+    config.onAfterMount?.(studio.player.getRuntimeRegistry());
     const nextState = studio.player.getState();
     mountedRuntimeRevision = nextState.runtimeRevision;
     syncInteractionLock(demoContainerNode, nextState.status);
@@ -250,6 +225,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   studio.player.onChange((state) => {
     if (state.runtimeRevision !== mountedRuntimeRevision) {
       mountDemoRootNodes(containerNode, studio, config.rootNodeIds);
+      config.onAfterMount?.(studio.player.getRuntimeRegistry());
       mountedRuntimeRevision = state.runtimeRevision;
     }
     syncInteractionLock(demoContainerNode, state.status);
@@ -273,6 +249,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   }
 
   mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds);
+  config.onAfterMount?.(studio.player.getRuntimeRegistry());
   const initialState = studio.player.getState();
   mountedRuntimeRevision = initialState.runtimeRevision;
   syncInteractionLock(demoContainerNode, initialState.status);

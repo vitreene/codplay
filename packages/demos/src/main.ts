@@ -9,6 +9,7 @@ import { runQuizReferenceDemo } from './codplay/quiz-reference-demo'
 import { runQuizSeriesDemo } from './codplay/quiz-series-demo'
 import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPocDemo } from './codplay/avatar-poc-demo'
+import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -32,6 +33,8 @@ if (demoName === 'quiz') {
 	void runReplaceCarouselDemo()
 } else if (demoName === 'avatar-poc') {
 	void runAvatarPocDemo()
+} else if (demoName === 'avatar-poc-1') {
+	void runAvatarPoc1Demo()
 } else {
 	void runPlayerPocDemo()
 }

@@ -24,6 +24,7 @@ export default defineConfig({
     alias: [
       { find: /^codplay\/(.*)/, replacement: resolve(__dirname, '../codplay/src/$1') },
       { find: 'codplay', replacement: resolve(__dirname, '../codplay/src/index.ts') },
+      { find: /^@codplay\/capsule-automation\/(.*)/, replacement: resolve(__dirname, '../authoring/capsule-automation/src/$1') },
       { find: '@codplay/capsule-automation', replacement: resolve(__dirname, '../authoring/capsule-automation/src/index.ts') },
       { find: /^three\/addons\/(.*)$/, replacement: resolve(THREE_ROOT, 'examples/jsm/$1') },
       { find: 'three', replacement: resolve(THREE_ROOT, 'build/three.module.js') },
@@ -35,6 +36,11 @@ export default defineConfig({
       resolveId(id: string) {
         if (id === '@met4citizen/talkinghead') {
           return resolve(TH_ROOT, 'modules/talkinghead.mjs')
+        }
+      },
+      transform(code: string, id: string) {
+        if (id.endsWith('talkinghead.mjs')) {
+          return code.replace(/\bimport\(moduleName\)/g, 'import(/* @vite-ignore */ moduleName)')
         }
       },
     },

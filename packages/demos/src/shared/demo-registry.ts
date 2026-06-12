@@ -16,6 +16,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: 'carousel',         label: 'Carrousel',          href: '?demo=carousel' },
   { id: 'replace-carousel', label: 'Replace Carousel',   href: '?demo=replace-carousel' },
   { id: 'avatar-poc',       label: 'Avatar POC (FR)',    href: '?demo=avatar-poc' },
+  { id: 'avatar-poc-1',     label: 'Avatar POC — CodPlay', href: '?demo=avatar-poc-1' },
 ]
 
 export function buildDemoLinksMarkup(activeId: string | undefined): string {
