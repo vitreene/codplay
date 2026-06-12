@@ -5,11 +5,11 @@ import type {
 } from './types'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
-  DEFAULT_TRANSITION_DURATION_MS, TIME_STEP_MS,
+  TIME_STEP_MS,
 } from './constants'
 import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
-import { flattenTracks } from './utils'
+import { flattenTracks, findParentClipBounds } from './utils'
 
 // ─── Machine-specific types (§3.1) ──────────────────────────────────────────
 
@@ -36,7 +36,7 @@ export type MachineInteraction =
   | { kind: 'dragging-keyframe'; trackId: string; keyframeId: string; originMs: number; currentMs: number }
   | { kind: 'dragging-playhead'; originMs: number; currentMs: number }
   | { kind: 'panning'; originPx: number; originStartMs: number }
-  | { kind: 'drawing-window'; trackId: string; startMs: number; currentMs: number }
+  | { kind: 'drawing-clip'; trackId: string; startMs: number; currentMs: number; introId: string; outroId: string }
 
 export type PlayRange = { inMs: number; outMs: number }
 
@@ -76,9 +76,10 @@ export type SequenceEditorEvent =
   | { type: 'DRAG.START_KEYFRAME'; trackId: string; keyframeId: string }
   | { type: 'DRAG.MOVE'; pointerMs: number }
   | { type: 'DRAG.END' }
-  | { type: 'WINDOW.START_DRAW'; trackId: string; pointerMs: number }
-  | { type: 'WINDOW.DRAW_MOVE'; pointerMs: number }
-  | { type: 'WINDOW.DRAW_END'; pointerMs: number }
+  | { type: 'CLIP.PLACE'; trackId: string; pointerMs: number }
+  | { type: 'CLIP.START_DRAW'; trackId: string; pointerMs: number; introId: string; outroId: string }
+  | { type: 'CLIP.DRAW_MOVE'; pointerMs: number }
+  | { type: 'CLIP.DRAW_END' }
   | { type: 'PLAYHEAD.SET'; timeMs: number }
   | { type: 'PLAYHEAD.START_PLAY' }
   | { type: 'PLAYHEAD.PAUSE' }
@@ -183,6 +184,17 @@ function updateTrackInScene(
 
 function insertKeyframeSorted(keyframes: Keyframe[], kf: Keyframe): Keyframe[] {
   return [...keyframes, kf].sort((a, b) => a.timeMs - b.timeMs)
+}
+
+function enforceClipOrder(keyframes: Keyframe[]): Keyframe[] {
+  const intro = keyframes.find(k => k.name === 'intro')
+  const outro = keyframes.find(k => k.name === 'outro')
+  if (!intro || !outro || intro.timeMs <= outro.timeMs) return keyframes
+  return keyframes.map(k => {
+    if (k.id === intro.id) return { ...k, name: 'outro' as const }
+    if (k.id === outro.id) return { ...k, name: 'intro' as const }
+    return k
+  })
 }
 
 function adjacentDecorId(keyframes: Keyframe[], timeMs: number): string | null {
@@ -442,14 +454,45 @@ export const sequenceEditorMachine = setup({
           }),
         },
 
-        'WINDOW.START_DRAW': {
-          target: 'drawing-window',
+        'CLIP.PLACE': {
+          actions: assign(({ context, event }) => {
+            const pointerMs = Math.max(0, Math.min(event.pointerMs, context.scene.durationMs))
+            const bounds = findParentClipBounds(event.trackId, context.scene.tracks, context.scene.durationMs)
+            const clampedMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, pointerMs))
+            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
+            if (!track) return {}
+            const intro = track.keyframes.find(k => k.name === 'intro')
+            const outro = track.keyframes.find(k => k.name === 'outro')
+            const scene = updateTrackInScene(context.scene, event.trackId, t => {
+              let keyframes = [...t.keyframes]
+              if (!intro) {
+                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'intro', decorId: null })
+              } else if (!outro) {
+                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'outro', decorId: null })
+                keyframes = enforceClipOrder(keyframes)
+              } else {
+                const distIntro = Math.abs(clampedMs - intro.timeMs)
+                const distOutro = Math.abs(clampedMs - outro.timeMs)
+                const moveId = distIntro <= distOutro ? intro.id : outro.id
+                keyframes = keyframes.map(k => k.id === moveId ? { ...k, timeMs: clampedMs } : k)
+                keyframes = keyframes.sort((a, b) => a.timeMs - b.timeMs)
+              }
+              return { ...t, keyframes }
+            })
+            return { scene, snapGrid: computeSnapGrid(scene) }
+          }),
+        },
+
+        'CLIP.START_DRAW': {
+          target: 'drawing-clip',
           actions: assign(({ event }) => ({
             interaction: {
-              kind: 'drawing-window' as const,
+              kind: 'drawing-clip' as const,
               trackId: event.trackId,
               startMs: event.pointerMs,
               currentMs: event.pointerMs,
+              introId: event.introId,
+              outroId: event.outroId,
             },
           })),
         },
@@ -796,48 +839,50 @@ export const sequenceEditorMachine = setup({
       },
     },
 
-    // ── drawing-window ───────────────────────────────────────────────────────
-    'drawing-window': {
+    // ── drawing-clip ─────────────────────────────────────────────────────────
+    'drawing-clip': {
       on: {
-        'WINDOW.DRAW_MOVE': {
+        'CLIP.DRAW_MOVE': {
           actions: assign(({ context, event }) => {
             const i = context.interaction
-            if (!i || i.kind !== 'drawing-window') return {}
+            if (!i || i.kind !== 'drawing-clip') return {}
             return { interaction: { ...i, currentMs: event.pointerMs } }
           }),
         },
-        'WINDOW.DRAW_END': {
+        'CLIP.DRAW_END': {
           target: 'idle',
           actions: assign(({ context }) => {
             const i = context.interaction
-            if (!i || i.kind !== 'drawing-window') return { interaction: null }
+            if (!i || i.kind !== 'drawing-clip') return { interaction: null }
 
-            const minMs = Math.min(i.startMs, i.currentMs)
-            const maxMs = Math.max(i.startMs, i.currentMs)
-            const durationMs = Math.max(DEFAULT_TRANSITION_DURATION_MS, maxMs - minMs)
+            const rawMinMs = Math.min(i.startMs, i.currentMs)
+            const rawMaxMs = Math.max(i.startMs, i.currentMs)
 
-            const track = flattenTracks(context.scene.tracks).find(t => t.id === i.trackId)
-            if (!track || track.keyframes.length === 0) return { interaction: null }
+            const bounds = findParentClipBounds(i.trackId, context.scene.tracks, context.scene.durationMs)
+            const minMs = Math.max(rawMinMs, bounds.minMs)
+            const maxMs = Math.min(rawMaxMs, bounds.maxMs)
 
-            const sorted = [...track.keyframes].sort((a, b) => a.timeMs - b.timeMs)
-            const firstKf = sorted[0]!
-            const lastKf = sorted[sorted.length - 1]!
+            if (minMs >= maxMs) return { interaction: null }
 
-            const isIntro = firstKf.timeMs >= minMs && firstKf.timeMs <= maxMs
-            const isOutro = lastKf.timeMs >= minMs && lastKf.timeMs <= maxMs
+            const scene = updateTrackInScene(context.scene, i.trackId, track => {
+              const kept = track.keyframes.filter(k => k.name !== 'intro' && k.name !== 'outro')
+              const introKf: Keyframe = {
+                id: i.introId || `kf-${Date.now()}`,
+                timeMs: minMs,
+                name: 'intro',
+                decorId: null,
+              }
+              const outroKf: Keyframe = {
+                id: i.outroId || `kf-${Date.now() + 1}`,
+                timeMs: maxMs,
+                name: 'outro',
+                decorId: null,
+              }
+              const keyframes = [...kept, introKf, outroKf].sort((a, b) => a.timeMs - b.timeMs)
+              return { ...track, keyframes }
+            })
 
-            const def: TransitionDef = { kind: 'named', name: 'fade', durationMs }
-
-            const scene = updateTrackInScene(context.scene, i.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k => {
-                if (isIntro && k.id === firstKf.id) return { ...k, transitionOut: def }
-                if (isOutro && k.id === lastKf.id && !isIntro) return { ...k, transitionOut: def }
-                return k
-              }),
-            }))
-
-            return { scene, interaction: null }
+            return { scene, snapGrid: computeSnapGrid(scene), interaction: null }
           }),
         },
       },

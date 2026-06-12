@@ -217,9 +217,64 @@ function startPan(e: PointerEvent): void {
   dragOverlay.addEventListener('pointerup', onUp)
 }
 
+// ── Clip draw (drag on capsule row, threshold-gated) ─────────────────────────
+
+function startClipDrag(trackId: string, e: PointerEvent): void {
+  if (ctrl.getSnapshot().value !== 'idle') return
+  const rect = timeline.getBoundingClientRect()
+  const startClientX = e.clientX
+
+  // Phase 1: watch for threshold on window — overlay stays inactive so click/dblclick can fire
+  function onMoveWindow(ev: PointerEvent): void {
+    if (Math.abs(ev.clientX - startClientX) <= 4) return
+    // Threshold crossed: switch to overlay for clean drag capture
+    window.removeEventListener('pointermove', onMoveWindow)
+    window.removeEventListener('pointerup', onUpWindow)
+    dragOverlay.classList.add('active')
+    dragOverlay.addEventListener('pointermove', onMoveOverlay)
+    dragOverlay.addEventListener('pointerup', onUpOverlay)
+    ctrl.clipStartDraw(trackId, ctrl.pixelToMs(startClientX - rect.left))
+    ctrl.clipDrawMove(ctrl.pixelToMs(ev.clientX - rect.left))
+  }
+
+  function onUpWindow(): void {
+    window.removeEventListener('pointermove', onMoveWindow)
+    window.removeEventListener('pointerup', onUpWindow)
+  }
+
+  // Phase 2: active drag on overlay
+  function onMoveOverlay(ev: PointerEvent): void {
+    ctrl.clipDrawMove(ctrl.pixelToMs(ev.clientX - rect.left))
+  }
+
+  function onUpOverlay(): void {
+    ctrl.clipDrawEnd()
+    dragOverlay.classList.remove('active')
+    dragOverlay.removeEventListener('pointermove', onMoveOverlay)
+    dragOverlay.removeEventListener('pointerup', onUpOverlay)
+  }
+
+  window.addEventListener('pointermove', onMoveWindow)
+  window.addEventListener('pointerup', onUpWindow)
+}
+
 timeline.addEventListener('pointerdown', e => {
   if (e.button !== 0) return
-  startPan(e)
+  if (e.altKey) {
+    startPan(e)
+    return
+  }
+  const rowEl = (e.target as HTMLElement).closest('[data-track-id]') as HTMLElement | null
+  if (rowEl?.dataset.kind === 'capsule') startClipDrag(rowEl.dataset.trackId!, e)
+})
+
+// Alt+dblclick on capsule row → clip boundary (intro → outro → move nearest)
+timeline.addEventListener('dblclick', e => {
+  if (!e.altKey) return
+  const rowEl = (e.target as HTMLElement).closest('[data-track-id]') as HTMLElement | null
+  if (rowEl?.dataset.kind !== 'capsule') return
+  const rect = timeline.getBoundingClientRect()
+  ctrl.clipPlace(rowEl.dataset.trackId!, ctrl.pixelToMs(e.clientX - rect.left))
 })
 
 // ── Timeline zoom (ctrl/meta + wheel, or trackpad pinch) ──────────────────────

@@ -351,6 +351,27 @@
   tab-size: 2;
 }
 
+/* ── Clip bands ─────────────────────────────────────────────────────────── */
+.seq-row__clip {
+  fill: rgba(52, 211, 153, 0.12);
+  pointer-events: none;
+}
+.seq-row__clip-preview {
+  fill: rgba(52, 211, 153, 0.22);
+  stroke: rgba(52, 211, 153, 0.7);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+/* Parent capsule boundary markers on child rows */
+.seq-row__clip-marker {
+  stroke-width: 1;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.seq-row__clip-marker--intro { stroke: #34d399; stroke-dasharray: 2 3; }
+.seq-row__clip-marker--outro { stroke: #34d399; stroke-dasharray: 2 3; }
+
 /* ── Drag overlay (covers viewport during keyframe drag) ────────────────── */
 .seq-drag-overlay {
   position: fixed;
@@ -360,6 +381,12 @@
   cursor: grabbing;
 }
 .seq-drag-overlay.active { pointer-events: auto; }
+
+/* Keyframe outside parent clip bounds — specificity [0,3,0] to beat .seq-kf[data-kf-name] */
+.seq-kf.seq-kf--out-of-bounds .seq-kf__diamond {
+  fill: #ef4444;
+  opacity: 0.85;
+}
 
 /* Dragging keyframe visual */
 .seq-kf--dragging .seq-kf__diamond {

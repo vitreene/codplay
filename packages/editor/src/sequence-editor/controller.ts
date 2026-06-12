@@ -11,6 +11,7 @@ import type {
   AudioTrack, WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
 } from './types'
 import { applySnapToMs } from './machine'
+import { flattenTracks } from './utils'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
 
@@ -198,6 +199,27 @@ export class SequenceEditorController {
     const newPixelsPerMs = viewWidthPx / durationMs
     this.send({ type: 'VIEWPORT.ZOOM', factor: newPixelsPerMs / this.getViewport().pixelsPerMs, focusMs: range.inMs })
     this.send({ type: 'VIEWPORT.SCROLL', startMs: range.inMs })
+  }
+
+  // ── Clip draw ────────────────────────────────────────────────────────────────
+
+  clipPlace(trackId: string, pointerMs: number): void {
+    this.send({ type: 'CLIP.PLACE', trackId, pointerMs })
+  }
+
+  clipStartDraw(trackId: string, pointerMs: number): void {
+    const track = flattenTracks(this.getSnapshot().context.scene.tracks).find(t => t.id === trackId)
+    const introId = track?.keyframes.find(k => k.name === 'intro')?.id ?? ''
+    const outroId = track?.keyframes.find(k => k.name === 'outro')?.id ?? ''
+    this.send({ type: 'CLIP.START_DRAW', trackId, pointerMs, introId, outroId })
+  }
+
+  clipDrawMove(pointerMs: number): void {
+    this.send({ type: 'CLIP.DRAW_MOVE', pointerMs })
+  }
+
+  clipDrawEnd(): void {
+    this.send({ type: 'CLIP.DRAW_END' })
   }
 
   // ── Drag (incremental, for pointer events) ──────────────────────────────────

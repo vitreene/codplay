@@ -1,6 +1,6 @@
 import type { MachineContext } from '../machine'
 import type { TrackNode } from '../types'
-import { getTrackRowHeight } from '../utils'
+import { getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -52,6 +52,36 @@ export function renderTrackRows(
     svg.setAttribute('height', String(rowHeight))
     svg.setAttribute('aria-hidden', 'true')
 
+    // Clip band: active zone between intro/outro keyframes (capsule tracks)
+    const clipDraw = ctx.interaction?.kind === 'drawing-clip' && ctx.interaction.trackId === track.id
+      ? ctx.interaction : null
+    if (track.kind === 'capsule') {
+      let clipMinMs: number | null = null
+      let clipMaxMs: number | null = null
+      if (clipDraw) {
+        clipMinMs = Math.min(clipDraw.startMs, clipDraw.currentMs)
+        clipMaxMs = Math.max(clipDraw.startMs, clipDraw.currentMs)
+      } else {
+        const introKf = track.keyframes.find(k => k.name === 'intro')
+        const outroKf = track.keyframes.find(k => k.name === 'outro')
+        if (introKf && outroKf) {
+          clipMinMs = introKf.timeMs
+          clipMaxMs = outroKf.timeMs
+        }
+      }
+      if (clipMinMs !== null && clipMaxMs !== null) {
+        const bx = (clipMinMs - startMs) * pixelsPerMs
+        const bw = (clipMaxMs - clipMinMs) * pixelsPerMs
+        const band = document.createElementNS(SVG_NS, 'rect')
+        band.setAttribute('x', String(bx))
+        band.setAttribute('y', '0')
+        band.setAttribute('width', String(Math.max(0, bw)))
+        band.setAttribute('height', String(rowHeight))
+        band.classList.add(clipDraw ? 'seq-row__clip-preview' : 'seq-row__clip')
+        svg.insertBefore(band, svg.firstChild)
+      }
+    }
+
     // Segment bars between adjacent keyframes (positions follow active drag)
     for (let i = 0; i < track.keyframes.length; i++) {
       const kf = track.keyframes[i]!
@@ -85,6 +115,9 @@ export function renderTrackRows(
       svg.appendChild(band)
     }
 
+    // Parent clip boundary markers + out-of-bounds detection
+    const parentMarkers = getParentClipMarkers(track.id, scene.tracks)
+
     // Keyframe handles (position follows active drag for the dragged keyframe)
     for (const kf of track.keyframes) {
       const effectiveMs = getEffectiveMs(kf.id, kf.timeMs, ctx)
@@ -98,6 +131,11 @@ export function renderTrackRows(
       if (isDragging) {
         handle.classList.add('seq-kf--dragging')
       }
+      const { introMs, outroMs } = parentMarkers
+      if (
+        (introMs !== null && effectiveMs < introMs) ||
+        (outroMs !== null && effectiveMs > outroMs)
+      ) handle.classList.add('seq-kf--out-of-bounds')
 
       if (onDragStart) {
         handle.addEventListener('pointerdown', e => {
@@ -113,6 +151,22 @@ export function renderTrackRows(
       }
 
       svg.appendChild(handle)
+    }
+
+    // Vertical markers at parent intro/outro positions
+    for (const [markerMs, cls] of [
+      [parentMarkers.introMs, 'seq-row__clip-marker seq-row__clip-marker--intro'],
+      [parentMarkers.outroMs, 'seq-row__clip-marker seq-row__clip-marker--outro'],
+    ] as [number | null, string][]) {
+      if (markerMs === null) continue
+      const mx = (markerMs - startMs) * pixelsPerMs
+      const line = document.createElementNS(SVG_NS, 'line')
+      line.setAttribute('x1', String(mx))
+      line.setAttribute('x2', String(mx))
+      line.setAttribute('y1', '0')
+      line.setAttribute('y2', String(rowHeight))
+      for (const c of cls.split(' ')) line.classList.add(c)
+      svg.appendChild(line)
     }
 
     rowEl.addEventListener('dblclick', e => {
