@@ -18,17 +18,15 @@ import sceneOneTrack from './sequence-editor/fixtures/scene-one-track.json'
 import sceneNested from './sequence-editor/fixtures/scene-nested-capsule.json'
 import sceneCarousel from './sequence-editor/fixtures/scene-carousel.json'
 import sceneEmpty from './sequence-editor/fixtures/scene-empty.json'
-import sceneAvatarPoc from './sequence-editor/fixtures/scene-avatar-poc.json'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
 const FIXTURES: Record<string, EditorScene> = {
-  'eddy-ref':        sceneEddy      as unknown as EditorScene,
-  'one-track':       sceneOneTrack  as unknown as EditorScene,
-  'nested-capsule':  sceneNested    as unknown as EditorScene,
-  'carousel':        sceneCarousel  as unknown as EditorScene,
-  'empty':           sceneEmpty     as unknown as EditorScene,
-  'avatar-poc':      sceneAvatarPoc as unknown as EditorScene,
+  'eddy-ref':        sceneEddy     as unknown as EditorScene,
+  'one-track':       sceneOneTrack as unknown as EditorScene,
+  'nested-capsule':  sceneNested   as unknown as EditorScene,
+  'carousel':        sceneCarousel as unknown as EditorScene,
+  'empty':           sceneEmpty    as unknown as EditorScene,
 }
 const FIXTURE_LABELS: Record<string, string> = {
   'eddy-ref':       'Eddy scène 02',
@@ -36,7 +34,6 @@ const FIXTURE_LABELS: Record<string, string> = {
   'nested-capsule': 'Capsule imbriquée',
   'carousel':       'Carousel (kf virtuels)',
   'empty':          'Scène vide',
-  'avatar-poc':     'Avatar POC (FR)',
 }
 
 // ── Controller ────────────────────────────────────────────────────────────────

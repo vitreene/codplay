@@ -44,7 +44,6 @@ export interface Keyframe {
 
 export interface TrackDistribution {
   mode: 'sequential' | 'stagger'
-  order?: 'forward' | 'backward'
   staggerInMs?: number
   staggerOutMs?: number
 }
@@ -175,4 +174,5 @@ export interface LayoutProfile {
 
 export interface DisplayConfig {
   timeUnit: 's' | 'ms'
+  capsuleOrder: 'forward' | 'backward'
 }

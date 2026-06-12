@@ -160,7 +160,7 @@ function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
   return points.sort((a, b) => a.timeMs - b.timeMs)
 }
 
-function computeVirtualKeyframes(scene: EditorScene): VirtualKeyframe[] {
+function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | 'backward' = 'forward'): VirtualKeyframe[] {
   const result: VirtualKeyframe[] = []
   for (const capsule of flattenTracks(scene.tracks)) {
     if (capsule.kind !== 'capsule' || !capsule.children?.length) continue
@@ -184,7 +184,7 @@ function computeVirtualKeyframes(scene: EditorScene): VirtualKeyframe[] {
     const out = CapsuleDistribution.compute({
       clipDurationMs,
       mode: dist.mode,
-      order: dist.order,
+      order: capsuleOrder,
       staggerInMs: dist.staggerInMs,
       staggerOutMs: dist.staggerOutMs,
       children,
@@ -314,7 +314,7 @@ export const sequenceEditorMachine = setup({
   actions: {
     assignSnapGrid: assign(({ context }) => ({
       snapGrid: computeSnapGrid(context.scene),
-      virtualKeyframes: computeVirtualKeyframes(context.scene),
+      virtualKeyframes: computeVirtualKeyframes(context.scene, context.displayConfig.capsuleOrder),
     })),
   },
 
@@ -389,7 +389,7 @@ export const sequenceEditorMachine = setup({
       displayConfig: DISPLAY_CONFIG_DEFAULT,
       viewMode: 'full-sequence',
       snapGrid: computeSnapGrid(input.scene),
-      virtualKeyframes: computeVirtualKeyframes(input.scene),
+      virtualKeyframes: computeVirtualKeyframes(input.scene, DISPLAY_CONFIG_DEFAULT.capsuleOrder),
     }
   },
 
@@ -421,7 +421,7 @@ export const sequenceEditorMachine = setup({
               ...t,
               keyframes: insertKeyframeSorted(t.keyframes, newKf),
             }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -455,7 +455,7 @@ export const sequenceEditorMachine = setup({
               context.selection.keyframeId === event.keyframeId
                 ? { trackId: null, keyframeId: null }
                 : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -467,7 +467,7 @@ export const sequenceEditorMachine = setup({
               context.selection.trackId === event.trackId
                 ? { trackId: event.trackId, keyframeId: null }
                 : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -492,7 +492,7 @@ export const sequenceEditorMachine = setup({
               sel.trackId && clearedIds.has(sel.trackId)
                 ? { trackId: null, keyframeId: null }
                 : sel
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -504,7 +504,7 @@ export const sequenceEditorMachine = setup({
                 k.id === event.keyframeId ? { ...k, name: event.name ?? undefined } : k,
               ),
             }))
-            return { scene, virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -600,7 +600,7 @@ export const sequenceEditorMachine = setup({
               }
               return { ...t, keyframes }
             })
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -709,7 +709,7 @@ export const sequenceEditorMachine = setup({
             const tracks = removeFromList(context.scene.tracks)
             const scene = { ...context.scene, tracks }
             const snapGrid = computeSnapGrid(scene)
-            const virtualKeyframes = computeVirtualKeyframes(scene)
+            const virtualKeyframes = computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder)
             const selection: MachineSelection =
               context.selection.trackId === event.trackId
                 ? { trackId: null, keyframeId: null }
@@ -731,28 +731,28 @@ export const sequenceEditorMachine = setup({
             const scene = updateTrackInScene(context.scene, event.trackId, t => ({
               ...t, keyframes: [],
             }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'CUE.ADD': {
           actions: assign(({ context, event }) => {
             const scene = { ...context.scene, cues: [...context.scene.cues, event.cue] }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'CUE.REMOVE': {
           actions: assign(({ context, event }) => {
             const scene = { ...context.scene, cues: context.scene.cues.filter(c => c.id !== event.cueId) }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'MARKER.ADD': {
           actions: assign(({ context, event }) => {
             const scene = { ...context.scene, markers: [...context.scene.markers, event.marker] }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -773,7 +773,7 @@ export const sequenceEditorMachine = setup({
             )
             const tracks = propagate(context.scene.tracks)
             const scene = { ...context.scene, markers, tracks }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -791,7 +791,7 @@ export const sequenceEditorMachine = setup({
             const markers = context.scene.markers.filter(m => m.id !== event.markerId)
             const tracks = detach(context.scene.tracks)
             const scene = { ...context.scene, markers, tracks }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene) }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -842,10 +842,10 @@ export const sequenceEditorMachine = setup({
         },
 
         'SCENE.LOAD': {
-          actions: assign(({ event }) => ({
+          actions: assign(({ context, event }) => ({
             scene: event.scene,
             snapGrid: computeSnapGrid(event.scene),
-            virtualKeyframes: computeVirtualKeyframes(event.scene),
+            virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
             playheadMs: 0,
             selection: { trackId: null, keyframeId: null },
             interaction: null,
@@ -957,7 +957,7 @@ export const sequenceEditorMachine = setup({
                 .map(k => k.id === i.keyframeId ? { ...k, timeMs } : k)
                 .sort((a, b) => a.timeMs - b.timeMs),
             }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene), interaction: null }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }
           }),
         },
       },
@@ -1006,7 +1006,7 @@ export const sequenceEditorMachine = setup({
               return { ...track, keyframes }
             })
 
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene), interaction: null }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }
           }),
         },
       },

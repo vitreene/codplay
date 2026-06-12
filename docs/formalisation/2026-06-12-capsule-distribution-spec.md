@@ -87,9 +87,9 @@ La spec du stagger en présence d'enfants lockés est à enrichir ultérieuremen
 
 ## 4. Algorithme d'adaptation — mode séquentiel avec enfants lockés
 
-### 4.1 Propriété `order`
+### 4.1 Propriété `order` — configuration globale
 
-La propriété `order` contrôle l'ordre temporel d'affichage des enfants :
+La propriété `order` est une **option d'initialisation du composant éditeur**, commune à toutes les capsules de la scène. Elle contrôle l'ordre temporel d'affichage des enfants :
 
 | Valeur | Sens | Comportement par défaut (sans locks) |
 |---|---|---|
@@ -97,6 +97,8 @@ La propriété `order` contrôle l'ordre temporel d'affichage des enfants :
 | `'backward'` | dernier élément en avant | img-N occupe le premier slot ; img-1 est le dernier |
 
 "En avant" = premier affiché dans le temps = occupe le slot le plus tôt.
+
+Emplacement dans la machine : `DisplayConfig.capsuleOrder`. Valeur par défaut : `'forward'`.
 
 ### 4.2 Mode `forward` — algorithme séquentiel gauche-droite
 
