@@ -35,7 +35,7 @@ export function createAvatarPocScene(): SceneDoc {
               tag: 'div',
               style: {
                 position: 'relative',
-                width: '800px',
+                width: '600px',
                 height: '600px',
                 overflow: 'hidden',
               },
@@ -61,7 +61,7 @@ export function createAvatarPocScene(): SceneDoc {
               },
             },
             actions: {
-              'scene:start': { broadcast: { type: 'START' } },
+              'audio:start': { broadcast: { type: 'START' } },
             },
           },
           {
@@ -104,6 +104,7 @@ export function createAvatarPocScene(): SceneDoc {
         ],
         eventimes: [
           { name: 'scene:start', startAt: 0 },
+          { name: 'audio:start', startAt: 0 },
           { name: 'sequence:end', startAt: SCENE_END_MS },
           ...buildVisemeEventimes(),
           ...buildWordEventimes(),

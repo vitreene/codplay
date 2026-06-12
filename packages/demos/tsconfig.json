@@ -6,6 +6,8 @@
       "codplay/*": ["../codplay/src/*"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
+      "@codplay/avatar3d": ["../authoring/avatar3d/src/index.ts"],
+      "@codplay/avatar3d/*": ["../authoring/avatar3d/src/*"],
       "three": ["../../../timeline/node_modules/@types/three"],
       "three/*": ["../../../timeline/node_modules/@types/three/*"]
     }

@@ -14,6 +14,10 @@ type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
   onReady?: (context: { player: Player; telco: TelcoApi }) => void
   /** Called after each mount cycle with the live registry — use for extra node placement. */
   onAfterMount?: (registry: ReturnType<Player['getRuntimeRegistry']>) => void
+  /** Async hook for demos that need async initialization (e.g. Three.js + TalkingHead).
+   *  Runs once before CodPlay is constructed. Returns components and/or renderFrame
+   *  to inject into the player. Overrides any same-key values from the top-level config. */
+  setup?: () => Promise<Pick<PlayerSceneDemoConfig, 'components' | 'renderFrame'>>
 };
 
 function isDomNode(nodeRef: unknown): nodeRef is Node {
@@ -101,9 +105,10 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const demoContainerNode = containerNode;
   demoContainerNode.style.position = "relative";
 
+  const setupResult = config.setup ? await config.setup() : {}
   const studio = new CodPlay({
-    renderFrame: config.renderFrame,
-    components: config.components,
+    renderFrame: setupResult.renderFrame ?? config.renderFrame,
+    components: { ...config.components, ...setupResult.components },
     createElementOptions: {
       emitRuntimeEvent: (event) => {
         void studio.player.emit({

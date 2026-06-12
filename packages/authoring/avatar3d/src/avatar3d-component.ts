@@ -1,9 +1,6 @@
-// All TH viseme morph target names
 const ALL_VISEMES = [
   'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR', 'aa', 'E', 'I', 'O', 'U',
 ] as const
-
-const VISEME_WEIGHT = 0.75
 
 /**
  * Minimal duck-typed interface for TalkingHead's morph target API.
@@ -14,9 +11,9 @@ export interface AvatarHeadApi {
   setMood(mood: string): void
 }
 
-function applyViseme(head: AvatarHeadApi, viseme: string | null): void {
+function applyViseme(head: AvatarHeadApi, viseme: string | null, weight: number): void {
   for (const v of ALL_VISEMES) {
-    head.setFixedValue('viseme_' + v, v === viseme ? VISEME_WEIGHT : 0)
+    head.setFixedValue('viseme_' + v, v === viseme ? weight : 0)
   }
 }
 
@@ -29,6 +26,8 @@ function releaseVisemes(head: AvatarHeadApi): void {
 export type Avatar3DDeps = {
   canvas: HTMLCanvasElement
   head: AvatarHeadApi
+  /** Amplitude max des morphes visème (0–1). Défaut : 0.75 */
+  visemeWeight?: number
 }
 
 // Minimal ComponentModules-compatible shape — no codplay import needed
@@ -91,7 +90,7 @@ export function createAvatar3DComponentClass(deps: Avatar3DDeps): new (input: un
       const action = input.action
       if ('viseme' in action) {
         const v = action['viseme']
-        applyViseme(deps.head, typeof v === 'string' ? v : null)
+        applyViseme(deps.head, typeof v === 'string' ? v : null, deps.visemeWeight ?? 0.75)
       }
       if ('mood' in action && typeof action['mood'] === 'string') {
         deps.head.setMood(action['mood'])

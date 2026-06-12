@@ -26,6 +26,8 @@ export default defineConfig({
       { find: 'codplay', replacement: resolve(__dirname, '../codplay/src/index.ts') },
       { find: /^@codplay\/capsule-automation\/(.*)/, replacement: resolve(__dirname, '../authoring/capsule-automation/src/$1') },
       { find: '@codplay/capsule-automation', replacement: resolve(__dirname, '../authoring/capsule-automation/src/index.ts') },
+      { find: /^@codplay\/avatar3d\/(.*)/, replacement: resolve(__dirname, '../authoring/avatar3d/src/$1') },
+      { find: '@codplay/avatar3d', replacement: resolve(__dirname, '../authoring/avatar3d/src/index.ts') },
       { find: /^three\/addons\/(.*)$/, replacement: resolve(THREE_ROOT, 'examples/jsm/$1') },
       { find: 'three', replacement: resolve(THREE_ROOT, 'build/three.module.js') },
     ],
