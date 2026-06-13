@@ -2,9 +2,7 @@ import { animate, engine } from 'animejs'
 import { createAnimationAdapter } from './adapter'
 import type { AnimationAdapter } from './types'
 
-export function createDefaultAnimationAdapter(options: {
-  renderFrame?: (nowMs: number) => void
-} = {}): AnimationAdapter {
+export function createDefaultAnimationAdapter(): AnimationAdapter {
   engine.useDefaultMainLoop = false
 
   const animeImpl = (parameters: Record<string, unknown>) => {
@@ -16,9 +14,8 @@ export function createDefaultAnimationAdapter(options: {
   }
 
   return createAnimationAdapter(animeImpl, {
-    renderFrame: (nowMs) => {
+    renderFrame: () => {
       engine.update()
-      options.renderFrame?.(nowMs)
     },
     setRate: (rate) => {
       engine.speed = rate

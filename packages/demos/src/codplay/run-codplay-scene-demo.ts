@@ -17,7 +17,7 @@ type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
   /** Async hook for demos that need async initialization (e.g. Three.js + TalkingHead).
    *  Runs once before CodPlay is constructed. Returns components and/or renderFrame
    *  to inject into the player. Overrides any same-key values from the top-level config. */
-  setup?: () => Promise<Pick<PlayerSceneDemoConfig, 'components' | 'renderFrame'>>
+  setup?: () => Promise<Pick<PlayerSceneDemoConfig, 'components' | 'renderAdapters'>>
 };
 
 function isDomNode(nodeRef: unknown): nodeRef is Node {
@@ -107,7 +107,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
 
   const setupResult = config.setup ? await config.setup() : {}
   const studio = new CodPlay({
-    renderFrame: setupResult.renderFrame ?? config.renderFrame,
+    renderAdapters: [...(config.renderAdapters ?? []), ...(setupResult.renderAdapters ?? [])],
     components: { ...config.components, ...setupResult.components },
     createElementOptions: {
       emitRuntimeEvent: (event) => {

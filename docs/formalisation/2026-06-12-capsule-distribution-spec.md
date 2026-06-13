@@ -1,7 +1,7 @@
 # Spec — Distribution capsule et keyframes virtuels
 
 Date : 2026-06-12  
-Statut : validé sauf points ouverts C et D
+Statut : validé — spec complète
 
 ---
 
@@ -263,12 +263,13 @@ Le runtime ne voit que des kf résolus.
 - Retourne : positions virtuelles + `min_duration`
 - Déclenché à chaque mutation de kf réels ou de clip capsule
 
-### Interface (esquisse) :
+### Interface :
 
 ```typescript
 interface CapsuleDistributionInput {
   clipDurationMs: number
   mode: 'sequential' | 'stagger'
+  order?: 'forward' | 'backward'  // global — fourni par l'éditeur via DisplayConfig.capsuleOrder
   staggerInMs?: number
   staggerOutMs?: number
   children: Array<{
@@ -279,14 +280,12 @@ interface CapsuleDistributionInput {
 }
 
 interface CapsuleDistributionOutput {
-  minDurationMs: number
+  minDurationMs: number       // = max(lockedOutroMs) parmi les enfants lockés
   children: Array<{
     trackId: string
-    introMs: number           // relatif — null si hors clip
-    outroMs: number           // relatif — null si hors clip
-    visible: boolean          // false si dépassement clip
-    transitionIn?: TransitionDef
-    transitionOut?: TransitionDef
+    introMs: number           // relatif à capsule.intro — toujours défini
+    outroMs: number           // relatif à capsule.intro — toujours défini
+    visible: boolean          // false si introMs ≥ clipDurationMs ou outroMs ≤ 0
   }>
 }
 ```

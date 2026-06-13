@@ -28,6 +28,8 @@ import {
 } from "./create-player-utils";
 import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from "./player-constants";
 import { resolveSeekEndMsFromPolicy, shouldReplayEventForSeek } from "./seek-runtime";
+import type { RenderAdapter } from "./render-adapter-types";
+import { RenderSync } from "./render-sync";
 import type {
   PlayerApi,
   PlayerCommandResult,
@@ -47,8 +49,8 @@ import type {
 export type CreatePlayerOptions = {
   runtimePolicy?: Partial<PlayerRuntimePolicy>;
   createElementOptions?: CreateElementOptions;
-  /** Hook called each ticker frame after animejs — use for Three.js or similar external renderers. */
-  renderFrame?: (nowMs: number) => void;
+  /** External rendering adapters (Three.js, Lottie, Rive, PixiJS…). Called in order each tick and on seek. */
+  renderAdapters?: RenderAdapter[];
   /** Override the animation adapter entirely (for tests or custom engines). */
   animationAdapter?: AnimationAdapter;
   components?: Record<string, import("../runtime/components").RuntimeComponentClass>;
@@ -113,6 +115,7 @@ export class PlayerFacade implements PlayerApi {
   private readonly runtimePlanner = new PlayerRuntimePlanner();
   private readonly director = new DirectorCore();
   private readonly renderer: RendererFacade;
+  private readonly renderSync: RenderSync;
   private readonly trackManager = new TrackManager();
   private readonly mediaSync = createMediaSyncModule({
     getComponentById: (runtimeItemId) => {
@@ -421,8 +424,7 @@ export class PlayerFacade implements PlayerApi {
     };
     this.onTimelineEvent = options.onTimelineEvent;
 
-    const animationAdapter = options.animationAdapter
-      ?? createDefaultAnimationAdapter({ renderFrame: options.renderFrame });
+    const animationAdapter = options.animationAdapter ?? createDefaultAnimationAdapter();
     this.renderer = new RendererFacade({
       animationAdapter,
       createElementOptions: options.createElementOptions,
@@ -464,6 +466,16 @@ export class PlayerFacade implements PlayerApi {
     for (const [type, componentClass] of Object.entries(options.components ?? {})) {
       this.component.register({ type, component: componentClass });
     }
+
+    const animeRenderAdapter: RenderAdapter = {
+      tick({ nowMs }) { animationAdapter.renderFrame?.(nowMs) },
+      seek() {},
+      pause() { animationAdapter.pause?.() },
+      resume() { animationAdapter.resume?.() },
+      rateChange(rate) { animationAdapter.setRate?.(rate) },
+      stop() { animationAdapter.stop() },
+    };
+    this.renderSync = new RenderSync([animeRenderAdapter, ...(options.renderAdapters ?? [])]);
   }
 
   readonly component: import("../runtime/components").ComponentRegistryApi = {
@@ -623,7 +635,7 @@ export class PlayerFacade implements PlayerApi {
       this.playbackStartMs = this.runtimePlanner.resolveNowMs();
     }
     this._rate = rate;
-    this.renderer.setRate(rate);
+    this.renderSync.rateChange(rate);
   }
 
   /**
@@ -721,6 +733,7 @@ export class PlayerFacade implements PlayerApi {
    */
   private resetRuntime(): void {
     this.stopPlaybackLoop();
+    this.renderSync.stop();
     this.director.destroy();
     this.mediaSync.resetPlayback();
     this.renderer.destroy();
@@ -1195,7 +1208,7 @@ export class PlayerFacade implements PlayerApi {
       this.timelineMs = timelineMs;
       this.runDueTimelineEventsSync(timelineMs);
       this.syncMediaTimeline(timelineMs);
-      this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs());
+      this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), timelineMs, this._rate);
       this.completePlaybackIfReachedEnd();
       return;
     }
@@ -1209,7 +1222,7 @@ export class PlayerFacade implements PlayerApi {
       this.timelineMs = timelineMs;
       await this.runDueTimelineEvents(timelineMs);
       this.syncMediaTimeline(timelineMs);
-      this.renderer.renderFrame(frameNowMs ?? this.runtimePlanner.resolveNowMs());
+      this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), timelineMs, this._rate);
       this.completePlaybackIfReachedEnd();
     });
   }
@@ -1481,13 +1494,18 @@ export class PlayerFacade implements PlayerApi {
       this.director.resume();
     }
 
+    const isResuming = this.status !== PLAYER_STATUS.ready;
     const rendererResult =
-      this.status === PLAYER_STATUS.ready ? this.startRenderer("play") : this.resumeRenderer("play");
+      isResuming ? this.resumeRenderer("play") : this.startRenderer("play");
     if (!rendererResult.ok) {
       return this.reject("RENDERER_INVALID_STATE", "Renderer rejected play transition", "player:play", {
         currentState: this.status,
         code: rendererResult.error.code,
       });
+    }
+
+    if (isResuming) {
+      this.renderSync.resume();
     }
 
     this.playbackStartMs = this.runtimePlanner.resolveNowMs();
@@ -1496,7 +1514,7 @@ export class PlayerFacade implements PlayerApi {
     const currentTimelineMs = this.resolveCurrentTimelineMs();
     this.timelineMs = currentTimelineMs;
     await this.runDueTimelineEvents(currentTimelineMs);
-    this.renderer.renderFrame(this.runtimePlanner.resolveNowMs());
+    this.renderSync.tick(this.runtimePlanner.resolveNowMs(), currentTimelineMs, this._rate);
     this.syncMediaTimeline(currentTimelineMs);
     this.completePlaybackIfReachedEnd();
     if (this.playbackStartMs !== null) {
@@ -1539,6 +1557,7 @@ export class PlayerFacade implements PlayerApi {
     this.timelineMs = this.resolveCurrentTimelineMs();
     this.playbackStartMs = null;
     this.stopPlaybackLoop();
+    this.renderSync.pause();
     this.setStatus(PLAYER_STATUS.paused);
     this.syncMediaTimeline(this.timelineMs);
     this.emitTrace("player:pause", RUNTIME_TRACE_STATUS.applied);
@@ -1635,7 +1654,7 @@ export class PlayerFacade implements PlayerApi {
         );
       }
 
-      this.renderer.renderFrame(this.runtimePlanner.resolveNowMs());
+      this.renderSync.tick(this.runtimePlanner.resolveNowMs(), timelineEvent.ms, this._rate);
     }
 
     if (!isFutureEvent) {
@@ -1705,7 +1724,7 @@ export class PlayerFacade implements PlayerApi {
         );
       }
 
-      this.renderer.renderFrame(this.runtimePlanner.resolveNowMs());
+      this.renderSync.tick(this.runtimePlanner.resolveNowMs(), timelineEvent.ms, this._rate);
     }
 
     this.syncMediaTimeline(timelineEvent.ms);
@@ -1849,6 +1868,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.trackManager.syncCursor({ nowMs: this.timelineMs });
     this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId);
+    this.renderSync.seek(this.runtimePlanner.resolveNowMs(), this.timelineMs);
     this.syncMediaTimeline(this.timelineMs);
 
     if (!this.sequenceEnded) {

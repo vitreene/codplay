@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TalkingHead } from "@met4citizen/talkinghead";
-import { createAvatar3DComponentClass } from "@codplay/avatar3d";
+import { createAvatar3DComponentClass, createTalkingHeadRenderAdapter } from "@codplay/avatar3d";
 import type { AvatarHeadApi } from "@codplay/avatar3d";
 import { createAvatarPocScene } from "../scenes/avatar-poc-scene";
 import { runCodPlaySceneDemo } from "./run-codplay-scene-demo";
@@ -110,8 +110,6 @@ export function runAvatarPoc1Demo(): Promise<void> {
 
       head.start();
 
-      let prevFrameMs: number | null = null;
-
       return {
         components: {
           avatar3d: createAvatar3DComponentClass({
@@ -120,12 +118,12 @@ export function runAvatarPoc1Demo(): Promise<void> {
             visemeWeight: VISEME_WEIGHT,
           }),
         },
-        renderFrame: (nowMs) => {
-          const delta = prevFrameMs !== null ? nowMs - prevFrameMs : 0;
-          head.animate(delta);
-          renderer.render(threeScene, threeCamera);
-          prevFrameMs = nowMs;
-        },
+        renderAdapters: [
+          createTalkingHeadRenderAdapter({
+            head: head as unknown as AvatarHeadApi & { animate(deltaMs: number): void },
+            render: () => renderer.render(threeScene, threeCamera),
+          }),
+        ],
       };
     },
   });
