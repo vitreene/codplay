@@ -8,6 +8,8 @@
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
       "@codplay/avatar3d": ["../authoring/avatar3d/src/index.ts"],
       "@codplay/avatar3d/*": ["../authoring/avatar3d/src/*"],
+      "@codplay/avatar-rive": ["../authoring/avatar-rive/src/index.ts"],
+      "@codplay/avatar-rive/*": ["../authoring/avatar-rive/src/*"],
       "three": ["../../../timeline/node_modules/@types/three"],
       "three/*": ["../../../timeline/node_modules/@types/three/*"]
     }

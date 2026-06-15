@@ -1,6 +1,9 @@
 import type { SceneDoc } from 'codplay/player/types'
 import { MOUTH_CUES, PRESTON_TO_TH, phraseWordsFR } from './avatar-data/phrase-fr'
 
+const SCENE_END_MS = 18500
+const AVATAR_SIZE = '600px'
+
 function buildVisemeEventimes() {
   return MOUTH_CUES.map((c) => ({
     name: 'avatar:viseme',
@@ -17,18 +20,14 @@ function buildWordEventimes() {
   }))
 }
 
-export function createAvatarPocScene(): SceneDoc {
+export function createAvatarRiveScene(): SceneDoc {
   return {
-    id: 'avatar-poc-scene',
+    id: 'avatar-rive-scene',
     rootStories: ['avatar-story'],
     stories: {
       'avatar-story': {
         id: 'avatar-story',
         entries: ['avatar-stage', 'audio', 'avatar', 'caption'],
-        // Route avatar:idle to the inline idle strap from @codplay/avatar3d
-        listen: [
-          { on: 'avatar:idle', straps: ['avatar:idle'] },
-        ],
         persos: [
           {
             id: 'avatar-stage',
@@ -37,9 +36,10 @@ export function createAvatarPocScene(): SceneDoc {
               tag: 'div',
               style: {
                 position: 'relative',
-                width: '600px',
-                height: '600px',
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
                 overflow: 'hidden',
+                background: '#1a1a2e',
               },
             },
             actions: {},
@@ -65,28 +65,16 @@ export function createAvatarPocScene(): SceneDoc {
             actions: {
               'audio:start': { broadcast: { type: 'START' } },
             },
-            // When the audio element ends naturally, fire sequence:end to stop idle loops.
-            emit: {
-              ended: { ref: 'media', event: { name: 'sequence:end' } },
-            },
           },
           {
             id: 'avatar',
-            type: 'avatar3d',
+            type: 'avatar-rive',
             initial: {
               move: { parentId: 'avatar-stage' },
             },
             actions: {
-              // Visemes — data.viseme drives the mouth shape
+              'avatar:start':  { broadcast: { type: 'START' } },
               'avatar:viseme': {},
-              // Morph — idle micro-movements (headRotateX/Y, eyesClosed, mouthShrugLower, …)
-              'avatar:morph': {},
-              // Gesture — data.gesture: string | null
-              'avatar:gesture': {},
-              // Gaze — data.enabled: boolean
-              'avatar:gaze': {},
-              // Mood — data.mood: MoodName
-              'avatar:mood': {},
             },
           },
           {
@@ -118,17 +106,10 @@ export function createAvatarPocScene(): SceneDoc {
           },
         ],
         eventimes: [
-          { name: 'scene:start', startAt: 0 },
-          { name: 'audio:start', startAt: 0 },
-          // Start idle loops — routed to the idle strap via story.listen above
-          { name: 'avatar:idle', startAt: 0 },
-          // Enable gaze immediately — seek-safe (materialized in track)
-          { name: 'avatar:gaze', startAt: 0, data: { enabled: true } },
-          // Gesture sequence — seeds from eventSeq → deterministic at seek
-          { name: 'avatar:gesture', startAt: 8000,  data: { gesture: 'shrug' } },
-          { name: 'avatar:gesture', startAt: 11000, data: { gesture: 'handup' } },
-          { name: 'avatar:gesture', startAt: 15000, data: { gesture: 'shrug' } },
-          { name: 'avatar:gesture', startAt: 17500, data: { gesture: null } },
+          { name: 'scene:start',  startAt: 0 },
+          { name: 'audio:start',  startAt: 0 },
+          { name: 'avatar:start', startAt: 0 },
+          { name: 'sequence:end', startAt: SCENE_END_MS },
           ...buildVisemeEventimes(),
           ...buildWordEventimes(),
         ],
