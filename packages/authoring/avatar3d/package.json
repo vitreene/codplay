@@ -9,6 +9,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "codplay": "*"
+  },
   "devDependencies": {
     "typescript": "~5.9.3"
   }

@@ -316,7 +316,7 @@ describe('SCENE.LOAD', () => {
     const ctx = actor.getSnapshot().context
     expect(ctx.scene.id).toBe(NESTED.id)
     expect(ctx.playheadMs).toBe(0)
-    expect(ctx.selection).toEqual({ trackId: null, keyframeId: null })
+    expect(ctx.selection).toEqual({ trackId: null, keyframeId: null, markerId: null })
     actor.stop()
   })
 })

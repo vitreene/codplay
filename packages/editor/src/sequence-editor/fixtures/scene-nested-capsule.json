@@ -74,7 +74,14 @@
     { "id": "cue-01", "timeMs": 1000, "label": "Entrée liste" },
     { "id": "cue-02", "timeMs": 5000, "label": "CTA" }
   ],
-  "markers": [
-    { "id": "marker-01", "timeMs": 3500, "label": "Milieu", "color": "#f59e0b" }
+  "markerTracks": [
+    {
+      "id": "mtrack-01",
+      "label": "Repères",
+      "visible": true,
+      "markers": [
+        { "id": "marker-01", "timeMs": 3500, "label": "Milieu", "color": "#f59e0b" }
+      ]
+    }
   ]
 }

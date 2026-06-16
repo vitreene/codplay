@@ -150,6 +150,28 @@
   opacity: 0.5;
 }
 .seq-label-row__vis:hover { opacity: 1; color: var(--seq-text); }
+
+.seq-label-row__remove {
+  background: none;
+  border: none;
+  color: var(--seq-text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  padding: 0 3px;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.seq-label-row__remove:hover { opacity: 1; color: #ef4444; }
+
+.seq-label-row--add-marker-track {
+  color: var(--seq-text-muted);
+  font-size: var(--seq-font-size-sm);
+  justify-content: center;
+  opacity: 0.7;
+}
+.seq-label-row--add-marker-track:hover { opacity: 1; color: var(--seq-accent); background: var(--seq-label-row-hover); }
+
 .seq-label-row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .seq-label-row__kind {
   font-size: 9px;
@@ -182,13 +204,28 @@
 .seq-cue__line { stroke: var(--seq-cue-color); stroke-width: 1; opacity: 0.7; }
 .seq-cue__label { fill: var(--seq-cue-color); font-size: 8px; font-family: var(--seq-font); opacity: 0.8; }
 
-/* Markers strip */
+/* Marker tracks — one .seq-markers row per named track, stacked */
+.seq-marker-tracks { width: 100%; }
 .seq-markers {
   display: block;
   width: 100%;
   border-bottom: 1px solid var(--seq-border);
 }
+.seq-markers--hidden { opacity: 0.25; pointer-events: none; }
+
+/* Matches the "+ piste marqueur" label row — extends its separator line across the timeline */
+.seq-marker-track-add-spacer {
+  flex-shrink: 0;
+  width: 100%;
+  border-bottom: 1px solid var(--seq-border);
+  box-sizing: border-box;
+}
 .seq-marker__label { fill: var(--seq-text-muted); font-size: 8px; font-family: var(--seq-font); }
+.seq-marker__flag { cursor: grab; }
+.seq-marker__flag:hover { opacity: 0.8; }
+.seq-marker__flag--selected { stroke: var(--seq-selected); stroke-width: 2; }
+
+.seq-label-row--marker-track { font-style: italic; }
 
 /* Track rows */
 .seq-rows { width: 100%; }

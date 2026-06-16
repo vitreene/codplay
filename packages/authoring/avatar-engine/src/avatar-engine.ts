@@ -38,7 +38,12 @@ export type AvatarEngine = {
    */
   loadModel(url: string, opts?: ModelLoaderOptions): Promise<{ scene: Group; boneMap: Map<string, Object3D> }>
 
-  /** Advance morph and gesture easing. Call every frame with the frame delta in ms. */
+  /**
+   * Advance morph and gesture easing. Call every frame with the frame delta in ms.
+   * AvatarEngine has no rate concept of its own — CodPlay is the single source of
+   * time scaling and is responsible for passing an already-scaled delta when
+   * playback rate differs from 1.
+   */
   animate(deltaMs: number): void
 
   /**

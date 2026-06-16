@@ -1,5 +1,5 @@
 import type { MachineContext } from '../machine'
-import type { TrackNode } from '../types'
+import type { TrackNode, MarkerTrack } from '../types'
 import { getTrackRowHeight } from '../utils'
 
 type FlatEntry = { track: TrackNode; depth: number }
@@ -32,24 +32,95 @@ export function renderTrackLabelList(
   onToggleVisibility?: (trackId: string) => void,
   onToggleCollapse?: (capsuleId: string) => void,
   collapsedIds?: ReadonlySet<string>,
+  onMarkerTrackClick?: (markerTrackId: string) => void,
+  onToggleMarkerTrackVisibility?: (markerTrackId: string) => void,
+  onAddMarkerTrack?: () => void,
+  onRemoveMarkerTrack?: (markerTrackId: string) => void,
 ): void {
   container.innerHTML = ''
 
-  // Spacer matching cueRow + markerRow + waveformRow heights.
+  // Spacer matching cueRow height — sits above the marker track label rows,
+  // mirroring cueRow's position in timelineInner (cueRow → markerTrackRows → waveformRow → trackRows).
   // SVG/canvas use box-sizing:content-box → rendered height = attr + 1px border.
   const { layoutProfile, scene } = ctx
   const hasWaveform = Boolean(scene.audio?.waveform)
-  const spacerH = (layoutProfile.rowHeightCues + 1)
-    + (layoutProfile.rowHeightMarkers + 1)
-    + (hasWaveform ? layoutProfile.rowHeightWaveform + 1 : 0)
-  const spacer = document.createElement('div')
-  spacer.style.cssText = `height:${spacerH}px;flex-shrink:0`
-  container.appendChild(spacer)
+  const cueSpacer = document.createElement('div')
+  cueSpacer.style.cssText = `height:${layoutProfile.rowHeightCues + 1}px;flex-shrink:0`
+  container.appendChild(cueSpacer)
+
+  for (const markerTrack of scene.markerTracks) {
+    container.appendChild(
+      buildMarkerTrackLabelRow(markerTrack, ctx, onMarkerTrackClick, onToggleMarkerTrackVisibility, onRemoveMarkerTrack),
+    )
+  }
+
+  if (onAddMarkerTrack) {
+    const addRow = document.createElement('div')
+    addRow.classList.add('seq-label-row', 'seq-label-row--add-marker-track')
+    addRow.style.height = `${layoutProfile.rowHeightMarkers + 1}px`
+    addRow.textContent = '+ piste marqueur'
+    addRow.title = 'Ajouter une piste de marqueurs'
+    addRow.addEventListener('click', () => onAddMarkerTrack())
+    container.appendChild(addRow)
+  }
+
+  if (hasWaveform) {
+    const waveformSpacer = document.createElement('div')
+    waveformSpacer.style.cssText = `height:${layoutProfile.rowHeightWaveform + 1}px;flex-shrink:0`
+    container.appendChild(waveformSpacer)
+  }
 
   const collapsed = collapsedIds ?? new Set<string>()
   for (const { track, depth } of flattenWithDepth(ctx.scene.tracks, 0, collapsed)) {
     container.appendChild(buildLabelRow(track, depth, ctx, collapsed, onTrackClick, onToggleVisibility, onToggleCollapse))
   }
+}
+
+function buildMarkerTrackLabelRow(
+  markerTrack: MarkerTrack,
+  ctx: MachineContext,
+  onMarkerTrackClick?: (markerTrackId: string) => void,
+  onToggleVisibility?: (markerTrackId: string) => void,
+  onRemove?: (markerTrackId: string) => void,
+): HTMLElement {
+  const row = document.createElement('div')
+  row.classList.add('seq-label-row', 'seq-label-row--marker-track')
+  row.dataset.markerTrackId = markerTrack.id
+  // +1 compensates the SVG marker row's content-box border (see renderMarkerTrackRows)
+  row.style.height = `${ctx.layoutProfile.rowHeightMarkers + 1}px`
+  if (!markerTrack.visible) row.classList.add('seq-label-row--hidden')
+
+  const name = document.createElement('span')
+  name.classList.add('seq-label-row__name')
+  name.textContent = markerTrack.label
+  row.appendChild(name)
+
+  const visBtn = document.createElement('button')
+  visBtn.classList.add('seq-label-row__vis')
+  visBtn.textContent = markerTrack.visible ? '●' : '○'
+  visBtn.title = markerTrack.visible ? 'Masquer' : 'Afficher'
+  visBtn.addEventListener('click', e => {
+    e.stopPropagation()
+    onToggleVisibility?.(markerTrack.id)
+  })
+  row.appendChild(visBtn)
+
+  if (onRemove) {
+    const rmBtn = document.createElement('button')
+    rmBtn.classList.add('seq-label-row__remove')
+    rmBtn.textContent = '✕'
+    rmBtn.title = 'Retirer cette piste'
+    rmBtn.addEventListener('click', e => {
+      e.stopPropagation()
+      onRemove(markerTrack.id)
+    })
+    row.appendChild(rmBtn)
+  }
+
+  if (onMarkerTrackClick) {
+    row.addEventListener('click', () => onMarkerTrackClick(markerTrack.id))
+  }
+  return row
 }
 
 function buildLabelRow(

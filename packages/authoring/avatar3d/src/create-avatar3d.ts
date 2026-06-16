@@ -16,6 +16,7 @@ import type { PerspectiveCamera, WebGLRenderer, Scene } from 'three'
 import { createAvatarEngine, GazeService } from '@codplay/avatar-engine'
 import type { MoodName, RetargetConfig } from '@codplay/avatar-engine'
 import type { RuntimeComponentClass } from 'codplay/runtime/components'
+import type { RenderAdapter as CodplayRenderAdapter } from 'codplay'
 import { createAvatar3DComponentClass } from './avatar3d-component.js'
 import { createAvatar3DRenderAdapter } from './avatar3d-render-adapter.js'
 
@@ -46,14 +47,7 @@ export type Avatar3DSetup = {
   /** Pass as components.avatar3d in setup() return. */
   componentClass: RuntimeComponentClass
   /** Pass in renderAdapters in setup() return. */
-  renderAdapter: {
-    tick(info: { deltaMs: number }): void
-    seekStart(): void
-    seek(info: { nowMs: number; timelineMs: number }): void
-    pause(): void
-    resume(): void
-    stop(): void
-  }
+  renderAdapter: CodplayRenderAdapter & { seekStart(): void }
 }
 
 export async function createAvatar3D(config: Avatar3DConfig): Promise<Avatar3DSetup> {

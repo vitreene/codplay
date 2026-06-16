@@ -1,4 +1,5 @@
 import { VISEME_TO_RIVE_ID } from './viseme-map'
+import type { RenderAdapter as CodplayRenderAdapter } from 'codplay'
 
 /**
  * Duck-type minimal d'un input Rive (SMIInput de l'API bas-niveau).
@@ -60,14 +61,7 @@ export type AvatarRiveComponent = {
 
 export type AvatarRiveBinding = {
   componentClass: new (input: unknown) => AvatarRiveComponent
-  renderAdapter: {
-    tick(info: { deltaMs: number }): void
-    seekStart(): void
-    seek(info: unknown): void
-    pause(): void
-    resume(): void
-    stop(): void
-  }
+  renderAdapter: CodplayRenderAdapter & { seekStart(): void }
 }
 
 function resetInputs(deps: AvatarRiveDeps): void {
@@ -79,8 +73,12 @@ function resetInputs(deps: AvatarRiveDeps): void {
  * Crée le composant CodPlay et le render adapter Rive.
  *
  * CodPlay EST le moteur — Rive n'a PAS son propre RAF.
- * - tick()  → advance state machine + artboard + draw. CodPlay est le seul
- *             producteur de frames ; si tick() s'arrête, l'image est gelée.
+ * - tick()  → advance state machine + artboard + draw, avec `timelineDeltaMs`
+ *             (déjà scalé par CodPlay = deltaMs × rate). Rive n'a pas de
+ *             multiplicateur de vitesse natif et n'a pas besoin d'en avoir un :
+ *             le seul levier est l'argument `sec` passé à `advance()`, et
+ *             CodPlay fournit déjà ce delta à la bonne cadence — comme pour le
+ *             ticker, une seule source de scaling, pas un rate par moteur.
  * - pause() / resume() → no-op : CodPlay arrête / reprend de lui-même d'appeler tick().
  * - seek    → replay des events (update) remet les inputs au bon état,
  *             puis seek() draw un seul frame pour matérialiser la position.
@@ -124,14 +122,14 @@ export function createAvatarRiveBinding(deps: AvatarRiveDeps): AvatarRiveBinding
     }
   }
 
-  const renderAdapter = {
+  const renderAdapter: CodplayRenderAdapter & { seekStart(): void } = {
     /**
      * CodPlay appelle tick() à chaque frame RAF.
      * On avance la state machine et l'artboard du même delta, puis on draw.
      * Pause = CodPlay arrête d'appeler tick(). Resume = reprend.
      */
-    tick({ deltaMs }: { deltaMs: number }): void {
-      const sec = deltaMs / 1000
+    tick({ timelineDeltaMs }) {
+      const sec = timelineDeltaMs / 1000
       deps.stateMachineInstance.advance(sec)
       deps.artboard.advance(sec)
       deps.drawFrame()

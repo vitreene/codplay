@@ -78,6 +78,14 @@ export interface AuthorMarker {
   color?: string
 }
 
+export interface MarkerTrack {
+  id: string
+  label: string
+  color?: string        // couleur par défaut des marqueurs de cette piste
+  visible: boolean
+  markers: AuthorMarker[]
+}
+
 export interface WaveformDataV1 {
   version: 1
   sampleRate: number
@@ -103,7 +111,7 @@ export interface EditorScene {
   tracks: TrackNode[]
   decors: Record<string, EditorDecor>
   cues: TextCue[]
-  markers: AuthorMarker[]
+  markerTracks: MarkerTrack[]
   audio?: AudioTrack
 }
 

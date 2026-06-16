@@ -10,6 +10,7 @@ type MediaNodeLike = Record<string, unknown> & {
   currentTime?: number
   duration?: number
   paused?: boolean
+  playbackRate?: number
   play?: () => unknown
   pause?: () => void
 }
@@ -22,6 +23,7 @@ export type MediaComponentApi = {
   getCurrentTimeMs: () => number
   getDurationMs: () => number | null
   isPaused: () => boolean
+  setRate: (rate: number) => void
 }
 
 const MEDIA_TIME_SYNC_TOLERANCE_MS = 40
@@ -197,6 +199,20 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     }
 
     return this.playbackState === 'paused'
+  }
+
+  /**
+   * Applies the player rate to the underlying media element's native playbackRate.
+   * The media element is its own engine: scaling its native clock keeps native
+   * `play()` advancement in sync with the rate-scaled timeline without forced seeks.
+   */
+  setRate(rate: number): void {
+    const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
+    if (mediaNode === null) {
+      return
+    }
+
+    mediaNode.playbackRate = rate
   }
 
   /**

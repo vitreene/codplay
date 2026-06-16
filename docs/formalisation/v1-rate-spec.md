@@ -19,9 +19,23 @@ Permettre d'accelrer ou de ralentir uniformement la lecture d'une sequence sans 
 
 Les valeurs d'eventimes ne sont pas modifiees. Ce sont les sources d'avancement du temps qui scalent.
 
+## Principe directeur : le moteur regle son propre rate
+
+CodPlay ne recalcule jamais lui-meme l'avancement d'un moteur tiers (anime.js, Three.js/avatar-engine, Rive, lottie-web, media HTML). Pour chaque source d'avancement temporel, **c'est le moteur qui possede et applique son propre multiplicateur de vitesse**, exactement comme un lecteur video natif ou `engine.speed` chez anime.js :
+
+| Moteur | Mecanisme natif de rate |
+|---|---|
+| anime.js | `engine.speed = rate` |
+| lottie-web | `animation.setSpeed(rate)` |
+| `<audio>`/`<video>` natif | `mediaElement.playbackRate = rate` |
+| `@codplay/avatar-engine` (Three.js) | `engine.setRate(rate)` — stocke `rate` et scale `deltaMs` en interne dans `animate()` |
+| Rive (`@rive-app/canvas`) | pas de multiplicateur natif — le seul levier est l'argument `sec` passe a `advance()`. Le rate est stocke localement par l'adapter et applique a `sec` a chaque tick |
+
+Consequence : CodPlay transmet le `deltaMs` **brut** (horloge murale, non scale) a `tick()`. Ne jamais combiner un `deltaMs` deja scale (ex. `timelineDeltaMs`) avec le mecanisme natif du moteur — cela appliquerait le rate deux fois.
+
 ## Sources d'avancement temporel
 
-Il existe trois sources independantes qui doivent toutes scaler avec `rate` :
+Il existe quatre sources independantes qui doivent toutes scaler avec `rate` :
 
 ### 1. Timeline player
 
@@ -47,15 +61,73 @@ virtualNowMs += deltaMs × rate
 
 Un helper `live.wait(500, ...)` se declenche apres 500 ms de timeline, soit `500 / rate` ms reelles.
 
-### 3. Moteur d'animation (AnimationAdapter)
+### 3. Renderers externes (`RenderAdapter`)
 
-Le moteur d'animation (anime.js v4 en reference) expose `engine.speed`. Celui-ci est un multiplicateur global applique a tous les tweens actifs :
+Chaque renderer externe couple a CodPlay (anime.js, avatar3d/Three.js, avatar-rive, et tout futur adapter Lottie/PixiJS) est un `RenderAdapter` orchestre par `RenderSync`. Le contrat canonique est expose publiquement par le package `codplay` :
 
+```ts
+import type { RenderAdapter, RenderTickInfo, RenderSeekInfo } from 'codplay'
 ```
-tickDelta = (wallClockNowMs - animation._startTime) × animation._speed × engine.speed
+
+```ts
+export type RenderTickInfo = {
+  nowMs: number
+  deltaMs: number          // delta horloge murale, brut
+  timelineMs: number
+  timelineDeltaMs: number  // deltaMs × rate — pour un adapter SANS moteur propre
+  rate: number
+}
+
+export interface RenderAdapter {
+  tick(info: RenderTickInfo): void
+  seek(info: RenderSeekInfo): void
+  pause?(): void
+  resume?(): void
+  rateChange?(rate: number): void
+  stop?(): void
+}
 ```
 
-`setRate(rate)` doit propager `rate` vers `engine.speed` via le hook `AnimationAdapter.setRate`.
+Regle de choix dans `tick()` :
+- si l'adapter pilote un moteur avec son propre multiplicateur natif (cf. tableau ci-dessus) → utiliser `deltaMs` brut, et implementer `rateChange(rate)` pour configurer le moteur.
+- si l'adapter n'a aucun moteur propre (rendu stateless, ex. `renderer.render(scene, camera)` pur) → `timelineDeltaMs` est deja le bon delta scale, `rateChange` n'est pas necessaire.
+
+**Ne jamais melanger les deux** : un adapter qui implemente `rateChange` pour configurer un moteur natif doit ignorer `timelineDeltaMs` dans `tick()`, sinon le rate s'applique deux fois.
+
+`rateChange` est optionnel dans le contrat (`?`) — un adapter sans notion de vitesse propre peut l'omettre. Mais tout adapter livre dans ce monorepo qui pilote un moteur stateful (avatar3d, avatar-rive, futur Lottie) **doit** l'implementer ; c'est l'oubli de cette implementation qui a cause le bug initial (rate sans effet sur l'avatar et sur l'audio).
+
+Reference d'implementation (le pattern a suivre pour tout nouvel adapter) :
+
+```ts
+// adapter interne anime.js, cree par PlayerFacade
+const animeRenderAdapter: RenderAdapter = {
+  tick({ nowMs }) { animationAdapter.renderFrame?.(nowMs) },
+  seek() {},
+  pause() { animationAdapter.pause?.() },
+  resume() { animationAdapter.resume?.() },
+  rateChange(rate) { animationAdapter.setRate?.(rate) },
+  stop() { animationAdapter.stop() },
+}
+```
+
+Importer le type canonique plutot que le redupliquer localement : trois adapters (`avatar3d-render-adapter.ts`, `create-avatar3d.ts`, `avatar-rive-component.ts`) avaient chacun leur propre copie partielle du type `RenderAdapter`, sans `rateChange` — c'est exactement ce qui a permis au bug de passer inapercu. Pour une extension locale (ex. `seekStart` en attente d'adoption upstream), intersectionner le type canonique plutot que le redeclarer :
+
+```ts
+import type { RenderAdapter as CodplayRenderAdapter } from 'codplay'
+type RenderAdapter = CodplayRenderAdapter & { seekStart(): void }
+```
+
+### 4. Media (`MediaSyncModule`)
+
+Les elements `<audio>`/`<video>` ne sont pas modelises comme des `RenderAdapter` (ils ne sont pas pilotes frame par frame par CodPlay — `syncTimeline()` les laisse jouer nativement et corrige la derive). Le rate y est applique via le mecanisme natif du navigateur :
+
+```ts
+mediaElement.playbackRate = rate
+```
+
+propage par `MediaComponent.setRate(rate)` → `MediaSyncModule.setRate(rate)` → tous les composants media tracks, et applique aussi aux nouveaux medias montes apres un changement de rate. `setRate` est optionnel sur `MediaSyncRuntimeComponent` (`setRate?:`) pour ne pas casser les composants de test qui n'en ont pas besoin.
+
+**Effet de bord assume** : `playbackRate` natif modifie aussi la hauteur (pitch) du son — comportement standard du navigateur, pas de time-stretching a hauteur constante. Choix retenu pour sa simplicite et sa fiabilite (cf. decision produit).
 
 ## Contrat de propagation
 
@@ -63,15 +135,15 @@ tickDelta = (wallClockNowMs - animation._startTime) × animation._speed × engin
 
 ```
 telco.setRate(rate)
-  → player.setRate(rate)          [Player public facade]
-    → PlayerFacade.setRate(rate)  [re-ancrage timeline]
-    → renderer.setRate(rate)      [RendererFacade]
-      → animationAdapter.setRate?.(rate)  [hook optionnel]
-    → scheduleRuntime.setRate(rate)       [PlayerScheduleFacade principal]
-    → strapLoopSchedulers.setRate(rate)   [schedulers de boucles actives]
+  → player.setRate(rate)              [Player public facade]
+    → PlayerFacade.setRate(rate)      [re-ancrage timeline]
+    → renderSync.rateChange(rate)     [tous les RenderAdapter, anime.js inclus]
+    → mediaSync.setRate(rate)         [tous les MediaSyncRuntimeComponent]
+    → scheduleRuntime.setRate(rate)   [PlayerScheduleFacade principal]
+    → strapLoopSchedulers.setRate(rate) [schedulers de boucles actives]
 ```
 
-Le hook `animationAdapter.setRate` est optionnel (`?`). Une integration qui n'utilise pas de moteur d'animation externe peut l'omettre.
+`renderSync.rateChange(rate)` boucle sur tous les adapters enregistres (`options.renderAdapters`) et appelle `adapter.rateChange?.(rate)` sur chacun — un adapter qui n'implemente pas le hook est silencieusement ignore (et donc insensible au rate, ce qui doit etre un choix delibere, pas un oubli).
 
 ## API PlayerApi
 
@@ -102,7 +174,9 @@ type TelcoApi = {
 - `rate` est un getter qui delegue a `player.getRate()`.
 - `setRate` delegue a `player.setRate()` sans serialisation de commande (synchrone, pas de `commandInFlight`).
 
-## Hook AnimationAdapter
+## Hook AnimationAdapter (anime.js)
+
+`AnimationAdapter.setRate` reste le point d'integration cote demo pour anime.js, mais n'est plus appele directement par `PlayerFacade.setRate`. Il est encapsule par l'`animeRenderAdapter` interne (cf. section 3) que `RenderSync.rateChange` declenche comme tout autre `RenderAdapter` :
 
 ```ts
 type AnimationAdapter = {
@@ -111,7 +185,7 @@ type AnimationAdapter = {
 }
 ```
 
-Le hook est appele par `renderer.setRate(rate)`. L'integration est responsable de connecter ce hook a son moteur d'animation. Exemple avec anime.js v4 :
+L'integration connecte ce hook a son moteur d'animation. Exemple avec anime.js v4 :
 
 ```ts
 createAnimationAdapter(animeImplementation, {
@@ -136,7 +210,7 @@ Apres retour a `timelineMs = 0`, si le player etait en `playing`, les ancres son
 
 ### master clock
 
-Si un master est actif, `timelineMs` suit le temps de ce master. Dans ce cas, `rate` n'a pas d'effet sur la timeline principale (le master dicte sa propre cadence). Les helpers live et le moteur d'animation restent scales par `rate`.
+Si un master media est actif, `timelineMs` suit `component.getCurrentTimeMs()` de ce master (`resolveTimelineMsFromActiveMaster`). Depuis que `MediaSyncModule.setRate` applique `playbackRate` nativement sur l'element media, le master avance lui-meme a la cadence scalee — `timelineMs` herite donc correctement du `rate`, sans calcul supplementaire cote player. Avant ce fix, le master ignorait `rate` et la timeline principale restait bloquee a vitesse normale meme si tout le reste (helpers, anime.js) etait scale — c'etait l'un des deux bypass corriges (l'autre etant l'avatar3d).
 
 ## Ce que rate ne modifie pas
 

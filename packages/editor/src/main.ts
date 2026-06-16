@@ -10,7 +10,7 @@ import { createTrackLabelList, renderTrackLabelList } from './sequence-editor/re
 import { createTrackRowArea, renderTrackRows } from './sequence-editor/render/track-row'
 import { createPlayheadOverlay, renderPlayhead } from './sequence-editor/render/playhead-line'
 import { createCueRow, renderCueRow } from './sequence-editor/render/cue-row'
-import { createMarkerRow, renderMarkerRow } from './sequence-editor/render/marker-row'
+import { createMarkerTrackRows, renderMarkerTrackRows } from './sequence-editor/render/marker-row'
 import { createWaveformRow, renderWaveformRow } from './sequence-editor/render/waveform-row'
 
 import sceneEddy from './sequence-editor/fixtures/scene-eddy-ref.json'
@@ -182,13 +182,18 @@ timelineInner.classList.add('seq-timeline-inner')
 timeline.appendChild(timelineInner)
 
 const cueRow = createCueRow()
-const markerRow = createMarkerRow()
+const markerRow = createMarkerTrackRows()
+// Matches the "+ piste marqueur" label row height (see renderTrackLabelList) so
+// labels and timeline rows stay vertically aligned (scroll is synced between the two).
+// Height is set in the render loop from ctx.layoutProfile.
+const markerAddSpacer = document.createElement('div')
+markerAddSpacer.classList.add('seq-marker-track-add-spacer')
 const waveformRow = createWaveformRow()
 const trackRows = createTrackRowArea()
 const playheadOverlay = createPlayheadOverlay()
 playheadOverlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none'
 
-timelineInner.append(cueRow, markerRow, waveformRow, trackRows, playheadOverlay)
+timelineInner.append(cueRow, markerRow, markerAddSpacer, waveformRow, trackRows, playheadOverlay)
 editor.append(corner, rulerWrapper, labels, timeline)
 
 const infobar = document.createElement('div')
@@ -334,6 +339,32 @@ function startKeyframeDrag(trackId: string, kfId: string, _e: PointerEvent): voi
   ctrl.dragStartKeyframe(trackId, kfId)
 }
 
+// ── Marker drag ────────────────────────────────────────────────────────────────
+
+function startMarkerDrag(markerId: string, _e: PointerEvent): void {
+  dragOverlay.classList.add('active')
+  ctrl.selectMarker(markerId)
+
+  function onMove(ev: PointerEvent): void {
+    const rect = timeline.getBoundingClientRect()
+    const rawMs = ctrl.pixelToMs(ev.clientX - rect.left)
+    const snapped = ctrl.snapToGrid(rawMs)
+    ctrl.moveMarker(markerId, Math.max(0, snapped))
+  }
+
+  function onUp(): void {
+    console.log('[seq] marker:drag:end', markerId)
+    dragOverlay.classList.remove('active')
+    dragOverlay.removeEventListener('pointermove', onMove)
+    dragOverlay.removeEventListener('pointerup', onUp)
+  }
+
+  dragOverlay.addEventListener('pointermove', onMove)
+  dragOverlay.addEventListener('pointerup', onUp)
+
+  console.log('[seq] marker:drag:start', markerId)
+}
+
 // ── Ruler: seek (click) or range draw (drag) ──────────────────────────────────
 
 rulerWrapper.addEventListener('pointerdown', e => {
@@ -477,7 +508,25 @@ function render(snap: { context: MachineContext }): void {
     },
     onToggleCollapse,
     collapsedCapsuleIds,
+    id => {
+      console.log('[seq] markerTrack:select', id)
+    },
+    id => {
+      console.log('[seq] markerTrack:toggleVisibility', id)
+      ctrl.toggleMarkerTrackVisibility(id)
+    },
+    () => {
+      const label = window.prompt('Nom de la piste de marqueurs :')
+      if (!label) return
+      const id = ctrl.addMarkerTrack(label)
+      console.log('[seq] markerTrack:add', id, label)
+    },
+    id => {
+      console.log('[seq] markerTrack:remove', id)
+      ctrl.removeMarkerTrack(id)
+    },
   )
+  markerAddSpacer.style.height = `${ctx.layoutProfile.rowHeightMarkers + 1}px`
   renderTrackRows(
     trackRows,
     ctx,
@@ -499,7 +548,19 @@ function render(snap: { context: MachineContext }): void {
     },
   )
   renderCueRow(cueRow, ctx)
-  renderMarkerRow(markerRow, ctx)
+  renderMarkerTrackRows(
+    markerRow,
+    ctx,
+    (markerTrackId, rawMs) => {
+      const id = ctrl.addMarker(markerTrackId, Math.max(0, rawMs))
+      console.log('[seq] marker:add', markerTrackId, id, rawMs.toFixed(0), 'ms')
+    },
+    markerId => {
+      console.log('[seq] marker:select', markerId)
+      ctrl.selectMarker(markerId)
+    },
+    startMarkerDrag,
+  )
   renderWaveformRow(waveformRow, ctx)
   renderPlayhead(playheadOverlay, ctx)
   renderInfobar(infobar, ctx)
@@ -546,13 +607,15 @@ function renderInfobar(bar: HTMLElement, ctx: MachineContext): void {
   }
 }
 
-// Delete / Backspace → remove selected kf
+// Delete / Backspace → remove selected kf or marker
 document.addEventListener('keydown', e => {
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
   if ((e.target as HTMLElement).closest('input, textarea, select')) return
   const { selection } = ctrl.getSnapshot().context
   if (selection.keyframeId && selection.trackId) {
     ctrl.removeKeyframe(selection.trackId, selection.keyframeId)
+  } else if (selection.markerId) {
+    ctrl.removeMarker(selection.markerId)
   }
 })
 

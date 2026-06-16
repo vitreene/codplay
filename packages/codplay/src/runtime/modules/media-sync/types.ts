@@ -11,6 +11,7 @@ export type MediaSyncRuntimeComponent = {
   getCurrentTimeMs: () => number
   getDurationMs: () => number | null
   isPaused: () => boolean
+  setRate?: (rate: number) => void
 }
 
 export type MediaSyncModuleContext = {
@@ -26,4 +27,5 @@ export type MediaSyncModule = {
   syncTimeline: (timelineMs: number, playbackState: MediaSyncPlaybackState) => void
   handleSequenceEnd: (timelineMs: number) => void
   resolveTimelineMsFromActiveMaster: (fallbackTimelineMs: number) => number
+  setRate: (rate: number) => void
 }

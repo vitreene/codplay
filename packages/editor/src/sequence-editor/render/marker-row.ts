@@ -2,38 +2,75 @@ import type { MachineContext } from '../machine'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-export function createMarkerRow(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, 'svg')
-  svg.classList.add('seq-markers')
-  svg.setAttribute('aria-hidden', 'true')
-  return svg
+export function createMarkerTrackRows(): HTMLElement {
+  const el = document.createElement('div')
+  el.classList.add('seq-marker-tracks')
+  return el
 }
 
-export function renderMarkerRow(svg: SVGSVGElement, ctx: MachineContext): void {
-  while (svg.firstChild) svg.removeChild(svg.firstChild)
+export function renderMarkerTrackRows(
+  container: HTMLElement,
+  ctx: MachineContext,
+  onAddMarker?: (markerTrackId: string, rawMs: number) => void,
+  onSelectMarker?: (markerId: string) => void,
+  onDragStartMarker?: (markerId: string, e: PointerEvent) => void,
+): void {
+  container.innerHTML = ''
 
-  const { viewport, scene, layoutProfile } = ctx
+  const { viewport, scene, selection, layoutProfile } = ctx
   const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightMarkers
 
-  svg.setAttribute('height', String(h))
+  for (const track of scene.markerTracks) {
+    const svg = document.createElementNS(SVG_NS, 'svg')
+    svg.classList.add('seq-markers')
+    if (!track.visible) svg.classList.add('seq-markers--hidden')
+    svg.setAttribute('height', String(h))
+    svg.dataset.markerTrackId = track.id
+    svg.setAttribute('aria-hidden', 'true')
 
-  for (const marker of scene.markers) {
-    const x = (marker.timeMs - startMs) * pixelsPerMs
-    const color = marker.color ?? 'var(--seq-marker-default-color)'
+    for (const marker of track.markers) {
+      const x = (marker.timeMs - startMs) * pixelsPerMs
+      const color = marker.color ?? track.color ?? 'var(--seq-marker-default-color)'
 
-    const flag = document.createElementNS(SVG_NS, 'polygon')
-    flag.setAttribute('points', `${x},0 ${x + 8},0 ${x + 8},${h - 4} ${x},${h}`)
-    flag.setAttribute('fill', color)
-    flag.classList.add('seq-marker__flag')
-    flag.dataset.markerId = marker.id
-    svg.appendChild(flag)
+      const flag = document.createElementNS(SVG_NS, 'polygon')
+      flag.setAttribute('points', `${x},0 ${x + 8},0 ${x + 8},${h - 4} ${x},${h}`)
+      flag.setAttribute('fill', color)
+      flag.classList.add('seq-marker__flag')
+      if (selection.markerId === marker.id) flag.classList.add('seq-marker__flag--selected')
+      flag.dataset.markerId = marker.id
 
-    const label = document.createElementNS(SVG_NS, 'text')
-    label.setAttribute('x', String(x + 10))
-    label.setAttribute('y', String(h - 3))
-    label.classList.add('seq-marker__label')
-    label.textContent = marker.label
-    svg.appendChild(label)
+      if (onDragStartMarker) {
+        flag.addEventListener('pointerdown', e => {
+          e.stopPropagation()
+          e.preventDefault()
+          onDragStartMarker(marker.id, e)
+        })
+      } else if (onSelectMarker) {
+        flag.addEventListener('click', e => {
+          e.stopPropagation()
+          onSelectMarker(marker.id)
+        })
+      }
+      svg.appendChild(flag)
+
+      const label = document.createElementNS(SVG_NS, 'text')
+      label.setAttribute('x', String(x + 10))
+      label.setAttribute('y', String(h - 3))
+      label.classList.add('seq-marker__label')
+      label.textContent = marker.label
+      svg.appendChild(label)
+    }
+
+    if (onAddMarker) {
+      svg.style.cursor = 'pointer'
+      svg.addEventListener('dblclick', e => {
+        const rect = svg.getBoundingClientRect()
+        const rawMs = startMs + (e.clientX - rect.left) / pixelsPerMs
+        onAddMarker(track.id, rawMs)
+      })
+    }
+
+    container.appendChild(svg)
   }
 }

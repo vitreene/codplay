@@ -636,6 +636,7 @@ export class PlayerFacade implements PlayerApi {
     }
     this._rate = rate;
     this.renderSync.rateChange(rate);
+    this.mediaSync.setRate(rate);
   }
 
   /**

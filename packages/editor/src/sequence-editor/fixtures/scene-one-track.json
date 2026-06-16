@@ -16,28 +16,46 @@
           "timeMs": 0,
           "name": "intro",
           "decorId": "decor-01",
-          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 600 }
+          "transitionOut": {
+            "kind": "named",
+            "name": "fade",
+            "durationMs": 600
+          }
         },
         {
           "id": "kf-02",
           "timeMs": 600,
           "decorId": "decor-02",
-          "transitionOut": { "kind": "interpolated", "durationMs": 400, "easing": "ease-in-out" }
+          "transitionOut": {
+            "kind": "interpolated",
+            "durationMs": 400,
+            "easing": "ease-in-out"
+          }
         },
         {
           "id": "kf-03",
           "timeMs": 9000,
           "name": "outro",
           "decorId": "decor-02",
-          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 500 }
+          "transitionOut": {
+            "kind": "named",
+            "name": "fade",
+            "durationMs": 500
+          }
         }
       ]
     }
   ],
   "decors": {
-    "decor-01": { "id": "decor-01", "data": {} },
-    "decor-02": { "id": "decor-02", "data": {} }
+    "decor-01": {
+      "id": "decor-01",
+      "data": {}
+    },
+    "decor-02": {
+      "id": "decor-02",
+      "data": {}
+    }
   },
   "cues": [],
-  "markers": []
+  "markerTracks": []
 }

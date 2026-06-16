@@ -7,7 +7,7 @@ import {
   type PlayRange,
 } from './machine'
 import type {
-  EditorScene, TrackNode, TextCue,
+  EditorScene, TrackNode, TextCue, MarkerTrack,
   AudioTrack, WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
 } from './types'
 import { applySnapToMs } from './machine'
@@ -37,7 +37,7 @@ function emptyScene(): EditorScene {
     tracks: [],
     decors: {},
     cues: [],
-    markers: [],
+    markerTracks: [],
   }
 }
 
@@ -247,6 +247,10 @@ export class SequenceEditorController {
     this.send({ type: 'KEYFRAME.SELECT', trackId, keyframeId })
   }
 
+  selectMarker(markerId: string | null): void {
+    this.send({ type: 'MARKER.SELECT', markerId })
+  }
+
   // ── Keyframes ───────────────────────────────────────────────────────────────
 
   addKeyframe(trackId: string, timeMs: number): string {
@@ -340,9 +344,28 @@ export class SequenceEditorController {
     this.send({ type: 'CUE.REMOVE', cueId })
   }
 
-  addMarker(timeMs: number, label?: string): string {
+  addMarkerTrack(label: string, color?: string): string {
+    const id = genId('mtrack')
+    const track: MarkerTrack = { id, label, color, visible: true, markers: [] }
+    this.send({ type: 'MARKER_TRACK.ADD', track })
+    return id
+  }
+
+  removeMarkerTrack(markerTrackId: string): void {
+    this.send({ type: 'MARKER_TRACK.REMOVE', markerTrackId })
+  }
+
+  renameMarkerTrack(markerTrackId: string, label: string): void {
+    this.send({ type: 'MARKER_TRACK.RENAME', markerTrackId, label })
+  }
+
+  toggleMarkerTrackVisibility(markerTrackId: string): void {
+    this.send({ type: 'MARKER_TRACK.TOGGLE_VISIBILITY', markerTrackId })
+  }
+
+  addMarker(markerTrackId: string, timeMs: number, label?: string): string {
     const id = genId('marker')
-    this.send({ type: 'MARKER.ADD', marker: { id, timeMs, label: label ?? '' } })
+    this.send({ type: 'MARKER.ADD', markerTrackId, marker: { id, timeMs, label: label ?? '' } })
     return id
   }
 

@@ -1,5 +1,5 @@
 export type {
-  EditorScene, TrackNode, Keyframe, EditorDecor, TextCue, AuthorMarker,
+  EditorScene, TrackNode, Keyframe, EditorDecor, TextCue, AuthorMarker, MarkerTrack,
   TransitionDef, TransitionKey, EasingValue, CapsuleKind,
   AudioTrack, WaveformDataV1,
   ViewportState, SelectionTarget, InteractionState, SnapPoint,

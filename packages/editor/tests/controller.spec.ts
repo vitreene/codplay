@@ -211,11 +211,57 @@ describe('addCue / removeCue', () => {
   })
 })
 
-describe('addMarker / moveMarker / removeMarker', () => {
-  it('addMarker crée un marker', () => {
+function findMarker(scene: EditorScene, markerId: string) {
+  for (const t of scene.markerTracks) {
+    const m = t.markers.find(m => m.id === markerId)
+    if (m) return m
+  }
+  return undefined
+}
+
+describe('addMarkerTrack / removeMarkerTrack / renameMarkerTrack / toggleMarkerTrackVisibility', () => {
+  it('addMarkerTrack crée une piste vide visible', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    const id = ctrl.addMarker(5000, 'Repère')
-    const m = ctrl.getScene().markers.find(m => m.id === id)
+    const id = ctrl.addMarkerTrack('Visèmes')
+    const t = ctrl.getScene().markerTracks.find(t => t.id === id)
+    expect(t).toMatchObject({ label: 'Visèmes', visible: true, markers: [] })
+    ctrl.destroy()
+  })
+
+  it('renameMarkerTrack renomme la piste', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.renameMarkerTrack('mtrack-01', 'Gestes')
+    expect(ctrl.getScene().markerTracks.find(t => t.id === 'mtrack-01')?.label).toBe('Gestes')
+    ctrl.destroy()
+  })
+
+  it('toggleMarkerTrackVisibility bascule visible', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.toggleMarkerTrackVisibility('mtrack-01')
+    expect(ctrl.getScene().markerTracks.find(t => t.id === 'mtrack-01')?.visible).toBe(false)
+    ctrl.destroy()
+  })
+
+  it('removeMarkerTrack retire la piste et détache les kf accrochés à ses marqueurs', () => {
+    const ctrl = new SequenceEditorController(ONE_TRACK)
+    const tid = ctrl.addMarkerTrack('Gestes')
+    const mid = ctrl.addMarker(tid, 600, 'mid')
+    ctrl.attachMarker('track-01', 'kf-02', mid)
+    ctrl.removeMarkerTrack(tid)
+    expect(ctrl.getScene().markerTracks.find(t => t.id === tid)).toBeUndefined()
+    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
+    expect(kf?.markerId).toBeUndefined()
+    expect(kf?.timeMs).toBe(600)
+    ctrl.destroy()
+  })
+})
+
+describe('addMarker / moveMarker / removeMarker', () => {
+  it('addMarker crée un marker dans la piste donnée', () => {
+    const ctrl = new SequenceEditorController(EMPTY)
+    const tid = ctrl.addMarkerTrack('Repères')
+    const id = ctrl.addMarker(tid, 5000, 'Repère')
+    const m = findMarker(ctrl.getScene(), id)
     expect(m?.timeMs).toBe(5000)
     ctrl.destroy()
   })
@@ -223,13 +269,14 @@ describe('addMarker / moveMarker / removeMarker', () => {
   it('moveMarker déplace le marker', () => {
     const ctrl = new SequenceEditorController(NESTED)
     ctrl.moveMarker('marker-01', 4000)
-    expect(ctrl.getScene().markers.find(m => m.id === 'marker-01')?.timeMs).toBe(4000)
+    expect(findMarker(ctrl.getScene(), 'marker-01')?.timeMs).toBe(4000)
     ctrl.destroy()
   })
 
   it('moveMarker propage aux kf accrochés', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    const mid = ctrl.addMarker(600, 'mid')
+    const tid = ctrl.addMarkerTrack('Repères')
+    const mid = ctrl.addMarker(tid, 600, 'mid')
     ctrl.attachMarker('track-01', 'kf-02', mid)
     ctrl.moveMarker(mid, 800)
     const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
@@ -239,12 +286,48 @@ describe('addMarker / moveMarker / removeMarker', () => {
 
   it('removeMarker détache les kf (timeMs conservé, markerId retiré)', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    const mid = ctrl.addMarker(600, 'mid')
+    const tid = ctrl.addMarkerTrack('Repères')
+    const mid = ctrl.addMarker(tid, 600, 'mid')
     ctrl.attachMarker('track-01', 'kf-02', mid)
     ctrl.removeMarker(mid)
     const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.markerId).toBeUndefined()
     expect(kf?.timeMs).toBe(600)
+    ctrl.destroy()
+  })
+})
+
+describe('selectMarker', () => {
+  it('sélectionne un marker et efface la sélection track/keyframe', () => {
+    const ctrl = new SequenceEditorController(ONE_TRACK)
+    ctrl.selectKeyframe('track-01', 'kf-02')
+    ctrl.selectMarker('marker-01')
+    const { selection } = ctrl.getSnapshot().context
+    expect(selection).toEqual({ trackId: null, keyframeId: null, markerId: 'marker-01' })
+    ctrl.destroy()
+  })
+
+  it('selectKeyframe efface la sélection de marker', () => {
+    const ctrl = new SequenceEditorController(ONE_TRACK)
+    ctrl.selectMarker('marker-01')
+    ctrl.selectKeyframe('track-01', 'kf-02')
+    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
+    ctrl.destroy()
+  })
+
+  it('removeMarker efface la sélection si le marker supprimé était sélectionné', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.selectMarker('marker-01')
+    ctrl.removeMarker('marker-01')
+    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
+    ctrl.destroy()
+  })
+
+  it('removeMarkerTrack efface la sélection si le marker sélectionné appartenait à la piste', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.selectMarker('marker-01')
+    ctrl.removeMarkerTrack('mtrack-01')
+    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
     ctrl.destroy()
   })
 })

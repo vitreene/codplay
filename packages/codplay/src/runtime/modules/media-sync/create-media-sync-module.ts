@@ -52,6 +52,7 @@ class MediaSyncModuleInstance implements MediaSyncModule {
   private readonly context: MediaSyncModuleContext
   private readonly mediaById = new Map<string, MediaRuntimeState>()
   private nextActivationOrder = 1
+  private rate = 1
 
   constructor(context: MediaSyncModuleContext) {
     this.context = context
@@ -83,6 +84,19 @@ class MediaSyncModuleInstance implements MediaSyncModule {
     this.mediaById.clear()
     for (const [runtimeItemId, mediaState] of nextMediaById) {
       this.mediaById.set(runtimeItemId, mediaState)
+      this.context.getComponentById(runtimeItemId)?.setRate?.(this.rate)
+    }
+  }
+
+  /**
+   * Applies the player rate to every tracked media element's native playbackRate.
+   * The media element is its own engine — scaling its native clock keeps native
+   * `play()` advancement aligned with the rate-scaled timeline without forced re-seeks.
+   */
+  setRate(rate: number): void {
+    this.rate = rate
+    for (const mediaState of this.mediaById.values()) {
+      this.context.getComponentById(mediaState.runtimeItemId)?.setRate?.(rate)
     }
   }
 

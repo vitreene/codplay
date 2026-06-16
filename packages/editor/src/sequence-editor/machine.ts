@@ -1,6 +1,6 @@
 import { setup, assign } from 'xstate'
 import type {
-  EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, AudioTrack,
+  EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, MarkerTrack, AudioTrack,
   WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
 } from './types'
 import { CapsuleDistribution } from 'codplay/capsule-distribution'
@@ -26,6 +26,7 @@ export interface MachineViewport {
 export interface MachineSelection {
   trackId: string | null
   keyframeId: string | null
+  markerId: string | null
 }
 
 export type MachineSnapPoint = {
@@ -77,6 +78,7 @@ export type MachineInput = {
 export type SequenceEditorEvent =
   | { type: 'TRACK.SELECT'; trackId: string | null }
   | { type: 'KEYFRAME.SELECT'; trackId: string; keyframeId: string | null }
+  | { type: 'MARKER.SELECT'; markerId: string | null }
   | { type: 'KEYFRAME.ADD'; trackId: string; timeMs: number; id?: string }
   | { type: 'KEYFRAME.REMOVE'; trackId: string; keyframeId: string }
   | { type: 'KEYFRAME.CLEAR_TRACK'; trackId: string }
@@ -118,7 +120,11 @@ export type SequenceEditorEvent =
   | { type: 'TRACK.RESET_KEYFRAMES'; trackId: string }
   | { type: 'CUE.ADD'; cue: TextCue & { id: string } }
   | { type: 'CUE.REMOVE'; cueId: string }
-  | { type: 'MARKER.ADD'; marker: AuthorMarker & { id: string } }
+  | { type: 'MARKER_TRACK.ADD'; track: MarkerTrack }
+  | { type: 'MARKER_TRACK.REMOVE'; markerTrackId: string }
+  | { type: 'MARKER_TRACK.RENAME'; markerTrackId: string; label: string }
+  | { type: 'MARKER_TRACK.TOGGLE_VISIBILITY'; markerTrackId: string }
+  | { type: 'MARKER.ADD'; markerTrackId: string; marker: AuthorMarker & { id: string } }
   | { type: 'MARKER.MOVE'; markerId: string; timeMs: number }
   | { type: 'MARKER.REMOVE'; markerId: string }
   | { type: 'KEYFRAME.ATTACH_MARKER'; trackId: string; keyframeId: string; markerId: string }
@@ -144,13 +150,25 @@ function clampViewportStart(startMs: number, vp: MachineViewport, durationMs: nu
   return Math.max(0, Math.min(startMs, durationMs - viewDurationMs))
 }
 
+function detachKeyframesByMarkerIds(tracks: TrackNode[], markerIds: ReadonlySet<string>): TrackNode[] {
+  return tracks.map(t => ({
+    ...t,
+    keyframes: t.keyframes.map(k =>
+      k.markerId !== undefined && markerIds.has(k.markerId) ? { ...k, markerId: undefined } : k,
+    ),
+    children: t.children ? detachKeyframesByMarkerIds(t.children, markerIds) : undefined,
+  }))
+}
+
 function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
   const points: MachineSnapPoint[] = []
   for (const cue of scene.cues) {
     points.push({ timeMs: cue.timeMs, kind: 'cue-start', sourceId: cue.id })
   }
-  for (const marker of scene.markers) {
-    points.push({ timeMs: marker.timeMs, kind: 'marker', sourceId: marker.id })
+  for (const track of scene.markerTracks) {
+    for (const marker of track.markers) {
+      points.push({ timeMs: marker.timeMs, kind: 'marker', sourceId: marker.id })
+    }
   }
   for (const track of flattenTracks(scene.tracks)) {
     for (const kf of track.keyframes) {
@@ -383,7 +401,7 @@ export const sequenceEditorMachine = setup({
       isPlaying: false,
       playRange: null,
       followPlayhead: false,
-      selection: { trackId: null, keyframeId: null },
+      selection: { trackId: null, keyframeId: null, markerId: null },
       interaction: null,
       layoutProfile: LAYOUT_PROFILE_DEFAULT,
       displayConfig: DISPLAY_CONFIG_DEFAULT,
@@ -400,12 +418,17 @@ export const sequenceEditorMachine = setup({
       on: {
         'TRACK.SELECT': {
           actions: assign(({ event }) => ({
-            selection: { trackId: event.trackId, keyframeId: null },
+            selection: { trackId: event.trackId, keyframeId: null, markerId: null },
           })),
         },
         'KEYFRAME.SELECT': {
           actions: assign(({ event }) => ({
-            selection: { trackId: event.trackId, keyframeId: event.keyframeId },
+            selection: { trackId: event.trackId, keyframeId: event.keyframeId, markerId: null },
+          })),
+        },
+        'MARKER.SELECT': {
+          actions: assign(({ event }) => ({
+            selection: { trackId: null, keyframeId: null, markerId: event.markerId },
           })),
         },
 
@@ -453,7 +476,7 @@ export const sequenceEditorMachine = setup({
             const scene = { ...sceneAfterRemove, decors }
             const selection: MachineSelection =
               context.selection.keyframeId === event.keyframeId
-                ? { trackId: null, keyframeId: null }
+                ? { trackId: null, keyframeId: null, markerId: null }
                 : context.selection
             return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -465,7 +488,7 @@ export const sequenceEditorMachine = setup({
             const scene = pruneOrphanDecors(cleared)
             const selection: MachineSelection =
               context.selection.trackId === event.trackId
-                ? { trackId: event.trackId, keyframeId: null }
+                ? { trackId: event.trackId, keyframeId: null, markerId: null }
                 : context.selection
             return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -490,7 +513,7 @@ export const sequenceEditorMachine = setup({
             const sel = context.selection
             const selection: MachineSelection =
               sel.trackId && clearedIds.has(sel.trackId)
-                ? { trackId: null, keyframeId: null }
+                ? { trackId: null, keyframeId: null, markerId: null }
                 : sel
             return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -570,7 +593,7 @@ export const sequenceEditorMachine = setup({
                 originMs: kf?.timeMs ?? 0,
                 currentMs: kf?.timeMs ?? 0,
               },
-              selection: { trackId: event.trackId, keyframeId: event.keyframeId },
+              selection: { trackId: event.trackId, keyframeId: event.keyframeId, markerId: null },
             }
           }),
         },
@@ -712,7 +735,7 @@ export const sequenceEditorMachine = setup({
             const virtualKeyframes = computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder)
             const selection: MachineSelection =
               context.selection.trackId === event.trackId
-                ? { trackId: null, keyframeId: null }
+                ? { trackId: null, keyframeId: null, markerId: null }
                 : context.selection
             return { scene, snapGrid, virtualKeyframes, selection }
           }),
@@ -749,9 +772,51 @@ export const sequenceEditorMachine = setup({
           }),
         },
 
+        'MARKER_TRACK.ADD': {
+          actions: assign(({ context, event }) => {
+            const scene = { ...context.scene, markerTracks: [...context.scene.markerTracks, event.track] }
+            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
+          }),
+        },
+
+        'MARKER_TRACK.REMOVE': {
+          actions: assign(({ context, event }) => {
+            const removedTrack = context.scene.markerTracks.find(t => t.id === event.markerTrackId)
+            const removedMarkerIds = new Set(removedTrack?.markers.map(m => m.id) ?? [])
+            const markerTracks = context.scene.markerTracks.filter(t => t.id !== event.markerTrackId)
+            const tracks = detachKeyframesByMarkerIds(context.scene.tracks, removedMarkerIds)
+            const scene = { ...context.scene, markerTracks, tracks }
+            const selection: MachineSelection = context.selection.markerId !== null && removedMarkerIds.has(context.selection.markerId)
+              ? { trackId: null, keyframeId: null, markerId: null }
+              : context.selection
+            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
+          }),
+        },
+
+        'MARKER_TRACK.RENAME': {
+          actions: assign(({ context, event }) => {
+            const markerTracks = context.scene.markerTracks.map(t =>
+              t.id === event.markerTrackId ? { ...t, label: event.label } : t,
+            )
+            return { scene: { ...context.scene, markerTracks } }
+          }),
+        },
+
+        'MARKER_TRACK.TOGGLE_VISIBILITY': {
+          actions: assign(({ context, event }) => {
+            const markerTracks = context.scene.markerTracks.map(t =>
+              t.id === event.markerTrackId ? { ...t, visible: !t.visible } : t,
+            )
+            return { scene: { ...context.scene, markerTracks } }
+          }),
+        },
+
         'MARKER.ADD': {
           actions: assign(({ context, event }) => {
-            const scene = { ...context.scene, markers: [...context.scene.markers, event.marker] }
+            const markerTracks = context.scene.markerTracks.map(t =>
+              t.id === event.markerTrackId ? { ...t, markers: [...t.markers, event.marker] } : t,
+            )
+            const scene = { ...context.scene, markerTracks }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
@@ -768,30 +833,28 @@ export const sequenceEditorMachine = setup({
                 children: t.children ? propagate(t.children) : undefined,
               }))
             }
-            const markers = context.scene.markers.map(m =>
-              m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m,
-            )
+            const markerTracks = context.scene.markerTracks.map(mt => ({
+              ...mt,
+              markers: mt.markers.map(m => m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m),
+            }))
             const tracks = propagate(context.scene.tracks)
-            const scene = { ...context.scene, markers, tracks }
+            const scene = { ...context.scene, markerTracks, tracks }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'MARKER.REMOVE': {
           actions: assign(({ context, event }) => {
-            function detach(tracks: TrackNode[]): TrackNode[] {
-              return tracks.map(t => ({
-                ...t,
-                keyframes: t.keyframes.map(k =>
-                  k.markerId === event.markerId ? { ...k, markerId: undefined } : k,
-                ),
-                children: t.children ? detach(t.children) : undefined,
-              }))
-            }
-            const markers = context.scene.markers.filter(m => m.id !== event.markerId)
-            const tracks = detach(context.scene.tracks)
-            const scene = { ...context.scene, markers, tracks }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
+            const markerTracks = context.scene.markerTracks.map(mt => ({
+              ...mt,
+              markers: mt.markers.filter(m => m.id !== event.markerId),
+            }))
+            const tracks = detachKeyframesByMarkerIds(context.scene.tracks, new Set([event.markerId]))
+            const scene = { ...context.scene, markerTracks, tracks }
+            const selection: MachineSelection = context.selection.markerId === event.markerId
+              ? { trackId: null, keyframeId: null, markerId: null }
+              : context.selection
+            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
@@ -847,7 +910,7 @@ export const sequenceEditorMachine = setup({
             snapGrid: computeSnapGrid(event.scene),
             virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
             playheadMs: 0,
-            selection: { trackId: null, keyframeId: null },
+            selection: { trackId: null, keyframeId: null, markerId: null },
             interaction: null,
           })),
         },
