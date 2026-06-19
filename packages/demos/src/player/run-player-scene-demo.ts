@@ -71,10 +71,12 @@ function syncInteractionLock(containerNode: HTMLDivElement, status: string): voi
 	containerNode.removeAttribute('inert');
 }
 
+type PlayerDemoConfig = PlayerSceneDemoConfig & { rootNodeIds: string[] }
+
 /**
- * Renders one shared player demo shell for one scene-based scenario.
+ * Renders one shared player demo layout for one scene-based scenario.
  */
-export async function runPlayerSceneDemo(config: PlayerSceneDemoConfig): Promise<void> {
+export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void> {
 	const appNode = globalThis.document.querySelector<HTMLDivElement>('#app');
 	if (appNode === null) {
 		throw new Error('Expected #app root element');

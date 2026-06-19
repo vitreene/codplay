@@ -22,7 +22,6 @@ export type PlayerSceneDemoConfig = {
 	subtitle: string;
 	scene: SceneDoc;
 	strapCollection?: StrapCollection;
-	rootNodeIds: string[];
 	activeDemo?: string;
 	actions?: PlayerSceneDemoAction[];
 	extraResources?: ResourceManifestEntry[];

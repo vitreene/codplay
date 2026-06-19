@@ -10,7 +10,6 @@ export async function runPreloadMediaDemo(): Promise<void> {
     title: 'Preload Media',
     subtitle: 'Audio à 0s, vidéo à 2s, images à 4s et 5s. Son, vidéo, images et CSS chargés via le module preload avant démarrage.',
     scene: createPreloadMediaScene(),
-    rootNodeIds: ['media-shell'],
     activeDemo: 'preload-media',
     extraResources: [
       {

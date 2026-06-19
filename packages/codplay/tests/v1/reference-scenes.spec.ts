@@ -477,7 +477,7 @@ describe('V1 - reference scenes', () => {
     expect(scene).not.toHaveProperty('straps')
     expect(scene).not.toHaveProperty('listen')
     expect(questionStory).not.toHaveProperty('initial')
-    expect(questionStory).not.toHaveProperty('straps')
+    expect(questionStory).toHaveProperty('straps', s4QuizStraps)
     expect(countStory).not.toHaveProperty('initial')
     expect(countStory).not.toHaveProperty('straps')
     expect(countStory).not.toHaveProperty('listen')

@@ -1,4 +1,4 @@
-import { createPlayerPocScene, playerPocRootNodeIds } from '../scenes'
+import { createPlayerPocScene } from '../scenes'
 import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 
 /**
@@ -10,7 +10,6 @@ export async function runCodPlayPocDemo(): Promise<void> {
 		subtitle:
 			"Meme cas dur que Player POC, compile puis joue via CodPlay; tout ecart sur le move est une regression.",
 		scene: createPlayerPocScene(),
-		rootNodeIds: playerPocRootNodeIds,
 		activeDemo: 'codplay-poc',
 	})
 }

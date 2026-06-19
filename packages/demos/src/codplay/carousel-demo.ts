@@ -10,7 +10,6 @@ export async function runCarouselDemo(): Promise<void> {
     title: 'Carrousel',
     subtitle: '3 images défilant en fondu toutes les 2s — 6s au total. Timing résolu par AutoCapsule.',
     scene: createCarouselScene(),
-    rootNodeIds: ['carousel-container'],
     activeDemo: 'carousel',
   })
 }

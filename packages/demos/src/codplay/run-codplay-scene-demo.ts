@@ -12,33 +12,11 @@ import type { TelcoApi } from "codplay/telco/types";
 
 type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
   onReady?: (context: { player: Player; telco: TelcoApi }) => void
-  /** Called after each mount cycle with the live registry — use for extra node placement. */
-  onAfterMount?: (registry: ReturnType<Player['getRuntimeRegistry']>) => void
   /** Async hook for demos that need async initialization (e.g. Three.js + TalkingHead).
    *  Runs once before CodPlay is constructed. Returns components and/or renderFrame
    *  to inject into the player. Overrides any same-key values from the top-level config. */
   setup?: () => Promise<Pick<PlayerSceneDemoConfig, 'components' | 'renderAdapters'>>
 };
-
-function isDomNode(nodeRef: unknown): nodeRef is Node {
-  return typeof globalThis.Node !== "undefined" && nodeRef instanceof globalThis.Node;
-}
-
-function mountDemoRootNodes(containerNode: HTMLDivElement, studio: CodPlay, rootNodeIds: string[]): void {
-  const registry = studio.player.getRuntimeRegistry();
-  const rootNodes: Node[] = [];
-
-  for (const rootNodeId of rootNodeIds) {
-    const nodeRef = registry.getNodeById(rootNodeId);
-    if (!isDomNode(nodeRef)) {
-      continue;
-    }
-
-    rootNodes.push(nodeRef);
-  }
-
-  containerNode.replaceChildren(...rootNodes);
-}
 
 function syncInteractionLock(containerNode: HTMLDivElement, status: string): void {
   const locked = status !== "playing";
@@ -52,7 +30,7 @@ function syncInteractionLock(containerNode: HTMLDivElement, status: string): voi
 }
 
 /**
- * Renders one shared CodPlay demo shell for one scene-based scenario.
+ * Renders one shared CodPlay demo layout for one scene-based scenario.
  */
 export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promise<void> {
   const appNode = globalThis.document.querySelector<HTMLDivElement>("#app");
@@ -139,10 +117,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   });
   remoteSlotNode.appendChild(remote.element);
 
-  let mountedRuntimeRevision = -1;
-
   async function resetDemoRuntime(): Promise<void> {
-    mountedRuntimeRevision = -1;
     const destroyResult = await studio.player.destroy();
     if (!destroyResult.ok) {
       throw new Error(`[demo] destroy failed: ${destroyResult.error.code}`);
@@ -158,21 +133,12 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
       throw new Error(`[demo] init failed: ${replayInitResult.error.code}`);
     }
 
-    mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds);
-    config.onAfterMount?.(studio.player.getRuntimeRegistry());
-    const nextState = studio.player.getState();
-    mountedRuntimeRevision = nextState.runtimeRevision;
-    syncInteractionLock(demoContainerNode, nextState.status);
+    syncInteractionLock(demoContainerNode, studio.player.getState().status);
   }
 
   studio.telco.configure({ onRewind: resetDemoRuntime });
 
   studio.player.onChange((state) => {
-    if (state.runtimeRevision !== mountedRuntimeRevision) {
-      mountDemoRootNodes(containerNode, studio, config.rootNodeIds);
-      config.onAfterMount?.(studio.player.getRuntimeRegistry());
-      mountedRuntimeRevision = state.runtimeRevision;
-    }
     syncInteractionLock(demoContainerNode, state.status);
   });
 
@@ -192,10 +158,6 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     throw new Error(`[demo] init failed: ${initResult.error.code}`);
   }
 
-  mountDemoRootNodes(demoContainerNode, studio, config.rootNodeIds);
-  config.onAfterMount?.(studio.player.getRuntimeRegistry());
-  const initialState = studio.player.getState();
-  mountedRuntimeRevision = initialState.runtimeRevision;
-  syncInteractionLock(demoContainerNode, initialState.status);
+  syncInteractionLock(demoContainerNode, studio.player.getState().status);
   remote.sync();
 }

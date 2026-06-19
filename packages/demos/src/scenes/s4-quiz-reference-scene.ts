@@ -435,6 +435,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
             actions: {},
           },
         ],
+        straps: s4QuizStraps,
         listen: [
           {
             on: "quiz:question:show",

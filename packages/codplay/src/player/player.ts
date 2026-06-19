@@ -88,14 +88,35 @@ export class Player implements PlayerApi {
   private playerMode: 'author' | 'broadcast' = 'broadcast'
   private preloadPolicy: PreloadPolicy = {}
   private activeManifest: ResourceManifest | null = null
+  private mountTarget: Element | null = null
+  private rootNodeIds: string[] = []
+  private mountedRuntimeRevision = -1
+  private unsubscribeMountSync: (() => void) | null = null
 
   readonly schedule: PlayerScheduleApi
+
+  private static isElement(value: unknown): value is Element {
+    return typeof globalThis.Element !== 'undefined' && value instanceof globalThis.Element
+  }
+
+  private static isNode(value: unknown): value is Node {
+    return typeof globalThis.Node !== 'undefined' && value instanceof globalThis.Node
+  }
 
   private static readonly LIFECYCLE_EVENT = {
     sceneReady: 'scene:ready',
     sceneStart: 'scene:start',
     sceneEnd: 'scene:end'
   } as const
+
+  private mountRootNodes(): void {
+    if (this.mountTarget === null) return
+    const registry = this.player.getRuntimeRegistry()
+    const nodes = this.rootNodeIds
+      .map(id => registry.getNodeById(id))
+      .filter(Player.isNode)
+    this.mountTarget.replaceChildren(...nodes)
+  }
 
   /**
    * Keeps the public scheduler surface stable for runtime helpers.
@@ -151,7 +172,8 @@ export class Player implements PlayerApi {
    * Initializes one compiled scene through the internal player facade.
    */
   async init(input: PlayerInitInput): Promise<ApiResult<void>> {
-    void input.mountTarget
+    this.mountTarget = Player.isElement(input.mountTarget) ? input.mountTarget : null
+    this.rootNodeIds = input.compiledScene.rootNodeIds
 
     this.playerMode = input.mode ?? 'broadcast'
     this.preloadPolicy = input.preloadPolicy ?? {}
@@ -178,6 +200,15 @@ export class Player implements PlayerApi {
     const readyResult = await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneReady }, RUNTIME_EVENT_SOURCE.system)
     if (readyResult.ok) {
       this.captureInitialAuthorState()
+      this.mountRootNodes()
+      this.mountedRuntimeRevision = this.player.getState().runtimeRevision
+      this.unsubscribeMountSync?.()
+      this.unsubscribeMountSync = this.player.onStateChange((state) => {
+        if (state.runtimeRevision !== this.mountedRuntimeRevision) {
+          this.mountedRuntimeRevision = state.runtimeRevision
+          this.mountRootNodes()
+        }
+      })
     }
 
     return readyResult
@@ -247,6 +278,12 @@ export class Player implements PlayerApi {
       this.destroyStrapLoopSchedulers()
       this.currentScene = null
       this.strapCollection = {}
+      this.unsubscribeMountSync?.()
+      this.unsubscribeMountSync = null
+      this.mountTarget?.replaceChildren()
+      this.mountTarget = null
+      this.rootNodeIds = []
+      this.mountedRuntimeRevision = -1
     })
   }
 

@@ -10,7 +10,6 @@ export async function runReplaceCarouselDemo(): Promise<void> {
     title: "Replace Carousel",
     subtitle: "4 cas : texte simple · texte letter · image simple · image cells",
     scene: createReplaceCarouselScene(),
-    rootNodeIds: ["demo-grid"],
     activeDemo: "replace-carousel",
     onReady: ({ player }) => {
       let paused = false;

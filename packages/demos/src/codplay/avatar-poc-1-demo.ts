@@ -12,7 +12,6 @@ export function runAvatarPoc1Demo(): Promise<void> {
     subtitle:
       'Avatar 3D piloté exclusivement par CodPlay — visèmes, geste, gaze, idle strap, tick Three.js via renderAdapter.',
     scene: createAvatarPocScene(),
-    rootNodeIds: ['avatar-stage'],
     activeDemo: 'avatar-poc-1',
     // Idle loops (blink, breathing, head micro-movement) — inline, seek-safe.
     strapCollection: createAvatar3DStraps(),

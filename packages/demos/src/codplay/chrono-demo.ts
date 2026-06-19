@@ -6,7 +6,6 @@ export async function runChronoDemo(): Promise<void> {
     title: 'Chronomètre',
     subtitle: 'TweenAction : aiguille + compteur centième — seek-compatible.',
     scene: createChronoScene(),
-    rootNodeIds: ['chrono-root'],
     activeDemo: 'chrono',
   })
 }

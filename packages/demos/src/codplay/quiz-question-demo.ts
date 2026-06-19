@@ -1,4 +1,5 @@
-import { createQuizQuestionScene, quizQuestionStraps } from '../scenes'
+import { createQuizQuestionScene } from '../scenes'
+import { quizQuestionSceneStraps } from '../scenes/quiz-question-scene'
 import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 
 /**
@@ -24,8 +25,7 @@ export async function runQuizQuestionDemo(): Promise<void> {
 				multipleHint: 'Plusieurs reponses possibles'
 			}
 		}),
-		strapCollection: quizQuestionStraps,
-		rootNodeIds: ['quiz-question-panel'],
+		strapCollection: quizQuestionSceneStraps,
 		activeDemo: 'quiz-question'
 	})
 }

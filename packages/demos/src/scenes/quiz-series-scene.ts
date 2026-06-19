@@ -1,7 +1,7 @@
 import type { StrapCollection } from "codplay/player"
 import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionAnsweredPayload, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "./quiz-question-scene"
-import { quizQuestionStraps } from "./quiz-question-scene"
+import { quizQuestionStoryStraps } from "./quiz-question-scene"
 
 // --- Configuration ---
 
@@ -404,7 +404,7 @@ function createSeriesQuestionStory(
       disabled: false,
       retryCount: 0
     },
-    straps: undefined,
+    straps: quizQuestionStoryStraps,
     listen: [
       { on: "quiz:question:answer:select", straps: ["quiz-question-select"] },
       { on: "quiz:question:validate", straps: ["quiz-question-submit"] }
@@ -681,7 +681,6 @@ function handleSeriesAggregate(
 }
 
 export const quizSeriesStraps: StrapCollection = {
-  ...quizQuestionStraps,
   "quiz-series-advance": ({ state }) => handleSeriesAdvance(state),
   "quiz-series-aggregate": ({ event, state }) => handleSeriesAggregate(state, event.data),
   "quiz-result-render": ({ state }) => handleResultRender(state)

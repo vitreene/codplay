@@ -470,7 +470,7 @@ function createQuestionStory(question: ResolvedQuizQuestion): SceneStoryDoc {
       disabled: false,
       retryCount: 0
     },
-    straps: undefined,
+    straps: quizQuestionStoryStraps,
     listen: [
       {
         on: 'quiz:question:answer:select',
@@ -691,8 +691,16 @@ function handleQuestionAggregate(state: Readonly<Record<string, unknown>>, event
   }
 }
 
-export const quizQuestionStraps: StrapCollection = {
+export const quizQuestionStoryStraps: StrapCollection = {
   "quiz-question-select": ({ event, state }) => handleQuestionSelect(state, event.data),
   "quiz-question-submit": ({ event, state }) => handleQuestionSubmit(state, event.data),
+}
+
+export const quizQuestionSceneStraps: StrapCollection = {
   "quiz-question-aggregate": ({ event, state }) => handleQuestionAggregate(state, event.data)
+}
+
+export const quizQuestionStraps: StrapCollection = {
+  ...quizQuestionStoryStraps,
+  ...quizQuestionSceneStraps,
 }

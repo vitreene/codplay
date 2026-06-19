@@ -9,7 +9,6 @@ export function runRiveCoachDemo(): Promise<void> {
     title: 'Rive Coach — @codplay/rive',
     subtitle: 'CoachRiveComponent via createRiveBinding() — architecture spec v1-third-party-runtime-spec.',
     scene: createRiveCoachScene(),
-    rootNodeIds: ['avatar-stage'],
     activeDemo: 'rive-coach',
 
     async setup() {

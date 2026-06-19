@@ -17,7 +17,6 @@ export function runAvatarRiveDemo(): Promise<void> {
     title: 'Avatar Rive — CodPlay',
     subtitle: 'Marionnette Rive pilotée frame-par-frame par CodPlay — aucun RAF Rive propre.',
     scene: createAvatarRiveScene(),
-    rootNodeIds: ['avatar-stage'],
     activeDemo: 'avatar-rive',
 
     async setup() {

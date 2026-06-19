@@ -10,7 +10,6 @@ export async function runQuizSeriesDemo(): Promise<void> {
     subtitle: 'Vrai/Faux, réponse unique, réponses multiples. Résultat final : 2/3 pour réussir.',
     scene: createQuizSeriesScene(),
     strapCollection: quizSeriesStraps,
-    rootNodeIds: ['quiz-series-container'],
     activeDemo: 'quiz-series'
   })
 }

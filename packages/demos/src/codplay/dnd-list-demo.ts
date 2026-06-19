@@ -9,7 +9,6 @@ export async function runDndListDemo(): Promise<void> {
     title: 'Drag & Drop listes',
     subtitle: 'Déplacer les items entre les listes A et B. Les compteurs se mettent à jour à chaque drop.',
     scene: createS6DndListScene(),
-    rootNodeIds: ['s6-shell'],
     strapCollection: s6Straps,
     activeDemo: 'dnd-list',
   })
