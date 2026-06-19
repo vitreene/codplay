@@ -13,12 +13,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "codplay": "*",
-    "@codplay/capsule-automation": "*"
+    "@codplay/capsule-automation": "*",
+    "@codplay/demo-remote": "*",
+    "codplay": "*"
   },
   "devDependencies": {
+    "@types/node": "^26.0.0",
+    "animejs": "^4.3.6",
     "typescript": "~5.9.3",
-    "vite": "^8.0.1",
-    "animejs": "^4.3.6"
+    "vite": "^8.0.1"
   }
 }

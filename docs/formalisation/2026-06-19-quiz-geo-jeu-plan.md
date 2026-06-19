@@ -37,7 +37,7 @@ init → grille → épreuve (×n) → finale → résultat
 
 ## Stories
 
-### 1. `game-shell-story` — coquille principale
+### 1. `game-layout-story` — structure principale
 
 **Rôle** : layout avec les trois zones.
 
@@ -45,7 +45,7 @@ init → grille → épreuve (×n) → finale → résultat
 - `data-part="game:zone:basket"` — panier 4 couleurs
 - `data-part="game:zone:timer"` — timer
 
-Montée en rootStory. Les autres stories s'injectent via `move: { parentId }`.
+Montée en rootStory. Les autres stories s'y injectent via `move: { parentId }`.
 
 ---
 
@@ -112,37 +112,56 @@ Le tween de fin émet `game:timer:expired` via un planned event à `durationMs`.
 
 Montée dans `game:zone:main` à l'activation (via `move` ou `show/hide`).
 
-#### Type quiz
+#### Types d'épreuves
 
-Réutilise `quiz-question-scene` infrastructure :
-- Straps `quizQuestionStraps` embarqués dans la story
-- Émet `quiz:question:answered` → le contrôleur traduit en `game:trial:done`
+| Type | Description |
+|---|---|
+| `vf-series` | Série de 3–4 questions vrai/faux en séquence → verdict gagné/perdu |
+| `single` | Une question à réponse unique |
+| `multiple` | Une question à réponses multiples |
+| `reading+quiz` | Texte à lire, puis une question (single ou multiple) |
+| `video+quiz` | Vidéo à regarder (timer pausé), puis une question |
+| `minigame` | À définir ultérieurement |
 
-#### Type lecture/vidéo
+Pas de réponse ouverte.
 
-À l'entrée dans la story (via un strap déclenché sur `game:trial:open`) :
+#### Épreuves quiz (`vf-series`, `single`, `multiple`)
+
+Réutilise `quiz-question-scene` infrastructure — straps `quizQuestionStraps` embarqués dans la story.
+
+**`vf-series`** : enchaîne 3–4 questions booléennes (pattern quiz-series réduit). Le verdict final (`game:trial:done { success }`) est calculé à l'issue des N questions. Le seuil de réussite est un paramètre de la trial (`threshold`, ex. toutes correctes ou majorité).
+
+**`single` / `multiple`** : une seule question, résolution immédiate.
+
+Dans tous les cas : émet `game:trial:done { trialId, success, wordId, color }`.
+
+#### Épreuves média (`reading+quiz`, `video+quiz`)
+
+À l'entrée dans la story (strap déclenché sur `game:trial:open`) :
 ```ts
 events: [{ name: 'game:timer:pause' }]
 ```
 
-À la fin (bouton "Continuer") :
+Phase média (lecture ou vidéo) → bouton "Continuer" → phase question (single ou multiple).
+
+À l'issue de la question :
 ```ts
 events: [
-  { name: 'game:trial:done', data: { trialId, success: true, wordId, color } },
+  { name: 'game:trial:done', data: { trialId, success, wordId, color } },
   { name: 'game:timer:resume', data: { remainingMs: ... } }
 ]
 ```
 
+La phase lecture est toujours gagnante si aucune question ne suit — mais dans ce jeu toutes les épreuves lecture/vidéo ont une question.
+
 #### Extra dans une trial lecture
 
-Si cette trial est désignée pour contenir un extra (décidé par PRNG à l'init) :
-- Strap de la trial utilise `context.planned.delay(extraOffsetMs)` pour émettre
-  `game:extra:show { label }` à un moment précis de la lecture.
-- Après `extraDurationMs` : `game:extra:hide` (via `context.planned.delay`).
+Si cette trial est désignée pour contenir un extra (déterminé par la graine à la création de la scène) :
+- Le strap de la trial utilise `context.planned.delay(extraOffsetMs)` pour émettre
+  `game:extra:show { label }` au bon moment.
+- Après `extraDurationMs` : `game:extra:hide` (second `context.planned.delay` enchaîné).
 
-> **Gap potentiel à vérifier** : `context.planned.delay` est spécifié dans
-> `v1-strap-helpers-spec.md`. S'il n'est pas encore disponible dans le runner de
-> straps des stories embarquées, signaler avant d'implémenter.
+`context.planned` est le bon outil ici — tout est résolu à l'init de la scène, sans dépendance à des événements futurs.
 
 ---
 
@@ -158,19 +177,13 @@ Si cette trial est désignée pour contenir un extra (décidé par PRNG à l'ini
 
 ---
 
-### 7. `game-final-story` — épreuve finale
+### 7. `game-final-{wordId}-story` — épreuve finale (×16)
 
-**Rôle** : une question quiz tirée parmi les mots collectés, hors timer.
+**Rôle** : une question quiz pour un mot donné, hors timer.
 
-Réutilise `quiz-question-scene` infrastructure.
+16 stories pré-construites à la création de la scène (une par mot/question possible), toutes cachées initialement. Réutilise `quiz-question-scene` infrastructure.
 
-**Décision ouverte** : comment la question est-elle choisie ?
-- Option A : 4 stories finales pré-construites (une par couleur), seule la bonne est montrée.
-- Option B : une seule story finale, la question est injectée via state update au déclenchement.
-
-> Option A est la plus sûre avec CodPlay actuel (state injecté au build, pas à runtime).
-> Option B nécessite de vérifier si `state update` depuis un strap scène peut modifier
-> `state.question` d'une story. **À trancher avant implémentation.**
+**Sélection de la question** : la graine détermine à la création quelle couleur fournira la question finale (ex. `couleurFinale = colors[seededRandom() % 4]`). À l'init du jeu on ne sait pas encore quel mot occupera ce slot — c'est le joueur qui le détermine en jouant. Quand `game:final:start` est émis, le contrôleur lit `basket[couleurFinale].wordId` et affiche la story correspondante.
 
 Émet `game:final:done { isCorrect }`.
 
@@ -256,6 +269,10 @@ game-final-route    écoute game:final:start
 game-result         écoute game:final:done + game:timer:expired
                     → calcule résultat
                     → émet game:result:show
+
+game-report         écoute game:result:show (side-effect strap)
+                    → envoie les résultats de la partie (score, panier, temps, seed)
+                    → V1 démo : console.log — sera remplacé par un fetch réel en production
 ```
 
 ---
@@ -266,23 +283,35 @@ game-result         écoute game:final:done + game:timer:expired
 type GameConfig = {
   timerTotalMs: number         // durée totale phase épreuves
   extraDurationMs: number      // durée d'affichage du jeton extra
-  seed: number                 // graine PRNG reproductible
+  seed: number                 // valeur de départ du tirage aléatoire
+  showCorrection: boolean      // révéler la bonne réponse en cas de faute (défaut : false)
   colors: string[]             // ['rouge', 'bleu', 'vert', 'jaune']
   trials: TrialConfig[]        // 16 entrées externalisées
   labels: GameLabels           // textes localisables
 }
 
+type TrialType = 'vf-series' | 'single' | 'multiple' | 'reading+quiz' | 'video+quiz' | 'minigame'
+
 type TrialConfig = {
   id: string
-  color: string                // quelle couleur cible
+  color: string                // couleur cible
   wordId: string
   wordLabel: string            // le mot à collecter
-  type: 'quiz' | 'reading' | 'video'
-  content: QuizTrialContent | ReadingTrialContent | VideoTrialContent
+  type: TrialType
+  showCorrection?: boolean     // surcharge du paramètre scène pour cette trial
+  threshold?: number           // vf-series : nombre de bonnes réponses pour réussir
+  content: VfSeriesContent | SingleQuizContent | MultipleQuizContent
+           | ReadingQuizContent | VideoQuizContent
 }
 ```
 
-La distribution aléatoire des tuiles sur la grille est calculée au build via un PRNG seeded (Mulberry32 — pure JS, couche démo). Idem pour le choix de la trial qui cache l'extra et son offset temporel.
+Une unique valeur `seed` par partie contrôle **tous** les aléatoires, dans cet ordre de consommation :
+1. Distribution des 16 tuiles sur la grille (mélange par couleur)
+2. Choix de la trial qui cache l'extra
+3. Offset temporel d'apparition de l'extra
+4. Couleur source de la question finale
+
+La même `seed` produit exactement la même partie — indispensable pour les tests. Cette logique est une simple fonction dans le code de la démo, le générateur est réinitialisé depuis `seed` à chaque appel de `createGameScene()`. CodPlay n'en a pas connaissance.
 
 ---
 
@@ -299,18 +328,59 @@ La distribution aléatoire des tuiles sur la grille est calculée au build via u
 
 ---
 
-## Points ouverts — à trancher avant implémentation
+## Structure du projet
 
-1. **`context.planned.delay` dans story straps** : disponible dans le runner actuel ?
-   Requis pour l'extra temporisé dans les trials lecture. Vérifier avant d'implémenter.
+```
+packages/demos/src/scenes/geo-quiz/
+│
+├── index.ts                        — createGeoQuizScene(config) : SceneDoc
+│                                     assemble stories + straps + seed
+│
+├── types.ts                        — GameConfig, TrialConfig, TrialType, GameLabels…
+│
+├── seed.ts                         — utilitaire PRNG (Mulberry32), pur JS
+│
+├── stories/
+│   ├── layout-story.ts             — structure principale (3 zones)
+│   ├── grid-story.ts               — grille 16 tuiles
+│   ├── basket-story.ts             — panier 4 couleurs
+│   ├── timer-story.ts              — timer (straps embarqués)
+│   ├── extra-story.ts              — jeton de rattrapage
+│   ├── result-story.ts             — écran de résultat
+│   ├── final-story.ts              — builder : createFinalStory(question)
+│   └── trials/
+│       ├── build-vf-series.ts      — builder : createVfSeriesTrial(config)
+│       ├── build-single.ts         — builder : createSingleTrial(config)
+│       ├── build-multiple.ts       — builder : createMultipleTrial(config)
+│       ├── build-reading-quiz.ts   — builder : createReadingQuizTrial(config)
+│       └── build-video-quiz.ts     — builder : createVideoQuizTrial(config)
+│
+├── straps/
+│   ├── game-router.ts              — game:trial:open
+│   ├── game-trial-done.ts          — game:trial:done
+│   ├── game-extra-collect.ts       — game:extra:collect
+│   ├── game-timer-track.ts         — game:timer:pause (stocke remainingMs)
+│   ├── game-final-route.ts         — game:final:start
+│   ├── game-result.ts              — game:final:done + game:timer:expired
+│   ├── game-report.ts              — side-effect : console.log (→ fetch en prod)
+│   └── index.ts                    — export gameStraps : StrapCollection
+│
+└── assets/
+    ├── texts/                      — contenus lecture (markdown ou HTML)
+    ├── videos/                     — références vidéo
+    └── questions/                  — contenu des questions par wordId
+```
 
-2. **Question finale — choix à runtime** : Option A (4 stories pré-construites) ou Option B
-   (state update vers une story existante) ? Option A est sûre, Option B est plus élégante
-   mais nécessite validation.
+**Règle** : `index.ts` est le seul fichier qui importe à la fois `stories/` et `straps/`. Les builders de stories ne connaissent pas les straps scène, et vice-versa.
 
-3. **Timer tracking à la pause** : le contrôleur doit connaître `timerRemainingMs` au moment
-   de la pause. Solution proposée : le contrôleur calcule `now - startTime` à la réception
-   de `game:timer:pause`. Confirmer que le state scène peut stocker cette valeur fiablement.
+---
 
-4. **Distribution PRNG** : confirmer que la logique PRNG dans la couche authoring (JS pur,
-   pas dans CodPlay) est le bon choix. La graine est un paramètre de `GameConfig`.
+## Décisions arrêtées
+
+1. **`context.planned.delay`** : confirmé comme outil pour l'extra temporisé. `context.live` écarté — tout doit être résolu à l'init de la scène.
+
+2. **Question finale** : 16 stories pré-construites (une par mot). La couleur source est tirée par la graine à la création ; le mot effectif est lu dans le panier au déclenchement de la finale. Le contrôleur affiche la story du mot collecté pour cette couleur.
+
+3. **Timer tracking** : le contrôleur stocke `timerRemainingMs` dans l'état scène et le passe en paramètre de `game:timer:resume`. Validé.
+
+4. **Tirage aléatoire** : calculé dans le code de création de la scène à partir de `seed` (avant l'init CodPlay). Validé.

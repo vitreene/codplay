@@ -10,6 +10,8 @@
       "@codplay/avatar3d/*": ["../authoring/avatar3d/src/*"],
       "@codplay/avatar-rive": ["../authoring/avatar-rive/src/index.ts"],
       "@codplay/avatar-rive/*": ["../authoring/avatar-rive/src/*"],
+      "@codplay/demo-remote": ["../authoring/demo-remote/src/index.ts"],
+      "@codplay/demo-remote/*": ["../authoring/demo-remote/src/*"],
       "three": ["../../../timeline/node_modules/@types/three"],
       "three/*": ["../../../timeline/node_modules/@types/three/*"]
     }

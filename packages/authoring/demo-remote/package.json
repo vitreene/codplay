@@ -1,0 +1,18 @@
+{
+  "name": "@codplay/demo-remote",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "codplay": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

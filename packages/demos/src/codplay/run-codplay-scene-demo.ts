@@ -2,7 +2,7 @@ import "../shared/demo-shell.css";
 
 import type { ResourceManifest, SceneDef } from "codplay/builder/types";
 import { CodPlay } from "codplay/creator";
-import { createSequenceCommandPanel } from "./codplay-scene-demo/sequence-command-panel";
+import { createDemoRemote } from "@codplay/demo-remote";
 import { createTraceLogPanel } from "../shared/trace-log-panel";
 import { resolveSceneSeekMaxMs } from "../shared/resolve-scene-seek-max-ms";
 import { buildDemoLinksMarkup } from "../shared/demo-registry";
@@ -62,12 +62,6 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
 
   const seekMaxMsFromScene = resolveSceneSeekMaxMs(config.scene);
   const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo);
-  const actionButtonsMarkup = (config.actions ?? [])
-    .map(
-      (action) =>
-        `<button id="${action.id}" class="demo-button ${action.className ?? "demo-button-secondary"}" type="button">${action.label}</button>`,
-    )
-    .join("");
 
   appNode.innerHTML = `
     <main class="demo-shell">
@@ -76,22 +70,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
         ${demoLinksMarkup.length > 0 ? `<nav class="demo-links">${demoLinksMarkup}</nav>` : ""}
         <h1>${config.title}</h1>
         <p class="subtitle">${config.subtitle}</p>
-        <div class="demo-controls">
-          <button id="demo-play-button" class="demo-button" type="button">Play</button>
-          <button id="demo-rewind-button" class="demo-button demo-button-secondary" type="button">Rewind</button>
-          <label class="demo-progress-control" for="demo-seek-range">
-            <span>Seek</span>
-            <input id="demo-seek-range" class="demo-progress-range" type="range" min="0" max="${seekMaxMsFromScene}" step="10" value="0" />
-            <span id="demo-seek-label" class="demo-progress-label">0ms / ${Math.max(0, Math.round(seekMaxMsFromScene))}ms</span>
-          </label>
-        </div>
-        <div class="demo-controls demo-rate-controls">
-          <button id="demo-rate-x1" class="demo-button demo-button-secondary demo-rate-active" type="button">x1</button>
-          <button id="demo-rate-x2" class="demo-button demo-button-secondary" type="button">x2</button>
-          <button id="demo-rate-x025" class="demo-button demo-button-secondary" type="button">x1/4</button>
-        </div>
-        ${actionButtonsMarkup.length > 0 ? `<div class="demo-controls demo-actions">${actionButtonsMarkup}</div>` : ""}
-        <div id="player-state" class="player-state"></div>
+        <div id="demo-remote-slot"></div>
         <div id="player-trace" class="player-state player-trace"></div>
       </aside>
       <div class="container" id="demo-container"></div>
@@ -104,6 +83,16 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   }
   const demoContainerNode = containerNode;
   demoContainerNode.style.position = "relative";
+
+  const remoteSlotNode = globalThis.document.querySelector<HTMLDivElement>("#demo-remote-slot");
+  if (remoteSlotNode === null) {
+    throw new Error("Expected #demo-remote-slot element");
+  }
+
+  const playerTraceNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
+  if (playerTraceNode === null) {
+    throw new Error("Expected #player-trace element");
+  }
 
   const setupResult = config.setup ? await config.setup() : {}
   const studio = new CodPlay({
@@ -123,40 +112,6 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     },
   });
 
-  const playerStateNode = globalThis.document.querySelector<HTMLDivElement>("#player-state");
-  if (playerStateNode === null) {
-    throw new Error("Expected #player-state element");
-  }
-  const playerTraceNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
-  if (playerTraceNode === null) {
-    throw new Error("Expected #player-trace element");
-  }
-  const playButtonNode = globalThis.document.querySelector<HTMLButtonElement>("#demo-play-button");
-  if (playButtonNode === null) {
-    throw new Error("Expected #demo-play-button element");
-  }
-  const rewindButtonNode = globalThis.document.querySelector<HTMLButtonElement>("#demo-rewind-button");
-  if (rewindButtonNode === null) {
-    throw new Error("Expected #demo-rewind-button element");
-  }
-  const seekRangeNode = globalThis.document.querySelector<HTMLInputElement>("#demo-seek-range");
-  if (seekRangeNode === null) {
-    throw new Error("Expected #demo-seek-range element");
-  }
-  const seekLabelNode = globalThis.document.querySelector<HTMLSpanElement>("#demo-seek-label");
-  if (seekLabelNode === null) {
-    throw new Error("Expected #demo-seek-label element");
-  }
-
-  const actionButtonNodes = new Map<string, HTMLButtonElement>();
-  for (const action of config.actions ?? []) {
-    const actionButtonNode = globalThis.document.querySelector<HTMLButtonElement>(`#${action.id}`);
-    if (actionButtonNode === null) {
-      throw new Error(`Expected #${action.id} element`);
-    }
-    actionButtonNodes.set(action.id, actionButtonNode);
-  }
-
   const traceLogPanel = createTraceLogPanel(playerTraceNode, { compact: config.compactTrace ?? false });
   const compileResult = studio.builder.compile({ scene: config.scene as unknown as SceneDef });
   if (!compileResult.ok) {
@@ -166,6 +121,25 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const resourceManifest: ResourceManifest = config.extraResources?.length
     ? { entries: [...compileResult.data.resourceManifest.entries, ...config.extraResources] }
     : compileResult.data.resourceManifest;
+
+  const remote = createDemoRemote({
+    telco: studio.telco,
+    seekMaxMsFromScene,
+    actions: config.actions,
+    emit: (config.actions?.length ?? 0) > 0
+      ? async (event) => {
+          await studio.player.emit({
+            name: event.name,
+            payload: event.payload,
+            cascade: event.cascade,
+            scopeStoryId: event.scopeStoryId,
+          });
+        }
+      : undefined,
+  });
+  remoteSlotNode.appendChild(remote.element);
+
+  let mountedRuntimeRevision = -1;
 
   async function resetDemoRuntime(): Promise<void> {
     mountedRuntimeRevision = -1;
@@ -189,43 +163,9 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     const nextState = studio.player.getState();
     mountedRuntimeRevision = nextState.runtimeRevision;
     syncInteractionLock(demoContainerNode, nextState.status);
-    commandPanel.syncFromState(nextState);
   }
 
-  const commandPanel = createSequenceCommandPanel({
-    player: studio.player,
-    seekMaxMsFromScene,
-    playButtonNode,
-    rewindButtonNode,
-    seekRangeNode,
-    seekLabelNode,
-    playerStateNode,
-    rewindAction: resetDemoRuntime,
-    actions: config.actions,
-    actionButtonNodes,
-  });
-
-  const rateButtons: Array<{ node: HTMLButtonElement; rate: number }> = [
-    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x1")!, rate: 1 },
-    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x2")!, rate: 2 },
-    { node: globalThis.document.querySelector<HTMLButtonElement>("#demo-rate-x025")!, rate: 0.25 },
-  ];
-
-  function syncRateButtons(): void {
-    const currentRate = studio.telco.rate;
-    for (const btn of rateButtons) {
-      btn.node.classList.toggle("demo-rate-active", btn.rate === currentRate);
-    }
-  }
-
-  for (const btn of rateButtons) {
-    btn.node.addEventListener("click", () => {
-      studio.telco.setRate(btn.rate);
-      syncRateButtons();
-    });
-  }
-
-  let mountedRuntimeRevision = -1;
+  studio.telco.configure({ onRewind: resetDemoRuntime });
 
   studio.player.onChange((state) => {
     if (state.runtimeRevision !== mountedRuntimeRevision) {
@@ -234,7 +174,6 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
       mountedRuntimeRevision = state.runtimeRevision;
     }
     syncInteractionLock(demoContainerNode, state.status);
-    commandPanel.syncFromState(state);
   });
 
   studio.player.onTrace((row) => {
@@ -258,5 +197,5 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const initialState = studio.player.getState();
   mountedRuntimeRevision = initialState.runtimeRevision;
   syncInteractionLock(demoContainerNode, initialState.status);
-  commandPanel.syncFromState(initialState);
+  remote.sync();
 }

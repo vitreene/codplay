@@ -15,32 +15,19 @@ import { runChronoDemo } from './codplay/chrono-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
-if (demoName === 'quiz') {
-	void runQuizReferenceDemo()
-} else if (demoName === 'quiz-question') {
-	void runQuizQuestionDemo()
-} else if (demoName === 'quiz-series') {
-	void runQuizSeriesDemo()
-} else if (demoName === 'codplay-poc') {
-	void runCodPlayPocDemo()
-} else if (demoName === 'drag') {
-	void runDragDemo()
-} else if (demoName === 'dnd-list') {
-	void runDndListDemo()
-} else if (demoName === 'preload-media') {
-	void runPreloadMediaDemo()
-} else if (demoName === 'carousel') {
-	void runCarouselDemo()
-} else if (demoName === 'replace-carousel') {
-	void runReplaceCarouselDemo()
-} else if (demoName === 'avatar-poc-1') {
-	void runAvatarPoc1Demo()
-} else if (demoName === 'avatar-rive') {
-	void runAvatarRiveDemo()
-} else if (demoName === 'rive-coach') {
-	void runRiveCoachDemo()
-} else if (demoName === 'chrono') {
-	void runChronoDemo()
-} else {
-	void runPlayerPocDemo()
+switch (demoName) {
+	case 'quiz':            void runQuizReferenceDemo(); break
+	case 'quiz-question':   void runQuizQuestionDemo(); break
+	case 'quiz-series':     void runQuizSeriesDemo(); break
+	case 'codplay-poc':     void runCodPlayPocDemo(); break
+	case 'drag':            void runDragDemo(); break
+	case 'dnd-list':        void runDndListDemo(); break
+	case 'preload-media':   void runPreloadMediaDemo(); break
+	case 'carousel':        void runCarouselDemo(); break
+	case 'replace-carousel': void runReplaceCarouselDemo(); break
+	case 'avatar-poc-1':    void runAvatarPoc1Demo(); break
+	case 'avatar-rive':     void runAvatarRiveDemo(); break
+	case 'rive-coach':      void runRiveCoachDemo(); break
+	case 'chrono':          void runChronoDemo(); break
+	default:                void runPlayerPocDemo()
 }
