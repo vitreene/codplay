@@ -29,6 +29,7 @@ import {
 import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from "./player-constants";
 import { resolveSeekEndMsFromPolicy, shouldReplayEventForSeek } from "./seek-runtime";
 import type { RenderAdapter } from "./render-adapter-types";
+import { TweenRunner, isTweenAction, isTweenSequence, isTweenStopAction, expandTweenToActiveSteps } from "../tween/tween-runner";
 import { RenderSync } from "./render-sync";
 import type {
   PlayerApi,
@@ -142,6 +143,9 @@ export class PlayerFacade implements PlayerApi {
   private sequenceEnded = false;
   private sequenceEndTriggerMs: number | null = null;
   private readonly jitTickSubscribers = new Set<(deltaMs: number) => void>();
+  private readonly tweenRunner = new TweenRunner(
+    (persoId) => this.renderer.getRuntimeRegistry().getComponentById(persoId),
+  );
   private readonly ticker = new TimeTicker();
   private nextPublicEventIndex = 0;
   private readonly mountedStoryIds = new Set<string>();
@@ -477,7 +481,7 @@ export class PlayerFacade implements PlayerApi {
       rateChange(rate) { animationAdapter.setRate?.(rate) },
       stop() { animationAdapter.stop() },
     };
-    this.renderSync = new RenderSync([animeRenderAdapter, ...(options.renderAdapters ?? [])]);
+    this.renderSync = new RenderSync([animeRenderAdapter, this.tweenRunner, ...(options.renderAdapters ?? [])]);
   }
 
   readonly component: import("../runtime/components").ComponentRegistryApi = {
@@ -1344,9 +1348,34 @@ export class PlayerFacade implements PlayerApi {
     let enqueuedCommitCount = 0;
 
     for (const commit of directorResult.commits) {
-      const enqueueResult = this.renderer.enqueueCommit(commit);
-      if (enqueueResult.ok) {
-        enqueuedCommitCount += 1;
+      let hasNormalOps = false;
+      for (const op of commit.operations) {
+        const action = op.action as unknown;
+        if (isTweenStopAction(action)) {
+          this.tweenRunner.cancelAll(commit.target.itemId);
+        } else if (isTweenAction(action) || isTweenSequence(action)) {
+          const steps = expandTweenToActiveSteps({
+            action: action as Parameters<typeof expandTweenToActiveSteps>[0]['action'],
+            persoId: commit.target.itemId,
+            actionKey: op.actionKey,
+            eventId: event.id,
+            eventMs: event.ms,
+            data: typeof event.payload === 'object' && event.payload !== null
+              ? (event.payload as Record<string, unknown>)
+              : undefined,
+          });
+          for (const step of steps) {
+            this.tweenRunner.register(step);
+          }
+        } else {
+          hasNormalOps = true;
+        }
+      }
+      if (hasNormalOps) {
+        const enqueueResult = this.renderer.enqueueCommit(commit);
+        if (enqueueResult.ok) {
+          enqueuedCommitCount += 1;
+        }
       }
     }
 
@@ -1894,6 +1923,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.trackManager.resetActiveTracks();
     this.trackManager.resetCursor();
+    this.tweenRunner.resetActiveTweens();
     const deferredSequenceEndMs = await this.replayDueTimelineEventsForSeek(
       this.timelineMs,
       eventMsByEventId,

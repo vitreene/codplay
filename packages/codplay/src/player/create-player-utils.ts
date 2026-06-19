@@ -285,6 +285,16 @@ export class PlayerRuntimePlanner {
   private createRuntimeItem(storyId: string, trackId: string, perso: PersoDoc): ItemDoc {
     const authoredActions = perso.actions as Record<string, ActionDoc> | undefined
 
+    const resolvedActions =
+      perso.type === 'input'
+        ? resolveInputStandardActions(authoredActions ?? {})
+        : (authoredActions ?? {})
+
+    const TWEEN_STOP_ACTION = 'tween:stop'
+    if (!(TWEEN_STOP_ACTION in resolvedActions)) {
+      (resolvedActions as Record<string, unknown>)[TWEEN_STOP_ACTION] = 'stop'
+    }
+
     return {
       id: perso.id,
       name: perso.name,
@@ -295,10 +305,7 @@ export class PlayerRuntimePlanner {
       initial: perso.initial,
       emit: perso.emit,
       list: perso.list,
-      actions:
-        perso.type === 'input'
-          ? resolveInputStandardActions(authoredActions ?? {})
-          : (authoredActions ?? {})
+      actions: resolvedActions,
     }
   }
 
