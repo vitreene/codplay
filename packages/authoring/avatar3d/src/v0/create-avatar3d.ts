@@ -12,65 +12,63 @@
  * The idle strap collection is returned separately (createAvatar3DStraps) and must be
  * passed as strapCollection at the top level of runCodPlaySceneDemo.
  */
-type PerspectiveCamera = unknown;
-type WebGLRenderer = { domElement: HTMLCanvasElement; render(scene: Scene, camera: PerspectiveCamera): void };
-type Scene = { add(object: unknown): void };
-import { createAvatarEngine, GazeService } from "@codplay/avatar-engine";
-import type { MoodName, RetargetConfig } from "@codplay/avatar-engine";
-import type { RuntimeComponentClass } from "codplay/runtime/components";
-import type { RenderAdapter as CodplayRenderAdapter } from "codplay";
-import { createAvatar3DComponentClass } from "./avatar3d-component.js";
-import { createAvatar3DRenderAdapter } from "./avatar3d-render-adapter.js";
+import type { PerspectiveCamera, WebGLRenderer, Scene } from 'three'
+import { createAvatarEngine, GazeService } from '@codplay/avatar-engine'
+import type { MoodName, RetargetConfig } from '@codplay/avatar-engine'
+import type { RuntimeComponentClass } from 'codplay/runtime/components'
+import type { RenderAdapter as CodplayRenderAdapter } from 'codplay'
+import { createAvatar3DComponentClass } from './avatar3d-component.js'
+import { createAvatar3DRenderAdapter } from './avatar3d-render-adapter.js'
 
 export type Avatar3DConfig = {
   /** URL of the GLB model (Mixamo rig + ARKit blend shapes). */
-  glbUrl: string;
+  glbUrl: string
   /** Mixamo retarget config — bone adjustments, scale, origin. */
-  retarget?: RetargetConfig;
+  retarget?: RetargetConfig
   /**
    * Prefix to strip from raw morph target names in the GLB.
    * ReadyPlayerMe / avatarsdk.glb: /^Wolf3D_[^_]+_/
    * Pure ARKit models: leave undefined.
    */
-  morphPrefix?: string | RegExp;
+  morphPrefix?: string | RegExp
   /** Three.js perspective camera — used for gaze computation. */
-  camera: PerspectiveCamera;
+  camera: PerspectiveCamera
   /** Three.js WebGL renderer — its domElement becomes the component's DOM node. */
-  renderer: WebGLRenderer;
+  renderer: WebGLRenderer
   /** Three.js scene — the loaded model group is added here automatically. */
-  scene: Scene;
+  scene: Scene
   /** Max viseme morph weight. Default: 0.75 */
-  visemeWeight?: number;
+  visemeWeight?: number
   /** Initial mood (expression baselines). Default: 'neutral' */
-  mood?: MoodName;
-};
+  mood?: MoodName
+}
 
 export type Avatar3DSetup = {
   /** Pass as components.avatar3d in setup() return. */
-  componentClass: RuntimeComponentClass;
+  componentClass: RuntimeComponentClass
   /** Pass in renderAdapters in setup() return. */
-  renderAdapter: CodplayRenderAdapter & { seekStart(): void };
-};
+  renderAdapter: CodplayRenderAdapter & { seekStart(): void }
+}
 
 export async function createAvatar3D(config: Avatar3DConfig): Promise<Avatar3DSetup> {
-  const engine = createAvatarEngine({ mood: config.mood });
+  const engine = createAvatarEngine({ mood: config.mood })
 
   const { scene: modelScene, boneMap } = await engine.loadModel(config.glbUrl, {
     retarget: config.retarget,
     morphPrefix: config.morphPrefix,
-  });
-  config.scene.add(modelScene);
+  })
+  config.scene.add(modelScene)
 
-  const leftEye = boneMap.get("LeftEye") ?? null;
-  const rightEye = boneMap.get("RightEye") ?? null;
-  const gaze = new GazeService(engine.morphEngine, leftEye, rightEye, config.camera);
+  const leftEye  = boneMap.get('LeftEye')  ?? null
+  const rightEye = boneMap.get('RightEye') ?? null
+  const gaze = new GazeService(engine.morphEngine, leftEye, rightEye, config.camera)
 
   const componentClass = createAvatar3DComponentClass({
     canvas: config.renderer.domElement,
     engine,
     gaze,
     visemeWeight: config.visemeWeight,
-  });
+  })
 
   const renderAdapter = createAvatar3DRenderAdapter({
     engine,
@@ -78,14 +76,14 @@ export async function createAvatar3D(config: Avatar3DConfig): Promise<Avatar3DSe
     renderer: config.renderer,
     threeScene: config.scene,
     camera: config.camera,
-  });
+  })
 
   // Render one initial frame so the character has a pose (not blank/T-pose)
   // before the player's play() is called. Gaze is enabled by default so the
   // character looks at the camera from the first frame.
-  gaze.setEnabled(true);
-  gaze.computeAndApply();
-  config.renderer.render(config.scene, config.camera);
+  gaze.setEnabled(true)
+  gaze.computeAndApply()
+  config.renderer.render(config.scene, config.camera)
 
-  return { componentClass, renderAdapter };
+  return { componentClass, renderAdapter }
 }

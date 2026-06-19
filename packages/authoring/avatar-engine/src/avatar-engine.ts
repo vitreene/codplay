@@ -19,6 +19,9 @@ import { GestureEngine } from './gesture-engine.js'
 import type { Rng, ResolvedPose } from './gesture-engine.js'
 import { loadModel } from './model-loader.js'
 import type { ModelLoaderOptions } from './model-loader.js'
+import { BlinkAnimator } from './blink-animator.js'
+import { BreathAnimator } from './breath-animator.js'
+import { HeadDriftAnimator } from './head-drift-animator.js'
 
 const VISEME_NAMES = [
   'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR',
@@ -100,6 +103,26 @@ export type AvatarEngine = {
    * Snap all gesture bones to rest instantly (stop/rewind path).
    */
   resetGesture(): void
+
+  /** Trigger a single blink animation. Ignored if a blink is already in progress. */
+  triggerBlink(): void
+
+  /** Trigger a single breath swell animation. Ignored if one is already in progress. */
+  triggerBreath(): void
+
+  /**
+   * Enable or disable the continuous sinusoidal head drift (TH idle micro-movement).
+   * When enabled, runs every animate() tick with incommensurate sine waves per axis.
+   * Disabled automatically by prepareSeek().
+   */
+  setHeadDriftEnabled(enabled: boolean): void
+
+  /**
+   * Transition head to a semantic pose direction with smooth easing.
+   * @param look - 'left' | 'right' | 'up' | 'down' | 'center'
+   * @param intensity - 0–1 scale factor applied to the pose's canonical rotation values
+   */
+  setHeadPose(look: string, intensity: number): void
 
   /** Direct access to the morph engine (for advanced use). */
   readonly morphEngine: MorphEngine
@@ -221,9 +244,23 @@ function createBoneCallback(boneMap: Map<string, Object3D>): { callback: BoneCal
   return { callback, dispose: () => { /* nothing to release */ } }
 }
 
+// Canonical head rotation values at intensity = 1 (radians).
+// headRotateX: positive = tilt down, negative = tilt up.
+// headRotateY: positive = turn right, negative = turn left.
+const HEAD_POSES: Record<string, { x: number; y: number }> = {
+  left:   { x:  0,    y: -0.14 },
+  right:  { x:  0,    y:  0.14 },
+  up:     { x: -0.10, y:  0    },
+  down:   { x:  0.10, y:  0    },
+  center: { x:  0,    y:  0    },
+}
+
 export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine {
   const morphEngine = new MorphEngine()
   const expressionEngine = new ExpressionEngine(morphEngine)
+  const blinkAnimator     = new BlinkAnimator(morphEngine)
+  const breathAnimator    = new BreathAnimator(morphEngine)
+  const headDriftAnimator = new HeadDriftAnimator(morphEngine)
   let gestureEngine: GestureEngine | null = null
 
   if (opts.mood) {
@@ -242,12 +279,19 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
     },
 
     animate(deltaMs) {
-      // gestureEngine runs first so morphEngine bone callbacks (headRotateX/Y) always win.
+      // headDriftAnimator first: snapFixed writes bone rotation instantly (needsUpdate=false).
+      // GestureEngine never owns Head.rotation.x/y (no template defines them), so no conflict.
+      headDriftAnimator.update(deltaMs)
+      blinkAnimator.update(deltaMs)
+      breathAnimator.update(deltaMs)
       gestureEngine?.update(deltaMs)
       morphEngine.update(deltaMs)
     },
 
     prepareSeek() {
+      headDriftAnimator.reset()
+      blinkAnimator.reset()
+      breathAnimator.reset()
       gestureEngine?.snapToRest()
       morphEngine.resetToBaselines()
     },
@@ -290,6 +334,24 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
 
     resetGesture() {
       gestureEngine?.snapToRest()
+    },
+
+    triggerBlink() {
+      blinkAnimator.trigger()
+    },
+
+    triggerBreath() {
+      breathAnimator.trigger()
+    },
+
+    setHeadDriftEnabled(enabled) {
+      headDriftAnimator.setEnabled(enabled)
+    },
+
+    setHeadPose(look, intensity) {
+      const pose = HEAD_POSES[look] ?? HEAD_POSES['center']!
+      morphEngine.setFixed('headRotateX', pose.x * intensity)
+      morphEngine.setFixed('headRotateY', pose.y * intensity)
     },
 
     get morphEngine() { return morphEngine },

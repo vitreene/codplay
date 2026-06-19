@@ -10,6 +10,7 @@ import { runQuizSeriesDemo } from './codplay/quiz-series-demo'
 import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
 import { runAvatarRiveDemo } from './codplay/avatar-rive-demo'
+import { runRiveCoachDemo } from './codplay/rive-coach-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -35,6 +36,8 @@ if (demoName === 'quiz') {
 	void runAvatarPoc1Demo()
 } else if (demoName === 'avatar-rive') {
 	void runAvatarRiveDemo()
+} else if (demoName === 'rive-coach') {
+	void runRiveCoachDemo()
 } else {
 	void runPlayerPocDemo()
 }

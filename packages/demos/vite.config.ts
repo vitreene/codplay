@@ -32,6 +32,8 @@ export default defineConfig({
       { find: '@codplay/avatar3d', replacement: resolve(__dirname, '../authoring/avatar3d/src/index.ts') },
       { find: /^@codplay\/avatar-rive\/(.*)/, replacement: resolve(__dirname, '../authoring/avatar-rive/src/$1') },
       { find: '@codplay/avatar-rive', replacement: resolve(__dirname, '../authoring/avatar-rive/src/index.ts') },
+      { find: /^@codplay\/rive\/(.*)/, replacement: resolve(__dirname, '../authoring/rive/src/$1') },
+      { find: '@codplay/rive', replacement: resolve(__dirname, '../authoring/rive/src/index.ts') },
       { find: /^three\/addons\/(.*)$/, replacement: resolve(THREE_ROOT, 'examples/jsm/$1') },
       { find: 'three', replacement: resolve(THREE_ROOT, 'build/three.module.js') },
     ],

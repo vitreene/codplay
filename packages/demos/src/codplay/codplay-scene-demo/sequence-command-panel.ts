@@ -23,6 +23,7 @@ export function createSequenceCommandPanel(input: {
 	let progressLoopFrameId: number | null = null
 	const seekThrottleMs = 90
 	let pendingSeekTargetMs: number | null = null
+	let activeSeekTargetMs: number | null = null
 	let seekThrottleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
 	let lastSeekDispatchMs = 0
 	let seekInteractionActive = false
@@ -70,7 +71,8 @@ export function createSequenceCommandPanel(input: {
 				: Math.round(state.horizon.progressEndMs)
 		const clampedTimelineMs = Math.min(Math.max(0, Math.round(state.timelineMs)), seekMaxMs)
 		const interactionTimelineMs = Math.min(readSeekTargetMsFromRange(), seekMaxMs)
-		const pendingTimelineMs = pendingSeekTargetMs === null ? null : Math.min(pendingSeekTargetMs, seekMaxMs)
+		const seekTargetMs = activeSeekTargetMs ?? pendingSeekTargetMs
+		const pendingTimelineMs = seekTargetMs === null ? null : Math.min(seekTargetMs, seekMaxMs)
 		const displayedTimelineMs = seekInteractionActive ? interactionTimelineMs : (pendingTimelineMs ?? clampedTimelineMs)
 
 		input.playButtonNode.disabled = commandInFlight || (!canPlay && !canPause)
@@ -164,9 +166,11 @@ export function createSequenceCommandPanel(input: {
 
 		const targetTimelineMs = pendingSeekTargetMs
 		pendingSeekTargetMs = null
+		activeSeekTargetMs = targetTimelineMs
 		lastSeekDispatchMs = resolveNowMs()
 
 		void runSeekFlow(targetTimelineMs).finally(() => {
+			activeSeekTargetMs = null
 			if (pendingSeekTargetMs !== null) {
 				scheduleThrottledSeekDispatch()
 			}

@@ -157,7 +157,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     actionButtonNodes.set(action.id, actionButtonNode);
   }
 
-  const traceLogPanel = createTraceLogPanel(playerTraceNode);
+  const traceLogPanel = createTraceLogPanel(playerTraceNode, { compact: config.compactTrace ?? false });
   const compileResult = studio.builder.compile({ scene: config.scene as unknown as SceneDef });
   if (!compileResult.ok) {
     throw new Error(`[demo] compile failed: ${compileResult.error.code}`);

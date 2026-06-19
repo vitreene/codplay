@@ -126,24 +126,6 @@ export function createAvatar3DComponentClass(
         engine.setMood(action['mood'] as Parameters<AvatarEngine['setMood']>[0])
         return
       }
-
-      // avatar:head-drift — enable / disable the continuous TH sine-wave head drift
-      if ('headDrift' in action) {
-        engine.setHeadDriftEnabled(action['headDrift'] === true)
-        return
-      }
-
-      // avatar:blink — triggers a single blink animation in the engine
-      if ('blink' in action) {
-        engine.triggerBlink()
-        return
-      }
-
-      // avatar:breathe — triggers a single breath swell animation in the engine
-      if ('breathe' in action) {
-        engine.triggerBreath()
-        return
-      }
     }
   } as unknown as RuntimeComponentClass
 }

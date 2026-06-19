@@ -262,5 +262,5 @@ Cas d'usage : abandon de sequence avant demarrage en contexte auteur.
 
 - V1 ne couvre pas les stratégies de retry sur echec reseau
 - le detail de la gestion des erreurs par type sera ajuste apres premiers tests reels d'environnement
-- les ressources de type `json` et `js` (Lottie, Three.js, Rive) sont hors perimetre V1 ; leur cas sera traite dans une extension V1.x
+- les ressources de type bibliotheque tierce (Rive `.riv`, Lottie `.json`, modeles Three.js) sont couvertes par `v1-third-party-runtime-spec.md` : chaque bibliotheque declare un type de manifeste et une strategie de preload a deux niveaux (singleton bibliotheque + cache par URL)
 - la gestion des ressources dans les composants (blob URL vs cache navigateur natif) reste transparente pour le module preload en V1

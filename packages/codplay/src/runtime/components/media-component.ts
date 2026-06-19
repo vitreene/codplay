@@ -263,14 +263,20 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   }
 
   /**
-   * Ensures the video part exists, resets its state, applies defaults and sets src.
+   * Ensures the video part exists, registers it, and initializes state.
+   * existingMediaNode must be captured before buildNode clears the parts map.
+   * On refresh (existingMediaNode !== null) the media element is reused without
+   * reset or src reload — syncTimeline is responsible for repositioning it.
    */
-  private setupMediaNode(rootNode: unknown): void {
-    const initial = this.perso.initial as { src?: unknown }
-    const mediaNode = ensureMediaNode(rootNode, this.getPart(MEDIA_REF))
-    resetRuntimeNodeState(mediaNode)
+  private setupMediaNode(rootNode: unknown, existingMediaNode: unknown | null): void {
+    const mediaNode = ensureMediaNode(rootNode, existingMediaNode)
     this.setPart(MEDIA_REF, mediaNode)
     this.playbackState = 'paused'
+    if (existingMediaNode !== null) {
+      return
+    }
+    const initial = this.perso.initial as { src?: unknown }
+    resetRuntimeNodeState(mediaNode)
     if (typeof initial.src === 'string') {
       this.setMediaSource(mediaNode, initial.src)
     }
@@ -293,10 +299,13 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
 
   /**
    * Creates the component root with an internal video part.
+   * The existing media node is captured before buildNode clears the parts map so
+   * setupMediaNode can reuse it on seek refresh without reset or src reload.
    */
   render(): ComponentRenderResult {
+    const existingMediaNode = this.getPart(MEDIA_REF)
     const rootNode = this.buildNode(`<div><video data-part="${MEDIA_REF}"/></div>`)
-    this.setupMediaNode(rootNode)
+    this.setupMediaNode(rootNode, existingMediaNode)
     this.services.apply(rootNode, this.perso.initial)
     this.applyVideoProps((this.perso.initial as Record<string, unknown>).video)
     return rootNode as Node

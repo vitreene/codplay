@@ -230,18 +230,6 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
       nodeRef.alt = ''
     }
 
-    if (
-      typeof globalThis.HTMLMediaElement !== 'undefined' &&
-      nodeRef instanceof globalThis.HTMLMediaElement
-    ) {
-      nodeRef.pause()
-      try {
-        nodeRef.currentTime = 0
-      } catch {
-        return
-      }
-    }
-
     return
   }
 
@@ -256,12 +244,6 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
   mutableNode.style = {}
   if (!preserveDataPart) {
     mutableNode.attributes = {}
-  }
-  if ('currentTime' in mutableNode) {
-    mutableNode.currentTime = 0
-  }
-  if ('paused' in mutableNode) {
-    mutableNode.paused = true
   }
 }
 

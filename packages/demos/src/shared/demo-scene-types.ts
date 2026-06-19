@@ -30,4 +30,6 @@ export type PlayerSceneDemoConfig = {
 	components?: Record<string, RuntimeComponentClass>;
 	/** External render adapters (Three.js, Lottie, Rive, PixiJS…) coupled to CodPlay's ticker. */
 	renderAdapters?: RenderAdapter[];
+	/** Show only time + event name in the trace panel; errors are always shown in full. */
+	compactTrace?: boolean;
 };

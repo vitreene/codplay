@@ -1,12 +1,12 @@
 import type { SceneDoc } from 'codplay/player/types'
 import { MOUTH_CUES, PRESTON_TO_TH, phraseWordsFR } from './avatar-data/phrase-fr'
 
-// End of speech, derived from the forced-alignment data (last viseme/word boundary)
-// rather than a guessed constant — sequence:end fires exactly when the voice ends.
-const SPEECH_END_MS = Math.max(
-  Math.round(MOUTH_CUES[MOUTH_CUES.length - 1]!.end * 1000),
-  phraseWordsFR[phraseWordsFR.length - 1]!.endMs,
-)
+const SCENE_END_MS = 18500
+const AVATAR_SIZE = '600px'
+
+const RIV_SRC = '/avatars/coach.riv'
+const ARTBOARD = 'Coach model'
+const STATE_MACHINE = 'State Machine 1'
 
 function buildVisemeEventimes() {
   return MOUTH_CUES.map((c) => ({
@@ -24,18 +24,14 @@ function buildWordEventimes() {
   }))
 }
 
-export function createAvatarPocScene(): SceneDoc {
+export function createRiveCoachScene(): SceneDoc {
   return {
-    id: 'avatar-poc-scene',
+    id: 'rive-coach-scene',
     rootStories: ['avatar-story'],
     stories: {
       'avatar-story': {
         id: 'avatar-story',
         entries: ['avatar-stage', 'audio', 'avatar', 'caption'],
-        // Route avatar:idle to the inline idle strap from @codplay/avatar3d
-        listen: [
-          { on: 'avatar:idle', straps: ['avatar:idle'] },
-        ],
         persos: [
           {
             id: 'avatar-stage',
@@ -44,9 +40,10 @@ export function createAvatarPocScene(): SceneDoc {
               tag: 'div',
               style: {
                 position: 'relative',
-                width: '600px',
-                height: '600px',
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
                 overflow: 'hidden',
+                background: '#1a1a2e',
               },
             },
             actions: {},
@@ -75,25 +72,23 @@ export function createAvatarPocScene(): SceneDoc {
           },
           {
             id: 'avatar',
-            type: 'avatar3d',
+            type: 'rive-coach',
             initial: {
+              src: RIV_SRC,
+              artboard: ARTBOARD,
+              stateMachine: STATE_MACHINE,
               move: { parentId: 'avatar-stage' },
+              style: {
+                position: 'absolute',
+                inset: '0',
+                width: '100%',
+                height: '100%',
+                display: 'block',
+              },
             },
             actions: {
-              // Visemes — data.viseme drives the mouth shape
+              'avatar:start':  { broadcast: { type: 'START' } },
               'avatar:viseme': {},
-              // Direct morph override — data.name + data.value (still used by external callers)
-              'avatar:morph': {},
-              // Gesture — data.gesture: string | null
-              'avatar:gesture': {},
-              // Gaze — data.enabled: boolean
-              'avatar:gaze': {},
-              // Mood — data.mood: MoodName
-              'avatar:mood': {},
-              // Idle — semantic events from avatar3d-straps
-              'avatar:blink': {},
-              'avatar:head-drift': {},
-              'avatar:breathe': {},
             },
           },
           {
@@ -125,19 +120,10 @@ export function createAvatarPocScene(): SceneDoc {
           },
         ],
         eventimes: [
-          { name: 'scene:start', startAt: 0 },
-          { name: 'audio:start', startAt: 0 },
-          // Start idle loops — routed to the idle strap via story.listen above
-          { name: 'avatar:idle', startAt: 0 },
-          // Enable gaze immediately — seek-safe (materialized in track)
-          { name: 'avatar:gaze', startAt: 0, data: { enabled: true } },
-          // Gesture sequence — seeds from eventSeq → deterministic at seek
-          { name: 'avatar:gesture', startAt: 8000,  data: { gesture: 'shrug' } },
-          { name: 'avatar:gesture', startAt: 11000, data: { gesture: 'handup' } },
-          { name: 'avatar:gesture', startAt: 15000, data: { gesture: 'shrug' } },
-          { name: 'avatar:gesture', startAt: 17500, data: { gesture: null } },
-          // Fires exactly when the voice ends (forced-alignment derived) — stops idle loops.
-          { name: 'sequence:end', startAt: SPEECH_END_MS },
+          { name: 'scene:start',  startAt: 0 },
+          { name: 'audio:start',  startAt: 0 },
+          { name: 'avatar:start', startAt: 0 },
+          { name: 'sequence:end', startAt: SCENE_END_MS },
           ...buildVisemeEventimes(),
           ...buildWordEventimes(),
         ],

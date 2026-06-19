@@ -80,6 +80,8 @@ export class Player implements PlayerApi {
   private currentScene: CompiledScene['scene'] | null = null
   private strapCollection: StrapCollection = {}
   private readonly strapLoopSchedulers = new Set<PlayerScheduleFacade>()
+  private readonly strapLoopUnsubscribers = new Map<PlayerScheduleFacade, () => void>()
+  private scheduleRuntimeUnsubscribe: (() => void) | null = null
   private initialSceneState: Record<string, unknown> | undefined
   private initialStoryStateById = new Map<string, Record<string, unknown> | undefined>()
   private playerMode: 'author' | 'broadcast' = 'broadcast'
@@ -190,8 +192,9 @@ export class Player implements PlayerApi {
     }
 
     return this.normalizeAsyncResult(this.player.play(), async () => {
-      this.scheduleRuntime.resume()
-      this.resumeStrapLoopSchedulers()
+      this.scheduleRuntimeUnsubscribe = this.player.subscribeJitTick((deltaMs) => {
+        this.scheduleRuntime.tick(deltaMs)
+      })
       await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneStart }, RUNTIME_EVENT_SOURCE.system)
     })
   }
@@ -201,8 +204,8 @@ export class Player implements PlayerApi {
    */
   pause(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.pause(), () => {
-      this.scheduleRuntime.pause()
-      this.pauseStrapLoopSchedulers()
+      this.scheduleRuntimeUnsubscribe?.()
+      this.scheduleRuntimeUnsubscribe = null
     })
   }
 
@@ -211,8 +214,9 @@ export class Player implements PlayerApi {
    */
   resume(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.play(), async () => {
-      this.scheduleRuntime.resume()
-      this.resumeStrapLoopSchedulers()
+      this.scheduleRuntimeUnsubscribe = this.player.subscribeJitTick((deltaMs) => {
+        this.scheduleRuntime.tick(deltaMs)
+      })
       await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneStart }, RUNTIME_EVENT_SOURCE.system)
     })
   }
@@ -223,6 +227,8 @@ export class Player implements PlayerApi {
   stop(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.pause(), async () => {
       await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneEnd }, RUNTIME_EVENT_SOURCE.system)
+      this.scheduleRuntimeUnsubscribe?.()
+      this.scheduleRuntimeUnsubscribe = null
       this.scheduleRuntime.stop()
       this.destroyStrapLoopSchedulers()
     })
@@ -234,6 +240,8 @@ export class Player implements PlayerApi {
   destroy(): Promise<ApiResult<void>> {
     return this.normalizeAsyncResult(this.player.destroy(), async () => {
       await this.routeSceneEvent({ name: Player.LIFECYCLE_EVENT.sceneEnd }, RUNTIME_EVENT_SOURCE.system)
+      this.scheduleRuntimeUnsubscribe?.()
+      this.scheduleRuntimeUnsubscribe = null
       this.scheduleRuntime.destroy()
       this.destroyStrapLoopSchedulers()
       this.currentScene = null
@@ -245,7 +253,6 @@ export class Player implements PlayerApi {
    * Seeks the current timeline.
    */
   seek(input: { timelineMs: number }): Promise<ApiResult<void>> {
-    this.pauseStrapLoopSchedulers()
     return (async () => {
       if (this.player.getState().status === 'playing') {
         const pauseResult = await this.pause()
@@ -307,10 +314,6 @@ export class Player implements PlayerApi {
 
   setRate(rate: number): void {
     this.player.setRate(rate)
-    this.scheduleRuntime.setRate(rate)
-    for (const scheduler of this.strapLoopSchedulers) {
-      scheduler.setRate(rate)
-    }
   }
 
   /**
@@ -361,31 +364,24 @@ export class Player implements PlayerApi {
   }
 
   /**
-   * Resumes all active local loop schedulers.
+   * Unsubscribes and destroys one JIT scheduler.
    */
-  private resumeStrapLoopSchedulers(): void {
-    for (const scheduler of this.strapLoopSchedulers) {
-      scheduler.resume()
-    }
+  private destroySingleScheduler(scheduler: PlayerScheduleFacade): void {
+    this.strapLoopUnsubscribers.get(scheduler)?.()
+    this.strapLoopUnsubscribers.delete(scheduler)
+    scheduler.destroy()
+    this.strapLoopSchedulers.delete(scheduler)
   }
 
   /**
-   * Pauses all active local loop schedulers.
-   */
-  private pauseStrapLoopSchedulers(): void {
-    for (const scheduler of this.strapLoopSchedulers) {
-      scheduler.pause()
-    }
-  }
-
-  /**
-   * Destroys all active local loop schedulers.
+   * Destroys all active JIT schedulers and clears subscriptions.
    */
   private destroyStrapLoopSchedulers(): void {
     for (const scheduler of this.strapLoopSchedulers) {
+      this.strapLoopUnsubscribers.get(scheduler)?.()
       scheduler.destroy()
     }
-
+    this.strapLoopUnsubscribers.clear()
     this.strapLoopSchedulers.clear()
   }
 
@@ -623,8 +619,13 @@ export class Player implements PlayerApi {
     }
 
     const createJitScheduler = () => {
+      let unsubscribe: (() => void) | null = null
+
       const scheduler = new PlayerScheduleFacade({
         emitEvent: async (event, context) => {
+          if (this.player.getState().sequenceEnded) {
+            return
+          }
           const eventMs = startedAtMs + context.currentTimeMs
           if (event.name === PLAYER_RUNTIME_EVENT.stateUpdate) {
             await this.emitRuntimeEvent(
@@ -656,6 +657,8 @@ export class Player implements PlayerApi {
         emitWarning: collectWarning,
         resolveState,
         onIdle: () => {
+          unsubscribe?.()
+          this.strapLoopUnsubscribers.delete(scheduler)
           scheduler.destroy()
           this.strapLoopSchedulers.delete(scheduler)
         },
@@ -663,9 +666,10 @@ export class Player implements PlayerApi {
       })
 
       this.strapLoopSchedulers.add(scheduler)
-      if (this.player.getState().status === 'playing') {
-        scheduler.resume()
-      }
+      unsubscribe = this.player.subscribeJitTick((deltaMs) => {
+        scheduler.tick(deltaMs)
+      })
+      this.strapLoopUnsubscribers.set(scheduler, unsubscribe)
 
       return scheduler
     }
@@ -784,12 +788,12 @@ export class Player implements PlayerApi {
 
       const scheduler = createJitScheduler()
       const handle = scheduler.wait(ms, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)), options)
+      scheduler.tick(0)
       return {
         id: handle.id,
         cancel: () => {
           handle.cancel()
-          scheduler.destroy()
-          this.strapLoopSchedulers.delete(scheduler)
+          this.destroySingleScheduler(scheduler)
         }
       }
     }
@@ -801,12 +805,12 @@ export class Player implements PlayerApi {
 
       const scheduler = createJitScheduler()
       const handle = scheduler.repeat(options, toRuntimeLoopEvents((context) => resolveStrapStepInput(input, context)))
+      scheduler.tick(0)
       return {
         id: handle.id,
         cancel: () => {
           handle.cancel()
-          scheduler.destroy()
-          this.strapLoopSchedulers.delete(scheduler)
+          this.destroySingleScheduler(scheduler)
         }
       }
     }
@@ -830,6 +834,7 @@ export class Player implements PlayerApi {
       if (modeResolution.mode === 'planned' && plannedTimes !== null) {
         const scheduler = createJitScheduler()
         const handle = scheduler.repeat({ everyMs: options.eachMs, times: plannedTimes, mode: 'planned' }, toRuntimeLoopEvents(factory))
+        scheduler.tick(0)
 
         return {
           id: handle.id,
@@ -843,13 +848,13 @@ export class Player implements PlayerApi {
 
       const scheduler = createJitScheduler()
       const handle = scheduler.loop(options, toRuntimeLoopEvents(factory))
+      scheduler.tick(0)
 
       return {
         id: handle.id,
         cancel: () => {
           handle.cancel()
-          scheduler.destroy()
-          this.strapLoopSchedulers.delete(scheduler)
+          this.destroySingleScheduler(scheduler)
         }
       }
     }
@@ -871,13 +876,13 @@ export class Player implements PlayerApi {
       const handles = planStaggerItems({ stepMs: options.stepMs, items: resolvedSteps }).map(({ offsetMs, item }) => {
         return scheduler.wait(offsetMs, toRuntimeLoopEvents(() => item), options)
       })
+      scheduler.tick(0)
 
       return handles.map((handle) => ({
         id: handle.id,
         cancel: () => {
           handle.cancel()
-          scheduler.destroy()
-          this.strapLoopSchedulers.delete(scheduler)
+          this.destroySingleScheduler(scheduler)
         }
       }))
     }

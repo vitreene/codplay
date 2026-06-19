@@ -91,11 +91,30 @@ function formatTraceRow(row: RuntimeTraceRow, firstTraceMs: number): string {
 }
 
 /**
+ * Formats one trace row in lightweight mode: time + event name, warn on errors.
+ */
+function formatTraceRowCompact(row: RuntimeTraceRow, firstTraceMs: number): string {
+	const deltaMs = Math.max(0, Math.round(row.traceMs - firstTraceMs))
+	const time = `+${String(deltaMs).padStart(4, ' ')}ms`
+	const isError = row.status === RUNTIME_TRACE_STATUS.rejected || row.status === RUNTIME_TRACE_STATUS.error
+	if (isError) {
+		const payload = (row.payload ?? {}) as Record<string, unknown>
+		const code = typeof payload['code'] === 'string' ? ` code=${payload['code']}` : ''
+		return `${time} !! ${row.eventName}${code}`
+	}
+	return `${time} ${row.eventName}`
+}
+
+/**
  * Creates one retained trace panel controller for the shared demo shell.
  */
-export function createTraceLogPanel(node: HTMLDivElement, maxLines = 14): {
+export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: number; compact?: boolean } | number = {}): {
 	push: (row: RuntimeTraceRow) => void;
 } {
+	const resolvedOptions = typeof options === 'number' ? { maxLines: options } : options
+	const maxLines = resolvedOptions.maxLines ?? 14
+	const compact = resolvedOptions.compact ?? false
+
 	const traceLines: string[] = []
 	let firstTraceMs: number | null = null
 
@@ -105,7 +124,10 @@ export function createTraceLogPanel(node: HTMLDivElement, maxLines = 14): {
 				firstTraceMs = row.traceMs
 			}
 
-			traceLines.push(formatTraceRow(row, firstTraceMs))
+			const line = compact
+				? formatTraceRowCompact(row, firstTraceMs)
+				: formatTraceRow(row, firstTraceMs)
+			traceLines.push(line)
 			if (traceLines.length > maxLines) {
 				traceLines.shift()
 			}

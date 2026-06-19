@@ -7,7 +7,7 @@ import {
   resolveHelperItemsAtOffset
 } from './helper-finite-core'
 import { hasEventLoopStop, normalizeLoopStopConditions, resolvePlannableLoopTimes } from './helper-loop-core'
-import { TimeTicker, type TickerOptions } from '../core/time/ticker'
+
 import { resolveEventInput } from './helper-input'
 import { resolveHelperMode } from './helper-mode'
 import type {
@@ -82,7 +82,6 @@ type EmitWarning = (warning: string) => void
  * Runs one deterministic helper scheduler for the public player facade.
  */
 export class PlayerScheduleFacade implements StrapHelpers {
-  private readonly ticker: TimeTicker
   private readonly emitEvent: EmitEvent
   private readonly emitWarning?: EmitWarning
   private readonly resolveState: () => DeepReadonly<Record<string, unknown>>
@@ -90,28 +89,24 @@ export class PlayerScheduleFacade implements StrapHelpers {
   private readonly jobs = new Map<string, ScheduleJob>()
   private policy: ResolvedRuntimeEventPolicy
 
-  private running = false
   private virtualNowMs = 0
-  private _rate = 1
   private nextJobId = 1
   private nextJobOrder = 1
 
   /**
-   * Configures one helper scheduler with one event emitter and one ticker.
+   * Configures one helper scheduler driven externally by the CodPlay ticker.
    */
   constructor(options: {
     emitEvent: EmitEvent
     emitWarning?: EmitWarning
     resolveState?: () => DeepReadonly<Record<string, unknown>>
     onIdle?: () => void
-    tickerOptions?: TickerOptions
     policy?: RuntimeEventPolicy
   }) {
     this.emitEvent = options.emitEvent
     this.emitWarning = options.emitWarning
     this.resolveState = options.resolveState ?? (() => ({}))
     this.onIdle = options.onIdle
-    this.ticker = new TimeTicker(options.tickerOptions)
     this.policy = createRuntimeEventPolicy(options.policy)
   }
 
@@ -126,54 +121,29 @@ export class PlayerScheduleFacade implements StrapHelpers {
    * Resets all helper jobs and the virtual runtime clock.
    */
   reset(): void {
-    this.pause()
     this.jobs.clear()
     this.virtualNowMs = 0
   }
 
-  setRate(rate: number): void {
-    this._rate = rate
-  }
-
   /**
-   * Starts helper ticking when the player is active.
+   * Advances the virtual clock by one frame and processes due jobs.
+   * Called by the CodPlay main ticker — no independent RAF loop.
    */
-  resume(): void {
-    if (this.running) {
-      return
-    }
-
-    this.running = true
-    this.ticker.start((payload) => {
-      this.virtualNowMs += payload.deltaMs * this._rate
-      this.processDueJobs()
-    })
+  tick(deltaMs: number): void {
+    this.virtualNowMs += deltaMs
     this.processDueJobs()
-  }
-
-  /**
-   * Freezes helper ticking without clearing pending jobs.
-   */
-  pause(): void {
-    if (!this.running) {
-      return
-    }
-
-    this.ticker.stop()
-    this.running = false
   }
 
   /**
    * Cancels all helper jobs and resets the virtual clock.
    */
   stop(): void {
-    this.pause()
     this.jobs.clear()
     this.virtualNowMs = 0
   }
 
   /**
-   * Cancels all helper jobs and releases ticker resources.
+   * Cancels all helper jobs and resets the virtual clock.
    */
   destroy(): void {
     this.stop()
@@ -224,9 +194,6 @@ export class PlayerScheduleFacade implements StrapHelpers {
     void mode
 
     this.jobs.set(job.id, job)
-    if (this.running) {
-      this.processDueJobs()
-    }
     return this.createHandle(job.id)
   }
 
@@ -260,9 +227,6 @@ export class PlayerScheduleFacade implements StrapHelpers {
     void mode
 
     this.jobs.set(job.id, job)
-    if (this.running) {
-      this.processDueJobs()
-    }
     return this.createHandle(job.id)
   }
 
@@ -299,9 +263,6 @@ export class PlayerScheduleFacade implements StrapHelpers {
     })
 
     this.jobs.set(job.id, job)
-    if (this.running) {
-      this.processDueJobs()
-    }
     return this.createHandle(job.id)
   }
 

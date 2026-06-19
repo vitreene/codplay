@@ -140,6 +140,8 @@ export class PlayerFacade implements PlayerApi {
   private rateAnchorMs = 0;
   private _rate = 1;
   private sequenceEnded = false;
+  private sequenceEndTriggerMs: number | null = null;
+  private readonly jitTickSubscribers = new Set<(deltaMs: number) => void>();
   private readonly ticker = new TimeTicker();
   private nextPublicEventIndex = 0;
   private readonly mountedStoryIds = new Set<string>();
@@ -640,6 +642,16 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Subscribes one callback to the playback tick for JIT scheduler dispatch.
+   * The callback receives the rate-scaled delta each frame — no independent RAF.
+   * Returns an unsubscribe function.
+   */
+  subscribeJitTick(fn: (deltaMs: number) => void): () => void {
+    this.jitTickSubscribers.add(fn);
+    return () => { this.jitTickSubscribers.delete(fn); };
+  }
+
+  /**
    * Synchronizes all registered media components to one target timeline.
    */
   private syncMediaTimeline(timelineMs: number): void {
@@ -749,6 +761,8 @@ export class PlayerFacade implements PlayerApi {
     this.playedEndMs = 0;
     this.playbackStartMs = null;
     this.sequenceEnded = false;
+    this.sequenceEndTriggerMs = null;
+    this.jitTickSubscribers.clear();
     this.nextPublicEventIndex = 0;
     this.mountedStoryIds.clear();
     this.scheduledStoryIds.clear();
@@ -898,6 +912,10 @@ export class PlayerFacade implements PlayerApi {
     this.director.load(runtimePlan.timelinePlan);
     this.loadMediaRuntime(runtimePlan.runtimePersos);
     this.syncHorizonFromRuntimePlan(runtimePlan);
+    this.sequenceEndTriggerMs =
+      runtimePlan.timelinePlan.sortedEvents.find(
+        (e) => e.name === PLAYER_SEQUENCE_EVENT.sequenceEnd,
+      )?.ms ?? null;
   }
 
   /**
@@ -1087,6 +1105,7 @@ export class PlayerFacade implements PlayerApi {
    */
   private finalizeSequenceEnd(sequenceEndMs: number): void {
     this.sequenceEnded = true;
+    this.jitTickSubscribers.clear();
     this.timelineMs = Math.min(sequenceEndMs, this.seekEndMs);
     this.playbackStartMs = null;
     this.stopPlaybackLoop();
@@ -1199,17 +1218,34 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Runs one frame tick when player is in playing state.
    */
-  private runPlaybackTick(frameNowMs?: number): void {
+  private runPlaybackTick(frameNowMs?: number, frameDeltaMs = 0): void {
     if (this.status !== PLAYER_STATUS.playing) {
       return;
     }
 
+    const syncTimelineMs = this.resolveCurrentTimelineMs();
+
+    // Synchronous gate: set sequenceEnded before JIT subscribers run so their
+    // emitEvent guard sees the flag in the same RAF callback.
+    if (
+      this.sequenceEndTriggerMs !== null &&
+      syncTimelineMs >= this.sequenceEndTriggerMs &&
+      !this.sequenceEnded
+    ) {
+      this.sequenceEnded = true;
+    }
+
+    // Tick all JIT subscribers in the same synchronous context as the main ticker.
+    const jitDeltaMs = frameDeltaMs * this._rate;
+    for (const subscriber of this.jitTickSubscribers) {
+      subscriber(jitDeltaMs);
+    }
+
     if (!this.onTimelineEvent) {
-      const timelineMs = this.resolveCurrentTimelineMs();
-      this.timelineMs = timelineMs;
-      this.runDueTimelineEventsSync(timelineMs);
-      this.syncMediaTimeline(timelineMs);
-      this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), timelineMs, this._rate);
+      this.timelineMs = syncTimelineMs;
+      this.runDueTimelineEventsSync(syncTimelineMs);
+      this.syncMediaTimeline(syncTimelineMs);
+      this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), syncTimelineMs, this._rate);
       this.completePlaybackIfReachedEnd();
       return;
     }
@@ -1250,7 +1286,7 @@ export class PlayerFacade implements PlayerApi {
     }
 
     this.ticker.start((tickPayload) => {
-      this.runPlaybackTick(tickPayload.nowMs);
+      this.runPlaybackTick(tickPayload.nowMs, tickPayload.deltaMs);
     });
   }
 

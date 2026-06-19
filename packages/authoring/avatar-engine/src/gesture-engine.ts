@@ -34,6 +34,15 @@ type BoneState = {
   x: number; y: number; z: number
   /** Target rotation. */
   tx: number; ty: number; tz: number
+  /**
+   * An axis becomes GE-owned the first time some gesture template defines it
+   * for this bone. Unowned axes are never read or written by GE — they stay
+   * the exclusive domain of the morph engine's bone callback (e.g. Head/Neck
+   * x/y, driven by headRotateX/Y for idle sway + gaze). Without this, GE would
+   * reset those axes to rest every frame, racing the callback's intermittent
+   * (needsUpdate-gated) writes — visible as a head/neck flicker during gestures.
+   */
+  ownX: boolean; ownY: boolean; ownZ: boolean
 }
 
 /**
@@ -268,14 +277,6 @@ function sampleValue(v: RotationValue, rng: Rng): number {
   return min + (max - min) * Math.pow(u, 1 / Math.max(0.001, power))
 }
 
-function resolveRotation(r: BoneRotation, rng: Rng): { x: number; y: number; z: number } {
-  return {
-    x: r.x !== undefined ? sampleValue(r.x, rng) : 0,
-    y: r.y !== undefined ? sampleValue(r.y, rng) : 0,
-    z: r.z !== undefined ? sampleValue(r.z, rng) : 0,
-  }
-}
-
 export class GestureEngine {
   private readonly state = new Map<string, BoneState>()
 
@@ -286,35 +287,39 @@ export class GestureEngine {
   constructor(boneMap: Map<string, Object3D>) {
     for (const [name, bone] of boneMap) {
       const { x, y, z } = bone.rotation as Euler
-      this.state.set(name, { bone, rx: x, ry: y, rz: z, x, y, z, tx: x, ty: y, tz: z })
+      this.state.set(name, {
+        bone, rx: x, ry: y, rz: z, x, y, z, tx: x, ty: y, tz: z,
+        ownX: false, ownY: false, ownZ: false,
+      })
     }
   }
 
   /**
    * Advance easing toward targets. Called every frame by engine.animate().
-   * gestureEngine.update() should run BEFORE morphEngine.update() so morph
-   * bone callbacks (headRotateX/Y) always overwrite gesture targets on the head.
+   * Only writes axes claimed by some gesture template (see BoneState.own*) —
+   * unclaimed axes (e.g. Head/Neck x/y) are left entirely to the morph engine's
+   * bone callback, so the two never race on the same rotation channel.
    */
   update(deltaMs: number): void {
     const alpha = 1 - Math.exp(-GESTURE_EASE * deltaMs)
     for (const s of this.state.values()) {
-      const dx = s.tx - s.x
-      const dy = s.ty - s.y
-      const dz = s.tz - s.z
-      if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4 && Math.abs(dz) < 1e-4) {
-        // Clamp to exact target to stop iteration
-        if (s.x !== s.tx || s.y !== s.ty || s.z !== s.tz) {
-          s.x = s.tx; s.y = s.ty; s.z = s.tz
-          const e = s.bone.rotation as Euler
-          e.x = s.x; e.y = s.y; e.z = s.z
-        }
-        continue
-      }
-      s.x += dx * alpha
-      s.y += dy * alpha
-      s.z += dz * alpha
+      if (!s.ownX && !s.ownY && !s.ownZ) continue
       const e = s.bone.rotation as Euler
-      e.x = s.x; e.y = s.y; e.z = s.z
+      if (s.ownX) {
+        const dx = s.tx - s.x
+        s.x = Math.abs(dx) < 1e-4 ? s.tx : s.x + dx * alpha
+        e.x = s.x
+      }
+      if (s.ownY) {
+        const dy = s.ty - s.y
+        s.y = Math.abs(dy) < 1e-4 ? s.ty : s.y + dy * alpha
+        e.y = s.y
+      }
+      if (s.ownZ) {
+        const dz = s.tz - s.z
+        s.z = Math.abs(dz) < 1e-4 ? s.tz : s.z + dz * alpha
+        e.z = s.z
+      }
     }
   }
 
@@ -329,9 +334,12 @@ export class GestureEngine {
     const template = GESTURE_TEMPLATES[name]
     if (!template) return null
 
-    // Reset ALL bones to rest first so previous gesture doesn't linger.
+    // Ease back to rest only for axes a previous gesture already claimed —
+    // axes never claimed by any gesture (Head/Neck x/y) are never touched.
     for (const s of this.state.values()) {
-      s.tx = s.rx; s.ty = s.ry; s.tz = s.rz
+      if (s.ownX) s.tx = s.rx
+      if (s.ownY) s.ty = s.ry
+      if (s.ownZ) s.tz = s.rz
     }
 
     const pose: ResolvedPose = new Map()
@@ -345,10 +353,17 @@ export class GestureEngine {
       const s = this.state.get(boneName)
       if (!s) continue
 
-      const resolved = resolveRotation(boneRot, rng)
-      pose.set(boneName, resolved)
-      // Set target only — update() advances easing each frame.
-      s.tx = resolved.x; s.ty = resolved.y; s.tz = resolved.z
+      // Axes absent from the template fall back to rest (not 0) — a partial
+      // entry like { z: 0.08 } must leave x/y untouched, never snap to world-zero.
+      const rx = boneRot.x !== undefined ? sampleValue(boneRot.x, rng) : s.rx
+      const ry = boneRot.y !== undefined ? sampleValue(boneRot.y, rng) : s.ry
+      const rz = boneRot.z !== undefined ? sampleValue(boneRot.z, rng) : s.rz
+      pose.set(boneName, { x: rx, y: ry, z: rz })
+
+      // Claim only the axes this template actually defines, and set their target.
+      if (boneRot.x !== undefined) { s.ownX = true; s.tx = rx }
+      if (boneRot.y !== undefined) { s.ownY = true; s.ty = ry }
+      if (boneRot.z !== undefined) { s.ownZ = true; s.tz = rz }
     }
 
     return pose
@@ -360,7 +375,9 @@ export class GestureEngine {
    */
   resetPose(): void {
     for (const s of this.state.values()) {
-      s.tx = s.rx; s.ty = s.ry; s.tz = s.rz
+      if (s.ownX) s.tx = s.rx
+      if (s.ownY) s.ty = s.ry
+      if (s.ownZ) s.tz = s.rz
     }
   }
 
@@ -386,11 +403,11 @@ export class GestureEngine {
    */
   snapToRest(): void {
     for (const s of this.state.values()) {
-      s.x = s.rx; s.tx = s.rx
-      s.y = s.ry; s.ty = s.ry
-      s.z = s.rz; s.tz = s.rz
+      if (!s.ownX && !s.ownY && !s.ownZ) continue
       const e = s.bone.rotation as Euler
-      e.x = s.rx; e.y = s.ry; e.z = s.rz
+      if (s.ownX) { s.x = s.rx; s.tx = s.rx; e.x = s.rx }
+      if (s.ownY) { s.y = s.ry; s.ty = s.ry; e.y = s.ry }
+      if (s.ownZ) { s.z = s.rz; s.tz = s.rz; e.z = s.rz }
     }
   }
 
