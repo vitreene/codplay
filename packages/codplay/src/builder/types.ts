@@ -1,3 +1,5 @@
+import type { StrapCollection } from '../player/strap-types'
+
 export type ApiError = {
   code: string
   message: string
@@ -51,7 +53,7 @@ export type StoryDef = {
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
-  straps: string[] | undefined
+  straps: StrapCollection | undefined
   listen: ListenRule[]
   eventimes?: Array<Record<string, unknown>>
   state?: Record<string, unknown> | undefined

@@ -15,7 +15,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 export function normalizeStoryDef(story: MutableStoryDef): StoryDef {
   story.initial = story.initial ?? undefined
-  story.straps = Array.isArray(story.straps) && story.straps.length > 0 ? story.straps : undefined
+  story.straps = isPlainObject(story.straps) && Object.keys(story.straps).length > 0 ? story.straps : undefined
   story.listen = Array.isArray(story.listen) ? story.listen : []
   story.eventimes = Array.isArray(story.eventimes) && story.eventimes.length > 0 ? story.eventimes : undefined
   story.tracks = isPlainObject(story.tracks) ? story.tracks : undefined

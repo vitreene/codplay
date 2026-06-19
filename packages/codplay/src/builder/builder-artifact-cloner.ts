@@ -39,7 +39,7 @@ export class BuilderArtifactCloner {
         entries: this.cloneData(story.entries),
         initial: this.cloneData(story.initial),
         persos: this.cloneData(story.persos),
-        straps: this.cloneData(story.straps),
+        straps: story.straps,
         listen: story.listen.map(rule => ({
           on: rule.on,
           transform: rule.transform,

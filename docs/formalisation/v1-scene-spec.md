@@ -60,9 +60,12 @@ type SceneDef = {
 - `Scene` expose `initial`, `straps`, `listen`, `init`, `state`, `tracks`.
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
+- `Scene.straps` déclare les noms des straps scène-niveau : orchestration cross-stories et side-effects globaux.
+- les straps story-niveau (portables avec chaque story) sont déclarés dans `StoryDef.straps` et injectés via `PlayerInitInput.storyStraps` — ils ne font pas partie de `Scene.straps`.
 - `listen` est obligatoire dans le contrat et peut etre vide (`[]`).
 - `tracks` est obligatoire en V1 et peut etre vide (`{}`).
 - dans `Scene.listen`, `straps` est facultatif sur chaque regle.
+- les straps référencés dans `Scene.listen` sont résolus exclusivement depuis `strapCollection` (scene-straps) ; `storyStraps` n'est pas consulté.
 - les regles `listen` de `Scene` sont des filtres.
 - dans `Scene`, `listen.on` doit etre unique par nom d'event.
 - doublon de `listen.on` dans `Scene`: erreur auteur.

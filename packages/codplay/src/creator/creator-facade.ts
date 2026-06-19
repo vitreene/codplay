@@ -1,4 +1,5 @@
 import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from '../builder/types'
+import type { StrapCollection } from '../player/strap-types'
 import { BuilderFacade } from '../builder/create-builder'
 import { Player } from '../player'
 import type { StoryEvent } from '../player'
@@ -266,10 +267,10 @@ export class CodPlay implements CodPlayApi {
   /**
    * Replaces one story straps list.
    */
-  setStoryStraps(input: { storyId: string; straps: string[] | undefined }): ApiResult<void> {
+  setStoryStraps(input: { storyId: string; straps: StrapCollection | undefined }): ApiResult<void> {
     return this.withStory(input.storyId, (story) => ({
       ...this.cloneStory(story),
-      straps: this.cloneData(input.straps)
+      straps: input.straps
     }))
   }
 
@@ -408,7 +409,7 @@ export class CodPlay implements CodPlayApi {
       entries: this.cloneData(story.entries),
       initial: this.cloneData(story.initial),
       persos: story.persos.map((perso) => this.clonePerso(perso)),
-      straps: this.cloneData(story.straps),
+      straps: story.straps,
       listen: this.cloneData(story.listen),
       eventimes: this.cloneData(story.eventimes),
       state: this.cloneData(story.state),

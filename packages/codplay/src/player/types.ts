@@ -1,7 +1,7 @@
 import type { SceneDef } from '../builder/types'
 import { PLAYER_STATUS } from './player-constants'
 import type { RuntimeEventSource } from '../core/events/types'
-import type { TransformFn } from './strap-types'
+import type { StrapCollection, TransformFn } from './strap-types'
 import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { RuntimeTraceRow } from '../runtime/trace-store'
 import type {
@@ -74,7 +74,7 @@ export type SceneStoryDoc = {
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: PersoDoc[]
-  straps: string[] | undefined
+  straps: StrapCollection | undefined
   listen: ListenRule[]
   eventimes?: StoryEventimeDoc[]
   state?: Record<string, unknown> | undefined

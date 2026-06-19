@@ -1,4 +1,5 @@
 import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from '../builder/types'
+import type { StrapCollection } from '../player/strap-types'
 import type { BuilderApi } from '../builder/types'
 import type { Player } from '../player'
 import type { StoryEvent } from '../player'
@@ -43,7 +44,7 @@ export type CodPlayApi = {
   upsertPerso: (input: { storyId: string; perso: Perso }) => ApiResult<void>
   removePerso: (input: { storyId: string; persoId: string }) => ApiResult<void>
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
-  setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
+  setStoryStraps: (input: { storyId: string; straps: StrapCollection | undefined }) => ApiResult<void>
   setStoryEntries: (input: { storyId: string; entries: string[] }) => ApiResult<void>
   exportSceneDoc: () => ApiResult<SceneDef>
 }

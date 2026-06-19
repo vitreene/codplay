@@ -41,7 +41,7 @@ function mountDemoRootNodes(containerNode: HTMLDivElement, studio: CodPlay, root
 }
 
 function syncInteractionLock(containerNode: HTMLDivElement, status: string): void {
-  const locked = status === "paused" || status === "seeking";
+  const locked = status !== "playing";
   containerNode.style.pointerEvents = locked ? "none" : "auto";
   if (locked) {
     containerNode.setAttribute("inert", "");

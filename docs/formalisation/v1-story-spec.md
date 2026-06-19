@@ -64,7 +64,7 @@ type StoryDef = {
   entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
-  straps: string[] | undefined
+  straps: StrapCollection | undefined
   listen: ListenRule[]
   eventimes?: StoryEventimeNode[]
   state?: StoryState
@@ -88,6 +88,9 @@ type StoryDef = {
 - le `story host` peut etre vise par l'alias de placement configurable `rootToken`.
 - le runtime peut conserver un index ordonne de `entries` par story pour instancier le montage de l'instance.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
+- `straps` déclare les noms des straps appartenant exclusivement à cette story (story-straps).
+- ces noms référencent les clés de `storyStraps[story.id]` injectés à `player.init`.
+- une story portable transporte ses straps comme une unité ; l'auteur d'une scène d'accueil n'a pas à connaître les straps internes de la story.
 - `listen` est obligatoire dans le contrat, et peut etre vide (`[]`).
 - `initial` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `state` est runtime-only et optionnel dans la definition.

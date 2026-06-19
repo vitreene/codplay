@@ -27,6 +27,7 @@ import type {
   StrapCollection,
   StrapContext,
   StrapExecutionScope,
+  StrapFn,
   StrapReturnValue,
   StrapRuntimeOutput,
   StrapStep,
@@ -923,6 +924,18 @@ export class Player implements PlayerApi {
   }
 
   /**
+   * Resolves a strap function with strict story/scene isolation.
+   * Story-level rules resolve from the story's own straps (embedded in the compiled scene).
+   * Scene-level rules resolve from strapCollection. Isolation is strict — no cross-lookup.
+   */
+  private resolveStrap(strapName: string, scopeStoryId: string | undefined): StrapFn | undefined {
+    if (scopeStoryId !== undefined) {
+      return this.currentScene?.stories[scopeStoryId]?.straps?.[strapName]
+    }
+    return this.strapCollection[strapName]
+  }
+
+  /**
    * Executes one strap by name and routes all its outputs.
    */
   private async executeStrap(
@@ -931,8 +944,11 @@ export class Player implements PlayerApi {
     scope: StrapExecutionScope,
     depth: number
   ): Promise<ApiResult<void>> {
-    const strap = this.strapCollection[strapName]
+    const strap = this.resolveStrap(strapName, scope.scopeStoryId)
     if (!strap) {
+      if (scope.scopeStoryId !== undefined) {
+        console.warn(`[codplay] story-strap "${strapName}" not found in story "${scope.scopeStoryId}" straps — ignored`)
+      }
       return { ok: true, data: undefined }
     }
 

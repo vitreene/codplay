@@ -120,7 +120,21 @@ type StrapCollection = Record<string, StrapFn>
 - un `Strap` est adresse par son `name` dans la `StrapCollection`
 - un `name` est unique dans la collection active
 
-2. Execution
+2. Appartenance et résolution
+
+- les straps sont divisés en deux niveaux d'appartenance : story-straps et scene-straps
+- un **story-strap** appartient exclusivement à une story ; il est portable avec elle et ne peut être invoqué que depuis `story.listen`
+- un **scene-strap** appartient à la scène ; il est destiné à l'orchestration cross-stories et aux side-effects globaux ; il est invocable depuis `scene.listen`
+- les story-straps sont injectés via `PlayerInitInput.storyStraps: Record<string, StrapCollection>`, indexés par `storyId`
+- les scene-straps sont injectés via `PlayerInitInput.strapCollection`
+- lors de la résolution d'un strap déclenché par `story.listen`, seule la collection `storyStraps[storyId]` est consultée — il n'y a pas de fallback vers `strapCollection`
+- un strap story-niveau déclaré dans `storyStraps` n'est pas accessible depuis `scene.listen`
+- lors de la résolution d'un strap déclenché par `scene.listen`, seule `strapCollection` est consultée
+- si un strap story-niveau est référencé dans `story.listen` mais absent de `storyStraps[storyId]`, le runtime émet un warning et ignore l'appel (comportement V1 : continue avec warning)
+- `StoryDef.straps: string[]` déclare les noms des straps appartenant à la story ; ces noms doivent correspondre aux clés de `storyStraps[storyId]` fournis au player
+- le player vérifie à l'init que toute clé déclarée dans `story.straps` est présente dans `storyStraps[storyId]` et émet un warning auteur si une clé est manquante
+
+3. Execution
 
 - l'appel au `Strap` est declenche par la `Story`
 - le `Strap` est execute dans le cycle runtime courant
@@ -228,3 +242,5 @@ const straps: StrapCollection = {
 - les emissions temporelles finies passent uniquement par `context.planned` ou `context.live` et sont materialisees en tracks rejouables
 - les conventions `Scene` d'emission externe passent par `event`, jamais par une propriete `effects`
 - la `Story` reste l'interlocuteur unique de la `Scene`
+- un story-strap n'est jamais accessible depuis `scene.listen` ; l'isolation est stricte
+- un scene-strap n'est jamais un fallback pour un story-strap manquant
