@@ -1,5 +1,5 @@
 export { createAvatarEngine } from './avatar-engine.js'
-export type { AvatarEngine, AvatarEngineOptions } from './avatar-engine.js'
+export type { AvatarEngine, AvatarEngineOptions, HeadDriftFn, BlinkScheduleFn, BreathTriggerFn } from './avatar-engine.js'
 
 export { MorphEngine } from './morph-engine.js'
 export type { MorphEntry, MorphSlot, BoneMorphName, MorphAlias, BoneCallback } from './morph-engine.js'

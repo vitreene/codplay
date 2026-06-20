@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createAvatar3D, createAvatar3DStraps } from '@codplay/avatar3d'
+import { createAvatar3D } from '@codplay/avatar3d'
 import { createAvatarPocScene } from '../scenes/avatar-poc-scene'
 import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 
@@ -13,8 +13,6 @@ export function runAvatarPoc1Demo(): Promise<void> {
       'Avatar 3D piloté exclusivement par CodPlay — visèmes, geste, gaze, idle strap, tick Three.js via renderAdapter.',
     scene: createAvatarPocScene(),
     activeDemo: 'avatar-poc-1',
-    // Idle loops (blink, breathing, head micro-movement) — inline, seek-safe.
-    strapCollection: createAvatar3DStraps(),
     async setup() {
       // preserveDrawingBuffer: true ensures the rendered frame stays visible between
       // RAF ticks — without it the canvas shows blank between player.init() and play().

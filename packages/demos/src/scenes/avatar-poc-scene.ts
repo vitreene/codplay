@@ -32,10 +32,6 @@ export function createAvatarPocScene(): SceneDoc {
       'avatar-story': {
         id: 'avatar-story',
         entries: ['avatar-stage', 'audio', 'avatar', 'caption'],
-        // Route avatar:idle to the inline idle strap from @codplay/avatar3d
-        listen: [
-          { on: 'avatar:idle', straps: ['avatar:idle'] },
-        ],
         persos: [
           {
             id: 'avatar-stage',
@@ -90,10 +86,10 @@ export function createAvatarPocScene(): SceneDoc {
               'avatar:gaze': {},
               // Mood — data.mood: MoodName
               'avatar:mood': {},
-              // Idle — semantic events from avatar3d-straps
-              'avatar:blink': {},
-              'avatar:head-drift': {},
-              'avatar:breathe': {},
+              // Idle — each event registers a per-frame fn in the component's action handler.
+              'avatar:blink':     { blink:     true },
+              'avatar:head-drift': { headDrift: true },
+              'avatar:breathe':   { breathe:   true },
             },
           },
           {
@@ -127,9 +123,11 @@ export function createAvatarPocScene(): SceneDoc {
         eventimes: [
           { name: 'scene:start', startAt: 0 },
           { name: 'audio:start', startAt: 0 },
-          // Start idle loops — routed to the idle strap via story.listen above
-          { name: 'avatar:idle', startAt: 0 },
-          // Enable gaze immediately — seek-safe (materialized in track)
+          // Idle animations — seek-safe: direct eventimes replayed on any seek.
+          { name: 'avatar:blink',      startAt: 0 },
+          { name: 'avatar:breathe',    startAt: 0 },
+          { name: 'avatar:head-drift', startAt: 0 },
+          // Gaze always on — seek-safe
           { name: 'avatar:gaze', startAt: 0, data: { enabled: true } },
           // Gesture sequence — seeds from eventSeq → deterministic at seek
           { name: 'avatar:gesture', startAt: 8000,  data: { gesture: 'shrug' } },

@@ -33,6 +33,24 @@ export type AvatarEngineOptions = {
   mood?: MoodName
 }
 
+/**
+ * Per-frame head drift function. Receives cumulative elapsed ms since activation.
+ * Returns bone rotation values to apply instantly (snapFixed).
+ */
+export type HeadDriftFn = (args: { elapsed: number }) => { headRotateX?: number; headRotateY?: number } | null | void
+
+/**
+ * Per-frame blink scheduler. Handles epoch detection + close/hold/open curve.
+ * Returns the current eyesClosed value (0–1) or null when no blink is active.
+ */
+export type BlinkScheduleFn = (args: { elapsed: number }) => { eyesClosed: number } | null | void
+
+/**
+ * Per-frame breath scheduler. Handles epoch detection.
+ * Returns { triggerBreath: true } once per epoch to fire the BreathAnimator.
+ */
+export type BreathTriggerFn = (args: { elapsed: number }) => { triggerBreath: true } | null | void
+
 export type AvatarEngine = {
   /**
    * Load a GLB model.
@@ -111,8 +129,28 @@ export type AvatarEngine = {
   triggerBreath(): void
 
   /**
-   * Enable or disable the continuous sinusoidal head drift (TH idle micro-movement).
-   * When enabled, runs every animate() tick with incommensurate sine waves per axis.
+   * Register a per-frame head drift function. Called every animate() tick with
+   * cumulative elapsed time. The returned headRotateX/Y are applied via snapFixed.
+   * Pass null to stop. Cleared automatically by prepareSeek().
+   */
+  setHeadDriftFn(fn: HeadDriftFn | null): void
+
+  /**
+   * Register a per-frame blink scheduler. Called every animate() tick.
+   * The returned eyesClosed value is applied via snapFixed on each frame.
+   * Pass null to stop. Cleared automatically by prepareSeek().
+   */
+  setBlinkScheduleFn(fn: BlinkScheduleFn | null): void
+
+  /**
+   * Register a per-frame breath scheduler. Called every animate() tick.
+   * When it returns { triggerBreath: true }, the BreathAnimator is triggered.
+   * Pass null to stop. Cleared automatically by prepareSeek().
+   */
+  setBreathTriggerFn(fn: BreathTriggerFn | null): void
+
+  /**
+   * Enable or disable the built-in sinusoidal head drift (legacy — prefer setHeadDriftFn).
    * Disabled automatically by prepareSeek().
    */
   setHeadDriftEnabled(enabled: boolean): void
@@ -262,6 +300,12 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
   const breathAnimator    = new BreathAnimator(morphEngine)
   const headDriftAnimator = new HeadDriftAnimator(morphEngine)
   let gestureEngine: GestureEngine | null = null
+  let _headDriftFn: HeadDriftFn | null = null
+  let _headDriftElapsed = 0
+  let _blinkScheduleFn: BlinkScheduleFn | null = null
+  let _blinkElapsed = 0
+  let _breathTriggerFn: BreathTriggerFn | null = null
+  let _breathElapsed = 0
 
   if (opts.mood) {
     expressionEngine.setMood(opts.mood)
@@ -279,16 +323,44 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
     },
 
     animate(deltaMs) {
-      // headDriftAnimator first: snapFixed writes bone rotation instantly (needsUpdate=false).
-      // GestureEngine never owns Head.rotation.x/y (no template defines them), so no conflict.
-      headDriftAnimator.update(deltaMs)
-      blinkAnimator.update(deltaMs)
+      // fn-based drift takes priority over the legacy HeadDriftAnimator.
+      if (_headDriftFn) {
+        _headDriftElapsed += deltaMs
+        const r = _headDriftFn({ elapsed: _headDriftElapsed })
+        if (r) {
+          if (r.headRotateX !== undefined) morphEngine.snapFixed('headRotateX', r.headRotateX)
+          if (r.headRotateY !== undefined) morphEngine.snapFixed('headRotateY', r.headRotateY)
+        }
+      } else {
+        headDriftAnimator.update(deltaMs)
+      }
+
+      if (_blinkScheduleFn) {
+        _blinkElapsed += deltaMs
+        const r = _blinkScheduleFn({ elapsed: _blinkElapsed })
+        if (r != null) morphEngine.snapFixed('eyesClosed', r.eyesClosed)
+      } else {
+        blinkAnimator.update(deltaMs)
+      }
+
+      if (_breathTriggerFn) {
+        _breathElapsed += deltaMs
+        const r = _breathTriggerFn({ elapsed: _breathElapsed })
+        if (r?.triggerBreath) breathAnimator.trigger()
+      }
       breathAnimator.update(deltaMs)
+
       gestureEngine?.update(deltaMs)
       morphEngine.update(deltaMs)
     },
 
     prepareSeek() {
+      _headDriftFn = null
+      _headDriftElapsed = 0
+      _blinkScheduleFn = null
+      _blinkElapsed = 0
+      _breathTriggerFn = null
+      _breathElapsed = 0
       headDriftAnimator.reset()
       blinkAnimator.reset()
       breathAnimator.reset()
@@ -342,6 +414,26 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
 
     triggerBreath() {
       breathAnimator.trigger()
+    },
+
+    setHeadDriftFn(fn) {
+      _headDriftFn = fn
+      _headDriftElapsed = 0
+      if (!fn) {
+        morphEngine.snapFixed('headRotateX', 0)
+        morphEngine.snapFixed('headRotateY', 0)
+      }
+    },
+
+    setBlinkScheduleFn(fn) {
+      _blinkScheduleFn = fn
+      _blinkElapsed = 0
+      if (!fn) morphEngine.snapFixed('eyesClosed', 0)
+    },
+
+    setBreathTriggerFn(fn) {
+      _breathTriggerFn = fn
+      _breathElapsed = 0
     },
 
     setHeadDriftEnabled(enabled) {
