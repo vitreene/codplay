@@ -1,11 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.json",
+  "extends": "../../../../tsconfig.base.json",
   "compilerOptions": {
     "types": [],
     "paths": {
-      "three": ["../../../../timeline/node_modules/@types/three"],
-      "three/addons/*": ["../../../../timeline/node_modules/@types/three/examples/jsm/*"],
-      "three/*": ["../../../../timeline/node_modules/@types/three/*"]
+      "three": ["../../../../../timeline/node_modules/@types/three"],
+      "three/addons/*": ["../../../../../timeline/node_modules/@types/three/examples/jsm/*"],
+      "three/*": ["../../../../../timeline/node_modules/@types/three/*"]
     }
   },
   "include": ["src"]

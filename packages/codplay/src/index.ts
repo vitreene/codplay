@@ -1,6 +1,6 @@
 export { CodPlay } from './creator'
 export type { CodPlayApi } from './creator'
-export type { TelcoApi, TelcoConfig, TelcoCommandResult, TelcoStateListener } from './telco/types'
+export type { TelcoApi, TelcoCommandResult, TelcoStateListener } from './telco/types'
 export type { RenderAdapter, RenderTickInfo, RenderSeekInfo } from './player/render-adapter-types'
 export { ComponentServiceBase } from './runtime/components/lib/component-service-base'
 export { lerp } from './tween/lerp'

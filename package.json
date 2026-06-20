@@ -14,7 +14,8 @@
     "packages/codplay",
     "packages/demos",
     "packages/editor",
-    "packages/authoring/*"
+    "packages/authoring/*",
+    "packages/authoring/components/*"
   ],
   "scripts": {
     "dev:demos": "npm run dev --workspace=packages/demos",

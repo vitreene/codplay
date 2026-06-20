@@ -1,28 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { CodPlay } from '../../src'
+import { SceneDocEditor } from '../../../authoring/scene-factory/src/scene-doc-editor'
+import { BuilderFacade } from '../../src/builder/create-builder'
+import { Player } from '../../src/player'
 
-/**
- * Creates one minimal strict perso fixture for end-to-end flow checks.
- */
 function createPersoFixture() {
   return {
     id: 'title',
     name: 'title',
     type: 'tag',
-    initial: {
-      content: 'hello'
-    },
+    initial: { content: 'hello' },
     actions: {}
   }
 }
 
-/**
- * Creates one minimal story fixture for end-to-end flow checks.
- */
 function createStoryFixture() {
   const perso = createPersoFixture()
-
   return {
     id: 'story-main',
     name: 'main',
@@ -37,34 +30,30 @@ function createStoryFixture() {
 
 describe('V1 - CodPlay flow', () => {
   it('authoring scene exports, compiles, and initializes the player', async () => {
-    const studio = new CodPlay()
+    const editor = new SceneDocEditor()
 
-    expect(studio.create({ id: 'scene-main' })).toEqual({ ok: true, data: undefined })
-    expect(studio.scene.rootStories.set({ value: ['story-main'] })).toEqual({ ok: true, data: undefined })
-    expect(studio.upsertStory({ story: createStoryFixture() })).toEqual({ ok: true, data: undefined })
+    expect(editor.create({ id: 'scene-main' })).toEqual({ ok: true, data: undefined })
+    expect(editor.scene.rootStories.set({ value: ['story-main'] })).toEqual({ ok: true, data: undefined })
+    expect(editor.upsertStory({ story: createStoryFixture() })).toEqual({ ok: true, data: undefined })
 
-    const exportResult = studio.exportSceneDoc()
+    const exportResult = editor.exportSceneDoc()
     expect(exportResult.ok).toBe(true)
+    if (!exportResult.ok) return
 
-    if (!exportResult.ok) {
-      return
-    }
-
-    const compileResult = studio.builder.compile({ scene: exportResult.data })
+    const builder = new BuilderFacade()
+    const compileResult = builder.compile({ scene: exportResult.data })
     expect(compileResult.ok).toBe(true)
+    if (!compileResult.ok) return
 
-    if (!compileResult.ok) {
-      return
-    }
-
-    const initResult = await studio.player.init({
+    const player = new Player()
+    const initResult = await player.init({
       mountTarget: {},
       compiledScene: compileResult.data.compiledScene,
       resourceManifest: compileResult.data.resourceManifest
     })
 
     expect(initResult).toEqual({ ok: true })
-    expect(studio.player.getState()).toMatchObject({
+    expect(player.getState()).toMatchObject({
       initialized: true,
       status: 'ready',
       sceneId: 'scene-main'

@@ -49,6 +49,7 @@ export type PlayerInitInput = {
   strapCollection?: StrapCollection
   mode?: 'author' | 'broadcast'
   preloadPolicy?: PreloadPolicy
+  enableInteractionLock?: boolean
 }
 
 export type PlayerScheduleApi = RuntimeScheduleHelpers
@@ -60,6 +61,7 @@ export type PlayerApi = {
   resume: () => Promise<ApiResult<void>>
   stop: () => Promise<ApiResult<void>>
   destroy: () => Promise<ApiResult<void>>
+  rewind: () => Promise<ApiResult<void>>
   seek: (input: { timelineMs: number }) => Promise<ApiResult<void>>
   emit: (input: StoryEvent) => Promise<ApiResult<void>>
   getState: () => PlayerStateSnapshot
@@ -88,6 +90,8 @@ export class Player implements PlayerApi {
   private playerMode: 'author' | 'broadcast' = 'broadcast'
   private preloadPolicy: PreloadPolicy = {}
   private activeManifest: ResourceManifest | null = null
+  private lastInitInput: PlayerInitInput | null = null
+  private interactionLockEnabled = false
   private mountTarget: Element | null = null
   private rootNodeIds: string[] = []
   private mountedRuntimeRevision = -1
@@ -116,6 +120,18 @@ export class Player implements PlayerApi {
       .map(id => registry.getNodeById(id))
       .filter(Player.isNode)
     this.mountTarget.replaceChildren(...nodes)
+  }
+
+  private syncMountTargetInteractionLock(status: string): void {
+    const target = this.mountTarget
+    if (target === null || !this.interactionLockEnabled) return
+    const locked = status !== 'playing'
+    ;(target as HTMLElement).style.pointerEvents = locked ? 'none' : ''
+    if (locked) {
+      target.setAttribute('inert', '')
+    } else {
+      target.removeAttribute('inert')
+    }
   }
 
   /**
@@ -172,6 +188,8 @@ export class Player implements PlayerApi {
    * Initializes one compiled scene through the internal player facade.
    */
   async init(input: PlayerInitInput): Promise<ApiResult<void>> {
+    this.lastInitInput = input
+    this.interactionLockEnabled = input.enableInteractionLock === true
     this.mountTarget = Player.isElement(input.mountTarget) ? input.mountTarget : null
     this.rootNodeIds = input.compiledScene.rootNodeIds
 
@@ -201,13 +219,16 @@ export class Player implements PlayerApi {
     if (readyResult.ok) {
       this.captureInitialAuthorState()
       this.mountRootNodes()
-      this.mountedRuntimeRevision = this.player.getState().runtimeRevision
+      const initialState = this.player.getState()
+      this.mountedRuntimeRevision = initialState.runtimeRevision
+      this.syncMountTargetInteractionLock(initialState.status)
       this.unsubscribeMountSync?.()
       this.unsubscribeMountSync = this.player.onStateChange((state) => {
         if (state.runtimeRevision !== this.mountedRuntimeRevision) {
           this.mountedRuntimeRevision = state.runtimeRevision
           this.mountRootNodes()
         }
+        this.syncMountTargetInteractionLock(state.status)
       })
     }
 
@@ -278,6 +299,7 @@ export class Player implements PlayerApi {
       this.destroyStrapLoopSchedulers()
       this.currentScene = null
       this.strapCollection = {}
+      this.lastInitInput = null
       this.unsubscribeMountSync?.()
       this.unsubscribeMountSync = null
       this.mountTarget?.replaceChildren()
@@ -285,6 +307,19 @@ export class Player implements PlayerApi {
       this.rootNodeIds = []
       this.mountedRuntimeRevision = -1
     })
+  }
+
+  /**
+   * Destroys and reinitializes the player from the last init input.
+   */
+  async rewind(): Promise<ApiResult<void>> {
+    const input = this.lastInitInput
+    if (input === null) {
+      return { ok: false, error: { code: 'PLAYER_NOT_INITIALIZED', message: 'rewind requires a prior init call' } }
+    }
+    const destroyResult = await this.destroy()
+    if (!destroyResult.ok) return destroyResult
+    return this.init(input)
   }
 
   /**

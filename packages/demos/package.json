@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@codplay/capsule-automation": "*",
-    "@codplay/demo-remote": "*",
+    "@codplay/remote": "*",
     "codplay": "*"
   },
   "devDependencies": {

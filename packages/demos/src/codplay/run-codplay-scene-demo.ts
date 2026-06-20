@@ -1,8 +1,7 @@
 import "../shared/demo-shell.css";
 
-import type { ResourceManifest, SceneDef } from "codplay/builder/types";
 import { CodPlay } from "codplay/creator";
-import { createDemoRemote } from "@codplay/demo-remote";
+import { createDemoRemote } from "@codplay/remote";
 import { createTraceLogPanel } from "../shared/trace-log-panel";
 import { resolveSceneSeekMaxMs } from "../shared/resolve-scene-seek-max-ms";
 import { buildDemoLinksMarkup } from "../shared/demo-registry";
@@ -11,36 +10,28 @@ import type { Player } from "codplay/player/player";
 import type { TelcoApi } from "codplay/telco/types";
 
 type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
-  onReady?: (context: { player: Player; telco: TelcoApi }) => void
-  /** Async hook for demos that need async initialization (e.g. Three.js + TalkingHead).
-   *  Runs once before CodPlay is constructed. Returns components and/or renderFrame
-   *  to inject into the player. Overrides any same-key values from the top-level config. */
-  setup?: () => Promise<Pick<PlayerSceneDemoConfig, 'components' | 'renderAdapters'>>
+  /** Appelé une fois après studio.load(), donc après init. Permet d'attacher des écouteurs
+   *  (onTrace, onChange…) avant le premier appel à play(). */
+  onReady?: (context: { player: Player; telco: TelcoApi }) => void;
+  /** Hook async pour les démos nécessitant une initialisation préalable (ex. Three.js, TalkingHead).
+   *  Exécuté une seule fois avant la construction de CodPlay. Les clés retournées écrasent
+   *  les valeurs éventuellement présentes dans la config principale. */
+  setup?: () => Promise<Pick<PlayerSceneDemoConfig, "components" | "renderAdapters">>;
 };
 
-function syncInteractionLock(containerNode: HTMLDivElement, status: string): void {
-  const locked = status !== "playing";
-  containerNode.style.pointerEvents = locked ? "none" : "auto";
-  if (locked) {
-    containerNode.setAttribute("inert", "");
-    return;
-  }
-
-  containerNode.removeAttribute("inert");
-}
-
 /**
- * Renders one shared CodPlay demo layout for one scene-based scenario.
+ * Monte le gabarit HTML d'une démo CodPlay et initialise la scène.
  */
 export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promise<void> {
+  // --- Page ---
+  // Injection du markup et résolution des nœuds DOM cibles.
+
   const appNode = globalThis.document.querySelector<HTMLDivElement>("#app");
   if (appNode === null) {
     throw new Error("Expected #app root element");
   }
 
-  const seekMaxMsFromScene = resolveSceneSeekMaxMs(config.scene);
   const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo);
-
   appNode.innerHTML = `
     <main class="demo-shell">
       <aside>
@@ -55,24 +46,25 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     </main>
   `;
 
-  const containerNode = globalThis.document.querySelector<HTMLDivElement>("#demo-container");
-  if (containerNode === null) {
-    throw new Error("Expected #demo-container element");
-  }
-  const demoContainerNode = containerNode;
+  const demoContainerNode = globalThis.document.querySelector<HTMLDivElement>("#demo-container");
+  if (demoContainerNode === null) throw new Error("Expected #demo-container element");
   demoContainerNode.style.position = "relative";
 
   const remoteSlotNode = globalThis.document.querySelector<HTMLDivElement>("#demo-remote-slot");
-  if (remoteSlotNode === null) {
-    throw new Error("Expected #demo-remote-slot element");
-  }
+  if (remoteSlotNode === null) throw new Error("Expected #demo-remote-slot element");
 
   const playerTraceNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
-  if (playerTraceNode === null) {
-    throw new Error("Expected #player-trace element");
-  }
+  if (playerTraceNode === null) throw new Error("Expected #player-trace element");
 
-  const setupResult = config.setup ? await config.setup() : {}
+  // fin page
+
+  const setupResult = config.setup ? await config.setup() : {};
+
+  // --- Studio ---
+  // Instanciation de CodPlay : regroupe le player, le builder et le telco.
+  // Le hook setup() permet aux démos complexes (ex. Three.js, TalkingHead) d'injecter
+  // des composants ou des adaptateurs de rendu avant la construction.
+
   const studio = new CodPlay({
     renderAdapters: [...(config.renderAdapters ?? []), ...(setupResult.renderAdapters ?? [])],
     components: { ...config.components, ...setupResult.components },
@@ -90,22 +82,21 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     },
   });
 
+  // --- Contrôles ---
+  // Panneau de trace et télécommande (transport, seek, actions scène).
+
   const traceLogPanel = createTraceLogPanel(playerTraceNode, { compact: config.compactTrace ?? false });
-  const compileResult = studio.builder.compile({ scene: config.scene as unknown as SceneDef });
-  if (!compileResult.ok) {
-    throw new Error(`[demo] compile failed: ${compileResult.error.code}`);
-  }
-  const compiledScene = compileResult.data.compiledScene;
-  const resourceManifest: ResourceManifest = config.extraResources?.length
-    ? { entries: [...compileResult.data.resourceManifest.entries, ...config.extraResources] }
-    : compileResult.data.resourceManifest;
+  studio.player.onTrace((row) => {
+    traceLogPanel.push(row);
+  });
 
   const remote = createDemoRemote({
     telco: studio.telco,
-    seekMaxMsFromScene,
+    seekMaxMsFromScene: resolveSceneSeekMaxMs(config.scene),
     actions: config.actions,
-    emit: (config.actions?.length ?? 0) > 0
-      ? async (event) => {
+    emit:
+      (config.actions?.length ?? 0) > 0 ?
+        async (event) => {
           await studio.player.emit({
             name: event.name,
             payload: event.payload,
@@ -117,47 +108,26 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   });
   remoteSlotNode.appendChild(remote.element);
 
-  async function resetDemoRuntime(): Promise<void> {
-    const destroyResult = await studio.player.destroy();
-    if (!destroyResult.ok) {
-      throw new Error(`[demo] destroy failed: ${destroyResult.error.code}`);
-    }
+  // --- Scène ---
+  // studio.load() est l'étape indispensable : elle compile le SceneDoc en CompiledScene
+  // et initialise le runtime en montant les nœuds dans le conteneur.
+  // Un échec est toujours une erreur de configuration : on lève immédiatement.
 
-    const replayInitResult = await studio.player.init({
-      mountTarget: demoContainerNode,
-      compiledScene,
-      resourceManifest,
-      strapCollection: config.strapCollection,
-    });
-    if (!replayInitResult.ok) {
-      throw new Error(`[demo] init failed: ${replayInitResult.error.code}`);
-    }
+  // enableInteractionLock bloque les interactions utilisateur quand le player n'est pas en lecture ;
+  // activé systématiquement en démo pour éviter toute interaction parasite pendant stop/seek.
 
-    syncInteractionLock(demoContainerNode, studio.player.getState().status);
+  const loadResult = await studio.load({
+    scene: config.scene,
+    mountTarget: demoContainerNode,
+    strapCollection: config.strapCollection,
+    extraResources: config.extraResources,
+    enableInteractionLock: true,
+  });
+  if (!loadResult.ok) {
+    throw new Error(`[demo] load failed: ${loadResult.error.code}`);
   }
-
-  studio.telco.configure({ onRewind: resetDemoRuntime });
-
-  studio.player.onChange((state) => {
-    syncInteractionLock(demoContainerNode, state.status);
-  });
-
-  studio.player.onTrace((row) => {
-    traceLogPanel.push(row);
-  });
 
   config.onReady?.({ player: studio.player, telco: studio.telco });
-
-  const initResult = await studio.player.init({
-    mountTarget: demoContainerNode,
-    compiledScene,
-    resourceManifest,
-    strapCollection: config.strapCollection,
-  });
-  if (!initResult.ok) {
-    throw new Error(`[demo] init failed: ${initResult.error.code}`);
-  }
-
-  syncInteractionLock(demoContainerNode, studio.player.getState().status);
+  // Synchronise l'état initial de la télécommande avec celui du player après init.
   remote.sync();
 }

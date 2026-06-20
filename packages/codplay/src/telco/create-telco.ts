@@ -1,5 +1,5 @@
 import type { PlayerApi } from '../player'
-import type { TelcoApi, TelcoCommandResult, TelcoConfig, TelcoStateListener } from './types'
+import type { TelcoApi, TelcoCommandResult, TelcoStateListener } from './types'
 import type { ApiResult } from '../builder/types'
 
 export type TickSubscriber = (callback: () => void) => () => void
@@ -14,7 +14,6 @@ export type CreateTelcoOptions = {
  */
 export function createTelco(player: PlayerApi, options?: CreateTelcoOptions): TelcoApi {
   const subscribeOnTick = options?.subscribeOnTick
-  let config: TelcoConfig = {}
   let _commandInFlight = false
   const changeListeners = new Set<TelcoStateListener>()
   const progressListeners = new Set<TelcoStateListener>()
@@ -69,10 +68,6 @@ export function createTelco(player: PlayerApi, options?: CreateTelcoOptions): Te
   }
 
   const api: TelcoApi = {
-    configure(c: TelcoConfig): void {
-      config = c
-    },
-
     getState() {
       return player.getState()
     },
@@ -110,14 +105,7 @@ export function createTelco(player: PlayerApi, options?: CreateTelcoOptions): Te
     },
 
     rewind() {
-      if (config.onRewind !== undefined) {
-        const onRewind = config.onRewind
-        return runCommand(async () => {
-          await onRewind()
-          return { ok: true as const, data: undefined as void }
-        })
-      }
-      return runCommand(() => player.seek({ timelineMs: 0 }))
+      return runCommand(() => player.rewind())
     },
 
     onChange(listener: TelcoStateListener): () => void {

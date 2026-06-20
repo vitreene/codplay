@@ -1,10 +1,10 @@
 {
-  "extends": "../../../tsconfig.base.json",
+  "extends": "../../../../tsconfig.base.json",
   "compilerOptions": {
     "types": [],
     "paths": {
-      "codplay": ["../../codplay/src/index.ts"],
-      "codplay/*": ["../../codplay/src/*"],
+      "codplay": ["../../../codplay/src/index.ts"],
+      "codplay/*": ["../../../codplay/src/*"],
       "@codplay/avatar-engine": ["../avatar-engine/src/index.ts"],
       "@codplay/avatar-engine/*": ["../avatar-engine/src/*"]
     }
