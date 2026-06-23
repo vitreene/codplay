@@ -76,7 +76,12 @@ export type SceneDef = {
 
 export type ResourceManifestEntry = {
   url: string
-  type: 'video' | 'audio' | 'image' | 'font' | 'css'
+  /**
+   * Built-in types are handled natively by the preload module. Any other
+   * string is dispatched to a strategy registered via
+   * PreloadApi.registerStrategy — see ThirdPartyBinding.preload.
+   */
+  type: 'video' | 'audio' | 'image' | 'font' | 'css' | (string & {})
   policy: {
     cache: 'default' | 'no-store' | 'immutable'
     version?: string

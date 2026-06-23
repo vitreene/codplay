@@ -5,7 +5,7 @@
  *   - Load a GLB model and register its morph targets
  *   - Advance morph easing on each frame (animate)
  *   - Snap morphs for seek (prepareSeek / commitSeek)
- *   - Expose setViseme, setExpression, setMood, playGesture
+ *   - Expose setMood, playGesture, and per-frame fn registration
  *
  * The Three.js scene, camera, renderer and lights are managed by the caller.
  * The loaded model's scene group should be added to the caller's scene.
@@ -17,16 +17,9 @@ import { ExpressionEngine } from './expression-engine.js'
 import type { MoodName } from './expression-engine.js'
 import { GestureEngine } from './gesture-engine.js'
 import type { Rng, ResolvedPose } from './gesture-engine.js'
-import { loadModel } from './model-loader.js'
+import { buildModelInstance } from './model-loader.js'
 import type { ModelLoaderOptions } from './model-loader.js'
-import { BlinkAnimator } from './blink-animator.js'
 import { BreathAnimator } from './breath-animator.js'
-import { HeadDriftAnimator } from './head-drift-animator.js'
-
-const VISEME_NAMES = [
-  'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR',
-  'aa', 'E', 'I', 'O', 'U',
-]
 
 export type AvatarEngineOptions = {
   /** Initial mood. Defaults to "neutral". */
@@ -34,30 +27,42 @@ export type AvatarEngineOptions = {
 }
 
 /**
- * Per-frame head drift function. Receives cumulative elapsed ms since activation.
+ * Per-frame head drift function. `elapsed` is the absolute scene-timeline ms
+ * since the avatar's idle loop started (ms=0), not time since (re)registration —
+ * implementations must be resync-safe: callable with any elapsed value, including
+ * a direct jump on seek, and produce the value that position actually corresponds to.
  * Returns bone rotation values to apply instantly (snapFixed).
  */
 export type HeadDriftFn = (args: { elapsed: number }) => { headRotateX?: number; headRotateY?: number } | null | void
 
 /**
  * Per-frame blink scheduler. Handles epoch detection + close/hold/open curve.
- * Returns the current eyesClosed value (0–1) or null when no blink is active.
+ * `elapsed` is the absolute scene-timeline ms since the avatar's idle loop
+ * started — same resync-safety requirement as HeadDriftFn (see above).
+ * Returns the current eyesClosed value (0–1); may return null to mean
+ * "leave the morph untouched" but is not required to.
  */
 export type BlinkScheduleFn = (args: { elapsed: number }) => { eyesClosed: number } | null | void
 
 /**
- * Per-frame breath scheduler. Handles epoch detection.
+ * Per-frame breath scheduler. Handles epoch detection. Unlike HeadDriftFn/
+ * BlinkScheduleFn, this is not resynced on seek (it fires a one-shot animation,
+ * not a value to reconstruct) — only its internal elapsed counter is realigned
+ * to the seek target by the engine, without calling the function.
  * Returns { triggerBreath: true } once per epoch to fire the BreathAnimator.
  */
 export type BreathTriggerFn = (args: { elapsed: number }) => { triggerBreath: true } | null | void
 
 export type AvatarEngine = {
   /**
-   * Load a GLB model.
+   * Build one instance from an already-preloaded (fetched+parsed) GLB scene —
+   * see model-preload.ts. Clones the cached scene (bones/morphs must be
+   * independent per instance), traverses it, and registers morph targets.
+   * Synchronous: the network fetch already happened during preload.
    * Returns the root Three.js group and the full bone map.
    * Add scene to your Three.js scene; use boneMap to access named bones (e.g. LeftEye/RightEye).
    */
-  loadModel(url: string, opts?: ModelLoaderOptions): Promise<{ scene: Group; boneMap: Map<string, Object3D> }>
+  loadModel(cachedScene: Group, opts?: ModelLoaderOptions): { scene: Group; boneMap: Map<string, Object3D> }
 
   /**
    * Advance morph and gesture easing. Call every frame with the frame delta in ms.
@@ -76,23 +81,15 @@ export type AvatarEngine = {
   /**
    * Snap morphs and gesture bones to their post-replay state.
    * Called after seek track replay completes.
+   *
+   * `timelineMs` is the absolute seek target — head-drift and blink are
+   * pure (or resync-safe) functions of elapsed time since scene start, so
+   * they are re-evaluated at exactly this position instead of staying at
+   * the prepareSeek() reset value. Without this, blink/head-drift would
+   * visibly freeze at their rest pose immediately after every seek instead
+   * of showing the state that position actually corresponds to.
    */
-  commitSeek(): void
-
-  /**
-   * Set a viseme morph weight.
-   * Accepts short names ("PP", "FF") or full ARKit names ("viseme_PP").
-   */
-  setViseme(name: string, weight: number | null): void
-
-  /** Release all viseme overrides (set all to null — baseline takes over). */
-  releaseVisemes(): void
-
-  /**
-   * Set an expression morph directly by ARKit name.
-   * Accepts aliases: "mouthSmile", "eyesClosed", "eyesLookUp", "eyesLookDown".
-   */
-  setExpression(name: string, value: number | null): void
+  commitSeek(timelineMs: number): void
 
   /** Transition to a mood, updating morph baselines. */
   setMood(name: MoodName): void
@@ -106,27 +103,10 @@ export type AvatarEngine = {
   playGesture(name: string, rng: Rng): ResolvedPose | null
 
   /**
-   * Replay a previously resolved gesture pose instantly (no PRNG needed).
-   * Used during seek to restore gesture state.
-   */
-  replayGesture(pose: ResolvedPose): void
-
-  /**
    * Start an eased return of all gesture bones to rest.
    * Call in response to a `avatar:gesture { gesture: null }` event during playback.
    */
   releaseGesture(): void
-
-  /**
-   * Snap all gesture bones to rest instantly (stop/rewind path).
-   */
-  resetGesture(): void
-
-  /** Trigger a single blink animation. Ignored if a blink is already in progress. */
-  triggerBlink(): void
-
-  /** Trigger a single breath swell animation. Ignored if one is already in progress. */
-  triggerBreath(): void
 
   /**
    * Register a per-frame head drift function. Called every animate() tick with
@@ -148,19 +128,6 @@ export type AvatarEngine = {
    * Pass null to stop. Cleared automatically by prepareSeek().
    */
   setBreathTriggerFn(fn: BreathTriggerFn | null): void
-
-  /**
-   * Enable or disable the built-in sinusoidal head drift (legacy — prefer setHeadDriftFn).
-   * Disabled automatically by prepareSeek().
-   */
-  setHeadDriftEnabled(enabled: boolean): void
-
-  /**
-   * Transition head to a semantic pose direction with smooth easing.
-   * @param look - 'left' | 'right' | 'up' | 'down' | 'center'
-   * @param intensity - 0–1 scale factor applied to the pose's canonical rotation values
-   */
-  setHeadPose(look: string, intensity: number): void
 
   /** Direct access to the morph engine (for advanced use). */
   readonly morphEngine: MorphEngine
@@ -282,23 +249,10 @@ function createBoneCallback(boneMap: Map<string, Object3D>): { callback: BoneCal
   return { callback, dispose: () => { /* nothing to release */ } }
 }
 
-// Canonical head rotation values at intensity = 1 (radians).
-// headRotateX: positive = tilt down, negative = tilt up.
-// headRotateY: positive = turn right, negative = turn left.
-const HEAD_POSES: Record<string, { x: number; y: number }> = {
-  left:   { x:  0,    y: -0.14 },
-  right:  { x:  0,    y:  0.14 },
-  up:     { x: -0.10, y:  0    },
-  down:   { x:  0.10, y:  0    },
-  center: { x:  0,    y:  0    },
-}
-
 export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine {
   const morphEngine = new MorphEngine()
   const expressionEngine = new ExpressionEngine(morphEngine)
-  const blinkAnimator     = new BlinkAnimator(morphEngine)
-  const breathAnimator    = new BreathAnimator(morphEngine)
-  const headDriftAnimator = new HeadDriftAnimator(morphEngine)
+  const breathAnimator = new BreathAnimator(morphEngine)
   let gestureEngine: GestureEngine | null = null
   let _headDriftFn: HeadDriftFn | null = null
   let _headDriftElapsed = 0
@@ -312,8 +266,8 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
   }
 
   return {
-    async loadModel(url, loaderOpts) {
-      const result = await loadModel(url, morphEngine, loaderOpts)
+    loadModel(cachedScene, loaderOpts) {
+      const result = buildModelInstance(cachedScene, morphEngine, loaderOpts)
       gestureEngine = new GestureEngine(result.boneMap)
       const { callback } = createBoneCallback(result.boneMap)
       morphEngine.registerBoneMorphs(callback)
@@ -323,7 +277,6 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
     },
 
     animate(deltaMs) {
-      // fn-based drift takes priority over the legacy HeadDriftAnimator.
       if (_headDriftFn) {
         _headDriftElapsed += deltaMs
         const r = _headDriftFn({ elapsed: _headDriftElapsed })
@@ -331,16 +284,12 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
           if (r.headRotateX !== undefined) morphEngine.snapFixed('headRotateX', r.headRotateX)
           if (r.headRotateY !== undefined) morphEngine.snapFixed('headRotateY', r.headRotateY)
         }
-      } else {
-        headDriftAnimator.update(deltaMs)
       }
 
       if (_blinkScheduleFn) {
         _blinkElapsed += deltaMs
         const r = _blinkScheduleFn({ elapsed: _blinkElapsed })
         if (r != null) morphEngine.snapFixed('eyesClosed', r.eyesClosed)
-      } else {
-        blinkAnimator.update(deltaMs)
       }
 
       if (_breathTriggerFn) {
@@ -355,37 +304,43 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
     },
 
     prepareSeek() {
-      _headDriftFn = null
-      _headDriftElapsed = 0
-      _blinkScheduleFn = null
-      _blinkElapsed = 0
-      _breathTriggerFn = null
-      _breathElapsed = 0
-      headDriftAnimator.reset()
-      blinkAnimator.reset()
+      _headDriftFn = null; _headDriftElapsed = 0
+      morphEngine.snapFixed('headRotateX', 0)
+      morphEngine.snapFixed('headRotateY', 0)
+      _blinkScheduleFn = null; _blinkElapsed = 0
+      morphEngine.snapFixed('eyesClosed', 0)
+      _breathTriggerFn = null; _breathElapsed = 0
       breathAnimator.reset()
       gestureEngine?.snapToRest()
       morphEngine.resetToBaselines()
     },
 
-    commitSeek() {
+    commitSeek(timelineMs) {
+      // headDrift is a pure function of elapsed (no internal state) — a direct
+      // jump to timelineMs reconstructs the exact pose for this position.
+      if (_headDriftFn) {
+        _headDriftElapsed = timelineMs
+        const r = _headDriftFn({ elapsed: timelineMs })
+        if (r) {
+          if (r.headRotateX !== undefined) morphEngine.snapFixed('headRotateX', r.headRotateX)
+          if (r.headRotateY !== undefined) morphEngine.snapFixed('headRotateY', r.headRotateY)
+        }
+      }
+      // blink is epoch-based but resync-safe (no in-progress state to misread) —
+      // a direct jump correctly reports whether timelineMs falls inside a blink window.
+      if (_blinkScheduleFn) {
+        _blinkElapsed = timelineMs
+        const r = _blinkScheduleFn({ elapsed: timelineMs })
+        morphEngine.snapFixed('eyesClosed', r ? r.eyesClosed : 0)
+      }
+      // breath is a one-shot trigger, not a value to reconstruct — resync the
+      // elapsed counter only, so the next animate() tick checks the right epoch
+      // without firing a spurious trigger mid-seek.
+      if (_breathTriggerFn) {
+        _breathElapsed = timelineMs
+      }
       gestureEngine?.snapToTargets()
       morphEngine.snapAll()
-    },
-
-    setViseme(name, weight) {
-      const full = name.startsWith('viseme_') ? name : `viseme_${name}`
-      morphEngine.setFixed(full, weight)
-    },
-
-    releaseVisemes() {
-      for (const name of VISEME_NAMES) {
-        morphEngine.setFixed(`viseme_${name}`, null)
-      }
-    },
-
-    setExpression(name, value) {
-      morphEngine.setFixed(name, value)
     },
 
     setMood(name) {
@@ -396,24 +351,8 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
       return gestureEngine?.applyGesture(name, rng) ?? null
     },
 
-    replayGesture(pose) {
-      gestureEngine?.applyPose(pose)
-    },
-
     releaseGesture() {
       gestureEngine?.resetPose()
-    },
-
-    resetGesture() {
-      gestureEngine?.snapToRest()
-    },
-
-    triggerBlink() {
-      blinkAnimator.trigger()
-    },
-
-    triggerBreath() {
-      breathAnimator.trigger()
     },
 
     setHeadDriftFn(fn) {
@@ -434,16 +373,6 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
     setBreathTriggerFn(fn) {
       _breathTriggerFn = fn
       _breathElapsed = 0
-    },
-
-    setHeadDriftEnabled(enabled) {
-      headDriftAnimator.setEnabled(enabled)
-    },
-
-    setHeadPose(look, intensity) {
-      const pose = HEAD_POSES[look] ?? HEAD_POSES['center']!
-      morphEngine.setFixed('headRotateX', pose.x * intensity)
-      morphEngine.setFixed('headRotateY', pose.y * intensity)
     },
 
     get morphEngine() { return morphEngine },

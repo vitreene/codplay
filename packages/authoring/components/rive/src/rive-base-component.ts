@@ -51,6 +51,11 @@ export class RiveBaseComponent extends BaseComponent {
     this._riveCtx!.artboard.advance(sec)
   }
 
+  /** Called by the hub via RenderAdapter.prepareSeek?(), once before the player replays seek events. */
+  _prepareSeek(): void {
+    this._resetServices()
+  }
+
   protected _drawFrame(): void {
     const { runtime, artboard, renderer } = this._riveCtx!
     const canvas = this.node as HTMLCanvasElement

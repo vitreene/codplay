@@ -3,6 +3,7 @@ import type { StrapCollection } from 'codplay/player'
 import type { ResourceManifestEntry } from 'codplay/builder/types'
 import type { RuntimeComponentClass } from 'codplay/runtime/components'
 import type { RenderAdapter } from 'codplay/player/render-adapter-types'
+import type { ThirdPartyBinding } from 'codplay/player/third-party-binding'
 
 /**
  * Defines one optional command button that emits one runtime event.
@@ -29,6 +30,8 @@ export type PlayerSceneDemoConfig = {
 	components?: Record<string, RuntimeComponentClass>;
 	/** External render adapters (Three.js, Lottie, Rive, PixiJS…) coupled to CodPlay's ticker. */
 	renderAdapters?: RenderAdapter[];
+	/** Third-party library registrations (components + renderAdapter + preload bundled). */
+	bindings?: ThirdPartyBinding[];
 	/** Show only time + event name in the trace panel; errors are always shown in full. */
 	compactTrace?: boolean;
 };

@@ -136,7 +136,7 @@ export function createS6DndListScene(): SceneDoc {
           assignments: { 'item-1': 'a', 'item-2': 'a', 'item-3': 'a' },
         },
         initial: undefined,
-        straps: [],
+        straps: s6Straps,
         listen: [
           { on: 'item:drag:tracking', transform: [trackMove] },
           { on: 'item:drag:end', straps: ['drop-resolver'] },

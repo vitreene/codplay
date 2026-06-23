@@ -40,6 +40,14 @@ export type RenderSeekInfo = {
 export interface RenderAdapter {
   /** Called every playback frame. Advance state, then render. */
   tick(info: RenderTickInfo): void
+  /**
+   * Called once before the player replays seek track events — no info, since there
+   * is no target position to apply yet, only internal state to reset to a clean
+   * baseline (schedulers, in-flight easing, internal services). Optional: omit when
+   * the adapter's seek() is already idempotent (e.g. direct currentTime assignment).
+   * See v1-render-adapter-spec.md for the full contract.
+   */
+  prepareSeek?(): void
   /** Called once after seek reconstruction. Snap to position instantly — no easing. */
   seek(info: RenderSeekInfo): void
   /** Called when playback pauses. */

@@ -1,24 +1,37 @@
 import type { ResourceManifestEntry } from '../builder/types'
 import type { ApiResult, ApiWarning } from '../builder/types'
-import type { PreloadApi, PreloadOptions, PreloadResult, PreloadState } from './preload-types'
+import type { PreloadApi, PreloadOptions, PreloadResult, PreloadState, PreloadStrategyFn } from './preload-types'
 import { getEntry, setEntry, releaseEntries } from './preload-cache'
-import { loadAudio, loadCss, loadFont, loadImage, loadVideo } from './preload-strategies'
+import { loadAudio, loadCss, loadFont, loadImage, loadVideo, withTimeout } from './preload-strategies'
 
 const DEFAULT_TIMEOUT_MS = 10000
 
-function loadByType(entry: ResourceManifestEntry, timeoutMs: number, signal: AbortSignal): Promise<void> {
+function builtinLoadByType(entry: ResourceManifestEntry, timeoutMs: number, signal: AbortSignal): Promise<void> | undefined {
   switch (entry.type) {
     case 'image': return loadImage(entry.url, timeoutMs, signal)
     case 'audio': return loadAudio(entry.url, timeoutMs, signal)
     case 'video': return loadVideo(entry.url, timeoutMs, signal)
     case 'font': return loadFont(entry.url, undefined, timeoutMs, signal)
     case 'css': return loadCss(entry.url, timeoutMs, signal)
+    default: return undefined
   }
 }
 
 export function createPreloadModule(): PreloadApi {
   const state: PreloadState = { status: 'idle', loadedCount: 0, totalCount: 0 }
   let currentController: AbortController | null = null
+  const strategies = new Map<string, PreloadStrategyFn>()
+
+  function loadByType(entry: ResourceManifestEntry, timeoutMs: number, signal: AbortSignal): Promise<void> {
+    const builtin = builtinLoadByType(entry, timeoutMs, signal)
+    if (builtin) return builtin
+
+    const strategy = strategies.get(entry.type)
+    if (!strategy) {
+      return Promise.reject(new Error(`No preload strategy registered for resource type "${entry.type}"`))
+    }
+    return withTimeout(strategy(entry.url, signal), timeoutMs)
+  }
 
   async function load({ manifest, options = {} }: {
     manifest: Parameters<PreloadApi['load']>[0]['manifest']
@@ -137,6 +150,9 @@ export function createPreloadModule(): PreloadApi {
     },
     release(urls: string[]) {
       releaseEntries(urls)
+    },
+    registerStrategy(type: string, strategyLoad: PreloadStrategyFn) {
+      strategies.set(type, strategyLoad)
     }
   }
 }

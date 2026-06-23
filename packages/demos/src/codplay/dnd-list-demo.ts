@@ -1,4 +1,4 @@
-import { createS6DndListScene, s6Straps } from '../scenes'
+import { createS6DndListScene } from '../scenes'
 import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
 
 /**
@@ -9,7 +9,6 @@ export async function runDndListDemo(): Promise<void> {
     title: 'Drag & Drop listes',
     subtitle: 'Déplacer les items entre les listes A et B. Les compteurs se mettent à jour à chaque drop.',
     scene: createS6DndListScene(),
-    strapCollection: s6Straps,
     activeDemo: 'dnd-list',
   })
 }

@@ -24,6 +24,8 @@ export type PreloadCacheEntry = {
   error?: string
 }
 
+export type PreloadStrategyFn = (url: string, signal: AbortSignal) => Promise<void>
+
 export type PreloadApi = {
   load: (input: {
     manifest: ResourceManifest
@@ -32,4 +34,6 @@ export type PreloadApi = {
   readonly state: PreloadState
   cancel: () => void
   release: (urls: string[]) => void
+  /** Registers a load strategy for a non-built-in ResourceManifestEntry.type — see ThirdPartyBinding.preload. */
+  registerStrategy: (type: string, load: PreloadStrategyFn) => void
 }

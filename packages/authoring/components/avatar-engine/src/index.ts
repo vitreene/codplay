@@ -13,8 +13,11 @@ export { GestureEngine } from './gesture-engine.js'
 export type { Rng, ResolvedPose, GestureTemplate } from './gesture-engine.js'
 export { GESTURE_TEMPLATES } from './gesture-engine.js'
 
-export { loadModel } from './model-loader.js'
+export { buildModelInstance } from './model-loader.js'
 export type { LoadedModel, ModelLoaderOptions, RetargetConfig } from './model-loader.js'
+
+export { preloadAvatar3DModel, getModelEntry } from './model-preload.js'
+export type { ModelPreloadEntry } from './model-preload.js'
 
 export { retarget } from './retargeter.js'
 

@@ -63,29 +63,10 @@ Un helper `live.wait(500, ...)` se declenche apres 500 ms de timeline, soit `500
 
 ### 3. Renderers externes (`RenderAdapter`)
 
-Chaque renderer externe couple a CodPlay (anime.js, avatar3d/Three.js, avatar-rive, et tout futur adapter Lottie/PixiJS) est un `RenderAdapter` orchestre par `RenderSync`. Le contrat canonique est expose publiquement par le package `codplay` :
+Chaque renderer externe couple a CodPlay (anime.js, avatar3d/Three.js, avatar-rive, et tout futur adapter Lottie/PixiJS) est un `RenderAdapter` orchestre par `RenderSync`. Le contrat canonique complet (incluant `prepareSeek?()`, le hook appele avant le replay des events de seek) est documente dans `v1-render-adapter-spec.md` — cette section se limite aux regles propres au rate (`tick`, `rateChange`).
 
 ```ts
 import type { RenderAdapter, RenderTickInfo, RenderSeekInfo } from 'codplay'
-```
-
-```ts
-export type RenderTickInfo = {
-  nowMs: number
-  deltaMs: number          // delta horloge murale, brut
-  timelineMs: number
-  timelineDeltaMs: number  // deltaMs × rate — pour un adapter SANS moteur propre
-  rate: number
-}
-
-export interface RenderAdapter {
-  tick(info: RenderTickInfo): void
-  seek(info: RenderSeekInfo): void
-  pause?(): void
-  resume?(): void
-  rateChange?(rate: number): void
-  stop?(): void
-}
 ```
 
 Regle de choix dans `tick()` :
@@ -110,12 +91,7 @@ const animeRenderAdapter: RenderAdapter = {
 }
 ```
 
-Importer le type canonique plutot que le redupliquer localement : trois adapters (`avatar3d-render-adapter.ts`, `create-avatar3d.ts`, `avatar-rive-component.ts`) avaient chacun leur propre copie partielle du type `RenderAdapter`, sans `rateChange` — c'est exactement ce qui a permis au bug de passer inapercu. Pour une extension locale (ex. `seekStart` en attente d'adoption upstream), intersectionner le type canonique plutot que le redeclarer :
-
-```ts
-import type { RenderAdapter as CodplayRenderAdapter } from 'codplay'
-type RenderAdapter = CodplayRenderAdapter & { seekStart(): void }
-```
+Importer le type canonique plutot que le redupliquer localement : trois adapters (`avatar3d-render-adapter.ts`, `create-avatar3d.ts`, `avatar-rive-component.ts`) avaient chacun leur propre copie partielle du type `RenderAdapter`, sans `rateChange` — c'est exactement ce qui a permis au bug de passer inapercu. Le hook `prepareSeek?()` (avant, local et non cable, nomme `seekStart()` dans ces memes adapters) fait desormais partie du contrat canonique — voir `v1-render-adapter-spec.md`. Aucune extension locale par intersection de type n'est plus necessaire pour ce besoin.
 
 ### 4. Media (`MediaSyncModule`)
 

@@ -203,6 +203,10 @@ export function createRuntimeNode(
  */
 export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = false): void {
   if (isDomElement(nodeRef)) {
+    const preserveSrc =
+      (typeof globalThis.HTMLImageElement !== 'undefined' && nodeRef instanceof globalThis.HTMLImageElement) ||
+      (typeof globalThis.HTMLMediaElement !== 'undefined' && nodeRef instanceof globalThis.HTMLMediaElement)
+
     const attributeNames =
       typeof nodeRef.getAttributeNames === 'function'
         ? nodeRef.getAttributeNames()
@@ -210,6 +214,11 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
 
     for (const attributeName of attributeNames) {
       if (preserveDataPart && attributeName === 'data-part') continue
+      // Removing src (even to reassign the same url right after) resets naturalWidth/
+      // complete/readyState synchronously until the browser revalidates it, even from
+      // cache — see applyImageSource comment. Preserved here so the generic sweep
+      // actually matches the intent already stated below.
+      if (preserveSrc && attributeName === 'src') continue
       nodeRef.removeAttribute(attributeName)
     }
 
@@ -224,9 +233,6 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
       typeof globalThis.HTMLImageElement !== 'undefined' &&
       nodeRef instanceof globalThis.HTMLImageElement
     ) {
-      // Do not clear src: blanking src discards the decoded texture even on detached nodes,
-      // causing a one-frame flash when the node is re-attached. applyImageMediaState sets
-      // the correct src immediately after, which is a no-op when the URL has not changed.
       nodeRef.alt = ''
     }
 
@@ -252,12 +258,18 @@ export function resetRuntimeNodeStyleState(nodeRef: unknown, preserveDataPart = 
  */
 export function resetRuntimeNodeState(nodeRef: unknown): void {
   if (isDomElement(nodeRef)) {
+    const preserveSrc =
+      (typeof globalThis.HTMLImageElement !== 'undefined' && nodeRef instanceof globalThis.HTMLImageElement) ||
+      (typeof globalThis.HTMLMediaElement !== 'undefined' && nodeRef instanceof globalThis.HTMLMediaElement)
+
     const attributeNames =
       typeof nodeRef.getAttributeNames === 'function'
         ? nodeRef.getAttributeNames()
         : []
 
     for (const attributeName of attributeNames) {
+      // See resetRuntimeNodeStyleState comment.
+      if (preserveSrc && attributeName === 'src') continue
       nodeRef.removeAttribute(attributeName)
     }
 
@@ -273,7 +285,6 @@ export function resetRuntimeNodeState(nodeRef: unknown): void {
       typeof globalThis.HTMLImageElement !== 'undefined' &&
       nodeRef instanceof globalThis.HTMLImageElement
     ) {
-      // Do not clear src — see resetRuntimeNodeStyleState comment.
       nodeRef.alt = ''
     }
 
@@ -524,6 +535,11 @@ export function applyTextContent(nodeRef: unknown, content: string): void {
 
 /**
  * Applies one image source url on one runtime media node.
+ * Reassigning the same src attribute still resets naturalWidth/complete
+ * synchronously until the browser revalidates it (even from cache), which
+ * corrupts any code reading image dimensions in the same tick (e.g. replace's
+ * split-cells geometry) — seek replays the same action repeatedly while
+ * scrubbing, so this guard against redundant reassignment matters.
  */
 export function applyImageSource(nodeRef: unknown, src: string): void {
   if (
@@ -531,6 +547,9 @@ export function applyImageSource(nodeRef: unknown, src: string): void {
     typeof globalThis.HTMLImageElement !== 'undefined' &&
     nodeRef instanceof globalThis.HTMLImageElement
   ) {
+    if (nodeRef.getAttribute('src') === src) {
+      return
+    }
     nodeRef.src = src
     return
   }

@@ -6,7 +6,10 @@
       "codplay": ["../../../codplay/src/index.ts"],
       "codplay/*": ["../../../codplay/src/*"],
       "@codplay/avatar-engine": ["../avatar-engine/src/index.ts"],
-      "@codplay/avatar-engine/*": ["../avatar-engine/src/*"]
+      "@codplay/avatar-engine/*": ["../avatar-engine/src/*"],
+      "three": ["../../../../../timeline/node_modules/@types/three"],
+      "three/addons/*": ["../../../../../timeline/node_modules/@types/three/examples/jsm/*"],
+      "three/*": ["../../../../../timeline/node_modules/@types/three/*"]
     }
   },
   "include": ["src"]

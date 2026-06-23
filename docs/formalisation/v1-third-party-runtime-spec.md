@@ -77,10 +77,11 @@ export function createRiveBinding(): ThirdPartyBinding {
   }
 
   const renderAdapter: RenderAdapter = {
-    tick:       (info) => instances.forEach(c => c._tick(info)),
-    seek:       (info) => instances.forEach(c => c._seek(info)),
-    rateChange: (rate) => instances.forEach(c => c.setRate(rate)),
-    stop:       ()     => { instances.forEach(c => c._stop()); instances.length = 0 },
+    tick:        (info) => instances.forEach(c => c._tick(info)),
+    prepareSeek: ()     => instances.forEach(c => c._prepareSeek()),
+    seek:        (info) => instances.forEach(c => c._seek(info)),
+    rateChange:  (rate) => instances.forEach(c => c.setRate(rate)),
+    stop:        ()     => { instances.forEach(c => c._stop()); instances.length = 0 },
   }
 
   return {
@@ -108,6 +109,45 @@ type CreatePlayerOptions = {
 // binding.services → codplay.service.register({ name, service })
 // binding.preload → enregistre la strategie dans le module preload
 ```
+
+### Deux chemins de registration — a ne pas confondre
+
+L'introduction de `bindings` cree un **second chemin de registration de composant**, distinct du chemin regulier deja existant. Les deux doivent etre cites et compris separement ; ils ne sont pas interchangeables aujourd'hui.
+
+**Chemin regulier** (composants internes CodPlay — `text`, `image`, `media`, `list`, `layout`, `input`, et tout composant auteur sans dependance a une bibliotheque externe) :
+
+```ts
+// create-player.ts — constructeur
+for (const [type, componentClass] of Object.entries(options.components ?? {})) {
+  this.component.register({ type, component: componentClass })
+}
+this.renderSync = new RenderSync([animeRenderAdapter, this.tweenRunner, ...(options.renderAdapters ?? [])])
+```
+
+`options.components` (map `type → RuntimeComponentClass`) et `options.renderAdapters` (tableau) sont deux options independantes du constructeur, alimentees directement par l'appelant. Pas de preload associe : un composant interne n'a pas de ressource a charger avant montage au-dela du manifest standard (`image`/`audio`/`video`/`font`/`css`).
+
+**Chemin binding** (bibliotheques tierces — Rive, Three.js/avatar-engine, futur Lottie/PixiJS) :
+
+```ts
+// expansion prevue, non encore implementee dans create-player.ts
+binding.components    → codplay.component.register({ type, component })   // meme registry que le chemin regulier
+binding.renderAdapter → ajoute au RenderSync                                // meme RenderSync que le chemin regulier
+binding.preload       → enregistre une strategie dans le module preload     // chemin qui n'existe pas du tout cote regulier
+```
+
+**Etat reel aujourd'hui** : le second chemin n'est pas cable. `CreatePlayerOptions` n'a pas de propriete `bindings` ([create-player.ts:50-58](../../packages/codplay/src/player/create-player.ts#L50-L58) — seulement `components?`/`renderAdapters?`). Une demo qui utilise `ThirdPartyBinding` (ex. `rive-coach-demo.ts`) le decompresse a la main dans le chemin regulier :
+
+```ts
+const binding = createRiveBinding()
+return {
+  components:    binding.components,
+  renderAdapters: binding.renderAdapter ? [binding.renderAdapter] : [],
+}
+```
+
+Donc *aujourd'hui*, il n'y a qu'un seul chemin reellement execute (le chemin regulier) — le "second chemin" n'existe qu'au niveau du type `ThirdPartyBinding` et de la convention de retour de `setup()`, pas dans le runtime `codplay`. C'est precisement ce qui doit etre clarifie : ne pas presenter `bindings` comme deja operant, et ne pas laisser croire que `ThirdPartyBinding` contourne le registry existant — il l'alimente, une fois cable, par une porte d'entree differente.
+
+**A unifier plus tard** (hors scope de cette session) : une fois `bindings` reellement consomme par `CreatePlayerOptions`/`Player`/`CodPlay`, deux portes d'entree coexisteront pour le meme registry de composants (`options.components` direct, et `options.bindings[].components` expanse) — sans compter `options.renderAdapters` vs `options.bindings[].renderAdapter`. La regle V1 actuelle ("`components` et `renderAdapters` restent pour usage interne ou transition") acte cette duplication comme transitoire mais ne dit pas comment la resorber. Question ouverte a trancher quand ce chantier sera engage : soit le chemin regulier disparait au profit d'un binding implicite genere pour chaque composant interne, soit les deux chemins restent legitimement distincts (composants internes vs bibliotheques tierces) et seule la documentation doit etre tenue a jour pour eviter la confusion.
 
 ### Usage auteur
 
@@ -255,9 +295,12 @@ init()       → recupere l'entree du cache preload (synchrone)
                enregistre l'instance dans le hub (via closure factory)
 update()     → traduit les champs de l'action en appels moteur
 _tick()      → advance moteur + draw (appele par le hub)
-_seek()      → advance(0) + draw (appele par le hub)
+_prepareSeek() → _resetServices() (appele par le hub, avant le replay des events de seek)
+_seek()      → advance(0) + draw (appele par le hub, apres le replay)
 setRate()    → stocke le rate local (appele par le hub via rateChange)
 ```
+
+`_prepareSeek()` delegue au hook canonique `RenderAdapter.prepareSeek?()` — cf. `v1-render-adapter-spec.md` pour le contrat complet et la justification du nom.
 
 `render()` et `init()` se succedent dans cet ordre, garantis par `_init()` de `BaseComponent`.
 
@@ -429,6 +472,11 @@ class RiveBaseComponent extends BaseComponent {
     this._drawFrame()
   }
 
+  // Composant base sans services internes : rien a reinitialiser ici.
+  // Des que des ComponentServiceBase sont ajoutes (Phase 5), surcharger
+  // pour appeler _resetServices() — voir l'exemple complet plus bas.
+  _prepareSeek(): void {}
+
   _seek(_info: RenderSeekInfo): void {
     if (!this._riveCtx) return
     this._doAdvance(0)
@@ -586,7 +634,9 @@ export abstract class ComponentServiceBase {
 
   /**
    * Remet le service a son etat neutre/initial.
-   * Appele automatiquement par le composant sur stop() et avant seek replay.
+   * Appele automatiquement par le composant sur stop() et depuis sa propre
+   * implementation du hook RenderAdapter.prepareSeek?() (cf. v1-render-adapter-spec.md),
+   * avant que le player ne rejoue les events de seek.
    * Implementation par defaut : no-op. Surcharger quand un etat doit etre reinitialise.
    */
   reset(): void {}
@@ -642,6 +692,12 @@ class RiveBaseComponent extends BaseComponent {
     for (const s of this._services) s.reset()
   }
 
+  // Appele par le hub via RenderAdapter.prepareSeek?() (v1-render-adapter-spec.md),
+  // une fois avant que le player ne rejoue les events de seek.
+  _prepareSeek(): void {
+    this._resetServices()
+  }
+
   _stop(): void {
     this._resetServices()
     for (const s of this._services) s.destroy?.()
@@ -653,7 +709,7 @@ class RiveBaseComponent extends BaseComponent {
 
 Points cles :
 - `_doAdvance` avance les services **avant** l'artboard — automatiquement, sans surcharge.
-- `_resetServices` couvre stop et seek-reset — automatiquement.
+- `_resetServices` est appelee depuis `_prepareSeek()` (avant un replay de seek) et depuis `_stop()` — les deux seuls declencheurs, tous deux automatiques, sans surcharge necessaire dans les sous-classes.
 - `update()` reste explicite : le composant specialise sait quelles cles d'action correspondent a quels services.
 
 ---
@@ -820,5 +876,5 @@ export function createRiveBinding(): ThirdPartyBinding {
 
 - `v1-component-api.md` — contrat BaseComponent, render(), init(), update(), services
 - `v1-preload-api.md` — cache de session, modes author/broadcast, strategies par type
-- `v1-rate-spec.md` — propagation rate, pattern RenderAdapter, regles deltaMs vs timelineDeltaMs
-- `v1-render-adapter-spec.md` (a creer si la surface RenderAdapter justifie une spec dediee)
+- `v1-rate-spec.md` — propagation rate, regles deltaMs vs timelineDeltaMs dans tick()
+- `v1-render-adapter-spec.md` — contrat RenderAdapter canonique complet (tick, prepareSeek, seek, pause, resume, rateChange, stop)

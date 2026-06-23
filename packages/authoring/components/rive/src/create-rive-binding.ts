@@ -23,6 +23,7 @@ export function createRiveBinding(): ThirdPartyBinding {
 
   const renderAdapter: RenderAdapter = {
     tick(info) { instances.forEach((c) => c._tick(info)) },
+    prepareSeek() { instances.forEach((c) => c._prepareSeek()) },
     seek(info) { instances.forEach((c) => c._seek(info)) },
     rateChange(rate) { instances.forEach((c) => c.setRate(rate)) },
     stop() {

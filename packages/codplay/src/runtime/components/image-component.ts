@@ -50,12 +50,19 @@ export class ImageComponent extends BaseComponent {
   }
 
   /**
-   * Ensures the img part exists inside the root node and resets its state.
+   * Ensures the img part exists inside the root node.
+   * existingMediaNode must be captured before buildNode clears the parts map.
+   * On refresh (existingMediaNode !== null) the img element is reused without
+   * reset or src reload — reassigning the same src resets naturalWidth/complete
+   * synchronously until the (cached) load event fires, which corrupts any code
+   * reading image dimensions in the same tick (e.g. replace's split-cells).
    */
-  private setupImageNode(rootNode: unknown): unknown {
-    const mediaNode = ensureImagePart(rootNode, this.getPart(MEDIA))
-    resetImagePart(mediaNode)
+  private setupImageNode(rootNode: unknown, existingMediaNode: unknown | null): unknown {
+    const mediaNode = ensureImagePart(rootNode, existingMediaNode)
     this.setPart(MEDIA, mediaNode)
+    if (existingMediaNode === null) {
+      resetImagePart(mediaNode)
+    }
     return mediaNode
   }
 
@@ -95,12 +102,17 @@ export class ImageComponent extends BaseComponent {
 
   /**
    * Creates the component root with an internal image part.
+   * The existing img node is captured before buildNode clears the parts map so
+   * setupImageNode can reuse it on seek refresh without reset or src reload.
    */
   render(): ComponentRenderResult {
+    const existingMediaNode = this.getPart(MEDIA)
     const rootNode = this.buildNode(`<div><img data-part="${MEDIA}"/></div>`)
-    const mediaNode = this.setupImageNode(rootNode)
+    const mediaNode = this.setupImageNode(rootNode, existingMediaNode)
     this.services.apply(rootNode, this.perso.initial)
-    this.applyImageMediaState(mediaNode, this.perso.initial as ImageState)
+    if (existingMediaNode === null) {
+      this.applyImageMediaState(mediaNode, this.perso.initial as ImageState)
+    }
     return rootNode as Node
   }
 }

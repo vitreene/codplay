@@ -9,7 +9,6 @@ import { runQuizReferenceDemo } from './codplay/quiz-reference-demo'
 import { runQuizSeriesDemo } from './codplay/quiz-series-demo'
 import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
-import { runAvatarRiveDemo } from './codplay/avatar-rive-demo'
 import { runRiveCoachDemo } from './codplay/rive-coach-demo'
 import { runChronoDemo } from './codplay/chrono-demo'
 
@@ -26,7 +25,6 @@ switch (demoName) {
 	case 'carousel':        void runCarouselDemo(); break
 	case 'replace-carousel': void runReplaceCarouselDemo(); break
 	case 'avatar-poc-1':    void runAvatarPoc1Demo(); break
-	case 'avatar-rive':     void runAvatarRiveDemo(); break
 	case 'rive-coach':      void runRiveCoachDemo(); break
 	case 'chrono':          void runChronoDemo(); break
 	default:                void runPlayerPocDemo()

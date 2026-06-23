@@ -36,6 +36,7 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 18. `v1-module-api.md`
 19. `v1-preload-api.md` — modes author/broadcast, strategies par type, cache session, eviction sequence:end
 19a. `v1-third-party-runtime-spec.md` — regles integration bibliotheques tierces (Rive, Three.js, Lottie...) : preload adapter, factory pattern, RenderAdapter hub, rate/ticker, services internes
+19b. `v1-render-adapter-spec.md` — contrat RenderAdapter canonique : tick, prepareSeek, seek, pause, resume, rateChange, stop
 20. `v1-scene-side-effects-api.md`
 21. `v1-horizon-spec.md`
 22. `v1-seek-spec.md`

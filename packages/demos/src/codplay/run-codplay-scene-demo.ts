@@ -68,6 +68,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   const studio = new CodPlay({
     renderAdapters: [...(config.renderAdapters ?? []), ...(setupResult.renderAdapters ?? [])],
     components: { ...config.components, ...setupResult.components },
+    bindings: config.bindings,
     createElementOptions: {
       emitRuntimeEvent: (event) => {
         void studio.player.emit({

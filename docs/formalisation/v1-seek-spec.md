@@ -195,4 +195,16 @@ Les events utilisateur (et leurs cascades) deja persistees dans les tracks subsi
 
 Ce cas necessite un mecanisme d'invalidation des events persistees apres le point de seek. Il touche le contrat du track manager (suppression retroactive, marquage de revision, ou snapshot isole). Non adresse en V1.
 
+## Appendice V1 — cas ouvert : detach-all systematique pendant un refresh, decodage media interrompu
+
+Constat (2026-06-23) : `RuntimeComponentOrchestrator.loadPersos()` detache tous les nodes montes du DOM avant de rafraichir chaque composant (`runtime-component-orchestrator.ts:413-418`), quel que soit le nombre de personas dont l'etat resolu a reellement change entre deux seeks. C'est une protection deliberee contre le flicker pendant la boucle de reset/reapplication (un node visible ne doit jamais montrer un etat intermediaire reset-mais-pas-encore-reapplique).
+
+Effet de bord observe : un scrubbing rapide (drag de slider seek) declenche un `seek()` par mouvement de pointeur, donc un cycle detach/refresh/reattach complet de **tous** les personas a chaque mouvement, y compris ceux dont rien n'a change. Pour un `<img>`/`<video>` dont le decodage est en cours, des cycles detach/reattach trop rapproches peuvent empecher le navigateur de jamais terminer le decodage dans la fenetre de temps disponible — `naturalWidth`/`complete` restent a zero meme quand `src` n'est pas reassigne. Observe concretement sur `replace-carousel-demo` (transition `replace: { split: 'cells' }`), ou `apply-split-cells.ts` lit `naturalWidth` en direct pour calculer la geometrie des cellules.
+
+Pistes ecartees ou deja appliquees en 2026-06-23 :
+- `mountRootNodes()` (`player.ts:116-122`) a ete corrige pour ne plus refaire `replaceChildren()` quand la liste des root nodes n'a pas change (evite une couche de detach/reattach redondante au niveau racine) — insuffisant seul, le detach-all par persona dans l'orchestrateur reste la cause dominante.
+- un cache local de `naturalWidth`/`naturalHeight` dans `apply-split-cells.ts` (retomber sur la derniere valeur connue quand la mesure live est a zero) corrigerait le symptome observe sans toucher au cycle global, mais ne traite pas la cause.
+
+Fix correct mais non trivial : scoper le detach-all aux personas dont l'etat resolu (style/content/move) a reellement change entre l'ancien et le nouveau `runtimePersos`, via une comparaison structurelle avant de detacher/rafraichir. Necessite de conserver une reference a l'etat resolu precedent par perso et de differ avant d'agir. Touche le coeur du runtime — a traiter dans une session dediee, hors scope de la migration avatar3d en cours.
+
 A specifier et implementer en post-V1.

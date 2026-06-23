@@ -29,6 +29,7 @@ import {
 import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from "./player-constants";
 import { resolveSeekEndMsFromPolicy, shouldReplayEventForSeek } from "./seek-runtime";
 import type { RenderAdapter } from "./render-adapter-types";
+import type { ThirdPartyBinding } from "./third-party-binding";
 import { TweenRunner, isTweenAction, isTweenSequence, isTweenStopAction, expandTweenToActiveSteps } from "../tween/tween-runner";
 import { RenderSync } from "./render-sync";
 import type {
@@ -55,6 +56,13 @@ export type CreatePlayerOptions = {
   /** Override the animation adapter entirely (for tests or custom engines). */
   animationAdapter?: AnimationAdapter;
   components?: Record<string, import("../runtime/components").RuntimeComponentClass>;
+  /**
+   * Third-party library registrations (components + renderAdapter + preload
+   * strategy bundled together). Expanded into the same registries as
+   * `components`/`renderAdapters` above — see "Deux chemins de
+   * registration" in v1-third-party-runtime-spec.md for how the two relate.
+   */
+  bindings?: ThirdPartyBinding[];
   onRuntimeEmit?: (event: PlayerPublicEventInput) => void;
   onTimelineEvent?: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>;
 };
@@ -472,6 +480,11 @@ export class PlayerFacade implements PlayerApi {
     for (const [type, componentClass] of Object.entries(options.components ?? {})) {
       this.component.register({ type, component: componentClass });
     }
+    for (const binding of options.bindings ?? []) {
+      for (const [type, componentClass] of Object.entries(binding.components)) {
+        this.component.register({ type, component: componentClass });
+      }
+    }
 
     const animeRenderAdapter: RenderAdapter = {
       tick({ nowMs }) { animationAdapter.renderFrame?.(nowMs) },
@@ -481,7 +494,15 @@ export class PlayerFacade implements PlayerApi {
       rateChange(rate) { animationAdapter.setRate?.(rate) },
       stop() { animationAdapter.stop() },
     };
-    this.renderSync = new RenderSync([animeRenderAdapter, this.tweenRunner, ...(options.renderAdapters ?? [])]);
+    const bindingRenderAdapters = (options.bindings ?? [])
+      .map((binding) => binding.renderAdapter)
+      .filter((adapter): adapter is RenderAdapter => adapter !== undefined);
+    this.renderSync = new RenderSync([
+      animeRenderAdapter,
+      this.tweenRunner,
+      ...(options.renderAdapters ?? []),
+      ...bindingRenderAdapters,
+    ]);
   }
 
   readonly component: import("../runtime/components").ComponentRegistryApi = {
@@ -1921,6 +1942,7 @@ export class PlayerFacade implements PlayerApi {
     );
     const playedReplayEndMs = this.playedEndMs;
 
+    this.renderSync.prepareSeek();
     this.trackManager.resetActiveTracks();
     this.trackManager.resetCursor();
     this.tweenRunner.resetActiveTweens();

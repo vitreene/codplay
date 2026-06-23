@@ -35,6 +35,12 @@ export class RenderSync {
     }
   }
 
+  prepareSeek(): void {
+    for (const adapter of this.adapters) {
+      try { adapter.prepareSeek?.() } catch {}
+    }
+  }
+
   seek(nowMs: number, timelineMs: number): void {
     this.lastNowMs = nowMs
     const info: RenderSeekInfo = { nowMs, timelineMs }

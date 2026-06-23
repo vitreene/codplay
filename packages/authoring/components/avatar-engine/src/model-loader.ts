@@ -1,5 +1,9 @@
 /**
- * GLB model loading — discovers morph targets and registers them with MorphEngine.
+ * Per-instance model setup — clone + discover morph targets + register them
+ * with MorphEngine. The GLB fetch+parse itself is a separate, cacheable-by-URL
+ * step (model-preload.ts); this module only handles what cannot be shared
+ * across instances: MorphEntry.slots point into the live Three.js graph, so
+ * two avatars cannot share the same Group — each needs its own clone.
  *
  * Prerequisite: the model must expose ARKit blend shapes.
  * Supported naming conventions:
@@ -10,8 +14,7 @@
  * Source: https://github.com/met4citizen/TalkingHead
  */
 import type { Group, Object3D } from 'three'
-import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { clone as cloneSkinnedScene } from 'three/addons/utils/SkeletonUtils.js'
 import type { MorphEngine } from './morph-engine.js'
 import { BONE_MORPH_NAMES } from './morph-engine.js'
 import { retarget } from './retargeter.js'
@@ -58,20 +61,22 @@ function stripPrefix(name: string, prefix: string | RegExp | undefined): string 
 }
 
 /**
- * Load a GLB and register all morph targets with the given MorphEngine.
+ * Clones a cached (preloaded) GLTF scene and registers all its morph targets
+ * with the given MorphEngine. Synchronous — the fetch already happened in
+ * model-preload.ts; this is purely per-instance graph setup.
  *
- * @param url    - URL of the GLB file.
- * @param engine - MorphEngine instance to populate.
- * @param opts   - Optional prefix stripping.
+ * @param cachedScene - Root group from a preloaded GLTF (see model-preload.ts).
+ *                      Never mutated directly — cloned first via SkeletonUtils
+ *                      so bones/morphs are independent per instance.
+ * @param engine      - MorphEngine instance to populate.
+ * @param opts        - Optional prefix stripping + retarget.
  */
-export async function loadModel(
-  url: string,
+export function buildModelInstance(
+  cachedScene: Group,
   engine: MorphEngine,
   opts: ModelLoaderOptions = {},
-): Promise<LoadedModel> {
-  const loader = new GLTFLoader()
-  const gltf = await loadGltf(loader, url)
-  const scene = gltf.scene
+): LoadedModel {
+  const scene = cloneSkinnedScene(cachedScene) as Group
 
   let armature: Object3D | null = null
   const morphNames = new Set<string>()
@@ -121,10 +126,4 @@ export async function loadModel(
     morphNames: Array.from(morphNames),
     boneMap,
   }
-}
-
-function loadGltf(loader: GLTFLoader, url: string): Promise<GLTF> {
-  return new Promise((resolve, reject) => {
-    loader.load(url, resolve, undefined, reject)
-  })
 }

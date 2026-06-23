@@ -113,12 +113,25 @@ export class Player implements PlayerApi {
     sceneEnd: 'scene:end'
   } as const
 
+  /**
+   * Re-syncs the mount target's children with the current root nodes.
+   * Skips replaceChildren() when the resolved list is identical (same nodes,
+   * same order) to what is already mounted — every runtimeRevision bump calls
+   * this, including ones with no structural change (e.g. a seek that only
+   * mutates style), and replaceChildren() always detaches+reattaches even when
+   * passed its own current children, which interrupts in-flight image/video
+   * decoding on descendants during rapid scrubbing.
+   */
   private mountRootNodes(): void {
     if (this.mountTarget === null) return
     const registry = this.player.getRuntimeRegistry()
     const nodes = this.rootNodeIds
       .map(id => registry.getNodeById(id))
       .filter(Player.isNode)
+    const current = this.mountTarget.childNodes
+    if (nodes.length === current.length && nodes.every((node, i) => node === current[i])) {
+      return
+    }
     this.mountTarget.replaceChildren(...nodes)
   }
 
@@ -138,6 +151,11 @@ export class Player implements PlayerApi {
    * Keeps the public scheduler surface stable for runtime helpers.
    */
   constructor(options: CreatePlayerOptions = {}) {
+    for (const binding of options.bindings ?? []) {
+      for (const strategy of binding.preload ?? []) {
+        this.preload.registerStrategy(strategy.type, strategy.load)
+      }
+    }
     this.player = new PlayerFacade({
       ...options,
       onTimelineEvent: async (event) => {
