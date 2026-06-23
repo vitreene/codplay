@@ -19,6 +19,7 @@ import {
   ACESFilmicToneMapping,
 } from 'three'
 import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
+import { passThroughRenderMutationResolver } from 'codplay/runtime/render-mutation-resolver'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
 import type { RenderTickInfo, RenderSeekInfo } from 'codplay/player/render-adapter-types'
 import { createAvatarEngine, GazeService, getModelEntry } from '@codplay/avatar-engine'
@@ -32,12 +33,22 @@ const DEFAULT_CAMERA_Y = 1.5
 const DEFAULT_CAMERA_Z = 3
 
 export class Avatar3DBaseComponent extends BaseComponent {
+  // BaseComponent defaults to htmlRenderMutationResolver, which drops any
+  // mutation whose action keys aren't HTML-oriented (style/attr/className) or
+  // in its fixed non-HTML whitelist (move/content/src/broadcast/…). avatar3d
+  // actions carry custom keys (viseme/gesture/blink/headDrift/breathe/enabled/
+  // mood/name), so that resolver would silently drop every animation update.
+  // The pre-migration standalone component had no resolver — the orchestrator
+  // fell back to passthrough — so this override restores that exact behavior.
+  static override readonly renderMutationResolver = passThroughRenderMutationResolver
+
   private engine: AvatarEngine | null = null
   private gaze: GazeService | null = null
   private renderer: WebGLRenderer | null = null
   private threeScene: Scene | null = null
   private camera: PerspectiveCamera | null = null
   private actionHandlers: [string, ActionHandler][] = []
+  private initStarted = false
 
   render(): ComponentRenderResult {
     // The orchestrator re-renders an already-mounted component on every
@@ -68,12 +79,15 @@ export class Avatar3DBaseComponent extends BaseComponent {
     // tryInitComponent. Unlike a DOM-only component, this one owns a WebGL
     // context: building a second WebGLRenderer on the same canvas silently
     // corrupts rendering instead of throwing. The one-time setup below must
-    // run exactly once per component instance.
-    if (this.renderer) return
+    // run exactly once per component instance. initStarted (not this.renderer)
+    // is the guard because the model parse is async — the renderer is set
+    // synchronously below, but a refresh could re-enter before then.
+    if (this.initStarted) return
+    this.initStarted = true
 
     const initial = this.perso.initial as Avatar3DInitial
     const entry = getModelEntry(initial.src)
-    if (!entry || entry.status !== 'ready' || !entry.scene) {
+    if (!entry || entry.status !== 'ready' || !entry.buffer) {
       throw new Error(`[avatar3d] resource not ready: ${initial.src} — ensure preload ran before player.init()`)
     }
 
@@ -97,8 +111,25 @@ export class Avatar3DBaseComponent extends BaseComponent {
     const lookAt = initial.camera?.lookAt ?? {}
     camera.lookAt(lookAt.x ?? 0, lookAt.y ?? camY, lookAt.z ?? 0)
 
+    this.renderer = renderer
+    this.threeScene = threeScene
+    this.camera = camera
+
+    // The model parse is async (GLTFLoader.parse re-parses the preloaded bytes
+    // into a fresh, single-skeleton scene). Until it resolves, _tick/_seek
+    // no-op (they guard on this.engine). Renderer/scene/camera are already set
+    // above so the canvas is live from the first frame.
+    void this.loadModelAsync(entry.buffer, initial, threeScene, camera)
+  }
+
+  private async loadModelAsync(
+    buffer: ArrayBuffer,
+    initial: Avatar3DInitial,
+    threeScene: Scene,
+    camera: PerspectiveCamera,
+  ): Promise<void> {
     const engine = createAvatarEngine({ mood: initial.mood })
-    const { scene: modelScene, boneMap } = engine.loadModel(entry.scene, {
+    const { scene: modelScene, boneMap } = await engine.loadModel(buffer, {
       morphPrefix: initial.morphPrefix,
       retarget: initial.retarget,
     })
@@ -110,14 +141,10 @@ export class Avatar3DBaseComponent extends BaseComponent {
 
     this.engine = engine
     this.gaze = gaze
-    this.renderer = renderer
-    this.threeScene = threeScene
-    this.camera = camera
     this.actionHandlers = buildActionHandlers(engine, gaze, initial.visemeWeight ?? 0.75)
 
-    // Render one initial frame so the character has a pose (not blank/T-pose)
-    // before the player's play() is called. Gaze is enabled by default so the
-    // character looks at the camera from the first frame.
+    // Render one initial frame so the character has a pose (not blank/T-pose).
+    // Gaze is enabled by default so it looks at the camera from the first frame.
     gaze.setEnabled(true)
     gaze.computeAndApply()
     this.render3D()

@@ -1,9 +1,12 @@
 /**
- * Per-instance model setup — clone + discover morph targets + register them
- * with MorphEngine. The GLB fetch+parse itself is a separate, cacheable-by-URL
- * step (model-preload.ts); this module only handles what cannot be shared
- * across instances: MorphEntry.slots point into the live Three.js graph, so
- * two avatars cannot share the same Group — each needs its own clone.
+ * Per-instance model setup — parse + discover morph targets + register them
+ * with MorphEngine. The GLB fetch is a separate, cacheable-by-URL step
+ * (model-preload.ts) that holds raw bytes; this module parses those bytes per
+ * instance so each avatar gets a fresh, independent scene with the model's
+ * original single-skeleton topology. (Parsing once and cloning via
+ * SkeletonUtils would split the one shared skeleton into one-per-SkinnedMesh,
+ * making retarget apply its origin offset once per skeleton — the buste/visage
+ * framing regression.)
  *
  * Prerequisite: the model must expose ARKit blend shapes.
  * Supported naming conventions:
@@ -14,7 +17,7 @@
  * Source: https://github.com/met4citizen/TalkingHead
  */
 import type { Group, Object3D } from 'three'
-import { clone as cloneSkinnedScene } from 'three/addons/utils/SkeletonUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { MorphEngine } from './morph-engine.js'
 import { BONE_MORPH_NAMES } from './morph-engine.js'
 import { retarget } from './retargeter.js'
@@ -61,22 +64,26 @@ function stripPrefix(name: string, prefix: string | RegExp | undefined): string 
 }
 
 /**
- * Clones a cached (preloaded) GLTF scene and registers all its morph targets
- * with the given MorphEngine. Synchronous — the fetch already happened in
- * model-preload.ts; this is purely per-instance graph setup.
+ * Parses preloaded GLB bytes into a fresh scene and registers all its morph
+ * targets with the given MorphEngine. Async — GLTFLoader.parse is callback
+ * based — but the network fetch already happened in model-preload.ts, so this
+ * only re-parses cached bytes. Each call yields an independent scene with the
+ * model's original single-skeleton topology (see module header).
  *
- * @param cachedScene - Root group from a preloaded GLTF (see model-preload.ts).
- *                      Never mutated directly — cloned first via SkeletonUtils
- *                      so bones/morphs are independent per instance.
- * @param engine      - MorphEngine instance to populate.
- * @param opts        - Optional prefix stripping + retarget.
+ * @param buffer - Raw .glb ArrayBuffer from a preloaded entry (model-preload.ts).
+ * @param engine - MorphEngine instance to populate.
+ * @param opts   - Optional prefix stripping + retarget.
  */
-export function buildModelInstance(
-  cachedScene: Group,
+export async function buildModelInstance(
+  buffer: ArrayBuffer,
   engine: MorphEngine,
   opts: ModelLoaderOptions = {},
-): LoadedModel {
-  const scene = cloneSkinnedScene(cachedScene) as Group
+): Promise<LoadedModel> {
+  const loader = new GLTFLoader()
+  const gltf = await new Promise<{ scene: Group }>((resolve, reject) => {
+    loader.parse(buffer, '', resolve, reject)
+  })
+  const scene = gltf.scene
 
   let armature: Object3D | null = null
   const morphNames = new Set<string>()

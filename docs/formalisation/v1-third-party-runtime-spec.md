@@ -304,6 +304,23 @@ setRate()    → stocke le rate local (appele par le hub via rateChange)
 
 `render()` et `init()` se succedent dans cet ordre, garantis par `_init()` de `BaseComponent`.
 
+### Regle normative : resolver de mutation pour cles d'action custom
+
+Tout composant tiers qui `extends BaseComponent` herite de `static renderMutationResolver = htmlRenderMutationResolver`. Ce resolver ne laisse passer vers `update()` que les mutations dont l'action porte une cle **HTML** (`style`/`attr`/`className`) ou une cle de sa **liste blanche non-HTML fixe** (`move`/`content`/`src`/`alt`/`fitMode`/`broadcast`/`checked`/`disabled`/… — cf. `html-render-mutation-resolver.ts:hasNonHtmlMutation`). Toute mutation dont l'action ne porte que des cles **custom** (ex. `viseme`, `emotion`, `gesture`, `blink`, `headDrift`, `breathe`, `mood`) est **silencieusement supprimee** avant d'atteindre `update()`.
+
+Consequence : un composant qui pilote son rendu via des cles d'action custom **doit** override le resolver en passthrough :
+
+```ts
+import { passThroughRenderMutationResolver } from 'codplay/runtime/render-mutation-resolver'
+
+class MyThirdPartyComponent extends BaseComponent {
+  static override readonly renderMutationResolver = passThroughRenderMutationResolver
+  // …
+}
+```
+
+Les cles HTML continuent d'etre appliquees normalement dans `update()` via `services.apply` ; le passthrough ne fait que cesser de filtrer les cles custom. C'est appliqué sur `Avatar3DBaseComponent` et `RiveBaseComponent`. Symptome typique en cas d'oubli : le composant rend sa premiere frame mais reste fige (aucune animation pilotee par event), alors que routage/dispatch/commit/enqueue sont tous corrects — la mutation est droppee a la toute derniere etape (`resolveRenderMutations`).
+
 ### Typage des proprietes perso
 
 Chaque composant tierce partie definit des types TypeScript pour les trois zones de contrat du perso : `initial`, `emit`, et `actions`. Ces types sont la definition de ce que le composant peut gerer. Ce sont les services et les capacites du composant qui les definissent.
@@ -602,6 +619,17 @@ _seek(_info: RenderSeekInfo): void {
   this._drawFrame()        // materialise la position visuellement
 }
 ```
+
+#### Invariant normatif : fidelite du seek (seek(t) ≡ play(t))
+
+Le seek est un **outil de debug auteur**, pas un artifice de lecture : l'etat affiche apres `seek(t)` doit etre **exactement** celui qu'on verrait quand le play atteint `t`. Aucune simulation, aucune reconstruction approximative, aucun « settle » cosmetique (ex. `advance(0.2)` pour laisser une transition se terminer) — ce serait maquiller le resultat.
+
+Cet invariant n'est tenable que si **l'etat visible du moteur a `t` est une fonction pure de l'etat timeline a `t`** — c.-a-d. determine uniquement par (la position `t`, les dernieres valeurs materialisees), sans dependance au chemin temporel parcouru. Le modele de seek de CodPlay (`v1-seek-spec` : rejeu des events materialises + snap, sans re-simulation du temps) repose sur cette purete.
+
+- **Conforme** : morphs poses directement (`snapFixed`), valeurs DOM, et toute animation exprimee comme **fonction pure de `elapsed`** (ex. head-drift/blink/breathe de l'avatar). Etat-a-`t` = f(position, dernieres valeurs) → seek exact, `advance(0)` suffit.
+- **Non conforme** : toute **state machine timee** qui *integre* dans le temps (ex. lipsync Rive pilote par un input declenchant une transition de duree non nulle). Son etat visible a `t` depend de tout l'historique des changements d'input et du temps ecoulé — ce n'est pas une fonction pure de `t`. Le rejeu « pose le dernier input + `advance(0)` » ne peut structurellement pas le reproduire, et aucun `advance(dt)` ne le corrige sans mentir.
+
+**Regle.** Une capacite qui doit etre fidele au seek doit etre pilotee de facon **path-independent** : l'input determine la pose **instantanement** (pas de transition timee cote moteur). Si le fichier/graphe tiers (ex. `.riv`) n'expose pas un tel pilotage instantane, alors la capacite **n'est pas seek-fidele** et on **ne maquille pas** : `_seek` reste `advance(0)` (reconstruction honnete de l'etat « inputs poses, temps non avance »), et la limitation est assumee telle quelle plutot que masquee. Decision actee (2026-06-23) : ne rien modifier dans ce cas.
 
 ### pause / resume
 

@@ -1,17 +1,17 @@
 /**
- * GLB preload — fetch + parse only, cached by URL, shared across instances.
+ * GLB preload — fetch only, cached by URL as raw bytes, shared across instances.
  *
- * Mirrors packages/authoring/components/rive/src/rive-preload.ts: the per-URL
- * cache holds the raw parsed result (here: gltf.scene), never touched by any
- * specific instance. Cloning + traversal + retarget + morph registration is
- * per-instance work done in model-loader.ts at init() time, not here.
+ * The per-URL cache holds the raw .glb ArrayBuffer, never a parsed scene.
+ * Each instance re-parses those bytes via GLTFLoader.parse in model-loader.ts at
+ * init() time, yielding a fresh, independent scene with the model's original
+ * single-skeleton topology — exactly like the previous per-instance
+ * GLTFLoader.load(url) flow. (A shared parsed scene cloned via SkeletonUtils
+ * splits the one skeleton into one-per-SkinnedMesh, which breaks retarget's
+ * per-skeleton origin offset — hence bytes + re-parse, not parse + clone.)
  */
-import type { Group } from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-
 export type ModelPreloadEntry = {
   status: 'loading' | 'ready' | 'error'
-  scene?: Group
+  buffer?: ArrayBuffer
   error?: string
 }
 
@@ -33,11 +33,9 @@ export async function preloadAvatar3DModel(url: string): Promise<void> {
   resourceCache.set(url, entry)
 
   try {
-    const loader = new GLTFLoader()
-    const gltf = await new Promise<{ scene: Group }>((resolve, reject) => {
-      loader.load(url, resolve, undefined, reject)
-    })
-    entry.scene = gltf.scene
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status} loading ${url}`)
+    entry.buffer = await res.arrayBuffer()
     entry.status = 'ready'
   } catch (err) {
     entry.status = 'error'

@@ -55,14 +55,14 @@ export type BreathTriggerFn = (args: { elapsed: number }) => { triggerBreath: tr
 
 export type AvatarEngine = {
   /**
-   * Build one instance from an already-preloaded (fetched+parsed) GLB scene —
-   * see model-preload.ts. Clones the cached scene (bones/morphs must be
-   * independent per instance), traverses it, and registers morph targets.
-   * Synchronous: the network fetch already happened during preload.
+   * Build one instance from preloaded GLB bytes — see model-preload.ts.
+   * Parses the bytes into a fresh, independent scene (single-skeleton topology),
+   * traverses it, and registers morph targets. Async: GLTFLoader.parse is
+   * callback based, but the network fetch already happened during preload.
    * Returns the root Three.js group and the full bone map.
    * Add scene to your Three.js scene; use boneMap to access named bones (e.g. LeftEye/RightEye).
    */
-  loadModel(cachedScene: Group, opts?: ModelLoaderOptions): { scene: Group; boneMap: Map<string, Object3D> }
+  loadModel(buffer: ArrayBuffer, opts?: ModelLoaderOptions): Promise<{ scene: Group; boneMap: Map<string, Object3D> }>
 
   /**
    * Advance morph and gesture easing. Call every frame with the frame delta in ms.
@@ -266,8 +266,8 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
   }
 
   return {
-    loadModel(cachedScene, loaderOpts) {
-      const result = buildModelInstance(cachedScene, morphEngine, loaderOpts)
+    async loadModel(buffer, loaderOpts) {
+      const result = await buildModelInstance(buffer, morphEngine, loaderOpts)
       gestureEngine = new GestureEngine(result.boneMap)
       const { callback } = createBoneCallback(result.boneMap)
       morphEngine.registerBoneMorphs(callback)
