@@ -135,6 +135,14 @@ type PersoTransitionTiming = {
 - la resolution de `rootToken` reste un contrat de placement, pas une identite runtime authorisee.
 - dans les stories composees, `initial.move` d'un perso de `entries` peut cibler `rootToken` pour se fixer sur le `story host` de la story.
 
+4ter. Modele de node media (image, video, sound) — une node par `src`
+
+- le `src` d'un media est une ressource a effet de bord : l'assigner declenche un (re)decodage. Il ne peut donc pas se reset/replay comme un style, et ne participe pas directement a l'etat runtime mutable reconstruit par seek.
+- un perso media materialise **une node persistante par `src` distinct** declare statiquement (`initial.src` + tous les `actions[*].src`). Chaque node recoit son `src` **une seule fois** (decode une seule fois) et est conservee meme inactive.
+- l'etat reconstructible du perso media est **quelle node est attachee** (la node active) : une seule node attachee a la racine a un instant donne. Cet etat structurel se reset (render → node de `initial.src`) et se rejoue (chaque action portant `src` → node de ce `src`) comme tout etat reconstructible. Le `src` n'est jamais reassigne ; changer de media = detacher la node active, attacher la node cible (son decode/buffer est preserve).
+- l'ensemble statique des `src` est la source de verite ; tous les medias d'une scene doivent etre prechargés avant execution. Un `src` produit a l'execution hors de cet ensemble declenche un warning auteur (`AUTHOR_IMAGE_SRC_NOT_PRELOADED` / `AUTHOR_MEDIA_SRC_NOT_PRELOADED`) ; son traitement complet est post-V1.
+- consequence seek : `play@t == seek@t` pour le media affiché, sans churn de decodage. Le **temps de lecture** d'un media (`video`/`sound`) reste reconstruit separement par la synchronisation media, pas par ce modele de node.
+
 5. Actions
 
 - `actions` est un dictionnaire `eventName -> action` type par `Perso.type`.

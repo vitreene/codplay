@@ -10,6 +10,18 @@ Réalisé : `ImageComponent` réécrit (`mediaBySrc: Map<src, node>`, `activeSrc
 
 Tests : `tests/v1/seek-image-src.spec.ts` (4 cas : reconstruction seek→initial ; 0 réassignation src région initiale ; 0 réassignation région post-mutation ; une seule img attachée + identité de node préservée au détach/réattach). Suite complète : 0 régression (13 échecs préexistants identiques), gates lot7/8/18 = 21/21. **Validé visuellement par l'auteur le 2026-06-25** (transitions simple + split-cells au seek, reconstruction de l'image initiale, pas de flick).
 
+### Extension media (video / sound) — 2026-06-25
+
+`MediaComponent` partageait exactement le même défaut structurel (`setupMediaNode` réutilisait la node sans reset/recharge du `src`). Node-par-src appliqué de la même façon (collection `mediaBySrc`, `setActiveSrc` detach/attach, `render` reset à l'initial, `update` bascule sur `action.src`). `media-sync` résout le composant par id et appelle son API (`seekTo`/`play`/`pause`…) qui passe par `getPart(MEDIA_REF)` = node active → intégration inchangée. Pour un media à `src` unique (cas preload-media) : une seule node, comportement identique. Warning `AUTHOR_MEDIA_SRC_NOT_PRELOADED` hors ensemble statique. Le **temps de lecture** reste géré par `media-sync` (non concerné). Test `tests/v1/seek-media-src.spec.ts`. Spec : `v1-perso-spec.md` §4ter. Vérif audio/vidéo réelle = à faire par l'auteur (non audible/visible par l'agent).
+
+### Régression corrigée : outlets de layout perdus au seek — 2026-06-25
+
+Ma réécriture de `LayoutComponent` (réutilisation racine) re-collectait les `data-part` via `collectDataParts` au refresh. Or `collectDataParts` **retire** l'attribut `data-part` à la 1ʳᵉ lecture (consommation prévue pour le parse unique) → au refresh, plus aucune partie trouvée → outlets non réenregistrés → `AUTHOR_LAYOUT_OUTLET_NOT_FOUND` au seek, et les moves vers ces outlets cassés. Fix : sur réutilisation, ne PAS re-collecter — garder les références de parties (stables, mêmes nodes) du premier render et ne restaurer que le baseline d'attributs. Test `tests/v1/seek-layout-outlet.spec.ts`.
+
+### Point ouvert : clones de transition superposés (race) — 2026-06-25
+
+Signalé : après plusieurs allers-retours par seek, deux nodes texte se superposent parfois (transition `replace` simple, clones non nettoyés). Le chemin déterministe est protégé (`load()` appelle `animationAdapter.stop()` → `onGroupFinalize` retire les clones ; vérifié par `tests/v1/seek-transition-clone-leak.spec.ts`). Non reproductible en jsdom/seek synchrone → vraisemblablement une race liée au timing réel d'anime.js (transition live interrompue par un seek). À investiguer avec des étapes de repro ou une trace navigateur.
+
 ## Diagnostic (validé)
 
 - Le `src` n'est pas un état rejouable : il est posé par l'exécution de l'action `replace` (`ImageComponent.update`). Au seek, le player rejoue les évènements dus → les états adossés à un `replace` se reconstruisent ; **l'état initial, seul état sans évènement, ne se reconstruit pas** (le `src` reste celui de la dernière mutation).

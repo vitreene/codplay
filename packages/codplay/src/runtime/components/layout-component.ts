@@ -199,28 +199,27 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
       this.report('AUTHOR_LAYOUT_MARKUP_INVALID', 'Layout markup must be a non-empty string')
     }
 
-    this.clearParts()
-    this.partIds = []
-
     // Reuse the existing root on refresh/seek. The authored markup is static, so re-parsing
     // would recreate the root node and force every moved child (e.g. a media perso) to be
-    // re-parented, interrupting the browser decode. Restore the markup baseline in place,
-    // re-collect data-parts (children are preserved), then reapply authored services.
+    // re-parented, interrupting the browser decode. The data-part attributes were already
+    // consumed by collectDataParts on the first parse, so parts cannot be re-collected — keep
+    // the stable part refs (same reused nodes) and just restore the markup baseline in place.
     if (this.node !== null && this.authoredAttrs !== null) {
       this.restoreAuthoredAttrs(this.node, '__root__')
-
-      const nodeByPart = new Map<string, unknown>()
-      collectDataParts(this.node, nodeByPart)
-      for (const [partId, partRef] of nodeByPart) {
-        this.restoreAuthoredAttrs(partRef, partId)
-        this.setPart(partId, partRef)
-        this.partIds.push(partId)
+      for (const partId of this.partIds) {
+        const partRef = this.getPart(partId)
+        if (partRef !== null) {
+          this.restoreAuthoredAttrs(partRef, partId)
+        }
       }
 
       this.services.apply(this.node, this.perso.initial)
 
       return this.node as Node
     }
+
+    this.clearParts()
+    this.partIds = []
 
     const parsedTree = parseLayoutMarkup(markup, resolvedFormat)
     const rootNode = parsedTree.rootNode

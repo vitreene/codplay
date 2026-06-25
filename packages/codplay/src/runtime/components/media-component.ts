@@ -45,17 +45,15 @@ function isMediaNodePaused(mediaNode: MediaNodeLike | null): boolean {
 }
 
 /**
- * Creates or reuses one internal video node attached to the wrapper root.
+ * Creates one fresh internal media node (one per src). DOM env returns a real <video>;
+ * the object fallback mirrors the media playback surface used by media-sync in tests.
  */
-function ensureMediaNode(rootNode: unknown, currentNode: unknown | null): unknown {
-  if (isDomElement(rootNode)) {
-    const existingNode = currentNode ?? rootNode.querySelector('video') ?? globalThis.document.createElement('video')
-    appendDomChild(rootNode, existingNode)
-    return existingNode
+function createMediaNode(rootNode: unknown): unknown {
+  if (typeof globalThis.document !== 'undefined') {
+    return globalThis.document.createElement('video')
   }
 
-  const existingFallbackNode = currentNode as MediaNodeLike | null
-  const fallbackNode: MediaNodeLike = existingFallbackNode ?? {
+  const fallbackNode: MediaNodeLike = {
     tagName: 'VIDEO',
     style: {},
     attributes: {},
@@ -76,10 +74,6 @@ function ensureMediaNode(rootNode: unknown, currentNode: unknown | null): unknow
     fallbackNode.paused = true
   }
 
-  if (typeof rootNode === 'object' && rootNode !== null) {
-    ;(rootNode as Record<string, unknown>).mediaNode = fallbackNode
-  }
-
   return fallbackNode
 }
 
@@ -88,6 +82,10 @@ function ensureMediaNode(rootNode: unknown, currentNode: unknown | null): unknow
  */
 export class MediaComponent extends BaseComponent implements MediaComponentApi {
   private playbackState: 'playing' | 'paused' = 'paused'
+  /** One persistent media node per src. Inactive nodes are detached but retained here. */
+  private readonly mediaBySrc = new Map<string, unknown>()
+  /** The src whose node is currently attached to the root. */
+  private activeSrc: string | null = null
 
   /**
    * Declares services used for className, style and attr patches.
@@ -257,29 +255,81 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     const targetNode = this.resolveRef(typeof action.ref === 'string' ? action.ref : undefined) ?? this.node
     this.services.apply(targetNode, input.action)
     if (typeof action.src === 'string') {
-      this.setMediaSource(this.getPart(MEDIA_REF), action.src)
+      this.setActiveSrc(this.node, action.src)
     }
     this.applyVideoProps(action.video)
   }
 
   /**
-   * Ensures the video part exists, registers it, and initializes state.
-   * existingMediaNode must be captured before buildNode clears the parts map.
-   * On refresh (existingMediaNode !== null) the media element is reused without
-   * reset or src reload — syncTimeline is responsible for repositioning it.
+   * Collects the statically declared srcs of this perso (initial + actions).
    */
-  private setupMediaNode(rootNode: unknown, existingMediaNode: unknown | null): void {
-    const mediaNode = ensureMediaNode(rootNode, existingMediaNode)
-    this.setPart(MEDIA_REF, mediaNode)
-    this.playbackState = 'paused'
-    if (existingMediaNode !== null) {
-      return
-    }
+  private staticSrcs(): string[] {
+    const srcs: string[] = []
     const initial = this.perso.initial as { src?: unknown }
-    resetRuntimeNodeState(mediaNode)
     if (typeof initial.src === 'string') {
-      this.setMediaSource(mediaNode, initial.src)
+      srcs.push(initial.src)
     }
+    const actions = (this.perso.actions ?? {}) as Record<string, unknown>
+    for (const action of Object.values(actions)) {
+      if (action !== null && typeof action === 'object' && !Array.isArray(action)) {
+        const src = (action as Record<string, unknown>).src
+        if (typeof src === 'string') {
+          srcs.push(src)
+        }
+      }
+    }
+    return srcs
+  }
+
+  /**
+   * Returns the persistent media node for one src, creating it (src assigned once) on first
+   * use. A src outside the static set warns the author: all scene media should be preloaded.
+   */
+  private ensureNodeForSrc(rootNode: unknown, src: string): unknown {
+    const existing = this.mediaBySrc.get(src)
+    if (existing !== undefined) {
+      return existing
+    }
+
+    if (!this.staticSrcs().includes(src)) {
+      this.report(
+        'AUTHOR_MEDIA_SRC_NOT_PRELOADED',
+        'Media src is not in the perso static set; all scene media should be preloaded',
+        { src }
+      )
+    }
+
+    const node = createMediaNode(rootNode)
+    resetRuntimeNodeState(node)
+    this.setMediaSource(node, src)
+    this.applyVideoProps((this.perso.initial as Record<string, unknown>).video, node)
+    this.mediaBySrc.set(src, node)
+    return node
+  }
+
+  /**
+   * Makes the node for one src the single attached media child of the root: detaches the
+   * previously active node and attaches the target one. No src reassignment on an existing
+   * node, so playback/decoding of inactive nodes is preserved.
+   */
+  private setActiveSrc(rootNode: unknown, src: string): void {
+    const node = this.ensureNodeForSrc(rootNode, src)
+
+    const previous =
+      this.activeSrc !== null ? this.mediaBySrc.get(this.activeSrc) : undefined
+    if (previous !== undefined && previous !== node && isDomElement(previous)) {
+      previous.remove()
+    }
+
+    if (isDomElement(rootNode) && isDomElement(node) && node.parentNode !== rootNode) {
+      appendDomChild(rootNode, node)
+    } else if (!isDomElement(rootNode) && typeof rootNode === 'object' && rootNode !== null) {
+      ;(rootNode as Record<string, unknown>).mediaNode = node
+    }
+
+    this.activeSrc = src
+    this.setPart(MEDIA_REF, node)
+    this.playbackState = 'paused'
   }
 
   /**
@@ -290,11 +340,12 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * The base class cp-video-inner is always re-ensured last so any authored
    * CSS selector or inline style can override defaults without !important.
    */
-  private applyVideoProps(videoProps: unknown): void {
+  private applyVideoProps(videoProps: unknown, target?: unknown): void {
+    const node = target ?? this.getPart(MEDIA_REF)
     if (videoProps !== null && typeof videoProps === 'object') {
-      this.services.apply(this.getPart(MEDIA_REF), videoProps as Record<string, unknown>)
+      this.services.apply(node, videoProps as Record<string, unknown>)
     }
-    applyClassNamePatch(this.getPart(MEDIA_REF), { add: VIDEO_BASE_CLASS })
+    applyClassNamePatch(node, { add: VIDEO_BASE_CLASS })
   }
 
   /**
@@ -303,11 +354,15 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * setupMediaNode can reuse it on seek refresh without reset or src reload.
    */
   render(): ComponentRenderResult {
-    const existingMediaNode = this.getPart(MEDIA_REF)
-    const rootNode = this.buildNode(`<div><video data-part="${MEDIA_REF}"/></div>`)
-    this.setupMediaNode(rootNode, existingMediaNode)
+    const rootNode = this.buildNode('<div></div>')
     this.services.apply(rootNode, this.perso.initial)
+
+    const initialSrc = (this.perso.initial as { src?: unknown }).src
+    if (typeof initialSrc === 'string') {
+      this.setActiveSrc(rootNode, initialSrc)
+    }
     this.applyVideoProps((this.perso.initial as Record<string, unknown>).video)
+
     return rootNode as Node
   }
 }
