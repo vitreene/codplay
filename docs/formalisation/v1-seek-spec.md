@@ -218,4 +218,6 @@ Pistes ecartees ou deja appliquees :
 
 Fix : **retirer le detach-all**, en rendant explicite et garde l'invariant qu'il remplacait — reset et replay doivent rester dans la **meme tache synchrone** (aucun `await`/`rAF`/`img.decode()` glisse entre `loadPersos` et le `syncAnimationsToTimeline` final). Le diffing d'etat par persona (cf. `2026-06-23-orchestrator-refresh-diffing-plan.md`) reste pertinent pour **sauter** les personas stables et reduire le travail de refresh, mais ce n'est plus la justification anti-flicker — celle-ci tombe avec le detach.
 
+Resolu (2026-06-25). En plus du retrait du detach-all et de l'idempotence de `applyMove`/des passes de mount, l'implementation a revele que la **cause dominante** du churn media carousel etait `LayoutComponent.render()` qui recreait son node racine a chaque seek (`parseLayoutMarkup`), re-parentant tout enfant (dont l'`<img>` d'une cellule `type: layout`). Corrige : le layout reutilise desormais son node et restaure le baseline d'attributs du markup au lieu de recreer (markup statique). `ImageComponent` etait deja correct. Voir `2026-06-25-orchestrator-remove-detach-all-plan.md` (statut implemente) et `tests/v1/seek-no-detach.spec.ts`.
+
 Plan d'implementation : `2026-06-25-orchestrator-remove-detach-all-plan.md`.

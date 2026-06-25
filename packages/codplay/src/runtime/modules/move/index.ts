@@ -135,6 +135,22 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
     }
 
     if (targetNode !== null) {
+      // Idempotence: when the node is already a child of the resolved target and was not
+      // held by a source list, skip the detach+append cycle entirely. Re-detaching a
+      // still-correct <img>/<video> would interrupt the browser decode and corrupt the
+      // live measurements (naturalWidth) read downstream. The initial-move pass only ever
+      // re-establishes a static structure on seek, so the position is already correct.
+      if (
+        sourceList === null &&
+        childNode !== null &&
+        childNode !== undefined &&
+        host.helpers.isNodeChildOf(targetNode, childNode)
+      ) {
+        host.registries.container.setParentId(request.persoId, null)
+        host.registries.mounted.set(request.persoId, true)
+        return
+      }
+
       const movedChildNode = sourceList !== null
         ? sourceList.detachChild({
             childId: request.persoId,

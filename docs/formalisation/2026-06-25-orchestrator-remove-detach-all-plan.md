@@ -2,7 +2,31 @@
 
 ## Statut
 
-Non démarré. Fait suite à l'analyse du 2026-06-25 (cf. `v1-seek-spec.md` — appendice « le detach-all du refresh est une fausse optimisation »). Remplace, sur le volet anti-flicker, le plan `2026-06-23-orchestrator-refresh-diffing-plan.md` (qui reste valable pour son objectif résiduel : sauter le refresh des personas stables).
+**Implémenté et vérifié le 2026-06-25.** Suite complète : 0 régression (13 échecs préexistants identiques au baseline HEAD), gates lot7/8/18 = 21/21, test d'acceptance `tests/v1/seek-no-detach.spec.ts` vert. Fait suite à l'analyse du 2026-06-25 (cf. `v1-seek-spec.md` — appendice « le detach-all du refresh est une fausse optimisation »). Remplace, sur le volet anti-flicker, le plan `2026-06-23-orchestrator-refresh-diffing-plan.md` (qui reste valable pour son objectif résiduel : sauter le refresh des personas stables).
+
+### Découverte en cours d'implémentation : cause dominante = recréation de la racine layout
+
+L'implémentation a révélé que retirer le detach-all + rendre `applyMove` idempotent **ne suffisait pas** pour le cas carousel : `LayoutComponent.render()` appelait **toujours** `parseLayoutMarkup`, recréant son node racine à chaque seek. Tout enfant déplacé dans un layout (donc l'`<img>` de replace-carousel, qui vit dans une cellule `type: layout`) était alors ré-parenté (`removeChild`+`appendChild`) à chaque seek → décodage interrompu. `ImageComponent` était déjà correct (réutilise son node, préserve l'`<img>` interne via `existingMediaNode`). Le coupable restant était uniquement le layout parent.
+
+Fix appliqué dans `LayoutComponent` : réutiliser `this.node` sur refresh/seek (le markup étant statique — `perso.initial.markup`, jamais muté ; `update()` n'applique que className/style/attr), en restaurant le **baseline d'attributs du markup** (snapshot pris au premier parse, avant `services.apply`) au lieu de recréer le node. Préserve enfants + styles inline du markup ET réinitialise les mutations runtime (correction seek). Une réutilisation naïve via `resetRuntimeNodeStyleState` aurait effacé les styles inline du markup (ex. cellules carousel `style="display:flex;..."`).
+
+### Bug de reconstruction du src image au seek (préexistant, NON corrigé — tension avec le fix flicker)
+
+Une fois le flicker disparu, un bug **préexistant** est devenu visible (confirmé sur baseline HEAD) : en seek arrière sous une mutation `src` (carousel `replace`), l'image ne revient pas à son `src` initial — la mauvaise image reste affichée. Cause : `ImageComponent.render()` ne réapplique l'état media (`src`) qu'au **premier mount** (`existingMediaNode === null`), pour préserver le décodage. Au seek arrière, sans event replace dû, le `src` reste celui de la dernière mutation.
+
+**Tentative naïve annulée** : réappliquer systématiquement le `src` dans `render()` (même via `applyImageSource` idempotent) **réintroduit le flicker et le mauvais calcul de dimensions**. Raison : le seek fonctionne en reset(render)+replay. Pour un scrub *à l'intérieur* d'une région post-mutation (src cible = B), `render()` réécrit l'initial A (DOM=B → écrit A) puis le replay réécrit B (A→B) → **deux réassignations de `src` par frame** alors que la valeur finale est constante → décodage relancé en boucle → `naturalWidth=0`. Le gate `existingMediaNode === null` protégeait exactement contre ça. Revert effectué : le gate est conservé, le décodage reste stable.
+
+**Vraie solution (follow-up, non implémenté)** : commit différé du `src` — calculer le `src` final reconstruit pour la cible de seek (initial, surchargé par les replace ≤ cible) et l'écrire **une seule fois** par batch de seek, idempotemment. Ainsi un scrub dans une région stable ne réassigne jamais (décodage préservé) et le seek arrière restaure l'initial. Nécessite une phase de commit explicite après le replay (ou un suivi `pendingSrc` + flush contrôlé), à plomber proprement. Acceptance test prêt : `tests/v1/seek-image-src.spec.ts` (premier cas en `it.skip`).
+
+### Fichiers livrés
+
+- `runtime/components/runtime-component-orchestrator.ts` : retrait detach-all (pré-boucle) + detach par perso (refresh + mount) ; `isNodeChildOf` ; gardes idempotentes `mountStoryHosts`/`mountStoryEntriesToStoryHosts` ; suppression `isRuntimeListComponent` (orphelin).
+- `runtime/modules/move/index.ts` : idempotence du chemin `targetNode` de `applyMove`.
+- `runtime/components/types.ts` : `isNodeChildOf` au contrat host.
+- `runtime/components/layout-component.ts` : réutilisation racine + snapshot/restore baseline markup (`captureAuthoredAttrs`/`restoreAuthoredAttrs`).
+- `runtime/components/image-component.ts` : réapplication systématique de l'état media initial dans `render()` (reconstruction seek du `src`, décodage préservé via idempotence).
+- `tests/v1/seek-no-detach.spec.ts` : acceptance (jsdom) — zéro `removeChild`/`appendChild` sur un enfant stable, identités node/parent préservées, sur une rafale de seeks.
+- `tests/v1/seek-image-src.spec.ts` : seek arrière restaure le `src` initial ; scrub stable ne réassigne jamais le `src` (décodage préservé).
 
 ## Problème
 

@@ -1,6 +1,6 @@
 import { BaseComponent } from './lib/base-component'
-import { ensureImagePart, resetImagePart, setImageAlt, setImageFitMode, setImageSource } from './lib/dom'
-import { applyClassNamePatch } from './lib/dom-component-adapter'
+import { setImageAlt, setImageFitMode, setImageSource } from './lib/dom'
+import { applyClassNamePatch, isDomElement } from './lib/dom-component-adapter'
 import { injectBaseStyle } from './lib/inject-base-style'
 import type { ImageFitMode } from './lib/dom'
 import { RUNTIME_CONFIG } from '../config'
@@ -33,9 +33,24 @@ function resolveImageFitMode(value: unknown): ImageFitMode | null {
 }
 
 /**
- * Implements one simple image component with one root and one media part.
+ * Image component backed by one persistent <img> per distinct src (node-per-src).
+ *
+ * The src of a media element is a side-effectful resource (assigning it restarts decode),
+ * so it cannot be reset/replayed like a style. Instead each authored src gets its own <img>,
+ * created and decoded once, kept in a map. The component state is *which node is attached*
+ * to the root — a structural, side-effect-free state that resets in render() and replays in
+ * update() exactly like any other reconstructable state. The src itself is never reassigned;
+ * switching image = detach the current node, attach the target node (its decode is preserved).
+ *
+ * Because exactly one <img> is attached at any time, the replace transitions (which clone the
+ * root or read `querySelector('img')`) keep working unchanged.
  */
 export class ImageComponent extends BaseComponent {
+  /** One persistent, decoded <img> per src. Inactive nodes are detached but retained here. */
+  private readonly mediaBySrc = new Map<string, unknown>()
+  /** The src whose node is currently attached to the root. */
+  private activeSrc: string | null = null
+
   /**
    * Declares services used for className, style and attr patches.
    * Injects the base stylesheet for the inner img element once per page.
@@ -50,69 +65,125 @@ export class ImageComponent extends BaseComponent {
   }
 
   /**
-   * Ensures the img part exists inside the root node.
-   * existingMediaNode must be captured before buildNode clears the parts map.
-   * On refresh (existingMediaNode !== null) the img element is reused without
-   * reset or src reload — reassigning the same src resets naturalWidth/complete
-   * synchronously until the (cached) load event fires, which corrupts any code
-   * reading image dimensions in the same tick (e.g. replace's split-cells).
+   * Collects the statically declared srcs of this perso (initial + actions). These are the
+   * media preloaded for the scene — the static source of truth for the node collection.
    */
-  private setupImageNode(rootNode: unknown, existingMediaNode: unknown | null): unknown {
-    const mediaNode = ensureImagePart(rootNode, existingMediaNode)
-    this.setPart(MEDIA, mediaNode)
-    if (existingMediaNode === null) {
-      resetImagePart(mediaNode)
+  private staticSrcs(): string[] {
+    const srcs: string[] = []
+    const initial = this.perso.initial as ImageState
+    if (typeof initial.src === 'string') {
+      srcs.push(initial.src)
     }
-    return mediaNode
+    const actions = (this.perso.actions ?? {}) as Record<string, unknown>
+    for (const action of Object.values(actions)) {
+      if (action !== null && typeof action === 'object' && !Array.isArray(action)) {
+        const src = (action as Record<string, unknown>).src
+        if (typeof src === 'string') {
+          srcs.push(src)
+        }
+      }
+    }
+    return srcs
   }
 
   /**
-   * Applies image-specific props on the internal img element.
-   * The base class cp-img-inner is always re-ensured last so any authored
-   * CSS selector or inline style can override defaults without !important.
+   * Returns the persistent node for one src, creating it (and decoding it once) on first use.
+   * A src outside the static set warns the author: all scene media should be preloaded.
    */
-  private applyImageMediaState(mediaNode: unknown, state: ImageState): void {
-    if (typeof state.src === 'string') {
-      setImageSource(mediaNode, state.src)
+  private ensureMediaNode(src: string): unknown {
+    const existing = this.mediaBySrc.get(src)
+    if (existing !== undefined) {
+      return existing
     }
 
+    if (!this.staticSrcs().includes(src)) {
+      this.report(
+        'AUTHOR_IMAGE_SRC_NOT_PRELOADED',
+        'Image src is not in the perso static set; all scene media should be preloaded',
+        { src }
+      )
+    }
+
+    const node =
+      typeof globalThis.document !== 'undefined'
+        ? globalThis.document.createElement('img')
+        : ({ tagName: 'IMG', style: {}, attributes: {} } as unknown)
+
+    setImageSource(node, src)
+    this.applyMediaProps(node, this.perso.initial as ImageState)
+    this.mediaBySrc.set(src, node)
+    return node
+  }
+
+  /**
+   * Applies the non-src media props (alt, fitMode, authored img styles, base class) on one node.
+   * The src is never applied here — it is assigned once at node creation.
+   */
+  private applyMediaProps(node: unknown, state: ImageState): void {
     if (typeof state.alt === 'string') {
-      setImageAlt(mediaNode, state.alt)
+      setImageAlt(node, state.alt)
     }
 
     const fitMode = resolveImageFitMode(state.fitMode)
     if (fitMode !== null) {
-      setImageFitMode(mediaNode, fitMode)
+      setImageFitMode(node, fitMode)
     }
 
     if (state.img !== null && typeof state.img === 'object') {
-      this.services.apply(mediaNode, state.img as Record<string, unknown>)
+      this.services.apply(node, state.img as Record<string, unknown>)
     }
 
-    applyClassNamePatch(mediaNode, { add: IMG_BASE_CLASS })
+    applyClassNamePatch(node, { add: IMG_BASE_CLASS })
   }
 
   /**
-   * Applies one resolved runtime action on the image component.
+   * Makes the node for one src the single attached child of the root: detaches the previously
+   * active node and attaches the target one. No src reassignment, so no decode restart.
+   */
+  private setActiveSrc(rootNode: unknown, src: string): void {
+    const node = this.ensureMediaNode(src)
+
+    const previous =
+      this.activeSrc !== null ? this.mediaBySrc.get(this.activeSrc) : undefined
+    if (previous !== undefined && previous !== node && isDomElement(previous)) {
+      previous.remove()
+    }
+
+    if (isDomElement(rootNode) && isDomElement(node) && node.parentNode !== rootNode) {
+      rootNode.appendChild(node)
+    }
+
+    this.activeSrc = src
+    this.setPart(MEDIA, node)
+  }
+
+  /**
+   * Applies one resolved runtime action: switches the attached node when the action carries a
+   * src, and applies any non-src media props on the active node.
    */
   update(input: RuntimeComponentUpdateInput): void {
     this.services.apply(this.node, input.action)
-    this.applyImageMediaState(this.getPart(MEDIA), input.action as ImageState)
+    const action = input.action as ImageState
+    if (typeof action.src === 'string') {
+      this.setActiveSrc(this.node, action.src)
+    }
+    this.applyMediaProps(this.getPart(MEDIA), action)
   }
 
   /**
-   * Creates the component root with an internal image part.
-   * The existing img node is captured before buildNode clears the parts map so
-   * setupImageNode can reuse it on seek refresh without reset or src reload.
+   * Builds the root and resets the attached node to the authored initial src. On refresh
+   * (seek/rewind) the root is reused and this reset re-attaches the initial node — the reset
+   * step of the seek cycle, side-effect-free (no src reassignment).
    */
   render(): ComponentRenderResult {
-    const existingMediaNode = this.getPart(MEDIA)
-    const rootNode = this.buildNode(`<div><img data-part="${MEDIA}"/></div>`)
-    const mediaNode = this.setupImageNode(rootNode, existingMediaNode)
+    const rootNode = this.buildNode('<div></div>')
     this.services.apply(rootNode, this.perso.initial)
-    if (existingMediaNode === null) {
-      this.applyImageMediaState(mediaNode, this.perso.initial as ImageState)
+
+    const initialSrc = (this.perso.initial as ImageState).src
+    if (typeof initialSrc === 'string') {
+      this.setActiveSrc(rootNode, initialSrc)
     }
+
     return rootNode as Node
   }
 }

@@ -324,6 +324,7 @@ export class RuntimeComponentOrchestrator {
         canAttachChildToNode: (parentNode, childNode) => this.canAttachChildToNode(parentNode, childNode),
         detachNode: (nodeRef) => this.detachNodeFromParent(nodeRef),
         appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode),
+        isNodeChildOf: (parentNode, childNode) => this.isNodeChildOf(parentNode, childNode),
       },
       emit: (input: ModuleEmitInput) => {
         const ms = input.ms ?? getTimelineMs();
@@ -410,12 +411,13 @@ export class RuntimeComponentOrchestrator {
       this.storyMoveByStoryId.set(storyId, rawMove);
     }
 
-    // Pre-detach all currently mounted nodes before any refresh so that style/content
-    // resets never happen on nodes that are still visible in the document, regardless
-    // of perso iteration order.
-    for (const node of this.nodeByPersoId.values()) {
-      this.detachNodeFromParent(node);
-    }
+    // No pre-detach. A loadPersos (seek/rewind/rebuild) runs entirely inside a single
+    // synchronous task: the style/content reset below and the subsequent event replay
+    // happen before the browser ever repaints, so an off-screen reset is unnecessary.
+    // Detaching here would needlessly remove nodes from the document and, for media
+    // (<img>/<video>), interrupt the browser decode — corrupting live measurements
+    // (naturalWidth) on the next refresh. Attach passes below are made idempotent so
+    // unchanged nodes are never detached. See v1-seek-spec.md (appendice 2026-06-25).
 
     for (const perso of Object.values(runtimePersos.persos)) {
       const existingComponent = this.componentByPersoId.get(perso.id);
@@ -468,21 +470,13 @@ export class RuntimeComponentOrchestrator {
    * Refreshes one already-mounted runtime component in place.
    */
   private refreshLoadedRuntimeComponent(perso: ItemDoc, component: RuntimeComponent): void {
-    const previousRootNode = this.nodeByPersoId.get(perso.id) ?? null;
-
-    // Detach before render so that style/content reset happens off-screen.
-    // When node identity is preserved (reuse), the second detach below is a no-op.
-    if (previousRootNode !== null) {
-      this.detachNodeFromParent(previousRootNode);
-    }
-
+    // No detach: the node is reused in place (buildNode preserves node identity) and
+    // its style/content reset happens synchronously, before any repaint. Detaching here
+    // would interrupt media decode on the reused node. The idempotent attach passes keep
+    // the node where it already is when nothing changed.
     const nextRootNode = this.tryInitComponent(perso, component, "refresh");
     if (nextRootNode === null) {
       return;
-    }
-
-    if (!this.isRuntimeListComponent(component)) {
-      this.detachNodeFromParent(nextRootNode);
     }
 
     this.storeLoadedRuntimeComponent(perso, component, nextRootNode);
@@ -503,10 +497,6 @@ export class RuntimeComponentOrchestrator {
     const rootNode = this.tryInitComponent(perso, component, "mount");
     if (rootNode === null) {
       return;
-    }
-
-    if (!this.isRuntimeListComponent(component)) {
-      this.detachNodeFromParent(rootNode);
     }
 
     this.storeLoadedRuntimeComponent(perso, component, rootNode);
@@ -749,20 +739,6 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Checks whether one component supports list attach/detach routing.
-   */
-  private isRuntimeListComponent(component: RuntimeComponent): component is RuntimeListComponent {
-    return (
-      "attachChild" in component &&
-      typeof component.attachChild === "function" &&
-      "detachChild" in component &&
-      typeof component.detachChild === "function" &&
-      "repositionChild" in component &&
-      typeof component.repositionChild === "function"
-    );
-  }
-
-  /**
    * Checks whether one runtime component exposes the layout outlet bridge contract.
    */
   private hasRuntimeOutlets(
@@ -911,6 +887,11 @@ export class RuntimeComponentOrchestrator {
       }
 
       const hostNode = this.resolveStoryHostNode(storyId, targetNode);
+      // Idempotent: re-appending an already-attached host would detach its whole
+      // subtree (and interrupt media decode). The story structure is static across seeks.
+      if (this.isNodeChildOf(targetNode, hostNode)) {
+        continue;
+      }
       this.appendNodeToParent(targetNode, hostNode);
     }
   }
@@ -957,7 +938,12 @@ export class RuntimeComponentOrchestrator {
           continue;
         }
 
-        this.appendNodeToParent(hostNode, entryNode);
+        // Idempotent: skip when the entry is already attached to its host. The entry
+        // order is static across seeks, so leaving placed nodes untouched preserves
+        // order while avoiding a subtree detach (and media decode interruption).
+        if (!this.isNodeChildOf(hostNode, entryNode)) {
+          this.appendNodeToParent(hostNode, entryNode);
+        }
         this.parentListByPersoId.set(entryId, null);
         this.mountedByPersoId.set(entryId, true);
       }
@@ -991,6 +977,23 @@ export class RuntimeComponentOrchestrator {
     const currentChildren = Array.isArray(mutableParent.children) ? mutableParent.children : [];
     mutableParent.children = currentChildren.filter((candidate) => candidate !== nodeRef);
     childNode.parentNode = null;
+  }
+
+  /**
+   * Reports whether one node is already a direct child of one parent (DOM or object).
+   * Used by the idempotent attach passes to skip a redundant detach/append cycle on seek.
+   */
+  private isNodeChildOf(parentNode: unknown, childNode: unknown): boolean {
+    if (
+      typeof parentNode !== "object" ||
+      parentNode === null ||
+      typeof childNode !== "object" ||
+      childNode === null
+    ) {
+      return false;
+    }
+
+    return (childNode as { parentNode?: unknown }).parentNode === parentNode;
   }
 
   /**

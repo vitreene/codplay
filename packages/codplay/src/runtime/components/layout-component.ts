@@ -136,6 +136,13 @@ function parseLayoutMarkup(markup: string, format: LayoutFormat): LayoutParsedTr
  */
 export class LayoutComponent extends BaseComponent implements RuntimeLayoutComponent {
   private partIds: string[] = []
+  /**
+   * Authored attribute baseline (markup attributes incl. inline style and the stable id),
+   * captured once at first parse and keyed by data-part id ('__root__' for the root). Used to
+   * restore the markup baseline when the root node is reused across seeks, instead of recreating
+   * it — recreating would re-parent every moved child and interrupt media decode.
+   */
+  private authoredAttrs: Map<string, Map<string, string>> | null = null
 
   /**
    * Declares services used for className, style and attr patches.
@@ -195,6 +202,26 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     this.clearParts()
     this.partIds = []
 
+    // Reuse the existing root on refresh/seek. The authored markup is static, so re-parsing
+    // would recreate the root node and force every moved child (e.g. a media perso) to be
+    // re-parented, interrupting the browser decode. Restore the markup baseline in place,
+    // re-collect data-parts (children are preserved), then reapply authored services.
+    if (this.node !== null && this.authoredAttrs !== null) {
+      this.restoreAuthoredAttrs(this.node, '__root__')
+
+      const nodeByPart = new Map<string, unknown>()
+      collectDataParts(this.node, nodeByPart)
+      for (const [partId, partRef] of nodeByPart) {
+        this.restoreAuthoredAttrs(partRef, partId)
+        this.setPart(partId, partRef)
+        this.partIds.push(partId)
+      }
+
+      this.services.apply(this.node, this.perso.initial)
+
+      return this.node as Node
+    }
+
     const parsedTree = parseLayoutMarkup(markup, resolvedFormat)
     const rootNode = parsedTree.rootNode
 
@@ -202,7 +229,11 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
       applyNodeId(rootNode, this.perso.id)
     }
 
+    this.authoredAttrs = new Map<string, Map<string, string>>()
+    this.captureAuthoredAttrs(rootNode, '__root__')
+
     for (const [partId, partRef] of parsedTree.nodeByPart) {
+      this.captureAuthoredAttrs(partRef, partId)
       this.setPart(partId, partRef)
       this.partIds.push(partId)
     }
@@ -210,5 +241,44 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
     this.services.apply(rootNode, this.perso.initial)
 
     return rootNode as Node
+  }
+
+  /**
+   * Captures one node's authored markup attributes (incl. the stable id) under one key.
+   * Called at first parse, before authored services are applied, so runtime-applied
+   * className/style/attr are never part of the baseline.
+   */
+  private captureAuthoredAttrs(nodeRef: unknown, key: string): void {
+    if (this.authoredAttrs === null || !isDomElement(nodeRef)) {
+      return
+    }
+
+    const attrs = new Map<string, string>()
+    for (const attributeName of nodeRef.getAttributeNames()) {
+      attrs.set(attributeName, nodeRef.getAttribute(attributeName) ?? '')
+    }
+    this.authoredAttrs.set(key, attrs)
+  }
+
+  /**
+   * Restores one node to its authored markup attribute baseline, dropping any
+   * runtime-applied attributes so seek replay reapplies state from a clean baseline.
+   */
+  private restoreAuthoredAttrs(nodeRef: unknown, key: string): void {
+    if (this.authoredAttrs === null || !isDomElement(nodeRef)) {
+      return
+    }
+
+    const baseline = this.authoredAttrs.get(key)
+    if (baseline === undefined) {
+      return
+    }
+
+    for (const attributeName of nodeRef.getAttributeNames()) {
+      nodeRef.removeAttribute(attributeName)
+    }
+    for (const [attributeName, value] of baseline) {
+      nodeRef.setAttribute(attributeName, value)
+    }
   }
 }

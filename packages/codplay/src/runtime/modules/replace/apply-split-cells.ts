@@ -101,24 +101,38 @@ function buildCells(
   return cells;
 }
 
+/**
+ * Applies one object-fit rect (background size + per-cell offset) to one list of cells.
+ */
+function applyRectToCells(
+  cells: HTMLElement[],
+  cols: number,
+  rows: number,
+  containerW: number,
+  containerH: number,
+  rect: ObjectFitRect
+): void {
+  const cellW = containerW / cols;
+  const cellH = containerH / rows;
+  const { renderedW, renderedH, offsetX, offsetY } = rect;
+  let i = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cell = cells[i++];
+      if (cell === undefined) continue;
+      cell.style.backgroundSize = `${renderedW}px ${renderedH}px`;
+      cell.style.backgroundPosition = `${offsetX - col * cellW}px ${offsetY - row * cellH}px`;
+    }
+  }
+}
+
 export function applyCellsBRect(
   el: HTMLElement,
   rect: { renderedW: number; renderedH: number; offsetX: number; offsetY: number }
 ): void {
   const session = activeCellsSessions.get(el);
   if (session === undefined || session.bCells.length === 0) return;
-  const cellW = session.containerW / session.cols;
-  const cellH = session.containerH / session.rows;
-  const { renderedW, renderedH, offsetX, offsetY } = rect;
-  let i = 0;
-  for (let row = 0; row < session.rows; row++) {
-    for (let col = 0; col < session.cols; col++) {
-      const cell = session.bCells[i++];
-      if (cell === undefined) continue;
-      cell.style.backgroundSize = `${renderedW}px ${renderedH}px`;
-      cell.style.backgroundPosition = `${offsetX - col * cellW}px ${offsetY - row * cellH}px`;
-    }
-  }
+  applyRectToCells(session.bCells, session.cols, session.rows, session.containerW, session.containerH, rect);
 }
 
 export function cancelSplitCellsSession(el: HTMLElement): void {
@@ -152,12 +166,18 @@ export function applySplitCellsBefore(
   const objectFitMode: "cover" | "contain" =
     imgEl !== null && getComputedStyle(imgEl).objectFit === "contain" ? "contain" : "cover";
 
-  const naturalW = imgEl?.naturalWidth ?? 0;
-  const naturalH = imgEl?.naturalHeight ?? 0;
-  const aRect = computeObjectFitRect(naturalW, naturalH, containerW, containerH, objectFitMode);
-
   const cols = command.cellX ?? DEFAULT_COLS;
   const rows = command.cellY ?? DEFAULT_ROWS;
+
+  // L'image A (l'image courante) ne doit pas être mesurée tant qu'elle n'est pas prête :
+  // une lecture de naturalWidth sur une image non décodée renvoie 0 et produit un rect
+  // étiré, jamais corrigé. Si elle est prête, on calcule tout de suite ; sinon on construit
+  // les cellules A avec un rect provisoire (remplissage du conteneur) et on les corrige au
+  // load, comme pour les cellules B.
+  const imgReady = imgEl !== null && imgEl.complete && imgEl.naturalWidth > 0;
+  const aRect = imgReady
+    ? computeObjectFitRect(imgEl.naturalWidth, imgEl.naturalHeight, containerW, containerH, objectFitMode)
+    : { renderedW: containerW, renderedH: containerH, offsetX: 0, offsetY: 0 };
 
   const overlay = document.createElement("div");
   overlay.id = `${el.id}-cells-overlay`;
@@ -187,6 +207,27 @@ export function applySplitCellsBefore(
     parentPosition: originalParentPosition,
     parent,
   });
+
+  // Image A pas encore prête : corriger la géométrie des cellules A dès qu'elle est décodée,
+  // si la session est toujours active (la transition peut s'être terminée entre-temps).
+  if (!imgReady && imgEl !== null) {
+    imgEl.addEventListener(
+      "load",
+      () => {
+        const session = activeCellsSessions.get(el);
+        if (session === undefined || session.aCells !== aCells) return;
+        const rect = computeObjectFitRect(
+          imgEl.naturalWidth,
+          imgEl.naturalHeight,
+          containerW,
+          containerH,
+          objectFitMode
+        );
+        applyRectToCells(aCells, cols, rows, containerW, containerH, rect);
+      },
+      { once: true }
+    );
+  }
 }
 
 export function applySplitCellsAfter(input: {

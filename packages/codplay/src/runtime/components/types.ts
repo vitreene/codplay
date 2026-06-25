@@ -326,6 +326,7 @@ export type RuntimeModuleHost = {
     canAttachChildToNode(parentNode: unknown, childNode: unknown): boolean
     detachNode(nodeRef: unknown): void
     appendNode(parentNode: unknown, childNode: unknown): void
+    isNodeChildOf(parentNode: unknown, childNode: unknown): boolean
   }
   emit(input: ModuleEmitInput): void
   timeline: { readonly currentMs: number }
