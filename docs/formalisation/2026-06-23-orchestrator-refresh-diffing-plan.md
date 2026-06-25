@@ -2,7 +2,9 @@
 
 ## Statut
 
-Non démarré. Planifié à la suite de l'investigation des régressions media/carousel du 2026-06-23 (voir `v1-seek-spec.md` — appendice "detach-all systématique pendant un refresh, décodage media interrompu").
+Non démarré. Planifié à la suite de l'investigation des régressions media/carousel du 2026-06-23 (voir `v1-seek-spec.md` — appendice "le detach-all du refresh est une fausse optimisation").
+
+> **Révision 2026-06-25 — la justification anti-flicker du detach est abandonnée.** L'analyse initiale ci-dessous présentait le detach-all comme une protection anti-flicker à *scoper*. C'est faux : le reset→replay d'un `seek()` est atomique (une seule tâche JS synchrone, boucle de replay sans `await`), donc l'état intermédiaire n'est jamais peint et le detach ne masque rien. Le détach est une fausse optimisation qui casse le décodage media. Le fix prioritaire n'est plus de *scoper* le detach mais de le **retirer** (plan dédié : `2026-06-25-orchestrator-remove-detach-all-plan.md`). Ce plan-ci reste valable pour son objectif résiduel : **sauter le refresh des personas stables** (économie de travail), mais sans plus invoquer l'anti-flicker comme motif.
 
 ## Problème
 

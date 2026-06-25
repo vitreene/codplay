@@ -1,4 +1,4 @@
-# Plan : jeu de quiz géographie — architecture scène et stories
+# Plan : quiz-hunt — architecture scène et stories
 
 ## Statut
 En attente de validation avant implémentation.
@@ -112,37 +112,27 @@ Le tween de fin émet `game:timer:expired` via un planned event à `durationMs`.
 
 Montée dans `game:zone:main` à l'activation (via `move` ou `show/hide`).
 
-#### Types d'épreuves
+#### Types d'épreuves — Prototype 1
 
-| Type | Description |
+| Type | Statut |
 |---|---|
-| `vf-series` | Série de 3–4 questions vrai/faux en séquence → verdict gagné/perdu |
-| `single` | Une question à réponse unique |
-| `multiple` | Une question à réponses multiples |
-| `reading+quiz` | Texte à lire, puis une question (single ou multiple) |
-| `video+quiz` | Vidéo à regarder (timer pausé), puis une question |
-| `minigame` | À définir ultérieurement |
+| `reading+quiz` | **Seul type implémenté dans ce prototype.** Indice textuel (lecture, description de scène/son/situation — jamais de média réel) puis une question fermée. |
+| `vf-series`, `single`, `multiple` (autonomes), `video+quiz`, `minigame` | Hors scope — vision long terme, voir §Contenu Prototype 1 pour la justification |
 
 Pas de réponse ouverte.
 
-#### Épreuves quiz (`vf-series`, `single`, `multiple`)
+**Pourquoi un seul type ici** : le contenu source (voir §Contenu — Prototype 1) propose pour chaque mot deux épreuves possibles, mais aucune n'est un véritable média (pas de vidéo, pas d'image, pas d'interaction réelle) — ce sont toutes des indices textuels avec un habillage narratif différent ("Lecture courte", "Terminal piraté", "Observation de salle"…). Mécaniquement elles se réduisent toutes au même schéma : afficher un texte-indice, révéler une question, résoudre. Inutile de coder plusieurs `TrialType` pour ce round — un seul (`reading+quiz`) suffit, l'`epreuveLabel` porte la diversité narrative.
 
-Réutilise `quiz-question-scene` infrastructure — straps `quizQuestionStraps` embarqués dans la story.
-
-**`vf-series`** : enchaîne 3–4 questions booléennes (pattern quiz-series réduit). Le verdict final (`game:trial:done { success }`) est calculé à l'issue des N questions. Le seuil de réussite est un paramètre de la trial (`threshold`, ex. toutes correctes ou majorité).
-
-**`single` / `multiple`** : une seule question, résolution immédiate.
-
-Dans tous les cas : émet `game:trial:done { trialId, success, wordId, color }`.
-
-#### Épreuves média (`reading+quiz`, `video+quiz`)
+#### Épreuve `reading+quiz` — déroulé
 
 À l'entrée dans la story (strap déclenché sur `game:trial:open`) :
 ```ts
 events: [{ name: 'game:timer:pause' }]
 ```
 
-Phase média (lecture ou vidéo) → bouton "Continuer" → phase question (single ou multiple).
+1. Affiche `consigne` + `clueText` (le texte-indice, quel que soit son habillage narratif).
+2. Après un délai fixe de 3000 ms (`context.planned.delay(3000)`), révèle automatiquement la question — aucun bouton "Continuer". Ce délai remplace la durée incompressible qu'aurait eue un véritable extrait vidéo.
+3. Le joueur répond (question fermée — single ou multiple selon le contenu).
 
 À l'issue de la question :
 ```ts
@@ -152,7 +142,7 @@ events: [
 ]
 ```
 
-La phase lecture est toujours gagnante si aucune question ne suit — mais dans ce jeu toutes les épreuves lecture/vidéo ont une question.
+Réutilise `quiz-question-scene` infrastructure pour la phase question — straps `quizQuestionStraps` embarqués dans la story.
 
 #### Extra dans une trial lecture
 
@@ -311,7 +301,42 @@ Une unique valeur `seed` par partie contrôle **tous** les aléatoires, dans cet
 3. Offset temporel d'apparition de l'extra
 4. Couleur source de la question finale
 
-La même `seed` produit exactement la même partie — indispensable pour les tests. Cette logique est une simple fonction dans le code de la démo, le générateur est réinitialisé depuis `seed` à chaque appel de `createGameScene()`. CodPlay n'en a pas connaissance.
+La même `seed` produit exactement la même partie — indispensable pour les tests. Cette logique est une simple fonction dans le code de la démo, le générateur est réinitialisé depuis `seed` à chaque appel de `createQuizHuntScene()`. CodPlay n'en a pas connaissance.
+
+---
+
+## Contenu — Prototype 1
+
+Source : `packages/demos/public/jeu_video_1980_2000_questions_epreuves_v3.md` (thème jeux vidéo 1980-2000, 16 mots / 4 couleurs). Chaque mot y propose **2 épreuves possibles** ; pour ce prototype, **une seule est retenue par mot** (choix figé en dur dans le JSON, pas de logique de sélection).
+
+Règles de choix appliquées :
+- Au moins une épreuve "Lecture courte" par couleur (texte pur).
+- Diversité maximale des habillages narratifs sur les épreuves restantes (chaque flavor utilisé une seule fois quand possible).
+
+| Mot | Couleur | Épreuve retenue (`epreuveLabel`) |
+|---|---|---|
+| BAGUE | rouge | Lecture courte |
+| CARTE MAGNÉTIQUE | rouge | Mini-jeu de correspondance |
+| POTION | rouge | Inventaire à analyser |
+| MISSILE | rouge | Observation de salle |
+| RACCOON CITY | bleu | Lecture courte |
+| BLACK MESA | bleu | Séquence sonore décrite |
+| MONKEY ISLAND | bleu | Épreuve d'objets absurdes |
+| MIDGAR | bleu | Carte de ville à analyser |
+| METROID | vert | Lecture courte |
+| HEADCRAB | vert | Épreuve de trajectoire |
+| TONBERRY | vert | Choix tactique |
+| SHODAN | vert | Terminal piraté |
+| GUYBRUSH | jaune | Lecture courte |
+| ABE | jaune | Sauvetage d'ouvriers |
+| SAMUS | jaune | Améliorations à replacer |
+| RAZIEL | jaune | Deux mondes superposés |
+
+Les épreuves non retenues (ex. "Observation d'image fixe" pour BAGUE, "Dossier d'archives" pour RACCOON CITY…) restent dans le `.md` source pour un usage ultérieur, mais ne sont pas transcrites dans le JSON de ce round.
+
+**JSON généré** : `packages/demos/src/scenes/quiz-hunt/assets/questions/quiz-hunt.json` — un objet par mot avec `finalQuestion` (3-5 réponses, `type: 'single'` dans ce jeu de données) et `trial` (`epreuveLabel`, `consigne`, `clueText`, `question`). Toutes les questions de ce prototype sont à réponse unique ; le schéma supporte `'boolean' | 'single' | 'multiple'` pour du contenu futur.
+
+Le contenu actuel (jeux vidéo 1980-2000) est un premier jeu de données interchangeable — la mécanique (grille, panier, timer, épreuves, finale) est totalement indépendante du thème des questions. D'où le nom du projet, sans lien avec un sujet particulier : les minigames et d'autres thèmes pourront être ajoutés plus tard sans toucher à l'architecture.
 
 ---
 
@@ -331,9 +356,9 @@ La même `seed` produit exactement la même partie — indispensable pour les te
 ## Structure du projet
 
 ```
-packages/demos/src/scenes/geo-quiz/
+packages/demos/src/scenes/quiz-hunt/
 │
-├── index.ts                        — createGeoQuizScene(config) : SceneDoc
+├── index.ts                        — createQuizHuntScene(config) : SceneDoc
 │                                     assemble stories + straps + seed
 │
 ├── types.ts                        — GameConfig, TrialConfig, TrialType, GameLabels…

@@ -200,16 +200,22 @@ Les events utilisateur (et leurs cascades) deja persistees dans les tracks subsi
 
 Ce cas necessite un mecanisme d'invalidation des events persistees apres le point de seek. Il touche le contrat du track manager (suppression retroactive, marquage de revision, ou snapshot isole). Non adresse en V1.
 
-## Appendice V1 — cas ouvert : detach-all systematique pendant un refresh, decodage media interrompu
+## Appendice V1 — le detach-all du refresh est une fausse optimisation ; l'invariant reel est « refresh entre deux repaints »
 
-Constat (2026-06-23) : `RuntimeComponentOrchestrator.loadPersos()` detache tous les nodes montes du DOM avant de rafraichir chaque composant (`runtime-component-orchestrator.ts:413-418`), quel que soit le nombre de personas dont l'etat resolu a reellement change entre deux seeks. C'est une protection deliberee contre le flicker pendant la boucle de reset/reapplication (un node visible ne doit jamais montrer un etat intermediaire reset-mais-pas-encore-reapplique).
+Constat (2026-06-23) : `RuntimeComponentOrchestrator.loadPersos()` detache tous les nodes montes du DOM avant de rafraichir chaque composant (`runtime-component-orchestrator.ts:413-418`, + per-perso :476/:485), a chaque `seek()`/`rewind()`/`rebuild()`, quel que soit le nombre de personas dont l'etat resolu a reellement change.
 
-Effet de bord observe : un scrubbing rapide (drag de slider seek) declenche un `seek()` par mouvement de pointeur, donc un cycle detach/refresh/reattach complet de **tous** les personas a chaque mouvement, y compris ceux dont rien n'a change. Pour un `<img>`/`<video>` dont le decodage est en cours, des cycles detach/reattach trop rapproches peuvent empecher le navigateur de jamais terminer le decodage dans la fenetre de temps disponible — `naturalWidth`/`complete` restent a zero meme quand `src` n'est pas reassigne. Observe concretement sur `replace-carousel-demo` (transition `replace: { split: 'cells' }`), ou `apply-split-cells.ts` lit `naturalWidth` en direct pour calculer la geometrie des cellules.
+Correction d'analyse (2026-06-25) : ce detach a longtemps ete justifie comme une protection anti-flicker (un node visible ne doit jamais montrer un etat reset-mais-pas-encore-reapplique). **C'est une fausse optimisation.** Tout l'enchainement d'un `seek()` — `loadPersos` (reset) → reattach → `replayDueTimelineEventsForSeek` (boucle sans `await`, `create-player.ts:1215-1251`) → `syncAnimationsToTimeline` — s'execute dans **une seule tache JS synchrone**. Le navigateur ne peint qu'en fin de tache : il n'y a donc **jamais** de repaint de l'etat intermediaire, et donc **rien a masquer**. L'intention reelle n'a jamais ete « sortir le node du DOM » mais « faire le refresh entre deux repaints », propriete deja garantie par l'atomicite synchrone du batch. Trace explicite de cette intention : commentaire `create-player.ts:1254-1256` (« sync … before any async boundary, preventing the browser from painting »).
 
-Pistes ecartees ou deja appliquees en 2026-06-23 :
-- `mountRootNodes()` (`player.ts:116-122`) a ete corrige pour ne plus refaire `replaceChildren()` quand la liste des root nodes n'a pas change (evite une couche de detach/reattach redondante au niveau racine) — insuffisant seul, le detach-all par persona dans l'orchestrateur reste la cause dominante.
-- un cache local de `naturalWidth`/`naturalHeight` dans `apply-split-cells.ts` (retomber sur la derniere valeur connue quand la mesure live est a zero) corrigerait le symptome observe sans toucher au cycle global, mais ne traite pas la cause.
+Les deux priorites d'origine, et ou elles sont reellement garanties :
+1. **Refresh entre deux repaints** (pas de saut d'image) : par l'atomicite synchrone du bloc reset→replay, pas par le detach.
+2. **Ne pas recreer le node a chaque seek** : par `buildNode` qui reutilise `this.node` (`base-component.ts:56-69`, identite preservee, reset des styles en place).
 
-Fix correct mais non trivial : scoper le detach-all aux personas dont l'etat resolu (style/content/move) a reellement change entre l'ancien et le nouveau `runtimePersos`, via une comparaison structurelle avant de detacher/rafraichir. Necessite de conserver une reference a l'etat resolu precedent par perso et de differ avant d'agir. Touche le coeur du runtime — a traiter dans une session dediee, hors scope de la migration avatar3d en cours.
+Le detach n'apporte ni l'une ni l'autre. Il **casse activement** la priorite 1 sur les media : un cycle `removeChild`/`appendChild` sur un `<img>`/`<video>` interrompt le pipeline de decodage du navigateur. Sous scrubbing rapide (un `seek()` par `pointermove`), ces cycles trop rapproches empechent le decodage de se terminer — `naturalWidth`/`complete` restent a zero meme quand `src` n'est pas reassigne. `apply-split-cells.ts` lit alors `naturalWidth` en direct (`apply-split-cells.ts:155`), retombe sur le fallback de `computeObjectFitRect` (`:58-60`) qui etire l'image en ignorant le ratio → geometrie de cellules faussee, mosaique deformee, flick. Observe sur `replace-carousel-demo` (`replace: { split: 'cells' }`).
 
-A specifier et implementer en post-V1.
+Pistes ecartees ou deja appliquees :
+- `mountRootNodes()` (`player.ts:116-122`) corrige le 2026-06-23 pour ne plus refaire `replaceChildren()` quand la liste des root nodes n'a pas change — utile mais marginal une fois le detach-all retire.
+- cache local de `naturalWidth`/`naturalHeight` dans `apply-split-cells.ts` : masquerait le symptome sans traiter la cause. Ecarte comme solution definitive.
+
+Fix : **retirer le detach-all**, en rendant explicite et garde l'invariant qu'il remplacait — reset et replay doivent rester dans la **meme tache synchrone** (aucun `await`/`rAF`/`img.decode()` glisse entre `loadPersos` et le `syncAnimationsToTimeline` final). Le diffing d'etat par persona (cf. `2026-06-23-orchestrator-refresh-diffing-plan.md`) reste pertinent pour **sauter** les personas stables et reduire le travail de refresh, mais ce n'est plus la justification anti-flicker — celle-ci tombe avec le detach.
+
+Plan d'implementation : `2026-06-25-orchestrator-remove-detach-all-plan.md`.

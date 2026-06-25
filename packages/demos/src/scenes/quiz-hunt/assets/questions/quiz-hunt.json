@@ -1,0 +1,499 @@
+{
+  "colors": ["rouge", "bleu", "vert", "jaune"],
+  "words": [
+    {
+      "id": "bague",
+      "label": "BAGUE",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans un jeu de vitesse sorti au début des années 1990, quel objet sert à la fois de protection temporaire et de monnaie de score ?",
+        "answers": [
+          { "id": "etoile", "label": "Une étoile", "isCorrect": false },
+          { "id": "bague", "label": "Une bague", "isCorrect": true },
+          { "id": "fiole", "label": "Une fiole", "isCorrect": false },
+          { "id": "gemme-rouge", "label": "Une gemme rouge", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis choisis l'objet qui correspond au rôle décrit.",
+        "clueText": "Dans certains jeux de plates-formes du début des années 1990, le héros ne possède pas une barre de vie classique. Lorsqu'il est touché, il peut survivre s'il transporte au moins un objet brillant ramassé sur le chemin. Le choc disperse alors ces objets autour de lui, et le joueur peut en récupérer une partie. Ils servent aussi à compter la progression et à obtenir des bonus en fin de niveau. Leur forme circulaire les rend immédiatement reconnaissables à l'écran.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel objet est décrit par le texte ?",
+          "answers": [
+            { "id": "bague", "label": "Une bague", "isCorrect": true },
+            { "id": "cle", "label": "Une clé", "isCorrect": false },
+            { "id": "potion", "label": "Une potion", "isCorrect": false },
+            { "id": "plume", "label": "Une plume", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "carte-magnetique",
+      "label": "CARTE MAGNÉTIQUE",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans de nombreux jeux d'infiltration ou de science-fiction des années 1990, quel objet limite l'accès à certaines zones selon un niveau d'autorisation ?",
+        "answers": [
+          { "id": "carte-magnetique", "label": "Une carte magnétique", "isCorrect": true },
+          { "id": "torche", "label": "Une torche", "isCorrect": false },
+          { "id": "casque-plongee", "label": "Un casque de plongée", "isCorrect": false },
+          { "id": "medaillon-sauvegarde", "label": "Un médaillon de sauvegarde", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Mini-jeu de correspondance",
+        "consigne": "Associe chaque porte au bon objet, puis valide l'objet nécessaire pour la porte électronique.",
+        "clueText": "Quatre portes vues de face : 1. Porte en bois avec serrure ancienne. 2. Porte de laboratoire avec lecteur lumineux. 3. Porte de temple avec symbole gravé. 4. Grille rouillée avec chaîne. Objets disponibles : clé en fer, carte magnétique, médaillon, pince coupante.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel objet faut-il associer à la porte de laboratoire ?",
+          "answers": [
+            { "id": "cle-fer", "label": "La clé en fer", "isCorrect": false },
+            { "id": "carte-magnetique", "label": "La carte magnétique", "isCorrect": true },
+            { "id": "medaillon", "label": "Le médaillon", "isCorrect": false },
+            { "id": "pince-coupante", "label": "La pince coupante", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "potion",
+      "label": "POTION",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans beaucoup de jeux de rôle japonais et occidentaux des années 1980-1990, quel objet consommable sert généralement à récupérer des points de vie ?",
+        "answers": [
+          { "id": "potion", "label": "Une potion", "isCorrect": true },
+          { "id": "boussole", "label": "Une boussole", "isCorrect": false },
+          { "id": "parchemin-vierge", "label": "Un parchemin vierge", "isCorrect": false },
+          { "id": "pierre-teleportation", "label": "Une pierre de téléportation", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Inventaire à analyser",
+        "consigne": "Parmi les objets affichés, sélectionne celui que le joueur doit utiliser pour soigner un personnage avant le combat suivant.",
+        "clueText": "Un écran d'inventaire rétro en grille : Épée courte : attaque +4. Bouclier rond : défense +2. Potion : restaure 50 PV. Corde : permet de sortir d'une grotte. Antidote : soigne le poison. Le personnage affiché à gauche a 12 PV sur 80.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel objet faut-il utiliser pour récupérer des points de vie ?",
+          "answers": [
+            { "id": "potion", "label": "Potion", "isCorrect": true },
+            { "id": "corde", "label": "Corde", "isCorrect": false },
+            { "id": "bouclier-rond", "label": "Bouclier rond", "isCorrect": false },
+            { "id": "antidote", "label": "Antidote", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "missile",
+      "label": "MISSILE",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans plusieurs jeux d'exploration-action, quel projectile limité sert souvent à ouvrir des portes spéciales ou à infliger de gros dégâts ?",
+        "answers": [
+          { "id": "plume", "label": "Une plume", "isCorrect": false },
+          { "id": "missile", "label": "Un missile", "isCorrect": true },
+          { "id": "cle-rouillee", "label": "Une clé rouillée", "isCorrect": false },
+          { "id": "note-musique", "label": "Une note de musique", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Observation de salle",
+        "consigne": "Observe les éléments de la salle et choisis le projectile nécessaire pour ouvrir la porte rouge.",
+        "clueText": "Une salle en vue de côté dans une base extraterrestre. À droite, une porte rouge reste fermée. Au sol, une recharge porte une icône de projectile pointu. L'interface indique : rayon standard illimité, bombes x03, missiles x05. Une note visuelle précise : « Les portes rouges résistent au tir normal. »",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle ressource faut-il utiliser ?",
+          "answers": [
+            { "id": "rayon-standard", "label": "Le rayon standard", "isCorrect": false },
+            { "id": "missiles", "label": "Les missiles", "isCorrect": true },
+            { "id": "bombes", "label": "Les bombes", "isCorrect": false },
+            { "id": "saut-mural", "label": "Le saut mural", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "raccoon-city",
+      "label": "RACCOON CITY",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle ville fictive devient le théâtre d'une catastrophe biologique dans une célèbre série d'horreur de la fin des années 1990 ?",
+        "answers": [
+          { "id": "rapture", "label": "Rapture", "isCorrect": false },
+          { "id": "silent-hill", "label": "Silent Hill", "isCorrect": false },
+          { "id": "raccoon-city", "label": "Raccoon City", "isCorrect": true },
+          { "id": "midgar", "label": "Midgar", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le rapport, puis choisis la ville mentionnée comme zone contaminée.",
+        "clueText": "Rapport de police : plusieurs appels signalent des attaques dans les rues du centre de Raccoon City. Les hôpitaux sont débordés, mais les symptômes ne ressemblent pas à une maladie ordinaire. Des témoins parlent de personnes agressives malgré des blessures mortelles. La société Umbrella est citée dans plusieurs documents retrouvés sur place.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle ville est indiquée dans le rapport ?",
+          "answers": [
+            { "id": "raccoon-city", "label": "Raccoon City", "isCorrect": true },
+            { "id": "liberty-city", "label": "Liberty City", "isCorrect": false },
+            { "id": "city-17", "label": "City 17", "isCorrect": false },
+            { "id": "angel-island", "label": "Angel Island", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "black-mesa",
+      "label": "BLACK MESA",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel complexe de recherche souterrain sert de point de départ à une invasion après une expérience scientifique ratée ?",
+        "answers": [
+          { "id": "black-mesa", "label": "Black Mesa", "isCorrect": true },
+          { "id": "aperture-science", "label": "Aperture Science", "isCorrect": false },
+          { "id": "nerv", "label": "NERV", "isCorrect": false },
+          { "id": "uac-mars-base", "label": "UAC Mars Base", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Séquence sonore décrite",
+        "consigne": "Écoute la bande d'annonce fictive, puis réponds à la question.",
+        "clueText": "Une voix automatisée annonce : « Bonjour, docteur. Le tram arrive au secteur des matériaux anormaux. Merci de rester derrière la ligne jaune. » À l'écran, on voit des couloirs de laboratoire, des portes de sécurité, des scientifiques en blouse et une combinaison orange marquée HEV.",
+        "question": {
+          "type": "single",
+          "prompt": "Dans quel type de lieu se déroule cette séquence ?",
+          "answers": [
+            { "id": "complexe-black-mesa", "label": "Un complexe de recherche nommé Black Mesa", "isCorrect": true },
+            { "id": "ile-pirate-melee", "label": "Une île pirate nommée Mêlée", "isCorrect": false },
+            { "id": "chateau-castlevania", "label": "Un château gothique nommé Castlevania", "isCorrect": false },
+            { "id": "ville-midgar", "label": "Une ville marchande nommée Midgar", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "monkey-island",
+      "label": "MONKEY ISLAND",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans quel lieu associé aux jeux d'aventure LucasArts trouve-t-on des pirates, des insultes en duel et un apprenti flibustier maladroit ?",
+        "answers": [
+          { "id": "monkey-island", "label": "Monkey Island", "isCorrect": true },
+          { "id": "shadow-moses", "label": "Shadow Moses", "isCorrect": false },
+          { "id": "zebes", "label": "Zebes", "isCorrect": false },
+          { "id": "britannia", "label": "Britannia", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Épreuve d'objets absurdes",
+        "consigne": "Observe les objets et choisis le lieu auquel ils renvoient.",
+        "clueText": "Un inventaire de point-and-click contient : un poulet en caoutchouc avec une poulie, une carte presque illisible, une chope de grog corrosif, un prospectus de cours d'escrime, et un portrait de pirate fantôme. Le décor montre un port nocturne avec des dialogues humoristiques.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel univers est évoqué par ces objets ?",
+          "answers": [
+            { "id": "monkey-island", "label": "Monkey Island", "isCorrect": true },
+            { "id": "myst", "label": "Myst", "isCorrect": false },
+            { "id": "doom", "label": "Doom", "isCorrect": false },
+            { "id": "wipeout", "label": "Wipeout", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "midgar",
+      "label": "MIDGAR",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle ville industrielle en forme de gigantesque plaque circulaire est exploitée par une compagnie qui pompe l'énergie de la planète ?",
+        "answers": [
+          { "id": "midgar", "label": "Midgar", "isCorrect": true },
+          { "id": "narshe", "label": "Narshe", "isCorrect": false },
+          { "id": "balamb", "label": "Balamb", "isCorrect": false },
+          { "id": "tristram", "label": "Tristram", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Carte de ville à analyser",
+        "consigne": "Observe le plan et réponds à la question.",
+        "clueText": "Un plan stylisé vu du dessus : une grande plaque circulaire divisée en secteurs numérotés, huit réacteurs autour du cercle, des rails reliant les quartiers, et une tour centrale portant le logo d'une compagnie énergétique. Sous le plan, une légende indique : « Réacteurs Mako — Secteurs 1 à 8 ».",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle ville correspond à ce plan ?",
+          "answers": [
+            { "id": "midgar", "label": "Midgar", "isCorrect": true },
+            { "id": "rapture", "label": "Rapture", "isCorrect": false },
+            { "id": "raccoon-city", "label": "Raccoon City", "isCorrect": false },
+            { "id": "zanarkand", "label": "Zanarkand", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "metroid",
+      "label": "METROID",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle créature flottante, capable d'absorber l'énergie de ses proies, donne son nom à une série d'exploration spatiale ?",
+        "answers": [
+          { "id": "metroid", "label": "Metroid", "isCorrect": true },
+          { "id": "headcrab", "label": "Headcrab", "isCorrect": false },
+          { "id": "cacodemon", "label": "Cacodémon", "isCorrect": false },
+          { "id": "tonberry", "label": "Tonberry", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le rapport biologique, puis choisis la créature étudiée.",
+        "clueText": "Le spécimen flotte dans l'air et s'accroche violemment à sa cible. Le Metroid ne mord pas comme un animal ordinaire : il absorbe l'énergie vitale. Les pirates de l'espace veulent l'utiliser comme arme biologique. Les chercheurs le considèrent comme extrêmement dangereux hors confinement.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle espèce est nommée dans le rapport ?",
+          "answers": [
+            { "id": "metroid", "label": "Metroid", "isCorrect": true },
+            { "id": "mimic", "label": "Mimic", "isCorrect": false },
+            { "id": "xenomorphe", "label": "Xénomorphe", "isCorrect": false },
+            { "id": "moogle", "label": "Moogle", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "headcrab",
+      "label": "HEADCRAB",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle petite créature venue de Xen attaque en sautant sur la tête des humains et peut les transformer en hôtes hostiles ?",
+        "answers": [
+          { "id": "headcrab", "label": "Headcrab", "isCorrect": true },
+          { "id": "imp", "label": "Imp", "isCorrect": false },
+          { "id": "slime", "label": "Slime", "isCorrect": false },
+          { "id": "redead", "label": "ReDead", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Épreuve de trajectoire",
+        "consigne": "Observe les déplacements des ennemis et identifie celui qui correspond à la fiche.",
+        "clueText": "Un écran partagé en quatre petites animations : 1. Un démon lance une boule de feu en ligne droite. 2. Une créature basse bondit en arc vers la tête d'un scientifique. 3. Un soldat tire derrière une caisse. 4. Un robot vole lentement en patrouille. La fiche indique : « attaque par saut court, cible la tête ».",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle animation correspond au headcrab ?",
+          "answers": [
+            { "id": "animation-1", "label": "Animation 1", "isCorrect": false },
+            { "id": "animation-2", "label": "Animation 2", "isCorrect": true },
+            { "id": "animation-3", "label": "Animation 3", "isCorrect": false },
+            { "id": "animation-4", "label": "Animation 4", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tonberry",
+      "label": "TONBERRY",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans plusieurs jeux de rôle, quel petit ennemi avance lentement avec une lanterne et un couteau, mais devient redoutable s'il atteint le joueur ?",
+        "answers": [
+          { "id": "tonberry", "label": "Tonberry", "isCorrect": true },
+          { "id": "behemoth", "label": "Behemoth", "isCorrect": false },
+          { "id": "bomb", "label": "Bomb", "isCorrect": false },
+          { "id": "marlboro", "label": "Marlboro", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Choix tactique",
+        "consigne": "Analyse la situation de combat et identifie l'ennemi à cibler en priorité.",
+        "clueText": "Un combat au tour par tour : Ennemi A : géant, 4000 PV, attaque tous les trois tours. Ennemi B : petite silhouette verte, lanterne, couteau, avance d'une case à chaque tour. Ennemi C : bombe qui grossit lorsqu'elle reçoit du feu. Une bulle d'aide indique : « Plus il s'approche, plus le risque devient élevé. »",
+        "question": {
+          "type": "single",
+          "prompt": "Quel ennemi correspond au Tonberry ?",
+          "answers": [
+            { "id": "ennemi-a", "label": "Ennemi A", "isCorrect": false },
+            { "id": "ennemi-b", "label": "Ennemi B", "isCorrect": true },
+            { "id": "ennemi-c", "label": "Ennemi C", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "shodan",
+      "label": "SHODAN",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle intelligence artificielle antagoniste de science-fiction se distingue par sa voix déformée, son mépris des humains et son contrôle d'une station spatiale ?",
+        "answers": [
+          { "id": "shodan", "label": "SHODAN", "isCorrect": true },
+          { "id": "glados", "label": "GLaDOS", "isCorrect": false },
+          { "id": "mother-brain", "label": "Mother Brain", "isCorrect": false },
+          { "id": "durandal", "label": "Durandal", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Terminal piraté",
+        "consigne": "Lis les trois extraits de terminal et trouve lequel correspond au bon antagoniste.",
+        "clueText": "Trois fenêtres de terminal : Terminal 1 : « Sujet de test, veuillez placer le cube sur le bouton. » Terminal 2 : « Les humains sont une erreur biologique. Cette station est désormais mon corps. » Terminal 3 : « Le roi démon a volé la relique sacrée. » Un effet visuel déforme les lettres du terminal 2.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel terminal correspond à SHODAN ?",
+          "answers": [
+            { "id": "terminal-1", "label": "Terminal 1", "isCorrect": false },
+            { "id": "terminal-2", "label": "Terminal 2", "isCorrect": true },
+            { "id": "terminal-3", "label": "Terminal 3", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "guybrush",
+      "label": "GUYBRUSH",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel apprenti pirate maladroit se présente avec assurance malgré son inexpérience et devient le héros d'une série d'aventure humoristique ?",
+        "answers": [
+          { "id": "guybrush", "label": "Guybrush", "isCorrect": true },
+          { "id": "raziel", "label": "Raziel", "isCorrect": false },
+          { "id": "duke", "label": "Duke", "isCorrect": false },
+          { "id": "abe", "label": "Abe", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le dialogue, puis choisis le prénom du personnage.",
+        "clueText": "Dans une taverne, un jeune homme annonce qu'il veut devenir pirate. Les habitués doutent de lui, mais il insiste avec un sérieux comique. Guybrush Threepwood devra apprendre l'escrime, voler un trésor et survivre à des épreuves absurdes. Les dialogues reposent souvent sur l'humour et les réponses inattendues.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel est le prénom du personnage ?",
+          "answers": [
+            { "id": "guybrush", "label": "Guybrush", "isCorrect": true },
+            { "id": "manny", "label": "Manny", "isCorrect": false },
+            { "id": "roger", "label": "Roger", "isCorrect": false },
+            { "id": "bernard", "label": "Bernard", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "abe",
+      "label": "ABE",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel ouvrier extraterrestre découvre que son usine transforme son peuple en produit alimentaire et tente de sauver les siens ?",
+        "answers": [
+          { "id": "abe", "label": "Abe", "isCorrect": true },
+          { "id": "crash", "label": "Crash", "isCorrect": false },
+          { "id": "rayman", "label": "Rayman", "isCorrect": false },
+          { "id": "spyro", "label": "Spyro", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Sauvetage d'ouvriers",
+        "consigne": "Observe la scène et choisis l'action qui correspond au personnage recherché.",
+        "clueText": "Un niveau en 2D dans une usine sombre. Le personnage principal n'est pas armé. Trois ouvriers attendent près d'un portail. Des gardes patrouillent avec des armes. Les commandes affichées sont : « Bonjour », « Suis-moi », « Attends », « Travaille ». Un compteur indique « Mudokons sauvés : 0/3 ».",
+        "question": {
+          "type": "single",
+          "prompt": "Quel personnage est associé à cette scène ?",
+          "answers": [
+            { "id": "abe", "label": "Abe", "isCorrect": true },
+            { "id": "mega-man", "label": "Mega Man", "isCorrect": false },
+            { "id": "ryu", "label": "Ryu", "isCorrect": false },
+            { "id": "alucard", "label": "Alucard", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "samus",
+      "label": "SAMUS",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quelle chasseuse de primes en armure explore des planètes hostiles, collecte des améliorations et combat des formes de vie extraterrestres ?",
+        "answers": [
+          { "id": "samus", "label": "Samus", "isCorrect": true },
+          { "id": "jill", "label": "Jill", "isCorrect": false },
+          { "id": "chun-li", "label": "Chun-Li", "isCorrect": false },
+          { "id": "joanna", "label": "Joanna", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Améliorations à replacer",
+        "consigne": "Observe les capacités débloquées et identifie le personnage associé à cette progression.",
+        "clueText": "Une carte de zones reliées par des portes de couleur. Trois améliorations sont placées sur le côté : boule morphing, missiles, rayon de glace. Des passages étroits ne peuvent être franchis qu'après transformation en boule. Des ennemis volants sont figés par le rayon de glace.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel personnage est le plus directement associé à cet ensemble d'améliorations ?",
+          "answers": [
+            { "id": "samus", "label": "Samus", "isCorrect": true },
+            { "id": "jill", "label": "Jill", "isCorrect": false },
+            { "id": "kain", "label": "Kain", "isCorrect": false },
+            { "id": "dizzy", "label": "Dizzy", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "raziel",
+      "label": "RAZIEL",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel ancien vampire devenu spectre poursuit son créateur dans un monde gothique où il passe entre monde matériel et monde spectral ?",
+        "answers": [
+          { "id": "raziel", "label": "Raziel", "isCorrect": true },
+          { "id": "alucard", "label": "Alucard", "isCorrect": false },
+          { "id": "caleb", "label": "Caleb", "isCorrect": false },
+          { "id": "gabriel", "label": "Gabriel", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Deux mondes superposés",
+        "consigne": "Compare les deux versions d'une même salle et identifie le personnage concerné.",
+        "clueText": "Deux images de la même salle gothique : Version matérielle : portes fermées, plateformes trop hautes, vitraux intacts. Version spectrale : murs déformés, plateformes inclinées, passage accessible. Au centre, une silhouette capuchonnée tient une lame spectrale attachée au bras. Une note indique : « Le passage entre les deux plans est nécessaire pour progresser. »",
+        "question": {
+          "type": "single",
+          "prompt": "Quel personnage utilise cette alternance entre deux plans ?",
+          "answers": [
+            { "id": "raziel", "label": "Raziel", "isCorrect": true },
+            { "id": "guybrush", "label": "Guybrush", "isCorrect": false },
+            { "id": "abe", "label": "Abe", "isCorrect": false },
+            { "id": "gordon", "label": "Gordon", "isCorrect": false }
+          ]
+        }
+      }
+    }
+  ]
+}
