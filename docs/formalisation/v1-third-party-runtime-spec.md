@@ -304,22 +304,13 @@ setRate()    → stocke le rate local (appele par le hub via rateChange)
 
 `render()` et `init()` se succedent dans cet ordre, garantis par `_init()` de `BaseComponent`.
 
-### Regle normative : resolver de mutation pour cles d'action custom
+### Resolver de mutation : ne juge pas l'identite des cles (modele declaratif)
 
-Tout composant tiers qui `extends BaseComponent` herite de `static renderMutationResolver = htmlRenderMutationResolver`. Ce resolver ne laisse passer vers `update()` que les mutations dont l'action porte une cle **HTML** (`style`/`attr`/`className`) ou une cle de sa **liste blanche non-HTML fixe** (`move`/`content`/`src`/`alt`/`fitMode`/`broadcast`/`checked`/`disabled`/… — cf. `html-render-mutation-resolver.ts:hasNonHtmlMutation`). Toute mutation dont l'action ne porte que des cles **custom** (ex. `viseme`, `emotion`, `gesture`, `blink`, `headDrift`, `breathe`, `mood`) est **silencieusement supprimee** avant d'atteindre `update()`.
+`htmlRenderMutationResolver` (resolver par defaut de tout composant via `BaseComponent`) a **un seul role** : resoudre les conflits same-tick sur les proprietes DOM (`style`/`attr`/`className`). Il **ne juge pas** l'identite des cles d'action : toute mutation portant une charge utile — n'importe quelle cle hors enveloppe de routage (`target`/`targetId`/`ref`) et hors `style`/`attr`/`className` — atteint `update()`. C'est ensuite le composant (ses **services**, ses **modules**, son `update()`) qui est la **seule source de verite** sur ce qu'il consomme ; les cles qu'il ne connait pas sont simplement ignorees, sans effet.
 
-Consequence : un composant qui pilote son rendu via des cles d'action custom **doit** override le resolver en passthrough :
+Consequence : un composant tiers pilote par des cles custom (`viseme`/`emotion`/`gesture`/`blink`/`headDrift`/`breathe`/`mood`/…) fonctionne **sans configuration speciale** — aucun override de resolver requis. Une mutation n'est droppee que si elle ne porte **aucune** charge utile : soit `{}`, soit uniquement des cles d'enveloppe, soit des proprietes HTML toutes supprimees par la resolution de conflits.
 
-```ts
-import { passThroughRenderMutationResolver } from 'codplay/runtime/render-mutation-resolver'
-
-class MyThirdPartyComponent extends BaseComponent {
-  static override readonly renderMutationResolver = passThroughRenderMutationResolver
-  // …
-}
-```
-
-Les cles HTML continuent d'etre appliquees normalement dans `update()` via `services.apply` ; le passthrough ne fait que cesser de filtrer les cles custom. C'est appliqué sur `Avatar3DBaseComponent` et `RiveBaseComponent`. Symptome typique en cas d'oubli : le composant rend sa premiere frame mais reste fige (aucune animation pilotee par event), alors que routage/dispatch/commit/enqueue sont tous corrects — la mutation est droppee a la toute derniere etape (`resolveRenderMutations`).
+> **Historique (2026-06-23).** Une version anterieure de `resolveHtmlRenderMutations` decidait « cette mutation mute-t-elle quelque chose ? » via une **liste blanche codee en dur** (`hasNonHtmlMutation` : union des cles internes de tous les composants natifs). Toute cle absente de la liste — donc toute cle de composant tiers — etait silencieusement supprimee avant `update()`, figeant avatar3d et rive (symptome : premiere frame rendue mais aucune animation pilotee par event, alors que routage/dispatch/commit/enqueue etaient corrects — drop a la derniere etape `resolveRenderMutations`). Corrige en remplacant la whitelist par la detection de payload decrite ci-dessus (`hasPayloadBeyondHtml`). Voir `2026-06-23-declarative-mutation-keys-plan.md`. Les overrides `passThroughRenderMutationResolver` poses en correctif provisoire sur `Avatar3DBaseComponent`/`RiveBaseComponent` ont ete retires (devenus inutiles).
 
 ### Typage des proprietes perso
 

@@ -104,6 +104,11 @@ type HorizonSnapshot = {
 
 - le seek peut aller jusqu'a `authorEndMs`.
 
+### Garantie du passe (toutes policies sauf `disabled`)
+
+- le passe deja lu est **toujours** atteignable : `seekEndMs = max(playedEndMs, borne-future-de-la-policy)`. La policy ne borne que le futur au-dela de `playedEndMs` (cf. `v1-horizon-spec`).
+- `playedEndMs` suit la position de lecture courante (pas seulement les events) : une animation `currentTime` (action-tween : `fn` + `duration`, sans event par tick) fait avancer `playedEndMs` via le tick, donc sa portion deja lue reste seekable en arriere. Voir la definition enrichie dans `v1-horizon-spec`.
+
 ## Regles normatives
 
 1. Source de verite

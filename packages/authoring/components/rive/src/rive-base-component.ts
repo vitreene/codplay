@@ -1,5 +1,4 @@
 import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
-import { passThroughRenderMutationResolver } from 'codplay/runtime/render-mutation-resolver'
 import { ComponentServiceBase } from 'codplay'
 import { COMPONENT_DEFAULT_SERVICES } from 'codplay/runtime/components/lib/component-services'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
@@ -9,15 +8,6 @@ import type { RiveInitial } from './rive-types'
 import { getRiveEntry } from './rive-preload'
 
 export class RiveBaseComponent extends BaseComponent {
-  // BaseComponent defaults to htmlRenderMutationResolver, which drops any
-  // mutation whose action keys aren't HTML-oriented (style/attr/className) or
-  // in its fixed non-HTML whitelist (move/content/src/broadcast/…). Rive
-  // components drive their state machine from custom keys (viseme/emotion/…),
-  // so that resolver would silently drop those updates — e.g. the coach
-  // lipsync never receiving its viseme values. Passthrough lets every update
-  // reach update(); HTML keys are still applied there via services.apply.
-  static override readonly renderMutationResolver = passThroughRenderMutationResolver
-
   protected _riveCtx: RiveContext | null = null
   private _rate = 1
   protected readonly _internalServices: ComponentServiceBase[] = []

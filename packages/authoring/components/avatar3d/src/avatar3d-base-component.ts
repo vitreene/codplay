@@ -19,7 +19,6 @@ import {
   ACESFilmicToneMapping,
 } from 'three'
 import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
-import { passThroughRenderMutationResolver } from 'codplay/runtime/render-mutation-resolver'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
 import type { RenderTickInfo, RenderSeekInfo } from 'codplay/player/render-adapter-types'
 import { createAvatarEngine, GazeService, getModelEntry } from '@codplay/avatar-engine'
@@ -33,15 +32,6 @@ const DEFAULT_CAMERA_Y = 1.5
 const DEFAULT_CAMERA_Z = 3
 
 export class Avatar3DBaseComponent extends BaseComponent {
-  // BaseComponent defaults to htmlRenderMutationResolver, which drops any
-  // mutation whose action keys aren't HTML-oriented (style/attr/className) or
-  // in its fixed non-HTML whitelist (move/content/src/broadcast/…). avatar3d
-  // actions carry custom keys (viseme/gesture/blink/headDrift/breathe/enabled/
-  // mood/name), so that resolver would silently drop every animation update.
-  // The pre-migration standalone component had no resolver — the orchestrator
-  // fell back to passthrough — so this override restores that exact behavior.
-  static override readonly renderMutationResolver = passThroughRenderMutationResolver
-
   private engine: AvatarEngine | null = null
   private gaze: GazeService | null = null
   private renderer: WebGLRenderer | null = null

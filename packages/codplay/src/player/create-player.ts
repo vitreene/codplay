@@ -269,22 +269,41 @@ export class PlayerFacade implements PlayerApi {
    * Resolves the current seek cap from canonical horizon values.
    */
   private resolveCurrentSeekEndMs(): number {
-    return resolveSeekEndMsFromPolicy(this.runtimePolicy.seekPolicy, {
+    const policyBound = resolveSeekEndMsFromPolicy(this.runtimePolicy.seekPolicy, {
       playedEndMs: this.playedEndMs,
       projectedMasterEndMs: this.projectedMasterEndMs,
       authorEndMs: this.authorEndMs,
     });
+    // The already-played past is always seekable (v1-horizon: seekEndMs >= playedEndMs);
+    // the policy only bounds the future beyond playedEndMs. `disabled` forbids seek entirely.
+    if (this.runtimePolicy.seekPolicy === "disabled") {
+      return policyBound;
+    }
+    return Math.max(this.playedEndMs, policyBound);
   }
 
   /**
    * Records the furthest position that can contribute to the replayable played horizon.
    */
   private recordPlayedProgress(event: TimelineEvent): void {
+    this.recordPlayedTimelineMs(event.ms);
+  }
+
+  /**
+   * Advances the played horizon to one reached timeline position.
+   * Per v1-horizon, `playedEndMs` follows the current playback position — not
+   * only event positions — so a currentTime-driven animation (action-tween with
+   * no per-tick event) keeps its already-played range seekable backward.
+   */
+  private recordPlayedTimelineMs(timelineMs: number): void {
     if (this.timelineReplayInProgress) {
       return;
     }
+    if (timelineMs <= this.playedEndMs) {
+      return;
+    }
 
-    this.playedEndMs = Math.max(this.playedEndMs, event.ms);
+    this.playedEndMs = timelineMs;
     this.timelineEndMs = Math.max(this.projectedMasterEndMs, this.playedEndMs);
     this.seekEndMs = this.resolveCurrentSeekEndMs();
   }
@@ -1268,6 +1287,7 @@ export class PlayerFacade implements PlayerApi {
 
     if (!this.onTimelineEvent) {
       this.timelineMs = syncTimelineMs;
+      this.recordPlayedTimelineMs(syncTimelineMs);
       this.runDueTimelineEventsSync(syncTimelineMs);
       this.syncMediaTimeline(syncTimelineMs);
       this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), syncTimelineMs, this._rate);
@@ -1282,6 +1302,7 @@ export class PlayerFacade implements PlayerApi {
 
       const timelineMs = this.resolveCurrentTimelineMs();
       this.timelineMs = timelineMs;
+      this.recordPlayedTimelineMs(timelineMs);
       await this.runDueTimelineEvents(timelineMs);
       this.syncMediaTimeline(timelineMs);
       this.renderSync.tick(frameNowMs ?? this.runtimePlanner.resolveNowMs(), timelineMs, this._rate);

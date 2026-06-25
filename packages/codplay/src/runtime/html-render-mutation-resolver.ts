@@ -86,25 +86,30 @@ function hasHtmlMutation(state: MutationState): boolean {
 }
 
 /**
- * Checks whether one mutation still has non-HTML mutations to preserve.
+ * Routing / selector keys that carry no applicable payload on their own.
+ * Everything else on an action is a payload key, owned by the target
+ * component's services/modules/update() — this resolver does not gatekeep
+ * payload key identity (no whitelist), it only resolves HTML conflicts.
+ * `style`/`attr`/`className` are judged separately via hasHtmlMutation after
+ * conflict resolution, so they are excluded here too.
  */
-function hasNonHtmlMutation(action: RuntimeResolvedMutation): boolean {
-  return (
-    action.action.move !== undefined ||
-    action.action.content !== undefined ||
-    action.action.src !== undefined ||
-    action.action.alt !== undefined ||
-    action.action.fitMode !== undefined ||
-    action.action.broadcast !== undefined ||
-    action.action.checked !== undefined ||
-    action.action.disabled !== undefined ||
-    action.action.visualState !== undefined ||
-    action.action.canValidate !== undefined ||
-    action.action.disableAnswers !== undefined ||
-    action.action.showCorrection !== undefined ||
-    action.action.selectedAnswerIds !== undefined ||
-    action.action.correctAnswerIds !== undefined
-  )
+const NON_PAYLOAD_ACTION_KEYS = new Set(['target', 'targetId', 'ref', 'style', 'attr', 'className'])
+
+/**
+ * Checks whether one mutation still carries any payload key beyond the HTML
+ * properties handled by hasHtmlMutation. A mutation that only had HTML props
+ * (all stripped by conflict resolution) or only routing keys is dropped; any
+ * mutation carrying a domain key (content/src/move/broadcast/viseme/…) is kept
+ * and reaches the component, which alone decides what it consumes.
+ */
+function hasPayloadBeyondHtml(mutation: RuntimeResolvedMutation): boolean {
+  const action = mutation.action as Record<string, unknown>
+  for (const key of Object.keys(action)) {
+    if (!NON_PAYLOAD_ACTION_KEYS.has(key) && action[key] !== undefined) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -331,7 +336,7 @@ export function resolveHtmlRenderMutations(
   for (let actionIndex = 0; actionIndex < mutations.length; actionIndex += 1) {
     const mutation = mutations[actionIndex]
     const state = mutationStates[actionIndex]
-    if (!hasHtmlMutation(state) && !hasNonHtmlMutation(mutation)) {
+    if (!hasHtmlMutation(state) && !hasPayloadBeyondHtml(mutation)) {
       continue
     }
 

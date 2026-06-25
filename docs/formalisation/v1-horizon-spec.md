@@ -37,6 +37,9 @@ type HorizonSnapshot = {
 
 - borne maximale effectivement deja lue pendant la lecture courante.
 - `playedEndMs` est monotone jusqu'a `rewind` ou relance a zero.
+- `playedEndMs` suit la **position de lecture courante**, pas seulement la position des events deja lus. A chaque tick de lecture, `playedEndMs = max(playedEndMs, timelineMs courant)`.
+- Justification (2026-06-25) : une animation pilotee par `currentTime` (action-tween : un `fn` evalue a chaque frame sur une `duration`, sans event par tick) fait progresser la lecture sans materialiser d'event intermediaire. Si `playedEndMs` n'etait nourri que par les events, il resterait fige au dernier event et la portion deja lue de l'animation deviendrait inatteignable au seek arriere. La position « deja lue » est donc la position temporelle reellement parcourue par la tete de lecture, events ou non.
+- corollaire : une track sans event sur l'intervalle (animation currentTime) nourrit quand meme `playedEndMs` via l'avancee du tick.
 
 2. `projectedMasterEndMs`
 
@@ -100,6 +103,7 @@ type SeekPolicy =
 - une track non master ne doit pas etendre `projectedMasterEndMs`.
 - si aucune track `role: "master"` n'est declaree, le runtime peut utiliser un fallback legacy pour `progressEndMs`.
 - `seek` doit toujours montrer l'etat exact deja vu pour le passe, et respecter la policy active pour le futur.
+- corollaire normatif : `seekEndMs >= playedEndMs` **toujours** (sauf policy `disabled`). Le passe deja lu reste integralement atteignable au seek quelle que soit la policy ; la policy ne borne que le **futur au-dela de `playedEndMs`**. Concretement `seekEndMs = max(playedEndMs, borne-future-de-la-policy)`.
 - `seek` ne rejoue jamais les `effects`.
 
 ## Exemple s4

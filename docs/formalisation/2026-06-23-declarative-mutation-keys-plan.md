@@ -2,6 +2,12 @@
 
 ## Statut
 
+**Réalisé (2026-06-23) — variante légère retenue.** Après cadrage, l'Option A (déclaration `actionKeys` explicite par composant) a été écartée en cours d'implémentation : énumérer les clés d'`update()` par composant recrée une mini-whitelist par composant, sujette à dérive. Réalisation retenue (décision utilisateur) : **le resolver cesse de juger l'identité des clés**. `hasNonHtmlMutation` (whitelist) est remplacé par `hasPayloadBeyondHtml` (`html-render-mutation-resolver.ts`) : une mutation atteint `update()` dès qu'elle porte une clé hors enveloppe (`target`/`targetId`/`ref`/`style`/`attr`/`className`). Le composant (services + modules + `update()`) reste seul juge de ce qu'il applique ; les clés inconnues sont ignorées. Aucune liste par composant, aucune dérive possible. Overrides passthrough avatar3d/rive retirés. Vérifié : suite `codplay` (mêmes 13 échecs pré-existants, gates lot7/8/18 verts), avatar3d 8/8, avatar-engine 5/5, typecheck propre. Spec mise à jour dans `v1-third-party-runtime-spec.md`.
+
+Le reste de ce document conserve la conception d'origine (Option A) à titre d'historique de décision.
+
+---
+
 Non démarré. Conception à valider avant toute implémentation. Découle de l'investigation des composants tiers figés (avatar3d, rive) : voir `v1-third-party-runtime-spec.md` (règle resolver passthrough) et l'encadré seek-fidélité.
 
 ## Problème
