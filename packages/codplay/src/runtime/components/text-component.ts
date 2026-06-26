@@ -1,11 +1,16 @@
 import { BaseComponent } from './lib/base-component'
 import { RUNTIME_CONFIG } from '../config'
 import { isDomElement } from './lib/dom-component-adapter'
+import type { PersoActionCommon, PersoInitialCommon } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
-type TextInitial = {
+export type TextInitial = PersoInitialCommon & {
   tag?: unknown
+  content?: unknown
+}
+
+export type TextAction = PersoActionCommon & {
   content?: unknown
 }
 
@@ -41,7 +46,7 @@ export class TextComponent extends BaseComponent {
 
   update(input: RuntimeComponentUpdateInput): void {
     this.services.apply(this.node, input.action)
-    const state = input.action as TextInitial
+    const state = input.action as TextAction
     if (state.content !== undefined) {
       applyRichContent(this.node, state.content)
     }

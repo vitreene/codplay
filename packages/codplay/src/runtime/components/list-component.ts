@@ -1,9 +1,9 @@
 import { BaseComponent } from './lib/base-component'
 import { isDomNode } from './lib/dom-component-adapter'
 import { RUNTIME_CONFIG } from '../config'
+import type { MoveMode, PersoActionCommon, PersoInitialCommon } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeListComponent } from './types'
-import type { MoveMode } from '../types'
 
 type ReorderOperation = 'move' | 'add' | 'remove'
 
@@ -18,10 +18,12 @@ type PersistentPlacementRule = {
   insertedOrder: number
 }
 
-type ListInitial = {
+export type ListInitial = PersoInitialCommon & {
   tag?: unknown
   config?: unknown
 }
+
+export type ListAction = PersoActionCommon
 
 /**
  * Clamps one numeric position into one inclusive range.

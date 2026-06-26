@@ -8,6 +8,7 @@ import type {
   ActionDoc,
   EmitDeclaration,
   ItemModuleConfig,
+  ItemType,
   ItemState,
   ListConfig
 } from '../runtime/types'
@@ -55,16 +56,16 @@ export type StoryEventimeDoc = {
   events?: StoryEventimeDoc[]
 }
 
-export type PersoDoc = {
+export type PersoDoc<T extends ItemType = ItemType> = T extends ItemType ? {
   id: string
   name?: string
-  type: string
+  type: T
   module?: ItemModuleConfig
-  initial: ItemState
+  initial: ItemState<T>
   emit?: EmitDeclaration
   list?: ListConfig
-  actions: Record<string, ActionDoc | null>
-}
+  actions: Record<string, ActionDoc<T> | null>
+} : never
 
 export type SceneStoryDoc = {
   id: string

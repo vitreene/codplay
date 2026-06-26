@@ -18,7 +18,7 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
         textAlign: "center"
       },
       move: { parentId: "game-basket-slots" }
-    } as unknown as PersoDoc["initial"],
+    },
     actions: {
       [`game:basket:fill:${color}`]: {}
     }
@@ -43,7 +43,7 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
             </div>
           `,
           style: {}
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {}
       },
       ...slots,
@@ -66,7 +66,7 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
             cursor: "pointer"
           },
           move: { parentId: "game-basket-final-slot" }
-        } as unknown as PersoDoc["initial"],
+        },
         emit: { click: { event: { name: "game:final:start", cascade: true } } },
         actions: {
           "game:basket:complete": { style: { display: "block" } }

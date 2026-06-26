@@ -1,58 +1,49 @@
+import type { InputCorrectionIconDefinition, InputPartDefinition } from './components/input-component'
+import type { CorePersoType, PersoTypeRegistry } from './perso-type-registry'
+
+export type {
+  ActionPayloadDoc,
+  AttrValue,
+  BroadcastAction,
+  ClassNameValue,
+  InputVisualStateValue,
+  ItemModuleConfig,
+  LayoutFormat,
+  ListAutoAnimateConfig,
+  ListConfig,
+  ListPerfConfig,
+  ListPlacementConfig,
+  ModuleCommandDoc,
+  MoveCommand,
+  MoveFlipMode,
+  MoveMode,
+  MoveValue,
+  PersoActionCommon,
+  PersoInitialCommon,
+  PersoInnerNodePatch,
+  ReplaceActionValue,
+  ReplaceDirection,
+  ReplaceSplit,
+  StyleEntryValue,
+  StyleTransitionValue,
+  StyleValue,
+} from './perso-shared-types'
+import type {
+  InputVisualStateValue,
+  ItemModuleConfig,
+  LayoutFormat,
+  ListConfig,
+  ListPlacementConfig,
+  MoveValue,
+  PersoActionCommon,
+  PersoInitialCommon,
+  PersoInnerNodePatch,
+} from './perso-shared-types'
+
 /**
  * Defines supported built-in item types while allowing custom types.
  */
-export type ItemType = 'text' | 'img' | 'media' | 'list' | 'layout' | string
-
-export type LayoutFormat = 'html' | 'svg'
-
-export type BroadcastAction = {
-  type: 'START' | 'PAUSE' | 'STOP'
-  startAt?: number
-  endAt?: number
-  transition?: {
-    from?: Record<string, unknown>
-    to?: Record<string, unknown>
-    duration?: number
-  }
-}
-
-/**
- * Defines one move mode accepted by the component runtime.
- */
-export type MoveMode = 'auto' | 'first' | 'last' | 'append' | 'prepend' | number
-
-/**
- * Defines one FLIP rendering mode used for move transitions.
- */
-export type MoveFlipMode = 'local' | 'overlay-world'
-
-/**
- * Defines one normalized move command payload.
- */
-export type MoveCommand = {
-  parentId: string
-  mode?: MoveMode
-  flip?: boolean
-  flipMode?: MoveFlipMode
-  reorder?: boolean
-}
-
-/**
- * Defines list reorder policy values for runtime placement behavior.
- */
-export type ListPlacementConfig = {
-  reorderOnMove?: boolean
-  reorderOnAdd?: boolean
-  reorderOnRemove?: boolean
-}
-
-/**
- * Defines one raw move value accepted from authored story docs.
- */
-export type MoveValue =
-  | MoveCommand
-  | string
-  | { mode?: string; targetId?: string; parentId?: string; flip?: boolean; flipMode?: string; reorder?: boolean }
+export type ItemType = CorePersoType | (string & {})
 
 /**
  * Defines one emit rule used by user interactions.
@@ -114,85 +105,28 @@ export type RuntimeEmitEvent = {
  */
 export type EmitDeclaration = Record<string, EmitRule>
 
-/**
- * Defines one item initial state payload.
- */
-export type ItemState = {
-  id?: string
+export type CustomItemState = PersoInitialCommon & {
   tag?: string
-  className?: string
-  move?: MoveValue
   markup?: string
   format?: LayoutFormat
-  master?: boolean
   config?: ListPlacementConfig
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
   content?: string
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  img?: PersoInnerNodePatch
+  video?: PersoInnerNodePatch
   selectionIcon?: InputPartDefinition
   correctionIcon?: InputCorrectionIconDefinition
 }
 
-export type InputVisualStateValue =
-  | 'idle'
-  | 'selected'
-  | 'disabled'
-  | 'revealed-correct'
-  | 'revealed-incorrect'
-  | 'revealed-missed-correct'
-
-/**
- * Describes one decorative input part configured on the perso.
- */
-export type InputPartDefinition = {
-  className?: string
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
-  content?: string
-}
-
-/**
- * Describes one correction icon definition with state-specific content.
- */
-export type InputCorrectionIconDefinition = InputPartDefinition & {
-  correctContent?: string
-  incorrectContent?: string
-  missedCorrectContent?: string
-}
-
-/**
- * Defines one module command payload used by module integration.
- */
-export type ModuleCommandDoc = {
-  name: string
-} & Record<string, unknown>
-
-/**
- * Defines one generic payload forwarded to custom command handlers.
- */
-export type ActionPayloadDoc = Record<string, unknown>
-
-/**
- * Defines one item module configuration payload.
- */
-export type ItemModuleConfig = Record<string, unknown>
-
-/**
- * Defines one authored action payload resolved by Director dispatch.
- */
-export type ActionDoc = {
-  ref?: string
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
-  attr?: Record<string, unknown>
-  move?: MoveValue
+export type CustomActionDoc = PersoActionCommon & {
   content?: string
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
+  img?: PersoInnerNodePatch
+  video?: PersoInnerNodePatch
   checked?: boolean
   disabled?: boolean
   visualState?: InputVisualStateValue
@@ -201,54 +135,29 @@ export type ActionDoc = {
   showCorrection?: boolean
   selectedAnswerIds?: string[]
   correctAnswerIds?: string[]
-  broadcast?: BroadcastAction
-  cmd?: ModuleCommandDoc
-  payload?: ActionPayloadDoc
-  targetId?: string
 }
 
-/**
- * Defines list animation policy values stored in authored docs.
- */
-export type ListAutoAnimateConfig = {
-  insert?: boolean
-  remove?: boolean
-  move?: boolean
-  durationMs?: number
-  easing?: string
-  staggerMs?: number
-}
+export type ItemState<T extends ItemType = ItemType> =
+  T extends CorePersoType ? PersoTypeRegistry[T]['initial'] : CustomItemState
 
-/**
- * Defines list performance policy values stored in authored docs.
- */
-export type ListPerfConfig = {
-  maxMoveAnimations?: number
-}
-
-/**
- * Defines list-specific authored configuration payload.
- */
-export type ListConfig = {
-  autoAnimate?: ListAutoAnimateConfig
-  perf?: ListPerfConfig
-}
+export type ActionDoc<T extends ItemType = ItemType> =
+  T extends CorePersoType ? PersoTypeRegistry[T]['action'] : CustomActionDoc
 
 /**
  * Defines one authored runtime item document.
  */
-export type ItemDoc = {
+export type ItemDoc<T extends ItemType = ItemType> = T extends ItemType ? {
   id: string
   name?: string
   storyId: string
   trackId?: string
-  type: ItemType
+  type: T
   module?: ItemModuleConfig
-  initial: ItemState
+  initial: ItemState<T>
   emit?: EmitDeclaration
   list?: ListConfig
-  actions: Record<string, ActionDoc>
-}
+  actions: Record<string, ActionDoc<T>>
+} : never
 
 /**
  * Defines one runtime perso graph consumed by renderer integrations.

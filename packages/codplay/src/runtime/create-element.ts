@@ -97,7 +97,7 @@ function createDefaultRuntimeNode(tagName: string): RuntimeNode {
  * Resolves the initial tag name according to item type and state.
  */
 function resolveTagName(item: ItemDoc): string {
-  if (item.initial.tag) {
+  if ('tag' in item.initial && typeof item.initial.tag === 'string' && item.initial.tag.length > 0) {
     return item.initial.tag
   }
 
@@ -182,11 +182,11 @@ function applyInitialState(nodeRef: unknown, item: ItemDoc): void {
       mutableNode.className = state.className
     }
 
-    if (state.content !== undefined) {
+    if ('content' in state && state.content !== undefined) {
       mutableNode.textContent = state.content
     }
 
-    if (state.src !== undefined) {
+    if ('src' in state && state.src !== undefined) {
       mutableNode.src = state.src
     }
 

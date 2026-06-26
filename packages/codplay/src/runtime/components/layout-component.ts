@@ -1,14 +1,16 @@
 import { BaseComponent } from './lib/base-component'
 import { bindComponentEmitDeclarations } from './lib/dom'
 import { applyNodeId, collectDataParts, isDomElement } from './lib/dom-component-adapter'
+import type { LayoutFormat, PersoActionCommon, PersoInitialCommon } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeLayoutComponent, RuntimeLayoutOutletSnapshot } from './types'
-import type { LayoutFormat } from '../types'
 
-type LayoutState = {
+export type LayoutInitial = PersoInitialCommon & {
   markup?: unknown
   format?: unknown
 }
+
+export type LayoutAction = PersoActionCommon
 
 type LayoutParsedTree = {
   rootNode: unknown
@@ -187,7 +189,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
    * Creates the parsed layout tree and registers all data-part nodes.
    */
   render(): ComponentRenderResult {
-    const state = this.perso.initial as LayoutState
+    const state = this.perso.initial as LayoutInitial
     const format = resolveLayoutFormat(state.format)
     if (format === null) {
       this.report('AUTHOR_LAYOUT_FORMAT_INVALID', 'Layout format must be html or svg', { format: state.format })

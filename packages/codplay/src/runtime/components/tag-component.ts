@@ -1,11 +1,16 @@
 import { BaseComponent } from './lib/base-component'
 import { setTextContent } from './lib/dom'
 import { RUNTIME_CONFIG } from '../config'
+import type { PersoActionCommon, PersoInitialCommon } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
-type TagInitial = {
+export type TagInitial = PersoInitialCommon & {
   tag?: unknown
+  content?: unknown
+}
+
+export type TagAction = PersoActionCommon & {
   content?: unknown
 }
 
@@ -26,7 +31,7 @@ export class TagComponent extends BaseComponent {
 
   update(input: RuntimeComponentUpdateInput): void {
     this.services.apply(this.node, input.action)
-    const state = input.action as TagInitial
+    const state = input.action as TagAction
     if (state.content !== undefined) {
       this.applyContent(this.node, state.content)
     }

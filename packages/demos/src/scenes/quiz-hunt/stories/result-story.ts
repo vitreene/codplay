@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay/player/types"
 import type { GameLabels } from "../types"
 
 /** Result story: a full-overlay verdict card. Purely passive. */
@@ -33,7 +33,7 @@ export function createResultStory(labels: GameLabels): SceneStoryDoc {
             opacity: 0,
             pointerEvents: "none"
           }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           "game:result:show": {
             style: { opacity: { from: 0, to: 1, duration: 300 }, pointerEvents: "auto" }
@@ -43,7 +43,7 @@ export function createResultStory(labels: GameLabels): SceneStoryDoc {
       {
         id: "game-result-verdict",
         type: "tag",
-        initial: { tag: "span", content: "", move: { parentId: "game-result-verdict-slot" } } as unknown as PersoDoc["initial"],
+        initial: { tag: "span", content: "", move: { parentId: "game-result-verdict-slot" } },
         actions: {
           "game:result:verdict:passed": { content: labels.resultPassedTitle, style: { color: "#16a34a" } },
           "game:result:verdict:failed": { content: labels.resultFailedTitle, style: { color: "#dc2626" } }
@@ -52,13 +52,13 @@ export function createResultStory(labels: GameLabels): SceneStoryDoc {
       {
         id: "game-result-summary",
         type: "tag",
-        initial: { tag: "span", content: "", move: { parentId: "game-result-summary-slot" } } as unknown as PersoDoc["initial"],
+        initial: { tag: "span", content: "", move: { parentId: "game-result-summary-slot" } },
         actions: { "game:result:summary": {} }
       },
       {
         id: "game-result-time",
         type: "tag",
-        initial: { tag: "span", content: "", move: { parentId: "game-result-time-slot" } } as unknown as PersoDoc["initial"],
+        initial: { tag: "span", content: "", move: { parentId: "game-result-time-slot" } },
         actions: { "game:result:time": {} }
       }
     ]

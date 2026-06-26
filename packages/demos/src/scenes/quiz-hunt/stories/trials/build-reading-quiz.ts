@@ -58,7 +58,7 @@ export function createReadingQuizTrial(
           boxSizing: "border-box"
         },
         move: { parentId: "game:zone:main" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         [`game:trial:${word.id}:show`]: { style: { display: "block" } },
         [`game:trial:${word.id}:hide`]: { style: { display: "none" } }
@@ -80,7 +80,7 @@ export function createReadingQuizTrial(
         style: { display: "none" },
         attr: { disabled: false },
         move: { parentId: `${prefix}:fieldset-slot` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         [`game:trial:${word.id}:reveal-question`]: { style: { display: "block" } },
         "quiz:question:resolved": { attr: { disabled: true } },
@@ -90,7 +90,7 @@ export function createReadingQuizTrial(
     {
       id: `${prefix}-title`,
       type: "tag",
-      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } } as unknown as PersoDoc["initial"],
+      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } },
       actions: {}
     },
     {
@@ -101,7 +101,7 @@ export function createReadingQuizTrial(
         content: question.type === "multiple" ? question.labels.multipleHint : "",
         style: { color: "#475569", fontSize: "0.875rem" },
         move: { parentId: `${prefix}:hint` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {}
     },
     ...createQuizAnswerPersos(prefix, question, groupName, retryEventName),

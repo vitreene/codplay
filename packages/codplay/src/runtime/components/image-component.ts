@@ -4,14 +4,22 @@ import { applyClassNamePatch, isDomElement } from './lib/dom-component-adapter'
 import { injectBaseStyle } from './lib/inject-base-style'
 import type { ImageFitMode } from './lib/dom'
 import { RUNTIME_CONFIG } from '../config'
+import type { PersoActionCommon, PersoInitialCommon, PersoInnerNodePatch } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
-type ImageState = {
+export type ImgInitial = PersoInitialCommon & {
   src?: unknown
   alt?: unknown
   fitMode?: unknown
-  img?: unknown
+  img?: PersoInnerNodePatch
+}
+
+export type ImgAction = PersoActionCommon & {
+  src?: unknown
+  alt?: unknown
+  fitMode?: unknown
+  img?: PersoInnerNodePatch
 }
 
 const MEDIA = 'media'
@@ -70,7 +78,7 @@ export class ImageComponent extends BaseComponent {
    */
   private staticSrcs(): string[] {
     const srcs: string[] = []
-    const initial = this.perso.initial as ImageState
+    const initial = this.perso.initial as ImgInitial
     if (typeof initial.src === 'string') {
       srcs.push(initial.src)
     }
@@ -110,7 +118,7 @@ export class ImageComponent extends BaseComponent {
         : ({ tagName: 'IMG', style: {}, attributes: {} } as unknown)
 
     setImageSource(node, src)
-    this.applyMediaProps(node, this.perso.initial as ImageState)
+    this.applyMediaProps(node, this.perso.initial as ImgInitial)
     this.mediaBySrc.set(src, node)
     return node
   }
@@ -119,7 +127,7 @@ export class ImageComponent extends BaseComponent {
    * Applies the non-src media props (alt, fitMode, authored img styles, base class) on one node.
    * The src is never applied here — it is assigned once at node creation.
    */
-  private applyMediaProps(node: unknown, state: ImageState): void {
+  private applyMediaProps(node: unknown, state: ImgInitial | ImgAction): void {
     if (typeof state.alt === 'string') {
       setImageAlt(node, state.alt)
     }
@@ -163,7 +171,7 @@ export class ImageComponent extends BaseComponent {
    */
   update(input: RuntimeComponentUpdateInput): void {
     this.services.apply(this.node, input.action)
-    const action = input.action as ImageState
+    const action = input.action as ImgAction
     if (typeof action.src === 'string') {
       this.setActiveSrc(this.node, action.src)
     }
@@ -179,7 +187,7 @@ export class ImageComponent extends BaseComponent {
     const rootNode = this.buildNode('<div></div>')
     this.services.apply(rootNode, this.perso.initial)
 
-    const initialSrc = (this.perso.initial as ImageState).src
+    const initialSrc = (this.perso.initial as ImgInitial).src
     if (typeof initialSrc === 'string') {
       this.setActiveSrc(rootNode, initialSrc)
     }

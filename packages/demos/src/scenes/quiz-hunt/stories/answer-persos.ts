@@ -30,7 +30,7 @@ export function createQuizAnswerPersos(
           disabled: false,
           visualState: "idle",
           move: { parentId: `${prefix}:answers` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: retryEventName === undefined ? {} : { [retryEventName]: { checked: false, disabled: false, visualState: "idle" } },
         emit: {
           change: {
@@ -47,7 +47,7 @@ export function createQuizAnswerPersos(
           content: "",
           style: { display: "inline-block", minWidth: "1ch", marginInlineStart: "8px", textAlign: "center" },
           move: { parentId: `${answerRootId}__selection-icon-slot` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           [`quiz:question:answer:${answer.id}:selected`]: { content: "•" },
           [`quiz:question:answer:${answer.id}:idle`]: { content: "" },
@@ -62,7 +62,7 @@ export function createQuizAnswerPersos(
           content: "",
           style: { display: "inline-block", minWidth: "1ch", marginInlineStart: "8px", textAlign: "center", fontWeight: 700 },
           move: { parentId: `${answerRootId}__correction-icon-slot` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+", style: { color: "#16a34a" } },
           [`quiz:question:answer:${answer.id}:revealed-incorrect`]: { content: "-", style: { color: "#dc2626" } },
@@ -101,7 +101,7 @@ export function createQuizControlPersos(
         },
         attr: { type: "button", disabled: true },
         move: { parentId: `${prefix}:controls` }
-      } as unknown as PersoDoc["initial"],
+      },
       emit: { click: { event: { name: "quiz:question:validate" } } },
       actions: {
         "quiz:question:selection:available": { attr: { disabled: false } },
@@ -119,7 +119,7 @@ export function createQuizControlPersos(
         style: { fontWeight: 600 },
         attr: { hidden: true },
         move: { parentId: `${prefix}:result` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         "quiz:question:resolved:correct": {
           content: question.labels.correct,

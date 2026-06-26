@@ -2,6 +2,7 @@ import { BaseComponent } from './lib/base-component'
 import { bindComponentEmitDeclarations } from './lib/dom'
 import { appendDomChild, applyClassNamePatch, isDomElement, resetRuntimeNodeState } from './lib/dom-component-adapter'
 import { injectBaseStyle } from './lib/inject-base-style'
+import type { PersoActionCommon, PersoInitialCommon, PersoInnerNodePatch } from '../perso-shared-types'
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from './types'
 
@@ -24,6 +25,16 @@ export type MediaComponentApi = {
   getDurationMs: () => number | null
   isPaused: () => boolean
   setRate: (rate: number) => void
+}
+
+export type MediaInitial = PersoInitialCommon & {
+  src?: unknown
+  video?: PersoInnerNodePatch
+}
+
+export type MediaAction = PersoActionCommon & {
+  src?: unknown
+  video?: PersoInnerNodePatch
 }
 
 const MEDIA_TIME_SYNC_TOLERANCE_MS = 40
@@ -265,7 +276,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * Applies one resolved runtime action on the media component.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    const action = input.action as { ref?: unknown; src?: unknown; video?: unknown }
+    const action = input.action as MediaAction
     const targetNode = this.resolveRef(typeof action.ref === 'string' ? action.ref : undefined) ?? this.node
     this.services.apply(targetNode, input.action)
     if (typeof action.src === 'string') {
@@ -279,7 +290,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    */
   private staticSrcs(): string[] {
     const srcs: string[] = []
-    const initial = this.perso.initial as { src?: unknown }
+    const initial = this.perso.initial as MediaInitial
     if (typeof initial.src === 'string') {
       srcs.push(initial.src)
     }
@@ -316,7 +327,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     const node = createMediaNode(rootNode)
     resetRuntimeNodeState(node)
     this.setMediaSource(node, src)
-    this.applyVideoProps((this.perso.initial as Record<string, unknown>).video, node)
+    this.applyVideoProps((this.perso.initial as MediaInitial).video, node)
     this.mediaBySrc.set(src, node)
     return node
   }
@@ -371,11 +382,11 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     const rootNode = this.buildNode('div')
     this.services.apply(rootNode, this.perso.initial)
 
-    const initialSrc = (this.perso.initial as { src?: unknown }).src
+    const initialSrc = (this.perso.initial as MediaInitial).src
     if (typeof initialSrc === 'string') {
       this.setActiveSrc(rootNode, initialSrc)
     }
-    this.applyVideoProps((this.perso.initial as Record<string, unknown>).video)
+    this.applyVideoProps((this.perso.initial as MediaInitial).video)
 
     return rootNode as Node
   }

@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay/player/types"
 
 /** Root story: the 3 zones (main, basket, timer). Every other story mounts into it via `move`. */
 export function createLayoutStory(): SceneStoryDoc {
@@ -23,7 +23,7 @@ export function createLayoutStory(): SceneStoryDoc {
             </div>
           `,
           style: { width: "100%" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {}
       }
     ]

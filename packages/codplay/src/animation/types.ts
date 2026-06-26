@@ -1,6 +1,6 @@
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
 import type { ResolvedAction } from '../core/events/types'
-import type { BroadcastAction, InputVisualStateValue, MoveValue } from '../runtime/types'
+import type { BroadcastAction, InputVisualStateValue, MoveValue, ReplaceActionValue, StyleValue, ClassNameValue } from '../runtime/types'
 
 export type AnimatedProperty = string
 
@@ -20,8 +20,8 @@ export type AnimationAction = {
   target?: unknown
   targetId?: string
   ref?: string
-  className?: string | { add?: string; remove?: string }
-  style?: Record<string, unknown>
+  className?: ClassNameValue
+  style?: StyleValue
   attr?: Record<string, unknown>
   move?: MoveValue
   content?: string
@@ -37,7 +37,7 @@ export type AnimationAction = {
   selectedAnswerIds?: string[]
   correctAnswerIds?: string[]
   broadcast?: BroadcastAction
-  replace?: string | Record<string, unknown>
+  replace?: ReplaceActionValue
 }
 
 export type AnimationResolvedAction = ResolvedAction<AnimationAction>

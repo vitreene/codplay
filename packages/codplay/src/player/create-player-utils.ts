@@ -1,9 +1,10 @@
 import type { AnimationAction } from '../animation/types'
 import type { EventListener, RuntimeEventSource, TimelineEvent } from '../core/events/types'
-import type { ActionDoc, MoveValue, RuntimePersos, ItemDoc } from '../runtime/types'
+import type { ActionDoc, ItemDoc, MoveValue, RuntimePersos } from '../runtime/types'
 import { RUNTIME_EVENT_SOURCE } from '../core/events/constants'
 import type { TrackAuthorMeta } from '../track-manager/types'
 import type { RuntimeTimelinePlan } from '../director/types'
+import type { InputActionDoc } from '../runtime/components/input-component'
 import type {
   PersoDoc,
   PlayerSceneLifecycleOptions,
@@ -234,7 +235,7 @@ export class PlayerRuntimePlanner {
       }
 
       for (const perso of story.persos) {
-        persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso)
+        persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso) as ItemDoc
       }
     }
 
@@ -263,7 +264,7 @@ export class PlayerRuntimePlanner {
     const persos: Record<string, ItemDoc> = {}
 
     for (const perso of story.persos) {
-      persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso)
+      persos[perso.id] = this.createRuntimeItem(story.id, story.trackId ?? story.id, perso) as ItemDoc
     }
 
     return {
@@ -287,7 +288,7 @@ export class PlayerRuntimePlanner {
 
     const resolvedActions =
       perso.type === 'input'
-        ? resolveInputStandardActions(authoredActions ?? {})
+        ? resolveInputStandardActions((authoredActions ?? {}) as Record<string, InputActionDoc>) as Record<string, ActionDoc>
         : (authoredActions ?? {})
 
     const TWEEN_STOP_ACTION = 'tween:stop'
@@ -306,7 +307,7 @@ export class PlayerRuntimePlanner {
       emit: perso.emit,
       list: perso.list,
       actions: resolvedActions,
-    }
+    } as ItemDoc
   }
 
   /**
@@ -349,7 +350,7 @@ export class PlayerRuntimePlanner {
     return Object.values(runtimePersos.persos).map((item) => ({
       listenerId: item.id,
       scopeStoryId: item.storyId,
-      actionsByEventName: item.actions
+      actionsByEventName: item.actions as Record<string, AnimationAction>
     }))
   }
 }

@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay/player/types"
 
 /**
  * Timer story: a label + a progress bar. Purely passive — the countdown logic
@@ -24,7 +24,7 @@ export function createTimerStory(): SceneStoryDoc {
             </div>
           `,
           style: {}
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {}
       },
       {
@@ -34,7 +34,7 @@ export function createTimerStory(): SceneStoryDoc {
           tag: "span",
           content: "--:--",
           move: { parentId: "game-timer-label-slot" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: { "game:timer:label": {} }
       },
       {
@@ -50,7 +50,7 @@ export function createTimerStory(): SceneStoryDoc {
             borderRadius: "4px"
           },
           move: { parentId: "game-timer-track-slot" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: { "game:timer:fill": {} }
       }
     ]

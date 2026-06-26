@@ -34,7 +34,7 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
           cursor: "pointer"
         },
         move: { parentId: "game-grid-root" }
-      } as unknown as PersoDoc["initial"],
+      },
       emit: {
         click: { event: { name: "game:trial:open", cascade: true }, data: { trialId: wordId } }
       },
@@ -73,7 +73,7 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
             gap: "10px",
             width: "100%"
           }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           "game:grid:show": { style: { display: "grid" } },
           "game:grid:hide": { style: { display: "none" } }

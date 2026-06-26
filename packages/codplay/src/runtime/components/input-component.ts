@@ -16,15 +16,21 @@ import {
 import type { RuntimeComponentClassInput } from "./types";
 import type {
   ComponentRenderResult,
-  RuntimeComponentUpdateInput,
   RuntimeLayoutOutletSnapshot,
+  RuntimeComponentUpdateInput,
 } from "./types";
-import type { ActionDoc } from "../types";
+import type {
+  AttrValue,
+  ClassNameValue,
+  PersoActionCommon,
+  PersoInitialCommon,
+  StyleValue,
+} from "../perso-shared-types";
 
 export type InputPartDefinition = {
-  className?: string;
-  style?: Record<string, unknown>;
-  attr?: Record<string, unknown>;
+  className?: ClassNameValue;
+  style?: StyleValue;
+  attr?: AttrValue;
   content?: string;
 };
 
@@ -34,7 +40,56 @@ export type InputCorrectionIconDefinition = InputPartDefinition & {
   missedCorrectContent?: string;
 };
 
-export type InputActionDoc = ActionDoc & {
+export type InputInitial = PersoInitialCommon & {
+  inputType?: unknown;
+  name?: unknown;
+  value?: unknown;
+  label?: unknown;
+  hint?: unknown;
+  checked?: unknown;
+  disabled?: unknown;
+  placeholder?: unknown;
+  min?: unknown;
+  max?: unknown;
+  step?: unknown;
+  form?: unknown;
+  required?: unknown;
+  readOnly?: unknown;
+  selectedAnswerIds?: unknown;
+  correctAnswerIds?: unknown;
+  disableAnswers?: unknown;
+  showCorrection?: unknown;
+  selectionIcon?: unknown;
+  correctionIcon?: unknown;
+  visualState?: unknown;
+};
+
+export type InputAction = PersoActionCommon & {
+  inputType?: unknown;
+  id?: unknown;
+  name?: unknown;
+  value?: unknown;
+  label?: unknown;
+  hint?: unknown;
+  checked?: unknown;
+  disabled?: unknown;
+  placeholder?: unknown;
+  min?: unknown;
+  max?: unknown;
+  step?: unknown;
+  form?: unknown;
+  required?: unknown;
+  readOnly?: unknown;
+  selectedAnswerIds?: unknown;
+  correctAnswerIds?: unknown;
+  disableAnswers?: unknown;
+  showCorrection?: unknown;
+  selectionIcon?: unknown;
+  correctionIcon?: unknown;
+  visualState?: unknown;
+};
+
+export type InputActionDoc = InputAction & {
   disableAnswers?: boolean;
   showCorrection?: boolean;
 };
@@ -68,31 +123,6 @@ export function resolveInputStandardActions(
     ...authoredActions,
   };
 }
-
-type InputState = {
-  id?: unknown;
-  inputType?: unknown;
-  name?: unknown;
-  value?: unknown;
-  label?: unknown;
-  hint?: unknown;
-  checked?: unknown;
-  disabled?: unknown;
-  placeholder?: unknown;
-  min?: unknown;
-  max?: unknown;
-  step?: unknown;
-  form?: unknown;
-  required?: unknown;
-  readOnly?: unknown;
-  selectedAnswerIds?: unknown;
-  correctAnswerIds?: unknown;
-  disableAnswers?: unknown;
-  showCorrection?: unknown;
-  selectionIcon?: unknown;
-  correctionIcon?: unknown;
-  visualState?: unknown;
-};
 
 type ResolvedInputState = {
   inputType: string;
@@ -274,7 +304,7 @@ function resolveCorrectionLabel(state: ResolvedInputState): string {
  * Resolves one raw authored state into one runtime-ready state.
  */
 function resolveInputState(
-  input: InputState,
+  input: InputInitial | InputAction,
   fallback?: ResolvedInputState,
   defaultControlId = "",
 ): ResolvedInputState {
@@ -524,7 +554,7 @@ export class InputComponent extends BaseComponent {
   update(input: RuntimeComponentUpdateInput): void {
     const previousState = this.state;
     const nextState = resolveInputState(
-      input.action as InputState,
+      input.action as InputAction,
       previousState ?? undefined,
       `${this.perso.id}__control`,
     );
@@ -539,7 +569,7 @@ export class InputComponent extends BaseComponent {
    */
   render(): ComponentRenderResult {
     const initialState = resolveInputState(
-      this.perso.initial as InputState,
+      this.perso.initial as InputInitial,
       undefined,
       `${this.perso.id}__control`,
     );

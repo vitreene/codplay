@@ -49,7 +49,7 @@ export function createFinalStory(
           boxSizing: "border-box"
         },
         move: { parentId: "game:zone:main" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         [`game:final:${word.id}:show`]: { style: { display: "block" } },
         [`game:final:${word.id}:hide`]: { style: { display: "none" } }
@@ -70,7 +70,7 @@ export function createFinalStory(
         `,
         attr: { disabled: false },
         move: { parentId: `${prefix}:fieldset-slot` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         "quiz:question:resolved": { attr: { disabled: true } }
       }
@@ -78,7 +78,7 @@ export function createFinalStory(
     {
       id: `${prefix}-title`,
       type: "tag",
-      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } } as unknown as PersoDoc["initial"],
+      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } },
       actions: {}
     },
     {
@@ -89,7 +89,7 @@ export function createFinalStory(
         content: question.type === "multiple" ? question.labels.multipleHint : "",
         style: { color: "#475569", fontSize: "0.875rem" },
         move: { parentId: `${prefix}:hint` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {}
     },
     ...createQuizAnswerPersos(prefix, question, groupName),

@@ -18,12 +18,12 @@ Figer une base unique pour:
 
 ```ts
 export interface PersoTypeRegistry {
+  tag: { initial: TagInitial; action: TagAction }
   text: { initial: TextInitial; action: TextAction }
   img: { initial: ImgInitial; action: ImgAction }
-  video: { initial: VideoInitial; action: VideoAction }
-  sound: { initial: SoundInitial; action: SoundAction }
+  input: { initial: InputInitial; action: InputAction }
+  media: { initial: MediaInitial; action: MediaAction }
   list: { initial: ListInitial; action: ListAction }
-  layer: { initial: LayerInitial; action: LayerAction }
   layout: { initial: LayoutInitial; action: LayoutAction }
 }
 
@@ -50,6 +50,13 @@ export type Perso<Id extends string = string, T extends PersoType = PersoType> =
   emit?: PersoEmit
 }
 ```
+
+Vocabulaire aligne sur les types reellement enregistres par le runtime
+(`runtime-component-orchestrator.ts` — `{ tag, text, img, input, media, list, layout }`).
+`video` et `sound` (V0) sont unifies dans `media` — un seul composant gere les deux,
+le contenu (`video`/`sound`) reste une question de source, pas de type perso distinct.
+`layer` (V0) n'a pas d'implementation correspondante et est retire du registre.
+`tag` et `input` sont des types reels qui manquaient a cette liste.
 
 Extension V1 pour la synchronisation master:
 

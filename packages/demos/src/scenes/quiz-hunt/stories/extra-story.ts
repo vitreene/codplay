@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay/player/types"
 import type { GameLabels } from "../types"
 
 /** Extra story: one floating clickable token, hidden by default. Purely passive. */
@@ -33,7 +33,7 @@ export function createExtraStory(labels: GameLabels): SceneStoryDoc {
             transition: "opacity 200ms ease"
           },
           move: { parentId: "game:zone:main" }
-        } as unknown as PersoDoc["initial"],
+        },
         emit: {
           click: { event: { name: "game:extra:collect", cascade: true } }
         },
