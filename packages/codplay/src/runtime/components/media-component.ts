@@ -172,7 +172,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   getCurrentTimeMs(): number {
     const mediaNode = toMediaNodeLike(this.getPart(MEDIA_REF))
     const currentTimeSeconds = typeof mediaNode?.currentTime === 'number' ? mediaNode.currentTime : 0
-    return Math.max(0, currentTimeSeconds * 1000)
+    return this.clampToPlaybackWindowMs(Math.max(0, currentTimeSeconds * 1000))
   }
 
   /**
@@ -185,6 +185,20 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
     }
 
     return Math.max(0, mediaNode.duration * 1000)
+  }
+
+  /**
+   * Clamps one media time to the effective playback window `[in, out]` (v1-perso-spec §7bis).
+   * V1: `in = 0`, `out = effective duration`. The `broadcast.startAt`/`endAt` narrowing of the
+   * window is a follow-up, fed to the component when broadcast wiring lands. Per §7bis the
+   * duration is meant to come from preload; `getDurationMs` currently reads it from the media node.
+   * The clamp is a CodPlay responsibility and does not rely on the native `<video>` clamp.
+   */
+  private clampToPlaybackWindowMs(mediaMs: number): number {
+    const inMs = 0
+    const lowerBounded = Math.max(inMs, mediaMs)
+    const outMs = this.getDurationMs()
+    return outMs === null ? lowerBounded : Math.min(outMs, lowerBounded)
   }
 
   /**
@@ -238,7 +252,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
       return
     }
 
-    const nextCurrentTimeSeconds = Math.max(0, mediaMs) / 1000
+    const nextCurrentTimeSeconds = this.clampToPlaybackWindowMs(mediaMs) / 1000
     const currentTimeSeconds = typeof mediaNode.currentTime === 'number' ? mediaNode.currentTime : 0
     if (Math.abs(currentTimeSeconds - nextCurrentTimeSeconds) * 1000 <= MEDIA_TIME_SYNC_TOLERANCE_MS) {
       return
@@ -354,7 +368,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
    * setupMediaNode can reuse it on seek refresh without reset or src reload.
    */
   render(): ComponentRenderResult {
-    const rootNode = this.buildNode('<div></div>')
+    const rootNode = this.buildNode('div')
     this.services.apply(rootNode, this.perso.initial)
 
     const initialSrc = (this.perso.initial as { src?: unknown }).src

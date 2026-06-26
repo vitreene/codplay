@@ -11,6 +11,7 @@ import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
 import { runRiveCoachDemo } from './codplay/rive-coach-demo'
 import { runChronoDemo } from './codplay/chrono-demo'
+import { runQuizHuntDemo } from './codplay/quiz-hunt-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -27,5 +28,6 @@ switch (demoName) {
 	case 'avatar-poc-1':    void runAvatarPoc1Demo(); break
 	case 'rive-coach':      void runRiveCoachDemo(); break
 	case 'chrono':          void runChronoDemo(); break
+	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	default:                void runPlayerPocDemo()
 }

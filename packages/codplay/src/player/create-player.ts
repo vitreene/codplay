@@ -1251,9 +1251,6 @@ export class PlayerFacade implements PlayerApi {
       }
     } finally {
       this.timelineReplayInProgress = false;
-      // Sync all animations created during replay to the target position before any async boundary,
-      // preventing the browser from painting with `from` values still applied.
-      this.renderer.syncAnimationsToTimeline(timelineMs, eventMsByEventId);
     }
 
     return null;

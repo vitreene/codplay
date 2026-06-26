@@ -61,7 +61,7 @@ type HorizonSnapshot = {
 
 - borne future garantie par les tracks `role: "master"`.
 - inclut les events deja materialises sur ces tracks, meme s'ils n'ont pas encore ete traverses en lecture.
-- inclut les media `master` et leur duree effective.
+- inclut les media `master` et leur duree effective (longueur de la fenetre de lecture `[in, out]`, cf. `v1-perso-spec` 7bis — pas la duree brute du fichier).
 - ignore les tracks decoratives et les futures occurrences non master.
 
 3. `authorEndMs`

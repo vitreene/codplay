@@ -41,7 +41,7 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 						actions: {}
 					}
 				],
-				straps: undefined,
+				straps: supportCounterStraps,
 				listen: [
 					{
 						on: 'support:start',

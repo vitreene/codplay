@@ -177,6 +177,16 @@ type PersoTransitionTiming = {
 - `broadcast` pilote l'etat de lecture du composant sans imposer une decision de propagation event.
 - la convention de fin media reste configurable; la convention V1 recommandee est `media:end`.
 
+7bis. Fenetre de lecture effective et clamp du temps media
+
+- la duree d'un media (`video`/`sound`) est **connue d'avance via le preload** (cf. `v1-preload-api`), independamment du chargement runtime des metadonnees DOM (`HTMLMediaElement.duration`). Le clamp ne doit pas dependre de la disponibilite de cette metadonnee native.
+- `broadcast.startAt` / `broadcast.endAt` definissent la **fenetre de lecture effective** `[in, out]` du media, avec `in = startAt ?? 0` et `out = min(endAt ?? duree, duree)`. En l'absence des deux, la fenetre est `[0, duree]`.
+- le **temps de lecture** suivi et expose par le composant (`getCurrentTimeMs`), ainsi que **toute position appliquee par la synchronisation media** (lecture *ou* seek), sont **bornes a `[in, out]`** :
+  - une position cible au-dela de `out` place le media en fin de fenetre (`out`) et le marque termine (`media:end`) ;
+  - une position en deca de `in` est ramenee a `in`.
+- consequence : `getCurrentTimeMs()` ne depasse **jamais** `out`, meme si la timeline de la scene depasse la fin du media. Le clamp est une responsabilite **CodPlay** ; il ne repose pas sur le clamp natif de l'element `<video>` (qui n'agit que sur le rendu, pas sur la valeur suivie).
+- la **duree effective** d'un media au sens de la projection d'horizon (`v1-seek-spec`, `projectedMasterEndMs`) est la longueur de cette fenetre `out - in`, pas la duree brute du fichier.
+
 ## Contrat event applique a un Perso
 
 Forme event:

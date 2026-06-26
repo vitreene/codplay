@@ -1,7 +1,69 @@
 # Plan : quiz-hunt — architecture scène et stories
 
 ## Statut
-En attente de validation avant implémentation.
+Implémentation en cours.
+
+## Correction d'architecture (avant implémentation)
+
+En creusant le routing d'événements (`player.ts: routeSceneEvent`), un point n'était pas couvert par le plan initial :
+un event émis par le strap d'une story A n'atteint **jamais** le `listen` embarqué d'une story B — seul le
+fallback "story locale → scene" existe (et la scene ne peut résoudre que des straps du `strapCollection` externe,
+jamais les straps embarqués d'une autre story). Donc le pattern « story auto-suffisante » (chrono-story) ne peut
+piloter une AUTRE story : il ne convient qu'à une story qui se pilote elle-même via ses propres persos (cas du
+timer dans chrono-story, qui est toute la scène).
+
+Pour quiz-hunt, le contrôleur (scene) doit piloter grid/basket/timer/extra depuis l'extérieur. Conséquence :
+
+- **Toutes les stories sauf les questions (trial/finale) sont passives** : `straps: undefined, listen: []`,
+  uniquement des persos avec des `actions` qui réagissent à des events émis par le `gameStraps` (scene-level).
+  Pattern identique à `quiz-series-progress-story` / `quiz-series-result-story`.
+- Le **timer n'a plus de straps embarqués** (contrairement à ce qui était écrit en §Réutilisation) : la logique
+  start/pause/resume/stop, le tick `context.live.loop`, vivent dans un strap scene-level (`game-timer`). La story
+  timer ne fait qu'afficher (`game:timer:fill`, `game:timer:label`).
+- L'**ouverture d'une trial** (affichage indice → délai 3000 ms → révélation question) est aussi orchestrée par
+  le strap scene-level `game-router` via `context.planned.delay`, pas par un strap embarqué dans la trial-story.
+  Les trial/finale-stories ne gardent que `quizQuestionStoryStraps` (select/submit), strictement local (mêmes
+  persos émettent/consomment, comme dans quiz-series).
+- Pas d'event `game:trial:done` séparé : `quiz:question:answered` (émis par `quizQuestionStoryStraps`, retombe au
+  niveau scene faute de règle locale) est capté directement par un strap scene-level (`game-trial-resolve`), qui
+  retrouve le mot via une table `questionIndex → { kind: 'trial'|'final', wordId, color }` construite à la
+  création de la scène (trials = index 0-15, finales = index 16-31, même position que dans le tableau de mots).
+- `game:timer:resume` n'a plus besoin de paramètre : `timerRemainingMs` est tenu à jour en continu par le tick
+  (scope scene), donc le strap le relit directement dans son propre état au lieu de le recevoir en payload.
+
+Aucune des fonctionnalités CodPlay existantes ne manque — c'est une correction de *où* vivent les straps, pas un
+gap. Le reste du plan (vocabulaire d'événements zone/perso, paramétrage, contenu, décisions 1/2/4) reste valide ;
+seules les lignes concernant les straps embarqués du timer et `game:trial:done` sont remplacées par ce qui précède.
+
+### Précision sur le scoping des events (mécanisme exact)
+
+En lisant `dispatch.ts` (application des actions persos) en plus de `player.ts` (routing) : l'application d'une
+action à un perso est filtrée par égalité stricte `listener.scopeStoryId === event.scopeStoryId` — **sauf** quand
+`event.scopeStoryId === undefined`, où le filtre est sauté et TOUS les persos de la scène sont vérifiés. Un strap
+résolu via une règle `listen` de scène (donc dans `strapCollection` externe) exécute toujours avec
+`scope.scopeStoryId === undefined` ; tout event qu'il émet hérite de cette même portée `undefined`, **quel que
+soit `cascade`** — un strap scene-level ne peut donc jamais re-cibler un event vers une story précise, seulement
+diffuser globalement (par nom d'event) ou rester global. C'est cette diffusion globale par nom qui permet aux
+gameStraps de piloter grid/basket/timer/extra/résultat : chaque event utilise un nom unique par cible
+(`game:trial:{wordId}:show`, `game:grid:tile:{wordId}:success`, `game:basket:fill:{color}`…) pour que seul le
+perso concerné réagisse, même si le matching est global.
+
+Inversement, un event routé via une règle `listen` LOCALE à une story (ex. `quiz:question:answer:select` →
+`quiz-question-select`, embarqué dans chaque trial/finale) garde `scope.scopeStoryId` = cette story, et tout ce
+que le strap émet reste scoped à cette même story — c'est pourquoi `quiz-question-scene.ts` peut réutiliser des
+noms d'event non préfixés par instance (`quiz:question:answer:${answerId}:selected`, `quiz:question:resolved`…)
+sans collision entre les 32 stories trial/finale : le filtrage par `scopeStoryId` isole chaque instance, même à
+noms identiques.
+
+**Conséquence pour le retry (jeton de rattrapage)** : un strap scene-level ne peut pas réinitialiser l'état LOCAL
+d'une trial précise (ni son `state`, ni cibler un event scoped vers elle). Mais ce n'est pas nécessaire : ni
+`handleQuestionSelect` ni `handleQuestionSubmit` (dans `quiz-question-scene.ts`) ne lisent `disabled`/`resolved`
+pour bloquer une resoumission — le seul verrou réel est l'attribut HTML natif `fieldset[disabled]`, qui empêche
+les clics natifs de partir. Le retry est donc implémenté par de pures actions persos (pas de strap, pas de
+modification de `quiz-question-scene.ts`), avec un nom d'event unique par trial (`game:trial:{wordId}:retry`)
+ajouté localement aux persos answer/fieldset/validate/result dans `build-reading-quiz.ts` : il réinitialise le
+DOM (fieldset réactivé, inputs décochés, icônes effacées, validate redisabled, résultat caché), et le prochain
+clic recalcule tout correctement via les straps existants, inchangés.
 
 ## Contraintes
 

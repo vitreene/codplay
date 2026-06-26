@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "resolveJsonModule": true,
     "paths": {
       "codplay": ["../codplay/src/index.ts"],
       "codplay/*": ["../codplay/src/*"],

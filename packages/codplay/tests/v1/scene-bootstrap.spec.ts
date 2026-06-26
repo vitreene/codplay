@@ -249,7 +249,7 @@ function createImmediateStrapUpdateSceneFixture(): SceneDef {
           { on: 'move:to-b', straps: ['set-b'] },
           { on: 'move:to-a', straps: ['resolve-return'] }
         ],
-        straps: undefined
+        straps: immediateStrapUpdateCollection
       }
     }
   }
@@ -518,7 +518,7 @@ describe('V1 - scene bootstrap', () => {
                 resolved: { className: { add: 'resolved' } }
               }
             }],
-            straps: ['resolver'],
+            straps,
             listen: [{ on: 'raw:end', straps: ['resolver'] }]
           }
         }
