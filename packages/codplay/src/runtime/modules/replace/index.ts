@@ -2,6 +2,7 @@ import { normalizeReplaceCommand, hasReplaceTarget } from './normalize-replace'
 import { applySimpleBefore, applySimpleAfter, applyCloneBDimensions, cancelSimpleSession } from './apply-simple'
 import type { ReplaceSimpleEmitter } from './apply-simple'
 import { applySplitTextBefore, applySplitTextAfter, cancelSplitTextSession } from './apply-split-text'
+import { applySlotTextBefore, applySlotTextAfter, cancelSlotTextSession } from './apply-slot-text'
 import { applySplitCellsBefore, applySplitCellsAfter, applyCellsBRect, cancelSplitCellsSession } from './apply-split-cells'
 import type { CellsEmitter } from './apply-split-cells'
 import type {
@@ -64,6 +65,9 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
       const imgChild = node.querySelector<HTMLImageElement>('img')
       const currentSrc = imgChild?.src ?? ''
       applySplitCellsBefore(node, parent, currentSrc, command)
+    } else if (command.transition.slot !== undefined) {
+      cancelSlotTextSession(node)
+      applySlotTextBefore(node, parent, command.split)
     } else {
       cancelSplitTextSession(node)
       applySplitTextBefore(node, parent, command.split)
@@ -115,6 +119,9 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
         currentMs: () => host.timeline.currentMs,
       }
       const transitions = applySplitCellsAfter({ el: node, command, eventId, eventName, listenerId, persoId, emitter: cellsEmitter })
+      output.directTransitions.push(...transitions)
+    } else if (command.transition.slot !== undefined) {
+      const transitions = applySlotTextAfter({ el: node, command, slot: command.transition.slot, eventId, eventName, listenerId, persoId })
       output.directTransitions.push(...transitions)
     } else {
       const transitions = applySplitTextAfter({ el: node, command, eventId, eventName, listenerId, persoId })

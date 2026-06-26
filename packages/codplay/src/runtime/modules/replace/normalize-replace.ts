@@ -16,6 +16,8 @@ export type ReplaceCommand = {
   direction?: ReplaceDirection
   cellX?: number
   cellY?: number
+  /** Slot uniquement : ne pas animer un glyphe identique à la même position (défaut true). */
+  skipUnchanged?: boolean
 }
 
 /**
@@ -80,6 +82,7 @@ export function normalizeReplaceCommand(rawReplace: unknown): ReplaceCommand | n
     direction: isDirection(raw.direction) ? raw.direction : undefined,
     cellX: typeof raw.cellX === 'number' ? raw.cellX : undefined,
     cellY: typeof raw.cellY === 'number' ? raw.cellY : undefined,
+    skipUnchanged: typeof raw.skipUnchanged === 'boolean' ? raw.skipUnchanged : undefined,
   }
 }
 

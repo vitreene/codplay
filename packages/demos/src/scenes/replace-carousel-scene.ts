@@ -83,7 +83,7 @@ export function createReplaceCarouselScene(): SceneDoc {
             initial: {
               move: { parentId: "demo-grid" },
               markup: `<div style="display:flex;flex-direction:column;gap:8px;background:#1a1a2e;border-radius:12px;padding:16px;overflow:hidden;">
-                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Texte · split letter</span>
+                <span style="font-size:11px;font-family:monospace;color:#888;text-transform:uppercase;letter-spacing:.08em;">Texte · slot-up</span>
               </div>`,
             },
             actions: {},
@@ -106,11 +106,11 @@ export function createReplaceCarouselScene(): SceneDoc {
             actions: {
               "replace-1": {
                 content: TEXT_B,
-                replace: { transition: "swipe-up", duration: 500, split: "letter" },
+                replace: { transition: "slot-up", duration: 500, split: "letter" },
               },
               "replace-2": {
                 content: TEXT_A,
-                replace: { transition: "swipe-up", duration: 500, split: "letter" },
+                replace: { transition: "slot-up", duration: 500, split: "letter" },
               },
             },
           },
