@@ -3,7 +3,12 @@
 Constats relevés en débuggant la démo quiz-hunt, mais valables comme bonnes pratiques générales
 pour le projet — pas des règles spécifiques à quiz-hunt. Quiz-hunt sert ici d'illustration
 concrète, pas de périmètre.
-Statut : à valider, pas encore appliqué au code.
+Statut : partiellement appliqué au code.
+
+- Item 2 appliqué sur la démo `quiz-hunt` : feuille `quiz-hunt.css` ajoutée, styles statiques
+  migrés vers des classes, footer rendu responsive, grille conservée en 4x4, `position:absolute`
+  retiré des panneaux trial/final.
+- Les autres items restent à valider ou à appliquer séparément.
 
 ---
 
@@ -106,6 +111,9 @@ le bug n°1 (`BUGS.md`) comme effet de bord, pas seulement le style.
 - Propriétés statiques (couleur, padding, border-radius, font-weight, gap, layout grid/flex…) →
   classe CSS déclarée dans une feuille de style du projet (suivre la convention `style.css` /
   `demo-shell.css` : variables CSS, sélecteurs nommés), appliquée via `className`.
+- Dans les classes CSS, privilégier des valeurs exprimées en `em` quand l'échelle doit suivre la
+  typo ou le contexte du composant; garder `px` en dernière intention, pour les cas où une valeur
+  fixe est réellement voulue.
 - `style:` inline réservé aux valeurs réellement dynamiques (calculées par strap/tween :
   pourcentage de remplissage, couleur d'accent paramétrée par mot/couleur de jeu).
 - Grid/flex modernes (`grid-template-columns`, `gap`, `minmax()`, `auto-fit`) pour toute mise en
@@ -120,6 +128,8 @@ le bug n°1 (`BUGS.md`) comme effet de bord, pas seulement le style.
 **Don't**
 - Dupliquer le même bloc `style: { padding, borderRadius, fontWeight… }` perso par perso quand
   une classe partagée suffirait.
+- Remplir les classes CSS de dimensions en `px` par défaut quand une valeur relative (`em`) ferait
+  mieux ressortir l'intention de mise à l'échelle.
 - Poser une classe dans le markup (`class="quiz-hunt-…"`) sans jamais écrire la règle CSS
   correspondante — classe morte, aussi inerte qu'un commentaire non lu.
 - `position: absolute; inset: 0` par réflexe pour empiler des panneaux qui ne sont jamais
@@ -127,10 +137,10 @@ le bug n°1 (`BUGS.md`) comme effet de bord, pas seulement le style.
 - Dimensions/colonnes figées (`width: 220px`, `repeat(4, 1fr)`) sans réflexion sur un viewport
   étroit.
 
-**Piste pour quiz-hunt** (non appliquée) : créer une feuille `quiz-hunt.css` co-localisée,
-migrer les blocs `style:` statiques de chaque story vers des classes, retirer `position:absolute`
-des panneaux trial/final, ajouter un breakpoint pour le footer (basket/timer empilés en colonne
-sous ~640px) et une grille responsive (`repeat(auto-fit, minmax(64px, 1fr))`) pour les tuiles.
+**Appliqué dans quiz-hunt** : feuille `quiz-hunt.css` co-localisée ajoutée, blocs `style:`
+statiques migrés vers des classes, `position:absolute` retiré des panneaux trial/final, breakpoint
+ajouté pour le footer (basket/timer empilés en colonne sous `640px`) et grille fixée en 4x4
+(`repeat(4, minmax(0, 1fr))`) pour les tuiles.
 
 ---
 

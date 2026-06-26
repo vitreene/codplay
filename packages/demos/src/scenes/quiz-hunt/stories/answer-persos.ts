@@ -44,8 +44,8 @@ export function createQuizAnswerPersos(
         type: "tag",
         initial: {
           tag: "span",
+          className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-selection",
           content: "",
-          style: { display: "inline-block", minWidth: "1ch", marginInlineStart: "8px", textAlign: "center" },
           move: { parentId: `${answerRootId}__selection-icon-slot` }
         },
         actions: {
@@ -59,15 +59,15 @@ export function createQuizAnswerPersos(
         type: "tag",
         initial: {
           tag: "span",
+          className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction",
           content: "",
-          style: { display: "inline-block", minWidth: "1ch", marginInlineStart: "8px", textAlign: "center", fontWeight: 700 },
           move: { parentId: `${answerRootId}__correction-icon-slot` }
         },
         actions: {
-          [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+", style: { color: "#16a34a" } },
-          [`quiz:question:answer:${answer.id}:revealed-incorrect`]: { content: "-", style: { color: "#dc2626" } },
-          [`quiz:question:answer:${answer.id}:revealed-missed-correct`]: { content: "+", style: { color: "#16a34a" } },
-          ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "" } })
+          [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-correct" },
+          [`quiz:question:answer:${answer.id}:revealed-incorrect`]: { content: "-", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-incorrect" },
+          [`quiz:question:answer:${answer.id}:revealed-missed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-missed-correct" },
+          ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction" } })
         }
       }
     ]
@@ -87,18 +87,9 @@ export function createQuizControlPersos(
       type: "tag",
       initial: {
         tag: "button",
+        className: "quiz-hunt-validate-button",
         content: question.labels.validate,
-        style: {
-          marginTop: "12px",
-          alignSelf: "flex-start",
-          backgroundColor: accent,
-          color: "#fff",
-          border: "none",
-          borderRadius: "8px",
-          padding: "8px 16px",
-          cursor: "pointer",
-          fontWeight: 600
-        },
+        style: { "--quiz-hunt-accent": accent },
         attr: { type: "button", disabled: true },
         move: { parentId: `${prefix}:controls` }
       },
@@ -115,8 +106,8 @@ export function createQuizControlPersos(
       type: "tag",
       initial: {
         tag: "span",
+        className: "quiz-hunt-question-result",
         content: "",
-        style: { fontWeight: 600 },
         attr: { hidden: true },
         move: { parentId: `${prefix}:result` }
       },
@@ -124,14 +115,14 @@ export function createQuizControlPersos(
         "quiz:question:resolved:correct": {
           content: question.labels.correct,
           attr: { hidden: false },
-          style: { color: "#16a34a" }
+          className: "quiz-hunt-question-result is-correct"
         },
         "quiz:question:resolved:incorrect": {
           content: question.labels.incorrect,
           attr: { hidden: false },
-          style: { color: "#dc2626" }
+          className: "quiz-hunt-question-result is-incorrect"
         },
-        ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "", attr: { hidden: true } } })
+        ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "", className: "quiz-hunt-question-result", attr: { hidden: true } } })
       }
     }
   ]

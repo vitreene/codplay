@@ -8,15 +8,9 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
     type: "tag",
     initial: {
       tag: "div",
+      className: "quiz-hunt-basket-slot",
       content: labels.basketEmptySlot,
-      style: {
-        flex: "1",
-        padding: "10px 12px",
-        borderRadius: "8px",
-        border: `2px solid ${colorAccents[color] ?? "#94a3b8"}`,
-        fontWeight: 600,
-        textAlign: "center"
-      },
+      style: { "--quiz-hunt-accent": colorAccents[color] ?? "#94a3b8" },
       move: { parentId: "game-basket-slots" }
     },
     actions: {
@@ -38,11 +32,10 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
           move: { parentId: "game:zone:basket" },
           markup: `
             <div class="quiz-hunt-basket">
-              <div data-part="game-basket-slots" style="display: flex; gap: 8px;"></div>
-              <div data-part="game-basket-final-slot" style="margin-top: 12px;"></div>
+              <div class="quiz-hunt-basket-slots" data-part="game-basket-slots"></div>
+              <div class="quiz-hunt-basket-final-slot" data-part="game-basket-final-slot"></div>
             </div>
-          `,
-          style: {}
+          `
         },
         actions: {}
       },
@@ -52,24 +45,17 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
         type: "tag",
         initial: {
           tag: "button",
+          className: "quiz-hunt-final-button is-hidden",
           content: labels.finalButton,
           attr: { type: "button" },
           style: {
-            display: "none",
-            width: "100%",
-            padding: "10px",
-            border: "none",
-            borderRadius: "8px",
-            backgroundColor: "#2563eb",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: "pointer"
+            "--quiz-hunt-accent": "#2563eb"
           },
           move: { parentId: "game-basket-final-slot" }
         },
         emit: { click: { event: { name: "game:final:start", cascade: true } } },
         actions: {
-          "game:basket:complete": { style: { display: "block" } }
+          "game:basket:complete": { className: { remove: "is-hidden" } }
         }
       }
     ]

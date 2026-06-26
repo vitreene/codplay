@@ -3,31 +3,38 @@
 
 export type RiveSMIInput = {
   name: string
+  type: number
   value: number | boolean | undefined
+  fire(): void
+  asBool(): RiveSMIInput
   asNumber(): RiveSMIInput
+  asTrigger(): RiveSMIInput
 }
 
-type RiveStateMachineInstance = {
-  advance(sec: number): void
+export type RiveStateMachineInstance = {
+  advance(sec: number): boolean
   inputCount(): number
   input(i: number): RiveSMIInput
+  delete(): void
 }
 
-type RiveArtboard = {
+export type RiveArtboard = {
   stateMachineByName(name: string): unknown
   bounds: unknown
-  advance(sec: number): void
+  advance(sec: number): boolean
   draw(renderer: RiveRenderer): void
+  delete(): void
 }
 
-type RiveRenderer = {
+export type RiveRenderer = {
   clear(): void
   save(): void
   restore(): void
   align(fit: unknown, alignment: unknown, frame: unknown, bounds: unknown): void
+  delete(): void
 }
 
-type RiveFile = {
+export type RiveFile = {
   artboardByName(name: string): RiveArtboard | null
   defaultArtboard(): RiveArtboard
 }

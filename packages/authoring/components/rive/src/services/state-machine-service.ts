@@ -1,27 +1,31 @@
 import { ComponentServiceBase } from 'codplay'
-import type { RiveContext, RiveSMIInput } from '../rive-context'
-
-type RiveStateMachineInstance = {
-  advance(sec: number): void
-  inputCount(): number
-  input(i: number): RiveSMIInput
-}
+import type { RiveContext, RiveSMIInput, RiveStateMachineInstance } from '../rive-context'
 
 export class StateMachineService extends ComponentServiceBase {
-  private readonly smInstance: RiveStateMachineInstance
+  private readonly ctx: RiveContext
+  private readonly stateMachineName: string
+  private smInstance: RiveStateMachineInstance
 
   constructor(ctx: RiveContext, stateMachineName: string) {
     super()
-    const smRef = ctx.artboard.stateMachineByName(stateMachineName)
-    if (!smRef) throw new Error(`[rive] state machine "${stateMachineName}" not found`)
-    this.smInstance = new ctx.runtime.StateMachineInstance(smRef, ctx.artboard) as RiveStateMachineInstance
+    this.ctx = ctx
+    this.stateMachineName = stateMachineName
+    this.smInstance = this.createInstance(ctx)
   }
 
   override advance(sec: number): void {
-    this.smInstance.advance(sec)
+    void this.smInstance.advance(sec)
   }
 
   apply(_value: unknown): void {}
+
+  override reset(): void {
+    this.recreate()
+  }
+
+  override destroy(): void {
+    this.smInstance.delete()
+  }
 
   getInput(name: string): RiveSMIInput | null {
     const count = this.smInstance.inputCount()
@@ -30,5 +34,16 @@ export class StateMachineService extends ComponentServiceBase {
       if (inp.name === name) return inp.asNumber()
     }
     return null
+  }
+
+  private recreate(): void {
+    this.smInstance.delete()
+    this.smInstance = this.createInstance(this.ctx)
+  }
+
+  private createInstance(ctx: RiveContext): RiveStateMachineInstance {
+    const smRef = ctx.artboard.stateMachineByName(this.stateMachineName)
+    if (!smRef) throw new Error(`[rive] state machine "${this.stateMachineName}" not found`)
+    return new ctx.runtime.StateMachineInstance(smRef, ctx.artboard) as RiveStateMachineInstance
   }
 }

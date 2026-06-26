@@ -1,3 +1,4 @@
+import "./quiz-hunt.css"
 import type { SceneDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionLabels, QuizQuestionStoryConfig } from "../quiz-question-scene"
 import type { GameConfig } from "./types"

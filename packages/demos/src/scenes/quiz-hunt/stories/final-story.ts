@@ -31,28 +31,17 @@ export function createFinalStory(
     {
       id: panelId,
       type: "layout",
-      initial: {
-        markup: `
-          <div class="quiz-hunt-final-panel">
-            <div data-part="${prefix}:fieldset-slot"></div>
-          </div>
-        `,
-        style: {
-          display: "none",
-          position: "absolute",
-          inset: "0",
-          padding: "20px",
-          border: "1px solid rgba(15, 23, 42, 0.12)",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          overflowY: "auto",
-          boxSizing: "border-box"
-        },
+        initial: {
+          markup: `
+            <div class="quiz-hunt-final-panel is-hidden">
+              <div data-part="${prefix}:fieldset-slot"></div>
+            </div>
+          `,
         move: { parentId: "game:zone:main" }
       },
       actions: {
-        [`game:final:${word.id}:show`]: { style: { display: "block" } },
-        [`game:final:${word.id}:hide`]: { style: { display: "none" } }
+        [`game:final:${word.id}:show`]: { className: { add: "is-visible", remove: "is-hidden" } },
+        [`game:final:${word.id}:hide`]: { className: { add: "is-hidden", remove: "is-visible" } }
       }
     },
     {
@@ -60,8 +49,8 @@ export function createFinalStory(
       type: "layout",
       initial: {
         markup: `
-          <fieldset class="quiz-question-fieldset" style="border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
-            <legend data-part="${prefix}:title" style="font-weight: 700; font-size: 1.1rem;"></legend>
+          <fieldset class="quiz-question-fieldset">
+            <legend class="quiz-hunt-question-title-slot is-final" data-part="${prefix}:title"></legend>
             <p data-part="${prefix}:hint"></p>
             <div data-part="${prefix}:answers"></div>
             <div data-part="${prefix}:controls"></div>
@@ -86,8 +75,8 @@ export function createFinalStory(
       type: "tag",
       initial: {
         tag: "span",
+        className: "quiz-hunt-question-hint",
         content: question.type === "multiple" ? question.labels.multipleHint : "",
-        style: { color: "#475569", fontSize: "0.875rem" },
         move: { parentId: `${prefix}:hint` }
       },
       actions: {}

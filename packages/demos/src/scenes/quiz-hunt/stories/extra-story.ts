@@ -15,31 +15,17 @@ export function createExtraStory(labels: GameLabels): SceneStoryDoc {
         type: "tag",
         initial: {
           tag: "button",
+          className: "quiz-hunt-extra-token is-hidden",
           content: labels.extraLabel,
           attr: { type: "button" },
-          style: {
-            position: "absolute",
-            top: "12px",
-            right: "12px",
-            padding: "8px 14px",
-            border: "none",
-            borderRadius: "999px",
-            backgroundColor: "#f59e0b",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: "pointer",
-            opacity: 0,
-            pointerEvents: "none",
-            transition: "opacity 200ms ease"
-          },
           move: { parentId: "game:zone:main" }
         },
         emit: {
           click: { event: { name: "game:extra:collect", cascade: true } }
         },
         actions: {
-          "game:extra:show": { style: { opacity: 1, pointerEvents: "auto" } },
-          "game:extra:hide": { style: { opacity: 0, pointerEvents: "none" } }
+          "game:extra:show": { className: { add: "is-visible", remove: "is-hidden" } },
+          "game:extra:hide": { className: { add: "is-hidden", remove: "is-visible" } }
         }
       }
     ]

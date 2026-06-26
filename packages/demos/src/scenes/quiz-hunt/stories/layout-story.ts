@@ -15,14 +15,13 @@ export function createLayoutStory(): SceneStoryDoc {
         initial: {
           markup: `
             <div class="quiz-hunt-layout">
-              <div data-part="game:zone:main" style="position: relative; min-height: 420px;"></div>
-              <div class="quiz-hunt-footer" style="display: flex; gap: 16px; margin-top: 16px;">
-                <div data-part="game:zone:basket" style="flex: 1;"></div>
-                <div data-part="game:zone:timer" style="width: 220px;"></div>
+              <div class="quiz-hunt-main-zone" data-part="game:zone:main"></div>
+              <div class="quiz-hunt-footer">
+                <div class="quiz-hunt-basket-zone" data-part="game:zone:basket"></div>
+                <div class="quiz-hunt-timer-zone" data-part="game:zone:timer"></div>
               </div>
             </div>
-          `,
-          style: { width: "100%" }
+          `
         },
         actions: {}
       }

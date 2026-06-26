@@ -21,18 +21,10 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
       type: "tag",
       initial: {
         tag: "button",
+        className: "quiz-hunt-grid-tile",
         content: String(position + 1),
         attr: { type: "button" },
-        style: {
-          aspectRatio: "1 / 1",
-          border: "none",
-          borderRadius: "10px",
-          backgroundColor: accent,
-          color: "#fff",
-          fontSize: "1.25rem",
-          fontWeight: 700,
-          cursor: "pointer"
-        },
+        style: { "--quiz-hunt-accent": accent },
         move: { parentId: "game-grid-root" }
       },
       emit: {
@@ -41,15 +33,15 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
       actions: {
         [`game:grid:tile:${wordId}:success`]: {
           attr: { disabled: true },
-          style: { backgroundColor: "#16a34a", cursor: "default", opacity: 1 }
+          className: "quiz-hunt-grid-tile is-success"
         },
         [`game:grid:tile:${wordId}:fail`]: {
           attr: { disabled: true },
-          style: { backgroundColor: "#94a3b8", cursor: "default", opacity: 0.6 }
+          className: "quiz-hunt-grid-tile is-fail"
         },
         [`game:grid:tile:${wordId}:unlocked`]: {
           attr: { disabled: false },
-          style: { backgroundColor: accent, cursor: "pointer", opacity: 1 }
+          className: "quiz-hunt-grid-tile"
         }
       }
     }
@@ -66,17 +58,12 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
         id: "game-grid-root",
         type: "list",
         initial: {
+          className: "quiz-hunt-grid",
           move: { parentId: "game:zone:main" },
-          style: {
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "10px",
-            width: "100%"
-          }
         },
         actions: {
-          "game:grid:show": { style: { display: "grid" } },
-          "game:grid:hide": { style: { display: "none" } }
+          "game:grid:show": { className: { remove: "is-hidden" } },
+          "game:grid:hide": { className: { add: "is-hidden" } }
         }
       },
       ...tiles

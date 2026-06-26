@@ -19,11 +19,10 @@ export function createTimerStory(): SceneStoryDoc {
           move: { parentId: "game:zone:timer" },
           markup: `
             <div class="quiz-hunt-timer">
-              <span data-part="game-timer-label-slot" style="font-weight: 700; font-family: monospace; font-size: 1.1rem;"></span>
-              <div data-part="game-timer-track-slot" style="height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden; margin-top: 6px;"></div>
+              <span class="quiz-hunt-timer-label-slot" data-part="game-timer-label-slot"></span>
+              <div class="quiz-hunt-timer-track-slot" data-part="game-timer-track-slot"></div>
             </div>
-          `,
-          style: {}
+          `
         },
         actions: {}
       },
@@ -42,13 +41,8 @@ export function createTimerStory(): SceneStoryDoc {
         type: "tag",
         initial: {
           tag: "div",
+          className: "quiz-hunt-timer-fill",
           content: "",
-          style: {
-            height: "100%",
-            width: "100%",
-            backgroundColor: "#2563eb",
-            borderRadius: "4px"
-          },
           move: { parentId: "game-timer-track-slot" }
         },
         actions: { "game:timer:fill": {} }

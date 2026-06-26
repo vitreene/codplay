@@ -14,39 +14,30 @@ export function createResultStory(labels: GameLabels): SceneStoryDoc {
         id: "game-result-overlay",
         type: "layout",
         initial: {
+          className: "quiz-hunt-result-overlay is-hidden",
           move: { parentId: "game:zone:main" },
           markup: `
-            <div class="quiz-hunt-result-card" style="background: #fff; border-radius: 16px; padding: 24px 32px; min-width: 300px; display: flex; flex-direction: column; gap: 8px;">
-              <p data-part="game-result-verdict-slot" style="font-weight: 700; font-size: 1.25rem; margin: 0;"></p>
-              <p data-part="game-result-summary-slot" style="margin: 0;"></p>
-              <p data-part="game-result-time-slot" style="margin: 0; color: #475569;"></p>
+            <div class="quiz-hunt-result-card">
+              <p class="quiz-hunt-result-verdict-slot" data-part="game-result-verdict-slot"></p>
+              <p class="quiz-hunt-result-summary-slot" data-part="game-result-summary-slot"></p>
+              <p class="quiz-hunt-result-time-slot" data-part="game-result-time-slot"></p>
             </div>
-          `,
-          style: {
-            position: "absolute",
-            inset: "0",
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(15, 23, 42, 0.6)",
-            opacity: 0,
-            pointerEvents: "none"
-          }
+          `
         },
         actions: {
           "game:result:show": {
-            style: { opacity: { from: 0, to: 1, duration: 300 }, pointerEvents: "auto" }
+            className: { add: "is-visible", remove: "is-hidden" },
+            style: { opacity: { from: 0, to: 1, duration: 300 } }
           }
         }
       },
-      {
-        id: "game-result-verdict",
-        type: "tag",
-        initial: { tag: "span", content: "", move: { parentId: "game-result-verdict-slot" } },
+        {
+          id: "game-result-verdict",
+          type: "tag",
+        initial: { tag: "span", className: "quiz-hunt-result-verdict", content: "", move: { parentId: "game-result-verdict-slot" } },
         actions: {
-          "game:result:verdict:passed": { content: labels.resultPassedTitle, style: { color: "#16a34a" } },
-          "game:result:verdict:failed": { content: labels.resultFailedTitle, style: { color: "#dc2626" } }
+          "game:result:verdict:passed": { content: labels.resultPassedTitle, className: "quiz-hunt-result-verdict is-passed" },
+          "game:result:verdict:failed": { content: labels.resultFailedTitle, className: "quiz-hunt-result-verdict is-failed" }
         }
       },
       {

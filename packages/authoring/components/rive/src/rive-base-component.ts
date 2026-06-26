@@ -4,12 +4,15 @@ import { COMPONENT_DEFAULT_SERVICES } from 'codplay/runtime/components/lib/compo
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
 import type { RenderTickInfo, RenderSeekInfo } from 'codplay/player/render-adapter-types'
 import type { RiveContext } from './rive-context'
-import type { RiveInitial } from './rive-types'
+import type { RiveInitial, RiveActionPayload } from './rive-types'
 import { getRiveEntry } from './rive-preload'
+
+type RivePlaybackState = 'playing' | 'paused' | 'stopped'
 
 export class RiveBaseComponent extends BaseComponent {
   protected _riveCtx: RiveContext | null = null
   private _rate = 1
+  private _playbackState: RivePlaybackState = 'playing'
   protected readonly _internalServices: ComponentServiceBase[] = []
 
   constructor(input: ConstructorParameters<typeof BaseComponent>[0]) {
@@ -21,6 +24,8 @@ export class RiveBaseComponent extends BaseComponent {
     this._internalServices.push(service)
   }
 
+  protected _initializeInternalServices(): void {}
+
   render(): ComponentRenderResult {
     const initial = this.perso.initial as RiveInitial
     const canvas = this.buildNode('canvas') as HTMLCanvasElement
@@ -31,19 +36,7 @@ export class RiveBaseComponent extends BaseComponent {
   }
 
   init(): void {
-    this._internalServices.length = 0
-    this._riveCtx = null
-    const initial = this.perso.initial as RiveInitial
-    const entry = getRiveEntry(initial.src)
-    if (!entry || entry.status !== 'ready' || !entry.runtime || !entry.file) {
-      throw new Error(`[rive] resource not ready: ${initial.src} — ensure preload ran before player.init()`)
-    }
-    const artboard = initial.artboard
-      ? entry.file.artboardByName(initial.artboard)
-      : entry.file.defaultArtboard()
-    if (!artboard) throw new Error(`[rive] artboard "${initial.artboard}" not found in ${initial.src}`)
-    const renderer = entry.runtime.makeRenderer(this.node as HTMLCanvasElement)
-    this._riveCtx = { runtime: entry.runtime, artboard, renderer }
+    this._rebuildRuntimeState({ recreateRenderer: true })
   }
 
   protected _doAdvance(sec: number): void {
@@ -53,7 +46,8 @@ export class RiveBaseComponent extends BaseComponent {
 
   /** Called by the hub via RenderAdapter.prepareSeek?(), once before the player replays seek events. */
   _prepareSeek(): void {
-    this._resetServices()
+    if (!this._riveCtx) return
+    this._rebuildRuntimeState({ recreateRenderer: false })
   }
 
   protected _drawFrame(): void {
@@ -70,6 +64,7 @@ export class RiveBaseComponent extends BaseComponent {
 
   _tick(info: RenderTickInfo): void {
     if (!this._riveCtx) return
+    if (this._playbackState !== 'playing') return
     const sec = (info.deltaMs * this._rate) / 1000
     this._doAdvance(sec)
     this._drawFrame()
@@ -86,10 +81,8 @@ export class RiveBaseComponent extends BaseComponent {
   }
 
   _stop(): void {
-    this._resetServices()
-    for (const s of this._internalServices) s.destroy?.()
-    this._internalServices.length = 0
-    this._riveCtx = null
+    this._destroyRuntimeState({ destroyRenderer: true })
+    this._playbackState = 'stopped'
   }
 
   protected _resetServices(): void {
@@ -98,5 +91,94 @@ export class RiveBaseComponent extends BaseComponent {
 
   update(input: RuntimeComponentUpdateInput): void {
     this.services.apply(this.node, input.action)
+    const action = input.action as RiveActionPayload
+    if (!this._applyBroadcast(action.broadcast)) {
+      return
+    }
+    this._applyAction(action)
+  }
+
+  protected _applyAction(_action: RiveActionPayload): void {}
+
+  private _applyBroadcast(broadcast: RiveActionPayload['broadcast']): boolean {
+    if (!broadcast) {
+      return true
+    }
+
+    if (broadcast.type === 'START') {
+      this._playbackState = 'playing'
+      return true
+    }
+
+    if (broadcast.type === 'PAUSE') {
+      this._playbackState = 'paused'
+      return false
+    }
+
+    if (broadcast.type === 'STOP') {
+      if (this._riveCtx) {
+        this._rebuildRuntimeState({ recreateRenderer: false })
+      }
+      this._playbackState = 'stopped'
+      this._drawFrame()
+      return false
+    }
+
+    return true
+  }
+
+  private _rebuildRuntimeState(input: { recreateRenderer: boolean }): void {
+    const initial = this.perso.initial as RiveInitial
+    const entry = getRiveEntry(initial.src)
+    if (!entry || entry.status !== 'ready' || !entry.runtime || !entry.file) {
+      throw new Error(`[rive] resource not ready: ${initial.src} — ensure preload ran before player.init()`)
+    }
+
+    const previousRenderer = this._riveCtx?.renderer ?? null
+    this._destroyRuntimeState({ destroyRenderer: input.recreateRenderer })
+
+    const artboard = initial.artboard
+      ? entry.file.artboardByName(initial.artboard)
+      : entry.file.defaultArtboard()
+    if (!artboard) throw new Error(`[rive] artboard "${initial.artboard}" not found in ${initial.src}`)
+
+    const renderer = input.recreateRenderer || previousRenderer === null
+      ? entry.runtime.makeRenderer(this.node as HTMLCanvasElement)
+      : previousRenderer
+
+    this._riveCtx = { runtime: entry.runtime, artboard, renderer }
+    this._playbackState = this._resolveInitialPlaybackState()
+    this._initializeInternalServices()
+  }
+
+  private _destroyRuntimeState(input: { destroyRenderer: boolean }): void {
+    for (const service of this._internalServices) {
+      service.destroy?.()
+    }
+    this._internalServices.length = 0
+
+    if (this._riveCtx) {
+      this._riveCtx.artboard.delete()
+      if (input.destroyRenderer) {
+        this._riveCtx.renderer.delete()
+      }
+    }
+
+    this._riveCtx = null
+  }
+
+  private _resolveInitialPlaybackState(): RivePlaybackState {
+    for (const action of Object.values(this.perso.actions ?? {})) {
+      if (action === null || typeof action !== 'object' || Array.isArray(action)) {
+        continue
+      }
+
+      const broadcast = (action as { broadcast?: { type?: unknown } }).broadcast
+      if (broadcast?.type === 'START' || broadcast?.type === 'PAUSE' || broadcast?.type === 'STOP') {
+        return 'stopped'
+      }
+    }
+
+    return 'playing'
   }
 }

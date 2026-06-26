@@ -37,31 +37,20 @@ export function createReadingQuizTrial(
     {
       id: panelId,
       type: "layout",
-      initial: {
-        markup: `
-          <div class="quiz-hunt-trial-panel">
-            <p data-part="${prefix}:epreuve-label" style="text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; color: #64748b; margin: 0;">${escapeHtml(word.trial.epreuveLabel)}</p>
-            <p data-part="${prefix}:consigne" style="font-weight: 600; margin: 4px 0 12px;">${escapeHtml(word.trial.consigne)}</p>
-            <p data-part="${prefix}:clue" style="margin: 0 0 16px;">${escapeHtml(word.trial.clueText)}</p>
-            <div data-part="${prefix}:fieldset-slot"></div>
-          </div>
-        `,
-        style: {
-          display: "none",
-          position: "absolute",
-          inset: "0",
-          padding: "20px",
-          border: "1px solid rgba(15, 23, 42, 0.12)",
-          borderRadius: "12px",
-          backgroundColor: "#ffffff",
-          overflowY: "auto",
-          boxSizing: "border-box"
-        },
+        initial: {
+          markup: `
+            <div class="quiz-hunt-trial-panel is-hidden">
+              <p class="quiz-hunt-trial-eyebrow" data-part="${prefix}:epreuve-label">${escapeHtml(word.trial.epreuveLabel)}</p>
+              <p class="quiz-hunt-trial-instruction" data-part="${prefix}:consigne">${escapeHtml(word.trial.consigne)}</p>
+              <p class="quiz-hunt-trial-clue" data-part="${prefix}:clue">${escapeHtml(word.trial.clueText)}</p>
+              <div data-part="${prefix}:fieldset-slot"></div>
+            </div>
+          `,
         move: { parentId: "game:zone:main" }
       },
       actions: {
-        [`game:trial:${word.id}:show`]: { style: { display: "block" } },
-        [`game:trial:${word.id}:hide`]: { style: { display: "none" } }
+        [`game:trial:${word.id}:show`]: { className: { add: "is-visible", remove: "is-hidden" } },
+        [`game:trial:${word.id}:hide`]: { className: { add: "is-hidden", remove: "is-visible" } }
       }
     },
     {
@@ -69,20 +58,19 @@ export function createReadingQuizTrial(
       type: "layout",
       initial: {
         markup: `
-          <fieldset class="quiz-question-fieldset" style="border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
-            <legend data-part="${prefix}:title" style="font-weight: 700;"></legend>
+          <fieldset class="quiz-question-fieldset is-hidden">
+            <legend class="quiz-hunt-question-title-slot" data-part="${prefix}:title"></legend>
             <p data-part="${prefix}:hint"></p>
             <div data-part="${prefix}:answers"></div>
             <div data-part="${prefix}:controls"></div>
             <p data-part="${prefix}:result" aria-live="polite"></p>
           </fieldset>
         `,
-        style: { display: "none" },
         attr: { disabled: false },
         move: { parentId: `${prefix}:fieldset-slot` }
       },
       actions: {
-        [`game:trial:${word.id}:reveal-question`]: { style: { display: "block" } },
+        [`game:trial:${word.id}:reveal-question`]: { className: { remove: "is-hidden" } },
         "quiz:question:resolved": { attr: { disabled: true } },
         [retryEventName]: { attr: { disabled: false } }
       }
@@ -98,8 +86,8 @@ export function createReadingQuizTrial(
       type: "tag",
       initial: {
         tag: "span",
+        className: "quiz-hunt-question-hint",
         content: question.type === "multiple" ? question.labels.multipleHint : "",
-        style: { color: "#475569", fontSize: "0.875rem" },
         move: { parentId: `${prefix}:hint` }
       },
       actions: {}

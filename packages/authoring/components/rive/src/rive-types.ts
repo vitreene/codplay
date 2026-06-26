@@ -19,7 +19,7 @@ export type RiveActionPayload = {
   style?: Record<string, unknown>
   className?: string | { add?: string; remove?: string }
   attr?: Record<string, unknown>
-  broadcast?: { type: string }
+  broadcast?: { type: 'START' | 'PAUSE' | 'STOP' | string }
 }
 
 export type CoachRiveActionPayload = RiveActionPayload & {

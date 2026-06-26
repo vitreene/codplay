@@ -25,6 +25,8 @@ export function createRiveBinding(): ThirdPartyBinding {
     tick(info) { instances.forEach((c) => c._tick(info)) },
     prepareSeek() { instances.forEach((c) => c._prepareSeek()) },
     seek(info) { instances.forEach((c) => c._seek(info)) },
+    pause() {},
+    resume() {},
     rateChange(rate) { instances.forEach((c) => c.setRate(rate)) },
     stop() {
       instances.forEach((c) => c._stop())
