@@ -6,9 +6,17 @@ Statut : à traiter. Bugs de code de démo (pas de gap CodPlay) constatés en li
 
 ---
 
-## 1. Double boucle du timer après la première épreuve
+## 1. Double boucle du timer après la première épreuve — CORRIGÉ (2026-06-26)
 
-**Fichiers** : `straps/game-router.ts:35-38`, `straps/game-trial-resolve.ts:45`, `straps/game-timer.ts:46-61`
+**Statut** : corrigé. `game-timer.ts` n'utilise plus `context.live.loop` ; un seul minuteur
+d'expiration ponctuel (`context.live.wait`) à la fois, toujours annulé avant tout nouveau départ,
+plus une `TweenAction` pour l'affichage continu (jauge + libellé). Nécessite un petit ajout côté
+CodPlay (`StrapMeta.ms`, transmis par `player.ts`) pour calculer le temps restant exact sans
+boucle. Détail : `docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`. Vérifié par
+tests ciblés (scénario exact du bug : resume sans pause intermédiaire → un seul minuteur actif,
+temps restant strictement décroissant) + suite complète 236/236, gates 21/21.
+
+**Fichiers (état avant correction)** : `straps/game-router.ts:35-38`, `straps/game-trial-resolve.ts:45`, `straps/game-timer.ts:46-61`
 
 - `game-router.ts` n'émet `game:timer:start` qu'au tout premier `game:trial:open`
   (`state.timerStarted === false`) ; tout accès suivant émet `game:timer:pause`.

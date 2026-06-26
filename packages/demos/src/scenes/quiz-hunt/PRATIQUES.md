@@ -8,6 +8,10 @@ Statut : partiellement appliqué au code.
 - Item 2 appliqué sur la démo `quiz-hunt` : feuille `quiz-hunt.css` ajoutée, styles statiques
   migrés vers des classes, footer rendu responsive, grille conservée en 4x4, `position:absolute`
   retiré des panneaux trial/final.
+- Item 1 appliqué sur `straps/game-timer.ts` : `context.live.loop` remplacé par une `TweenAction`
+  (jauge + libellé) plus un minuteur d'expiration ponctuel toujours annulé avant tout nouveau
+  départ. A nécessité un petit ajout côté CodPlay (`StrapMeta.ms`). Détail :
+  `docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`, `BUGS.md` n°1.
 - Les autres items restent à valider ou à appliquer séparément.
 
 ---
@@ -66,10 +70,11 @@ dans l'état scène et émet deux events (`game:timer:fill`, `game:timer:label`)
 - Démarrer un nouveau `context.live.loop`/`repeat` sans avoir conservé (et au besoin annulé) le
   `HelperHandle` du précédent sur la même responsabilité.
 
-**Piste pour quiz-hunt** (non appliquée) : remplacer `startTick`/`context.live.loop` par une
+**Appliqué dans quiz-hunt** (2026-06-26) : `startTick`/`context.live.loop` remplacés par une
 `TweenAction` sur `game-timer-fill`/`game-timer-label` (`duration = remainingMs`, `fn` calcule
-`width`/`content` depuis `progress`), `game:timer:pause`/`stop` émettant `tween:stop`. Réglerait
-le bug n°1 (`BUGS.md`) comme effet de bord, pas seulement le style.
+`width`/`content` depuis `progress`), `game:timer:pause`/`stop` émettant `tween:stop`. A réglé le
+bug n°1 (`BUGS.md`) comme effet de bord, pas seulement le style. Détail :
+`docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`.
 
 ---
 

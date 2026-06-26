@@ -7,6 +7,8 @@ export type StrapMeta = {
     persoId?: string
     userEvent?: string
   }
+  /** Position courante dans la timeline de la scène, en millisecondes, au moment où ce strap est appelé. */
+  ms?: number
 }
 
 export type StrapHelperHandle = HelperHandle

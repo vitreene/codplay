@@ -1061,7 +1061,8 @@ export class Player implements PlayerApi {
                   ? ((event.data.self as { id: string }).id)
                   : undefined
               }
-            : undefined
+            : undefined,
+        ms: scope.ms
       },
       context: strapContext
     })

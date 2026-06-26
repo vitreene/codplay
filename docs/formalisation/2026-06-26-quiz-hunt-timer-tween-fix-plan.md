@@ -2,8 +2,11 @@
 
 ## Statut
 
-Proposition de plan — pas encore implémenté. Inclut un petit ajout au cœur de CodPlay (pas
-seulement la démo) : voir §"Ajout retenu côté CodPlay".
+**Implémenté (2026-06-26).** `StrapMeta.ms` ajouté (`strap-types.ts`), transmis depuis
+`scope.ms` dans `executeStrap` (`player.ts`) ; `game-timer.ts` réécrit selon ce plan. Vérifié :
+suite complète 236/236, gates 21/21, plus 3 tests ciblés reproduisant le scénario exact du bug
+n°1 (resume sans pause intermédiaire) confirmant un seul minuteur actif à la fois et un temps
+restant strictement décroissant. `BUGS.md` n°1 marqué corrigé.
 
 ## Contexte
 
