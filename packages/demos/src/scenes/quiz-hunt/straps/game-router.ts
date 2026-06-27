@@ -32,13 +32,19 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
       ? { extraToken: false, extraConsumedOn: trialId }
       : {}
 
+    // The clock only freezes while the clue text is being read; it must already be
+    // running again once the question appears, so the first-ever trial pauses it
+    // right after starting it rather than leaving it running through the reading delay.
     const timerStarted = state.timerStarted === true
-    const timerEvent = timerStarted
-      ? { name: "game:timer:pause" }
-      : { name: "game:timer:start", data: { durationMs: config.timerTotalMs } }
+    const timerEvents = timerStarted
+      ? [{ name: "game:timer:pause" }]
+      : [{ name: "game:timer:start", data: { durationMs: config.timerTotalMs } }, { name: "game:timer:pause" }]
 
     const revealEventName = `game:trial:${trialId}:reveal-question`
-    const reveal = context.planned.delay(3000, { event: { name: revealEventName } })
+    const reveal = context.planned.delay(3000, [
+      { event: { name: revealEventName } },
+      { event: { name: "game:timer:resume" } }
+    ])
 
     const extraAlreadyOffered = state.extraOfferedOn !== null && state.extraOfferedOn !== undefined
     const shouldOfferExtra = trialId === draw.extraWordId && !extraAlreadyOffered
@@ -66,7 +72,7 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
         events: [
           { name: "game:grid:hide" },
           { name: `game:trial:${trialId}:show` },
-          timerEvent,
+          ...timerEvents,
           ...unlockEvents
         ]
       },

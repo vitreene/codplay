@@ -48,8 +48,7 @@ export function createGameTrialResolveStrap(
     const events: { name: string; data?: Record<string, unknown> }[] = [
       { name: "game:grid:show" },
       { name: `game:trial:${wordId}:hide` },
-      { name: isCorrect ? `game:grid:tile:${wordId}:success` : `game:grid:tile:${wordId}:fail` },
-      { name: "game:timer:resume" }
+      { name: isCorrect ? `game:grid:tile:${wordId}:success` : `game:grid:tile:${wordId}:fail` }
     ]
 
     if (isCorrect) {

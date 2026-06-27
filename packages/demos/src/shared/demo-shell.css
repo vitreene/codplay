@@ -178,6 +178,13 @@ h1 {
 	max-height: 16lh;
 }
 
+.player-trace-count {
+	margin-top: 0.45rem;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.71rem;
+	color: var(--muted, #888);
+}
+
 @media (max-width: 760px) {
 	body {
 		overflow: auto;

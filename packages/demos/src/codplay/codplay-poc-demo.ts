@@ -1,15 +1,14 @@
-import { createPlayerPocScene } from '../scenes'
-import { runCodPlaySceneDemo } from './run-codplay-scene-demo'
+import { createPlayerPocScene } from "../scenes";
+import { runCodPlaySceneDemo } from "./run-codplay-scene-demo";
 
 /**
  * Mounts the move proof-of-concept demo through the CodPlay public surface.
  */
 export async function runCodPlayPocDemo(): Promise<void> {
-	await runCodPlaySceneDemo({
-		title: 'CodPlay POC',
-		subtitle:
-			"Meme cas dur que Player POC, compile puis joue via CodPlay; tout ecart sur le move est une regression.",
-		scene: createPlayerPocScene(),
-		activeDemo: 'codplay-poc',
-	})
+  await runCodPlaySceneDemo({
+    title: "test Flip",
+    subtitle: "passage aller-retour d'une liste dans deux conteneurs animés",
+    scene: createPlayerPocScene(),
+    activeDemo: "codplay-poc",
+  });
 }

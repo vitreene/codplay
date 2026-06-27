@@ -186,51 +186,49 @@ function createAnimeGridSimulation(): ThreejsSimulationFn {
   }
 }
 
-export function createThreejsAnimeGridScene(): SceneDoc {
-  return {
-    id: 'threejs-anime-grid-scene',
-    rootStories: ['threejs-anime-grid-story'],
-    stories: {
-      'threejs-anime-grid-story': {
-        id: 'threejs-anime-grid-story',
-        entries: ['threejs-stage', 'threejs-grid'],
-        persos: [
-          {
-            id: 'threejs-stage',
-            type: 'tag',
-            initial: {
-              tag: 'div',
-              style: {
-                position: 'relative',
-                width: `${STAGE_SIZE}px`,
-                height: `${STAGE_SIZE}px`,
-                overflow: 'hidden',
-                borderRadius: '24px',
-                boxShadow: '0 24px 80px rgba(15, 23, 42, 0.45)',
-              },
-            },
-            actions: {},
-          },
-          {
-            id: 'threejs-grid',
-            type: 'threejs',
-            initial: {
-              move: { parentId: 'threejs-stage' },
-              width: STAGE_SIZE,
-              height: STAGE_SIZE,
-              build: buildAnimeGridScene,
-            },
-            actions: {
-              'scene:start': {
-                simulate: createAnimeGridSimulation(),
-              },
+export const threejsAnimeGridScene = {
+  id: 'threejs-anime-grid-scene',
+  rootStories: ['threejs-anime-grid-story'],
+  stories: {
+    'threejs-anime-grid-story': {
+      id: 'threejs-anime-grid-story',
+      entries: ['threejs-stage', 'threejs-grid'],
+      persos: [
+        {
+          id: 'threejs-stage',
+          type: 'tag',
+          initial: {
+            tag: 'div',
+            style: {
+              position: 'relative',
+              width: `${STAGE_SIZE}px`,
+              height: `${STAGE_SIZE}px`,
+              overflow: 'hidden',
+              borderRadius: '24px',
+              boxShadow: '0 24px 80px rgba(15, 23, 42, 0.45)',
             },
           },
-        ],
-        eventimes: [
-          { name: 'scene:start', startAt: 0 },
-        ],
-      },
+          actions: {},
+        },
+        {
+          id: 'threejs-grid',
+          type: 'threejs',
+          initial: {
+            move: { parentId: 'threejs-stage' },
+            width: STAGE_SIZE,
+            height: STAGE_SIZE,
+            build: buildAnimeGridScene,
+          },
+          actions: {
+            'scene:start': {
+              simulate: createAnimeGridSimulation(),
+            },
+          },
+        },
+      ],
+      eventimes: [
+        { name: 'scene:start', startAt: 0 },
+      ],
     },
-  } as unknown as SceneDoc
-}
+  },
+} as unknown as SceneDoc

@@ -40,6 +40,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
         <h1>${config.title}</h1>
         <p class="subtitle">${config.subtitle}</p>
         <div id="demo-remote-slot"></div>
+        <div id="player-trace-count" class="player-trace-count"></div>
         <div id="player-trace" class="player-state player-trace"></div>
       </aside>
       <div class="container" id="demo-container"></div>
@@ -55,6 +56,9 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
 
   const playerTraceNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace");
   if (playerTraceNode === null) throw new Error("Expected #player-trace element");
+
+  const playerTraceCountNode = globalThis.document.querySelector<HTMLDivElement>("#player-trace-count");
+  if (playerTraceCountNode === null) throw new Error("Expected #player-trace-count element");
 
   // fin page
 
@@ -87,7 +91,10 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   // Panneau de trace et télécommande (transport, seek, actions scène).
 
   const traceLogPanel = createTraceLogPanel(playerTraceNode, { compact: config.compactTrace ?? false });
+  let traceEventCount = 0;
   studio.player.onTrace((row) => {
+    traceEventCount += 1;
+    playerTraceCountNode.textContent = `${traceEventCount} events`;
     traceLogPanel.push(row);
   });
 
