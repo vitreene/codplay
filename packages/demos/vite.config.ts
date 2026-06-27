@@ -4,7 +4,7 @@ import { extname } from 'node:path'
 import { defineConfig } from 'vite'
 
 const TH_ROOT = '/Users/hervesaintmacary/Projets/Talking-head'
-const THREE_ROOT = '/Users/hervesaintmacary/Projets/vitreene/timeline/node_modules/three'
+const THREE_ROOT = resolve(__dirname, '../../node_modules/three')
 
 const MIME: Record<string, string> = {
   '.glb':  'model/gltf-binary',
@@ -17,7 +17,7 @@ export default defineConfig({
   server: {
     port: 5173,
     fs: {
-      allow: ['..', TH_ROOT, THREE_ROOT],
+      allow: ['..', TH_ROOT],
     },
   },
   resolve: {
@@ -28,6 +28,7 @@ export default defineConfig({
       { find: '@codplay/avatar-engine', replacement: resolve(__dirname, '../authoring/components/avatar-engine/src/index.ts') },
       { find: '@codplay/avatar3d', replacement: resolve(__dirname, '../authoring/components/avatar3d/src/index.ts') },
       { find: '@codplay/rive', replacement: resolve(__dirname, '../authoring/components/rive/src/index.ts') },
+      { find: '@codplay/threejs', replacement: resolve(__dirname, '../authoring/components/threejs/src/index.ts') },
       // Regex générale : authoring/<name>/src/ pour les packages à la racine d'authoring.
       { find: /^@codplay\/([^/]+)\/(.+)$/, replacement: `${resolve(__dirname, '../authoring')}/$1/src/$2` },
       { find: /^@codplay\/([^/]+)$/, replacement: `${resolve(__dirname, '../authoring')}/$1/src/index.ts` },

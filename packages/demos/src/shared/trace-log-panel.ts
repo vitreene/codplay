@@ -112,7 +112,7 @@ export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: 
 	push: (row: RuntimeTraceRow) => void;
 } {
 	const resolvedOptions = typeof options === 'number' ? { maxLines: options } : options
-	const maxLines = resolvedOptions.maxLines ?? 14
+	const maxLines = resolvedOptions.maxLines ?? 500
 	const compact = resolvedOptions.compact ?? false
 
 	const traceLines: string[] = []
@@ -133,6 +133,7 @@ export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: 
 			}
 
 			node.textContent = traceLines.join('\n')
+			node.scrollTop = node.scrollHeight
 		}
 	}
 }

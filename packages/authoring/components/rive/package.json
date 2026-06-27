@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "codplay": "*",
-    "@rive-app/canvas": "^2.27.0"
+    "@rive-app/canvas": "^2.38.3"
   },
   "devDependencies": {
-    "typescript": "~5.9.3"
+    "typescript": "~6.0.3"
   }
 }

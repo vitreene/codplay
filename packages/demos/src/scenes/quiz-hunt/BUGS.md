@@ -12,9 +12,21 @@ Statut : à traiter. Bugs de code de démo (pas de gap CodPlay) constatés en li
 d'expiration ponctuel (`context.live.wait`) à la fois, toujours annulé avant tout nouveau départ,
 plus une `TweenAction` pour l'affichage continu (jauge + libellé). Nécessite un petit ajout côté
 CodPlay (`StrapMeta.ms`, transmis par `player.ts`) pour calculer le temps restant exact sans
-boucle. Détail : `docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`. Vérifié par
-tests ciblés (scénario exact du bug : resume sans pause intermédiaire → un seul minuteur actif,
-temps restant strictement décroissant) + suite complète 236/236, gates 21/21.
+boucle. Détail : `docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`.
+
+**Régression trouvée et corrigée dans le correctif lui-même** : la 1ère version calculait le
+temps écoulé seulement dans la branche `pause`/`stop`. Sur la toute première épreuve,
+`game-router.ts` émet `start` (pas `pause`) à l'ouverture et `game-trial-resolve.ts` émet
+`resume` (jamais `pause`) à la fermeture — donc rien ne recalculait `timerRemainingMs` entre les
+deux, et `resume` repartait avec la durée totale intacte : le timer semblait "réinitialisé après
+la réponse à la question" pour ce premier cycle précisément (signalé par l'auteur). Fix : le
+calcul du temps écoulé du segment en cours s'applique maintenant à **chaque** event reçu, pas
+seulement `pause`/`stop` — `resume` ferme correctement le segment précédent qu'il ait été ouvert
+par `start` ou par un `resume` antérieur.
+
+Vérifié par tests ciblés (scénario exact du bug original + scénario exact de cette régression :
+`start` → `resume` direct sans `pause` → le temps restant doit refléter le temps réellement
+écoulé, pas repartir de la durée totale) + suite complète 236/236, gates 21/21.
 
 **Fichiers (état avant correction)** : `straps/game-router.ts:35-38`, `straps/game-trial-resolve.ts:45`, `straps/game-timer.ts:46-61`
 
@@ -83,6 +95,92 @@ l'émission de l'event déclencheur.
 **Piste** (non appliquée) : ajouter `{ name: retryEventName }` (ou
 `game:trial:${trialId}:retry`) à `unlockEvents` dans `game-router.ts`, à côté de
 l'event de déblocage de la tuile grille.
+
+---
+
+## 3. Message de résultat ("Gagné"/"Perdu") jamais visible après une épreuve — CORRIGÉ (2026-06-26)
+
+**Statut** : corrigé. `quizQuestionStoryStraps` (infra partagée, non modifiée) émet
+`quiz:question:answered` et `quiz:question:resolved:correct`/`:incorrect` dans le
+même lot d'events, synchrone. Comme `game-trial-resolve.ts` réagissait à
+`quiz:question:answered` en masquant le panneau de l'épreuve **dans le même tick**,
+le texte de résultat posé sur `${prefix}-result` n'était jamais visible — le panneau
+qui le contient disparaissait avant que le navigateur ne peigne quoi que ce soit.
+Signalé par l'auteur ("je ne vois pas ce message !").
+
+**Fix** : `game-trial-resolve.ts` retarde maintenant tout ce qui est visuel pour une
+épreuve (retour grille, tuile succès/échec, reprise timer, panier) de 2000 ms via
+`context.planned.delay` — le texte de résultat, posé immédiatement par l'infra
+partagée, reste donc visible 2 secondes avant que le panneau ne se masque. Le timer
+reste en pause pendant cette fenêtre (cohérent avec : le timer ne doit être suspendu
+que pendant la lecture des contenus). Libellés changés en "Gagné !"/"Perdu"
+(`quiz-hunt-demo.ts`). Hors scope : la question finale (pas de retour grille à
+retarder). Ajout connexe : coche `✓`/croix `✗` sur le contenu des tuiles
+succès/échec (`grid-story.ts`), restauré au numéro d'origine sur déblocage extra.
+
+Vérifié par tests ciblés (delay exact de 2000ms, ordre des events, basket events
+absents sur échec, route finale non affectée) + suite complète 236/236.
+
+**Précision (2026-06-27)** : la catégorie "vert" (`COLOR_ACCENTS.vert`, `index.ts`) et l'état
+`is-success` (`quiz-hunt.css`) utilisaient la même couleur `#16a34a` — une tuile verte non jouée
+et une tuile résolue avec succès pouvaient donc partager le même fond. **Décision finale de
+l'auteur : retirer la couleur de succès.** `is-success` ne fixe plus de `background-color` —
+la tuile garde sa couleur de catégorie d'origine (via `--quiz-hunt-accent`), seule la coche `✓`
+signale la réussite. Plus de couleur universelle de succès, donc plus aucune collision possible
+avec une catégorie.
+
+---
+
+## 4. `game:timer:pause`/`game:timer:stop` jamais routés au strap du minuteur — CORRIGÉ (2026-06-27)
+
+**Trouvé en cherchant le bug du panier ci-dessous** (voir note plus bas — sans rapport avec le
+panier, mais réel). `index.ts` (`listen` de la scène) ne câblait que `game:timer:start` et
+`game:timer:resume` vers le strap `game-timer` :
+```
+{ on: "game:timer:start", straps: ["game-timer"] },
+{ on: "game:timer:resume", straps: ["game-timer"] },
+```
+Or `game-router.ts` émet `game:timer:pause` à chaque ouverture d'épreuve à partir de la 2e
+(`timerStarted` déjà vrai), et `game-final-route.ts` émet `game:timer:stop`. Ces deux events
+n'avaient **aucune règle `listen`** : ils étaient dispatchés sans qu'aucun strap ne les reçoive.
+Conséquence réelle : à partir de la 2e épreuve, `game-timer.ts` ne recalculait jamais le temps
+restant ni n'annulait le minuteur d'expiration en cours sur `pause` — le minuteur continuait de
+tourner en tâche de fond pendant que la grille était affichée, et `tween:stop` n'était jamais
+émis (jauge/texte figés visuellement, mais le minuteur sous-jacent dérivait).
+
+**Fix** : ajout de `{ on: "game:timer:pause", straps: ["game-timer"] }` et
+`{ on: "game:timer:stop", straps: ["game-timer"] }` au `listen` de la scène (`index.ts`). Le
+strap `game-timer.ts` lui-même n'a pas changé — ses branches `pause`/`stop` existaient déjà et
+étaient testées isolément hier, mais jamais atteintes en jeu réel faute de câblage.
+
+Vérifié : suite complète 236/236 (pas de test ciblé supplémentaire — branches déjà couvertes
+par les tests du strap lui-même, seul le câblage manquait).
+
+---
+
+## Investigation du 2026-06-27 : "la 3e réponse correcte ne s'écrit pas dans le panier"
+
+Signalé : 3 épreuves de couleurs différentes, 1ère réussie (ajoutée au panier), 2e ratée, 3e
+réussie mais absente du panier.
+
+**Non reproduit.** Test d'intégration bout-en-bout (vrai `Player`+`BuilderFacade`, contenu et
+seed réels de la démo, horloge simulée déterministe via `vi.useFakeTimers`) rejouant exactement
+cette séquence (succès/échec/succès sur 3 couleurs différentes) : le panier contient
+systématiquement les deux mots réussis, sur 5 exécutions consécutives. Une première version du
+test avec une vraie horloge (`setTimeout` réel) montrait un résultat **non déterministe** (tantôt
+la 1ère, tantôt la 3e manquait) — mais cette variation venait de la marge de minuterie du test
+lui-même (attente de 2200 ms pile au-dessus du délai de 2000 ms de `game-trial-resolve.ts`), pas
+du code de la démo : avec une horloge déterministe, le même scénario est stable.
+
+**Hypothèse non écartée** : un écart de timing similaire pourrait exister dans un vrai navigateur
+si le joueur valide une épreuve très peu de temps après que la grille soit redevenue cliquable
+(juste après les 2 secondes de `game-trial-resolve.ts`) — mais en jeu réel, le délai de révélation
+de la question (3 secondes, `game-router.ts`) s'ajoute toujours avant de pouvoir valider une
+nouvelle épreuve, ce qui donne une marge bien plus confortable que dans le test instrumenté.
+
+**À faire avant de conclure** : rejouer le scénario exact dans le navigateur (`/run`) en notant
+précisément où l'écriture manque (case du panier ? tuile de la grille ? autre ?) et si possible
+le délai réel entre la validation de la 2e et celle de la 3e épreuve.
 
 ---
 

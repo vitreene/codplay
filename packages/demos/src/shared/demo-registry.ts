@@ -17,6 +17,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: 'replace-carousel', label: 'Replace Carousel',   href: '?demo=replace-carousel' },
   { id: 'avatar-poc-1',     label: 'Avatar 3D',            href: '?demo=avatar-poc-1' },
   { id: 'rive-coach',       label: 'Rive Coach',           href: '?demo=rive-coach' },
+  { id: 'threejs-anime-grid', label: 'Three.js animejs',   href: '?demo=threejs-anime-grid' },
   { id: 'chrono',           label: 'Chronomètre',          href: '?demo=chrono' },
   { id: 'quiz-hunt',        label: 'Quiz Hunt',            href: '?demo=quiz-hunt' },
 ]

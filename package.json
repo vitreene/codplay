@@ -25,6 +25,6 @@
     "build": "npm run build --workspace=packages/codplay"
   },
   "devDependencies": {
-    "typescript": "~5.9.3"
+    "typescript": "~6.0.3"
   }
 }

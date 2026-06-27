@@ -3,10 +3,18 @@
 ## Statut
 
 **Implémenté (2026-06-26).** `StrapMeta.ms` ajouté (`strap-types.ts`), transmis depuis
-`scope.ms` dans `executeStrap` (`player.ts`) ; `game-timer.ts` réécrit selon ce plan. Vérifié :
-suite complète 236/236, gates 21/21, plus 3 tests ciblés reproduisant le scénario exact du bug
-n°1 (resume sans pause intermédiaire) confirmant un seul minuteur actif à la fois et un temps
-restant strictement décroissant. `BUGS.md` n°1 marqué corrigé.
+`scope.ms` dans `executeStrap` (`player.ts`) ; `game-timer.ts` réécrit selon ce plan. `BUGS.md`
+n°1 marqué corrigé.
+
+**Régression corrigée dans la foulée (même jour)** : la conception initiale ci-dessous ne
+calculait le temps écoulé que dans la branche `pause`/`stop`. Or la 1ère épreuve s'ouvre par
+`start` (pas `pause`) et se referme par `resume` (jamais `pause`) — rien ne recalculait
+`timerRemainingMs` entre les deux, donc `resume` repartait avec la durée totale intacte (timer
+visuellement "réinitialisé" après la 1ère réponse). Fix : le calcul de l'écoulé s'applique à
+**chaque** event reçu (voir le code final de `game-timer.ts` — une seule passe de calcul de
+l'écoulé en tête de fonction, avant de brancher sur le nom de l'event), pas seulement
+`pause`/`stop`. Vérifié : suite complète 236/236, gates 21/21, tests ciblés couvrant le bug
+original (double minuteur) et cette régression (`start` → `resume` direct sans `pause`).
 
 ## Contexte
 

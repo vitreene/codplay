@@ -174,7 +174,7 @@ h1 {
 }
 
 .player-trace {
-	overflow: hidden;
+	overflow-y: auto;
 	max-height: 16lh;
 }
 

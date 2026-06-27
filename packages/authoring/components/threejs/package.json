@@ -1,5 +1,5 @@
 {
-  "name": "@codplay/avatar-engine",
+  "name": "@codplay/threejs",
   "version": "0.0.1",
   "type": "module",
   "exports": {
@@ -10,6 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "animejs": "^4.5.0",
+    "codplay": "*",
+    "three": ">=0.150.0"
   },
   "devDependencies": {
     "typescript": "~6.0.3",

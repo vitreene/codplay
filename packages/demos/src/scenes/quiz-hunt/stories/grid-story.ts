@@ -33,14 +33,17 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
       actions: {
         [`game:grid:tile:${wordId}:success`]: {
           attr: { disabled: true },
+          content: "✓",
           className: "quiz-hunt-grid-tile is-success"
         },
         [`game:grid:tile:${wordId}:fail`]: {
           attr: { disabled: true },
+          content: "✗",
           className: "quiz-hunt-grid-tile is-fail"
         },
         [`game:grid:tile:${wordId}:unlocked`]: {
           attr: { disabled: false },
+          content: String(position + 1),
           className: "quiz-hunt-grid-tile"
         }
       }

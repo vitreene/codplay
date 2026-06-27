@@ -1723,7 +1723,10 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    const currentMs = this.resolveCurrentTimelineMs();
+    // Live-clock retroactive detection is only meaningful for captured user events;
+    // system events already carry a resolved `ms` and must compare against the tick-fixed
+    // `timelineMs`, not a clock that can drift forward across an awaited nested strap call.
+    const currentMs = eventSource === RUNTIME_EVENT_SOURCE.user ? this.resolveCurrentTimelineMs() : this.timelineMs;
     const isFutureEvent = timelineEvent.ms > currentMs;
     const isRetroactiveEvent = timelineEvent.ms < currentMs;
     if (!isFutureEvent) {

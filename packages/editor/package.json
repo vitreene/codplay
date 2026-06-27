@@ -11,11 +11,11 @@
   "dependencies": {
     "codplay": "*",
     "@codplay/capsule-automation": "*",
-    "xstate": "^5.32.0"
+    "xstate": "^5.32.2"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
-    "vite": "^8.0.1",
-    "vitest": "^4.1.8"
+    "typescript": "~6.0.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
   }
 }

@@ -11,10 +11,10 @@
       "@codplay/avatar3d/*": ["../authoring/components/avatar3d/src/*"],
       "@codplay/rive": ["../authoring/components/rive/src/index.ts"],
       "@codplay/rive/*": ["../authoring/components/rive/src/*"],
+      "@codplay/threejs": ["../authoring/components/threejs/src/index.ts"],
+      "@codplay/threejs/*": ["../authoring/components/threejs/src/*"],
       "@codplay/remote": ["../authoring/remote/src/index.ts"],
-      "@codplay/remote/*": ["../authoring/remote/src/*"],
-      "three": ["../../../timeline/node_modules/@types/three"],
-      "three/*": ["../../../timeline/node_modules/@types/three/*"]
+      "@codplay/remote/*": ["../authoring/remote/src/*"]
     }
   },
   "include": ["src"]

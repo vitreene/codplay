@@ -12,8 +12,8 @@ const config: GameConfig = {
   labels: {
     validate: 'Valider',
     next: 'Suivant',
-    correct: 'Bonne réponse !',
-    incorrect: 'Mauvaise réponse',
+    correct: 'Gagné !',
+    incorrect: 'Perdu',
     multipleHint: 'Plusieurs réponses possibles',
     gridTitle: 'Choisis une épreuve',
     basketTitle: 'Panier',

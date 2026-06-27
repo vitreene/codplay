@@ -1,5 +1,6 @@
 import type { SceneDoc } from 'codplay/player/types'
-import { MOUTH_CUES, PRESTON_TO_TH, phraseWordsFR } from './avatar-data/phrase-fr'
+import { MOUTH_CUES, phraseWordsFR } from './avatar-data/phrase-fr'
+import { riveCoachVisemeConversionStraps } from './avatar-data/rive-viseme-conversion'
 
 const SCENE_END_MS = 18500
 const AVATAR_SIZE = '600px'
@@ -10,9 +11,9 @@ const STATE_MACHINE = 'State Machine 1'
 
 function buildVisemeEventimes() {
   return MOUTH_CUES.map((c) => ({
-    name: 'avatar:viseme',
+    name: 'avatar:viseme:raw',
     startAt: Math.round(c.start * 1000),
-    data: { viseme: PRESTON_TO_TH[c.value] ?? null },
+    data: { viseme: c.value },
   }))
 }
 
@@ -32,6 +33,10 @@ export function createRiveCoachScene(): SceneDoc {
       'avatar-story': {
         id: 'avatar-story',
         entries: ['avatar-stage', 'audio', 'avatar', 'caption'],
+        straps: riveCoachVisemeConversionStraps,
+        listen: [
+          { on: 'avatar:viseme:raw', straps: ['rive-coach-viseme-convert'] },
+        ],
         persos: [
           {
             id: 'avatar-stage',

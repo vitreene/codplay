@@ -3,18 +3,25 @@ import type { QuestionRouteEntry } from "../types"
 
 type WordLookup = Record<string, { label: string }>
 
+/** Time the "Gagné !"/"Perdu" result text stays visible before the trial panel closes. */
+const TRIAL_RESULT_DELAY_MS = 2000
+
 /**
  * Scene-level handler for `quiz:question:answered`, emitted by both trial and final
  * question stories (shared `quizQuestionStoryStraps`) and falling through to scene scope
  * since neither story declares a local `listen` rule for it. Branches on the question's
  * route entry (built once at scene creation) to know whether it closes a trial or the final.
+ *
+ * For a trial, every visible consequence (grid/tile/timer, basket) is delayed by
+ * `TRIAL_RESULT_DELAY_MS` so the result text set synchronously by `quiz:question:resolved:*`
+ * (inside the still-visible trial panel) stays on screen for that long before the panel hides.
  */
 export function createGameTrialResolveStrap(
   routeTable: Record<number, QuestionRouteEntry>,
   wordsById: WordLookup,
   colors: string[]
 ): StrapFn {
-  return ({ event, state }) => {
+  return ({ event, state, context }) => {
     const payload = event.data as { questionIndex?: number; isCorrect?: boolean } | undefined
     const questionIndex = payload?.questionIndex
     const isCorrect = payload?.isCorrect === true
@@ -59,9 +66,11 @@ export function createGameTrialResolveStrap(
       }
     }
 
-    return {
-      update: { trialStatus, basket, phase: "grid", currentTrialId: null },
-      events
-    }
+    const [firstEvent, ...restEvents] = events
+
+    return context.planned.delay(TRIAL_RESULT_DELAY_MS, [
+      { update: { trialStatus, basket, phase: "grid", currentTrialId: null }, event: firstEvent },
+      ...restEvents.map((delayedEvent) => ({ event: delayedEvent }))
+    ])
   }
 }
