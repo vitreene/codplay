@@ -158,29 +158,47 @@ par les tests du strap lui-même, seul le câblage manquait).
 
 ---
 
-## Investigation du 2026-06-27 : "la 3e réponse correcte ne s'écrit pas dans le panier"
+## Investigation du 2026-06-27 : "la 3e réponse correcte ne s'écrit pas dans le panier" — CORRIGÉ
 
 Signalé : 3 épreuves de couleurs différentes, 1ère réussie (ajoutée au panier), 2e ratée, 3e
-réussie mais absente du panier.
+réussie mais absente du panier. Une 1ère analyse (horloge simulée déterministe) ne reproduisait
+pas le bug ; la vraie trace de session navigateur a permis de l'isoler précisément : la
+**dernière entrée** du lot d'events matérialisé par `game-trial-resolve` (`game:basket:fill:{couleur}`)
+disparaissait silencieusement, alors que toutes les entrées précédentes du même lot s'appliquaient.
 
-**Non reproduit.** Test d'intégration bout-en-bout (vrai `Player`+`BuilderFacade`, contenu et
-seed réels de la démo, horloge simulée déterministe via `vi.useFakeTimers`) rejouant exactement
-cette séquence (succès/échec/succès sur 3 couleurs différentes) : le panier contient
-systématiquement les deux mots réussis, sur 5 exécutions consécutives. Une première version du
-test avec une vraie horloge (`setTimeout` réel) montrait un résultat **non déterministe** (tantôt
-la 1ère, tantôt la 3e manquait) — mais cette variation venait de la marge de minuterie du test
-lui-même (attente de 2200 ms pile au-dessus du délai de 2000 ms de `game-trial-resolve.ts`), pas
-du code de la démo : avec une horloge déterministe, le même scénario est stable.
+**Cause confirmée : bug du cœur CodPlay (`create-player.ts`), pas de la démo.** `Player.emit()`
+classe un event comme "rétroactif" en comparant son `ms` à `resolveCurrentTimelineMs()` — une
+horloge réelle (`performance.now()`/`Date.now()`) relue à chaque appel. Quand un strap imbriqué
+(ex. `game-timer`, déclenché en cascade par un event du lot de `game-trial-resolve` encore en
+cours de purge) émet ses propres events système, ces appels à `emit()` se produisent après
+plusieurs `await` — un temps réel non nul s'est écoulé entre le début de la purge du lot et cet
+appel imbriqué. L'event imbriqué se voit donc classé "rétroactif" par rapport à cette horloge
+qui a dérivé, ce qui déclenche `syncCursor({ nowMs: <horloge dérivée> })` : cet appel avance
+aveuglément le curseur de **toutes** les pistes jusqu'à cette valeur, sans exécuter les events
+qu'il dépasse au passage — dont la queue du lot encore en attente (`game:basket:fill:{couleur}`).
 
-**Hypothèse non écartée** : un écart de timing similaire pourrait exister dans un vrai navigateur
-si le joueur valide une épreuve très peu de temps après que la grille soit redevenue cliquable
-(juste après les 2 secondes de `game-trial-resolve.ts`) — mais en jeu réel, le délai de révélation
-de la question (3 secondes, `game-router.ts`) s'ajoute toujours avant de pouvoir valider une
-nouvelle épreuve, ce qui donne une marge bien plus confortable que dans le test instrumenté.
+**Correctif** (`create-player.ts`) : un drapeau `drainingDueEvents`, actif uniquement pendant la
+purge effective d'un lot d'events dus (`runDueTimelineEventsSync`/`runDueTimelineEvents`). Quand
+il est actif, `emit()` compare au `timelineMs` figé du tick en cours plutôt qu'à une relecture de
+l'horloge réelle — qui ne peut pas dériver pendant la purge. Hors purge (ex. event système émis en
+réaction immédiate à un `emit()` utilisateur), le comportement d'origine (horloge réelle) est
+inchangé — une première version du correctif basée sur la seule source de l'event (`user`/`system`)
+cassait 9 tests existants (seek/replay) pour cette raison.
 
-**À faire avant de conclure** : rejouer le scénario exact dans le navigateur (`/run`) en notant
-précisément où l'écriture manque (case du panier ? tuile de la grille ? autre ?) et si possible
-le délai réel entre la validation de la 2e et celle de la 3e épreuve.
+Vérifié : 236/236 tests existants + 17 exécutions consécutives (5 puis 12) du scénario réel
+`raccoon-city` → `abe` via le vrai contenu/seed de la démo, sans aucune récurrence du bug.
+
+**Cause écartée en cours de route** : `context.live.wait` dans `game-timer.ts` a été remplacé par
+`context.planned.delay` (voir réécriture du strap ci-dessous) — une piste suggérée avant le
+diagnostic définitif, qui s'est avérée ne pas être la cause (le bug se reproduisait identiquement
+sans `context.live`). Le remplacement reste en place car il simplifie le strap (plus d'état de
+fermeture, plus d'annulation manuelle — péremption gérée déclarativement par comparaison de
+`segmentStartedAtMs`), mais ce n'est pas lui qui corrige le bug.
+
+**Reste à traiter séparément (hors périmètre démo)** : `resolveCurrentTimelineMs()` elle-même
+relit l'horloge réelle indépendamment de l'horloge déjà échantillonnée une fois par tick par le
+ticker (`TimeTicker.runTick`), au lieu de réutiliser cette valeur. Le correctif ci-dessus contourne
+le symptôme pour ce point d'entrée précis ; un plan séparé doit traiter la dérive à la racine.
 
 ---
 

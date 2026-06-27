@@ -31,9 +31,10 @@ export type ThreejsSimulationInput = {
   timelineMs: number
   timelineDeltaMs: number
   phase: 'tick' | 'seek'
+  refs: ReadonlyMap<string, unknown>
 }
 
-export type ThreejsSimulationFn = (input: ThreejsSimulationInput) => ThreejsSetDescriptor[] | void
+export type ThreejsSimulationFn = (input: ThreejsSimulationInput) => void
 
 export type ThreejsInitial = PersoInitialCommon & {
   width?: number

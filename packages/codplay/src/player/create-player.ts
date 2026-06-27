@@ -159,6 +159,7 @@ export class PlayerFacade implements PlayerApi {
   private readonly mountedStoryIds = new Set<string>();
   private readonly scheduledStoryIds = new Set<string>();
   private timelineReplayInProgress = false;
+  private drainingDueEvents = false;
 
   private readonly traceStore = createRuntimeTraceStore({ maxEntries: 2000 });
   private readonly traceListeners = new Set<PlayerTraceListener>();
@@ -1129,18 +1130,24 @@ export class PlayerFacade implements PlayerApi {
    * Applies all due timeline events synchronously when no author interceptor is active.
    */
   private runDueTimelineEventsSync(timelineMs: number): void {
-    let guard = 0;
-    while (guard < 1000) {
-      guard += 1;
-      const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
+    const wasDraining = this.drainingDueEvents;
+    this.drainingDueEvents = true;
+    try {
+      let guard = 0;
+      while (guard < 1000) {
+        guard += 1;
+        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
 
-      if (dueEvents.length === 0) {
-        return;
-      }
+        if (dueEvents.length === 0) {
+          return;
+        }
 
-      for (const event of dueEvents) {
-        this.runTimelineEvent(event);
+        for (const event of dueEvents) {
+          this.runTimelineEvent(event);
+        }
       }
+    } finally {
+      this.drainingDueEvents = wasDraining;
     }
   }
 
@@ -1187,17 +1194,23 @@ export class PlayerFacade implements PlayerApi {
       return;
     }
 
-    let guard = 0;
-    while (guard < 1000) {
-      guard += 1;
-      const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
-      if (dueEvents.length === 0) {
-        return;
-      }
+    const wasDraining = this.drainingDueEvents;
+    this.drainingDueEvents = true;
+    try {
+      let guard = 0;
+      while (guard < 1000) {
+        guard += 1;
+        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
+        if (dueEvents.length === 0) {
+          return;
+        }
 
-      for (const event of dueEvents) {
-        await this.dispatchTimelineEvent(event);
+        for (const event of dueEvents) {
+          await this.dispatchTimelineEvent(event);
+        }
       }
+    } finally {
+      this.drainingDueEvents = wasDraining;
     }
   }
 
@@ -1723,10 +1736,11 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    // Live-clock retroactive detection is only meaningful for captured user events;
-    // system events already carry a resolved `ms` and must compare against the tick-fixed
-    // `timelineMs`, not a clock that can drift forward across an awaited nested strap call.
-    const currentMs = eventSource === RUNTIME_EVENT_SOURCE.user ? this.resolveCurrentTimelineMs() : this.timelineMs;
+    // While a due-events batch is draining, `timelineMs` is the tick's fixed cursor; a
+    // nested emit triggered from within that drain must compare against it rather than a
+    // fresh `resolveCurrentTimelineMs()` read, which drifts forward across awaited calls
+    // and can make `syncCursor` skip not-yet-applied events later in the same batch.
+    const currentMs = this.drainingDueEvents ? this.timelineMs : this.resolveCurrentTimelineMs();
     const isFutureEvent = timelineEvent.ms > currentMs;
     const isRetroactiveEvent = timelineEvent.ms < currentMs;
     if (!isFutureEvent) {

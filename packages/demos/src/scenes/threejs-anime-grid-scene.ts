@@ -1,9 +1,3 @@
-declare module 'three'
-
-import 'animejs/adapters/three'
-
-import { utils } from 'animejs'
-import { getInstances } from 'animejs/adapters/three'
 import {
   AmbientLight,
   BoxGeometry,
@@ -11,12 +5,13 @@ import {
   DirectionalLight,
   InstancedMesh,
   MeshLambertMaterial,
+  Object3D,
   PerspectiveCamera,
   PointLight,
   Scene,
 } from 'three'
 import type { SceneDoc } from 'codplay/player/types'
-import type { ThreejsBuildContext, ThreejsBuildResult, ThreejsSetDescriptor, ThreejsSimulationFn } from '@codplay/threejs'
+import type { ThreejsBuildContext, ThreejsBuildResult, ThreejsSimulationFn } from '@codplay/threejs'
 
 const STAGE_SIZE = 720
 const GRID_SIZE = 4
@@ -29,6 +24,11 @@ const INSTANCES_HOLD_MS = 500
 const INSTANCES_DELAY_MAX_MS = 500
 
 type GridPoint = { x: number; y: number; z: number }
+
+/** Converts one degree value to radians. */
+function degToRad(value: number): number {
+  return (value * Math.PI) / 180
+}
 
 /** Clamps one value in the [0, 1] interval. */
 function clamp01(value: number): number {
@@ -92,50 +92,37 @@ function resolveInstanceFactor(elapsedMs: number, delayMs: number): number {
   return evaluatePingPongFactor(localMs, INSTANCES_DURATION_MS, INSTANCES_HOLD_MS)
 }
 
-/** Builds the set payload applied by the generic threejs component at one absolute time. */
-function buildThreejsSetPayload(elapsedMs: number): ThreejsSetDescriptor[] {
-  const layout = createGridLayoutData()
-  const rotationY = (elapsedMs / 9000) * 360
-  const rotationX = (elapsedMs / 12000) * 360
-  const currentPositions = layout.positions.map((position, index) => {
+/** Applies one full instanced-mesh pose directly from absolute time and static layout data. */
+function applyInstancedMeshPose(
+  mesh: InstancedMesh,
+  layout: { positions: GridPoint[]; delaysMs: number[] },
+  elapsedMs: number,
+  scratch: Object3D,
+): void {
+  scratch.rotation.set(0, 0, 0)
+  scratch.scale.set(1, 1, 1)
+
+  for (let index = 0; index < layout.positions.length; index += 1) {
+    const position = layout.positions[index]!
     const factor = resolveInstanceFactor(elapsedMs, layout.delaysMs[index] ?? 0)
     const scale = 1 + factor * (CUBE_EXPANSION - 1)
-    return {
-      x: position.x * scale,
-      y: position.y * scale,
-      z: position.z * scale,
-    }
-  })
+    scratch.position.set(
+      position.x * scale,
+      position.y * scale,
+      position.z * scale,
+    )
+    scratch.updateMatrix()
+    mesh.setMatrixAt(index, scratch.matrix)
+  }
 
-  return [
-    {
-      ref: 'mesh',
-      values: {
-        rotateY: rotationY,
-        rotateX: rotationX,
-      },
-    },
-    {
-      ref: 'pointLight',
-      values: {
-        intensity: resolvePointLightIntensity(elapsedMs),
-      },
-    },
-    {
-      ref: 'instances',
-      values: {
-        x: (_target: unknown, index: number) => currentPositions[index]?.x ?? 0,
-        y: (_target: unknown, index: number) => currentPositions[index]?.y ?? 0,
-        z: (_target: unknown, index: number) => currentPositions[index]?.z ?? 0,
-      },
-    },
-  ]
+  mesh.instanceMatrix.needsUpdate = true
 }
 
 /** Builds the procedural Three.js scene used by the CodPlay-controlled demo. */
 function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
   const { renderer, width, height } = context
   const layout = createGridLayoutData()
+  const scratch = new Object3D()
 
   renderer.shadowMap.enabled = true
 
@@ -165,12 +152,7 @@ function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
   mesh.receiveShadow = true
   scene.add(mesh)
 
-  const instances = getInstances(mesh)
-  utils.set(instances, {
-    x: (_target: unknown, index: number) => layout.positions[index]?.x ?? 0,
-    y: (_target: unknown, index: number) => layout.positions[index]?.y ?? 0,
-    z: (_target: unknown, index: number) => layout.positions[index]?.z ?? 0,
-  })
+  applyInstancedMeshPose(mesh, layout, 0, scratch)
 
   return {
     scene,
@@ -178,14 +160,30 @@ function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
     refs: {
       mesh,
       pointLight,
-      instances,
     },
   }
 }
 
 /** Creates one deterministic 3D simulation driven exclusively by CodPlay time. */
 function createAnimeGridSimulation(): ThreejsSimulationFn {
-  return ({ timelineMs }) => buildThreejsSetPayload(timelineMs % DEMO_DURATION_MS)
+  const layout = createGridLayoutData()
+  const scratch = new Object3D()
+
+  return ({ timelineMs, refs }) => {
+    const elapsedMs = timelineMs % DEMO_DURATION_MS
+    const mesh = refs.get('mesh')
+    const pointLight = refs.get('pointLight')
+
+    if (mesh instanceof InstancedMesh) {
+      mesh.rotation.y = degToRad((elapsedMs / 9000) * 360)
+      mesh.rotation.x = degToRad((elapsedMs / 12000) * 360)
+      applyInstancedMeshPose(mesh, layout, elapsedMs, scratch)
+    }
+
+    if (pointLight instanceof PointLight) {
+      pointLight.intensity = resolvePointLightIntensity(elapsedMs)
+    }
+  }
 }
 
 export function createThreejsAnimeGridScene(): SceneDoc {

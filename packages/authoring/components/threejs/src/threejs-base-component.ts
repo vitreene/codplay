@@ -146,10 +146,13 @@ export class ThreejsBaseComponent extends BaseComponent {
 
   /** Re-evaluates the current simulation from CodPlay time, then applies the resulting set payload. */
   private applySimulationFrame(input: { timelineMs: number; timelineDeltaMs: number; phase: 'tick' | 'seek' }): void {
-    if (this.simulationFn === null) return
-    const set = this.simulationFn(input)
-    if (!Array.isArray(set) || set.length === 0) return
-    this.applySetPayload({ set })
+    if (this.simulationFn === null || this.runtimeState === null) return
+    this.simulationFn({
+      timelineMs: input.timelineMs,
+      timelineDeltaMs: input.timelineDeltaMs,
+      phase: input.phase,
+      refs: this.runtimeState.refs,
+    })
   }
 
   /** Destroys the current runtime scene and releases Three.js resources. */
