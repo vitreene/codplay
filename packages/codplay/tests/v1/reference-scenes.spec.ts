@@ -462,11 +462,14 @@ describe('V1 - reference scenes', () => {
     expect((registry.getNodeById('quiz-count-value') as RuntimeNodeFixture | null)?.parentNode).toBe(countZone)
     expect((registry.getNodeById('quiz-success-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(successZone)
     expect((registry.getNodeById('quiz-failure-panel') as RuntimeNodeFixture | null)?.parentNode).toBe(failureZone)
-    expect(registry.getParentListId('quiz-question-panel')).toBeNull()
-    expect(registry.getParentListId('quiz-success-panel')).toBeNull()
-    expect(registry.getParentListId('quiz-failure-panel')).toBeNull()
-    expect(registry.getParentListId('quiz-intro-title')).toBeNull()
-    expect(registry.getParentListId('quiz-count-value')).toBeNull()
+    // An outlet-attached perso's parent is recorded as the outlet id (not null) since
+    // 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3 — the chain must
+    // stay walkable from a child up to its owning layout component at seek.
+    expect(registry.getParentListId('quiz-question-panel')).toBe('quiz-layout:question')
+    expect(registry.getParentListId('quiz-success-panel')).toBe('quiz-layout:success')
+    expect(registry.getParentListId('quiz-failure-panel')).toBe('quiz-layout:failure')
+    expect(registry.getParentListId('quiz-intro-title')).toBe('quiz-layout:intro')
+    expect(registry.getParentListId('quiz-count-value')).toBe('quiz-layout:count')
   })
 
   it('keeps S4 empty defaults implicit and routes perdu through quiz:answer:no', () => {

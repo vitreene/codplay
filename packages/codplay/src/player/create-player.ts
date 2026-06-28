@@ -12,7 +12,8 @@ import {
   type RuntimeTraceStatus,
 } from "../runtime/trace-store";
 import type { CreateElementOptions } from "../runtime/create-element";
-import type { RuntimePersos } from "../runtime/types";
+import type { MoveCommand, RuntimePersos } from "../runtime/types";
+import { isStoryHostMove, normalizeMoveCommand } from "../runtime/modules/move";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
 import { RUNTIME_TRACE_STATUS } from "../runtime/trace-constants";
 import { TrackManager } from "../track-manager/create-track-manager";
@@ -30,7 +31,17 @@ import { PLAYER_RUNTIME_EVENT, PLAYER_SEQUENCE_EVENT, PLAYER_STATUS } from "./pl
 import { resolveSeekEndMsFromPolicy, shouldReplayEventForSeek } from "./seek-runtime";
 import type { RenderAdapter } from "./render-adapter-types";
 import type { ThirdPartyBinding } from "./third-party-binding";
-import { TweenRunner, isTweenAction, isTweenSequence, isTweenStopAction, expandTweenToActiveSteps } from "../tween/tween-runner";
+import { TweenRunner, isTweenStopAction } from "../tween/tween-runner";
+import {
+  ACTION_SEQUENCE_TOKEN_KEY,
+  buildActionSequenceContinuationEventName,
+  isActionSequence,
+  parseActionSequenceContinuationEventName,
+  planActionSequenceSteps,
+  readActionSequenceToken,
+  type ActionSequence,
+} from "./action-sequence";
+import type { AnimationAction, AnimationResolvedAction } from "../animation/types";
 import { RenderSync } from "./render-sync";
 import type {
   PlayerApi,
@@ -154,6 +165,8 @@ export class PlayerFacade implements PlayerApi {
   private readonly tweenRunner = new TweenRunner(
     (persoId) => this.renderer.getRuntimeRegistry().getComponentById(persoId),
   );
+  private readonly actionSequenceTriggerByKey = new Map<string, string>();
+  private readonly decomposedActionSequenceTriggerEventIds = new Set<string>();
   private readonly ticker = new TimeTicker();
   private nextPublicEventIndex = 0;
   private readonly mountedStoryIds = new Set<string>();
@@ -461,6 +474,7 @@ export class PlayerFacade implements PlayerApi {
     const animationAdapter = options.animationAdapter ?? createDefaultAnimationAdapter();
     this.renderer = new RendererFacade({
       animationAdapter,
+      continuousAnimationEngines: [this.tweenRunner],
       createElementOptions: options.createElementOptions,
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
       emitRuntimeEvent: (event) => {
@@ -964,12 +978,123 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Loads one mounted runtime perso graph into the renderer.
+   * Loads one mounted runtime perso graph into the renderer. `mountedPersoIds`,
+   * when provided, restricts the load to story entries plus persos it lists
+   * — see RuntimeComponentOrchestrator.loadPersos.
    */
   private loadMountedRuntimePersos(
     runtimePlan: ReturnType<PlayerRuntimePlanner["createRuntimePlan"]>,
+    mountedPersoIds?: ReadonlySet<string>,
   ): ReturnType<RendererFacade["load"]> {
-    return this.renderer.load({ runtimePersos: runtimePlan.runtimePersos });
+    return this.renderer.load({ runtimePersos: runtimePlan.runtimePersos, mountedPersoIds });
+  }
+
+  /**
+   * Resolves which persos would be mounted at one seek target, without
+   * touching the DOM or any component — used to restrict the renderer load
+   * that follows to only what will actually be visible, instead of
+   * refreshing every perso and letting the subsequent track replay correct
+   * it. Two steps: (1) a move-only dry-run scan of due track events up to
+   * `targetMs` (each resolved via `director.runTimelineEvent(event,
+   * {dryRun:true})` — pure event/listener lookup, no commit/eventSeq side
+   * effect, safe to call again here ahead of the real replay) builds the
+   * effective move per perso, falling back to its static `initial.move`
+   * when the track carries none; (2) the renderer walks the proposed parent
+   * chain top-down via already-registered graph relationships only. See
+   * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+   */
+  private resolveMountedPersoIdsAtSeek(runtimePersos: RuntimePersos, targetMs: number): Set<string> {
+    const entriesByStoryId = runtimePersos.entriesByStoryId ?? {};
+    const rootPersoIds = new Set<string>();
+    const effectiveMoveByPersoId = new Map<string, MoveCommand | null>();
+
+    for (const perso of Object.values(runtimePersos.persos)) {
+      const storyEntries = entriesByStoryId[perso.storyId] ?? [];
+      const rawInitialMove = (perso.initial as { move?: unknown }).move;
+      const isRoot = storyEntries.includes(perso.id) && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove));
+
+      if (isRoot) {
+        rootPersoIds.add(perso.id);
+        effectiveMoveByPersoId.set(perso.id, null);
+        continue;
+      }
+
+      effectiveMoveByPersoId.set(perso.id, normalizeMoveCommand(rawInitialMove, true));
+    }
+
+    // Not activeOnly: this scan runs before resetActiveTracks/the real replay
+    // re-establishes the correct active set for targetMs (dynamic track
+    // activate/deactivate control events). Scanning every track risks
+    // over-including a move from a track that the real replay will end up
+    // treating as inactive — harmless, since loadPersos only ever applies a
+    // perso's own static initial.move when refreshing it, so an over-included
+    // perso just gets a redundant refresh. Under-including would be unsafe:
+    // a perso skipped here never gets a component, so the real replay's own
+    // later move for it would fail to find one. See
+    // 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+    const dueEvents = this.trackManager.getAllEvents().filter((event) => event.ms <= targetMs);
+
+    for (const event of dueEvents) {
+      const { resolvedActions } = this.director.runTimelineEvent(event, { dryRun: true });
+      for (const resolvedAction of resolvedActions) {
+        const action = resolvedAction.action as unknown;
+
+        // A perso-level ActionSequence is never materialized into the track
+        // until the real replay first decomposes it — on a cold scan (this
+        // event has never been replayed before), its continuation steps
+        // (which is typically where a chained move:"off" lives) would
+        // otherwise be invisible here. Decompose it the same way the real
+        // replay does (same shared primitive) instead of waiting for it to
+        // exist in the track. See
+        // 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+        if (isActionSequence(action)) {
+          for (const step of planActionSequenceSteps(action as ActionSequence)) {
+            const stepMs = event.ms + step.offsetMs;
+            if (stepMs > targetMs) {
+              break;
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(step.action, "move")) {
+              continue;
+            }
+
+            const persoId = (step.action.targetId as string | undefined) ?? resolvedAction.listenerId;
+            if (!effectiveMoveByPersoId.has(persoId)) {
+              continue;
+            }
+
+            effectiveMoveByPersoId.set(persoId, normalizeMoveCommand(step.action.move, false));
+          }
+          continue;
+        }
+
+        const actionRecord = action as Record<string, unknown>;
+        if (!Object.prototype.hasOwnProperty.call(actionRecord, "move")) {
+          continue;
+        }
+
+        const persoId = (actionRecord.targetId as string | undefined) ?? resolvedAction.listenerId;
+        if (!effectiveMoveByPersoId.has(persoId)) {
+          continue;
+        }
+
+        effectiveMoveByPersoId.set(persoId, normalizeMoveCommand(actionRecord.move, false));
+      }
+    }
+
+    const mountedStateByPersoId = this.renderer.resolveMountedStateAtSeek({
+      rootPersoIds,
+      effectiveMoveByPersoId,
+    });
+
+    const mountedPersoIds = new Set<string>();
+    for (const [persoId, mounted] of mountedStateByPersoId) {
+      if (mounted) {
+        mountedPersoIds.add(persoId);
+      }
+    }
+
+    return mountedPersoIds;
   }
 
   /**
@@ -1134,17 +1259,19 @@ export class PlayerFacade implements PlayerApi {
     this.drainingDueEvents = true;
     try {
       let guard = 0;
-      while (guard < 1000) {
+      // One event at a time — see replayDueTimelineEventsForSeek and
+      // 2026-06-29-track-event-insertion-cursor-defect.md: a pre-fetched
+      // batch can strand an event materialized by an earlier one's own
+      // handler behind an already-batched later event.
+      while (guard < 10000) {
         guard += 1;
-        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
+        const event = this.trackManager.collectNextDueEvent({ nowMs: timelineMs });
 
-        if (dueEvents.length === 0) {
+        if (event === null) {
           return;
         }
 
-        for (const event of dueEvents) {
-          this.runTimelineEvent(event);
-        }
+        this.runTimelineEvent(event);
       }
     } finally {
       this.drainingDueEvents = wasDraining;
@@ -1198,16 +1325,16 @@ export class PlayerFacade implements PlayerApi {
     this.drainingDueEvents = true;
     try {
       let guard = 0;
-      while (guard < 1000) {
+      // One event at a time — see runDueTimelineEventsSync and
+      // 2026-06-29-track-event-insertion-cursor-defect.md.
+      while (guard < 10000) {
         guard += 1;
-        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
-        if (dueEvents.length === 0) {
+        const event = this.trackManager.collectNextDueEvent({ nowMs: timelineMs });
+        if (event === null) {
           return;
         }
 
-        for (const event of dueEvents) {
-          await this.dispatchTimelineEvent(event);
-        }
+        await this.dispatchTimelineEvent(event);
       }
     } finally {
       this.drainingDueEvents = wasDraining;
@@ -1225,42 +1352,47 @@ export class PlayerFacade implements PlayerApi {
     this.timelineReplayInProgress = true;
     try {
       let guard = 0;
-      while (guard < 1000) {
+      // One event at a time, not a pre-fetched batch: an earlier event's own
+      // handler can materialize a new event chronologically before a later
+      // one already due in the same instant (e.g. an ActionSequence
+      // continuation step). Re-querying after each event lets that new
+      // event be picked up in correct order on the very next iteration,
+      // instead of being stuck behind an already-batched later event. See
+      // 2026-06-29-track-event-insertion-cursor-defect.md.
+      while (guard < 10000) {
         guard += 1;
-        const dueEvents = this.trackManager.collectDueEvents({ nowMs: timelineMs }).events;
+        const event = this.trackManager.collectNextDueEvent({ nowMs: timelineMs });
 
-        if (dueEvents.length === 0) {
+        if (event === null) {
           return null;
         }
 
-        for (const event of dueEvents) {
-          if (event.name === PLAYER_SEQUENCE_EVENT.sequenceEnd) {
-            return event.ms;
-          }
-
-          if (
-            !shouldReplayEventForSeek(
-              event,
-              playedReplayEndMs,
-              this.trackManager.state.loadedTrackIds,
-              (trackId) => this.trackManager.getTrackMeta(trackId),
-            )
-          ) {
-            continue;
-          }
-
-          this.emitTrace(PLAYER_TRACE_EVENT.seekReplayEvent, RUNTIME_TRACE_STATUS.info, {
-            eventId: event.id,
-            eventName: event.name,
-            eventMs: event.ms,
-            trackId: event.trackId,
-            authorInterceptorConfigured: this.onTimelineEvent !== undefined,
-            dispatchedThroughAuthor: false,
-          });
-
-          this.renderer.syncAnimationsToTimeline(event.ms, eventMsByEventId);
-          this.runTimelineEvent(event);
+        if (event.name === PLAYER_SEQUENCE_EVENT.sequenceEnd) {
+          return event.ms;
         }
+
+        if (
+          !shouldReplayEventForSeek(
+            event,
+            playedReplayEndMs,
+            this.trackManager.state.loadedTrackIds,
+            (trackId) => this.trackManager.getTrackMeta(trackId),
+          )
+        ) {
+          continue;
+        }
+
+        this.emitTrace(PLAYER_TRACE_EVENT.seekReplayEvent, RUNTIME_TRACE_STATUS.info, {
+          eventId: event.id,
+          eventName: event.name,
+          eventMs: event.ms,
+          trackId: event.trackId,
+          authorInterceptorConfigured: this.onTimelineEvent !== undefined,
+          dispatchedThroughAuthor: false,
+        });
+
+        this.renderer.syncAnimationsToTimeline(event.ms, eventMsByEventId);
+        this.runTimelineEvent(event);
       }
     } finally {
       this.timelineReplayInProgress = false;
@@ -1401,29 +1533,51 @@ export class PlayerFacade implements PlayerApi {
 
     for (const commit of directorResult.commits) {
       let hasNormalOps = false;
+      let dropCommit = false;
       for (const op of commit.operations) {
         const action = op.action as unknown;
         if (isTweenStopAction(action)) {
+          // The "stop" sentinel is a bare string, not an action payload — it
+          // cannot safely flow through the normal commit circuit (component
+          // update expects a record). Cancellation is applied directly here,
+          // the one deliberate exception to the single-trigger rule below.
           this.tweenRunner.cancelAll(commit.target.itemId);
-        } else if (isTweenAction(action) || isTweenSequence(action)) {
-          const steps = expandTweenToActiveSteps({
-            action: action as Parameters<typeof expandTweenToActiveSteps>[0]['action'],
-            persoId: commit.target.itemId,
-            actionKey: op.actionKey,
-            eventId: event.id,
-            eventMs: event.ms,
-            data: typeof event.payload === 'object' && event.payload !== null
-              ? (event.payload as Record<string, unknown>)
-              : undefined,
-          });
-          for (const step of steps) {
-            this.tweenRunner.register(step);
-          }
-        } else {
-          hasNormalOps = true;
+          continue;
         }
+
+        if (this.isStaleActionSequenceContinuation(event.name, action)) {
+          // A later trigger on the same actionKey superseded the ActionSequence
+          // that scheduled this continuation step (Cas 1 — interruption +
+          // remplacement). Drop it silently: it must not apply.
+          dropCommit = true;
+          continue;
+        }
+
+        // Any fresh resolution on this actionKey invalidates a still-pending
+        // ActionSequence previously triggered on the same key, even if this
+        // new resolution is not itself a sequence.
+        this.invalidatePendingActionSequence(commit.target.itemId, op.actionKey, event.id);
+
+        // Close out whatever the previous step of the same ActionSequence
+        // chain (if any) left active in TweenRunner, before this step's own
+        // action applies — a step explicitly retires its predecessor rather
+        // than relying on the global seek pass, which is not chronologically
+        // ordered relative to the rest of the track (see
+        // 2026-06-28-seek-continuous-engine-overwrite-defect.md).
+        this.retireActionSequenceChainTween(commit.target.itemId, event.name);
+
+        if (isActionSequence(action)) {
+          this.scheduleActionSequenceContinuation(event, commit.target.itemId, op);
+        }
+
+        // A static action or a TweenAction (`fn`+`duration`) is an ordinary
+        // action payload: it is enqueued like any other and triggers once
+        // through the normal commit circuit. The renderer claims a
+        // TweenAction for continuous evaluation after that single trigger —
+        // see RendererFacade.tick().
+        hasNormalOps = true;
       }
-      if (hasNormalOps) {
+      if (hasNormalOps && !dropCommit) {
         const enqueueResult = this.renderer.enqueueCommit(commit);
         if (enqueueResult.ok) {
           enqueuedCommitCount += 1;
@@ -1445,6 +1599,106 @@ export class PlayerFacade implements PlayerApi {
 
     this.recordPlayedProgress(event);
     this.seekEndMs = this.resolveCurrentSeekEndMs();
+  }
+
+  /**
+   * Returns true when one resolved action carries an `ActionSequence`
+   * continuation token that no longer matches the latest trigger recorded
+   * for this event name — meaning a later trigger on the same actionKey
+   * superseded it (Cas 1 — interruption + remplacement) before it was due.
+   */
+  private isStaleActionSequenceContinuation(eventName: string, action: unknown): boolean {
+    const token = readActionSequenceToken(action);
+    if (token === undefined) {
+      return false;
+    }
+
+    return this.actionSequenceTriggerByKey.get(eventName) !== token;
+  }
+
+  /**
+   * Records the latest trigger for one (persoId, actionKey) pair, so any
+   * still-pending `ActionSequence` continuation steps scheduled by a
+   * previous trigger on the same key are recognized as stale and dropped
+   * when due.
+   */
+  private invalidatePendingActionSequence(persoId: string, actionKey: string, triggerEventId: string): void {
+    const continuationEventName = buildActionSequenceContinuationEventName(persoId, actionKey);
+    this.actionSequenceTriggerByKey.set(continuationEventName, triggerEventId);
+  }
+
+  /**
+   * Retires, in TweenRunner, the tween (if any) left active by the previous
+   * step of the same ActionSequence chain — under the event name about to
+   * apply (covers a previous continuation step sharing this same name), and
+   * under the original actionKey recovered from it when this event IS a
+   * continuation event (covers the chain's own first step). A static step
+   * never reaches TweenRunner on its own, so without this explicit retire a
+   * stale tween from an earlier step in the same chain would otherwise only
+   * be cleared by the global seek pass — which is not chronologically
+   * ordered relative to the rest of the track (see
+   * 2026-06-28-seek-continuous-engine-overwrite-defect.md). This call is a
+   * no-op when nothing is registered under either key.
+   */
+  private retireActionSequenceChainTween(persoId: string, eventName: string): void {
+    this.tweenRunner.cancelByActionKey(persoId, eventName);
+
+    const continuation = parseActionSequenceContinuationEventName(eventName, persoId);
+    if (continuation !== null) {
+      this.tweenRunner.cancelByActionKey(persoId, continuation.actionKey);
+    }
+  }
+
+  /**
+   * Decomposes one perso-level `ActionSequence` into its first step (applied
+   * in the current commit, in place) and its continuation steps. The
+   * continuation steps are materialized into the track at their absolute ms
+   * via `appendGeneratedEvents` — replayed correctly by any future seek,
+   * exactly like any other track entry, no dedicated mechanism needed.
+   */
+  private scheduleActionSequenceContinuation(
+    event: TimelineEvent,
+    persoId: string,
+    op: AnimationResolvedAction,
+  ): void {
+    const steps = planActionSequenceSteps(op.action as unknown as ActionSequence);
+    const [first, ...rest] = steps;
+    if (first === undefined) {
+      return;
+    }
+
+    op.action = first.action as AnimationAction;
+
+    if (rest.length === 0 || this.decomposedActionSequenceTriggerEventIds.has(event.id)) {
+      // The continuation steps are materialized into the track exactly once
+      // per distinct triggering event — the first time it is ever processed,
+      // live or during a cold seek. Every later replay of this same track
+      // entry (by any subsequent seek) must not re-append duplicates: the
+      // continuation entries appended on the first encounter are already
+      // permanent track history at this point.
+      return;
+    }
+
+    this.decomposedActionSequenceTriggerEventIds.add(event.id);
+
+    const continuationEventName = buildActionSequenceContinuationEventName(persoId, op.actionKey);
+    const triggerEventId = this.actionSequenceTriggerByKey.get(continuationEventName) ?? event.id;
+
+    const continuationEvents: TimelineEvent[] = rest.map((step, index) => ({
+      id: `evt-${event.id}-seq-${index + 1}`,
+      ms: Math.max(0, event.ms + step.offsetMs),
+      name: continuationEventName,
+      payload: { ...step.action, [ACTION_SEQUENCE_TOKEN_KEY]: triggerEventId },
+      scopeStoryId: event.scopeStoryId,
+      index,
+      source: event.source,
+      trackId: event.trackId,
+    }));
+
+    this.appendGeneratedEvents({
+      trackId: event.trackId ?? PLAYER_TRACK.global,
+      events: continuationEvents,
+    });
   }
 
   /**
@@ -1940,7 +2194,11 @@ export class PlayerFacade implements PlayerApi {
 
     this.applyMountedRuntimePlan(runtimePlan);
 
-    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan);
+    const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs);
+    const seekTargetTimelineMs = Math.min(boundedTargetTimelineMs, this.resolveCurrentSeekEndMs());
+    const mountedPersoIds = this.resolveMountedPersoIdsAtSeek(runtimePlan.runtimePersos, seekTargetTimelineMs);
+
+    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan, mountedPersoIds);
     if (!rendererLoadResult.ok) {
       return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to seek story", "player:seek:failed", {
         sceneId: this.scene.id,
@@ -1951,11 +2209,9 @@ export class PlayerFacade implements PlayerApi {
 
     this.syncHorizonFromRuntimePlan(runtimePlan);
 
-    const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs);
-
     this.emitStateSnapshot();
 
-    this.timelineMs = Math.min(boundedTargetTimelineMs, this.resolveCurrentSeekEndMs());
+    this.timelineMs = seekTargetTimelineMs;
 
     this.director.start();
     const rendererStartResult = this.startRenderer("seek-replay");
@@ -1981,6 +2237,7 @@ export class PlayerFacade implements PlayerApi {
     this.trackManager.resetActiveTracks();
     this.trackManager.resetCursor();
     this.tweenRunner.resetActiveTweens();
+    this.actionSequenceTriggerByKey.clear();
     const deferredSequenceEndMs = await this.replayDueTimelineEventsForSeek(
       this.timelineMs,
       eventMsByEventId,

@@ -5,11 +5,11 @@ import { riveCoachVisemeConversionStraps } from './avatar-data/rive-viseme-conve
 const SCENE_END_MS = 18500
 const AVATAR_SIZE = '600px'
 
-const RIV_SRC = '/avatars/coach.riv'
-const ARTBOARD = 'Coach model'
-const STATE_MACHINE = 'State Machine 1'
+export const RIVE_COACH_SRC = '/avatars/coach.riv'
+export const RIVE_COACH_ARTBOARD = 'Coach model'
+export const RIVE_COACH_STATE_MACHINE = 'State Machine 1'
 
-function buildVisemeEventimes() {
+export function buildRiveCoachVisemeEventimes() {
   return MOUTH_CUES.map((c) => ({
     name: 'avatar:viseme:raw',
     startAt: Math.round(c.start * 1000),
@@ -17,12 +17,137 @@ function buildVisemeEventimes() {
   }))
 }
 
-function buildWordEventimes() {
+export function buildRiveCoachWordEventimes() {
   return phraseWordsFR.map((w) => ({
     name: 'subtitle:word',
     startAt: w.startMs,
     data: { content: w.word },
   }))
+}
+
+type RiveCoachBlockOptions = {
+  stageId: string
+  audioId: string
+  avatarId: string
+  captionId?: string
+  parentId: string
+  width: string
+  height: string
+  showCaption?: boolean
+  stageClassName?: string
+  avatarStyle?: Record<string, unknown>
+  captionStyle?: Record<string, unknown>
+  stageStyle?: Record<string, unknown>
+}
+
+export function createRiveCoachBlock(options: RiveCoachBlockOptions) {
+  const showCaption = options.showCaption !== false
+  const persos: Array<Record<string, unknown>> = [
+    {
+      id: options.stageId,
+      type: 'tag',
+      initial: {
+        tag: 'div',
+        className: options.stageClassName,
+        move: { parentId: options.parentId },
+        style: {
+          position: 'relative',
+          width: options.width,
+          height: options.height,
+          overflow: 'hidden',
+          background: '#1a1a2e',
+          ...options.stageStyle,
+        },
+      },
+      actions: {},
+    },
+    {
+      id: options.audioId,
+      type: 'media',
+      initial: {
+        tag: 'video',
+        src: '/assets/1_7b_e.mp3',
+        master: true,
+        move: { parentId: options.stageId },
+        style: {
+          position: 'absolute',
+          left: '0',
+          top: '0',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+        },
+      },
+      actions: {
+        'audio:start': { broadcast: { type: 'START' } },
+      },
+    },
+    {
+      id: options.avatarId,
+      type: 'rive-coach',
+      initial: {
+        src: RIVE_COACH_SRC,
+        artboard: RIVE_COACH_ARTBOARD,
+        stateMachine: RIVE_COACH_STATE_MACHINE,
+        move: { parentId: options.stageId },
+        style: {
+          position: 'absolute',
+          inset: '0',
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          ...options.avatarStyle,
+        },
+      },
+      actions: {
+        'avatar:start': { broadcast: { type: 'START' } },
+        'avatar:viseme': {},
+      },
+    },
+  ]
+
+  if (showCaption) {
+    persos.push({
+      id: options.captionId ?? `${options.stageId}-caption`,
+      type: 'text',
+      initial: {
+        tag: 'p',
+        content: '',
+        move: { parentId: options.stageId },
+        style: {
+          position: 'absolute',
+          bottom: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          margin: '0',
+          padding: '4px 10px',
+          color: '#fff',
+          fontSize: '15px',
+          background: 'rgba(0,0,0,0.55)',
+          borderRadius: '4px',
+          minHeight: '1.6em',
+          textAlign: 'center',
+          pointerEvents: 'none',
+          ...options.captionStyle,
+        },
+      },
+      actions: {
+        'subtitle:word': {},
+      },
+    })
+  }
+
+  return {
+    persos,
+    eventimes: [
+      { name: 'audio:start', startAt: 0 },
+      { name: 'avatar:start', startAt: 0 },
+      ...buildRiveCoachVisemeEventimes(),
+      ...(showCaption ? buildRiveCoachWordEventimes() : []),
+    ],
+    listen: [{ on: 'avatar:viseme:raw', straps: ['rive-coach-viseme-convert'] }],
+  }
 }
 
 export function createRiveCoachScene(): SceneDoc {
@@ -79,9 +204,9 @@ export function createRiveCoachScene(): SceneDoc {
             id: 'avatar',
             type: 'rive-coach',
             initial: {
-              src: RIV_SRC,
-              artboard: ARTBOARD,
-              stateMachine: STATE_MACHINE,
+               src: RIVE_COACH_SRC,
+               artboard: RIVE_COACH_ARTBOARD,
+               stateMachine: RIVE_COACH_STATE_MACHINE,
               move: { parentId: 'avatar-stage' },
               style: {
                 position: 'absolute',
@@ -129,8 +254,8 @@ export function createRiveCoachScene(): SceneDoc {
           { name: 'audio:start',  startAt: 0 },
           { name: 'avatar:start', startAt: 0 },
           { name: 'sequence:end', startAt: SCENE_END_MS },
-          ...buildVisemeEventimes(),
-          ...buildWordEventimes(),
+          ...buildRiveCoachVisemeEventimes(),
+          ...buildRiveCoachWordEventimes(),
         ],
       },
     },

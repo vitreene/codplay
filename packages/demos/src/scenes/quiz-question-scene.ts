@@ -493,6 +493,43 @@ function createQuestionStory(question: ResolvedQuizQuestion): SceneStoryDoc {
   }
 }
 
+type QuizQuestionStoryOptions = {
+  storyId?: string
+  parentId?: string
+  panelClassName?: string
+  panelStyle?: Record<string, unknown>
+}
+
+export function createQuizQuestionStory(
+  question: ResolvedQuizQuestion,
+  options: QuizQuestionStoryOptions = {},
+): SceneStoryDoc {
+  const story = createQuestionStory(question)
+  const storyId = options.storyId ?? QUESTION_STORY_ID
+  const panel = story.persos.find((perso) => perso.id === QUESTION_PANEL_ID)
+
+  if (panel) {
+    const initial = panel.initial as Record<string, unknown>
+    if (options.parentId) {
+      initial.move = { parentId: options.parentId }
+    }
+    if (options.panelClassName) {
+      initial.className = options.panelClassName
+    }
+    if (options.panelStyle) {
+      initial.style = {
+        ...(typeof initial.style === 'object' && initial.style !== null ? initial.style as Record<string, unknown> : {}),
+        ...options.panelStyle,
+      }
+    }
+  }
+
+  return {
+    ...story,
+    id: storyId,
+  }
+}
+
 /**
  * Creates one scene doc for one resolved quiz question.
  */

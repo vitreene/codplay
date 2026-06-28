@@ -83,9 +83,16 @@ export class DirectorCore implements DirectorApi {
   }
 
   /**
-   * Resolves one timeline event into ordered runtime commits.
+   * Resolves one timeline event into ordered runtime commits. `dryRun: true`
+   * returns the same `resolvedActions` (event/listener resolution is a pure
+   * lookup, safe to repeat) without building commits — `nextCommitSeq` is
+   * never advanced, so a later non-dry-run call for any event keeps the same
+   * commitSeq/eventSeq it would have received had the dry run never
+   * happened. Used by the seek move-state pre-pass to inspect which due
+   * events carry a `move`, without shifting the eventSeq-based warnOnce
+   * dedup of the real replay that follows.
    */
-  runTimelineEvent(event: TimelineEvent): DirectorEventResult {
+  runTimelineEvent(event: TimelineEvent, options?: { dryRun?: boolean }): DirectorEventResult {
     if (this.runtimePlan === null) {
       return {
         commits: [],
@@ -97,7 +104,7 @@ export class DirectorCore implements DirectorApi {
       listeners: this.runtimePlan.listeners
     }) as AnimationResolvedAction[]
 
-    if (resolvedActions.length === 0) {
+    if (resolvedActions.length === 0 || options?.dryRun === true) {
       return {
         commits: [],
         resolvedActions

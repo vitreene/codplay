@@ -31,13 +31,23 @@ export class TrackManagerCodec {
    * Sorts one track bucket event list with stable global event ordering.
    */
   sortTrackEvents(track: TrackBucket): void {
+    track.events = this.sortEventsForTrack(track, track.events)
+  }
+
+  /**
+   * Sorts one arbitrary event list with the same ordering rules as
+   * `sortTrackEvents`, without mutating the track — used to reorder only the
+   * not-yet-collected suffix of a track when appending live events, leaving
+   * the already-collected prefix (and `nextIndex`) untouched.
+   */
+  sortEventsForTrack(track: TrackBucket, events: TrackManagerStoryEvent[]): TrackManagerStoryEvent[] {
     const trackMeta: Record<string, TrackMeta> = {
       [track.id]: {
         order: track.order,
         source: track.source
       }
     }
-    track.events = sortRuntimeEvents(track.events, trackMeta) as TrackManagerStoryEvent[]
+    return sortRuntimeEvents(events, trackMeta) as TrackManagerStoryEvent[]
   }
 
   /**

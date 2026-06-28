@@ -13,6 +13,7 @@ export type RuntimeConfig = {
   }
   move: {
     rootToken: string
+    detachToken: string
   }
 }
 
@@ -30,6 +31,7 @@ export const RUNTIME_CONFIG: RuntimeConfig = {
     defaultTagName: 'section'
   },
   move: {
-    rootToken: 'root'
+    rootToken: 'root',
+    detachToken: 'off'
   }
 }

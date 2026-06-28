@@ -44,6 +44,24 @@ export function isStoryHostMove(rawMove: unknown): boolean {
 }
 
 /**
+ * Checks whether one raw move payload is the explicit detach sentinel
+ * (`move: "off"`, or `{ parentId: "off" }`) — an intentional DOM detachment,
+ * distinct from an author error targeting a missing outlet/list/node.
+ */
+export function isDetachMove(rawMove: unknown): boolean {
+  if (rawMove === RUNTIME_CONFIG.move.detachToken) {
+    return true
+  }
+
+  if (typeof rawMove !== 'object' || rawMove === null) {
+    return false
+  }
+
+  const move = rawMove as { parentId?: unknown }
+  return move.parentId === RUNTIME_CONFIG.move.detachToken
+}
+
+/**
  * Normalizes a raw move payload into one strict move command.
  */
 export function normalizeMoveCommand(rawMove: unknown, isInitialMove: boolean): MoveCommand | null {
@@ -100,24 +118,38 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
       : null
 
     if (targetList === null && targetNode === null) {
-      if (sourceList !== null) {
-        sourceList.detachChild({
-          childId: request.persoId,
-          mode: request.move.mode,
-          reorder: request.move.reorder,
-          eventId: request.eventId,
-          eventSeq: request.eventSeq
-        })
+      const detachedFromListNode = sourceList !== null
+        ? sourceList.detachChild({
+            childId: request.persoId,
+            mode: request.move.mode,
+            reorder: request.move.reorder,
+            eventId: request.eventId,
+            eventSeq: request.eventSeq
+          })
+        : null
+
+      // Physical detachment: a target that doesn't resolve to a list or a node
+      // means the perso leaves the document entirely — its own DOM node, if it
+      // still has one, must be detached too. Without this, only the bookkeeping
+      // (parentId/mounted) changed and the node stayed physically attached.
+      const nodeToDetach = detachedFromListNode ?? childNode
+      if (nodeToDetach !== null && nodeToDetach !== undefined) {
+        host.helpers.detachNode(nodeToDetach)
       }
 
       host.registries.container.setParentId(request.persoId, null)
       host.registries.mounted.set(request.persoId, false)
-      host.warnOnce(request.eventSeq, 'AUTHOR_LAYOUT_OUTLET_NOT_FOUND', {
-        persoId: request.persoId,
-        parentId: request.move.parentId,
-        eventId: request.eventId,
-        eventSeq: request.eventSeq
-      }, request.persoId)
+
+      // The reserved detach sentinel ("off") is an intentional detachment, not
+      // an author error targeting a missing outlet/list/node — never warn for it.
+      if (request.move.parentId !== RUNTIME_CONFIG.move.detachToken) {
+        host.warnOnce(request.eventSeq, 'AUTHOR_LAYOUT_OUTLET_NOT_FOUND', {
+          persoId: request.persoId,
+          parentId: request.move.parentId,
+          eventId: request.eventId,
+          eventSeq: request.eventSeq
+        }, request.persoId)
+      }
       return
     }
 
@@ -146,7 +178,11 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
         childNode !== undefined &&
         host.helpers.isNodeChildOf(targetNode, childNode)
       ) {
-        host.registries.container.setParentId(request.persoId, null)
+        // The outlet id is recorded as this perso's parent (not null) so the
+        // attach chain can be walked upward at seek (outlet -> owning component
+        // -> its own parent/mounted state), without consulting the DOM or the
+        // track. See 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+        host.registries.container.setParentId(request.persoId, request.move.parentId)
         host.registries.mounted.set(request.persoId, true)
         return
       }
@@ -184,7 +220,9 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
 
       host.helpers.detachNode(movedChildNode)
       host.helpers.appendNode(targetNode, movedChildNode)
-      host.registries.container.setParentId(request.persoId, null)
+      // Same reasoning as the idempotent-skip branch above: record the outlet
+      // id, not null, so the parent chain remains walkable at seek.
+      host.registries.container.setParentId(request.persoId, request.move.parentId)
       host.registries.mounted.set(request.persoId, true)
       return
     }

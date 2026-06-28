@@ -1,5 +1,6 @@
 import type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from '../player/render-adapter-types'
 import type { RuntimeComponent } from '../runtime/components/types'
+import type { ContinuousAnimationEngine, ContinuousAnimationEngineTriggerInput } from '../animation/types'
 
 export type TweenFn = (input: { progress: number; data?: Record<string, unknown> }) => Record<string, unknown> | undefined
 
@@ -8,10 +9,7 @@ export type TweenActionShape = {
   duration: number
   ease?: string
   ignoreDuration?: boolean
-  startAt?: number
 }
-
-export type TweenSequenceShape = TweenActionShape[]
 
 type ActiveTween = {
   persoId: string
@@ -67,13 +65,20 @@ function applyEasing(ease: string, t: number): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Manages active TweenActions. Implements RenderAdapter so it receives
- * tick() and seek() from RenderSync without modifying the core player loop.
+ * Drives `TweenAction` — a continuous interpolation engine for one action
+ * triggered once, at the same level as the external animation library
+ * (`ContinuousAnimationEngine`). Implements `RenderAdapter` so it receives
+ * tick()/seek() from RenderSync for its own per-frame evaluation, independent
+ * of the commit circuit.
  *
- * Registration happens in PlayerFacade.runTimelineEvent() when a TweenAction
- * or TweenSequence is detected in the resolved action payload.
+ * `TweenAction` never carries chaining or `move` — a heterogeneous list of
+ * steps (`ActionSequence`) is a distinct, separate concern that decomposes
+ * into individually-triggered ordinary actions through the normal commit
+ * circuit; this engine only ever claims one `TweenAction` at a time.
  */
-export class TweenRunner implements RenderAdapter {
+export class TweenRunner implements RenderAdapter, ContinuousAnimationEngine {
+  readonly name = 'tween-action'
+
   private activeTweens: ActiveTween[] = []
   private readonly getComponent: (persoId: string) => RuntimeComponent | null
 
@@ -81,9 +86,46 @@ export class TweenRunner implements RenderAdapter {
     this.getComponent = getComponent
   }
 
+  // -------------------------------------------------------------------------
+  // ContinuousAnimationEngine interface
+  // -------------------------------------------------------------------------
+
   /**
-   * Registers one tween step. Cancels any existing step for the same
-   * (persoId, actionKey) pair — new event on same key interrupts.
+   * Claims one resolved action's payload when it is a `TweenAction` shape
+   * (`fn`+`duration`). Never claims an array — a heterogeneous or homogeneous
+   * list of steps is not this engine's concern (see `ActionSequence`).
+   */
+  claims(action: unknown): boolean {
+    return isTweenAction(action)
+  }
+
+  /**
+   * Registers one tween from its single trigger point. Called once, after
+   * the resolved action has already gone through `beforeUpdate`/component
+   * resolution/`afterUpdate` like any other action.
+   */
+  trigger(input: ContinuousAnimationEngineTriggerInput): void {
+    const action = input.resolvedAction.action as unknown
+    if (!isTweenAction(action)) {
+      return
+    }
+
+    this.register({
+      persoId: input.resolvedAction.listenerId,
+      actionKey: input.resolvedAction.actionKey,
+      eventId: input.resolvedAction.eventId,
+      fn: action.fn,
+      startMs: input.eventMs,
+      duration: action.duration,
+      ease: action.ease ?? 'linear',
+      data: action as unknown as Record<string, unknown>,
+    })
+  }
+
+  /**
+   * Registers one active tween. Cancels any existing tween for the same
+   * (persoId, actionKey) pair — a new trigger on the same key interrupts and
+   * restarts (Cas 1 — interruption + remplacement).
    */
   register(tween: ActiveTween): void {
     this.activeTweens = this.activeTweens.filter(
@@ -97,6 +139,20 @@ export class TweenRunner implements RenderAdapter {
    */
   cancelAll(persoId: string): void {
     this.activeTweens = this.activeTweens.filter((t) => t.persoId !== persoId)
+  }
+
+  /**
+   * Cancels the active tween, if any, registered under one exact
+   * (persoId, actionKey) pair — a narrower cancellation than `cancelAll`,
+   * used to retire a tween left active by a specific prior step (e.g. one
+   * `ActionSequence` step explicitly closing out whatever the previous step
+   * of the same chain may have left active, rather than waiting for a
+   * global seek pass that may run out of chronological order).
+   */
+  cancelByActionKey(persoId: string, actionKey: string): void {
+    this.activeTweens = this.activeTweens.filter(
+      (t) => !(t.persoId === persoId && t.actionKey === actionKey),
+    )
   }
 
   /**
@@ -166,7 +222,7 @@ export class TweenRunner implements RenderAdapter {
 }
 
 // ---------------------------------------------------------------------------
-// Detection helpers (used in PlayerFacade)
+// Detection helpers
 // ---------------------------------------------------------------------------
 
 export function isTweenAction(value: unknown): value is TweenActionShape {
@@ -180,47 +236,6 @@ export function isTweenAction(value: unknown): value is TweenActionShape {
   )
 }
 
-export function isTweenSequence(value: unknown): value is TweenSequenceShape {
-  return Array.isArray(value) && value.length > 0 && isTweenAction(value[0])
-}
-
 export function isTweenStopAction(value: unknown): value is 'stop' {
   return value === 'stop'
-}
-
-/**
- * Expands one TweenAction or TweenSequence into a flat list of ActiveTween
- * entries with absolute startMs computed from the triggering event timestamp.
- */
-export function expandTweenToActiveSteps(input: {
-  action: TweenActionShape | TweenSequenceShape
-  persoId: string
-  actionKey: string
-  eventId: string
-  eventMs: number
-  data?: Record<string, unknown>
-}): ActiveTween[] {
-  const { action, persoId, actionKey, eventId, eventMs, data } = input
-  const steps: TweenActionShape[] = isTweenSequence(action) ? action : [action as TweenActionShape]
-
-  const result: ActiveTween[] = []
-  let chainMs = 0
-
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i]!
-    const stepStartAt = step.startAt !== undefined ? step.startAt : chainMs
-    result.push({
-      persoId,
-      actionKey: i === 0 ? actionKey : `${actionKey}:${i}`,
-      eventId: `${eventId}:tween:${i}`,
-      fn: step.fn,
-      startMs: eventMs + stepStartAt,
-      duration: step.duration,
-      ease: step.ease ?? 'linear',
-      data,
-    })
-    chainMs = stepStartAt + step.duration
-  }
-
-  return result
 }

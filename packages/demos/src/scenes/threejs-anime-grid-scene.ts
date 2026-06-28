@@ -15,7 +15,7 @@ import type { ThreejsBuildContext, ThreejsBuildResult, ThreejsSimulationFn } fro
 
 const STAGE_SIZE = 720
 const GRID_SIZE = 4
-const CUBE_EXPANSION = 10
+const CUBE_EXPANSION = 4
 const DEMO_DURATION_MS = 30000
 const POINT_LIGHT_DURATION_MS = 2500
 const POINT_LIGHT_HOLD_MS = 500
@@ -82,7 +82,7 @@ function evaluatePingPongFactor(elapsedMs: number, durationMs: number, holdMs: n
 /** Resolves the point light intensity at one absolute scene time. */
 function resolvePointLightIntensity(elapsedMs: number): number {
   const factor = evaluatePingPongFactor(elapsedMs, POINT_LIGHT_DURATION_MS, POINT_LIGHT_HOLD_MS)
-  return 30 * (1 - factor)
+  return 8 * (1 - factor)
 }
 
 /** Resolves the current expansion factor of one cube instance at one absolute scene time. */
@@ -119,7 +119,7 @@ function applyInstancedMeshPose(
 }
 
 /** Builds the procedural Three.js scene used by the CodPlay-controlled demo. */
-function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
+export function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
   const { renderer, width, height } = context
   const layout = createGridLayoutData()
   const scratch = new Object3D()
@@ -127,26 +127,30 @@ function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
   renderer.shadowMap.enabled = true
 
   const scene = new Scene()
-  scene.background = new Color('#111827')
+  scene.background = new Color('#0f172a')
 
   const camera = new PerspectiveCamera(50, width / height, 0.1, 100)
   camera.position.z = 6
   scene.add(camera)
 
-  scene.add(new AmbientLight(0xffffff, 0.25))
+  scene.add(new AmbientLight(0xffffff, 0.12))
 
-  const pointLight = new PointLight(0xffffff, 8, 20, 0.4)
+  const pointLight = new PointLight(0xdbeafe, 2.5, 20, 0.4)
   pointLight.castShadow = true
   pointLight.position.set(layout.spread * 4, layout.spread * 4, 6)
   scene.add(pointLight)
 
-  const directionalLight = new DirectionalLight(0xffffff, 2)
+  const directionalLight = new DirectionalLight(0xffffff, 0.55)
   directionalLight.position.set(2, 3, 4)
   scene.add(directionalLight)
 
   const cellSize = 2 / GRID_SIZE
   const geometry = new BoxGeometry(cellSize, cellSize, cellSize)
-  const material = new MeshLambertMaterial({ color: '#93c5fd' })
+  const material = new MeshLambertMaterial({
+    color: '#64748b',
+    transparent: true,
+    opacity: 0.35,
+  })
   const mesh = new InstancedMesh(geometry, material, GRID_SIZE * GRID_SIZE * GRID_SIZE)
   mesh.castShadow = true
   mesh.receiveShadow = true
@@ -165,7 +169,7 @@ function buildAnimeGridScene(context: ThreejsBuildContext): ThreejsBuildResult {
 }
 
 /** Creates one deterministic 3D simulation driven exclusively by CodPlay time. */
-function createAnimeGridSimulation(): ThreejsSimulationFn {
+export function createAnimeGridSimulation(): ThreejsSimulationFn {
   const layout = createGridLayoutData()
   const scratch = new Object3D()
 

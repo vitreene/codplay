@@ -84,6 +84,7 @@ export type TrackManagerApi = {
     events: TrackManagerStoryEvent[]
     refs?: TrackEventRef[]
   }
+  collectNextDueEvent: (input: { nowMs: number }) => TrackManagerStoryEvent | null
   getAllEvents: (options?: { activeOnly?: boolean }) => TrackManagerStoryEvent[]
   getTrackMeta: (trackId: string) => TrackRuntimeMeta | null
   state: TrackManagerStateSnapshot

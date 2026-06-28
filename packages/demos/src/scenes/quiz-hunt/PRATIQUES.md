@@ -175,34 +175,18 @@ de la scène dès l'init ; le reste s'attache à la demande.
   en mémoire/DOM des dizaines d'éléments jamais visibles (32 panneaux ici).
 - Confondre `display:none` (élément présent mais masqué) avec un vrai détachement.
 
-**⚠️ Point bloquant repéré en vérifiant le mécanisme actuel — à trancher avant d'appliquer** :
-le détachement n'a, en l'état, **aucun sentinel propre et silencieux**. En lisant
-`runtime/modules/move/index.ts` :
-- `isMoveCommand` exige un `parentId` *string non vide* (`index.ts:14-21`) — un `move: {
-  parentId: null }` est donc traité comme "pas de move du tout" (ignoré), pas comme un détachement.
-- Le seul chemin qui détache réellement est de cibler un `parentId` qui ne résout à **aucune**
-  liste/node connue (`'missing-list'` dans `tests/lot18/move-phase-c.spec.ts:187-198`, *L18-T1*)
-  — et ce chemin émet systématiquement un warning `AUTHOR_LAYOUT_OUTLET_NOT_FOUND`
-  (`index.ts:102-121`), pensé pour signaler une erreur d'auteur (cible introuvable par typo),
-  pas un détachement volontaire.
-- `warnOnce` dédoublonne par `{eventSeq, code, persoId}` (`runtime-component-orchestrator.ts:1044-1056`)
-  — pas globalement par `persoId`. Donc chaque `hide` volontaire d'un panneau (nouvel `eventSeq`
-  à chaque event) réémettrait ce warning, indéfiniment, pas juste une fois.
+**Point bloquant levé le 2026-06-29** — `move:"off"` (Phase 3 de
+`2026-06-28-unify-action-execution-and-move-off-plan.md`) livre le sentinel de détachement
+intentionnel manquant : `move: "off"` détache réellement le nœud du DOM (pas seulement la
+bookkeeping) sans émettre `AUTHOR_LAYOUT_OUTLET_NOT_FOUND`, distinct d'un `parentId` invalide par
+erreur d'auteur. Le volet seek (scrubbing rapide, coût de `loadPersos`) est résolu dans la même
+Phase 3 : un perso résolu non monté à la cible du seek n'est ni rafraîchi ni réinitialisé — voir
+`2026-06-29-track-event-insertion-cursor-defect.md` pour un défaut connexe découvert et corrigé
+pendant cette validation.
 
-Adopter ce pattern sur quiz-hunt aujourd'hui produirait donc un warning d'erreur d'auteur à
-chaque masquage volontaire d'un panneau. Avant de migrer le code : faut-il un vrai mécanisme de
-détachement intentionnel (ex. `move: { parentId: null }` traité comme détachement explicite et
-silencieux, distinct d'un `parentId` invalide), ou la pratique demandée doit-elle attendre cet
-ajout côté CodPlay ? Je n'ai pas tranché — point à discuter, pas encore de gap noté côté spec
-formelle (`v1-move-separation-policy-state-backend-dom.md` documente l'état actuel du
-détachement-par-cible-manquante mais pas de sentinel dédié).
-
-**Volet seek isolé séparément** : cette pratique ne pose pas de souci en lecture normale, mais sa
-compatibilité avec le `seek` (scrubbing rapide notamment) est un sujet à part, plus profond que
-le sentinel de détachement ci-dessus — formalisé dans
-`docs/formalisation/2026-06-26-mount-unmount-seek-intention.md` (intention + précédent direct
-`2026-06-25-image-node-per-src-plan.md`, questions ouvertes). Analyse de faisabilité à mener
-séparément, pas encore faite.
+Mécanisme validé sur une démo dédiée minimale (`?demo=move-off`), **pas encore reporté dans
+quiz-hunt** (panneaux trial/final) — `build-reading-quiz.ts`/`final-story.ts` n'ont pas été
+modifiés. Cet item reste ouvert jusqu'à cette migration.
 
 ---
 

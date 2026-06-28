@@ -193,6 +193,52 @@ export class TrackManager implements TrackManagerApi {
   }
 
   /**
+   * Returns the single earliest due event across all active tracks (or null
+   * when none is due), advancing only that one track's cursor by one
+   * position. Unlike `collectDueEvents` — which drains every due event from
+   * every track in one call, before any of them is actually processed —
+   * this lets a caller that processes events one at a time (seek replay)
+   * pick up an event materialized by an earlier event's own handler (e.g.
+   * an ActionSequence continuation step) in correct chronological order,
+   * instead of it being stuck behind an already-batched later event. See
+   * 2026-06-29-track-event-insertion-cursor-defect.md.
+   */
+  collectNextDueEvent(input: { nowMs: number }): TrackManagerStoryEvent | null {
+    let bestTrack: TrackBucket | null = null
+    let bestEvent: TrackManagerStoryEvent | null = null
+
+    for (const track of this.trackById.values()) {
+      if (!track.active || track.nextIndex >= track.events.length) {
+        continue
+      }
+
+      const candidate = track.events[track.nextIndex]
+      if (candidate.ms > input.nowMs) {
+        continue
+      }
+
+      if (bestEvent === null) {
+        bestTrack = track
+        bestEvent = candidate
+        continue
+      }
+
+      const [winner] = this.codec.sortCollectedTrackEvents([bestEvent, candidate], this.trackById.values())
+      if (winner === candidate) {
+        bestTrack = track
+        bestEvent = candidate
+      }
+    }
+
+    if (bestTrack === null || bestEvent === null) {
+      return null
+    }
+
+    bestTrack.nextIndex += 1
+    return bestEvent
+  }
+
+  /**
    * Returns all loaded events in deterministic order.
    */
   getAllEvents(options: { activeOnly?: boolean } = {}): TrackManagerStoryEvent[] {
@@ -254,14 +300,27 @@ export class TrackManager implements TrackManagerApi {
       }
     }
 
-    track.events.push(
-      ...events.map((event, index) => ({
-        ...event,
-        trackId,
-        index: Number.isFinite(event.index) ? event.index : this.generatedEventIndex + index
-      }))
-    )
-    this.codec.sortTrackEvents(track)
+    const normalizedNewEvents = events.map((event, index) => ({
+      ...event,
+      trackId,
+      index: Number.isFinite(event.index) ? event.index : this.generatedEventIndex + index
+    }))
+
+    // Freeze the already-collected prefix (events[0, nextIndex)) instead of
+    // re-sorting the whole array. A collectDueEvents call may have already
+    // returned some of these events as due — even though their handler
+    // hasn't run yet, since this very append can happen from inside an
+    // earlier due event's own handler (e.g. an ActionSequence materializing
+    // its next step). Re-sorting the full array would shift their indices
+    // and desynchronize `nextIndex`, silently skipping a newly appended
+    // event that sorts before the cursor, or returning an already-collected
+    // one a second time on the next collectDueEvents call. Only the
+    // not-yet-collected suffix is reordered with the new events merged in —
+    // see 2026-06-29-track-event-insertion-cursor-defect.md.
+    const consumed = track.events.slice(0, track.nextIndex)
+    const pending = track.events.slice(track.nextIndex)
+    track.events = [...consumed, ...this.codec.sortEventsForTrack(track, [...pending, ...normalizedNewEvents])]
+
     this.syncState()
     return {
       ok: true,

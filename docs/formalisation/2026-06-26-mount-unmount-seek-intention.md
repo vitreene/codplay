@@ -2,6 +2,10 @@
 
 ## Statut
 
+**Clos le 2026-06-29** — remplacé par `2026-06-28-unify-action-execution-and-move-off-plan.md`,
+dont la Phase 3 livre `move:"off"` et la résolution d'état monté au seek. Document conservé pour
+l'historique de l'intention initiale ; ne plus l'utiliser comme référence active.
+
 Intention formalisée — **pas une analyse de faisabilité**. L'analyse de faisabilité est un
 travail distinct, à mener ultérieurement à partir des questions ouvertes listées ici.
 

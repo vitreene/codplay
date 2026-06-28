@@ -12,6 +12,7 @@ import {
 } from './helper-finite-core'
 import { hasEventLoopStop, resolvePlannableLoopTimes } from './helper-loop-core'
 import { resolveStrapStepInput } from './helper-input'
+import { planGenericSequenceSteps } from './action-sequence'
 import { resolveHelperMode } from './helper-mode'
 import type { DeepReadonly, StoryEvent } from './helper-types'
 import type { PlayerEmitInput, PlayerStateListener, PlayerStateSnapshot } from './types'
@@ -851,6 +852,14 @@ export class Player implements PlayerApi {
       )
     }
 
+    const createPlannedSequence = (steps: Parameters<PlannedStrapHelpers['sequence']>[0]) => {
+      return toPlannedOccurrences(
+        planGenericSequenceSteps(
+          steps.map((entry) => ({ content: entry.step, durationMs: entry.durationMs, startAt: entry.startAt }))
+        ).map(({ offsetMs, content }) => ({ offsetMs, step: content }))
+      )
+    }
+
     const createPlannedStagger = (options: Parameters<PlannedStrapHelpers['stagger']>[0], input: Parameters<PlannedStrapHelpers['stagger']>[1]) => {
       if (!isValidHelperStaggerOptions(options)) {
         throw new Error('AUTHOR_HELPER_INVALID_ARG')
@@ -999,7 +1008,8 @@ export class Player implements PlayerApi {
         },
         repeat: createPlannedRepeat,
         loop: createPlannedLoop,
-        stagger: createPlannedStagger
+        stagger: createPlannedStagger,
+        sequence: createPlannedSequence
       },
       live: {
         wait: scheduleWait,

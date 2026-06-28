@@ -12,6 +12,7 @@ import type {
   StrictSceneDoc
 } from './types'
 import { resolveInputStandardActions } from '../runtime/components/input-component'
+import { buildActionSequenceContinuationEventName, isActionSequence } from './action-sequence'
 
 export type PlayerRuntimePlan = {
   runtimePersos: RuntimePersos
@@ -294,6 +295,20 @@ export class PlayerRuntimePlanner {
     const TWEEN_STOP_ACTION = 'tween:stop'
     if (!(TWEEN_STOP_ACTION in resolvedActions)) {
       (resolvedActions as Record<string, unknown>)[TWEEN_STOP_ACTION] = 'stop'
+    }
+
+    // Reserve one auto-reference continuation key per statically-declared
+    // ActionSequence (perso.actions[key] = ActionSequenceStep[]), so the
+    // sequence's steps after the first can be delivered later to this exact
+    // perso — the dispatch system has no per-perso targeting otherwise (see
+    // v1-action-sequence-spec.md).
+    for (const actionKey of Object.keys(resolvedActions)) {
+      if (isActionSequence(resolvedActions[actionKey])) {
+        const continuationEventName = buildActionSequenceContinuationEventName(perso.id, actionKey)
+        if (!(continuationEventName in resolvedActions)) {
+          (resolvedActions as Record<string, unknown>)[continuationEventName] = null
+        }
+      }
     }
 
     return {

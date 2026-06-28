@@ -29,6 +29,18 @@ export type PlannedStrapOccurrence = {
   step: StrapStep
 }
 
+/**
+ * Declares one heterogeneous step of the `sequence` chaining helper — each
+ * step carries its own `StrapStep` (so it can target a different perso or
+ * mix `event`/`update`) and its own duration for chaining. Distinct from
+ * `repeat`/`stagger`, which repeat one template at a uniform spacing.
+ */
+export type ActionSequenceStrapStep = {
+  step: StrapStep
+  durationMs?: number
+  startAt?: number
+}
+
 export type StrapRuntimeOutput = {
   events?: StoryEvent[]
   warnings?: string[]
@@ -47,6 +59,14 @@ export type PlannedStrapHelpers = {
     factory: StrapStepFactory
   ) => PlannedStrapOccurrence[]
   stagger: (options: StaggerOptions, input: StrapStepInput) => PlannedStrapOccurrence[]
+  /**
+   * Chains a fixed list of heterogeneous steps by each step's own duration —
+   * not a repetition of one template (see `repeat`/`stagger`). Each step can
+   * target a different perso from one single trigger. No `context.live`
+   * counterpart in V1: a fixed sequence is fully resolvable in advance and
+   * does not need `live`'s event-driven/interruptible semantics.
+   */
+  sequence: (steps: ActionSequenceStrapStep[]) => PlannedStrapOccurrence[]
 }
 
 export type LiveStrapHelpers = {

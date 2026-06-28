@@ -30,6 +30,6 @@ export type DirectorApi = {
   stop: () => void
   destroy: () => void
   getSortedEvents: () => TimelineEvent[]
-  runTimelineEvent: (event: TimelineEvent) => DirectorEventResult
+  runTimelineEvent: (event: TimelineEvent, options?: { dryRun?: boolean }) => DirectorEventResult
   getState: () => DirectorStateSnapshot
 }

@@ -15,7 +15,9 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "avatar-poc-1", label: "Avatar 3D", href: "?demo=avatar-poc-1" },
   { id: "rive-coach", label: "Rive lip-sync", href: "?demo=rive-coach" },
   { id: "threejs-anime-grid", label: "animation 3D", href: "?demo=threejs-anime-grid" },
+  { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "?demo=mashup-rive-three-quiz" },
   { id: "chrono", label: "Chronomètre", href: "?demo=chrono" },
+  { id: "move-off", label: "Détachement DOM", href: "?demo=move-off" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
 ];
 

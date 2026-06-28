@@ -87,6 +87,12 @@ type PlannedStrapOccurrence = {
   step: StrapStep
 }
 
+type ActionSequenceStrapStep = {
+  step: StrapStep
+  durationMs?: number
+  startAt?: number
+}
+
 type HelperHandle = {
   id: string
   cancel: () => void
@@ -208,6 +214,10 @@ type PlannedStrapHelpers = {
     options: LoopOptions,
     input: StrapStepInput
   ) => PlannedStrapOccurrence[]
+
+  sequence: (
+    steps: ActionSequenceStrapStep[]
+  ) => PlannedStrapOccurrence[]
 }
 ```
 
@@ -266,6 +276,22 @@ type LiveStrapHelpers = {
 - doit obligatoirement avoir une condition de sortie
 - n'est jamais infini par construction
 
+### `sequence`
+
+- chaine une liste fixe d'etapes **heterogenes** — chacune avec sa propre duree et son propre
+  `StrapStep`, donc pouvant cibler un perso different par etape depuis un seul declenchement
+- distinct de `repeat`/`stagger` : ceux-ci repetent un seul template a une cadence uniforme ;
+  `sequence` chaine des etapes distinctes, sans cadence commune
+- chaque etape demarre ou la precedente s'est terminee (`offsetMs[n] = offsetMs[n-1] +
+  durationMs[n-1]`), sauf `startAt` explicite qui fixe un offset absolu
+- `durationMs` absent sur une etape vaut `0` (pas d'attente implicite — l'etape suivante demarre au
+  meme instant)
+- planned uniquement en V1 — pas de `context.live.sequence` : une sequence figee est entierement
+  resolvable a l'avance, elle n'a pas besoin de la semantique evenementielle/interruptible propre a
+  `context.live`
+- voir `v1-action-sequence-spec.md` pour le detail complet (primitive partagee avec la forme
+  niveau perso `ActionSequence`, limites, interactions connues)
+
 ## Spec `loop`
 
 ```ts
@@ -322,6 +348,7 @@ Deux modes existent.
 - `repeat`: `planned`
 - `stagger`: `planned`
 - `loop`: `jit`
+- `sequence`: `planned` uniquement (pas de variante `jit`/`context.live`)
 - les retours `Strap` peuvent contenir des tableaux imbriques de chunks `context.planned`
 - le runtime aplatit ces tableaux recursivement avant materialisation
 
@@ -483,6 +510,15 @@ context.live.loop(
     }
   })
 )
+```
+
+### `sequence` — coordination de deux persos depuis un seul declenchement
+
+```ts
+return context.planned.sequence([
+  { step: { event: { name: "panel", data: { content: "etape 1" } } }, durationMs: 300 },
+  { step: { event: { name: "panel-footer", data: { content: "etape 2" } } } }
+])
 ```
 
 ## Mode d'insertion des events emis par les straps (`eventInsertMode`)

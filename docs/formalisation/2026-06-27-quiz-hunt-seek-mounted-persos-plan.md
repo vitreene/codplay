@@ -2,8 +2,14 @@
 
 ## Statut
 
-**Non implémenté.** Document de cadrage pour discussion, suite à la mesure du 2026-06-27 (voir
-contexte). Ne pas implémenter avant d'avoir choisi une des deux options ci-dessous (ou une autre).
+**Clos le 2026-06-29** — la réduction de coût décrite ici est livrée par la Phase 3 de
+`2026-06-28-unify-action-execution-and-move-off-plan.md` : `loadPersos` accepte désormais un
+ensemble `mountedPersoIds` résolu avant tout travail (`resolveMountedPersoIdsAtSeek`), et n'écrit
+rien pour les persos résolus non montés à la cible du seek — measure de coût reprise dans
+`tests/v1/move-off-detach.spec.ts`. Reste à appliquer le même mécanisme dans `quiz-hunt`
+(panneaux trial/final) pour clôturer `PRATIQUES.md` item 3 — non fait à ce stade, démo dédiée
+`move-off` validée seule pour l'instant. Document conservé pour l'historique de la mesure
+initiale ; ne plus l'utiliser comme référence active pour l'implémentation.
 
 ## Constat mesuré
 

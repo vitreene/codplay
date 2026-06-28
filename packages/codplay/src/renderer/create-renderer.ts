@@ -1,6 +1,6 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
-import type { AnimationAdapter } from '../animation/types'
+import type { AnimationAdapter, AnimationResolvedAction, ContinuousAnimationEngine } from '../animation/types'
 import type { RenderMutationTraceEntry, RenderMutationResolver, RuntimeResolvedMutation } from '../runtime/render-mutation-resolver'
 import { passThroughRenderMutationResolver } from '../runtime/render-mutation-resolver'
 import { RuntimeComponentOrchestrator } from '../runtime/components'
@@ -43,6 +43,7 @@ const RENDERER_STATUS = {
  */
 export class RendererFacade implements RendererApi {
   private readonly animationAdapter: AnimationAdapter
+  private readonly continuousAnimationEngines: ContinuousAnimationEngine[]
   private readonly orchestrator: RuntimeComponentOrchestrator
   private readonly runtimeCreateElementOptions: CreateRendererOptions['createElementOptions']
 
@@ -113,6 +114,7 @@ export class RendererFacade implements RendererApi {
    */
   constructor(options: CreateRendererOptions = {}) {
     this.animationAdapter = options.animationAdapter ?? NOOP_ANIMATION_ADAPTER
+    this.continuousAnimationEngines = options.continuousAnimationEngines ?? []
     this.runtimeCreateElementOptions = {
       ...options.createElementOptions,
       emitRuntimeEvent: options.emitRuntimeEvent,
@@ -182,6 +184,55 @@ export class RendererFacade implements RendererApi {
     return eventSeqByEventId
   }
 
+  /**
+   * Resolves the triggering ms for a resolved action from ready commit metadata.
+   */
+  private buildEventMsMap(commits: RuntimeCommit[]): Map<string, number> {
+    const eventMsByEventId = new Map<string, number>()
+    for (const commit of commits) {
+      if (commit.causeEventId === undefined) {
+        continue
+      }
+
+      eventMsByEventId.set(commit.causeEventId, commit.applyAtMs)
+    }
+
+    return eventMsByEventId
+  }
+
+  /**
+   * Routes each animatable action to the first continuous animation engine
+   * that claims it (`TweenAction`, or any future engine registered the same
+   * way) — exactly once, right after this action's own `beforeUpdate`/
+   * component-resolution/`afterUpdate` cycle already ran identically to any
+   * other action. Actions claimed by an engine are removed from the list
+   * handed to the external animation library bridge.
+   */
+  private dispatchToContinuousAnimationEngines(
+    animatableActions: AnimationResolvedAction[],
+    eventMsByEventId: ReadonlyMap<string, number>
+  ): AnimationResolvedAction[] {
+    if (this.continuousAnimationEngines.length === 0) {
+      return animatableActions
+    }
+
+    const remaining: AnimationResolvedAction[] = []
+    for (const resolvedAction of animatableActions) {
+      const engine = this.continuousAnimationEngines.find((candidate) => candidate.claims(resolvedAction.action))
+      if (engine === undefined) {
+        remaining.push(resolvedAction)
+        continue
+      }
+
+      engine.trigger({
+        resolvedAction,
+        eventMs: eventMsByEventId.get(resolvedAction.eventId) ?? 0
+      })
+    }
+
+    return remaining
+  }
+
   readonly component: import('../runtime/components').ComponentRegistryApi = {
     register: (input) => {
       if (this.isInitialized()) {
@@ -235,12 +286,23 @@ export class RendererFacade implements RendererApi {
   }
 
   /**
+   * Resolves mounted state at one seek target from a proposed effective move
+   * per perso — see RuntimeComponentOrchestrator.resolveMountedStateAtSeek.
+   */
+  resolveMountedStateAtSeek(input: {
+    rootPersoIds: ReadonlySet<string>
+    effectiveMoveByPersoId: ReadonlyMap<string, import('../runtime/types').MoveCommand | null>
+  }): Map<string, boolean> {
+    return this.orchestrator.resolveMountedStateAtSeek(input)
+  }
+
+  /**
    * Loads one runtime perso graph and instantiates one runtime component per perso.
    */
   load(input: RendererLoadInput): RendererCommandResult {
     this.animationAdapter.stop()
     this.orchestrator.setCreateElementOptions(this.runtimeCreateElementOptions)
-    this.orchestrator.loadPersos(input.runtimePersos)
+    this.orchestrator.loadPersos(input.runtimePersos, input.mountedPersoIds)
     this.loadedRuntimeId = input.runtimePersos.id
     this.pendingCommits = []
     this.lastAppliedCommitSeq = 0
@@ -385,6 +447,7 @@ export class RendererFacade implements RendererApi {
     }
 
     const eventSeqByEventId = this.buildEventSeqMap(readyCommits)
+    const eventMsByEventId = this.buildEventMsMap(readyCommits)
     const resolvedActions = readyCommits.flatMap((commit) => commit.operations)
     const conflictResolution = this.resolveRenderMutations(resolvedActions)
 
@@ -396,7 +459,11 @@ export class RendererFacade implements RendererApi {
         }))
       )
 
-      const transitions = [...deriveSimpleTransitions(routed.animatableActions), ...routed.directTransitions]
+      const remainingAnimatableActions = this.dispatchToContinuousAnimationEngines(
+        routed.animatableActions,
+        eventMsByEventId
+      )
+      const transitions = [...deriveSimpleTransitions(remainingAnimatableActions), ...routed.directTransitions]
       const animation = runAnimationBatch(transitions, this.animationAdapter)
 
       return {

@@ -92,6 +92,7 @@ export class RuntimeComponentOrchestrator {
   private readonly mountedByPersoId = new Map<string, boolean>();
   private readonly renderMutationResolverByPersoId = new Map<string, RenderMutationResolver>();
   private readonly outletIdsByComponentId = new Map<string, string[]>();
+  private readonly componentIdByOutletId = new Map<string, string>();
   private readonly storyIdByPersoId = new Map<string, string>();
   private readonly storyEntriesByStoryId = new Map<string, string[]>();
   private readonly storyMoveByStoryId = new Map<string, unknown>();
@@ -397,8 +398,13 @@ export class RuntimeComponentOrchestrator {
 
   /**
    * Synchronizes one runtime perso graph without purging the existing registry.
+   * `mountedPersoIds`, when provided, restricts both the mount/refresh pass
+   * and the initial-move pass to story entries plus persos it lists — a
+   * perso resolved as not-mounted-at-targetMs (`resolveMountedStateAtSeek`)
+   * gets no write at all, not just a skipped refresh. See
+   * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
    */
-  loadPersos(runtimePersos: RuntimePersos): RuntimeElementMap {
+  loadPersos(runtimePersos: RuntimePersos, mountedPersoIds?: ReadonlySet<string>): RuntimeElementMap {
     this.installModules();
     this.storyEntriesByStoryId.clear();
     this.storyMoveByStoryId.clear();
@@ -420,6 +426,17 @@ export class RuntimeComponentOrchestrator {
     // unchanged nodes are never detached. See v1-seek-spec.md (appendice 2026-06-25).
 
     for (const perso of Object.values(runtimePersos.persos)) {
+      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
+      const isStoryEntry = storyEntries.includes(perso.id);
+      // Exempt only true roots (an entry with no custom move of its own) from
+      // the mountedPersoIds filter — an entry with its own move/outlet target
+      // is an ordinary perso for this purpose, same root condition as the
+      // initial-move loop below and resolveMountedPersoIdsAtSeek's rootPersoIds.
+      const isRootEntry = isStoryEntry && (perso.initial.move === undefined || isStoryHostMove(perso.initial.move));
+      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
+        continue;
+      }
+
       const existingComponent = this.componentByPersoId.get(perso.id);
       if (existingComponent) {
         this.refreshLoadedRuntimeComponent(perso, existingComponent);
@@ -447,6 +464,11 @@ export class RuntimeComponentOrchestrator {
     for (const perso of Object.values(runtimePersos.persos)) {
       const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
       const isStoryEntry = storyEntries.includes(perso.id);
+      const isRootEntry = isStoryEntry && (perso.initial.move === undefined || isStoryHostMove(perso.initial.move));
+      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
+        continue;
+      }
+
       const rawInitialMove = perso.initial.move;
 
       if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
@@ -540,6 +562,7 @@ export class RuntimeComponentOrchestrator {
     this.mountedByPersoId.clear();
     this.renderMutationResolverByPersoId.clear();
     this.outletIdsByComponentId.clear();
+    this.componentIdByOutletId.clear();
     this.storyIdByPersoId.clear();
     this.storyEntriesByStoryId.clear();
     this.storyMoveByStoryId.clear();
@@ -559,7 +582,7 @@ export class RuntimeComponentOrchestrator {
 
     for (const [updateIndex, update] of updates.entries()) {
       if (
-        this.routeResolvedUpdate({
+        this.triggerResolvedAction({
           update,
           moveDecision: moveDecisionsByUpdateIndex.get(updateIndex),
           animatableActions,
@@ -578,9 +601,17 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Routes one resolved update to a runtime component and collect outputs.
+   * Single trigger point for one resolved action, regardless of which engine
+   * (if any) will later take over a continuous evaluation of it. Resolves the
+   * target component, runs `beforeUpdate`/`afterUpdate`, applies the action
+   * once via `tryUpdateComponent`, and collects it into `animatableActions`
+   * for the renderer to offer to continuous animation engines (see
+   * `RendererFacade.tick()` / `ContinuousAnimationEngine`). This is the only
+   * place `RUNTIME_COMPONENT_NODE_NOT_FOUND` is raised, so every action —
+   * static or claimed later by an engine — gets the same target-resolution
+   * guarantee.
    */
-  private routeResolvedUpdate(input: {
+  private triggerResolvedAction(input: {
     update: RuntimeResolvedUpdate;
     moveDecision: MoveCommand | null | undefined;
     animatableActions: AnimationResolvedAction[];
@@ -760,6 +791,7 @@ export class RuntimeComponentOrchestrator {
       if (this.nodeByPersoId.get(outletId) !== undefined) {
         this.nodeByPersoId.delete(outletId);
       }
+      this.componentIdByOutletId.delete(outletId);
     }
 
     this.outletIdsByComponentId.delete(componentId);
@@ -790,6 +822,7 @@ export class RuntimeComponentOrchestrator {
       }
 
       this.nodeByPersoId.set(outletId, outlet.nodeRef);
+      this.componentIdByOutletId.set(outletId, componentId);
       registeredOutletIds.push(outletId);
     }
 
@@ -894,6 +927,93 @@ export class RuntimeComponentOrchestrator {
       }
       this.appendNodeToParent(targetNode, hostNode);
     }
+  }
+
+  /**
+   * Resolves, for every perso with a known effective move at one seek
+   * target, whether it would be mounted — walking the proposed parent chain
+   * top-down via already-registered graph relationships only
+   * (`componentIdByOutletId`, and any other perso recognized by
+   * `effectiveMoveByPersoId` itself for a list or direct-node target), never
+   * the DOM nor the track. A perso whose chain reaches the detach sentinel,
+   * an unresolved target, or a cycle before reaching a root is not mounted —
+   * its whole subtree is short-circuited without consulting any
+   * descendant's own history. See
+   * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+   */
+  resolveMountedStateAtSeek(input: {
+    rootPersoIds: ReadonlySet<string>;
+    effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>;
+  }): Map<string, boolean> {
+    const resolved = new Map<string, boolean>();
+    for (const persoId of input.effectiveMoveByPersoId.keys()) {
+      this.resolveOneMountedStateAtSeek(persoId, input, resolved, new Set());
+    }
+    return resolved;
+  }
+
+  /**
+   * Resolves one perso's mounted state at seek, memoized, with cycle
+   * detection (a cyclic parent chain is treated as not mounted rather than
+   * recursed forever).
+   */
+  private resolveOneMountedStateAtSeek(
+    persoId: string,
+    input: {
+      rootPersoIds: ReadonlySet<string>;
+      effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>;
+    },
+    resolved: Map<string, boolean>,
+    visiting: Set<string>,
+  ): boolean {
+    const cached = resolved.get(persoId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (visiting.has(persoId)) {
+      resolved.set(persoId, false);
+      return false;
+    }
+
+    const move = input.effectiveMoveByPersoId.get(persoId) ?? null;
+
+    if (move === null) {
+      // A root entry with no move of its own is mounted under its story
+      // host. Any other perso with no move at all (no static `initial.move`,
+      // no track move) was never placed anywhere: not mounted.
+      const mounted = input.rootPersoIds.has(persoId);
+      resolved.set(persoId, mounted);
+      return mounted;
+    }
+
+    if (move.parentId === RUNTIME_CONFIG.move.detachToken) {
+      resolved.set(persoId, false);
+      return false;
+    }
+
+    if (move.parentId === RUNTIME_CONFIG.move.rootToken) {
+      resolved.set(persoId, true);
+      return true;
+    }
+
+    visiting.add(persoId);
+    let parentMounted: boolean;
+    if (input.effectiveMoveByPersoId.has(move.parentId)) {
+      // The target is itself a known perso (a list, or any other component
+      // targeted directly) — resolve its own mounted state the same way.
+      parentMounted = this.resolveOneMountedStateAtSeek(move.parentId, input, resolved, visiting);
+    } else {
+      const owningComponentId = this.componentIdByOutletId.get(move.parentId);
+      parentMounted =
+        owningComponentId !== undefined
+          ? this.resolveOneMountedStateAtSeek(owningComponentId, input, resolved, visiting)
+          : false;
+    }
+    visiting.delete(persoId);
+
+    resolved.set(persoId, parentMounted);
+    return parentMounted;
   }
 
   /**

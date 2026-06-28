@@ -5,7 +5,7 @@ import { quizQuestionStoryStraps } from "./quiz-question-scene"
 
 // --- Configuration ---
 
-const SERIES_TOTAL = 3
+export const SERIES_TOTAL = 3
 const SERIES_THRESHOLD = 2
 
 const SERIES_LABELS = {
@@ -98,9 +98,32 @@ function createSeriesContainerStory(): SceneStoryDoc {
 
 // --- Progress story ---
 
-function createSeriesProgressStory(): SceneStoryDoc {
+type SeriesProgressStoryOptions = {
+  storyId?: string
+  parentId?: string
+  showTrack?: boolean
+  showRate?: boolean
+  layoutClassName?: string
+  countClassName?: string
+  fillClassName?: string
+  rateClassName?: string
+  background?: string
+  padding?: string
+  borderRadius?: string
+  countStyle?: Record<string, unknown>
+  rateStyle?: Record<string, unknown>
+}
+
+export function createSeriesProgressStory(options: SeriesProgressStoryOptions = {}): SceneStoryDoc {
+  const storyId = options.storyId ?? "quiz-series-progress-story"
+  const parentId = options.parentId ?? "quiz-series:progress"
+  const showTrack = options.showTrack !== false
+  const showRate = options.showRate !== false
+  const background = options.background ?? "rgba(15,23,42,0.06)"
+  const padding = options.padding ?? "8px 12px"
+  const borderRadius = options.borderRadius ?? "8px"
   return {
-    id: "quiz-series-progress-story",
+    id: storyId,
     entries: ["quiz-series-progress-layout"],
     initial: undefined,
     straps: undefined,
@@ -110,15 +133,16 @@ function createSeriesProgressStory(): SceneStoryDoc {
         id: "quiz-series-progress-layout",
         type: "layout",
         initial: {
+          className: options.layoutClassName,
           markup: `
-            <div class="quiz-series-progress" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(15,23,42,0.06); border-radius: 8px;">
+            <div class="quiz-series-progress" style="display: flex; align-items: center; gap: 10px; padding: ${padding}; background: ${background}; border-radius: ${borderRadius};">
               <span data-part="quiz-series:progress-count"></span>
-              <div data-part="quiz-series:progress-track" style="flex: 1; height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden;"></div>
-              <span data-part="quiz-series:progress-rate"></span>
+              ${showTrack ? '<div data-part="quiz-series:progress-track" style="flex: 1; height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden;"></div>' : ''}
+              ${showRate ? '<span data-part="quiz-series:progress-rate"></span>' : ''}
             </div>
           `,
           style: {},
-          move: { parentId: "quiz-series:progress" }
+          move: { parentId }
         } as unknown as PersoDoc["initial"],
         actions: {}
       },
@@ -126,17 +150,19 @@ function createSeriesProgressStory(): SceneStoryDoc {
         id: "quiz-series-progress-count",
         type: "tag",
         initial: {
+          className: options.countClassName,
           tag: "span",
           content: `0 / ${SERIES_TOTAL}`,
-          style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px" },
+          style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px", ...(options.countStyle ?? {}) },
           move: { parentId: "quiz-series:progress-count" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:count": {} }
       },
-      {
+      ...(showTrack ? [{
         id: "quiz-series-progress-fill",
         type: "tag",
         initial: {
+          className: options.fillClassName,
           tag: "div",
           content: "",
           style: {
@@ -149,18 +175,19 @@ function createSeriesProgressStory(): SceneStoryDoc {
           move: { parentId: "quiz-series:progress-track" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:fill": {} }
-      },
-      {
+      }] : []),
+      ...(showRate ? [{
         id: "quiz-series-progress-rate",
         type: "tag",
         initial: {
+          className: options.rateClassName,
           tag: "span",
           content: "—",
-          style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right" },
+          style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right", ...(options.rateStyle ?? {}) },
           move: { parentId: "quiz-series:progress-rate" }
         } as unknown as PersoDoc["initial"],
         actions: { "quiz:series:progress:rate": {} }
-      }
+      }] : [])
     ]
   }
 }

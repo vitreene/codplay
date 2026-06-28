@@ -94,3 +94,27 @@ export type AnimationBatchResult = {
   appliedCount: number
   trace: AnimationTraceEntry[]
 }
+
+/**
+ * Input passed to a continuous animation engine when it claims one resolved
+ * action at the single trigger point (after `beforeUpdate`/`afterUpdate` and
+ * component resolution have already run for it like any other action).
+ */
+export type ContinuousAnimationEngineTriggerInput = {
+  resolvedAction: AnimationResolvedAction
+  eventMs: number
+}
+
+/**
+ * Declares one engine able to claim and drive a resolved action whose value
+ * evolves continuously over time from a single trigger, instead of being
+ * applied once as a static value. `TweenAction` (a pure `fn`-driven engine)
+ * and the external animation library bridge are two sibling implementations
+ * of this same role — this contract lets either be added, combined, or
+ * replaced without touching the single dispatch point that calls `claims`.
+ */
+export type ContinuousAnimationEngine = {
+  name: string
+  claims(action: unknown): boolean
+  trigger(input: ContinuousAnimationEngineTriggerInput): void
+}

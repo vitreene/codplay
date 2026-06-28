@@ -1,0 +1,112 @@
+.mashup-stage {
+  width: min(100%, 60em);
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  border-radius: 1.75em;
+  background: #0f172a;
+  box-shadow: 0 2.25em 6.25em rgba(15, 23, 42, 0.35);
+}
+
+.mashup-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.5em;
+  padding: 2em;
+  pointer-events: none;
+}
+
+.mashup-quiz-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  gap: 1em;
+  pointer-events: auto;
+}
+
+.mashup-quiz-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4em;
+  min-height: 2.4em;
+  color: #f8fafc;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  border: 1px solid rgba(248, 250, 252, 0.24);
+  border-radius: 0.6em;
+  background: transparent;
+  box-shadow: 0 0.75em 2em rgba(15, 23, 42, 0.22);
+  text-shadow: 0 0.375em 1.25em rgba(15, 23, 42, 0.55);
+}
+
+.mashup-quiz-panel {
+  width: min(100%, 24em);
+  border: none !important;
+  border-radius: 1.25em !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.mashup-quiz-panel .quiz-question-fieldset {
+  background: transparent;
+}
+
+.mashup-quiz-panel .input,
+.mashup-quiz-panel .input__label,
+.mashup-quiz-panel .input__hint,
+.mashup-quiz-panel .input__selection-icon,
+.mashup-quiz-panel .input__correction-icon {
+  background: transparent;
+}
+
+.mashup-quiz-button {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+}
+
+.mashup-aside-slot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 21.25em;
+  width: 21.25em;
+  height: 21.25em;
+}
+
+.mashup-rive-stage {
+  width: 100%;
+  height: 100%;
+  border-radius: 1.5em;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(0.625em);
+  box-shadow: 0 1.125em 3.75em rgba(15, 23, 42, 0.35);
+}
+
+@media (max-width: 48em) {
+  .mashup-overlay {
+    grid-template-columns: 1fr;
+    align-content: space-between;
+    justify-items: center;
+    padding: 1.25em;
+  }
+
+  .mashup-quiz-slot {
+    order: 2;
+    justify-content: center;
+  }
+
+  .mashup-aside-slot {
+    order: 1;
+    justify-content: center;
+    flex-basis: 15em;
+    width: 15em;
+    height: 15em;
+  }
+}

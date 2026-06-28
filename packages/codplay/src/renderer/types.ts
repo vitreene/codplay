@@ -1,7 +1,7 @@
-import type { AnimationAdapter, AnimationResolvedAction } from '../animation/types'
+import type { AnimationAdapter, AnimationResolvedAction, ContinuousAnimationEngine } from '../animation/types'
 import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
-import type { RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
+import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
 export type { ComponentRegistryApi, ModuleRegistryApi, ServiceRegistryApi }
 
 /**
@@ -10,6 +10,7 @@ export type { ComponentRegistryApi, ModuleRegistryApi, ServiceRegistryApi }
 export type CreateRendererOptions = {
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
+  continuousAnimationEngines?: ContinuousAnimationEngine[]
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
 }
@@ -98,6 +99,13 @@ export type RendererErrorListener = (error: RendererError) => void
  */
 export type RendererLoadInput = {
   runtimePersos: RuntimePersos
+  /**
+   * Restricts the load to story entries plus persos listed here. Omit for a
+   * full load (initial mount). Used at seek once mounted state at the seek
+   * target has been resolved — see
+   * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
+   */
+  mountedPersoIds?: ReadonlySet<string>
 }
 
 /**
@@ -108,6 +116,10 @@ export type RendererApi = {
   service: ServiceRegistryApi
   module: ModuleRegistryApi
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
+  resolveMountedStateAtSeek: (input: {
+    rootPersoIds: ReadonlySet<string>
+    effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>
+  }) => Map<string, boolean>
   load: (input: RendererLoadInput) => RendererCommandResult
   start: () => RendererCommandResult
   pause: () => RendererCommandResult
