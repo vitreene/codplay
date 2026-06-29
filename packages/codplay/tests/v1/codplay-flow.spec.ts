@@ -9,7 +9,7 @@ function createPersoFixture() {
     id: 'title',
     name: 'title',
     type: 'tag',
-    initial: { content: 'hello' },
+    initial: { content: 'hello', move: '@root' },
     actions: {}
   }
 }
@@ -19,7 +19,6 @@ function createStoryFixture() {
   return {
     id: 'story-main',
     name: 'main',
-    entries: [perso.id],
     initial: undefined,
     persos: [perso],
     straps: undefined,

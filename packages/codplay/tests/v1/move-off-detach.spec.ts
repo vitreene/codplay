@@ -7,7 +7,7 @@ import type { SceneDoc } from '../../src/player/types'
 
 /**
  * Layout with one outlet, and a content perso attached to it, detached via
- * `move:"off"` then reattached — the minimal shape exercised by Phase 3 of
+ * `move:"@off"` then reattached — the minimal shape exercised by Phase 3 of
  * 2026-06-28-unify-action-execution-and-move-off-plan.md.
  */
 function createMoveOffSceneFixture(): SceneDoc {
@@ -64,7 +64,7 @@ function createMoveOffSceneFixture(): SceneDoc {
 
 /**
  * Same shape as `createMoveOffSceneFixture`, but `detach` is a perso-level
- * `ActionSequence` chaining a TweenAction fade into `move:"off"` — the exact
+ * `ActionSequence` chaining a TweenAction fade into `move:"@off"` — the exact
  * shape used by the dedicated move-off demo. Exercises the seek mounted-state
  * pre-pass's ability to decompose a sequence it has never replayed before.
  */
@@ -123,7 +123,7 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
   } as unknown as SceneDoc
 }
 
-describe('V1 - move:"off" explicit DOM detachment', () => {
+describe('V1 - move:"@off" explicit DOM detachment', () => {
   it('detaches the node physically (not just bookkeeping) and emits no missing-outlet warning', async () => {
     const player = new PlayerFacade()
     const warnings: string[] = []
@@ -216,7 +216,7 @@ describe('V1 - move:"off" explicit DOM detachment', () => {
     expect(initSpy).not.toHaveBeenCalled()
   })
 
-  it('resolves a sequence-chained move:"off" correctly on the very first seek that crosses it (cold, never replayed before)', async () => {
+  it('resolves a sequence-chained move:"@off" correctly on the very first seek that crosses it (cold, never replayed before)', async () => {
     const player = new PlayerFacade()
     expect(await player.init(createMoveOffSequenceSceneFixture())).toEqual({ ok: true })
     expect(await player.play()).toEqual({ ok: true })
@@ -225,7 +225,7 @@ describe('V1 - move:"off" explicit DOM detachment', () => {
     const initSpy = vi.spyOn(panelComponent, '_init')
 
     // A cold seek straight into the detached window: the `detach` ActionSequence
-    // has never been replayed before, so its move:"off" continuation step has
+    // has never been replayed before, so its move:"@off" continuation step has
     // never been materialized into the track. The mounted-state pre-pass must
     // still resolve "not mounted" by decomposing the sequence itself — not by
     // relying on a continuation event that doesn't exist yet.
@@ -243,7 +243,7 @@ describe('V1 - move:"off" explicit DOM detachment', () => {
 
     // Single seek straight to ms1500: `detach` (ms500) and `attach` (ms1500) are
     // BOTH due in the SAME collectDueEvents batch, collected before either one's
-    // handler runs. `detach`'s ActionSequence materializes its move:"off"
+    // handler runs. `detach`'s ActionSequence materializes its move:"@off"
     // continuation step (due at ms700) into the track from inside its own
     // handler — chronologically BEFORE `attach`, which is already queued in
     // this same batch. The continuation step must still be picked up (not

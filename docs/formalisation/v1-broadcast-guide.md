@@ -51,7 +51,6 @@ export const myQuizScene: SceneDef = {
   stories: {
     'container-story': {
       id: 'container-story',
-      entries: ['quiz-container'],           // perso racine — sera dans rootNodeIds
       initial: undefined,
       straps: ['onSceneReady'],
       listen: [],
@@ -60,7 +59,7 @@ export const myQuizScene: SceneDef = {
           id: 'quiz-container',
           type: 'layout',
           initial: {
-            // Pas de move → perso racine, sera dans rootNodeIds
+            move: '@root',                  // racine permanente → sera dans rootNodeIds
             style: { position: 'relative', width: '100%' }
           },
           actions: {}

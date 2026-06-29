@@ -157,11 +157,6 @@ export type StoryDef = {
   trackId?: string
   /** Configuration des pistes locales à la story. */
   tracks?: Record<string, unknown>
-  /**
-   * Ordre d'affichage des persos dans la story (tableau de persoIds).
-   * Contrôle le rendu et l'ordre du DOM.
-   */
-  entries: string[]
   /** State initial de la story (écrase `scene.initial` dans son scope). */
   initial?: Record<string, unknown>
   /** Liste des persos appartenant à cette story. */
@@ -294,6 +289,8 @@ export type LayoutFormat = 'html' | 'svg'
  * Valeur de déplacement acceptée dans `initial.move` ou `action.move`.
  * Formes possibles :
  * - string : parentId cible (mode 'auto' implicite)
+ * - string préfixée `@` : alias symbolique réservé (`@root` = story host, `@off` = détachement
+ *   intentionnel) — le préfixe distingue sans ambiguïté un token réservé d'un identifiant auteur
  * - MoveCommand : commande complète avec mode, flip, reorder
  */
 export type MoveValue =

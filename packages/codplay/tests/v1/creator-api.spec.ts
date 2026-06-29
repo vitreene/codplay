@@ -8,7 +8,7 @@ function createPersoFixture(): Perso {
     id: 'title',
     name: 'title',
     type: 'tag',
-    initial: { content: 'hello' },
+    initial: { content: 'hello', move: '@root' },
     actions: {}
   }
 }
@@ -18,7 +18,6 @@ function createStoryFixture(): StoryDef {
   return {
     id: 'story-main',
     name: 'main',
-    entries: [perso.id],
     initial: undefined,
     persos: [perso],
     straps: undefined,
@@ -52,11 +51,11 @@ describe('Creator API V1', () => {
     expect(exportResult.data.stories['story-intro']).toMatchObject({
       id: 'story-intro',
       name: 'intro',
-      entries: ['story-intro__title'],
       persos: [{
         id: 'story-intro__title',
         name: 'title',
         type: 'tag',
+        initial: { move: '@root' },
         actions: { 'story-intro__title': null }
       }]
     })
@@ -84,8 +83,7 @@ describe('Creator API V1', () => {
         'story-main': {
           id: 'story-main',
           name: 'main',
-          entries: ['title'],
-          persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello' }, actions: {} }]
+          persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello', move: '@root' }, actions: {} }]
         }
       }
     })

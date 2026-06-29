@@ -1035,7 +1035,7 @@ export class PlayerFacade implements PlayerApi {
         // A perso-level ActionSequence is never materialized into the track
         // until the real replay first decomposes it — on a cold scan (this
         // event has never been replayed before), its continuation steps
-        // (which is typically where a chained move:"off" lives) would
+        // (which is typically where a chained move:"@off" lives) would
         // otherwise be invisible here. Decompose it the same way the real
         // replay does (same shared primitive) instead of waiting for it to
         // exist in the track. See

@@ -126,7 +126,7 @@ Note de contexte:
 - a `scene.init`, toutes les stories de la scene sont initialisees.
 - une story initialisee peut exister dans le runtime sans etre presente dans le DOM.
 - une story initialisee peut recevoir des events meme si elle n'est pas encore visible dans le DOM.
-- le runtime peut conserver pour chaque story l'ordre de ses `entries` afin de monter l'instance dans son `story host`.
+- le runtime peut conserver pour chaque story l'ordre des persos portant `move: '@root'` afin de monter l'instance dans son `story host` (`v1-perso-spec.md` 4bis, remplace l'ancien `Story.entries`, retire).
 - `story.initial.move` peut positionner le `story host` de l'instance dans un outlet autorise.
 - si un event est emis avant qu'une story, un perso ou un placement ne soit pret pour le traitement attendu, cet event peut etre perdu.
 - les elements peuvent entrer dans le DOM ou en sortir pendant la sequence.

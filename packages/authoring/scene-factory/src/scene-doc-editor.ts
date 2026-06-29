@@ -45,7 +45,6 @@ export class SceneDocEditor {
         id: identity.storyId,
         name: identity.storyName,
         tracks: undefined,
-        entries: [],
         initial: undefined,
         persos: [],
         straps: undefined,
@@ -77,11 +76,10 @@ export class SceneDocEditor {
           id: identity.persoId,
           name: identity.persoName,
           type: input.type,
-          initial: undefined,
+          initial: { move: '@root' },
           actions: { [identity.persoId]: null }
         }
       ]
-      nextStory.entries = [...nextStory.entries, identity.persoId]
       scene.stories[input.storyId] = nextStory
 
       return { ok: true, data: identity }
@@ -146,11 +144,13 @@ export class SceneDocEditor {
     return this.withStory(input.storyId, (story) => {
       const nextStory = this.cloneStory(story)
       const nextPersos = nextStory.persos.filter((p) => p.id !== input.perso.id)
-      nextPersos.push(this.clonePerso(input.perso))
-      nextStory.persos = nextPersos
-      if (!nextStory.entries.includes(input.perso.id)) {
-        nextStory.entries = [...nextStory.entries, input.perso.id]
+      const clonedPerso = this.clonePerso(input.perso)
+      const hasMove = (clonedPerso.initial as Record<string, unknown> | undefined)?.move !== undefined
+      if (!hasMove) {
+        clonedPerso.initial = { ...(clonedPerso.initial as Record<string, unknown> | undefined), move: '@root' }
       }
+      nextPersos.push(clonedPerso)
+      nextStory.persos = nextPersos
       return nextStory
     })
   }
@@ -159,7 +159,6 @@ export class SceneDocEditor {
     return this.withStory(input.storyId, (story) => {
       const nextStory = this.cloneStory(story)
       nextStory.persos = nextStory.persos.filter((p) => p.id !== input.persoId)
-      nextStory.entries = nextStory.entries.filter((id) => id !== input.persoId)
       return nextStory
     })
   }
@@ -175,13 +174,6 @@ export class SceneDocEditor {
     return this.withStory(input.storyId, (story) => ({
       ...this.cloneStory(story),
       straps: input.straps
-    }))
-  }
-
-  setStoryEntries(input: { storyId: string; entries: string[] }): ApiResult<void> {
-    return this.withStory(input.storyId, (story) => ({
-      ...this.cloneStory(story),
-      entries: this.cloneData(input.entries)
     }))
   }
 
@@ -260,7 +252,6 @@ export class SceneDocEditor {
       id: story.id,
       name: story.name ?? story.id,
       tracks: this.cloneData(story.tracks),
-      entries: this.cloneData(story.entries),
       initial: this.cloneData(story.initial),
       persos: story.persos.map((p) => this.clonePerso(p)),
       straps: story.straps,

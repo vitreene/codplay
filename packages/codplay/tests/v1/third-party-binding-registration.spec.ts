@@ -65,9 +65,8 @@ describe('CreatePlayerOptions.bindings — preload strategy registration (Player
       story: {
         id: 'story-main',
         name: 'main',
-        entries: ['title'],
         initial: undefined,
-        persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello' }, actions: {} }],
+        persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello', move: '@root' }, actions: {} }],
         straps: undefined,
         listen: [],
         init: () => undefined,

@@ -55,7 +55,7 @@ toute première épreuve (miroir exact de la condition `start`/`pause` de
 `game-router`), soit conserver le `HelperHandle` retourné par `context.live.loop`
 dans l'état et le `cancel()` avant tout nouveau `startTick`.
 
-> Voir `PRATIQUES.md` n°1 : la cause racine est le choix de `context.live.loop`
+> Voir `docs/formalisation/pratiques.md` n°1 : la cause racine est le choix de `context.live.loop`
 > pour porter une valeur continue. En remplaçant `startTick` par une
 > `TweenAction` (pattern `chrono-story.ts`), ce bug disparaît de lui-même —
 > `tween:stop` interrompt atomiquement tous les tweens actifs, sans handle à
@@ -207,3 +207,63 @@ le symptôme pour ce point d'entrée précis ; un plan séparé doit traiter la 
 Audit interrompu avant de couvrir : flux final/résultat (`game-final-route.ts`,
 `game-result.ts`), déterminisme de la graine (`seed.ts`/`deriveGameDraw`), cas
 limites du panier. À reprendre si besoin.
+
+---
+
+## Application des bonnes pratiques générales (`docs/formalisation/pratiques.md`)
+
+Statut d'application sur quiz-hunt des recommandations générales du projet — pas des bugs en
+soi, mais le suivi spécifique à cette démo de ces items.
+
+**Item 1 (`context.live.loop` haute fréquence)** — appliqué (2026-06-26) :
+`straps/game-timer.ts` : `context.live.loop` remplacé par une `TweenAction` (jauge + libellé)
+plus un minuteur d'expiration ponctuel toujours annulé avant tout nouveau départ. A nécessité un
+petit ajout côté CodPlay (`StrapMeta.ms`). A réglé le bug n°1 ci-dessus comme effet de bord.
+Détail : `docs/formalisation/2026-06-26-quiz-hunt-timer-tween-fix-plan.md`.
+
+**Item 2 (styles inline / `position:absolute` / responsive)** — appliqué : feuille
+`quiz-hunt.css` co-localisée ajoutée, blocs `style:` statiques migrés vers des classes,
+`position:absolute` retiré des panneaux trial/final (sauf `game-result-overlay` et
+`game-extra-token`, deux cas légitimes de superposition), breakpoint ajouté pour le footer
+(basket/timer empilés en colonne sous `640px`), grille fixée en 4x4
+(`repeat(4, minmax(0, 1fr))`) pour les tuiles.
+
+Constaté avant correction dans les 9 fichiers `stories/*.ts` de quiz-hunt (`layout-story.ts`,
+`grid-story.ts`, `basket-story.ts`, `timer-story.ts`, `extra-story.ts`, `result-story.ts`,
+`final-story.ts`, `build-reading-quiz.ts`, `answer-persos.ts`) : classes posées dans le markup
+(`quiz-hunt-layout`, `quiz-hunt-footer`…) sans aucune règle CSS correspondante, mise en forme
+entièrement portée par `style:` inline répété perso par perso, `position:absolute; inset:0` sur
+les 32 panneaux trial+final alors qu'un seul est visible à la fois, aucune `@media`/`clamp()`
+nulle part (grille à 4 colonnes fixes, timer à largeur fixe, footer toujours en ligne).
+
+**Item 3 (montage statique + `display` au lieu d'attacher/détacher)** — implémenté le
+2026-06-29 pour `build-reading-quiz.ts`/`final-story.ts` (32 panneaux trial + 32 panneaux final).
+`result-story.ts`/`extra-story.ts` intentionnellement laissés tels quels : un seul perso chacun,
+négligeable pour le coût de `loadPersos`. Détail des défauts rencontrés et corrigés pendant cette
+mise en œuvre (pour mémoire technique) : `2026-06-29-strap-emit-syncCursor-drift-defect.md`.
+
+Constaté avant correction : tous les panneaux trial/final montés à `game:zone:main` dès
+`initial.move`, visibilité pilotée ensuite par `style.display` (`'none'`/`'block'`) sur les
+events `:show`/`:hide`. Validé sur une démo dédiée minimale (`?demo=move-off`) avant ce report
+dans quiz-hunt.
+
+**Item 4 (`capsule-automation`)** — non appliqué, piste évaluée au cas par cas : quiz-hunt
+n'utilise rien de `capsule-automation` et recode à la main la grille/classes (item 2) et les
+transitions de révélation (item 3). Si la duplication des blocs `style:` (item 2) est jugée
+gênante à l'avenir, un `AutoCapsule` (ou directement ses fonctions `core/`) pourrait factoriser
+la grille des 16 tuiles et un jeu de transitions nommées partagé par les panneaux
+`game:zone:main` — déclenchement (`show`/`hide`) restant porté par les straps scène
+(`game-router`, `game-trial-resolve`) comme aujourd'hui, seul le payload d'action viendrait
+d'`AutoCapsule` au lieu d'un objet `style:` écrit à la main par panneau.
+
+**Item 5 (story d'abord, scène en cumul)** — déjà bien posé, référence positive (pas un défaut à
+corriger) :
+- `straps/game-trial-resolve.ts` et `straps/game-result.ts` (scène) cumulent un état qui n'existe
+  qu'au niveau scène — `trialStatus` (16 épreuves), `basket` (4 couleurs), temps restant —
+  qu'aucune trial-story individuelle ne pourrait porter seule.
+- `quizQuestionStoryStraps` (embarqué via `straps: quizQuestionStoryStraps` dans chaque
+  `game-trial-{id}-story` et `game-final-{wordId}-story`) résout *une* question — sélection,
+  validation, correction — sur de l'état strictement local à cette story (`selectedAnswerIds`,
+  `resolved`, `retryCount`). Aucune raison d'en faire un strap scène.
+- Cohérent avec la contrainte de routage déjà tracée dans
+  `docs/formalisation/2026-06-19-quiz-hunt-plan.md` §"Correction d'architecture".

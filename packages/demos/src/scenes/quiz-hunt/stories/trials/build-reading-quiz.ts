@@ -49,7 +49,7 @@ export function createReadingQuizTrial(
       },
       // Attached on demand on `:show`, detached for real on `:hide` once
       // the fade-out (CSS opacity transition, quiz-hunt.css) has had time
-      // to play — see PRATIQUES.md item 3. ActionSequence (the
+      // to play — see docs/formalisation/pratiques.md item 3. ActionSequence (the
       // `[{action,durationMs?}, ...]` chaining shape) is a valid runtime
       // action value not yet reflected in the static `ActionDoc` type —
       // cast needed, mirrors move-off-story.ts.

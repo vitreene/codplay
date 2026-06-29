@@ -72,7 +72,6 @@ type AuthoringApi = {
 
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
   setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
-  setStoryEntries: (input: { storyId: string; entries: string[] }) => ApiResult<void>
 
   exportSceneDoc: () => ApiResult<SceneDef>
 }
@@ -92,7 +91,7 @@ type AuthoringApi = {
 - apres `scene.init`, la structure des tracks est figee.
 - `rootStories` est obligatoire et non vide en mode diffusion.
 - `rootStories` reste defini explicitement au niveau scene.
-- `entries` est obligatoire dans chaque `Story` et peut valoir `[]`.
+- `createPerso` et `upsertPerso` posent `move: '@root'` par defaut sur `perso.initial` quand l'appelant ne fournit aucun `move` (`v1-perso-spec.md` 4bis) — remplace l'ancien comportement par defaut via `Story.entries` (retire).
 - `listen.on` doit etre unique dans une story et dans la scene.
 - `listen.transform` peut contenir plusieurs etapes, executees dans l'ordre.
 - `createStory` peut appliquer un schema de nommage generique pour les stories instanciees (ex: `name + discriminant`).

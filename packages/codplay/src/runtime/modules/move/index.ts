@@ -45,7 +45,7 @@ export function isStoryHostMove(rawMove: unknown): boolean {
 
 /**
  * Checks whether one raw move payload is the explicit detach sentinel
- * (`move: "off"`, or `{ parentId: "off" }`) — an intentional DOM detachment,
+ * (`move: "@off"`, or `{ parentId: "@off" }`) — an intentional DOM detachment,
  * distinct from an author error targeting a missing outlet/list/node.
  */
 export function isDetachMove(rawMove: unknown): boolean {
