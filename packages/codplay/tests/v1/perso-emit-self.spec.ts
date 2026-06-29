@@ -30,7 +30,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createPersoEmitSceneFixture(): SceneDoc {
   return {
     id: 'scene-emit-self',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -38,7 +37,7 @@ function createPersoEmitSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__title',
@@ -66,9 +65,6 @@ function createPersoEmitSceneFixture(): SceneDoc {
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

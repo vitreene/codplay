@@ -105,10 +105,10 @@ export function createCarouselScene(): SceneDoc {
 
   return {
     id: 'carousel-scene',
-    rootStories: ['carousel-story'],
     stories: {
       'carousel-story': {
         id: 'carousel-story',
+        initial: { move: '@root' },
         persos,
         eventimes,
       },

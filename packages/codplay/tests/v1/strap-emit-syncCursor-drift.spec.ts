@@ -34,7 +34,6 @@ const driftStraps: StrapCollection = {
 function temp__createDriftScene(): SceneDoc {
   return {
     id: 'drift-scene',
-    rootStories: ['drift-story'],
     initial: undefined,
     straps: undefined,
     listen: [],

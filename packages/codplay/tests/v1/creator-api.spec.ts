@@ -18,7 +18,7 @@ function createStoryFixture(): StoryDef {
   return {
     id: 'story-main',
     name: 'main',
-    initial: undefined,
+    initial: { move: '@root' },
     persos: [perso],
     straps: undefined,
     listen: [],
@@ -65,7 +65,6 @@ describe('Creator API V1', () => {
     const creator = new SceneDocEditor()
 
     expect(creator.create({ id: 'scene-main' })).toEqual({ ok: true, data: undefined })
-    expect(creator.scene.rootStories.set({ value: ['story-main'] })).toEqual({ ok: true, data: undefined })
     expect(creator.scene.initial.set({ value: { locale: 'fr' } })).toEqual({ ok: true, data: undefined })
     expect(creator.scene.tracks.set({ value: {} })).toEqual({ ok: true, data: undefined })
     expect(creator.upsertStory({ story: createStoryFixture() })).toEqual({ ok: true, data: undefined })
@@ -76,13 +75,13 @@ describe('Creator API V1', () => {
 
     expect(exportResult.data).toMatchObject({
       id: 'scene-main',
-      rootStories: ['story-main'],
       initial: { locale: 'fr' },
       tracks: {},
       stories: {
         'story-main': {
           id: 'story-main',
           name: 'main',
+          initial: { move: '@root' },
           persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello', move: '@root' }, actions: {} }]
         }
       }

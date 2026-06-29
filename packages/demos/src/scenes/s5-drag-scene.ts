@@ -1,5 +1,5 @@
 import type { TransformFn } from "codplay/player";
-import type { PlayerSceneLifecycleOptions, SceneDoc, StrictSceneDoc } from "codplay/player/types";
+import type { SceneDoc } from "codplay/player/types";
 
 const trackMove: TransformFn = (event) => {
   const { dx, dy, baseX, baseY } = event.data as { dx: number; dy: number; baseX: number; baseY: number };
@@ -42,14 +42,13 @@ const dragToStyle: TransformFn = (event) => {
 export function createS5DragScene(): SceneDoc {
   return {
     id: "s5-drag-scene",
-    rootStories: ["s5-drag-story"],
     initial: undefined,
     straps: [],
     listen: [],
     stories: {
       "s5-drag-story": {
         id: "s5-drag-story",
-        initial: undefined,
+        initial: { move: "@root" },
         straps: [],
         listen: [
           { on: "drag:moved", transform: [trackMove] },
@@ -97,9 +96,6 @@ export function createS5DragScene(): SceneDoc {
           },
         ],
       },
-    },
-    init(scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) {
-      options.mount(scene.rootStories[0]);
     },
     tracks: {},
   } as unknown as SceneDoc;

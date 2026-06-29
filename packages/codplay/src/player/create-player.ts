@@ -93,7 +93,10 @@ const PLAYER_TRACE_EVENT = {
   seekReplayEvent: "player:seek:replay:event",
   initStarted: "player:init:started",
   initDone: "player:init:done",
+  storyMoveMissingWarning: "player:story:move-missing-warning",
 } as const;
+
+const AUTHOR_STORY_MOVE_MISSING = "AUTHOR_STORY_MOVE_MISSING";
 
 const PLAYER_TRACK = {
   global: "global",
@@ -171,6 +174,7 @@ export class PlayerFacade implements PlayerApi {
   private nextPublicEventIndex = 0;
   private readonly mountedStoryIds = new Set<string>();
   private readonly scheduledStoryIds = new Set<string>();
+  private playerMode: "author" | "broadcast" = "broadcast";
   private timelineReplayInProgress = false;
   private drainingDueEvents = false;
 
@@ -829,6 +833,8 @@ export class PlayerFacade implements PlayerApi {
 
   /**
    * Marks all authored stories as active for the current runtime cycle.
+   * Perso instantiation is unconditional for every story regardless of its
+   * own `move` (placement) — see 2026-06-29-story-root-move-installation-plan.md.
    */
   private activateAllSceneStories(): void {
     if (this.scene === null) {
@@ -841,6 +847,28 @@ export class PlayerFacade implements PlayerApi {
     for (const storyId of Object.keys(this.scene.stories)) {
       this.mountedStoryIds.add(storyId);
       this.scheduledStoryIds.add(storyId);
+    }
+  }
+
+  /**
+   * Warns, in author mode only, when a story has no `initial.move` resolved
+   * at all — silent in broadcast mode. See plan 1.4.
+   */
+  private warnMissingStoryMoves(runtimeScene: StrictSceneDoc): void {
+    if (this.playerMode !== "author") {
+      return;
+    }
+
+    for (const story of Object.values(runtimeScene.stories)) {
+      const storyMove = (story.initial as Record<string, unknown> | undefined)?.move;
+      if (storyMove !== undefined) {
+        continue;
+      }
+
+      this.emitTrace(PLAYER_TRACE_EVENT.storyMoveMissingWarning, RUNTIME_TRACE_STATUS.info, {
+        code: AUTHOR_STORY_MOVE_MISSING,
+        storyId: story.id,
+      });
     }
   }
 
@@ -1119,42 +1147,6 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
-   * Mounts one story into renderer/director without starting its portable eventimes.
-   */
-  private mountStory(story: string | SceneStoryDoc): void {
-    const nextStory = this.resolveSceneStory(story);
-    if (nextStory === null) {
-      return;
-    }
-
-    if (this.mountedStoryIds.has(nextStory.id)) {
-      return;
-    }
-
-    this.mountedStoryIds.add(nextStory.id);
-
-    const runtimePlan = this.createMountedRuntimePlan();
-    if (runtimePlan === null) {
-      return;
-    }
-
-    this.applyMountedRuntimePlan(runtimePlan);
-
-    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan);
-    if (!rendererLoadResult.ok) {
-      this.emitTrace(PLAYER_TRACE_EVENT.mountFailed, RUNTIME_TRACE_STATUS.error, {
-        storyId: nextStory.id,
-        mountedStoryIds: this.getMountedStoryIds(),
-        code: rendererLoadResult.error.code,
-        message: rendererLoadResult.error.message,
-      });
-      return;
-    }
-
-    this.syncHorizonFromRuntimePlan(runtimePlan);
-  }
-
-  /**
    * Schedules one mounted story eventime tree once per player cycle.
    */
   private scheduleStoryEventimes(story: string | SceneStoryDoc): void {
@@ -1194,9 +1186,6 @@ export class PlayerFacade implements PlayerApi {
    */
   private createLifecycleOptions(): PlayerSceneLifecycleOptions {
     return createSceneLifecycleOptions({
-      mount: (story) => {
-        this.mountStory(story);
-      },
       schedule: (story) => {
         this.scheduleStoryEventimes(story);
       },
@@ -1710,7 +1699,9 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Initializes player runtime with one scene document.
    */
-  async init(nextScene: PlayerSceneInput): Promise<PlayerCommandResult> {
+  async init(nextScene: PlayerSceneInput, options?: { mode?: "author" | "broadcast" }): Promise<PlayerCommandResult> {
+    this.playerMode = options?.mode ?? "broadcast";
+
     this.emitTrace(PLAYER_TRACE_EVENT.initStarted, RUNTIME_TRACE_STATUS.applied, {
       sceneId: nextScene.id,
     });
@@ -1750,6 +1741,7 @@ export class PlayerFacade implements PlayerApi {
 
     this.initializeSceneStories(runtimeScene);
     this.activateAllSceneStories();
+    this.warnMissingStoryMoves(runtimeScene);
     runtimeScene.init?.(runtimeScene, this.createLifecycleOptions());
     this.seedAllStoryEventimes();
 

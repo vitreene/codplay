@@ -67,14 +67,13 @@ function createMediaSyncScene(options: {
 
   return {
     id: 'media-sync-scene',
-    rootStories: ['media-sync-story'],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       'media-sync-story': {
         id: 'media-sync-story',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'media-sync-item',
@@ -139,9 +138,6 @@ function createMediaSyncScene(options: {
         ]
       }
     },
-    init(_scene, runtime) {
-      runtime.mount('media-sync-story')
-    },
     onStart(_scene, runtime) {
       runtime.schedule('media-sync-story')
     },
@@ -156,14 +152,13 @@ describe('Lot 19 - media player sync', () => {
   it('emits one component event from media ref ended on wrapped video', async () => {
     const scene: SceneDoc = {
       id: 'media-emit-scene',
-      rootStories: ['story-media'],
       initial: undefined,
       straps: undefined,
       listen: [],
       stories: {
         'story-media': {
           id: 'story-media',
-          initial: undefined,
+          initial: { move: '@root' },
           persos: [
             {
               id: 'media-item',
@@ -201,9 +196,6 @@ describe('Lot 19 - media player sync', () => {
           listen: []
         }
       },
-      init(_scene, runtime) {
-        runtime.mount('story-media')
-      },
       tracks: {}
     }
 
@@ -225,14 +217,13 @@ describe('Lot 19 - media player sync', () => {
     const traces: Array<{ eventName: string; payload?: Record<string, unknown> }> = []
     const scene: SceneDoc = {
       id: 'media-ref-warning-scene',
-      rootStories: ['story-media'],
       initial: undefined,
       straps: undefined,
       listen: [],
       stories: {
         'story-media': {
           id: 'story-media',
-          initial: undefined,
+          initial: { move: '@root' },
           persos: [
             {
               id: 'media-item',
@@ -255,9 +246,6 @@ describe('Lot 19 - media player sync', () => {
           straps: undefined,
           listen: []
         }
-      },
-      init(_scene, runtime) {
-        runtime.mount('story-media')
       },
       tracks: {}
     }

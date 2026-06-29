@@ -70,7 +70,7 @@ const SERIES_QUESTIONS: ResolvedQuizQuestion[] = [
 function createSeriesContainerStory(): SceneStoryDoc {
   return {
     id: "quiz-series-container-story",
-    initial: undefined,
+    initial: { move: "@root" },
     straps: undefined,
     listen: [],
     persos: [
@@ -136,7 +136,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
           </div>
         `,
         style: {},
-        move: { parentId }
+        move: "@root"
       } as unknown as PersoDoc["initial"],
       actions: {}
     },
@@ -192,7 +192,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
 
   return {
     id: storyId,
-    initial: undefined,
+    initial: { move: { parentId } },
     straps: undefined,
     listen: [],
     persos
@@ -320,7 +320,7 @@ function createSeriesQuestionStory(
           boxSizing: "border-box",
           ...(position > 0 ? { transform: "translateX(100%)" } : {})
         },
-        move: { parentId: "quiz-series:slot" }
+        move: "@root"
       } as unknown as PersoDoc["initial"],
       actions: {
         [`quiz:question:${position}:hide`]: {
@@ -427,7 +427,7 @@ function createSeriesQuestionStory(
 
   return {
     id: storyId,
-    initial: undefined,
+    initial: { move: { parentId: "quiz-series:slot" } },
     state: {
       question,
       config: DEFAULT_SERIES_CONFIG,
@@ -475,7 +475,7 @@ function createSeriesResultStory(): SceneStoryDoc {
 
   return {
     id: "quiz-series-result-story",
-    initial: undefined,
+    initial: { move: { parentId: "quiz-series:slot" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -502,7 +502,7 @@ function createSeriesResultStory(): SceneStoryDoc {
             opacity: 0,
             pointerEvents: "none"
           },
-          move: { parentId: "quiz-series:slot" }
+          move: "@root"
         } as unknown as PersoDoc["initial"],
         actions: {
           "quiz:result:show": {
@@ -595,7 +595,6 @@ export function createQuizSeriesScene(): SceneDoc {
 
   return {
     id: "quiz-series-scene",
-    rootStories: ["quiz-series-container-story"],
     initial: {
       currentIndex: 0,
       answers: [],

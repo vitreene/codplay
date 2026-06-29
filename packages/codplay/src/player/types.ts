@@ -79,10 +79,10 @@ export type SceneStoryDoc = {
   eventimes?: StoryEventimeDoc[]
   state?: Record<string, unknown> | undefined
   init?: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
+  disabled?: boolean
 }
 
 export type PlayerSceneLifecycleOptions = {
-  mount: (story: string | SceneStoryDoc) => void
   schedule: (story: string | SceneStoryDoc) => void
 }
 
@@ -100,7 +100,6 @@ export type PlayerEmitInput = {
 export type StrictSceneDoc = {
   id: string
   stories: Record<string, SceneStoryDoc>
-  rootStories: string[]
   initial: Record<string, unknown> | undefined
   straps: string[] | undefined
   listen: ListenRule[]

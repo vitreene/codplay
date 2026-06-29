@@ -229,7 +229,9 @@ export class Player implements PlayerApi {
     this.strapCollection = input.strapCollection ?? {}
     this.destroyStrapLoopSchedulers()
     this.scheduleRuntime.reset()
-    const initResult = this.normalizeResult(await this.player.init(input.compiledScene.scene))
+    const initResult = this.normalizeResult(
+      await this.player.init(input.compiledScene.scene, { mode: this.playerMode })
+    )
     if (!initResult.ok) {
       return initResult
     }

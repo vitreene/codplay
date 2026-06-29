@@ -63,7 +63,6 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
 
   return {
     id: 'scene-layout',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -71,14 +70,11 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos,
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

@@ -30,7 +30,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createBootstrapSceneFixture(): SceneDef {
     return {
       id: 'scene-bootstrap',
-      rootStories: ['story-main'],
       initial: undefined,
       straps: undefined,
     listen: [
@@ -40,16 +39,13 @@ function createBootstrapSceneFixture(): SceneDef {
       }
       ],
       tracks: {},
-      init(scene, options) {
-        options.mount(scene.rootStories[0])
-      },
       onStart(scene, options) {
-        options.schedule(scene.rootStories[0])
+        options.schedule('story-main')
       },
       stories: {
         'story-main': {
           id: 'story-main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'title',
@@ -75,21 +71,17 @@ function createBootstrapSceneFixture(): SceneDef {
 function createStoryListenPassthroughSceneFixture(): SceneDef {
   return {
     id: 'scene-story-listen-passthrough',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
     tracks: {},
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     stories: {
       'story-main': {
         id: 'story-main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'title',
@@ -129,18 +121,14 @@ function createStoryListenPassthroughSceneFixture(): SceneDef {
 function createPersistOnlyParentSceneFixture(): SceneDef {
   return {
     id: 'scene-persist-only-parent',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
     tracks: {},
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     stories: {
       'story-main': {
         id: 'story-main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'title',
@@ -171,18 +159,14 @@ function createPersistOnlyParentSceneFixture(): SceneDef {
 function createPersistOnlyTransformSceneFixture(): SceneDef {
   return {
     id: 'scene-persist-only-transform',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
     tracks: {},
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     stories: {
       'story-main': {
         id: 'story-main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'title',
@@ -213,18 +197,14 @@ function createPersistOnlyTransformSceneFixture(): SceneDef {
 function createImmediateStrapUpdateSceneFixture(): SceneDef {
   return {
     id: 'scene-immediate-strap-update',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
     tracks: {},
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     stories: {
       'story-main': {
         id: 'story-main',
-        initial: undefined,
+        initial: { move: '@root' },
         state: {
           side: 'a'
         },
@@ -492,18 +472,14 @@ describe('V1 - scene bootstrap', () => {
     const compileResult = builder.compile({
       scene: {
         id: 'scene-strap-persist-only',
-        rootStories: ['story-main'],
         initial: undefined,
         straps: ['resolver'],
         listen: [],
         tracks: {},
-        init(scene, options) {
-          options.mount(scene.rootStories[0])
-        },
         stories: {
           'story-main': {
             id: 'story-main',
-            initial: undefined,
+            initial: { move: '@root' },
             persos: [{
               id: 'title',
               type: 'tag',

@@ -137,12 +137,27 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
         host.helpers.detachNode(nodeToDetach)
       }
 
-      host.registries.container.setParentId(request.persoId, null)
-      host.registries.mounted.set(request.persoId, false)
+      // "@root" resolving to null here covers two legitimate, distinct cases:
+      // the containing story has no move at all (genuinely not mounted, by
+      // design — see v1-story-spec.md), or the story's own move is itself
+      // "@root" (true page root — this perso WILL be mounted, but by
+      // Player.mountRootNodes() against the real mountTarget, never visible
+      // to this orchestrator-level resolution). Only the second is "mounted".
+      const isTruePageRoot =
+        request.move.parentId === RUNTIME_CONFIG.move.rootToken &&
+        storyId !== null &&
+        host.helpers.isStoryRootPlacement(storyId)
 
-      // The reserved detach sentinel ("off") is an intentional detachment, not
-      // an author error targeting a missing outlet/list/node — never warn for it.
-      if (request.move.parentId !== RUNTIME_CONFIG.move.detachToken) {
+      host.registries.container.setParentId(request.persoId, null)
+      host.registries.mounted.set(request.persoId, isTruePageRoot)
+
+      // The reserved sentinels ("off", "root") are intentional placement
+      // decisions, not a real outlet/list/node id the author expects to
+      // exist — never warn for them.
+      if (
+        request.move.parentId !== RUNTIME_CONFIG.move.detachToken &&
+        request.move.parentId !== RUNTIME_CONFIG.move.rootToken
+      ) {
         host.warnOnce(request.eventSeq, 'AUTHOR_LAYOUT_OUTLET_NOT_FOUND', {
           persoId: request.persoId,
           parentId: request.move.parentId,

@@ -4,10 +4,16 @@
 
 Socle unique des invariants partages par les specs V1.
 
+## Invariants moteur
+
+- le moteur (orchestrateur/runtime core) ne cree jamais de node lui-meme; la creation de node est l'entiere responsabilite des composants (`nodeFactory`, `v1-component-api.md`)
+- corollaire: avec des composants adequats, Codplay doit pouvoir jouer une scene entierement en canvas, sans DOM
+- tout node sans composant/perso authored derriere (un node synthetique invente par le moteur pour ses propres besoins internes) est une violation de cet invariant
+
 ## Invariants structure
 
-- `Scene.rootStories` est obligatoire et non vide en diffusion
-- `Scene.rootStories` designe les stories autorisees a la racine de la scene
+- une `Story` atteint la racine de la page par son propre `story.initial.move: '@root'` (`v1-story-spec.md`); il n'existe plus d'autorisation scene-level centralisee (`Scene.rootStories`, retire)
+- `Story.disabled` (booleen, distinct de `move`) retire une story entierement de la compilation; sans rapport avec le placement
 - `Story.listen` et `Scene.listen` sont obligatoires (peuvent etre `[]`)
 - une `Story` peut avoir plusieurs elements racine, chacun declare par son propre `move: '@root'` (`v1-perso-spec.md` 4bis)
 - `Story.straps` et `Scene.straps` sont obligatoires comme proprietes et peuvent valoir `undefined`
@@ -61,7 +67,7 @@ Socle unique des invariants partages par les specs V1.
 - meta `CompiledScene`: `schemaVersion` + `createdAt`
 - `hash` n'est pas une meta `CompiledScene`; il est reserve a la policy ressource
 - `tracks` reste une orchestration scene-level et ne remplace pas la portabilite des eventimes story-level
-- `Scene.rootStories` porte une structure d'autorisation scene-level, pas une temporalite implicite
+- `CompiledScene.rootNodeIds` est calcule au build: persos dont le `move` propre resout a `'@root'`, dans une story dont le `move` propre resout aussi a `'@root'` (les deux niveaux doivent coincider)
 - si aucun track explicite n'est indique pour un event de story, le fallback est le track `story.id`
 - si `story.trackId` existe, il devient le fallback prioritaire des events de story
 

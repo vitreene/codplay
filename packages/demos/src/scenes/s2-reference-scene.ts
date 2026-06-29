@@ -6,14 +6,13 @@ import type { SceneDoc } from 'codplay/player/types'
 export function createS2ReferenceScene(): SceneDoc {
   return {
     id: 's2-reference-scene',
-    rootStories: ['s2-reference-story'],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       's2-reference-story': {
         id: 's2-reference-story',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'reference-list',

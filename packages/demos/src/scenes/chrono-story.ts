@@ -55,10 +55,10 @@ const BTN_BASE = {
 export function createChronoScene(): SceneDoc {
   return {
     id: 'chrono-scene',
-    rootStories: ['chrono-story'],
     stories: {
       'chrono-story': {
         id: 'chrono-story',
+        initial: { move: '@root' },
         straps: {
           chrono: ({ event }: { event: { name: string; data?: unknown } }) => {
             if (event.name === 'chrono:start') {

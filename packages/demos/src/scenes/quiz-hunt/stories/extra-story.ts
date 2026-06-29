@@ -5,7 +5,7 @@ import type { GameLabels } from "../types"
 export function createExtraStory(labels: GameLabels): SceneStoryDoc {
   return {
     id: "game-extra-story",
-    initial: undefined,
+    initial: { move: { parentId: "game:zone:main" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -17,7 +17,7 @@ export function createExtraStory(labels: GameLabels): SceneStoryDoc {
           className: "quiz-hunt-extra-token is-hidden",
           content: labels.extraLabel,
           attr: { type: "button" },
-          move: { parentId: "game:zone:main" }
+          move: "@root"
         },
         emit: {
           click: { event: { name: "game:extra:collect", cascade: true } }

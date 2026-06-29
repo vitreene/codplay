@@ -8,7 +8,6 @@ type SceneState = {
   listen: ListenRule[]
   straps: string[] | undefined
   tracks: Record<string, unknown>
-  rootStories: string[]
   stories: Record<string, StoryDef>
 }
 
@@ -31,7 +30,6 @@ export class SceneDocEditor {
       listen: [],
       straps: undefined,
       tracks: {},
-      rootStories: [],
       stories: {}
     }
 
@@ -45,7 +43,7 @@ export class SceneDocEditor {
         id: identity.storyId,
         name: identity.storyName,
         tracks: undefined,
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [],
         straps: undefined,
         listen: [],
@@ -118,10 +116,6 @@ export class SceneDocEditor {
           scene.tracks = nextTracks
           return { ok: true, data: undefined }
         })
-    },
-    rootStories: {
-      set: (input: { value: string[] }): ApiResult<void> =>
-        this.withScene((scene) => { scene.rootStories = this.cloneData(input.value); return { ok: true, data: undefined } })
     }
   }
 
@@ -135,9 +129,15 @@ export class SceneDocEditor {
   removeStory(input: { storyId: string }): ApiResult<void> {
     return this.withScene((scene) => {
       delete scene.stories[input.storyId]
-      scene.rootStories = scene.rootStories.filter((id) => id !== input.storyId)
       return { ok: true, data: undefined }
     })
+  }
+
+  setStoryDisabled(input: { storyId: string; disabled: boolean }): ApiResult<void> {
+    return this.withStory(input.storyId, (story) => ({
+      ...this.cloneStory(story),
+      disabled: input.disabled
+    }))
   }
 
   upsertPerso(input: { storyId: string; perso: Perso }): ApiResult<void> {
@@ -235,7 +235,6 @@ export class SceneDocEditor {
     const scene = this.currentScene!
     return {
       id: scene.id,
-      rootStories: this.cloneData(scene.rootStories),
       initial: this.cloneData(scene.initial),
       straps: this.cloneData(scene.straps),
       listen: this.cloneData(scene.listen),
@@ -258,7 +257,8 @@ export class SceneDocEditor {
       listen: this.cloneData(story.listen),
       eventimes: this.cloneData(story.eventimes),
       state: this.cloneData(story.state),
-      init: story.init
+      init: story.init,
+      disabled: story.disabled
     }
   }
 

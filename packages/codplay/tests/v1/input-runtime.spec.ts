@@ -46,7 +46,6 @@ function createInputItemFixture(): ItemDoc {
 function createInputSceneFixture(): SceneDoc {
   return {
     id: 'scene-input',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -54,14 +53,11 @@ function createInputSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [createInputItemFixture()],
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

@@ -11,7 +11,6 @@ const INIT_TRACE_EVENT = 'player:init:done'
 function createStoryInitSceneFixture(calls: string[]): SceneDoc {
   return {
     id: 'scene-story-init',
-    rootStories: ['story-a'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -20,7 +19,8 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
         id: 'story-a',
         name: 'a',
         initial: {
-          marker: 'A'
+          marker: 'A',
+          move: '@root'
         },
         persos: [
           {
@@ -75,9 +75,8 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
         }
       }
     },
-    init(scene, options) {
+    init(scene, _options) {
       calls.push(`scene:${Object.keys(scene.stories).length}`)
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

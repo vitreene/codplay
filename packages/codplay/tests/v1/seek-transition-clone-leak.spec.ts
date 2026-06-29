@@ -11,7 +11,6 @@ import type { SceneDoc } from '../../src/player/types'
 function createTextReplaceSceneFixture(): SceneDoc {
   return {
     id: 'scene-text-replace',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -19,7 +18,7 @@ function createTextReplaceSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'cell',
@@ -43,11 +42,8 @@ function createTextReplaceSceneFixture(): SceneDoc {
         eventimes: [{ name: 'swap', startAt: 1500 }]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

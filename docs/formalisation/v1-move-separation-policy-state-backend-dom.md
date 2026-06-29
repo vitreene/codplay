@@ -72,7 +72,7 @@ Ces invariants doivent etre documentes et testes avant toute bascule de responsa
 - `initial.move` peut etre explicite (`parentId`) ou symbolique via le token configurable `rootToken`.
 - `rootToken` resout le `story host` courant; ce n'est pas un id runtime explicite.
 - le token `rootToken` sert a une assignation de placement, pas a un mouvement DOM en soi.
-- les persos d'`entries` peuvent etre montes dans le `story host` sans `move` explicite.
+- un perso est monte dans le `story host` uniquement via un `move` explicite ciblant `rootToken` (`@root`) — aucun montage implicite sans `move` (l'ancien champ `Story.entries` qui portait ce role est retire, voir `v1-perso-spec.md` 4bis).
 - la cle de conflit same-tick pour `move` est `{ eventSeq, persoId }`.
 - en cas de conflit same-tick, le dernier `move` valide gagne.
 - si le dernier `move` du tick est invalide, aucun `move` du tick ne s'applique pour cet item.

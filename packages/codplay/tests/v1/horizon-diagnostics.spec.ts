@@ -23,7 +23,6 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 	const supportCounterTrackId = createStrapTrackId('support-story', 'support-counter')
 	return {
 		id: 'support-counter-scene',
-		rootStories: ['support-story'],
 		initial: undefined,
 		straps: undefined,
 		listen: [],
@@ -31,7 +30,7 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 			'support-story': {
 				id: 'support-story',
 				trackId: 'support-track',
-				initial: undefined,
+				initial: { move: '@root' },
 				persos: [
 					{
 						id: 'support-node',
@@ -75,11 +74,8 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 				...(input.strapTrackRole ? { role: input.strapTrackRole } : {})
 			}
 		},
-		init(scene, options) {
-			options.mount(scene.rootStories[0])
-		},
 		onStart(scene, options) {
-			options.schedule(scene.rootStories[0])
+			options.schedule('support-story')
 		}
 	}
 }
@@ -96,7 +92,6 @@ const supportCounterStraps: StrapCollection = {
 function createStateReplayScene(): SceneDoc {
 	return {
 		id: 'state-replay-scene',
-		rootStories: ['state-story'],
 		initial: undefined,
 		straps: undefined,
 		listen: [
@@ -112,7 +107,7 @@ function createStateReplayScene(): SceneDoc {
 		stories: {
 			'state-story': {
 				id: 'state-story',
-				initial: undefined,
+				initial: { move: '@root' },
 				persos: [
 					{
 						id: 'result-node',
@@ -127,10 +122,7 @@ function createStateReplayScene(): SceneDoc {
 				listen: []
 			}
 		},
-		tracks: {},
-		init(scene, options) {
-			options.mount(scene.rootStories[0])
-		}
+		tracks: {}
 	}
 }
 
@@ -140,7 +132,6 @@ function createStateReplayScene(): SceneDoc {
 function createPlayProgressionScene(): SceneDoc {
 	return {
 		id: 'play-progression-scene',
-		rootStories: ['progress-story'],
 		initial: undefined,
 		straps: undefined,
 		listen: [],
@@ -148,7 +139,7 @@ function createPlayProgressionScene(): SceneDoc {
 			'progress-story': {
 				id: 'progress-story',
 				trackId: 'support-track',
-				initial: undefined,
+				initial: { move: '@root' },
 				persos: [
 					{
 						id: 'progress-node',
@@ -189,7 +180,7 @@ function createPlayProgressionScene(): SceneDoc {
 			}
 		},
 		onStart(scene, options) {
-			options.schedule(scene.rootStories[0])
+			options.schedule('progress-story')
 		}
 	}
 }

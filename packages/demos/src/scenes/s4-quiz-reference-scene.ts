@@ -7,10 +7,10 @@ import type { SceneDoc } from "codplay/player/types";
 export function createS4QuizReferenceScene(): SceneDoc {
   return {
     id: "s4-quiz-reference-scene",
-    rootStories: ["s4-quiz-layout-story"],
     stories: {
       "s4-quiz-layout-story": {
         id: "s4-quiz-layout-story",
+        initial: { move: "@root" },
         persos: [
           {
             id: "quiz-layout",

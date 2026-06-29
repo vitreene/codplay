@@ -323,6 +323,7 @@ export type RuntimeModuleHost = {
   helpers: {
     getStoryId(persoId: string): string | null
     resolveTargetNode(parentId: string, storyId: string | null, childNode?: unknown): unknown | null
+    isStoryRootPlacement(storyId: string): boolean
     canAttachChildToNode(parentNode: unknown, childNode: unknown): boolean
     detachNode(nodeRef: unknown): void
     appendNode(parentNode: unknown, childNode: unknown): void

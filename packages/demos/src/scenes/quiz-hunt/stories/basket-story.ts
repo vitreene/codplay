@@ -20,7 +20,7 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
 
   return {
     id: "game-basket-story",
-    initial: undefined,
+    initial: { move: { parentId: "game:zone:basket" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -28,7 +28,7 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
         id: "game-basket-root",
         type: "layout",
         initial: {
-          move: { parentId: "game:zone:basket" },
+          move: "@root",
           markup: `
             <div class="quiz-hunt-basket">
               <div class="quiz-hunt-basket-slots" data-part="game-basket-slots"></div>

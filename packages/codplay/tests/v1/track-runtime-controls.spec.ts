@@ -37,7 +37,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createTrackDeclarationSceneFixture(): SceneDoc {
   return {
     id: 'scene-track-declare',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -50,7 +49,7 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
             active: false
           }
         },
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__title',
@@ -76,9 +75,6 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
         listen: []
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     tracks: {}
   }
 }
@@ -89,7 +85,6 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
 function createTrackToggleSceneFixture(): SceneDoc {
   return {
     id: 'scene-track-toggle',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -97,7 +92,7 @@ function createTrackToggleSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__title',
@@ -118,9 +113,6 @@ function createTrackToggleSceneFixture(): SceneDoc {
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {
       fr: {
@@ -159,7 +151,6 @@ function createTrackToggleSceneFixture(): SceneDoc {
 function createStoryAndMainTrackSceneFixture(): SceneDoc {
   return {
     id: 'scene-story-and-main-track',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -167,7 +158,7 @@ function createStoryAndMainTrackSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         trackId: 'story-main__main-track',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__title',
@@ -189,9 +180,6 @@ function createStoryAndMainTrackSceneFixture(): SceneDoc {
           }
         ]
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {
       'story-main__main-track': {

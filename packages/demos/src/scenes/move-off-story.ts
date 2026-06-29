@@ -15,10 +15,10 @@ import type { SceneDoc } from 'codplay/player/types'
 export function createMoveOffScene(): SceneDoc {
   return {
     id: 'move-off-scene',
-    rootStories: ['move-off-story'],
     stories: {
       'move-off-story': {
         id: 'move-off-story',
+        initial: { move: '@root' },
         persos: [
           {
             id: 'move-off-root',

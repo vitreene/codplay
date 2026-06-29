@@ -6,14 +6,13 @@ import type { SceneDoc } from 'codplay/player/types'
 export function createS1CanariScene(): SceneDoc {
   return {
     id: 's1-canari-scene',
-    rootStories: ['s1-canari-story'],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       's1-canari-story': {
         id: 's1-canari-story',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'canari-title',
@@ -32,9 +31,6 @@ export function createS1CanariScene(): SceneDoc {
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

@@ -68,8 +68,6 @@ Regles V1:
 Erreurs:
 
 - `AUTHOR_DUPLICATE_LISTEN_ON`: doublon `listen.on` dans une meme story/scene
-- `AUTHOR_ROOT_STORIES_INVALID`: `rootStories` manquant, vide ou invalide en diffusion
-- `AUTHOR_STORY_ENTRIES_INVALID`: `entries` absentes ou invalides dans une `Story`
 - `AUTHOR_TRACK_UNKNOWN`: track referencee inconnue
 - `AUTHOR_ELEMENT_ID_IMMUTABLE`: tentative de modification d'`id` apres creation
 - `RUNTIME_HELPER_INVALID_ARG`: argument helper invalide
@@ -90,6 +88,8 @@ Warnings:
 - `RUNTIME_SAME_TICK_REPETITION`: repetitions meme tick preservees (mode keep-all)
 - `RUNTIME_EVENT_LIMIT_REACHED`: limite runtime atteinte si policy activee
 - `RUNTIME_CASCADE_DEPTH_REACHED`: profondeur de cascade limite atteinte, propagation tronquee
+- `AUTHOR_STORY_DISABLED_REFERENCE`: `move.parentId` (story ou perso) referencant un perso d'une story `disabled`, compile quand meme
+- `AUTHOR_STORY_MOVE_MISSING`: story sans `initial.move` resolu, signale uniquement en mode auteur
 
 Fallback unique:
 

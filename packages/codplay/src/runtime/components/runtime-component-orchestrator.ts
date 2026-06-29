@@ -101,7 +101,6 @@ export class RuntimeComponentOrchestrator {
   private readonly componentIdByOutletId = new Map<string, string>();
   private readonly storyIdByPersoId = new Map<string, string>();
   private readonly storyMoveByStoryId = new Map<string, unknown>();
-  private readonly storyHostNodeByStoryId = new Map<string, unknown>();
 
   private createElementOptions: import("../create-element").CreateElementOptions | undefined;
 
@@ -325,8 +324,8 @@ export class RuntimeComponentOrchestrator {
       },
       helpers: {
         getStoryId: (persoId) => this.storyIdByPersoId.get(persoId) ?? null,
-        resolveTargetNode: (parentId, storyId, childNode) =>
-          this.resolveMoveTargetNode(parentId, storyId, childNode),
+        resolveTargetNode: (parentId, storyId) => this.resolveMoveTargetNode(parentId, storyId),
+        isStoryRootPlacement: (storyId) => this.isStoryRootPlacement(storyId),
         canAttachChildToNode: (parentNode, childNode) => this.canAttachChildToNode(parentNode, childNode),
         detachNode: (nodeRef) => this.detachNodeFromParent(nodeRef),
         appendNode: (parentNode, childNode) => this.appendNodeToParent(parentNode, childNode),
@@ -456,8 +455,6 @@ export class RuntimeComponentOrchestrator {
       this.mountLoadedRuntimeComponent(perso, componentClass);
     }
 
-    this.mountStoryHosts(runtimePersos);
-
     for (const perso of Object.values(runtimePersos.persos)) {
       const rawInitialMove = perso.initial.move;
 
@@ -582,7 +579,6 @@ export class RuntimeComponentOrchestrator {
     this.componentIdByOutletId.clear();
     this.storyIdByPersoId.clear();
     this.storyMoveByStoryId.clear();
-    this.storyHostNodeByStoryId.clear();
     return new Map();
   }
 
@@ -877,72 +873,34 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
-   * Creates one synthetic host node used to mount one story instance.
+   * Resolves the real target a perso's '@root' move chains to, by following
+   * its own story's move — never a synthetic per-story node (the engine
+   * never creates nodes itself, see v1-invariants.md "Invariants moteur").
    */
-  private createStoryHostNode(storyId: string, useDomNode: boolean): unknown {
-    if (useDomNode && typeof globalThis.document !== "undefined") {
-      const hostNode = globalThis.document.createElement("div");
-      hostNode.id = storyId;
-      return hostNode;
-    }
-
-    return {
-      tagName: "DIV",
-      id: storyId,
-      style: {},
-      attributes: {},
-      children: [],
-    };
-  }
-
-  /**
-   * Resolves one synthetic host node for one story instance.
-   */
-  private resolveStoryHostNode(storyId: string, childNode?: unknown): unknown {
-    const existingHostNode = this.storyHostNodeByStoryId.get(storyId);
-    if (existingHostNode !== undefined) {
-      return existingHostNode;
-    }
-
-    const hostNode = this.createStoryHostNode(storyId, isDomNode(childNode));
-    this.storyHostNodeByStoryId.set(storyId, hostNode);
-    return hostNode;
-  }
-
-  /**
-   * Resolves one explicit parent node for one story host mount.
-   */
-  private resolveStoryMountTargetNode(parentId: string): unknown | null {
-    if (parentId === RUNTIME_CONFIG.move.rootToken) {
+  private resolveStoryPlacementNode(storyId: string): unknown | null {
+    const rawStoryMove = this.storyMoveByStoryId.get(storyId);
+    const storyMove = normalizeMoveCommand(rawStoryMove, true);
+    if (storyMove === null) {
       return null;
     }
 
-    return this.nodeByPersoId.get(parentId) ?? null;
+    if (storyMove.parentId === RUNTIME_CONFIG.move.rootToken) {
+      // True page root: handled separately by rootNodeIds/Player.mountRootNodes().
+      return null;
+    }
+
+    return this.nodeByPersoId.get(storyMove.parentId) ?? null;
   }
 
   /**
-   * Mounts story hosts into declared parent outlets before child entries.
+   * Checks whether a story's own move resolves to the true page root —
+   * distinguishes that legitimate "no node to resolve here" case from a
+   * genuinely missing outlet/list for the move module's mounted bookkeeping
+   * and warning policy (`runtime/modules/move/index.ts`).
    */
-  private mountStoryHosts(runtimePersos: RuntimePersos): void {
-    for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
-      const move = normalizeMoveCommand(rawMove, true);
-      if (move === null) {
-        continue;
-      }
-
-      const targetNode = this.resolveStoryMountTargetNode(move.parentId);
-      if (targetNode === null) {
-        continue;
-      }
-
-      const hostNode = this.resolveStoryHostNode(storyId, targetNode);
-      // Idempotent: re-appending an already-attached host would detach its whole
-      // subtree (and interrupt media decode). The story structure is static across seeks.
-      if (this.isNodeChildOf(targetNode, hostNode)) {
-        continue;
-      }
-      this.appendNodeToParent(targetNode, hostNode);
-    }
+  private isStoryRootPlacement(storyId: string): boolean {
+    const storyMove = normalizeMoveCommand(this.storyMoveByStoryId.get(storyId), true);
+    return storyMove !== null && storyMove.parentId === RUNTIME_CONFIG.move.rootToken;
   }
 
   /**
@@ -1031,13 +989,9 @@ export class RuntimeComponentOrchestrator {
   /**
    * Resolves one parent node target from one move parent identifier.
    */
-  private resolveMoveTargetNode(
-    parentId: string,
-    storyId: string | null,
-    childNode?: unknown,
-  ): unknown | null {
+  private resolveMoveTargetNode(parentId: string, storyId: string | null): unknown | null {
     if (parentId === RUNTIME_CONFIG.move.rootToken) {
-      return storyId === null ? null : this.resolveStoryHostNode(storyId, childNode);
+      return storyId === null ? null : this.resolveStoryPlacementNode(storyId);
     }
 
     return this.nodeByPersoId.get(parentId) ?? null;

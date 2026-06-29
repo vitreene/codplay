@@ -98,9 +98,6 @@ export type SceneDef = {
   /** Map des stories de la scène, indexées par storyId. */
   stories: Record<string, StoryDef>
 
-  /** Liste des storyIds auto-initialisés au démarrage du player. */
-  rootStories: string[]
-
   /**
    * State initial de la scène, partagé par toutes les stories sans scope propre.
    * Accessible en lecture dans les straps via `input.state`.
@@ -157,7 +154,11 @@ export type StoryDef = {
   trackId?: string
   /** Configuration des pistes locales à la story. */
   tracks?: Record<string, unknown>
-  /** State initial de la story (écrase `scene.initial` dans son scope). */
+  /**
+   * State initial de la story (écrase `scene.initial` dans son scope).
+   * Porte aussi `move` (`'@root'` ou `{ parentId }`) : le placement statique
+   * de la story elle-même. Absent → la story n'apparaît nulle part.
+   */
   initial?: Record<string, unknown>
   /** Liste des persos appartenant à cette story. */
   persos: PersoDoc[]
@@ -174,6 +175,12 @@ export type StoryDef = {
   state?: Record<string, unknown>
   /** Hook d'initialisation locale à la story. */
   init?: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
+  /**
+   * Retrait volontaire et temporaire par l'auteur (équivalent "commenter la
+   * story"). Quand `true`, le builder retire la story entièrement de l'artefact
+   * compilé (persos, tracks, listen rules inclus) ; sans rapport avec `move`.
+   */
+  disabled?: boolean
 }
 
 /**

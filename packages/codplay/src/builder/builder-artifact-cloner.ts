@@ -47,14 +47,14 @@ export class BuilderArtifactCloner {
         })),
         eventimes: this.cloneData(story.eventimes),
         state: this.cloneData(story.state),
-        init: story.init
+        init: story.init,
+        disabled: story.disabled
       }
     }
 
     return {
       id: scene.id,
       stories: clonedStories,
-      rootStories: this.cloneData(scene.rootStories),
       initial: this.cloneData(scene.initial),
       straps: this.cloneData(scene.straps),
       listen: scene.listen.map(rule => ({

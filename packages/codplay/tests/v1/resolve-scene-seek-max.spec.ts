@@ -12,7 +12,6 @@ function createSceneFixture(input: {
 }): SceneDoc {
 	return {
 		id: 'scene-seek-max-fixture',
-		rootStories: Object.keys(input.stories),
 		initial: undefined,
 		straps: undefined,
 		listen: [],

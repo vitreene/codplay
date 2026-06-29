@@ -18,24 +18,20 @@ function temp__createStrictSceneFixture(input: {
 }): SceneDoc {
   return {
     id: input.sceneId,
-    rootStories: [input.storyId],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        initial: undefined,
+        initial: { move: '@root' },
         persos: input.persos,
         straps: undefined,
         listen: []
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule(input.storyId)
     },
     tracks: input.tracks
   }
@@ -420,14 +416,13 @@ describe('Lot 16 - playback timeline minimal', () => {
 
     const scene: SceneDoc = {
       id: 'scene-story-start-zero-offset',
-      rootStories: ['story-main'],
       initial: undefined,
       straps: undefined,
       listen: [],
       stories: {
         'story-main': {
           id: 'story-main',
-          initial: undefined,
+          initial: { move: '@root' },
           persos: [
             {
               id: 'title',
@@ -461,11 +456,8 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       },
-      init(sceneDoc, options) {
-        options.mount(sceneDoc.rootStories[0])
-      },
       onStart(sceneDoc, options) {
-        options.schedule(sceneDoc.rootStories[0])
+        options.schedule('story-main')
       },
       tracks: {}
     }
@@ -538,14 +530,13 @@ describe('Lot 16 - playback timeline minimal', () => {
 
     const scene: SceneDoc = {
       id: 'scene-story-start-zero-offset-render-frame',
-      rootStories: ['story-main'],
       initial: undefined,
       straps: undefined,
       listen: [],
       stories: {
         'story-main': {
           id: 'story-main',
-          initial: undefined,
+          initial: { move: '@root' },
           persos: [
             {
               id: 'title',
@@ -574,11 +565,8 @@ describe('Lot 16 - playback timeline minimal', () => {
           ]
         }
       },
-      init(sceneDoc, options) {
-        options.mount(sceneDoc.rootStories[0])
-      },
       onStart(sceneDoc, options) {
-        options.schedule(sceneDoc.rootStories[0])
+        options.schedule('story-main')
       },
       tracks: {}
     }

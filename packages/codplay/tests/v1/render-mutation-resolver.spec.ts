@@ -55,7 +55,6 @@ class CounterRuntimeComponent implements RuntimeComponent {
 function createNoResolverSceneFixture(): SceneDoc {
   return {
     id: 'scene-no-resolver',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -63,7 +62,7 @@ function createNoResolverSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__counter',
@@ -98,11 +97,8 @@ function createNoResolverSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

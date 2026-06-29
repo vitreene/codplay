@@ -4,7 +4,7 @@ import type { SceneStoryDoc } from "codplay/player/types"
 export function createLayoutStory(): SceneStoryDoc {
   return {
     id: "game-layout-story",
-    initial: undefined,
+    initial: { move: "@root" },
     straps: undefined,
     listen: [],
     persos: [

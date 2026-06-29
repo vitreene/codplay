@@ -5,7 +5,7 @@ import type { GameLabels } from "../types"
 export function createResultStory(labels: GameLabels): SceneStoryDoc {
   return {
     id: "game-result-story",
-    initial: undefined,
+    initial: { move: { parentId: "game:zone:main" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -14,7 +14,7 @@ export function createResultStory(labels: GameLabels): SceneStoryDoc {
         type: "layout",
         initial: {
           className: "quiz-hunt-result-overlay is-hidden",
-          move: { parentId: "game:zone:main" },
+          move: "@root",
           markup: `
             <div class="quiz-hunt-result-card">
               <p class="quiz-hunt-result-verdict-slot" data-part="game-result-verdict-slot"></p>

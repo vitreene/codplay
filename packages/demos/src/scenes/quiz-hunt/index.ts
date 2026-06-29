@@ -64,7 +64,6 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
 
   return {
     id: "quiz-hunt-scene",
-    rootStories: ["game-layout-story"],
     initial: {
       phase: "grid",
       currentTrialId: null,

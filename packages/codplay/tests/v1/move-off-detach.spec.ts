@@ -13,7 +13,6 @@ import type { SceneDoc } from '../../src/player/types'
 function createMoveOffSceneFixture(): SceneDoc {
   return {
     id: 'scene-move-off',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -21,7 +20,7 @@ function createMoveOffSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'scene-layout',
@@ -52,11 +51,8 @@ function createMoveOffSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }
@@ -71,7 +67,6 @@ function createMoveOffSceneFixture(): SceneDoc {
 function createMoveOffSequenceSceneFixture(): SceneDoc {
   return {
     id: 'scene-move-off-sequence',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -79,7 +74,7 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'scene-layout',
@@ -113,11 +108,8 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   } as unknown as SceneDoc

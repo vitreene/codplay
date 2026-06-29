@@ -39,7 +39,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createStoryListenScopeSceneFixture(): SceneDef {
   return {
     id: 'scene-story-listen-scope',
-    rootStories: ['story-a', 'story-b'],
     initial: undefined,
     straps: undefined,
     listen: [
@@ -52,7 +51,7 @@ function createStoryListenScopeSceneFixture(): SceneDef {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-a__title',
@@ -97,7 +96,7 @@ function createStoryListenScopeSceneFixture(): SceneDef {
       'story-b': {
         id: 'story-b',
         name: 'b',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-b__title',
@@ -117,11 +116,6 @@ function createStoryListenScopeSceneFixture(): SceneDef {
         ],
         straps: undefined,
         listen: []
-      }
-    },
-    init(scene, options) {
-      for (const storyId of scene.rootStories) {
-        options.mount(storyId)
       }
     },
     tracks: {}

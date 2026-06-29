@@ -52,7 +52,7 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
 
   return {
     id: "game-grid-story",
-    initial: undefined,
+    initial: { move: { parentId: "game:zone:main" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -61,7 +61,7 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
         type: "list",
         initial: {
           className: "quiz-hunt-grid",
-          move: { parentId: "game:zone:main" },
+          move: "@root",
         },
         actions: {
           "game:grid:show": { className: { remove: "is-hidden" } },

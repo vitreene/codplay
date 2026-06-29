@@ -2,8 +2,8 @@ import type { ApiWarning, SceneDef, StoryDef, ValidationError, ValidationReport 
 
 export const AUTHOR_DUPLICATE_LISTEN_ON = 'AUTHOR_DUPLICATE_LISTEN_ON'
 export const AUTHOR_IDENTITY_INVALID = 'AUTHOR_IDENTITY_INVALID'
-export const AUTHOR_ROOT_STORIES_INVALID = 'AUTHOR_ROOT_STORIES_INVALID'
 export const AUTHOR_TRACKS_INVALID = 'AUTHOR_TRACKS_INVALID'
+export const AUTHOR_STORY_DISABLED_REFERENCE = 'AUTHOR_STORY_DISABLED_REFERENCE'
 
 /**
  * Validates one authored scene against the V1 builder rules.
@@ -16,10 +16,10 @@ export class BuilderValidator {
     const errors: ValidationError[] = []
     const warnings: ApiWarning[] = []
 
-    this.validateRootStories(scene, errors)
     this.validateTracks(scene, errors)
     this.validateSceneListenUniqueness(scene, errors)
     this.validateStories(scene, errors)
+    this.validateDisabledStoryReferences(scene, warnings)
 
     return {
       ok: errors.length === 0,
@@ -44,27 +44,56 @@ export class BuilderValidator {
   }
 
   /**
-   * Validates root stories presence and references against known stories.
+   * Detects move.parentId references (story-level or perso-level) pointing at
+   * a perso that belongs to a `disabled` story — non-blocking: the builder
+   * still compiles, the author stays responsible for cleaning up. Only static
+   * `initial.move` is checked; dynamic (action-level) moves are out of scope.
    */
-  private validateRootStories(scene: SceneDef, errors: ValidationError[]): void {
-    if (!Array.isArray(scene.rootStories) || scene.rootStories.length === 0) {
-      errors.push({
-        code: AUTHOR_ROOT_STORIES_INVALID,
-        message: 'rootStories must be a non-empty string array.'
-      })
+  private validateDisabledStoryReferences(scene: SceneDef, warnings: ApiWarning[]): void {
+    const disabledStoryIdByPersoId = new Map<string, string>()
+    for (const story of Object.values(scene.stories)) {
+      if (story.disabled !== true) continue
+      for (const perso of story.persos) {
+        disabledStoryIdByPersoId.set(perso.id, story.id)
+      }
+    }
+
+    if (disabledStoryIdByPersoId.size === 0) {
       return
     }
 
-    const allKnownStoryIds = new Set(Object.keys(scene.stories))
-    const hasInvalidReference = scene.rootStories.some((storyId) => {
-      return typeof storyId !== 'string' || storyId.trim().length === 0 || !allKnownStoryIds.has(storyId)
-    })
+    const resolveParentId = (rawMove: unknown): string | undefined => {
+      if (typeof rawMove === 'string') return rawMove
+      if (typeof rawMove !== 'object' || rawMove === null) return undefined
+      const parentId = (rawMove as { parentId?: unknown }).parentId
+      return typeof parentId === 'string' ? parentId : undefined
+    }
 
-    if (hasInvalidReference) {
-      errors.push({
-        code: AUTHOR_ROOT_STORIES_INVALID,
-        message: 'rootStories contains unknown or invalid story ids.'
+    const checkParentId = (parentId: string | undefined, details: Record<string, unknown>): void => {
+      if (parentId === undefined) return
+      const disabledStoryId = disabledStoryIdByPersoId.get(parentId)
+      if (disabledStoryId === undefined) return
+
+      warnings.push({
+        code: AUTHOR_STORY_DISABLED_REFERENCE,
+        message: 'A move.parentId references a perso that belongs to a disabled story.',
+        details: { ...details, parentId, disabledStoryId }
       })
+    }
+
+    for (const story of Object.values(scene.stories)) {
+      if (story.disabled === true) continue
+
+      checkParentId(resolveParentId((story.initial as Record<string, unknown> | undefined)?.move), {
+        storyId: story.id
+      })
+
+      for (const perso of story.persos) {
+        checkParentId(resolveParentId((perso.initial as Record<string, unknown> | undefined)?.move), {
+          storyId: story.id,
+          persoId: perso.id
+        })
+      }
     }
   }
 

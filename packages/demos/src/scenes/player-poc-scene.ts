@@ -301,14 +301,13 @@ export function createPlayerPocScene(): SceneDoc {
 
 	return {
 		id: 'scene-demo',
-		rootStories: ['story-demo'],
 		initial: undefined,
 		straps: undefined,
 		listen: [],
 		stories: {
 			'story-demo': {
 				id: 'story-demo',
-				initial: undefined,
+				initial: { move: '@root' },
 				persos: normalizeDemoPersos(persoById),
 				straps: undefined,
 				listen: [],

@@ -60,12 +60,11 @@ describe('CreatePlayerOptions.bindings — preload strategy registration (Player
   function createMinimalCompiledScene() {
     const editor = new SceneDocEditor()
     editor.create({ id: 'scene-binding-preload' })
-    editor.scene.rootStories.set({ value: ['story-main'] })
     editor.upsertStory({
       story: {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [{ id: 'title', name: 'title', type: 'tag', initial: { content: 'hello', move: '@root' }, actions: {} }],
         straps: undefined,
         listen: [],

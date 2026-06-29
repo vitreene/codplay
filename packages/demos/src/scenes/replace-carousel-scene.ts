@@ -11,10 +11,10 @@ const TEXT_B = "Le silence du soir";
 export function createReplaceCarouselScene(): SceneDoc {
   return {
     id: "replace-carousel-scene",
-    rootStories: ["replace-carousel-story"],
     stories: {
       "replace-carousel-story": {
         id: "replace-carousel-story",
+        initial: { move: "@root" },
         persos: [
           // ── Grid container ──────────────────────────────────────────────
           {

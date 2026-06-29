@@ -7,10 +7,10 @@ import type { SceneDoc } from 'codplay/player/types'
 export function createPreloadMediaScene(): SceneDoc {
   return {
     id: 'preload-media-scene',
-    rootStories: ['preload-media-story'],
     stories: {
       'preload-media-story': {
         id: 'preload-media-story',
+        initial: { move: '@root' },
         persos: [
           {
             id: 'media-shell',

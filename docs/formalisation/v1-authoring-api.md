@@ -65,13 +65,11 @@ type AuthoringApi = {
       upsert: (input: { trackId: string; track: Record<string, unknown> }) => ApiResult<void>
       remove: (input: { trackId: string }) => ApiResult<void>
     }
-    rootStories: {
-      set: (input: { value: string[] }) => ApiResult<void>
-    }
   }
 
   setStoryListen: (input: { storyId: string; listen: ListenRule[] }) => ApiResult<void>
   setStoryStraps: (input: { storyId: string; straps: string[] | undefined }) => ApiResult<void>
+  setStoryDisabled: (input: { storyId: string; disabled: boolean }) => ApiResult<void>
 
   exportSceneDoc: () => ApiResult<SceneDef>
 }
@@ -89,9 +87,9 @@ type AuthoringApi = {
 - chaque story dispose aussi par defaut d'un track portant `story.id`.
 - la seule metadata auteur normative d'un track est `active`.
 - apres `scene.init`, la structure des tracks est figee.
-- `rootStories` est obligatoire et non vide en mode diffusion.
-- `rootStories` reste defini explicitement au niveau scene.
+- `createStory` pose `initial: { move: '@root' }` par defaut pour qu'une story nouvellement creee soit immediatement visible — remplace l'ancien comportement par defaut via `Scene.rootStories` (retire).
 - `createPerso` et `upsertPerso` posent `move: '@root'` par defaut sur `perso.initial` quand l'appelant ne fournit aucun `move` (`v1-perso-spec.md` 4bis) — remplace l'ancien comportement par defaut via `Story.entries` (retire).
+- `setStoryDisabled` retire/restaure une story de la construction de la scene (builder), sans rapport avec `move`/le placement.
 - `listen.on` doit etre unique dans une story et dans la scene.
 - `listen.transform` peut contenir plusieurs etapes, executees dans l'ordre.
 - `createStory` peut appliquer un schema de nommage generique pour les stories instanciees (ex: `name + discriminant`).

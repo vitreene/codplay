@@ -75,10 +75,11 @@ quizStory.persos.unshift({
     tag: 'strong',
     content: '10',
     className: 'mashup-quiz-count',
-    move: {
-      parentId: 'mashup-quiz-slot',
-      mode: 'first',
-    },
+    // '@root': reaches `mashup-quiz-slot` via quizStory's own `initial.move`
+    // (set above), never targets another story's outlet directly. `mode`
+    // is forced to 'append' for any initial move regardless — ordering
+    // before the panel is achieved by `unshift`, declared first.
+    move: '@root',
     style: {
       opacity: 0,
     },
@@ -179,10 +180,10 @@ for (const perso of quizStory.persos) {
 
 export const mashupRiveThreeQuizScene = {
   id: 'mashup-rive-three-quiz-scene',
-  rootStories: ['mashup-root-story', quizStory.id],
   stories: {
     'mashup-root-story': {
       id: 'mashup-root-story',
+      initial: { move: '@root' },
       straps: riveCoachVisemeConversionStraps,
       listen: [...riveBlock.listen],
       persos: [

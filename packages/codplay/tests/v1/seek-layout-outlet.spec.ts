@@ -11,7 +11,6 @@ import type { SceneDoc } from '../../src/player/types'
 function createLayoutOutletSceneFixture(): SceneDoc {
   return {
     id: 'scene-layout-seek',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -19,7 +18,7 @@ function createLayoutOutletSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'scene-layout',
@@ -44,11 +43,8 @@ function createLayoutOutletSceneFixture(): SceneDoc {
         eventimes: [{ name: 'tick', startAt: 1000 }]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

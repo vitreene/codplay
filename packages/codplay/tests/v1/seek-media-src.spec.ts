@@ -14,7 +14,6 @@ const SRC_B = '/b.mp4'
 function createMediaSwapSceneFixture(): SceneDoc {
   return {
     id: 'scene-media-src-seek',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -22,7 +21,7 @@ function createMediaSwapSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__media',
@@ -37,11 +36,8 @@ function createMediaSwapSceneFixture(): SceneDoc {
         eventimes: [{ name: 'swap', startAt: 1000 }]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

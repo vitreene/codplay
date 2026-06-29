@@ -7,10 +7,9 @@ Glossaire final V1 de la terminologie normative.
 ## Termes principaux
 
 - `Scene`: racine globale d'orchestration
-- `rootStories`: stories autorisees a la racine de la scene
 - `Story`: unite d'orchestration locale independante
-- `Story instance`: occurrence runtime d'une story dans un host unique
-- `entries`: persos d'entree explicites d'une story; peuvent etre multiples
+- `Story.initial.move`: placement statique de la story elle-meme (`'@root'` ou `{ parentId }`) — absent, la story n'apparait nulle part
+- `Story.disabled`: retrait volontaire et temporaire d'une story de la construction de la scene (builder), sans rapport avec `move`
 - `Perso`: unite de rendu/action locale
 - `name`: identite auteur lisible d'un element
 - `id`: identifiant runtime canonique d'un element
@@ -37,7 +36,7 @@ Glossaire final V1 de la terminologie normative.
 
 - `init`: instanciation runtime initiale de la lecture
 - `bootstrap scene`: phase avant diffusion visible, pilotee par la scene
-- `mount`: operation technique de placement d'une story via ses `entries`
+- `mount`: operation technique de placement d'un perso via `move` (dont l'alias `@root`)
 - `story host`: parent de montage effectif d'une story instance
 - `rootToken`: alias de placement configurable qui cible le `story host`
 - `start`: depart logique d'une sequence/story par event; il fixe l'ancre temporelle

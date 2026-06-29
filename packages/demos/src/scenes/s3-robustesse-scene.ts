@@ -6,14 +6,13 @@ import type { SceneDoc } from 'codplay/player/types'
 export function createS3RobustesseScene(): SceneDoc {
   return {
     id: 's3-robustesse-scene',
-    rootStories: ['s3-robustesse-story'],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       's3-robustesse-story': {
         id: 's3-robustesse-story',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'robust-stage',
@@ -62,9 +61,6 @@ export function createS3RobustesseScene(): SceneDoc {
         straps: undefined,
         listen: []
       }
-    },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
     },
     tracks: {}
   }

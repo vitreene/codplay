@@ -22,6 +22,13 @@ Cette spec fixe uniquement:
 - le role de `createRootNode()`
 - les formes autorisees du retour de `render()`
 
+## Principe fondamental
+
+Le moteur (orchestrateur/runtime core) ne cree jamais de node lui-meme. C'est l'entiere
+responsabilite des composants — via `render()` et le `nodeFactory` injecte
+(`createElementOptions`). Avec des composants adequats, Codplay doit pouvoir jouer une scene
+entierement en canvas, sans DOM. Voir aussi `v1-invariants.md` ("Invariants moteur").
+
 Cette spec ne fige pas encore:
 
 - `part`

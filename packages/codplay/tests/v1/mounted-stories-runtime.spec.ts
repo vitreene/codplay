@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from 'vitest'
 
+import { BuilderFacade } from '../../src/builder/create-builder'
+import { Player } from '../../src/player'
 import { PlayerFacade } from '../../src/player/create-player'
+import type { SceneDef } from '../../src/builder/types'
 import type { SceneDoc } from '../../src/player/types'
 
 type RuntimeNodeFixture = {
@@ -31,7 +36,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createMountedStoriesSceneFixture(): SceneDoc {
   return {
     id: 'scene-mounted-stories',
-    rootStories: ['story-a', 'story-b'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -39,7 +43,7 @@ function createMountedStoriesSceneFixture(): SceneDoc {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-a__title',
@@ -57,7 +61,7 @@ function createMountedStoriesSceneFixture(): SceneDoc {
       'story-b': {
         id: 'story-b',
         name: 'b',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-b__title',
@@ -73,21 +77,19 @@ function createMountedStoriesSceneFixture(): SceneDoc {
         listen: []
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-      options.mount(scene.rootStories[1])
-    },
     tracks: {}
   }
 }
 
 /**
- * Creates one strict scene fixture that mounts root entries into one shared story host.
+ * Creates one builder-compatible scene fixture with two root-level persos in
+ * the same story (`story.initial.move: '@root'`, each perso also `'@root'`).
+ * Compiled through the full Builder -> Player pipeline so `rootNodeIds` and
+ * `Player.mountRootNodes()` (the real page-root grouping mechanism) run.
  */
-function createStoryHostSceneFixture(): SceneDoc {
+function createRootGroupingSceneFixture(): SceneDef {
   return {
     id: 'scene-story-host',
-    rootStories: ['story-a'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -95,7 +97,7 @@ function createStoryHostSceneFixture(): SceneDoc {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-a__lead',
@@ -120,9 +122,6 @@ function createStoryHostSceneFixture(): SceneDoc {
         listen: []
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     tracks: {}
   }
 }
@@ -142,25 +141,36 @@ describe('V1 - mounted stories runtime', () => {
     expect(player.getRuntimeRegistry().getNodeById('story-b__title')).not.toBeNull()
   })
 
-  it('mounts root entries into the story host when rootToken is used', async () => {
-    const player = new PlayerFacade({
-      createElementOptions: {
-        nodeFactory: (perso) => createRuntimeNodeFixture(perso.type === 'list' ? 'SECTION' : 'DIV')
-      }
+  it('groups two @root persos of the same story directly under the real page mountTarget (no synthetic story host node)', async () => {
+    const builder = new BuilderFacade()
+    const compileResult = builder.compile({ scene: createRootGroupingSceneFixture() })
+    expect(compileResult.ok).toBe(true)
+    if (!compileResult.ok) {
+      return
+    }
+
+    expect(compileResult.data.compiledScene.rootNodeIds).toEqual(['story-a__lead', 'story-a__tail'])
+
+    const mountTarget = document.createElement('div')
+    const player = new Player()
+
+    const initResult = await player.init({
+      mountTarget,
+      compiledScene: compileResult.data.compiledScene,
+      resourceManifest: compileResult.data.resourceManifest
     })
+    expect(initResult).toEqual({ ok: true, data: undefined })
 
-    const initResult = await player.init(createStoryHostSceneFixture())
-
-    expect(initResult.ok).toBe(true)
-
-    const registry = player.getRuntimeRegistry()
-    const leadNode = registry.getNodeById('story-a__lead') as RuntimeNodeFixture | null
-    const tailNode = registry.getNodeById('story-a__tail') as RuntimeNodeFixture | null
-
-    expect(leadNode?.parentNode).toBe(tailNode?.parentNode)
-    expect(leadNode?.parentNode?.children?.map((child) => child.id)).toEqual([
+    // The engine never creates a node itself (v1-invariants.md "Invariants
+    // moteur") — there is no intermediate synthetic node between mountTarget
+    // and the two persos: they are mountTarget's direct children.
+    expect(Array.from(mountTarget.children).map((child) => child.id)).toEqual([
       'story-a__lead',
       'story-a__tail'
     ])
+
+    const registry = player.getRuntimeRegistry()
+    expect(registry.isMounted('story-a__lead')).toBe(true)
+    expect(registry.isMounted('story-a__tail')).toBe(true)
   })
 })

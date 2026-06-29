@@ -9,7 +9,6 @@ import type { SceneDef } from '../../src/builder/types'
 function createValidSceneFixture(): SceneDef {
   return {
     id: 'scene-fixture',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [
@@ -23,7 +22,7 @@ function createValidSceneFixture(): SceneDef {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'title-perso',
@@ -43,15 +42,38 @@ function createValidSceneFixture(): SceneDef {
 }
 
 describe('Builder API V1', () => {
-  it('returns blocking validation error when rootStories is missing or invalid', () => {
+  it('strips disabled stories from the compiled scene', () => {
     const builder = new BuilderFacade()
-    const invalidScene = createValidSceneFixture()
-    invalidScene.rootStories = []
+    const scene = createValidSceneFixture()
+    scene.stories['story-main'].disabled = true
 
-    const report = builder.validate({ scene: invalidScene })
+    const compileResult = builder.compile({ scene })
+    expect(compileResult.ok).toBe(true)
 
-    expect(report.ok).toBe(false)
-    expect(report.errors.some((error) => error.code === 'AUTHOR_ROOT_STORIES_INVALID')).toBe(true)
+    if (!compileResult.ok) {
+      return
+    }
+
+    expect(compileResult.data.compiledScene.scene.stories['story-main']).toBeUndefined()
+  })
+
+  it('warns (non-blocking) when a move.parentId references a perso in a disabled story', () => {
+    const builder = new BuilderFacade()
+    const scene = createValidSceneFixture()
+    scene.stories['other-story'] = {
+      id: 'other-story',
+      name: 'other',
+      initial: { move: { parentId: 'title-perso' } },
+      persos: [],
+      straps: undefined,
+      listen: []
+    }
+    scene.stories['story-main'].disabled = true
+
+    const report = builder.validate({ scene })
+
+    expect(report.ok).toBe(true)
+    expect(report.warnings.some((warning) => warning.code === 'AUTHOR_STORY_DISABLED_REFERENCE')).toBe(true)
   })
 
   it('returns blocking validation error when scene listen.on contains duplicates', () => {
@@ -89,6 +111,38 @@ describe('Builder API V1', () => {
 
     expect(report.ok).toBe(false)
     expect(report.errors.some((error) => error.code === 'AUTHOR_TRACKS_INVALID')).toBe(true)
+  })
+
+  it('derives rootNodeIds only for persos whose own move and their story move both resolve to @root', () => {
+    const builder = new BuilderFacade()
+    const scene = createValidSceneFixture()
+    scene.stories['other-story'] = {
+      id: 'other-story',
+      name: 'other',
+      // No story-level move: this story's persos never reach the page root,
+      // regardless of their own move.
+      initial: undefined,
+      persos: [
+        {
+          id: 'orphan-root-perso',
+          name: 'orphan-root-perso',
+          type: 'tag',
+          initial: { content: 'orphan', move: '@root' },
+          actions: { 'orphan-root-perso': null }
+        }
+      ],
+      straps: undefined,
+      listen: []
+    }
+
+    const compileResult = builder.compile({ scene })
+    expect(compileResult.ok).toBe(true)
+
+    if (!compileResult.ok) {
+      return
+    }
+
+    expect(compileResult.data.compiledScene.rootNodeIds).toEqual(['title-perso'])
   })
 
   it('compiles one valid scene while preserving story and perso names', () => {
@@ -155,19 +209,18 @@ describe('Builder API V1', () => {
     expect(compiledScene.schemaVersion).toBe('v1-test')
     expect(compiledScene.createdAt).toMatch(/\d{4}-\d{2}-\d{2}T/)
     expect(compiledScene.scene.id).toBe(scene.id)
-    expect(compiledScene.scene.rootStories).toEqual(scene.rootStories)
 
     expect(resourceManifest).toEqual({ entries: [] })
     expect(diagnostics.warnings).toEqual([])
-
-    scene.rootStories.push('new-root')
-    expect(compiledScene.scene.rootStories).toEqual(['story-main'])
   })
 
   it('fails compile when validation contains blocking errors', () => {
     const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
-    invalidScene.rootStories = []
+    invalidScene.listen = [
+      { on: 'sequence:start' },
+      { on: 'sequence:start' }
+    ]
 
     const compileResult = builder.compile({ scene: invalidScene })
 
@@ -177,6 +230,6 @@ describe('Builder API V1', () => {
       return
     }
 
-    expect(compileResult.error.code).toBe('AUTHOR_ROOT_STORIES_INVALID')
+    expect(compileResult.error.code).toBe('AUTHOR_DUPLICATE_LISTEN_ON')
   })
 })

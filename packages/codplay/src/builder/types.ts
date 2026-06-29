@@ -57,12 +57,18 @@ export type StoryDef = {
   eventimes?: Array<Record<string, unknown>>
   state?: Record<string, unknown> | undefined
   init?: (input?: Record<string, unknown>) => Record<string, unknown> | undefined
+  /**
+   * Author-level, temporary exclusion from scene construction — equivalent to
+   * commenting the story out. When true, the builder strips the story (and its
+   * persos/tracks/listen rules) entirely from the CompiledScene; it stays in the
+   * authored SceneDef. Unrelated to `move`/`@root` placement.
+   */
+  disabled?: boolean
 }
 
 export type SceneDef = {
   id: string
   stories: Record<string, StoryDef>
-  rootStories: string[]
   initial: Record<string, unknown> | undefined
   straps: string[] | undefined
   listen: ListenRule[]

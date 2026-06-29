@@ -192,10 +192,10 @@ export function createAnimeGridSimulation(): ThreejsSimulationFn {
 
 export const threejsAnimeGridScene = {
   id: 'threejs-anime-grid-scene',
-  rootStories: ['threejs-anime-grid-story'],
   stories: {
     'threejs-anime-grid-story': {
       id: 'threejs-anime-grid-story',
+      initial: { move: '@root' },
       persos: [
         {
           id: 'threejs-stage',

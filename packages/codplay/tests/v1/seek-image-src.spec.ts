@@ -16,7 +16,6 @@ const SRC_B = '/b.jpg'
 function createImageSwapSceneFixture(): SceneDoc {
   return {
     id: 'scene-image-src-seek',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -24,7 +23,7 @@ function createImageSwapSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__img',
@@ -46,11 +45,8 @@ function createImageSwapSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

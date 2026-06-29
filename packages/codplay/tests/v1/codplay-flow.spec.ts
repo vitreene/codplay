@@ -19,7 +19,7 @@ function createStoryFixture() {
   return {
     id: 'story-main',
     name: 'main',
-    initial: undefined,
+    initial: { move: '@root' },
     persos: [perso],
     straps: undefined,
     listen: [],
@@ -32,7 +32,6 @@ describe('V1 - CodPlay flow', () => {
     const editor = new SceneDocEditor()
 
     expect(editor.create({ id: 'scene-main' })).toEqual({ ok: true, data: undefined })
-    expect(editor.scene.rootStories.set({ value: ['story-main'] })).toEqual({ ok: true, data: undefined })
     expect(editor.upsertStory({ story: createStoryFixture() })).toEqual({ ok: true, data: undefined })
 
     const exportResult = editor.exportSceneDoc()

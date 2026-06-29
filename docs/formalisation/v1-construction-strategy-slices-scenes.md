@@ -54,7 +54,7 @@ Validation visuelle obligatoire:
 3. facade Player non alignee completement (`init` V1, `schedule`, `onChange`, `stop`, `resume`)
 4. runtime policy V1 partielle (same tick, straps, observabilite)
 5. `TrackManager` V1 non isole comme module explicite
-6. structure scene/story a aligner sur `rootStories` + `entries`
+6. structure scene/story a aligner sur `move: '@root'` (porte par chaque story elle-meme, plus de `rootStories` scene-level)
 7. bootstrap scene + demarrage par event a fermer proprement
 
 ## Arborescence cible a introduire
@@ -96,8 +96,7 @@ Champs obligatoires:
 
 Contraintes structurelles minimales:
 
-- `scene.rootStories`
-- `scene.stories[*].entries`
+- `rootNodeIds` (derives des persos `move: '@root'`, dans une story elle-meme `move: '@root'`)
 
 ### Player
 
@@ -160,8 +159,8 @@ Note d'integration:
 ### Actions
 
 1. Aligner structure `Scene`/`Story` V1 dans builder + adaptateur runtime.
-2. Valider `rootStories`, `entries` et references de base.
-3. Garantir `rootStories`, `entries`, `listen`, `tracks` dans l'artefact compile.
+2. Valider `rootStories` et references de base.
+3. Garantir `rootStories`, `rootNodeIds`, `listen`, `tracks` dans l'artefact compile.
 
 ### Commandes de sortie
 

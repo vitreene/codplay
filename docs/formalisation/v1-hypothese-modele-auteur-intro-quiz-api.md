@@ -208,13 +208,14 @@ studio.story.upsert({
 })
 ```
 
-## 5) Root stories
+## 5) Placement racine des stories
 
-```ts
-studio.scene.rootStories.set({
-  value: ["story-intro", "story-quiz", "story-bravo", "story-dommage"]
-})
-```
+`Scene.rootStories` n'existe plus : chaque story se place elle-même via son
+propre `initial.move: '@root'` (`createStory` le pose par défaut). Aucun appel
+scene-level équivalent à `rootStories.set(...)` n'est nécessaire — si une story
+créée ici doit explicitement ne pas apparaître, c'est à l'auteur de retirer ce
+`move` (ou d'utiliser `studio.setStoryDisabled(...)` pour la masquer
+temporairement de la compilation, sans rapport avec le placement).
 
 ## 6) Export auteur -> compile -> run
 

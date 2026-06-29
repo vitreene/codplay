@@ -28,10 +28,10 @@ function buildWordEventimes() {
 export function createAvatarPocScene(): SceneDoc {
   return {
     id: "avatar-poc-scene",
-    rootStories: ["avatar-story"],
     stories: {
       "avatar-story": {
         id: "avatar-story",
+        initial: { move: "@root" },
         persos: [
           {
             id: "avatar-stage",

@@ -38,7 +38,6 @@ import type { SceneDef } from 'codplay'
 
 export const myQuizScene: SceneDef = {
   id: 'my-quiz',
-  rootStories: ['container-story'],
   listen: [
     {
       on: 'quiz:answered',
@@ -51,7 +50,7 @@ export const myQuizScene: SceneDef = {
   stories: {
     'container-story': {
       id: 'container-story',
-      initial: undefined,
+      initial: { move: '@root' },           // la story elle-même atteint la racine de la page
       straps: ['onSceneReady'],
       listen: [],
       persos: [
@@ -242,7 +241,6 @@ export default datascene
   },
   "scene": {
     "id": "my-quiz",
-    "rootStories": ["container-story"],
     "listen": [{ "on": "quiz:answered", "straps": ["onQuizAnswered"] }],
     "stories": { "...": "..." },
     "tracks": {},

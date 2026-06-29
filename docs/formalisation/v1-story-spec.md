@@ -68,6 +68,7 @@ type StoryDef = {
   eventimes?: StoryEventimeNode[]
   state?: StoryState
   init: (input?: StoryInitInput) => StoryState
+  disabled?: boolean
 }
 ```
 
@@ -79,11 +80,13 @@ type StoryDef = {
 - une `Story` ne porte pas de conteneur de rendu obligatoire propre.
 - une story peut avoir plusieurs elements racine.
 - une `Story` est un template instanciable: chaque montage runtime produit une story instance.
-- une story instance possede un `story host` unique, resolu par le contexte de montage.
-- `story.initial.move` peut definir le parent de montage du `story host` de l'instance.
-- un perso se place a la racine de sa story via `move: '@root'` (`initial.move`, ou en action s'il ne doit le devenir qu'a partir d'un event) — voir `v1-perso-spec.md` 4bis. Les persos ainsi declares sont montes directement dans le `story host`, dans l'ordre de declaration de `persos`.
-- le `story host` est vise par l'alias de placement configurable `@root` (cle `rootToken`).
-- ce mecanisme remplace l'ancien champ `Story.entries` (retire) : `entries` etait declare par la story (sens inverse de toute autre relation de placement, qui part toujours du perso) et ne pouvait pas exprimer de moment (liste figee a la compilation) — `move: '@root'` est porte par le perso et accepte aussi bien `initial` qu'une action.
+- une `Story` se place elle-meme via son propre `story.initial.move` — meme vocabulaire que le `move` perso (`v1-perso-spec.md` 4bis), mais statique uniquement (resolu une fois, pas d'equivalent action au niveau story).
+- `story.initial.move: '@root'` place la story directement a la racine de la page (point de montage fourni au Player).
+- `story.initial.move: { parentId }` compose la story dans un outlet d'une autre story (deja utilise, ex. une story de question embarquee dans un mashup).
+- l'absence de `move` (`initial.move` absent) signifie que la story n'apparait nulle part — symetrie stricte avec la regle perso (aucune racine implicite par defaut). En mode auteur, ce cas produit un warning de trace non bloquant (`AUTHOR_STORY_MOVE_MISSING`), silencieux en diffusion.
+- un perso se place a la racine de sa propre story via `move: '@root'` (`initial.move`, ou en action s'il ne doit le devenir qu'a partir d'un event) — voir `v1-perso-spec.md` 4bis. `move: '@root'` cote perso resout en chaine contre la cible reelle deja designee par le `move` de SA PROPRE story — jamais contre un node synthetique cree pour l'occasion: le moteur ne cree aucun node lui-meme (`v1-invariants.md` "Invariants moteur").
+- ce mecanisme remplace l'ancien champ `Story.entries` (retire) et l'ancienne autorisation `Scene.rootStories` (retiree) : les deux etaient declares hors du perso/de la story eux-memes et ne pouvaient pas exprimer de moment ou de placement compose — `move: '@root'`/`{parentId}` est porte directement par chaque niveau (story et perso) qui se place lui-meme.
+- `disabled` (booleen, distinct de `move`) est une annotation de retrait volontaire et temporaire par l'auteur — equivalent "commenter la story". Quand `true`, le **builder** retire la story entierement du `CompiledScene` (persos, tracks, listen rules inclus); elle reste dans le document source. Sans rapport avec le placement.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `straps` déclare les noms des straps appartenant exclusivement à cette story (story-straps).
 - ces noms référencent les clés de `storyStraps[story.id]` injectés à `player.init`.
@@ -97,13 +100,12 @@ type StoryDef = {
 2. Independance et placement
 
 - une `Story` est une unite independante.
-- monter une `Story` consiste a propager le placement vers ses persos `move: '@root'`.
-- monter une `Story` fixe un `story host` unique pour cette instance.
-- le contexte de placement d'une `Story` ne vit pas dans `StoryDef`.
+- le placement d'une `Story` vit dans `StoryDef.initial.move` — porte par la story elle-meme, statique.
+- l'instanciation des persos d'une story (creation des composants/nodes runtime) reste inconditionnelle, independante de tout `move` story-level: une story sans `move` resolu a quand meme tous ses persos instancies, simplement aucun n'atteint la racine de la page par ce biais.
 - une `Story` reste portable et reutilisable dans des scenes ou contextes visuels differents.
 - une story peut etre rendue visuellement dans une autre sans creer de lien structurel hierarchique.
-- ce placement inter-stories repose sur les `move` de ses elements et non sur une declaration de hierarchie entre stories.
-- l'alias `rootToken` resout le `story host` de l'instance courante; il ne remplace pas un identifiant runtime explicite.
+- ce placement inter-stories repose exclusivement sur le `move` de la story composee elle-meme (`{ parentId }` ciblant un outlet d'une autre story) — jamais sur un perso visant directement un outlet hors de sa propre story.
+- l'alias `rootToken` (`'@root'`), pour un perso, resout en chaine contre la cible reelle deja designee par le `move` de sa propre story; il ne remplace pas un identifiant runtime explicite.
 
 3. Initialisation
 

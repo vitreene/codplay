@@ -29,19 +29,39 @@ function isStoryHostMove(rawMove: unknown): boolean {
 }
 
 /**
- * Derives root node IDs from the compiled scene's rootStories.
- * Root nodes are persos in root stories that have no move at all, or move: '@root'
- * (no parent — directly mounted at the page's mount target).
+ * Strips `disabled` stories entirely from the scene before compilation —
+ * an author-level, temporary exclusion (equivalent to commenting the story
+ * out), unrelated to `move`/`@root` placement. The story stays in the
+ * authored SceneDef; it never reaches the CompiledScene.
+ */
+function removeDisabledStories(scene: SceneDef): SceneDef {
+  const hasDisabledStory = Object.values(scene.stories).some((story) => story.disabled === true)
+  if (!hasDisabledStory) {
+    return scene
+  }
+
+  const stories: SceneDef['stories'] = {}
+  for (const [storyId, story] of Object.entries(scene.stories)) {
+    if (story.disabled === true) continue
+    stories[storyId] = story
+  }
+
+  return { ...scene, stories }
+}
+
+/**
+ * Derives root node IDs: persos whose own move resolves to '@root', inside a
+ * story whose own `initial.move` also resolves to '@root' (the only case
+ * where a story's content lands directly under the page's mount target —
+ * both levels must agree, see 2026-06-29-story-root-move-installation-plan.md 1.3bis).
  */
 function deriveRootNodeIds(scene: SceneDef): string[] {
-  return scene.rootStories.flatMap((storyId) => {
-    const story = scene.stories[storyId]
-    if (story === undefined) return []
+  return Object.values(scene.stories).flatMap((story) => {
+    const storyMove = (story.initial as Record<string, unknown> | undefined)?.move
+    if (!isStoryHostMove(storyMove)) return []
+
     return story.persos
-      .filter((perso) => {
-        const move = (perso.initial as Record<string, unknown> | undefined)?.move
-        return move === undefined || isStoryHostMove(move)
-      })
+      .filter((perso) => isStoryHostMove((perso.initial as Record<string, unknown> | undefined)?.move))
       .map((perso) => perso.id)
   })
 }
@@ -84,13 +104,14 @@ export class BuilderFacade implements BuilderApi {
       }
     }
 
-    const resourceManifest = extractResourceManifest(normalizedScene)
+    const compiledSceneDef = removeDisabledStories(normalizedScene)
+    const resourceManifest = extractResourceManifest(compiledSceneDef)
       const compiledScene: CompiledScene = {
         schemaVersion: this.schemaVersion,
         createdAt: new Date().toISOString(),
-        scene: this.cloner.cloneSceneDef(normalizedScene),
+        scene: this.cloner.cloneSceneDef(compiledSceneDef),
         resources: this.cloner.cloneResourceManifest(resourceManifest),
-        rootNodeIds: deriveRootNodeIds(normalizedScene)
+        rootNodeIds: deriveRootNodeIds(compiledSceneDef)
       }
 
     return {

@@ -53,10 +53,10 @@ function createPolygonMorphTween(input: {
 export function createPolygonScene(): SceneDoc {
   return {
     id: 'polygon-scene',
-    rootStories: ['polygon-story'],
     stories: {
       'polygon-story': {
         id: 'polygon-story',
+        initial: { move: '@root' },
         persos: [
           {
             id: 'polygon-layout',

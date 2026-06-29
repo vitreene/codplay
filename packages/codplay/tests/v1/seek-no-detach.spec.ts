@@ -13,7 +13,6 @@ import type { SceneDoc } from '../../src/player/types'
 function createGridChildSceneFixture(): SceneDoc {
   return {
     id: 'scene-seek-no-detach',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -21,7 +20,7 @@ function createGridChildSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__grid',
@@ -59,11 +58,8 @@ function createGridChildSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

@@ -7,7 +7,7 @@ import type { SceneStoryDoc } from "codplay/player/types"
 export function createTimerStory(): SceneStoryDoc {
   return {
     id: "game-timer-story",
-    initial: undefined,
+    initial: { move: { parentId: "game:zone:timer" } },
     straps: undefined,
     listen: [],
     persos: [
@@ -15,7 +15,7 @@ export function createTimerStory(): SceneStoryDoc {
         id: "game-timer-root",
         type: "layout",
         initial: {
-          move: { parentId: "game:zone:timer" },
+          move: "@root",
           markup: `
             <div class="quiz-hunt-timer">
               <span class="quiz-hunt-timer-label-slot" data-part="game-timer-label-slot"></span>

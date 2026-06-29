@@ -153,10 +153,10 @@ export function createRiveCoachBlock(options: RiveCoachBlockOptions) {
 export function createRiveCoachScene(): SceneDoc {
   return {
     id: 'rive-coach-scene',
-    rootStories: ['avatar-story'],
     stories: {
       'avatar-story': {
         id: 'avatar-story',
+        initial: { move: '@root' },
         straps: riveCoachVisemeConversionStraps,
         listen: [
           { on: 'avatar:viseme:raw', straps: ['rive-coach-viseme-convert'] },

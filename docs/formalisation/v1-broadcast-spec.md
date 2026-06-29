@@ -64,16 +64,18 @@ des persos (click, pointerdown, capture) sont automatiquement routées vers
 ### 5. Montage des noeuds racines
 
 Le builder calcule `rootNodeIds: string[]` à la compilation et l'inscrit dans
-`CompiledScene`. Cette liste contient les IDs des persos racines de chaque
-`rootStory` — définis comme les persos dont `initial.move` est absent.
+`CompiledScene`. Cette liste contient les IDs des persos dont `initial.move`
+cible l'alias `@root`, à l'intérieur d'une story dont `initial.move` cible lui
+aussi l'alias `@root` (`v1-perso-spec.md` 4bis, `v1-story-spec.md`).
 
 Le BroadcastPlayer appelle `getRuntimeRegistry().getNodeById(id)` après `init()` et
 appende les noeuds dans le conteneur hôte. L'intégrateur ne déclare rien.
 
 **Règle de dérivation dans le builder :**
-Pour chaque `storyId` dans `scene.rootStories`, prendre les entrées de
-`story.entries` dont le perso correspondant n'a pas de `initial.move`. Ces IDs
-constituent `rootNodeIds`.
+Pour chaque story dont `initial.move === '@root'`, prendre ses persos dont
+`initial.move` cible aussi l'alias `@root`. Ces IDs constituent `rootNodeIds`.
+Une story sans `move`, ou dont le `move` cible un outlet d'une autre story
+(`{ parentId }`), ne contribue jamais à `rootNodeIds`.
 
 ---
 

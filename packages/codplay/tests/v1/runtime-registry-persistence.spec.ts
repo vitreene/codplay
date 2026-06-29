@@ -28,7 +28,6 @@ function createRuntimeNodeFixture(tagName: string): RuntimeNodeFixture {
 function createPersistentRuntimeSceneFixture(): SceneDoc {
   return {
     id: 'scene-persistent-runtime',
-    rootStories: ['story-main'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -36,7 +35,7 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        initial: undefined,
+        initial: { move: '@root' },
         persos: [
           {
             id: 'story-main__title',
@@ -64,11 +63,8 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
         ]
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule('story-main')
     },
     tracks: {}
   }

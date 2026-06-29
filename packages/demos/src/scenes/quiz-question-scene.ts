@@ -462,7 +462,7 @@ function createQuestionNext(question: ResolvedQuizQuestion): PersoDoc {
 function createQuestionStory(question: ResolvedQuizQuestion): SceneStoryDoc {
   return {
     id: QUESTION_STORY_ID,
-    initial: undefined,
+    initial: { move: '@root' },
     state: {
       question,
       config: DEFAULT_QUESTION_CONFIG,
@@ -509,12 +509,16 @@ export function createQuizQuestionStory(
   const story = createQuestionStory(question)
   const storyId = options.storyId ?? QUESTION_STORY_ID
   const panel = story.persos.find((perso) => perso.id === QUESTION_PANEL_ID)
+  // Composition into another story's outlet is the STORY's own move
+  // (`initial.move: { parentId }`), never the panel perso reaching directly
+  // across story boundaries — the panel always keeps `move: '@root'`,
+  // attaching to its own (now correctly placed) story.
+  const storyInitial = options.parentId
+    ? { ...(story.initial as Record<string, unknown> | undefined), move: { parentId: options.parentId } }
+    : story.initial
 
   if (panel) {
     const initial = panel.initial as Record<string, unknown>
-    if (options.parentId) {
-      initial.move = { parentId: options.parentId }
-    }
     if (options.panelClassName) {
       initial.className = options.panelClassName
     }
@@ -529,6 +533,7 @@ export function createQuizQuestionStory(
   return {
     ...story,
     id: storyId,
+    initial: storyInitial,
   }
 }
 
@@ -538,7 +543,6 @@ export function createQuizQuestionStory(
 export function createQuizQuestionScene(question: ResolvedQuizQuestion): SceneDoc {
   return {
     id: `quiz-question-${question.index}-scene`,
-    rootStories: [QUESTION_STORY_ID],
     initial: {
       answers: [],
       answeredCount: 0,

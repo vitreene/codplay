@@ -39,7 +39,6 @@ type ListenRule = {
 type SceneDef = {
   id: string
   stories: Record<string, StoryDef>
-  rootStories: string[]
   initial: Record<string, unknown> | undefined
   straps: string[] | undefined
   listen: ListenRule[]
@@ -96,18 +95,18 @@ Note de contexte:
 
 3. Stories racine
 
-- `rootStories` designe les stories autorisees a etre placees a la racine de la scene.
-- `rootStories` est obligatoire et non vide.
-- chaque story referencee dans `rootStories` doit exister dans `stories`.
-- `rootStories` est une structure d'autorisation scene-level, pas un declencheur temporel implicite.
-- `rootStories` n'impose ni visibilite immediate, ni montage implicite, ni demarrage automatique.
+- une story atteint la racine de la page par son propre `story.initial.move: '@root'` — meme mecanisme et meme vocabulaire qu'au niveau perso (`v1-perso-spec.md` 4bis), porte au niveau story.
+- l'absence de `move` (`initial.move` absent) signifie que la story n'apparait nulle part: aucune racine implicite par defaut.
+- en mode auteur, une story sans `move` resolu produit un warning de trace (`AUTHOR_STORY_MOVE_MISSING`), silencieux en diffusion.
+- `Story.disabled` (booleen, distinct de `move`) retire une story entierement de la compilation (builder), independamment de tout placement — voir `v1-story-spec.md`.
+- `rootStories` n'existe plus: c'etait l'ancien mecanisme d'autorisation scene-level, remplace par le `move` porte par chaque story elle-meme.
 
 4. Stories independantes
 
 - une story est une unite independante.
 - `Scene` ne porte aucune hierarchie structurelle entre stories.
 - une story peut etre rendue visuellement dans le perimetre d'une autre sans creer de lien structurel runtime.
-- cette relation visuelle passe par les mecanismes existants de `move` appliques aux elements concernes.
+- cette composition cross-story passe exclusivement par le `move` de la story elle-meme (`story.initial.move: { parentId }`, ciblant un outlet d'une autre story) — jamais par un perso visant directement un outlet hors de sa propre story. Le perso, a l'interieur, utilise `move: '@root'`, qui resout en chaine contre cette cible.
 
 5. Ecoute et effects
 
@@ -126,8 +125,8 @@ Note de contexte:
 - a `scene.init`, toutes les stories de la scene sont initialisees.
 - une story initialisee peut exister dans le runtime sans etre presente dans le DOM.
 - une story initialisee peut recevoir des events meme si elle n'est pas encore visible dans le DOM.
-- le runtime peut conserver pour chaque story l'ordre des persos portant `move: '@root'` afin de monter l'instance dans son `story host` (`v1-perso-spec.md` 4bis, remplace l'ancien `Story.entries`, retire).
-- `story.initial.move` peut positionner le `story host` de l'instance dans un outlet autorise.
+- un perso portant `move: '@root'` rejoint la cible reelle deja designee par le `move` de SA PROPRE story, en chaine — jamais un node synthetique cree pour l'occasion: le moteur ne cree aucun node lui-meme, c'est l'entiere responsabilite des composants (`v1-invariants.md` "Invariants moteur", `v1-component-api.md`).
+- `story.initial.move: { parentId }` positionne ainsi, indirectement, tous les persos `@root` de cette story dans l'outlet designe — sans aucun node intermediaire.
 - si un event est emis avant qu'une story, un perso ou un placement ne soit pret pour le traitement attendu, cet event peut etre perdu.
 - les elements peuvent entrer dans le DOM ou en sortir pendant la sequence.
 - la sortie du DOM n'implique pas la suppression runtime de l'element.
@@ -138,7 +137,7 @@ Note de contexte:
 
 - apres chargement et preload, la `Scene` execute une phase de bootstrap avant la diffusion visuelle normale.
 - cette phase initialise le runtime global de scene avant le premier event visible de sequence.
-- le bootstrap peut preparer les placements autorises par `rootStories` sans introduire de demarrage temporel implicite.
+- le bootstrap peut preparer les placements de story (`story.initial.move`) sans introduire de demarrage temporel implicite.
 - en implementation, il est attendu que le montage structurel des persos et la mise en timeline de leurs `eventimes` restent deux operations distinctes.
 - le demarrage logique de sequence passe ensuite par les events et leur resolution dans `Scene.listen`.
 
@@ -175,8 +174,7 @@ Note de contexte:
 - aucun track ne peut etre ajoute ou supprime pendant la lecture.
 - `tracks` porte l'orchestration scene-level (activation, registre, timing global), pas la definition metier portable des eventimes d'une story.
 - les eventimes portables d'une story restent dans `Story.eventimes`.
-- le montage d'une story cree une story instance avec un `story host` unique.
-- ce `story host` est la cible de reference de l'alias configurable `rootToken` pour cette instance.
+- l'alias configurable `rootToken` (`'@root'`), pour un perso d'une story donnee, resout en chaine contre la cible reelle deja designee par le `move` de cette story — pas contre un node distinct cree pour l'instance.
 - la scene fixe l'ancrage temporel de depart d'une story via la resolution runtime de ses events et le mecanisme existant d'offsets relatifs.
 - cet ancrage temporel est distinct du simple montage des persos de la story dans le runtime.
 - un track unique par defaut `global` existe toujours.
@@ -236,6 +234,6 @@ Contraintes:
 Reference transversale: `v1-invariants.md`.
 
 - `Scene` orchestre le global; `Story` orchestre le local.
-- `rootStories` est l'autorite scene-level sur les stories autorisees a la racine de la scene.
+- chaque story est l'autorite sur son propre placement racine, via son propre `move: '@root'` — il n'existe plus d'autorisation scene-level centralisee (`rootStories`).
 - aucune hierarchie structurelle entre stories n'est portee par `Scene`.
 - aucun couplage nominatif inter-stories par adressage direct d'une story cible.

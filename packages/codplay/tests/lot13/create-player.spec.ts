@@ -33,24 +33,20 @@ function temp__createStrictSceneFixture(input: {
 }): SceneDoc {
   return {
     id: input.sceneId,
-    rootStories: [input.storyId],
     initial: undefined,
     straps: undefined,
     listen: [],
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        initial: undefined,
+        initial: { move: '@root' },
         persos: input.persos,
         straps: undefined,
         listen: []
       }
     },
-    init(scene, options) {
-      options.mount(scene.rootStories[0])
-    },
     onStart(scene, options) {
-      options.schedule(scene.rootStories[0])
+      options.schedule(input.storyId)
     },
     tracks: input.tracks ?? {}
   }
@@ -567,14 +563,13 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
 
     const scene: SceneDoc = {
       id: 'scene-mounted-start',
-      rootStories: ['story-main'],
       initial: undefined,
       straps: undefined,
       listen: [],
       stories: {
         'story-main': {
           id: 'story-main',
-          initial: undefined,
+          initial: { move: '@root' },
           persos: [
             {
               id: 'title-main',
@@ -610,10 +605,6 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
             }
           ]
         }
-      },
-      init(_scene, options) {
-        options.mount('story-main')
-        options.mount('story-wait')
       },
       onStart(_scene, options) {
         options.schedule('story-main')

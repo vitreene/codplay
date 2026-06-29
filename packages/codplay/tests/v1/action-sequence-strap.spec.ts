@@ -35,7 +35,6 @@ const fanoutStraps: StrapCollection = {
 function temp__createFanoutScene(): SceneDoc {
   return {
     id: 'fanout-scene',
-    rootStories: ['fanout-story'],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -77,7 +76,6 @@ function temp__createFanoutScene(): SceneDoc {
 function temp__createFanoutWithCollidingEventimeScene(): SceneDoc {
   return {
     id: 'fanout-collision-scene',
-    rootStories: ['fanout-story'],
     initial: undefined,
     straps: undefined,
     listen: [],

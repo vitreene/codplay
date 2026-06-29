@@ -1,6 +1,5 @@
 import type { TransformFn, StrapCollection } from 'codplay/player/strap-types'
 import type { SceneDoc } from 'codplay/player/types'
-import type { PlayerSceneLifecycleOptions, StrictSceneDoc } from 'codplay/player/types'
 
 const DROP_ZONES: Record<string, 'a' | 'b'> = {
   'list-a': 'a',
@@ -124,7 +123,6 @@ function makeItemPerso(
 export function createS6DndListScene(): SceneDoc {
   return {
     id: 's6-dnd-list-scene',
-    rootStories: ['s6-main-story'],
     initial: undefined,
     straps: [],
     listen: [],
@@ -134,7 +132,7 @@ export function createS6DndListScene(): SceneDoc {
         state: {
           assignments: { 'item-1': 'a', 'item-2': 'a', 'item-3': 'a' },
         },
-        initial: undefined,
+        initial: { move: '@root' },
         straps: s6Straps,
         listen: [
           { on: 'item:drag:tracking', transform: [trackMove] },
@@ -234,8 +232,5 @@ export function createS6DndListScene(): SceneDoc {
       },
     },
     tracks: {},
-    init(scene: StrictSceneDoc, options: PlayerSceneLifecycleOptions) {
-      options.mount(scene.rootStories[0])
-    },
   } as unknown as SceneDoc
 }
