@@ -42,6 +42,12 @@ import type {
   ServiceRegisterInput,
 } from "./types";
 
+// The move command for "resolved to no attachment at all" at a seek target — used in
+// place of `null` so loadPersos always has a real command to hand to applyMove (whose own
+// idempotence makes the call a no-op when the perso is already detached). See
+// 2026-06-29-entries-removal-and-dynamic-move-seek-plan.md, défaut 2.
+const DETACH_MOVE_COMMAND: MoveCommand = normalizeMoveCommand(RUNTIME_CONFIG.move.detachToken, false) as MoveCommand;
+
 const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   tag: TagComponent,
   text: TextComponent,
@@ -404,7 +410,11 @@ export class RuntimeComponentOrchestrator {
    * gets no write at all, not just a skipped refresh. See
    * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
    */
-  loadPersos(runtimePersos: RuntimePersos, mountedPersoIds?: ReadonlySet<string>): RuntimeElementMap {
+  loadPersos(
+    runtimePersos: RuntimePersos,
+    mountedPersoIds?: ReadonlySet<string>,
+    effectiveMoveByPersoId?: ReadonlyMap<string, MoveCommand | null>,
+  ): RuntimeElementMap {
     this.installModules();
     this.storyEntriesByStoryId.clear();
     this.storyMoveByStoryId.clear();
@@ -464,18 +474,47 @@ export class RuntimeComponentOrchestrator {
     for (const perso of Object.values(runtimePersos.persos)) {
       const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
       const isStoryEntry = storyEntries.includes(perso.id);
-      const isRootEntry = isStoryEntry && (perso.initial.move === undefined || isStoryHostMove(perso.initial.move));
-      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
-        continue;
-      }
-
       const rawInitialMove = perso.initial.move;
+      const isRootEntry = isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove));
 
       if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
         continue;
       }
 
-      const moveCommand = normalizeMoveCommand(perso.initial.move, true);
+      if (effectiveMoveByPersoId?.has(perso.id)) {
+        // Seek path: resolveMountedPersoIdsAtSeek already resolved this perso's move at
+        // targetMs from track history — apply it as-is (a real target, or the detach
+        // sentinel when nothing due establishes any attachment) instead of falling back
+        // to the static initial.move, which a track-driven perso never has. Bypasses the
+        // mountedPersoIds filter below on purpose: a perso resolved "not mounted" still
+        // needs this call to detach it if it is currently attached from a prior live
+        // state. See 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3 and
+        // 2026-06-29-entries-removal-and-dynamic-move-seek-plan.md, défaut 2.
+        const resolvedMove = effectiveMoveByPersoId.get(perso.id) ?? DETACH_MOVE_COMMAND;
+
+        // Cheap pre-check before calling onInitialPerso/applyMove: applyMove's own
+        // idempotence (the attach branch only) still does a full registry/outlet
+        // resolution before bailing out, and its detach branch has no early-out at all.
+        // Run for every non-root perso on every seek (most of which are already
+        // detached and stay detached), that cost reintroduces exactly what the
+        // mountedPersoIds filter above was built to eliminate. A perso already
+        // recorded at its resolved target needs no call at all.
+        const resolvedParentId =
+          resolvedMove.parentId === RUNTIME_CONFIG.move.detachToken ? null : resolvedMove.parentId;
+        const currentParentId = this.parentListByPersoId.get(perso.id) ?? null;
+        if (resolvedParentId === currentParentId) {
+          continue;
+        }
+
+        this.runHook("onInitialPerso", { perso, moveCommand: resolvedMove });
+        continue;
+      }
+
+      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
+        continue;
+      }
+
+      const moveCommand = normalizeMoveCommand(rawInitialMove, true);
       if (moveCommand === null) {
         continue;
       }

@@ -31,18 +31,29 @@ export function createFinalStory(
     {
       id: panelId,
       type: "layout",
-        initial: {
-          markup: `
-            <div class="quiz-hunt-final-panel is-hidden">
-              <div data-part="${prefix}:fieldset-slot"></div>
-            </div>
-          `,
-        move: { parentId: "game:zone:main" }
+      initial: {
+        markup: `
+          <div class="quiz-hunt-final-panel is-hidden">
+            <div data-part="${prefix}:fieldset-slot"></div>
+          </div>
+        `
       },
+      // Attached on demand on `:show`, detached for real on `:hide` once
+      // the fade-out (CSS opacity transition, quiz-hunt.css) has had time
+      // to play — see PRATIQUES.md item 3. ActionSequence (the
+      // `[{action,durationMs?}, ...]` chaining shape) is a valid runtime
+      // action value not yet reflected in the static `ActionDoc` type —
+      // cast needed, mirrors move-off-story.ts.
       actions: {
-        [`game:final:${word.id}:show`]: { className: { add: "is-visible", remove: "is-hidden" } },
-        [`game:final:${word.id}:hide`]: { className: { add: "is-hidden", remove: "is-visible" } }
-      }
+        [`game:final:${word.id}:show`]: [
+          { action: { move: { parentId: "game:zone:main" } }, durationMs: 20 },
+          { action: { className: { add: "is-visible", remove: "is-hidden" } } }
+        ],
+        [`game:final:${word.id}:hide`]: [
+          { action: { className: { add: "is-hidden", remove: "is-visible" } }, durationMs: 200 },
+          { action: { move: "off" } }
+        ]
+      } as unknown as PersoDoc<"layout">["actions"]
     },
     {
       id: `${prefix}-fieldset`,
@@ -87,7 +98,14 @@ export function createFinalStory(
 
   return {
     id: `game-final-${word.id}-story`,
-    entries: [panelId],
+    // Not the story's permanent root (v1-story-spec.md: `entries` designates
+    // persos placed at the story's root, mounted directly in its story host
+    // regardless of move) — this panel is absent until its own `:show`
+    // action moves it, and detached again on `:hide` (`move:"off"`). Listing
+    // it as an entry would make it always-mounted by definition, defeating
+    // that mechanism and the seek-time refresh filter that depends on it
+    // (`resolveMountedPersoIdsAtSeek`) — see PRATIQUES.md item 3.
+    entries: [],
     initial: undefined,
     state: {
       question,

@@ -5,16 +5,11 @@
     "paths": {
       "codplay": ["../codplay/src/index.ts"],
       "codplay/*": ["../codplay/src/*"],
-      "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
-      "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
-      "@codplay/avatar3d": ["../authoring/components/avatar3d/src/index.ts"],
-      "@codplay/avatar3d/*": ["../authoring/components/avatar3d/src/*"],
-      "@codplay/rive": ["../authoring/components/rive/src/index.ts"],
-      "@codplay/rive/*": ["../authoring/components/rive/src/*"],
-      "@codplay/threejs": ["../authoring/components/threejs/src/index.ts"],
-      "@codplay/threejs/*": ["../authoring/components/threejs/src/*"],
-      "@codplay/remote": ["../authoring/remote/src/index.ts"],
-      "@codplay/remote/*": ["../authoring/remote/src/*"]
+      // Keep the same priority order as build/resolve-codplay-authoring.ts.
+      "@codplay/*": [
+        "../authoring/components/*/src/index.ts",
+        "../authoring/*/src/index.ts"
+      ]
     }
   },
   "include": ["src"]

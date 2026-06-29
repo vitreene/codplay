@@ -426,7 +426,17 @@ Démo dédiée — **à construire**, volontairement minimale (pas quiz-hunt) :
   rapide autour du point de détachement), puis en relance après un seek arrière (le perso doit se
   rattacher correctement si on revient avant le déclenchement).
 - Une fois validée, reporter le même mécanisme dans `quiz-hunt` (panneaux trial/final), en clôturant
-  `PRATIQUES.md` item 3.
+  `PRATIQUES.md` item 3. **Fait le 2026-06-29** : `build-reading-quiz.ts`/`final-story.ts` n'ont
+  plus de `initial.move`, attachent via `move` sur `:show` et détachent via `move:"off"` sur
+  `:hide` (ActionSequence à deux étapes, fondu CSS `opacity` 200ms ajouté à `quiz-hunt.css` —
+  les panneaux n'avaient jusqu'ici aucune transition, juste un saut `display:none`/`block`).
+  `result-story.ts`/`extra-story.ts` intentionnellement non touchés (un seul perso chacun,
+  négligeables pour le coût mesuré). Un test utilisateur en lecture normale a ensuite révélé un
+  défaut distinct, préexistant, exposé pour la première fois par ce portage (un `move` dynamique
+  déclenché par une strap retournant plusieurs events immédiats) — cadré et **corrigé** dans
+  `2026-06-29-strap-emit-syncCursor-drift-defect.md`. Suite de tests/gates verte (253 tests) avec
+  un test de régression dédié. Reste à revalider visuellement dans le navigateur, puis à tester la
+  réactivité du seek dans quiz-hunt avec les 64 panneaux non montés en permanence.
 
 Tests à écrire (suivant le patron déjà en place pour les invariants de seek, ex.
 `tests/v1/seek-image-src.spec.ts`, `tests/v1/seek-layout-outlet.spec.ts`) :

@@ -92,9 +92,19 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
 
   const traceLogPanel = createTraceLogPanel(playerTraceNode, { compact: config.compactTrace ?? false });
   let traceEventCount = 0;
+  let traceCountFlushScheduled = false;
   studio.player.onTrace((row) => {
     traceEventCount += 1;
-    playerTraceCountNode.textContent = `${traceEventCount} events`;
+    // Same reasoning as trace-log-panel.ts's own flush: a seek replay burst can fire
+    // hundreds of traces synchronously — coalesce into one DOM write per frame instead
+    // of one per trace, so this debug counter never competes with the scene's own work.
+    if (!traceCountFlushScheduled) {
+      traceCountFlushScheduled = true;
+      globalThis.requestAnimationFrame(() => {
+        traceCountFlushScheduled = false;
+        playerTraceCountNode.textContent = `${traceEventCount} events`;
+      });
+    }
     traceLogPanel.push(row);
   });
 

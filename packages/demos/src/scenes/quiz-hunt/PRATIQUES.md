@@ -151,9 +151,16 @@ ajouté pour le footer (basket/timer empilés en colonne sous `640px`) et grille
 
 ## 3. Tout monter dans le DOM dès l'init + `display:none`/`block` au lieu d'attacher/détacher dynamiquement
 
-**Constaté dans** : `build-reading-quiz.ts` (32 panneaux trial), `final-story.ts` (32 panneaux
-final), `result-story.ts`, `extra-story.ts` — tous montés à `game:zone:main` dès `initial.move`,
-visibilité pilotée ensuite par `style.display` (`'none'`/`'block'`) sur les events `:show`/`:hide`.
+**Statut : implémenté le 2026-06-29 pour `build-reading-quiz.ts`/`final-story.ts`** (32 panneaux
+trial + 32 panneaux final). `result-story.ts`/`extra-story.ts` intentionnellement laissés tels
+quels : un seul perso chacun, négligeable pour le coût de `loadPersos`. Détail des défauts
+rencontrés et corrigés pendant cette mise en œuvre (pas une pratique en soi, pour mémoire technique
+seulement) : `2026-06-29-strap-emit-syncCursor-drift-defect.md`.
+
+**Constaté dans** (avant correction) : `build-reading-quiz.ts` (32 panneaux trial), `final-story.ts`
+(32 panneaux final), `result-story.ts`, `extra-story.ts` — tous montés à `game:zone:main` dès
+`initial.move`, visibilité pilotée ensuite par `style.display` (`'none'`/`'block'`) sur les events
+`:show`/`:hide`.
 
 **Constat (guidance utilisateur, à valider avant d'appliquer)** : CodPlay sait attacher/détacher
 un perso du DOM dynamiquement (`move`), et la réapparition d'un élément doit passer par une
@@ -174,19 +181,15 @@ de la scène dès l'init ; le reste s'attache à la demande.
 - Monter tous les persos de contenu à l'init puis ne piloter que leur `display` — ça maintient
   en mémoire/DOM des dizaines d'éléments jamais visibles (32 panneaux ici).
 - Confondre `display:none` (élément présent mais masqué) avec un vrai détachement.
+- Déclarer en `entries` un perso qui n'est censé être présent qu'à la demande. `entries` désigne
+  explicitement les persos placés à la racine permanente d'une story (`v1-story-spec.md`) : un
+  perso qui y figure est toujours considéré monté, même sans `move` — y mettre un contenu
+  dormant (panneau, popup) neutralise silencieusement tout détachement/filtrage de seek qu'on
+  croit avoir mis en place sur ce perso.
 
-**Point bloquant levé le 2026-06-29** — `move:"off"` (Phase 3 de
-`2026-06-28-unify-action-execution-and-move-off-plan.md`) livre le sentinel de détachement
-intentionnel manquant : `move: "off"` détache réellement le nœud du DOM (pas seulement la
-bookkeeping) sans émettre `AUTHOR_LAYOUT_OUTLET_NOT_FOUND`, distinct d'un `parentId` invalide par
-erreur d'auteur. Le volet seek (scrubbing rapide, coût de `loadPersos`) est résolu dans la même
-Phase 3 : un perso résolu non monté à la cible du seek n'est ni rafraîchi ni réinitialisé — voir
-`2026-06-29-track-event-insertion-cursor-defect.md` pour un défaut connexe découvert et corrigé
-pendant cette validation.
-
-Mécanisme validé sur une démo dédiée minimale (`?demo=move-off`), **pas encore reporté dans
-quiz-hunt** (panneaux trial/final) — `build-reading-quiz.ts`/`final-story.ts` n'ont pas été
-modifiés. Cet item reste ouvert jusqu'à cette migration.
+Mécanisme : `move:"off"` (Phase 3 de `2026-06-28-unify-action-execution-and-move-off-plan.md`) —
+sentinel de détachement intentionnel, détache réellement le nœud du DOM. Validé sur une démo
+dédiée minimale (`?demo=move-off`) avant ce report dans quiz-hunt.
 
 ---
 

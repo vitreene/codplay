@@ -117,6 +117,20 @@ export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: 
 
 	const traceLines: string[] = []
 	let firstTraceMs: number | null = null
+	let flushScheduled = false
+
+	// Writing textContent then immediately reading scrollHeight forces a synchronous
+	// layout — harmless for one push, but a seek replay can emit hundreds of traces
+	// in the same synchronous burst (no yield back to the browser in between), turning
+	// that pattern into repeated forced reflow that dominates the seek's own cost. The
+	// scene's own work must never be slowed down by this debug panel. Deferring the
+	// actual DOM write to one rAF coalesces an entire burst into a single write+read,
+	// since rAF cannot run before the synchronous burst that scheduled it finishes.
+	const flush = (): void => {
+		flushScheduled = false
+		node.textContent = traceLines.join('\n')
+		node.scrollTop = node.scrollHeight
+	}
 
 	return {
 		push: (row) => {
@@ -132,8 +146,10 @@ export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: 
 				traceLines.shift()
 			}
 
-			node.textContent = traceLines.join('\n')
-			node.scrollTop = node.scrollHeight
+			if (!flushScheduled) {
+				flushScheduled = true
+				globalThis.requestAnimationFrame(flush)
+			}
 		}
 	}
 }

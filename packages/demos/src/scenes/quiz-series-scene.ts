@@ -122,73 +122,81 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
   const background = options.background ?? "rgba(15,23,42,0.06)"
   const padding = options.padding ?? "8px 12px"
   const borderRadius = options.borderRadius ?? "8px"
+  const persos: PersoDoc[] = [
+    {
+      id: "quiz-series-progress-layout",
+      type: "layout",
+      initial: {
+        className: options.layoutClassName,
+        markup: `
+          <div class="quiz-series-progress" style="display: flex; align-items: center; gap: 10px; padding: ${padding}; background: ${background}; border-radius: ${borderRadius};">
+            <span data-part="quiz-series:progress-count"></span>
+            ${showTrack ? '<div data-part="quiz-series:progress-track" style="flex: 1; height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden;"></div>' : ''}
+            ${showRate ? '<span data-part="quiz-series:progress-rate"></span>' : ''}
+          </div>
+        `,
+        style: {},
+        move: { parentId }
+      } as unknown as PersoDoc["initial"],
+      actions: {}
+    },
+    {
+      id: "quiz-series-progress-count",
+      type: "tag",
+      initial: {
+        className: options.countClassName,
+        tag: "span",
+        content: `0 / ${SERIES_TOTAL}`,
+        style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px", ...(options.countStyle ?? {}) },
+        move: { parentId: "quiz-series:progress-count" }
+      } as unknown as PersoDoc["initial"],
+      actions: { "quiz:series:progress:count": {} }
+    }
+  ]
+
+  if (showTrack) {
+    persos.push({
+      id: "quiz-series-progress-fill",
+      type: "tag",
+      initial: {
+        className: options.fillClassName,
+        tag: "div",
+        content: "",
+        style: {
+          height: "100%",
+          width: "0%",
+          backgroundColor: "#2563eb",
+          borderRadius: "4px",
+          transition: "width 350ms ease"
+        },
+        move: { parentId: "quiz-series:progress-track" }
+      } as unknown as PersoDoc["initial"],
+      actions: { "quiz:series:progress:fill": {} }
+    })
+  }
+
+  if (showRate) {
+    persos.push({
+      id: "quiz-series-progress-rate",
+      type: "tag",
+      initial: {
+        className: options.rateClassName,
+        tag: "span",
+        content: "—",
+        style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right", ...(options.rateStyle ?? {}) },
+        move: { parentId: "quiz-series:progress-rate" }
+      } as unknown as PersoDoc["initial"],
+      actions: { "quiz:series:progress:rate": {} }
+    })
+  }
+
   return {
     id: storyId,
     entries: ["quiz-series-progress-layout"],
     initial: undefined,
     straps: undefined,
     listen: [],
-    persos: [
-      {
-        id: "quiz-series-progress-layout",
-        type: "layout",
-        initial: {
-          className: options.layoutClassName,
-          markup: `
-            <div class="quiz-series-progress" style="display: flex; align-items: center; gap: 10px; padding: ${padding}; background: ${background}; border-radius: ${borderRadius};">
-              <span data-part="quiz-series:progress-count"></span>
-              ${showTrack ? '<div data-part="quiz-series:progress-track" style="flex: 1; height: 8px; background: rgba(15,23,42,0.12); border-radius: 4px; overflow: hidden;"></div>' : ''}
-              ${showRate ? '<span data-part="quiz-series:progress-rate"></span>' : ''}
-            </div>
-          `,
-          style: {},
-          move: { parentId }
-        } as unknown as PersoDoc["initial"],
-        actions: {}
-      },
-      {
-        id: "quiz-series-progress-count",
-        type: "tag",
-        initial: {
-          className: options.countClassName,
-          tag: "span",
-          content: `0 / ${SERIES_TOTAL}`,
-          style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px", ...(options.countStyle ?? {}) },
-          move: { parentId: "quiz-series:progress-count" }
-        } as unknown as PersoDoc["initial"],
-        actions: { "quiz:series:progress:count": {} }
-      },
-      ...(showTrack ? [{
-        id: "quiz-series-progress-fill",
-        type: "tag",
-        initial: {
-          className: options.fillClassName,
-          tag: "div",
-          content: "",
-          style: {
-            height: "100%",
-            width: "0%",
-            backgroundColor: "#2563eb",
-            borderRadius: "4px",
-            transition: "width 350ms ease"
-          },
-          move: { parentId: "quiz-series:progress-track" }
-        } as unknown as PersoDoc["initial"],
-        actions: { "quiz:series:progress:fill": {} }
-      }] : []),
-      ...(showRate ? [{
-        id: "quiz-series-progress-rate",
-        type: "tag",
-        initial: {
-          className: options.rateClassName,
-          tag: "span",
-          content: "—",
-          style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right", ...(options.rateStyle ?? {}) },
-          move: { parentId: "quiz-series:progress-rate" }
-        } as unknown as PersoDoc["initial"],
-        actions: { "quiz:series:progress:rate": {} }
-      }] : [])
-    ]
+    persos
   }
 }
 

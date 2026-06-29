@@ -985,8 +985,9 @@ export class PlayerFacade implements PlayerApi {
   private loadMountedRuntimePersos(
     runtimePlan: ReturnType<PlayerRuntimePlanner["createRuntimePlan"]>,
     mountedPersoIds?: ReadonlySet<string>,
+    effectiveMoveByPersoId?: ReadonlyMap<string, MoveCommand | null>,
   ): ReturnType<RendererFacade["load"]> {
-    return this.renderer.load({ runtimePersos: runtimePlan.runtimePersos, mountedPersoIds });
+    return this.renderer.load({ runtimePersos: runtimePlan.runtimePersos, mountedPersoIds, effectiveMoveByPersoId });
   }
 
   /**
@@ -1003,7 +1004,10 @@ export class PlayerFacade implements PlayerApi {
    * chain top-down via already-registered graph relationships only. See
    * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
    */
-  private resolveMountedPersoIdsAtSeek(runtimePersos: RuntimePersos, targetMs: number): Set<string> {
+  private resolveMountedPersoIdsAtSeek(
+    runtimePersos: RuntimePersos,
+    targetMs: number,
+  ): { mountedPersoIds: Set<string>; effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null> } {
     const entriesByStoryId = runtimePersos.entriesByStoryId ?? {};
     const rootPersoIds = new Set<string>();
     const effectiveMoveByPersoId = new Map<string, MoveCommand | null>();
@@ -1094,7 +1098,7 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    return mountedPersoIds;
+    return { mountedPersoIds, effectiveMoveByPersoId };
   }
 
   /**
@@ -1990,11 +1994,25 @@ export class PlayerFacade implements PlayerApi {
       }
     }
 
-    // While a due-events batch is draining, `timelineMs` is the tick's fixed cursor; a
-    // nested emit triggered from within that drain must compare against it rather than a
-    // fresh `resolveCurrentTimelineMs()` read, which drifts forward across awaited calls
-    // and can make `syncCursor` skip not-yet-applied events later in the same batch.
-    const currentMs = this.drainingDueEvents ? this.timelineMs : this.resolveCurrentTimelineMs();
+    // While a due-events batch is draining, `timelineMs` is the tick's fixed cursor.
+    // `persist-future` is the only mode whose contract genuinely needs a fresh
+    // "is this still ahead of now" read (an event deliberately scheduled ahead,
+    // to be applied once the live position reaches it). For every other mode
+    // (the default `apply-now`, used both for a generic call and for one strap's
+    // sequentially-awaited events reaching this method through
+    // `executeStrap`/`routeSceneEvent`), `timelineEvent.ms` is itself already the
+    // only drift-free value: `createTimelineEvent` set it, an instant earlier,
+    // with no `await` in between — from `input.ms` when the caller already froze
+    // it once for the whole batch, or from that same fresh clock read otherwise.
+    // Re-reading the clock a second time here for `apply-now` would only
+    // reintroduce real-time drift across the `await` boundaries of a strap's own
+    // batch, without ever being more correct for it — see
+    // 2026-06-29-strap-emit-syncCursor-drift-defect.md.
+    const currentMs = this.drainingDueEvents
+      ? this.timelineMs
+      : event.mode === "persist-future"
+        ? this.resolveCurrentTimelineMs()
+        : timelineEvent.ms;
     const isFutureEvent = timelineEvent.ms > currentMs;
     const isRetroactiveEvent = timelineEvent.ms < currentMs;
     if (!isFutureEvent) {
@@ -2196,9 +2214,12 @@ export class PlayerFacade implements PlayerApi {
 
     const boundedTargetTimelineMs = this.runtimePlanner.clampTimelineMs(targetTimelineMs);
     const seekTargetTimelineMs = Math.min(boundedTargetTimelineMs, this.resolveCurrentSeekEndMs());
-    const mountedPersoIds = this.resolveMountedPersoIdsAtSeek(runtimePlan.runtimePersos, seekTargetTimelineMs);
+    const { mountedPersoIds, effectiveMoveByPersoId } = this.resolveMountedPersoIdsAtSeek(
+      runtimePlan.runtimePersos,
+      seekTargetTimelineMs,
+    );
 
-    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan, mountedPersoIds);
+    const rendererLoadResult = this.loadMountedRuntimePersos(runtimePlan, mountedPersoIds, effectiveMoveByPersoId);
     if (!rendererLoadResult.ok) {
       return this.reject("RENDERER_LOAD_FAILED", "Renderer failed to seek story", "player:seek:failed", {
         sceneId: this.scene.id,

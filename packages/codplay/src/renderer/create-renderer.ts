@@ -302,7 +302,7 @@ export class RendererFacade implements RendererApi {
   load(input: RendererLoadInput): RendererCommandResult {
     this.animationAdapter.stop()
     this.orchestrator.setCreateElementOptions(this.runtimeCreateElementOptions)
-    this.orchestrator.loadPersos(input.runtimePersos, input.mountedPersoIds)
+    this.orchestrator.loadPersos(input.runtimePersos, input.mountedPersoIds, input.effectiveMoveByPersoId)
     this.loadedRuntimeId = input.runtimePersos.id
     this.pendingCommits = []
     this.lastAppliedCommitSeq = 0

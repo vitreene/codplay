@@ -8,7 +8,7 @@ export const playerPocRootNodeIds = ['demo-stage-list', 'demo-list', 'demo-trash
  */
 function normalizeDemoPersos(persoById: Record<string, PersoDoc>): PersoDoc[] {
 	return Object.values(persoById).map((perso) => {
-		const nextInitial = { ...perso.initial }
+		const nextInitial = { ...perso.initial } as PersoDoc['initial']
 		if (nextInitial.id === perso.id) {
 			delete nextInitial.id
 		}
@@ -16,7 +16,7 @@ function normalizeDemoPersos(persoById: Record<string, PersoDoc>): PersoDoc[] {
 		return {
 			...perso,
 			initial: nextInitial,
-		}
+		} as PersoDoc
 	})
 }
 
