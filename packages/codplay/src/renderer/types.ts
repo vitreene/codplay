@@ -127,7 +127,6 @@ export type RendererApi = {
   module: ModuleRegistryApi
   getRuntimeRegistry: () => RuntimeRegistrySnapshot
   resolveMountedStateAtSeek: (input: {
-    rootPersoIds: ReadonlySet<string>
     effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>
   }) => Map<string, boolean>
   load: (input: RendererLoadInput) => RendererCommandResult

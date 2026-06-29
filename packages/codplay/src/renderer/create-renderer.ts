@@ -290,7 +290,6 @@ export class RendererFacade implements RendererApi {
    * per perso — see RuntimeComponentOrchestrator.resolveMountedStateAtSeek.
    */
   resolveMountedStateAtSeek(input: {
-    rootPersoIds: ReadonlySet<string>
     effectiveMoveByPersoId: ReadonlyMap<string, import('../runtime/types').MoveCommand | null>
   }): Map<string, boolean> {
     return this.orchestrator.resolveMountedStateAtSeek(input)

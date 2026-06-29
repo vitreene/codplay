@@ -36,7 +36,6 @@ export class BuilderArtifactCloner {
         name: story.name,
         trackId: story.trackId,
         tracks: this.cloneData(story.tracks),
-        entries: this.cloneData(story.entries),
         initial: this.cloneData(story.initial),
         persos: story.persos.map(perso => this.cloneData(perso)),
         straps: story.straps,

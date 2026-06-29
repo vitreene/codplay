@@ -60,7 +60,7 @@ export function createReadingQuizTrial(
         ],
         [`game:trial:${word.id}:hide`]: [
           { action: { className: { add: "is-hidden", remove: "is-visible" } }, durationMs: 200 },
-          { action: { move: "off" } }
+          { action: { move: "@off" } }
         ]
       } as unknown as PersoDoc<"layout">["actions"]
     },
@@ -109,14 +109,9 @@ export function createReadingQuizTrial(
 
   return {
     id: `game-trial-${word.id}-story`,
-    // Not the story's permanent root (v1-story-spec.md: `entries` designates
-    // persos placed at the story's root, mounted directly in its story host
-    // regardless of move) — this panel is absent until its own `:show`
-    // action moves it, and detached again on `:hide` (`move:"off"`). Listing
-    // it as an entry would make it always-mounted by definition, defeating
-    // that mechanism and the seek-time refresh filter that depends on it
-    // (`resolveMountedPersoIdsAtSeek`) — see PRATIQUES.md item 3.
-    entries: [],
+    // No move: '@root' here on purpose — this panel is absent until its own
+    // `:show` action moves it, and detached again on `:hide` (`move:"@off"`).
+    // See v1-perso-spec.md 4bis and v1-seek-spec.md (appendice 2026-06-29).
     initial: undefined,
     state: {
       question,

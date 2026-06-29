@@ -9,8 +9,7 @@ Socle unique des invariants partages par les specs V1.
 - `Scene.rootStories` est obligatoire et non vide en diffusion
 - `Scene.rootStories` designe les stories autorisees a la racine de la scene
 - `Story.listen` et `Scene.listen` sont obligatoires (peuvent etre `[]`)
-- `Story.entries` est obligatoire dans le contrat et peut valoir `[]`
-- une `Story` peut avoir plusieurs elements racine via `entries`
+- une `Story` peut avoir plusieurs elements racine, chacun declare par son propre `move: '@root'` (`v1-perso-spec.md` 4bis)
 - `Story.straps` et `Scene.straps` sont obligatoires comme proprietes et peuvent valoir `undefined`
 - `tracks` est obligatoire en diffusion et peut etre `{}`
 - le registre des tracks est fige apres `scene.init`

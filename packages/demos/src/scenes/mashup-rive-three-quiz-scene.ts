@@ -63,7 +63,6 @@ const quizStory = createQuizQuestionStory(mashupQuestion, {
   },
 })
 
-quizStory.entries.unshift('mashup-quiz-count')
 quizStory.listen.push(
   { on: 'scene:start', straps: ['mashup-quiz-countdown-start'] },
   { on: 'quiz:question:resolved', straps: ['mashup-quiz-countdown-stop'] },
@@ -184,7 +183,6 @@ export const mashupRiveThreeQuizScene = {
   stories: {
     'mashup-root-story': {
       id: 'mashup-root-story',
-      entries: ['mashup-stage', 'mashup-bg', 'mashup-overlay', ...riveBlock.persos.map((perso) => String(perso.id))],
       straps: riveCoachVisemeConversionStraps,
       listen: [...riveBlock.listen],
       persos: [
@@ -194,6 +192,7 @@ export const mashupRiveThreeQuizScene = {
           initial: {
             tag: 'div',
             className: 'mashup-stage',
+            move: '@root',
             style: {
               position: 'relative',
             },

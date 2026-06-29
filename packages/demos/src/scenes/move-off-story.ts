@@ -1,10 +1,10 @@
 import type { SceneDoc } from 'codplay/player/types'
 
 /**
- * Minimal demo for move:"off" (Phase 3 of
+ * Minimal demo for move:"@off" (Phase 3 of
  * 2026-06-28-unify-action-execution-and-move-off-plan.md): one content perso
  * attached to a layout outlet, detached via a TweenAction fade chained into
- * a static move:"off" step (ActionSequence), then reattached by a second
+ * a static move:"@off" step (ActionSequence), then reattached by a second
  * event. Single deterministic trigger mechanism (eventimes only) so seek and
  * scrubbing land on known, reproducible ms positions — a manual emit
  * alongside a scheduled eventime on the same actionKey would interrupt the
@@ -19,12 +19,12 @@ export function createMoveOffScene(): SceneDoc {
     stories: {
       'move-off-story': {
         id: 'move-off-story',
-        entries: ['move-off-root'],
         persos: [
           {
             id: 'move-off-root',
             type: 'list',
             initial: {
+              move: '@root',
               style: {
                 display: 'flex',
                 flexDirection: 'column',
@@ -70,7 +70,7 @@ export function createMoveOffScene(): SceneDoc {
                     duration: 500,
                   },
                 },
-                { action: { move: 'off' } },
+                { action: { move: '@off' } },
               ],
               attach: {
                 move: { parentId: 'move-off-layout:slot' },

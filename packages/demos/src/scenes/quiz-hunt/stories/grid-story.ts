@@ -52,7 +52,6 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
 
   return {
     id: "game-grid-story",
-    entries: ["game-grid-root"],
     initial: undefined,
     straps: undefined,
     listen: [],

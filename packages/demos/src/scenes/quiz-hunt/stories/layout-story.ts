@@ -4,7 +4,6 @@ import type { SceneStoryDoc } from "codplay/player/types"
 export function createLayoutStory(): SceneStoryDoc {
   return {
     id: "game-layout-story",
-    entries: ["game-layout-root"],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -13,6 +12,7 @@ export function createLayoutStory(): SceneStoryDoc {
         id: "game-layout-root",
         type: "layout",
         initial: {
+          move: "@root",
           markup: `
             <div class="quiz-hunt-layout">
               <div class="quiz-hunt-main-zone" data-part="game:zone:main"></div>

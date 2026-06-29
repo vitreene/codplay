@@ -50,14 +50,13 @@ function createTrackDeclarationSceneFixture(): SceneDoc {
             active: false
           }
         },
-        entries: ['story-main__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-main__title',
             name: 'title',
             type: 'tag',
-            initial: { content: 'hello' },
+            initial: { content: 'hello', move: '@root' },
             actions: {
               'story-main__title': null,
               'title:clicked': {
@@ -98,14 +97,13 @@ function createTrackToggleSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-main__title',
             name: 'title',
             type: 'tag',
-            initial: { content: 'base' },
+            initial: { content: 'base', move: '@root' },
             actions: {
               'story-main__title': null,
               'lang:fr': {
@@ -169,14 +167,13 @@ function createStoryAndMainTrackSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         trackId: 'story-main__main-track',
-        entries: ['story-main__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-main__title',
             name: 'title',
             type: 'tag',
-            initial: { content: 'base' },
+            initial: { content: 'base', move: '@root' },
             actions: {
               'story-main__title': null
             }

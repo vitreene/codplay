@@ -49,7 +49,6 @@ export function createS5DragScene(): SceneDoc {
     stories: {
       "s5-drag-story": {
         id: "s5-drag-story",
-        entries: ["draggable"],
         initial: undefined,
         straps: [],
         listen: [
@@ -62,6 +61,7 @@ export function createS5DragScene(): SceneDoc {
             id: "draggable",
             type: "tag",
             initial: {
+              move: "@root",
               content: "Déplacez-moi",
               style: {
                 position: "absolute",

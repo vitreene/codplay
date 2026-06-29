@@ -31,7 +31,6 @@ describe('resolveSceneSeekMaxMs', () => {
 			stories: {
 				'master-story': {
 					id: 'master-story',
-					entries: [],
 					initial: undefined,
 					persos: [],
 					straps: undefined,
@@ -41,7 +40,6 @@ describe('resolveSceneSeekMaxMs', () => {
 				},
 				'decor-story': {
 					id: 'decor-story',
-					entries: [],
 					initial: undefined,
 					persos: [],
 					straps: undefined,
@@ -64,7 +62,6 @@ describe('resolveSceneSeekMaxMs', () => {
 			stories: {
 				'left-story': {
 					id: 'left-story',
-					entries: [],
 					initial: undefined,
 					persos: [],
 					straps: undefined,
@@ -74,7 +71,6 @@ describe('resolveSceneSeekMaxMs', () => {
 				},
 				'right-story': {
 					id: 'right-story',
-					entries: [],
 					initial: undefined,
 					persos: [],
 					straps: undefined,

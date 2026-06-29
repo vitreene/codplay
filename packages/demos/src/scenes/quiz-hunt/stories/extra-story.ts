@@ -5,7 +5,6 @@ import type { GameLabels } from "../types"
 export function createExtraStory(labels: GameLabels): SceneStoryDoc {
   return {
     id: "game-extra-story",
-    entries: ["game-extra-token"],
     initial: undefined,
     straps: undefined,
     listen: [],

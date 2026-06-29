@@ -52,14 +52,13 @@ function createStoryListenScopeSceneFixture(): SceneDef {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        entries: ['story-a__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-a__title',
             name: 'title-a',
             type: 'tag',
-            initial: { content: 'A' },
+            initial: { content: 'A', move: '@root' },
             actions: {
               'story-a__title': null,
               [EVENT_NAME.localFlash]: {
@@ -98,14 +97,13 @@ function createStoryListenScopeSceneFixture(): SceneDef {
       'story-b': {
         id: 'story-b',
         name: 'b',
-        entries: ['story-b__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-b__title',
             name: 'title-b',
             type: 'tag',
-            initial: { content: 'B' },
+            initial: { content: 'B', move: '@root' },
             actions: {
               'story-b__title': null,
               [EVENT_NAME.localFlash]: {

@@ -21,7 +21,6 @@ function createGridChildSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__grid'],
         initial: undefined,
         persos: [
           {
@@ -29,6 +28,7 @@ function createGridChildSceneFixture(): SceneDoc {
             name: 'grid',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: '<div></div>'
             },
             actions: {}

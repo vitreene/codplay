@@ -27,7 +27,6 @@ function createDynamicMountSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['scene-layout'],
         initial: undefined,
         persos: [
           {
@@ -35,6 +34,7 @@ function createDynamicMountSceneFixture(): SceneDoc {
             name: 'layout',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: '<section class="shell"><main data-part="scene-layout:slot"></main></section>'
             },
             actions: { 'scene-layout': null }
@@ -46,7 +46,7 @@ function createDynamicMountSceneFixture(): SceneDoc {
             initial: { content: 'hello' },
             actions: {
               attach: { move: { parentId: 'scene-layout:slot' } },
-              detach: { move: 'off' }
+              detach: { move: '@off' }
             }
           }
         ],

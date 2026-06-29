@@ -19,7 +19,6 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        entries: ['story-a__title'],
         initial: {
           marker: 'A'
         },
@@ -29,7 +28,8 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
             name: 'title-a',
             type: 'tag',
             initial: {
-              content: 'A'
+              content: 'A',
+              move: '@root'
             },
             actions: {
               'story-a__title': null
@@ -48,7 +48,6 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
       'story-b': {
         id: 'story-b',
         name: 'b',
-        entries: ['story-b__title'],
         initial: {
           marker: 'B'
         },
@@ -58,7 +57,8 @@ function createStoryInitSceneFixture(calls: string[]): SceneDoc {
             name: 'title-b',
             type: 'tag',
             initial: {
-              content: 'B'
+              content: 'B',
+              move: '@root'
             },
             actions: {
               'story-b__title': null

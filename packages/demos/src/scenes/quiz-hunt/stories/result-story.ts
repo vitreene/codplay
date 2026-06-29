@@ -5,7 +5,6 @@ import type { GameLabels } from "../types"
 export function createResultStory(labels: GameLabels): SceneStoryDoc {
   return {
     id: "game-result-story",
-    entries: ["game-result-overlay"],
     initial: undefined,
     straps: undefined,
     listen: [],

@@ -74,7 +74,6 @@ function createMediaSyncScene(options: {
     stories: {
       'media-sync-story': {
         id: 'media-sync-story',
-        entries: ['media-sync-item', 'media-sync-hold'],
         initial: undefined,
         persos: [
           {
@@ -84,6 +83,7 @@ function createMediaSyncScene(options: {
               tag: 'video',
               src: '/assets/1_7b_e.mp3',
               master: options.isMaster === true,
+              move: '@root',
               style: {
                 width: '1px',
                 height: '1px',
@@ -106,6 +106,7 @@ function createMediaSyncScene(options: {
             initial: {
               tag: 'div',
               content: '',
+              move: '@root',
               style: {
                 opacity: 0
               }
@@ -162,14 +163,14 @@ describe('Lot 19 - media player sync', () => {
       stories: {
         'story-media': {
           id: 'story-media',
-          entries: ['media-item', 'text-item'],
           initial: undefined,
           persos: [
             {
               id: 'media-item',
               type: 'media',
               initial: {
-                src: '/assets/1_7b_e.mp3'
+                src: '/assets/1_7b_e.mp3',
+                move: '@root'
               },
               emit: {
                 ended: {
@@ -185,7 +186,8 @@ describe('Lot 19 - media player sync', () => {
               id: 'text-item',
               type: 'tag',
               initial: {
-                content: 'pending'
+                content: 'pending',
+                move: '@root'
               },
               actions: {
                 'media:done': {
@@ -230,14 +232,14 @@ describe('Lot 19 - media player sync', () => {
       stories: {
         'story-media': {
           id: 'story-media',
-          entries: ['media-item'],
           initial: undefined,
           persos: [
             {
               id: 'media-item',
               type: 'media',
               initial: {
-                src: '/assets/1_7b_e.mp3'
+                src: '/assets/1_7b_e.mp3',
+                move: '@root'
               },
               emit: {
                 ended: {

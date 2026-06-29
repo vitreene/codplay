@@ -219,7 +219,6 @@ export class PlayerRuntimePlanner {
    */
   createRuntimePersos(scene: StrictSceneDoc, mountedStoryIds: string[]): RuntimePersos {
     const persos: Record<string, ItemDoc> = {}
-    const entriesByStoryId: Record<string, string[]> = {}
     const storyMovesByStoryId: Record<string, MoveValue> = {}
 
     for (const storyId of mountedStoryIds) {
@@ -228,7 +227,6 @@ export class PlayerRuntimePlanner {
         continue
       }
 
-      entriesByStoryId[story.id] = [...story.entries]
       const storyInitial = story.initial as Record<string, unknown> | undefined
       const storyMove = storyInitial?.move
       if (storyMove !== undefined) {
@@ -243,7 +241,6 @@ export class PlayerRuntimePlanner {
     return {
       id: scene.id || RUNTIME_PERSOS_ID_FALLBACK,
       persos,
-      entriesByStoryId,
       storyMovesByStoryId
     }
   }
@@ -271,9 +268,6 @@ export class PlayerRuntimePlanner {
     return {
       id: story.id,
       persos,
-      entriesByStoryId: {
-        [story.id]: [...story.entries]
-      },
       storyMovesByStoryId:
         story.initial === undefined || (story.initial as Record<string, unknown>).move === undefined
           ? undefined

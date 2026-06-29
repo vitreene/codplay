@@ -24,7 +24,6 @@ function temp__createStrictSceneFixture(input: {
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        entries: input.persos.map((perso) => perso.id),
         initial: undefined,
         persos: input.persos,
         straps: undefined,
@@ -99,6 +98,7 @@ function temp__createDemoSceneFixture(): SceneDoc {
           tag: 'div',
           className: 'demo-box',
           content: 'DEMO',
+          move: '@root',
           style: {
             backgroundColor: '#c80f17',
             color: '#ffffff'
@@ -160,6 +160,7 @@ function temp__createRewindStateSceneFixture(): SceneDoc {
         initial: {
           className: 'state-initial',
           content: 'STATE',
+          move: '@root',
           style: {
             opacity: 0
           },

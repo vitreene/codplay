@@ -25,7 +25,6 @@ function temp__createTweenSceneFixture(input: {
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        entries: input.persos.map((perso) => perso.id),
         initial: undefined,
         persos: input.persos,
         straps: undefined,
@@ -82,7 +81,7 @@ function temp__createTweenPerso(durationMs: number): PersoFixture {
   return {
     id: 'title',
     type: 'tag',
-    initial: {},
+    initial: { move: '@root' },
     actions: {
       intro: {
         duration: durationMs,

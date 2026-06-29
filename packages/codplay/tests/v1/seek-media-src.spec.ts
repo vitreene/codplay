@@ -22,14 +22,13 @@ function createMediaSwapSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__media'],
         initial: undefined,
         persos: [
           {
             id: 'story-main__media',
             name: 'media',
             type: 'media',
-            initial: { tag: 'video', src: SRC_A, master: false },
+            initial: { tag: 'video', src: SRC_A, master: false, move: '@root' },
             actions: { swap: { src: SRC_B } }
           }
         ],

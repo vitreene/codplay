@@ -21,7 +21,6 @@ function createMoveOffSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['scene-layout', 'panel'],
         initial: undefined,
         persos: [
           {
@@ -29,6 +28,7 @@ function createMoveOffSceneFixture(): SceneDoc {
             name: 'layout',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: '<section class="shell"><main data-part="scene-layout:slot"></main></section>'
             },
             actions: { 'scene-layout': null }
@@ -39,7 +39,7 @@ function createMoveOffSceneFixture(): SceneDoc {
             type: 'tag',
             initial: { move: { parentId: 'scene-layout:slot' }, content: 'hello' },
             actions: {
-              detach: { move: 'off' },
+              detach: { move: '@off' },
               attach: { move: { parentId: 'scene-layout:slot' } }
             }
           }
@@ -79,7 +79,6 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['scene-layout', 'panel'],
         initial: undefined,
         persos: [
           {
@@ -87,6 +86,7 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
             name: 'layout',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: '<section class="shell"><main data-part="scene-layout:slot"></main></section>'
             },
             actions: { 'scene-layout': null }
@@ -99,7 +99,7 @@ function createMoveOffSequenceSceneFixture(): SceneDoc {
             actions: {
               detach: [
                 { action: { fn: ({ progress }: { progress: number }) => ({ style: { opacity: String(1 - progress) } }), duration: 200 } },
-                { action: { move: 'off' } }
+                { action: { move: '@off' } }
               ],
               attach: { move: { parentId: 'scene-layout:slot' }, style: { opacity: '1' } }
             }

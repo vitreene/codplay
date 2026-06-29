@@ -70,6 +70,7 @@ export function createCarouselScene(): SceneDoc {
       id: CONTAINER_ID,
       type: 'list',
       initial: {
+        move: '@root',
         style: {
           width: '80%',
           aspectRatio: '1',
@@ -108,7 +109,6 @@ export function createCarouselScene(): SceneDoc {
     stories: {
       'carousel-story': {
         id: 'carousel-story',
-        entries: [CONTAINER_ID],
         persos,
         eventimes,
       },

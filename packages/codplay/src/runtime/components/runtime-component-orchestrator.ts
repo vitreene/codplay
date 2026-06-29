@@ -15,7 +15,7 @@ import { ListComponent } from "./list-component";
 import { MediaComponent } from "./media-component";
 import { TagComponent } from "./tag-component";
 import { TextComponent } from "./text-component";
-import { moveModule, normalizeMoveCommand, isStoryHostMove } from "../modules/move";
+import { moveModule, normalizeMoveCommand } from "../modules/move";
 import { listModule } from "../modules/list";
 import { replaceModule } from "../modules/replace";
 import type {
@@ -100,7 +100,6 @@ export class RuntimeComponentOrchestrator {
   private readonly outletIdsByComponentId = new Map<string, string[]>();
   private readonly componentIdByOutletId = new Map<string, string>();
   private readonly storyIdByPersoId = new Map<string, string>();
-  private readonly storyEntriesByStoryId = new Map<string, string[]>();
   private readonly storyMoveByStoryId = new Map<string, unknown>();
   private readonly storyHostNodeByStoryId = new Map<string, unknown>();
 
@@ -416,12 +415,7 @@ export class RuntimeComponentOrchestrator {
     effectiveMoveByPersoId?: ReadonlyMap<string, MoveCommand | null>,
   ): RuntimeElementMap {
     this.installModules();
-    this.storyEntriesByStoryId.clear();
     this.storyMoveByStoryId.clear();
-
-    for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
-      this.storyEntriesByStoryId.set(storyId, [...entryIds]);
-    }
 
     for (const [storyId, rawMove] of Object.entries(runtimePersos.storyMovesByStoryId ?? {})) {
       this.storyMoveByStoryId.set(storyId, rawMove);
@@ -436,14 +430,7 @@ export class RuntimeComponentOrchestrator {
     // unchanged nodes are never detached. See v1-seek-spec.md (appendice 2026-06-25).
 
     for (const perso of Object.values(runtimePersos.persos)) {
-      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
-      const isStoryEntry = storyEntries.includes(perso.id);
-      // Exempt only true roots (an entry with no custom move of its own) from
-      // the mountedPersoIds filter — an entry with its own move/outlet target
-      // is an ordinary perso for this purpose, same root condition as the
-      // initial-move loop below and resolveMountedPersoIdsAtSeek's rootPersoIds.
-      const isRootEntry = isStoryEntry && (perso.initial.move === undefined || isStoryHostMove(perso.initial.move));
-      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
+      if (mountedPersoIds !== undefined && !mountedPersoIds.has(perso.id)) {
         continue;
       }
 
@@ -472,14 +459,7 @@ export class RuntimeComponentOrchestrator {
     this.mountStoryHosts(runtimePersos);
 
     for (const perso of Object.values(runtimePersos.persos)) {
-      const storyEntries = this.storyEntriesByStoryId.get(perso.storyId) ?? [];
-      const isStoryEntry = storyEntries.includes(perso.id);
       const rawInitialMove = perso.initial.move;
-      const isRootEntry = isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove));
-
-      if (isStoryEntry && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove))) {
-        continue;
-      }
 
       if (effectiveMoveByPersoId?.has(perso.id)) {
         // Seek path: resolveMountedPersoIdsAtSeek already resolved this perso's move at
@@ -510,7 +490,7 @@ export class RuntimeComponentOrchestrator {
         continue;
       }
 
-      if (mountedPersoIds !== undefined && !isRootEntry && !mountedPersoIds.has(perso.id)) {
+      if (mountedPersoIds !== undefined && !mountedPersoIds.has(perso.id)) {
         continue;
       }
 
@@ -521,8 +501,6 @@ export class RuntimeComponentOrchestrator {
 
       this.runHook("onInitialPerso", { perso, moveCommand });
     }
-
-    this.mountStoryEntriesToStoryHosts(runtimePersos);
 
     return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId);
   }
@@ -603,7 +581,6 @@ export class RuntimeComponentOrchestrator {
     this.outletIdsByComponentId.clear();
     this.componentIdByOutletId.clear();
     this.storyIdByPersoId.clear();
-    this.storyEntriesByStoryId.clear();
     this.storyMoveByStoryId.clear();
     this.storyHostNodeByStoryId.clear();
     return new Map();
@@ -981,7 +958,6 @@ export class RuntimeComponentOrchestrator {
    * 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3.
    */
   resolveMountedStateAtSeek(input: {
-    rootPersoIds: ReadonlySet<string>;
     effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>;
   }): Map<string, boolean> {
     const resolved = new Map<string, boolean>();
@@ -999,7 +975,6 @@ export class RuntimeComponentOrchestrator {
   private resolveOneMountedStateAtSeek(
     persoId: string,
     input: {
-      rootPersoIds: ReadonlySet<string>;
       effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null>;
     },
     resolved: Map<string, boolean>,
@@ -1018,12 +993,10 @@ export class RuntimeComponentOrchestrator {
     const move = input.effectiveMoveByPersoId.get(persoId) ?? null;
 
     if (move === null) {
-      // A root entry with no move of its own is mounted under its story
-      // host. Any other perso with no move at all (no static `initial.move`,
-      // no track move) was never placed anywhere: not mounted.
-      const mounted = input.rootPersoIds.has(persoId);
-      resolved.set(persoId, mounted);
-      return mounted;
+      // A perso with no move at all (no static initial.move, no track move,
+      // not move: '@root') was never placed anywhere: not mounted.
+      resolved.set(persoId, false);
+      return false;
     }
 
     if (move.parentId === RUNTIME_CONFIG.move.detachToken) {
@@ -1068,45 +1041,6 @@ export class RuntimeComponentOrchestrator {
     }
 
     return this.nodeByPersoId.get(parentId) ?? null;
-  }
-
-  /**
-   * Mounts the root entries of each story into their synthetic hosts.
-   */
-  private mountStoryEntriesToStoryHosts(runtimePersos: RuntimePersos): void {
-    for (const [storyId, entryIds] of Object.entries(runtimePersos.entriesByStoryId ?? {})) {
-      if (entryIds.length === 0) {
-        continue;
-      }
-
-      const hostNode = this.resolveStoryHostNode(storyId, this.nodeByPersoId.get(entryIds[0]));
-
-      for (const entryId of entryIds) {
-        const item = runtimePersos.persos[entryId];
-        if (item === undefined) {
-          continue;
-        }
-
-        const rawInitialMove = item.initial.move;
-        if (rawInitialMove !== undefined && !isStoryHostMove(rawInitialMove)) {
-          continue;
-        }
-
-        const entryNode = this.nodeByPersoId.get(entryId);
-        if (entryNode === undefined) {
-          continue;
-        }
-
-        // Idempotent: skip when the entry is already attached to its host. The entry
-        // order is static across seeks, so leaving placed nodes untouched preserves
-        // order while avoiding a subtree detach (and media decode interruption).
-        if (!this.isNodeChildOf(hostNode, entryNode)) {
-          this.appendNodeToParent(hostNode, entryNode);
-        }
-        this.parentListByPersoId.set(entryId, null);
-        this.mountedByPersoId.set(entryId, true);
-      }
-    }
   }
 
   /**

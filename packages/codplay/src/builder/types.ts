@@ -50,7 +50,6 @@ export type StoryDef = {
   name?: string
   trackId?: string
   tracks?: Record<string, unknown>
-  entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
   straps: StrapCollection | undefined

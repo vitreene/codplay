@@ -31,13 +31,12 @@ function createSupportCounterScene(input: { strapTrackRole?: string } = {}): Sce
 			'support-story': {
 				id: 'support-story',
 				trackId: 'support-track',
-				entries: ['support-node'],
 				initial: undefined,
 				persos: [
 					{
 						id: 'support-node',
 						type: 'tag',
-						initial: { content: 'support' },
+						initial: { content: 'support', move: '@root' },
 						actions: {}
 					}
 				],
@@ -113,13 +112,12 @@ function createStateReplayScene(): SceneDoc {
 		stories: {
 			'state-story': {
 				id: 'state-story',
-				entries: ['result-node'],
 				initial: undefined,
 				persos: [
 					{
 						id: 'result-node',
 						type: 'tag',
-						initial: { content: 'idle' },
+						initial: { content: 'idle', move: '@root' },
 						actions: {
 							'result-node': null
 						}
@@ -150,13 +148,12 @@ function createPlayProgressionScene(): SceneDoc {
 			'progress-story': {
 				id: 'progress-story',
 				trackId: 'support-track',
-				entries: ['progress-node'],
 				initial: undefined,
 				persos: [
 					{
 						id: 'progress-node',
 						type: 'tag',
-						initial: { content: 'progress' },
+						initial: { content: 'progress', move: '@root' },
 						actions: {}
 					}
 				],

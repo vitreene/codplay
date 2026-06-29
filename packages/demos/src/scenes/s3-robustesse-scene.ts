@@ -13,13 +13,13 @@ export function createS3RobustesseScene(): SceneDoc {
     stories: {
       's3-robustesse-story': {
         id: 's3-robustesse-story',
-        entries: ['robust-stage', 'robust-overlay', 'robust-card'],
         initial: undefined,
         persos: [
           {
             id: 'robust-stage',
             type: 'list',
             initial: {
+              move: '@root',
               className: 'robust-stage'
             },
             actions: {}
@@ -28,6 +28,7 @@ export function createS3RobustesseScene(): SceneDoc {
             id: 'robust-overlay',
             type: 'list',
             initial: {
+              move: '@root',
               className: 'robust-overlay'
             },
             actions: {}

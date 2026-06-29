@@ -39,14 +39,13 @@ function createMountedStoriesSceneFixture(): SceneDoc {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        entries: ['story-a__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-a__title',
             name: 'title-a',
             type: 'tag',
-            initial: { content: 'A' },
+            initial: { content: 'A', move: '@root' },
             actions: {
               'story-a__title': null
             }
@@ -58,14 +57,13 @@ function createMountedStoriesSceneFixture(): SceneDoc {
       'story-b': {
         id: 'story-b',
         name: 'b',
-        entries: ['story-b__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-b__title',
             name: 'title-b',
             type: 'tag',
-            initial: { content: 'B' },
+            initial: { content: 'B', move: '@root' },
             actions: {
               'story-b__title': null
             }
@@ -97,14 +95,13 @@ function createStoryHostSceneFixture(): SceneDoc {
       'story-a': {
         id: 'story-a',
         name: 'a',
-        entries: ['story-a__lead', 'story-a__tail'],
         initial: undefined,
         persos: [
           {
             id: 'story-a__lead',
             name: 'lead',
             type: 'tag',
-            initial: { content: 'lead', move: 'root' },
+            initial: { content: 'lead', move: '@root' },
             actions: {
               'story-a__lead': null
             }
@@ -113,7 +110,7 @@ function createStoryHostSceneFixture(): SceneDoc {
             id: 'story-a__tail',
             name: 'tail',
             type: 'tag',
-            initial: { content: 'tail' },
+            initial: { content: 'tail', move: '@root' },
             actions: {
               'story-a__tail': null
             }

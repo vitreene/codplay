@@ -63,7 +63,6 @@ function createNoResolverSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__counter'],
         initial: undefined,
         persos: [
           {
@@ -71,7 +70,8 @@ function createNoResolverSceneFixture(): SceneDoc {
             name: 'counter',
             type: 'counter',
             initial: {
-              content: 'zero'
+              content: 'zero',
+              move: '@root'
             },
             actions: {
               'story-main__counter': null,

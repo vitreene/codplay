@@ -221,3 +221,71 @@ Fix : **retirer le detach-all**, en rendant explicite et garde l'invariant qu'il
 Resolu (2026-06-25). En plus du retrait du detach-all et de l'idempotence de `applyMove`/des passes de mount, l'implementation a revele que la **cause dominante** du churn media carousel etait `LayoutComponent.render()` qui recreait son node racine a chaque seek (`parseLayoutMarkup`), re-parentant tout enfant (dont l'`<img>` d'une cellule `type: layout`). Corrige : le layout reutilise desormais son node et restaure le baseline d'attributs du markup au lieu de recreer (markup statique). `ImageComponent` etait deja correct. Voir `2026-06-25-orchestrator-remove-detach-all-plan.md` (statut implemente) et `tests/v1/seek-no-detach.spec.ts`.
 
 Plan d'implementation : `2026-06-25-orchestrator-remove-detach-all-plan.md`.
+
+## Appendice V1 — un perso sans position statique doit pouvoir etre reconstruit au seek depuis le seul track
+
+Constat (2026-06-29) : la phase 3 de `2026-06-28-unify-action-execution-and-move-off-plan.md` visait a
+livrer `move:"@off"` (alors `"off"`) pour des persos de contenu attaches/detaches dynamiquement, sans
+`initial.move` statique — un panneau qui n'existe qu'entre son `:show` et son `:hide`, jamais avant,
+jamais apres. Le plan demandait deux choses : **resoudre** l'etat monte de ce perso a `targetMs` depuis
+le track (fait : `resolveMountedPersoIdsAtSeek`/`resolveOneMountedStateAtSeek`), et **ecrire** cet etat
+resolu — c'est-a-dire l'appliquer reellement (attacher/detacher), pas seulement filtrer qui rafraichir.
+Seule la premiere moitie avait ete livree : la resolution determinait correctement `mountedPersoIds`
+(qui rafraichir), mais rien ne consommait la cible resolue pour l'appliquer. Le passage charge de
+l'attachement initial (`onInitialPerso`) ne lisait que `perso.initial.move`, statique — pour un perso
+qui n'en a jamais, cet appel n'avait jamais lieu, a aucun seek. Un seek vers un instant avant le tout
+premier `:show` de ce perso laissait son attachement DOM/bookkeeping figes a l'etat d'une session de
+lecture reelle precedente, quelle que soit la cible demandee.
+
+Deux causes distinctes contribuaient au symptome, et les deux devaient etre corrigees ensemble :
+
+1. **Mauvaise classification d'autorat** : un perso destine a etre attache/detache dynamiquement,
+   mais liste par erreur dans l'ancien `Story.entries`, etait toujours considere "racine permanente"
+   (`isRoot`), quel que soit son etat reel — neutralisant silencieusement tout le mecanisme ci-dessous.
+   `entries` est retire (voir `v1-story-spec.md`, `v1-perso-spec.md` 4bis) au profit de `move: '@root'`,
+   porte par le perso et non plus par la story — un perso qui n'est pas `@root` ne peut plus echapper
+   par erreur a la resolution dynamique.
+2. **Resolution sans ecriture** : meme correctement classifie, un perso sans `initial.move` ne recevait
+   jamais l'appel d'attachement, la resolution dynamique n'etant jamais branchee jusqu'a `applyMove`.
+
+Fix (2026-06-29) : `resolveMountedPersoIdsAtSeek` expose desormais, en plus du filtre booleen
+`mountedPersoIds`, la map complete `effectiveMoveByPersoId` (la cible de `move` resolue par perso a
+`targetMs`, deja calculee par le reduce sur les events de track portant `move`). Cette map est transmise
+jusqu'a `RuntimeComponentOrchestrator.loadPersos`, qui l'applique via le meme `onInitialPerso`/
+`applyMove` que le chemin statique — y compris pour detacher (cible resolue absente → commande de
+detachement synthetique, jamais `null` brut, pour garantir un appel reel) un perso reste attache d'une
+session live precedente. Une verification legere (comparer le `parentId` deja enregistre a la cible
+resolue) precede l'appel pour ne jamais le declencher quand rien n'a change — necessaire pour ne pas
+reintroduire, pour ce chemin dynamique, le cout que le filtre `mountedPersoIds` existe pour eliminer.
+Le chemin statique (`initial.move` fixe) n'est pas modifie.
+
+Verifie : `tests/v1/dynamic-mount-seek.spec.ts` (perso sans `initial.move`, seek arriere avant son tout
+premier attachement → correctement detache, pas figé) ; `tests/v1/move-off-detach.spec.ts` (cas statique)
+toujours vert ; suite complete et gates verts ; mesure de noeuds DOM reels sur `quiz-hunt` (pas un set
+interne) confirmant l'attachement correct apres seek.
+
+Plan d'implementation : `2026-06-29-entries-removal-and-dynamic-move-seek-plan.md`.
+
+## Appendice V1 — le panneau de trace de debug ne doit jamais entrer en concurrence avec le cout du seek
+
+Constat (2026-06-29) : meme apres l'appendice precedente, le seek restait tres lent dans un navigateur
+reel (jusqu'a 2250ms pour une seule interaction de scrub, mesure par les violations Chrome) alors que
+le meme scenario mesurait 10-40ms en environnement de test (jsdom). Profilage navigateur (Performance
+panel) : `Rendering` dominait (6395ms / 9022ms), localise dans `replayDueTimelineEventsForSeek`, sans
+rapport avec le travail du moteur lui-meme (`Scripting` = 776ms). Cause : le panneau de trace de debug
+des demos (`packages/demos/src/shared/trace-log-panel.ts`) ecrivait `node.textContent` puis lisait
+immediatement `node.scrollHeight` (layout-dependant) a **chaque** trace recue. `replayDueTimelineEventsForSeek`
+rejoue tous les events dus depuis zero a chaque seek (curseur de track reinitialise), emettant des
+dizaines a centaines de traces dans la meme tache synchrone — chacune forcant un flush de tout le
+layout en attente du document. Confirme empiriquement : neutraliser le panneau de trace retablissait
+une reactivite normale, sans aucun changement moteur.
+
+Le seek lui-meme (la scene, le moteur CodPlay) n'etait pas en cause — uniquement l'outillage de debug
+des demos, qui ne doit **jamais** interferer avec la performance de la scene, prioritaire par principe.
+
+Fix : `trace-log-panel.ts` accumule desormais chaque trace dans un tableau (aucun acces DOM) et ne
+declenche qu'un seul `requestAnimationFrame` par rafale pour ecrire `textContent`/lire `scrollHeight`
+une unique fois — une rafale synchrone de seek (qui ne laisse jamais la main au navigateur entre les
+traces) ne peut produire qu'un seul flush, juste apres la fin du seek. Le compteur de traces du shell
+de demo suit le meme principe. Hors-perimetre de l'architecture CodPlay (moteur non concerne) — fix
+localise a `packages/demos/src/shared/trace-log-panel.ts` et `packages/demos/src/codplay/run-codplay-scene-demo.ts`.

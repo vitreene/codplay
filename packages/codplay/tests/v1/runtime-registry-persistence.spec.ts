@@ -36,7 +36,6 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__title'],
         initial: undefined,
         persos: [
           {
@@ -44,7 +43,8 @@ function createPersistentRuntimeSceneFixture(): SceneDoc {
             name: 'title',
             type: 'tag',
             initial: {
-              content: 'persist'
+              content: 'persist',
+              move: '@root'
             },
             actions: {
               'story-main__title': null,

@@ -61,7 +61,6 @@ type StoryDef = {
   id: string
   trackId?: string
   tracks?: Record<string, { active?: boolean }>
-  entries: string[]
   initial: Record<string, unknown> | undefined
   persos: Perso[]
   straps: StrapCollection | undefined
@@ -76,17 +75,15 @@ type StoryDef = {
 
 1. Structure
 
-- une `Story` declare `id`, `entries`, `initial`, `persos`, `straps`, `listen`, `init`.
+- une `Story` declare `id`, `initial`, `persos`, `straps`, `listen`, `init`.
 - une `Story` ne porte pas de conteneur de rendu obligatoire propre.
-- `entries` reference explicitement les persos places a la racine de la story.
-- `entries` est obligatoire dans le contrat et peut etre vide (`[]`).
 - une story peut avoir plusieurs elements racine.
 - une `Story` est un template instanciable: chaque montage runtime produit une story instance.
 - une story instance possede un `story host` unique, resolu par le contexte de montage.
 - `story.initial.move` peut definir le parent de montage du `story host` de l'instance.
-- les persos listes dans `entries` sont montes directement dans ce `story host`, dans l'ordre de declaration.
-- le `story host` peut etre vise par l'alias de placement configurable `rootToken`.
-- le runtime peut conserver un index ordonne de `entries` par story pour instancier le montage de l'instance.
+- un perso se place a la racine de sa story via `move: '@root'` (`initial.move`, ou en action s'il ne doit le devenir qu'a partir d'un event) — voir `v1-perso-spec.md` 4bis. Les persos ainsi declares sont montes directement dans le `story host`, dans l'ordre de declaration de `persos`.
+- le `story host` est vise par l'alias de placement configurable `@root` (cle `rootToken`).
+- ce mecanisme remplace l'ancien champ `Story.entries` (retire) : `entries` etait declare par la story (sens inverse de toute autre relation de placement, qui part toujours du perso) et ne pouvait pas exprimer de moment (liste figee a la compilation) — `move: '@root'` est porte par le perso et accepte aussi bien `initial` qu'une action.
 - `straps` est obligatoire dans le contrat et peut valoir `undefined` par defaut.
 - `straps` déclare les noms des straps appartenant exclusivement à cette story (story-straps).
 - ces noms référencent les clés de `storyStraps[story.id]` injectés à `player.init`.
@@ -100,7 +97,7 @@ type StoryDef = {
 2. Independance et placement
 
 - une `Story` est une unite independante.
-- monter une `Story` consiste a propager le placement vers ses `entries`.
+- monter une `Story` consiste a propager le placement vers ses persos `move: '@root'`.
 - monter une `Story` fixe un `story host` unique pour cette instance.
 - le contexte de placement d'une `Story` ne vit pas dans `StoryDef`.
 - une `Story` reste portable et reutilisable dans des scenes ou contextes visuels differents.
@@ -214,13 +211,12 @@ type StoryDef = {
 ```ts
 const storyCounter: StoryDef = {
   id: "story-counter",
-  entries: ["story-counter__counter-text"],
   persos: [
     {
       id: "story-counter__counter-text",
       name: "counter-text",
       type: "text",
-      initial: { content: "20", color: "green" },
+      initial: { content: "20", color: "green", move: "@root" },
       actions: {
         "story-counter__counter-text": null,
         "counter_color": { color: "green" }
@@ -252,7 +248,7 @@ const storyCounter: StoryDef = {
 Reference transversale: `v1-invariants.md`.
 
 - une `Story` orchestre ses `persos` et ses `straps` sans bypass `Scene`.
-- `entries` expose les persos d'entree explicites de la story et peut en contenir plusieurs.
+- les persos `move: '@root'` exposent les racines explicites de la story et peuvent en contenir plusieurs.
 - `listen` redistribue nativement les events sans imposer un strap.
 - `straps` restent facultatifs dans les regles `listen`.
 - la portee des events reste locale story ou globale scene selon `cascade`.

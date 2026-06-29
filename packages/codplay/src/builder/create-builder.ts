@@ -2,6 +2,7 @@ import { BuilderValidator } from './builder-validation'
 import { BuilderArtifactCloner } from './builder-artifact-cloner'
 import { normalizeSceneDef } from './scene-normalization'
 import { extractResourceManifest } from './extract-resource-manifest'
+import { RUNTIME_CONFIG } from '../runtime/config'
 import type {
   ApiResult,
   ApiWarning,
@@ -17,17 +18,31 @@ import type {
 const DEFAULT_SCHEMA_VERSION = 'v1'
 
 /**
+ * Checks whether one raw move payload targets the story host alias (`@root`).
+ * Duplicated from runtime/modules/move's isStoryHostMove to avoid a builder -> runtime
+ * dependency for one predicate; both must stay aligned with RUNTIME_CONFIG.move.rootToken.
+ */
+function isStoryHostMove(rawMove: unknown): boolean {
+  if (rawMove === RUNTIME_CONFIG.move.rootToken) return true
+  if (typeof rawMove !== 'object' || rawMove === null) return false
+  return (rawMove as { parentId?: unknown }).parentId === RUNTIME_CONFIG.move.rootToken
+}
+
+/**
  * Derives root node IDs from the compiled scene's rootStories.
- * Root nodes are persos in root stories that have no initial.move (no parent).
+ * Root nodes are persos in root stories that have no move at all, or move: '@root'
+ * (no parent — directly mounted at the page's mount target).
  */
 function deriveRootNodeIds(scene: SceneDef): string[] {
   return scene.rootStories.flatMap((storyId) => {
     const story = scene.stories[storyId]
     if (story === undefined) return []
-    return story.entries.filter((persoId) => {
-      const perso = story.persos.find((p) => p.id === persoId)
-      return perso !== undefined && (perso.initial === undefined || (perso.initial as Record<string, unknown>).move === undefined)
-    })
+    return story.persos
+      .filter((perso) => {
+        const move = (perso.initial as Record<string, unknown> | undefined)?.move
+        return move === undefined || isStoryHostMove(move)
+      })
+      .map((perso) => perso.id)
   })
 }
 

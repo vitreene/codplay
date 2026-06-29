@@ -24,7 +24,6 @@ function createImageSwapSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__img'],
         initial: undefined,
         persos: [
           {
@@ -32,6 +31,7 @@ function createImageSwapSceneFixture(): SceneDoc {
             name: 'img',
             type: 'img',
             initial: {
+              move: '@root',
               src: SRC_A
             },
             actions: {

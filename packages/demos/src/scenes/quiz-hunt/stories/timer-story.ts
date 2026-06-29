@@ -7,7 +7,6 @@ import type { SceneStoryDoc } from "codplay/player/types"
 export function createTimerStory(): SceneStoryDoc {
   return {
     id: "game-timer-story",
-    entries: ["game-timer-root"],
     initial: undefined,
     straps: undefined,
     listen: [],

@@ -72,7 +72,6 @@ export type SceneStoryDoc = {
   name?: string
   trackId?: string
   tracks?: Record<string, unknown>
-  entries: string[]
   initial: Record<string, unknown> | undefined
   persos: PersoDoc[]
   straps: StrapCollection | undefined

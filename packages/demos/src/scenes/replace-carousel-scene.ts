@@ -15,13 +15,13 @@ export function createReplaceCarouselScene(): SceneDoc {
     stories: {
       "replace-carousel-story": {
         id: "replace-carousel-story",
-        entries: ["demo-grid"],
         persos: [
           // ── Grid container ──────────────────────────────────────────────
           {
             id: "demo-grid",
             type: "layout",
             initial: {
+              move: "@root",
               markup: "<div></div>",
               style: {
                 display: "grid",

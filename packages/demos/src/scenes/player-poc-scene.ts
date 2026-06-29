@@ -30,6 +30,7 @@ export function createPlayerPocScene(): SceneDoc {
 			type: 'list',
 			initial: {
 				id: 'demo-list',
+				move: '@root',
 				className: 'demo-card demo-list-main',
 				style: {
 					position: 'absolute',
@@ -79,6 +80,7 @@ export function createPlayerPocScene(): SceneDoc {
 			type: 'list',
 			initial: {
 				id: 'demo-stage-list',
+				move: '@root',
 				className: 'demo-card',
 				style: {
 					position: 'absolute',
@@ -125,6 +127,7 @@ export function createPlayerPocScene(): SceneDoc {
 			type: 'list',
 			initial: {
 				id: 'demo-trash-list',
+				move: '@root',
 				style: {
 					display: 'none',
 				},
@@ -305,7 +308,6 @@ export function createPlayerPocScene(): SceneDoc {
 		stories: {
 			'story-demo': {
 				id: 'story-demo',
-				entries: Object.keys(persoById),
 				initial: undefined,
 				persos: normalizeDemoPersos(persoById),
 				straps: undefined,

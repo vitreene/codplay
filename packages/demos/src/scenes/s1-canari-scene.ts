@@ -13,7 +13,6 @@ export function createS1CanariScene(): SceneDoc {
     stories: {
       's1-canari-story': {
         id: 's1-canari-story',
-        entries: ['canari-title'],
         initial: undefined,
         persos: [
           {
@@ -21,6 +20,7 @@ export function createS1CanariScene(): SceneDoc {
             type: 'text',
             initial: {
               tag: 'h1',
+              move: '@root',
               content: 'Canari',
               style: {
                 color: '#102643'

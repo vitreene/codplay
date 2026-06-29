@@ -32,13 +32,13 @@ export function createAvatarPocScene(): SceneDoc {
     stories: {
       "avatar-story": {
         id: "avatar-story",
-        entries: ["avatar-stage", "audio", "avatar", "caption"],
         persos: [
           {
             id: "avatar-stage",
             type: "tag",
             initial: {
               tag: "div",
+              move: "@root",
               style: {
                 position: "relative",
                 width: "600px",

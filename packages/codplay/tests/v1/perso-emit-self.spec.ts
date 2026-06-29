@@ -38,14 +38,13 @@ function createPersoEmitSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__title'],
         initial: undefined,
         persos: [
           {
             id: 'story-main__title',
             name: 'title',
             type: 'tag',
-            initial: { content: 'hello' },
+            initial: { content: 'hello', move: '@root' },
             actions: {
               'story-main__title': null,
               'title:clicked': {

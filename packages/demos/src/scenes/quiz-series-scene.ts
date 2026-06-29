@@ -70,7 +70,6 @@ const SERIES_QUESTIONS: ResolvedQuizQuestion[] = [
 function createSeriesContainerStory(): SceneStoryDoc {
   return {
     id: "quiz-series-container-story",
-    entries: ["quiz-series-container"],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -79,6 +78,7 @@ function createSeriesContainerStory(): SceneStoryDoc {
         id: "quiz-series-container",
         type: "layout",
         initial: {
+          move: "@root",
           markup: `
             <div class="quiz-series-wrapper">
               <div data-part="quiz-series:progress" style="margin-bottom: 10px;"></div>
@@ -192,7 +192,6 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
 
   return {
     id: storyId,
-    entries: ["quiz-series-progress-layout"],
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -428,7 +427,6 @@ function createSeriesQuestionStory(
 
   return {
     id: storyId,
-    entries: [panelId],
     initial: undefined,
     state: {
       question,
@@ -477,7 +475,6 @@ function createSeriesResultStory(): SceneStoryDoc {
 
   return {
     id: "quiz-series-result-story",
-    entries: ["quiz-series-result-modal"],
     initial: undefined,
     straps: undefined,
     listen: [],

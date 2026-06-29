@@ -20,7 +20,6 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
 
   return {
     id: "game-basket-story",
-    entries: ["game-basket-root"],
     initial: undefined,
     straps: undefined,
     listen: [],

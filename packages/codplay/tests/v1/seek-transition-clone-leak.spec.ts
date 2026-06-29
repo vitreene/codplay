@@ -19,14 +19,13 @@ function createTextReplaceSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['cell', 'txt'],
         initial: undefined,
         persos: [
           {
             id: 'cell',
             name: 'cell',
             type: 'layout',
-            initial: { markup: '<div><span data-part="cell:slot"></span></div>' },
+            initial: { move: '@root', markup: '<div><span data-part="cell:slot"></span></div>' },
             actions: { cell: null }
           },
           {

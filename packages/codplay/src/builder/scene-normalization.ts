@@ -1,6 +1,6 @@
 import type { SceneDef, StoryDef } from './types'
 
-type MutableStoryDef = Partial<StoryDef> & { id: string; entries?: string[]; persos?: StoryDef['persos'] }
+type MutableStoryDef = Partial<StoryDef> & { id: string; persos?: StoryDef['persos'] }
 type MutableSceneDef = Partial<SceneDef> & { stories: Record<string, unknown> }
 
 /**

@@ -11,12 +11,12 @@ export function createPreloadMediaScene(): SceneDoc {
     stories: {
       'preload-media-story': {
         id: 'preload-media-story',
-        entries: ['media-shell'],
         persos: [
           {
             id: 'media-shell',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: `
                 <div class="preload-media-shell">
                   <div class="preload-media-grid">

@@ -49,13 +49,12 @@ function createBootstrapSceneFixture(): SceneDef {
       stories: {
         'story-main': {
           id: 'story-main',
-          entries: ['title'],
         initial: undefined,
         persos: [
           {
             id: 'title',
             type: 'tag',
-            initial: { content: 'bootstrap' },
+            initial: { content: 'bootstrap', move: '@root' },
             actions: {
               'story:start': {
                 className: { add: 'story-started' }
@@ -90,13 +89,12 @@ function createStoryListenPassthroughSceneFixture(): SceneDef {
     stories: {
       'story-main': {
         id: 'story-main',
-        entries: ['title'],
         initial: undefined,
         persos: [
           {
             id: 'title',
             type: 'tag',
-            initial: { content: 'bootstrap' },
+            initial: { content: 'bootstrap', move: '@root' },
             actions: {
               intro: {
                 className: { add: 'intro-applied' }
@@ -142,13 +140,12 @@ function createPersistOnlyParentSceneFixture(): SceneDef {
     stories: {
       'story-main': {
         id: 'story-main',
-        entries: ['title'],
         initial: undefined,
         persos: [
           {
             id: 'title',
             type: 'tag',
-            initial: { content: 'bootstrap' },
+            initial: { content: 'bootstrap', move: '@root' },
             actions: {
               reveal: {
                 className: { add: 'revealed' }
@@ -185,13 +182,12 @@ function createPersistOnlyTransformSceneFixture(): SceneDef {
     stories: {
       'story-main': {
         id: 'story-main',
-        entries: ['title'],
         initial: undefined,
         persos: [
           {
             id: 'title',
             type: 'tag',
-            initial: { content: 'bootstrap' },
+            initial: { content: 'bootstrap', move: '@root' },
             actions: {
               reveal: {
                 className: { add: 'revealed' }
@@ -228,7 +224,6 @@ function createImmediateStrapUpdateSceneFixture(): SceneDef {
     stories: {
       'story-main': {
         id: 'story-main',
-        entries: ['title'],
         initial: undefined,
         state: {
           side: 'a'
@@ -237,7 +232,7 @@ function createImmediateStrapUpdateSceneFixture(): SceneDef {
           {
             id: 'title',
             type: 'tag',
-            initial: { content: 'bootstrap' },
+            initial: { content: 'bootstrap', move: '@root' },
             actions: {
               reveal: {
                 className: { add: 'revealed' }
@@ -508,12 +503,11 @@ describe('V1 - scene bootstrap', () => {
         stories: {
           'story-main': {
             id: 'story-main',
-            entries: ['title'],
             initial: undefined,
             persos: [{
               id: 'title',
               type: 'tag',
-              initial: { content: 'base' },
+              initial: { content: 'base', move: '@root' },
               actions: {
                 resolved: { className: { add: 'resolved' } }
               }

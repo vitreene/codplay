@@ -165,7 +165,6 @@ export type ItemDoc<T extends ItemType = ItemType> = T extends ItemType ? {
 export type RuntimePersos = {
   id: string
   persos: Record<string, ItemDoc>
-  entriesByStoryId?: Record<string, string[]>
   storyMovesByStoryId?: Record<string, MoveValue>
 }
 

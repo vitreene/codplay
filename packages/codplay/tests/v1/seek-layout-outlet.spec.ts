@@ -19,7 +19,6 @@ function createLayoutOutletSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['scene-layout', 'story-main__title'],
         initial: undefined,
         persos: [
           {
@@ -27,6 +26,7 @@ function createLayoutOutletSceneFixture(): SceneDoc {
             name: 'layout',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: '<section class="shell"><main data-part="scene-layout:slot"></main></section>'
             },
             actions: { 'scene-layout': null }

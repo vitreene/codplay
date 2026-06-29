@@ -134,13 +134,15 @@ type PersoTransitionTiming = {
 
 4bis. Placement initial
 
-- `initial.move` decrit le parent de montage du perso.
-- `initial.move` accepte la forme objet existante (`parentId`, `mode`, `flip`, `flipMode`, `reorder`).
-- `initial.move` accepte aussi une forme string reservee aux aliases symboliques configures par runtime.
-- l'alias V1 `rootToken` cible le `story host` courant; sa valeur par defaut est configurable.
-- quand un perso appartient a `entries`, son montage peut etre resolu directement dans le `story host` sans `move` explicite.
-- la resolution de `rootToken` reste un contrat de placement, pas une identite runtime authorisee.
-- dans les stories composees, `initial.move` d'un perso de `entries` peut cibler `rootToken` pour se fixer sur le `story host` de la story.
+- `move` decrit le parent de montage du perso — en `initial.move` (vrai depuis le demarrage de la story) ou dans le payload d'une action (vrai a partir de cet event).
+- `move` accepte la forme objet existante (`parentId`, `mode`, `flip`, `flipMode`, `reorder`).
+- `move` accepte aussi une forme string reservee aux aliases symboliques configures par runtime.
+- tout alias symbolique de `move` est prefixe `@` (`@root`, `@off`) — ce prefixe distingue sans ambiguite un token reserve d'un identifiant auteur (perso, outlet) qui ne le porte jamais.
+- l'alias V1 `@root` (configurable, cle `rootToken`) cible le `story host` courant.
+- un perso porte `move: '@root'` (en `initial` ou en action) quand il doit etre la racine permanente de sa story — c'est le contrat de placement complet : auteur (qui designe son parent) et temporel (`initial` = vrai depuis le debut, action = vrai a partir de cet event). Remplace l'ancien champ `Story.entries`, retire (voir `v1-story-spec.md`), qui ne pouvait exprimer que l'auteur (declare par la story, pas par le perso) sans jamais pouvoir exprimer le moment.
+- l'alias V1 `@off` (configurable, cle `detachToken`) detache intentionnellement le perso du DOM — distinct d'un identifiant introuvable par erreur d'auteur (`AUTHOR_LAYOUT_OUTLET_NOT_FOUND` n'est jamais emis pour `@off`).
+- un perso sans `move` du tout (ni `initial.move`, ni jamais touche par un event de `move`) n'est jamais monte par defaut.
+- la resolution de `@root`/`@off` reste un contrat de placement, pas une identite runtime authorisee.
 
 4ter. Modele de node media (image, video, sound) — une node par `src`
 

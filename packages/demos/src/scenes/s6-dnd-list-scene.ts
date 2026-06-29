@@ -131,7 +131,6 @@ export function createS6DndListScene(): SceneDoc {
     stories: {
       's6-main-story': {
         id: 's6-main-story',
-        entries: ['s6-shell'],
         state: {
           assignments: { 'item-1': 'a', 'item-2': 'a', 'item-3': 'a' },
         },
@@ -149,6 +148,7 @@ export function createS6DndListScene(): SceneDoc {
             id: 's6-shell',
             type: 'layout',
             initial: {
+              move: '@root',
               style: {
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',

@@ -3,7 +3,6 @@ import type { ApiWarning, SceneDef, StoryDef, ValidationError, ValidationReport 
 export const AUTHOR_DUPLICATE_LISTEN_ON = 'AUTHOR_DUPLICATE_LISTEN_ON'
 export const AUTHOR_IDENTITY_INVALID = 'AUTHOR_IDENTITY_INVALID'
 export const AUTHOR_ROOT_STORIES_INVALID = 'AUTHOR_ROOT_STORIES_INVALID'
-export const AUTHOR_STORY_ENTRIES_INVALID = 'AUTHOR_STORY_ENTRIES_INVALID'
 export const AUTHOR_TRACKS_INVALID = 'AUTHOR_TRACKS_INVALID'
 
 /**
@@ -100,7 +99,6 @@ export class BuilderValidator {
         })
       }
 
-      this.validateStoryEntries(story, errors)
       this.validateStoryListenUniqueness(story, errors)
     }
   }
@@ -130,37 +128,6 @@ export class BuilderValidator {
         details: {
           ...details,
           id
-        }
-      })
-    }
-  }
-
-  /**
-   * Validates one story entries integrity and perso references.
-   */
-  private validateStoryEntries(story: StoryDef, errors: ValidationError[]): void {
-    if (!Array.isArray(story.entries)) {
-      errors.push({
-        code: AUTHOR_STORY_ENTRIES_INVALID,
-        message: 'Story.entries must be an array.',
-        details: {
-          storyId: story.id
-        }
-      })
-      return
-    }
-
-    const knownPersoIds = new Set(story.persos.map((perso) => perso.id))
-    const hasInvalidEntry = story.entries.some((entryId) => {
-      return typeof entryId !== 'string' || entryId.trim().length === 0 || !knownPersoIds.has(entryId)
-    })
-
-    if (hasInvalidEntry) {
-      errors.push({
-        code: AUTHOR_STORY_ENTRIES_INVALID,
-        message: 'Story.entries contains unknown or invalid perso ids.',
-        details: {
-          storyId: story.id
         }
       })
     }

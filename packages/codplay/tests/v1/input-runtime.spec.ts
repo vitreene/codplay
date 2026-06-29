@@ -16,6 +16,7 @@ function createInputItemFixture(): ItemDoc {
     storyId: 'story-main',
     type: 'input',
     initial: {
+      move: '@root',
       id: 'story-main__answer-control',
       inputType: 'text',
       name: 'answer',
@@ -53,7 +54,6 @@ function createInputSceneFixture(): SceneDoc {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['story-main__answer'],
         initial: undefined,
         persos: [createInputItemFixture()],
         straps: undefined,

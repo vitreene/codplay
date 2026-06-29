@@ -157,7 +157,6 @@ export function createRiveCoachScene(): SceneDoc {
     stories: {
       'avatar-story': {
         id: 'avatar-story',
-        entries: ['avatar-stage', 'audio', 'avatar', 'caption'],
         straps: riveCoachVisemeConversionStraps,
         listen: [
           { on: 'avatar:viseme:raw', straps: ['rive-coach-viseme-convert'] },
@@ -168,6 +167,7 @@ export function createRiveCoachScene(): SceneDoc {
             type: 'tag',
             initial: {
               tag: 'div',
+              move: '@root',
               style: {
                 position: 'relative',
                 width: AVATAR_SIZE,

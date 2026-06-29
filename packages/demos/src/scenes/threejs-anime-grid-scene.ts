@@ -196,13 +196,13 @@ export const threejsAnimeGridScene = {
   stories: {
     'threejs-anime-grid-story': {
       id: 'threejs-anime-grid-story',
-      entries: ['threejs-stage', 'threejs-grid'],
       persos: [
         {
           id: 'threejs-stage',
           type: 'tag',
           initial: {
             tag: 'div',
+            move: '@root',
             style: {
               position: 'relative',
               width: `${STAGE_SIZE}px`,

@@ -25,7 +25,6 @@ function temp__createActionSequenceSceneFixture(input: {
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        entries: input.persos.map((perso) => perso.id),
         initial: undefined,
         persos: input.persos,
         straps: undefined,
@@ -82,7 +81,7 @@ describe('V1 - ActionSequence (perso-level chaining primitive)', () => {
     const perso = {
       id: 'panel',
       type: 'tag',
-      initial: {},
+      initial: { move: '@root' },
       actions: {
         // Step 1 (TweenAction) intentionally animates a different property
         // (style.opacity) than the static steps (content): composing a
@@ -134,7 +133,7 @@ describe('V1 - ActionSequence (perso-level chaining primitive)', () => {
     const perso = {
       id: 'panel',
       type: 'tag',
-      initial: {},
+      initial: { move: '@root' },
       actions: {
         sequence: [
           { action: { content: 'first' }, durationMs: 200 },
@@ -168,7 +167,7 @@ describe('V1 - ActionSequence (perso-level chaining primitive)', () => {
     const perso = {
       id: 'panel',
       type: 'tag',
-      initial: {},
+      initial: { move: '@root' },
       actions: {
         sequence: [
           { action: { content: 'old-1' }, durationMs: 300 },
@@ -228,7 +227,7 @@ describe('V1 - ActionSequence (perso-level chaining primitive)', () => {
     const perso = {
       id: 'panel',
       type: 'tag',
-      initial: {},
+      initial: { move: '@root' },
       actions: {
         // Step 0 (TweenAction) and step 1 (static) intentionally touch the
         // SAME property (content) — this used to be silently overwritten by

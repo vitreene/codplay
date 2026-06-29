@@ -13,7 +13,7 @@ import {
 } from "../runtime/trace-store";
 import type { CreateElementOptions } from "../runtime/create-element";
 import type { MoveCommand, RuntimePersos } from "../runtime/types";
-import { isStoryHostMove, normalizeMoveCommand } from "../runtime/modules/move";
+import { normalizeMoveCommand } from "../runtime/modules/move";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
 import { RUNTIME_TRACE_STATUS } from "../runtime/trace-constants";
 import { TrackManager } from "../track-manager/create-track-manager";
@@ -1008,21 +1008,10 @@ export class PlayerFacade implements PlayerApi {
     runtimePersos: RuntimePersos,
     targetMs: number,
   ): { mountedPersoIds: Set<string>; effectiveMoveByPersoId: ReadonlyMap<string, MoveCommand | null> } {
-    const entriesByStoryId = runtimePersos.entriesByStoryId ?? {};
-    const rootPersoIds = new Set<string>();
     const effectiveMoveByPersoId = new Map<string, MoveCommand | null>();
 
     for (const perso of Object.values(runtimePersos.persos)) {
-      const storyEntries = entriesByStoryId[perso.storyId] ?? [];
       const rawInitialMove = (perso.initial as { move?: unknown }).move;
-      const isRoot = storyEntries.includes(perso.id) && (rawInitialMove === undefined || isStoryHostMove(rawInitialMove));
-
-      if (isRoot) {
-        rootPersoIds.add(perso.id);
-        effectiveMoveByPersoId.set(perso.id, null);
-        continue;
-      }
-
       effectiveMoveByPersoId.set(perso.id, normalizeMoveCommand(rawInitialMove, true));
     }
 
@@ -1087,7 +1076,6 @@ export class PlayerFacade implements PlayerApi {
     }
 
     const mountedStateByPersoId = this.renderer.resolveMountedStateAtSeek({
-      rootPersoIds,
       effectiveMoveByPersoId,
     });
 

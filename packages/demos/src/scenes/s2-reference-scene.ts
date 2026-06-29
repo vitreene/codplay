@@ -13,13 +13,13 @@ export function createS2ReferenceScene(): SceneDoc {
     stories: {
       's2-reference-story': {
         id: 's2-reference-story',
-        entries: ['reference-list', 'reference-title', 'reference-caption'],
         initial: undefined,
         persos: [
           {
             id: 'reference-list',
             type: 'list',
             initial: {
+              move: '@root',
               className: 'reference-list',
               style: {
                 width: '360px',

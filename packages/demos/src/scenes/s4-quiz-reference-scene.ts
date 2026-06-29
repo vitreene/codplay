@@ -11,12 +11,12 @@ export function createS4QuizReferenceScene(): SceneDoc {
     stories: {
       "s4-quiz-layout-story": {
         id: "s4-quiz-layout-story",
-        entries: ["quiz-layout"],
         persos: [
           {
             id: "quiz-layout",
             type: "layout",
             initial: {
+              move: "@root",
               markup: `
                 <section class="quiz-layout-shell">
                   <div data-part="quiz-layout:decor" style="grid-column: 1/-1; grid-row: 1/-1; position: relative;"></div>
@@ -50,13 +50,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-decor-story": {
         id: "s4-quiz-decor-story",
-        entries: [
-          "quiz-decor-layer",
-          "quiz-decor-circle-a",
-          "quiz-decor-circle-b",
-          "quiz-decor-circle-c",
-          "quiz-decor-media",
-        ],
         persos: [
           {
             id: "quiz-decor-layer",
@@ -242,7 +235,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-intro-story": {
         id: "s4-quiz-intro-story",
-        entries: ["quiz-intro-title"],
         persos: [
           {
             id: "quiz-intro-title",
@@ -308,7 +300,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-question-story": {
         id: "s4-quiz-question-story",
-        entries: ["quiz-question-panel"],
         persos: [
           {
             id: "quiz-question-panel",
@@ -465,7 +456,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-count-story": {
         id: "s4-quiz-count-story",
-        entries: ["quiz-count-value"],
         persos: [
           {
             id: "quiz-count-value",
@@ -543,7 +533,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-success-story": {
         id: "s4-quiz-success-story",
-        entries: ["quiz-success-panel"],
         persos: [
           {
             id: "quiz-success-panel",
@@ -583,7 +572,6 @@ export function createS4QuizReferenceScene(): SceneDoc {
       },
       "s4-quiz-failure-story": {
         id: "s4-quiz-failure-story",
-        entries: ["quiz-failure-panel"],
         persos: [
           {
             id: "quiz-failure-panel",

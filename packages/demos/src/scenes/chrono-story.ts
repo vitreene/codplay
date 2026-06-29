@@ -116,13 +116,13 @@ export function createChronoScene(): SceneDoc {
             }
           },
         },
-        entries: ['chrono-root'],
         persos: [
           // ── outer shell ───────────────────────────────────────
           {
             id: 'chrono-root',
             type: 'list',
             initial: {
+              move: '@root',
               style: {
                 display: 'flex',
                 flexDirection: 'column',

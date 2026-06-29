@@ -23,14 +23,13 @@ function createValidSceneFixture(): SceneDef {
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['title-perso'],
         initial: undefined,
         persos: [
           {
             id: 'title-perso',
             name: 'title-perso',
             type: 'tag',
-            initial: { content: 'hello' },
+            initial: { content: 'hello', move: '@root' },
             actions: {
               'title-perso': null
             }
@@ -53,17 +52,6 @@ describe('Builder API V1', () => {
 
     expect(report.ok).toBe(false)
     expect(report.errors.some((error) => error.code === 'AUTHOR_ROOT_STORIES_INVALID')).toBe(true)
-  })
-
-  it('returns blocking validation error when story entries are invalid', () => {
-    const builder = new BuilderFacade()
-    const invalidScene = createValidSceneFixture()
-    invalidScene.stories['story-main'].entries = ['unknown-perso']
-
-    const report = builder.validate({ scene: invalidScene })
-
-    expect(report.ok).toBe(false)
-    expect(report.errors.some((error) => error.code === 'AUTHOR_STORY_ENTRIES_INVALID')).toBe(true)
   })
 
   it('returns blocking validation error when scene listen.on contains duplicates', () => {
@@ -168,7 +156,6 @@ describe('Builder API V1', () => {
     expect(compiledScene.createdAt).toMatch(/\d{4}-\d{2}-\d{2}T/)
     expect(compiledScene.scene.id).toBe(scene.id)
     expect(compiledScene.scene.rootStories).toEqual(scene.rootStories)
-    expect(compiledScene.scene.stories['story-main'].entries).toEqual(['title-perso'])
 
     expect(resourceManifest).toEqual({ entries: [] })
     expect(diagnostics.warnings).toEqual([])
@@ -180,7 +167,7 @@ describe('Builder API V1', () => {
   it('fails compile when validation contains blocking errors', () => {
     const builder = new BuilderFacade()
     const invalidScene = createValidSceneFixture()
-    invalidScene.stories['story-main'].entries = ['missing-perso']
+    invalidScene.rootStories = []
 
     const compileResult = builder.compile({ scene: invalidScene })
 
@@ -190,6 +177,6 @@ describe('Builder API V1', () => {
       return
     }
 
-    expect(compileResult.error.code).toBe('AUTHOR_STORY_ENTRIES_INVALID')
+    expect(compileResult.error.code).toBe('AUTHOR_ROOT_STORIES_INVALID')
   })
 })

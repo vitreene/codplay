@@ -57,12 +57,12 @@ export function createPolygonScene(): SceneDoc {
     stories: {
       'polygon-story': {
         id: 'polygon-story',
-        entries: ['polygon-layout', 'polygon-shape', 'polygon-label', 'polygon-radio-etoile', 'polygon-radio-heptagone'],
         persos: [
           {
             id: 'polygon-layout',
             type: 'layout',
             initial: {
+              move: '@root',
               markup: `
                 <section class="polygon-demo-shell">
                   <div data-part="polygon-layout:shape" style="position:relative;display:grid;place-items:center;width:320px;height:320px;"></div>

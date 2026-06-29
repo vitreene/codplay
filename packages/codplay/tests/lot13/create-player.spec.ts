@@ -40,7 +40,6 @@ function temp__createStrictSceneFixture(input: {
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        entries: input.persos.map((perso) => perso.id),
         initial: undefined,
         persos: input.persos,
         straps: undefined,
@@ -69,7 +68,8 @@ function temp__createSceneFixture(): SceneDoc {
         id: 'title',
         type: 'tag',
         initial: {
-          content: 'hello'
+          content: 'hello',
+          move: '@root'
         },
         actions: {}
       }
@@ -89,7 +89,8 @@ function temp__createRuntimeEventSceneFixture(): SceneDoc {
         id: 'message',
         type: 'tag',
         initial: {
-          content: 'base'
+          content: 'base',
+          move: '@root'
         },
         actions: {
           reveal: {
@@ -114,7 +115,8 @@ function temp__createSeekSceneFixture(): SceneDoc {
         id: 'box',
         type: 'tag',
         initial: {
-          content: 'seek-box'
+          content: 'seek-box',
+          move: '@root'
         },
         actions: {
           'box:move': {
@@ -160,7 +162,8 @@ function temp__createCascadeSeekSceneFixture(): SceneDoc {
         id: 'box',
         type: 'tag',
         initial: {
-          content: 'seek-cascade'
+          content: 'seek-cascade',
+          move: '@root'
         },
         actions: {
           'box:move-1': {
@@ -571,13 +574,12 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
       stories: {
         'story-main': {
           id: 'story-main',
-          entries: ['title-main'],
           initial: undefined,
           persos: [
             {
               id: 'title-main',
               type: 'tag',
-              initial: { content: 'main' },
+              initial: { content: 'main', move: '@root' },
               actions: {}
             }
           ],
@@ -586,13 +588,12 @@ describe('Lot 13 - createPlayer API and state runtime', () => {
         },
         'story-wait': {
           id: 'story-wait',
-          entries: ['title-wait'],
           initial: undefined,
           persos: [
             {
               id: 'title-wait',
               type: 'tag',
-              initial: { content: 'wait' },
+              initial: { content: 'wait', move: '@root' },
               actions: {
                 reveal: {
                   className: { add: 'revealed' }

@@ -25,7 +25,6 @@ function temp__createStrictSceneFixture(input: {
     stories: {
       [input.storyId]: {
         id: input.storyId,
-        entries: input.persos.map((perso) => perso.id),
         initial: undefined,
         persos: input.persos,
         straps: undefined,
@@ -104,7 +103,7 @@ describe('Lot 16 - playback timeline minimal', () => {
         {
           id: 'title',
           type: 'tag',
-          initial: {},
+          initial: { move: '@root' },
           actions: {
             intro: {
               style: {
@@ -175,7 +174,7 @@ describe('Lot 16 - playback timeline minimal', () => {
         {
           id: 'title',
           type: 'tag',
-          initial: {},
+          initial: { move: '@root' },
           actions: {
             intro: {
               style: {
@@ -260,7 +259,7 @@ describe('Lot 16 - playback timeline minimal', () => {
         {
           id: 'title',
           type: 'tag',
-          initial: {},
+          initial: { move: '@root' },
           actions: {
             intro: {
               style: {
@@ -335,7 +334,7 @@ describe('Lot 16 - playback timeline minimal', () => {
         {
           id: 'title',
           type: 'tag',
-          initial: {},
+          initial: { move: '@root' },
           actions: {
             intro: {
               style: {
@@ -428,13 +427,13 @@ describe('Lot 16 - playback timeline minimal', () => {
       stories: {
         'story-main': {
           id: 'story-main',
-          entries: ['title'],
           initial: undefined,
           persos: [
             {
               id: 'title',
               type: 'tag',
               initial: {
+                move: '@root',
                 style: {
                   opacity: 0
                 }
@@ -546,13 +545,12 @@ describe('Lot 16 - playback timeline minimal', () => {
       stories: {
         'story-main': {
           id: 'story-main',
-          entries: ['title'],
           initial: undefined,
           persos: [
             {
               id: 'title',
               type: 'tag',
-              initial: {},
+              initial: { move: '@root' },
               actions: {
                 intro: {
                   style: {

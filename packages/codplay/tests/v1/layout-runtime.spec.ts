@@ -20,6 +20,7 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
       name: 'layout',
       type: 'layout',
       initial: {
+        move: '@root',
         format: input.format,
         markup: layoutMarkup
       },
@@ -70,7 +71,6 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
       'story-main': {
         id: 'story-main',
         name: 'main',
-        entries: ['scene-layout', 'story-main__title', ...(input.includeMissingOutlet ? ['story-main__orphan'] : [])],
         initial: undefined,
         persos,
         straps: undefined,

@@ -192,6 +192,9 @@ function createQuestionPanel(): PersoDoc {
     id: QUESTION_PANEL_ID,
     type: 'layout',
     initial: {
+      // Default root placement — createQuizQuestionStory overrides this with a
+      // real `move` when options.parentId is given.
+      move: '@root',
       markup: `
         <fieldset class="quiz-question-fieldset">
           <legend data-part="quiz-question:title"></legend>
@@ -459,7 +462,6 @@ function createQuestionNext(question: ResolvedQuizQuestion): PersoDoc {
 function createQuestionStory(question: ResolvedQuizQuestion): SceneStoryDoc {
   return {
     id: QUESTION_STORY_ID,
-    entries: [QUESTION_PANEL_ID],
     initial: undefined,
     state: {
       question,
