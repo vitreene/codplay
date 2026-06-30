@@ -67,7 +67,13 @@ export function createOverlayWorldOutletReproScene(): SceneDoc {
             },
             actions: {
               'owor:outlet:move-to-footer': {
-                move: { parentId: 'owor-shell:target-slot-outlet', flipMode: 'overlay-world' },
+                move: {
+                  parentId: 'owor-shell:target-slot-outlet',
+                  flipMode: 'overlay-world',
+                  duration: 900,
+                  easing: 'easeInOutQuad',
+                  attraction: 70,
+                },
               },
             },
           },
@@ -92,7 +98,13 @@ export function createOverlayWorldOutletReproScene(): SceneDoc {
             },
             actions: {
               'owor:list:move-to-footer': {
-                move: { parentId: 'owor-target-list', flipMode: 'overlay-world' },
+                move: {
+                  parentId: 'owor-target-list',
+                  flipMode: 'overlay-world',
+                  duration: 1100,
+                  easing: 'easeOutCubic',
+                  attraction: -45,
+                },
                 className: 'owor-token owor-token-docked',
               },
             },

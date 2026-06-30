@@ -187,6 +187,7 @@ export type ServiceRegistryApi = {
 export type RuntimeResolvedUpdate = {
   resolvedAction: AnimationResolvedAction
   eventSeq: number
+  isSeekReplay?: boolean
 }
 
 /**
@@ -225,6 +226,7 @@ export type RuntimeModuleHookPayload = {
   rootNode?: unknown
   resolvedAction?: AnimationResolvedAction
   eventSeq?: number
+  isSeekReplay?: boolean
   moveCommand?: MoveCommand | null
   output?: RuntimeModuleHookOutput
 }

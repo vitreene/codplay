@@ -451,10 +451,18 @@ export class RendererFacade implements RendererApi {
     const conflictResolution = this.resolveRenderMutations(resolvedActions)
 
     try {
+      const isSeekReplayByEventId = new Map<string, boolean>()
+      for (const commit of readyCommits) {
+        for (const operation of commit.operations) {
+          isSeekReplayByEventId.set(operation.eventId, commit.isSeekReplay === true)
+        }
+      }
+
       const routed = this.orchestrator.routeUpdates(
         conflictResolution.resolvedMutations.map((resolvedAction) => ({
           resolvedAction,
-          eventSeq: eventSeqByEventId.get(resolvedAction.eventId) ?? 0
+          eventSeq: eventSeqByEventId.get(resolvedAction.eventId) ?? 0,
+          isSeekReplay: isSeekReplayByEventId.get(resolvedAction.eventId) === true
         }))
       )
 

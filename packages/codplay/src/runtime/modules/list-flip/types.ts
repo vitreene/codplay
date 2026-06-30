@@ -21,6 +21,7 @@ export type PrepareListFlipMoveInput = {
   eventId: string
   eventName: string
   eventSeq: number
+  isSeekReplay?: boolean
 }
 
 export type ListFlipSession = {

@@ -15,6 +15,11 @@ type WorldRectSnapshot = {
   height: number
 }
 
+type Point2D = {
+  x: number
+  y: number
+}
+
 type OverlayWorldPhoto = {
   rect: WorldRectSnapshot
   matrix: Matrix2D
@@ -36,6 +41,7 @@ type PreparedListFlipMove = {
   firstSnapshots: FlipSnapshot[]
   flipEntries: FlipEntry[]
   movedNodeBoxBeforeMove: NodeBoxSnapshot | null
+  movedWorldPhotoBeforeMove: OverlayWorldPhoto | null
   sourceListIdBeforeMove: string | null
 }
 
@@ -96,12 +102,15 @@ class ListFlipModuleInstance implements ListFlipModule {
     const movedNodeBeforeMove = this.context.getNodeById(input.persoId)
     const movedNodeBoxBeforeMove =
       isDomElement(movedNodeBeforeMove) ? this.captureElementBoxSnapshot(movedNodeBeforeMove) : null
+    const movedWorldPhotoBeforeMove =
+      isDomElement(movedNodeBeforeMove) ? this.captureLiveWorldPhoto(movedNodeBeforeMove) : null
 
     const preparedMove: PreparedListFlipMove = {
       input,
       firstSnapshots: this.flipEngine.capture(flipEntries),
       flipEntries,
       movedNodeBoxBeforeMove,
+      movedWorldPhotoBeforeMove,
       sourceListIdBeforeMove: this.context.getParentListId(input.persoId)
     }
 
@@ -129,12 +138,18 @@ class ListFlipModuleInstance implements ListFlipModule {
     }
 
     const lastFlipSnapshots = this.flipEngine.capture(preparedMove.flipEntries)
-    const flipPlan = this.flipEngine.plan(preparedMove.firstSnapshots, lastFlipSnapshots)
+    const flipPlan = this.flipEngine.plan(
+      preparedMove.firstSnapshots,
+      lastFlipSnapshots,
+      this.resolveFlipPlanOptions(preparedMove.input.move)
+    )
 
     const isOverlayWorldMove = preparedMove.input.move.flipMode === 'overlay-world'
     const movedTransitionId = `flip-${preparedMove.input.persoId}`
     const localFlipPlanTransitions =
-      isOverlayWorldMove
+      isOverlayWorldMove && preparedMove.input.isSeekReplay === true
+        ? []
+        : isOverlayWorldMove
         ? flipPlan.transitions.filter((transition) => transition.transitionId !== movedTransitionId)
         : flipPlan.transitions
 
@@ -173,6 +188,7 @@ class ListFlipModuleInstance implements ListFlipModule {
       movedPersoId: preparedMove.input.persoId,
       sourceListId: preparedMove.sourceListIdBeforeMove,
       oldNodeBoxBeforeMove: preparedMove.movedNodeBoxBeforeMove,
+      oldWorldPhotoBeforeMove: preparedMove.movedWorldPhotoBeforeMove,
       move: preparedMove.input.move,
       flipPlanTransitions: flipPlan.transitions,
       firstSnapshots: preparedMove.firstSnapshots,
@@ -203,6 +219,16 @@ class ListFlipModuleInstance implements ListFlipModule {
     return directTransitions
   }
 
+  /**
+   * Resolves FLIP plan timing options carried by one authored move command.
+   */
+  private resolveFlipPlanOptions(move: MoveCommand): { durationMs?: number; easing?: string } {
+    return {
+      durationMs: typeof move.duration === 'number' && Number.isFinite(move.duration) ? move.duration : undefined,
+      easing: move.easing ?? move.ease
+    }
+  }
+
   private collectFlipEntriesForMove(persoId: string, move: MoveCommand): FlipEntry[] {
     if (move.flip === false) {
       return []
@@ -210,17 +236,18 @@ class ListFlipModuleInstance implements ListFlipModule {
 
     const sourceListId = this.context.getParentListId(persoId)
     const targetListId = move.parentId
-    if (sourceListId === null && !this.context.isMounted(targetListId)) {
-      return []
-    }
-
     const sourceList = sourceListId ? this.context.getListById(sourceListId) : null
     const targetList = this.context.getListById(targetListId)
-    if (targetList === null) {
+    const targetNode = targetList === null ? this.context.getNodeById(targetListId) : null
+    if (sourceListId === null && targetList === null && targetNode === null) {
       return []
     }
 
-    if (this.context.isMounted(targetListId) === false) {
+    if (targetList === null && (move.flipMode !== 'overlay-world' || targetNode === null)) {
+      return []
+    }
+
+    if (targetList !== null && this.context.isMounted(targetListId) === false) {
       return []
     }
 
@@ -231,8 +258,10 @@ class ListFlipModuleInstance implements ListFlipModule {
       touchedIds.add(childId)
     }
 
-    for (const childId of targetList.getChildrenSnapshot()) {
-      touchedIds.add(childId)
+    if (targetList !== null) {
+      for (const childId of targetList.getChildrenSnapshot()) {
+        touchedIds.add(childId)
+      }
     }
 
     const entries: FlipEntry[] = []
@@ -258,6 +287,7 @@ class ListFlipModuleInstance implements ListFlipModule {
     movedPersoId: string
     sourceListId: string | null
     oldNodeBoxBeforeMove: NodeBoxSnapshot | null
+    oldWorldPhotoBeforeMove: OverlayWorldPhoto | null
     move: MoveCommand
     flipPlanTransitions: FlipTransitionRequest[]
     firstSnapshots: FlipSnapshot[]
@@ -299,17 +329,27 @@ class ListFlipModuleInstance implements ListFlipModule {
     this.cleanupOverlayRuntime()
 
     const authoritativeOldLocalSize = this.toPreferredLocalSize(input.oldNodeBoxBeforeMove)
-    const worldPhotos = this.computeOverlayWorldPhotosFromLocalFlip({
-      movedPersoId: input.movedPersoId,
-      movedNode: movedNodeElement,
-      flipTransition,
-      fallbackOldRect: this.toWorldRectSnapshot(firstSnapshot),
-      fallbackNextRect: this.toWorldRectSnapshot(lastSnapshot),
-      fallbackOldMatrix: multiplyMatrix(firstSnapshot.parentMatrix, firstSnapshot.matrix),
-      fallbackNextMatrix: multiplyMatrix(lastSnapshot.parentMatrix, lastSnapshot.matrix),
-      authoritativeOldLocalWidth: authoritativeOldLocalSize.width,
-      authoritativeOldLocalHeight: authoritativeOldLocalSize.height
-    })
+    const worldPhotos = input.oldWorldPhotoBeforeMove === null
+      ? this.computeOverlayWorldPhotosFromLocalFlip({
+          movedPersoId: input.movedPersoId,
+          movedNode: movedNodeElement,
+          flipTransition,
+          fallbackOldRect: this.toWorldRectSnapshot(firstSnapshot),
+          fallbackNextRect: this.toWorldRectSnapshot(lastSnapshot),
+          fallbackOldMatrix: multiplyMatrix(firstSnapshot.parentMatrix, firstSnapshot.matrix),
+          fallbackNextMatrix: multiplyMatrix(lastSnapshot.parentMatrix, lastSnapshot.matrix),
+          authoritativeOldLocalWidth: authoritativeOldLocalSize.width,
+          authoritativeOldLocalHeight: authoritativeOldLocalSize.height
+        })
+      : {
+          old: {
+            ...input.oldWorldPhotoBeforeMove,
+            localWidth: authoritativeOldLocalSize.width ?? input.oldWorldPhotoBeforeMove.localWidth,
+            localHeight: authoritativeOldLocalSize.height ?? input.oldWorldPhotoBeforeMove.localHeight
+          },
+          next: this.captureLiveWorldPhoto(movedNodeElement),
+          source: 'snapshot-fallback' as const
+        }
 
     const worldPhotoClones = this.createOverlayWorldPhotoClones({
       movedNode: movedNodeElement,
@@ -338,8 +378,10 @@ class ListFlipModuleInstance implements ListFlipModule {
       eventId: input.eventId,
       eventName: input.eventName,
       movedPersoId: input.movedPersoId,
+      movedNode: movedNodeElement,
       animatedCloneNode: worldPhotoClones.oldCloneNode,
       targetCloneNode: worldPhotoClones.nextCloneNode,
+      attraction: input.move.attraction ?? 0,
       flipTransition,
       onFinalize: () => {
         movedNodeElement.style.visibility = movedNodeVisibilityBeforeOverlay
@@ -360,8 +402,10 @@ class ListFlipModuleInstance implements ListFlipModule {
     eventId: string
     eventName: string
     movedPersoId: string
+    movedNode: HTMLElement
     animatedCloneNode: HTMLElement
     targetCloneNode: HTMLElement
+    attraction: number
     flipTransition: FlipTransitionRequest
     onFinalize: (reason: 'completed' | 'stopped') => void
   }): TransitionRequest[] {
@@ -388,7 +432,10 @@ class ListFlipModuleInstance implements ListFlipModule {
       input.onFinalize(reason)
     }
 
-    const pushTransition = (property: string, from: number | string, to: number | string) => {
+    const pushTransition = (property: string, from: number | string, to: number | string, options?: {
+      finalValue?: number | string
+      modifier?: (value: number) => number | string
+    }) => {
       transitions.push({
         transitionId: `${transitionIdPrefix}-${property}`,
         eventId: input.eventId,
@@ -398,6 +445,8 @@ class ListFlipModuleInstance implements ListFlipModule {
         target: input.animatedCloneNode,
         from,
         to,
+        finalValue: options?.finalValue,
+        modifier: options?.modifier,
         duration: input.flipTransition.duration,
         easing: input.flipTransition.easing,
         delayMs: input.flipTransition.delayMs,
@@ -406,11 +455,40 @@ class ListFlipModuleInstance implements ListFlipModule {
       })
     }
 
-    if (Math.abs(toLeft - fromLeft) > this.flipZeroTolerance) {
-      pushTransition('left', `${fromLeft}px`, `${toLeft}px`)
-    }
-    if (Math.abs(toTop - fromTop) > this.flipZeroTolerance) {
-      pushTransition('top', `${fromTop}px`, `${toTop}px`)
+    const shouldUseCurvedTrajectory = input.attraction !== 0 && (
+      Math.abs(toLeft - fromLeft) > this.flipZeroTolerance ||
+      Math.abs(toTop - fromTop) > this.flipZeroTolerance
+    )
+
+    if (shouldUseCurvedTrajectory) {
+      const controlPoint = this.resolveOverlayTrajectoryControlPoint({
+        movedNode: input.movedNode,
+        fromLeft,
+        fromTop,
+        toLeft,
+        toTop,
+        fromWidth,
+        fromHeight,
+        toWidth,
+        toHeight,
+        attraction: input.attraction
+      })
+
+      pushTransition('x', 0, 1, {
+        finalValue: toLeft - fromLeft,
+        modifier: (progress) => this.computeQuadraticBezier(progress, 0, controlPoint.x - fromLeft, toLeft - fromLeft)
+      })
+      pushTransition('y', 0, 1, {
+        finalValue: toTop - fromTop,
+        modifier: (progress) => this.computeQuadraticBezier(progress, 0, controlPoint.y - fromTop, toTop - fromTop)
+      })
+    } else {
+      if (Math.abs(toLeft - fromLeft) > this.flipZeroTolerance) {
+        pushTransition('left', `${fromLeft}px`, `${toLeft}px`)
+      }
+      if (Math.abs(toTop - fromTop) > this.flipZeroTolerance) {
+        pushTransition('top', `${fromTop}px`, `${toTop}px`)
+      }
     }
     if (Math.abs(toWidth - fromWidth) > this.flipZeroTolerance) {
       pushTransition('width', `${fromWidth}px`, `${toWidth}px`)
@@ -425,12 +503,99 @@ class ListFlipModuleInstance implements ListFlipModule {
     return transitions
   }
 
+  /**
+   * Resolves the Bezier control point for one attracted/repelled overlay trajectory.
+   */
+  private resolveOverlayTrajectoryControlPoint(input: {
+    movedNode: HTMLElement
+    fromLeft: number
+    fromTop: number
+    toLeft: number
+    toTop: number
+    fromWidth: number
+    fromHeight: number
+    toWidth: number
+    toHeight: number
+    attraction: number
+  }): Point2D {
+    const runtimeCenter = this.resolveRuntimeContextCenter(input.movedNode)
+    const fromCenter = {
+      x: input.fromLeft + input.fromWidth / 2,
+      y: input.fromTop + input.fromHeight / 2
+    }
+    const toCenter = {
+      x: input.toLeft + input.toWidth / 2,
+      y: input.toTop + input.toHeight / 2
+    }
+    const midpoint = {
+      x: (fromCenter.x + toCenter.x) / 2,
+      y: (fromCenter.y + toCenter.y) / 2
+    }
+    const attractionRatio = input.attraction / 100
+    const controlCenter = {
+      x: midpoint.x + (runtimeCenter.x - midpoint.x) * attractionRatio,
+      y: midpoint.y + (runtimeCenter.y - midpoint.y) * attractionRatio
+    }
+    const averageWidth = (input.fromWidth + input.toWidth) / 2
+    const averageHeight = (input.fromHeight + input.toHeight) / 2
+
+    return {
+      x: controlCenter.x - averageWidth / 2,
+      y: controlCenter.y - averageHeight / 2
+    }
+  }
+
+  /**
+   * Resolves the visible center of the runtime context containing one moved node.
+   */
+  private resolveRuntimeContextCenter(anchorNode: Element): Point2D {
+    const contextRoot = resolveOverlayContextRoot(anchorNode)
+    const rect = contextRoot.getBoundingClientRect()
+    if (rect.width > 1e-3 && rect.height > 1e-3) {
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      }
+    }
+
+    return {
+      x: (globalThis.innerWidth ?? 0) / 2,
+      y: (globalThis.innerHeight ?? 0) / 2
+    }
+  }
+
+  /**
+   * Computes one scalar coordinate on a quadratic Bezier curve.
+   */
+  private computeQuadraticBezier(progress: number, from: number, control: number, to: number): number {
+    const t = Math.max(0, Math.min(1, progress))
+    const inverse = 1 - t
+    return inverse * inverse * from + 2 * inverse * t * control + t * t * to
+  }
+
   private toWorldRectSnapshot(input: { left: number; top: number; width: number; height: number }): WorldRectSnapshot {
     return {
       left: input.left,
       top: input.top,
       width: input.width,
       height: input.height
+    }
+  }
+
+  private captureLiveWorldPhoto(nodeRef: Element): OverlayWorldPhoto {
+    const rect = nodeRef.getBoundingClientRect()
+    const boxSnapshot = this.captureElementBoxSnapshot(nodeRef)
+
+    return {
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      },
+      matrix: captureCombinedMatrixForNode(nodeRef),
+      localWidth: boxSnapshot.computedWidthPx ?? boxSnapshot.offsetWidth ?? boxSnapshot.clientWidth ?? undefined,
+      localHeight: boxSnapshot.computedHeightPx ?? boxSnapshot.offsetHeight ?? boxSnapshot.clientHeight ?? undefined
     }
   }
 

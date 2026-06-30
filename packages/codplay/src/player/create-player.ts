@@ -1559,7 +1559,9 @@ export class PlayerFacade implements PlayerApi {
         hasNormalOps = true;
       }
       if (hasNormalOps && !dropCommit) {
-        const enqueueResult = this.renderer.enqueueCommit(commit);
+        const enqueueResult = this.renderer.enqueueCommit(
+          this.timelineReplayInProgress ? { ...commit, isSeekReplay: true } : commit,
+        );
         if (enqueueResult.ok) {
           enqueuedCommitCount += 1;
         }

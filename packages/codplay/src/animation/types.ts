@@ -51,6 +51,8 @@ export type TransitionRequest = {
   target: unknown
   from?: number | string
   to: number | string
+  finalValue?: number | string
+  modifier?: (value: number) => number | string
 } & Required<Pick<AnimationTimerOptions, 'duration'>> & {
   easing?: string
 } & AnimationTimerOptions & {

@@ -11,13 +11,44 @@ import type {
 /**
  * Checks whether one value is a minimal move command object.
  */
-function isMoveCommand(value: unknown): value is { parentId: string; mode?: unknown; flip?: unknown; flipMode?: unknown; reorder?: unknown } {
+function isMoveCommand(value: unknown): value is { parentId: string; mode?: unknown; flip?: unknown; flipMode?: unknown; reorder?: unknown; duration?: unknown; easing?: unknown; ease?: unknown; attraction?: unknown } {
   if (typeof value !== 'object' || value === null) {
     return false
   }
 
   const move = value as { parentId?: unknown }
   return typeof move.parentId === 'string' && move.parentId.length > 0
+}
+
+/**
+ * Resolves one optional FLIP trajectory attraction value in the author range -100..100.
+ */
+function normalizeMoveAttraction(rawAttraction: unknown): number | undefined {
+  if (typeof rawAttraction !== 'number' || !Number.isFinite(rawAttraction)) {
+    return undefined
+  }
+
+  return Math.max(-100, Math.min(100, Math.round(rawAttraction)))
+}
+
+/**
+ * Resolves one optional non-negative move animation duration.
+ */
+function normalizeMoveDuration(rawDuration: unknown): number | undefined {
+  return typeof rawDuration === 'number' && Number.isFinite(rawDuration) && rawDuration >= 0
+    ? rawDuration
+    : undefined
+}
+
+/**
+ * Resolves one optional move animation easing name.
+ */
+function normalizeMoveEasing(rawEasing: unknown, rawEase: unknown): string | undefined {
+  if (typeof rawEasing === 'string' && rawEasing.length > 0) {
+    return rawEasing
+  }
+
+  return typeof rawEase === 'string' && rawEase.length > 0 ? rawEase : undefined
 }
 
 /**
@@ -84,7 +115,11 @@ export function normalizeMoveCommand(rawMove: unknown, isInitialMove: boolean): 
     mode: isInitialMove ? 'append' : (rawMove.mode as MoveCommand['mode']) ?? 'append',
     flip: rawMove.flip as MoveCommand['flip'],
     flipMode: normalizeMoveFlipMode(rawMove.flipMode),
-    reorder: rawMove.reorder as MoveCommand['reorder']
+    reorder: rawMove.reorder as MoveCommand['reorder'],
+    duration: normalizeMoveDuration(rawMove.duration),
+    easing: normalizeMoveEasing(rawMove.easing, rawMove.ease),
+    ease: normalizeMoveEasing(rawMove.easing, rawMove.ease),
+    attraction: normalizeMoveAttraction(rawMove.attraction)
   }
 }
 
@@ -101,6 +136,7 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
     getParentListId: (id) => host.registries.container.getParentId(id),
     isMounted: (id) => host.registries.mounted.get(id)
   })
+  const pendingFlipSessionByEventId = new Map<string, ReturnType<typeof listFlipModule.prepareMove>>()
 
   function applyMove(request: {
     persoId: string
@@ -298,7 +334,7 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
   }
 
   function beforeUpdate(payload: RuntimeModuleHookPayload): void {
-    const { resolvedAction, eventSeq, moveCommand, output } = payload
+    const { resolvedAction, eventSeq, moveCommand } = payload
     if (resolvedAction === undefined || eventSeq === undefined || moveCommand === undefined || moveCommand === null) {
       return
     }
@@ -310,8 +346,10 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
       move: moveCommand,
       eventId: resolvedAction.eventId,
       eventName: resolvedAction.eventName,
-      eventSeq
+      eventSeq,
+      isSeekReplay: payload.isSeekReplay === true
     })
+    pendingFlipSessionByEventId.set(resolvedAction.eventId, flipSession)
 
     applyMove({
       persoId,
@@ -319,15 +357,24 @@ function install(host: RuntimeModuleHost): RuntimeModuleBinding {
       eventId: resolvedAction.eventId,
       eventSeq
     })
+  }
 
-    if (flipSession !== null && output !== undefined) {
+  function afterUpdate(payload: RuntimeModuleHookPayload): void {
+    const { resolvedAction, output } = payload
+    if (resolvedAction === undefined || output === undefined) {
+      return
+    }
+
+    const flipSession = pendingFlipSessionByEventId.get(resolvedAction.eventId) ?? null
+    pendingFlipSessionByEventId.delete(resolvedAction.eventId)
+    if (flipSession !== null) {
       output.directTransitions.push(...flipSession.commit())
     }
   }
 
   return {
     runtime: {
-      hooks: { onInitialPerso, beforeUpdate },
+      hooks: { onInitialPerso, beforeUpdate, afterUpdate },
       match: { actionKeys: ['move'] }
     }
   }

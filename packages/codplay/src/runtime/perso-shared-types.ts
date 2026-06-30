@@ -44,6 +44,10 @@ export type MoveCommand = {
   flip?: boolean
   flipMode?: MoveFlipMode
   reorder?: boolean
+  duration?: number
+  easing?: string
+  ease?: string
+  attraction?: number
 }
 
 export type ListPlacementConfig = {
@@ -55,7 +59,7 @@ export type ListPlacementConfig = {
 export type MoveValue =
   | MoveCommand
   | string
-  | { mode?: string; targetId?: string; parentId?: string; flip?: boolean; flipMode?: string; reorder?: boolean }
+  | { mode?: string; targetId?: string; parentId?: string; flip?: boolean; flipMode?: string; reorder?: boolean; duration?: number; easing?: string; ease?: string; attraction?: number }
 
 export type InputVisualStateValue =
   | 'idle'

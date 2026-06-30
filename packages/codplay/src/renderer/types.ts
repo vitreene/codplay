@@ -56,6 +56,7 @@ export type RuntimeCommit = {
   target: RuntimeCommitTarget
   operations: AnimationResolvedAction[]
   causeEventId?: string
+  isSeekReplay?: boolean
 }
 
 /**
@@ -108,11 +109,10 @@ export type RendererLoadInput = {
   mountedPersoIds?: ReadonlySet<string>
   /**
    * The move resolved per perso at the seek target (same dry-run scan that
-   * produced `mountedPersoIds`). When present, the orchestrator applies it
-   * directly instead of falling back to the perso's static `initial.move` —
-   * the completion of Phase 3 (resolution alone used to only filter which
-   * persos to refresh, never to attach/detach a perso whose position is
-   * entirely track-driven). See
+   * produced `mountedPersoIds`). The orchestrator consumes it for persos
+   * without a static `initial.move`; persos with a static baseline still replay
+   * from that baseline. This completes Phase 3 for persos whose position is
+   * entirely track-driven. See
    * 2026-06-29-entries-removal-and-dynamic-move-seek-plan.md, défaut 2.
    */
   effectiveMoveByPersoId?: ReadonlyMap<string, MoveCommand | null>

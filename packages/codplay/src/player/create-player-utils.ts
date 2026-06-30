@@ -327,12 +327,12 @@ export class PlayerRuntimePlanner {
       return 0
     }
 
+    let maxDurationMs = this.resolveMoveDurationMs(action.move)
     const style = action.style
     if (typeof style !== 'object' || style === null) {
-      return 0
+      return maxDurationMs
     }
 
-    let maxDurationMs = 0
     for (const styleValue of Object.values(style as Record<string, unknown>)) {
       if (typeof styleValue !== 'object' || styleValue === null) {
         continue
@@ -350,6 +350,25 @@ export class PlayerRuntimePlanner {
     }
 
     return maxDurationMs
+  }
+
+  /**
+   * Resolves one authored move animation duration when FLIP is enabled.
+   */
+  private resolveMoveDurationMs(rawMove: unknown): number {
+    if (typeof rawMove !== 'object' || rawMove === null) {
+      return 0
+    }
+
+    const move = rawMove as Record<string, unknown>
+    if (move.flip === false) {
+      return 0
+    }
+
+    const duration = move.duration
+    return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+      ? this.clampTimelineMs(duration)
+      : 0
   }
 
   /**

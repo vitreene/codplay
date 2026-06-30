@@ -1,3 +1,5 @@
+import { utils } from 'animejs'
+
 import type { AnimationAdapter, AnimationHandle, TransitionRequest } from './types'
 
 export type AnimeAnimationLike = {
@@ -71,9 +73,43 @@ function cleanupTransitionStyle(transition: TransitionRequest): void {
 }
 
 /**
+ * Applies one transition target value directly when an animation is completed
+ * through seek finalization rather than a natural animation frame.
+ */
+function applyTransitionEndValue(transition: TransitionRequest): void {
+  const target = transition.target
+
+  if (typeof globalThis.Element !== 'undefined' && target instanceof globalThis.Element) {
+    utils.set(target, { [transition.property]: transition.finalValue ?? transition.to } as Parameters<typeof utils.set>[1])
+    return
+  }
+
+  if (typeof target !== 'object' || target === null) {
+    return
+  }
+
+  const targetObject = target as Record<string, unknown>
+  const styleRecord =
+    typeof targetObject.style === 'object' && targetObject.style !== null
+      ? (targetObject.style as Record<string, unknown>)
+      : null
+
+  if (styleRecord !== null) {
+    styleRecord[transition.property] = transition.finalValue ?? transition.to
+    return
+  }
+
+  targetObject[transition.property] = transition.finalValue ?? transition.to
+}
+
+/**
  * Applies transition finalization hooks with a deterministic reason.
  */
 function finalizeTransition(transition: TransitionRequest, reason: 'completed' | 'stopped'): void {
+  if (reason === 'completed') {
+    applyTransitionEndValue(transition)
+  }
+
   cleanupTransitionStyle(transition)
   transition.onFinalize?.(reason)
 }
@@ -88,17 +124,25 @@ function isNoOpTransition(transition: TransitionRequest): boolean {
 /**
  * Builds the tween value payload for one transition.
  */
-function toTransitionValue(transition: TransitionRequest): Record<string, number | string> {
+function toTransitionValue(transition: TransitionRequest): Record<string, number | string | ((value: number) => number | string)> {
   if (transition.from === undefined) {
-    return {
+    const payload: Record<string, number | string | ((value: number) => number | string)> = {
       to: transition.to
     }
+    if (transition.modifier !== undefined) {
+      payload.modifier = transition.modifier
+    }
+    return payload
   }
 
-  return {
+  const payload: Record<string, number | string | ((value: number) => number | string)> = {
     from: transition.from,
     to: transition.to
   }
+  if (transition.modifier !== undefined) {
+    payload.modifier = transition.modifier
+  }
+  return payload
 }
 
 /**

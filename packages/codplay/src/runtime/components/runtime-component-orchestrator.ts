@@ -457,16 +457,18 @@ export class RuntimeComponentOrchestrator {
 
     for (const perso of Object.values(runtimePersos.persos)) {
       const rawInitialMove = perso.initial.move;
+      const initialMoveCommand = normalizeMoveCommand(rawInitialMove, true);
 
-      if (effectiveMoveByPersoId?.has(perso.id)) {
+      if (initialMoveCommand === null && effectiveMoveByPersoId?.has(perso.id)) {
         // Seek path: resolveMountedPersoIdsAtSeek already resolved this perso's move at
-        // targetMs from track history — apply it as-is (a real target, or the detach
-        // sentinel when nothing due establishes any attachment) instead of falling back
-        // to the static initial.move, which a track-driven perso never has. Bypasses the
-        // mountedPersoIds filter below on purpose: a perso resolved "not mounted" still
-        // needs this call to detach it if it is currently attached from a prior live
-        // state. See 2026-06-28-unify-action-execution-and-move-off-plan.md Phase 3 and
-        // 2026-06-29-entries-removal-and-dynamic-move-seek-plan.md, défaut 2.
+        // targetMs from track history. Use it only for persos without a static
+        // initial.move: persos with a static baseline must start seek replay from that
+        // baseline so replayed move animations can capture the same "First" as live
+        // playback. Bypasses the mountedPersoIds filter below on purpose: a perso
+        // resolved "not mounted" still needs this call to detach it if it is currently
+        // attached from a prior live state. See 2026-06-28-unify-action-execution-and-
+        // move-off-plan.md Phase 3 and 2026-06-29-entries-removal-and-dynamic-move-
+        // seek-plan.md, défaut 2.
         const resolvedMove = effectiveMoveByPersoId.get(perso.id) ?? DETACH_MOVE_COMMAND;
 
         // Cheap pre-check before calling onInitialPerso/applyMove: applyMove's own
@@ -491,12 +493,11 @@ export class RuntimeComponentOrchestrator {
         continue;
       }
 
-      const moveCommand = normalizeMoveCommand(rawInitialMove, true);
-      if (moveCommand === null) {
+      if (initialMoveCommand === null) {
         continue;
       }
 
-      this.runHook("onInitialPerso", { perso, moveCommand });
+      this.runHook("onInitialPerso", { perso, moveCommand: initialMoveCommand });
     }
 
     return toRuntimeElementMap(this.componentByPersoId, this.nodeByPersoId);
@@ -651,6 +652,7 @@ export class RuntimeComponentOrchestrator {
     this.runHook("beforeUpdate", {
       resolvedAction: input.update.resolvedAction,
       eventSeq: input.update.eventSeq,
+      isSeekReplay: input.update.isSeekReplay === true,
       moveCommand: moveDecision,
       component,
       output: hookOutput,
@@ -670,6 +672,7 @@ export class RuntimeComponentOrchestrator {
     this.runHook("afterUpdate", {
       resolvedAction: input.update.resolvedAction,
       eventSeq: input.update.eventSeq,
+      isSeekReplay: input.update.isSeekReplay === true,
       component,
       output: hookOutput,
     });
