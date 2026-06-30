@@ -18,6 +18,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "?demo=mashup-rive-three-quiz" },
   { id: "chrono", label: "Chronomètre", href: "?demo=chrono" },
   { id: "move-off", label: "Détachement DOM", href: "?demo=move-off" },
+  { id: "overlay-world-outlet", label: "Overlay-world outlet", href: "?demo=overlay-world-outlet" },
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
 ];

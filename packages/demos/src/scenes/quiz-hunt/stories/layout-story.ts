@@ -1,7 +1,7 @@
 import type { SceneStoryDoc } from "codplay/player/types"
 
-/** Root story: the 3 zones (main, basket, timer). Every other story mounts into it via `move`. */
-export function createLayoutStory(): SceneStoryDoc {
+/** Root story: title, main stack, then footer zones for basket, extra token, and timer. */
+export function createLayoutStory(title: string): SceneStoryDoc {
   return {
     id: "game-layout-story",
     initial: { move: "@root" },
@@ -15,9 +15,13 @@ export function createLayoutStory(): SceneStoryDoc {
           move: "@root",
           markup: `
             <div class="quiz-hunt-layout">
+              <div class="quiz-hunt-title-zone">
+                <h2 class="quiz-hunt-title">${title}</h2>
+              </div>
               <div class="quiz-hunt-main-zone" data-part="game:zone:main"></div>
               <div class="quiz-hunt-footer">
                 <div class="quiz-hunt-basket-zone" data-part="game:zone:basket"></div>
+                <div class="quiz-hunt-extra-zone" data-part="game:zone:extra"></div>
                 <div class="quiz-hunt-timer-zone" data-part="game:zone:timer"></div>
               </div>
             </div>

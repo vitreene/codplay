@@ -2,10 +2,73 @@ import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionLabels, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "../../../quiz-question-scene"
 import { quizQuestionStoryStraps } from "../../../quiz-question-scene"
 import { createQuizAnswerPersos, createQuizControlPersos } from "../answer-persos"
-import type { QuizHuntWord } from "../../types"
+import type { QuizHuntClueMedia, QuizHuntWord } from "../../types"
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+/** Builds the reading clue slot content: plain text, video, or a temporary placeholder. */
+function createCluePersos(prefix: string, word: QuizHuntWord): PersoDoc[] {
+  const clueMedia = word.trial.clueMedia
+  if (clueMedia?.type !== "video") {
+    return [
+      {
+        id: `${prefix}-clue-text`,
+        type: "tag",
+        initial: {
+          tag: "p",
+          className: "quiz-hunt-trial-clue",
+          content: word.trial.clueText ?? "",
+          move: { parentId: `${prefix}:clue-slot` }
+        },
+        actions: {}
+      }
+    ]
+  }
+
+  return createClueVideoPersos(prefix, word.id, clueMedia)
+}
+
+/** Builds the optional clue video and its placeholder for one trial. */
+function createClueVideoPersos(prefix: string, wordId: string, clueMedia: QuizHuntClueMedia): PersoDoc[] {
+  const startEventName = `game:trial:${wordId}:clue-media:start`
+  const stopEventName = `game:trial:${wordId}:clue-media:stop`
+
+  const mediaPersos: PersoDoc[] = []
+
+  if (typeof clueMedia.src === "string" && clueMedia.src.length > 0) {
+    mediaPersos.push({
+      id: `${prefix}-clue-video`,
+      type: "media",
+      initial: {
+        tag: "video",
+        src: clueMedia.src,
+        master: false,
+        className: "quiz-hunt-trial-clue-video",
+        video: { style: { width: "100%", display: "block" }, controls: true, muted: true },
+        move: { parentId: `${prefix}:clue-slot` }
+      },
+      actions: {
+        [startEventName]: { broadcast: { type: "START", startAt: 0 } },
+        [stopEventName]: { broadcast: { type: "STOP" } }
+      }
+    } as unknown as PersoDoc)
+  } else {
+    mediaPersos.push({
+      id: `${prefix}-clue-video-placeholder`,
+      type: "tag",
+      initial: {
+        tag: "div",
+        className: "quiz-hunt-trial-clue-video-placeholder",
+        content: clueMedia.placeholderText ?? "Video a brancher dans assets.",
+        move: { parentId: `${prefix}:clue-slot` }
+      },
+      actions: {}
+    })
+  }
+
+  return mediaPersos
 }
 
 /**
@@ -42,7 +105,7 @@ export function createReadingQuizTrial(
           <div class="quiz-hunt-trial-panel is-hidden">
             <p class="quiz-hunt-trial-eyebrow" data-part="${prefix}:epreuve-label">${escapeHtml(word.trial.epreuveLabel)}</p>
             <p class="quiz-hunt-trial-instruction" data-part="${prefix}:consigne">${escapeHtml(word.trial.consigne)}</p>
-            <p class="quiz-hunt-trial-clue" data-part="${prefix}:clue">${escapeHtml(word.trial.clueText)}</p>
+            <div data-part="${prefix}:clue-slot"></div>
             <div data-part="${prefix}:fieldset-slot"></div>
           </div>
         `
@@ -54,14 +117,18 @@ export function createReadingQuizTrial(
       // action value not yet reflected in the static `ActionDoc` type —
       // cast needed, mirrors move-off-story.ts.
       actions: {
-        [`game:trial:${word.id}:show`]: [
-          { action: { move: { parentId: "game:zone:main" } }, durationMs: 20 },
-          { action: { className: { add: "is-visible", remove: "is-hidden" } } }
-        ],
+        [`game:trial:${word.id}:show`]: {
+          move: { parentId: "game:zone:main" },
+          className: { add: "is-visible", remove: "is-hidden" }
+        },
         [`game:trial:${word.id}:hide`]: [
           { action: { className: { add: "is-hidden", remove: "is-visible" } }, durationMs: 200 },
           { action: { move: "@off" } }
-        ]
+        ],
+        [retryEventName]: {
+          move: { parentId: "game:zone:main" },
+          className: { add: "is-visible", remove: "is-hidden" }
+        }
       } as unknown as PersoDoc<"layout">["actions"]
     },
     {
@@ -83,7 +150,10 @@ export function createReadingQuizTrial(
       actions: {
         [`game:trial:${word.id}:reveal-question`]: { className: { remove: "is-hidden" } },
         "quiz:question:resolved": { attr: { disabled: true } },
-        [retryEventName]: { attr: { disabled: false } }
+        [retryEventName]: {
+          attr: { disabled: false },
+          className: { add: "is-hidden" }
+        }
       }
     },
     {
@@ -103,6 +173,7 @@ export function createReadingQuizTrial(
       },
       actions: {}
     },
+    ...createCluePersos(prefix, word),
     ...createQuizAnswerPersos(prefix, question, groupName, retryEventName),
     ...createQuizControlPersos(prefix, question, "#2563eb", retryEventName)
   ]

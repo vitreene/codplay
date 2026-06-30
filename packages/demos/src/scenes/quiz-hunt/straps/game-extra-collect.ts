@@ -8,6 +8,6 @@ export const gameExtraCollectStrap: StrapFn = ({ state }) => {
 
   return {
     update: { extraToken: true },
-    events: [{ name: "game:extra:hide" }]
+    events: [{ name: "game:extra:inventory:collect" }]
   }
 }

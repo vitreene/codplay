@@ -15,6 +15,7 @@ import { runQuizHuntDemo } from './codplay/quiz-hunt-demo'
 import { runThreejsAnimeGridDemo } from './codplay/threejs-anime-grid-demo'
 import { runMashupRiveThreeQuizDemo } from './codplay/mashup-rive-three-quiz-demo'
 import { runMoveOffDemo } from './codplay/move-off-demo'
+import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
@@ -35,6 +36,7 @@ switch (demoName) {
 	case 'mashup-rive-three-quiz': void runMashupRiveThreeQuizDemo(); break
 	case 'chrono':          void runChronoDemo(); break
 	case 'move-off':        void runMoveOffDemo(); break
+	case 'overlay-world-outlet': void runOverlayWorldOutletDemo(); break
 	case 'polygon':         void runPolygonDemo(); break
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	default:                void runPlayerPocDemo()

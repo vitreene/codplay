@@ -44,7 +44,7 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
   const questionLabels = toQuestionLabels(config)
 
   const stories: Record<string, SceneStoryDoc> = {
-    "game-layout-story": createLayoutStory(),
+    "game-layout-story": createLayoutStory(config.labels.gridTitle),
     "game-grid-story": createGridStory(words, draw.gridOrder, COLOR_ACCENTS),
     "game-basket-story": createBasketStory(colors, COLOR_ACCENTS, config.labels),
     "game-timer-story": createTimerStory(),
@@ -80,7 +80,10 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
     listen: [
       { on: "game:trial:open", straps: ["game-router"] },
       { on: "quiz:question:answered", straps: ["game-trial-resolve"] },
+      { on: "game:extra:window:show", straps: ["game-extra-window"] },
+      { on: "game:extra:window:hide", straps: ["game-extra-window"] },
       { on: "game:extra:collect", straps: ["game-extra-collect"] },
+      { on: "game:extra:drag:end", straps: ["game-extra-drop"] },
       { on: "game:timer:start", straps: ["game-timer"] },
       { on: "game:timer:resume", straps: ["game-timer"] },
       { on: "game:timer:pause", straps: ["game-timer"] },
@@ -103,9 +106,9 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
  * Re-derives the same deterministic draw from `config.seed` — calling both functions with
  * the same `config` always yields a consistent scene/straps pair.
  */
-export function createQuizHuntStraps(config: GameConfig) {
+export function createQuizHuntStraps(config: GameConfig, scene?: SceneDoc) {
   const draw = deriveGameDraw(config.content, config.seed)
-  return createGameStraps(config, draw)
+  return createGameStraps(config, draw, scene)
 }
 
 export type { GameConfig } from "./types"

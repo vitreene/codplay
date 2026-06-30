@@ -1,0 +1,149 @@
+.owor-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  width: 100%;
+  height: 100%;
+  padding: 1rem;
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+}
+
+.owor-title {
+  font: 800 1.15rem/1.2 "Avenir Next", "Segoe UI", sans-serif;
+  color: #0f172a;
+}
+
+.owor-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-height: 0;
+}
+
+.owor-stage-card {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-height: 0;
+  padding: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.owor-case-label {
+  margin: 0;
+  color: #0f172a;
+  font: 800 0.82rem/1.1 "Avenir Next", "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.owor-stage-copy {
+  margin: 0;
+  color: #475569;
+  font: 600 0.95rem/1.35 "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.owor-source-slot {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  min-height: 10rem;
+  padding: 0.5rem;
+  border: 1px dashed rgba(148, 163, 184, 0.9);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.95));
+}
+
+.owor-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 13rem);
+  gap: 1rem;
+  align-items: center;
+}
+
+.owor-footer-block,
+.owor-footer-center {
+  min-height: 5rem;
+  border-radius: 1rem;
+}
+
+.owor-footer-block {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 800 0.95rem/1.1 "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.owor-footer-basket {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.owor-footer-timer {
+  background: linear-gradient(135deg, #0f766e, #0f766e);
+}
+
+.owor-footer-center {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px dashed rgba(148, 163, 184, 0.9);
+}
+
+.owor-footer-caption {
+  color: #475569;
+  font: 700 0.78rem/1.1 "Avenir Next", "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.owor-target-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  min-height: 4rem;
+}
+
+.owor-target-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  min-height: 4rem;
+}
+
+.owor-token {
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid #b45309;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fde68a, #f59e0b 58%, #d97706 100%);
+  box-shadow: 0 0.3rem 0.8rem rgba(217, 119, 6, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #7c2d12;
+  font: 900 1.1rem/1 "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.owor-token-floating {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.owor-token-docked {
+  position: relative;
+}
+
+@media (max-width: 760px) {
+  .owor-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .owor-footer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

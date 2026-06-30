@@ -63,38 +63,22 @@ dans l'état et le `cancel()` avant tout nouveau `startTick`.
 
 ---
 
-## 2. Le retry via jeton de rattrapage ne réinitialise jamais l'épreuve — event mort
+## 2. Le retry via jeton de rattrapage ne réinitialise jamais l'épreuve — CORRIGÉ (2026-06-29)
 
-**Fichiers** : `stories/trials/build-reading-quiz.ts:26,87,107-108`,
-`stories/answer-persos.ts:34,54,70,110,134`, `straps/game-router.ts:28-30`
+**Fix appliqué** : le flux passe maintenant par un vrai jeton de rattrapage
+stocké à côté du panier, draggable sur une tuile échouée.
 
-- `build-reading-quiz.ts` définit `retryEventName = game:trial:{wordId}:retry` et
-  le branche comme action de remise à zéro sur : le fieldset (`disabled:false`),
-  chaque input réponse (`checked:false, disabled:false, visualState:'idle'`),
-  les icônes de sélection/correction (`content:''`), le bouton valider
-  (`disabled:true`) et le texte de résultat (`hidden:true`).
-- **Rien n'émet jamais cet event.** Recherche exhaustive dans
-  `packages/demos/src/scenes/quiz-hunt/` : aucun `emit` perso ni aucun strap ne
-  produit `game:trial:{wordId}:retry`.
-- Le seul endroit plausible, `game-router.ts` (`unlockEvents`, déclenché quand
-  `status === 'fail' && extraToken`), n'émet que
-  `game:grid:tile:{trialId}:unlocked` (le visuel de la tuile grille) — jamais
-  l'event de reset de l'épreuve elle-même.
+- `stories/basket-story.ts` expose le jeton d'inventaire et sa capture pointer.
+- `straps/game-extra-drop.ts` résout le drop : seule une tuile `fail` est valide,
+  le strap remet alors `trialStatus[trialId]` à `available`, émet
+  `game:trial:{trialId}:retry`, déverrouille la tuile, consomme le jeton puis
+  rouvre immédiatement l'épreuve.
+- `straps/game-router.ts` ne tente plus de rouvrir une tuile en échec par clic
+  direct ; ce chemin passe exclusivement par le drag-and-drop du jeton.
 
-**Effet** : le déblocage de la tuile (visuel grille) fonctionne, mais en
-rouvrant l'épreuve le panneau garde l'état de la tentative précédente :
-fieldset désactivé, réponses cochées, icônes de correction affichées, message
-"Mauvaise réponse" toujours visible. Le joueur ne peut pas effectivement
-retenter l'épreuve malgré le jeton consommé.
-
-**Cohérence avec le plan** : `2026-06-19-quiz-hunt-plan.md` §"Conséquence pour
-le retry" décrit exactement ce mécanisme (event dédié par trial, reset par
-actions persos pures, pas de strap) — le câblage côté persos a été fait, pas
-l'émission de l'event déclencheur.
-
-**Piste** (non appliquée) : ajouter `{ name: retryEventName }` (ou
-`game:trial:${trialId}:retry`) à `unlockEvents` dans `game-router.ts`, à côté de
-l'event de déblocage de la tuile grille.
+**Résultat** : l'état local de la question est bien annulé (fieldset réactivé,
+réponses/icônes/résultat effacés), la question ciblée se rouvre immédiatement,
+et le jeton disparaît après usage.
 
 ---
 

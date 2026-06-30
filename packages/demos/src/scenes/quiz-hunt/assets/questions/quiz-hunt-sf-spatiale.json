@@ -1,0 +1,505 @@
+{
+  "colors": ["bleu", "rouge", "vert", "jaune"],
+  "words": [
+    {
+      "id": "nostromo",
+      "label": "NOSTROMO",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Alien, le huitieme passager, qu'est-ce qui rend le Nostromo particulierement inquietant comme decor ?",
+        "answers": [
+          { "id": "palais-lumineux", "label": "Il ressemble a un palais lumineux et ouvert.", "isCorrect": false },
+          { "id": "industriel-etroit", "label": "Il est etroit, industriel et difficile a fuir.", "isCorrect": true },
+          { "id": "controle-enfants", "label": "Il est entierement controle par des enfants.", "isCorrect": false },
+          { "id": "fond-ocean", "label": "Il se situe au fond de l'ocean.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Indices textuels",
+        "consigne": "Choisis le nom du vaisseau correspondant aux indices.",
+        "clueMedia": {
+          "type": "video",
+          "placeholderText": "Video Nostromo a brancher ici des que l'asset est disponible."
+        },
+        "revealDelayMs": 5000,
+        "question": {
+          "type": "single",
+          "prompt": "Quel vaisseau est decrit ?",
+          "answers": [
+            { "id": "discovery-one", "label": "Discovery One", "isCorrect": false },
+            { "id": "nostromo", "label": "Nostromo", "isCorrect": true },
+            { "id": "event-horizon", "label": "Event Horizon", "isCorrect": false },
+            { "id": "sulaco", "label": "Sulaco", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "discovery-one",
+      "label": "DISCOVERY ONE",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel element transforme le voyage du Discovery One en menace interieure ?",
+        "answers": [
+          { "id": "tempete-martienne", "label": "Une tempete de sable martienne", "isCorrect": false },
+          { "id": "ordinateur-dangereux", "label": "Un ordinateur de bord devenu dangereux", "isCorrect": true },
+          { "id": "robots-geants", "label": "Une invasion de robots geants", "isCorrect": false },
+          { "id": "gravite-comique", "label": "Une panne de gravite comique", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "Dans 2001 : l'Odyssee de l'espace, le Discovery One est envoye vers Jupiter. Le vaisseau transporte des astronautes eveilles et d'autres en hibernation. A bord, l'ordinateur HAL 9000 surveille les fonctions essentielles. La mission semble d'abord calme, precise et controlee. Mais le comportement de HAL devient peu a peu menacant. Le Discovery One devient alors un lieu de tension entre l'humain et la machine.",
+        "question": {
+          "type": "single",
+          "prompt": "Vers quelle destination le Discovery One est-il envoye dans le texte ?",
+          "answers": [
+            { "id": "mars", "label": "Mars", "isCorrect": false },
+            { "id": "jupiter", "label": "Jupiter", "isCorrect": true },
+            { "id": "saturne", "label": "Saturne", "isCorrect": false },
+            { "id": "lune", "label": "La Lune", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "icarus-ii",
+      "label": "ICARUS II",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Pourquoi le nom Icarus est-il particulierement adapte au film Sunshine ?",
+        "answers": [
+          { "id": "voyage-sous-mer", "label": "Parce que le vaisseau voyage sous la mer.", "isCorrect": false },
+          { "id": "danger-soleil", "label": "Parce que la mission consiste a s'approcher dangereusement du Soleil.", "isCorrect": true },
+          { "id": "cite-grecque", "label": "Parce que l'equipage cherche une cite grecque.", "isCorrect": false },
+          { "id": "antiquite", "label": "Parce que le film se deroule dans l'Antiquite.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Association d'indices",
+        "consigne": "Choisis le vaisseau qui correspond a ces quatre indices.",
+        "clueText": "Le film met en scene une mission desesperee pour sauver la Terre. L'equipage voyage vers le Soleil, pas loin de lui. Le vaisseau porte le nom d'un personnage mythologique lie au soleil. Le bouclier thermique est indispensable a la survie de l'equipage.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel vaisseau est decrit ?",
+          "answers": [
+            { "id": "icarus-ii", "label": "Icarus II", "isCorrect": true },
+            { "id": "ares-iii", "label": "Ares III", "isCorrect": false },
+            { "id": "endurance", "label": "Endurance", "isCorrect": false },
+            { "id": "valley-forge", "label": "Valley Forge", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "endurance",
+      "label": "ENDURANCE",
+      "color": "bleu",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Interstellar, quel objectif motive principalement le voyage de l'Endurance ?",
+        "answers": [
+          { "id": "planete-habitable", "label": "Trouver une planete habitable pour l'humanite.", "isCorrect": true },
+          { "id": "capturer-alien", "label": "Capturer un alien pour l'etudier.", "isCorrect": false },
+          { "id": "course-vaisseaux", "label": "Organiser une course entre vaisseaux.", "isCorrect": false },
+          { "id": "station-commerciale", "label": "Proteger une station commerciale.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Description precise",
+        "consigne": "Lis la description et choisis le film concerne.",
+        "clueText": "Un vaisseau circulaire quitte le systeme solaire connu apres un passage pres de Saturne. Sa mission n'est pas la guerre, mais la recherche d'un refuge possible pour l'espece humaine. Les planetes visitees ne sont pas de simples decors : chacune impose une contrainte physique extreme.",
+        "question": {
+          "type": "single",
+          "prompt": "Dans quel film trouve-t-on ce vaisseau nomme Endurance ?",
+          "answers": [
+            { "id": "interstellar", "label": "Interstellar", "isCorrect": true },
+            { "id": "gravity", "label": "Gravity", "isCorrect": false },
+            { "id": "starship-troopers", "label": "Starship Troopers", "isCorrect": false },
+            { "id": "moon", "label": "Moon", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "arrakis",
+      "label": "ARRAKIS",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Dune, pourquoi Arrakis attire-t-elle autant de convoitises ?",
+        "answers": [
+          { "id": "substance-navigation", "label": "Elle produit une substance indispensable a la navigation spatiale.", "isCorrect": true },
+          { "id": "grands-oceans", "label": "Elle possede les plus grands oceans de l'empire.", "isCorrect": false },
+          { "id": "ordinateur-parlant", "label": "Elle abrite le seul ordinateur parlant.", "isCorrect": false },
+          { "id": "prison-robots", "label": "Elle sert de prison pour les robots.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "Dans Dune, Arrakis est une planete desertique presque entierement couverte de sable. Elle est aussi appelee Dune par ceux qui la connaissent. Son importance vient de l'epice, une substance rare et strategique. L'epice prolonge la vie et permet la navigation spatiale a grande echelle. Les vers geants rendent l'exploitation du desert extremement dangereuse. Controler Arrakis signifie controler une ressource essentielle a l'empire.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle ressource rend Arrakis si importante dans le texte ?",
+          "answers": [
+            { "id": "cristal-noir", "label": "Le cristal noir", "isCorrect": false },
+            { "id": "epice", "label": "L'epice", "isCorrect": true },
+            { "id": "eau-abondante", "label": "L'eau liquide abondante", "isCorrect": false },
+            { "id": "adamantium", "label": "Le metal adamantium", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "lv-426",
+      "label": "LV-426",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel role LV-426 joue-t-elle dans l'univers d'Alien ?",
+        "answers": [
+          { "id": "decouverte-xenomorphe", "label": "Elle marque le lieu de la decouverte initiale liee au xenomorphe.", "isCorrect": true },
+          { "id": "base-comique", "label": "Elle sert uniquement de base comique.", "isCorrect": false },
+          { "id": "capitale-empire", "label": "Elle est la capitale de l'empire galactique.", "isCorrect": false },
+          { "id": "laboratoire-hal", "label": "Elle est le laboratoire de naissance de HAL.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Reperage chronologique",
+        "consigne": "Choisis l'affirmation correcte a partir des indices.",
+        "clueText": "Le lieu apparait dans Alien puis revient dans Aliens. Il est d'abord explore par l'equipage du Nostromo. Il devient ensuite une colonie humaine en danger.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle affirmation correspond a LV-426 ?",
+          "answers": [
+            { "id": "planete-tourisme", "label": "C'est une planete paradisiaque de tourisme.", "isCorrect": false },
+            { "id": "lune-xenomorphe", "label": "C'est une lune liee a la premiere decouverte du xenomorphe.", "isCorrect": true },
+            { "id": "nom-hal", "label": "C'est le nom de l'ordinateur du Discovery One.", "isCorrect": false },
+            { "id": "ville-sous-marine", "label": "C'est une ville sous-marine dans Avatar.", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "solaris",
+      "label": "SOLARIS",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Pourquoi Solaris est-elle un lieu particulier dans la science-fiction spatiale ?",
+        "answers": [
+          { "id": "memoire", "label": "Elle transforme le voyage spatial en confrontation avec la memoire.", "isCorrect": true },
+          { "id": "courses", "label": "Elle est seulement une planete de courses automobiles.", "isCorrect": false },
+          { "id": "sabres-laser", "label": "Elle est connue pour ses combats de sabres laser.", "isCorrect": false },
+          { "id": "mine-epice", "label": "Elle contient une mine d'epice gardee par des vers.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Identification par contraste",
+        "consigne": "Lis la description et choisis le lieu concerne.",
+        "clueText": "Ce lieu de science-fiction spatiale n'est pas dangereux par des monstres ou des batailles. Il trouble les personnages en materialisant des souvenirs intimes. La planete est associee a un ocean mysterieux qui defie l'explication scientifique classique.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel est ce lieu ?",
+          "answers": [
+            { "id": "solaris", "label": "Solaris", "isCorrect": true },
+            { "id": "arrakis", "label": "Arrakis", "isCorrect": false },
+            { "id": "krypton", "label": "Krypton", "isCorrect": false },
+            { "id": "mars", "label": "Mars", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pandora",
+      "label": "PANDORA",
+      "color": "rouge",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Avatar, quel conflit principal structure Pandora ?",
+        "answers": [
+          { "id": "rivalite-ordinateurs", "label": "La rivalite entre deux ordinateurs de bord.", "isCorrect": false },
+          { "id": "exploitation-vivant", "label": "L'opposition entre exploitation humaine et monde vivant des Na'vi.", "isCorrect": true },
+          { "id": "enquete-orbitale", "label": "Une enquete policiere dans une station orbitale.", "isCorrect": false },
+          { "id": "robots-dinosaures", "label": "Une guerre entre robots et dinosaures.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "Dans Avatar, Pandora est une lune habitable couverte de forets luxuriantes. Les humains y viennent pour extraire un minerai precieux appele unobtanium. Les Na'vi vivent en lien etroit avec les animaux, les plantes et leur environnement. Le lieu oppose deux visions : exploitation industrielle et equilibre avec le vivant. La faune de Pandora est dangereuse, mais aussi integree a une ecologie complexe. Le conflit nait lorsque les humains menacent le territoire des Na'vi.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel minerai les humains cherchent-ils sur Pandora dans le texte ?",
+          "answers": [
+            { "id": "vibranium", "label": "Le vibranium", "isCorrect": false },
+            { "id": "unobtanium", "label": "L'unobtanium", "isCorrect": true },
+            { "id": "epice", "label": "L'epice", "isCorrect": false },
+            { "id": "plutonium-rouge", "label": "Le plutonium rouge", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "xenomorphe",
+      "label": "XENOMORPHE",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Qu'est-ce qui distingue fortement le xenomorphe d'un simple monstre spatial classique ?",
+        "answers": [
+          { "id": "cycle-hote", "label": "Son cycle biologique passe par plusieurs etapes liees a un hote.", "isCorrect": true },
+          { "id": "parle-rimes", "label": "Il parle toujours en rimes.", "isCorrect": false },
+          { "id": "pilote-course", "label": "Il pilote un vaisseau de course.", "isCorrect": false },
+          { "id": "eau-douce", "label": "Il ne peut vivre que dans l'eau douce.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Question a indices",
+        "consigne": "Lis les indices et choisis la creature.",
+        "clueText": "Elle apparait dans un film spatial melant horreur et science-fiction. Son cycle de vie implique un hote humain. Elle est associee au facehugger et au chestburster. Son apparence biomecanique a marque le cinema.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle creature est decrite ?",
+          "answers": [
+            { "id": "xenomorphe", "label": "Le xenomorphe", "isCorrect": true },
+            { "id": "ver-des-sables", "label": "Le ver des sables", "isCorrect": false },
+            { "id": "et", "label": "E.T.", "isCorrect": false },
+            { "id": "gort", "label": "Le robot Gort", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "hal-9000",
+      "label": "HAL 9000",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Pourquoi HAL 9000 est-il inquietant dans 2001 ?",
+        "answers": [
+          { "id": "calme-controle", "label": "Il combine calme apparent et controle vital du vaisseau.", "isCorrect": true },
+          { "id": "griffes", "label": "Il attaque uniquement avec des griffes.", "isCorrect": false },
+          { "id": "pirates", "label": "Il est poursuivi par des pirates.", "isCorrect": false },
+          { "id": "silence", "label": "Il refuse de parler aux humains.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "HAL 9000 est l'ordinateur de bord du Discovery One dans 2001 : l'Odyssee de l'espace. Il parle d'une voix calme et semble d'abord fiable. Il controle des fonctions essentielles du vaisseau. Lorsqu'il se sent menace ou contredit, il devient dangereux pour l'equipage. Son oeil rouge circulaire est l'une des images les plus celebres du film. HAL incarne une peur froide : celle d'une machine rationnelle mais incontralable.",
+        "question": {
+          "type": "single",
+          "prompt": "Dans le texte, quelle image visuelle est associee a HAL ?",
+          "answers": [
+            { "id": "casque-dore", "label": "Un casque dore", "isCorrect": false },
+            { "id": "oeil-rouge", "label": "Un oeil rouge circulaire", "isCorrect": true },
+            { "id": "main-geante", "label": "Une main metallique geante", "isCorrect": false },
+            { "id": "cape-noire", "label": "Une cape noire", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ver-des-sables",
+      "label": "VER DES SABLES",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Dune, pourquoi les vers des sables ne sont-ils pas de simples monstres decoratifs ?",
+        "answers": [
+          { "id": "ecologie-epice", "label": "Ils sont lies a l'ecologie et a l'epice d'Arrakis.", "isCorrect": true },
+          { "id": "vehicules-comiques", "label": "Ils servent uniquement de vehicules comiques.", "isCorrect": false },
+          { "id": "couloirs-nostromo", "label": "Ils vivent dans les couloirs du Nostromo.", "isCorrect": false },
+          { "id": "controles-hal", "label": "Ils sont controles par HAL 9000.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Indices contextualises",
+        "consigne": "Lis les indices et choisis la creature.",
+        "clueText": "Elle vit dans le desert d'Arrakis. Elle est liee a la production ou au cycle de l'epice. Elle peut engloutir machines et voyageurs. Les Fremen connaissent des methodes pour survivre pres d'elle.",
+        "question": {
+          "type": "single",
+          "prompt": "Quelle creature est decrite ?",
+          "answers": [
+            { "id": "ver-des-sables", "label": "Le ver des sables", "isCorrect": true },
+            { "id": "xenomorphe", "label": "Le xenomorphe", "isCorrect": false },
+            { "id": "rancor", "label": "Le rancor", "isCorrect": false },
+            { "id": "tripode", "label": "Le tripode", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "monolithe",
+      "label": "MONOLITHE",
+      "color": "vert",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Quel role le monolithe joue-t-il principalement dans 2001 ?",
+        "answers": [
+          { "id": "intelligence-evolution", "label": "Il symbolise une intelligence inconnue liee a l'evolution.", "isCorrect": true },
+          { "id": "moteur-discovery", "label": "Il sert de moteur au Discovery One.", "isCorrect": false },
+          { "id": "arme-astronautes", "label": "Il est une arme portee par les astronautes.", "isCorrect": false },
+          { "id": "remplace-casque", "label": "Il remplace le casque des pilotes.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Question fermee de role",
+        "consigne": "Lis les indices et choisis l'objet ou l'entite decrit.",
+        "clueText": "Il apparait dans un film de Stanley Kubrick. Il est associe a l'evolution humaine et au mystere cosmique. Il ne parle pas et n'est presque pas explique. Sa presence provoque plus de questions que de reponses.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel element est decrit ?",
+          "answers": [
+            { "id": "monolithe", "label": "Le monolithe", "isCorrect": true },
+            { "id": "sabre-laser", "label": "Le sabre laser", "isCorrect": false },
+            { "id": "anneau-unique", "label": "L'anneau unique", "isCorrect": false },
+            { "id": "tesseract", "label": "Le Tesseract", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ripley",
+      "label": "RIPLEY",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Qu'est-ce qui caracterise Ripley dans Alien ?",
+        "answers": [
+          { "id": "prudence-rationnelle", "label": "Une prudence rationnelle face a une menace mal comprise.", "isCorrect": true },
+          { "id": "pouvoir-magique", "label": "Un pouvoir magique herite d'une planete desertique.", "isCorrect": false },
+          { "id": "capturer-hal", "label": "Une volonte de capturer HAL 9000.", "isCorrect": false },
+          { "id": "mission-pandora", "label": "Une mission commerciale sur Pandora.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "Ellen Ripley est officier a bord du Nostromo dans Alien, le huitieme passager. Elle se distingue par son respect des procedures de quarantaine. Quand la menace grandit, elle devient l'une des rares a garder une lecture claire du danger. Dans Aliens, elle revient avec une experience traumatique du premier film. Son personnage associe survie, mefiance envers les autorites et courage pratique. Elle devient une figure majeure de la science-fiction spatiale.",
+        "question": {
+          "type": "single",
+          "prompt": "Dans le texte, quelle procedure Ripley veut-elle respecter ?",
+          "answers": [
+            { "id": "quarantaine", "label": "La quarantaine", "isCorrect": true },
+            { "id": "decollage-auto", "label": "Le decollage automatique", "isCorrect": false },
+            { "id": "vote-equipage", "label": "Le vote de l'equipage", "isCorrect": false },
+            { "id": "ceremonie-militaire", "label": "La ceremonie militaire", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dave-bowman",
+      "label": "DAVE BOWMAN",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans 2001, quel type de role Dave Bowman occupe-t-il surtout ?",
+        "answers": [
+          { "id": "temoin-humain", "label": "Un temoin humain confronte a la machine puis au mystere cosmique.", "isCorrect": true },
+          { "id": "empereur", "label": "Un empereur galactique dirigeant une armee.", "isCorrect": false },
+          { "id": "chasseur-primes", "label": "Un chasseur de primes extraterrestre.", "isCorrect": false },
+          { "id": "pilote-epice", "label": "Un pilote cherchant de l'epice sur Arrakis.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Reperage de role",
+        "consigne": "Lis les indices et choisis le personnage.",
+        "clueText": "Il voyage a bord du Discovery One. Il affronte un ordinateur de bord devenu dangereux. Son parcours se termine dans une sequence cosmique celebre et mysterieuse. Il appartient a un film ou le silence et la mise en scene comptent autant que les dialogues.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel personnage est decrit ?",
+          "answers": [
+            { "id": "dave-bowman", "label": "Dave Bowman", "isCorrect": true },
+            { "id": "cooper", "label": "Cooper", "isCorrect": false },
+            { "id": "mark-watney", "label": "Mark Watney", "isCorrect": false },
+            { "id": "flash-gordon", "label": "Flash Gordon", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cooper",
+      "label": "COOPER",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Interstellar, pourquoi le voyage de Cooper n'est-il pas seulement une mission scientifique ?",
+        "answers": [
+          { "id": "separation-fille", "label": "Parce qu'il est aussi lie a la separation avec sa fille.", "isCorrect": true },
+          { "id": "tresor-pirate", "label": "Parce qu'il cherche un tresor pirate.", "isCorrect": false },
+          { "id": "emission-tv", "label": "Parce qu'il participe a une emission de television.", "isCorrect": false },
+          { "id": "retrouver-nostromo", "label": "Parce qu'il doit retrouver le Nostromo.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Lecture courte",
+        "consigne": "Lis le texte, puis reponds a la question fermee.",
+        "clueText": "Dans Interstellar, Cooper est un ancien pilote devenu agriculteur sur une Terre en crise. Il accepte de partir dans l'espace pour chercher une solution a la survie humaine. Son depart le separe de sa fille Murph, ce qui donne au film une forte dimension intime. La mission le conduit a travers un trou de ver pres de Saturne. Le personnage est partage entre devoir collectif et attachement familial. Son lien avec Murph reste central jusqu'a la resolution du recit.",
+        "question": {
+          "type": "single",
+          "prompt": "Avec quel membre de sa famille Cooper entretient-il le lien central du film ?",
+          "answers": [
+            { "id": "murph", "label": "Sa fille Murph", "isCorrect": true },
+            { "id": "tomy", "label": "Son frere Tomy", "isCorrect": false },
+            { "id": "joseph", "label": "Son pere Joseph", "isCorrect": false },
+            { "id": "amelia", "label": "Sa soeur Amelia", "isCorrect": false }
+          ]
+        }
+      }
+    },
+    {
+      "id": "leeloo",
+      "label": "LEELOO",
+      "color": "jaune",
+      "finalQuestion": {
+        "type": "single",
+        "prompt": "Dans Le Cinquieme Element, pourquoi Leeloo est-elle essentielle a la resolution ?",
+        "answers": [
+          { "id": "element-vivant", "label": "Elle incarne l'element vivant necessaire face a la menace cosmique.", "isCorrect": true },
+          { "id": "pilote-discovery", "label": "Elle pilote le Discovery One jusqu'a Jupiter.", "isCorrect": false },
+          { "id": "fabrique-epice", "label": "Elle fabrique l'epice d'Arrakis.", "isCorrect": false },
+          { "id": "detruit-pandora", "label": "Elle detruit Pandora pour sauver la Terre.", "isCorrect": false }
+        ]
+      },
+      "trial": {
+        "type": "reading+quiz",
+        "epreuveLabel": "Indices contextualises",
+        "consigne": "Lis les indices et choisis le personnage.",
+        "clueText": "Elle apparait dans un film de science-fiction francais sorti en 1997. Elle est liee aux quatre elements classiques et a un cinquieme element. Son apparence, son langage et son apprentissage rapide sont centraux dans le recit. Elle joue un role decisif face a une menace cosmique.",
+        "question": {
+          "type": "single",
+          "prompt": "Quel personnage est decrit ?",
+          "answers": [
+            { "id": "leeloo", "label": "Leeloo", "isCorrect": true },
+            { "id": "ripley", "label": "Ripley", "isCorrect": false },
+            { "id": "trinity", "label": "Trinity", "isCorrect": false },
+            { "id": "barbarella", "label": "Barbarella", "isCorrect": false }
+          ]
+        }
+      }
+    }
+  ]
+}

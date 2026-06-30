@@ -2,11 +2,15 @@ import type { StrapFn, StrapReturnValue } from "codplay/player/strap-types"
 import type { GameConfig, GameDraw } from "../types"
 
 /**
- * Scene-level `game:trial:open` handler: gates access (locked tile, extra token),
- * starts/pauses the timer, swaps grid ↔ trial panel, and schedules the fixed-delay
- * question reveal — plus the one-shot extra token window when this trial hosts it.
+ * Scene-level `game:trial:open` handler: blocks completed/failed tiles, swaps grid ↔
+ * trial panel, manages the reading-phase timer pause/reveal on first access, and keeps
+ * retry re-openings immediate once a retry token drop has restored the trial to available.
  */
 export function createGameRouterStrap(config: GameConfig, draw: GameDraw): StrapFn {
+  const revealDelayMsByTrialId = Object.fromEntries(
+    config.content.words.map((word) => [word.id, typeof word.trial.revealDelayMs === "number" ? word.trial.revealDelayMs : 3000])
+  )
+
   return ({ event, state, context }) => {
     const trialId = typeof event.data?.trialId === "string" ? event.data.trialId : undefined
     if (trialId === undefined) {
@@ -20,17 +24,9 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
       return undefined
     }
 
-    const extraToken = state.extraToken === true
-    if (status === "fail" && !extraToken) {
+    if (status === "fail") {
       return undefined
     }
-
-    const unlockEvents = status === "fail" && extraToken
-      ? [{ name: `game:grid:tile:${trialId}:unlocked` }]
-      : []
-    const tokenUpdate = status === "fail" && extraToken
-      ? { extraToken: false, extraConsumedOn: trialId }
-      : {}
 
     // The clock only freezes while the clue text is being read; it must already be
     // running again once the question appears, so the first-ever trial pauses it
@@ -39,12 +35,8 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
     const timerEvents = timerStarted
       ? [{ name: "game:timer:pause" }]
       : [{ name: "game:timer:start", data: { durationMs: config.timerTotalMs } }, { name: "game:timer:pause" }]
-
-    const revealEventName = `game:trial:${trialId}:reveal-question`
-    const reveal = context.planned.delay(3000, [
-      { event: { name: revealEventName } },
-      { event: { name: "game:timer:resume" } }
-    ])
+    const clueMediaStartEventName = `game:trial:${trialId}:clue-media:start`
+    const revealDelayMs = revealDelayMsByTrialId[trialId] ?? 3000
 
     const extraAlreadyOffered = state.extraOfferedOn !== null && state.extraOfferedOn !== undefined
     const shouldOfferExtra = trialId === draw.extraWordId && !extraAlreadyOffered
@@ -52,10 +44,10 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
     const extraSchedule = shouldOfferExtra
       ? [
           ...context.planned.delay(draw.extraOffsetMs, {
-            event: { name: "game:extra:show", data: { label: config.labels.extraLabel } }
+            event: { name: "game:extra:window:show", data: { label: config.labels.extraLabel } }
           }),
           ...context.planned.delay(draw.extraOffsetMs + config.extraDurationMs, {
-            event: { name: "game:extra:hide" }
+            event: { name: "game:extra:window:hide" }
           })
         ]
       : []
@@ -66,19 +58,18 @@ export function createGameRouterStrap(config: GameConfig, draw: GameDraw): Strap
           phase: "trial",
           currentTrialId: trialId,
           timerStarted: true,
-          ...tokenUpdate,
           ...(shouldOfferExtra ? { extraOfferedOn: trialId } : {})
         },
-        events: [
-          { name: "game:grid:hide" },
-          { name: `game:trial:${trialId}:show` },
-          ...timerEvents,
-          ...unlockEvents
-        ]
-      },
-      reveal,
-      extraSchedule
+        events: [{ name: "game:grid:hide" }, { name: `game:trial:${trialId}:show` }, { name: clueMediaStartEventName }, ...timerEvents]
+      }
     ]
+
+    const revealEventName = `game:trial:${trialId}:reveal-question`
+    result.push(context.planned.delay(revealDelayMs, [{ event: { name: revealEventName } }, { event: { name: "game:timer:resume" } }]))
+
+    if (extraSchedule.length > 0) {
+      result.push(extraSchedule)
+    }
 
     return result
   }

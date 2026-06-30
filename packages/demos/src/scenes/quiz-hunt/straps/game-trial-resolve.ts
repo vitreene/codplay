@@ -47,6 +47,7 @@ export function createGameTrialResolveStrap(
     const basket = { ...((state.basket as Record<string, { wordId: string; wordLabel: string } | null> | undefined) ?? {}) }
     const events: { name: string; data?: Record<string, unknown> }[] = [
       { name: "game:grid:show" },
+      { name: `game:trial:${wordId}:clue-media:stop` },
       { name: `game:trial:${wordId}:hide` },
       { name: isCorrect ? `game:grid:tile:${wordId}:success` : `game:grid:tile:${wordId}:fail` }
     ]

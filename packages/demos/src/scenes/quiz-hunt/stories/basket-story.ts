@@ -1,7 +1,7 @@
 import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
 import type { GameLabels } from "../types"
 
-/** Basket story: 4 color slots + the hidden "final question" button. Purely passive. */
+/** Basket story: 4 color slots and the final-question button. */
 export function createBasketStory(colors: string[], colorAccents: Record<string, string>, labels: GameLabels): SceneStoryDoc {
   const slots: PersoDoc[] = colors.map((color) => ({
     id: `game-basket-slot-${color}`,
@@ -31,8 +31,11 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
           move: "@root",
           markup: `
             <div class="quiz-hunt-basket">
+              <p class="quiz-hunt-basket-title">${labels.basketTitle}</p>
               <div class="quiz-hunt-basket-slots" data-part="game-basket-slots"></div>
-              <div class="quiz-hunt-basket-final-slot" data-part="game-basket-final-slot"></div>
+              <div class="quiz-hunt-basket-tools">
+                <div class="quiz-hunt-basket-final-slot" data-part="game-basket-final-slot"></div>
+              </div>
             </div>
           `
         },

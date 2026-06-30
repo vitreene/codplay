@@ -12,6 +12,12 @@ export type QuizHuntQuestion = {
   answers: QuizHuntAnswer[]
 }
 
+export type QuizHuntClueMedia = {
+  type: "video"
+  src?: string
+  placeholderText?: string
+}
+
 export type QuizHuntWord = {
   id: string
   label: string
@@ -21,7 +27,9 @@ export type QuizHuntWord = {
     type: "reading+quiz"
     epreuveLabel: string
     consigne: string
-    clueText: string
+    clueText?: string
+    clueMedia?: QuizHuntClueMedia
+    revealDelayMs?: number
     question: QuizHuntQuestion
   }
 }
