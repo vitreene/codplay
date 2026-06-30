@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { deriveSimpleTransitions } from '../../src/animation/derive-simple'
-import type { AnimationResolvedAction } from '../../src/animation/types'
+import type { AnimationResolvedAction, TransitionRequest } from '../../src/animation/types'
 import { applyResolvedActions } from '../../src/runtime/apply-actions'
 import type { RuntimeElementMap, RuntimeNode } from '../../src/runtime/types'
 
@@ -144,5 +146,60 @@ describe('Lot 05 - animation properties extensibility', () => {
     expect(firstCallArguments.duration).toBe(450)
     expect(thirdPartyTarget.progress).toBe(1)
     expect(result.animation.appliedCount).toBe(1)
+  })
+
+  it('L5-T4 adapter finalizes individual translate without replacing transform', () => {
+    const target = document.createElement('div')
+    target.style.transform = 'matrix(1, 0, 0, 1, 20, 30)'
+
+    let complete: (() => void) | undefined
+    const animeImplementation = vi.fn<AnimeImplementation>((parameters) => {
+      complete = typeof parameters.complete === 'function'
+        ? parameters.complete as () => void
+        : undefined
+      return { pause: vi.fn() }
+    })
+    const adapter = createAnimationAdapter(animeImplementation)
+    const transition: TransitionRequest = {
+      transitionId: 'translate-1',
+      eventId: 'evt-1',
+      eventName: 'move',
+      listenerId: 'item-1',
+      property: 'translate',
+      target,
+      from: '0px 0px',
+      to: '190px 0px',
+      duration: 400
+    }
+
+    adapter.run([transition])
+    complete?.()
+
+    expect(animeImplementation).toHaveBeenCalledTimes(1)
+    expect(target.style.translate).toBe('190px 0px')
+    expect(target.style.transform).toBe('matrix(1, 0, 0, 1, 20, 30)')
+  })
+
+  it('L5-T5 adapter normalizes legacy easing names for Anime.js v4', () => {
+    const target = document.createElement('div')
+    const animeImplementation = vi.fn<AnimeImplementation>(() => ({ pause: vi.fn() }))
+    const adapter = createAnimationAdapter(animeImplementation)
+    const transition: TransitionRequest = {
+      transitionId: 'opacity-1',
+      eventId: 'evt-1',
+      eventName: 'move',
+      listenerId: 'item-1',
+      property: 'opacity',
+      target,
+      from: 0,
+      to: 1,
+      duration: 400,
+      easing: 'easeInOutQuad'
+    }
+
+    adapter.run([transition])
+
+    expect(animeImplementation).toHaveBeenCalledTimes(1)
+    expect(animeImplementation.mock.calls[0]?.[0].ease).toBe('inOutQuad')
   })
 })

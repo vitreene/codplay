@@ -55,7 +55,7 @@ Semantique :
 
 - `attraction` est optionnel et vaut `0` par defaut.
 - `attraction` est un entier auteur clampé dans `[-100, 100]`.
-- `attraction = 0` : trajectoire lineaire actuelle, sans modifier de trajectoire.
+- `attraction = 0` : trajectoire lineaire, sans modifier de trajectoire.
 - `attraction > 0` : la courbe est attiree vers le centre du contexte runtime.
 - `attraction < 0` : la courbe est repoussee du centre du contexte runtime.
 - `attraction = 100` : le point de controle de la courbe est le centre du contexte runtime.
@@ -86,8 +86,10 @@ position(t) = (1 - t)^2 * P0 + 2 * (1 - t) * t * control + t^2 * P1
 Implementation :
 
 - Le clone overlay reste ancre en `position: fixed` via `left/top` au point de depart.
-- Avec `attraction = 0`, les transitions lineaires historiques `left/top` sont conservees.
-- Avec `attraction !== 0`, la trajectoire est animee via transform `x`/`y` avec un `modifier` Anime.js ; `left/top` ne servent plus qu'a l'ancrage initial.
+- Le deplacement, lineaire ou courbe, est anime via la propriete transform individuelle `translate`.
+- Avec `attraction = 0`, `translate` va directement de `0px 0px` au delta final.
+- Avec `attraction !== 0`, `translate` utilise un `modifier` Anime.js qui calcule la coordonnee Bezier ; `left/top` ne servent plus qu'a l'ancrage initial.
+- `translate` est utilise plutot que les canaux Anime.js `x`/`y` pour ne pas remplacer le `transform: matrix(...)` qui porte deja la matrice visuelle du clone.
 - Le centre utilise est le centre du contexte runtime resolu depuis le node deplace, avec fallback viewport si le contexte n'est pas mesurable.
 
 ## Contraintes d'architecture
@@ -99,4 +101,4 @@ Implementation :
 ## Validation automatisee actuelle
 
 - `tests/v1/overlay-world-seek-baseline.spec.ts` verifie que `duration` et `easing` d'un move `overlay-world` sont transmis aux transitions produites.
-- Le meme fichier verifie qu'une trajectoire avec `attraction` produit des transitions transform `x`/`y` avec modifier, et non un recalcul lineaire `left/top`.
+- Le meme fichier verifie qu'une trajectoire avec `attraction` produit une transition transform `translate` avec modifier.

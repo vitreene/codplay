@@ -45,6 +45,7 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
     const eventMs = capture.snapAt === 'end' ? nowMs - capture.duration : nowMs
 
     const endEventSpec = capture.endEvent ?? capture.event
+    const endEventMode = capture.endEvent !== undefined ? undefined : 'persist-only'
 
     emitRuntimeEvent({
       name: endEventSpec.name,
@@ -52,7 +53,7 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
       scopeStoryId: endEventSpec.cascade === true ? undefined : scopeStoryId,
       source: 'system',
       ms: eventMs,
-      mode: 'persist-only',
+      mode: endEventMode,
       data: {
         fromX: baseX,
         fromY: baseY,

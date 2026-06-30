@@ -125,6 +125,7 @@ class ListFlipModuleInstance implements ListFlipModule {
 
   cleanup(): void {
     this.cleanupOverlayRuntime()
+    this.destroyOverlayLayer()
   }
 
   private commitPreparedMove(preparedMove: PreparedListFlipMove): TransitionRequest[] {
@@ -192,7 +193,7 @@ class ListFlipModuleInstance implements ListFlipModule {
       move: preparedMove.input.move,
       flipPlanTransitions: flipPlan.transitions,
       firstSnapshots: preparedMove.firstSnapshots,
-      lastSnapshots: lastFlipSnapshots
+      lastSnapshots: lastFlipSnapshots,
     })
 
     const movedTransitionPrefix = `flip-${preparedMove.input.persoId}-`
@@ -388,6 +389,7 @@ class ListFlipModuleInstance implements ListFlipModule {
         worldPhotoClones.finalize()
       }
     })
+    worldPhotoClones.removeTargetClone()
 
     if (overlayTransitions.length === 0) {
       movedNodeElement.style.visibility = movedNodeVisibilityBeforeOverlay
@@ -455,10 +457,10 @@ class ListFlipModuleInstance implements ListFlipModule {
       })
     }
 
-    const shouldUseCurvedTrajectory = input.attraction !== 0 && (
+    const hasMoveDelta =
       Math.abs(toLeft - fromLeft) > this.flipZeroTolerance ||
       Math.abs(toTop - fromTop) > this.flipZeroTolerance
-    )
+    const shouldUseCurvedTrajectory = input.attraction !== 0 && hasMoveDelta
 
     if (shouldUseCurvedTrajectory) {
       const controlPoint = this.resolveOverlayTrajectoryControlPoint({
@@ -474,21 +476,18 @@ class ListFlipModuleInstance implements ListFlipModule {
         attraction: input.attraction
       })
 
-      pushTransition('x', 0, 1, {
-        finalValue: toLeft - fromLeft,
-        modifier: (progress) => this.computeQuadraticBezier(progress, 0, controlPoint.x - fromLeft, toLeft - fromLeft)
+      pushTransition('translate', 0, 1, {
+        finalValue: `${toLeft - fromLeft}px ${toTop - fromTop}px`,
+        modifier: (progress) => {
+          const x = this.computeQuadraticBezier(progress, 0, controlPoint.x - fromLeft, toLeft - fromLeft)
+          const y = this.computeQuadraticBezier(progress, 0, controlPoint.y - fromTop, toTop - fromTop)
+          return `${x}px ${y}px`
+        }
       })
-      pushTransition('y', 0, 1, {
-        finalValue: toTop - fromTop,
-        modifier: (progress) => this.computeQuadraticBezier(progress, 0, controlPoint.y - fromTop, toTop - fromTop)
-      })
-    } else {
-      if (Math.abs(toLeft - fromLeft) > this.flipZeroTolerance) {
-        pushTransition('left', `${fromLeft}px`, `${toLeft}px`)
-      }
-      if (Math.abs(toTop - fromTop) > this.flipZeroTolerance) {
-        pushTransition('top', `${fromTop}px`, `${toTop}px`)
-      }
+    } else if (hasMoveDelta) {
+      const deltaX = toLeft - fromLeft
+      const deltaY = toTop - fromTop
+      pushTransition('translate', '0px 0px', `${deltaX}px ${deltaY}px`)
     }
     if (Math.abs(toWidth - fromWidth) > this.flipZeroTolerance) {
       pushTransition('width', `${fromWidth}px`, `${toWidth}px`)
@@ -883,6 +882,19 @@ class ListFlipModuleInstance implements ListFlipModule {
       return this.overlayLayerNode
     }
 
+    // installModules() is called on every seek pass, creating a fresh module instance.
+    // Before creating a new layer, adopt the one already in the DOM — if it exists —
+    // and flush its orphaned photo clones (left behind by the previous instance).
+    const existingLayer = globalThis.document.querySelector('[data-runtime-flip-overlay-layer]')
+    if (existingLayer instanceof globalThis.HTMLElement) {
+      while (existingLayer.firstChild !== null) {
+        existingLayer.removeChild(existingLayer.firstChild)
+      }
+      existingLayer.style.zIndex = String(overlayLayerZIndex)
+      this.overlayLayerNode = existingLayer
+      return existingLayer
+    }
+
     const overlayLayer = globalThis.document.createElement('div')
     overlayLayer.setAttribute('data-runtime-flip-overlay-layer', 'true')
     overlayLayer.style.position = 'fixed'
@@ -926,6 +938,7 @@ class ListFlipModuleInstance implements ListFlipModule {
   }): {
     oldCloneNode: HTMLElement
     nextCloneNode: HTMLElement
+    removeTargetClone: () => void
     finalize: () => void
   } | null {
     const overlayLayer = this.ensureOverlayLayer(input.movedNode)
@@ -976,6 +989,12 @@ class ListFlipModuleInstance implements ListFlipModule {
     setupClone(nextCloneNode, input.nextPhoto, 'next')
 
     let finalized = false
+    const removeTargetClone = () => {
+      if (nextCloneNode.parentNode !== null) {
+        nextCloneNode.parentNode.removeChild(nextCloneNode)
+      }
+    }
+
     const finalize = () => {
       if (finalized) {
         return
@@ -985,9 +1004,7 @@ class ListFlipModuleInstance implements ListFlipModule {
       if (oldCloneNode.parentNode !== null) {
         oldCloneNode.parentNode.removeChild(oldCloneNode)
       }
-      if (nextCloneNode.parentNode !== null) {
-        nextCloneNode.parentNode.removeChild(nextCloneNode)
-      }
+      removeTargetClone()
       this.overlayFinalizers.delete(finalize)
     }
 
@@ -996,6 +1013,7 @@ class ListFlipModuleInstance implements ListFlipModule {
     return {
       oldCloneNode,
       nextCloneNode,
+      removeTargetClone,
       finalize
     }
   }
@@ -1076,6 +1094,9 @@ class ListFlipModuleInstance implements ListFlipModule {
     }
 
     this.overlayFinalizers.clear()
+  }
+
+  private destroyOverlayLayer(): void {
     if (this.overlayLayerNode !== null && this.overlayLayerNode.parentNode !== null) {
       this.overlayLayerNode.parentNode.removeChild(this.overlayLayerNode)
     }

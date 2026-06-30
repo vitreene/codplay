@@ -184,18 +184,39 @@ describe('V1 - overlay-world seek baseline', () => {
     recordedBatches.length = 0
     expect(await player.seek(1200)).toEqual({ ok: true })
 
-    const leftTransition = recordedBatches
+    const translateTransition = recordedBatches
       .flat()
       .find((transition) =>
-        transition.transitionId.startsWith('flip-overlay-moving-item-') && transition.property === 'left'
+        transition.transitionId.startsWith('flip-overlay-moving-item-') && transition.property === 'translate'
       )
 
-    expect(leftTransition).toMatchObject({
-      from: '20px',
-      to: '210px',
+    expect(translateTransition).toMatchObject({
+      from: '0px 0px',
+      to: '190px 0px',
       duration: 740,
       easing: 'easeInOutQuad'
     })
+  })
+
+  it('produces a y transition for source-list neighbors during a live overlay-world move', async () => {
+    installGeometryStub()
+
+    const recordedBatches: TransitionRequest[][] = []
+    const player = new PlayerFacade({ animationAdapter: createRecordingAdapter(recordedBatches) })
+
+    expect(await player.init(createOverlayWorldSeekScene())).toEqual({ ok: true })
+    expect(await player.play()).toEqual({ ok: true })
+
+    recordedBatches.length = 0
+    expect(await player.emit({ name: 'item:move', data: {} })).toEqual({ ok: true })
+
+    const neighborYTransition = recordedBatches
+      .flat()
+      .find((transition) => transition.property === 'y' && transition.target === player.getRuntimeRegistry().getNodeById('neighbor-item'))
+
+    expect(neighborYTransition).toBeDefined()
+    expect(neighborYTransition?.from).toBeCloseTo(30, 0)
+    expect(neighborYTransition?.to).toBeCloseTo(0, 0)
   })
 
   it('does not replay local FLIP y values on source-list neighbors during overlay-world seek replay', async () => {
@@ -253,18 +274,22 @@ describe('V1 - overlay-world seek baseline', () => {
     targetOutlet.appendChild(movingNode)
     parentById.set('outlet-moving-item', 'layout:target-outlet')
 
-    const leftTransition = (session?.commit() ?? [])
+    const translateTransition = (session?.commit() ?? [])
       .find((transition) =>
-        transition.transitionId.startsWith('flip-overlay-outlet-moving-item-') && transition.property === 'left'
+        transition.transitionId.startsWith('flip-overlay-outlet-moving-item-') && transition.property === 'translate'
       )
 
-    expect(leftTransition).toMatchObject({
-      from: '20px',
-      to: '210px'
+    expect(translateTransition).toMatchObject({
+      from: '0px 0px',
+      to: '190px 0px'
     })
+
+    const overlayPhotos = document.querySelectorAll('[data-runtime-flip-overlay-photo]')
+    expect(overlayPhotos).toHaveLength(1)
+    expect(overlayPhotos[0]?.getAttribute('data-runtime-flip-overlay-photo')).toBe('old')
   })
 
-  it('uses transform x/y modifiers for attracted overlay-world trajectories', () => {
+  it('uses transform translate modifiers for attracted overlay-world trajectories', () => {
     installGeometryStub()
 
     const sourceOutlet = document.createElement('div')
@@ -305,24 +330,15 @@ describe('V1 - overlay-world seek baseline', () => {
     parentById.set('outlet-moving-item', 'layout:target-outlet')
 
     const transitions = session?.commit() ?? []
-    const xTransition = transitions.find((transition) =>
-      transition.transitionId.startsWith('flip-overlay-outlet-moving-item-') && transition.property === 'x'
-    )
-    const yTransition = transitions.find((transition) =>
-      transition.transitionId.startsWith('flip-overlay-outlet-moving-item-') && transition.property === 'y'
+    const translateTransition = transitions.find((transition) =>
+      transition.transitionId.startsWith('flip-overlay-outlet-moving-item-') && transition.property === 'translate'
     )
 
-    expect(xTransition).toMatchObject({
+    expect(translateTransition).toMatchObject({
       from: 0,
       to: 1,
-      finalValue: 190
+      finalValue: '190px 0px'
     })
-    expect(yTransition).toMatchObject({
-      from: 0,
-      to: 1,
-      finalValue: 0
-    })
-    expect(typeof xTransition?.modifier).toBe('function')
-    expect(typeof yTransition?.modifier).toBe('function')
+    expect(typeof translateTransition?.modifier).toBe('function')
   })
 })

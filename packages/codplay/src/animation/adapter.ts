@@ -39,6 +39,36 @@ type ActiveAnimation = {
 }
 
 /**
+ * Converts historical CodPlay easing names to Anime.js v4 names.
+ */
+function normalizeAnimeEase(ease: string | undefined): string | undefined {
+  if (ease === undefined || !ease.startsWith('ease')) {
+    return ease
+  }
+
+  if (ease === 'easeInOut') {
+    return 'inOut'
+  }
+  if (ease.startsWith('easeInOut')) {
+    return `inOut${ease.slice('easeInOut'.length)}`
+  }
+  if (ease === 'easeOut') {
+    return 'out'
+  }
+  if (ease.startsWith('easeOut')) {
+    return `out${ease.slice('easeOut'.length)}`
+  }
+  if (ease === 'easeIn') {
+    return 'in'
+  }
+  if (ease.startsWith('easeIn')) {
+    return `in${ease.slice('easeIn'.length)}`
+  }
+
+  return ease
+}
+
+/**
  * Applies one style cleanup marker on one transition target.
  */
 function cleanupTransitionStyle(transition: TransitionRequest): void {
@@ -182,7 +212,8 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
     }
 
     const targetKey = resolveTargetKey(transition.target, objectIds, nextObjectIdRef)
-    const timingKey = `${transition.eventId}|${transition.duration}|${transition.ease ?? transition.easing ?? ''}|${transition.delayMs ?? 0}|${transition.loopDelayMs ?? 0}|${String(transition.reversed ?? false)}|${String(transition.alternate ?? false)}|${String(transition.loop ?? false)}|${transition.stagger ?? 0}|${transition.composition ?? ''}`
+    const animeEase = normalizeAnimeEase(transition.ease ?? transition.easing)
+    const timingKey = `${transition.eventId}|${transition.duration}|${animeEase ?? ''}|${transition.delayMs ?? 0}|${transition.loopDelayMs ?? 0}|${String(transition.reversed ?? false)}|${String(transition.alternate ?? false)}|${String(transition.loop ?? false)}|${transition.stagger ?? 0}|${transition.composition ?? ''}`
     const baseGroupKey = `${targetKey}|${timingKey}`
 
     const propertyKey = transition.property
@@ -205,7 +236,7 @@ function groupTransitions(transitions: TransitionRequest[]): TransitionGroup[] {
         parameters: {
           targets: transition.target,
           duration: transition.duration,
-          ease: transition.ease ?? transition.easing,
+          ease: animeEase,
           delay: transition.delayMs,
           stagger: transition.stagger,
           loopDelay: transition.loopDelayMs,
