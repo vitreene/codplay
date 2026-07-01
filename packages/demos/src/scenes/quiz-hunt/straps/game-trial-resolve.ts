@@ -36,7 +36,7 @@ export function createGameTrialResolveStrap(
 
     if (route.kind === "final") {
       return {
-        events: [{ name: "game:final:done", data: { isCorrect } }]
+        events: [{ name: "game:final:done", data: { isCorrect, wordId: route.wordId, color: route.color, questionIndex } }]
       }
     }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createComponentModules } from 'codplay/runtime/components/lib/component-modules'
 import { CORE_SERVICES, createComponentServices } from 'codplay/runtime/components/lib/component-services'
 import { PolygonComponent } from '../src/polygon-component.js'
-import { resolvePolygonPointsString } from '../src/polygon-geometry.js'
+import { resolvePolygonPathString } from '../src/polygon-geometry.js'
 
 /** Creates one polygon component instance wired with the runtime defaults. */
 function createPolygonComponent(): PolygonComponent {
@@ -56,7 +56,7 @@ describe('PolygonComponent', () => {
     component._init()
 
     const refreshedRootNode = component.node as SVGSVGElement
-    const polygonNode = refreshedRootNode.querySelector('polygon')
+    const pathNode = refreshedRootNode.querySelector('path')
     const textNode = refreshedRootNode.querySelector('text')
 
     expect(refreshedRootNode).toBe(initialRootNode)
@@ -64,6 +64,6 @@ describe('PolygonComponent', () => {
     expect(refreshedRootNode.style.color).toBe('rebeccapurple')
     expect(refreshedRootNode.getAttribute('data-shape')).toBe('etoile')
     expect(textNode?.textContent).toBe('etoile')
-    expect(polygonNode?.getAttribute('points')).toBe(resolvePolygonPointsString({ sides: 5, inner: 20, outer: 40 }))
+    expect(pathNode?.getAttribute('d')).toBe(resolvePolygonPathString({ sides: 5, inner: 20, outer: 40 }))
   })
 })

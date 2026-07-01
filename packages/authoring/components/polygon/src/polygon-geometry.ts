@@ -3,6 +3,7 @@ export type PolygonShapeState = {
   inner?: unknown
   outer?: unknown
   rotationDeg?: unknown
+  inflexion?: unknown
 }
 
 export type NormalizedPolygonShapeState = {
@@ -10,6 +11,7 @@ export type NormalizedPolygonShapeState = {
   inner: number | null
   outer: number
   rotationDeg: number
+  inflexion: number[]
 }
 
 type Point = { x: number; y: number }
@@ -28,7 +30,19 @@ export function normalizePolygonShapeState(input: PolygonShapeState): Normalized
   const innerRaw = Number.isFinite(input.inner) ? Number(input.inner) : null
   const inner = innerRaw === null ? null : Math.max(0, Math.min(outer, Number(innerRaw)))
   const rotationDeg = Number.isFinite(input.rotationDeg) ? Number(input.rotationDeg) : -90
-  return { sides, inner, outer, rotationDeg }
+  const segmentCount = inner !== null && inner > 0 && inner < outer ? sides * 2 : sides
+  const inflexionRaw = input.inflexion
+  let inflexion: number[]
+  if (Array.isArray(inflexionRaw)) {
+    inflexion = Array.from({ length: segmentCount }, (_, i) => {
+      const v = inflexionRaw[i]
+      return Number.isFinite(v) ? Number(v) : 0
+    })
+  } else {
+    const scalar = Number.isFinite(inflexionRaw) ? Number(inflexionRaw) : 0
+    inflexion = Array.from({ length: segmentCount }, () => scalar)
+  }
+  return { sides, inner, outer, rotationDeg, inflexion }
 }
 
 /** Builds the explicit vertices of one regular polygon or star. */
@@ -135,4 +149,60 @@ export function resolveMorphPointsString(input: {
     sampleCount,
   )
   return toPolygonPointsString(interpolatePointSets(fromPoints, toPoints, input.progress))
+}
+
+/** Builds one SVG arc or line command from one vertex to the next. */
+function arcSegmentCommand(p1: Point, p2: Point, f: number): string {
+  if (f === 0) return `L ${p2.x.toFixed(3)} ${p2.y.toFixed(3)}`
+  const dx = p2.x - p1.x
+  const dy = p2.y - p1.y
+  const c = Math.hypot(dx, dy)
+  if (c === 0) return `L ${p2.x.toFixed(3)} ${p2.y.toFixed(3)}`
+  const s = Math.abs(f)
+  const r = (c * c / 4 + s * s) / (2 * s)
+  // large-arc when sagitta exceeds half the chord length
+  const largeArc = s > c / 2 ? 1 : 0
+  // sweep=1 (CW on screen) bows to the left of travel = outward for a CW-wound polygon
+  const sweep = f > 0 ? 1 : 0
+  return `A ${r.toFixed(3)} ${r.toFixed(3)} 0 ${largeArc} ${sweep} ${p2.x.toFixed(3)} ${p2.y.toFixed(3)}`
+}
+
+/** Serializes one point cloud with per-segment inflexion into an SVG path `d` string. */
+export function toPolygonPathString(vertices: readonly Point[], inflexions: readonly number[]): string {
+  if (vertices.length === 0) return ''
+  const first = vertices[0]!
+  const commands: string[] = [`M ${first.x.toFixed(3)} ${first.y.toFixed(3)}`]
+  for (let i = 0; i < vertices.length; i++) {
+    const p1 = vertices[i]!
+    const p2 = vertices[(i + 1) % vertices.length]!
+    commands.push(arcSegmentCommand(p1, p2, inflexions[i] ?? 0))
+  }
+  commands.push('Z')
+  return commands.join(' ')
+}
+
+/** Resolves one SVG path `d` string for one static shape state, with arc support. */
+export function resolvePolygonPathString(input: PolygonShapeState): string {
+  const state = normalizePolygonShapeState(input)
+  return toPolygonPathString(createPolygonVertices(state), state.inflexion)
+}
+
+/** Resolves one morph-interpolated SVG path `d` string between two shape states (straight-line approximation). */
+export function resolveMorphPathString(input: {
+  from: PolygonShapeState
+  to: PolygonShapeState
+  progress: number
+  sampleCount?: number
+}): string {
+  const sampleCount = Math.max(8, Math.round(Number.isFinite(input.sampleCount) ? Number(input.sampleCount) : 96))
+  const fromPoints = resampleClosedPolyline(
+    createPolygonVertices(normalizePolygonShapeState(input.from)),
+    sampleCount,
+  )
+  const toPoints = resampleClosedPolyline(
+    createPolygonVertices(normalizePolygonShapeState(input.to)),
+    sampleCount,
+  )
+  const interpolated = interpolatePointSets(fromPoints, toPoints, input.progress)
+  return toPolygonPathString(interpolated, Array.from({ length: interpolated.length }, () => 0))
 }

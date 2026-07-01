@@ -1,6 +1,9 @@
 import type { StrapFn, StrapReturnValue } from "codplay/player/strap-types"
 import type { TweenFn } from "codplay/tween/tween-runner"
 
+const ELAPSED_RING_RADIUS = 132
+const ELAPSED_RING_CIRCUMFERENCE = 2 * Math.PI * ELAPSED_RING_RADIUS
+
 function formatRemaining(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000))
   const minutes = Math.floor(totalSeconds / 60)
@@ -8,18 +11,37 @@ function formatRemaining(ms: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
 }
 
-function buildFillFn(totalMs: number, remainingAtSegmentStart: number): TweenFn {
+function resolveTimerColor(progress: number): string {
+  return progress < 0.5 ? "#4ade80" : progress < 0.75 ? "#fb923c" : "#f87171"
+}
+
+function buildNeedleFn(remainingAtSegmentStart: number): TweenFn {
+  const startDeg = (remainingAtSegmentStart / 1000 / 60) * 360
   return ({ progress }) => {
-    const remaining = Math.max(0, remainingAtSegmentStart * (1 - progress))
-    const percent = totalMs > 0 ? (remaining / totalMs) * 100 : 0
-    return { style: { width: `${percent.toFixed(2)}%` } }
+    const deg = startDeg * (1 - progress)
+    return { style: { transform: `rotate(${deg.toFixed(3)}deg)` } }
   }
 }
 
-function buildLabelFn(remainingAtSegmentStart: number): TweenFn {
-  return ({ progress }) => ({
-    content: formatRemaining(remainingAtSegmentStart * (1 - progress))
-  })
+function buildElapsedFn(totalMs: number, remainingAtSegmentStart: number): TweenFn {
+  return ({ progress }) => {
+    const remaining = remainingAtSegmentStart * (1 - progress)
+    const elapsedRatio = totalMs > 0 ? Math.min(1, Math.max(0, (totalMs - remaining) / totalMs)) : 1
+    const dashOffset = ELAPSED_RING_CIRCUMFERENCE * (1 - elapsedRatio)
+    return {
+      attr: { "stroke-dashoffset": dashOffset.toFixed(3) }
+    }
+  }
+}
+
+function buildDisplayFn(remainingAtSegmentStart: number): TweenFn {
+  return ({ progress }) => {
+    const remaining = remainingAtSegmentStart * (1 - progress)
+    return {
+      content: formatRemaining(remaining),
+      style: { color: resolveTimerColor(progress) }
+    }
+  }
 }
 
 const TIMER_EVENT_NAMES = ["game:timer:start", "game:timer:resume", "game:timer:pause", "game:timer:stop"]
@@ -30,7 +52,8 @@ const EXPIRY_CHECK_EVENT = "game:timer:expiry-check"
 /**
  * Scene-level timer engine: a single one-shot expiry check (`context.planned.delay`) per
  * running segment ("segment" = the period between one start/resume and the next
- * pause/stop/resume), replaced by a `TweenAction` for the visible countdown (jauge + label).
+ * pause/stop/resume), replaced by `TweenAction`s for the chrono needle, display,
+ * and elapsed-time ring.
  * No repeating loop, no `context.live` helper, no closure-held cancellable handle.
  *
  * Staleness is handled declaratively instead of by cancellation: each scheduled expiry check
@@ -87,12 +110,16 @@ export function createGameTimerStrap(totalMs: number): StrapFn {
         update: { timerStarted: true, timerRemainingMs: remainingNow, segmentStartedAtMs: nowMs },
         events: [
           {
-            name: "game:timer:fill",
-            data: { duration: remainingNow, ease: "linear", fn: buildFillFn(totalMs, remainingNow) }
+            name: "game:timer:elapsed",
+            data: { duration: remainingNow, ease: "linear", fn: buildElapsedFn(totalMs, remainingNow) }
           },
           {
-            name: "game:timer:label",
-            data: { duration: remainingNow, ease: "linear", fn: buildLabelFn(remainingNow) }
+            name: "game:timer:needle",
+            data: { duration: remainingNow, ease: "linear", fn: buildNeedleFn(remainingNow) }
+          },
+          {
+            name: "game:timer:display",
+            data: { duration: remainingNow, ease: "linear", fn: buildDisplayFn(remainingNow) }
           }
         ]
       },

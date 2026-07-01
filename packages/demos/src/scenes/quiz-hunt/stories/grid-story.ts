@@ -1,11 +1,12 @@
 import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { QuizHuntColorStyle } from "../color-palette"
 import type { QuizHuntWord } from "../types"
 
 /**
  * Grid story: one tile per word, in seed-shuffled order. Purely passive — `game-router`
  * (scene-level) drives every visual change via `game:grid:tile:{wordId}:*` actions.
  */
-export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colorAccents: Record<string, string>): SceneStoryDoc {
+export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colorStyles: Record<string, QuizHuntColorStyle>): SceneStoryDoc {
   const wordsById = new Map(words.map((word) => [word.id, word]))
 
   const tiles: PersoDoc[] = gridOrder.map((wordId, position) => {
@@ -14,7 +15,7 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
       throw new Error(`[quiz-hunt] grid order references unknown word "${wordId}"`)
     }
 
-    const accent = colorAccents[word.color] ?? "#94a3b8"
+    const colorStyle = colorStyles[word.color] ?? { solid: "#94a3b8", gradient: "linear-gradient(135deg, #cbd5e1, #94a3b8)" }
 
     return {
       id: `game-grid-tile-${wordId}`,
@@ -24,7 +25,10 @@ export function createGridStory(words: QuizHuntWord[], gridOrder: string[], colo
         className: "quiz-hunt-grid-tile",
         content: String(position + 1),
         attr: { type: "button" },
-        style: { "--quiz-hunt-accent": accent },
+        style: {
+          "--quiz-hunt-accent": colorStyle.solid,
+          "--quiz-hunt-accent-gradient": colorStyle.gradient
+        },
         move: { parentId: "game-grid-root" }
       },
       emit: {

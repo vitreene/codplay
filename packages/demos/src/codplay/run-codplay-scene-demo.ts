@@ -146,6 +146,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   }
 
   config.onReady?.({ player: studio.player, telco: studio.telco });
+  config.onControlsReady?.({ player: studio.player, telco: studio.telco, container: remoteSlotNode, sceneContainer: demoContainerNode });
   // Synchronise l'état initial de la télécommande avec celui du player après init.
   remote.sync();
 }

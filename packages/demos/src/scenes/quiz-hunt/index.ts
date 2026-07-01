@@ -12,13 +12,8 @@ import { createResultStory } from "./stories/result-story"
 import { createFinalStory } from "./stories/final-story"
 import { createReadingQuizTrial } from "./stories/trials/build-reading-quiz"
 import { createGameStraps } from "./straps"
-
-const COLOR_ACCENTS: Record<string, string> = {
-  rouge: "#dc2626",
-  bleu: "#2563eb",
-  vert: "#16a34a",
-  jaune: "#ca8a04"
-}
+import { QUIZ_HUNT_DEBUG_QUESTION_TRACK_ID, createQuizHuntDebugQuestionTrack } from "./debug-question-track"
+import { QUIZ_HUNT_COLOR_STYLES } from "./color-palette"
 
 const QUESTION_CONFIG: QuizQuestionStoryConfig = {
   showCorrection: true,
@@ -42,12 +37,13 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
   const { words, colors } = config.content
   const draw = deriveGameDraw(config.content, config.seed)
   const questionLabels = toQuestionLabels(config)
+  const tileNumberByWordId = new Map(draw.gridOrder.map((wordId, index) => [wordId, index + 1]))
 
   const stories: Record<string, SceneStoryDoc> = {
     "game-layout-story": createLayoutStory(config.labels.gridTitle),
-    "game-grid-story": createGridStory(words, draw.gridOrder, COLOR_ACCENTS),
-    "game-basket-story": createBasketStory(colors, COLOR_ACCENTS, config.labels),
-    "game-timer-story": createTimerStory(),
+    "game-grid-story": createGridStory(words, draw.gridOrder, QUIZ_HUNT_COLOR_STYLES),
+    "game-basket-story": createBasketStory(colors, QUIZ_HUNT_COLOR_STYLES, config.labels),
+    "game-timer-story": createTimerStory(config.timerTotalMs),
     "game-extra-story": createExtraStory(config.labels),
     "game-result-story": createResultStory(config.labels)
   }
@@ -55,10 +51,11 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
   const questionStoryConfig: QuizQuestionStoryConfig = { ...QUESTION_CONFIG, showCorrection: config.showCorrection }
 
   words.forEach((word, index) => {
-    const trial = createReadingQuizTrial(word, index, questionStoryConfig, questionLabels)
+    const tileNumber = tileNumberByWordId.get(word.id) ?? index + 1
+    const trial = createReadingQuizTrial(word, index, tileNumber, questionStoryConfig, questionLabels)
     stories[trial.id] = trial
 
-    const final = createFinalStory(word, words.length + index, questionStoryConfig, questionLabels)
+    const final = createFinalStory(word, words.length + index, tileNumber, questionStoryConfig, questionLabels)
     stories[final.id] = final
   })
 
@@ -69,6 +66,7 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
       currentTrialId: null,
       trialStatus: {},
       basket: Object.fromEntries(colors.map((color) => [color, null])),
+      finalAttemptedWordIds: [],
       extraToken: false,
       extraConsumedOn: null,
       extraOfferedOn: null,
@@ -90,12 +88,16 @@ export function createQuizHuntScene(config: GameConfig): SceneDoc {
       { on: "game:timer:stop", straps: ["game-timer"] },
       { on: "game:timer:expiry-check", straps: ["game-timer"] },
       { on: "game:final:start", straps: ["game-final-route"] },
-      { on: "game:final:done", straps: ["game-result"] },
+      { on: "game:final:done", straps: ["game-final-resolve"] },
+      { on: "game:final:won", straps: ["game-result"] },
+      { on: "game:final:lost", straps: ["game-result"] },
       { on: "game:timer:expired", straps: ["game-result"] },
       { on: "game:result:show", straps: ["game-report"] }
     ],
     stories,
-    tracks: {}
+    tracks: {
+      [QUIZ_HUNT_DEBUG_QUESTION_TRACK_ID]: createQuizHuntDebugQuestionTrack(words)
+    }
   }
 }
 
@@ -111,4 +113,5 @@ export function createQuizHuntStraps(config: GameConfig, scene?: SceneDoc) {
   return createGameStraps(config, draw, scene)
 }
 
+export { QUIZ_HUNT_DEBUG_QUESTION_TRACK_ID }
 export type { GameConfig } from "./types"

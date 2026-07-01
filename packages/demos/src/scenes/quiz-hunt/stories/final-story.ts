@@ -2,6 +2,7 @@ import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionLabels, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "../../quiz-question-scene"
 import { quizQuestionStoryStraps } from "../../quiz-question-scene"
 import { createQuizAnswerPersos, createQuizControlPersos } from "./answer-persos"
+import { createQuizHuntQuestionBadge } from "./question-badge"
 import type { QuizHuntWord } from "../types"
 
 /**
@@ -12,6 +13,7 @@ import type { QuizHuntWord } from "../types"
 export function createFinalStory(
   word: QuizHuntWord,
   index: number,
+  tileNumber: number,
   config: QuizQuestionStoryConfig,
   labels: QuizQuestionLabels
 ): SceneStoryDoc {
@@ -34,6 +36,10 @@ export function createFinalStory(
       initial: {
         markup: `
           <div class="quiz-hunt-final-panel is-hidden">
+            <div class="quiz-hunt-trial-header">
+              <p class="quiz-hunt-trial-eyebrow">Épreuve finale</p>
+              <div class="quiz-hunt-question-badge-slot" data-part="${prefix}:badge"></div>
+            </div>
             <div data-part="${prefix}:fieldset-slot"></div>
           </div>
         `
@@ -55,6 +61,13 @@ export function createFinalStory(
         ]
       } as unknown as PersoDoc<"layout">["actions"]
     },
+    createQuizHuntQuestionBadge({
+      id: `${prefix}-badge`,
+      parentId: `${prefix}:badge`,
+      word,
+      number: tileNumber,
+      content: "🏆"
+    }),
     {
       id: `${prefix}-fieldset`,
       type: "layout",
@@ -78,7 +91,11 @@ export function createFinalStory(
     {
       id: `${prefix}-title`,
       type: "tag",
-      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } },
+      initial: {
+        tag: "span",
+        content: question.prompt,
+        move: { parentId: `${prefix}:title` }
+      },
       actions: {}
     },
     {

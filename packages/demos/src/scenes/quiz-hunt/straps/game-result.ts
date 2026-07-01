@@ -1,17 +1,16 @@
 import type { StrapFn } from "codplay/player/strap-types"
 
 /**
- * Scene-level handler for the two ways a game session ends: the final question is
- * answered (`game:final:done`), or the timer runs out before reaching it (`game:timer:expired`).
+ * Scene-level handler for final win/loss panels and timer expiry.
  * Builds the structured `game:result:show` payload plus the display-ready text events.
  */
 export function createGameResultStrap(totalMs: number, colors: string[]): StrapFn {
   return ({ event, state }) => {
-    if (event.name !== "game:final:done" && event.name !== "game:timer:expired") {
+    if (event.name !== "game:final:won" && event.name !== "game:final:lost" && event.name !== "game:timer:expired") {
       return undefined
     }
 
-    const passed = event.name === "game:final:done" && event.data?.isCorrect === true
+    const passed = event.name === "game:final:won"
     const basket = (state.basket as Record<string, { wordId: string; wordLabel: string } | null> | undefined) ?? {}
     const foundCount = colors.filter((color) => basket[color] !== null && basket[color] !== undefined).length
     const remaining = typeof state.timerRemainingMs === "number" ? state.timerRemainingMs : totalMs

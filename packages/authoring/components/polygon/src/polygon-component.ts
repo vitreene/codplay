@@ -2,7 +2,7 @@ import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
 import { applyNodeId, isDomElement } from 'codplay/runtime/components/lib/dom-component-adapter'
 import type { RuntimeComponentClassInput } from 'codplay/runtime/components/types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
-import { normalizePolygonShapeState, resolveMorphPointsString, resolvePolygonPointsString, type PolygonShapeState } from './polygon-geometry.js'
+import { normalizePolygonShapeState, resolveMorphPathString, resolvePolygonPathString, type PolygonShapeState } from './polygon-geometry.js'
 import type { PolygonAction, PolygonInitial, PolygonMorphState } from './polygon-types.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -133,26 +133,26 @@ export class PolygonComponent extends BaseComponent {
     }
   }
 
-  /** Applies one polygon points string on the internal shape node. */
-  private applyPoints(points: string): void {
+  /** Applies one SVG path `d` string on the internal shape node. */
+  private applyPath(d: string): void {
     if (this.shapeNode === null) return
     if (isSvgElement(this.shapeNode)) {
-      this.shapeNode.setAttribute('points', points)
+      this.shapeNode.setAttribute('d', d)
       return
     }
     if (typeof this.shapeNode === 'object' && this.shapeNode !== null) {
-      ;(this.shapeNode as Record<string, unknown>).points = points
+      ;(this.shapeNode as Record<string, unknown>).d = d
     }
   }
 
   /** Applies the current static shape state. */
   private applyStaticShape(): void {
-    this.applyPoints(resolvePolygonPointsString(this.currentShapeState))
+    this.applyPath(resolvePolygonPathString(this.currentShapeState))
   }
 
   /** Applies one morph-interpolated polygon shape. */
   private applyMorph(morph: PolygonMorphState): void {
-    this.applyPoints(resolveMorphPointsString(morph))
+    this.applyPath(resolveMorphPathString(morph))
   }
 
   /** Captures one DOM node's authored attribute baseline under one local key. */
@@ -202,7 +202,7 @@ export class PolygonComponent extends BaseComponent {
     }
 
     const rootNode = createSvgElement('svg')
-    const shapeNode = createSvgElement('polygon')
+    const shapeNode = createSvgElement('path')
     const textNode = createSvgElement('text')
 
     if (!isSvgElement(rootNode) || !isSvgElement(shapeNode) || !isSvgElement(textNode)) {
@@ -254,7 +254,7 @@ export class PolygonComponent extends BaseComponent {
     if (this.node !== null) return this.node as ComponentRenderResult
 
     const rootNode = createSvgElement('svg')
-    const shapeNode = createSvgElement('polygon')
+    const shapeNode = createSvgElement('path')
     const textNode = createSvgElement('text')
 
     if (isSvgElement(rootNode)) {
@@ -326,7 +326,7 @@ export class PolygonComponent extends BaseComponent {
       return
     }
 
-    const hasShapeKey = action.sides !== undefined || action.inner !== undefined || action.outer !== undefined || action.rotationDeg !== undefined
+    const hasShapeKey = action.sides !== undefined || action.inner !== undefined || action.outer !== undefined || action.rotationDeg !== undefined || action.inflexion !== undefined
     if (!hasShapeKey) return
 
     const nextShapeState: PolygonShapeState = { ...this.currentShapeState }
@@ -334,6 +334,7 @@ export class PolygonComponent extends BaseComponent {
     if ('inner' in action) nextShapeState.inner = action.inner
     if ('outer' in action) nextShapeState.outer = action.outer
     if ('rotationDeg' in action) nextShapeState.rotationDeg = action.rotationDeg
+    if ('inflexion' in action) nextShapeState.inflexion = action.inflexion
 
     this.currentShapeState = normalizePolygonShapeState(nextShapeState)
     this.applyStaticShape()

@@ -2,6 +2,7 @@ import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionLabels, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "../../../quiz-question-scene"
 import { quizQuestionStoryStraps } from "../../../quiz-question-scene"
 import { createQuizAnswerPersos, createQuizControlPersos } from "../answer-persos"
+import { createQuizHuntQuestionBadge } from "../question-badge"
 import type { QuizHuntClueMedia, QuizHuntWord } from "../../types"
 
 function escapeHtml(text: string): string {
@@ -80,6 +81,7 @@ function createClueVideoPersos(prefix: string, wordId: string, clueMedia: QuizHu
 export function createReadingQuizTrial(
   word: QuizHuntWord,
   index: number,
+  tileNumber: number,
   config: QuizQuestionStoryConfig,
   labels: QuizQuestionLabels
 ): SceneStoryDoc {
@@ -103,7 +105,10 @@ export function createReadingQuizTrial(
       initial: {
         markup: `
           <div class="quiz-hunt-trial-panel is-hidden">
-            <p class="quiz-hunt-trial-eyebrow" data-part="${prefix}:epreuve-label">${escapeHtml(word.trial.epreuveLabel)}</p>
+            <div class="quiz-hunt-trial-header">
+              <p class="quiz-hunt-trial-eyebrow" data-part="${prefix}:epreuve-label">${escapeHtml(word.trial.epreuveLabel)}</p>
+              <div class="quiz-hunt-question-badge-slot" data-part="${prefix}:badge"></div>
+            </div>
             <p class="quiz-hunt-trial-instruction" data-part="${prefix}:consigne">${escapeHtml(word.trial.consigne)}</p>
             <div data-part="${prefix}:clue-slot"></div>
             <div data-part="${prefix}:fieldset-slot"></div>
@@ -131,6 +136,12 @@ export function createReadingQuizTrial(
         }
       } as unknown as PersoDoc<"layout">["actions"]
     },
+    createQuizHuntQuestionBadge({
+      id: `${prefix}-badge`,
+      parentId: `${prefix}:badge`,
+      word,
+      number: tileNumber
+    }),
     {
       id: `${prefix}-fieldset`,
       type: "layout",
@@ -159,7 +170,11 @@ export function createReadingQuizTrial(
     {
       id: `${prefix}-title`,
       type: "tag",
-      initial: { tag: "span", content: question.prompt, move: { parentId: `${prefix}:title` } },
+      initial: {
+        tag: "span",
+        content: question.prompt,
+        move: { parentId: `${prefix}:title` }
+      },
       actions: {}
     },
     {

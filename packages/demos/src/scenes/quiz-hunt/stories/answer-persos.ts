@@ -51,6 +51,8 @@ export function createQuizAnswerPersos(
         actions: {
           [`quiz:question:answer:${answer.id}:selected`]: { content: "•" },
           [`quiz:question:answer:${answer.id}:idle`]: { content: "" },
+          [`debug:${prefix}:answer:${answer.id}:selected`]: { content: "•" },
+          [`debug:${prefix}:answer:${answer.id}:idle`]: { content: "" },
           ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "" } })
         }
       },
@@ -67,6 +69,10 @@ export function createQuizAnswerPersos(
           [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-correct" },
           [`quiz:question:answer:${answer.id}:revealed-incorrect`]: { content: "-", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-incorrect" },
           [`quiz:question:answer:${answer.id}:revealed-missed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-missed-correct" },
+          [`debug:${prefix}:answer:${answer.id}:revealed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-correct" },
+          [`debug:${prefix}:answer:${answer.id}:revealed-incorrect`]: { content: "-", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-incorrect" },
+          [`debug:${prefix}:answer:${answer.id}:revealed-missed-correct`]: { content: "+", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction is-missed-correct" },
+          [`debug:${prefix}:answer:${answer.id}:clear`]: { content: "", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction" },
           ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "", className: "quiz-hunt-answer-icon quiz-hunt-answer-icon-correction" } })
         }
       }
@@ -121,6 +127,21 @@ export function createQuizControlPersos(
           content: question.labels.incorrect,
           attr: { hidden: false },
           className: "quiz-hunt-question-result is-incorrect"
+        },
+        [`debug:${prefix}:resolved:correct`]: {
+          content: question.labels.correct,
+          attr: { hidden: false },
+          className: "quiz-hunt-question-result is-correct"
+        },
+        [`debug:${prefix}:resolved:incorrect`]: {
+          content: question.labels.incorrect,
+          attr: { hidden: false },
+          className: "quiz-hunt-question-result is-incorrect"
+        },
+        [`debug:${prefix}:result:clear`]: {
+          content: "",
+          attr: { hidden: true },
+          className: "quiz-hunt-question-result"
         },
         ...(retryEventName === undefined ? {} : { [retryEventName]: { content: "", className: "quiz-hunt-question-result", attr: { hidden: true } } })
       }

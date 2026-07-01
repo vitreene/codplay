@@ -1,5 +1,7 @@
 import type { PlayerPublicEventInput, SceneDoc } from 'codplay/player/types'
 import type { StrapCollection } from 'codplay/player'
+import type { Player } from 'codplay/player/player'
+import type { TelcoApi } from 'codplay/telco/types'
 import type { ResourceManifestEntry } from 'codplay/builder/types'
 import type { RuntimeComponentClass } from 'codplay/runtime/components'
 import type { RenderAdapter } from 'codplay/player/render-adapter-types'
@@ -34,4 +36,6 @@ export type PlayerSceneDemoConfig = {
 	bindings?: ThirdPartyBinding[];
 	/** Show only time + event name in the trace panel; errors are always shown in full. */
 	compactTrace?: boolean;
+	/** Optional external controls rendered in the shared demo sidebar. */
+	onControlsReady?: (context: { player: Player; telco: TelcoApi; container: HTMLElement; sceneContainer: HTMLElement }) => void;
 };

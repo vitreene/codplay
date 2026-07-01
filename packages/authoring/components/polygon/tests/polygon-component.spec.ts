@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPolygonVertices, normalizePolygonShapeState, resolveMorphPointsString, resolvePolygonPointsString } from '../src/polygon-geometry.js'
+import { createPolygonVertices, normalizePolygonShapeState, resolveMorphPathString, resolvePolygonPathString } from '../src/polygon-geometry.js'
 
 describe('normalizePolygonShapeState', () => {
   it('clamps and normalizes authored polygon values', () => {
@@ -8,7 +8,23 @@ describe('normalizePolygonShapeState', () => {
       outer: 1,
       inner: 1,
       rotationDeg: 45,
+      inflexion: [0, 0, 0],
     })
+  })
+
+  it('expands a scalar inflexion to one value per segment', () => {
+    const state = normalizePolygonShapeState({ sides: 4, inflexion: 5 })
+    expect(state.inflexion).toEqual([5, 5, 5, 5])
+  })
+
+  it('maps an array inflexion to segments, filling missing entries with 0', () => {
+    const state = normalizePolygonShapeState({ sides: 4, inflexion: [10, -5] })
+    expect(state.inflexion).toEqual([10, -5, 0, 0])
+  })
+
+  it('uses twice as many segments for a star', () => {
+    const state = normalizePolygonShapeState({ sides: 5, inner: 20, outer: 40, inflexion: 3 })
+    expect(state.inflexion).toHaveLength(10)
   })
 })
 
@@ -22,16 +38,29 @@ describe('createPolygonVertices', () => {
   })
 })
 
-describe('polygon points serialization', () => {
-  it('serializes one static shape to an SVG points string', () => {
-    expect(resolvePolygonPointsString({ sides: 3, outer: 40 })).toContain(',')
+describe('polygon path serialization', () => {
+  it('serializes one straight-segment shape to an SVG path string', () => {
+    const d = resolvePolygonPathString({ sides: 3, outer: 40 })
+    expect(d).toMatch(/^M /)
+    expect(d).toContain('L ')
+    expect(d).toContain('Z')
   })
 
-  it('serializes one morph interpolation between two shapes', () => {
-    expect(resolveMorphPointsString({
+  it('serializes one arc-segment shape using SVG arc commands', () => {
+    const d = resolvePolygonPathString({ sides: 3, outer: 40, inflexion: 5 })
+    expect(d).toMatch(/^M /)
+    expect(d).toContain('A ')
+    expect(d).toContain('Z')
+  })
+
+  it('serializes one morph interpolation as a straight-segment path', () => {
+    const d = resolveMorphPathString({
       from: { sides: 3, outer: 40 },
       to: { sides: 5, inner: 20, outer: 40 },
       progress: 0.5,
-    })).toContain(',')
+    })
+    expect(d).toMatch(/^M /)
+    expect(d).toContain('L ')
+    expect(d).toContain('Z')
   })
 })

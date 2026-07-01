@@ -1,8 +1,9 @@
 import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { QuizHuntColorStyle } from "../color-palette"
 import type { GameLabels } from "../types"
 
 /** Basket story: 4 color slots and the final-question button. */
-export function createBasketStory(colors: string[], colorAccents: Record<string, string>, labels: GameLabels): SceneStoryDoc {
+export function createBasketStory(colors: string[], colorStyles: Record<string, QuizHuntColorStyle>, labels: GameLabels): SceneStoryDoc {
   const slots: PersoDoc[] = colors.map((color) => ({
     id: `game-basket-slot-${color}`,
     type: "tag",
@@ -10,11 +11,15 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
       tag: "div",
       className: "quiz-hunt-basket-slot",
       content: labels.basketEmptySlot,
-      style: { "--quiz-hunt-accent": colorAccents[color] ?? "#94a3b8" },
+      style: {
+        "--quiz-hunt-accent": colorStyles[color]?.solid ?? "#94a3b8",
+        "--quiz-hunt-accent-gradient": colorStyles[color]?.gradient ?? "linear-gradient(135deg, #cbd5e1, #94a3b8)"
+      },
       move: { parentId: "game-basket-slots" }
     },
     actions: {
-      [`game:basket:fill:${color}`]: {}
+      [`game:basket:fill:${color}`]: {},
+      [`game:basket:clear:${color}`]: { content: labels.basketEmptySlot }
     }
   }))
 
@@ -57,7 +62,8 @@ export function createBasketStory(colors: string[], colorAccents: Record<string,
         },
         emit: { click: { event: { name: "game:final:start", cascade: true } } },
         actions: {
-          "game:basket:complete": { className: { remove: "is-hidden" } }
+          "game:basket:complete": { className: { remove: "is-hidden" } },
+          "game:basket:incomplete": { className: { add: "is-hidden" } }
         }
       }
     ]

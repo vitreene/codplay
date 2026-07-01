@@ -8,6 +8,7 @@ import { gameExtraWindowStrap } from "./game-extra-window"
 import { createGameExtraDropStrap } from "./game-extra-drop"
 import { createGameTimerStrap } from "./game-timer"
 import { createGameFinalRouteStrap } from "./game-final-route"
+import { createGameFinalResolveStrap } from "./game-final-resolve"
 import { createGameResultStrap } from "./game-result"
 import { createGameReportStrap } from "./game-report"
 
@@ -68,6 +69,7 @@ export function createGameStraps(config: GameConfig, draw: GameDraw, scene?: Sce
     "game-extra-drop": createGameExtraDropStrap(resetTrialStoryState),
     "game-timer": createGameTimerStrap(config.timerTotalMs),
     "game-final-route": createGameFinalRouteStrap(draw.finalColor, colors),
+    "game-final-resolve": createGameFinalResolveStrap(draw.finalColor, words),
     "game-result": createGameResultStrap(config.timerTotalMs, colors),
     "game-report": createGameReportStrap(config.seed)
   }
