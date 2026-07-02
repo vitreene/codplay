@@ -21,6 +21,8 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "overlay-world-outlet", label: "Overlay-world outlet", href: "?demo=overlay-world-outlet" },
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
+  { id: "selection-frame", label: "Selection Frame", href: "?demo=selection-frame" },
+  { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },
 ];
 
 export function buildDemoLinksMarkup(activeId: string | undefined): string {

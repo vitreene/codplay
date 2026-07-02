@@ -15,6 +15,7 @@
   "dependencies": {
     "@codplay/capsule-automation": "*",
     "@codplay/remote": "*",
+    "@codplay/selection-frame": "*",
     "codplay": "*"
   },
   "devDependencies": {

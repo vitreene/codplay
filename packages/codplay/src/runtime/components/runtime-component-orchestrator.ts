@@ -103,6 +103,7 @@ export class RuntimeComponentOrchestrator {
   private readonly componentIdByOutletId = new Map<string, string>();
   private readonly storyIdByPersoId = new Map<string, string>();
   private readonly storyMoveByStoryId = new Map<string, unknown>();
+  private readonly nodeSubscribersByPersoId = new Map<string, Set<(node: Element | null) => void>>();
 
   private createElementOptions: import("../create-element").CreateElementOptions | undefined;
 
@@ -553,6 +554,7 @@ export class RuntimeComponentOrchestrator {
     this.clearComponentOutlets(perso.id);
     this.componentByPersoId.set(perso.id, component);
     this.nodeByPersoId.set(perso.id, rootNode);
+    this.notifyNodeSubscribers(perso.id, rootNode);
     this.parentListByPersoId.set(perso.id, null);
     this.mountedByPersoId.set(perso.id, false);
     this.storyIdByPersoId.set(perso.id, perso.storyId);
@@ -577,6 +579,9 @@ export class RuntimeComponentOrchestrator {
    */
   destroy(): RuntimeElementMap {
     this.runHook("onDestroy", {});
+    for (const persoId of this.nodeSubscribersByPersoId.keys()) {
+      this.notifyNodeSubscribers(persoId, null);
+    }
     this.componentByPersoId.clear();
     this.nodeByPersoId.clear();
     this.listByPersoId.clear();
@@ -775,6 +780,46 @@ export class RuntimeComponentOrchestrator {
   }
 
   /**
+   * Subscribes to the DOM node lifecycle of one perso (v1-author-api-spec).
+   * The callback fires synchronously with the current node on subscription,
+   * then on every node replacement (re-init) and removal (destroy → null).
+   * Subscriptions survive orchestrator destroy so a scene rebuild reattaches.
+   */
+  subscribeToNode(persoId: string, cb: (node: Element | null) => void): () => void {
+    let subscribers = this.nodeSubscribersByPersoId.get(persoId);
+    if (subscribers === undefined) {
+      subscribers = new Set();
+      this.nodeSubscribersByPersoId.set(persoId, subscribers);
+    }
+    subscribers.add(cb);
+    cb(this.toElementOrNull(this.nodeByPersoId.get(persoId)));
+    return () => {
+      subscribers.delete(cb);
+      if (subscribers.size === 0) {
+        this.nodeSubscribersByPersoId.delete(persoId);
+      }
+    };
+  }
+
+  private toElementOrNull(nodeRef: unknown): Element | null {
+    if (typeof globalThis.Element !== "undefined" && nodeRef instanceof globalThis.Element) {
+      return nodeRef;
+    }
+    return null;
+  }
+
+  private notifyNodeSubscribers(persoId: string, nodeRef: unknown): void {
+    const subscribers = this.nodeSubscribersByPersoId.get(persoId);
+    if (subscribers === undefined) {
+      return;
+    }
+    const node = this.toElementOrNull(nodeRef);
+    for (const cb of subscribers) {
+      cb(node);
+    }
+  }
+
+  /**
    * Exposes one stable runtime registry used by renderer/player integration.
    */
   getRuntimeRegistrySnapshot(): RuntimeRegistrySnapshot {
@@ -791,6 +836,7 @@ export class RuntimeComponentOrchestrator {
       setMounted: (persoId, mounted) => {
         this.mountedByPersoId.set(persoId, mounted);
       },
+      subscribeToNode: (persoId, cb) => this.subscribeToNode(persoId, cb),
     };
   }
 
@@ -829,6 +875,7 @@ export class RuntimeComponentOrchestrator {
     for (const outletId of outletIds) {
       if (this.nodeByPersoId.get(outletId) !== undefined) {
         this.nodeByPersoId.delete(outletId);
+        this.notifyNodeSubscribers(outletId, null);
       }
       this.componentIdByOutletId.delete(outletId);
     }
@@ -861,6 +908,7 @@ export class RuntimeComponentOrchestrator {
       }
 
       this.nodeByPersoId.set(outletId, outlet.nodeRef);
+      this.notifyNodeSubscribers(outletId, outlet.nodeRef);
       this.componentIdByOutletId.set(outletId, componentId);
       registeredOutletIds.push(outletId);
     }

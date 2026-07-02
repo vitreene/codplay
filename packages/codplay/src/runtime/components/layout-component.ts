@@ -5,9 +5,12 @@ import type { LayoutFormat, PersoActionCommon, PersoInitialCommon } from '../per
 import type { RuntimeComponentClassInput } from './types'
 import type { ComponentRenderResult, RuntimeComponentUpdateInput, RuntimeLayoutComponent, RuntimeLayoutOutletSnapshot } from './types'
 
+// Typage conforme à v1-layout-spec.md : `markup` est requis et constitutif du
+// composant — un oubli (ex. markup égaré dans `style`) doit échouer à la
+// compilation, pas seulement produire un warning runtime.
 export type LayoutInitial = PersoInitialCommon & {
-  markup?: unknown
-  format?: unknown
+  markup: string
+  format?: LayoutFormat
 }
 
 export type LayoutAction = PersoActionCommon

@@ -132,6 +132,7 @@ export type RuntimeRegistrySnapshot = {
   setParentListId: (persoId: string, parentListId: string | null) => void
   isMounted: (persoId: string) => boolean
   setMounted: (persoId: string, mounted: boolean) => void
+  subscribeToNode: (persoId: string, cb: (node: Element | null) => void) => () => void
 }
 
 /**

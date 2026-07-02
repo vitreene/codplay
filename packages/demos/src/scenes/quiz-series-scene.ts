@@ -89,7 +89,7 @@ function createSeriesContainerStory(): SceneStoryDoc {
             width: "100%",
             borderRadius: "12px"
           }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {}
       }
     ]
@@ -137,7 +137,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
         `,
         style: {},
         move: "@root"
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {}
     },
     {
@@ -149,7 +149,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
         content: `0 / ${SERIES_TOTAL}`,
         style: { fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap", minWidth: "48px", ...(options.countStyle ?? {}) },
         move: { parentId: "quiz-series:progress-count" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: { "quiz:series:progress:count": {} }
     }
   ]
@@ -170,7 +170,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
           transition: "width 350ms ease"
         },
         move: { parentId: "quiz-series:progress-track" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: { "quiz:series:progress:fill": {} }
     })
   }
@@ -185,7 +185,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
         content: "—",
         style: { fontSize: "0.8rem", fontWeight: 700, whiteSpace: "nowrap", minWidth: "48px", textAlign: "right", ...(options.rateStyle ?? {}) },
         move: { parentId: "quiz-series:progress-rate" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: { "quiz:series:progress:rate": {} }
     })
   }
@@ -233,7 +233,7 @@ function createSeriesQuestionStory(
           disabled: false,
           visualState: "idle",
           move: { parentId: `${prefix}:answers` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {},
         emit: {
           change: {
@@ -255,7 +255,7 @@ function createSeriesQuestionStory(
             textAlign: "center"
           },
           move: { parentId: `${answerRootId}__selection-icon-slot` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           [`quiz:question:answer:${answer.id}:selected`]: { content: "•" },
           [`quiz:question:answer:${answer.id}:idle`]: { content: "" }
@@ -275,7 +275,7 @@ function createSeriesQuestionStory(
             fontWeight: 700
           },
           move: { parentId: `${answerRootId}__correction-icon-slot` }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           [`quiz:question:answer:${answer.id}:revealed-correct`]: { content: "+" },
           [`quiz:question:answer:${answer.id}:revealed-incorrect`]: { content: "-" },
@@ -321,7 +321,7 @@ function createSeriesQuestionStory(
           ...(position > 0 ? { transform: "translateX(100%)" } : {})
         },
         move: "@root"
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         [`quiz:question:${position}:hide`]: {
           style: { x: { from: 0, to: "-100%", duration: 350, ease: "inOutCubic" } }
@@ -339,7 +339,7 @@ function createSeriesQuestionStory(
         content: question.prompt,
         style: { fontWeight: 700, color: borderColor },
         move: { parentId: `${prefix}:title` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {}
     },
     {
@@ -350,7 +350,7 @@ function createSeriesQuestionStory(
         content: question.type === "multiple" ? question.labels.multipleHint : "",
         style: { color: "#475569", fontSize: "0.875rem" },
         move: { parentId: `${prefix}:hint` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {}
     },
     ...answerPersos,
@@ -373,7 +373,7 @@ function createSeriesQuestionStory(
         },
         attr: { type: "button", disabled: true },
         move: { parentId: `${prefix}:controls` }
-      } as unknown as PersoDoc["initial"],
+      },
       emit: {
         click: { event: { name: "quiz:question:validate" } }
       },
@@ -392,7 +392,7 @@ function createSeriesQuestionStory(
         style: { fontWeight: 600 },
         attr: { hidden: true },
         move: { parentId: `${prefix}:result` }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         "quiz:question:resolved:correct": {
           content: question.labels.correct,
@@ -415,7 +415,7 @@ function createSeriesQuestionStory(
         attr: { type: "button", hidden: true },
         style: { marginTop: "8px", cursor: "pointer" },
         move: { parentId: `${prefix}:next` }
-      } as unknown as PersoDoc["initial"],
+      },
       emit: {
         click: { event: { name: "quiz:question:next" } }
       },
@@ -459,7 +459,7 @@ function createSeriesResultStory(): SceneStoryDoc {
         content: `Question ${n}`,
         style: { margin: "4px 0", fontWeight: 500 },
         move: { parentId: "quiz-series-result:items" }
-      } as unknown as PersoDoc["initial"],
+      },
       actions: {
         [`quiz:result:item:${n}:correct`]: {
           content: `Question ${n} : ✓`,
@@ -503,7 +503,7 @@ function createSeriesResultStory(): SceneStoryDoc {
             pointerEvents: "none"
           },
           move: "@root"
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           "quiz:result:show": {
             style: {
@@ -534,7 +534,7 @@ function createSeriesResultStory(): SceneStoryDoc {
             gap: "8px"
           },
           move: { parentId: "quiz-series-result:card" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {}
       },
       ...itemPersos,
@@ -546,7 +546,7 @@ function createSeriesResultStory(): SceneStoryDoc {
           content: "— / 3",
           style: { fontSize: "1.25rem", fontWeight: 700, margin: "12px 0 4px" },
           move: { parentId: "quiz-series-result:score" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           "quiz:result:score": {}
         }
@@ -559,7 +559,7 @@ function createSeriesResultStory(): SceneStoryDoc {
           content: "",
           style: { fontWeight: 700, fontSize: "1.125rem" },
           move: { parentId: "quiz-series-result:verdict" }
-        } as unknown as PersoDoc["initial"],
+        },
         actions: {
           "quiz:result:verdict:passed": {
             content: "Réussi !",

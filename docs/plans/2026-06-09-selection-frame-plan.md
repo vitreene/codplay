@@ -124,12 +124,13 @@ L'**attache-flex** (flex-start/end, align-top/bottom) est un outil distinct, ind
 type CapabilityPreset = {
   name: string
   capabilities: Array<'move' | 'rotate' | 'rotation-origin' | 'resize' | 'scale' | 'positioning'>
+  handles?: Partial<Record<'corners' | 'sides' | CsHandleId, HandleBehavior>>  // voir section Poignées
 }
 
 handle.applyPreset(preset: CapabilityPreset): void
 ```
 
-Le cs adapte son rendu (poignées visibles, zones interactives) aux capacités actives du preset courant. Les capacités absentes du preset sont visuellement masquées et non interactives.
+Le cs adapte son rendu (poignées visibles, zones interactives) aux capacités actives du preset courant. Les capacités absentes du preset sont visuellement masquées et non interactives. Le champ `handles` configure le comportement individuel des poignées (fonction assignée, bascule resize/scale) — détaillé dans la section Poignées.
 
 **Trois contextes d'édition connus**
 
@@ -239,6 +240,14 @@ Ces `div` de zones sont les **cibles de drop** : quand l'auteur déplace l'élé
 
 **Mode placement libre dans la grille** : quand aucune zone prédéfinie n'existe, l'interaction est visuellement identique au mode libre — drag et resize pixel — mais le cs et le clone sont **aimantés par les contraintes de la grille sous-jacente** (lignes de colonnes, lignes de rangées, en tenant compte des gaps). L'éditeur (`GridPlacementAdapter`) convertit la position aimantée en placement grid (`row`, `col`, `rowSpan`, `colSpan`). La grille reste affichée en filigrane dans le gabarit pendant le drag.
 
+**Contrat du drop : l'élément se place là où l'auteur l'a vu.** La cellule surlignée pendant le drag est l'**unique source de vérité** du drop — jamais un second calcul (delta pixel arrondi) qui pourrait diverger de la prévisualisation. Le canal : `CsValueAdapter.applyCellDrop?(cell)` (optionnel, contexte grid) ; au relâché, le cs le déclenche avec la dernière cellule surlignée. Le delta pixel (`applyMove`) n'est que le repli quand l'adaptateur n'expose pas ce canal.
+
+**Poignées en contexte grid** : le resize ajuste les **spans** — l'adaptateur accumule les deltas pixel (comme pour le move) et franchit les frontières de cellules par stride (taille de cellule + gap). Cela permet d'aligner un élément sur plusieurs colonnes/rangées.
+
+**Signal de placement pour l'éditeur** : chaque changement de placement (drop, spans) est notifié via `onPlacement({ row, col, rowSpan, colSpan })` — c'est par ce signal que l'éditeur peut, ensuite, déclarer une **zone** à partir de l'emprise ajustée par l'auteur. Ce principe vaut pour tout placement, pas seulement le mode grid.
+
+**Clone temporaire** : il reproduit la taille rendue de l'élément (dimensions explicites posées à la création — en `position: fixed` il perdrait sa taille de grille) et s'ancre sur la cellule survolée, gaps compris.
+
 **Systèmes de coordonnées en mode grid libre**
 
 Trois systèmes coexistent pendant un drag :
@@ -291,11 +300,19 @@ Cette opération est implémentée par `extractRotationMatrix(matrix)` dans `dom
 
 ### Drag → diff
 
-Un drag sur le corps du cs (intérieur du cadre) déplace l'élément. Le delta souris est en espace viewport ; il est converti en espace local via l'inverse de la matrice cumulée (`worldDeltaToLocalDelta`). Le cs émet toujours un **delta pixel local** — il ne connaît pas la sémantique de destination.
+Un drag sur le corps du cs (intérieur du cadre) déplace l'élément. Le delta souris est en espace viewport ; il est converti via l'inverse de la **matrice cumulée du parent** (`worldDeltaToLocalDelta` sur la matrice du parent, pas celle de l'élément). Raison : la propriété CSS `translate` s'applique avant la rotation propre de l'élément, donc dans l'espace de coordonnées du parent — convertir via la matrice de l'élément appliquerait sa rotation deux fois. Le cs émet toujours un **delta pixel local** — il ne connaît pas la sémantique de destination.
+
+L'émission est **continue** : l'adaptateur reçoit un diff incrémental à chaque déplacement du pointeur (arrondi au pixel, cumul exact), pas au relâché. L'élément suit le geste en direct.
+
+**Correction par mesure avant repaint** : le cs ne fait pas confiance au delta théorique pour son propre feedback. Après chaque émission, il mesure la position réelle de l'élément (`getBoundingClientRect`, synchrone donc avant repaint) et cale son `translate` sur le déplacement mesuré. Toute interférence de layout (marges auto, contraintes min/max, propriétés non anticipées) est ainsi absorbée sans qu'il faille l'énumérer : l'élément est la vérité, le cs suit. Les gestes resize/rotate/scale appliquent le même principe via une recapture de pose complète à chaque émission.
 
 ### Resize → diff
 
-Les poignées de coin produisent un delta `{ dw, dh }` local via `worldSizeToLocalSize` — même principe : delta brut, sémantique déléguée.
+Les poignées produisent un delta `{ dw, dh }` local en projetant le delta souris sur les **axes locaux de l'élément** via `worldDeltaToLocalDelta` (matrice complète de l'élément, rotation incluse), puis en appliquant le signe de la poignée. La poignée tirée reste ainsi exactement sous le pointeur, quelle que soit la rotation.
+
+`worldSizeToLocalSize` ne convient **pas** pour ce geste : elle convertit des dimensions (non négatives, clampées à 0) — un delta négatif y serait écrasé et la réduction bloquée.
+
+Même règle d'émission continue que le drag : diff incrémental à chaque déplacement du pointeur, l'élément se met à jour en direct.
 
 ### Adaptateur de transposition (CsValueAdapter)
 
@@ -304,12 +321,25 @@ Le cs émet des deltas bruts. La décision sur la propriété cible appartient �
 ```ts
 type CsRawMoveDiff = { dx: number; dy: number }
 type CsRawSizeDiff = { dw: number; dh: number }
+type CsRawRotateDiff = {
+  dr: number                                   // degrés, arrondis à l'entier
+  origin?: { fx: number; fy: number }          // pivot en fractions de la boîte de l'élément (0..1)
+}
+type CsRawScaleDiff = { fx: number; fy: number } // facteurs multiplicatifs (1 = inchangé)
 
 interface CsValueAdapter {
   applyMove(raw: CsRawMoveDiff): void
   applyResize(raw: CsRawSizeDiff): void
+  applyRotate(raw: CsRawRotateDiff): void
+  applyScale(raw: CsRawScaleDiff): void
 }
 ```
+
+Rotation et scale empruntent le même canal que move/resize : le cs émet des deltas bruts, l'adaptateur décide de la propriété cible. La rotation est émise en degrés entiers incrémentaux ; le scale en facteurs multiplicatifs (précision 0.01). Les adaptateurs pour lesquels rotation/scale n'ont pas de sens (`FlexAdapter`, `GridPlacementAdapter`) les implémentent comme no-op.
+
+**L'origine de rotation fait partie du canal `applyRotate`** : le pivot placé via l'aiguille (capacité `rotation-origin`) est émis dans chaque `CsRawRotateDiff` sous forme de fractions de la boîte de l'élément. `LibreAdapter` le transpose en `transform-origin` avant d'appliquer la rotation. Pas de canal séparé pour le pivot.
+
+**Compensation au changement d'origine** : changer `transform-origin` sur un élément déjà transformé ré-applique la transformation existante autour du nouveau point — l'élément saute. `LibreAdapter` compense au moment du changement : `delta = (I − M)·(O_ancien − O_nouveau)`, où M est la partie linéaire courante (rotate·scale·transform composés) et O les origines en pixels locaux ; le delta s'ajoute à `translate` (même espace). La pose visuelle est ainsi strictement conservée à l'instant du changement d'origine.
 
 L'éditeur instancie l'adaptateur approprié au contexte courant et peut en changer sans détruire la sélection (ex. : grid → libre pour un affinage de position).
 
@@ -492,8 +522,8 @@ Responsabilités :
   - Capturer `{ rect, matrix, localWidth, localHeight }` du nœud cible
   - Positionner le cs : `position: fixed`, `left/top` calibrés (pattern `calibrateOverlayGhostToWorldSnapshot`), `width/height` depuis `localWidth × scaleX` / `localHeight × scaleY`, `transform: matrix(...)` via `extractRotationMatrix`, `translate: 0px 0px`
 - À l'apparition du nœud conteneur ET si la capacité `positioning` est active : positionner le gabarit sur le nœud conteneur (même pattern overlay-world : `captureCombinedMatrixForNode` + `calibrateOverlayGhostToWorldSnapshot`), puis afficher les zones si `setContainerGrid` a fourni une structure
-- Pointer events sur le corps du cs : drag → `worldDeltaToLocalDelta` → **feedback visuel via `translate: Δx Δy`** (propriété CSS individuelle, pas `left/top`, pas `x`/`y` Anime.js) → `adapter.applyMove(raw)` à chaque delta → reset `translate` à zéro au relâché
-- Pointer events sur les poignées de coin : resize → `worldSizeToLocalSize` → preview + `adapter.applyResize(raw)` au relâché
+- Pointer events sur le corps du cs : drag → `worldDeltaToLocalDelta` (matrice du parent) → **feedback visuel via `translate: Δx Δy`** (propriété CSS individuelle, pas `left/top`, pas `x`/`y` Anime.js) → `adapter.applyMove(raw)` à chaque delta → reset `translate` à zéro au relâché
+- Pointer events sur les poignées de coin : resize → `worldSizeToLocalSize` → `adapter.applyResize(raw)` à chaque delta (émission continue, comme le drag)
 - À la disparition du nœud (callback null) : masquer cs et clone sans les détruire (suspension)
 - `setPartVisibility` / `setPartActive` : bascules programmatiques indépendantes de l'état de suspension
 - `sync()` : recalibrage forcé de l'ancrage et de la matrice (appelé par l'éditeur après une modification externe de position/dimensions ne passant pas par une reconstruction de nœud)
@@ -542,9 +572,54 @@ Le mécanisme d'accroche (`containerId` → `subscribeToNode` → overlay positi
 
 Selon la config active, les coins servent à **redimensionner** (width/height) ou à **rescaler** (scale) l'élément. En mode rescale, le cs lui-même n'est pas rescalé — seul l'élément l'est.
 
+**Bascule resize ↔ scale (alt-clic)** : chaque poignée porte un **mode courant** persistant. Un **alt-clic** sur la poignée fait basculer son mode (resize ↔ scale) sans démarrer de geste. Le mode est visualisé : en mode scale, **le bord de la poignée devient plus épais**. Un Alt maintenu pendant le drag n'a pas d'effet — la bascule est un état, pas un modificateur (un modificateur maintenu est trop peu visuel pour comprendre ce qui se passe).
+
+**Configuration par preset** : le comportement des poignées est configurable par l'éditeur. Valeurs par défaut : mode `resize` si la capacité est active (sinon `scale`), bascule autorisée si les deux capacités sont actives. Le preset peut :
+- assigner une fonction fixe à une poignée ou un groupe (`mode`) ;
+- autoriser ou interdire la bascule (`allowSwap`).
+
+```ts
+type CsHandleId = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w'
+
+type HandleBehavior = {
+  mode?: 'resize' | 'scale'   // fonction assignée ; défaut : selon les capacités
+  allowSwap?: boolean         // alt-clic autorisé ; défaut : les deux capacités actives
+}
+
+type CapabilityPreset = {
+  name: string
+  capabilities: CsCapability[]
+  handles?: Partial<Record<'corners' | 'sides' | CsHandleId, HandleBehavior>>
+}
+```
+
+Résolution par poignée : config de la poignée précise > config du groupe (`corners`/`sides`) > défauts. L'application d'un preset réinitialise les modes courants.
+
+**Conservation du ratio** : sur les coins, le ratio w/h est **maintenu par défaut** — en resize comme en scale. L'axe dominant du geste pilote, l'autre suit le ratio de départ. **Shift** lève la contrainte pour un geste libre.
+
 ### Côtés (milieu de chaque arête)
 
-Par défaut, les poignées de côté redimensionnent sur un seul axe (width ou height). Un **alt-clic sur une poignée de côté** bascule ce point en mode scale sur cet axe — si l'éditeur autorise cette bascule.
+Les poignées de côté agissent sur un seul axe (width ou height). En mode scale, l'axe tiré pilote un scale uniforme par défaut ; Shift le restreint à cet axe seul.
+
+### Ancrage par poignée — verrouillage mesuré
+
+Le point opposé à la poignée tirée est l'**ancre** : il doit rester visuellement immobile pendant tout le geste. Seul l'angle (ou le bord) tiré bouge.
+
+Une compensation théorique par poignée (ex. `dx = -dw` pour les poignées ouest) est insuffisante : elle n'anticipe pas les effets du `transform-origin` (une rotation autour du centre répartit toute croissance symétriquement des deux côtés), des marges automatiques, ou d'autres propriétés de layout. Le mécanisme retenu est le **verrouillage mesuré**, application du principe « mesure avant repaint » :
+
+1. Au début du geste, la position viewport de l'ancre est mesurée et mémorisée. La position viewport d'un point local `(fx, fy)` de la boîte se calcule depuis le rect mesuré et la partie linéaire de la matrice (les coins transformés donnent le décalage AABB ↔ origine locale).
+2. Après chaque émission `applyResize`/`applyScale`, la position de l'ancre est re-mesurée.
+3. L'écart mesuré (viewport) est converti en espace parent (`worldDeltaToLocalDelta` sur la matrice du parent) et émis en `applyMove` correctif arrondi au pixel.
+
+La boucle est auto-correctrice : chaque correction part de l'erreur *mesurée* après les corrections précédentes — pas d'accumulation de dérive. Le cs se recale sur l'élément (recapture de pose) à chaque émission.
+
+### Robustesse des gestes
+
+Les sessions de geste (drag, resize, rotation, pivot) obéissent aux règles suivantes :
+
+- Seul le **bouton primaire** démarre une session.
+- Les matrices de conversion sont **figées au début de la session** — la recapture de pose en cours de geste ne perturbe pas les calculs de delta.
+- Une session se termine sur `pointerup`, mais aussi sur `pointercancel`, `lostpointercapture`, ou quand un `pointermove` arrive avec `buttons === 0` (relâché manqué). Sans cela, une session fantôme survit et transforme un simple survol en geste — la libération de session précède tout appel susceptible de lever une exception.
 
 ### Drag intérieur
 
@@ -554,7 +629,17 @@ Un drag à l'intérieur du cadre déplace l'élément (mode libre). En mode posi
 
 Un point central porte une **aiguille** (needle). La rotation est commandée en tirant l'extrémité de l'aiguille. Le point de pivot (base de l'aiguille) est l'axe de rotation ; il est déplaçable.
 
+**Suivi de la souris et précision** : pendant le drag, la pointe de l'aiguille reste exactement sous le pointeur (position inverse-transformée dans l'espace local du cs — même règle affine que le pivot). L'aiguille **s'allonge avec le drag** : plus le rayon pivot–pointeur est grand, plus la précision angulaire est fine. Au repos, l'aiguille reprend sa longueur fixe. L'angle émis est calculé en espace viewport autour du pivot figé en début de geste (le pivot est le centre de rotation : il ne bouge pas pendant le geste).
+
 **Aimantation de l'axe** : l'axe est attiré par les 8 points caractéristiques du cadre (4 coins + 4 milieux d'arêtes). Quand il se pose sur l'un de ces points, la poignée de redimensionnement sous-jacente est désactivée (les deux fonctions ne peuvent pas coexister au même point).
+
+**Retour à la position par défaut** : un double-clic sur l'axe de rotation le ramène au centre de l'élément (position par défaut). La poignée éventuellement désactivée par aimantation est réactivée.
+
+**Transposition affine du pivot** : le pivot vit dans la boîte locale de l'élément (fractions 0..1). Le pointeur souris doit être transformé inversement via la matrice de l'élément pour obtenir ces fractions — diviser les coordonnées souris par le `getBoundingClientRect()` (boîte englobante axis-aligned) est faux dès que l'élément est tourné. Symétriquement, la position viewport du pivot (base du calcul d'angle) passe par le mapping affine, pas par le rect englobant.
+
+**Émission** : la rotation émet `CsRawRotateDiff { dr, origin }` — degrés entiers incrémentaux plus le pivot en fractions. `LibreAdapter` transpose `origin` en `transform-origin` avant d'appliquer la rotation.
+
+**Propriétés individuelles et matrice** : les adaptateurs mutent les propriétés CSS individuelles (`rotate`, `scale`, `translate`), qui ne figurent **pas** dans la valeur computed `transform`. La capture de matrice du module (`captureCombinedMatrixWithIndividualTransforms`) compose `rotate · scale · transform` (ordre spec) sur toute l'ascendance — l'utilitaire codplay `captureCombinedMatrixForNode`, qui ne lit que `transform`, ne suffit pas ici.
 
 ### Contraintes clavier (Shift)
 
@@ -562,4 +647,5 @@ Un point central porte une **aiguille** (needle). La rotation est commandée en 
 |---|---|
 | Rotation | Pas de 15° |
 | Déplacement | Contrainte d'axe (horizontal ou vertical) |
-| Scale | Lève la contrainte de ratio — le ratio w/h est maintenu par défaut ; Shift permet un scale non proportionnel |
+| Resize / scale par les coins | Lève la conservation du ratio — le ratio w/h est maintenu par défaut ; Shift permet un geste non proportionnel |
+| Scale par les côtés | Restreint le scale à l'axe tiré (uniforme par défaut) |

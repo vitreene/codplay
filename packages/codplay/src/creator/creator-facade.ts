@@ -42,6 +42,7 @@ export class CodPlay implements CodPlayApi {
       resourceManifest,
       strapCollection: input.strapCollection,
       enableInteractionLock: input.enableInteractionLock,
+      mode: input.mode,
     })
     if (!initResult.ok) return initResult
 

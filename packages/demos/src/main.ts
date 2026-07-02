@@ -17,6 +17,8 @@ import { runMashupRiveThreeQuizDemo } from './codplay/mashup-rive-three-quiz-dem
 import { runMoveOffDemo } from './codplay/move-off-demo'
 import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
+import { runSelectionFrameDemo } from './codplay/selection-frame-demo'
+import { runSelectionFrameGridDemo } from './codplay/selection-frame-grid-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -38,6 +40,8 @@ switch (demoName) {
 	case 'move-off':        void runMoveOffDemo(); break
 	case 'overlay-world-outlet': void runOverlayWorldOutletDemo(); break
 	case 'polygon':         void runPolygonDemo(); break
+	case 'selection-frame': void runSelectionFrameDemo(); break
+	case 'selection-frame-grid': void runSelectionFrameGridDemo(); break
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	default:                void runPlayerPocDemo()
 }

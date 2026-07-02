@@ -10,6 +10,8 @@ import type { Player } from "codplay/player/player";
 import type { TelcoApi } from "codplay/telco/types";
 
 type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
+  /** Mode d'initialisation du player ('author' pour les démos d'édition). */
+  mode?: "author" | "broadcast";
   /** Appelé une fois après studio.load(), donc après init. Permet d'attacher des écouteurs
    *  (onTrace, onChange…) avant le premier appel à play(). */
   onReady?: (context: { player: Player; telco: TelcoApi }) => void;
@@ -94,6 +96,12 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
   let traceEventCount = 0;
   let traceCountFlushScheduled = false;
   studio.player.onTrace((row) => {
+    // Les erreurs runtime (ex. AUTHOR_LAYOUT_MARKUP_INVALID) n'apparaissent que
+    // dans le panneau de trace — miroir console pour qu'elles alertent aussi
+    // pendant le développement d'une démo.
+    if (row.status === "error") {
+      console.warn(`[codplay] ${row.eventName}`, row.payload ?? "");
+    }
     traceEventCount += 1;
     // Same reasoning as trace-log-panel.ts's own flush: a seek replay burst can fire
     // hundreds of traces synchronously — coalesce into one DOM write per frame instead
@@ -140,6 +148,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     strapCollection: config.strapCollection,
     extraResources: config.extraResources,
     enableInteractionLock: true,
+    mode: config.mode,
   });
   if (!loadResult.ok) {
     throw new Error(`[demo] load failed: ${loadResult.error.code}`);

@@ -12,6 +12,7 @@ export type CodPlayLoadInput = {
   strapCollection?: StrapCollection
   extraResources?: ResourceManifest['entries']
   enableInteractionLock?: boolean
+  mode?: 'author' | 'broadcast'
 }
 
 export type CodPlayApi = {

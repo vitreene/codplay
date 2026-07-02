@@ -70,6 +70,7 @@ export type PlayerApi = {
   setRate: (rate: number) => void
   onChange: (listener: PlayerStateListener) => () => void
   onTrace: (listener: (row: RuntimeTraceRow) => void) => () => void
+  subscribeToNode: (persoId: string, cb: (node: Element | null) => void) => () => void
   schedule: PlayerScheduleApi
 }
 
@@ -429,6 +430,13 @@ export class Player implements PlayerApi {
    */
   onTrace(listener: (row: RuntimeTraceRow) => void): () => void {
     return this.player.onTrace(listener)
+  }
+
+  /**
+   * Subscribes to the DOM node lifecycle of one perso (v1-author-api-spec).
+   */
+  subscribeToNode(persoId: string, cb: (node: Element | null) => void): () => void {
+    return this.player.getRuntimeRegistry().subscribeToNode(persoId, cb)
   }
 
   /**

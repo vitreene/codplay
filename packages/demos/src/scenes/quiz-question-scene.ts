@@ -218,7 +218,7 @@ function createQuestionPanel(): PersoDoc {
       attr: {
         disabled: false
       }
-    } as unknown as PersoDoc['initial'],
+    },
     actions: {
       'quiz:question:resolved': {
         attr: {
