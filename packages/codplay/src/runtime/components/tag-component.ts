@@ -30,7 +30,7 @@ export class TagComponent extends BaseComponent {
   }
 
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
     const state = input.action as TagAction
     if (state.content !== undefined) {
       this.applyContent(this.node, state.content)

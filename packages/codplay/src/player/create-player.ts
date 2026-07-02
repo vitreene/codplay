@@ -4,6 +4,7 @@ import type { TimelineEvent } from "../core/events/types";
 import { TimeTicker } from "../core/time/ticker";
 import { DirectorCore } from "../director/create-director";
 import { RendererFacade } from "../renderer/create-renderer";
+import { createAnimeSvgService } from "../runtime/components";
 import { createMediaSyncModule } from "../runtime/modules/media-sync";
 import type { MediaSyncRuntimeComponent } from "../runtime/modules/media-sync";
 import {
@@ -479,6 +480,7 @@ export class PlayerFacade implements PlayerApi {
     this.renderer = new RendererFacade({
       animationAdapter,
       continuousAnimationEngines: [this.tweenRunner],
+      coreServices: [{ name: "animeSvg", service: createAnimeSvgService() }],
       createElementOptions: options.createElementOptions,
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
       emitRuntimeEvent: (event) => {
@@ -519,6 +521,9 @@ export class PlayerFacade implements PlayerApi {
       this.component.register({ type, component: componentClass });
     }
     for (const binding of options.bindings ?? []) {
+      for (const serviceRegistration of binding.services ?? []) {
+        this.service.register(serviceRegistration);
+      }
       for (const [type, componentClass] of Object.entries(binding.components)) {
         this.component.register({ type, component: componentClass });
       }

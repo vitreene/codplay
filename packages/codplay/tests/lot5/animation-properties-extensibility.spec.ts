@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { deriveSimpleTransitions } from '../../src/animation/derive-simple'
-import type { AnimationResolvedAction, TransitionRequest } from '../../src/animation/types'
+import type { AnimationResolvedAction, AnimeSvgMorphOperation, TransitionRequest } from '../../src/animation/types'
 import { applyResolvedActions } from '../../src/runtime/apply-actions'
 import type { RuntimeElementMap, RuntimeNode } from '../../src/runtime/types'
 
@@ -201,5 +201,46 @@ describe('Lot 05 - animation properties extensibility', () => {
 
     expect(animeImplementation).toHaveBeenCalledTimes(1)
     expect(animeImplementation.mock.calls[0]?.[0].ease).toBe('inOutQuad')
+  })
+
+  it('L5-T6 adapter runs Anime SVG morph operations centrally', () => {
+    const target = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    const to = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    target.setAttribute('d', 'M0 0 L10 0')
+    to.setAttribute('d', 'M0 0 L20 20')
+
+    let complete: (() => void) | undefined
+    const animeImplementation = vi.fn<AnimeImplementation>((parameters) => {
+      complete = typeof parameters.complete === 'function'
+        ? parameters.complete as () => void
+        : undefined
+      return { pause: vi.fn() }
+    })
+    const adapter = createAnimationAdapter(animeImplementation)
+    const operation: AnimeSvgMorphOperation = {
+      kind: 'anime-svg:morphTo',
+      operationId: 'morph-1',
+      eventId: 'evt-1',
+      eventName: 'morph',
+      listenerId: 'item-1',
+      property: 'd',
+      target,
+      to,
+      finalValue: 'M0 0 L20 20',
+      duration: 400,
+      easing: 'easeInOutQuad',
+      precision: 0,
+    }
+
+    const handles = adapter.run([operation])
+    complete?.()
+
+    expect(handles).toHaveLength(1)
+    expect(handles[0]?.transitionId).toBe('morph-1')
+    expect(animeImplementation).toHaveBeenCalledTimes(1)
+    expect(animeImplementation.mock.calls[0]?.[0].targets).toBe(target)
+    expect(typeof animeImplementation.mock.calls[0]?.[0].d).toBe('function')
+    expect(animeImplementation.mock.calls[0]?.[0].ease).toBe('inOutQuad')
+    expect(target.getAttribute('d')).toBe('M0 0 L20 20')
   })
 })

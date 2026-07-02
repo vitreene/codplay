@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { utils } from 'animejs'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
-import type { AnimationAdapter, TransitionRequest } from '../../src/animation/types'
+import type { AnimationAdapter, AnimationOperation, TransitionRequest } from '../../src/animation/types'
 import { PlayerFacade } from '../../src/player/create-player'
 import type { SceneDoc } from '../../src/player/types'
 import { createListFlipModule } from '../../src/runtime/modules/list-flip'
@@ -149,11 +149,12 @@ function createNoopSeekAnimeImplementation(): AnimeImplementation {
 /** Creates an adapter that records every transition batch without mutating DOM state. */
 function createRecordingAdapter(recordedBatches: TransitionRequest[][]): AnimationAdapter {
   return {
-    run(transitions) {
+    run(operations) {
+      const transitions = operations.filter((operation): operation is TransitionRequest => !('kind' in operation))
       recordedBatches.push(transitions)
-      return transitions.map((transition) => ({
-        transitionId: transition.transitionId,
-        target: transition.target,
+      return operations.map((operation: AnimationOperation) => ({
+        transitionId: 'operationId' in operation ? operation.operationId : operation.transitionId,
+        target: operation.target,
         stop: () => undefined
       }))
     },

@@ -45,7 +45,7 @@ export class TextComponent extends BaseComponent {
   }
 
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
     const state = input.action as TextAction
     if (state.content !== undefined) {
       applyRichContent(this.node, state.content)

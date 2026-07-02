@@ -1,12 +1,12 @@
-import type { AnimationResolvedAction } from '../../animation/types'
+import type { AnimationOperation, AnimationResolvedAction } from '../../animation/types'
 import type { TransitionRequest } from '../../animation/types'
 import type { CreateElementOptions } from '../create-element'
 import type { RenderMutationResolver } from '../render-mutation-resolver'
 import type { ItemDoc, MoveCommand } from '../types'
-import type { ComponentServices, ServiceInstance } from './lib/component-services'
+import type { ComponentServices, RuntimeServiceOutput, ServiceApplyContext, ServiceInstance } from './lib/component-services'
 import type { ComponentModules } from './lib/component-modules'
 
-export type { ComponentServices, ServiceInstance }
+export type { ComponentServices, RuntimeServiceOutput, ServiceApplyContext, ServiceInstance }
 export type { ComponentModules }
 
 /**
@@ -31,6 +31,7 @@ export type RuntimeComponentUpdateInput = {
   eventId: string
   eventSeq: number
   action: Record<string, unknown>
+  serviceContext?: ServiceApplyContext
 }
 
 /**
@@ -197,6 +198,7 @@ export type RuntimeUpdateRoutingResult = {
   appliedActionsCount: number
   animatableActions: AnimationResolvedAction[]
   directTransitions: TransitionRequest[]
+  animationOperations: AnimationOperation[]
 }
 
 /**

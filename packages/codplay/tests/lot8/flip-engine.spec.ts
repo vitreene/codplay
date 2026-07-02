@@ -3,7 +3,7 @@ import { animate } from 'animejs'
 
 import { createAnimationAdapter, type AnimeImplementation } from '../../src/animation/adapter'
 import { runAnimationBatch } from '../../src/animation/run-batch'
-import type { AnimationAdapter, AnimationHandle, TransitionRequest } from '../../src/animation/types'
+import type { AnimationAdapter, AnimationHandle, AnimationOperation, TransitionRequest } from '../../src/animation/types'
 import { createFlipEngine } from '../../src/runtime/modules/list-flip/engine'
 
 type RectLike = {
@@ -58,11 +58,12 @@ function temp__createFakeNode(
  */
 function temp__createRecordingAnimationAdapter(onRun: (transitions: TransitionRequest[]) => void): AnimationAdapter {
   return {
-    run: (transitions) => {
+    run: (operations) => {
+      const transitions = operations.filter((operation): operation is TransitionRequest => !('kind' in operation))
       onRun(transitions)
-      return transitions.map<AnimationHandle>((transition) => ({
-        transitionId: transition.transitionId,
-        target: transition.target,
+      return operations.map<AnimationHandle>((operation: AnimationOperation) => ({
+        transitionId: 'operationId' in operation ? operation.operationId : operation.transitionId,
+        target: operation.target,
         stop: () => {
           return
         }

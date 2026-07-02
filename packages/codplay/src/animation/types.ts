@@ -25,6 +25,12 @@ export type AnimationAction = {
   attr?: Record<string, unknown>
   move?: MoveValue
   content?: string
+  sides?: unknown
+  inner?: unknown
+  outer?: unknown
+  rotationDeg?: unknown
+  inflexion?: unknown
+  morph?: unknown
   src?: string
   alt?: string
   fitMode?: 'wallpaper' | 'sprite'
@@ -67,6 +73,28 @@ export type TransitionRequest = {
   }
 }
 
+export type AnimeSvgMorphOperation = {
+  kind: 'anime-svg:morphTo'
+  operationId: string
+  eventId: string
+  eventName: string
+  listenerId: string
+  property: 'd' | 'points'
+  target: unknown
+  to: unknown
+  finalValue?: string
+} & Required<Pick<AnimationTimerOptions, 'duration'>> & {
+  easing?: string
+  precision?: number
+} & AnimationTimerOptions
+
+/**
+ * Describes one animation operation accepted by the central animation adapter.
+ * Rich Anime.js capabilities will extend this union without changing the
+ * existing TransitionRequest contract.
+ */
+export type AnimationOperation = TransitionRequest | AnimeSvgMorphOperation
+
 export type AnimationTraceEntry = {
   traceId: string
   eventId: string
@@ -83,7 +111,7 @@ export type AnimationHandle = {
 }
 
 export type AnimationAdapter = {
-  run: (transitions: TransitionRequest[]) => AnimationHandle[]
+  run: (operations: AnimationOperation[]) => AnimationHandle[]
   stop: (target?: unknown) => void
   pause?: (target?: unknown) => void
   resume?: (target?: unknown) => void

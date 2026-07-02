@@ -327,7 +327,10 @@ export class PlayerRuntimePlanner {
       return 0
     }
 
-    let maxDurationMs = this.resolveMoveDurationMs(action.move)
+    let maxDurationMs = Math.max(
+      this.resolveMoveDurationMs(action.move),
+      this.resolveMorphDurationMs(action.morph),
+    )
     const style = action.style
     if (typeof style !== 'object' || style === null) {
       return maxDurationMs
@@ -369,6 +372,27 @@ export class PlayerRuntimePlanner {
     return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
       ? this.clampTimelineMs(duration)
       : 0
+  }
+
+  /**
+   * Resolves one authored Anime SVG morph duration when explicitly declared.
+   */
+  private resolveMorphDurationMs(rawMorph: unknown): number {
+    if (typeof rawMorph !== 'object' || rawMorph === null) {
+      return 0
+    }
+
+    const morph = rawMorph as Record<string, unknown>
+    const duration = morph.duration
+    const delay = morph.delayMs ?? morph.delay
+    const durationMs = typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+      ? duration
+      : 0
+    const delayMs = typeof delay === 'number' && Number.isFinite(delay) && delay > 0
+      ? delay
+      : 0
+
+    return this.clampTimelineMs(durationMs + delayMs)
   }
 
   /**

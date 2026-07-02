@@ -182,7 +182,7 @@ export class LayoutComponent extends BaseComponent implements RuntimeLayoutCompo
    * Applies one resolved runtime action on the root layout node.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
   }
 
   /**

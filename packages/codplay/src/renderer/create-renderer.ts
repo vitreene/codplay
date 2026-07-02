@@ -128,7 +128,8 @@ export class RendererFacade implements RendererApi {
           details: warning.details
         })
       },
-      createElementOptions: this.runtimeCreateElementOptions
+      createElementOptions: this.runtimeCreateElementOptions,
+      coreServices: options.coreServices
     })
   }
 
@@ -470,8 +471,12 @@ export class RendererFacade implements RendererApi {
         routed.animatableActions,
         eventMsByEventId
       )
-      const transitions = [...deriveSimpleTransitions(remainingAnimatableActions), ...routed.directTransitions]
-      const animation = runAnimationBatch(transitions, this.animationAdapter)
+      const animationOperations = [
+        ...deriveSimpleTransitions(remainingAnimatableActions),
+        ...routed.directTransitions,
+        ...routed.animationOperations
+      ]
+      const animation = runAnimationBatch(animationOperations, this.animationAdapter)
 
       return {
         appliedCommitCount: readyCommits.length,

@@ -560,7 +560,7 @@ export class InputComponent extends BaseComponent {
     );
 
     this.state = nextState;
-    this.services.apply(this.node, input.action);
+    this.services.apply(this.node, input.action, input.serviceContext);
     this.applyState(this.node, nextState, previousState);
   }
 

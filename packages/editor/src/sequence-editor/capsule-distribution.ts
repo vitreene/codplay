@@ -29,6 +29,7 @@ export interface CapsuleDistributionOutput {
 }
 
 export class CapsuleDistribution {
+  /** Computes virtual child bounds from one editor capsule distribution policy. */
   static compute(input: CapsuleDistributionInput): CapsuleDistributionOutput {
     const { mode, children } = input
     if (children.length === 0) {
@@ -50,35 +51,30 @@ export class CapsuleDistribution {
     return { minDurationMs, children: seq }
   }
 
-  // ── Sequential forward (premier devant) ─────────────────────────────────────
   // Children placed left-to-right in list order. Locked intro creates a gap;
   // locked outro anchors the right boundary. Free children share remaining time.
-
   private static computeSequentialForward(
     input: CapsuleDistributionInput,
   ): ChildOutput[] {
     const { clipDurationMs, children } = input
 
-    // Phase 1: compute share for children with free outro
     let cursor = 0
     let committedMs = 0
     let freeCount = 0
 
     for (const child of children) {
       const intro = child.lockedIntroMs !== undefined ? Math.max(cursor, child.lockedIntroMs) : cursor
-      committedMs += intro - cursor  // gap before this child
+      committedMs += intro - cursor
       if (child.lockedOutroMs !== undefined) {
         committedMs += Math.max(intro, child.lockedOutroMs) - intro
         cursor = Math.max(intro, child.lockedOutroMs)
       } else {
         freeCount++
-        // cursor does not advance for free children in phase 1
       }
     }
 
     const share = freeCount > 0 ? Math.max(0, clipDurationMs - committedMs) / freeCount : 0
 
-    // Phase 2: place each child
     cursor = 0
     const result: ChildOutput[] = []
 
@@ -97,35 +93,31 @@ export class CapsuleDistribution {
     return result
   }
 
-  // ── Sequential backward (dernier devant) ─────────────────────────────────────
   // Children placed right-to-left. Child at index 0 occupies the rightmost slot
   // (appears last in time). Cursor starts at clipDurationMs and moves left.
-
   private static computeSequentialBackward(
     input: CapsuleDistributionInput,
   ): ChildOutput[] {
     const { clipDurationMs, children } = input
 
-    // Phase 1: compute share for children with free intro
     let cursor = clipDurationMs
     let committedMs = 0
     let freeCount = 0
 
     for (const child of children) {
       const outro = child.lockedOutroMs !== undefined ? Math.min(cursor, child.lockedOutroMs) : cursor
-      committedMs += cursor - outro  // gap to the right of this child
+      committedMs += cursor - outro
       if (child.lockedIntroMs !== undefined) {
         committedMs += outro - Math.min(outro, child.lockedIntroMs)
         cursor = Math.min(outro, child.lockedIntroMs)
       } else {
         freeCount++
-        cursor = outro  // cursor regresses to outro for free intro children
+        cursor = outro
       }
     }
 
     const share = freeCount > 0 ? Math.max(0, clipDurationMs - committedMs) / freeCount : 0
 
-    // Phase 2: place each child
     cursor = clipDurationMs
     const result: ChildOutput[] = new Array(children.length)
 
@@ -145,8 +137,6 @@ export class CapsuleDistribution {
     return result
   }
 
-  // ── Stagger ───────────────────────────────────────────────────────────────────
-
   private static computeStagger(
     input: CapsuleDistributionInput,
     _minDurationMs: number,
@@ -155,7 +145,6 @@ export class CapsuleDistribution {
     const N = children.length
 
     return children.map((c, i) => {
-      // Locked children keep their bounds
       if (c.lockedIntroMs !== undefined && c.lockedOutroMs !== undefined) {
         return {
           trackId: c.trackId,

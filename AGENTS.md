@@ -15,6 +15,7 @@
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - Demos exist to validate the project and reveal missing pieces; they must not hide gaps or be made to work at all costs.
+- CodPlay core capabilities are approaching v1. Adding to or modifying `packages/codplay` core requires explicit user authorization and must always be the consequence of an agreed plan. No opportunistic or speculative core patches.
 - Additional instructions may be added later and should be followed.
 
 ## Current workspace note

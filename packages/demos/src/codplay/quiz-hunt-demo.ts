@@ -1,4 +1,3 @@
-import { createPolygonBinding } from '@codplay/polygon'
 import { QUIZ_HUNT_DEBUG_QUESTION_TRACK_ID, createQuizHuntScene, createQuizHuntStraps } from '../scenes'
 import type { GameConfig, QuizHuntContent } from '../scenes/quiz-hunt/types'
 import quizHuntContent from '../scenes/quiz-hunt/assets/questions/quiz-hunt-sf-spatiale.json'
@@ -46,7 +45,6 @@ export async function runQuizHuntDemo(): Promise<void> {
     scene,
     strapCollection: createQuizHuntStraps(config, scene),
     activeDemo: 'quiz-hunt',
-    bindings: [createPolygonBinding()],
     onControlsReady: ({ player, container, sceneContainer }) => {
       let active = false
       let previousPointerEvents = ''

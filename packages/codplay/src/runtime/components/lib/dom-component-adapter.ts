@@ -81,11 +81,15 @@ function createRuntimeEmitSelf(item: ItemDoc): RuntimeEmitSelf {
 
 /**
  * Emits all declared runtime events for one user interaction.
+ * When the DOM event target is an HTMLInputElement, includes `value` (string)
+ * and `valueAsNumber` (number) in the event data so straps and transforms
+ * can read the current input value without coupling to the DOM.
  */
 function emitDeclaredRuntimeEvents(
   item: ItemDoc,
   userEvent: string,
-  emitRuntimeEvent: (event: RuntimeEmitEvent) => void
+  emitRuntimeEvent: (event: RuntimeEmitEvent) => void,
+  domEvent?: Event
 ): void {
   const rule = item.emit?.[userEvent]
   if (!rule) {
@@ -93,8 +97,15 @@ function emitDeclaredRuntimeEvents(
   }
 
   const self = createRuntimeEmitSelf(item)
+  const htmlInputElement = globalThis.HTMLInputElement
+  const inputPayload =
+    typeof htmlInputElement === 'function' && domEvent?.target instanceof htmlInputElement
+      ? { value: domEvent.target.value, valueAsNumber: domEvent.target.valueAsNumber }
+      : undefined
+
   for (const action of resolveRootEmitRule(rule)) {
-    const data = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
+    const base = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
+    const data = inputPayload !== undefined ? { ...base, ...inputPayload } : base
     emitRuntimeEvent({
       name: action.event.name,
       data,
@@ -137,7 +148,7 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
 
     if (isDomElement(nodeRef)) {
       nodeRef.addEventListener(userEvent, (domEvent) => {
-        emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent)
+        emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent, domEvent)
 
         if (captureSpec !== undefined && domEvent instanceof PointerEvent) {
           const base = readElementTranslation(nodeRef)
@@ -364,24 +375,44 @@ export function applyClassNamePatch(
     return
   }
 
-  if (typeof className === 'string') {
+  const isSvgNode = isDomElement(nodeRef) && nodeRef.namespaceURI === 'http://www.w3.org/2000/svg'
+
+  const readCurrentClassName = (): string => {
+    if (isSvgNode) {
+      return nodeRef.getAttribute('class') ?? ''
+    }
+
+    return typeof nodeRef === 'object' && nodeRef !== null && typeof (nodeRef as { className?: unknown }).className === 'string'
+      ? ((nodeRef as { className?: string }).className ?? '')
+      : ''
+  }
+
+  const writeClassName = (nextClassName: string): void => {
+    if (isSvgNode) {
+      if (nextClassName.length === 0) {
+        nodeRef.removeAttribute('class')
+      } else {
+        nodeRef.setAttribute('class', nextClassName)
+      }
+      return
+    }
+
     if (isDomElement(nodeRef)) {
-      nodeRef.className = className
+      nodeRef.className = nextClassName
       return
     }
 
     if (typeof nodeRef === 'object' && nodeRef !== null) {
-      ;(nodeRef as Record<string, unknown>).className = className
+      ;(nodeRef as Record<string, unknown>).className = nextClassName
     }
+  }
+
+  if (typeof className === 'string') {
+    writeClassName(className)
     return
   }
 
-  const initialValue =
-    typeof nodeRef === 'object' && nodeRef !== null && typeof (nodeRef as { className?: unknown }).className === 'string'
-      ? ((nodeRef as { className?: string }).className ?? '')
-      : ''
-
-  const classSet = new Set(initialValue.split(/\s+/).filter((token) => token.length > 0))
+  const classSet = new Set(readCurrentClassName().split(/\s+/).filter((token) => token.length > 0))
   for (const token of (className.add ?? '').split(/\s+/)) {
     if (token.length > 0) {
       classSet.add(token)
@@ -394,15 +425,7 @@ export function applyClassNamePatch(
     }
   }
 
-  const finalClassName = [...classSet].join(' ')
-  if (isDomElement(nodeRef)) {
-    nodeRef.className = finalClassName
-    return
-  }
-
-  if (typeof nodeRef === 'object' && nodeRef !== null) {
-    ;(nodeRef as Record<string, unknown>).className = finalClassName
-  }
+  writeClassName([...classSet].join(' '))
 }
 
 /**

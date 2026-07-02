@@ -1,5 +1,5 @@
 import type { AnimationAdapter, AnimationResolvedAction, ContinuousAnimationEngine } from '../animation/types'
-import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegistryApi } from '../runtime/components'
+import type { ComponentRegistryApi, ModuleRegistryApi, RuntimeRegistrySnapshot, ServiceRegisterInput, ServiceRegistryApi } from '../runtime/components'
 import type { CreateElementOptions } from '../runtime/create-element'
 import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from '../runtime/types'
 export type { ComponentRegistryApi, ModuleRegistryApi, ServiceRegistryApi }
@@ -11,6 +11,7 @@ export type CreateRendererOptions = {
   createElementOptions?: CreateElementOptions
   animationAdapter?: AnimationAdapter
   continuousAnimationEngines?: ContinuousAnimationEngine[]
+  coreServices?: readonly ServiceRegisterInput[]
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
 }

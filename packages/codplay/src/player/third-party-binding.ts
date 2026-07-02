@@ -1,5 +1,5 @@
 import type { RenderAdapter } from './render-adapter-types'
-import type { RuntimeComponentClass } from '../runtime/components/types'
+import type { RuntimeComponentClass, ServiceRegisterInput } from '../runtime/components/types'
 
 export type ThirdPartyPreloadStrategy = {
   type: string
@@ -13,6 +13,7 @@ export type ThirdPartyPreloadStrategy = {
  */
 export type ThirdPartyBinding = {
   components: Record<string, RuntimeComponentClass>
+  services?: ServiceRegisterInput[]
   renderAdapter?: RenderAdapter
   preload?: ThirdPartyPreloadStrategy[]
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CapsuleDistribution } from '../../src/capsule-distribution/capsule-distribution'
+import { CapsuleDistribution } from '../src/sequence-editor/capsule-distribution'
 
 const clip6 = (children: Parameters<typeof CapsuleDistribution.compute>[0]['children'], order?: 'forward' | 'backward') =>
   CapsuleDistribution.compute({ clipDurationMs: 6000, mode: 'sequential', order, children })
@@ -28,19 +28,16 @@ describe('CapsuleDistribution — sequential forward (default)', () => {
   })
 
   it('respects locked intro — creates gap, followers come after', () => {
-    // img1 intro locked at 2500ms — gap [0,2500] empty; img2, img3 follow after img1
     const { children } = clip6([
       { trackId: 'a', lockedIntroMs: 2500 },
       { trackId: 'b' },
       { trackId: 'c' },
     ])
-    // gap = 2500, share = (6000-2500)/3 ≈ 1166.67
     const share = (6000 - 2500) / 3
     expect(children[0]!.introMs).toBeCloseTo(2500)
     expect(children[0]!.outroMs).toBeCloseTo(2500 + share)
     expect(children[1]!.introMs).toBeCloseTo(2500 + share)
     expect(children[2]!.outroMs).toBeCloseTo(6000)
-    // all children come AFTER img1's locked intro
     expect(children[1]!.introMs).toBeGreaterThanOrEqual(children[0]!.outroMs - 0.01)
     expect(children[2]!.introMs).toBeGreaterThanOrEqual(children[1]!.outroMs - 0.01)
   })
@@ -69,7 +66,6 @@ describe('CapsuleDistribution — sequential backward (dernier devant)', () => {
       { trackId: 'b' },
       { trackId: 'c' },
     ], 'backward')
-    // backward: index 0 (a) is last in time, index 2 (c) is first
     expect(children[2]!.introMs).toBeCloseTo(0)
     expect(children[2]!.outroMs).toBeCloseTo(2000)
     expect(children[1]!.introMs).toBeCloseTo(2000)
@@ -78,8 +74,6 @@ describe('CapsuleDistribution — sequential backward (dernier devant)', () => {
   })
 
   it('locked intro on index-0 — others fill BEFORE it in time', () => {
-    // img1 (index 0) intro locked at 2500 → in backward mode it occupies [2500, 6000]
-    // img2 and img3 fill [0, 2500]
     const { children } = clip6([
       { trackId: 'a', lockedIntroMs: 2500 },
       { trackId: 'b' },
@@ -89,7 +83,6 @@ describe('CapsuleDistribution — sequential backward (dernier devant)', () => {
     expect(children[0]!.outroMs).toBeCloseTo(6000)
     expect(children[1]!.outroMs).toBeCloseTo(2500)
     expect(children[2]!.introMs).toBeCloseTo(0)
-    // all precede img1
     expect(children[1]!.introMs).toBeGreaterThanOrEqual(0)
     expect(children[2]!.outroMs).toBeLessThanOrEqual(children[1]!.introMs + 0.01)
   })

@@ -1,0 +1,97 @@
+.polygon-demo-shell {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 24px;
+  box-sizing: border-box;
+  background: radial-gradient(circle at top, #e9d5ff 0%, #c4b5fd 28%, #f8fafc 100%);
+}
+
+.polygon-demo-morph-corner {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 96px;
+  height: 96px;
+}
+
+.polygon-demo-morph-test {
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.polygon-demo-morph-test:hover {
+  transform: scale(1.06);
+  filter: drop-shadow(0 12px 22px rgba(76, 29, 149, 0.38));
+}
+
+.polygon-demo-shape {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.polygon-demo-controls {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  column-gap: 12px;
+  row-gap: 14px;
+  align-items: center;
+  width: 320px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(49, 46, 129, 0.12);
+}
+
+.polygon-demo-param-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #312e81;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.polygon-demo-param-btn:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.polygon-demo-slider-bare {
+  display: block;
+  width: 100%;
+}
+
+.polygon-demo-slider-bare .input__label {
+  display: none;
+}
+
+.polygon-demo-slider-bare .input__control[type='range'] {
+  display: block;
+  width: 100%;
+  accent-color: #4f46e5;
+  cursor: pointer;
+}
+
+.polygon-demo-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4f46e5;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+  white-space: nowrap;
+}

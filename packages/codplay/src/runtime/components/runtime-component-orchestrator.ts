@@ -1,11 +1,11 @@
-import type { AnimationResolvedAction } from "../../animation/types";
+import type { AnimationOperation, AnimationResolvedAction } from "../../animation/types";
 import type { TransitionRequest } from "../../animation/types";
 import { RUNTIME_CONFIG } from "../config";
 import type { ItemDoc, RuntimeElementMap, RuntimePersos } from "../types";
 import type { MoveCommand } from "../types";
 import type { RenderMutationResolver } from "../render-mutation-resolver";
 import { createComponentServices, CORE_SERVICES } from "./lib/component-services";
-import type { ServiceInstance } from "./lib/component-services";
+import type { RuntimeServiceOutput, ServiceApplyContext, ServiceInstance } from "./lib/component-services";
 import { createComponentModules } from "./lib/component-modules";
 import { isDomNode } from "./lib/dom-component-adapter";
 import { InputComponent } from "./input-component";
@@ -13,6 +13,7 @@ import { LayoutComponent } from "./layout-component";
 import { ImageComponent } from "./image-component";
 import { ListComponent } from "./list-component";
 import { MediaComponent } from "./media-component";
+import { PolygonComponent } from "./polygon-component";
 import { TagComponent } from "./tag-component";
 import { TextComponent } from "./text-component";
 import { moveModule, normalizeMoveCommand } from "../modules/move";
@@ -56,6 +57,7 @@ const DEFAULT_COMPONENT_CLASSES: Record<string, RuntimeComponentClass> = {
   media: MediaComponent,
   list: ListComponent,
   layout: LayoutComponent,
+  polygon: PolygonComponent,
 };
 
 /**
@@ -110,9 +112,14 @@ export class RuntimeComponentOrchestrator {
   constructor(input: {
     warn: RuntimeComponentWarningReporter;
     createElementOptions?: import("../create-element").CreateElementOptions;
+    coreServices?: readonly ServiceRegisterInput[];
   }) {
     this.warn = input.warn;
     this.createElementOptions = input.createElementOptions;
+
+    for (const { name, service } of input.coreServices ?? []) {
+      this.serviceRegistry.set(name, service);
+    }
 
     for (const [persoType, componentClass] of Object.entries(DEFAULT_COMPONENT_CLASSES)) {
       this.setComponentClass(persoType, componentClass);
@@ -590,6 +597,7 @@ export class RuntimeComponentOrchestrator {
     this.warningKeys.clear();
     const animatableActions: AnimationResolvedAction[] = [];
     const directTransitions: TransitionRequest[] = [];
+    const animationOperations: AnimationOperation[] = [];
     let appliedActionsCount = 0;
     const moveDecisionsByUpdateIndex = this.resolveMoveDecisions(updates);
 
@@ -600,6 +608,7 @@ export class RuntimeComponentOrchestrator {
           moveDecision: moveDecisionsByUpdateIndex.get(updateIndex),
           animatableActions,
           directTransitions,
+          animationOperations,
         })
       ) {
         appliedActionsCount += 1;
@@ -610,6 +619,7 @@ export class RuntimeComponentOrchestrator {
       appliedActionsCount,
       animatableActions,
       directTransitions,
+      animationOperations,
     };
   }
 
@@ -629,6 +639,7 @@ export class RuntimeComponentOrchestrator {
     moveDecision: MoveCommand | null | undefined;
     animatableActions: AnimationResolvedAction[];
     directTransitions: TransitionRequest[];
+    animationOperations: AnimationOperation[];
   }): boolean {
     const targetPersoId = this.resolveTargetPersoId(input.update.resolvedAction);
     const component = this.componentByPersoId.get(targetPersoId);
@@ -648,6 +659,16 @@ export class RuntimeComponentOrchestrator {
 
     const moveDecision = input.moveDecision ?? null;
     const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] };
+    const serviceOutput: RuntimeServiceOutput = { animationOperations: [] };
+    const serviceContext: ServiceApplyContext = {
+      eventId: input.update.resolvedAction.eventId,
+      eventName: input.update.resolvedAction.eventName,
+      eventSeq: input.update.eventSeq,
+      listenerId: input.update.resolvedAction.listenerId,
+      persoId: targetPersoId,
+      isSeekReplay: input.update.isSeekReplay === true,
+      output: serviceOutput,
+    };
 
     this.runHook("beforeUpdate", {
       resolvedAction: input.update.resolvedAction,
@@ -664,6 +685,7 @@ export class RuntimeComponentOrchestrator {
         eventId: input.update.resolvedAction.eventId,
         eventSeq: input.update.eventSeq,
         action: input.update.resolvedAction.action as Record<string, unknown>,
+        serviceContext,
       })
     ) {
       return false;
@@ -678,6 +700,7 @@ export class RuntimeComponentOrchestrator {
     });
 
     input.directTransitions.push(...hookOutput.directTransitions);
+    input.animationOperations.push(...serviceOutput.animationOperations);
 
     const targetNode = this.nodeByPersoId.get(targetPersoId);
     if (targetNode !== undefined) {
@@ -729,6 +752,7 @@ export class RuntimeComponentOrchestrator {
       eventId: string;
       eventSeq: number;
       action: Record<string, unknown>;
+      serviceContext?: ServiceApplyContext;
     },
   ): boolean {
     try {

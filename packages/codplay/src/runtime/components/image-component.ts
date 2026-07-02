@@ -170,7 +170,7 @@ export class ImageComponent extends BaseComponent {
    * src, and applies any non-src media props on the active node.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
     const action = input.action as ImgAction
     if (typeof action.src === 'string') {
       this.setActiveSrc(this.node, action.src)

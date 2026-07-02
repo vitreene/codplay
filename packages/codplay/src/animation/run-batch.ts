@@ -1,16 +1,24 @@
 import { RUNTIME_TRACE_STATUS } from '../runtime/trace-constants'
-import type { AnimationAdapter, AnimationBatchResult, AnimationTraceEntry, TransitionRequest } from './types'
+import type { AnimationAdapter, AnimationBatchResult, AnimationOperation, AnimationTraceEntry } from './types'
+
+/**
+ * Resolves the stable handle id used by animation traces for any operation.
+ */
+function getAnimationOperationId(operation: AnimationOperation): string {
+  return 'operationId' in operation ? operation.operationId : operation.transitionId
+}
 
 /**
  * Builds one trace entry that links an event to one animation transition.
  */
-function toTraceEntry(transition: TransitionRequest, index: number): AnimationTraceEntry {
+function toTraceEntry(operation: AnimationOperation, index: number): AnimationTraceEntry {
+  const operationId = getAnimationOperationId(operation)
   return {
-    traceId: `anim-trace-${index}-${transition.transitionId}`,
-    eventId: transition.eventId,
-    eventName: transition.eventName,
-    transitionId: transition.transitionId,
-    property: transition.property,
+    traceId: `anim-trace-${index}-${operationId}`,
+    eventId: operation.eventId,
+    eventName: operation.eventName,
+    transitionId: operationId,
+    property: operation.property,
     status: RUNTIME_TRACE_STATUS.applied
   }
 }
@@ -19,19 +27,19 @@ function toTraceEntry(transition: TransitionRequest, index: number): AnimationTr
  * Executes one animation batch and returns a minimal trace report.
  */
 export function runAnimationBatch(
-  transitions: TransitionRequest[],
+  operations: AnimationOperation[],
   animationAdapter: AnimationAdapter
 ): AnimationBatchResult {
-  if (transitions.length === 0) {
+  if (operations.length === 0) {
     return {
       appliedCount: 0,
       trace: []
     }
   }
 
-  const startedHandles = animationAdapter.run(transitions)
+  const startedHandles = animationAdapter.run(operations)
   const startedTransitionIds = new Set(startedHandles.map((handle) => handle.transitionId))
-  const appliedTransitions = transitions.filter((transition) => startedTransitionIds.has(transition.transitionId))
+  const appliedTransitions = operations.filter((operation) => startedTransitionIds.has(getAnimationOperationId(operation)))
 
   return {
     appliedCount: startedHandles.length,

@@ -346,7 +346,7 @@ export class ListComponent extends BaseComponent implements RuntimeListComponent
    * Applies one aggregated root-level patch action.
    */
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
   }
 
   /**

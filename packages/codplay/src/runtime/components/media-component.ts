@@ -278,7 +278,7 @@ export class MediaComponent extends BaseComponent implements MediaComponentApi {
   update(input: RuntimeComponentUpdateInput): void {
     const action = input.action as MediaAction
     const targetNode = this.resolveRef(typeof action.ref === 'string' ? action.ref : undefined) ?? this.node
-    this.services.apply(targetNode, input.action)
+    this.services.apply(targetNode, input.action, input.serviceContext)
     if (typeof action.src === 'string') {
       this.setActiveSrc(this.node, action.src)
     }

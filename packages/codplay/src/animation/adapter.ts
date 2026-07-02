@@ -1,6 +1,7 @@
 import { utils } from 'animejs'
+import { morphTo as animeSvgMorphTo } from 'animejs/svg'
 
-import type { AnimationAdapter, AnimationHandle, TransitionRequest } from './types'
+import type { AnimationAdapter, AnimationHandle, AnimationOperation, AnimeSvgMorphOperation, TransitionRequest } from './types'
 
 export type AnimeAnimationLike = {
   pause?: () => void
@@ -27,7 +28,7 @@ type TransitionGroup = {
 type ActiveAnimation = {
   animation: AnimeAnimationLike
   target: unknown
-  transitions: TransitionRequest[]
+  operations: AnimationOperation[]
   eventId: string
   duration: number
   delayMs: number
@@ -36,6 +37,55 @@ type ActiveAnimation = {
   alternate: boolean
   loop: boolean | number
   finalized: boolean
+}
+
+/**
+ * Returns true when one operation is a simple transition request.
+ */
+function isTransitionRequest(operation: AnimationOperation): operation is TransitionRequest {
+  return !('kind' in operation)
+}
+
+/**
+ * Returns true when one operation targets Anime.js SVG morphing.
+ */
+function isAnimeSvgMorphOperation(operation: AnimationOperation): operation is AnimeSvgMorphOperation {
+  return 'kind' in operation && operation.kind === 'anime-svg:morphTo'
+}
+
+/**
+ * Resolves the stable handle id used by active animation bookkeeping.
+ */
+function getAnimationOperationId(operation: AnimationOperation): string {
+  return isTransitionRequest(operation) ? operation.transitionId : operation.operationId
+}
+
+/**
+ * Applies one SVG attribute value to a morph target.
+ */
+function applySvgMorphValue(target: unknown, property: 'd' | 'points', value: string): void {
+  if (typeof target === 'object' && target !== null && 'setAttribute' in target) {
+    const setAttribute = (target as { setAttribute?: unknown }).setAttribute
+    if (typeof setAttribute === 'function') {
+      setAttribute.call(target, property, value)
+      return
+    }
+  }
+
+  if (typeof target === 'object' && target !== null) {
+    ;(target as Record<string, unknown>)[property] = value
+  }
+}
+
+/**
+ * Applies final SVG morph attributes after seek completion.
+ */
+function finalizeAnimeSvgMorphOperation(operation: AnimeSvgMorphOperation, reason: 'completed' | 'stopped'): void {
+  if (reason !== 'completed' || operation.finalValue === undefined) {
+    return
+  }
+
+  applySvgMorphValue(operation.target, operation.property, operation.finalValue)
 }
 
 /**
@@ -285,11 +335,11 @@ export function createAnimationAdapter(
   /**
    * Removes active handles associated with one transition set.
    */
-  function removeHandlesForTransitions(transitions: TransitionRequest[]): void {
-    const transitionIds = new Set(transitions.map((transition) => transition.transitionId))
+  function removeHandlesForOperations(operations: AnimationOperation[]): void {
+    const operationIds = new Set(operations.map(getAnimationOperationId))
     for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
       const handle = activeHandles[index]
-      if (transitionIds.has(handle.transitionId)) {
+      if (operationIds.has(handle.transitionId)) {
         activeHandles.splice(index, 1)
       }
     }
@@ -334,14 +384,19 @@ export function createAnimationAdapter(
     }
 
     entry.finalized = true
-    for (const transition of entry.transitions) {
-      finalizeTransition(transition, reason)
-      if (transition.group !== undefined) {
-        finalizeGroup(transition.group.id, reason)
+    for (const operation of entry.operations) {
+      if (isAnimeSvgMorphOperation(operation)) {
+        finalizeAnimeSvgMorphOperation(operation, reason)
+        continue
+      }
+
+      finalizeTransition(operation, reason)
+      if (operation.group !== undefined) {
+        finalizeGroup(operation.group.id, reason)
       }
     }
 
-    removeHandlesForTransitions(entry.transitions)
+    removeHandlesForOperations(entry.operations)
     removeActiveAnimation(entry)
   }
 
@@ -382,16 +437,18 @@ export function createAnimationAdapter(
   }
 
   /**
-   * Starts a batch of transitions and stores stoppable handles.
+   * Starts a batch of animation operations and stores stoppable handles.
    */
-  function run(transitions: TransitionRequest[]): AnimationHandle[] {
+  function run(operations: AnimationOperation[]): AnimationHandle[] {
+    const transitions = operations.filter(isTransitionRequest)
+    const morphOperations = operations.filter(isAnimeSvgMorphOperation)
     registerGroups(transitions)
     const startedHandles: AnimationHandle[] = []
     const transitionGroups = groupTransitions(transitions)
 
     for (const transitionGroup of transitionGroups) {
       const transitionCleanupRunner = () => {
-        const activeAnimation = activeAnimations.find((entry) => entry.transitions === transitionGroup.transitions)
+        const activeAnimation = activeAnimations.find((entry) => entry.operations === transitionGroup.transitions)
         if (activeAnimation !== undefined) {
           completeActiveAnimation(activeAnimation)
         }
@@ -420,7 +477,7 @@ export function createAnimationAdapter(
       const activeAnimation: ActiveAnimation = {
         animation,
         target: firstTransition.target,
-        transitions: transitionGroup.transitions,
+        operations: transitionGroup.transitions,
         eventId: firstTransition.eventId,
         duration: firstTransition.duration,
         delayMs: firstTransition.delayMs ?? 0,
@@ -452,6 +509,65 @@ export function createAnimationAdapter(
         activeHandles.push(handle)
         startedHandles.push(handle)
       }
+    }
+
+    for (const operation of morphOperations) {
+      const morphCleanupRunner = () => {
+        const activeAnimation = activeAnimations.find((entry) => entry.operations[0] === operation)
+        if (activeAnimation !== undefined) {
+          completeActiveAnimation(activeAnimation)
+        }
+      }
+      const parameters: Record<string, unknown> = {
+        targets: operation.target,
+        duration: operation.duration,
+        ease: normalizeAnimeEase(operation.ease ?? operation.easing),
+        delay: operation.delayMs,
+        loopDelay: operation.loopDelayMs,
+        reversed: operation.reversed,
+        alternate: operation.alternate,
+        loop: operation.loop,
+        [operation.property]: animeSvgMorphTo(operation.to as Parameters<typeof animeSvgMorphTo>[0], operation.precision),
+        onComplete: morphCleanupRunner,
+        complete: morphCleanupRunner
+      }
+      const animation = animeImplementation(parameters)
+      if (animation === null || animation === undefined) {
+        continue
+      }
+
+      const activeAnimation: ActiveAnimation = {
+        animation,
+        target: operation.target,
+        operations: [operation],
+        eventId: operation.eventId,
+        duration: operation.duration,
+        delayMs: operation.delayMs ?? 0,
+        loopDelayMs: operation.loopDelayMs ?? 0,
+        reversed: operation.reversed === true,
+        alternate: operation.alternate === true,
+        loop: operation.loop ?? false,
+        finalized: false
+      }
+      activeAnimations.push(activeAnimation)
+
+      let isStopped = false
+      const stopAnimation = () => {
+        if (isStopped) {
+          return
+        }
+
+        isStopped = true
+        stopActiveAnimation(activeAnimation)
+      }
+      const handle: AnimationHandle = {
+        transitionId: operation.operationId,
+        target: operation.target,
+        stop: stopAnimation
+      }
+
+      activeHandles.push(handle)
+      startedHandles.push(handle)
     }
 
     return startedHandles

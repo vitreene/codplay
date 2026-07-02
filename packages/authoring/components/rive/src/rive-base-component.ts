@@ -90,7 +90,7 @@ export class RiveBaseComponent extends BaseComponent {
   }
 
   update(input: RuntimeComponentUpdateInput): void {
-    this.services.apply(this.node, input.action)
+    this.services.apply(this.node, input.action, input.serviceContext)
     const action = input.action as RiveActionPayload
     if (!this._applyBroadcast(action.broadcast)) {
       return
