@@ -45,6 +45,13 @@ export interface CsValueAdapter {
    * highlighted cell instead of emitting a pixel delta.
    */
   applyCellDrop?(cell: { row: number; col: number }): void
+  /**
+   * Grid context, handle resize: one atomic cell footprint. North/west
+   * handles move the origin (a span alone only extends down/right); the cs
+   * emits the full area resolved against the measured tracks instead of
+   * pixel deltas.
+   */
+  applyCellArea?(area: { row: number; col: number; rowSpan: number; colSpan: number }): void
 }
 
 export type CsCapability =
@@ -67,6 +74,12 @@ export type HandleBehavior = {
   mode?: 'resize' | 'scale'
   /** Whether alt-click may toggle the handle between resize and scale. */
   allowSwap?: boolean
+  /**
+   * Corner ratio policy — configuration, never a context-specific branch:
+   * 'locked' (default): w/h ratio maintained, Shift lifts it (free placement).
+   * 'free': free gesture, Shift locks the ratio (grid context).
+   */
+  ratio?: 'locked' | 'free'
 }
 
 /**
@@ -79,19 +92,55 @@ export type CapabilityPreset = {
   handles?: Partial<Record<'corners' | 'sides' | CsHandleId, HandleBehavior>>
 }
 
+/**
+ * Result of one create-mode trace, handed to the editor at release (or at
+ * applyCreationGeometry). In grid context the cs snaps to measured tracks and
+ * emits a cell area; in free context it emits a local pixel rect (rounded).
+ */
+export type CreationResult =
+  | { kind: 'rect'; rect: { x: number; y: number; width: number; height: number } }
+  | { kind: 'cell-area'; area: { row: number; col: number; rowSpan: number; colSpan: number } }
+
+/**
+ * Geometry supplied by the editor instead of a trace — the "card" notion is
+ * an editor-owned catalog of pre-built geometries (e.g. title/body/footer);
+ * the module only ever receives one resolved geometry, never the catalog.
+ * Negative row/col/span values count from the grid's far edge (-1 = last
+ * track / to the last track) — only the -1 case is exercised today.
+ */
+export type CreationGeometry =
+  | { rect: { fx: number; fy: number; fw: number; fh: number } }
+  | { cellArea: { row: number; col: number; rowSpan: number; colSpan: number } }
+
+export type SelectionFrameCreationOptions = {
+  /** Emitted once: at trace release, or at applyCreationGeometry. */
+  onCreate: (result: CreationResult) => void
+  /** Below this local-px size on both axes, a free-mode trace is discarded. */
+  minTraceSizePx?: number
+}
+
 export type SelectionFrameOptions = {
-  /** Editor item id (= persoId in the player). */
-  itemId: string
+  /**
+   * Editor item id (= persoId in the player). Required unless `creation` is
+   * provided — in create mode the item doesn't exist yet and arrives later
+   * through `handle.attachItem`.
+   */
+  itemId?: string
   /** Author-mode access surface to the player (v1-author-api-spec). */
   authorApi: AuthorApi
   /** Scene mount container — reference for the overlay layer. */
   sceneRoot: Element
-  /** Transposition of raw deltas into CSS mutations. */
-  adapter: CsValueAdapter
+  /** Transposition of raw deltas into CSS mutations. Required unless `creation` is provided. */
+  adapter?: CsValueAdapter
   /** persoId of the parent container (capsule) — resolved via subscribeToNode. */
   containerId?: string
   /** Below this rendered size the cs auto-hides. */
   minSizePx?: number
+  /**
+   * Activates create mode: the cs is traced into existence instead of
+   * attaching to an existing item. See docs/plans/2026-07-03-selection-frame-variantes-plan.md.
+   */
+  creation?: SelectionFrameCreationOptions
 }
 
 export type MultiSelectionFrameOptions = {
@@ -112,4 +161,15 @@ export type SelectionFrameHandle = {
   applyPreset: (preset: CapabilityPreset) => void
   setAdapter: (adapter: CsValueAdapter) => void
   setContainerGrid: (grid: AutoCapsuleGridArtifact | null) => void
+  /**
+   * Create mode only: applies an editor-supplied geometry (a "card") instead
+   * of tracing. Inert (no-op) outside create mode.
+   */
+  applyCreationGeometry: (geometry: CreationGeometry) => void
+  /**
+   * Create mode only: binds the traced/applied geometry to a real item and
+   * switches the SAME cs to regular selection (subscribeToNode takes over).
+   * Inert (no-op) outside create mode.
+   */
+  attachItem: (input: { itemId: string; adapter: CsValueAdapter }) => void
 }

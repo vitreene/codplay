@@ -21,12 +21,17 @@ export async function runSelectionFrameDemo(): Promise<void> {
         itemId: EDITED_ITEM_ID
       })
 
-      createSelectionFrame({
+      const frame = createSelectionFrame({
         itemId: EDITED_ITEM_ID,
         authorApi,
         sceneRoot,
         adapter
       })
+
+      // Recalage sur resize/scroll — responsabilité éditeur (plan, section
+      // « Scroll, resize et changements d'environnement »).
+      globalThis.addEventListener('resize', () => frame.sync())
+      globalThis.document.addEventListener('scroll', () => frame.sync(), { capture: true, passive: true })
     }
   })
 }

@@ -240,13 +240,39 @@ Ces `div` de zones sont les **cibles de drop** : quand l'auteur déplace l'élé
 
 **Mode placement libre dans la grille** : quand aucune zone prédéfinie n'existe, l'interaction est visuellement identique au mode libre — drag et resize pixel — mais le cs et le clone sont **aimantés par les contraintes de la grille sous-jacente** (lignes de colonnes, lignes de rangées, en tenant compte des gaps). L'éditeur (`GridPlacementAdapter`) convertit la position aimantée en placement grid (`row`, `col`, `rowSpan`, `colSpan`). La grille reste affichée en filigrane dans le gabarit pendant le drag.
 
-**Contrat du drop : l'élément se place là où l'auteur l'a vu.** La cellule surlignée pendant le drag est l'**unique source de vérité** du drop — jamais un second calcul (delta pixel arrondi) qui pourrait diverger de la prévisualisation. Le canal : `CsValueAdapter.applyCellDrop?(cell)` (optionnel, contexte grid) ; au relâché, le cs le déclenche avec la dernière cellule surlignée. Le delta pixel (`applyMove`) n'est que le repli quand l'adaptateur n'expose pas ce canal.
+**Contrat du drop : l'élément se place là où l'auteur l'a vu.** La cellule surlignée pendant le drag est l'**unique source de vérité** du drop — jamais un second calcul (delta pixel arrondi) qui pourrait diverger de la prévisualisation. Le canal : `CsValueAdapter.applyCellDrop?(cell)` (optionnel, contexte grid) ; au relâché, le cs le déclenche avec la cellule cible. Le delta pixel (`applyMove`) n'est que le repli quand l'adaptateur n'expose pas ce canal.
 
-**Poignées en contexte grid** : le resize ajuste les **spans** — l'adaptateur accumule les deltas pixel (comme pour le move) et franchit les frontières de cellules par stride (taille de cellule + gap). Cela permet d'aligner un élément sur plusieurs colonnes/rangées.
+**Cible recalculée au relâché** : les navigateurs coalescent les `pointermove` sur le rythme des frames, mais pas le `pointerup` — sur un drop rapide, la dernière cellule prévisualisée peut être en retard d'une frame sur le point réel de relâché (raté « aléatoire », dépendant de la vitesse du geste). La cellule cible est donc recalculée aux coordonnées du `pointerup` ; la dernière cellule surlignée sert de repli si le relâché sort du conteneur.
+
+**Cellules de taille irrégulière** : aucune hypothèse de pistes uniformes. La géométrie des pistes est **mesurée** sur le conteneur réel via `getComputedStyle().gridTemplateColumns/Rows` (le navigateur y résout les tailles en pixels) plus `columnGap`/`rowGap`. Cette géométrie mesurée alimente :
+- la détection de cellule sous le pointeur (parcours des frontières cumulées, pas de division) ;
+- l'ancrage du clone temporaire sur le coin réel de la piste ;
+- le `GridPlacementAdapter`, qui résout placement et spans **au plus proche** (la piste dont l'ancre — ou l'emprise — est la plus proche de la position accumulée), et non par arrondi de stride ;
+- le gabarit, qui copie les templates résolus du conteneur réel — jamais un template théorique qui pourrait diverger.
+
+Repli : si les templates résolus ne sont pas disponibles (environnement sans layout), division uniforme depuis `rows`/`cols` du contexte.
+
+**Gabarit et matrice complète** : contrairement au cs (qui refuse le scale dans son transform pour ne pas déformer ses poignées), le gabarit n'a pas de poignées — il porte la **matrice complète** (rotation + scale, translation à zéro) avec les dimensions locales du conteneur. Les templates mesurés en px locaux s'y appliquent alors à l'identique, ce qui garantit l'alignement exact des zones sur les vraies cellules.
+
+**Poignées en contexte grid — emprise atomique** : le resize n'émet pas de deltas pixel mais une **emprise cellulaire complète** via `CsValueAdapter.applyCellArea?({ row, col, rowSpan, colSpan })`. Le bord tiré suit le pointeur jusqu'à la piste mesurée qui le contient ; le bord opposé reste fixe. Les poignées nord/ouest **déplacent l'origine** (et ajustent le span en conséquence) — un span seul ne peut étendre l'emprise que vers le bas/droite, ce qui faisait rater les poignées hautes quand le span et une correction pixel concurrente (verrouillage d'ancre) se disputaient le placement. En contexte grid, le chemin pixel (`applyResize` + verrouillage d'ancre mesuré) est court-circuité : l'emprise est la seule unité. `applyResize` par accumulation reste le canal des adaptateurs sans `applyCellArea`.
 
 **Signal de placement pour l'éditeur** : chaque changement de placement (drop, spans) est notifié via `onPlacement({ row, col, rowSpan, colSpan })` — c'est par ce signal que l'éditeur peut, ensuite, déclarer une **zone** à partir de l'emprise ajustée par l'auteur. Ce principe vaut pour tout placement, pas seulement le mode grid.
 
-**Clone temporaire** : il reproduit la taille rendue de l'élément (dimensions explicites posées à la création — en `position: fixed` il perdrait sa taille de grille) et s'ancre sur la cellule survolée, gaps compris.
+**Clone temporaire** : il reproduit la taille rendue de l'élément (dimensions explicites posées à la création — en `position: fixed` il perdrait sa taille de grille) et s'ancre sur la cellule survolée, gaps compris. Il porte la **matrice visuelle de l'élément** (rotation/scale hérités, `transform-origin: 0 0`) : dans un conteneur tourné, la prévisualisation est tournée comme le sera l'élément. L'ancrage `left/top` sur le coin de cellule reste exact car la rotation autour de l'origine locale laisse ce coin fixe. À la création, l'ancrage initial est le **coin d'origine locale** de l'élément (mapping affine), jamais le coin de son AABB — pour un élément tourné les deux diffèrent, et un ancrage AABB fausse la trajectoire initiale de la projection animée.
+
+**Référence `pointAt` — la zone dessinée fait foi** : la cellule sous la souris est résolue par `elementsFromPoint` sur les **zones du gabarit** (`data-cs-zone`) — l'élément qui dessine la cellule est la référence, pas un calcul de coordonnées parallèle. Surlignage, ancrage du clone et drop dérivent tous du même nœud de zone : aucune divergence possible entre ce que l'auteur voit et ce qui est appliqué. Le calcul par pistes mesurées reste le repli (zone absente du point, grilles denses affichées au pas de 10).
+
+**Éléments multi-cellules — cellule d'empoignement** : un élément couvrant plusieurs cellules conserve son système de cellules au drop (un 2×2 reste un 2×2, grille équivalente). La référence de placement est la **cellule d'empoignement**, mesurée **dans la boîte locale de l'élément** : le pointeur est inverse-transformé via la matrice de l'élément, sa fraction dans la boîte (0..1) multipliée par les spans donne la cellule empoignée de l'emprise. Ce calcul est insensible à la rotation — empoigner le quadrant visuel bas-droit d'un élément tourné désigne toujours sa cellule locale bas-droite. (Une soustraction cellule-pointée − cellule-d'origine mélangerait l'espace visuel et l'espace layout : la rotation y injecte un offset parasite qui clampe l'origine cible sur place — placements erronés ou gestes sans effet.) Au survol comme au drop, la cellule visée reçoit la cellule d'empoignement : `origine cible = cellule survolée − offset`. Si ce placement ferait sortir l'emprise de la grille, l'origine est **recalée depuis le bord vers l'intérieur** (clamp aux bornes, emprise préservée). Le clone prévisualise l'emprise complète (origine + spans) sur les pistes mesurées de la cible.
+
+**Éléments transformés — décomposition layout/transform** : les cellules d'un élément sont celles de sa **boîte layout** (pré-transform), pas de sa boîte visuelle — un élément décalé par `translate` appartient toujours à ses cellules layout. Le coin layout se déduit du coin visuel en soustrayant le déplacement du transform propre : `d = t + (I − M)·O` (t = translate, M = matrice propre rotate·scale·transform, O = transform-origin en px), toutes valeurs lues en computed styles. L'emprise (origine, spans, empoignement) se mesure sur cette boîte layout.
+
+**Ghost fidèle au rendu final** : quand l'élément porte un transform, le placement grid ne change que sa position layout — le transform reste appliqué par-dessus. Le ghost doit donc prévisualiser **le rendu final réel** : coin layout à la cellule cible + déplacement du transform propre recalculé aux dimensions cibles (le transform-origin en % suit la boîte, dont la taille change avec les pistes de destination), dimensions futures = emprise sur les pistes cibles × scale visuel. Ghost et placement final coïncident alors par construction — c'est le contrat du drop appliqué aux éléments transformés.
+
+*Option en réserve (si l'empoignement ne suffit pas)* : pour chaque coin de l'élément, chercher le coin de cellule le plus proche afin de conserver la surface la plus approchante — non implémentée.
+
+**Projection animée du clone** : quand la cellule cible change, le clone est **animé** (interpolation 0,5 s) vers la position et les dimensions de la zone cible — il vient occuper tout l'espace de la cellule au lieu de sauter. L'animation en cours est annulée à chaque nouvelle cible et au relâché.
+
+**Protocole anime.js** : le moteur JS d'anime est une ressource interne de codplay — `useDefaultMainLoop` désactivé, `engine.update()` appelé par le ticker du player, `engine.speed` couplé au rate. Un `animate()` classique depuis un module authoring serait **gelé hors lecture** et subirait le rate. Les modules authoring utilisent exclusivement **`waapi.animate`** (module WAAPI d'anime v4) : les animations sont pilotées par la timeline native du navigateur, indépendantes du moteur JS partagé. Ne jamais importer `animate`/`engine` d'anime.js dans un module authoring.
 
 **Systèmes de coordonnées en mode grid libre**
 
@@ -584,6 +610,7 @@ type CsHandleId = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w'
 type HandleBehavior = {
   mode?: 'resize' | 'scale'   // fonction assignée ; défaut : selon les capacités
   allowSwap?: boolean         // alt-clic autorisé ; défaut : les deux capacités actives
+  ratio?: 'locked' | 'free'   // politique de ratio des coins ; défaut : 'locked'
 }
 
 type CapabilityPreset = {
@@ -595,7 +622,12 @@ type CapabilityPreset = {
 
 Résolution par poignée : config de la poignée précise > config du groupe (`corners`/`sides`) > défauts. L'application d'un preset réinitialise les modes courants.
 
-**Conservation du ratio** : sur les coins, le ratio w/h est **maintenu par défaut** — en resize comme en scale. L'axe dominant du geste pilote, l'autre suit le ratio de départ. **Shift** lève la contrainte pour un geste libre.
+**Conservation du ratio — politique configurable** : le comportement du ratio sur les coins est une **configuration de poignée** (`HandleBehavior.ratio`), jamais un cas particulier codé selon le contexte :
+
+- `ratio: 'locked'` (défaut) : le ratio w/h est maintenu, **Shift le lève** — adapté au mode libre.
+- `ratio: 'free'` : le geste est libre, **Shift verrouille le ratio** — adapté au contexte grid (où l'emprise en cellules est la norme et le ratio l'exception).
+
+C'est l'éditeur qui choisit la politique via le preset (ex. le preset de positionnement grid déclare `handles: { corners: { ratio: 'free' } }`). Dans les deux politiques, l'axe dominant du geste pilote et l'autre suit le ratio de départ quand la contrainte est active.
 
 ### Côtés (milieu de chaque arête)
 
@@ -620,6 +652,7 @@ Les sessions de geste (drag, resize, rotation, pivot) obéissent aux règles sui
 - Seul le **bouton primaire** démarre une session.
 - Les matrices de conversion sont **figées au début de la session** — la recapture de pose en cours de geste ne perturbe pas les calculs de delta.
 - Une session se termine sur `pointerup`, mais aussi sur `pointercancel`, `lostpointercapture`, ou quand un `pointermove` arrive avec `buttons === 0` (relâché manqué). Sans cela, une session fantôme survit et transforme un simple survol en geste — la libération de session précède tout appel susceptible de lever une exception.
+- **Un `pointermove` avec `buttons === 0` vaut relâché, pas abandon** : la session se termine en **appliquant** au point courant. Les navigateurs coalescent les pointermove — sur un relâché rapide, un dernier move avec `buttons` déjà à 0 peut précéder le `pointerup` ; le traiter en abandon avalerait le drop (symptôme : le drop échoue quand on relâche avant la fin de l'animation du clone, l'animation n'étant qu'un indice visuel, jamais une obligation). Seuls `pointercancel` et `lostpointercapture` sont des abandons.
 
 ### Drag intérieur
 

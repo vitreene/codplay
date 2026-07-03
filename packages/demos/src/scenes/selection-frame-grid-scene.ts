@@ -28,15 +28,21 @@ export function createSelectionFrameGridScene(grid: AutoCapsuleGridArtifact): Sc
               move: "@root",
               markup: `<div class="grid-capsule"></div>`,
               style: {
-                // Structure grid fournie par capsule-automation — source de
-                // vérité unique pour le conteneur ET pour le gabarit du cs.
+                // Structure grid fournie par capsule-automation, puis pistes
+                // rendues irrégulières — le cs mesure les templates résolus
+                // (computed styles), aucune hypothèse de cellules uniformes.
                 ...grid.inlineStyle,
+                gridTemplateColumns: "1fr 2fr 1fr 3fr",
+                gridTemplateRows: "2fr 1fr 1fr 2fr",
                 width: "520px",
                 height: "360px",
                 margin: "60px 0 0 120px",
-                background: "#f8fafc",
-                border: "1px solid #cbd5e1",
+                // Conteneur matérialisé dans la scène : il reste visible même
+                // hors contexte grid (mode libre, gabarit masqué).
+                background: "#e8eef7",
+                border: "2px dashed #7c93b5",
                 borderRadius: "8px",
+                boxShadow: "inset 0 0 0 1px rgba(124, 147, 181, 0.25)",
                 rotate: "20deg",
               },
             },
@@ -49,8 +55,10 @@ export function createSelectionFrameGridScene(grid: AutoCapsuleGridArtifact): Sc
               move: { parentId: GRID_CONTAINER_ID },
               markup: `<div class="grid-item"><h2>Item</h2></div>`,
               style: {
-                gridRow: "1 / span 1",
-                gridColumn: "1 / span 1",
+                // Emprise multi-cellules : le système 2×2 est conservé au drop
+                // (cellule d'empoignement comme référence de placement).
+                gridRow: "1 / span 2",
+                gridColumn: "1 / span 2",
                 background: "#f3c96b",
                 border: "2px solid #a97d1f",
                 borderRadius: "6px",

@@ -54,6 +54,66 @@ export function captureNodeOwnMatrix(node: Element): Matrix2D {
 }
 
 /**
+ * Own-transform components of one node, read from computed styles. Used to
+ * decompose the LAYOUT box from the VISUAL box: the displacement the own
+ * transform applies to the local origin is d = t + (I − M)·O (t = translate,
+ * M = own linear matrix, O = transform-origin in px).
+ */
+export type OwnTransformComponents = {
+  matrix: Matrix2D
+  translateX: number
+  translateY: number
+  originX: number
+  originY: number
+}
+
+function parseLengthPx(part: string | undefined, referencePx: number, fallbackPx: number): number {
+  if (part === undefined) return fallbackPx
+  const parsed = Number.parseFloat(part)
+  if (!Number.isFinite(parsed)) return fallbackPx
+  return part.endsWith('%') ? (parsed / 100) * referencePx : parsed
+}
+
+export function captureOwnTransformComponents(
+  node: Element,
+  localWidth: number,
+  localHeight: number
+): OwnTransformComponents {
+  const win = node.ownerDocument.defaultView
+  const computed = win?.getComputedStyle(node)
+
+  const translateRaw = computed?.translate ?? ''
+  const translateParts = translateRaw === 'none' ? [] : translateRaw.split(/\s+/).filter(Boolean)
+  const originParts = (computed?.transformOrigin ?? '').split(/\s+/).filter(Boolean)
+
+  return {
+    matrix: captureNodeOwnMatrix(node),
+    translateX: parseLengthPx(translateParts[0], localWidth, 0),
+    translateY: parseLengthPx(translateParts[1], localHeight, 0),
+    originX: parseLengthPx(originParts[0], localWidth, localWidth / 2),
+    originY: parseLengthPx(originParts[1], localHeight, localHeight / 2)
+  }
+}
+
+/**
+ * Displacement the own transform applies to the element's local origin, in
+ * the element's PARENT space: d = t + (I − M)·O. Layout corner = visual
+ * corner − d ; final visual corner after a layout move = new layout corner + d
+ * (with O recomputed when the box size changes — percent origins follow it).
+ */
+export function ownCornerDisplacement(
+  components: OwnTransformComponents,
+  originX: number,
+  originY: number
+): { x: number; y: number } {
+  const m = components.matrix
+  return {
+    x: components.translateX + (originX - (m.a * originX + m.c * originY)),
+    y: components.translateY + (originY - (m.b * originX + m.d * originY))
+  }
+}
+
+/**
  * Accumulates the matrices of one node and all its ancestors, individual
  * transform properties included (unlike codplay's captureCombinedMatrixForNode
  * which only reads `transform`).

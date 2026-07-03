@@ -33,6 +33,13 @@ export type CsMachineEvent =
   | { type: 'VISIBILITY_CHANGED'; part: 'element' | 'cs'; visible: boolean }
   | { type: 'CS_ACTIVE_CHANGED'; active: boolean }
   | { type: 'OPERATION_ENABLED_CHANGED'; op: string; enabled: boolean }
+  // ── creation mode (v1 plan, "Cycle après création") ──────────────────────
+  | { type: 'CREATE_ARMED' }
+  | { type: 'TRACE_START' }
+  | { type: 'TRACE_END' }
+  | { type: 'TRACE_ABORT' }
+  | { type: 'CREATION_GEOMETRY_APPLIED' }
+  | { type: 'ITEM_ATTACHED' }
 
 export const DEFAULT_CAPABILITIES: CsCapability[] = [
   'move',
@@ -102,7 +109,40 @@ export const csMachine = setup({
   states: {
     idle: {
       on: {
-        NODE_APPEARED: { target: 'active' }
+        NODE_APPEARED: { target: 'active' },
+        CREATE_ARMED: { target: 'creating' }
+      }
+    },
+    // Create mode (v1 plan, "Cycle après création") : the cs is traced into
+    // existence before any item exists. armed = capture active, no geometry
+    // yet; tracing = a drag session is live; awaitingItem = a geometry was
+    // committed (trace release or applyCreationGeometry) and the cs stays
+    // visible while the editor creates the perso. ITEM_ATTACHED hands off to
+    // the regular active/suspended flow with the SAME cs node — no
+    // disappearance/reappearance.
+    creating: {
+      initial: 'armed',
+      states: {
+        armed: {
+          on: {
+            TRACE_START: { target: 'tracing' },
+            CREATION_GEOMETRY_APPLIED: { target: 'awaitingItem' }
+          }
+        },
+        tracing: {
+          on: {
+            TRACE_END: { target: 'awaitingItem' },
+            TRACE_ABORT: { target: 'armed' }
+          }
+        },
+        awaitingItem: {
+          on: {
+            // A new trace (or a new applied geometry) overwrites the pending one.
+            TRACE_START: { target: 'tracing' },
+            CREATION_GEOMETRY_APPLIED: { target: 'awaitingItem' },
+            ITEM_ATTACHED: { target: '#selection-frame.active' }
+          }
+        }
       }
     },
     active: {

@@ -14,6 +14,7 @@
   "dependencies": {
     "codplay": "*",
     "@codplay/capsule-automation": "*",
+    "animejs": "^4.5.0",
     "xstate": "^5.32.2"
   },
   "devDependencies": {

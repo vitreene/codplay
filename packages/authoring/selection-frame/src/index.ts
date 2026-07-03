@@ -20,15 +20,29 @@ export { createFlexAnchorTool } from './flex-anchor-tool'
 export type { FlexAnchorToolHandle, FlexAnchorToolOptions } from './flex-anchor-tool'
 
 export {
+  measureGridTracks,
+  parseResolvedTrackList,
+  uniformTrackGeometry,
+  trackAnchorPx,
+  trackSpanPx,
+  trackIndexAtPx,
+  nearestTrackAnchor,
+  nearestTrackSpan
+} from './grid-geometry'
+export type { GridTrackGeometry } from './grid-geometry'
+
+export {
   captureOverlayPose,
   captureCombinedMatrixWithIndividualTransforms,
   captureNodeOwnMatrix,
+  captureOwnTransformComponents,
   calibrateGhostToWorldSnapshot,
   ensureOverlayLayer,
   localFractionToViewportPoint,
-  measureWorldRect
+  measureWorldRect,
+  ownCornerDisplacement
 } from './overlay-pose'
-export type { OverlayPose } from './overlay-pose'
+export type { OverlayPose, OwnTransformComponents } from './overlay-pose'
 
 export type {
   CapabilityPreset,

@@ -172,12 +172,21 @@ describe('FlexAdapter', () => {
   })
 })
 
+function temp__uniformTracks(rows: number, cols: number, sizePx: number, gapPx = 0) {
+  return {
+    cols: Array.from({ length: cols }, () => sizePx),
+    rows: Array.from({ length: rows }, () => sizePx),
+    columnGap: gapPx,
+    rowGap: gapPx
+  }
+}
+
 describe('GridPlacementAdapter', () => {
   it('converts pixel deltas into cell placement changes', () => {
     const placements: unknown[] = []
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: (placement) => placements.push(placement)
     })
@@ -193,7 +202,7 @@ describe('GridPlacementAdapter', () => {
   it('accumulates sub-cell movement until a boundary is crossed', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: () => {}
     })
@@ -208,7 +217,7 @@ describe('GridPlacementAdapter', () => {
   it('clamps placement to the grid bounds', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(2, 2),
-      getContainerSize: () => ({ width: 200, height: 200 }),
+      getTrackGeometry: () => temp__uniformTracks(2, 2, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: () => {}
     })
@@ -223,7 +232,7 @@ describe('GridPlacementAdapter', () => {
   it('converts resize deltas into span changes within bounds', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: () => {}
     })
@@ -238,13 +247,13 @@ describe('GridPlacementAdapter', () => {
   it('accumulates small continuous resize increments until a cell boundary is crossed', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: () => {}
     })
 
-    // 60 increments of 1px: each alone rounds to 0 cells — the accumulation
-    // must cross the 50px half-stride boundary (stride = 100px).
+    // 60 increments of 1px: each alone is below the boundary — the
+    // accumulation must reach the nearest-extent switch (150px on 100px tracks).
     for (let index = 0; index < 60; index += 1) {
       adapter.applyResize({ dw: 1, dh: 0 })
     }
@@ -255,7 +264,7 @@ describe('GridPlacementAdapter', () => {
     const placements: unknown[] = []
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: (placement) => placements.push(placement)
     })
@@ -265,19 +274,18 @@ describe('GridPlacementAdapter', () => {
 
     // Clamped so the span stays inside the grid.
     adapter.applyCellDrop!({ row: 1, col: 1 })
-    adapter.applyResize({ dw: 150, dh: 0 })
+    adapter.applyResize({ dw: 180, dh: 0 })
     expect(adapter.getPlacement()).toMatchObject({ colSpan: 3 })
     adapter.applyCellDrop!({ row: 1, col: 4 })
     expect(adapter.getPlacement()).toMatchObject({ row: 1, col: 2, colSpan: 3 })
     expect(placements.length).toBeGreaterThan(0)
   })
 
-  it('accounts for gaps in cell size computation', () => {
+  it('accounts for gaps in the track anchors', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(2, 2),
-      // 2 cols, 20px gap: cell width = (420 - 20) / 2 = 200; stride = 220
-      getContainerSize: () => ({ width: 420, height: 420 }),
-      gaps: { column: 20, row: 20 },
+      // 200px tracks, 20px gap: anchors at 0 and 220.
+      getTrackGeometry: () => temp__uniformTracks(2, 2, 200, 20),
       initialPlacement: { row: 1, col: 1 },
       onPlacement: () => {}
     })
@@ -289,10 +297,52 @@ describe('GridPlacementAdapter', () => {
     expect(adapter.getPlacement()).toMatchObject({ col: 2 })
   })
 
+  it('resolves placement on irregular tracks (nearest anchor and extent)', () => {
+    const irregular = {
+      cols: [50, 200, 100, 150],
+      rows: [80, 40, 120, 60],
+      columnGap: 10,
+      rowGap: 10
+    }
+    const adapter = createGridPlacementAdapter({
+      grid: temp__createGridArtifact(4, 4),
+      getTrackGeometry: () => irregular,
+      initialPlacement: { row: 1, col: 1 },
+      onPlacement: () => {}
+    })
+
+    // Column anchors: 0, 60, 270, 380. A 55px move is nearest to anchor 60.
+    adapter.applyMove({ dx: 55, dy: 0 })
+    expect(adapter.getPlacement()).toMatchObject({ col: 2 })
+
+    // From col 2, extents: 200, 310, 470. A +170px resize targets 370 → span 2.
+    adapter.applyResize({ dw: 170, dh: 0 })
+    expect(adapter.getPlacement()).toMatchObject({ colSpan: 2 })
+  })
+
+  it('applyCellArea applies one atomic footprint (origin moved by north/west handles)', () => {
+    const placements: unknown[] = []
+    const adapter = createGridPlacementAdapter({
+      grid: temp__createGridArtifact(4, 4),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
+      initialPlacement: { row: 2, col: 2, rowSpan: 2, colSpan: 2 },
+      onPlacement: (placement) => placements.push(placement)
+    })
+
+    // North-handle gesture: the origin moves up, the bottom edge stays fixed.
+    adapter.applyCellArea!({ row: 1, col: 2, rowSpan: 3, colSpan: 2 })
+    expect(adapter.getPlacement()).toEqual({ row: 1, col: 2, rowSpan: 3, colSpan: 2 })
+
+    // Out-of-grid areas are clamped back inward, spans preserved when possible.
+    adapter.applyCellArea!({ row: 3, col: 3, rowSpan: 3, colSpan: 3 })
+    expect(adapter.getPlacement()).toEqual({ row: 2, col: 2, rowSpan: 3, colSpan: 3 })
+    expect(placements).toHaveLength(2)
+  })
+
   it('resets accumulation on resetTo', () => {
     const adapter = createGridPlacementAdapter({
       grid: temp__createGridArtifact(4, 4),
-      getContainerSize: () => ({ width: 400, height: 400 }),
+      getTrackGeometry: () => temp__uniformTracks(4, 4, 100),
       initialPlacement: { row: 2, col: 2 },
       onPlacement: () => {}
     })

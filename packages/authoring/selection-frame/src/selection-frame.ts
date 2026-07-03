@@ -1,18 +1,39 @@
+// waapi.animate uniquement : les animations WAAPI sont pilotées par la
+// timeline native du navigateur. Le moteur JS d'anime est une ressource
+// interne de codplay (useDefaultMainLoop désactivé, engine.update() par le
+// ticker du player, engine.speed = rate) — un animate() classique serait gelé
+// hors lecture et subirait le rate. Ne jamais importer animate/engine ici.
+import { waapi } from 'animejs'
+import type { WAAPIAnimation } from 'animejs'
 import { createActor } from 'xstate'
 import { worldDeltaToLocalDelta } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
 import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import { csMachine } from './machine'
+import { bindGestureSession } from './gesture-session'
+import type { GridTrackGeometry } from './grid-geometry'
+import {
+  measureGridTracks,
+  nearestTrackSpan,
+  trackAnchorPx,
+  trackIndexAtPx,
+  trackSpanPx,
+  uniformTrackGeometry
+} from './grid-geometry'
 import {
   calibrateGhostToWorldSnapshot,
   captureOverlayPose,
+  captureOwnTransformComponents,
   ensureOverlayLayer,
   localFractionToViewportPoint,
-  measureWorldRect
+  measureWorldRect,
+  ownCornerDisplacement
 } from './overlay-pose'
 import type { OverlayPose } from './overlay-pose'
 import type {
   CapabilityPreset,
+  CreationGeometry,
+  CreationResult,
   CsValueAdapter,
   SelectionFrameHandle,
   SelectionFrameOptions,
@@ -55,17 +76,6 @@ const OPPOSITE_POINT: Record<HandleId, HandleId> = {
   w: 'e'
 }
 
-/** Releases pointer capture without letting an InvalidPointerId abort the caller. */
-function safeReleaseCapture(node: HTMLElement, pointerId: number): void {
-  try {
-    if (node.hasPointerCapture(pointerId)) {
-      node.releasePointerCapture(pointerId)
-    }
-  } catch {
-    // Capture already gone (pointercancel, implicit release): nothing to do.
-  }
-}
-
 /**
  * Places one visual selection frame (cs) over the DOM element of one player
  * perso and turns pointer gestures into raw diffs handed to the editor-owned
@@ -76,12 +86,17 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   const doc = options.sceneRoot.ownerDocument
   const overlayLayer = ensureOverlayLayer(options.sceneRoot)
 
-  let adapter: CsValueAdapter = options.adapter
+  let adapter: CsValueAdapter | null = options.adapter ?? null
   let elementNode: HTMLElement | null = null
   let containerNode: HTMLElement | null = null
   let containerGrid: AutoCapsuleGridArtifact | null = null
   let pose: OverlayPose | null = null
   let destroyed = false
+
+  if (options.creation === undefined && (options.itemId === undefined || options.adapter === undefined)) {
+    throw new Error('createSelectionFrame: itemId and adapter are required unless creation is provided')
+  }
+  let creation = options.creation ?? null
 
   const actor = createActor(csMachine)
   actor.start()
@@ -89,7 +104,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   // ── cs DOM ────────────────────────────────────────────────────────────────
 
   const csRoot = doc.createElement('div')
-  csRoot.setAttribute('data-selection-frame', options.itemId)
+  csRoot.setAttribute('data-selection-frame', options.itemId ?? '')
   csRoot.style.position = 'fixed'
   csRoot.style.boxSizing = 'border-box'
   csRoot.style.border = '1px solid #4a90d9'
@@ -201,7 +216,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   // ── gabarit DOM (grid positioning context only) ──────────────────────────
 
   const gabaritRoot = doc.createElement('div')
-  gabaritRoot.setAttribute('data-cs-gabarit', options.itemId)
+  gabaritRoot.setAttribute('data-cs-gabarit', options.itemId ?? '')
   gabaritRoot.style.position = 'fixed'
   gabaritRoot.style.boxSizing = 'border-box'
   gabaritRoot.style.transformOrigin = '0px 0px'
@@ -209,18 +224,47 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   gabaritRoot.style.pointerEvents = 'none'
   overlayLayer.insertBefore(gabaritRoot, csRoot)
 
+  // ── creation surface (create mode only) ──────────────────────────────────
+  // Invisible veil covering the trace reference (container or scene root):
+  // catches the pointerdown that starts a trace. Appended LAST so it always
+  // wins hit-testing over the gabarit zones and the cs itself (both inert
+  // during creation). Removed once attachItem hands off to the regular flow.
+
+  let creationSurface: HTMLElement | null = null
+  if (creation !== null) {
+    creationSurface = doc.createElement('div')
+    creationSurface.setAttribute('data-cs-creation-surface', '')
+    creationSurface.style.position = 'fixed'
+    creationSurface.style.boxSizing = 'border-box'
+    creationSurface.style.transformOrigin = '0px 0px'
+    creationSurface.style.display = 'none'
+    creationSurface.style.pointerEvents = 'none'
+    creationSurface.style.cursor = 'crosshair'
+    creationSurface.style.touchAction = 'none'
+    overlayLayer.appendChild(creationSurface)
+  }
+
   // ── state application ────────────────────────────────────────────────────
 
   const isSuspended = (): boolean => actor.getSnapshot().matches('suspended') || actor.getSnapshot().matches('idle')
+
+  const isCreatingState = (): boolean => actor.getSnapshot().matches('creating')
 
   const capabilityActive = (capability: string): boolean =>
     actor.getSnapshot().context.capabilities.includes(capability as never)
 
   const operationEnabled = (op: string): boolean => !actor.getSnapshot().context.disabledOperations.includes(op)
 
+  // Set true the moment a trace starts (or a geometry is applied) and never
+  // reset within the creating branch: the cs stays visible through
+  // awaitingItem ("le cadre reste affiché") until ITEM_ATTACHED hands off.
+  let creationHasGeometry = false
+
   const csShouldDisplay = (): boolean => {
     const context = actor.getSnapshot().context
-    if (isSuspended() || !context.csVisible || pose === null) return false
+    if (!context.csVisible) return false
+    if (isCreatingState()) return creationHasGeometry
+    if (isSuspended() || pose === null) return false
     if (options.minSizePx !== undefined && (pose.frameWidth < options.minSizePx || pose.frameHeight < options.minSizePx)) {
       return false
     }
@@ -228,6 +272,16 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   }
 
   const refreshHandleVisibility = (): void => {
+    if (isCreatingState()) {
+      // Poignées inertes pendant le tracé : la géométrie n'a pas encore de
+      // capacités à représenter (pas d'item avant l'attache).
+      for (const [, handle] of handleNodes) handle.style.display = 'none'
+      needleLine.style.display = 'none'
+      needleTip.style.display = 'none'
+      pivotNode.style.display = 'none'
+      csRoot.style.cursor = 'crosshair'
+      return
+    }
     const resizeEnabled = (capabilityActive('resize') || capabilityActive('scale')) && operationEnabled('resize')
     for (const [id, handle] of handleNodes) {
       const suppressed = pivotMagnetTarget === id
@@ -246,12 +300,13 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   const applyMachineState = (): void => {
     const context = actor.getSnapshot().context
     csRoot.style.display = csShouldDisplay() ? '' : 'none'
-    csRoot.style.pointerEvents = context.csActive ? 'auto' : 'none'
+    csRoot.style.pointerEvents = isCreatingState() ? 'none' : context.csActive ? 'auto' : 'none'
     if (elementNode !== null) {
       elementNode.style.visibility = context.elementVisible ? '' : 'hidden'
     }
     refreshHandleVisibility()
     refreshGabarit()
+    refreshCreationSurface()
   }
 
   const positionCs = (): void => {
@@ -281,14 +336,22 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     if (containerGrid === null) return
     const { rows, cols } = containerGrid.context
 
-    // The artifact's inlineStyle is the single source of truth for the grid
-    // structure (templates AND gaps) — applying it keeps the gabarit zones
-    // exactly aligned with the real container cells.
+    // Base structure from the artifact's inlineStyle, then override with the
+    // REAL container's resolved templates when the browser provides them —
+    // irregular tracks stay exactly aligned, never a theoretical template.
     gabaritRoot.style.display = 'grid'
     gabaritRoot.style.gridTemplateRows = `repeat(${rows}, 1fr)`
     gabaritRoot.style.gridTemplateColumns = `repeat(${cols}, 1fr)`
     for (const [key, value] of Object.entries(containerGrid.inlineStyle)) {
       gabaritRoot.style[key as never] = String(value) as never
+    }
+    if (containerNode !== null) {
+      const win = containerNode.ownerDocument.defaultView
+      const computed = win?.getComputedStyle(containerNode)
+      if (computed !== undefined && measureGridTracks(containerNode) !== null) {
+        gabaritRoot.style.gridTemplateColumns = computed.gridTemplateColumns
+        gabaritRoot.style.gridTemplateRows = computed.gridTemplateRows
+      }
     }
 
     if (supportsGapDecoration()) {
@@ -315,17 +378,28 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   }
 
   const refreshGabarit = (): void => {
-    const active = capabilityActive('positioning') && containerNode !== null && containerGrid !== null && !isSuspended()
+    // Create mode in grid context reuses the same gabarit for track snapping
+    // regardless of the 'positioning' capability (no preset applies yet —
+    // there is no item to configure until attachItem).
+    const active =
+      (capabilityActive('positioning') || isCreatingState()) &&
+      containerNode !== null &&
+      containerGrid !== null &&
+      !isSuspended()
 
     if (!active) {
       gabaritRoot.style.display = 'none'
       return
     }
 
+    // Unlike the cs (which refuses scale in its transform to keep its handles
+    // undeformed), the gabarit has no handles: it carries the FULL matrix
+    // with the container's LOCAL dimensions, so the measured px templates
+    // apply identically and the zones align exactly with the real cells.
     const containerPose = captureOverlayPose(containerNode!)
-    const m = containerPose.rotationMatrix
-    gabaritRoot.style.width = `${containerPose.frameWidth}px`
-    gabaritRoot.style.height = `${containerPose.frameHeight}px`
+    const m = containerPose.matrix
+    gabaritRoot.style.width = `${containerPose.localWidth}px`
+    gabaritRoot.style.height = `${containerPose.localHeight}px`
     gabaritRoot.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
     renderGabaritZones()
     calibrateGhostToWorldSnapshot(gabaritRoot, containerPose.rect)
@@ -348,242 +422,588 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     }
   }
 
-  /** Cell strides (cell + gap) in the container's local space. */
-  const gridStrides = (
-    containerPose: OverlayPose
-  ): { strideX: number; strideY: number; cellWidth: number; cellHeight: number } | null => {
-    if (containerGrid === null) return null
-    const { rows, cols } = containerGrid.context
+  /**
+   * Measured track geometry of the real container — resolved px templates
+   * from computed styles (irregular tracks supported), with a uniform
+   * fallback when no layout engine resolved them.
+   */
+  const containerTrackGeometry = (containerPose: OverlayPose): GridTrackGeometry | null => {
+    if (containerNode === null || containerGrid === null) return null
+    const measured = measureGridTracks(containerNode)
+    if (measured !== null) return measured
     const gaps = gridGapsPx()
-    const cellWidth = Math.max(1e-3, (containerPose.localWidth - gaps.column * (cols - 1)) / cols)
-    const cellHeight = Math.max(1e-3, (containerPose.localHeight - gaps.row * (rows - 1)) / rows)
-    return { strideX: cellWidth + gaps.column, strideY: cellHeight + gaps.row, cellWidth, cellHeight }
+    return uniformTrackGeometry({
+      rows: containerGrid.context.rows,
+      cols: containerGrid.context.cols,
+      localWidth: containerPose.localWidth,
+      localHeight: containerPose.localHeight,
+      columnGap: gaps.column,
+      rowGap: gaps.row
+    })
   }
 
   /**
    * Resolves the grid cell under one viewport point (1-based row/col). The
    * pointer is inverse-transformed into the container's LOCAL space through
    * its pose — no fraction is ever computed on the axis-aligned rect — and
-   * the boundaries account for the grid gaps.
+   * the cell comes from a boundary walk over the MEASURED tracks.
    */
   const cellFromViewportPoint = (x: number, y: number): { row: number; col: number } | null => {
     if (containerNode === null || containerGrid === null) return null
     const containerPose = captureOverlayPose(containerNode)
     if (containerPose.localWidth < 1e-3 || containerPose.localHeight < 1e-3) return null
-    const strides = gridStrides(containerPose)
-    if (strides === null) return null
+    const tracks = containerTrackGeometry(containerPose)
+    if (tracks === null) return null
     const origin = localFractionToViewportPoint(containerPose, 0, 0)
     const local = worldDeltaToLocalDelta(containerPose.matrix, x - origin.x, y - origin.y)
-    const { rows, cols } = containerGrid.context
-    const col = Math.min(cols, Math.max(1, Math.floor(local.x / strides.strideX) + 1))
-    const row = Math.min(rows, Math.max(1, Math.floor(local.y / strides.strideY) + 1))
-    return { row, col }
-  }
-
-  /** Viewport anchor of one grid cell (gap-aware), via the affine mapping. */
-  const cellViewportAnchor = (row: number, col: number): { left: number; top: number } | null => {
-    if (containerNode === null || containerGrid === null) return null
-    const containerPose = captureOverlayPose(containerNode)
-    const strides = gridStrides(containerPose)
-    if (strides === null || containerPose.localWidth < 1e-3 || containerPose.localHeight < 1e-3) return null
-    const point = localFractionToViewportPoint(
-      containerPose,
-      ((col - 1) * strides.strideX) / containerPose.localWidth,
-      ((row - 1) * strides.strideY) / containerPose.localHeight
-    )
-    return { left: point.x, top: point.y }
+    return {
+      row: trackIndexAtPx(tracks.rows, tracks.rowGap, local.y),
+      col: trackIndexAtPx(tracks.cols, tracks.columnGap, local.x)
+    }
   }
 
   let highlightedZone: HTMLElement | null = null
-  const highlightZone = (cell: { row: number; col: number } | null): void => {
+  const highlightZoneNode = (zone: HTMLElement | null): void => {
     if (highlightedZone !== null) {
       highlightedZone.style.background = ''
       highlightedZone = null
     }
-    if (cell === null) return
-    const zone = zoneNodes.get(`${cell.row}:${cell.col}`)
-    if (zone !== undefined) {
+    if (zone !== null) {
       zone.style.background = 'rgba(74, 144, 217, 0.25)'
       highlightedZone = zone
     }
   }
 
+  type ZoneHit = { row: number; col: number; node: HTMLElement | null }
+
+  /**
+   * pointAt: the drawn zone under the pointer is the reference — resolved by
+   * elementsFromPoint on the gabarit zones, so highlight, clone anchoring and
+   * drop all derive from the same node the author actually sees. The measured
+   * track math is only the fallback (dense grids drawn at a 10 step, pointer
+   * outside the zones).
+   */
+  const zoneAtPoint = (x: number, y: number): ZoneHit | null => {
+    if (typeof doc.elementsFromPoint === 'function') {
+      for (const element of doc.elementsFromPoint(x, y)) {
+        if (element instanceof HTMLElement && gabaritRoot.contains(element) && element.hasAttribute('data-cs-zone')) {
+          const key = element.getAttribute('data-cs-zone')!.split(':')
+          const row = Number.parseInt(key[0] ?? '', 10)
+          const col = Number.parseInt(key[1] ?? '', 10)
+          if (Number.isFinite(row) && Number.isFinite(col)) {
+            return { row, col, node: element }
+          }
+        }
+      }
+    }
+    const computed = cellFromViewportPoint(x, y)
+    if (computed === null) return null
+    return { ...computed, node: zoneNodes.get(`${computed.row}:${computed.col}`) ?? null }
+  }
+
+  type CellArea = { row: number; col: number; rowSpan: number; colSpan: number }
+
+  /**
+   * Measures the element's cell footprint (origin + spans) on its LAYOUT box:
+   * the visual corner is projected into the container's local space, then the
+   * own-transform displacement (d = t + (I − M)·O) is subtracted — an element
+   * offset by a translate still belongs to its layout cells.
+   */
+  const measureElementFootprint = (): CellArea | null => {
+    if (pose === null || elementNode === null || containerNode === null || containerGrid === null) return null
+    const containerPose = captureOverlayPose(containerNode)
+    const tracks = containerTrackGeometry(containerPose)
+    if (tracks === null) return null
+
+    const containerOrigin = localFractionToViewportPoint(containerPose, 0, 0)
+    const visualCorner = localFractionToViewportPoint(pose, 0, 0)
+    const cornerLocal = worldDeltaToLocalDelta(
+      containerPose.matrix,
+      visualCorner.x - containerOrigin.x,
+      visualCorner.y - containerOrigin.y
+    )
+    const own = captureOwnTransformComponents(elementNode, pose.localWidth, pose.localHeight)
+    const displacement = ownCornerDisplacement(own, own.originX, own.originY)
+    const layoutX = cornerLocal.x - displacement.x
+    const layoutY = cornerLocal.y - displacement.y
+
+    // +1px inset so a corner sitting exactly on a boundary resolves inward.
+    const row = trackIndexAtPx(tracks.rows, tracks.rowGap, layoutY + 1)
+    const col = trackIndexAtPx(tracks.cols, tracks.columnGap, layoutX + 1)
+    return {
+      row,
+      col,
+      // Layout dimensions (untransformed) resolve the spans.
+      rowSpan: nearestTrackSpan(tracks.rows, tracks.rowGap, row, pose.localHeight),
+      colSpan: nearestTrackSpan(tracks.cols, tracks.columnGap, col, pose.localWidth)
+    }
+  }
+
+  /** Container-local coordinates of one viewport point (affine). */
+  const viewportToContainerLocal = (x: number, y: number): { x: number; y: number } | null => {
+    if (containerNode === null) return null
+    const containerPose = captureOverlayPose(containerNode)
+    const containerOrigin = localFractionToViewportPoint(containerPose, 0, 0)
+    return worldDeltaToLocalDelta(containerPose.matrix, x - containerOrigin.x, y - containerOrigin.y)
+  }
+
+  /**
+   * Measures the multi-cell grab context at gesture start: the element's
+   * footprint, and which of its OWN cells sits under the pointer. The grab
+   * cell is resolved in the element's LOCAL box (pointer inverse-transformed,
+   * fraction × spans) — rotation-proof: grabbing the visual bottom-right
+   * quadrant of a rotated element always designates its local bottom-right
+   * cell. Mixing the visual pointer cell with the layout origin would inject
+   * a spurious rotation offset (wrong placements, gestures without effect).
+   */
+  const captureGridDragContext = (
+    pointerX: number,
+    pointerY: number
+  ): { grabRowOffset: number; grabColOffset: number; rowSpan: number; colSpan: number } | null => {
+    const footprint = measureElementFootprint()
+    if (footprint === null || pose === null) return null
+
+    const elementOrigin = localFractionToViewportPoint(pose, 0, 0)
+    const local = worldDeltaToLocalDelta(pose.matrix, pointerX - elementOrigin.x, pointerY - elementOrigin.y)
+    const fractionX = pose.localWidth > 1e-6 ? local.x / pose.localWidth : 0
+    const fractionY = pose.localHeight > 1e-6 ? local.y / pose.localHeight : 0
+
+    return {
+      grabRowOffset: Math.max(0, Math.min(footprint.rowSpan - 1, Math.floor(fractionY * footprint.rowSpan))),
+      grabColOffset: Math.max(0, Math.min(footprint.colSpan - 1, Math.floor(fractionX * footprint.colSpan))),
+      rowSpan: footprint.rowSpan,
+      colSpan: footprint.colSpan
+    }
+  }
+
+  /**
+   * Resolves the target ORIGIN cell for one hovered cell: the hovered cell
+   * receives the grabbed cell, and the footprint is clamped back inward from
+   * the grid edges (spans preserved).
+   */
+  const resolveDropOrigin = (
+    hit: { row: number; col: number },
+    context: { grabRowOffset: number; grabColOffset: number; rowSpan: number; colSpan: number } | null
+  ): { row: number; col: number } => {
+    if (context === null || containerGrid === null) return { row: hit.row, col: hit.col }
+    const { rows, cols } = containerGrid.context
+    return {
+      row: Math.min(Math.max(hit.row - context.grabRowOffset, 1), rows - context.rowSpan + 1),
+      col: Math.min(Math.max(hit.col - context.grabColOffset, 1), cols - context.colSpan + 1)
+    }
+  }
+
+  // ── creation (trace the cs into existence) ───────────────────────────────
+  // Same devices as the regular cs: subscribeToNode-style container tracking,
+  // overlay-world pose + calibration, measured track geometry. No separate
+  // module — this IS selection-frame, per docs/plans/2026-07-03-selection-frame-variantes-plan.md.
+
+  const minTraceSizePx = creation?.minTraceSizePx ?? 4
+
+  /** Trace reference: the given container once resolved, or the scene root itself. */
+  const creationReferenceNode = (): Element | null =>
+    options.containerId !== undefined ? containerNode : options.sceneRoot
+
+  const creationGridActive = (): boolean => containerNode !== null && containerGrid !== null
+
+  /**
+   * Positions csRoot directly from a container-local rect — no elementNode
+   * involved. Mirrors positionCs()'s overlay-world pattern (rotation-only
+   * matrix, calibrated left/top), using the reference node's pose instead of
+   * an element's.
+   */
+  const positionCsFromLocalRect = (
+    refPose: OverlayPose,
+    rect: { x: number; y: number; width: number; height: number }
+  ): void => {
+    const m = refPose.rotationMatrix
+    const corner = localFractionToViewportPoint(
+      refPose,
+      refPose.localWidth > 1e-6 ? rect.x / refPose.localWidth : 0,
+      refPose.localHeight > 1e-6 ? rect.y / refPose.localHeight : 0
+    )
+    csRoot.style.width = `${Math.max(0, rect.width) * refPose.scaleX}px`
+    csRoot.style.height = `${Math.max(0, rect.height) * refPose.scaleY}px`
+    csRoot.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
+    csRoot.style.translate = '0px 0px'
+    calibrateGhostToWorldSnapshot(csRoot, { left: corner.x, top: corner.y })
+  }
+
+  const positionCsFromCellArea = (refPose: OverlayPose, tracks: GridTrackGeometry, area: CellArea): void => {
+    const anchorX = trackAnchorPx(tracks.cols, tracks.columnGap, area.col)
+    const anchorY = trackAnchorPx(tracks.rows, tracks.rowGap, area.row)
+    const width = trackSpanPx(tracks.cols, tracks.columnGap, area.col, area.colSpan)
+    const height = trackSpanPx(tracks.rows, tracks.rowGap, area.row, area.rowSpan)
+    positionCsFromLocalRect(refPose, { x: anchorX, y: anchorY, width, height })
+  }
+
+  const refreshCreationSurface = (): void => {
+    if (creationSurface === null) return
+    if (!isCreatingState()) {
+      creationSurface.style.display = 'none'
+      creationSurface.style.pointerEvents = 'none'
+      return
+    }
+    const referenceNode = creationReferenceNode()
+    if (referenceNode === null) {
+      creationSurface.style.display = 'none'
+      creationSurface.style.pointerEvents = 'none'
+      return
+    }
+    const refPose = captureOverlayPose(referenceNode)
+    const m = refPose.rotationMatrix
+    creationSurface.style.display = 'block'
+    creationSurface.style.pointerEvents = 'auto'
+    creationSurface.style.width = `${refPose.frameWidth}px`
+    creationSurface.style.height = `${refPose.frameHeight}px`
+    creationSurface.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
+    calibrateGhostToWorldSnapshot(creationSurface, refPose.rect)
+  }
+
+  type TraceSession = {
+    containerPose: OverlayPose
+    tracks: GridTrackGeometry | null
+    anchorLocal: { x: number; y: number }
+    isGrid: boolean
+    startCell: { row: number; col: number } | null
+    current: CreationResult | null
+  }
+
+  const traceGesture =
+    creationSurface !== null
+      ? bindGestureSession<TraceSession>(creationSurface, {
+          onStart: (event) => {
+            if (creation === null || !actor.getSnapshot().matches('creating')) return null
+            const referenceNode = creationReferenceNode()
+            if (referenceNode === null) return null
+            const refPose = captureOverlayPose(referenceNode)
+            const isGrid = creationGridActive()
+            const tracks = isGrid ? containerTrackGeometry(refPose) : null
+            const origin = localFractionToViewportPoint(refPose, 0, 0)
+            const anchorLocal = worldDeltaToLocalDelta(refPose.matrix, event.clientX - origin.x, event.clientY - origin.y)
+            const startCell =
+              isGrid && tracks !== null
+                ? {
+                    row: trackIndexAtPx(tracks.rows, tracks.rowGap, anchorLocal.y),
+                    col: trackIndexAtPx(tracks.cols, tracks.columnGap, anchorLocal.x)
+                  }
+                : null
+
+            actor.send({ type: 'TRACE_START' })
+            if (!actor.getSnapshot().matches({ creating: 'tracing' })) return null
+            event.preventDefault()
+            creationHasGeometry = true
+
+            let current: CreationResult
+            if (isGrid && startCell !== null && tracks !== null) {
+              const area = { row: startCell.row, col: startCell.col, rowSpan: 1, colSpan: 1 }
+              positionCsFromCellArea(refPose, tracks, area)
+              current = { kind: 'cell-area', area }
+            } else {
+              positionCsFromLocalRect(refPose, { x: anchorLocal.x, y: anchorLocal.y, width: 0, height: 0 })
+              current = { kind: 'rect', rect: { x: anchorLocal.x, y: anchorLocal.y, width: 0, height: 0 } }
+            }
+            applyMachineState()
+            return { containerPose: refPose, tracks, anchorLocal, isGrid, startCell, current }
+          },
+          onMove: (event, session) => {
+            const origin = localFractionToViewportPoint(session.containerPose, 0, 0)
+            const local = worldDeltaToLocalDelta(session.containerPose.matrix, event.clientX - origin.x, event.clientY - origin.y)
+
+            if (session.isGrid && session.tracks !== null && session.startCell !== null) {
+              const currentCell = {
+                row: trackIndexAtPx(session.tracks.rows, session.tracks.rowGap, local.y),
+                col: trackIndexAtPx(session.tracks.cols, session.tracks.columnGap, local.x)
+              }
+              const area = {
+                row: Math.min(session.startCell.row, currentCell.row),
+                col: Math.min(session.startCell.col, currentCell.col),
+                rowSpan: Math.abs(currentCell.row - session.startCell.row) + 1,
+                colSpan: Math.abs(currentCell.col - session.startCell.col) + 1
+              }
+              session.current = { kind: 'cell-area', area }
+              positionCsFromCellArea(session.containerPose, session.tracks, area)
+              return
+            }
+
+            let width = local.x - session.anchorLocal.x
+            let height = local.y - session.anchorLocal.y
+            if (event.shiftKey) {
+              const side = Math.max(Math.abs(width), Math.abs(height))
+              width = width < 0 ? -side : side
+              height = height < 0 ? -side : side
+            }
+            const rect = {
+              x: Math.min(session.anchorLocal.x, session.anchorLocal.x + width),
+              y: Math.min(session.anchorLocal.y, session.anchorLocal.y + height),
+              width: Math.abs(width),
+              height: Math.abs(height)
+            }
+            session.current = { kind: 'rect', rect }
+            positionCsFromLocalRect(session.containerPose, rect)
+          },
+          onEnd: (session, apply) => {
+            const result = session.current
+            const meetsMinimum =
+              apply &&
+              result !== null &&
+              (result.kind === 'cell-area' || (result.rect.width >= minTraceSizePx && result.rect.height >= minTraceSizePx))
+
+            if (!meetsMinimum || result === null) {
+              actor.send({ type: 'TRACE_ABORT' })
+              applyMachineState()
+              return
+            }
+
+            actor.send({ type: 'TRACE_END' })
+            const rounded: CreationResult =
+              result.kind === 'rect'
+                ? {
+                    kind: 'rect',
+                    rect: {
+                      x: Math.round(result.rect.x),
+                      y: Math.round(result.rect.y),
+                      width: Math.round(result.rect.width),
+                      height: Math.round(result.rect.height)
+                    }
+                  }
+                : result
+            applyMachineState()
+            creation!.onCreate(rounded)
+          }
+        })
+      : null
+
   // ── drag (cs body) ───────────────────────────────────────────────────────
 
   type DragSession = {
-    pointerId: number
-    startX: number
-    startY: number
     /** Conversion space frozen at session start. */
     parentMatrix: Matrix2D
     /** Element viewport anchor at session start — baseline for measured correction. */
     startRectLeft: number
     startRectTop: number
+    startX: number
+    startY: number
     emittedX: number
     emittedY: number
     axisLock: 'x' | 'y' | null
     /** Grid libre mode: element stays put, a temporary clone previews the snap. */
     gridClone: HTMLElement | null
-    /** Last highlighted cell — the single source of truth for the drop. */
+    /**
+     * Multi-cell grab context: which cell of the element's footprint was
+     * grabbed, and the measured spans — the hovered cell receives the grabbed
+     * cell, the footprint is preserved (a 2×2 stays a 2×2).
+     */
+    gridContext: { grabRowOffset: number; grabColOffset: number; rowSpan: number; colSpan: number } | null
+    /** Last resolved target ORIGIN cell — the single source of truth for the drop. */
     lastCell: { row: number; col: number } | null
+    /** Key of the zone the clone is currently animating towards. */
+    lastZoneKey: string | null
+    /** In-flight clone projection (cancelled on retarget and on release). */
+    cloneAnimation: WAAPIAnimation | null
     lastLocalX: number
     lastLocalY: number
   }
-  let dragSession: DragSession | null = null
 
-  const endDragSession = (apply: boolean): void => {
-    if (dragSession === null) return
-    const session = dragSession
-    dragSession = null
-    safeReleaseCapture(csRoot, session.pointerId)
-    actor.send({ type: 'DRAG_END' })
+  const dragGesture = bindGestureSession<DragSession>(csRoot, {
+    onStart: (event) => {
+      if (event.target !== csRoot || pose === null) return null
+      actor.send({ type: 'DRAG_START' })
+      if (!actor.getSnapshot().matches({ active: 'dragging' })) return null
 
-    if (session.gridClone !== null) {
-      session.gridClone.remove()
-      highlightZone(null)
-      if (apply) {
-        // Drop contract: the element lands exactly where the author saw it —
-        // the highlighted cell drives the drop when the adapter exposes the
-        // channel; the pixel delta is only the fallback.
-        if (adapter.applyCellDrop !== undefined && session.lastCell !== null) {
-          adapter.applyCellDrop(session.lastCell)
-        } else {
-          adapter.applyMove({ dx: Math.round(session.lastLocalX), dy: Math.round(session.lastLocalY) })
+      let gridClone: HTMLElement | null = null
+      if (gridDragActive() && elementNode !== null) {
+        const clone = elementNode.cloneNode(true)
+        if (clone instanceof HTMLElement) {
+          clone.removeAttribute('id')
+          clone.setAttribute('aria-hidden', 'true')
+          clone.setAttribute('data-cs-grid-clone', '')
+          clone.style.position = 'fixed'
+          clone.style.margin = '0'
+          clone.style.opacity = '0.5'
+          clone.style.pointerEvents = 'none'
+          // Explicit dimensions: in position fixed the clone loses its
+          // grid-driven size — reproduce the element's rendered size.
+          clone.style.width = `${pose.frameWidth}px`
+          clone.style.height = `${pose.frameHeight}px`
+          clone.style.boxSizing = 'border-box'
+          // Visual matrix of the element (container rotation included): the
+          // preview must show the element as it will render. Rotation around
+          // the local origin keeps the left/top anchor on the cell corner.
+          // The cloned inline individual properties are cleared first — the
+          // pose matrix already carries them, keeping them would double-apply.
+          clone.style.translate = ''
+          clone.style.rotate = ''
+          clone.style.scale = ''
+          const m = pose.rotationMatrix
+          clone.style.transformOrigin = '0px 0px'
+          clone.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
+          // Initial anchor: the element's LOCAL-ORIGIN corner (affine mapping),
+          // never the AABB corner — they differ on a rotated element, and an
+          // AABB anchor breaks the projection's initial trajectory.
+          const cornerPoint = localFractionToViewportPoint(pose, 0, 0)
+          clone.style.left = `${cornerPoint.x}px`
+          clone.style.top = `${cornerPoint.y}px`
+          overlayLayer.appendChild(clone)
+          gridClone = clone
         }
       }
-    }
 
-    csRoot.style.translate = '0px 0px'
-    sync()
-  }
-
-  const onBodyPointerDown = (event: PointerEvent): void => {
-    if (event.target !== csRoot || pose === null || event.button !== 0) return
-    actor.send({ type: 'DRAG_START' })
-    if (!actor.getSnapshot().matches({ active: 'dragging' })) return
-
-    let gridClone: HTMLElement | null = null
-    if (gridDragActive() && elementNode !== null) {
-      const clone = elementNode.cloneNode(true)
-      if (clone instanceof HTMLElement) {
-        clone.removeAttribute('id')
-        clone.setAttribute('aria-hidden', 'true')
-        clone.setAttribute('data-cs-grid-clone', '')
-        clone.style.position = 'fixed'
-        clone.style.margin = '0'
-        clone.style.opacity = '0.5'
-        clone.style.pointerEvents = 'none'
-        // Explicit dimensions: in position fixed the clone loses its
-        // grid-driven size — reproduce the element's rendered size.
-        clone.style.width = `${pose.frameWidth}px`
-        clone.style.height = `${pose.frameHeight}px`
-        clone.style.boxSizing = 'border-box'
-        clone.style.left = `${pose.rect.left}px`
-        clone.style.top = `${pose.rect.top}px`
-        overlayLayer.appendChild(clone)
-        gridClone = clone
+      event.preventDefault()
+      return {
+        parentMatrix: pose.parentMatrix,
+        startRectLeft: pose.rect.left,
+        startRectTop: pose.rect.top,
+        startX: event.clientX,
+        startY: event.clientY,
+        emittedX: 0,
+        emittedY: 0,
+        axisLock: null,
+        gridClone,
+        gridContext: gridClone !== null ? captureGridDragContext(event.clientX, event.clientY) : null,
+        lastCell: null,
+        lastZoneKey: null,
+        cloneAnimation: null,
+        lastLocalX: 0,
+        lastLocalY: 0
       }
-    }
+    },
+    onMove: (event, session) => {
+      let viewportDx = event.clientX - session.startX
+      let viewportDy = event.clientY - session.startY
 
-    dragSession = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      parentMatrix: pose.parentMatrix,
-      startRectLeft: pose.rect.left,
-      startRectTop: pose.rect.top,
-      emittedX: 0,
-      emittedY: 0,
-      axisLock: null,
-      gridClone,
-      lastCell: null,
-      lastLocalX: 0,
-      lastLocalY: 0
-    }
-    csRoot.setPointerCapture(event.pointerId)
-    event.preventDefault()
-  }
-
-  const onBodyPointerMove = (event: PointerEvent): void => {
-    if (dragSession === null || event.pointerId !== dragSession.pointerId) return
-    if (event.buttons === 0) {
-      // Missed release (pointercancel, focus loss): end without a grid emission.
-      endDragSession(false)
-      return
-    }
-
-    let viewportDx = event.clientX - dragSession.startX
-    let viewportDy = event.clientY - dragSession.startY
-
-    if (event.shiftKey) {
-      if (dragSession.axisLock === null && (Math.abs(viewportDx) > 2 || Math.abs(viewportDy) > 2)) {
-        dragSession.axisLock = Math.abs(viewportDx) >= Math.abs(viewportDy) ? 'x' : 'y'
+      if (event.shiftKey) {
+        if (session.axisLock === null && (Math.abs(viewportDx) > 2 || Math.abs(viewportDy) > 2)) {
+          session.axisLock = Math.abs(viewportDx) >= Math.abs(viewportDy) ? 'x' : 'y'
+        }
+        if (session.axisLock === 'x') viewportDy = 0
+        if (session.axisLock === 'y') viewportDx = 0
+      } else {
+        session.axisLock = null
       }
-      if (dragSession.axisLock === 'x') viewportDy = 0
-      if (dragSession.axisLock === 'y') viewportDx = 0
-    } else {
-      dragSession.axisLock = null
-    }
 
-    // The cs follows the raw pointer.
-    csRoot.style.translate = `${viewportDx}px ${viewportDy}px`
+      // The cs follows the raw pointer.
+      csRoot.style.translate = `${viewportDx}px ${viewportDy}px`
 
-    // CSS `translate` on the element operates in the PARENT's space: convert
-    // through the parent matrix, not the element matrix (which would apply
-    // the element's own rotation twice).
-    const local = worldDeltaToLocalDelta(dragSession.parentMatrix, viewportDx, viewportDy)
-    dragSession.lastLocalX = local.x
-    dragSession.lastLocalY = local.y
+      // CSS `translate` on the element operates in the PARENT's space: convert
+      // through the parent matrix, not the element matrix (which would apply
+      // the element's own rotation twice).
+      const local = worldDeltaToLocalDelta(session.parentMatrix, viewportDx, viewportDy)
+      session.lastLocalX = local.x
+      session.lastLocalY = local.y
 
-    if (dragSession.gridClone !== null) {
-      // Grid libre: the element stays put until validation; the clone snaps
-      // to the hovered cell and the matching zone is highlighted. The cell is
-      // memorized: it IS the drop target (contract: land where the author saw).
-      const cell = cellFromViewportPoint(event.clientX, event.clientY)
-      highlightZone(cell)
-      if (cell !== null) {
-        dragSession.lastCell = cell
-        const anchor = cellViewportAnchor(cell.row, cell.col)
-        if (anchor !== null) {
-          dragSession.gridClone.style.left = `${anchor.left}px`
-          dragSession.gridClone.style.top = `${anchor.top}px`
+      if (session.gridClone !== null) {
+        // Grid libre: the element stays put until validation; the drawn zone
+        // under the pointer (pointAt) drives highlight, clone and drop alike.
+        // Multi-cell: the hovered cell receives the GRABBED cell — the clone
+        // previews the full footprint at the resolved origin.
+        const hit = zoneAtPoint(event.clientX, event.clientY)
+        highlightZoneNode(hit?.node ?? null)
+        if (hit !== null) {
+          const origin = resolveDropOrigin(hit, session.gridContext)
+          session.lastCell = origin
+          const zoneKey = `${origin.row}:${origin.col}`
+          if (zoneKey !== session.lastZoneKey && containerNode !== null && elementNode !== null && pose !== null) {
+            session.lastZoneKey = zoneKey
+            // Faithful preview: the ghost shows the FINAL render — layout
+            // corner at the target footprint plus the element's own-transform
+            // displacement, recomputed at the target dimensions (percent
+            // origins follow the box, whose size changes with the destination
+            // tracks). Ghost and final placement coincide by construction.
+            const containerPose = captureOverlayPose(containerNode)
+            const tracks = containerTrackGeometry(containerPose)
+            if (tracks !== null && containerPose.localWidth > 1e-3 && containerPose.localHeight > 1e-3) {
+              const rowSpan = session.gridContext?.rowSpan ?? 1
+              const colSpan = session.gridContext?.colSpan ?? 1
+              const futureLocalW = trackSpanPx(tracks.cols, tracks.columnGap, origin.col, colSpan)
+              const futureLocalH = trackSpanPx(tracks.rows, tracks.rowGap, origin.row, rowSpan)
+
+              const own = captureOwnTransformComponents(elementNode, pose.localWidth, pose.localHeight)
+              const originFx = pose.localWidth > 1e-6 ? own.originX / pose.localWidth : 0.5
+              const originFy = pose.localHeight > 1e-6 ? own.originY / pose.localHeight : 0.5
+              const displacement = ownCornerDisplacement(own, originFx * futureLocalW, originFy * futureLocalH)
+
+              const cornerLocalX = trackAnchorPx(tracks.cols, tracks.columnGap, origin.col) + displacement.x
+              const cornerLocalY = trackAnchorPx(tracks.rows, tracks.rowGap, origin.row) + displacement.y
+              const corner = localFractionToViewportPoint(
+                containerPose,
+                cornerLocalX / containerPose.localWidth,
+                cornerLocalY / containerPose.localHeight
+              )
+
+              // Future rendered size = future layout size × current visual scale.
+              const scaleRatioX = pose.localWidth > 1e-6 ? pose.frameWidth / pose.localWidth : 1
+              const scaleRatioY = pose.localHeight > 1e-6 ? pose.frameHeight / pose.localHeight : 1
+
+              session.cloneAnimation?.cancel()
+              session.cloneAnimation = waapi.animate(session.gridClone, {
+                left: `${corner.x}px`,
+                top: `${corner.y}px`,
+                width: `${futureLocalW * scaleRatioX}px`,
+                height: `${futureLocalH * scaleRatioY}px`,
+                duration: 500,
+                ease: 'outQuad'
+              })
+            }
+          }
+        }
+        return
+      }
+
+      // Libre: continuous incremental emission, exact accumulation on rounded totals.
+      const targetX = Math.round(local.x)
+      const targetY = Math.round(local.y)
+      const dx = targetX - session.emittedX
+      const dy = targetY - session.emittedY
+      if (dx === 0 && dy === 0) return
+      session.emittedX = targetX
+      session.emittedY = targetY
+      adapter?.applyMove({ dx, dy })
+      actor.send({ type: 'DRAG_MOVE' })
+
+      // Measured correction before repaint: the element is the truth. Any
+      // layout interference (auto margins, min/max constraints, unforeseen
+      // properties) deflects it from the theoretical delta — measure where it
+      // actually landed (world-anchor seam) and glue the cs to it.
+      if (elementNode !== null) {
+        const measured = measureWorldRect(elementNode)
+        csRoot.style.translate = `${measured.left - session.startRectLeft}px ${measured.top - session.startRectTop}px`
+      }
+    },
+    onEnd: (session, apply, event) => {
+      actor.send({ type: 'DRAG_END' })
+
+      if (session.gridClone !== null) {
+        session.cloneAnimation?.cancel()
+        session.gridClone.remove()
+        highlightZoneNode(null)
+        if (apply) {
+          // Drop contract: the element lands exactly where the author saw it.
+          // The target is resolved at the RELEASE point (pointermove events are
+          // frame-coalesced, pointerup is not) through the same pointAt zone
+          // reference and grab-offset resolution as the preview.
+          const releaseHit = event !== null ? zoneAtPoint(event.clientX, event.clientY) : null
+          const dropOrigin = releaseHit !== null ? resolveDropOrigin(releaseHit, session.gridContext) : session.lastCell
+          if (adapter?.applyCellDrop !== undefined && dropOrigin !== null) {
+            adapter.applyCellDrop(dropOrigin)
+          } else {
+            adapter?.applyMove({ dx: Math.round(session.lastLocalX), dy: Math.round(session.lastLocalY) })
+          }
         }
       }
-      return
+
+      csRoot.style.translate = '0px 0px'
+      sync()
     }
-
-    // Libre: continuous incremental emission, exact accumulation on rounded totals.
-    const targetX = Math.round(local.x)
-    const targetY = Math.round(local.y)
-    const dx = targetX - dragSession.emittedX
-    const dy = targetY - dragSession.emittedY
-    if (dx === 0 && dy === 0) return
-    dragSession.emittedX = targetX
-    dragSession.emittedY = targetY
-    adapter.applyMove({ dx, dy })
-    actor.send({ type: 'DRAG_MOVE' })
-
-    // Measured correction before repaint: the element is the truth. Any
-    // layout interference (auto margins, min/max constraints, unforeseen
-    // properties) deflects it from the theoretical delta — measure where it
-    // actually landed (world-anchor seam) and glue the cs to it.
-    if (elementNode !== null) {
-      const measured = measureWorldRect(elementNode)
-      csRoot.style.translate = `${measured.left - dragSession.startRectLeft}px ${measured.top - dragSession.startRectTop}px`
-    }
-  }
-
-  const onBodyPointerUp = (event: PointerEvent): void => {
-    if (dragSession === null || event.pointerId !== dragSession.pointerId) return
-    endDragSession(true)
-  }
+  })
 
   // ── resize / scale (handles) ─────────────────────────────────────────────
 
   type ResizeSession = {
-    pointerId: number
     handleId: HandleId
     mode: 'resize' | 'scale'
+    /** Corner ratio policy resolved from the preset at session start. */
+    ratioPolicy: 'locked' | 'free'
     startX: number
     startY: number
     /** Conversion spaces frozen at session start. */
@@ -596,12 +1016,15 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     anchorFy: number
     anchorStartX: number
     anchorStartY: number
+    /** Grid context: footprint at gesture start — the resize emits atomic cell areas. */
+    gridArea: CellArea | null
+    /** Last emitted area key, to emit only on change. */
+    lastAreaKey: string | null
     emittedW: number
     emittedH: number
     emittedFx: number
     emittedFy: number
   }
-  let resizeSession: ResizeSession | null = null
 
   const handleFactors: Record<HandleId, { w: number; h: number }> = {
     nw: { w: -1, h: -1 },
@@ -624,7 +1047,9 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   let presetHandles: CapabilityPreset['handles'] = undefined
   const handleModes = new Map<HandleId, 'resize' | 'scale'>()
 
-  const resolveHandleBehavior = (id: HandleId): { mode: 'resize' | 'scale'; allowSwap: boolean } => {
+  const resolveHandleBehavior = (
+    id: HandleId
+  ): { mode: 'resize' | 'scale'; allowSwap: boolean; ratio: 'locked' | 'free' } => {
     const group = isCorner(id) ? 'corners' : 'sides'
     const specific = presetHandles?.[id]
     const groupConfig = presetHandles?.[group]
@@ -632,7 +1057,8 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     const scaleAllowed = capabilityActive('scale')
     return {
       mode: specific?.mode ?? groupConfig?.mode ?? (resizeAllowed ? 'resize' : 'scale'),
-      allowSwap: specific?.allowSwap ?? groupConfig?.allowSwap ?? (resizeAllowed && scaleAllowed)
+      allowSwap: specific?.allowSwap ?? groupConfig?.allowSwap ?? (resizeAllowed && scaleAllowed),
+      ratio: specific?.ratio ?? groupConfig?.ratio ?? 'locked'
     }
   }
 
@@ -645,58 +1071,6 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     if (!capabilityActive(next)) return
     handleModes.set(id, next)
     refreshHandleVisibility()
-  }
-
-  const endResizeSession = (): void => {
-    if (resizeSession === null) return
-    const session = resizeSession
-    resizeSession = null
-    const handle = handleNodes.get(session.handleId)
-    if (handle !== undefined) {
-      safeReleaseCapture(handle, session.pointerId)
-    }
-    actor.send({ type: 'RESIZE_END' })
-    sync()
-  }
-
-  const onHandlePointerDown = (handleId: HandleId) => (event: PointerEvent): void => {
-    if (pose === null || event.button !== 0) return
-
-    // Alt-click: toggle the handle's persistent mode, no gesture starts.
-    if (event.altKey) {
-      toggleHandleMode(handleId)
-      event.preventDefault()
-      event.stopPropagation()
-      return
-    }
-
-    actor.send({ type: 'RESIZE_START' })
-    if (!actor.getSnapshot().matches({ active: 'resizing' })) return
-    const handle = handleNodes.get(handleId)!
-    const anchorPoint = CHARACTERISTIC_POINTS[OPPOSITE_POINT[handleId]]
-    const anchorStart = localFractionToViewportPoint(pose, anchorPoint.fx, anchorPoint.fy)
-    resizeSession = {
-      pointerId: event.pointerId,
-      handleId,
-      mode: currentHandleMode(handleId),
-      startX: event.clientX,
-      startY: event.clientY,
-      matrix: pose.matrix,
-      parentMatrix: pose.parentMatrix,
-      startLocalWidth: pose.localWidth,
-      startLocalHeight: pose.localHeight,
-      anchorFx: anchorPoint.fx,
-      anchorFy: anchorPoint.fy,
-      anchorStartX: anchorStart.x,
-      anchorStartY: anchorStart.y,
-      emittedW: 0,
-      emittedH: 0,
-      emittedFx: 1,
-      emittedFy: 1
-    }
-    handle.setPointerCapture(event.pointerId)
-    event.preventDefault()
-    event.stopPropagation()
   }
 
   /**
@@ -717,100 +1091,186 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     const dx = Math.round(parentDelta.x)
     const dy = Math.round(parentDelta.y)
     if (dx !== 0 || dy !== 0) {
-      adapter.applyMove({ dx, dy })
+      adapter?.applyMove({ dx, dy })
     }
   }
 
-  const onHandlePointerMove = (event: PointerEvent): void => {
-    if (resizeSession === null || event.pointerId !== resizeSession.pointerId) return
-    if (event.buttons === 0) {
-      endResizeSession()
-      return
-    }
-    const session = resizeSession
-    const factors = handleFactors[session.handleId]
-    // Project the raw pointer delta onto the element's LOCAL axes (rotation
-    // included) so the dragged handle stays under the pointer, then apply the
-    // handle sign. worldSizeToLocalSize is unfit here: it converts sizes
-    // (clamped at 0) and would block any reduction.
-    const localDelta = worldDeltaToLocalDelta(
-      session.matrix,
-      event.clientX - session.startX,
-      event.clientY - session.startY
-    )
-    let localW = factors.w === 0 ? 0 : localDelta.x * factors.w
-    let localH = factors.h === 0 ? 0 : localDelta.y * factors.h
+  const resizeGestures = new Map<HandleId, ReturnType<typeof bindGestureSession<ResizeSession>>>()
 
-    // Corner ratio constraint: the w/h ratio is preserved by default (resize
-    // and scale alike) — the dominant axis of the gesture drives, the other
-    // follows the session-start ratio. Shift lifts the constraint.
-    if (isCorner(session.handleId) && !event.shiftKey && session.startLocalWidth > 1e-6 && session.startLocalHeight > 1e-6) {
-      const relW = Math.abs(localW) / session.startLocalWidth
-      const relH = Math.abs(localH) / session.startLocalHeight
-      if (relW >= relH) {
-        localH = localW * (session.startLocalHeight / session.startLocalWidth)
-      } else {
-        localW = localH * (session.startLocalWidth / session.startLocalHeight)
+  for (const [handleId, handle] of handleNodes) {
+    const gesture = bindGestureSession<ResizeSession>(handle, {
+      onStart: (event) => {
+        if (pose === null) return null
+
+        // Alt-click: toggle the handle's persistent mode, no gesture starts.
+        if (event.altKey) {
+          toggleHandleMode(handleId)
+          event.preventDefault()
+          event.stopPropagation()
+          return null
+        }
+
+        actor.send({ type: 'RESIZE_START' })
+        if (!actor.getSnapshot().matches({ active: 'resizing' })) return null
+        const anchorPoint = CHARACTERISTIC_POINTS[OPPOSITE_POINT[handleId]]
+        const anchorStart = localFractionToViewportPoint(pose, anchorPoint.fx, anchorPoint.fy)
+        event.preventDefault()
+        event.stopPropagation()
+        return {
+          handleId,
+          mode: currentHandleMode(handleId),
+          ratioPolicy: resolveHandleBehavior(handleId).ratio,
+          startX: event.clientX,
+          startY: event.clientY,
+          matrix: pose.matrix,
+          parentMatrix: pose.parentMatrix,
+          startLocalWidth: pose.localWidth,
+          startLocalHeight: pose.localHeight,
+          anchorFx: anchorPoint.fx,
+          anchorFy: anchorPoint.fy,
+          anchorStartX: anchorStart.x,
+          anchorStartY: anchorStart.y,
+          gridArea: gridDragActive() && adapter?.applyCellArea !== undefined ? measureElementFootprint() : null,
+          lastAreaKey: null,
+          emittedW: 0,
+          emittedH: 0,
+          emittedFx: 1,
+          emittedFy: 1
+        }
+      },
+      onMove: (event, session) => {
+        const factors = handleFactors[session.handleId]
+
+        // Grid context: the dragged edge follows the pointer to the measured
+        // track containing it; the opposite edge stays fixed. North/west handles
+        // MOVE THE ORIGIN — a span alone only extends down/right, which is why
+        // the pixel path (applyResize + anchor lock) misfired on top handles.
+        if (session.gridArea !== null && adapter?.applyCellArea !== undefined && containerGrid !== null) {
+          const local = viewportToContainerLocal(event.clientX, event.clientY)
+          const containerPoseNow = containerNode !== null ? captureOverlayPose(containerNode) : null
+          const tracks = containerPoseNow !== null ? containerTrackGeometry(containerPoseNow) : null
+          if (local !== null && tracks !== null) {
+            const start = session.gridArea
+            let { row, col, rowSpan, colSpan } = start
+            if (factors.h !== 0) {
+              const pointerRow = trackIndexAtPx(tracks.rows, tracks.rowGap, local.y)
+              if (factors.h < 0) {
+                const bottom = start.row + start.rowSpan - 1
+                const top = Math.min(pointerRow, bottom)
+                row = top
+                rowSpan = bottom - top + 1
+              } else {
+                const bottom = Math.max(pointerRow, start.row)
+                rowSpan = bottom - start.row + 1
+              }
+            }
+            if (factors.w !== 0) {
+              const pointerCol = trackIndexAtPx(tracks.cols, tracks.columnGap, local.x)
+              if (factors.w < 0) {
+                const right = start.col + start.colSpan - 1
+                const left = Math.min(pointerCol, right)
+                col = left
+                colSpan = right - left + 1
+              } else {
+                const right = Math.max(pointerCol, start.col)
+                colSpan = right - start.col + 1
+              }
+            }
+            const areaKey = `${row}:${col}:${rowSpan}:${colSpan}`
+            if (areaKey !== session.lastAreaKey) {
+              session.lastAreaKey = areaKey
+              adapter.applyCellArea({ row, col, rowSpan, colSpan })
+              positionCs()
+            }
+          }
+          return
+        }
+
+        // Project the raw pointer delta onto the element's LOCAL axes (rotation
+        // included) so the dragged handle stays under the pointer, then apply the
+        // handle sign. worldSizeToLocalSize is unfit here: it converts sizes
+        // (clamped at 0) and would block any reduction.
+        const localDelta = worldDeltaToLocalDelta(
+          session.matrix,
+          event.clientX - session.startX,
+          event.clientY - session.startY
+        )
+        let localW = factors.w === 0 ? 0 : localDelta.x * factors.w
+        let localH = factors.h === 0 ? 0 : localDelta.y * factors.h
+
+        // Corner ratio constraint — policy-driven (HandleBehavior.ratio), never a
+        // context-specific branch: 'locked' = maintained, Shift lifts; 'free' =
+        // free gesture, Shift locks. The dominant axis drives, the other follows
+        // the session-start ratio.
+        const ratioActive = session.ratioPolicy === 'free' ? event.shiftKey : !event.shiftKey
+        if (isCorner(session.handleId) && ratioActive && session.startLocalWidth > 1e-6 && session.startLocalHeight > 1e-6) {
+          const relW = Math.abs(localW) / session.startLocalWidth
+          const relH = Math.abs(localH) / session.startLocalHeight
+          if (relW >= relH) {
+            localH = localW * (session.startLocalHeight / session.startLocalWidth)
+          } else {
+            localW = localH * (session.startLocalWidth / session.startLocalHeight)
+          }
+        }
+
+        if (session.mode === 'scale') {
+          // Scale: multiplicative factors; corner uniformity follows the same
+          // ratio policy as resize. The cs itself is not rescaled — it re-captures
+          // the element after emission.
+          let targetFx = session.startLocalWidth > 1e-3 ? (session.startLocalWidth + localW) / session.startLocalWidth : 1
+          let targetFy = session.startLocalHeight > 1e-3 ? (session.startLocalHeight + localH) / session.startLocalHeight : 1
+          if (factors.w === 0) targetFx = event.shiftKey ? 1 : targetFy
+          if (factors.h === 0) targetFy = event.shiftKey ? 1 : targetFx
+          if (isCorner(session.handleId) && ratioActive) {
+            const uniform = Math.abs(targetFx - 1) >= Math.abs(targetFy - 1) ? targetFx : targetFy
+            targetFx = uniform
+            targetFy = uniform
+          }
+          targetFx = Math.max(0.01, Math.round(targetFx * 100) / 100)
+          targetFy = Math.max(0.01, Math.round(targetFy * 100) / 100)
+          const fx = targetFx / session.emittedFx
+          const fy = targetFy / session.emittedFy
+          if (Math.abs(fx - 1) < 1e-9 && Math.abs(fy - 1) < 1e-9) return
+          session.emittedFx = targetFx
+          session.emittedFy = targetFy
+          adapter?.applyScale({ fx, fy })
+          lockAnchor(session)
+          positionCs()
+          return
+        }
+
+        // Resize: continuous incremental emission on rounded totals.
+        const targetW = Math.round(localW)
+        const targetH = Math.round(localH)
+        const dw = targetW - session.emittedW
+        const dh = targetH - session.emittedH
+        if (dw === 0 && dh === 0) return
+        session.emittedW = targetW
+        session.emittedH = targetH
+        adapter?.applyResize({ dw, dh })
+
+        // Only the dragged handle moves: lock the anchor by measurement, then
+        // re-capture so the cs keeps tracking the element.
+        lockAnchor(session)
+        positionCs()
+      },
+      onEnd: () => {
+        actor.send({ type: 'RESIZE_END' })
+        sync()
       }
-    }
-
-    if (session.mode === 'scale') {
-      // Scale: multiplicative factors; w/h ratio locked unless Shift lifts it.
-      // The cs itself is not rescaled — it re-captures the element after emission.
-      let targetFx = session.startLocalWidth > 1e-3 ? (session.startLocalWidth + localW) / session.startLocalWidth : 1
-      let targetFy = session.startLocalHeight > 1e-3 ? (session.startLocalHeight + localH) / session.startLocalHeight : 1
-      if (factors.w === 0) targetFx = event.shiftKey ? 1 : targetFy
-      if (factors.h === 0) targetFy = event.shiftKey ? 1 : targetFx
-      if (isCorner(session.handleId) && !event.shiftKey) {
-        const uniform = Math.abs(targetFx - 1) >= Math.abs(targetFy - 1) ? targetFx : targetFy
-        targetFx = uniform
-        targetFy = uniform
-      }
-      targetFx = Math.max(0.01, Math.round(targetFx * 100) / 100)
-      targetFy = Math.max(0.01, Math.round(targetFy * 100) / 100)
-      const fx = targetFx / session.emittedFx
-      const fy = targetFy / session.emittedFy
-      if (Math.abs(fx - 1) < 1e-9 && Math.abs(fy - 1) < 1e-9) return
-      session.emittedFx = targetFx
-      session.emittedFy = targetFy
-      adapter.applyScale({ fx, fy })
-      lockAnchor(session)
-      positionCs()
-      return
-    }
-
-    // Resize: continuous incremental emission on rounded totals.
-    const targetW = Math.round(localW)
-    const targetH = Math.round(localH)
-    const dw = targetW - session.emittedW
-    const dh = targetH - session.emittedH
-    if (dw === 0 && dh === 0) return
-    session.emittedW = targetW
-    session.emittedH = targetH
-    adapter.applyResize({ dw, dh })
-
-    // Only the dragged handle moves: lock the anchor by measurement, then
-    // re-capture so the cs keeps tracking the element.
-    lockAnchor(session)
-    positionCs()
-  }
-
-  const onHandlePointerUp = (event: PointerEvent): void => {
-    if (resizeSession === null || event.pointerId !== resizeSession.pointerId) return
-    endResizeSession()
+    })
+    resizeGestures.set(handleId, gesture)
   }
 
   // ── rotation (needle tip) + pivot placement ──────────────────────────────
 
   type RotateSession = {
-    pointerId: number
     startPointerAngleDeg: number
     /** Pivot frozen in viewport space at session start. */
     pivotX: number
     pivotY: number
     emittedDeg: number
   }
-  let rotateSession: RotateSession | null = null
 
   /**
    * Glues the needle tip to the pointer: the pointer is inverse-transformed
@@ -837,129 +1297,98 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     return localFractionToViewportPoint(pose, pivotFraction.fx, pivotFraction.fy)
   }
 
-  const endRotateSession = (): void => {
-    if (rotateSession === null) return
-    const session = rotateSession
-    rotateSession = null
-    safeReleaseCapture(needleTip, session.pointerId)
-    actor.send({ type: 'ROTATE_END' })
-    // The needle retracts to its resting length once the gesture ends.
-    needleLengthPx = NEEDLE_LENGTH_PX
-    sync()
-  }
-
-  needleTip.addEventListener('pointerdown', (event: PointerEvent) => {
-    if (pose === null || event.button !== 0) return
-    actor.send({ type: 'ROTATE_START' })
-    if (!actor.getSnapshot().matches({ active: 'rotating' })) return
-    const pivot = pivotViewportPoint()
-    if (pivot === null) return
-    rotateSession = {
-      pointerId: event.pointerId,
-      startPointerAngleDeg: (Math.atan2(event.clientY - pivot.y, event.clientX - pivot.x) * 180) / Math.PI,
-      pivotX: pivot.x,
-      pivotY: pivot.y,
-      emittedDeg: 0
-    }
-    needleTip.setPointerCapture(event.pointerId)
-    event.preventDefault()
-    event.stopPropagation()
-  })
-
-  needleTip.addEventListener('pointermove', (event: PointerEvent) => {
-    if (rotateSession === null || event.pointerId !== rotateSession.pointerId) return
-    if (event.buttons === 0) {
-      endRotateSession()
-      return
-    }
-    // Emission: physical rotation described by the pointer around the pivot
-    // frozen at gesture start (the pivot IS the rotation center — it does
-    // not move during the gesture).
-    const pointerAngle =
-      (Math.atan2(event.clientY - rotateSession.pivotY, event.clientX - rotateSession.pivotX) * 180) / Math.PI
-    let deltaDeg = pointerAngle - rotateSession.startPointerAngleDeg
-    if (event.shiftKey) {
-      deltaDeg = Math.round(deltaDeg / ROTATE_STEP_DEG) * ROTATE_STEP_DEG
-    }
-
-    const target = Math.round(deltaDeg)
-    const dr = target - rotateSession.emittedDeg
-    if (dr !== 0) {
-      rotateSession.emittedDeg = target
-      adapter.applyRotate({ dr, origin: { fx: pivotFraction.fx, fy: pivotFraction.fy } })
-      // The element rotated live: re-capture so the cs keeps tracking it.
-      positionCs()
-    }
-
-    // Visual: the needle tip stays glued to the pointer and elongates with
-    // the drag, using the pose refreshed by the emission above.
-    followPointerWithNeedle(event)
-  })
-
-  needleTip.addEventListener('pointerup', (event: PointerEvent) => {
-    if (rotateSession === null || event.pointerId !== rotateSession.pointerId) return
-    endRotateSession()
-  })
-  needleTip.addEventListener('pointercancel', endRotateSession)
-  needleTip.addEventListener('lostpointercapture', () => {
-    if (rotateSession !== null) endRotateSession()
-  })
-
-  let pivotDragPointerId: number | null = null
-
-  const endPivotDrag = (): void => {
-    if (pivotDragPointerId === null) return
-    const pointerId = pivotDragPointerId
-    pivotDragPointerId = null
-    safeReleaseCapture(pivotNode, pointerId)
-  }
-
-  pivotNode.addEventListener('pointerdown', (event: PointerEvent) => {
-    if (!capabilityActive('rotation-origin') || event.button !== 0) return
-    pivotDragPointerId = event.pointerId
-    pivotNode.setPointerCapture(event.pointerId)
-    event.preventDefault()
-    event.stopPropagation()
-  })
-
-  pivotNode.addEventListener('pointermove', (event: PointerEvent) => {
-    if (pivotDragPointerId === null || event.pointerId !== pivotDragPointerId) return
-    if (event.buttons === 0) {
-      endPivotDrag()
-      return
-    }
-    if (pose === null || pose.localWidth < 1e-3 || pose.localHeight < 1e-3) return
-
-    // Map the pointer into the LOCAL box: offset from the local origin's
-    // viewport position, inverse-transformed through the element matrix.
-    // Dividing by the axis-aligned bounding rect would be wrong as soon as
-    // the element is rotated (the transposition the pivot needs is affine).
-    const origin = localFractionToViewportPoint(pose, 0, 0)
-    const local = worldDeltaToLocalDelta(pose.matrix, event.clientX - origin.x, event.clientY - origin.y)
-    let fx = Math.min(1, Math.max(0, local.x / pose.localWidth))
-    let fy = Math.min(1, Math.max(0, local.y / pose.localHeight))
-
-    // Magnetize to the 8 characteristic points (distance in rendered pixels).
-    pivotMagnetTarget = null
-    for (const [id, point] of Object.entries(CHARACTERISTIC_POINTS) as Array<[HandleId, { fx: number; fy: number }]>) {
-      const distancePx = Math.hypot((fx - point.fx) * pose.frameWidth, (fy - point.fy) * pose.frameHeight)
-      if (distancePx <= PIVOT_MAGNET_RADIUS_PX) {
-        fx = point.fx
-        fy = point.fy
-        pivotMagnetTarget = id
-        break
+  const rotateGesture = bindGestureSession<RotateSession>(needleTip, {
+    onStart: (event) => {
+      if (pose === null) return null
+      actor.send({ type: 'ROTATE_START' })
+      if (!actor.getSnapshot().matches({ active: 'rotating' })) return null
+      const pivot = pivotViewportPoint()
+      if (pivot === null) return null
+      event.preventDefault()
+      event.stopPropagation()
+      return {
+        startPointerAngleDeg: (Math.atan2(event.clientY - pivot.y, event.clientX - pivot.x) * 180) / Math.PI,
+        pivotX: pivot.x,
+        pivotY: pivot.y,
+        emittedDeg: 0
       }
-    }
+    },
+    onMove: (event, session) => {
+      // Emission: physical rotation described by the pointer around the pivot
+      // frozen at gesture start (the pivot IS the rotation center — it does
+      // not move during the gesture).
+      const pointerAngle = (Math.atan2(event.clientY - session.pivotY, event.clientX - session.pivotX) * 180) / Math.PI
+      let deltaDeg = pointerAngle - session.startPointerAngleDeg
+      if (event.shiftKey) {
+        deltaDeg = Math.round(deltaDeg / ROTATE_STEP_DEG) * ROTATE_STEP_DEG
+      }
 
-    pivotFraction = { fx, fy }
-    positionNeedle()
-    refreshHandleVisibility()
+      const target = Math.round(deltaDeg)
+      const dr = target - session.emittedDeg
+      if (dr !== 0) {
+        session.emittedDeg = target
+        adapter?.applyRotate({ dr, origin: { fx: pivotFraction.fx, fy: pivotFraction.fy } })
+        // The element rotated live: re-capture so the cs keeps tracking it.
+        positionCs()
+      }
+
+      // Visual: the needle tip stays glued to the pointer and elongates with
+      // the drag, using the pose refreshed by the emission above.
+      followPointerWithNeedle(event)
+    },
+    onEnd: () => {
+      actor.send({ type: 'ROTATE_END' })
+      // The needle retracts to its resting length once the gesture ends.
+      needleLengthPx = NEEDLE_LENGTH_PX
+      sync()
+    }
   })
 
-  pivotNode.addEventListener('pointerup', endPivotDrag)
-  pivotNode.addEventListener('pointercancel', endPivotDrag)
+  type PivotDragSession = Record<string, never>
+
+  const pivotGesture = bindGestureSession<PivotDragSession>(pivotNode, {
+    onStart: (event) => {
+      if (!capabilityActive('rotation-origin')) return null
+      event.preventDefault()
+      event.stopPropagation()
+      return {}
+    },
+    onMove: (event) => {
+      if (pose === null || pose.localWidth < 1e-3 || pose.localHeight < 1e-3) return
+
+      // Map the pointer into the LOCAL box: offset from the local origin's
+      // viewport position, inverse-transformed through the element matrix.
+      // Dividing by the axis-aligned bounding rect would be wrong as soon as
+      // the element is rotated (the transposition the pivot needs is affine).
+      const origin = localFractionToViewportPoint(pose, 0, 0)
+      const local = worldDeltaToLocalDelta(pose.matrix, event.clientX - origin.x, event.clientY - origin.y)
+      let fx = Math.min(1, Math.max(0, local.x / pose.localWidth))
+      let fy = Math.min(1, Math.max(0, local.y / pose.localHeight))
+
+      // Magnetize to the 8 characteristic points (distance in rendered pixels).
+      pivotMagnetTarget = null
+      for (const [id, point] of Object.entries(CHARACTERISTIC_POINTS) as Array<[HandleId, { fx: number; fy: number }]>) {
+        const distancePx = Math.hypot((fx - point.fx) * pose.frameWidth, (fy - point.fy) * pose.frameHeight)
+        if (distancePx <= PIVOT_MAGNET_RADIUS_PX) {
+          fx = point.fx
+          fy = point.fy
+          pivotMagnetTarget = id
+          break
+        }
+      }
+
+      pivotFraction = { fx, fy }
+      positionNeedle()
+      refreshHandleVisibility()
+    },
+    onEnd: () => {
+      // Nothing to commit or roll back — the pivot fraction already holds the
+      // live position throughout the gesture.
+    }
+  })
 
   // Double-click on the rotation axis: back to its default position (center).
+  // Independent of the drag gesture session — not a pointer gesture itself.
   pivotNode.addEventListener('dblclick', (event: MouseEvent) => {
     if (!capabilityActive('rotation-origin')) return
     pivotFraction = { fx: 0.5, fy: 0.5 }
@@ -970,26 +1399,6 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     event.stopPropagation()
   })
 
-  // ── wiring ───────────────────────────────────────────────────────────────
-
-  csRoot.addEventListener('pointerdown', onBodyPointerDown)
-  csRoot.addEventListener('pointermove', onBodyPointerMove)
-  csRoot.addEventListener('pointerup', onBodyPointerUp)
-  csRoot.addEventListener('pointercancel', () => endDragSession(false))
-  csRoot.addEventListener('lostpointercapture', () => {
-    if (dragSession !== null) endDragSession(false)
-  })
-
-  for (const [handleId, handle] of handleNodes) {
-    handle.addEventListener('pointerdown', onHandlePointerDown(handleId))
-    handle.addEventListener('pointermove', onHandlePointerMove)
-    handle.addEventListener('pointerup', onHandlePointerUp)
-    handle.addEventListener('pointercancel', endResizeSession)
-    handle.addEventListener('lostpointercapture', () => {
-      if (resizeSession !== null && resizeSession.handleId === handleId) endResizeSession()
-    })
-  }
-
   // ── node lifecycle ───────────────────────────────────────────────────────
 
   let resizeObserver: ResizeObserver | null = null
@@ -998,14 +1407,15 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     if (typeof globalThis.ResizeObserver === 'undefined') return
     resizeObserver?.disconnect()
     resizeObserver = new globalThis.ResizeObserver(() => {
-      if (dragSession === null && resizeSession === null && rotateSession === null) {
+      const anyResizeActive = Array.from(resizeGestures.values()).some((gesture) => gesture.isActive())
+      if (!dragGesture.isActive() && !anyResizeActive && !rotateGesture.isActive()) {
         sync()
       }
     })
     resizeObserver.observe(node)
   }
 
-  const unsubscribeElement = options.authorApi.subscribeToNode(options.itemId, (node) => {
+  const handleElementNode = (node: Element | null): void => {
     if (destroyed) return
     if (node instanceof HTMLElement) {
       elementNode = node
@@ -1019,7 +1429,12 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       actor.send({ type: 'NODE_DISAPPEARED' })
     }
     applyMachineState()
-  })
+  }
+
+  // In create mode there is no itemId yet — the subscription starts only
+  // once attachItem hands off a real one.
+  let unsubscribeElement: (() => void) | null =
+    options.itemId !== undefined ? options.authorApi.subscribeToNode(options.itemId, handleElementNode) : null
 
   const unsubscribeContainer =
     options.containerId !== undefined
@@ -1027,14 +1442,23 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
           if (destroyed) return
           containerNode = node instanceof HTMLElement ? node : null
           refreshGabarit()
+          refreshCreationSurface()
         })
       : null
+
+  if (creation !== null) {
+    actor.send({ type: 'CREATE_ARMED' })
+  }
+  applyMachineState()
 
   // ── handle ───────────────────────────────────────────────────────────────
 
   function sync(): void {
-    if (destroyed || elementNode === null) return
-    positionCs()
+    if (destroyed) return
+    if (elementNode !== null) {
+      positionCs()
+    }
+    refreshCreationSurface()
     applyMachineState()
   }
 
@@ -1042,9 +1466,15 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     destroy(): void {
       if (destroyed) return
       destroyed = true
-      unsubscribeElement()
+      unsubscribeElement?.()
       unsubscribeContainer?.()
       resizeObserver?.disconnect()
+      dragGesture.unbind()
+      for (const gesture of resizeGestures.values()) gesture.unbind()
+      rotateGesture.unbind()
+      pivotGesture.unbind()
+      traceGesture?.unbind()
+      creationSurface?.remove()
       actor.stop()
       csRoot.remove()
       gabaritRoot.remove()
@@ -1083,6 +1513,65 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     setContainerGrid(grid: AutoCapsuleGridArtifact | null): void {
       containerGrid = grid
       refreshGabarit()
+    },
+
+    applyCreationGeometry(geometry: CreationGeometry): void {
+      if (creation === null) return
+      const referenceNode = creationReferenceNode()
+      if (referenceNode === null) return
+      const refPose = captureOverlayPose(referenceNode)
+      creationHasGeometry = true
+
+      if ('cellArea' in geometry) {
+        if (containerGrid === null) return
+        const tracks = containerTrackGeometry(refPose)
+        if (tracks === null) return
+        const { rows, cols } = containerGrid.context
+        // Negative row/col/span extend from the grid's far edge (-1 = last
+        // track / to the last track) — only this documented case is exercised.
+        const row = geometry.cellArea.row < 0 ? rows + geometry.cellArea.row + 1 : geometry.cellArea.row
+        const col = geometry.cellArea.col < 0 ? cols + geometry.cellArea.col + 1 : geometry.cellArea.col
+        const rowSpan = geometry.cellArea.rowSpan < 0 ? rows - row + 1 : geometry.cellArea.rowSpan
+        const colSpan = geometry.cellArea.colSpan < 0 ? cols - col + 1 : geometry.cellArea.colSpan
+        const area = { row, col, rowSpan, colSpan }
+        positionCsFromCellArea(refPose, tracks, area)
+        actor.send({ type: 'CREATION_GEOMETRY_APPLIED' })
+        applyMachineState()
+        creation.onCreate({ kind: 'cell-area', area })
+        return
+      }
+
+      const rect = {
+        x: geometry.rect.fx * refPose.localWidth,
+        y: geometry.rect.fy * refPose.localHeight,
+        width: geometry.rect.fw * refPose.localWidth,
+        height: geometry.rect.fh * refPose.localHeight
+      }
+      positionCsFromLocalRect(refPose, rect)
+      actor.send({ type: 'CREATION_GEOMETRY_APPLIED' })
+      applyMachineState()
+      creation.onCreate({
+        kind: 'rect',
+        rect: {
+          x: Math.round(rect.x),
+          y: Math.round(rect.y),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        }
+      })
+    },
+
+    attachItem(input: { itemId: string; adapter: CsValueAdapter }): void {
+      if (destroyed || creation === null) return
+      adapter = input.adapter
+      creation = null
+      csRoot.setAttribute('data-selection-frame', input.itemId)
+      traceGesture?.unbind()
+      creationSurface?.remove()
+      creationSurface = null
+      actor.send({ type: 'ITEM_ATTACHED' })
+      applyMachineState()
+      unsubscribeElement = options.authorApi.subscribeToNode(input.itemId, handleElementNode)
     }
   }
 }

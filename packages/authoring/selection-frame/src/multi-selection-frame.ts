@@ -5,6 +5,7 @@ import { csMachine } from './machine'
 import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, measureWorldRect } from './overlay-pose'
 import type {
   CapabilityPreset,
+  CreationGeometry,
   CsValueAdapter,
   MultiSelectionFrameOptions,
   SelectionFrameHandle,
@@ -258,6 +259,14 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
 
     setContainerGrid(): void {
       // Inert in multi-selection: grid positioning is a single-item context.
+    },
+
+    applyCreationGeometry(_geometry: CreationGeometry): void {
+      // Inert in multi-selection: create mode targets a single new item.
+    },
+
+    attachItem(): void {
+      // Inert in multi-selection: create mode targets a single new item.
     }
   }
 }

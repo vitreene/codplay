@@ -1,13 +1,16 @@
 import type { AutoCapsuleChildPlacementInput, AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
+import type { GridTrackGeometry } from '../grid-geometry'
+import { nearestTrackAnchor, nearestTrackSpan, trackAnchorPx, trackSpanPx } from '../grid-geometry'
 import type { CsRawMoveDiff, CsRawSizeDiff, CsValueAdapter } from '../types'
 
 export type GridPlacementAdapterOptions = {
   /** Grid structure of the parent container — source of truth: capsule-automation. */
   grid: AutoCapsuleGridArtifact
-  /** Container content box in the same pixel space as the cs deltas. */
-  getContainerSize: () => { width: number; height: number }
-  /** Gap sizes in pixels, when known by the editor. */
-  gaps?: { column: number; row: number }
+  /**
+   * Measured track geometry of the real container (resolved px track sizes
+   * and gaps) — no uniform-cell assumption; irregular tracks are supported.
+   */
+  getTrackGeometry: () => GridTrackGeometry
   /** Placement of the child before the gesture starts. */
   initialPlacement: { row: number; col: number; rowSpan?: number; colSpan?: number }
   /** Receives every placement change; the editor applies it to the child definition. */
@@ -26,8 +29,10 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Converts raw pixel deltas into grid cell placement
- * (AutoCapsuleChildPlacementInput). Accumulates sub-cell movement so slow
- * drags still cross cell boundaries; emits only when the placement changes.
+ * (AutoCapsuleChildPlacementInput). Accumulates sub-cell movement, then
+ * resolves the NEAREST track (anchor for moves, extent for spans) against the
+ * measured geometry — correct for irregular track sizes. Emits only when the
+ * placement changes.
  */
 export function createGridPlacementAdapter(options: GridPlacementAdapterOptions): GridPlacementAdapter {
   const { rows, cols } = options.grid.context
@@ -41,16 +46,6 @@ export function createGridPlacementAdapter(options: GridPlacementAdapterOptions)
   let accumulatedY = 0
   let accumulatedW = 0
   let accumulatedH = 0
-
-  const cellSize = (): { width: number; height: number } => {
-    const container = options.getContainerSize()
-    const columnGap = options.gaps?.column ?? 0
-    const rowGap = options.gaps?.row ?? 0
-    return {
-      width: Math.max(1e-3, (container.width - columnGap * (cols - 1)) / cols),
-      height: Math.max(1e-3, (container.height - rowGap * (rows - 1)) / rows)
-    }
-  }
 
   const emitIfChanged = (next: typeof placement): void => {
     if (
@@ -69,41 +64,49 @@ export function createGridPlacementAdapter(options: GridPlacementAdapterOptions)
     applyMove(raw: CsRawMoveDiff): void {
       accumulatedX += raw.dx
       accumulatedY += raw.dy
-      const cell = cellSize()
-      const colOffset = Math.round(accumulatedX / (cell.width + (options.gaps?.column ?? 0)))
-      const rowOffset = Math.round(accumulatedY / (cell.height + (options.gaps?.row ?? 0)))
-      if (colOffset === 0 && rowOffset === 0) return
+      const tracks = options.getTrackGeometry()
 
-      accumulatedX -= colOffset * (cell.width + (options.gaps?.column ?? 0))
-      accumulatedY -= rowOffset * (cell.height + (options.gaps?.row ?? 0))
+      const targetX = trackAnchorPx(tracks.cols, tracks.columnGap, placement.col) + accumulatedX
+      const targetY = trackAnchorPx(tracks.rows, tracks.rowGap, placement.row) + accumulatedY
+      const nextCol = nearestTrackAnchor(tracks.cols, tracks.columnGap, targetX, cols - placement.colSpan + 1)
+      const nextRow = nearestTrackAnchor(tracks.rows, tracks.rowGap, targetY, rows - placement.rowSpan + 1)
+      if (nextCol === placement.col && nextRow === placement.row) return
 
-      emitIfChanged({
-        ...placement,
-        row: clamp(placement.row + rowOffset, 1, rows - placement.rowSpan + 1),
-        col: clamp(placement.col + colOffset, 1, cols - placement.colSpan + 1)
-      })
+      accumulatedX -= trackAnchorPx(tracks.cols, tracks.columnGap, nextCol) - trackAnchorPx(tracks.cols, tracks.columnGap, placement.col)
+      accumulatedY -= trackAnchorPx(tracks.rows, tracks.rowGap, nextRow) - trackAnchorPx(tracks.rows, tracks.rowGap, placement.row)
+
+      emitIfChanged({ ...placement, row: nextRow, col: nextCol })
     },
 
     applyResize(raw: CsRawSizeDiff): void {
-      // Continuous emission sends small increments: accumulate them (like
-      // applyMove) — rounding each increment alone would never cross a cell.
+      // Continuous emission sends small increments: accumulate them, then
+      // resolve the span whose measured extent is nearest to the target size.
       accumulatedW += raw.dw
       accumulatedH += raw.dh
-      const cell = cellSize()
-      const strideX = cell.width + (options.gaps?.column ?? 0)
-      const strideY = cell.height + (options.gaps?.row ?? 0)
-      const colSpanOffset = Math.round(accumulatedW / strideX)
-      const rowSpanOffset = Math.round(accumulatedH / strideY)
-      if (colSpanOffset === 0 && rowSpanOffset === 0) return
+      const tracks = options.getTrackGeometry()
 
-      accumulatedW -= colSpanOffset * strideX
-      accumulatedH -= rowSpanOffset * strideY
+      const targetW = trackSpanPx(tracks.cols, tracks.columnGap, placement.col, placement.colSpan) + accumulatedW
+      const targetH = trackSpanPx(tracks.rows, tracks.rowGap, placement.row, placement.rowSpan) + accumulatedH
+      const nextColSpan = nearestTrackSpan(tracks.cols, tracks.columnGap, placement.col, targetW)
+      const nextRowSpan = nearestTrackSpan(tracks.rows, tracks.rowGap, placement.row, targetH)
+      if (nextColSpan === placement.colSpan && nextRowSpan === placement.rowSpan) return
 
-      emitIfChanged({
-        ...placement,
-        colSpan: clamp(placement.colSpan + colSpanOffset, 1, cols - placement.col + 1),
-        rowSpan: clamp(placement.rowSpan + rowSpanOffset, 1, rows - placement.row + 1)
-      })
+      accumulatedW -=
+        trackSpanPx(tracks.cols, tracks.columnGap, placement.col, nextColSpan) -
+        trackSpanPx(tracks.cols, tracks.columnGap, placement.col, placement.colSpan)
+      accumulatedH -=
+        trackSpanPx(tracks.rows, tracks.rowGap, placement.row, nextRowSpan) -
+        trackSpanPx(tracks.rows, tracks.rowGap, placement.row, placement.rowSpan)
+
+      emitIfChanged({ ...placement, colSpan: nextColSpan, rowSpan: nextRowSpan })
+    },
+
+    applyRotate(): void {
+      // Rotation carries no meaning for grid placement.
+    },
+
+    applyScale(): void {
+      // Scale carries no meaning for grid placement; spans go through applyResize.
     },
 
     applyCellDrop(cell: { row: number; col: number }): void {
@@ -117,12 +120,21 @@ export function createGridPlacementAdapter(options: GridPlacementAdapterOptions)
       })
     },
 
-    applyRotate(): void {
-      // Rotation carries no meaning for grid placement.
-    },
-
-    applyScale(): void {
-      // Scale carries no meaning for grid placement; spans go through applyResize.
+    applyCellArea(area: { row: number; col: number; rowSpan: number; colSpan: number }): void {
+      // Atomic footprint from a handle gesture (north/west handles move the
+      // origin) — resolved by the cs against the measured tracks, no pixel math.
+      accumulatedX = 0
+      accumulatedY = 0
+      accumulatedW = 0
+      accumulatedH = 0
+      const rowSpan = clamp(area.rowSpan, 1, rows)
+      const colSpan = clamp(area.colSpan, 1, cols)
+      emitIfChanged({
+        row: clamp(area.row, 1, rows - rowSpan + 1),
+        col: clamp(area.col, 1, cols - colSpan + 1),
+        rowSpan,
+        colSpan
+      })
     },
 
     resetTo(next): void {
