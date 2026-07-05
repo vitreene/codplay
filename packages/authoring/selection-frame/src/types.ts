@@ -117,6 +117,17 @@ export type SelectionFrameCreationOptions = {
   onCreate: (result: CreationResult) => void
   /** Below this local-px size on both axes, a free-mode trace is discarded. */
   minTraceSizePx?: number
+  /**
+   * Explicit trace context, decided by the editor — never auto-derived from
+   * the active preset. Unset (default): grid if a containerGrid is set on
+   * the frame, libre otherwise (unchanged from the original behavior).
+   * 'libre': forces a free-rect trace even inside a grid container (the
+   * resulting rect is still in container-local px; placing it as a grid
+   * child with a translate relative to the home cell is the editor's job).
+   * 'grid': forces cell-area tracing; falls back to libre if no grid
+   * context is actually available.
+   */
+  context?: 'grid' | 'libre'
 }
 
 export type SelectionFrameOptions = {

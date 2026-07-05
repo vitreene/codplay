@@ -1,11 +1,42 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest'
+import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 
 import type { AuthorApi } from '../src/author-api'
 import { createSelectionFrame } from '../src/selection-frame'
 import { createMultiSelectionFrame } from '../src/multi-selection-frame'
 import type { CsValueAdapter } from '../src/types'
+
+function temp__createGridArtifact(rows: number, cols: number): AutoCapsuleGridArtifact {
+  return {
+    className: 'grid',
+    inlineStyle: {},
+    cssRules: [],
+    context: { rows, cols, areas: [], mode: 'fixed' }
+  }
+}
+
+// jsdom does not implement the Pointer Capture API — polyfill the minimal
+// surface gesture-session.ts relies on so trace/drag/resize gestures can be
+// exercised with real pointerdown/pointermove/pointerup sequences.
+if (typeof HTMLElement.prototype.setPointerCapture !== 'function') {
+  const captured = new WeakMap<HTMLElement, Set<number>>()
+  HTMLElement.prototype.setPointerCapture = function (pointerId: number): void {
+    let set = captured.get(this)
+    if (set === undefined) {
+      set = new Set()
+      captured.set(this, set)
+    }
+    set.add(pointerId)
+  }
+  HTMLElement.prototype.hasPointerCapture = function (pointerId: number): boolean {
+    return captured.get(this)?.has(pointerId) ?? false
+  }
+  HTMLElement.prototype.releasePointerCapture = function (pointerId: number): void {
+    captured.get(this)?.delete(pointerId)
+  }
+}
 
 /**
  * AuthorApi stub with controllable node lifecycle per persoId.
@@ -47,6 +78,18 @@ function temp__csRoot(itemId: string): HTMLElement | null {
   return document.querySelector(`[data-selection-frame="${itemId}"]`)
 }
 
+function temp__creationSurface(): HTMLElement | null {
+  return document.querySelector('[data-cs-creation-surface]')
+}
+
+/** MouseEvent stand-in for a PointerEvent (jsdom convention already used by the alt-click test below) — pointerId is attached separately since MouseEventInit doesn't declare it. */
+function temp__firePointer(target: Element, type: string, init: { clientX?: number; clientY?: number; shiftKey?: boolean }): void {
+  const event = new MouseEvent(type, { button: 0, bubbles: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0, shiftKey: init.shiftKey ?? false })
+  Object.defineProperty(event, 'pointerId', { value: 1 })
+  Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
+  target.dispatchEvent(event)
+}
+
 describe('createSelectionFrame', () => {
   it('creates the cs hidden while no node is present, shows it on node appearance', () => {
     const authorApi = temp__createAuthorApiStub()
@@ -65,6 +108,36 @@ describe('createSelectionFrame', () => {
     expect(cs!.style.display).not.toBe('none')
 
     handle.destroy()
+  })
+
+  it('never calibrates the cs while it is display:none on first attach (same path attachItem uses for a synchronously-resolved node)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const violations: string[] = []
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.hasAttribute('data-selection-frame') && this.style.display === 'none') {
+        violations.push('measured a display:none cs')
+      }
+      return originalGetBoundingClientRect.call(this)
+    }
+
+    try {
+      // A node already resolved BEFORE construction is delivered synchronously
+      // by subscribeToNode — the exact same timing as create mode's attachItem,
+      // which subscribes to an already-registered synthetic node.
+      authorApi.emitNode('item-1', document.createElement('div'))
+      const handle = createSelectionFrame({
+        itemId: 'item-1',
+        authorApi,
+        sceneRoot: document.body,
+        adapter: temp__createNoopAdapter()
+      })
+
+      expect(violations).toEqual([])
+      handle.destroy()
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+    }
   })
 
   it('suspends the cs when the node disappears and reattaches on return', () => {
@@ -243,6 +316,221 @@ describe('createSelectionFrame', () => {
 
     handle.destroy()
     expect(temp__csRoot('item-1')).toBeNull()
+  })
+})
+
+describe('createSelectionFrame — create mode', () => {
+  it('requires itemId+adapter unless creation is provided', () => {
+    const authorApi = temp__createAuthorApiStub()
+    expect(() =>
+      createSelectionFrame({
+        authorApi,
+        sceneRoot: document.body
+      } as never)
+    ).toThrow()
+  })
+
+  it('arms a hidden creation surface and keeps the cs hidden until a geometry exists', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const onCreate = () => {}
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      creation: { onCreate }
+    })
+
+    const surface = temp__creationSurface()
+    expect(surface).not.toBeNull()
+    expect(surface!.style.display).not.toBe('none')
+
+    handle.destroy()
+  })
+
+  it('a libre trace on the creation surface emits one rect result and keeps the cs visible', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const results: Array<{ kind: string }> = []
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      creation: { onCreate: (result) => results.push(result) }
+    })
+    const surface = temp__creationSurface()!
+
+    temp__firePointer(surface, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(surface, 'pointermove', { clientX: 60, clientY: 50 })
+    temp__firePointer(surface, 'pointerup', { clientX: 60, clientY: 50 })
+
+    expect(results).toHaveLength(1)
+    expect(results[0]!.kind).toBe('rect')
+
+    // The cs stays displayed through awaitingItem — "le cadre reste affiché".
+    const cs = document.querySelector<HTMLElement>('[data-selection-frame]')!
+    expect(cs.style.display).not.toBe('none')
+
+    handle.destroy()
+  })
+
+  it('never calibrates the cs while it is display:none (a hidden element always measures as an all-zero rect, corrupting the calibration loop)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const violations: string[] = []
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      if (this.hasAttribute('data-selection-frame') && this.style.display === 'none') {
+        violations.push('measured a display:none cs')
+      }
+      return originalGetBoundingClientRect.call(this)
+    }
+
+    try {
+      const handle = createSelectionFrame({
+        authorApi,
+        sceneRoot: document.body,
+        creation: { onCreate: () => {} }
+      })
+      const surface = temp__creationSurface()!
+
+      temp__firePointer(surface, 'pointerdown', { clientX: 10, clientY: 10 })
+      temp__firePointer(surface, 'pointermove', { clientX: 60, clientY: 50 })
+      temp__firePointer(surface, 'pointerup', { clientX: 60, clientY: 50 })
+
+      expect(violations).toEqual([])
+      handle.destroy()
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect
+    }
+  })
+
+  it('creation.context "libre" forces a rect trace even inside a configured grid container', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const containerNode = document.createElement('div')
+    authorApi.emitNode('grid-container', containerNode)
+    const results: Array<{ kind: string }> = []
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'grid-container',
+      creation: { onCreate: (result) => results.push(result), context: 'libre' }
+    })
+    handle.setContainerGrid(temp__createGridArtifact(4, 4))
+    const surface = temp__creationSurface()!
+
+    temp__firePointer(surface, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(surface, 'pointermove', { clientX: 60, clientY: 50 })
+    temp__firePointer(surface, 'pointerup', { clientX: 60, clientY: 50 })
+
+    expect(results).toHaveLength(1)
+    expect(results[0]!.kind).toBe('rect')
+
+    handle.destroy()
+  })
+
+  it('without an explicit context, a configured grid container traces a cell-area', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const containerNode = document.createElement('div')
+    authorApi.emitNode('grid-container', containerNode)
+    const results: Array<{ kind: string }> = []
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'grid-container',
+      creation: { onCreate: (result) => results.push(result) }
+    })
+    handle.setContainerGrid(temp__createGridArtifact(4, 4))
+    const surface = temp__creationSurface()!
+
+    temp__firePointer(surface, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(surface, 'pointermove', { clientX: 60, clientY: 50 })
+    temp__firePointer(surface, 'pointerup', { clientX: 60, clientY: 50 })
+
+    expect(results).toHaveLength(1)
+    expect(results[0]!.kind).toBe('cell-area')
+
+    handle.destroy()
+  })
+
+  it('a trace under minTraceSizePx is discarded — no emission, no lingering cs', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const onCreate = () => {
+      throw new Error('should not be called for a too-small trace')
+    }
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      creation: { onCreate, minTraceSizePx: 20 }
+    })
+    const surface = temp__creationSurface()!
+
+    temp__firePointer(surface, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(surface, 'pointermove', { clientX: 12, clientY: 11 })
+    temp__firePointer(surface, 'pointerup', { clientX: 12, clientY: 11 })
+
+    handle.destroy()
+  })
+
+  it('applyCreationGeometry emits immediately without a trace gesture', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const results: Array<{ kind: string }> = []
+
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      creation: { onCreate: (result) => results.push(result) }
+    })
+
+    handle.applyCreationGeometry({ rect: { fx: 0, fy: 0, fw: 1, fh: 1 } })
+
+    expect(results).toHaveLength(1)
+    expect(results[0]!.kind).toBe('rect')
+
+    handle.destroy()
+  })
+
+  it('attachItem hands off the SAME cs node to regular selection via subscribeToNode', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const handle = createSelectionFrame({
+      authorApi,
+      sceneRoot: document.body,
+      creation: { onCreate: () => {} }
+    })
+
+    handle.applyCreationGeometry({ rect: { fx: 0, fy: 0, fw: 1, fh: 1 } })
+    const csBefore = document.querySelector<HTMLElement>('[data-selection-frame]')!
+
+    handle.attachItem({ itemId: 'new-item', adapter: temp__createNoopAdapter() })
+    expect(temp__creationSurface()).toBeNull()
+
+    const node = document.createElement('div')
+    authorApi.emitNode('new-item', node)
+
+    const csAfter = temp__csRoot('new-item')!
+    expect(csAfter).toBe(csBefore)
+    expect(csAfter.style.display).not.toBe('none')
+
+    handle.destroy()
+  })
+
+  it('applyCreationGeometry and attachItem are inert outside create mode', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('item-1', document.createElement('div'))
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter()
+    })
+
+    expect(() => {
+      handle.applyCreationGeometry({ rect: { fx: 0, fy: 0, fw: 1, fh: 1 } })
+      handle.attachItem({ itemId: 'other', adapter: temp__createNoopAdapter() })
+    }).not.toThrow()
+
+    handle.destroy()
   })
 })
 

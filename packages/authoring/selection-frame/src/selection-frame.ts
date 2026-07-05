@@ -274,14 +274,21 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   const refreshHandleVisibility = (): void => {
     if (isCreatingState()) {
       // Poignées inertes pendant le tracé : la géométrie n'a pas encore de
-      // capacités à représenter (pas d'item avant l'attache).
+      // capacités à représenter (pas d'item avant l'attache). Remplissage +
+      // bordure tiretée distincts : sinon un tracé de quelques pixels (voire
+      // 0×0 à l'amorce) passe inaperçu derrière le seul contour 1px partagé
+      // avec la sélection régulière.
       for (const [, handle] of handleNodes) handle.style.display = 'none'
       needleLine.style.display = 'none'
       needleTip.style.display = 'none'
       pivotNode.style.display = 'none'
       csRoot.style.cursor = 'crosshair'
+      csRoot.style.borderStyle = 'dashed'
+      csRoot.style.background = 'rgba(74, 144, 217, 0.15)'
       return
     }
+    csRoot.style.borderStyle = 'solid'
+    csRoot.style.background = ''
     const resizeEnabled = (capabilityActive('resize') || capabilityActive('scale')) && operationEnabled('resize')
     for (const [id, handle] of handleNodes) {
       const suppressed = pivotMagnetTarget === id
@@ -317,6 +324,16 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     csRoot.style.height = `${pose.frameHeight}px`
     csRoot.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
     csRoot.style.translate = '0px 0px'
+    // Must be visible BEFORE calibrating: calibrateGhostToWorldSnapshot measures
+    // via getBoundingClientRect, which a display:none element always reports as
+    // an all-zero rect — the correction loop then "corrects" against that
+    // phantom zero every iteration, landing at ~5× the intended position (1
+    // initial + 4 loop iterations). applyMachineState(), called right after
+    // positionCs() by every caller, corrects this back to 'none' if the cs
+    // should truly stay hidden (suspended, below minSizePx, etc.) — this first
+    // attach (and the create-mode attachItem handoff, which goes through this
+    // same path) must not calibrate while still hidden from a prior state.
+    csRoot.style.display = ''
     calibrateGhostToWorldSnapshot(csRoot, pose.rect)
     positionNeedle()
   }
@@ -509,6 +526,20 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
    * own-transform displacement (d = t + (I − M)·O) is subtracted — an element
    * offset by a translate still belongs to its layout cells.
    */
+  /**
+   * A position:absolute grid item still uses grid-row/grid-column as its
+   * placement reference, but its rendered size never derives from a span (it
+   * doesn't participate in track sizing) — unlike a normal grid-flow item,
+   * whose size IS its span. Created-in-libre items are absolutely positioned
+   * for exactly this reason (see the grid demo): re-deriving a span from
+   * their measured size would be meaningless and desyncs the drag ghost from
+   * the actual (fixed) rendered size.
+   */
+  const isSizeIndependentOfGrid = (node: Element): boolean => {
+    const win = node.ownerDocument.defaultView
+    return win?.getComputedStyle(node).position === 'absolute'
+  }
+
   const measureElementFootprint = (): CellArea | null => {
     if (pose === null || elementNode === null || containerNode === null || containerGrid === null) return null
     const containerPose = captureOverlayPose(containerNode)
@@ -530,6 +561,9 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     // +1px inset so a corner sitting exactly on a boundary resolves inward.
     const row = trackIndexAtPx(tracks.rows, tracks.rowGap, layoutY + 1)
     const col = trackIndexAtPx(tracks.cols, tracks.columnGap, layoutX + 1)
+    if (isSizeIndependentOfGrid(elementNode)) {
+      return { row, col, rowSpan: 1, colSpan: 1 }
+    }
     return {
       row,
       col,
@@ -604,7 +638,14 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   const creationReferenceNode = (): Element | null =>
     options.containerId !== undefined ? containerNode : options.sceneRoot
 
-  const creationGridActive = (): boolean => containerNode !== null && containerGrid !== null
+  const creationGridActive = (): boolean => {
+    // Explicit editor choice, never auto-derived from the active preset:
+    // 'libre' forces a free-rect trace even inside a grid container; 'grid'
+    // (or unset) keeps the default — cell-area tracing whenever a grid
+    // context is actually configured, falling back to libre otherwise.
+    if (creation?.context === 'libre') return false
+    return containerNode !== null && containerGrid !== null
+  }
 
   /**
    * Positions csRoot directly from a container-local rect — no elementNode
@@ -629,11 +670,31 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     calibrateGhostToWorldSnapshot(csRoot, { left: corner.x, top: corner.y })
   }
 
+  /**
+   * Same method as editing a real item: the origin zone is a REAL DOM node
+   * laid out by the same grid engine a future real item would be — measuring
+   * its pose (captureOverlayPose, like positionCs() does for an element)
+   * gives the exact rendered corner, with none of the residual drift a
+   * track-arithmetic reconstruction can accumulate (border/padding, subpixel
+   * rounding). Falls back to arithmetic only when no zone node exists for
+   * this cell (dense grids, sampled every DENSE_GRID_STEP).
+   */
   const positionCsFromCellArea = (refPose: OverlayPose, tracks: GridTrackGeometry, area: CellArea): void => {
-    const anchorX = trackAnchorPx(tracks.cols, tracks.columnGap, area.col)
-    const anchorY = trackAnchorPx(tracks.rows, tracks.rowGap, area.row)
     const width = trackSpanPx(tracks.cols, tracks.columnGap, area.col, area.colSpan)
     const height = trackSpanPx(tracks.rows, tracks.rowGap, area.row, area.rowSpan)
+    const originZone = zoneNodes.get(`${area.row}:${area.col}`)
+    if (originZone !== null && originZone !== undefined) {
+      const zonePose = captureOverlayPose(originZone)
+      const m = zonePose.rotationMatrix
+      csRoot.style.width = `${width * zonePose.scaleX}px`
+      csRoot.style.height = `${height * zonePose.scaleY}px`
+      csRoot.style.transform = `matrix(${m.a}, ${m.b}, ${m.c}, ${m.d}, 0, 0)`
+      csRoot.style.translate = '0px 0px'
+      calibrateGhostToWorldSnapshot(csRoot, zonePose.rect)
+      return
+    }
+    const anchorX = trackAnchorPx(tracks.cols, tracks.columnGap, area.col)
+    const anchorY = trackAnchorPx(tracks.rows, tracks.rowGap, area.row)
     positionCsFromLocalRect(refPose, { x: anchorX, y: anchorY, width, height })
   }
 
@@ -693,6 +754,13 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
             if (!actor.getSnapshot().matches({ creating: 'tracing' })) return null
             event.preventDefault()
             creationHasGeometry = true
+            // Must be visible BEFORE positioning: calibrateGhostToWorldSnapshot
+            // measures via getBoundingClientRect, which a display:none element
+            // always reports as an all-zero rect — the correction loop then
+            // "corrects" against that phantom zero every iteration, landing far
+            // off target. applyMachineState() below would set this anyway, but
+            // only AFTER positioning runs.
+            csRoot.style.display = ''
 
             let current: CreationResult
             if (isGrid && startCell !== null && tracks !== null) {
@@ -740,7 +808,30 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
               height: Math.abs(height)
             }
             session.current = { kind: 'rect', rect }
-            positionCsFromLocalRect(session.containerPose, rect)
+
+            // Same method as editing: left/top were calibrated ONCE at the
+            // anchor in onStart and are never touched again — recalibrating
+            // on every move (positionCsFromLocalRect) is what let the origin
+            // corner visibly drift with the pointer. Growth, including past
+            // the anchor in the negative direction, is expressed with
+            // translate + width/height only.
+            //
+            // translate composes LAST (outermost, same space as the raw
+            // viewport deltas the regular body-drag assigns directly to
+            // translate) — NOT before the cs's own rotation. A local-space
+            // overshoot must therefore be converted to viewport space via the
+            // FULL matrix (rotation AND scale) before being assigned, exactly
+            // like localFractionToViewportPoint does for a point; using
+            // scaleX/scaleY alone (no rotation) is what made the anchor drift
+            // on a rotated container when dragging past it.
+            const m = session.containerPose.matrix
+            const overshootLocalX = Math.min(0, width)
+            const overshootLocalY = Math.min(0, height)
+            const translateX = m.a * overshootLocalX + m.c * overshootLocalY
+            const translateY = m.b * overshootLocalX + m.d * overshootLocalY
+            csRoot.style.translate = `${translateX}px ${translateY}px`
+            csRoot.style.width = `${Math.abs(width) * session.containerPose.scaleX}px`
+            csRoot.style.height = `${Math.abs(height) * session.containerPose.scaleY}px`
           },
           onEnd: (session, apply) => {
             const result = session.current
@@ -850,6 +941,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       }
 
       event.preventDefault()
+      const gridContext = gridClone !== null ? captureGridDragContext(event.clientX, event.clientY) : null
       return {
         parentMatrix: pose.parentMatrix,
         startRectLeft: pose.rect.left,
@@ -860,7 +952,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
         emittedY: 0,
         axisLock: null,
         gridClone,
-        gridContext: gridClone !== null ? captureGridDragContext(event.clientX, event.clientY) : null,
+        gridContext,
         lastCell: null,
         lastZoneKey: null,
         cloneAnimation: null,
@@ -918,10 +1010,19 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
               const futureLocalW = trackSpanPx(tracks.cols, tracks.columnGap, origin.col, colSpan)
               const futureLocalH = trackSpanPx(tracks.rows, tracks.rowGap, origin.row, rowSpan)
 
+              // A position:absolute item's size never derives from a span —
+              // it doesn't depend on the grid at all, only its anchor does.
+              // Project the displacement (and render the ghost) at the
+              // item's OWN unchanging dimensions instead of the target
+              // cell's span size; only the corner (position) animates.
+              const sizeIndependent = isSizeIndependentOfGrid(elementNode)
+              const targetLocalW = sizeIndependent ? pose.localWidth : futureLocalW
+              const targetLocalH = sizeIndependent ? pose.localHeight : futureLocalH
+
               const own = captureOwnTransformComponents(elementNode, pose.localWidth, pose.localHeight)
               const originFx = pose.localWidth > 1e-6 ? own.originX / pose.localWidth : 0.5
               const originFy = pose.localHeight > 1e-6 ? own.originY / pose.localHeight : 0.5
-              const displacement = ownCornerDisplacement(own, originFx * futureLocalW, originFy * futureLocalH)
+              const displacement = ownCornerDisplacement(own, originFx * targetLocalW, originFy * targetLocalH)
 
               const cornerLocalX = trackAnchorPx(tracks.cols, tracks.columnGap, origin.col) + displacement.x
               const cornerLocalY = trackAnchorPx(tracks.rows, tracks.rowGap, origin.row) + displacement.y
@@ -934,13 +1035,15 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
               // Future rendered size = future layout size × current visual scale.
               const scaleRatioX = pose.localWidth > 1e-6 ? pose.frameWidth / pose.localWidth : 1
               const scaleRatioY = pose.localHeight > 1e-6 ? pose.frameHeight / pose.localHeight : 1
+              const renderedW = sizeIndependent ? pose.frameWidth : futureLocalW * scaleRatioX
+              const renderedH = sizeIndependent ? pose.frameHeight : futureLocalH * scaleRatioY
 
               session.cloneAnimation?.cancel()
               session.cloneAnimation = waapi.animate(session.gridClone, {
                 left: `${corner.x}px`,
                 top: `${corner.y}px`,
-                width: `${futureLocalW * scaleRatioX}px`,
-                height: `${futureLocalH * scaleRatioY}px`,
+                width: `${renderedW}px`,
+                height: `${renderedH}px`,
                 duration: 500,
                 ease: 'outQuad'
               })
@@ -1521,6 +1624,9 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       if (referenceNode === null) return
       const refPose = captureOverlayPose(referenceNode)
       creationHasGeometry = true
+      // See onStart: must be visible before positioning, or calibration
+      // measures against a phantom all-zero display:none rect.
+      csRoot.style.display = ''
 
       if ('cellArea' in geometry) {
         if (containerGrid === null) return

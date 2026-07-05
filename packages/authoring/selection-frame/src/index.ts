@@ -46,6 +46,8 @@ export type { OverlayPose, OwnTransformComponents } from './overlay-pose'
 
 export type {
   CapabilityPreset,
+  CreationGeometry,
+  CreationResult,
   CsCapability,
   CsRawMoveDiff,
   CsRawRotateDiff,
@@ -53,6 +55,7 @@ export type {
   CsRawSizeDiff,
   CsValueAdapter,
   MultiSelectionFrameOptions,
+  SelectionFrameCreationOptions,
   SelectionFrameHandle,
   SelectionFrameOptions,
   SelectionFramePart
