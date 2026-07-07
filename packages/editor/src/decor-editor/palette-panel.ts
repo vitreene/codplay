@@ -25,9 +25,14 @@ export interface PanelField {
   options?: string[]
   /** Pour kind: 'icon-select' uniquement — boutons icônes sans label (ex. alignement). */
   iconOptions?: IconOption[]
-  /** Pour kind: 'boolean' uniquement — valeurs CSS pour actif/inactif (ex. "bold"/"normal"). */
-  trueValue?: string
-  falseValue?: string
+  /**
+   * Pour kind: 'boolean' uniquement — valeur écrite pour actif/inactif. Le plus souvent
+   * une valeur CSS (ex. "bold"/"normal") pour un champ sous `style.*`, mais un module hors
+   * `style` (ex. `textAutoSize.enabled`) porte un vrai booléen TypeScript, pas une chaîne —
+   * le rendu n'a pas à imposer un format de valeur au décor (cf §4 bis, moteur de panneaux).
+   */
+  trueValue?: string | boolean
+  falseValue?: string | boolean
   /** Pour kind: 'boolean' uniquement — icône affichée à la place du label texte (ex. B/I). */
   icon?: IconName
   /** Pour kind: 'slider' uniquement — bornes de la plage (valeurs saisies, avant échelle). */

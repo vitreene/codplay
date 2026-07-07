@@ -5,6 +5,7 @@ import { panelsForTypes } from './palette-panel'
 import type { PaletteConfig, PanelId } from './palette-panel'
 import { resolveFieldAcrossItems } from './field-state'
 import type { FieldState } from './field-state'
+import { buildPatchFromPath } from './path-patch'
 import type {
   DecorPatch, DecorPreset, ItemType, OrientationContext, ResolvedDecor, ZoneCard, ZoneTable,
 } from './types'
@@ -151,6 +152,16 @@ export class DecorEditorController {
   applyPatch(patch: DecorPatch): void {
     this.send({ type: 'PATCH.APPLY', patch })
     this.emitDecorChange()
+  }
+
+  /**
+   * Construit un écart à partir d'un chemin générique ("groupe.propriete", ou racine) et
+   * l'applique — même règle que `applyPatch` (spec §7 bis). Le rendu appelle cette méthode
+   * sans connaître la structure du décor, symétrique de `resolveField`/`hasOwnPatch` en
+   * lecture : aucune limitation du rendu à `style.*`.
+   */
+  applyPathPatch(path: string, value: unknown): void {
+    this.applyPatch(buildPatchFromPath(path, value))
   }
 
   /** Contrôle « hériter » — masqué en multi-sélection : no-op tant que plusieurs items sont attachés. */

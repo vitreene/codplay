@@ -39,6 +39,17 @@ export interface PositionPatch {
   scale?: { x: number; y: number }
 }
 
+// ─── Text auto-size (module non-CSS, transposé en aval — spec text-auto-size §5) ──
+//
+// La coche « auto » ne peut pas vivre dans `style` (valeurs CSS finales uniquement) :
+// elle vit dans ce module à part, comme `position`. Le calcul lui-même (taille de police,
+// line-height) est produit par `@codplay/text-auto-size`, jamais stocké ici — seule
+// l'intention (`enabled`) est persistée dans l'écart.
+
+export interface TextAutoSizePatch {
+  enabled: boolean
+}
+
 // ─── Decor patch (écart) ────────────────────────────────────────────────────
 //
 // `style` est une carte OUVERTE de propriétés CSS : le domaine ne connaît
@@ -62,6 +73,7 @@ export interface DecorPatch {
   zone?: string | null // référence PAR NOM ; null = surface de la capsule
   capsule?: CapsulePatch // items capsule uniquement (§ 8)
   text?: string // contenu textuel (saisie dans dedit)
+  textAutoSize?: TextAutoSizePatch // items texte uniquement (spec text-auto-size §5)
   custom?: string // mini-éditeur de code : CSS libre, responsabilité auteur
 }
 

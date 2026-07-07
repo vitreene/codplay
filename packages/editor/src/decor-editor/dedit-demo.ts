@@ -1,18 +1,30 @@
 import './decor-editor.css'
 
+import { computeTextAutoSize, pxToCqw } from '@codplay/text-auto-size'
 import { DecorEditorController } from './controller'
 import { createDecorEditorPalette } from './render'
 import type { DecorEditorCatalogs } from './controller'
 import type { PaletteConfig } from './palette-panel'
 import type { ResolvedDecor } from './types'
 
+// « Advent Pro » en premier : seule police réellement chargée (index.html) — police variable
+// avec axe `wdth`, pour tester l'élargissement font-stretch (spec text-auto-size §2.3). Les
+// autres noms sont des placeholders non chargés (défaut navigateur en pratique).
 const FONT_FAMILIES = [
-  'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat',
+  'Advent Pro', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat',
   'Merriweather', 'Playfair Display', 'Source Serif Pro', 'PT Serif', 'Lora',
 ]
 
 /** Style de base de l'item de démo, reposé à chaque réapplication du décor résolu (§ applyResolvedDecor). */
-const BASE_ITEM_STYLE = 'padding:24px;max-width:60%;min-height:60px;border:1px dashed #4b5563;color:#f9fafb;overflow-wrap:break-word;'
+const BASE_ITEM_STYLE = 'box-sizing:border-box;padding:24px;border:1px dashed #4b5563;background-color:#1f2937;color:#f9fafb;overflow-wrap:break-word;overflow:hidden;'
+
+/**
+ * Largeur du conteneur de référence pour la conversion cqw ↔ px (spec text-auto-size §3.3,
+ * §4) — fixe pour la démo (pas de builder ni de pont position réels ici), déclarée sur
+ * `stage` via `container-type: inline-size` pour que les `cqw` écrits par le panneau
+ * Dimensions se résolvent réellement (sinon `cqw` sans conteneur de requête ancêtre vaut 0).
+ */
+const STAGE_REFERENCE_WIDTH_PX = 600
 
 /**
  * Configuration de palette : un exemple d'usage du moteur de panneaux, PAS une
@@ -55,6 +67,9 @@ const PALETTE_CONFIG: PaletteConfig = {
           ],
         },
         { path: 'style.color', kind: 'color', label: 'Texte' },
+        // Case « auto » (spec text-auto-size §5) : un vrai booléen, pas une valeur CSS —
+        // possible depuis l'élargissement de trueValue/falseValue (string | boolean).
+        { path: 'textAutoSize.enabled', kind: 'boolean', label: 'Auto' },
       ],
     },
     {
@@ -65,11 +80,16 @@ const PALETTE_CONFIG: PaletteConfig = {
         { path: 'style.height', kind: 'number', label: 'Hauteur' },
       ],
     },
+    {
+      id: 'content',
+      label: 'Contenu',
+      fields: [{ path: 'text', kind: 'text', label: 'Texte' }],
+    },
     { id: 'custom', label: 'Custom', kind: 'custom-code' },
     { id: 'presets', label: 'Presets', kind: 'preset-list' },
   ],
   panelsByItemType: {
-    text: ['shape', 'typo', 'dimensions', 'custom', 'presets'],
+    text: ['shape', 'typo', 'dimensions', 'content', 'custom', 'presets'],
     image: ['shape', 'dimensions', 'custom', 'presets'],
     media: ['shape', 'dimensions', 'custom', 'presets'],
     video: ['shape', 'dimensions', 'custom', 'presets'],
@@ -86,14 +106,20 @@ export function runDecorEditorDemo(): void {
   const app = document.getElementById('app')
   if (!app) return
   app.innerHTML = ''
-  app.style.cssText = 'display:grid;width:100%;height:100%;'
+  // Centré explicitement : la palette est en `position:fixed` en haut à gauche
+  // (cf plus bas) — sans centrage, le stage (largeur fixe) se collerait au même
+  // coin par défaut (`display:grid` sans `justify-items` centre pas un enfant à
+  // taille définie) et le recouvrirait entièrement.
+  app.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;'
 
   const stage = document.createElement('div')
-  stage.style.cssText = 'display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;'
+  // `container-type: inline-size` + largeur fixe : les `cqw` écrits par la palette
+  // (Dimensions, mais aussi le résultat du calcul auto-size) se résolvent réellement
+  // contre cette largeur — sans conteneur de requête ancêtre, `cqw` vaudrait 0.
+  stage.style.cssText = `display:flex;align-items:center;justify-content:center;container-type:inline-size;width:${STAGE_REFERENCE_WIDTH_PX}px;`
   app.appendChild(stage)
 
   const itemEl = document.createElement('div')
-  itemEl.textContent = 'Le vif renard brun saute par-dessus le chien paresseux.'
   itemEl.style.cssText = BASE_ITEM_STYLE
   stage.appendChild(itemEl)
 
@@ -107,7 +133,12 @@ export function runDecorEditorDemo(): void {
 
   const controller = new DecorEditorController(catalogs)
 
-  const defaults: ResolvedDecor = { style: { 'font-size': '4cqw' } }
+  const defaults: ResolvedDecor = {
+    style: { 'font-family': 'Advent Pro', 'font-size': '4cqw', width: '40cqw', height: '20cqw' },
+    text: 'Le vif renard brun saute par-dessus le chien paresseux.',
+    // Coché par défaut : c'est justement la fonctionnalité qu'on teste (spec text-auto-size).
+    textAutoSize: { enabled: true },
+  }
   controller.attachItems([{
     itemId: 'demo-item',
     itemType: 'text',
@@ -123,8 +154,8 @@ export function runDecorEditorDemo(): void {
   // une propriété retirée par « hériter » disparaît bien de l'item (l'écart émis
   // par onDecorChange ne porte plus cette clé, donc appliquer seulement l'écart
   // ne peut jamais retirer une valeur déjà posée en style inline).
-  applyResolvedDecor(itemEl, controller.getResolvedDecors()[0]!)
-  controller.subscribe(() => applyResolvedDecor(itemEl, controller.getResolvedDecors()[0]!))
+  applyResolvedDecor(itemEl, controller.getResolvedDecors()[0]!, STAGE_REFERENCE_WIDTH_PX)
+  controller.subscribe(() => applyResolvedDecor(itemEl, controller.getResolvedDecors()[0]!, STAGE_REFERENCE_WIDTH_PX))
 
   const palette = createDecorEditorPalette(controller)
   palette.element.style.top = '24px'
@@ -169,13 +200,70 @@ function groupTypoIconFields(paletteEl: HTMLElement): void {
  * réapplication : `style` étant une carte ouverte propriété-CSS → valeur-CSS, un
  * simple `setProperty` ne peut jamais RETIRER une propriété qui a disparu de
  * l'écart résolu (ex. après un « hériter » qui retombe sur un défaut absent).
+ *
+ * `textAutoSize` (spec text-auto-size §7) : calculé ici, en direct, sur l'item
+ * affiché — jamais persisté (l'écart ne porte que `enabled`). `custom` est ajouté
+ * en dernier, donc prime toujours sur le résultat du calcul (§6).
  */
-function applyResolvedDecor(el: HTMLElement, decor: ResolvedDecor): void {
+function applyResolvedDecor(el: HTMLElement, decor: ResolvedDecor, referenceWidthPx: number): void {
   el.style.cssText = BASE_ITEM_STYLE
+  if (decor.text !== undefined) el.textContent = decor.text
   if (decor.style) {
     for (const [prop, value] of Object.entries(decor.style)) {
       el.style.setProperty(prop, value)
     }
   }
+  if (decor.textAutoSize?.enabled) {
+    applyTextAutoSize(el, decor, referenceWidthPx)
+  }
   if (decor.custom !== undefined) el.style.cssText += `;${decor.custom}`
+}
+
+/**
+ * Zone de texte réellement disponible (content-box, padding/bordure déduits) — le contrat
+ * est que TOUT le texte tienne dans le bloc, padding compris, pas seulement dans sa boîte
+ * de bordure. `getComputedStyle().width/height` rapporte la taille selon `box-sizing` tel
+ * que déclaré (ex. la boîte de BORDURE avec `box-sizing:border-box`, vérifié empiriquement
+ * ici — pas automatiquement le contenu) : padding et bordure sont donc déduits
+ * explicitement, via d'autres propriétés calculées — toujours des computed styles, jamais
+ * `getBoundingClientRect` (mesure, pas ancrage).
+ */
+function contentBoxSizePx(cs: CSSStyleDeclaration): { widthPx: number; heightPx: number } {
+  const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+  const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+  const borderX = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth)
+  const borderY = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
+  return {
+    widthPx: parseFloat(cs.width) - paddingX - borderX,
+    heightPx: parseFloat(cs.height) - paddingY - borderY,
+  }
+}
+
+/**
+ * La police utilisée pour la mesure doit être EXACTEMENT celle qui sera rendue — y compris
+ * son repli (ex. `decor.style['font-family']` absent, comme au tout premier chargement).
+ * Un repli codé en dur ici (ex. "Inter") diverge silencieusement du repli réel choisi par
+ * le navigateur (une police système quelconque), causant des écarts de mesure minimes qui
+ * font parfois basculer le texte sur une ligne de plus — d'où la lecture de la police
+ * réellement CALCULÉE sur l'élément, jamais une valeur par défaut devinée.
+ */
+function applyTextAutoSize(el: HTMLElement, decor: ResolvedDecor, referenceWidthPx: number): void {
+  const cs = getComputedStyle(el)
+  const { widthPx, heightPx } = contentBoxSizePx(cs)
+
+  const result = computeTextAutoSize({
+    text: decor.text ?? '',
+    font: {
+      family: cs.fontFamily,
+      weight: cs.fontWeight,
+      style: cs.fontStyle === 'italic' ? 'italic' : 'normal',
+    },
+    blockWidthCqw: pxToCqw(widthPx, referenceWidthPx),
+    blockHeightCqw: pxToCqw(heightPx, referenceWidthPx),
+    referenceWidthPx,
+  })
+
+  el.style.setProperty('font-size', `${result.fontSizeCqw}cqw`)
+  el.style.setProperty('line-height', String(result.lineHeight))
+  el.style.setProperty('font-stretch', result.fontStretch)
 }

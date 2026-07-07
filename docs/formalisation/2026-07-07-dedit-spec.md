@@ -408,8 +408,10 @@ interface PanelField {
   label: string
   options?: string[]      // pour kind: 'select'
   iconOptions?: IconOption[]  // pour kind: 'icon-select' — boutons icônes sans label
-  trueValue?: string      // pour kind: 'boolean' — valeur CSS si actif (ex. "bold")
-  falseValue?: string     // pour kind: 'boolean' — valeur CSS si inactif (ex. "normal")
+  trueValue?: string | boolean   // pour kind: 'boolean' — valeur si actif : CSS pour un champ
+                                  // sous style.* (ex. "bold"), vrai booléen pour un module hors
+                                  // style (ex. textAutoSize.enabled) — défaut `true` si omis
+  falseValue?: string | boolean  // symétrique, défaut `false` si omis
   icon?: IconName         // pour kind: 'boolean' — icône affichée à la place du label texte
   min?: number; max?: number; step?: number   // pour kind: 'slider' — bornes (valeurs saisies, avant échelle)
 }

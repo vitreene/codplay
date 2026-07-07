@@ -1,7 +1,6 @@
 import type { ClassNameValue } from 'codplay/runtime/perso-shared-types'
 import type { DecorPatch, ResolvedDecor } from './types'
-
-const STRUCTURED_GROUPS = ['position', 'capsule'] as const
+import { STRUCTURED_GROUPS } from './decor-patch-groups'
 
 /**
  * Résout un `classes` déjà courant (chaîne, toujours le cas dans un décor résolu)

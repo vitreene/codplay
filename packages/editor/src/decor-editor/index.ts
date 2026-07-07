@@ -1,5 +1,5 @@
 export type {
-  OrientationContext, ItemType, FlexAnchor, CapsulePatch, PositionPatch,
+  OrientationContext, ItemType, FlexAnchor, CapsulePatch, PositionPatch, TextAutoSizePatch,
   DecorPatch, ResolvedDecor, DecorPreset,
   ZoneCoords, ZoneDef, ZoneTable, ZoneCard,
   PositionValuesPx,

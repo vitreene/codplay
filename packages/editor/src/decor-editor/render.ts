@@ -187,7 +187,11 @@ function renderField(
   }
 }
 
-/** Nom de propriété CSS ciblé par un chemin "style.<propriete>" (seul cas géré par ces contrôles en phase 3). */
+/**
+ * Nom de propriété CSS ciblé par un chemin "style.<propriete>" — utilisé uniquement pour
+ * choisir la règle de formatage numérique (`css-value-format.ts`), qui n'a de sens que pour
+ * `style.*`. N'intervient pas dans l'écriture du patch (générique, cf `applyPathPatch`).
+ */
 function cssPropertyOf(path: string): string {
   return path.split('.').slice(1).join('.')
 }
@@ -215,7 +219,7 @@ function renderColorField(
     // patch sans jamais recréer cet <input> (cf commentaire dans render()) —
     // sinon le navigateur ferme le picker au premier changement de couleur.
     input.addEventListener('input', () => {
-      applyStylePatch(controller, path, hexToCssOklch(input.value))
+      controller.applyPathPatch(path, hexToCssOklch(input.value))
     })
 
     return () => {
@@ -250,7 +254,7 @@ function renderNumberField(
     control.appendChild(input)
     input.addEventListener('change', () => {
       if (input.value === '') return
-      applyStylePatch(controller, path, formatNumberForCssProperty(cssProperty, Number(input.value)))
+      controller.applyPathPatch(path, formatNumberForCssProperty(cssProperty, Number(input.value)))
     })
     return () => {
       if (document.activeElement === input) return
@@ -282,7 +286,7 @@ function renderSliderField(
     input.step = String(step)
     control.appendChild(input)
     input.addEventListener('input', () => {
-      applyStylePatch(controller, path, formatNumberForCssProperty(cssProperty, Number(input.value)))
+      controller.applyPathPatch(path, formatNumberForCssProperty(cssProperty, Number(input.value)))
     })
     return () => {
       if (document.activeElement === input) return
@@ -294,38 +298,74 @@ function renderSliderField(
   })
 }
 
-/** Bouton-bascule icônisé (icône lucide si fournie, sinon le label sert de glyphe, ex. "B"/"I") — jamais de checkbox. */
+/**
+ * Deux formes exclusives, jamais mélangées (une icône ne porte pas aussi un label texte
+ * dupliqué) : bouton-bascule icônisé sans label (ex. "B"/"I") si `field.icon` est fourni,
+ * sinon case à cocher classique avec son label (ex. "Auto").
+ */
 function renderBooleanField(
   container: HTMLElement,
   controller: DecorEditorController,
   field: PanelField,
   multi: boolean,
 ): FieldUpdater {
-  const { path } = field
-  const trueValue = field.trueValue ?? 'true'
-  const falseValue = field.falseValue ?? 'false'
+  return field.icon
+    ? renderIconToggleField(container, controller, field, multi)
+    : renderCheckboxField(container, controller, field, multi)
+}
+
+function renderIconToggleField(
+  container: HTMLElement,
+  controller: DecorEditorController,
+  field: PanelField,
+  multi: boolean,
+): FieldUpdater {
+  const { path, icon } = field
+  const trueValue: string | boolean = field.trueValue ?? true
+  const falseValue: string | boolean = field.falseValue ?? false
   return fieldRow(container, field.label, path, multi, controller, control => {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.classList.add('dedit-toggle-btn')
-    if (field.icon) {
-      btn.innerHTML = iconSvg(field.icon)
-      btn.title = field.label
-    } else {
-      btn.textContent = field.label
-    }
+    btn.innerHTML = iconSvg(icon!)
+    btn.title = field.label
     control.appendChild(btn)
     btn.addEventListener('click', () => {
-      const state = controller.resolveField<string | undefined>(path)
+      const state = controller.resolveField<string | boolean | undefined>(path)
       const isActive = state.kind === 'uniform' && state.value === trueValue
-      applyStylePatch(controller, path, isActive ? falseValue : trueValue)
+      controller.applyPathPatch(path, isActive ? falseValue : trueValue)
     })
     return () => {
-      const state = controller.resolveField<string | undefined>(path)
+      const state = controller.resolveField<string | boolean | undefined>(path)
       btn.classList.toggle('dedit-toggle-btn--active', state.kind === 'uniform' && state.value === trueValue)
       btn.classList.toggle('dedit-toggle-btn--mixed', state.kind === 'mixed')
     }
-  }, !field.icon)
+  }, false)
+}
+
+function renderCheckboxField(
+  container: HTMLElement,
+  controller: DecorEditorController,
+  field: PanelField,
+  multi: boolean,
+): FieldUpdater {
+  const { path } = field
+  const trueValue: string | boolean = field.trueValue ?? true
+  const falseValue: string | boolean = field.falseValue ?? false
+  return fieldRow(container, field.label, path, multi, controller, control => {
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    control.appendChild(input)
+    input.addEventListener('change', () => {
+      controller.applyPathPatch(path, input.checked ? trueValue : falseValue)
+    })
+    return () => {
+      const state = controller.resolveField<string | boolean | undefined>(path)
+      input.checked = state.kind === 'uniform' && state.value === trueValue
+      input.indeterminate = state.kind === 'mixed'
+      control.parentElement?.classList.toggle('dedit-field--mixed', state.kind === 'mixed')
+    }
+  }, true)
 }
 
 function renderSelectField(
@@ -349,7 +389,7 @@ function renderSelectField(
     control.appendChild(select)
     select.addEventListener('change', () => {
       if (select.value === '') return
-      applyStylePatch(controller, path, select.value)
+      controller.applyPathPatch(path, select.value)
     })
     return () => {
       const state = controller.resolveField<string | undefined>(path)
@@ -379,7 +419,7 @@ function renderIconSelectField(
       btn.classList.add('dedit-toggle-btn')
       btn.innerHTML = iconSvg(opt.icon)
       btn.title = opt.value
-      btn.addEventListener('click', () => applyStylePatch(controller, path, opt.value))
+      btn.addEventListener('click', () => controller.applyPathPatch(path, opt.value))
       control.appendChild(btn)
       return { btn, value: opt.value }
     })
@@ -404,7 +444,7 @@ function renderTextField(
     const input = document.createElement('input')
     input.type = 'text'
     control.appendChild(input)
-    input.addEventListener('change', () => applyStylePatch(controller, path, input.value))
+    input.addEventListener('change', () => controller.applyPathPatch(path, input.value))
     return () => {
       if (document.activeElement === input) return
       const state = controller.resolveField<string | undefined>(path)
@@ -457,10 +497,4 @@ function renderPresetListPanel(container: HTMLElement, controller: DecorEditorCo
   }
   container.appendChild(wrapper)
   return () => {}
-}
-
-/** Écrit une valeur CSS finale dans `style.<propriete>` (seule cible gérée par ces contrôles en phase 3). */
-function applyStylePatch(controller: DecorEditorController, path: string, cssValue: string): void {
-  const cssProperty = cssPropertyOf(path)
-  controller.applyPatch({ style: { [cssProperty]: cssValue } })
 }

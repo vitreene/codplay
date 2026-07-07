@@ -106,6 +106,16 @@ describe('DecorEditorController — édition (sélection simple)', () => {
     ctrl.destroy()
   })
 
+  it('applyPathPatch construit l\'écart depuis un chemin générique et l\'applique (hors style)', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    ctrl.attachItems([attachInput()])
+    const cb = vi.fn()
+    ctrl.onDecorChange(cb)
+    ctrl.applyPathPatch('textAutoSize.enabled', true)
+    expect(cb).toHaveBeenCalledWith([{ itemId: 'item-1', patch: { textAutoSize: { enabled: true } } }])
+    ctrl.destroy()
+  })
+
   it('stripInherited retire l\'écart et émet le patch résultant', () => {
     const ctrl = new DecorEditorController(emptyCatalogs())
     ctrl.attachItems([attachInput({ patch: { style: { 'font-size': '20cqw', 'font-weight': 'bold' } } })])

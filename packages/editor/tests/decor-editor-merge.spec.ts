@@ -34,6 +34,18 @@ describe('mergePatch', () => {
     expect(result.position).toEqual({ x: 1, y: 2 })
   })
 
+  it('textAutoSize (module distinct, pas du style) fusionne indépendamment', () => {
+    const base: DecorPatch = {}
+    const result = mergePatch(base, { textAutoSize: { enabled: true } })
+    expect(result.textAutoSize).toEqual({ enabled: true })
+  })
+
+  it('textAutoSize absent de addition → base intacte (hérité)', () => {
+    const base: DecorPatch = { textAutoSize: { enabled: true } }
+    const result = mergePatch(base, { style: { color: 'red' } })
+    expect(result.textAutoSize).toEqual({ enabled: true })
+  })
+
   it('zone: null abandonne toute zone', () => {
     const base: DecorPatch = { zone: 'header' }
     const result = mergePatch(base, { zone: null })
