@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "codplay": "*",
     "@codplay/capsule-automation": "*",
+    "codplay": "*",
+    "color": "^5.0.3",
+    "lucide-static": "^1.23.0",
     "xstate": "^5.32.2"
   },
   "devDependencies": {

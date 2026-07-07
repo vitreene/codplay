@@ -1,0 +1,56 @@
+// ─── Formatage des valeurs CSS — config centralisée ─────────────────────────
+//
+// La palette édite des propriétés CSS via des contrôles conviviaux (nombre sans
+// unité affichée, curseur…) mais le décor ne stocke que des chaînes CSS finales
+// (spec §3.2) — jamais de valeur intermédiaire à convertir en aval. Cette table
+// dit, pour une propriété CSS donnée, comment un nombre saisi devient une chaîne
+// CSS : certaines propriétés acceptent un nombre nu (order, z-index, opacity…),
+// d'autres ont besoin d'une unité (cqw, systématique pour toute grandeur — §3.3).
+//
+// Un FACTEUR D'ÉCHELLE (`scale`) permet d'ajuster la granularité perçue : une
+// saisie de "1" ne produit pas nécessairement "1cqw" — pour des grandeurs fines
+// (épaisseur de bord, rayon, padding), une valeur de scale plus petite rapproche
+// l'unité saisie du rendu visuel réel. Valeur = évaluation empirique, à ajuster
+// ici sans toucher au reste du code.
+
+export type NumberFormat = 'cqw' | 'raw'
+
+interface NumberFormatEntry {
+  format: NumberFormat
+  /** Facteur multiplicatif appliqué à la valeur saisie avant application de l'unité. */
+  scale?: number
+}
+
+const NUMBER_FORMAT_BY_PROPERTY: Record<string, NumberFormatEntry> = {
+  order: { format: 'raw' },
+  'z-index': { format: 'raw' },
+  opacity: { format: 'raw' },
+  'font-weight': { format: 'raw' },
+  'line-height': { format: 'raw' },
+  'border-width': { format: 'cqw', scale: 0.25 },
+  'border-radius': { format: 'cqw', scale: 0.25 },
+  padding: { format: 'cqw', scale: 0.25 },
+}
+
+const DEFAULT_ENTRY: NumberFormatEntry = { format: 'cqw' }
+
+/** Convertit une saisie numérique en chaîne CSS finale pour une propriété donnée. */
+export function formatNumberForCssProperty(cssProperty: string, value: number): string {
+  const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
+  if (entry.format === 'raw') return String(value)
+  const scaled = value * (entry.scale ?? 1)
+  return `${scaled}cqw`
+}
+
+/**
+ * Extrait la valeur saisie (avant échelle) d'une chaîne CSS déjà formatée —
+ * inverse de `formatNumberForCssProperty`, pour réafficher la valeur telle que
+ * l'utilisateur l'a tapée plutôt que la valeur cqw résultante.
+ */
+export function parseNumberFromCssValue(cssProperty: string, value: string): number | undefined {
+  const match = value.match(/^-?\d+(\.\d+)?/)
+  if (!match) return undefined
+  const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
+  const scale = entry.format === 'cqw' ? (entry.scale ?? 1) : 1
+  return Number(match[0]) / scale
+}

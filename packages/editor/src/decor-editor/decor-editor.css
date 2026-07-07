@@ -1,0 +1,235 @@
+/* ── Variables ──────────────────────────────────────────────────────────── */
+:root {
+  --dedit-bg: #1f2937;
+  --dedit-border: #374151;
+  --dedit-text: #f9fafb;
+  --dedit-text-muted: #9ca3af;
+  --dedit-accent: #3b82f6;
+  --dedit-mixed-bg: #374151;
+
+  --dedit-font: ui-sans-serif, system-ui, sans-serif;
+  --dedit-font-size: 12px;
+  --dedit-radius: 8px;
+}
+
+/* ── Palette ────────────────────────────────────────────────────────────── */
+.dedit-palette {
+  position: fixed;
+  width: 260px;
+  background: var(--dedit-bg);
+  color: var(--dedit-text);
+  border: 1px solid var(--dedit-border);
+  border-radius: var(--dedit-radius);
+  font-family: var(--dedit-font);
+  font-size: var(--dedit-font-size);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  z-index: var(--dedit-layer-palette, 100);
+}
+
+.dedit-palette--hidden {
+  display: none;
+}
+
+/* ── Family tabs ────────────────────────────────────────────────────────── */
+.dedit-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--dedit-border);
+  overflow-x: auto;
+}
+
+.dedit-tab {
+  flex: none;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: var(--dedit-text-muted);
+  cursor: pointer;
+  font-size: var(--dedit-font-size);
+}
+
+.dedit-tab--active {
+  color: var(--dedit-text);
+  border-bottom: 2px solid var(--dedit-accent);
+}
+
+/* ── Panel ──────────────────────────────────────────────────────────────── */
+.dedit-panel {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dedit-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.dedit-field__label {
+  color: var(--dedit-text-muted);
+  flex: none;
+}
+
+.dedit-field__control {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dedit-field__control input[type="text"],
+.dedit-field__control input[type="number"],
+.dedit-field__control select {
+  flex: 1;
+  min-width: 0;
+  background: var(--dedit-mixed-bg);
+  border: 1px solid var(--dedit-border);
+  border-radius: 4px;
+  color: var(--dedit-text);
+  font-size: var(--dedit-font-size);
+  padding: 3px 6px;
+}
+
+.dedit-field--mixed input,
+.dedit-field--mixed select {
+  color: var(--dedit-text-muted);
+}
+.dedit-field--mixed input::placeholder {
+  color: var(--dedit-text-muted);
+  font-style: italic;
+}
+
+/* ── Inherit control (§3.1) — discret, visible seulement s'il y a un écart ── */
+.dedit-strip-btn {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  line-height: 12px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+  background: none;
+  color: var(--dedit-text-muted);
+  font-size: 11px;
+  padding: 0;
+}
+
+.dedit-strip-btn:hover {
+  color: var(--dedit-text);
+  background: var(--dedit-mixed-bg);
+}
+
+.dedit-strip-btn--hidden {
+  visibility: hidden;
+}
+
+/* ── Toggle button (gras/italique/alignement…) ──────────────────────────── */
+.dedit-toggle-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--dedit-border);
+  background: var(--dedit-mixed-bg);
+  color: var(--dedit-text-muted);
+  cursor: pointer;
+  font-size: var(--dedit-font-size);
+  font-weight: bold;
+  padding: 0;
+}
+
+.dedit-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dedit-toggle-btn--active {
+  color: var(--dedit-text);
+  border-color: var(--dedit-accent);
+  background: color-mix(in srgb, var(--dedit-accent) 25%, var(--dedit-mixed-bg));
+}
+
+.dedit-toggle-btn--mixed {
+  color: var(--dedit-text-muted);
+  border-style: dashed;
+}
+
+/* ── Icon select (groupe de boutons icônes exclusifs, ex. alignement) ────── */
+.dedit-icon-select {
+  gap: 2px;
+}
+
+/* ── Regroupement B/I + Alignement sur une même ligne (panneau démo "Typo") ──
+   Ad hoc à la démo : dedit-demo.ts enveloppe ces 3 champs sans label dans un
+   conteneur .dedit-icon-row commun (post-traitement DOM après chaque render),
+   sans toucher au moteur de rendu générique. */
+.dedit-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dedit-icon-row .dedit-field {
+  width: auto;
+}
+.dedit-icon-row__separator {
+  width: 1px;
+  align-self: stretch;
+  background: var(--dedit-border);
+  margin: 0 4px;
+}
+
+/* ── Slider ───────────────────────────────────────────────────────────────── */
+.dedit-field__control input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--dedit-accent);
+}
+
+/* ── Coming soon (familles non encore implémentées) ─────────────────────── */
+.dedit-coming-soon {
+  color: var(--dedit-text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ── Presets (spec §9 — action de fusion, pas une propriété) ────────────── */
+.dedit-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dedit-preset-btn {
+  padding: 6px 12px;
+  background: var(--dedit-mixed-bg);
+  color: var(--dedit-text);
+  border: 1px solid var(--dedit-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--dedit-font-size);
+}
+
+.dedit-preset-btn:hover {
+  border-color: var(--dedit-accent);
+}
+
+/* ── Custom (mini code editor) ──────────────────────────────────────────── */
+.dedit-custom textarea {
+  width: 100%;
+  min-height: 80px;
+  background: var(--dedit-mixed-bg);
+  border: 1px solid var(--dedit-border);
+  border-radius: 4px;
+  color: var(--dedit-text);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  padding: 6px;
+  resize: vertical;
+}
