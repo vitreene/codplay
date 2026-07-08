@@ -6,6 +6,8 @@
       "codplay/*": ["../codplay/src/*"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
+      "@codplay/scene-factory": ["../authoring/scene-factory/src/index.ts"],
+      "@codplay/scene-factory/*": ["../authoring/scene-factory/src/*"],
       "@codplay/text-auto-size": ["../authoring/text-auto-size/src/index.ts"],
       "@codplay/text-auto-size/*": ["../authoring/text-auto-size/src/*"]
     }

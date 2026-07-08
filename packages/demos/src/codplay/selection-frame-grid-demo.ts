@@ -81,10 +81,9 @@ export async function runSelectionFrameGridDemo(): Promise<void> {
     capsule: {
       id: "selection-frame-grid",
       type: "grille",
-      timeRange: { startMs: 0, endMs: 1000 },
-      grid: { mode: "manual", rows: GRID_ROWS, cols: GRID_COLS, gap: `${GRID_GAP_PX}px` }
+      grid: { rows: GRID_ROWS, cols: GRID_COLS, gap: `${GRID_GAP_PX}px` }
     },
-    children: [{ id: GRID_ITEM_ID, order: 0 }]
+    children: [{ id: GRID_ITEM_ID, order: 0, timeRange: { startMs: 0, endMs: 1000 } }]
   });
   const result = capsule.resolve();
 

@@ -13,18 +13,26 @@ const IMAGES: Array<{ id: string; src: string }> = [
 ]
 
 function buildCapsule(): AutoCapsuleResult {
+  // Timing is no longer computed by capsule-automation — each child carries its own resolved
+  // absolute timeRange (here: an even split of TOTAL_MS, standing in for what
+  // CapsuleDistribution.compute() would produce for a 'sequential' capsule upstream of the
+  // Builder, not wired into this pre-Builder demo).
+  const slotMs = TOTAL_MS / IMAGES.length
   const cap = new AutoCapsule({
     capsule: {
       id: CAPSULE_ID,
-      type: 'carrousel',
-      timeRange: { startMs: 0, endMs: TOTAL_MS },
-      grid: { mode: 'forced' },
+      type: 'carousel',
+      grid: {},
       defaults: {
         introTransitionRef: 'swipe-right',
         outroTransitionRef: 'swipe-left',
       },
     },
-    children: IMAGES.map(({ id }, order) => ({ id, order })),
+    children: IMAGES.map(({ id }, order) => ({
+      id,
+      order,
+      timeRange: { startMs: order * slotMs, endMs: (order + 1) * slotMs },
+    })),
   })
   return cap.resolve()
 }

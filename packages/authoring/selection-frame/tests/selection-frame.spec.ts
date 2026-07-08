@@ -13,7 +13,7 @@ function temp__createGridArtifact(rows: number, cols: number): AutoCapsuleGridAr
     className: 'grid',
     inlineStyle: {},
     cssRules: [],
-    context: { rows, cols, areas: [], mode: 'fixed' }
+    context: { rows, cols, mode: 'manual' }
   }
 }
 

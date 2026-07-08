@@ -235,12 +235,12 @@ Un enfant locké peut avoir ses propres transitions (kf réels avec `transitionI
 
 **Les kf virtuels n'existent pas dans le rendu.**
 
-Le builder (`packages/codplay/src/builder/`) résout les kf virtuels en kf concrets lors de la compilation du `SceneDoc` en `CompiledScene` :
+Le Builder ed2 (`packages/editor/src/builder/`, pas le builder Codplay `packages/codplay/src/builder/`) résout les kf virtuels en kf concrets **avant** de construire le `SceneDoc` — pas lors d'une compilation `SceneDoc → CompiledScene`, qui reste une étape Codplay généraliste sans connaissance des capsules :
 
-1. Pour chaque capsule avec un mode de distribution, le builder appelle le module de distribution.
+1. Pour chaque capsule avec un mode de distribution, le Builder appelle `CapsuleDistribution.compute()` (`packages/authoring/scene-factory/`).
 2. Le module retourne les positions concrètes pour chaque enfant libre.
-3. Le builder injecte ces positions comme kf réels dans les tracks enfants du `CompiledScene`.
-4. Le `CompiledScene` ne contient que des kf concrets — aucune notion de virtual.
+3. Le Builder pose ces positions comme `timeRange` réel sur chaque enfant (capsule-automation), puis comme eventimes réels dans le `SceneDoc` construit.
+4. Le `SceneDoc` remis au builder Codplay ne contient que des kf concrets — aucune notion de virtual à ce stade.
 
 L'éditeur travaille sur le `SceneDoc` (avec kf virtuels calculés à la volée pour le rendu).
 Le runtime ne voit que des kf résolus.
@@ -249,19 +249,23 @@ Le runtime ne voit que des kf résolus.
 
 ## 8. Frontier projet / module métier
 
-### Ce projet (éditeur + builder codplay) :
+### sequence-editor (éditeur, aperçu) :
 
 - Stocke les kf réels dans `TrackNode.keyframes`
-- Appelle le module de distribution pour obtenir les kf virtuels à afficher
+- Appelle `CapsuleDistribution.compute()` pour obtenir les kf virtuels affichés dans l'aperçu
 - Bloque le drag de l'outro capsule à `intro.timeMs + min_duration`
-- Résout les kf virtuels en kf concrets au build
 - Expose : `KEYFRAME.ADD`, `KEYFRAME.REMOVE`, `KEYFRAME.CLEAR_TRACK`, `KEYFRAME.CLEAR_CAPSULE`
 
-### Module métier capsule (externe, hors scope) :
+### `CapsuleDistribution` (implémentée, `packages/authoring/scene-factory/capsule-distribution.ts`) :
 
 - Reçoit : durée clip, mode, paramètres (stagger_in_ms, stagger_out_ms), kf réels des enfants
 - Retourne : positions virtuelles + `min_duration`
-- Déclenché à chaque mutation de kf réels ou de clip capsule
+- Appelée à la fois par sequence-editor (aperçu) et par le Builder ed2 (résolution finale, ci-dessous) — même calcul, une seule source de vérité, déclenché à chaque mutation de kf réels ou de clip capsule
+
+### Builder ed2 (résolution finale, au build) :
+
+- Résout les kf virtuels en kf concrets absolus (`{introMs,outroMs}` relatifs → `{startMs,endMs}` absolus)
+- Transmet le résultat à capsule-automation (`AutoCapsuleChildInput.timeRange`) — cf `2026-07-08-capsule-automation-reconciliation-plan.md`
 
 ### Interface :
 

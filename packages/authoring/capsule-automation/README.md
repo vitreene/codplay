@@ -47,15 +47,16 @@ Le composant manipule quatre familles de donnees:
 
 La capsule porte:
 
-- son type
-- sa `timeRange`
+- son type — determine seul son `gridMode` (voir Grille), aucun champ de timing
 - sa configuration de grille
-- sa politique de timing
 - ses refs par defaut pour les events `intro` et `outro`
 
 ### Grille
 
 La grille de capsule est un contexte de premier niveau. Elle est calculee avant les placements enfants.
+
+Le mode de grille (`GRID_MODE`) n'est pas un champ de `grid` — il est fixe par type de capsule
+(`AutoCapsuleTypeBehavior.gridMode`, voir `CAPSULE_TYPE`), jamais un choix de l'appelant.
 
 Le cas principal est le mode manuel base sur le pas de grille:
 
@@ -66,11 +67,9 @@ Si ces valeurs sont omises en mode manuel, `AutoCapsule` utilise les valeurs par
 
 Champs principaux:
 
-- `mode`
 - `rows`
 - `cols`
 - `orientation`
-- `areas`
 - `gap`
 - `rowGap`
 - `columnGap`
@@ -84,9 +83,9 @@ Regle de precedence CSS:
 Chaque enfant peut porter:
 
 - un ordre
+- sa `timeRange` resolue (obligatoire, fournie par l'appelant — jamais calculee ici)
 - un style inline
 - un placement explicite
-- des contraintes temporelles
 - des events explicites
 
 ### Registres d'events
@@ -107,12 +106,12 @@ Exemples:
 - `GRID_MODE.derived`
 - `CAPSULE_TYPE.grille`
 - `EVENT_ACTION.intro`
-- `TIME_MODE.fixed`
+- `PLACEMENT_POLICY.mixed`
 
 Dans le composant lui-meme et dans son usage, on privilegie donc:
 
 ```ts
-grid.mode === GRID_MODE.derived
+behavior.gridMode === GRID_MODE.derived
 ```
 
 et non une chaine litterale en dur.
@@ -132,7 +131,6 @@ class AutoCapsule {
 
   setCapsule(patch: Partial<AutoCapsuleDefinition>): AutoCapsuleResult
   setGrid(patch: Partial<AutoCapsuleGridInput>): AutoCapsuleResult
-  setTimeRange(timeRange: AutoCapsuleTimeRangeInput): AutoCapsuleResult
 
   upsertChild(child: AutoCapsuleChildInput): AutoCapsuleResult
   removeChild(childId: string): AutoCapsuleResult
@@ -169,12 +167,7 @@ type AutoCapsuleInput = {
 type AutoCapsuleDefinition = {
   id: string
   type: AutoCapsuleType
-  timeRange: { startMs: number; endMs: number }
   grid: AutoCapsuleGridInput
-  timing?: {
-    mode?: AutoCapsuleTimeMode
-    fixedDurationMs?: number
-  }
   defaults?: {
     introTransitionRef?: string | null
     outroTransitionRef?: string | null
@@ -182,39 +175,46 @@ type AutoCapsuleDefinition = {
   }
 }
 
+// `mode` is not part of this input: it is fixed per `AutoCapsuleType`
+// (`AutoCapsuleTypeBehavior.gridMode`), never a caller choice.
 type AutoCapsuleGridInput = {
-  mode: AutoCapsuleGridMode
   rows?: number | null
   cols?: number | null
   orientation?: AutoCapsuleOrientation | null
   gap?: string | null
   rowGap?: string | null
   columnGap?: string | null
-  areas?: string[] | null
+}
+
+type AutoCapsuleChildInput = {
+  id: string
+  order: number
+  // Resolved absolute time range, provided by the caller (e.g. CapsuleDistribution) —
+  // never computed by AutoCapsule.
+  timeRange: { startMs: number; endMs: number }
+  // ...placement, style, events
 }
 ```
 
 ## Exemple minimal
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-1",
-    type: CAPSULE_TYPE.grille,
-    timeRange: { startMs: 2000, endMs: 8000 },
+    type: CAPSULE_TYPE.grille, // gridMode = GRID_MODE.manual, fixe par type
     grid: {
-      mode: GRID_MODE.manual,
       cols: 16,
       rows: 9,
       gap: "16px"
     }
   },
   children: [
-    { id: "a", order: 1000 },
-    { id: "b", order: 2000 },
-    { id: "c", order: 3000 }
+    { id: "a", order: 1000, timeRange: { startMs: 2000, endMs: 4000 } },
+    { id: "b", order: 2000, timeRange: { startMs: 4000, endMs: 6000 } },
+    { id: "c", order: 3000, timeRange: { startMs: 6000, endMs: 8000 } }
   ]
 })
 
@@ -234,15 +234,13 @@ console.log(result.styleSheet)
 ## Exemple `buildGrid()` seul
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-grid",
     type: CAPSULE_TYPE.grille,
-    timeRange: { startMs: 0, endMs: 6000 },
     grid: {
-      mode: GRID_MODE.manual,
       cols: 16,
       rows: 9,
       rowGap: "8px",
@@ -265,16 +263,13 @@ Utilisez ce mode si votre application veut d'abord construire le conteneur capsu
 ## Exemple avec defaults de grille
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-default-grid",
     type: CAPSULE_TYPE.grille,
-    timeRange: { startMs: 0, endMs: 4000 },
-    grid: {
-      mode: GRID_MODE.manual
-    }
+    grid: {}
   },
   children: []
 })
@@ -287,23 +282,18 @@ console.log(grid.context.cols) // 16
 ## Exemple avec override enfant
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-2",
     type: CAPSULE_TYPE.grille,
-    timeRange: { startMs: 0, endMs: 9000 },
-    grid: {
-      mode: GRID_MODE.manual,
-      rows: 2,
-      cols: 2
-    }
+    grid: { rows: 2, cols: 2 }
   },
   children: [
-    { id: "a", order: 1 },
-    { id: "b", order: 2 },
-    { id: "c", order: 3 }
+    { id: "a", order: 1, timeRange: { startMs: 0, endMs: 3000 } },
+    { id: "b", order: 2, timeRange: { startMs: 3000, endMs: 6000 } },
+    { id: "c", order: 3, timeRange: { startMs: 6000, endMs: 9000 } }
   ]
 })
 
@@ -312,10 +302,6 @@ capsule.setChildPlacement("b", {
   col: 1,
   rowSpan: 1,
   colSpan: 2
-})
-
-capsule.setChildConstraint("c", {
-  lockedTimeRange: { startMs: 6000, endMs: 9000 }
 })
 
 const result = capsule.resolve()
@@ -327,14 +313,13 @@ console.log(result.children.find((child) => child.id === "c")?.timeRange)
 ## Exemple avec `eventTimes`
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-events",
-    type: CAPSULE_TYPE.carrousel,
-    timeRange: { startMs: 0, endMs: 8000 },
-    grid: { mode: GRID_MODE.forced }
+    type: CAPSULE_TYPE.carousel,
+    grid: {}
   },
   eventTimes: [
     { name: "chapter-a", startMs: 2500, endMs: 2500 },
@@ -344,6 +329,7 @@ const capsule = new AutoCapsule({
     {
       id: "a",
       order: 1,
+      timeRange: { startMs: 0, endMs: 8000 },
       events: {
         [EVENT_ACTION.intro]: { action: EVENT_ACTION.intro, name: "chapter-a", ref: "fade" }
       }
@@ -370,16 +356,15 @@ console.log(result.children[0].events.intro.triggerMs) // 2500
 Vous pouvez les lire, les remplacer ou en ajouter.
 
 ```ts
-import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION, GRID_MODE } from "./src"
+import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from "./src"
 
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-defs",
-    type: CAPSULE_TYPE.carrousel,
-    timeRange: { startMs: 0, endMs: 4000 },
-    grid: { mode: GRID_MODE.forced }
+    type: CAPSULE_TYPE.carousel,
+    grid: {}
   },
-  children: [{ id: "a", order: 1 }]
+  children: [{ id: "a", order: 1, timeRange: { startMs: 0, endMs: 4000 } }]
 })
 
 console.log(capsule.getEventDefinitions().fade)
@@ -436,36 +421,23 @@ Chaque event resolu peut maintenant inclure:
 
 ## Politique de grille actuelle
 
-Comportement v1 implemente:
+`GRID_MODE` est fixe par `CAPSULE_TYPE` (`AutoCapsuleTypeBehavior.gridMode`), jamais un champ que l'appelant choisit sur `grid`:
 
-- `MANUAL`: mode principal; utilise `rows/cols`, puis fallback sur les defaults du type si omis
-- `FORCED`: force `1 x 1`
-- `DERIVED`: derive la grille depuis `orientation` et le nombre d'enfants visibles
-- `LIST`: une ligne par enfant
-- `AREAS`: conserve un contexte grille explicite avec `areas`
+- `carousel` → `FORCED`: force `1 x 1`
+- `rangee` → `DERIVED`: derive la grille depuis `orientation` et le nombre d'enfants visibles
+- `liste` → `LIST`: une ligne par enfant
+- `grille`, `card` → `MANUAL`: utilise `rows/cols`, puis fallback sur les defaults du type si omis
 
 Defaults actuels:
 
-- `grille`, `position`, `card`, `legacy`, `rangee`, `liste`: `rows = 9`, `cols = 16` quand le mode est manuel et que les valeurs sont omises
-- `carrousel`: `1 x 1`
+- `grille`, `card`, `rangee`, `liste`: `rows = 9`, `cols = 16` quand le mode est manuel et que les valeurs sont omises
+- `carousel`: `1 x 1`
 
 ## Politique de timing actuelle
 
-Deux modes sont disponibles:
-
-- `distributed`
-- `fixed`
-
-En `distributed`:
-
-- la `timeRange` capsule est partagee entre les enfants visibles
-- un `lockedTimeRange` enfant agit comme un verrou
-- le temps restant est redistribue autour de ces verrous
-
-En `fixed`:
-
-- chaque enfant recoit un slot de `fixedDurationMs`
-- les verrous individuels restent prioritaires
+`AutoCapsule` ne calcule aucune distribution temporelle. Chaque enfant porte sa `timeRange`
+absolue, deja resolue par l'appelant (typiquement `CapsuleDistribution`, en amont) — un simple
+passthrough (`resolveAutoCapsuleTiming`), pas un moteur de repartition.
 
 ## Politique d'events actuelle
 
@@ -480,7 +452,6 @@ En v1:
 Limites actuelles:
 
 - les events autres que `intro` et `outro` sans `eventTime` explicite retombent sur le debut de l'enfant
-- les contraintes `minDurationMs` et `maxDurationMs` sont modelisees mais pas encore redistribuees sur les voisins
 - le futur modele `beforeEvent` / `afterEvent` / `durationMs` explicite entre actions n'est pas encore implemente
 
 ## Configuration
@@ -498,11 +469,10 @@ Exemple:
 const capsule = new AutoCapsule({
   capsule: {
     id: "capsule-config",
-    type: CAPSULE_TYPE.liste,
-    timeRange: { startMs: 0, endMs: 4000 },
-    grid: { mode: GRID_MODE.list }
+    type: CAPSULE_TYPE.liste, // gridMode = GRID_MODE.list, fixe par type
+    grid: {}
   },
-  children: [{ id: "a", order: 1 }],
+  children: [{ id: "a", order: 1, timeRange: { startMs: 0, endMs: 4000 } }],
   config: {
     naming: {
       buildListItemClassName: (index) => `my-list-row-${index}`

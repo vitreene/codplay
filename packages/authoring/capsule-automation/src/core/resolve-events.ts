@@ -60,7 +60,7 @@ export function resolveAutoCapsuleEvents(
 	const byChildId: Record<string, AutoCapsuleResolvedChildEvents> = {};
 	const usedSyntheticEventsByChildId: Record<string, boolean> = {};
 	const eventTimeByName = buildEventTimeByName(state);
-	const behavior = state.config.types[state.capsule.type] || state.config.types.legacy;
+	const behavior = state.config.types[state.capsule.type];
 	const generateDefaultOutro =
 		state.capsule.defaults?.generateDefaultOutro ?? behavior.defaultGenerateDefaultOutro;
 

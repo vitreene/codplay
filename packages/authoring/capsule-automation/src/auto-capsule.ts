@@ -20,8 +20,7 @@ import type {
 	AutoCapsuleResult,
 	AutoCapsuleSerializableState,
 	AutoCapsuleState,
-	AutoCapsuleEventTimeInput,
-	AutoCapsuleTimeRangeInput
+	AutoCapsuleEventTimeInput
 } from "./types/public";
 import type { AutoCapsuleNormalizedState, AutoCapsuleOrderedChild } from "./types/internal";
 
@@ -220,9 +219,6 @@ export class AutoCapsule {
 			...this.state.capsule,
 			...cloneObject(patch),
 			grid: patch.grid ? { ...this.state.capsule.grid, ...cloneObject(patch.grid) } : this.state.capsule.grid,
-			timing: patch.timing
-				? { ...(this.state.capsule.timing || {}), ...cloneObject(patch.timing) }
-				: this.state.capsule.timing,
 			defaults: patch.defaults
 				? { ...(this.state.capsule.defaults || {}), ...cloneObject(patch.defaults) }
 				: this.state.capsule.defaults
@@ -238,14 +234,6 @@ export class AutoCapsule {
 			...this.state.capsule.grid,
 			...cloneObject(patch)
 		};
-		return this.commitWrite();
-	}
-
-	/**
-	 * Update the visible time range of the capsule.
-	 */
-	setTimeRange(timeRange: AutoCapsuleTimeRangeInput): AutoCapsuleResult {
-		this.state.capsule.timeRange = cloneObject(timeRange);
 		return this.commitWrite();
 	}
 

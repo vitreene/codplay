@@ -24,13 +24,11 @@ export type TransitionDef =
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
 export type CapsuleKind =
-  | 'carrousel'
+  | 'carousel'
   | 'rangee'
   | 'liste'
   | 'grille'
-  | 'position'
   | 'card'
-  | 'legacy'
 
 export interface Keyframe {
   id: string

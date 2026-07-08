@@ -2,7 +2,7 @@ import type {
 	AutoCapsuleDiagnostic,
 	AutoCapsuleResolvedChildPlacement
 } from "../types/public";
-import { AREA_KIND, CAPSULE_TYPE, DIAGNOSTIC_LEVEL, GRID_MODE, PLACEMENT_POLICY } from "../types/public";
+import { AREA_KIND, DIAGNOSTIC_LEVEL, GRID_MODE, PLACEMENT_POLICY } from "../types/public";
 import type {
 	AutoCapsuleGridComputation,
 	AutoCapsuleNormalizedState,
@@ -88,13 +88,17 @@ function buildExplicitPlacement(
 
 /**
  * Build the automatic placement of one child from the effective grid context.
+ *
+ * `grid.context.mode` alone is enough here: `GRID_MODE` is fixed per `CAPSULE_TYPE`
+ * (`AutoCapsuleTypeBehavior.gridMode`), so checking `capsule.type === CAPSULE_TYPE.liste`
+ * in addition would be redundant — only `liste` ever resolves to `GRID_MODE.list`.
  */
 function buildAutoPlacement(
 	state: AutoCapsuleNormalizedState,
 	child: AutoCapsuleOrderedChild,
 	grid: AutoCapsuleGridComputation["artifact"]
 ): AutoCapsuleResolvedChildPlacement {
-	if (state.capsule.type === CAPSULE_TYPE.liste || grid.context.mode === GRID_MODE.list) {
+	if (grid.context.mode === GRID_MODE.list) {
 		return buildPlacementFromCoordinates(state, child, child.index + 1, 1, 1, 1, AREA_KIND.listRow, false);
 	}
 
@@ -131,7 +135,7 @@ export function resolveAutoCapsulePlacement(
 			continue;
 		}
 
-		const behavior = state.config.types[state.capsule.type] || state.config.types.legacy;
+		const behavior = state.config.types[state.capsule.type];
 		if (behavior.placementPolicy === PLACEMENT_POLICY.explicitOnly) {
 			const placement: AutoCapsuleResolvedChildPlacement = {
 				areaClassName: null,

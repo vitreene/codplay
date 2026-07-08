@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@codplay/capsule-automation": "*",
+    "@codplay/scene-factory": "*",
     "@codplay/text-auto-size": "*",
     "codplay": "*",
     "color": "^5.0.3",

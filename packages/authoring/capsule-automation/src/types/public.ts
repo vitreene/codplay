@@ -10,42 +10,27 @@ export const GRID_MODE = {
 	derived: "derived",
 	/** Build a one-column list-like grid. */
 	list: "list",
-	/** Keep an explicit grid with named areas. */
-	areas: "areas",
 	/** Use the explicit `rows` and `cols` step, with type defaults as fallback. */
 	manual: "manual"
 } as const;
 export type AutoCapsuleGridMode = ValueOf<typeof GRID_MODE>;
 
 /**
- * Public time distribution modes supported by AutoCapsule.
- */
-export const TIME_MODE = {
-	/** Split the capsule time range across visible children. */
-	distributed: "distributed",
-	/** Assign a fixed duration slot to each visible child. */
-	fixed: "fixed"
-} as const;
-export type AutoCapsuleTimeMode = ValueOf<typeof TIME_MODE>;
-
-/**
  * Portable capsule kind. These values intentionally mirror the current product language.
+ * Each kind resolves to exactly one `GRID_MODE` (see `AutoCapsuleTypeBehavior.gridMode`) — a
+ * one-to-one, fixed mapping, not a caller-adjustable setting.
  */
 export const CAPSULE_TYPE = {
-	/** One visible child at a time, usually on a `1 x 1` grid. */
-	carrousel: "carrousel",
-	/** Linear capsule, typically horizontal or vertical. */
+	/** One visible child at a time, on a `GRID_MODE.forced` (`1 x 1`) grid. */
+	carousel: "carousel",
+	/** Linear capsule on a `GRID_MODE.derived` grid, typically horizontal or vertical. */
 	rangee: "rangee",
-	/** List-oriented capsule with one item per row. */
+	/** List-oriented capsule on a `GRID_MODE.list` grid, one item per row. */
 	liste: "liste",
-	/** General-purpose grid capsule. */
+	/** General-purpose grid capsule on a `GRID_MODE.manual` grid. */
 	grille: "grille",
-	/** Capsule that prefers explicit area-based positioning. */
-	position: "position",
-	/** Capsule that can rely on named areas or card-like templates. */
-	card: "card",
-	/** Fallback type when no specialized behavior is requested. */
-	legacy: "legacy"
+	/** Named-zone capsule on a `GRID_MODE.manual` grid; an unzoned child resolves to a full-surface ghost zone. */
+	card: "card"
 } as const;
 export type AutoCapsuleType = ValueOf<typeof CAPSULE_TYPE>;
 
@@ -92,25 +77,6 @@ export const AREA_KIND = {
 	listRow: "list-row"
 } as const;
 export type AutoCapsuleAreaKind = ValueOf<typeof AREA_KIND>;
-
-/**
- * Grid interpretation policies attached to capsule types.
- */
-export const GRID_POLICY = {
-	/** Interpret the capsule as a single-cell stack. */
-	stack: "stack",
-	/** Interpret the capsule as a line derived from orientation. */
-	line: "line",
-	/** Interpret the capsule as a list. */
-	list: "list",
-	/** Interpret the capsule as a manual or parametric grid. */
-	grid: "grid",
-	/** Interpret the capsule as a named-area grid. */
-	areas: "areas",
-	/** Use fallback behavior compatible with a generic legacy capsule. */
-	legacy: "legacy"
-} as const;
-export type AutoCapsuleGridPolicy = ValueOf<typeof GRID_POLICY>;
 
 /**
  * Placement behavior policies attached to capsule types.
@@ -185,26 +151,25 @@ export type AutoCapsuleEventDefinition = {
 
 /**
  * Grid configuration of the capsule container.
+ *
+ * `mode` is not part of this input: it is fixed per `AutoCapsuleType` (`AutoCapsuleTypeBehavior.gridMode`),
+ * never a caller choice — see `CAPSULE_TYPE`.
  */
 export type AutoCapsuleGridInput = {
-	/** Grid mode used to compute the capsule container. */
-	mode: AutoCapsuleGridMode;
 	/** Optional extra class tokens applied to the grid container. */
 	className?: string | null;
 	/**
 	 * Main explicit grid step. This is the primary mode for common usage.
-	 * When omitted in `GRID_MODE.manual` or `GRID_MODE.areas`, type defaults are used.
+	 * When omitted in `GRID_MODE.manual`, type defaults are used.
 	 */
 	rows?: number | null;
 	/**
 	 * Main explicit grid step. This is the primary mode for common usage.
-	 * When omitted in `GRID_MODE.manual` or `GRID_MODE.areas`, type defaults are used.
+	 * When omitted in `GRID_MODE.manual`, type defaults are used.
 	 */
 	cols?: number | null;
 	/** Orientation used by derived grid modes. */
 	orientation?: AutoCapsuleOrientation | null;
-	/** Optional named areas contract for area-based layouts. */
-	areas?: string[] | null;
 	/** Shared CSS gap value applied when row and column gaps are identical. */
 	gap?: string | null;
 	/** CSS row-gap override. */
@@ -213,16 +178,6 @@ export type AutoCapsuleGridInput = {
 	columnGap?: string | null;
 	/** Optional container class token emitted in addition to generated classes. */
 	containerClassName?: string | null;
-};
-
-/**
- * Timing policy for automatic child distribution.
- */
-export type AutoCapsuleTimingInput = {
-	/** Automatic child time distribution strategy. */
-	mode?: AutoCapsuleTimeMode | null;
-	/** Fixed slot duration used when `mode === TIME_MODE.fixed`. */
-	fixedDurationMs?: number | null;
 };
 
 /**
@@ -239,6 +194,10 @@ export type AutoCapsuleDefaultsInput = {
 
 /**
  * Root capsule definition.
+ *
+ * There is no capsule-level `timeRange` here: timing is fully resolved upstream (by the caller,
+ * e.g. `CapsuleDistribution`) and carried per child (`AutoCapsuleChildInput.timeRange`) — see
+ * `resolveAutoCapsuleTiming`, a trivial per-child passthrough.
  */
 export type AutoCapsuleDefinition = {
 	/** Stable capsule identifier. */
@@ -247,12 +206,8 @@ export type AutoCapsuleDefinition = {
 	type: AutoCapsuleType;
 	/** Optional display name. */
 	name?: string;
-	/** Visible time range of the capsule. */
-	timeRange: AutoCapsuleTimeRangeInput;
 	/** Grid definition used to build the capsule container context. */
 	grid: AutoCapsuleGridInput;
-	/** Optional timing override for child scheduling. */
-	timing?: AutoCapsuleTimingInput;
 	/** Optional defaults used when events must be generated. */
 	defaults?: AutoCapsuleDefaultsInput;
 	/** Optional extra class tokens applied to the capsule container. */
@@ -283,12 +238,6 @@ export type AutoCapsuleChildPlacementInput = {
  * Optional child-level constraints.
  */
 export type AutoCapsuleChildConstraintInput = {
-	/** Locked time range that the automatic resolver must preserve for the child. */
-	lockedTimeRange?: AutoCapsuleTimeRangeInput | null;
-	/** Optional minimum duration kept for future timing strategies. */
-	minDurationMs?: number | null;
-	/** Optional maximum duration kept for future timing strategies. */
-	maxDurationMs?: number | null;
 	/** Prevent placement updates by external tooling. */
 	lockPlacement?: boolean | null;
 	/** Prevent automatic class generation for the child. */
@@ -321,6 +270,8 @@ export type AutoCapsuleChildInput = {
 	id: string;
 	/** Ordering key used by placement and timing resolution. */
 	order: number;
+	/** Resolved absolute time range, provided by the caller (e.g. `CapsuleDistribution`) — never computed here. */
+	timeRange: AutoCapsuleTimeRangeInput;
 	/** Whether the child participates in resolution and output. */
 	visible?: boolean;
 	/** Optional extra class tokens applied to the child. */
@@ -342,7 +293,7 @@ export type AutoCapsuleGridNamingInput = {
 	type: AutoCapsuleType;
 	rows: number;
 	cols: number;
-	mode: AutoCapsuleGridInput["mode"];
+	mode: AutoCapsuleGridMode;
 };
 
 export type AutoCapsuleAreaNamingInput = {
@@ -365,16 +316,12 @@ export type AutoCapsuleSyntheticEventNamingInput = {
  * Behavior registry entry for one capsule type.
  */
 export type AutoCapsuleTypeBehavior = {
-	/** Default automatic child timing mode for the type. */
-	defaultTimeMode: AutoCapsuleTimeMode;
-	/** Default fixed duration used when the fixed mode is active. */
-	defaultFixedDurationMs: number;
+	/** Grid mode fixed for this type — not caller-adjustable, see `GRID_MODE`. */
+	gridMode: AutoCapsuleGridMode;
 	/** Default row step used when manual rows are omitted. */
 	defaultRows: number;
 	/** Default column step used when manual columns are omitted. */
 	defaultCols: number;
-	/** Default grid interpretation policy of the type. */
-	gridPolicy: AutoCapsuleGridPolicy;
 	/** Default child placement policy of the type. */
 	placementPolicy: AutoCapsulePlacementPolicy;
 	/** Default intro ref used when generating intro events. */
@@ -453,10 +400,8 @@ export type AutoCapsuleGridArtifact = {
 		rows: number;
 		/** Effective resolved column count. */
 		cols: number;
-		/** Effective named area contract, when present. */
-		areas: string[];
-		/** Effective grid mode used for resolution. */
-		mode: AutoCapsuleGridInput["mode"];
+		/** Effective grid mode used for resolution — fixed by capsule type. */
+		mode: AutoCapsuleGridMode;
 	};
 };
 

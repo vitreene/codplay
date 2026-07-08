@@ -3,8 +3,8 @@ import type {
   EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, MarkerTrack, AudioTrack,
   WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
 } from './types'
-import { CapsuleDistribution } from './capsule-distribution'
-import type { ChildInput } from './capsule-distribution'
+import { CapsuleDistribution } from '@codplay/scene-factory'
+import type { ChildInput } from '@codplay/scene-factory'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
   TIME_STEP_MS,
