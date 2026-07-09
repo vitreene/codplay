@@ -83,7 +83,7 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 	}
 
 	const seekMaxMsFromScene = resolveSceneSeekMaxMs(config.scene);
-	const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo);
+	const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo, config.demoLinks);
 	const actionButtonsMarkup = (config.actions ?? [])
 		.map(
 			(action) =>

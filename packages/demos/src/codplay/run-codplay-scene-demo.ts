@@ -33,7 +33,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     throw new Error("Expected #app root element");
   }
 
-  const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo);
+  const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo, config.demoLinks);
   appNode.innerHTML = `
     <main class="demo-shell">
       <aside>

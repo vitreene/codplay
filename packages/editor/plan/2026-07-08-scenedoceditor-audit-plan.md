@@ -1,5 +1,6 @@
 # Plan — Audit et remise à niveau de `SceneDocEditor` depuis Codplay
 
+**Statut** : chantier terminé et vérifié (2026-07-09) — voir §6.
 **Périmètre** : `packages/authoring/scene-factory/src/scene-doc-editor.ts`, comparé au modèle de domaine Codplay actuel (`packages/codplay/src/builder/types.ts`, `player/types.ts`).
 **Origine** : hypothèse de l'utilisateur (2026-07-08) — depuis la séparation `SceneDocEditor`/`CodPlay` (2026-06-20), des notions du modèle de scène ont pu évoluer côté Codplay sans que `SceneDocEditor` suive. **Confirmée ci-dessous, pas seulement plausible.**
 **Chantier distinct** du plan Builder (`2026-07-08-builder-plan.md`) — celui-ci en dépend, ne le contient pas.
@@ -27,10 +28,11 @@
 | `scene.rootStories` | Absent | **Correctement absent** — `rootStories` n'existe plus dans `SceneDef` (§2). Ne pas réimplémenter. |
 | `scene.initial/init/listen/straps/tracks` | Présents (`tracks` a en plus `.upsert`/`.remove`) | Conserver |
 | — (pas dans le plan d'origine) | `setStoryDisabled` existe déjà (ajouté après coup, `StoryDef.disabled` réel) | Conserver |
-| — (pas dans le plan d'origine) | `createStory`/`createPerso` : id toujours auto-généré par slug, aucune option d'id explicite | **À ajouter** — paramètre `id?` optionnel, génération par slug conservée par défaut si absent |
-| — (pas dans le plan d'origine) | `cloneStory()` supprime `trackId` à chaque écriture | **À corriger** — simple oubli de champ dans le clone, pas une nouvelle méthode |
-| — (pas dans le plan d'origine) | `SceneDef.state`/`onStart`/`onSequenceEnd` inaccessibles (pas de `scene.state`/`scene.onStart`/`scene.onSequenceEnd`) | **À ajouter**, sur le modèle de `scene.initial.set` |
-| — (pas dans le plan d'origine) | `clonePerso()` ne garde que `{id,name,type,initial,actions,emit}` | **À corriger** — une fois `Perso.list` ajouté côté Codplay (§2), le faire suivre dans `clonePerso()` |
+| — (pas dans le plan d'origine) | `createStory`/`createPerso` : id toujours auto-généré par slug, aucune option d'id explicite | **Fait** — paramètre `id?` optionnel sur les deux méthodes, génération par slug conservée par défaut si absent, collision explicite rejetée (`CREATOR_STORY_ID_COLLISION`/`CREATOR_PERSO_ID_COLLISION`), jamais un écrasement silencieux. `docs/formalisation/v1-authoring-api.md` étendu en conséquence (absent depuis le tout premier commit, pas une régression de spec — voir §6). |
+| — (pas dans le plan d'origine) | `cloneStory()` supprime `trackId` à chaque écriture | **Fait** — champ ajouté au clone. |
+| — (pas dans le plan d'origine) | `scene.onStart`/`scene.onSequenceEnd` inaccessibles | **Fait**, sur le modèle de `scene.initial.set` — besoin auteur confirmé (effets de bord type transmission à un backend, pas utilisé aujourd'hui mais jugé important en production). Spec étendue (§6). |
+| — (pas dans le plan d'origine) | `scene.state` inaccessible | **Parqué, pas fait** — pas de besoin réel identifié dans ed2 ; vérifié que quiz-hunt n'utilise pas de `state` au niveau scène (seulement `story.state`, un mécanisme différent déjà fonctionnel). Sujet à rouvrir explicitement quand le travail sur quiz-hunt reprendra (l'utilisateur veut alors tester un vrai state niveau scène). Ne pas ajouter avant ça. |
+| — (pas dans le plan d'origine) | `clonePerso()` ne garde que `{id,name,type,initial,actions,emit}` | **Fait** — `Perso.list?: ListConfig` ajouté côté Codplay (`packages/codplay/src/builder/types.ts`), suivi dans `clonePerso()`. |
 
 ## 4. Méthode de mise en œuvre
 
@@ -51,3 +53,12 @@
 ## 5. Relation avec le Builder
 
 `2026-07-08-builder-plan.md` dépend du résultat de ce chantier (`SceneDocEditor` en devient la classe métier testable) mais ne le contient pas. Ordre : ce chantier avant l'étape 2 du plan Builder (« Compléter `SceneDocEditor` »), qui se réduit alors à appliquer les conclusions de l'audit plutôt qu'à le redécouvrir.
+
+## 6. Chantier terminé (2026-07-09) — extension de `v1-authoring-api.md` d'abord
+
+Avant d'implémenter la table §3, relecture de la spec normative (`docs/formalisation/v1-authoring-api.md`) — étape prévue par la méthode (§4 point 1) qui a révélé l'inverse de ce qu'elle cherchait d'habitude : deux points du plan d'audit (`id?` explicite, `scene.onStart`/`onSequenceEnd`) proposaient une capacité que la spec n'a **jamais** eue, vérifié par git (absents depuis le tout premier commit du repo, y compris à la dernière mise à jour de la spec qui a pourtant ajouté `setStoryDisabled` au même endroit — pas une staleness, une exclusion qui semblait délibérée). Arrêté et discuté avec l'utilisateur avant de coder, conformément à la règle « ne pas patcher en divergeant de la spec sans en discuter » :
+- **`id?` explicite** : besoin réel déjà confirmé plus tôt dans ce chantier (ed2 a ses propres ids déterministes) → spec étendue.
+- **`scene.onStart`/`onSequenceEnd`** : confirmés par l'utilisateur comme besoin auteur réel (effets de bord, ex. transmission à un backend) — pas utilisé aujourd'hui, jugé important en production → spec étendue.
+- **`scene.state`** : proposé par erreur dans le plan d'audit (aucun besoin réel identifié, seulement parce que le type le porte). L'utilisateur a d'abord évoqué un souvenir d'usage dans quiz-hunt pour un « résultat global » — vérifié dans le code, infirmé (quiz-hunt n'a que du `story.state`, pas de `scene.state`). Confirmation finale de l'utilisateur : le besoin est réel mais différé, à rouvrir explicitement au retour sur quiz-hunt — **retiré de ce chantier**, pas ajouté.
+
+Implémenté et vérifié : `id?`/collision sur `createStory`/`createPerso`, `scene.onStart`/`scene.onSequenceEnd`, `cloneStory()` préserve `trackId`, `Perso.list?: ListConfig` ajouté côté Codplay et suivi par `clonePerso()`. 5 nouveaux tests dans `packages/codplay/tests/v1/creator-api.spec.ts` (277 tests au total, tous verts). `docs/formalisation/v1-authoring-api.md` mis à jour en premier, l'implémentation ensuite — pas l'inverse.

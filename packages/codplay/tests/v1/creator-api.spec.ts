@@ -110,4 +110,81 @@ describe('Creator API V1', () => {
       error: { code: 'CREATOR_NOT_INITIALIZED' }
     })
   })
+
+  it('creates a story and a perso with an explicit id when given, instead of a generated slug', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+
+    expect(creator.createStory({ id: 'story-fixed', name: 'intro' })).toEqual({
+      ok: true,
+      data: { storyId: 'story-fixed', storyName: 'intro' }
+    })
+    expect(creator.createPerso({ storyId: 'story-fixed', type: 'tag', id: 'perso-fixed', name: 'title' })).toEqual({
+      ok: true,
+      data: { persoId: 'perso-fixed', persoName: 'title' }
+    })
+
+    const exportResult = creator.exportSceneDoc()
+    if (!exportResult.ok) throw new Error('export failed')
+    expect(exportResult.data.stories['story-fixed']?.persos[0]?.id).toBe('perso-fixed')
+  })
+
+  it('rejects an explicit story id that collides with an existing one, without overwriting it', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+    creator.createStory({ id: 'story-fixed' })
+
+    expect(creator.createStory({ id: 'story-fixed' })).toMatchObject({
+      ok: false,
+      error: { code: 'CREATOR_STORY_ID_COLLISION' }
+    })
+  })
+
+  it('rejects an explicit perso id that collides with an existing one in the same story', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+    creator.createStory({ id: 'story-fixed' })
+    creator.createPerso({ storyId: 'story-fixed', type: 'tag', id: 'perso-fixed' })
+
+    expect(creator.createPerso({ storyId: 'story-fixed', type: 'tag', id: 'perso-fixed' })).toMatchObject({
+      ok: false,
+      error: { code: 'CREATOR_PERSO_ID_COLLISION' }
+    })
+  })
+
+  it('sets scene.onStart and scene.onSequenceEnd, round-tripped through exportSceneDoc', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+
+    const onStart = (): void => {}
+    const onSequenceEnd = (): void => {}
+    expect(creator.scene.onStart.set({ value: onStart })).toEqual({ ok: true, data: undefined })
+    expect(creator.scene.onSequenceEnd.set({ value: onSequenceEnd })).toEqual({ ok: true, data: undefined })
+
+    const exportResult = creator.exportSceneDoc()
+    if (!exportResult.ok) throw new Error('export failed')
+    expect(exportResult.data.onStart).toBe(onStart)
+    expect(exportResult.data.onSequenceEnd).toBe(onSequenceEnd)
+  })
+
+  it('preserves StoryDef.trackId and Perso.list across upsertStory/upsertPerso (clone fidelity)', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+
+    const story = createStoryFixture()
+    story.trackId = 'track-story-main'
+    creator.upsertStory({ story })
+
+    creator.upsertPerso({
+      storyId: 'story-main',
+      perso: { id: 'listy', type: 'list', initial: { move: '@root' }, list: { autoAnimate: { durationMs: 200 } }, actions: {} }
+    })
+
+    const exportResult = creator.exportSceneDoc()
+    if (!exportResult.ok) throw new Error('export failed')
+    expect(exportResult.data.stories['story-main']?.trackId).toBe('track-story-main')
+    expect(exportResult.data.stories['story-main']?.persos.find((p) => p.id === 'listy')?.list).toEqual({
+      autoAnimate: { durationMs: 200 }
+    })
+  })
 })

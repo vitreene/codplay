@@ -5,6 +5,8 @@ type SceneState = {
   id: string
   initial: Record<string, unknown> | undefined
   init: ((input?: Record<string, unknown>) => Record<string, unknown> | undefined) | undefined
+  onStart: ((...args: any[]) => void) | undefined
+  onSequenceEnd: ((...args: any[]) => void) | undefined
   listen: ListenRule[]
   straps: string[] | undefined
   tracks: Record<string, unknown>
@@ -27,6 +29,8 @@ export class SceneDocEditor {
       id: input.id,
       initial: undefined,
       init: undefined,
+      onStart: undefined,
+      onSequenceEnd: undefined,
       listen: [],
       straps: undefined,
       tracks: {},
@@ -36,9 +40,12 @@ export class SceneDocEditor {
     return { ok: true, data: undefined }
   }
 
-  createStory(input: { name?: string } = {}): ApiResult<{ storyId: string; storyName: string }> {
+  createStory(input: { id?: string; name?: string } = {}): ApiResult<{ storyId: string; storyName: string }> {
     return this.withScene((scene) => {
-      const identity = this.createStoryIdentity(scene, input.name)
+      const identityResult = this.resolveStoryIdentity(scene, input.id, input.name)
+      if (!identityResult.ok) return identityResult
+      const identity = identityResult.data
+
       scene.stories[identity.storyId] = {
         id: identity.storyId,
         name: identity.storyName,
@@ -58,6 +65,7 @@ export class SceneDocEditor {
   createPerso(input: {
     storyId: string
     type: string
+    id?: string
     name?: string
   }): ApiResult<{ persoId: string; persoName: string }> {
     return this.withScene((scene) => {
@@ -66,7 +74,10 @@ export class SceneDocEditor {
         return this.reject('CREATOR_STORY_NOT_FOUND', `Story '${input.storyId}' does not exist`)
       }
 
-      const identity = this.createPersoIdentity(story, input.type, input.name)
+      const identityResult = this.resolvePersoIdentity(story, input.id, input.type, input.name)
+      if (!identityResult.ok) return identityResult
+      const identity = identityResult.data
+
       const nextStory = this.cloneStory(story)
       nextStory.persos = [
         ...nextStory.persos,
@@ -92,6 +103,14 @@ export class SceneDocEditor {
     init: {
       set: (input: { value: ((input?: Record<string, unknown>) => Record<string, unknown> | undefined) | undefined }): ApiResult<void> =>
         this.withScene((scene) => { scene.init = input.value; return { ok: true, data: undefined } })
+    },
+    onStart: {
+      set: (input: { value: ((...args: any[]) => void) | undefined }): ApiResult<void> =>
+        this.withScene((scene) => { scene.onStart = input.value; return { ok: true, data: undefined } })
+    },
+    onSequenceEnd: {
+      set: (input: { value: ((...args: any[]) => void) | undefined }): ApiResult<void> =>
+        this.withScene((scene) => { scene.onSequenceEnd = input.value; return { ok: true, data: undefined } })
     },
     listen: {
       set: (input: { value: ListenRule[] }): ApiResult<void> =>
@@ -202,6 +221,44 @@ export class SceneDocEditor {
     })
   }
 
+  /**
+   * Resolve a story identity from an explicit `id` when given (rejecting a collision rather
+   * than silently overwriting), falling back to slug-based generation otherwise.
+   */
+  private resolveStoryIdentity(
+    scene: SceneState,
+    explicitId: string | undefined,
+    requestedName?: string
+  ): ApiResult<{ storyId: string; storyName: string }> {
+    if (explicitId !== undefined) {
+      if (explicitId in scene.stories) {
+        return this.reject('CREATOR_STORY_ID_COLLISION', `Story id '${explicitId}' already exists`)
+      }
+      return { ok: true, data: { storyId: explicitId, storyName: this.normalizeAuthorName(requestedName, explicitId) } }
+    }
+    return { ok: true, data: this.createStoryIdentity(scene, requestedName) }
+  }
+
+  /**
+   * Resolve a perso identity from an explicit `id` when given (rejecting a collision rather
+   * than silently overwriting), falling back to slug-based generation otherwise.
+   */
+  private resolvePersoIdentity(
+    story: StoryDef,
+    explicitId: string | undefined,
+    persoType: string,
+    requestedName?: string
+  ): ApiResult<{ persoId: string; persoName: string }> {
+    if (explicitId !== undefined) {
+      if (story.persos.some((p) => p.id === explicitId)) {
+        return this.reject('CREATOR_PERSO_ID_COLLISION', `Perso id '${explicitId}' already exists in story '${story.id}'`)
+      }
+      const persoName = this.normalizeAuthorName(requestedName, this.slugify(persoType, 'perso'))
+      return { ok: true, data: { persoId: explicitId, persoName } }
+    }
+    return { ok: true, data: this.createPersoIdentity(story, persoType, requestedName) }
+  }
+
   private createStoryIdentity(scene: SceneState, requestedName?: string): { storyId: string; storyName: string } {
     const baseName = this.normalizeAuthorName(requestedName, 'story')
     const usedNames = new Set(Object.values(scene.stories).map((s) => s.name ?? s.id))
@@ -242,7 +299,9 @@ export class SceneDocEditor {
         Object.entries(scene.stories).map(([id, story]) => [id, this.cloneStory(story)])
       ),
       tracks: this.cloneData(scene.tracks),
-      init: scene.init
+      init: scene.init,
+      onStart: scene.onStart,
+      onSequenceEnd: scene.onSequenceEnd
     }
   }
 
@@ -250,6 +309,7 @@ export class SceneDocEditor {
     return {
       id: story.id,
       name: story.name ?? story.id,
+      trackId: story.trackId,
       tracks: this.cloneData(story.tracks),
       initial: this.cloneData(story.initial),
       persos: story.persos.map((p) => this.clonePerso(p)),
@@ -268,6 +328,7 @@ export class SceneDocEditor {
       name: perso.name ?? perso.id,
       type: perso.type,
       initial: this.cloneData(perso.initial),
+      list: this.cloneData(perso.list),
       actions: this.cloneData(perso.actions),
       emit: this.cloneData(perso.emit)
     }

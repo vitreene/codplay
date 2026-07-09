@@ -20,6 +20,14 @@ export default defineConfig({
       allow: ['..', TH_ROOT],
     },
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        fame: resolve(__dirname, 'fame.html'),
+      },
+    },
+  },
   resolve: {
     alias: [
       { find: /^codplay\/(.*)/, replacement: resolve(__dirname, '../codplay/src/$1') },

@@ -6,6 +6,7 @@ import type { ResourceManifestEntry } from 'codplay/builder/types'
 import type { RuntimeComponentClass } from 'codplay/runtime/components'
 import type { RenderAdapter } from 'codplay/player/render-adapter-types'
 import type { ThirdPartyBinding } from 'codplay/player/third-party-binding'
+import type { DemoEntry } from './demo-registry'
 
 /**
  * Defines one optional command button that emits one runtime event.
@@ -26,6 +27,8 @@ export type PlayerSceneDemoConfig = {
 	scene: SceneDoc;
 	strapCollection?: StrapCollection;
 	activeDemo?: string;
+	/** Restricts the sidebar menu to this subset instead of the full DEMO_REGISTRY. */
+	demoLinks?: DemoEntry[];
 	actions?: PlayerSceneDemoAction[];
 	extraResources?: ResourceManifestEntry[];
 	/** Custom component classes keyed by perso type, registered before init. */

@@ -35,13 +35,14 @@ type ApiWarning = {
 type AuthoringApi = {
   create: (input: { id: string }) => ApiResult<void>
 
-  createStory: (input?: { name?: string }) => ApiResult<{ storyId: string; storyName: string }>
+  createStory: (input?: { id?: string; name?: string }) => ApiResult<{ storyId: string; storyName: string }>
   upsertStory: (input: { story: StoryDef }) => ApiResult<void>
   removeStory: (input: { storyId: string }) => ApiResult<void>
 
   createPerso: (input: {
     storyId: string
     type: PersoType
+    id?: string
     name?: string
   }) => ApiResult<{ persoId: string; persoName: string }>
   upsertPerso: (input: { storyId: string; perso: Perso }) => ApiResult<void>
@@ -53,6 +54,12 @@ type AuthoringApi = {
     }
     init: {
       set: (input: { value: (input?: Record<string, unknown>) => Record<string, unknown> | undefined }) => ApiResult<void>
+    }
+    onStart: {
+      set: (input: { value: ((...args: any[]) => void) | undefined }) => ApiResult<void>
+    }
+    onSequenceEnd: {
+      set: (input: { value: ((...args: any[]) => void) | undefined }) => ApiResult<void>
     }
     listen: {
       set: (input: { value: ListenRule[] }) => ApiResult<void>
@@ -95,8 +102,11 @@ type AuthoringApi = {
 - `createStory` peut appliquer un schema de nommage generique pour les stories instanciees (ex: `name + discriminant`).
 - `createPerso` peut appliquer un schema de nommage generique pour les persos instancies (ex: `name + discriminant`).
 - `createStory` et `createPerso` doivent rendre visibles a l'auteur le `name` effectif et l'`id` effectif apres creation.
+- `createStory` et `createPerso` acceptent un `id` explicite optionnel — un outil auteur (ex. un editeur qui possede deja ses propres ids deterministes cote donnees d'edition) peut l'imposer ; omis, l'id reste genere par slug comme avant.
+- un `id` explicite qui entre en collision avec un id deja existant dans la scene/story est une erreur auteur, jamais un ecrasement silencieux.
 - l'`id` d'un element n'est pas modifiable apres creation.
 - toute tentative de modification d'`id` apres creation est une erreur auteur.
+- `scene.onStart`/`scene.onSequenceEnd` exposent les hooks de cycle de vie de meme nom sur `SceneDef`, pour des effets de bord auteur (ex. transmettre un resultat a un backend) — non consommes par le runtime V1 lui-meme, poses ici pour que l'auteur puisse les definir des la construction de la scene.
 - `upsertStory` et `upsertPerso` operent sur des objets existants dont l'`id` est deja fixe.
 - `exportSceneDoc` retourne une scene prete pour compilation Builder.
 

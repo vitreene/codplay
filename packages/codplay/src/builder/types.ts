@@ -1,4 +1,5 @@
 import type { StrapCollection } from '../player/strap-types'
+import type { ListConfig } from '../runtime/types'
 
 export type ApiError = {
   code: string
@@ -41,6 +42,7 @@ export type Perso = {
   name?: string
   type: string
   initial: Record<string, unknown> | undefined
+  list?: ListConfig
   actions: Record<string, unknown>
   emit?: Record<string, unknown>
 }

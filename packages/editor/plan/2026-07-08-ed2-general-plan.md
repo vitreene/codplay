@@ -15,7 +15,7 @@
 | # | Document | Type | Statut | Emplacement |
 |---|---|---|---|---|
 | 1 | Réconciliation capsule-automation ↔ CapsuleDistribution | Plan | **Terminé et vérifié (2026-07-08)** | `packages/editor/plan/2026-07-08-capsule-automation-reconciliation-plan.md` |
-| 2 | Audit et remise à niveau de `SceneDocEditor` depuis Codplay | Plan | Écrit | `packages/editor/plan/2026-07-08-scenedoceditor-audit-plan.md` |
+| 2 | Audit et remise à niveau de `SceneDocEditor` depuis Codplay | Plan | **Terminé et vérifié (2026-07-09)** | `packages/editor/plan/2026-07-08-scenedoceditor-audit-plan.md` |
 | 3 | Construction du Builder | Spec + Plan | Écrit (dépend de 1 et 2) | `packages/editor/plan/2026-07-08-builder-plan.md` |
 | 4 | Moteur de validation métier (ed2) | Plan | Écrit (dépend de 3) | `packages/editor/plan/2026-07-08-validation-engine-plan.md` |
 | 5 | Spec capsule (ed2) | Spec | Écrit, fermée (tous les points tranchés) | `packages/editor/plan/2026-07-08-capsule-spec.md` |
@@ -27,7 +27,7 @@
 ## Ordre d'implémentation
 
 1. **Réconciliation capsule-automation ↔ CapsuleDistribution — terminé (2026-07-08).** `CapsuleDistribution` (déplacée dans `packages/authoring/scene-factory/`) fait foi pour le timing ; capsule-automation se recentre sur catalogue de transitions + génération CSS/grid, consommant un `timeRange` déjà résolu par enfant plutôt qu'en le recalculant. `GRID_MODE` fixé par sous-type (plus un champ caller-fourni). Mise en test faite (capsule-automation : 21 tests, zéro avant ce chantier ; `CapsuleDistribution` : 13, dont 6 nouveaux sur `stagger`).
-2. **Audit et remise à niveau de `SceneDocEditor`** — préalable au Builder, indépendant de (1). Depuis sa séparation de `CodPlay` (2026-06-20), le modèle Codplay a évolué sans que `SceneDocEditor` suive systématiquement (décalage confirmé, pas hypothétique — voir le document dédié). `SceneDocEditor` doit devenir la classe métier testable du Builder, pas un helper contourné.
+2. **Audit et remise à niveau de `SceneDocEditor` — terminé (2026-07-09).** `id?` explicite + collision sur `createStory`/`createPerso`, `scene.onStart`/`scene.onSequenceEnd`, `cloneStory()` préserve `trackId`, `Perso.list?: ListConfig` ajouté côté Codplay et suivi par `clonePerso()`. `docs/formalisation/v1-authoring-api.md` étendu en premier (deux capacités absentes depuis toujours, pas une staleness) avant de toucher l'implémentation. `scene.state` volontairement **parqué** — pas de besoin ed2 réel, à rouvrir seulement au retour sur le chantier quiz-hunt.
 3. **Construction du Builder** — dépend de (1) et (2). Couvre : construction du `SceneDef` (persos, eventimes, actions) via `SceneDocEditor` remis à niveau, capsule racine (`list`, `flip:false`), génération et branchement de la feuille de style. Une validation explicitement demandée à mener ici :
    - **Feuille de style vérifiée par un test concret** : Blob CSS généré dynamiquement (`type:'text/css'`) → `extraResources` → rendu effectif dans une scène jouée. Aucune démo existante n'exerce ce chemin précis (seul un CSS statique est aujourd'hui prouvé via `preload-media-demo.ts`).
 4. **Moteur de validation métier (ed2)** — dépend de (3) : valide la sortie du Builder (invariants capsule racine, intégrité référentielle des moves, unicité des noms d'action, existence des `ref` de transition) avant compilation. Pièce distincte de `SceneDocEditor` (qui reste un pur squelette) et du Builder (orchestration).
@@ -54,10 +54,12 @@
 - Premier incrément de construction : **headless**, sans UI — fixture `EditorScene` → Builder → `SceneDef` → player, via test automatisé. La coquille React vient après (interactions timeline, puis décor).
 - « bloc » (ItemType) : pas une valeur distincte, un `text` à contenu vide (surface colorée). Futurs types média (story-comme-média, lotties, rive, threejs) : valeurs `ItemType` distinctes (propriétés dédiées propres à chacun), jamais des discriminants sous `media` — ajoutés à la disponibilité du composant Codplay correspondant.
 - `constraints.minDurationMs`/`maxDurationMs` (capsule-automation) retirés : non consommés nulle part, reliquat Eddy probable (cf `2026-07-08-capsule-automation-reconciliation-plan.md` §3.1).
+- `SceneDocEditor` : `createStory`/`createPerso` acceptent un `id?` explicite (collision rejetée, jamais un écrasement) — ed2 peut imposer ses propres ids déterministes. `scene.onStart`/`scene.onSequenceEnd` exposés (effets de bord auteur, ex. transmission backend). `trackId`/`Perso.list` ne se perdent plus au clone. `docs/formalisation/v1-authoring-api.md` étendu pour couvrir ces ajouts — absents de la spec depuis toujours, pas une régression corrigée.
 
 ## Hors périmètre (parqué, pas bloquant)
 
 - Rôle `master` sur une track (horizon/`progressEndMs`) : non testé nulle part dans Codplay, sans rapport avec ed2 — la plupart des démos Codplay tournent déjà sans média. À tester un jour dans une démo Codplay dédiée.
+- `scene.state` (authoring API, `SceneDocEditor`) : pas de besoin ed2 identifié — sans rapport avec ce chantier. À rouvrir explicitement au retour sur quiz-hunt (démo Codplay), où un vrai state niveau scène doit être testé.
 
 ## Conventions transverses au chantier
 

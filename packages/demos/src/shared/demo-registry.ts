@@ -25,8 +25,20 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },
 ];
 
-export function buildDemoLinksMarkup(activeId: string | undefined): string {
-  return DEMO_REGISTRY.map(
+/**
+ * Subset of DEMO_REGISTRY exposed on the "fame" page (fame.html), a separate
+ * entry point that showcases a curated selection of demos.
+ */
+export const FAME_REGISTRY: DemoEntry[] = [
+  { id: "quiz", label: "Quiz compteur", href: "fame.html?demo=quiz" },
+  { id: "Flip", label: "Flip", href: "fame.html?demo=codplay-poc" },
+  { id: "chrono", label: "Chronomètre", href: "fame.html?demo=chrono" },
+  { id: "polygon", label: "Polygon", href: "fame.html?demo=polygon" },
+  { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "fame.html?demo=mashup-rive-three-quiz" },
+];
+
+export function buildDemoLinksMarkup(activeId: string | undefined, entries: DemoEntry[] = DEMO_REGISTRY): string {
+  return entries.map(
     (entry) =>
       `<a class="demo-link${entry.id === activeId ? " demo-link-active" : ""}" href="${entry.href}">${entry.label}</a>`,
   ).join("");
