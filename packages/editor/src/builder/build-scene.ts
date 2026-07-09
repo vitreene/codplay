@@ -53,13 +53,69 @@ export type BuildSceneResult = {
 }
 
 /**
- * Builder increment (`2026-07-08-builder-plan.md` §"Partie plan" steps 3-5) : the root capsule's
- * children now go through the real pipeline — `CapsuleDistribution.compute()` for timing,
- * `AutoCapsule.resolve()` for grid/placement/transitions/CSS — instead of a hand-placed
- * eventime. Still single-level (no nested capsule yet, step 6).
+ * # The ed2 Builder — what it does, and how
  *
- * Only `contentType: 'text'` is mapped for now — the full `ItemType` → perso type table
- * (`2026-07-08-builder-plan.md` §5) lands with the next increment (more than one item type).
+ * `buildSceneDoc()` is the single entry point: it takes one authored `EditorScene` (the data
+ * model `sequence-editor`/`decor-editor` produce) and returns one Codplay `SceneDef` ready to
+ * compile and play — plus the CSS the scene needs, as a separate string (see `styleSheet` below).
+ *
+ * ## The shape of an `EditorScene`
+ *
+ * An `EditorScene` is a flat scene duration (`durationMs`) plus a tree of `TrackNode`s
+ * (`scene.tracks`). Each `TrackNode` is one of two kinds:
+ * - `kind: 'element'` — a leaf item (today: `contentType: 'text'` only, §5 of the plan; other
+ *   content types throw rather than silently falling back to something — `mapContentTypeToPersoType`).
+ * - `kind: 'capsule'` — a container with its own `children: TrackNode[]`, its own `capsuleType`
+ *   (`carousel`/`rangee`/`liste`/`grille`/`card`), and its own `keyframes` (when it appears/
+ *   disappears). A capsule can contain other capsules, to any depth — `capsule-a` holding
+ *   `capsule-b` holding a leaf item is exactly as valid as one flat level.
+ *
+ * Every scene also has an IMPLICIT root capsule the author never sees or authors directly (§6 of
+ * `2026-07-08-capsule-spec.md`) — it's the one perso that actually bridges to the player's real
+ * `mountTarget`, and every top-level track in `scene.tracks` is really a child of it.
+ *
+ * ## The pipeline, capsule by capsule
+ *
+ * Every capsule (the implicit root, or any authored one) goes through the exact same 3-stage
+ * resolution — `resolveCapsule()` is that one function, called once per capsule level:
+ *
+ * 1. **Timing** — `CapsulePreset.resolve()` turns a capsule's `capsuleType` + its author-chosen
+ *    `distribution` setting (`sequential` or `stagger`, `TrackNode.distribution`) into the concrete
+ *    input `CapsuleDistribution.compute()` needs. Only `carousel` has a real structural default
+ *    (its grid is forced to one cell, so children MUST take turns) — every other type requires an
+ *    explicit `distribution`, or the Builder throws rather than guessing (Principe B). This gives
+ *    every child of the capsule its resolved `{introMs, outroMs}` — when it appears/disappears,
+ *    relative to the capsule's own start.
+ * 2. **Grid, placement, transitions, CSS** — that resolved timing feeds a real `AutoCapsule`
+ *    instance (`capsule-automation`), which resolves the grid shape, each child's placement (its
+ *    own explicit placement if given, or the type's own automatic rule — including the
+ *    "ghost zone" full-surface fallback for `card`-type capsules, generated automatically, no
+ *    special-casing needed here), each child's intro/outro as a concrete style diff (from the
+ *    keyframe's own named transition, e.g. `fade`), and the CSS backing all of it.
+ * 3. **Perso + eventimes** — the resolved artifact becomes one Codplay `perso` (always `type:
+ *    'list'`, whatever the capsule's own sub-type) with a `className` carrying the resolved grid/
+ *    placement classes, and a couple of NAMED ACTIONS (`${id}-intro`/`${id}-outro`) carrying the
+ *    resolved style diff. The `story.eventimes` array gets two pure triggers (`{name, startAt}`,
+ *    no payload) pointing at those same action names — this is Principe A: an eventime only ever
+ *    fires a named action, it never carries data itself.
+ *
+ * ## Walking the tree
+ *
+ * `buildSceneDoc()` doesn't recurse through `TrackNode.children` as a call stack — it works
+ * through a flat worklist (a queue): resolve one capsule's children, and for every child that is
+ * ITSELF a capsule, push its own children onto the same queue to be resolved next. Nothing about
+ * Codplay's own model requires structural recursion here — a `perso`'s `move.parentId` is just a
+ * plain reference to another perso's id, regardless of how deep the authoring tree was, so the
+ * worklist just needs to keep track of "these tracks, under this parent perso id" pairs.
+ *
+ * ## The two outputs
+ *
+ * - `sceneDoc` — the real `SceneDef`, built through `SceneDocEditor` (Codplay's own authoring
+ *   helper), ready for `BuilderFacade.compile()`.
+ * - `styleSheet` — every capsule's own resolved CSS, concatenated. This is NEVER inlined onto any
+ *   perso's own `style` — only referenced through `className` — so it has to travel to the player
+ *   as an actual stylesheet (a Blob → `extraResources`, see the demo wiring in
+ *   `packages/demos/src/codplay/ed2-builder-demo.ts`) for the scene to render correctly at all.
  */
 export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
   const editor = new SceneDocEditor()

@@ -249,3 +249,78 @@ describe('buildSceneDoc — nested capsule (2 levels deep, mixed capsule types)'
     expect(compileResult.ok).toBe(true)
   })
 })
+
+describe('buildSceneDoc — nested capsule reads its own TrackNode.grid override (not just the scene root)', () => {
+  it('a nested capsule with an explicit grid resolves to that grid, not the type default (9x16)', () => {
+    const scene: EditorScene = {
+      id: 'grid-override-scene', title: 'grid override', durationMs: 3000, durationSource: 'arbitrary',
+      decors: {}, rootDecorId: null,
+      tracks: [{
+        id: 'capsule-a', kind: 'capsule', label: 'A', visible: true, capsuleType: 'grille',
+        grid: { rows: 1, cols: 2 },
+        distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        keyframes: [
+          { id: 'kf-a-intro', timeMs: 0, decorId: null },
+          { id: 'kf-a-outro', timeMs: 3000, decorId: null },
+        ],
+        children: [
+          { id: 'item-1', kind: 'element', label: '1', visible: true, contentType: 'text', keyframes: [{ id: 'kf-1', timeMs: 0, decorId: null }, { id: 'kf-1-out', timeMs: 3000, decorId: null }] },
+          { id: 'item-2', kind: 'element', label: '2', visible: true, contentType: 'text', keyframes: [{ id: 'kf-2', timeMs: 0, decorId: null }, { id: 'kf-2-out', timeMs: 3000, decorId: null }] },
+        ],
+      }],
+      cues: [], markerTracks: [],
+    }
+
+    const { sceneDoc, styleSheet } = buildSceneDoc(scene)
+    const capsuleA = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'capsule-a')!
+    const gridClass = (capsuleA.initial as { className?: string }).className!.split(' ')[0]
+
+    expect(gridClass).toBe('ac-grid-grille-1x2-manual')
+    expect(styleSheet).toContain(`.${gridClass}{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));grid-template-rows:1fr;}`)
+  })
+})
+
+describe('buildSceneDoc — error paths (never silently guessed, Principe B)', () => {
+  it('throws when a capsule track has no capsuleType — the Builder never guesses which sub-type pipeline to run', () => {
+    const scene: EditorScene = {
+      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
+      decors: {}, rootDecorId: null,
+      tracks: [{
+        id: 'capsule-untyped', kind: 'capsule', label: 'Untyped', visible: true,
+        // capsuleType intentionally omitted
+        keyframes: [{ id: 'kf', timeMs: 0, decorId: null }],
+        children: [],
+      }],
+      cues: [], markerTracks: [],
+    }
+    expect(() => buildSceneDoc(scene)).toThrow(/capsule-untyped.*capsuleType/)
+  })
+
+  it('throws for any contentType other than text — the only mapped ItemType in this increment (§5 of the plan)', () => {
+    const scene: EditorScene = {
+      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
+      decors: {}, rootDecorId: null,
+      tracks: [{
+        id: 'item-image', kind: 'element', label: 'Image', visible: true, contentType: 'image',
+        keyframes: [{ id: 'kf', timeMs: 0, decorId: null }],
+      }],
+      cues: [], markerTracks: [],
+    }
+    expect(() => buildSceneDoc(scene)).toThrow(/unsupported contentType 'image'/)
+  })
+
+  it('throws when a non-carousel capsule has no distribution setting — CapsulePreset never guesses a mode (§3.3)', () => {
+    const scene: EditorScene = {
+      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
+      decors: {}, rootDecorId: null,
+      tracks: [{
+        id: 'capsule-unconfigured', kind: 'capsule', label: 'Unconfigured', visible: true, capsuleType: 'grille',
+        // distribution intentionally omitted — grille has no structural default (only carousel does)
+        keyframes: [{ id: 'kf-intro', timeMs: 0, decorId: null }, { id: 'kf-outro', timeMs: 1000, decorId: null }],
+        children: [],
+      }],
+      cues: [], markerTracks: [],
+    }
+    expect(() => buildSceneDoc(scene)).toThrow(/has no structural default/)
+  })
+})
