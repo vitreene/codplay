@@ -83,6 +83,14 @@ Son kf virtuel intro est rendu en warning (hors cadre). Idem si `outroMs ≤ 0`.
 Les enfants lockés sont exclus du calcul de stagger et conservent leurs bornes réelles.  
 La spec du stagger en présence d'enfants lockés est à enrichir ultérieurement.
 
+### 3.3 Résolution du sous-type — entièrement à `sequence-editor`
+
+`CapsuleDistribution` ne connaît **aucun** `CapsuleKind`/sous-type de capsule — `mode` est un paramètre d'entrée obligatoire (§8), jamais inféré depuis un type de capsule à l'intérieur de cette classe. « Carousel » est d'abord un concept destiné à l'auteur (le nom qu'il choisit dans l'interface) — sa résolution en un mode concret (`sequential`, sa grille forcée à une cellule unique n'admettant qu'un enfant visible à la fois) a lieu **au plus tôt côté `sequence-editor`**, qui appelle ensuite `compute()` avec un `mode` déjà résolu, jamais avec le sous-type lui-même.
+
+Pour tout autre sous-type (`rangee`/`grille`/`card`/`liste`, tous à plusieurs cellules), il n'existe aucun mode déductible du seul sous-type — le choix (`sequential` vs `stagger`, et ses valeurs) vient de l'auteur (`CapsulePatch.sequencing`), résolu lui aussi côté `sequence-editor`. Une future interface pourra proposer des presets par disposition (ex. « ligne = 1×3, stagger:2 ») — des valeurs par défaut d'interface, arbitraires et modifiables par l'auteur, jamais une constante figée dans `CapsuleDistribution` ou le Builder.
+
+Un enfant locké (kf réel sur au moins une borne) prime toujours sur le mode résolu, quel qu'il soit — c'est un réglage d'auteur explicite, jamais écrasé.
+
 ---
 
 ## 4. Algorithme d'adaptation — mode séquentiel avec enfants lockés
@@ -272,7 +280,7 @@ Le runtime ne voit que des kf résolus.
 ```typescript
 interface CapsuleDistributionInput {
   clipDurationMs: number
-  mode: 'sequential' | 'stagger'
+  mode: 'sequential' | 'stagger'  // toujours explicite — résolu en amont par sequence-editor (§3.3), jamais inféré ici depuis un CapsuleKind
   order?: 'forward' | 'backward'  // global — fourni par l'éditeur via DisplayConfig.capsuleOrder
   staggerInMs?: number
   staggerOutMs?: number
@@ -293,6 +301,8 @@ interface CapsuleDistributionOutput {
   }>
 }
 ```
+
+**`CapsuleDistribution` n'importe/ne déclare aucun `CapsuleKind`** — le vocabulaire des sous-types de capsule (`carousel`/`rangee`/`liste`/`grille`/`card`) et sa résolution vers un `mode` concret vivent entièrement dans `sequence-editor` (§3.3), jamais dans cette classe ni dans le Builder ed2. `compute()` reste une pure fonction de calcul temporel — `clipDurationMs`/`mode`/`children` — sans aucune connaissance du concept « capsule ».
 
 ---
 

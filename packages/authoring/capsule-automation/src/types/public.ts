@@ -214,6 +214,16 @@ export type AutoCapsuleDefinition = {
 	className?: string | null;
 	/** Optional inline style applied to the capsule container. */
 	style?: Record<string, string | number>;
+	/**
+	 * Marks this capsule as the scene-root capsule — the one bridging the authored scene to its
+	 * real host container (ex. the player's `mountTarget`), as opposed to a capsule nested inside
+	 * another capsule. When set, a dedicated fixed class (`ac-scene-root`, `width:100%;height:100%`)
+	 * is added alongside the grid class — a separate CSS concern (dimension vs. grid layout/
+	 * position), never folded into the grid class name/rule, which only ever encodes grid
+	 * type/rows/cols/mode. Emitted via `cssRules`/`className`, not `style`/`inlineStyle` (a channel
+	 * not every caller wires into their own rendered stylesheet).
+	 */
+	sceneRoot?: boolean;
 };
 
 /**

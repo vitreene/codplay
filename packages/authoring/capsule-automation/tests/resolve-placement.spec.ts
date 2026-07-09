@@ -49,16 +49,21 @@ describe('resolveAutoCapsulePlacement', () => {
     expect(result.children[1]!.placement.areaClassName).toBe('ac-list-r2')
   })
 
-  it('emits a warning diagnostic for a card child left without any placement (explicitOnly policy)', () => {
+  it('resolves a card child left without any placement (explicitOnly policy) to the full-surface ghost zone', () => {
+    // §3/§11 (`2026-07-08-capsule-spec.md`) — declarative, automatic for ANY explicitOnly type,
+    // no caller-side type-literal branching needed for this: previously an empty placement +
+    // warning, requiring the ed2 Builder to special-case `card` itself and apply the ghost zone
+    // by hand (`setChildPlacement`) — moved here so it happens by construction instead.
     const capsule = new AutoCapsule({
-      capsule: { id: 'c', type: CAPSULE_TYPE.card, grid: {} },
+      capsule: { id: 'c', type: CAPSULE_TYPE.card, grid: { rows: 9, cols: 16 } },
       children: [child('a', 1)],
     })
     const result = capsule.resolve()
-    expect(result.children[0]!.placement.areaClassName).toBeNull()
-    expect(result.children[0]!.meta.usedAutoPlacement).toBe(false)
+    expect(result.children[0]!.placement.gridRow).toBe('1 / span 9')
+    expect(result.children[0]!.placement.gridColumn).toBe('1 / span 16')
+    expect(result.children[0]!.meta.usedAutoPlacement).toBe(true)
     expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({ code: 'placement-explicit-required', childId: 'a' }),
+      expect.objectContaining({ code: 'placement-ghost-zone-applied', childId: 'a' }),
     )
   })
 })

@@ -70,6 +70,7 @@ export type StoryDef = {
 
 export type SceneDef = {
   id: string
+  name?: string
   stories: Record<string, StoryDef>
   initial: Record<string, unknown> | undefined
   straps: string[] | undefined

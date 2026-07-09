@@ -110,6 +110,21 @@ function buildAutoPlacement(
 }
 
 /**
+ * Build the ghost-zone placement (`2026-07-08-capsule-spec.md` §3/§11) — the full-surface
+ * fallback for a child with no explicit placement in an `explicitOnly` capsule (ex. `card`). This
+ * used to be the caller's (the ed2 Builder's) own responsibility, hardcoded behind a
+ * `capsuleType === 'card'` literal comparison — moved here so it's declarative and automatic for
+ * ANY `explicitOnly` type, present or future, without any type-literal branching upstream.
+ */
+function buildGhostZonePlacement(
+	state: AutoCapsuleNormalizedState,
+	child: AutoCapsuleOrderedChild,
+	grid: AutoCapsuleGridComputation["artifact"]
+): AutoCapsuleResolvedChildPlacement {
+	return buildPlacementFromCoordinates(state, child, 1, 1, grid.context.rows, grid.context.cols, AREA_KIND.gridSpan, true);
+}
+
+/**
  * Resolve explicit and automatic child placement artifacts.
  *
  * Main variables:
@@ -137,16 +152,11 @@ export function resolveAutoCapsulePlacement(
 
 		const behavior = state.config.types[state.capsule.type];
 		if (behavior.placementPolicy === PLACEMENT_POLICY.explicitOnly) {
-			const placement: AutoCapsuleResolvedChildPlacement = {
-				areaClassName: null,
-				placementClassName: null,
-				cssRules: []
-			};
-			byChildId[child.id] = { placement, usedAutoPlacement: false };
+			byChildId[child.id] = { placement: buildGhostZonePlacement(state, child, grid), usedAutoPlacement: true };
 			diagnostics.push({
-				level: DIAGNOSTIC_LEVEL.warning,
-				code: "placement-explicit-required",
-				message: `Child \"${child.id}\" has no explicit placement in a capsule type that prefers explicit placement.`,
+				level: DIAGNOSTIC_LEVEL.info,
+				code: "placement-ghost-zone-applied",
+				message: `Child \"${child.id}\" has no explicit placement in a capsule type that requires one — resolved to the full-surface ghost zone.`,
 				childId: child.id
 			});
 			continue;

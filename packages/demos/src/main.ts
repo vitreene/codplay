@@ -19,6 +19,7 @@ import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
 import { runSelectionFrameDemo } from './codplay/selection-frame-demo'
 import { runSelectionFrameGridDemo } from './codplay/selection-frame-grid-demo'
+import { runEd2BuilderDemo } from './codplay/ed2-builder-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -43,5 +44,6 @@ switch (demoName) {
 	case 'selection-frame': void runSelectionFrameDemo(); break
 	case 'selection-frame-grid': void runSelectionFrameGridDemo(); break
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
+	case 'ed2-builder':     void runEd2BuilderDemo(); break
 	default:                void runPlayerPocDemo()
 }

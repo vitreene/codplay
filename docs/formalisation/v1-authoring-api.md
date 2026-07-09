@@ -33,7 +33,7 @@ type ApiWarning = {
 
 ```ts
 type AuthoringApi = {
-  create: (input: { id: string }) => ApiResult<void>
+  create: (input: { id: string; name?: string }) => ApiResult<void>
 
   createStory: (input?: { id?: string; name?: string }) => ApiResult<{ storyId: string; storyName: string }>
   upsertStory: (input: { story: StoryDef }) => ApiResult<void>
@@ -50,6 +50,9 @@ type AuthoringApi = {
 
   scene: {
     initial: {
+      set: (input: { value: Record<string, unknown> | undefined }) => ApiResult<void>
+    }
+    state: {
       set: (input: { value: Record<string, unknown> | undefined }) => ApiResult<void>
     }
     init: {
@@ -107,6 +110,8 @@ type AuthoringApi = {
 - l'`id` d'un element n'est pas modifiable apres creation.
 - toute tentative de modification d'`id` apres creation est une erreur auteur.
 - `scene.onStart`/`scene.onSequenceEnd` exposent les hooks de cycle de vie de meme nom sur `SceneDef`, pour des effets de bord auteur (ex. transmettre un resultat a un backend) — non consommes par le runtime V1 lui-meme, poses ici pour que l'auteur puisse les definir des la construction de la scene.
+- `scene.state` expose `SceneDef.state`, un etat porte au niveau scene (distinct de `StoryDef.state`, deja etabli et scope a une story) — utile pour un etat partage entre plusieurs stories (ex. un resultat global).
+- `create` accepte un `name` facultatif, sur le modele de `StoryDef.name`/`Perso.name` — pas de mecanisme de derivation d'id a partir du nom au niveau scene (l'`id` est toujours explicite des `create`), juste un libelle auteur optionnel.
 - `upsertStory` et `upsertPerso` operent sur des objets existants dont l'`id` est deja fixe.
 - `exportSceneDoc` retourne une scene prete pour compilation Builder.
 

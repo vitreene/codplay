@@ -1,5 +1,7 @@
 // ─── Transitions ────────────────────────────────────────────────────────────
 
+import type { CapsuleKind } from '@codplay/scene-factory'
+
 export type TransitionKey =
   | '--'
   | 'cut'
@@ -23,12 +25,15 @@ export type TransitionDef =
 
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
-export type CapsuleKind =
-  | 'carousel'
-  | 'rangee'
-  | 'liste'
-  | 'grille'
-  | 'card'
+/**
+ * Re-exported, not redeclared — `@codplay/scene-factory`'s `CapsulePreset` is the single source of
+ * truth for this vocabulary (resolves `CapsuleKind` + author settings, `TrackDistribution`, into
+ * the concrete `mode`/values `CapsuleDistribution.compute()` needs — `2026-06-12-capsule-
+ * distribution-spec.md` §3.3). A second, separately-declared `CapsuleKind` here previously drifted
+ * out of sync with reality once — never again (same class of bug as the old `GRID_MODE`/
+ * `GRID_POLICY` duplication).
+ */
+export type { CapsuleKind }
 
 export interface Keyframe {
   id: string
@@ -53,6 +58,12 @@ export interface TrackNode {
   visible: boolean
   contentType?: 'text' | 'image' | 'media' | 'video'
   capsuleType?: CapsuleKind
+  /**
+   * Provisional override for a `capsule` track's grid size — TEMPORARY, for the ed2-builder demo
+   * only (2026-07-09), not a real authored setting. Real grid presets belong to `CapsulePatch`
+   * (`2026-07-08-capsule-spec.md` §10, `grid?: {rows?, cols?, gap?}` — panel not yet built).
+   */
+  grid?: { rows?: number; cols?: number }
   distribution?: TrackDistribution
   children?: TrackNode[]
   keyframes: Keyframe[]
@@ -108,6 +119,8 @@ export interface EditorScene {
   durationSource: 'arbitrary' | 'audio-primary' | 'mixed'
   tracks: TrackNode[]
   decors: Record<string, EditorDecor>
+  /** Décor de la capsule racine — sans keyframe, posé une seule fois (pas un détournement de Keyframe.decorId). */
+  rootDecorId: string | null
   cues: TextCue[]
   markerTracks: MarkerTrack[]
   audio?: AudioTrack

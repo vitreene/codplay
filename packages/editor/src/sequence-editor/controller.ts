@@ -36,6 +36,7 @@ function emptyScene(): EditorScene {
     durationSource: 'arbitrary',
     tracks: [],
     decors: {},
+    rootDecorId: null,
     cues: [],
     markerTracks: [],
   }

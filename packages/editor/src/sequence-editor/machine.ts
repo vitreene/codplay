@@ -3,7 +3,7 @@ import type {
   EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, MarkerTrack, AudioTrack,
   WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
 } from './types'
-import { CapsuleDistribution } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
 import type { ChildInput } from '@codplay/scene-factory'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
@@ -198,13 +198,24 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
       }
     })
 
-    const dist = capsule.distribution ?? { mode: 'sequential' as const }
+    // `CapsulePreset` is the one place `CapsuleKind` → concrete distribution resolution lives
+    // (`2026-06-12-capsule-distribution-spec.md` §3.3) — shared with the ed2 Builder's own final
+    // resolution (`resolveCapsule`), so both stay in agreement (§7, "même calcul, une seule
+    // source de vérité"). A capsule mid-authoring may have no `capsuleType`/`distribution` set
+    // yet — no virtual keyframes are produced for it until the author supplies what `CapsulePreset`
+    // needs (same skip pattern as the missing intro/outro kf check above), rather than guessing or
+    // letting the resolution error propagate into the live preview.
+    if (!capsule.capsuleType) continue
+    let preset: ReturnType<typeof CapsulePreset.resolve>
+    try {
+      preset = CapsulePreset.resolve({ capsuleType: capsule.capsuleType, distribution: capsule.distribution })
+    } catch {
+      continue
+    }
     const out = CapsuleDistribution.compute({
       clipDurationMs,
-      mode: dist.mode,
+      ...preset,
       order: capsuleOrder,
-      staggerInMs: dist.staggerInMs,
-      staggerOutMs: dist.staggerOutMs,
       children,
     })
 

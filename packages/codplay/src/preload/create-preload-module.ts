@@ -6,13 +6,18 @@ import { loadAudio, loadCss, loadFont, loadImage, loadVideo, withTimeout } from 
 
 const DEFAULT_TIMEOUT_MS = 10000
 
-function builtinLoadByType(entry: ResourceManifestEntry, timeoutMs: number, signal: AbortSignal): Promise<void> | undefined {
+function builtinLoadByType(
+  entry: ResourceManifestEntry,
+  timeoutMs: number,
+  signal: AbortSignal,
+  container: Element | null | undefined
+): Promise<void> | undefined {
   switch (entry.type) {
     case 'image': return loadImage(entry.url, timeoutMs, signal)
     case 'audio': return loadAudio(entry.url, timeoutMs, signal)
     case 'video': return loadVideo(entry.url, timeoutMs, signal)
     case 'font': return loadFont(entry.url, undefined, timeoutMs, signal)
-    case 'css': return loadCss(entry.url, timeoutMs, signal)
+    case 'css': return loadCss(entry.url, timeoutMs, signal, container)
     default: return undefined
   }
 }
@@ -22,8 +27,13 @@ export function createPreloadModule(): PreloadApi {
   let currentController: AbortController | null = null
   const strategies = new Map<string, PreloadStrategyFn>()
 
-  function loadByType(entry: ResourceManifestEntry, timeoutMs: number, signal: AbortSignal): Promise<void> {
-    const builtin = builtinLoadByType(entry, timeoutMs, signal)
+  function loadByType(
+    entry: ResourceManifestEntry,
+    timeoutMs: number,
+    signal: AbortSignal,
+    container: Element | null | undefined
+  ): Promise<void> {
+    const builtin = builtinLoadByType(entry, timeoutMs, signal, container)
     if (builtin) return builtin
 
     const strategy = strategies.get(entry.type)
@@ -37,7 +47,7 @@ export function createPreloadModule(): PreloadApi {
     manifest: Parameters<PreloadApi['load']>[0]['manifest']
     options?: PreloadOptions
   }): Promise<ApiResult<PreloadResult>> {
-    const { mode = 'broadcast', timeout = DEFAULT_TIMEOUT_MS } = options
+    const { mode = 'broadcast', timeout = DEFAULT_TIMEOUT_MS, container } = options
 
     if (currentController) currentController.abort()
     currentController = new AbortController()
@@ -74,7 +84,7 @@ export function createPreloadModule(): PreloadApi {
           return
         }
 
-        const loadPromise = loadByType(entry, timeout, signal)
+        const loadPromise = loadByType(entry, timeout, signal, container)
         setEntry(entry.url, { url: entry.url, status: 'loading', promise: loadPromise })
 
         try {

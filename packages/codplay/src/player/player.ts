@@ -219,7 +219,7 @@ export class Player implements PlayerApi {
 
     const preloadResult = await this.preload.load({
       manifest: this.activeManifest,
-      options: { mode: this.playerMode, timeout: this.preloadPolicy.timeout }
+      options: { mode: this.playerMode, timeout: this.preloadPolicy.timeout, container: this.mountTarget }
     })
     if (!preloadResult.ok) return preloadResult
 

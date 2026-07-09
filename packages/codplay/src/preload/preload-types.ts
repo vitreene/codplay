@@ -3,6 +3,13 @@ import type { ApiResult, ApiWarning, ResourceManifest } from '../builder/types'
 export type PreloadOptions = {
   mode?: 'author' | 'broadcast'
   timeout?: number
+  /**
+   * Scene mount container — used to scope `type:'css'` resources (`@scope`, never a global
+   * `document.head` injection, so a scene's CSS never leaks onto the rest of the host page).
+   * Absent when preload runs before a scene is mounted (ex. tooling prefetch, `mode:'author'`) —
+   * `loadCss` falls back to a plain, unscoped `<link>` in that case.
+   */
+  container?: Element | null
 }
 
 export type PreloadResult = {

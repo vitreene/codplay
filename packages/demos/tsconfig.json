@@ -5,10 +5,17 @@
     "paths": {
       "codplay": ["../codplay/src/index.ts"],
       "codplay/*": ["../codplay/src/*"],
+      // Sibling top-level package with deep imports — TS path patterns can't express
+      // "split package name from subpath" generically, so this one needs its own explicit
+      // entry (same two-key pattern as e.g. packages/editor/tsconfig.json's own
+      // @codplay/capsule-automation + @codplay/capsule-automation/*).
+      "@codplay/editor": ["../editor/src/index.ts"],
+      "@codplay/editor/*": ["../editor/src/*"],
       // Keep the same priority order as build/resolve-codplay-authoring.ts.
       "@codplay/*": [
         "../authoring/components/*/src/index.ts",
-        "../authoring/*/src/index.ts"
+        "../authoring/*/src/index.ts",
+        "../*/src/index.ts"
       ]
     }
   },

@@ -152,6 +152,27 @@ describe('Creator API V1', () => {
     })
   })
 
+  it('accepts an optional name at create, exported alongside id', () => {
+    const creator = new SceneDocEditor()
+    expect(creator.create({ id: 'scene-main', name: 'Ma scène' })).toEqual({ ok: true, data: undefined })
+
+    const exportResult = creator.exportSceneDoc()
+    if (!exportResult.ok) throw new Error('export failed')
+    expect(exportResult.data.id).toBe('scene-main')
+    expect(exportResult.data.name).toBe('Ma scène')
+  })
+
+  it('sets scene.state, distinct from any story-level state, round-tripped through exportSceneDoc', () => {
+    const creator = new SceneDocEditor()
+    creator.create({ id: 'scene-main' })
+
+    expect(creator.scene.state.set({ value: { globalScore: 0 } })).toEqual({ ok: true, data: undefined })
+
+    const exportResult = creator.exportSceneDoc()
+    if (!exportResult.ok) throw new Error('export failed')
+    expect(exportResult.data.state).toEqual({ globalScore: 0 })
+  })
+
   it('sets scene.onStart and scene.onSequenceEnd, round-tripped through exportSceneDoc', () => {
     const creator = new SceneDocEditor()
     creator.create({ id: 'scene-main' })

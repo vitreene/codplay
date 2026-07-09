@@ -3,7 +3,9 @@ import type { StrapCollection } from 'codplay/player/strap-types'
 
 type SceneState = {
   id: string
+  name: string | undefined
   initial: Record<string, unknown> | undefined
+  state: Record<string, unknown> | undefined
   init: ((input?: Record<string, unknown>) => Record<string, unknown> | undefined) | undefined
   onStart: ((...args: any[]) => void) | undefined
   onSequenceEnd: ((...args: any[]) => void) | undefined
@@ -20,14 +22,16 @@ type SceneState = {
 export class SceneDocEditor {
   private currentScene: SceneState | null = null
 
-  create(input: { id: string }): ApiResult<void> {
+  create(input: { id: string; name?: string }): ApiResult<void> {
     if (this.currentScene !== null) {
       return this.reject('CREATOR_ALREADY_INITIALIZED', 'create can only be called once')
     }
 
     this.currentScene = {
       id: input.id,
+      name: input.name,
       initial: undefined,
+      state: undefined,
       init: undefined,
       onStart: undefined,
       onSequenceEnd: undefined,
@@ -99,6 +103,10 @@ export class SceneDocEditor {
     initial: {
       set: (input: { value: Record<string, unknown> | undefined }): ApiResult<void> =>
         this.withScene((scene) => { scene.initial = this.cloneData(input.value); return { ok: true, data: undefined } })
+    },
+    state: {
+      set: (input: { value: Record<string, unknown> | undefined }): ApiResult<void> =>
+        this.withScene((scene) => { scene.state = this.cloneData(input.value); return { ok: true, data: undefined } })
     },
     init: {
       set: (input: { value: ((input?: Record<string, unknown>) => Record<string, unknown> | undefined) | undefined }): ApiResult<void> =>
@@ -292,7 +300,9 @@ export class SceneDocEditor {
     const scene = this.currentScene!
     return {
       id: scene.id,
+      name: scene.name,
       initial: this.cloneData(scene.initial),
+      state: this.cloneData(scene.state),
       straps: this.cloneData(scene.straps),
       listen: this.cloneData(scene.listen),
       stories: Object.fromEntries(

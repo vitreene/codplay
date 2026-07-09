@@ -85,3 +85,81 @@ describe('buildGrid() — gridMode fixed per CAPSULE_TYPE', () => {
     expect(grid.inlineStyle.columnGap).toBe('12px')
   })
 })
+
+describe('buildGrid() — sceneRoot fills its real host container', () => {
+  it('adds the fixed ac-scene-root class alongside the grid class when sceneRoot is set', () => {
+    const capsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const grid = capsule.buildGrid()
+    expect(grid.className.split(' ')).toContain('ac-scene-root')
+  })
+
+  it('does not add ac-scene-root when sceneRoot is omitted (nested capsule default)', () => {
+    const capsule = new AutoCapsule({
+      capsule: { id: 'nested', type: CAPSULE_TYPE.card, grid: {} },
+      children: [],
+    })
+    const grid = capsule.buildGrid()
+    expect(grid.className.split(' ')).not.toContain('ac-scene-root')
+  })
+
+  it('never mixes the fill concern into the grid class/name — same grid class with or without sceneRoot', () => {
+    const sceneRootCapsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const nestedCapsule = new AutoCapsule({
+      capsule: { id: 'nested', type: CAPSULE_TYPE.card, grid: {} },
+      children: [],
+    })
+    const sceneRootGridToken = sceneRootCapsule.buildGrid().className.split(' ').find((token) => token.startsWith('ac-grid-'))
+    const nestedGridToken = nestedCapsule.buildGrid().className.split(' ').find((token) => token.startsWith('ac-grid-'))
+    expect(sceneRootGridToken).toBe(nestedGridToken)
+  })
+
+  it('never sets width/height on the grid inline style — dimension is a separate class, not a grid concern', () => {
+    const capsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const grid = capsule.buildGrid()
+    expect(grid.inlineStyle.width).toBeUndefined()
+    expect(grid.inlineStyle.height).toBeUndefined()
+  })
+
+  it('propagates a dedicated .ac-scene-root rule (dimension, grid-area, min-width/height:0, overflow) into the resolved styleSheet', () => {
+    const capsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const result = capsule.resolve()
+    expect(result.styleSheet).toContain('.ac-scene-root{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;}')
+  })
+
+  it('min-width:0/min-height:0 prevent the capsule\'s own oversized children from growing the parent grid track (and it) beyond the real container', () => {
+    // CSS Grid items default to min-width/min-height:auto, refusing to shrink below their own
+    // content's intrinsic size — that pushes an auto-sized parent track (ex. the demo shell's
+    // `.container`, no explicit grid-template) to grow around it, defeating width:100%/height:100%
+    // entirely. min-width:0/min-height:0 is what actually makes the fill bound-able.
+    const capsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const result = capsule.resolve()
+    expect(result.styleSheet).toMatch(/\.ac-scene-root\{[^}]*min-width:0;[^}]*min-height:0;/)
+  })
+
+  it('grid-area:1/-1 matters when the real host container is itself display:grid — fills the whole parent area, not one auto-placed cell', () => {
+    // Simulates a grid parent with no explicit template (like the demo shell's `.container`,
+    // `display:grid;place-items:center`, no `grid-template-columns/rows`) — a plain
+    // `width:100%;height:100%` child there only fills its own auto-placed implicit cell.
+    const capsule = new AutoCapsule({
+      capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
+      children: [],
+    })
+    const result = capsule.resolve()
+    expect(result.styleSheet).toMatch(/\.ac-scene-root\{[^}]*grid-area:1\/-1;/)
+  })
+})

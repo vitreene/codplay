@@ -14,9 +14,11 @@ export interface ChildOutput {
   visible: boolean         // false if the child falls outside the clip
 }
 
+export type DistributionMode = 'sequential' | 'stagger'
+
 export interface CapsuleDistributionInput {
   clipDurationMs: number
-  mode: 'sequential' | 'stagger'
+  mode: DistributionMode
   order?: 'forward' | 'backward'
   staggerInMs?: number
   staggerOutMs?: number
