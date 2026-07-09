@@ -1,5 +1,5 @@
 import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automation'
-import { CapsuleDistribution, CapsulePreset, SceneDocEditor } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset, SceneDocEditor, validateSceneDoc } from '@codplay/scene-factory'
 import type { AutoCapsuleChildElementArtifact, AutoCapsuleChildInput, AutoCapsuleEventInput, AutoCapsuleType } from '@codplay/capsule-automation'
 import type { CapsuleKind } from '@codplay/scene-factory'
 import type { Perso, SceneDef, StoryDef } from 'codplay/builder/types'
@@ -184,6 +184,18 @@ export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
 
   const exportResult = editor.exportSceneDoc()
   if (!exportResult.ok) throw new Error(exportResult.error.message)
+
+  // ed2-specific rules (implicit root capsule, `${persoId}-intro`/`-outro` action naming) that
+  // Codplay's own generic `BuilderValidator` cannot know about — run here, ahead of
+  // `BuilderFacade.compile()`, so a broken invariant is caught with a diagnostic that names the
+  // exact perso/story at fault rather than surfacing later as a generic runtime mounting error
+  // (`2026-07-08-validation-engine-plan.md`).
+  const validationReport = validateSceneDoc(exportResult.data)
+  if (!validationReport.ok) {
+    const errorMessages = validationReport.diagnostics.filter((d) => d.level === 'error').map((d) => d.message)
+    throw new Error(`buildSceneDoc: scene validation failed —\n${errorMessages.join('\n')}`)
+  }
+
   return { sceneDoc: exportResult.data, styleSheet: `${styleSheets.join('\n')}\n${STYLE_CHECK_RULE}` }
 }
 
