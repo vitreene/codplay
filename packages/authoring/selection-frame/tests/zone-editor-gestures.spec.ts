@@ -622,7 +622,7 @@ describe('createZoneEditor — commandes programmatiques (même chemin de mutati
     handle.destroy()
   })
 
-  it('getSplitOptions / splitZone via commands match the plan\'s own worked example', () => {
+  it('divideZone / resizeContainerAxis / breakContainer via commands round-trip through ZoneEditorHandle', () => {
     const authorApi = temp__createAuthorApiStub()
     authorApi.emitNode('capsule-1', temp__sizedContainer())
     const handle = createZoneEditor({
@@ -634,10 +634,49 @@ describe('createZoneEditor — commandes programmatiques (même chemin de mutati
       onSelectionChange: () => {},
     })
 
-    expect(handle.getSplitOptions('z1').cols).toEqual([1, 2, 3, 6])
-    const created = handle.splitZone('z1', { cols: 3 })
-    expect(created).toEqual(['z1-1', 'z1-2', 'z1-3'])
-    expect(handle.getState().zones.find((z) => z.name === 'z1')).toBeUndefined()
+    // The SAME zone gains `container` — never removed, never a new entry (design doc §Cycle de vie).
+    handle.divideZone('z1')
+    const divided = handle.getState().zones.find((z) => z.name === 'z1')!
+    expect(divided.container).toBeDefined()
+    expect(divided.container!.grid).toMatchObject({ rows: 1, cols: 2 })
+    // A measurable main-grid container (temp__sizedContainer's own real width/height, resolved
+    // through the same uniform-track fallback jsdom always takes) applies a default gap aligned
+    // with a main-grid track size (design doc §Rendu — Valeur de gap par défaut).
+    expect(divided.container!.grid.gap).toBeDefined()
+
+    handle.resizeContainerAxis('z1', 'col', 3)
+    const resized = handle.getState().zones.find((z) => z.name === 'z1')!
+    expect(resized.container!.grid).toMatchObject({ rows: 1, cols: 3 })
+    // "Les zones-enfants correspondent aux cellules d'une grille" — growing an axis regenerates
+    // children to exactly match the new rows×cols (3 cells now, not still 2).
+    expect(resized.container!.children).toHaveLength(3)
+
+    const created = handle.breakContainer('z1')
+    expect(created).toEqual(['z1.1.1', 'z1.1.2', 'z1.1.3'])
+    expect(handle.getState().zones.some((z) => z.name === 'z1')).toBe(false)
+    expect(handle.getState().zones.map((z) => z.name).sort()).toEqual(['z1.1.1', 'z1.1.2', 'z1.1.3'])
+
+    handle.destroy()
+  })
+
+  it('listAllZoneNames surfaces both leaves and container children, distinguishing their kind', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.addZone({ row: 2, col: 1, rowSpan: 1, colSpan: 4 }, 'z1')
+    handle.divideZone('z1')
+
+    const listed = handle.listAllZoneNames()
+    // 'z1' itself is still `kind: 'leaf'` — carrying `container` doesn't change its own listing kind.
+    expect(listed.filter((z) => z.kind === 'leaf').map((z) => z.name).sort()).toEqual(['a', 'z1'])
+    expect(listed.filter((z) => z.kind === 'container-child')).toHaveLength(2)
 
     handle.destroy()
   })
@@ -708,5 +747,335 @@ describe('createZoneEditor — commandes programmatiques (même chemin de mutati
     expect(temp__editorRoot()!.querySelectorAll('[data-zone-editor-zone]')).toHaveLength(3)
 
     handle.destroy()
+  })
+})
+
+describe('createZoneEditor — geste clavier : ajuster rows/cols de la zone sélectionnée', () => {
+  function fireKey(key: string): void {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  }
+
+  it('ArrowRight grows cols by 1 on the selected zone\'s own container, regenerating its cells', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1') // cols: 2
+    handle.select(['z1'])
+
+    fireKey('ArrowRight')
+    const zone = handle.getState().zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toMatchObject({ cols: 3, rows: 1 })
+    expect(zone.container!.children).toHaveLength(3)
+
+    handle.destroy()
+  })
+
+  it('ArrowLeft shrinks cols by 1, stopping at the divider\'s own floor of 2', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1') // cols: 2
+    handle.select(['z1'])
+
+    fireKey('ArrowLeft') // already at the floor — silent no-op
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid.cols).toBe(2)
+
+    handle.destroy()
+  })
+
+  it('ArrowUp grows rows, ArrowDown shrinks it ("haut = plus, bas = moins") — the OTHER axis, independent of cols', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(6, 1, [{ name: 'z1', row: 1, col: 1, rowSpan: 6, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1', 'row') // rows: 2
+    handle.select(['z1'])
+
+    fireKey('ArrowUp')
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid).toMatchObject({ rows: 3, cols: 1 })
+
+    fireKey('ArrowDown')
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid).toMatchObject({ rows: 2, cols: 1 })
+
+    handle.destroy()
+  })
+
+  it('does nothing when the selected zone does not carry a container', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.select(['a'])
+
+    fireKey('ArrowRight')
+    expect(handle.getState().zones.find((z) => z.name === 'a')!.container).toBeUndefined()
+
+    handle.destroy()
+  })
+
+  it('does nothing when more than one zone is selected', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+    handle.addZone({ row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
+    handle.select(['z1', 'a'])
+
+    fireKey('ArrowRight')
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid.cols).toBe(2)
+
+    handle.destroy()
+  })
+
+  it('a non-arrow key is a no-op', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+    handle.select(['z1'])
+
+    fireKey('Enter')
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid.cols).toBe(2)
+
+    handle.destroy()
+  })
+
+  it('the listener is removed on destroy — no further mutation after that', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+    handle.select(['z1'])
+    const stateBeforeDestroy = handle.getState()
+
+    handle.destroy()
+    fireKey('ArrowRight') // must not throw despite `destroyed` guard, and must not mutate anything observable
+
+    expect(handle.getState()).toEqual(stateBeforeDestroy)
+  })
+
+  it('is machine-gated — a keypress mid-drag (pointer capture already held elsewhere) is a no-op', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [
+        { name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 2 },
+        { name: 'other', row: 3, col: 3, rowSpan: 1, colSpan: 1 },
+      ]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+    handle.select(['z1'])
+
+    // Start a real drag on the OTHER zone — the machine is now `{ active: 'moving' }`, not `still`.
+    const otherNode = temp__editorRoot()!.querySelector('[data-zone-editor-zone="other"]')!
+    temp__firePointer(otherNode, 'pointerdown', { clientX: 50, clientY: 50 })
+    temp__firePointer(otherNode, 'pointermove', { clientX: 100, clientY: 100 })
+
+    fireKey('ArrowRight')
+    expect(handle.getState().zones.find((z) => z.name === 'z1')!.container!.grid.cols).toBe(2)
+
+    handle.destroy()
+  })
+})
+
+describe('createZoneEditor — geste clavier : Delete/Backspace efface la sélection', () => {
+  function fireKey(key: string): void {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  }
+
+  it('Delete removes every currently selected zone, including one carrying a container', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [
+        { name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+        { name: 'z1', row: 2, col: 1, rowSpan: 1, colSpan: 2 },
+      ]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+    handle.select(['a', 'z1'])
+
+    fireKey('Delete')
+    expect(handle.getState().zones).toHaveLength(0)
+
+    handle.destroy()
+  })
+
+  it('Backspace has the same effect as Delete', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.select(['a'])
+
+    fireKey('Backspace')
+    expect(handle.getState().zones).toHaveLength(0)
+
+    handle.destroy()
+  })
+
+  it('clears the selection after removing it', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const selections: string[][] = []
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: (names) => selections.push(names),
+    })
+    handle.select(['a'])
+
+    fireKey('Delete')
+    expect(selections.at(-1)).toEqual([])
+
+    handle.destroy()
+  })
+
+  it('is a no-op with nothing selected', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+
+    fireKey('Delete')
+    expect(handle.getState().zones).toHaveLength(1)
+
+    handle.destroy()
+  })
+
+  it('a non-delete key is a no-op', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.select(['a'])
+
+    fireKey('Enter')
+    expect(handle.getState().zones).toHaveLength(1)
+
+    handle.destroy()
+  })
+
+  it('is machine-gated — a keypress mid-drag (pointer capture already held elsewhere) is a no-op', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [
+        { name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+        { name: 'other', row: 3, col: 3, rowSpan: 1, colSpan: 1 },
+      ]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.select(['a'])
+
+    const otherNode = temp__editorRoot()!.querySelector('[data-zone-editor-zone="other"]')!
+    temp__firePointer(otherNode, 'pointerdown', { clientX: 50, clientY: 50 })
+    temp__firePointer(otherNode, 'pointermove', { clientX: 100, clientY: 100 })
+
+    fireKey('Delete')
+    expect(handle.getState().zones).toHaveLength(2)
+
+    handle.destroy()
+  })
+
+  it('the listener is removed on destroy — no further mutation after that', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', temp__sizedContainer())
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.select(['a'])
+
+    handle.destroy()
+    fireKey('Delete') // must not throw despite `destroyed` guard
+
+    expect(handle.getState().zones).toHaveLength(1)
   })
 })

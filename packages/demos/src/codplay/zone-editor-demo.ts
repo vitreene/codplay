@@ -48,7 +48,7 @@ export async function runZoneEditorDemo(): Promise<void> {
         authorApi,
         sceneRoot,
         containerId: ZONE_EDITOR_CONTAINER_ID,
-        initialState: { grid: { rows: GRID_ROWS, cols: GRID_COLS, fakeGapUnits: 2 }, zones: [] },
+        initialState: { grid: { rows: GRID_ROWS, cols: GRID_COLS }, zones: [] },
         onZonesChange: (state) => renderStatus(state),
         onSelectionChange: (names) => {
           selectedNames = names;
@@ -84,21 +84,29 @@ export async function runZoneEditorDemo(): Promise<void> {
         editor.setState({
           grid: editor.getState().grid,
           zones: [
-            { name: "titre", row: 1, col: 1, rowSpan: 12, colSpan: GRID_COLS },
-            { name: "corps", row: 13, col: 1, rowSpan: 65, colSpan: GRID_COLS },
-            { name: "footer", row: 78, col: 1, rowSpan: 13, colSpan: GRID_COLS },
+            { id: "card-titre", name: "titre", row: 1, col: 1, rowSpan: 12, colSpan: GRID_COLS },
+            { id: "card-corps", name: "corps", row: 13, col: 1, rowSpan: 65, colSpan: GRID_COLS },
+            { id: "card-footer", name: "footer", row: 78, col: 1, rowSpan: 13, colSpan: GRID_COLS },
           ],
         });
       });
 
-      // Split avec faux gap (plan §Gestes d'édition: parts égales, écart
-      // constant en cellules contiguës) — sur la première zone sélectionnée.
-      makeButton("Diviser la sélection en 2 (faux gap)", () => {
+      // Diviseur (design doc `2026-07-10-zone-container-design.md` §Cycle de vie: "diviser en 2"
+      // est le signal fondateur — la MÊME zone gagne `container`, reste sélectionnable/déplaçable
+      // comme toute autre zone).
+      makeButton("Diviser la sélection en 2 (vertical)", () => {
         const [name] = selectedNames;
         if (name === undefined) return;
-        const options = editor.getSplitOptions(name);
-        if (options.cols.includes(2)) editor.splitZone(name, { cols: 2 });
-        else if (options.rows.includes(2)) editor.splitZone(name, { rows: 2 });
+        editor.divideZone(name);
+      });
+
+      // Cassure (design doc §Ce que ce document NE couvre PAS → §L'opération de cassure elle-même
+      // — geste ponctuel sur UNE zone-conteneur précise, jamais en bloc). La zone source disparaît,
+      // remplacée par ses enfants devenus des ZoneDef indépendantes.
+      makeButton("Détacher les zones enfants de la sélection", () => {
+        const [name] = selectedNames;
+        if (name === undefined) return;
+        editor.breakContainer(name);
       });
 
       // Fusion (plan §Gestes d'édition: emprise englobante, prend le nom de

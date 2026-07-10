@@ -236,6 +236,67 @@ describe('createZoneEditor — setPartVisibility', () => {
 
     handle.destroy()
   })
+
+  it('hides labels independently of the zones themselves — the zone boxes stay visible', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', document.createElement('div'))
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(2, 2, [{ name: 'a', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+
+    handle.setPartVisibility('labels', false)
+    expect(temp__editorRoot()!.querySelector('[data-zone-editor-label]')).toHaveProperty('style.display', 'none')
+    expect(temp__editorRoot()!.querySelector('[data-zone-editor-zone]')).not.toHaveProperty('style.display', 'none')
+
+    handle.setPartVisibility('labels', true)
+    expect(temp__editorRoot()!.querySelector('[data-zone-editor-label]')).not.toHaveProperty('style.display', 'none')
+
+    handle.destroy()
+  })
+})
+
+describe('createZoneEditor — labels de zone', () => {
+  it('every zone gets a visible label showing its own name', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', document.createElement('div'))
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(2, 2, [{ name: 'titre', row: 1, col: 1, rowSpan: 1, colSpan: 1 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+
+    const label = temp__editorRoot()!.querySelector('[data-zone-editor-zone="titre"] > [data-zone-editor-label]')
+    expect(label?.textContent).toBe('titre')
+
+    handle.destroy()
+  })
+
+  it('a container child gets its own computed-name label, matching what breakContainer would produce', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('capsule-1', document.createElement('div'))
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(1, 6, [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 6 }]),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    handle.divideZone('z1')
+
+    const childLabels = [...temp__editorRoot()!.querySelectorAll('[data-zone-editor-container-child] > [data-zone-editor-label]')].map((n) => n.textContent)
+    expect(childLabels.sort()).toEqual(['z1.1.1', 'z1.1.2'])
+
+    handle.destroy()
+  })
 })
 
 describe('createZoneEditor — isCellPlacementAvailable', () => {

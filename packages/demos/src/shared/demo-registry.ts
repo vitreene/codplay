@@ -32,6 +32,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
  */
 export const FAME_REGISTRY: DemoEntry[] = [
   { id: "quiz", label: "Quiz compteur", href: "fame.html?demo=quiz" },
+  { id: "quiz-series", label: "Quiz Série", href: "fame.html?demo=quiz-series" },
   { id: "Flip", label: "Flip", href: "fame.html?demo=codplay-poc" },
   { id: "chrono", label: "Chronomètre", href: "fame.html?demo=chrono" },
   { id: "polygon", label: "Polygon", href: "fame.html?demo=polygon" },

@@ -13,6 +13,7 @@ export type ZoneMachineContext = {
   selectedNames: string[]
   gridVisible: boolean
   zonesVisible: boolean
+  labelsVisible: boolean
 }
 
 export type ZoneMachineEvent =
@@ -27,9 +28,11 @@ export type ZoneMachineEvent =
   | { type: 'MOVE_END' }
   | { type: 'ZONE_ADDED'; name: string }
   | { type: 'ZONE_REMOVED'; name: string }
+  | { type: 'CONTAINER_CREATED'; name: string }
+  | { type: 'CONTAINER_BROKEN'; name: string }
   | { type: 'SELECTION_CHANGED'; names: string[] }
   | { type: 'STATE_REPLACED' }
-  | { type: 'VISIBILITY_CHANGED'; part: 'grid' | 'zones'; visible: boolean }
+  | { type: 'VISIBILITY_CHANGED'; part: 'grid' | 'zones' | 'labels'; visible: boolean }
 
 export const zoneMachine = setup({
   types: {
@@ -43,6 +46,7 @@ export const zoneMachine = setup({
     applyVisibility: assign(({ event }) => {
       if (event.type !== 'VISIBILITY_CHANGED') return {}
       if (event.part === 'grid') return { gridVisible: event.visible }
+      if (event.part === 'labels') return { labelsVisible: event.visible }
       return { zonesVisible: event.visible }
     }),
     deselectRemoved: assign({
@@ -58,7 +62,8 @@ export const zoneMachine = setup({
   context: {
     selectedNames: [],
     gridVisible: true,
-    zonesVisible: true
+    zonesVisible: true,
+    labelsVisible: true
   },
   on: {
     SELECTION_CHANGED: { actions: 'applySelection' },
@@ -69,7 +74,12 @@ export const zoneMachine = setup({
     // not duplicated into the machine. These events exist for callers that
     // want to observe the transition (e.g. a future host UI), not to drive it.
     ZONE_ADDED: {},
-    STATE_REPLACED: {}
+    STATE_REPLACED: {},
+    // Same observation-only role for containers — `divideZone`/`breakContainer` mutate
+    // `state.containers` directly; these events exist only so an observer can tell a container
+    // was created/broken without diffing state itself.
+    CONTAINER_CREATED: {},
+    CONTAINER_BROKEN: {}
   },
   states: {
     idle: {

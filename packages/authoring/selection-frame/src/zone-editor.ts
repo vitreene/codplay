@@ -33,7 +33,7 @@ import { CHARACTERISTIC_POINTS, createHandleNode } from './handle-geometry'
 import type { HandleId } from './handle-geometry'
 import { zoneMachine } from './zone-machine'
 import * as zoneModel from './zone-model'
-import type { ZoneDef, ZoneEditorState, ZoneGridModel } from './zone-model'
+import type { Axis, ZoneDef, ZoneEditorState, ZoneGridModel } from './zone-model'
 
 /**
  * NEUTRALIZED for now (2026-07-09) — the background-gradient rewrite made the previous per-regime
@@ -72,12 +72,18 @@ export type ZoneEditorHandle = {
   addZone(area: { row: number; col: number; rowSpan: number; colSpan: number }, name?: string): string
   removeZone(name: string): void
   renameZone(name: string, next: string): void
-  getSplitOptions(name: string): { rows: number[]; cols: number[] }
-  splitZone(name: string, div: { rows?: number; cols?: number; gapUnits?: number }): string[]
+  /** Always a 2-way split on ONE axis — "diviser en 2" is the founding signal (design doc §Cycle de vie). Defaults to `'col'` when omitted. */
+  divideZone(name: string, axis?: Axis): void
+  /** Adjusts one axis' own division count on an existing container (design doc §API). */
+  resizeContainerAxis(name: string, axis: Axis, count: number): void
+  /** Breaks ONE container — relative→absolute, figée. Never applied in bulk (design doc §API). */
+  breakContainer(name: string): string[]
+  /** Read-only listing of every named zone (leaves and container children) — for the attachment context (design doc §API). */
+  listAllZoneNames(): Array<{ id: string; name: string; kind: 'leaf' | 'container-child'; containerId?: string }>
   mergeZones(names: string[], name?: string): string
   select(names: string[]): void
   getState(): ZoneEditorState
-  setPartVisibility(part: 'grid' | 'zones', visible: boolean): void
+  setPartVisibility(part: 'grid' | 'zones' | 'labels', visible: boolean): void
   /** Whether the grid is currently fine enough that per-cell placement should be offered. */
   isCellPlacementAvailable(): boolean
 }
@@ -97,6 +103,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   let destroyed = false
   let gridVisible = true
   let zonesVisible = true
+  let labelsVisible = true
   let selectedNames: string[] = []
 
   const actor = createActor(zoneMachine)
@@ -158,6 +165,13 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
 
   const zoneNodes = new Map<string, HTMLElement>()
   const handleNodesByZone = new Map<string, Map<HandleId, HTMLElement>>()
+
+  type Area = { row: number; col: number; rowSpan: number; colSpan: number }
+
+  /** Writes a new area to a zone by `name` — the one mutation path for a move/resize gesture. */
+  function updateZoneArea(name: string, area: Area): ZoneEditorState {
+    return { ...state, zones: state.zones.map((z) => (z.name === name ? { ...z, ...area } : z)) }
+  }
 
   // ── mutation (le SEUL chemin d'écriture — gestes ET commandes) ──────────────
 
@@ -242,7 +256,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     hoverHighlight.style.display = 'none'
   })
 
-  function renderZoneHandles(zone: ZoneDef, zoneNode: HTMLElement): void {
+  function renderZoneHandles(zone: { name: string }, zoneNode: HTMLElement): void {
     const handles = new Map<HandleId, HTMLElement>()
     for (const id of Object.keys(CHARACTERISTIC_POINTS) as HandleId[]) {
       const handle = createHandleNode({ doc, id, attributeName: 'data-zone-editor-handle', borderColor: 'rgba(217, 74, 74, 0.85)', pointerEventsAuto: true })
@@ -272,6 +286,66 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     node.style.height = `${zone.rowSpan * rowPct}%`
   }
 
+  /**
+   * A small text label naming a zone/cell — purely visual, `pointerEvents:'none'` so it never
+   * steals a click from the zone/cell it sits on top of. Independently togglable via
+   * `setPartVisibility('labels', visible)` (design doc: labels and zones themselves are two
+   * separate visibility toggles, requested explicitly by the user, 2026-07-11).
+   */
+  function createLabelNode(text: string): HTMLElement {
+    const label = doc.createElement('div')
+    label.setAttribute('data-zone-editor-label', '')
+    label.textContent = text
+    label.style.position = 'absolute'
+    label.style.top = '2px'
+    label.style.left = '4px'
+    label.style.fontSize = '10px'
+    label.style.lineHeight = '1'
+    label.style.color = 'rgba(0, 0, 0, 0.75)'
+    label.style.pointerEvents = 'none'
+    label.style.whiteSpace = 'nowrap'
+    label.style.display = labelsVisible ? '' : 'none'
+    return label
+  }
+
+  /**
+   * A zone's own `container` inner grid — REAL, autonomous `display:grid` (design doc §Rendu):
+   * `gridTemplateColumns/Rows`/`gap` resolved from `zone.container.grid`, children posed with real
+   * `gridRow`/`gridColumn` — never inherited via `subgrid` (ruled out: this module always renders
+   * in a separate overlay, never a true DOM descendant of a real grid parent) and never the main
+   * fine grid's own gradient/percent mechanism (a container's own track count is bounded to one
+   * division, generally 2 to a few dozen — never the ~14400-track scale that forced that rewrite).
+   * Purely visual for now — no gesture on a child individually (design doc §Nommage des enfants:
+   * a container child has no editable identity before the container is broken). Each cell gets its
+   * own computed-name label (`computeContainerChildName` — same formula `breakContainer` itself
+   * uses, so the label shows exactly what a break would produce).
+   */
+  function renderContainerInner(node: HTMLElement, zoneName: string, container: NonNullable<ZoneDef['container']>): void {
+    node.style.display = 'grid'
+    node.style.gridTemplateColumns = `repeat(${container.grid.cols}, 1fr)`
+    node.style.gridTemplateRows = `repeat(${container.grid.rows}, 1fr)`
+    if (container.grid.gap) node.style.gap = `${container.grid.gap.row}px ${container.grid.gap.col}px`
+    for (const child of container.children) {
+      const childNode = doc.createElement('div')
+      childNode.setAttribute('data-zone-editor-container-child', child.id)
+      childNode.style.position = 'relative'
+      childNode.style.gridRow = `${child.row} / span ${child.rowSpan}`
+      childNode.style.gridColumn = `${child.col} / span ${child.colSpan}`
+      childNode.style.border = '1px solid rgba(74, 144, 217, 0.5)'
+      childNode.style.boxSizing = 'border-box'
+      childNode.style.pointerEvents = 'none'
+      childNode.appendChild(createLabelNode(zoneModel.computeContainerChildName(zoneName, child.row, child.col)))
+      node.appendChild(childNode)
+    }
+  }
+
+  /**
+   * Renders every zone with the exact same gesture surface (selection border, move, resize
+   * handles) whether it carries `container` or not — "aucune raison d'en faire une zone différente
+   * des autres, même comportement" (user, 2026-07-11). A zone with `container` gains, on top of
+   * that base rendering, its own inner `display:grid` (`renderContainerInner`) — the one thing
+   * that actually differs. Every zone (leaf or not) also gets its own name label.
+   */
   function renderZones(): void {
     for (const zone of state.zones) {
       const node = doc.createElement('div')
@@ -289,6 +363,8 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       zoneNodes.set(zone.name, node)
       bindZoneSelectAndMove(node, zone.name)
       if (selected) renderZoneHandles(zone, node)
+      if (zone.container) renderContainerInner(node, zone.name, zone.container)
+      node.appendChild(createLabelNode(zone.name))
     }
   }
 
@@ -355,6 +431,27 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       columnGap: state.grid.gap?.col ?? 0,
       rowGap: state.grid.gap?.row ?? 0
     })
+  }
+
+  /**
+   * Applies a default `container.grid.gap` aligned with the MAIN grid's own track size (design
+   * doc §Rendu — Valeur de gap par défaut: "sa valeur doit s'aligner avec les cellules de la grille
+   * PRINCIPALE... pas un nombre de pixels arbitraire"), same principle the old « faux gap » was
+   * meant to express, now backed by a real measurement instead of a hand-rolled unit. Silently a
+   * no-op when the main grid isn't measurable yet (jsdom, node not yet mounted) — this default is
+   * a legibility nicety, never load-bearing for `divideZone`'s own correctness. Must live here,
+   * not in `zone-model.ts`, which stays pure/DOM-free — the design doc is explicit on this split.
+   */
+  function withDefaultGapIfMeasurable(next: ZoneEditorState, name: string): ZoneEditorState {
+    const zone = next.zones.find((z) => z.name === name)
+    const tracks = containerTrackGeometry()
+    if (!zone?.container || zone.container.grid.gap || tracks === null) return next
+    const gapPx = { row: tracks.rows[0] ?? 0, col: tracks.cols[0] ?? 0 }
+    if (gapPx.row <= 0 && gapPx.col <= 0) return next
+    return {
+      ...next,
+      zones: next.zones.map((z) => (z.name === name ? { ...z, container: { ...z.container!, grid: { ...z.container!.grid, gap: gapPx } } } : z))
+    }
   }
 
   /**
@@ -697,11 +794,67 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
           if (node !== undefined) positionZoneNode(node, session.startArea)
           return
         }
-        const nextZones = state.zones.map((z) => (z.name === session.zoneName ? { ...z, ...lastArea } : z))
-        applyState({ ...state, zones: nextZones })
+        applyState(updateZoneArea(session.zoneName, lastArea))
       }
     })
   }
+
+  // ── geste clavier : ajuster rows/cols de la zone sélectionnée (design doc §Focus clavier) ──
+
+  /**
+   * Global listener on `document`, filtered by selection — no DOM focus concept, active as soon
+   * as exactly one zone is selected AND it carries `container`, regardless of which element
+   * actually has focus. Zero host-side prerequisite for the keyboard to work (same decision
+   * already made for the package's own zone-editor, before the design doc's `container`
+   * refactor). ←→ adjusts `cols` (→ grows, ← shrinks), ↑↓ adjusts `rows` (↑ grows, ↓ shrinks —
+   * "haut = plus, bas = moins", user, 2026-07-11) — one step per keypress (`resizeContainerAxis`'s
+   * own floor of 2 already rejects going below it; no ceiling yet).
+   *
+   * Machine-gated exactly like every other gesture in this file (`grâce à xstate, la portée des
+   * opérations clavier doit se limiter au contexte de cet éditeur` — user, 2026-07-11): a keyboard
+   * op must not fire while the editor is suspended/idle (container node gone) or while another
+   * gesture already holds pointer capture (`tracing`/`resizing`/`moving`) — only `{active:'still'}`
+   * accepts it, same guard already established for Alt+click during the consolidation audit.
+   */
+  const onContainerResizeKeydown = (event: KeyboardEvent): void => {
+    if (destroyed || selectedNames.length !== 1) return
+    if (!actor.getSnapshot().matches({ active: 'still' })) return
+    const zone = state.zones.find((z) => z.name === selectedNames[0])
+    if (!zone?.container) return
+
+    const axis: Axis | null = event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? 'col' : event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'row' : null
+    if (axis === null) return
+
+    const current = axis === 'col' ? zone.container.grid.cols : zone.container.grid.rows
+    const growing = event.key === 'ArrowRight' || event.key === 'ArrowUp'
+    const nextCount = current + (growing ? 1 : -1)
+    if (nextCount < 2) return
+
+    event.preventDefault()
+    applyState(zoneModel.resizeContainerAxis(state, zone.name, axis, nextCount))
+  }
+  doc.addEventListener('keydown', onContainerResizeKeydown)
+
+  /**
+   * "Delete"/"Backspace" removes every currently selected zone — same behaviour as the demo's own
+   * "Tout supprimer" button (`zone-editor-demo.ts`), just scoped to the selection instead of every
+   * zone. A zone carrying `container` removes in one shot, its whole division structure included
+   * — `removeZone` already makes no leaf-vs-container distinction. No-op with nothing selected.
+   * Same machine gate as `onContainerResizeKeydown` above — must not fire while suspended/idle or
+   * while another gesture already holds pointer capture.
+   */
+  const onDeleteKeydown = (event: KeyboardEvent): void => {
+    if (destroyed || selectedNames.length === 0) return
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return
+    if (!actor.getSnapshot().matches({ active: 'still' })) return
+    event.preventDefault()
+    for (const name of selectedNames) {
+      applyState(zoneModel.removeZone(state, name))
+      actor.send({ type: 'ZONE_REMOVED', name })
+    }
+    applySelection([])
+  }
+  doc.addEventListener('keydown', onDeleteKeydown)
 
   return {
     destroy(): void {
@@ -709,6 +862,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       destroyed = true
       unsubscribeContainer()
       traceGesture.unbind()
+      doc.removeEventListener('keydown', onContainerResizeKeydown)
       actor.stop()
       editorRoot.remove()
     },
@@ -747,17 +901,30 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       if (selectedNames.includes(name)) applySelection(selectedNames.map((n) => (n === name ? next : n)))
     },
 
-    getSplitOptions(name: string): { rows: number[]; cols: number[] } {
-      return zoneModel.getSplitOptions(state, name)
+    divideZone(name: string, axis?: Axis): void {
+      const divided = zoneModel.divideZone(state, name, axis)
+      // The zone stays exactly what it was for gesture purposes — no selection/deselection here:
+      // "aucune raison d'en faire une zone différente des autres, même comportement" (user,
+      // 2026-07-11). It never left `state.zones`. One single mutation/notification, division and
+      // default gap combined.
+      applyState(withDefaultGapIfMeasurable(divided, name))
+      actor.send({ type: 'CONTAINER_CREATED', name })
     },
 
-    splitZone(name, div): string[] {
-      const { state: next, createdNames } = zoneModel.splitZone(state, name, div)
+    resizeContainerAxis(name: string, axis: Axis, count: number): void {
+      applyState(zoneModel.resizeContainerAxis(state, name, axis, count))
+    },
+
+    breakContainer(name: string): string[] {
+      const { state: next, createdNames } = zoneModel.breakContainer(state, name)
       applyState(next)
+      actor.send({ type: 'CONTAINER_BROKEN', name })
       for (const created of createdNames) actor.send({ type: 'ZONE_ADDED', name: created })
-      actor.send({ type: 'ZONE_REMOVED', name })
-      if (selectedNames.includes(name)) applySelection(createdNames)
       return createdNames
+    },
+
+    listAllZoneNames(): Array<{ id: string; name: string; kind: 'leaf' | 'container-child'; containerId?: string }> {
+      return zoneModel.listAllZoneNames(state)
     },
 
     mergeZones(names, name): string {
@@ -777,12 +944,18 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       return state
     },
 
-    setPartVisibility(part: 'grid' | 'zones', visible: boolean): void {
+    setPartVisibility(part: 'grid' | 'zones' | 'labels', visible: boolean): void {
       if (part === 'grid') gridVisible = visible
+      else if (part === 'labels') labelsVisible = visible
       else zonesVisible = visible
       actor.send({ type: 'VISIBILITY_CHANGED', part, visible })
       gridBackground.style.display = gridVisible ? '' : 'none'
       zonesRoot.style.display = zonesVisible ? '' : 'none'
+      // Applied to already-rendered labels directly — no full re-render needed, same discipline
+      // as `gridBackground`/`zonesRoot`'s own toggle above.
+      for (const label of zonesRoot.querySelectorAll<HTMLElement>('[data-zone-editor-label]')) {
+        label.style.display = labelsVisible ? '' : 'none'
+      }
     },
 
     isCellPlacementAvailable(): boolean {

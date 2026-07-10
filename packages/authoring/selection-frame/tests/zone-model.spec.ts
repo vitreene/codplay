@@ -4,11 +4,13 @@ import {
   MAX_GAP_ROWS_COLS_FOR_CSS_GAP,
   addZone,
   adjustFineGridForReservedTracks,
-  getSplitOptions,
+  breakContainer,
+  divideZone,
+  listAllZoneNames,
   mergeZones,
   removeZone,
   renameZone,
-  splitZone,
+  resizeContainerAxis,
   validateZoneGridModel,
 } from '../src/zone-model'
 import type { ZoneEditorState } from '../src/zone-model'
@@ -33,9 +35,9 @@ describe('validateZoneGridModel', () => {
 })
 
 describe('addZone / removeZone / renameZone', () => {
-  it('defaults an unnamed zone to the first free z{n}', () => {
+  it('defaults an unnamed zone to the first free z{n}, with a freshly generated id', () => {
     const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 })
-    expect(state.zones).toEqual([{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 1 }])
+    expect(state.zones).toEqual([{ id: expect.any(String), name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 1 }])
   })
 
   it('skips over an explicitly-used name when auto-naming the next zone', () => {
@@ -55,72 +57,201 @@ describe('addZone / removeZone / renameZone', () => {
     expect(state.zones).toHaveLength(2)
   })
 
+  it('generates distinct ids for successive zones', () => {
+    let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
+    state = addZone(state, { row: 2, col: 1, rowSpan: 1, colSpan: 1 }, 'b')
+    const [a, b] = state.zones
+    expect(a!.id).not.toBe(b!.id)
+  })
+
   it('removes a zone by name', () => {
     const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
     expect(removeZone(state, 'a').zones).toEqual([])
   })
 
-  it('renames a zone, rejecting a collision with an existing name', () => {
+  it('renames a zone, rejecting a collision with an existing name, without changing its id', () => {
     let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
     state = addZone(state, { row: 2, col: 1, rowSpan: 1, colSpan: 1 }, 'b')
-    expect(renameZone(state, 'a', 'titre').zones.map((z) => z.name)).toEqual(['titre', 'b'])
+    const originalId = state.zones[0]!.id
+    const renamed = renameZone(state, 'a', 'titre')
+    expect(renamed.zones.map((z) => z.name)).toEqual(['titre', 'b'])
+    expect(renamed.zones.find((z) => z.name === 'titre')!.id).toBe(originalId)
     expect(() => renameZone(state, 'a', 'b')).toThrow()
   })
 })
 
-describe('getSplitOptions / splitZone — the plan\'s own worked example (6-track span)', () => {
-  it('a 6-span zone with no fake gap offers exactly 1, 2, 3, 6 (integer divisors)', () => {
-    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 6 }, 'z3')
-    expect(getSplitOptions(state, 'z3').cols).toEqual([1, 2, 3, 6])
-  })
-
-  it('splitting that 6-span zone 2x3 (no fake gap) produces 6 equal 1x2-wide children named z3-1..z3-6', () => {
-    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 2, colSpan: 6 }, 'z3')
-    const { state: next, createdNames } = splitZone(state, 'z3', { rows: 2, cols: 3 })
-    expect(createdNames).toEqual(['z3-1', 'z3-2', 'z3-3', 'z3-4', 'z3-5', 'z3-6'])
-    expect(next.zones.every((z) => z.rowSpan === 1 && z.colSpan === 2)).toBe(true)
-    expect(next.zones.find((z) => z.name === 'z3')).toBeUndefined()
-  })
-
-  it('a fake gap of 1 excludes split counts that would break equal integer parts', () => {
-    // span=6, gapUnits=1: n=1 -> 6/1 ok; n=2 -> (6-1)/2=2.5 not ok; n=3 -> (6-2)/3=4/3 not ok
-    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 6 }, 'z1')
-    state.grid.fakeGapUnits = 1
-    expect(getSplitOptions(state, 'z1').cols).toEqual([1])
-  })
-
-  it('a fake gap that DOES divide evenly is offered and produces the expected constant-gap layout', () => {
-    // span=7, gapUnits=1, n=3: (7-2)/3 = 5/3 -> not valid; n=2: (7-1)/2=3 -> valid (parts of 3, gap of 1 between)
-    const state: ZoneEditorState = { grid: { rows: 1, cols: 7, fakeGapUnits: 1 }, zones: [{ name: 'z1', row: 1, col: 1, rowSpan: 1, colSpan: 7 }] }
-    expect(getSplitOptions(state, 'z1').cols).toContain(2)
-
-    const { state: next } = splitZone(state, 'z1', { cols: 2 })
-    const [a, b] = [...next.zones].sort((x, y) => x.col - y.col)
-    expect(a).toMatchObject({ col: 1, colSpan: 3 })
-    expect(b).toMatchObject({ col: 5, colSpan: 3 }) // col 1 + span 3 + gap 1 = 5
-  })
-
-  it('rejects a split that does not divide the span into equal integer parts', () => {
-    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 5 }, 'z1')
-    expect(() => splitZone(state, 'z1', { cols: 3 })).toThrow()
-  })
-
-  it('splitting only one axis (the other omitted) leaves that axis whole', () => {
+describe('divideZone — "diviser en 2" is the founding signal', () => {
+  it('the SAME zone gains `container` — never removed from `zones`, never a new entry', () => {
     const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 4, colSpan: 6 }, 'z1')
-    const { createdNames, state: next } = splitZone(state, 'z1', { cols: 2 })
-    expect(createdNames).toHaveLength(2)
-    expect(next.zones.every((z) => z.rowSpan === 4)).toBe(true)
+    const originalId = state.zones[0]!.id
+    const next = divideZone(state, 'z1')
+    expect(next.zones).toHaveLength(1)
+    expect(next.zones[0]).toMatchObject({ id: originalId, name: 'z1', row: 1, col: 1, rowSpan: 4, colSpan: 6 })
+  })
+
+  it('defaults to a vertical split (axis "col", 2 columns) when no axis is given', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 4, colSpan: 6 }, 'z1')
+    const next = divideZone(state, 'z1')
+    const zone = next.zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toEqual({ rows: 1, cols: 2 })
+    expect(zone.container!.children).toHaveLength(2)
+  })
+
+  it('splits on the row axis when explicitly requested', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 4, colSpan: 6 }, 'z1')
+    const next = divideZone(state, 'z1', 'row')
+    const zone = next.zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toEqual({ rows: 2, cols: 1 })
+    expect(zone.container!.children.map((c) => ({ row: c.row, col: c.col }))).toEqual([
+      { row: 1, col: 1 },
+      { row: 2, col: 1 },
+    ])
+  })
+
+  it('rejects dividing a zone that does not exist', () => {
+    expect(() => divideZone(baseState(), 'nope')).toThrow()
+  })
+
+  it('rejects dividing a zone that already carries a container', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 2 }, 'z1')
+    const divided = divideZone(state, 'z1')
+    expect(() => divideZone(divided, 'z1')).toThrow()
+  })
+
+  it('every id in the resulting state (zone and its 2 children) is distinct', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 2 }, 'z1')
+    const next = divideZone(state, 'z1')
+    const zone = next.zones.find((z) => z.name === 'z1')!
+    const ids = [zone.id, ...zone.container!.children.map((c) => c.id)]
+    expect(new Set(ids).size).toBe(3)
+  })
+})
+
+describe('resizeContainerAxis — "les zones-enfants correspondent aux cellules d\'une grille"', () => {
+  function dividedState(): ZoneEditorState {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 6 }, 'z1')
+    return divideZone(state, 'z1')
+  }
+
+  it('growing an axis regenerates children to exactly match the new rows×cols — one 1×1 cell per position', () => {
+    const next = resizeContainerAxis(dividedState(), 'z1', 'col', 4)
+    const zone = next.zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toEqual({ rows: 1, cols: 4 })
+    expect(zone.container!.children).toHaveLength(4)
+    expect(zone.container!.children.map((c) => ({ row: c.row, col: c.col, rowSpan: c.rowSpan, colSpan: c.colSpan })).sort((a, b) => a.col - b.col)).toEqual([
+      { row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+      { row: 1, col: 2, rowSpan: 1, colSpan: 1 },
+      { row: 1, col: 3, rowSpan: 1, colSpan: 1 },
+      { row: 1, col: 4, rowSpan: 1, colSpan: 1 },
+    ])
+  })
+
+  it('cells that already existed keep their own id — an attachment survives', () => {
+    const before = dividedState()
+    const idsBefore = before.zones.find((z) => z.name === 'z1')!.container!.children.map((c) => ({ pos: `${c.row}.${c.col}`, id: c.id }))
+    const after = resizeContainerAxis(before, 'z1', 'col', 3)
+    const idsAfter = after.zones.find((z) => z.name === 'z1')!.container!.children.map((c) => ({ pos: `${c.row}.${c.col}`, id: c.id }))
+    for (const cell of idsBefore) {
+      expect(idsAfter.find((c) => c.pos === cell.pos)?.id).toBe(cell.id)
+    }
+  })
+
+  it('shrinking an axis simply drops the cells that no longer exist — no rejection', () => {
+    const grown = resizeContainerAxis(dividedState(), 'z1', 'col', 4)
+    const shrunk = resizeContainerAxis(grown, 'z1', 'col', 2)
+    const zone = shrunk.zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toEqual({ rows: 1, cols: 2 })
+    expect(zone.container!.children).toHaveLength(2)
+  })
+
+  it('rejects a count below the divider\'s own floor of 2', () => {
+    expect(() => resizeContainerAxis(dividedState(), 'z1', 'col', 1)).toThrow()
+  })
+
+  it('rejects resizing a zone that does not carry a container', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 2 }, 'z1')
+    expect(() => resizeContainerAxis(state, 'z1', 'col', 3)).toThrow()
+  })
+
+  it('resizing the OTHER axis regenerates the full 2D cell grid (rows × cols)', () => {
+    const next = resizeContainerAxis(dividedState(), 'z1', 'row', 2)
+    const zone = next.zones.find((z) => z.name === 'z1')!
+    expect(zone.container!.grid).toEqual({ rows: 2, cols: 2 })
+    expect(zone.container!.children).toHaveLength(4)
+  })
+})
+
+describe('breakContainer', () => {
+  it('the SOURCE zone (carrying container) is removed from zones, replaced by one ZoneDef per child', () => {
+    const state = addZone(baseState(), { row: 3, col: 1, rowSpan: 1, colSpan: 6 }, 'z1')
+    const divided = divideZone(state, 'z1')
+    const { state: broken, createdNames } = breakContainer(divided, 'z1')
+
+    expect(broken.zones.some((z) => z.name === 'z1')).toBe(false)
+    expect(createdNames).toEqual(['z1.1.1', 'z1.1.2'])
+    const [a, b] = [...broken.zones].sort((x, y) => x.col - y.col)
+    expect(a).toMatchObject({ name: 'z1.1.1', row: 3, col: 1, rowSpan: 1, colSpan: 3 })
+    expect(b).toMatchObject({ name: 'z1.1.2', row: 3, col: 4, rowSpan: 1, colSpan: 3 })
+  })
+
+  it('preserves each child\'s own id across the break — an existing attachment would survive', () => {
+    const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 4 }, 'z1')
+    const divided = divideZone(state, 'z1')
+    const sourceId = divided.zones.find((z) => z.name === 'z1')!.id
+    const childIds = divided.zones.find((z) => z.name === 'z1')!.container!.children.map((c) => c.id)
+
+    const { state: broken } = breakContainer(divided, 'z1')
+    expect(broken.zones.map((z) => z.id).sort()).toEqual([...childIds].sort())
+    expect(broken.zones.some((z) => z.id === sourceId)).toBe(false)
+  })
+
+  it('breaks only ONE divided zone, never applied in bulk', () => {
+    let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 2 }, 'a')
+    state = addZone(state, { row: 2, col: 1, rowSpan: 1, colSpan: 2 }, 'b')
+    state = divideZone(state, 'a')
+    state = divideZone(state, 'b')
+    expect(state.zones.filter((z) => z.container)).toHaveLength(2)
+
+    const { state: next } = breakContainer(state, 'a')
+    expect(next.zones.filter((z) => z.container)).toHaveLength(1)
+    expect(next.zones.find((z) => z.container)!.name).toBe('b')
+  })
+
+  it('rejects breaking a zone that does not carry a container', () => {
+    expect(() => breakContainer(baseState(), 'nope')).toThrow()
+  })
+})
+
+describe('listAllZoneNames', () => {
+  it('lists zones and container children together, distinguishing their kind', () => {
+    let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
+    state = addZone(state, { row: 2, col: 1, rowSpan: 1, colSpan: 4 }, 'z1')
+    const divided = divideZone(state, 'z1')
+    const containerId = divided.zones.find((z) => z.name === 'z1')!.id
+
+    const listed = listAllZoneNames(divided)
+    expect(listed).toHaveLength(4) // 'a' (leaf) + 'z1' (leaf, carries container) + 2 children
+    expect(listed.filter((z) => z.kind === 'leaf').map((z) => z.name).sort()).toEqual(['a', 'z1'])
+    const children = listed.filter((z) => z.kind === 'container-child')
+    expect(children).toHaveLength(2)
+    expect(children.every((z) => z.containerId === containerId)).toBe(true)
+    expect(children.map((z) => z.name)).toEqual(['z1.1.1', 'z1.1.2'])
+  })
+
+  it('returns an empty list for an empty state', () => {
+    expect(listAllZoneNames(baseState())).toEqual([])
   })
 })
 
 describe('mergeZones — bounding footprint (plan\'s own definition)', () => {
-  it('merges 2 non-adjacent zones into their bounding box, removing the sources', () => {
+  it('merges 2 non-adjacent zones into their bounding box, removing the sources, inheriting the first zone\'s own id', () => {
     let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
     state = addZone(state, { row: 3, col: 4, rowSpan: 2, colSpan: 2 }, 'b')
+    const firstId = state.zones[0]!.id
 
     const { state: next, mergedName } = mergeZones(state, ['a', 'b'])
     expect(mergedName).toBe('a')
-    expect(next.zones).toEqual([{ name: 'a', row: 1, col: 1, rowSpan: 4, colSpan: 5 }])
+    expect(next.zones).toEqual([{ id: firstId, name: 'a', row: 1, col: 1, rowSpan: 4, colSpan: 5 }])
   })
 
   it('accepts an explicit name for the merged zone, overriding the first-selected default', () => {
@@ -133,6 +264,13 @@ describe('mergeZones — bounding footprint (plan\'s own definition)', () => {
   it('rejects merging fewer than 2 zones', () => {
     const state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 1 }, 'a')
     expect(() => mergeZones(state, ['a'])).toThrow()
+  })
+
+  it('rejects merging a zone that carries a container — never silently drops its division structure', () => {
+    let state = addZone(baseState(), { row: 1, col: 1, rowSpan: 1, colSpan: 2 }, 'a')
+    state = addZone(state, { row: 2, col: 1, rowSpan: 1, colSpan: 2 }, 'b')
+    state = divideZone(state, 'a')
+    expect(() => mergeZones(state, ['a', 'b'])).toThrow()
   })
 })
 

@@ -65,14 +65,17 @@ export {
   MAX_GAP_ROWS_COLS_FOR_CSS_GAP,
   addZone,
   adjustFineGridForReservedTracks,
-  getSplitOptions,
+  breakContainer,
+  computeContainerChildName,
+  divideZone,
+  listAllZoneNames,
   mergeZones,
   removeZone,
   renameZone,
-  splitZone,
+  resizeContainerAxis,
   validateZoneGridModel
 } from './zone-model'
-export type { ZoneDef, ZoneEditorState, ZoneGridModel, ZoneModelValidationError } from './zone-model'
+export type { Axis, ZoneCard, ZoneContainerChild, ZoneContainerData, ZoneDef, ZoneEditorState, ZoneGridModel, ZoneModelValidationError } from './zone-model'
 
 export { createZoneEditor } from './zone-editor'
 export type { ZoneEditorHandle, ZoneEditorOptions } from './zone-editor'
