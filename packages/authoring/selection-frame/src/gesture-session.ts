@@ -7,6 +7,18 @@
  * session ends on pointerup, pointercancel, lostpointercapture, or a
  * pointermove arriving with buttons === 0 (missed release) — without this, a
  * surviving session turns a plain hover into a gesture.
+ *
+ * `lostpointercapture` always APPLIES the gesture at its current point, never
+ * treated as an abort. Found by testing on a real drag (large capturing
+ * element, e.g. zone-editor's own grid background): browsers can deliver
+ * `lostpointercapture` mid-gesture even with the button still held, not just
+ * on release — no reliable signal in this codebase (button state, timing,
+ * viewport bounds) distinguished a "real" abort from a normal one. Matches
+ * the only other precedent in this package (`multi-selection-frame.ts`'s own
+ * `lostpointercapture` handling), which never attempted this distinction
+ * either: always apply the session's own last-known state, exactly like a
+ * `pointerup`. Only `pointercancel` (a genuine hardware-level interruption)
+ * still aborts.
  */
 
 /** Releases pointer capture without letting an InvalidPointerId abort the caller. */
@@ -30,9 +42,10 @@ export type GestureSessionHandlers<S> = {
   onMove: (event: PointerEvent, session: S) => void
   /**
    * Called exactly once when the session ends: a release (apply = true —
-   * pointerup, or a pointermove with buttons === 0, which IS a release the
-   * browser delivered before the pointerup), or a genuine abort (apply =
-   * false — pointercancel, lostpointercapture). Pointer capture is already
+   * pointerup, a pointermove with buttons === 0 delivered before the
+   * pointerup, or lostpointercapture — always treated as a completed
+   * gesture, see this file's own top comment), or a genuine abort
+   * (apply = false — pointercancel only). Pointer capture is already
    * released by the time this runs.
    */
   onEnd: (session: S, apply: boolean, event: PointerEvent | null) => void
@@ -81,7 +94,7 @@ export function bindGestureSession<S>(
       // aborted: browsers coalesce pointermoves, and on a fast release a last
       // move with buttons already 0 can precede the pointerup — treating it
       // as an abort would swallow the drop. Apply at the current point; only
-      // pointercancel/lostpointercapture are genuine aborts.
+      // pointercancel is a genuine abort.
       end(true, event)
       return
     }
@@ -100,7 +113,7 @@ export function bindGestureSession<S>(
 
   const onLostPointerCapture = (event: PointerEvent): void => {
     if (session === null || event.pointerId !== pointerId) return
-    end(false, event)
+    end(true, event)
   }
 
   targetNode.addEventListener('pointerdown', onPointerDown)

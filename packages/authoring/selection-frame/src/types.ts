@@ -152,6 +152,18 @@ export type SelectionFrameOptions = {
    * attaching to an existing item. See docs/plans/2026-07-03-selection-frame-variantes-plan.md.
    */
   creation?: SelectionFrameCreationOptions
+  /**
+   * Alt+click (cycle to the item stacked underneath) / Alt+Shift+click (editor decides whether to
+   * add rather than replace — this module has no notion of "selection" of its own, it edits one
+   * item at a time, so it can't decide replace-vs-add itself). The cs resolves EVERY editable
+   * item's own persoId stacked at the clicked point (`elementsFromPoint`, filtered down to real
+   * player-mounted nodes — its own cs/gabarit/creation-surface/handle nodes are excluded), in
+   * DOM z-order (topmost first) — never the target to switch to itself: only the editor knows
+   * which item is currently attached (`itemId`) and how selection composes across other tools
+   * (e.g. a future multi-select), so cycling/attaching is always the editor's own call
+   * (`attachItem`/`setAdapter`).
+   */
+  onAltClickCycle?: (candidateItemIds: string[], additive: boolean) => void
 }
 
 export type MultiSelectionFrameOptions = {

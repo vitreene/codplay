@@ -39,6 +39,21 @@ if (typeof HTMLElement.prototype.setPointerCapture !== 'function') {
 }
 
 /**
+ * jsdom does not implement `elementsFromPoint` (no real layout engine to resolve a point against)
+ * — a fixed stack is set once per test via `temp__setElementsFromPointStack`, letting Alt+click
+ * cycle tests prove the module correctly CONSUMES and FILTERS the result, without needing real
+ * geometry (which `resolveAltClickCandidates` itself never computes — it's a pure pass-through
+ * over whatever elementsFromPoint returns).
+ */
+let temp__elementsFromPointStack: Element[] = []
+function temp__setElementsFromPointStack(stack: Element[]): void {
+  temp__elementsFromPointStack = stack
+}
+if (typeof document.elementsFromPoint !== 'function') {
+  document.elementsFromPoint = () => temp__elementsFromPointStack
+}
+
+/**
  * AuthorApi stub with controllable node lifecycle per persoId.
  */
 function temp__createAuthorApiStub(): AuthorApi & {
@@ -83,8 +98,8 @@ function temp__creationSurface(): HTMLElement | null {
 }
 
 /** MouseEvent stand-in for a PointerEvent (jsdom convention already used by the alt-click test below) — pointerId is attached separately since MouseEventInit doesn't declare it. */
-function temp__firePointer(target: Element, type: string, init: { clientX?: number; clientY?: number; shiftKey?: boolean }): void {
-  const event = new MouseEvent(type, { button: 0, bubbles: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0, shiftKey: init.shiftKey ?? false })
+function temp__firePointer(target: Element, type: string, init: { clientX?: number; clientY?: number; shiftKey?: boolean; altKey?: boolean }): void {
+  const event = new MouseEvent(type, { button: 0, bubbles: true, clientX: init.clientX ?? 0, clientY: init.clientY ?? 0, shiftKey: init.shiftKey ?? false, altKey: init.altKey ?? false })
   Object.defineProperty(event, 'pointerId', { value: 1 })
   Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
   target.dispatchEvent(event)
@@ -534,6 +549,120 @@ describe('createSelectionFrame — create mode', () => {
   })
 })
 
+describe('createSelectionFrame — Alt+click cycle (item stacked underneath)', () => {
+  it('Alt+click resolves the stacked candidates (topmost first) and hands them to onAltClickCycle, additive:false', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('item-1', document.createElement('div'))
+    const calls: Array<{ candidateItemIds: string[]; additive: boolean }> = []
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter(),
+      onAltClickCycle: (candidateItemIds, additive) => calls.push({ candidateItemIds, additive })
+    })
+
+    const underneath = document.createElement('div')
+    underneath.id = 'item-2'
+    document.body.appendChild(underneath)
+    const topmost = document.createElement('div')
+    topmost.id = 'item-1'
+    document.body.appendChild(topmost)
+    temp__setElementsFromPointStack([topmost, underneath])
+
+    const cs = temp__csRoot('item-1')!
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10, altKey: true })
+    temp__firePointer(cs, 'pointerup', { clientX: 10, clientY: 10, altKey: true })
+
+    expect(calls).toEqual([{ candidateItemIds: ['item-1', 'item-2'], additive: false }])
+
+    handle.destroy()
+    underneath.remove()
+    topmost.remove()
+  })
+
+  it('Alt+Shift+click reports additive:true', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('item-1', document.createElement('div'))
+    const calls: Array<{ candidateItemIds: string[]; additive: boolean }> = []
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter(),
+      onAltClickCycle: (candidateItemIds, additive) => calls.push({ candidateItemIds, additive })
+    })
+
+    const topmost = document.createElement('div')
+    topmost.id = 'item-1'
+    document.body.appendChild(topmost)
+    temp__setElementsFromPointStack([topmost])
+
+    const cs = temp__csRoot('item-1')!
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10, altKey: true, shiftKey: true })
+    temp__firePointer(cs, 'pointerup', { clientX: 10, clientY: 10, altKey: true, shiftKey: true })
+
+    expect(calls).toEqual([{ candidateItemIds: ['item-1'], additive: true }])
+
+    handle.destroy()
+    topmost.remove()
+  })
+
+  it('excludes the cs\'s own overlay nodes (the shared overlay layer) from the candidate list', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('item-1', document.createElement('div'))
+    const calls: Array<{ candidateItemIds: string[]; additive: boolean }> = []
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter(),
+      onAltClickCycle: (candidateItemIds, additive) => calls.push({ candidateItemIds, additive })
+    })
+
+    const cs = temp__csRoot('item-1')!
+    // The cs itself (an overlay node, no meaningful `id` here) is first in the stack — it must
+    // never appear as a candidate, even though it happens to sit at the very click point.
+    temp__setElementsFromPointStack([cs])
+
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10, altKey: true })
+    temp__firePointer(cs, 'pointerup', { clientX: 10, clientY: 10, altKey: true })
+
+    expect(calls).toEqual([{ candidateItemIds: [], additive: false }])
+
+    handle.destroy()
+  })
+
+  it('Alt+click never starts a body drag — the element stays at its own placement', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const element = document.createElement('div')
+    authorApi.emitNode('item-1', element)
+    const moves: unknown[] = []
+    const adapter = { ...temp__createNoopAdapter(), applyMove: (diff: unknown) => moves.push(diff) }
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter,
+      onAltClickCycle: () => {}
+    })
+
+    const cs = temp__csRoot('item-1')!
+    temp__setElementsFromPointStack([])
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10, altKey: true })
+    temp__firePointer(cs, 'pointermove', { clientX: 60, clientY: 60, altKey: true })
+    temp__firePointer(cs, 'pointerup', { clientX: 60, clientY: 60, altKey: true })
+
+    expect(moves).toHaveLength(0)
+
+    handle.destroy()
+  })
+})
+
 describe('createMultiSelectionFrame', () => {
   it('shows one shared cs once at least one node is present', () => {
     const authorApi = temp__createAuthorApiStub()
@@ -595,6 +724,60 @@ describe('createMultiSelectionFrame', () => {
       handle.setAdapter(temp__createNoopAdapter())
       handle.setContainerGrid(null)
     }).not.toThrow()
+
+    handle.destroy()
+  })
+
+  it('a drag on the shared cs broadcasts the same move diff to every present item\'s own adapter (migrated to bindGestureSession, 2026-07-10)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const movesA: Array<{ dx: number; dy: number }> = []
+    const movesB: Array<{ dx: number; dy: number }> = []
+    const adapterA: CsValueAdapter = { ...temp__createNoopAdapter(), applyMove: (diff) => movesA.push(diff) }
+    const adapterB: CsValueAdapter = { ...temp__createNoopAdapter(), applyMove: (diff) => movesB.push(diff) }
+
+    authorApi.emitNode('a', document.createElement('div'))
+    authorApi.emitNode('b', document.createElement('div'))
+
+    const handle = createMultiSelectionFrame({
+      items: [
+        { itemId: 'a', adapter: adapterA },
+        { itemId: 'b', adapter: adapterB }
+      ],
+      authorApi,
+      sceneRoot: document.body
+    })
+
+    const cs = document.querySelector<HTMLElement>('[data-selection-frame-multi]')!
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(cs, 'pointermove', { clientX: 60, clientY: 40 })
+    temp__firePointer(cs, 'pointerup', { clientX: 60, clientY: 40 })
+
+    // Both items receive a move — same broadcast diff, per-item adapter.
+    expect(movesA.length).toBeGreaterThan(0)
+    expect(movesB.length).toBeGreaterThan(0)
+    expect(movesA).toEqual(movesB)
+
+    handle.destroy()
+  })
+
+  it('a drag ending via lostpointercapture still applies the move (not silently swallowed as an abort)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const moves: Array<{ dx: number; dy: number }> = []
+    const adapter: CsValueAdapter = { ...temp__createNoopAdapter(), applyMove: (diff) => moves.push(diff) }
+    authorApi.emitNode('a', document.createElement('div'))
+
+    const handle = createMultiSelectionFrame({
+      items: [{ itemId: 'a', adapter }],
+      authorApi,
+      sceneRoot: document.body
+    })
+
+    const cs = document.querySelector<HTMLElement>('[data-selection-frame-multi]')!
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(cs, 'pointermove', { clientX: 60, clientY: 40 })
+    cs.dispatchEvent(new Event('lostpointercapture'))
+
+    expect(moves.length).toBeGreaterThan(0)
 
     handle.destroy()
   })

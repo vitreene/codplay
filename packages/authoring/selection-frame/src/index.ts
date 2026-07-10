@@ -60,3 +60,22 @@ export type {
   SelectionFrameOptions,
   SelectionFramePart
 } from './types'
+
+export {
+  MAX_GAP_ROWS_COLS_FOR_CSS_GAP,
+  addZone,
+  adjustFineGridForReservedTracks,
+  getSplitOptions,
+  mergeZones,
+  removeZone,
+  renameZone,
+  splitZone,
+  validateZoneGridModel
+} from './zone-model'
+export type { ZoneDef, ZoneEditorState, ZoneGridModel, ZoneModelValidationError } from './zone-model'
+
+export { createZoneEditor } from './zone-editor'
+export type { ZoneEditorHandle, ZoneEditorOptions } from './zone-editor'
+
+export { zoneMachine } from './zone-machine'
+export type { ZoneMachineContext, ZoneMachineEvent } from './zone-machine'

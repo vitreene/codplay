@@ -2,6 +2,7 @@ import { createActor } from 'xstate'
 import { worldDeltaToLocalDelta } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
 import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import { csMachine } from './machine'
+import { bindGestureSession } from './gesture-session'
 import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, measureWorldRect } from './overlay-pose'
 import type {
   CapabilityPreset,
@@ -108,9 +109,14 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
   }
 
   // ── gestures: same raw diff broadcast to every adapter ───────────────────
+  // Wired through the shared `bindGestureSession` (same session-robustness rules — button-only
+  // start, buttons===0/lostpointercapture handling — as the cs's own drag/resize and the zone
+  // editor's own gestures) rather than a hand-rolled listener set, per the consolidation audit
+  // (2026-07-10): this file previously reimplemented that plumbing manually and, by coincidence,
+  // never carried the `lostpointercapture` bug the shared module once had — proof that duplicating
+  // this wiring is a real maintenance risk, not just a style preference.
 
   type DragSession = {
-    pointerId: number
     startX: number
     startY: number
     startUnionLeft: number
@@ -118,7 +124,6 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
     emittedX: number
     emittedY: number
   }
-  let dragSession: DragSession | null = null
 
   const measureUnionCorner = (): { left: number; top: number } | null => {
     const present = presentItems()
@@ -133,76 +138,50 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
     return { left, top }
   }
 
-  const endDragSession = (): void => {
-    if (dragSession === null) return
-    const session = dragSession
-    dragSession = null
-    try {
-      if (csRoot.hasPointerCapture(session.pointerId)) {
-        csRoot.releasePointerCapture(session.pointerId)
+  bindGestureSession<DragSession>(csRoot, {
+    onStart: (event) => {
+      if (unionRect === null) return null
+      actor.send({ type: 'DRAG_START' })
+      if (!actor.getSnapshot().matches({ active: 'dragging' })) return null
+      event.preventDefault()
+      return {
+        startX: event.clientX,
+        startY: event.clientY,
+        startUnionLeft: unionRect.left,
+        startUnionTop: unionRect.top,
+        emittedX: 0,
+        emittedY: 0
       }
-    } catch {
-      // Capture already gone: nothing to do.
-    }
-    actor.send({ type: 'DRAG_END' })
-    csRoot.style.translate = '0px 0px'
-    recompute()
-  }
+    },
+    onMove: (event, session) => {
+      const viewportDx = event.clientX - session.startX
+      const viewportDy = event.clientY - session.startY
+      csRoot.style.translate = `${viewportDx}px ${viewportDy}px`
 
-  csRoot.addEventListener('pointerdown', (event: PointerEvent) => {
-    if (unionRect === null || event.button !== 0) return
-    actor.send({ type: 'DRAG_START' })
-    if (!actor.getSnapshot().matches({ active: 'dragging' })) return
-    dragSession = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startUnionLeft: unionRect.left,
-      startUnionTop: unionRect.top,
-      emittedX: 0,
-      emittedY: 0
-    }
-    csRoot.setPointerCapture(event.pointerId)
-    event.preventDefault()
-  })
+      const local = worldDeltaToLocalDelta(commonMatrix, viewportDx, viewportDy)
+      const targetX = Math.round(local.x)
+      const targetY = Math.round(local.y)
+      const dx = targetX - session.emittedX
+      const dy = targetY - session.emittedY
+      if (dx === 0 && dy === 0) return
+      session.emittedX = targetX
+      session.emittedY = targetY
+      for (const item of presentItems()) {
+        item.adapter.applyMove({ dx, dy })
+      }
 
-  csRoot.addEventListener('pointermove', (event: PointerEvent) => {
-    if (dragSession === null || event.pointerId !== dragSession.pointerId) return
-    if (event.buttons === 0) {
-      endDragSession()
-      return
+      // Measured correction before repaint: glue the cs to where the items
+      // actually landed, absorbing any layout interference.
+      const corner = measureUnionCorner()
+      if (corner !== null) {
+        csRoot.style.translate = `${corner.left - session.startUnionLeft}px ${corner.top - session.startUnionTop}px`
+      }
+    },
+    onEnd: () => {
+      actor.send({ type: 'DRAG_END' })
+      csRoot.style.translate = '0px 0px'
+      recompute()
     }
-    const viewportDx = event.clientX - dragSession.startX
-    const viewportDy = event.clientY - dragSession.startY
-    csRoot.style.translate = `${viewportDx}px ${viewportDy}px`
-
-    const local = worldDeltaToLocalDelta(commonMatrix, viewportDx, viewportDy)
-    const targetX = Math.round(local.x)
-    const targetY = Math.round(local.y)
-    const dx = targetX - dragSession.emittedX
-    const dy = targetY - dragSession.emittedY
-    if (dx === 0 && dy === 0) return
-    dragSession.emittedX = targetX
-    dragSession.emittedY = targetY
-    for (const item of presentItems()) {
-      item.adapter.applyMove({ dx, dy })
-    }
-
-    // Measured correction before repaint: glue the cs to where the items
-    // actually landed, absorbing any layout interference.
-    const corner = measureUnionCorner()
-    if (corner !== null) {
-      csRoot.style.translate = `${corner.left - dragSession.startUnionLeft}px ${corner.top - dragSession.startUnionTop}px`
-    }
-  })
-
-  csRoot.addEventListener('pointerup', (event: PointerEvent) => {
-    if (dragSession === null || event.pointerId !== dragSession.pointerId) return
-    endDragSession()
-  })
-  csRoot.addEventListener('pointercancel', endDragSession)
-  csRoot.addEventListener('lostpointercapture', () => {
-    if (dragSession !== null) endDragSession()
   })
 
   // ── node lifecycle ───────────────────────────────────────────────────────

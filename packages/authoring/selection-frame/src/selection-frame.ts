@@ -11,6 +11,8 @@ import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import { csMachine } from './machine'
 import { bindGestureSession } from './gesture-session'
+import { CHARACTERISTIC_POINTS, HANDLE_SIZE_PX, OPPOSITE_POINT, createHandleNode } from './handle-geometry'
+import type { HandleId } from './handle-geometry'
 import type { GridTrackGeometry } from './grid-geometry'
 import {
   measureGridTracks,
@@ -40,41 +42,12 @@ import type {
   SelectionFramePart
 } from './types'
 
-const HANDLE_SIZE_PX = 10
 const PIVOT_SIZE_PX = 12
 const NEEDLE_LENGTH_PX = 36
 const PIVOT_MAGNET_RADIUS_PX = 8
 const ROTATE_STEP_DEG = 15
 const DENSE_GRID_THRESHOLD = 50
 const DENSE_GRID_STEP = 10
-
-type CornerId = 'nw' | 'ne' | 'se' | 'sw'
-type SideId = 'n' | 'e' | 's' | 'w'
-type HandleId = CornerId | SideId
-
-/** Characteristic points in cs-local fractions (0..1). */
-const CHARACTERISTIC_POINTS: Record<HandleId, { fx: number; fy: number }> = {
-  nw: { fx: 0, fy: 0 },
-  ne: { fx: 1, fy: 0 },
-  se: { fx: 1, fy: 1 },
-  sw: { fx: 0, fy: 1 },
-  n: { fx: 0.5, fy: 0 },
-  e: { fx: 1, fy: 0.5 },
-  s: { fx: 0.5, fy: 1 },
-  w: { fx: 0, fy: 0.5 }
-}
-
-/** Anchor of each handle: the opposite characteristic point stays fixed. */
-const OPPOSITE_POINT: Record<HandleId, HandleId> = {
-  nw: 'se',
-  ne: 'sw',
-  se: 'nw',
-  sw: 'ne',
-  n: 's',
-  e: 'w',
-  s: 'n',
-  w: 'e'
-}
 
 /**
  * Places one visual selection frame (cs) over the DOM element of one player
@@ -117,32 +90,8 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
 
   const handleNodes = new Map<HandleId, HTMLElement>()
 
-  const handleCursors: Record<HandleId, string> = {
-    nw: 'nwse-resize',
-    ne: 'nesw-resize',
-    se: 'nwse-resize',
-    sw: 'nesw-resize',
-    n: 'ns-resize',
-    e: 'ew-resize',
-    s: 'ns-resize',
-    w: 'ew-resize'
-  }
-
-  for (const [id, point] of Object.entries(CHARACTERISTIC_POINTS) as Array<[HandleId, { fx: number; fy: number }]>) {
-    const handle = doc.createElement('div')
-    handle.setAttribute('data-cs-handle', id)
-    handle.style.position = 'absolute'
-    handle.style.left = `${point.fx * 100}%`
-    handle.style.top = `${point.fy * 100}%`
-    handle.style.width = `${HANDLE_SIZE_PX}px`
-    handle.style.height = `${HANDLE_SIZE_PX}px`
-    handle.style.marginLeft = `${-HANDLE_SIZE_PX / 2}px`
-    handle.style.marginTop = `${-HANDLE_SIZE_PX / 2}px`
-    handle.style.background = '#ffffff'
-    handle.style.border = '1px solid #4a90d9'
-    handle.style.boxSizing = 'border-box'
-    handle.style.cursor = handleCursors[id]
-    handle.style.touchAction = 'none'
+  for (const id of Object.keys(CHARACTERISTIC_POINTS) as HandleId[]) {
+    const handle = createHandleNode({ doc, id, attributeName: 'data-cs-handle', borderColor: '#4a90d9', pointerEventsAuto: false })
     csRoot.appendChild(handle)
     handleNodes.set(id, handle)
   }
@@ -865,6 +814,27 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
         })
       : null
 
+  // ── Alt+click cycle (item stacked underneath) ────────────────────────────
+
+  /**
+   * Every real player-mounted item's own persoId stacked at this viewport point, topmost first —
+   * the runtime's own convention of `node.id === perso.id` (`applyNodeId`, `dom.ts`/
+   * `dom-component-adapter.ts`) makes this a direct read, no separate node→persoId registry
+   * needed. Any node inside the shared overlay layer (this cs's own body/handles/gabarit, or
+   * another module's — the layer is shared across the whole package) is excluded: only real scene
+   * nodes are candidates.
+   */
+  const resolveAltClickCandidates = (x: number, y: number): string[] => {
+    if (typeof doc.elementsFromPoint !== 'function') return []
+    const candidates: string[] = []
+    for (const element of doc.elementsFromPoint(x, y)) {
+      if (!(element instanceof HTMLElement)) continue
+      if (overlayLayer.contains(element)) continue
+      if (element.id.length > 0) candidates.push(element.id)
+    }
+    return candidates
+  }
+
   // ── drag (cs body) ───────────────────────────────────────────────────────
 
   type DragSession = {
@@ -899,6 +869,22 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   const dragGesture = bindGestureSession<DragSession>(csRoot, {
     onStart: (event) => {
       if (event.target !== csRoot || pose === null) return null
+
+      // Alt-click: resolve the stacked candidates and hand off to the editor, no gesture starts —
+      // same "instantaneous action, not a drag" pattern as the handles' own alt-click toggle. Same
+      // machine guard as every other gesture start: a cycle must not fire while another gesture is
+      // already in flight (dragging/resizing/rotating) — `isSuspended()` alone only screens out
+      // suspended/idle. Found missing during a systematic pass over the package's own machine
+      // guards, 2026-07-10 (same fix applied to zone-editor.ts's own alt-click).
+      if (event.altKey) {
+        if (options.onAltClickCycle !== undefined && actor.getSnapshot().matches({ active: 'still' })) {
+          options.onAltClickCycle(resolveAltClickCandidates(event.clientX, event.clientY), event.shiftKey)
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        return null
+      }
+
       actor.send({ type: 'DRAG_START' })
       if (!actor.getSnapshot().matches({ active: 'dragging' })) return null
 

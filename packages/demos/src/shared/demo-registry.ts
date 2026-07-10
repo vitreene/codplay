@@ -23,6 +23,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
   { id: "selection-frame", label: "Selection Frame", href: "?demo=selection-frame" },
   { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },
+  { id: "zone-editor", label: "Éditeur de zones", href: "?demo=zone-editor" },
 ];
 
 /**
