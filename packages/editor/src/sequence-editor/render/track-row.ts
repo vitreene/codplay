@@ -1,18 +1,25 @@
 import type { MachineContext, VirtualKeyframe } from '../machine'
-import type { TrackNode } from '../types'
-import { getTrackRowHeight, getParentClipMarkers } from '../utils'
+import type { Item } from '../types'
+import { childrenOf, getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-function flattenFiltered(tracks: TrackNode[], collapsedIds: ReadonlySet<string>): TrackNode[] {
-  const result: TrackNode[] = []
-  for (const track of tracks) {
-    result.push(track)
-    if (track.children && !collapsedIds.has(track.id)) {
-      result.push(...flattenFiltered(track.children, collapsedIds))
+/**
+ * Ordre visuel de piste : parcours en profondeur (DFS) sur le modèle plat — chaque capsule est
+ * immédiatement suivie de ses enfants, exactement le regroupement visuel produit par l'ancienne
+ * récursion sur `.children` (audité 2026-07-13 : cet effet ne dépend que de la relation
+ * parent↔enfant, jamais de la profondeur elle-même — remplacer par `childrenOf` suffit).
+ */
+function flattenFiltered(items: Item[], collapsedIds: ReadonlySet<string>): Item[] {
+  const result: Item[] = []
+  function walk(parentId: string | null): void {
+    for (const item of childrenOf(items, parentId)) {
+      result.push(item)
+      if (!collapsedIds.has(item.id)) walk(item.id)
     }
   }
+  walk(null)
   return result
 }
 
@@ -44,9 +51,9 @@ export function renderTrackRows(
   const collapsed = collapsedIds ?? new Set<string>()
   const drag = ctx.interaction?.kind === 'dragging-keyframe' ? ctx.interaction : null
 
-  for (const track of flattenFiltered(scene.tracks, collapsed)) {
-    const rowHeight = getTrackRowHeight(track, layoutProfile)
-    const rowEl = buildTrackRow(track, rowHeight)
+  for (const item of flattenFiltered(scene.items, collapsed)) {
+    const rowHeight = getTrackRowHeight(item, layoutProfile)
+    const rowEl = buildTrackRow(item, rowHeight)
 
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('seq-row__svg')
@@ -54,17 +61,17 @@ export function renderTrackRows(
     svg.setAttribute('aria-hidden', 'true')
 
     // Clip band: active zone between intro/outro keyframes (capsule tracks)
-    const clipDraw = ctx.interaction?.kind === 'drawing-clip' && ctx.interaction.trackId === track.id
+    const clipDraw = ctx.interaction?.kind === 'drawing-clip' && ctx.interaction.trackId === item.id
       ? ctx.interaction : null
-    if (track.kind === 'capsule') {
+    if (item.type === 'capsule') {
       let clipMinMs: number | null = null
       let clipMaxMs: number | null = null
       if (clipDraw) {
         clipMinMs = Math.min(clipDraw.startMs, clipDraw.currentMs)
         clipMaxMs = Math.max(clipDraw.startMs, clipDraw.currentMs)
       } else {
-        const introKf = track.keyframes.find(k => k.name === 'intro')
-        const outroKf = track.keyframes.find(k => k.name === 'outro')
+        const introKf = item.keyframes.find((k) => k.name === 'intro')
+        const outroKf = item.keyframes.find((k) => k.name === 'outro')
         if (introKf && outroKf) {
           clipMinMs = introKf.timeMs
           clipMaxMs = outroKf.timeMs
@@ -84,9 +91,9 @@ export function renderTrackRows(
     }
 
     // Segment bars between adjacent keyframes (positions follow active drag)
-    for (let i = 0; i < track.keyframes.length; i++) {
-      const kf = track.keyframes[i]!
-      const next = track.keyframes[i + 1]
+    for (let i = 0; i < item.keyframes.length; i++) {
+      const kf = item.keyframes[i]!
+      const next = item.keyframes[i + 1]
       if (!next) break
       const x1 = (getEffectiveMs(kf.id, kf.timeMs, ctx) - startMs) * pixelsPerMs
       const x2 = (getEffectiveMs(next.id, next.timeMs, ctx) - startMs) * pixelsPerMs
@@ -100,7 +107,7 @@ export function renderTrackRows(
     }
 
     // Transition duration bands (named = amber, interpolated = blue)
-    for (const kf of track.keyframes) {
+    for (const kf of item.keyframes) {
       if (!kf.transitionOut) continue
       const kfX = (getEffectiveMs(kf.id, kf.timeMs, ctx) - startMs) * pixelsPerMs
       const bandW = kf.transitionOut.durationMs * pixelsPerMs
@@ -117,16 +124,16 @@ export function renderTrackRows(
     }
 
     // Parent clip boundary markers + out-of-bounds detection
-    const parentMarkers = getParentClipMarkers(track.id, scene.tracks)
+    const parentMarkers = getParentClipMarkers(item.id, scene.items)
 
     // Keyframe handles (position follows active drag for the dragged keyframe)
-    for (const kf of track.keyframes) {
+    for (const kf of item.keyframes) {
       const effectiveMs = getEffectiveMs(kf.id, kf.timeMs, ctx)
       const x = (effectiveMs - startMs) * pixelsPerMs
       const handle = createKeyframeHandle(kf, x, rowHeight, layoutProfile)
-      const isDragging = drag?.keyframeId === kf.id && drag.trackId === track.id
+      const isDragging = drag?.keyframeId === kf.id && drag.trackId === item.id
 
-      if (selection.keyframeId === kf.id && selection.trackId === track.id) {
+      if (selection.keyframeId === kf.id && selection.trackId === item.id) {
         handle.classList.add('seq-kf--selected')
       }
       if (isDragging) {
@@ -142,12 +149,12 @@ export function renderTrackRows(
         handle.addEventListener('pointerdown', e => {
           e.stopPropagation()
           e.preventDefault()
-          onDragStart(track.id, kf.id, e)
+          onDragStart(item.id, kf.id, e)
         })
       } else {
         handle.addEventListener('click', e => {
           e.stopPropagation()
-          onSelectKeyframe(track.id, kf.id)
+          onSelectKeyframe(item.id, kf.id)
         })
       }
 
@@ -155,10 +162,10 @@ export function renderTrackRows(
     }
 
     // Virtual keyframes (hollow diamonds — distribution-computed, not stored)
-    const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === track.id)
+    const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === item.id)
     for (const vkf of vkfsForTrack) {
       const x = (vkf.timeMs - startMs) * pixelsPerMs
-      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: null }
+      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: '' }
       const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile)
       handle.classList.add('seq-kf--virtual')
       if (!vkf.visible) handle.classList.add('seq-kf--out-of-bounds')
@@ -191,7 +198,7 @@ export function renderTrackRows(
     rowEl.addEventListener('dblclick', e => {
       const rect = rowEl.getBoundingClientRect()
       const rawMs = viewport.startMs + (e.clientX - rect.left) / viewport.pixelsPerMs
-      onAddKeyframe(track.id, rawMs)
+      onAddKeyframe(item.id, rawMs)
     })
 
     rowEl.appendChild(svg)
@@ -199,13 +206,12 @@ export function renderTrackRows(
   }
 }
 
-function buildTrackRow(track: TrackNode, rowHeight: number): HTMLElement {
+function buildTrackRow(item: Item, rowHeight: number): HTMLElement {
   const row = document.createElement('div')
   row.classList.add('seq-row')
-  if (!track.visible) row.classList.add('seq-row--hidden')
-  row.dataset.trackId = track.id
-  row.dataset.kind = track.kind
+  if (!item.visible) row.classList.add('seq-row--hidden')
+  row.dataset.trackId = item.id
+  row.dataset.kind = item.type === 'capsule' ? 'capsule' : 'element'
   row.style.height = `${rowHeight}px`
-  if (track.children) row.dataset.hasChildren = 'true'
   return row
 }

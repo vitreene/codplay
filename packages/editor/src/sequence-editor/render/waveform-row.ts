@@ -1,5 +1,5 @@
 import type { MachineContext } from '../machine'
-import type { WaveformDataV1 } from '../types'
+import type { Waveform } from '../types'
 
 export function createWaveformRow(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
@@ -7,8 +7,16 @@ export function createWaveformRow(): HTMLCanvasElement {
   return canvas
 }
 
+/** La waveform vit dans le `Content` de l'item désigné par `masterItemId` (document-model §"Le son master") — remplace l'ancien `scene.audio.waveform`. */
+function masterWaveform(ctx: MachineContext): Waveform | undefined {
+  const masterItemId = ctx.scene.masterItemId
+  const masterItem = masterItemId ? ctx.scene.items.find((i) => i.id === masterItemId) : undefined
+  const content = masterItem?.contentId ? ctx.scene.contents[masterItem.contentId] : undefined
+  return content?.waveform
+}
+
 export function renderWaveformRow(canvas: HTMLCanvasElement, ctx: MachineContext): void {
-  const waveform = ctx.scene.audio?.waveform
+  const waveform = masterWaveform(ctx)
   if (!waveform) {
     canvas.style.display = 'none'
     return
@@ -31,7 +39,7 @@ export function renderWaveformRow(canvas: HTMLCanvasElement, ctx: MachineContext
 
 function drawWaveform(
   gc: CanvasRenderingContext2D,
-  wf: WaveformDataV1,
+  wf: Waveform,
   pixelsPerMs: number,
   startMs: number,
   width: number,

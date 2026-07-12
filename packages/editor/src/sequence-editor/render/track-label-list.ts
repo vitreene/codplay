@@ -1,21 +1,28 @@
 import type { MachineContext } from '../machine'
-import type { TrackNode, MarkerTrack } from '../types'
-import { getTrackRowHeight } from '../utils'
+import type { Item, MarkerTrack } from '../types'
+import { childrenOf, getTrackRowHeight } from '../utils'
 
-type FlatEntry = { track: TrackNode; depth: number }
+type FlatEntry = { item: Item; depth: number }
 
+/**
+ * Remplace l'ancienne récursion sur `.children` — la profondeur est ici calculée en DESCENDANT
+ * (accumulée pendant `walk`), pas en remontant `parentId` depuis chaque item : équivalent au calcul
+ * précédent (même valeur produite), juste porté par `childrenOf` (filtre plat) au lieu d'un champ
+ * `children` porté par le nœud. C'est le seul endroit où la profondeur NUMÉRIQUE compte (indentation
+ * CSS `data-depth`, `sequence-editor.css:125-126`) — audité 2026-07-13.
+ */
 function flattenWithDepth(
-  tracks: TrackNode[],
-  depth = 0,
+  items: Item[],
   collapsedIds: ReadonlySet<string> = new Set(),
 ): FlatEntry[] {
   const result: FlatEntry[] = []
-  for (const track of tracks) {
-    result.push({ track, depth })
-    if (track.children && !collapsedIds.has(track.id)) {
-      result.push(...flattenWithDepth(track.children, depth + 1, collapsedIds))
+  function walk(parentId: string | null, depth: number): void {
+    for (const item of childrenOf(items, parentId)) {
+      result.push({ item, depth })
+      if (!collapsedIds.has(item.id)) walk(item.id, depth + 1)
     }
   }
+  walk(null, 0)
   return result
 }
 
@@ -43,12 +50,12 @@ export function renderTrackLabelList(
   // mirroring cueRow's position in timelineInner (cueRow → markerTrackRows → waveformRow → trackRows).
   // SVG/canvas use box-sizing:content-box → rendered height = attr + 1px border.
   const { layoutProfile, scene } = ctx
-  const hasWaveform = Boolean(scene.audio?.waveform)
+  const hasWaveform = Boolean(masterWaveform(ctx))
   const cueSpacer = document.createElement('div')
   cueSpacer.style.cssText = `height:${layoutProfile.rowHeightCues + 1}px;flex-shrink:0`
   container.appendChild(cueSpacer)
 
-  for (const markerTrack of scene.markerTracks) {
+  for (const markerTrack of Object.values(scene.markerTracks)) {
     container.appendChild(
       buildMarkerTrackLabelRow(markerTrack, ctx, onMarkerTrackClick, onToggleMarkerTrackVisibility, onRemoveMarkerTrack),
     )
@@ -71,9 +78,17 @@ export function renderTrackLabelList(
   }
 
   const collapsed = collapsedIds ?? new Set<string>()
-  for (const { track, depth } of flattenWithDepth(ctx.scene.tracks, 0, collapsed)) {
-    container.appendChild(buildLabelRow(track, depth, ctx, collapsed, onTrackClick, onToggleVisibility, onToggleCollapse))
+  for (const { item, depth } of flattenWithDepth(ctx.scene.items, collapsed)) {
+    container.appendChild(buildLabelRow(item, depth, ctx, collapsed, onTrackClick, onToggleVisibility, onToggleCollapse))
   }
+}
+
+/** Même lookup que `render/waveform-row.ts::masterWaveform` — dupliqué ici plutôt que partagé pour rester un test booléen local, pas une dépendance croisée entre deux modules de rendu indépendants. */
+function masterWaveform(ctx: MachineContext): boolean {
+  const masterItemId = ctx.scene.masterItemId
+  const masterItem = masterItemId ? ctx.scene.items.find((i) => i.id === masterItemId) : undefined
+  const content = masterItem?.contentId ? ctx.scene.contents[masterItem.contentId] : undefined
+  return Boolean(content?.waveform)
 }
 
 function buildMarkerTrackLabelRow(
@@ -123,8 +138,18 @@ function buildMarkerTrackLabelRow(
   return row
 }
 
+/** Libellé d'affichage — `Item.label` si posé, sinon dérivé (texte tronqué, source, badge de type). Document-model §"Item.label est un libellé d'affichage, pas du contenu". */
+function displayLabel(item: Item, ctx: MachineContext): string {
+  if (item.label) return item.label
+  if (item.type === 'capsule') return item.capsule?.kind ?? 'capsule'
+  const content = item.contentId ? ctx.scene.contents[item.contentId] : undefined
+  if (content?.text) return content.text.length > 24 ? `${content.text.slice(0, 24)}…` : content.text
+  if (content?.source) return content.source.split('/').pop() ?? content.source
+  return item.type
+}
+
 function buildLabelRow(
-  track: TrackNode,
+  item: Item,
   depth: number,
   ctx: MachineContext,
   collapsedIds: ReadonlySet<string>,
@@ -134,52 +159,53 @@ function buildLabelRow(
 ): HTMLElement {
   const row = document.createElement('div')
   row.classList.add('seq-label-row')
-  row.dataset.trackId = track.id
-  row.dataset.kind = track.kind
+  row.dataset.trackId = item.id
+  row.dataset.kind = item.type === 'capsule' ? 'capsule' : 'element'
   row.dataset.depth = String(depth)
-  row.style.height = `${getTrackRowHeight(track, ctx.layoutProfile)}px`
+  row.style.height = `${getTrackRowHeight(item, ctx.layoutProfile)}px`
 
-  const isSelected = ctx.selection.trackId === track.id && ctx.selection.keyframeId === null
+  const isSelected = ctx.selection.trackId === item.id && ctx.selection.keyframeId === null
   if (isSelected) row.classList.add('seq-label-row--selected')
-  if (!track.visible) row.classList.add('seq-label-row--hidden')
+  if (!item.visible) row.classList.add('seq-label-row--hidden')
 
   // Collapse toggle — capsules with children only
-  if (track.kind === 'capsule' && track.children?.length) {
-    const isCollapsed = collapsedIds.has(track.id)
+  const hasChildren = item.type === 'capsule' && childrenOf(ctx.scene.items, item.id).length > 0
+  if (hasChildren) {
+    const isCollapsed = collapsedIds.has(item.id)
     const colBtn = document.createElement('button')
     colBtn.classList.add('seq-label-row__collapse')
     colBtn.textContent = isCollapsed ? '▶' : '▼'
     colBtn.title = isCollapsed ? 'Développer' : 'Réduire'
     colBtn.addEventListener('click', e => {
       e.stopPropagation()
-      onToggleCollapse?.(track.id)
+      onToggleCollapse?.(item.id)
     })
     row.appendChild(colBtn)
   }
 
   const name = document.createElement('span')
   name.classList.add('seq-label-row__name')
-  name.textContent = track.label
+  name.textContent = displayLabel(item, ctx)
   row.appendChild(name)
 
-  if (track.kind === 'capsule') {
+  if (item.type === 'capsule') {
     const tag = document.createElement('span')
     tag.classList.add('seq-label-row__kind')
-    tag.textContent = track.capsuleType ?? 'capsule'
+    tag.textContent = item.capsule?.kind ?? 'capsule'
     row.appendChild(tag)
   }
 
   // Visibility toggle — right-aligned via margin-left:auto on CSS
   const visBtn = document.createElement('button')
   visBtn.classList.add('seq-label-row__vis')
-  visBtn.textContent = track.visible ? '●' : '○'
-  visBtn.title = track.visible ? 'Masquer' : 'Afficher'
+  visBtn.textContent = item.visible ? '●' : '○'
+  visBtn.title = item.visible ? 'Masquer' : 'Afficher'
   visBtn.addEventListener('click', e => {
     e.stopPropagation()
-    onToggleVisibility?.(track.id)
+    onToggleVisibility?.(item.id)
   })
   row.appendChild(visBtn)
 
-  row.addEventListener('click', () => onTrackClick(track.id))
+  row.addEventListener('click', () => onTrackClick(item.id))
   return row
 }

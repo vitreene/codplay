@@ -19,6 +19,7 @@ const emptyScene = {
   contents: {},
   decors: {},
   zones: {},
+  markerTracks: {},
 }
 
 /**

@@ -1,45 +1,66 @@
 {
   "id": "scene-carousel",
-  "title": "Carousel d'images",
-  "durationMs": 9000,
-  "durationSource": "arbitrary",
-  "tracks": [
+  "meta": {
+    "title": "Carousel d'images",
+    "durationMs": 9000,
+    "durationSource": "arbitrary",
+    "timeUnit": "s",
+    "capsuleOrder": "forward"
+  },
+  "items": [
     {
       "id": "track-carousel",
-      "kind": "capsule",
-      "capsuleType": "carrousel",
+      "type": "capsule",
       "label": "Carousel",
+      "parentId": null,
+      "order": "a",
       "visible": true,
-      "keyframes": [],
-      "children": [
-        {
-          "id": "track-img-0",
-          "kind": "element",
-          "contentType": "image",
-          "label": "Image 1",
-          "visible": true,
-          "keyframes": []
-        },
-        {
-          "id": "track-img-1",
-          "kind": "element",
-          "contentType": "image",
-          "label": "Image 2",
-          "visible": true,
-          "keyframes": []
-        },
-        {
-          "id": "track-img-2",
-          "kind": "element",
-          "contentType": "image",
-          "label": "Image 3",
-          "visible": true,
-          "keyframes": []
-        }
-      ]
+      "contentId": null,
+      "initialDecorId": "decor-carousel",
+      "capsule": { "kind": "carousel", "distribution": { "mode": "sequential" } },
+      "keyframes": []
+    },
+    {
+      "id": "track-img-0",
+      "type": "image",
+      "label": "Image 1",
+      "parentId": "track-carousel",
+      "order": "a",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img-0",
+      "keyframes": []
+    },
+    {
+      "id": "track-img-1",
+      "type": "image",
+      "label": "Image 2",
+      "parentId": "track-carousel",
+      "order": "b",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img-1",
+      "keyframes": []
+    },
+    {
+      "id": "track-img-2",
+      "type": "image",
+      "label": "Image 3",
+      "parentId": "track-carousel",
+      "order": "c",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img-2",
+      "keyframes": []
     }
   ],
-  "decors": {},
-  "cues": [],
-  "markerTracks": []
+  "contents": {},
+  "decors": {
+    "decor-carousel": { "id": "decor-carousel" },
+    "decor-img-0": { "id": "decor-img-0" },
+    "decor-img-1": { "id": "decor-img-1" },
+    "decor-img-2": { "id": "decor-img-2" }
+  },
+  "zones": {},
+  "markerTracks": {}
 }

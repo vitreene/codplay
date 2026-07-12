@@ -1,15 +1,22 @@
 {
   "id": "scene-one-track",
-  "title": "Un élément texte",
-  "durationMs": 10000,
-  "durationSource": "arbitrary",
-  "tracks": [
+  "meta": {
+    "title": "Un élément texte",
+    "durationMs": 10000,
+    "durationSource": "arbitrary",
+    "timeUnit": "s",
+    "capsuleOrder": "forward"
+  },
+  "items": [
     {
       "id": "track-01",
-      "kind": "element",
-      "contentType": "text",
+      "type": "text",
       "label": "Titre",
+      "parentId": null,
+      "order": "a",
       "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-01",
       "keyframes": [
         {
           "id": "kf-01",
@@ -46,16 +53,11 @@
       ]
     }
   ],
+  "contents": {},
   "decors": {
-    "decor-01": {
-      "id": "decor-01",
-      "data": {}
-    },
-    "decor-02": {
-      "id": "decor-02",
-      "data": {}
-    }
+    "decor-01": { "id": "decor-01" },
+    "decor-02": { "id": "decor-02" }
   },
-  "cues": [],
-  "markerTracks": []
+  "zones": {},
+  "markerTracks": {}
 }

@@ -2,7 +2,6 @@ import './sequence-editor.css'
 
 import type { MachineContext, VirtualKeyframe } from './machine'
 import type { SequenceEditorController } from './controller'
-import { flattenTracks } from './utils'
 import { formatTimeMs } from './constants'
 import { createTimeRuler, renderTimeRuler } from './render/time-ruler'
 import { createTrackLabelList, renderTrackLabelList } from './render/track-label-list'
@@ -40,7 +39,7 @@ export function mountSequenceEditor(
   function isTooCloseToExisting(trackId: string, rawMs: number, ctx: MachineContext): boolean {
     const { pixelsPerMs } = ctx.viewport
     const thresholdMs = ctx.layoutProfile.keyframeHandleSizePx / pixelsPerMs
-    const track = flattenTracks(ctx.scene.tracks).find((t) => t.id === trackId)
+    const track = ctx.scene.items.find((i) => i.id === trackId)
     if (track) {
       for (const kf of track.keyframes) {
         if (Math.abs(kf.timeMs - rawMs) < thresholdMs) return true
@@ -446,7 +445,7 @@ export function mountSequenceEditor(
       ctrl.notifyResize(timelineW, timeline.clientHeight)
     }
 
-    const totalPx = ctx.scene.durationMs * ctx.viewport.pixelsPerMs
+    const totalPx = ctx.scene.meta.durationMs * ctx.viewport.pixelsPerMs
     timelineInner.style.minWidth = `${totalPx}px`
 
     const expectedScrollLeft = ctx.viewport.startMs * ctx.viewport.pixelsPerMs
@@ -506,7 +505,6 @@ export function mountSequenceEditor(
   function renderInfobar(bar: HTMLElement, ctx: MachineContext): void {
     bar.innerHTML = ''
     const { selection, scene, displayConfig } = ctx
-    const allTracks = flattenTracks(scene.tracks)
 
     function btn(label: string, action: () => void): HTMLButtonElement {
       const b = document.createElement('button')
@@ -522,22 +520,22 @@ export function mountSequenceEditor(
     }
 
     if (selection.keyframeId) {
-      const track = allTracks.find((t) => t.id === selection.trackId)
+      const track = scene.items.find((i) => i.id === selection.trackId)
       const kf = track?.keyframes.find((k) => k.id === selection.keyframeId)
       if (!kf || !track) return
       bar.append(
-        span(`kf: ${formatTimeMs(kf.timeMs, displayConfig.timeUnit)}${kf.name ? ' — ' + kf.name : ''}  décor: ${kf.decorId ?? '∅'}`),
+        span(`kf: ${formatTimeMs(kf.timeMs, displayConfig.timeUnit)}${kf.name ? ' — ' + kf.name : ''}  décor: ${kf.decorId}`),
         btn('Supprimer', () => ctrl.removeKeyframe(track.id, kf.id)),
         btn('Vider la ligne', () => ctrl.clearTrack(track.id)),
       )
     } else if (selection.trackId) {
-      const track = allTracks.find((t) => t.id === selection.trackId)
+      const track = scene.items.find((i) => i.id === selection.trackId)
       if (!track) return
       bar.append(
-        span(`${track.label}  (${track.kind})  ${track.keyframes.length} kf`),
+        span(`${track.label ?? track.id}  (${track.type})  ${track.keyframes.length} kf`),
         btn('Vider la ligne', () => ctrl.clearTrack(track.id)),
       )
-      if (track.kind === 'capsule') {
+      if (track.type === 'capsule') {
         bar.append(btn('Vider la capsule', () => ctrl.clearCapsule(track.id)))
       }
     }

@@ -70,6 +70,8 @@ export interface Keyframe {
 export interface Item {
   id: string
   type: ItemType
+  /** Libellé d'affichage libre (timeline) — PAS le contenu, cf. `Content.text`. Absent : l'éditeur dérive un affichage par défaut. */
+  label?: string
   parentId: string | null
   order: string
   visible: boolean
@@ -154,6 +156,25 @@ export interface Zone {
   container?: ZoneContainer
 }
 
+// ─── MarkerTrack ────────────────────────────────────────────────────────────
+
+/** Repère temporel ponctuel, libre — posé par l'auteur sur la timeline, sans rattachement à un média (à la différence de `Cue`, qui vit dans `Content` d'une source). */
+export interface Marker {
+  id: string
+  timeMs: number
+  label: string
+  color?: string
+}
+
+/** Table indépendante des items (même patron que `zones`) — regroupement visuel de marqueurs dans la timeline. */
+export interface MarkerTrack {
+  id: string
+  label: string
+  color?: string
+  visible: boolean
+  markers: Marker[]
+}
+
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
 export type DurationSource = 'arbitrary' | 'audio-primary' | 'mixed'
@@ -175,6 +196,8 @@ export interface EditorScene {
   contents: Record<string, Content>
   decors: Record<string, Decor>
   zones: Record<string, Zone>
+  /** Marqueurs libres sur la timeline, indépendants de tout item/média (même patron que `zones`). */
+  markerTracks: Record<string, MarkerTrack>
   /** Décor de la capsule racine IMPLICITE (jamais un item) — posé une fois, jamais keyframé. */
   rootDecorId?: string
   masterItemId?: string

@@ -1,7 +1,6 @@
 import { setup, assign } from 'xstate'
 import type {
-  EditorScene, TrackNode, Keyframe, TextCue, AuthorMarker, MarkerTrack, AudioTrack,
-  WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
+  EditorScene, Item, Keyframe, MarkerTrack, Marker, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
 import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
 import type { ChildInput } from '@codplay/scene-factory'
@@ -11,7 +10,7 @@ import {
 } from './constants'
 import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
-import { flattenTracks, findParentClipBounds } from './utils'
+import { childrenOf, descendantIds, findParentClipBounds } from './utils'
 
 // ─── Machine-specific types (§3.1) ──────────────────────────────────────────
 
@@ -79,15 +78,14 @@ export type SequenceEditorEvent =
   | { type: 'TRACK.SELECT'; trackId: string | null }
   | { type: 'KEYFRAME.SELECT'; trackId: string; keyframeId: string | null }
   | { type: 'MARKER.SELECT'; markerId: string | null }
-  | { type: 'KEYFRAME.ADD'; trackId: string; timeMs: number; id?: string }
+  | { type: 'KEYFRAME.ADD'; trackId: string; timeMs: number; id?: string; decorId?: string }
   | { type: 'KEYFRAME.REMOVE'; trackId: string; keyframeId: string }
   | { type: 'KEYFRAME.CLEAR_TRACK'; trackId: string }
   | { type: 'KEYFRAME.CLEAR_CAPSULE'; trackId: string }
   | { type: 'KEYFRAME.RENAME'; trackId: string; keyframeId: string; name: string | null }
-  | { type: 'KEYFRAME.ASSIGN_DECOR'; trackId: string; keyframeId: string; decorId: string | null }
-  | { type: 'DECOR.REGISTER'; decorId: string; data: Record<string, unknown> }
-  | { type: 'KEYFRAME.SET_TRANSITION_IN'; trackId: string; keyframeId: string; def: TransitionDef | null }
-  | { type: 'KEYFRAME.SET_TRANSITION_OUT'; trackId: string; keyframeId: string; def: TransitionDef | null }
+  | { type: 'KEYFRAME.ASSIGN_DECOR'; trackId: string; keyframeId: string; decorId: string }
+  | { type: 'KEYFRAME.SET_TRANSITION_IN'; trackId: string; keyframeId: string; def: Transition | null }
+  | { type: 'KEYFRAME.SET_TRANSITION_OUT'; trackId: string; keyframeId: string; def: Transition | null }
   | { type: 'DRAG.START_KEYFRAME'; trackId: string; keyframeId: string }
   | { type: 'DRAG.MOVE'; pointerMs: number }
   | { type: 'DRAG.END' }
@@ -112,28 +110,30 @@ export type SequenceEditorEvent =
   | { type: 'VIEWPORT.SET_MODE'; mode: 'full-sequence' | 'text-priority' }
   | { type: 'VIEWPORT.SET_LAYOUT_PROFILE'; profile: LayoutProfile }
   | { type: 'VIEWPORT.SET_DISPLAY_CONFIG'; config: DisplayConfig }
-  | { type: 'TRACK.ADD'; node: Omit<TrackNode, 'keyframes'> & { id: string }; afterId?: string }
+  | { type: 'TRACK.ADD'; item: Omit<Item, 'keyframes'> & { id: string } }
   | { type: 'TRACK.REMOVE'; trackId: string }
-  | { type: 'TRACK.MOVE'; trackId: string; afterId: string | null; parentId?: string }
+  | { type: 'TRACK.MOVE'; trackId: string; parentId: string | null; order?: string }
   | { type: 'TRACK.TOGGLE_VISIBILITY'; trackId: string }
   | { type: 'TRACK.NEST_IN_CAPSULE'; trackId: string; capsuleId: string }
   | { type: 'TRACK.RESET_KEYFRAMES'; trackId: string }
-  | { type: 'CUE.ADD'; cue: TextCue & { id: string } }
-  | { type: 'CUE.REMOVE'; cueId: string }
   | { type: 'MARKER_TRACK.ADD'; track: MarkerTrack }
   | { type: 'MARKER_TRACK.REMOVE'; markerTrackId: string }
   | { type: 'MARKER_TRACK.RENAME'; markerTrackId: string; label: string }
   | { type: 'MARKER_TRACK.TOGGLE_VISIBILITY'; markerTrackId: string }
-  | { type: 'MARKER.ADD'; markerTrackId: string; marker: AuthorMarker & { id: string } }
+  | { type: 'MARKER.ADD'; markerTrackId: string; marker: Marker & { id: string } }
   | { type: 'MARKER.MOVE'; markerId: string; timeMs: number }
   | { type: 'MARKER.REMOVE'; markerId: string }
   | { type: 'KEYFRAME.ATTACH_MARKER'; trackId: string; keyframeId: string; markerId: string }
   | { type: 'KEYFRAME.DETACH_MARKER'; trackId: string; keyframeId: string }
-  | { type: 'AUDIO.SET'; track: AudioTrack }
-  | { type: 'AUDIO.CLEAR' }
-  | { type: 'AUDIO.SET_WAVEFORM'; waveform: WaveformDataV1 }
+  /**
+   * Le son est un item média + le rôle `masterItemId` (document-model §"Le son master") — plus un
+   * champ scène séparé. `AUDIO.SET` écrit sur l'item DÉJÀ désigné par `masterItemId` (créé par la
+   * façade centrale, hors périmètre de ce module) : ce module ne fait qu'écrire son `Content`, il ne
+   * crée jamais l'item lui-même (pas de commande de création ici — `machine.ts` n'a pas la façade).
+   */
+  | { type: 'AUDIO.SET_WAVEFORM'; waveform: Waveform }
   | { type: 'SCENE.LOAD'; scene: EditorScene }
-  | { type: 'SCENE.SET_DURATION'; durationMs: number; source?: EditorScene['durationSource'] }
+  | { type: 'SCENE.SET_DURATION'; durationMs: number; source?: EditorScene['meta']['durationSource'] }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -150,28 +150,32 @@ function clampViewportStart(startMs: number, vp: MachineViewport, durationMs: nu
   return Math.max(0, Math.min(startMs, durationMs - viewDurationMs))
 }
 
-function detachKeyframesByMarkerIds(tracks: TrackNode[], markerIds: ReadonlySet<string>): TrackNode[] {
-  return tracks.map(t => ({
-    ...t,
-    keyframes: t.keyframes.map(k =>
+function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string>): Item[] {
+  return items.map((item) => ({
+    ...item,
+    keyframes: item.keyframes.map((k) =>
       k.markerId !== undefined && markerIds.has(k.markerId) ? { ...k, markerId: undefined } : k,
     ),
-    children: t.children ? detachKeyframesByMarkerIds(t.children, markerIds) : undefined,
   }))
+}
+
+/** Toutes les cues de tous les contents média de la scène — remplace l'ancienne liste globale `scene.cues` (document-model §"Le son master": les cues vivent dans `Content`, par source). */
+function allCues(scene: EditorScene): { timeMs: number; id: string }[] {
+  return Object.values(scene.contents).flatMap((content) => content.cues ?? [])
 }
 
 function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
   const points: MachineSnapPoint[] = []
-  for (const cue of scene.cues) {
+  for (const cue of allCues(scene)) {
     points.push({ timeMs: cue.timeMs, kind: 'cue-start', sourceId: cue.id })
   }
-  for (const track of scene.markerTracks) {
+  for (const track of Object.values(scene.markerTracks)) {
     for (const marker of track.markers) {
       points.push({ timeMs: marker.timeMs, kind: 'marker', sourceId: marker.id })
     }
   }
-  for (const track of flattenTracks(scene.tracks)) {
-    for (const kf of track.keyframes) {
+  for (const item of scene.items) {
+    for (const kf of item.keyframes) {
       points.push({ timeMs: kf.timeMs, kind: 'keyframe', sourceId: kf.id })
     }
   }
@@ -180,17 +184,19 @@ function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
 
 function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | 'backward' = 'forward'): VirtualKeyframe[] {
   const result: VirtualKeyframe[] = []
-  for (const capsule of flattenTracks(scene.tracks)) {
-    if (capsule.kind !== 'capsule' || !capsule.children?.length) continue
-    const introKf = capsule.keyframes.find(k => k.name === 'intro')
-    const outroKf = capsule.keyframes.find(k => k.name === 'outro')
+  for (const capsule of scene.items) {
+    if (capsule.type !== 'capsule') continue
+    const children = childrenOf(scene.items, capsule.id)
+    if (children.length === 0) continue
+    const introKf = capsule.keyframes.find((k) => k.name === 'intro')
+    const outroKf = capsule.keyframes.find((k) => k.name === 'outro')
     if (!introKf || !outroKf) continue
     const clipDurationMs = outroKf.timeMs - introKf.timeMs
     if (clipDurationMs <= 0) continue
 
-    const children: ChildInput[] = capsule.children.map(child => {
-      const ci = child.keyframes.find(k => k.name === 'intro')
-      const co = child.keyframes.find(k => k.name === 'outro')
+    const childInputs: ChildInput[] = children.map((child) => {
+      const ci = child.keyframes.find((k) => k.name === 'intro')
+      const co = child.keyframes.find((k) => k.name === 'outro')
       return {
         trackId: child.id,
         lockedIntroMs: ci !== undefined ? ci.timeMs - introKf.timeMs : undefined,
@@ -201,14 +207,14 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
     // `CapsulePreset` is the one place `CapsuleKind` → concrete distribution resolution lives
     // (`2026-06-12-capsule-distribution-spec.md` §3.3) — shared with the ed2 Builder's own final
     // resolution (`resolveCapsule`), so both stay in agreement (§7, "même calcul, une seule
-    // source de vérité"). A capsule mid-authoring may have no `capsuleType`/`distribution` set
+    // source de vérité"). A capsule mid-authoring may have no `capsule.kind`/`.distribution` set
     // yet — no virtual keyframes are produced for it until the author supplies what `CapsulePreset`
     // needs (same skip pattern as the missing intro/outro kf check above), rather than guessing or
     // letting the resolution error propagate into the live preview.
-    if (!capsule.capsuleType) continue
+    if (!capsule.capsule) continue
     let preset: ReturnType<typeof CapsulePreset.resolve>
     try {
-      preset = CapsulePreset.resolve({ capsuleType: capsule.capsuleType, distribution: capsule.distribution })
+      preset = CapsulePreset.resolve({ capsuleType: capsule.capsule.kind, distribution: capsule.capsule.distribution })
     } catch {
       continue
     }
@@ -216,14 +222,14 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
       clipDurationMs,
       ...preset,
       order: capsuleOrder,
-      children,
+      children: childInputs,
     })
 
     for (let i = 0; i < out.children.length; i++) {
       const childOut = out.children[i]!
-      const child = capsule.children[i]!
-      const hasIntro = child.keyframes.some(k => k.name === 'intro')
-      const hasOutro = child.keyframes.some(k => k.name === 'outro')
+      const child = children[i]!
+      const hasIntro = child.keyframes.some((k) => k.name === 'intro')
+      const hasOutro = child.keyframes.some((k) => k.name === 'outro')
       if (!hasIntro) {
         result.push({
           trackId: child.id,
@@ -267,25 +273,30 @@ export function applySnapToMs(
   return Math.round(rawMs / TIME_STEP_MS) * TIME_STEP_MS
 }
 
-function updateTrackInScene(
+/** Remplace `updateTrackInScene` (ancien : parcours récursif de `children`) — un item est trouvé une seule fois dans la liste plate, pas de walk. */
+function updateItemInScene(
   scene: EditorScene,
-  trackId: string,
-  updater: (track: TrackNode) => TrackNode,
+  itemId: string,
+  updater: (item: Item) => Item,
 ): EditorScene {
-  function walk(tracks: TrackNode[]): TrackNode[] {
-    return tracks.map(t => {
-      if (t.id === trackId) return updater(t)
-      if (t.children) return { ...t, children: walk(t.children) }
-      return t
-    })
+  return {
+    ...scene,
+    items: scene.items.map((item) => (item.id === itemId ? updater(item) : item)),
   }
-  return { ...scene, tracks: walk(scene.tracks) }
+}
+
+/**
+ * Un kf toujours créé avec un décor — jamais `null` (même règle que la façade centrale,
+ * `app/commands/base-commands.ts::createKeyframe` : `Keyframe.decorId` est obligatoire dans le
+ * modèle cible). Le décor créé est vide (`{ id }`), à remplir ensuite par dedit — pas un décor
+ * deviné ici (Principe B, cf. Builder ed2).
+ */
+function freshDecorId(): string {
+  return `decor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function pruneOrphanDecors(scene: EditorScene): EditorScene {
-  const used = new Set(
-    flattenTracks(scene.tracks).flatMap(t => t.keyframes).map(k => k.decorId).filter(Boolean) as string[],
-  )
+  const used = new Set(scene.items.flatMap((item) => item.keyframes).map((k) => k.decorId))
   const decors = Object.fromEntries(Object.entries(scene.decors).filter(([id]) => used.has(id)))
   return { ...scene, decors }
 }
@@ -295,24 +306,24 @@ function insertKeyframeSorted(keyframes: Keyframe[], kf: Keyframe): Keyframe[] {
 }
 
 function enforceClipOrder(keyframes: Keyframe[]): Keyframe[] {
-  const intro = keyframes.find(k => k.name === 'intro')
-  const outro = keyframes.find(k => k.name === 'outro')
+  const intro = keyframes.find((k) => k.name === 'intro')
+  const outro = keyframes.find((k) => k.name === 'outro')
   if (!intro || !outro || intro.timeMs <= outro.timeMs) return keyframes
-  return keyframes.map(k => {
+  return keyframes.map((k) => {
     if (k.id === intro.id) return { ...k, name: 'outro' as const }
     if (k.id === outro.id) return { ...k, name: 'intro' as const }
     return k
   })
 }
 
-function adjacentDecorId(keyframes: Keyframe[], timeMs: number): string | null {
+function adjacentDecorId(keyframes: Keyframe[], timeMs: number, fallback: string): string {
   const sorted = [...keyframes].sort((a, b) => a.timeMs - b.timeMs)
   let prev: Keyframe | null = null
   for (const k of sorted) {
     if (k.timeMs <= timeMs) prev = k
     else break
   }
-  return prev?.decorId ?? sorted[0]?.decorId ?? null
+  return prev?.decorId ?? sorted[0]?.decorId ?? fallback
 }
 
 // ─── Machine ─────────────────────────────────────────────────────────────────
@@ -328,7 +339,7 @@ export const sequenceEditorMachine = setup({
     canCommitDrag: ({ context }) => {
       const i = context.interaction
       if (!i || i.kind !== 'dragging-keyframe') return false
-      return i.currentMs >= 0 && i.currentMs <= context.scene.durationMs
+      return i.currentMs >= 0 && i.currentMs <= context.scene.meta.durationMs
     },
     snapThresholdReached: ({ context }) => {
       const i = context.interaction
@@ -366,7 +377,7 @@ export const sequenceEditorMachine = setup({
     },
     'VIEWPORT.SCROLL': {
       actions: assign(({ context, event }) => {
-        const startMs = clampViewportStart(event.startMs, context.viewport, context.scene.durationMs)
+        const startMs = clampViewportStart(event.startMs, context.viewport, context.scene.meta.durationMs)
         return {
           viewport: {
             ...context.viewport,
@@ -446,14 +457,21 @@ export const sequenceEditorMachine = setup({
         'KEYFRAME.ADD': {
           actions: assign(({ context, event }) => {
             const timeMs = Math.round(
-              Math.max(0, Math.min(event.timeMs, context.scene.durationMs)) / TIME_STEP_MS,
+              Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) / TIME_STEP_MS,
             ) * TIME_STEP_MS
-            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
-            const decorId = track ? adjacentDecorId(track.keyframes, timeMs) : null
+            const item = context.scene.items.find((i) => i.id === event.trackId)
+            let scene = context.scene
+            let decorId = event.decorId
+            if (decorId === undefined) {
+              decorId = item ? adjacentDecorId(item.keyframes, timeMs, freshDecorId()) : freshDecorId()
+              if (!scene.decors[decorId]) {
+                scene = { ...scene, decors: { ...scene.decors, [decorId]: { id: decorId } } }
+              }
+            }
             const newKf: Keyframe = { id: event.id ?? `kf-${Date.now()}`, timeMs, decorId }
-            const scene = updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: insertKeyframeSorted(t.keyframes, newKf),
+            scene = updateItemInScene(scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: insertKeyframeSorted(i.keyframes, newKf),
             }))
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -461,22 +479,22 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.REMOVE': {
           actions: assign(({ context, event }) => {
-            const removedKf = flattenTracks(context.scene.tracks)
-              .find(t => t.id === event.trackId)
-              ?.keyframes.find(k => k.id === event.keyframeId)
-            const removedDecorId = removedKf?.decorId ?? null
+            const removedKf = context.scene.items
+              .find((i) => i.id === event.trackId)
+              ?.keyframes.find((k) => k.id === event.keyframeId)
+            const removedDecorId = removedKf?.decorId
 
-            const sceneAfterRemove = updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.filter(k => k.id !== event.keyframeId),
+            const sceneAfterRemove = updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.filter((k) => k.id !== event.keyframeId),
             }))
 
             // Remove orphan decor — only if no other kf still references it
             let decors = sceneAfterRemove.decors
             if (removedDecorId) {
-              const stillUsed = flattenTracks(sceneAfterRemove.tracks)
-                .flatMap(t => t.keyframes)
-                .some(k => k.decorId === removedDecorId)
+              const stillUsed = sceneAfterRemove.items
+                .flatMap((i) => i.keyframes)
+                .some((k) => k.decorId === removedDecorId)
               if (!stillUsed) {
                 decors = Object.fromEntries(
                   Object.entries(decors).filter(([id]) => id !== removedDecorId),
@@ -495,7 +513,7 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.CLEAR_TRACK': {
           actions: assign(({ context, event }) => {
-            const cleared = updateTrackInScene(context.scene, event.trackId, t => ({ ...t, keyframes: [] }))
+            const cleared = updateItemInScene(context.scene, event.trackId, (i) => ({ ...i, keyframes: [] }))
             const scene = pruneOrphanDecors(cleared)
             const selection: MachineSelection =
               context.selection.trackId === event.trackId
@@ -507,19 +525,9 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.CLEAR_CAPSULE': {
           actions: assign(({ context, event }) => {
-            function clearAllKf(t: TrackNode): TrackNode {
-              return { ...t, keyframes: [], children: t.children?.map(clearAllKf) }
-            }
-            function clearSubtree(tracks: TrackNode[]): TrackNode[] {
-              return tracks.map(t => {
-                if (t.id === event.trackId) return clearAllKf(t)
-                if (t.children) return { ...t, children: clearSubtree(t.children) }
-                return t
-              })
-            }
-            const capsuleRoot = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
-            const clearedIds = new Set(capsuleRoot ? flattenTracks([capsuleRoot]).map(t => t.id) : [])
-            const cleared = { ...context.scene, tracks: clearSubtree(context.scene.tracks) }
+            const clearedIds = new Set([event.trackId, ...descendantIds(context.scene.items, event.trackId)])
+            const items = context.scene.items.map((i) => (clearedIds.has(i.id) ? { ...i, keyframes: [] } : i))
+            const cleared = { ...context.scene, items }
             const scene = pruneOrphanDecors(cleared)
             const sel = context.selection
             const selection: MachineSelection =
@@ -532,9 +540,9 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.RENAME': {
           actions: assign(({ context, event }) => {
-            const scene = updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            const scene = updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId ? { ...k, name: event.name ?? undefined } : k,
               ),
             }))
@@ -544,32 +552,20 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.ASSIGN_DECOR': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId ? { ...k, decorId: event.decorId } : k,
               ),
             })),
           })),
         },
 
-        'DECOR.REGISTER': {
-          actions: assign(({ context, event }) => ({
-            scene: {
-              ...context.scene,
-              decors: {
-                ...context.scene.decors,
-                [event.decorId]: { id: event.decorId, data: event.data },
-              },
-            },
-          })),
-        },
-
         'KEYFRAME.SET_TRANSITION_IN': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId
                   ? { ...k, transitionIn: event.def ?? undefined }
                   : k,
@@ -580,9 +576,9 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.SET_TRANSITION_OUT': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId
                   ? { ...k, transitionOut: event.def ?? undefined }
                   : k,
@@ -594,8 +590,8 @@ export const sequenceEditorMachine = setup({
         'DRAG.START_KEYFRAME': {
           target: 'dragging-keyframe',
           actions: assign(({ context, event }) => {
-            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
-            const kf = track?.keyframes.find(k => k.id === event.keyframeId)
+            const item = context.scene.items.find((i) => i.id === event.trackId)
+            const kf = item?.keyframes.find((k) => k.id === event.keyframeId)
             return {
               interaction: {
                 kind: 'dragging-keyframe' as const,
@@ -611,28 +607,28 @@ export const sequenceEditorMachine = setup({
 
         'CLIP.PLACE': {
           actions: assign(({ context, event }) => {
-            const pointerMs = Math.max(0, Math.min(event.pointerMs, context.scene.durationMs))
-            const bounds = findParentClipBounds(event.trackId, context.scene.tracks, context.scene.durationMs)
+            const pointerMs = Math.max(0, Math.min(event.pointerMs, context.scene.meta.durationMs))
+            const bounds = findParentClipBounds(event.trackId, context.scene.items, context.scene.meta.durationMs)
             const clampedMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, pointerMs))
-            const track = flattenTracks(context.scene.tracks).find(t => t.id === event.trackId)
-            if (!track) return {}
-            const intro = track.keyframes.find(k => k.name === 'intro')
-            const outro = track.keyframes.find(k => k.name === 'outro')
-            const scene = updateTrackInScene(context.scene, event.trackId, t => {
-              let keyframes = [...t.keyframes]
+            const item = context.scene.items.find((i) => i.id === event.trackId)
+            if (!item) return {}
+            const intro = item.keyframes.find((k) => k.name === 'intro')
+            const outro = item.keyframes.find((k) => k.name === 'outro')
+            const scene = updateItemInScene(context.scene, event.trackId, (i) => {
+              let keyframes = [...i.keyframes]
               if (!intro) {
-                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'intro', decorId: null })
+                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'intro', decorId: freshDecorId() })
               } else if (!outro) {
-                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'outro', decorId: null })
+                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'outro', decorId: freshDecorId() })
                 keyframes = enforceClipOrder(keyframes)
               } else {
                 const distIntro = Math.abs(clampedMs - intro.timeMs)
                 const distOutro = Math.abs(clampedMs - outro.timeMs)
                 const moveId = distIntro <= distOutro ? intro.id : outro.id
-                keyframes = keyframes.map(k => k.id === moveId ? { ...k, timeMs: clampedMs } : k)
+                keyframes = keyframes.map((k) => (k.id === moveId ? { ...k, timeMs: clampedMs } : k))
                 keyframes = keyframes.sort((a, b) => a.timeMs - b.timeMs)
               }
-              return { ...t, keyframes }
+              return { ...i, keyframes }
             })
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -654,7 +650,7 @@ export const sequenceEditorMachine = setup({
 
         'PLAYHEAD.SET': {
           actions: assign(({ context, event }) => ({
-            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.durationMs)),
+            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)),
           })),
         },
 
@@ -698,9 +694,9 @@ export const sequenceEditorMachine = setup({
             const viewMode = event.mode
             let viewport = context.viewport
             if (viewMode === 'full-sequence') {
-              const raw = context.viewport.viewWidthPx / context.scene.durationMs
+              const raw = context.viewport.viewWidthPx / context.scene.meta.durationMs
               const pixelsPerMs = (isFinite(raw) && raw > 0) ? raw : context.viewport.pixelsPerMs
-              viewport = { ...viewport, pixelsPerMs, startMs: 0, endMs: context.scene.durationMs }
+              viewport = { ...viewport, pixelsPerMs, startMs: 0, endMs: context.scene.meta.durationMs }
             }
             return { viewMode, viewport }
           }),
@@ -716,32 +712,27 @@ export const sequenceEditorMachine = setup({
 
         'TRACK.ADD': {
           actions: assign(({ context, event }) => {
-            const newTrack: TrackNode = { ...event.node, keyframes: [] }
-            let tracks: TrackNode[]
-            if (event.afterId) {
-              const idx = context.scene.tracks.findIndex(t => t.id === event.afterId)
-              if (idx >= 0) {
-                tracks = [...context.scene.tracks]
-                tracks.splice(idx + 1, 0, newTrack)
-              } else {
-                tracks = [...context.scene.tracks, newTrack]
-              }
-            } else {
-              tracks = [...context.scene.tracks, newTrack]
-            }
-            return { scene: { ...context.scene, tracks } }
+            const newItem: Item = { ...event.item, keyframes: [] }
+            return { scene: { ...context.scene, items: [...context.scene.items, newItem] } }
           }),
+        },
+
+        /** Changer de parent/ordre est un simple remplacement de deux champs plats — pas de retrait/insertion dans un tableau `children` imbriqué comme l'ancien modèle l'exigeait. Event déclaré mais jamais géré dans l'ancien `machine.ts` (mort en pratique) — implémenté ici car le modèle plat rend l'opération triviale et réellement utile (glisser-déplacer une piste). */
+        'TRACK.MOVE': {
+          actions: assign(({ context, event }) => ({
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              parentId: event.parentId,
+              order: event.order ?? i.order,
+            })),
+          })),
         },
 
         'TRACK.REMOVE': {
           actions: assign(({ context, event }) => {
-            function removeFromList(tracks: TrackNode[]): TrackNode[] {
-              return tracks
-                .filter(t => t.id !== event.trackId)
-                .map(t => t.children ? { ...t, children: removeFromList(t.children) } : t)
-            }
-            const tracks = removeFromList(context.scene.tracks)
-            const scene = { ...context.scene, tracks }
+            const removedIds = new Set([event.trackId, ...descendantIds(context.scene.items, event.trackId)])
+            const items = context.scene.items.filter((i) => !removedIds.has(i.id))
+            const scene = { ...context.scene, items }
             const snapGrid = computeSnapGrid(scene)
             const virtualKeyframes = computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder)
             const selection: MachineSelection =
@@ -754,49 +745,36 @@ export const sequenceEditorMachine = setup({
 
         'TRACK.TOGGLE_VISIBILITY': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t, visible: !t.visible,
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i, visible: !i.visible,
             })),
           })),
         },
 
         'TRACK.RESET_KEYFRAMES': {
           actions: assign(({ context, event }) => {
-            const scene = updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t, keyframes: [],
+            const scene = updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i, keyframes: [],
             }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'CUE.ADD': {
-          actions: assign(({ context, event }) => {
-            const scene = { ...context.scene, cues: [...context.scene.cues, event.cue] }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'CUE.REMOVE': {
-          actions: assign(({ context, event }) => {
-            const scene = { ...context.scene, cues: context.scene.cues.filter(c => c.id !== event.cueId) }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'MARKER_TRACK.ADD': {
           actions: assign(({ context, event }) => {
-            const scene = { ...context.scene, markerTracks: [...context.scene.markerTracks, event.track] }
+            const scene = { ...context.scene, markerTracks: { ...context.scene.markerTracks, [event.track.id]: event.track } }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'MARKER_TRACK.REMOVE': {
           actions: assign(({ context, event }) => {
-            const removedTrack = context.scene.markerTracks.find(t => t.id === event.markerTrackId)
-            const removedMarkerIds = new Set(removedTrack?.markers.map(m => m.id) ?? [])
-            const markerTracks = context.scene.markerTracks.filter(t => t.id !== event.markerTrackId)
-            const tracks = detachKeyframesByMarkerIds(context.scene.tracks, removedMarkerIds)
-            const scene = { ...context.scene, markerTracks, tracks }
+            const removedTrack = context.scene.markerTracks[event.markerTrackId]
+            const removedMarkerIds = new Set(removedTrack?.markers.map((m) => m.id) ?? [])
+            const markerTracks = { ...context.scene.markerTracks }
+            delete markerTracks[event.markerTrackId]
+            const items = detachKeyframesByMarkerIds(context.scene.items, removedMarkerIds)
+            const scene = { ...context.scene, markerTracks, items }
             const selection: MachineSelection = context.selection.markerId !== null && removedMarkerIds.has(context.selection.markerId)
               ? { trackId: null, keyframeId: null, markerId: null }
               : context.selection
@@ -806,27 +784,27 @@ export const sequenceEditorMachine = setup({
 
         'MARKER_TRACK.RENAME': {
           actions: assign(({ context, event }) => {
-            const markerTracks = context.scene.markerTracks.map(t =>
-              t.id === event.markerTrackId ? { ...t, label: event.label } : t,
-            )
+            const track = context.scene.markerTracks[event.markerTrackId]
+            if (!track) return {}
+            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, label: event.label } }
             return { scene: { ...context.scene, markerTracks } }
           }),
         },
 
         'MARKER_TRACK.TOGGLE_VISIBILITY': {
           actions: assign(({ context, event }) => {
-            const markerTracks = context.scene.markerTracks.map(t =>
-              t.id === event.markerTrackId ? { ...t, visible: !t.visible } : t,
-            )
+            const track = context.scene.markerTracks[event.markerTrackId]
+            if (!track) return {}
+            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, visible: !track.visible } }
             return { scene: { ...context.scene, markerTracks } }
           }),
         },
 
         'MARKER.ADD': {
           actions: assign(({ context, event }) => {
-            const markerTracks = context.scene.markerTracks.map(t =>
-              t.id === event.markerTrackId ? { ...t, markers: [...t.markers, event.marker] } : t,
-            )
+            const track = context.scene.markerTracks[event.markerTrackId]
+            if (!track) return {}
+            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, markers: [...track.markers, event.marker] } }
             const scene = { ...context.scene, markerTracks }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
@@ -835,33 +813,33 @@ export const sequenceEditorMachine = setup({
         'MARKER.MOVE': {
           actions: assign(({ context, event }) => {
             // propagate to attached keyframes
-            function propagate(tracks: TrackNode[]): TrackNode[] {
-              return tracks.map(t => ({
-                ...t,
-                keyframes: t.keyframes.map(k =>
-                  k.markerId === event.markerId ? { ...k, timeMs: event.timeMs } : k,
-                ),
-                children: t.children ? propagate(t.children) : undefined,
-              }))
-            }
-            const markerTracks = context.scene.markerTracks.map(mt => ({
-              ...mt,
-              markers: mt.markers.map(m => m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m),
+            const items = context.scene.items.map((i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
+                k.markerId === event.markerId ? { ...k, timeMs: event.timeMs } : k,
+              ),
             }))
-            const tracks = propagate(context.scene.tracks)
-            const scene = { ...context.scene, markerTracks, tracks }
+            const markerTracks = Object.fromEntries(
+              Object.entries(context.scene.markerTracks).map(([id, mt]) => [
+                id,
+                { ...mt, markers: mt.markers.map((m) => (m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m)) },
+              ]),
+            )
+            const scene = { ...context.scene, markerTracks, items }
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'MARKER.REMOVE': {
           actions: assign(({ context, event }) => {
-            const markerTracks = context.scene.markerTracks.map(mt => ({
-              ...mt,
-              markers: mt.markers.filter(m => m.id !== event.markerId),
-            }))
-            const tracks = detachKeyframesByMarkerIds(context.scene.tracks, new Set([event.markerId]))
-            const scene = { ...context.scene, markerTracks, tracks }
+            const markerTracks = Object.fromEntries(
+              Object.entries(context.scene.markerTracks).map(([id, mt]) => [
+                id,
+                { ...mt, markers: mt.markers.filter((m) => m.id !== event.markerId) },
+              ]),
+            )
+            const items = detachKeyframesByMarkerIds(context.scene.items, new Set([event.markerId]))
+            const scene = { ...context.scene, markerTracks, items }
             const selection: MachineSelection = context.selection.markerId === event.markerId
               ? { trackId: null, keyframeId: null, markerId: null }
               : context.selection
@@ -871,9 +849,9 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.ATTACH_MARKER': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId ? { ...k, markerId: event.markerId } : k,
               ),
             })),
@@ -882,34 +860,26 @@ export const sequenceEditorMachine = setup({
 
         'KEYFRAME.DETACH_MARKER': {
           actions: assign(({ context, event }) => ({
-            scene: updateTrackInScene(context.scene, event.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes.map(k =>
+            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
+              ...i,
+              keyframes: i.keyframes.map((k) =>
                 k.id === event.keyframeId ? { ...k, markerId: undefined } : k,
               ),
             })),
           })),
         },
 
-        'AUDIO.SET': {
-          actions: assign(({ context, event }) => ({
-            scene: { ...context.scene, audio: event.track },
-          })),
-        },
-
-        'AUDIO.CLEAR': {
-          actions: assign(({ context }) => ({
-            scene: { ...context.scene, audio: undefined },
-          })),
-        },
-
         'AUDIO.SET_WAVEFORM': {
           actions: assign(({ context, event }) => {
-            if (!context.scene.audio) return {}
+            const masterItemId = context.scene.masterItemId
+            const masterItem = masterItemId ? context.scene.items.find((i) => i.id === masterItemId) : undefined
+            if (!masterItem?.contentId) return {}
+            const content = context.scene.contents[masterItem.contentId]
+            if (!content) return {}
             return {
               scene: {
                 ...context.scene,
-                audio: { ...context.scene.audio, waveform: event.waveform },
+                contents: { ...context.scene.contents, [content.id]: { ...content, waveform: event.waveform } },
               },
             }
           }),
@@ -930,8 +900,11 @@ export const sequenceEditorMachine = setup({
           actions: assign(({ context, event }) => ({
             scene: {
               ...context.scene,
-              durationMs: event.durationMs,
-              durationSource: event.source ?? context.scene.durationSource,
+              meta: {
+                ...context.scene.meta,
+                durationMs: event.durationMs,
+                durationSource: event.source ?? context.scene.meta.durationSource,
+              },
             },
           })),
         },
@@ -945,13 +918,13 @@ export const sequenceEditorMachine = setup({
           {
             // End of play: transition to idle so START_PLAY becomes available again
             guard: ({ context, event }) => {
-              const stopMs = context.playRange?.outMs ?? context.scene.durationMs
+              const stopMs = context.playRange?.outMs ?? context.scene.meta.durationMs
               return context.playheadMs + event.deltaMs >= stopMs
             },
             target: 'idle',
             actions: assign(({ context }) => ({
               isPlaying: false,
-              playheadMs: context.playRange?.outMs ?? context.scene.durationMs,
+              playheadMs: context.playRange?.outMs ?? context.scene.meta.durationMs,
             })),
           },
           {
@@ -970,7 +943,7 @@ export const sequenceEditorMachine = setup({
         },
         'PLAYHEAD.SET': {
           actions: assign(({ context, event }) => ({
-            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.durationMs)),
+            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)),
           })),
         },
       },
@@ -988,7 +961,7 @@ export const sequenceEditorMachine = setup({
             const startMs = clampViewportStart(
               i.originStartMs - deltaMs,
               context.viewport,
-              context.scene.durationMs,
+              context.scene.meta.durationMs,
             )
             const viewport: MachineViewport = {
               ...context.viewport,
@@ -1014,7 +987,7 @@ export const sequenceEditorMachine = setup({
             if (!i || i.kind !== 'dragging-keyframe') return {}
             const thresholdMs = context.layoutProfile.snapThresholdPx / context.viewport.pixelsPerMs
             const snapped = applySnapToMs(event.pointerMs, context.snapGrid, thresholdMs)
-            const currentMs = Math.max(0, Math.min(snapped, context.scene.durationMs))
+            const currentMs = Math.max(0, Math.min(snapped, context.scene.meta.durationMs))
             return { interaction: { ...i, currentMs } }
           }),
         },
@@ -1025,10 +998,10 @@ export const sequenceEditorMachine = setup({
             const i = context.interaction
             if (!i || i.kind !== 'dragging-keyframe') return { interaction: null }
             const timeMs = i.currentMs
-            const scene = updateTrackInScene(context.scene, i.trackId, t => ({
-              ...t,
-              keyframes: t.keyframes
-                .map(k => k.id === i.keyframeId ? { ...k, timeMs } : k)
+            const scene = updateItemInScene(context.scene, i.trackId, (item) => ({
+              ...item,
+              keyframes: item.keyframes
+                .map((k) => (k.id === i.keyframeId ? { ...k, timeMs } : k))
                 .sort((a, b) => a.timeMs - b.timeMs),
             }))
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }
@@ -1056,28 +1029,28 @@ export const sequenceEditorMachine = setup({
             const rawMinMs = Math.min(i.startMs, i.currentMs)
             const rawMaxMs = Math.max(i.startMs, i.currentMs)
 
-            const bounds = findParentClipBounds(i.trackId, context.scene.tracks, context.scene.durationMs)
+            const bounds = findParentClipBounds(i.trackId, context.scene.items, context.scene.meta.durationMs)
             const minMs = Math.max(rawMinMs, bounds.minMs)
             const maxMs = Math.min(rawMaxMs, bounds.maxMs)
 
             if (minMs >= maxMs) return { interaction: null }
 
-            const scene = updateTrackInScene(context.scene, i.trackId, track => {
-              const kept = track.keyframes.filter(k => k.name !== 'intro' && k.name !== 'outro')
+            const scene = updateItemInScene(context.scene, i.trackId, (item) => {
+              const kept = item.keyframes.filter((k) => k.name !== 'intro' && k.name !== 'outro')
               const introKf: Keyframe = {
                 id: i.introId || `kf-${Date.now()}`,
                 timeMs: minMs,
                 name: 'intro',
-                decorId: null,
+                decorId: freshDecorId(),
               }
               const outroKf: Keyframe = {
                 id: i.outroId || `kf-${Date.now() + 1}`,
                 timeMs: maxMs,
                 name: 'outro',
-                decorId: null,
+                decorId: freshDecorId(),
               }
               const keyframes = [...kept, introKf, outroKf].sort((a, b) => a.timeMs - b.timeMs)
-              return { ...track, keyframes }
+              return { ...item, keyframes }
             })
 
             return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }

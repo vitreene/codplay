@@ -53,7 +53,7 @@ export function renderTimeRuler(svg: SVGSVGElement, ctx: MachineContext): void {
   const gradStart = Math.floor(startMs / intervalMs) * intervalMs
   const gradEnd = startMs + width / pixelsPerMs + intervalMs
 
-  for (let t = gradStart; t <= Math.min(gradEnd, scene.durationMs); t += intervalMs) {
+  for (let t = gradStart; t <= Math.min(gradEnd, scene.meta.durationMs); t += intervalMs) {
     const x = (t - startMs) * pixelsPerMs
 
     const line = document.createElementNS(SVG_NS, 'line')

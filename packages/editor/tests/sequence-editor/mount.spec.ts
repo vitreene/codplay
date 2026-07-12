@@ -20,16 +20,30 @@ beforeAll(() => {
 function minimalScene(): EditorScene {
   return {
     id: 'scene-1',
-    title: 'Scène minimale',
-    durationMs: 3000,
-    durationSource: 'arbitrary',
-    decors: {},
-    rootDecorId: null,
-    tracks: [
-      { id: 'item-1', kind: 'element', label: 'Item', visible: true, contentType: 'text', keyframes: [{ id: 'kf-1', timeMs: 0, decorId: null }] },
+    meta: {
+      title: 'Scène minimale',
+      durationMs: 3000,
+      durationSource: 'arbitrary',
+      timeUnit: 's',
+      capsuleOrder: 'forward',
+    },
+    items: [
+      {
+        id: 'item-1',
+        type: 'text',
+        label: 'Item',
+        parentId: null,
+        order: 'a',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'decor-1',
+        keyframes: [{ id: 'kf-1', timeMs: 0, decorId: 'decor-1' }],
+      },
     ],
-    cues: [],
-    markerTracks: [],
+    contents: {},
+    decors: { 'decor-1': { id: 'decor-1' } },
+    zones: {},
+    markerTracks: {},
   }
 }
 

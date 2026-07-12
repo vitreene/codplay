@@ -7,11 +7,9 @@ import {
   type PlayRange,
 } from './machine'
 import type {
-  EditorScene, TrackNode, TextCue, MarkerTrack,
-  AudioTrack, WaveformDataV1, TransitionDef, LayoutProfile, DisplayConfig,
+  EditorScene, Item, MarkerTrack, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
 import { applySnapToMs } from './machine'
-import { flattenTracks } from './utils'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
 
@@ -31,14 +29,18 @@ function genId(prefix: string): string {
 function emptyScene(): EditorScene {
   return {
     id: genId('scene'),
-    title: 'Untitled',
-    durationMs: 10000,
-    durationSource: 'arbitrary',
-    tracks: [],
+    meta: {
+      title: 'Untitled',
+      durationMs: 10000,
+      durationSource: 'arbitrary',
+      timeUnit: 's',
+      capsuleOrder: 'forward',
+    },
+    items: [],
+    contents: {},
     decors: {},
-    rootDecorId: null,
-    cues: [],
-    markerTracks: [],
+    zones: {},
+    markerTracks: {},
   }
 }
 
@@ -166,7 +168,7 @@ export class SequenceEditorController {
   setPlayRange(inMs: number, outMs: number): void {
     const clamped = {
       inMs: Math.max(0, Math.min(inMs, outMs)),
-      outMs: Math.min(outMs, this.getScene().durationMs),
+      outMs: Math.min(outMs, this.getScene().meta.durationMs),
     }
     if (clamped.outMs - clamped.inMs < 100) return  // ignore ranges under 100ms
     this.send({ type: 'PLAYRANGE.SET', inMs: clamped.inMs, outMs: clamped.outMs })
@@ -210,9 +212,9 @@ export class SequenceEditorController {
   }
 
   clipStartDraw(trackId: string, pointerMs: number): void {
-    const track = flattenTracks(this.getSnapshot().context.scene.tracks).find(t => t.id === trackId)
-    const introId = track?.keyframes.find(k => k.name === 'intro')?.id ?? ''
-    const outroId = track?.keyframes.find(k => k.name === 'outro')?.id ?? ''
+    const item = this.getSnapshot().context.scene.items.find(i => i.id === trackId)
+    const introId = item?.keyframes.find(k => k.name === 'intro')?.id ?? ''
+    const outroId = item?.keyframes.find(k => k.name === 'outro')?.id ?? ''
     this.send({ type: 'CLIP.START_DRAW', trackId, pointerMs, introId, outroId })
   }
 
@@ -283,33 +285,28 @@ export class SequenceEditorController {
     this.send({ type: 'KEYFRAME.RENAME', trackId, keyframeId, name })
   }
 
-  assignDecor(trackId: string, keyframeId: string, decorId: string | null): void {
+  assignDecor(trackId: string, keyframeId: string, decorId: string): void {
     this.send({ type: 'KEYFRAME.ASSIGN_DECOR', trackId, keyframeId, decorId })
   }
 
-  setTransitionIn(trackId: string, keyframeId: string, def: TransitionDef | null): void {
+  setTransitionIn(trackId: string, keyframeId: string, def: Transition | null): void {
     this.send({ type: 'KEYFRAME.SET_TRANSITION_IN', trackId, keyframeId, def })
   }
 
-  setTransitionOut(trackId: string, keyframeId: string, def: TransitionDef | null): void {
+  setTransitionOut(trackId: string, keyframeId: string, def: Transition | null): void {
     this.send({ type: 'KEYFRAME.SET_TRANSITION_OUT', trackId, keyframeId, def })
   }
 
-  // ── Decor registry ──────────────────────────────────────────────────────────
+  // ── Track (items) ───────────────────────────────────────────────────────────
 
-  registerDecor(decorId: string, data: Record<string, unknown>): void {
-    this.send({ type: 'DECOR.REGISTER', decorId, data })
-  }
-
-  getDecorData(decorId: string): Record<string, unknown> | null {
-    return this.getScene().decors[decorId]?.data ?? null
-  }
-
-  // ── Track tree ──────────────────────────────────────────────────────────────
-
-  addTrack(node: Omit<TrackNode, 'id' | 'keyframes'>, afterId?: string): string {
-    const id = genId('track')
-    this.send({ type: 'TRACK.ADD', node: { ...node, id }, afterId })
+  /**
+   * Ajoute un item — la position dans la fratrie (`order`) est de la responsabilité de l'appelant
+   * (façade centrale, hors périmètre du sequence-editor lui-même — ce contrôleur reste un îlot
+   * piloté, pas propriétaire de la politique d'ordre). `parentId: null` = enfant racine.
+   */
+  addTrack(item: Omit<Item, 'id' | 'keyframes'>): string {
+    const id = genId('item')
+    this.send({ type: 'TRACK.ADD', item: { ...item, id } })
     return id
   }
 
@@ -317,12 +314,9 @@ export class SequenceEditorController {
     this.send({ type: 'TRACK.REMOVE', trackId })
   }
 
-  moveTrack(trackId: string, afterId: string | null, parentId?: string): void {
-    this.send({ type: 'TRACK.MOVE', trackId, afterId, parentId })
-  }
-
-  nestTrack(trackId: string, capsuleId: string): void {
-    this.send({ type: 'TRACK.NEST_IN_CAPSULE', trackId, capsuleId })
+  /** Change le parent et/ou l'ordre d'un item — remplace l'ancien `moveTrack(trackId, afterId, parentId?)` (position relative dans un tableau `children`), plus de sens dans le modèle plat. */
+  moveTrack(trackId: string, parentId: string | null, order?: string): void {
+    this.send({ type: 'TRACK.MOVE', trackId, parentId, order })
   }
 
   toggleVisibility(trackId: string): void {
@@ -333,17 +327,7 @@ export class SequenceEditorController {
     this.send({ type: 'TRACK.RESET_KEYFRAMES', trackId })
   }
 
-  // ── Cues / Markers ──────────────────────────────────────────────────────────
-
-  addCue(cue: Omit<TextCue, 'id'>): string {
-    const id = genId('cue')
-    this.send({ type: 'CUE.ADD', cue: { ...cue, id } })
-    return id
-  }
-
-  removeCue(cueId: string): void {
-    this.send({ type: 'CUE.REMOVE', cueId })
-  }
+  // ── Markers ──────────────────────────────────────────────────────────────────
 
   addMarkerTrack(label: string, color?: string): string {
     const id = genId('mtrack')
@@ -386,23 +370,20 @@ export class SequenceEditorController {
     this.send({ type: 'KEYFRAME.DETACH_MARKER', trackId, keyframeId })
   }
 
-  // ── Audio ───────────────────────────────────────────────────────────────────
+  // ── Audio (item média désigné par `masterItemId` — document-model §"Le son master") ─────────
 
-  setAudio(track: Omit<AudioTrack, 'waveform'>): void {
-    this.send({ type: 'AUDIO.SET', track: { ...track } })
-  }
-
-  clearAudio(): void {
-    this.send({ type: 'AUDIO.CLEAR' })
-  }
-
-  setAudioWaveform(waveform: WaveformDataV1): void {
+  /**
+   * Écrit la waveform sur le `Content` de l'item désigné par `scene.masterItemId`. La désignation
+   * du master (poser `masterItemId`, créer l'item média lui-même) passe par la façade centrale —
+   * hors périmètre de ce contrôleur, qui ne fait qu'écrire sur un item déjà désigné.
+   */
+  setMasterWaveform(waveform: Waveform): void {
     this.send({ type: 'AUDIO.SET_WAVEFORM', waveform })
   }
 
   // ── Duration ─────────────────────────────────────────────────────────────────
 
-  setDuration(durationMs: number, source?: EditorScene['durationSource']): void {
+  setDuration(durationMs: number, source?: EditorScene['meta']['durationSource']): void {
     this.send({ type: 'SCENE.SET_DURATION', durationMs, source })
   }
 

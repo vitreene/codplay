@@ -1,4 +1,4 @@
-import type { EasingValue } from './types'
+import type { Easing } from './types'
 
 export const ZOOM_MIN_PX_PER_SEC = 10
 export const ZOOM_MAX_PX_PER_SEC = 800
@@ -12,7 +12,7 @@ export const VIRTUAL_SCROLL_BUFFER_ROWS = 3
 export const TIME_STEP_MS = 100
 
 export const DEFAULT_TRANSITION_DURATION_MS = 400
-export const DEFAULT_EASING: EasingValue = 'ease-in-out'
+export const DEFAULT_EASING: Easing = 'ease-in-out'
 
 export const LABEL_COLUMN_WIDTH_PX = 200
 export const RULER_HEIGHT_PX = 28

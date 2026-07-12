@@ -1,4 +1,4 @@
-import type { LayoutProfile, TrackNode, SnapPoint } from './types'
+import type { LayoutProfile, Item, SnapPoint } from './types'
 import { TIME_STEP_MS } from './constants'
 
 export function msToPixel(ms: number, pxPerSec: number): number {
@@ -21,17 +21,13 @@ export function clampMs(ms: number, minMs: number, maxMs: number): number {
   return Math.max(minMs, Math.min(maxMs, ms))
 }
 
-export function flattenTracks(tracks: TrackNode[]): TrackNode[] {
-  const result: TrackNode[] = []
-  for (const track of tracks) {
-    result.push(track)
-    if (track.children) result.push(...flattenTracks(track.children))
-  }
-  return result
+/** Every item directly under `parentId` (root items when `null`), sorted by their fractional `order` key — same patron as `build-scene.ts::childrenOf`. */
+export function childrenOf(items: Item[], parentId: string | null): Item[] {
+  return items.filter((item) => item.parentId === parentId).sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
 }
 
-export function getTrackRowHeight(track: TrackNode, profile: LayoutProfile): number {
-  return track.kind === 'capsule' ? profile.rowHeightCapsule : profile.rowHeightElement
+export function getTrackRowHeight(item: Item, profile: LayoutProfile): number {
+  return item.type === 'capsule' ? profile.rowHeightCapsule : profile.rowHeightElement
 }
 
 export function computeGraduationInterval(pxPerSec: number, levels: number[], minGapPx: number): number {
@@ -42,72 +38,57 @@ export function computeGraduationInterval(pxPerSec: number, levels: number[], mi
   return levels[levels.length - 1]
 }
 
-/** Returns the active clip bounds of the nearest ancestor capsule, or {0, durationMs}. */
+/** Returns the active clip bounds of the nearest ancestor capsule, or {0, durationMs}. A single `parentId` lookup, no tree walk. */
 export function findParentClipBounds(
-  trackId: string,
-  tracks: TrackNode[],
+  itemId: string,
+  items: Item[],
   durationMs: number,
 ): { minMs: number; maxMs: number } {
-  function search(nodes: TrackNode[]): TrackNode | null {
-    for (const node of nodes) {
-      if (node.children) {
-        for (const child of node.children) {
-          if (child.id === trackId || descendantIds(child).includes(trackId)) return node
-        }
-        const deeper = search(node.children)
-        if (deeper) return deeper
-      }
-    }
-    return null
-  }
-  function descendantIds(node: TrackNode): string[] {
-    const ids: string[] = [node.id]
-    for (const c of node.children ?? []) ids.push(...descendantIds(c))
-    return ids
-  }
-  const parent = search(tracks)
+  const item = items.find((i) => i.id === itemId)
+  const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { minMs: 0, maxMs: durationMs }
-  const intro = parent.keyframes.find(k => k.name === 'intro')
-  const outro = parent.keyframes.find(k => k.name === 'outro')
+  const intro = parent.keyframes.find((k) => k.name === 'intro')
+  const outro = parent.keyframes.find((k) => k.name === 'outro')
   return { minMs: intro?.timeMs ?? 0, maxMs: outro?.timeMs ?? durationMs }
 }
 
-/** Returns the intro/outro timeMs of the nearest ancestor capsule, or null if not set. */
+/** Returns the intro/outro timeMs of the nearest ancestor capsule, or null if not set. Same lookup as `findParentClipBounds`, no boundary defaults. */
 export function getParentClipMarkers(
-  trackId: string,
-  tracks: TrackNode[],
+  itemId: string,
+  items: Item[],
 ): { introMs: number | null; outroMs: number | null } {
-  function search(nodes: TrackNode[]): TrackNode | null {
-    for (const node of nodes) {
-      if (node.children) {
-        for (const child of node.children) {
-          if (child.id === trackId || descendantIds(child).includes(trackId)) return node
-        }
-        const deeper = search(node.children)
-        if (deeper) return deeper
-      }
-    }
-    return null
-  }
-  function descendantIds(node: TrackNode): string[] {
-    const ids: string[] = [node.id]
-    for (const c of node.children ?? []) ids.push(...descendantIds(c))
-    return ids
-  }
-  const parent = search(tracks)
+  const item = items.find((i) => i.id === itemId)
+  const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { introMs: null, outroMs: null }
   return {
-    introMs: parent.keyframes.find(k => k.name === 'intro')?.timeMs ?? null,
-    outroMs: parent.keyframes.find(k => k.name === 'outro')?.timeMs ?? null,
+    introMs: parent.keyframes.find((k) => k.name === 'intro')?.timeMs ?? null,
+    outroMs: parent.keyframes.find((k) => k.name === 'outro')?.timeMs ?? null,
   }
 }
 
-export function generateSnapPoints(tracks: TrackNode[]): SnapPoint[] {
+export function generateSnapPoints(items: Item[]): SnapPoint[] {
   const points: SnapPoint[] = []
-  for (const track of flattenTracks(tracks)) {
-    for (const kf of track.keyframes) {
+  for (const item of items) {
+    for (const kf of item.keyframes) {
       points.push({ timeMs: kf.timeMs, source: 'keyframe', id: kf.id })
     }
   }
   return points
+}
+
+/** Every descendant id of `itemId` (itself excluded), computed by repeated parentId lookups — no `children` field to walk. */
+export function descendantIds(items: Item[], itemId: string): string[] {
+  const ids: string[] = []
+  let frontier = [itemId]
+  while (frontier.length > 0) {
+    const next: string[] = []
+    for (const item of items) {
+      if (item.parentId !== null && frontier.includes(item.parentId)) {
+        ids.push(item.id)
+        next.push(item.id)
+      }
+    }
+    frontier = next
+  }
+  return ids
 }

@@ -16,7 +16,7 @@ const EDDY      = sceneEddy     as unknown as EditorScene
 describe('cycle de vie', () => {
   it('s\'instancie sans scène (scène vide générée)', () => {
     const ctrl = new SequenceEditorController()
-    expect(ctrl.getScene().tracks).toHaveLength(0)
+    expect(ctrl.getScene().items).toHaveLength(0)
     ctrl.destroy()
   })
 
@@ -107,7 +107,7 @@ describe('addKeyframe', () => {
   it('le kf avec cet id est bien dans la scène', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
     const id = ctrl.addKeyframe('track-01', 5000)
-    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === id)
+    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === id)
     expect(kf).toBeDefined()
     expect(kf!.timeMs).toBe(5000)
     ctrl.destroy()
@@ -126,7 +126,7 @@ describe('removeKeyframe', () => {
   it('supprime le kf ciblé', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
     ctrl.removeKeyframe('track-01', 'kf-02')
-    expect(ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
+    expect(ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
     ctrl.destroy()
   })
 
@@ -151,7 +151,7 @@ describe('moveKeyframe', () => {
   it('déplace kf-02 à 4000 ms', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
     ctrl.moveKeyframe('track-01', 'kf-02', 4000)
-    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
+    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.timeMs).toBe(4000)
     ctrl.destroy()
   })
@@ -164,55 +164,47 @@ describe('moveKeyframe', () => {
   })
 })
 
-// ─── Tracks ──────────────────────────────────────────────────────────────────
+// ─── Tracks (items) ─────────────────────────────────────────────────────────
 
-describe('addTrack / removeTrack', () => {
-  it('addTrack retourne un id et crée le track', () => {
+describe('addTrack / removeTrack / moveTrack', () => {
+  it('addTrack retourne un id et crée l\'item', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    const id = ctrl.addTrack({ kind: 'element', label: 'Nouveau', visible: true })
-    const track = ctrl.getScene().tracks.find(t => t.id === id)
-    expect(track).toBeDefined()
-    expect(track!.keyframes).toHaveLength(0)
+    const id = ctrl.addTrack({ type: 'text', label: 'Nouveau', parentId: null, order: 'a', visible: true, contentId: null, initialDecorId: 'd0' })
+    const item = ctrl.getScene().items.find(i => i.id === id)
+    expect(item).toBeDefined()
+    expect(item!.keyframes).toHaveLength(0)
     ctrl.destroy()
   })
 
-  it('removeTrack supprime le track', () => {
+  it('removeTrack supprime l\'item', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
     ctrl.removeTrack('track-01')
-    expect(ctrl.getScene().tracks.find(t => t.id === 'track-01')).toBeUndefined()
+    expect(ctrl.getScene().items.find(i => i.id === 'track-01')).toBeUndefined()
     ctrl.destroy()
   })
 
   it('toggleVisibility inverse visible', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    const before = ctrl.getScene().tracks[0]!.visible
+    const before = ctrl.getScene().items[0]!.visible
     ctrl.toggleVisibility('track-01')
-    expect(ctrl.getScene().tracks[0]!.visible).toBe(!before)
+    expect(ctrl.getScene().items[0]!.visible).toBe(!before)
+    ctrl.destroy()
+  })
+
+  it('moveTrack change le parentId (et l\'order si fourni) — remplace l\'ancien afterId/parentId relatif à un tableau children', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.moveTrack('track-cta', 'track-capsule-01', 'z')
+    const moved = ctrl.getScene().items.find(i => i.id === 'track-cta')!
+    expect(moved.parentId).toBe('track-capsule-01')
+    expect(moved.order).toBe('z')
     ctrl.destroy()
   })
 })
 
-// ─── Cues / Markers ──────────────────────────────────────────────────────────
-
-describe('addCue / removeCue', () => {
-  it('addCue retourne un id et ajoute le cue', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    const id = ctrl.addCue({ timeMs: 2000, label: 'Test' })
-    const cue = ctrl.getScene().cues.find(c => c.id === id)
-    expect(cue?.timeMs).toBe(2000)
-    ctrl.destroy()
-  })
-
-  it('removeCue retire le cue', () => {
-    const ctrl = new SequenceEditorController(EDDY)
-    ctrl.removeCue('cue-1000')
-    expect(ctrl.getScene().cues.find(c => c.id === 'cue-1000')).toBeUndefined()
-    ctrl.destroy()
-  })
-})
+// ─── Markers ─────────────────────────────────────────────────────────────────
 
 function findMarker(scene: EditorScene, markerId: string) {
-  for (const t of scene.markerTracks) {
+  for (const t of Object.values(scene.markerTracks)) {
     const m = t.markers.find(m => m.id === markerId)
     if (m) return m
   }
@@ -223,7 +215,7 @@ describe('addMarkerTrack / removeMarkerTrack / renameMarkerTrack / toggleMarkerT
   it('addMarkerTrack crée une piste vide visible', () => {
     const ctrl = new SequenceEditorController(EMPTY)
     const id = ctrl.addMarkerTrack('Visèmes')
-    const t = ctrl.getScene().markerTracks.find(t => t.id === id)
+    const t = ctrl.getScene().markerTracks[id]
     expect(t).toMatchObject({ label: 'Visèmes', visible: true, markers: [] })
     ctrl.destroy()
   })
@@ -231,14 +223,14 @@ describe('addMarkerTrack / removeMarkerTrack / renameMarkerTrack / toggleMarkerT
   it('renameMarkerTrack renomme la piste', () => {
     const ctrl = new SequenceEditorController(NESTED)
     ctrl.renameMarkerTrack('mtrack-01', 'Gestes')
-    expect(ctrl.getScene().markerTracks.find(t => t.id === 'mtrack-01')?.label).toBe('Gestes')
+    expect(ctrl.getScene().markerTracks['mtrack-01']?.label).toBe('Gestes')
     ctrl.destroy()
   })
 
   it('toggleMarkerTrackVisibility bascule visible', () => {
     const ctrl = new SequenceEditorController(NESTED)
     ctrl.toggleMarkerTrackVisibility('mtrack-01')
-    expect(ctrl.getScene().markerTracks.find(t => t.id === 'mtrack-01')?.visible).toBe(false)
+    expect(ctrl.getScene().markerTracks['mtrack-01']?.visible).toBe(false)
     ctrl.destroy()
   })
 
@@ -248,8 +240,8 @@ describe('addMarkerTrack / removeMarkerTrack / renameMarkerTrack / toggleMarkerT
     const mid = ctrl.addMarker(tid, 600, 'mid')
     ctrl.attachMarker('track-01', 'kf-02', mid)
     ctrl.removeMarkerTrack(tid)
-    expect(ctrl.getScene().markerTracks.find(t => t.id === tid)).toBeUndefined()
-    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
+    expect(ctrl.getScene().markerTracks[tid]).toBeUndefined()
+    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.markerId).toBeUndefined()
     expect(kf?.timeMs).toBe(600)
     ctrl.destroy()
@@ -279,7 +271,7 @@ describe('addMarker / moveMarker / removeMarker', () => {
     const mid = ctrl.addMarker(tid, 600, 'mid')
     ctrl.attachMarker('track-01', 'kf-02', mid)
     ctrl.moveMarker(mid, 800)
-    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
+    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.timeMs).toBe(800)
     ctrl.destroy()
   })
@@ -290,7 +282,7 @@ describe('addMarker / moveMarker / removeMarker', () => {
     const mid = ctrl.addMarker(tid, 600, 'mid')
     ctrl.attachMarker('track-01', 'kf-02', mid)
     ctrl.removeMarker(mid)
-    const kf = ctrl.getScene().tracks[0]!.keyframes.find(k => k.id === 'kf-02')
+    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.markerId).toBeUndefined()
     expect(kf?.timeMs).toBe(600)
     ctrl.destroy()
@@ -332,41 +324,28 @@ describe('selectMarker', () => {
   })
 })
 
-// ─── Décor registry ──────────────────────────────────────────────────────────
-
-describe('registerDecor / getDecorData', () => {
-  it('registerDecor puis getDecorData retourne les data', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.registerDecor('d-01', { color: 'red', opacity: 0.5 })
-    expect(ctrl.getDecorData('d-01')).toEqual({ color: 'red', opacity: 0.5 })
-    ctrl.destroy()
-  })
-
-  it('getDecorData sur id inexistant retourne null', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    expect(ctrl.getDecorData('nope')).toBeNull()
-    ctrl.destroy()
-  })
-})
-
-// ─── Audio ───────────────────────────────────────────────────────────────────
+// ─── Audio (item média + masterItemId, remplace l'ancien scene.audio) ────────
 
 describe('audio', () => {
-  it('setAudio / clearAudio', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.setAudio({ id: 'a1', label: 'VO', srcUrl: '/vo.mp3', durationMs: 8000 })
-    expect(ctrl.getScene().audio?.id).toBe('a1')
-    ctrl.clearAudio()
-    expect(ctrl.getScene().audio).toBeUndefined()
+  it('setMasterWaveform écrit sur le Content de l\'item désigné par masterItemId', () => {
+    const scene: EditorScene = {
+      ...EMPTY,
+      items: [{ id: 'media-1', type: 'media', parentId: null, order: 'a', visible: true, contentId: 'content-1', initialDecorId: 'd0', keyframes: [] }],
+      contents: { 'content-1': { id: 'content-1', type: 'media', source: '/vo.mp3' } },
+      masterItemId: 'media-1',
+    }
+    const ctrl = new SequenceEditorController(scene)
+    const wf = { version: 1 as const, sampleRate: 44100, durationSec: 8, points: 4, min: [-1, -1, -1, -1], max: [1, 1, 1, 1] }
+    ctrl.setMasterWaveform(wf)
+    expect(ctrl.getScene().contents['content-1']!.waveform?.points).toBe(4)
     ctrl.destroy()
   })
 
-  it('setAudioWaveform injecte la waveform', () => {
+  it('setMasterWaveform est un no-op sans masterItemId', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.setAudio({ id: 'a1', label: 'VO', srcUrl: '/vo.mp3', durationMs: 8000 })
-    const wf = { version: 1 as const, sampleRate: 44100, durationSec: 8, points: 4, min: [-1,-1,-1,-1], max: [1,1,1,1] }
-    ctrl.setAudioWaveform(wf)
-    expect(ctrl.getScene().audio?.waveform?.points).toBe(4)
+    const wf = { version: 1 as const, sampleRate: 44100, durationSec: 8, points: 4, min: [-1, -1, -1, -1], max: [1, 1, 1, 1] }
+    ctrl.setMasterWaveform(wf)
+    expect(ctrl.getScene().contents).toEqual({})
     ctrl.destroy()
   })
 })
@@ -394,9 +373,9 @@ describe('msToPixel / pixelToMs / snapToGrid', () => {
     ctrl.destroy()
   })
 
-  it('snapToGrid snap sur un cue proche', () => {
+  it('snapToGrid snap sur un marqueur proche (scene-eddy-ref : marqueur à 1000 ms, ex-cue)', () => {
     const ctrl = new SequenceEditorController(EDDY)
-    // cue-1000 à 1000 ms. pixelsPerMs=0.08, snapThreshold=8px → thresholdMs=100
+    // marker à 1000 ms. pixelsPerMs=0.08, snapThreshold=8px → thresholdMs=100
     // 1050 est dans [900,1100] → snappé à 1000
     expect(ctrl.snapToGrid(1050)).toBe(1000)
     ctrl.destroy()
@@ -404,7 +383,7 @@ describe('msToPixel / pixelToMs / snapToGrid', () => {
 
   it('snapToGrid arrondi à 100 ms si hors seuil', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    // Pas de cues : arrondi à 100 ms
+    // Pas de marqueurs/keyframes : arrondi à 100 ms
     expect(ctrl.snapToGrid(3450)).toBe(3500)
     ctrl.destroy()
   })

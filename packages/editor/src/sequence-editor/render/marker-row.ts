@@ -21,7 +21,7 @@ export function renderMarkerTrackRows(
   const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightMarkers
 
-  for (const track of scene.markerTracks) {
+  for (const track of Object.values(scene.markerTracks)) {
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('seq-markers')
     if (!track.visible) svg.classList.add('seq-markers--hidden')

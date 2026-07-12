@@ -1,171 +1,152 @@
 {
   "id": "scene-eddy-ref",
-  "title": "Eddy scène 02 — référence",
-  "durationMs": 5000,
-  "durationSource": "arbitrary",
-  "tracks": [
+  "meta": {
+    "title": "Eddy scène 02 — référence",
+    "durationMs": 5000,
+    "durationSource": "arbitrary",
+    "timeUnit": "s",
+    "capsuleOrder": "forward"
+  },
+  "items": [
     {
       "id": "track-root",
-      "kind": "element",
-      "contentType": "image",
+      "type": "image",
       "label": "root (container)",
+      "parentId": null,
+      "order": "a",
       "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-root-00",
       "keyframes": [
         {
           "id": "kf-root-00",
           "timeMs": 0,
           "name": "intro",
           "decorId": "decor-root-00",
-          "transitionOut": {
-            "kind": "named",
-            "name": "fade",
-            "durationMs": 400
-          }
+          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 400 }
         },
         {
           "id": "kf-root-01",
           "timeMs": 1000,
           "decorId": "decor-root-01",
-          "transitionOut": {
-            "kind": "interpolated",
-            "durationMs": 3500,
-            "easing": "ease-in-out"
-          }
+          "transitionOut": { "kind": "interpolated", "durationMs": 3500, "easing": "ease-in-out" }
         }
       ]
     },
     {
       "id": "track-capsule",
-      "kind": "capsule",
-      "capsuleType": "liste",
+      "type": "capsule",
       "label": "capsule01",
+      "parentId": null,
+      "order": "b",
       "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-cap-00",
+      "capsule": { "kind": "liste", "distribution": { "mode": "sequential" } },
       "keyframes": [
         {
           "id": "kf-cap-00",
           "timeMs": 0,
           "name": "intro",
-          "decorId": null,
-          "transitionOut": {
-            "kind": "named",
-            "name": "fade",
-            "durationMs": 400
-          }
+          "decorId": "decor-cap-00",
+          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 400 }
         }
-      ],
-      "children": [
+      ]
+    },
+    {
+      "id": "track-img-0",
+      "type": "image",
+      "label": "img-0",
+      "parentId": "track-capsule",
+      "order": "a",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img0-00",
+      "keyframes": [
         {
-          "id": "track-img-0",
-          "kind": "element",
-          "contentType": "image",
-          "label": "img-0",
-          "visible": true,
-          "keyframes": [
-            {
-              "id": "kf-img0-00",
-              "timeMs": 0,
-              "name": "intro",
-              "decorId": "decor-img0-00",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-left",
-                "durationMs": 500
-              }
-            },
-            {
-              "id": "kf-img0-01",
-              "timeMs": 1000,
-              "name": "outro",
-              "decorId": "decor-img0-01",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-down",
-                "durationMs": 800
-              }
-            }
-          ]
+          "id": "kf-img0-00",
+          "timeMs": 0,
+          "name": "intro",
+          "decorId": "decor-img0-00",
+          "transitionOut": { "kind": "named", "name": "swipe-left", "durationMs": 500 }
         },
         {
-          "id": "track-img-1",
-          "kind": "element",
-          "contentType": "image",
-          "label": "img-1",
-          "visible": true,
-          "keyframes": [
-            {
-              "id": "kf-img1-00",
-              "timeMs": 1000,
-              "name": "intro",
-              "decorId": "decor-img1-00",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-left",
-                "durationMs": 500
-              }
-            },
-            {
-              "id": "kf-img1-01",
-              "timeMs": 2000,
-              "name": "outro",
-              "decorId": "decor-img1-01",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-down",
-                "durationMs": 800
-              }
-            }
-          ]
+          "id": "kf-img0-01",
+          "timeMs": 1000,
+          "name": "outro",
+          "decorId": "decor-img0-01",
+          "transitionOut": { "kind": "named", "name": "swipe-down", "durationMs": 800 }
+        }
+      ]
+    },
+    {
+      "id": "track-img-1",
+      "type": "image",
+      "label": "img-1",
+      "parentId": "track-capsule",
+      "order": "b",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img1-00",
+      "keyframes": [
+        {
+          "id": "kf-img1-00",
+          "timeMs": 1000,
+          "name": "intro",
+          "decorId": "decor-img1-00",
+          "transitionOut": { "kind": "named", "name": "swipe-left", "durationMs": 500 }
         },
         {
-          "id": "track-img-2",
-          "kind": "element",
-          "contentType": "image",
-          "label": "img-2",
-          "visible": true,
-          "keyframes": [
-            {
-              "id": "kf-img2-00",
-              "timeMs": 2000,
-              "name": "intro",
-              "decorId": "decor-img2-00",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-left",
-                "durationMs": 500
-              }
-            },
-            {
-              "id": "kf-img2-01",
-              "timeMs": 3000,
-              "name": "outro",
-              "decorId": "decor-img2-01",
-              "transitionOut": {
-                "kind": "named",
-                "name": "swipe-down",
-                "durationMs": 800
-              }
-            }
-          ]
+          "id": "kf-img1-01",
+          "timeMs": 2000,
+          "name": "outro",
+          "decorId": "decor-img1-01",
+          "transitionOut": { "kind": "named", "name": "swipe-down", "durationMs": 800 }
+        }
+      ]
+    },
+    {
+      "id": "track-img-2",
+      "type": "image",
+      "label": "img-2",
+      "parentId": "track-capsule",
+      "order": "c",
+      "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-img2-00",
+      "keyframes": [
+        {
+          "id": "kf-img2-00",
+          "timeMs": 2000,
+          "name": "intro",
+          "decorId": "decor-img2-00",
+          "transitionOut": { "kind": "named", "name": "swipe-left", "durationMs": 500 }
+        },
+        {
+          "id": "kf-img2-01",
+          "timeMs": 3000,
+          "name": "outro",
+          "decorId": "decor-img2-01",
+          "transitionOut": { "kind": "named", "name": "swipe-down", "durationMs": 800 }
         }
       ]
     },
     {
       "id": "track-lottie",
-      "kind": "element",
-      "contentType": "media",
+      "type": "media",
       "label": "lot-1 (lottie)",
+      "parentId": null,
+      "order": "c",
       "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-lot-00",
       "keyframes": [
         {
           "id": "kf-lot-00",
           "timeMs": 0,
           "name": "intro",
           "decorId": "decor-lot-00",
-          "transitionOut": {
-            "kind": "named",
-            "name": "fade",
-            "durationMs": 400
-          }
+          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 400 }
         },
         {
           "id": "kf-lot-01",
@@ -176,21 +157,20 @@
     },
     {
       "id": "track-video",
-      "kind": "element",
-      "contentType": "video",
+      "type": "video",
       "label": "vid-1",
+      "parentId": null,
+      "order": "d",
       "visible": true,
+      "contentId": null,
+      "initialDecorId": "decor-vid-00",
       "keyframes": [
         {
           "id": "kf-vid-00",
           "timeMs": 0,
           "name": "intro",
           "decorId": "decor-vid-00",
-          "transitionOut": {
-            "kind": "named",
-            "name": "fade",
-            "durationMs": 400
-          }
+          "transitionOut": { "kind": "named", "name": "fade", "durationMs": 400 }
         },
         {
           "id": "kf-vid-01",
@@ -200,92 +180,37 @@
       ]
     }
   ],
+  "contents": {},
   "decors": {
-    "decor-root-00": {
-      "id": "decor-root-00",
-      "data": {}
-    },
-    "decor-root-01": {
-      "id": "decor-root-01",
-      "data": {}
-    },
-    "decor-img0-00": {
-      "id": "decor-img0-00",
-      "data": {}
-    },
-    "decor-img0-01": {
-      "id": "decor-img0-01",
-      "data": {}
-    },
-    "decor-img1-00": {
-      "id": "decor-img1-00",
-      "data": {}
-    },
-    "decor-img1-01": {
-      "id": "decor-img1-01",
-      "data": {}
-    },
-    "decor-img2-00": {
-      "id": "decor-img2-00",
-      "data": {}
-    },
-    "decor-img2-01": {
-      "id": "decor-img2-01",
-      "data": {}
-    },
-    "decor-lot-00": {
-      "id": "decor-lot-00",
-      "data": {}
-    },
-    "decor-lot-01": {
-      "id": "decor-lot-01",
-      "data": {}
-    },
-    "decor-vid-00": {
-      "id": "decor-vid-00",
-      "data": {}
-    },
-    "decor-vid-01": {
-      "id": "decor-vid-01",
-      "data": {}
-    }
+    "decor-root-00": { "id": "decor-root-00" },
+    "decor-root-01": { "id": "decor-root-01" },
+    "decor-cap-00": { "id": "decor-cap-00" },
+    "decor-img0-00": { "id": "decor-img0-00" },
+    "decor-img0-01": { "id": "decor-img0-01" },
+    "decor-img1-00": { "id": "decor-img1-00" },
+    "decor-img1-01": { "id": "decor-img1-01" },
+    "decor-img2-00": { "id": "decor-img2-00" },
+    "decor-img2-01": { "id": "decor-img2-01" },
+    "decor-lot-00": { "id": "decor-lot-00" },
+    "decor-lot-01": { "id": "decor-lot-01" },
+    "decor-vid-00": { "id": "decor-vid-00" },
+    "decor-vid-01": { "id": "decor-vid-01" }
   },
-  "cues": [
-    {
-      "id": "cue-0000",
-      "timeMs": 0,
-      "label": "0"
-    },
-    {
-      "id": "cue-1000",
-      "timeMs": 1000,
-      "label": "1000"
-    },
-    {
-      "id": "cue-1500",
-      "timeMs": 1500,
-      "label": "1500"
-    },
-    {
-      "id": "cue-2000",
-      "timeMs": 2000,
-      "label": "2000"
-    },
-    {
-      "id": "cue-3000",
-      "timeMs": 3000,
-      "label": "3000"
-    },
-    {
-      "id": "cue-4000",
-      "timeMs": 4000,
-      "label": "4000"
-    },
-    {
-      "id": "cue-5000",
-      "timeMs": 5000,
-      "label": "5000"
+  "zones": {},
+  "markerTracks": {
+    "mtrack-cues": {
+      "id": "mtrack-cues",
+      "label": "Repères",
+      "visible": true,
+      "markers": [
+        { "id": "cue-0000", "timeMs": 0, "label": "0" },
+        { "id": "cue-1000", "timeMs": 1000, "label": "1000" },
+        { "id": "cue-1500", "timeMs": 1500, "label": "1500" },
+        { "id": "cue-2000", "timeMs": 2000, "label": "2000" },
+        { "id": "cue-3000", "timeMs": 3000, "label": "3000" },
+        { "id": "cue-4000", "timeMs": 4000, "label": "4000" },
+        { "id": "cue-5000", "timeMs": 5000, "label": "5000" }
+      ]
     }
-  ],
-  "markerTracks": []
+  }
 }

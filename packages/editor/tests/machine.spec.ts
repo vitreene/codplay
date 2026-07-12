@@ -7,8 +7,8 @@ import sceneEmpty from '../src/sequence-editor/fixtures/scene-empty.json'
 import sceneNested from '../src/sequence-editor/fixtures/scene-nested-capsule.json'
 
 const ONE_TRACK = sceneOneTrack as unknown as EditorScene    // 3 kf à 0, 600, 9000 ms, durationMs 10000
-const EMPTY = sceneEmpty as unknown as EditorScene           // 0 tracks, durationMs 10000
-const NESTED = sceneNested as unknown as EditorScene         // tracks avec capsule imbriquée
+const EMPTY = sceneEmpty as unknown as EditorScene           // 0 items, durationMs 10000
+const NESTED = sceneNested as unknown as EditorScene         // items avec capsule imbriquée (parentId)
 
 function boot(scene: EditorScene, viewWidthPx = 800) {
   const actor = createActor(sequenceEditorMachine, { input: { scene, viewWidthPx } })
@@ -22,18 +22,18 @@ describe('KEYFRAME.ADD', () => {
   it('insère un keyframe et le trie par timeMs', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 3000 })
-    const track = actor.getSnapshot().context.scene.tracks.find(t => t.id === 'track-01')!
-    expect(track.keyframes).toHaveLength(4)
-    const times = track.keyframes.map(k => k.timeMs)
+    const item = actor.getSnapshot().context.scene.items.find(i => i.id === 'track-01')!
+    expect(item.keyframes).toHaveLength(4)
+    const times = item.keyframes.map(k => k.timeMs)
     expect(times).toEqual([...times].sort((a, b) => a - b))
-    expect(track.keyframes.find(k => k.timeMs === 3000)).toBeDefined()
+    expect(item.keyframes.find(k => k.timeMs === 3000)).toBeDefined()
     actor.stop()
   })
 
   it('clamp le timeMs à [0, durationMs]', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 99999 })
-    const kf = actor.getSnapshot().context.scene.tracks[0]!.keyframes.find(
+    const kf = actor.getSnapshot().context.scene.items[0]!.keyframes.find(
       k => k.timeMs === 10000,
     )
     expect(kf).toBeDefined()
@@ -61,9 +61,9 @@ describe('KEYFRAME.REMOVE', () => {
   it('supprime le keyframe ciblé', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'KEYFRAME.REMOVE', trackId: 'track-01', keyframeId: 'kf-02' })
-    const track = actor.getSnapshot().context.scene.tracks[0]!
-    expect(track.keyframes).toHaveLength(2)
-    expect(track.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
+    const item = actor.getSnapshot().context.scene.items[0]!
+    expect(item.keyframes).toHaveLength(2)
+    expect(item.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
     actor.stop()
   })
 
@@ -104,16 +104,19 @@ describe('drag keyframe', () => {
     actor.stop()
   })
 
-  it('DRAG.MOVE snap sur un cue à portée', () => {
-    // ONE_TRACK n'a pas de cues — ajouter un cue à 3000 ms, puis dragger à 3020 ms
+  it('DRAG.MOVE snap sur un marqueur à portée', () => {
+    // ONE_TRACK n'a pas de piste de marqueurs — en ajouter une, puis dragger à portée d'un marqueur.
+    // Remplace l'ancien `CUE.ADD` (supprimé — les cues vivent désormais dans `Content`, par item
+    // média ; un point d'aimantation autoportant sur la scène est un marqueur, `markerTracks`).
     const actor = boot(ONE_TRACK)
-    actor.send({ type: 'CUE.ADD', cue: { id: 'cue-test', timeMs: 3000, label: 'test' } })
+    actor.send({ type: 'MARKER_TRACK.ADD', track: { id: 'mt-test', label: 'test', visible: true, markers: [] } })
+    actor.send({ type: 'MARKER.ADD', markerTrackId: 'mt-test', marker: { id: 'marker-test', timeMs: 3000, label: 'test' } })
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
     // avec ZOOM_DEFAULT=80px/s et snapThresholdPx=8, threshold=100ms.  3020 est dans [2900,3100]
     actor.send({ type: 'DRAG.MOVE', pointerMs: 3020 })
     const i = actor.getSnapshot().context.interaction!
     if (i.kind === 'dragging-keyframe') {
-      expect(i.currentMs).toBe(3000)   // snappé sur le cue
+      expect(i.currentMs).toBe(3000)   // snappé sur le marqueur
     }
     actor.stop()
   })
@@ -124,10 +127,10 @@ describe('drag keyframe', () => {
     actor.send({ type: 'DRAG.MOVE', pointerMs: 4000 })
     actor.send({ type: 'DRAG.END' })
     expect(actor.getSnapshot().value).toBe('idle')
-    const track = actor.getSnapshot().context.scene.tracks[0]!
-    const kf = track.keyframes.find(k => k.id === 'kf-02')
+    const item = actor.getSnapshot().context.scene.items[0]!
+    const kf = item.keyframes.find(k => k.id === 'kf-02')
     expect(kf?.timeMs).toBe(4000)
-    const times = track.keyframes.map(k => k.timeMs)
+    const times = item.keyframes.map(k => k.timeMs)
     expect(times).toEqual([...times].sort((a, b) => a - b))
     actor.stop()
   })
@@ -169,7 +172,7 @@ describe('clip draw', () => {
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 3000 })
     actor.send({ type: 'CLIP.DRAW_END' })
     expect(actor.getSnapshot().value).toBe('idle')
-    const kfs = actor.getSnapshot().context.scene.tracks[0]!.keyframes
+    const kfs = actor.getSnapshot().context.scene.items[0]!.keyframes
     const intro = kfs.find(k => k.id === 'new-intro')
     const outro = kfs.find(k => k.id === 'new-outro')
     expect(intro?.timeMs).toBe(1000)
@@ -185,7 +188,7 @@ describe('clip draw', () => {
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 4000, introId: 'rev-i', outroId: 'rev-o' })
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
     actor.send({ type: 'CLIP.DRAW_END' })
-    const kfs = actor.getSnapshot().context.scene.tracks[0]!.keyframes
+    const kfs = actor.getSnapshot().context.scene.items[0]!.keyframes
     const intro = kfs.find(k => k.id === 'rev-i')
     const outro = kfs.find(k => k.id === 'rev-o')
     expect(intro?.timeMs).toBe(2000)   // min
@@ -293,7 +296,7 @@ describe('playhead', () => {
     const actor = boot(EMPTY)
     actor.send({ type: 'PLAYHEAD.START_PLAY' })
     actor.send({ type: 'PLAYHEAD.TICK', deltaMs: 99999 })
-    expect(actor.getSnapshot().context.playheadMs).toBe(EMPTY.durationMs)
+    expect(actor.getSnapshot().context.playheadMs).toBe(EMPTY.meta.durationMs)
     actor.stop()
   })
 
@@ -317,6 +320,31 @@ describe('SCENE.LOAD', () => {
     expect(ctx.scene.id).toBe(NESTED.id)
     expect(ctx.playheadMs).toBe(0)
     expect(ctx.selection).toEqual({ trackId: null, keyframeId: null, markerId: null })
+    actor.stop()
+  })
+})
+
+// ─── Nested capsule (parentId-derived tree, ex-`children`) ───────────────────
+
+describe('scène imbriquée (scene-nested-capsule)', () => {
+  it('les enfants de la capsule sont retrouvés par parentId (pas de champ children)', () => {
+    const actor = boot(NESTED)
+    const capsule = actor.getSnapshot().context.scene.items.find(i => i.id === 'track-capsule-01')!
+    const children = actor.getSnapshot().context.scene.items.filter(i => i.parentId === capsule.id)
+    expect(children.map(c => c.id).sort()).toEqual(['track-item-01', 'track-item-02'])
+    actor.stop()
+  })
+
+  it('TRACK.REMOVE sur la capsule retire aussi ses descendants', () => {
+    const actor = boot(NESTED)
+    actor.send({ type: 'TRACK.REMOVE', trackId: 'track-capsule-01' })
+    const ids = actor.getSnapshot().context.scene.items.map(i => i.id)
+    expect(ids).not.toContain('track-capsule-01')
+    expect(ids).not.toContain('track-item-01')
+    expect(ids).not.toContain('track-item-02')
+    // les items non descendants (fond, CTA) survivent
+    expect(ids).toContain('track-bg')
+    expect(ids).toContain('track-cta')
     actor.stop()
   })
 })

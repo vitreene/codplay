@@ -166,6 +166,15 @@ EditorScene {
   contents: Record<string, Content>   // indexé par contentId
   decors:   Record<string, Decor>     // indexé par decorId
   zones:    Record<string, Zone>      // indexé par zoneId
+  markerTracks: Record<string, MarkerTrack>   // indexé par markerTrackId — marqueurs libres sur la
+                                       //   timeline, INDÉPENDANTS de tout item/média (même patron
+                                       //   que `zones` : une table référencée à côté de l'arbre
+                                       //   d'items, pas une extension de `Content`/`Cue` — un
+                                       //   marqueur n'est pas la transcription d'une source, ajouté
+                                       //   par l'auteur librement sur la timeline). Ajouté 2026-07-13,
+                                       //   migration sequence-editor — la fonctionnalité existait déjà
+                                       //   côté sequence-editor (ancien `EditorScene.markerTracks`),
+                                       //   ce document ne faisait que ne pas encore la couvrir.
   rootDecorId?: string                // → decors — décor de la capsule racine IMPLICITE (jamais un
                                        //   item, jamais vue/autorée par l'auteur). Posé une seule
                                        //   fois, jamais keyframé — même nature que le décor initial
@@ -173,6 +182,21 @@ EditorScene {
                                        //   pas d'initialDecorId propre : ce champ en tient lieu.
   masterItemId?: string               // PROVISOIRE — → l'item média « master » (piste dédiée),
                                        //   facultatif. Ne survivra PAS au multipiste (voir note).
+}
+
+MarkerTrack {                         // une piste de marqueurs (regroupement visuel dans la timeline)
+  id: string
+  label: string
+  color?: string                      // couleur par défaut des marqueurs de cette piste
+  visible: boolean
+  markers: Marker[]
+}
+
+Marker {                              // un repère temporel ponctuel, libre (pas de transcription)
+  id: string
+  timeMs: number
+  label: string
+  color?: string                      // surcharge la couleur de la piste
 }
 
 SceneMeta {                           // réglages d'APP (le Builder en projette une part vers Codplay)
@@ -190,6 +214,14 @@ SceneMeta {                           // réglages d'APP (le Builder en projette
 Item {
   id: string                          // = id du perso au build
   type: ItemType                      // spécifique côté ed2 ; Codplay unifie media/video au build
+  label?: string                      // libellé D'AFFICHAGE libre côté timeline (sequence-editor) —
+                                       //   PAS le contenu (celui-ci vit dans Content). L'auteur peut
+                                       //   renommer un item sans changer ce qu'il montre (ex. "Texte
+                                       //   d'intro" indépendamment du texte réellement affiché).
+                                       //   Absent → l'éditeur dérive un libellé d'affichage depuis
+                                       //   Content/type (troncature du texte, nom de source média,
+                                       //   badge de type pour une capsule) plutôt que d'afficher un
+                                       //   vide. Ajouté 2026-07-13, migration sequence-editor.
   parentId: string | null             // null = enfant de la capsule racine
   order: string                       // clé textuelle fractionnaire ("a","b","ab"…)
   visible: boolean                    // affichage dans l'éditeur (pas de rendu)
@@ -298,6 +330,8 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
   - **`capsule` → `Item.capsule`** : les réglages d'une capsule sont **statiques** (définis une fois, jamais keyframés) et **uniques à l'item** — leur place est sur l'item (`CapsuleDef`), pas dans la table `decors` faite pour l'aspect variable. L'ancien `CapsulePatch` est **fusionné** dans `CapsuleDef` (plus de dualité def/patch). `capsule` n'a pas vocation à bouger dans le temps → hors décor.
   - **Évolution future possible (notée, pas v1)** : un lien **Content↔Decor** *pourrait* revenir pour du **changement de contenu (texte) via l'interface** — Codplay sait gérer un changement de content. Mais ce serait alors une **référence de content pilotée par keyframe** (le décor d'un kf pointe vers un content différent), pas un champ `text` brut réintroduit dans Decor. Réservé à un besoin réel (cf. discussion : changement de content pas dans l'éditeur en v1) ; ne pas l'anticiper dans le modèle.
 - **`initialDecorId` (item) et `EditorScene.rootDecorId` (racine implicite) jouent le même rôle** — un décor de base, posé une fois, jamais keyframé. Séparés parce que la racine n'est **pas** un item (§ »racine» ci-dessus) : elle n'a donc pas de champ `initialDecorId` propre, d'où `rootDecorId` porté directement par `EditorScene`.
+- **`Item.label` est un libellé d'affichage, pas du contenu** — distinct de `Content.text` : renommer une piste dans la timeline ne change jamais ce que l'item montre. Optionnel : l'éditeur dérive un affichage par défaut (troncature de `Content.text`, nom de source, badge de type) quand absent, plutôt que d'imposer sa saisie.
+- **`markerTracks` est une table indépendante, pas liée aux items/médias** — contrairement à `Cue` (qui vit dans `Content`, parce qu'une cue est la transcription d'une source précise), un marqueur est posé librement par l'auteur sur la timeline, sans rattachement à un média. D'où sa place à côté de `zones` (autre table référencée indépendante des items), pas dans `Content`.
 
 ---
 

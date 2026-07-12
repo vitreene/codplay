@@ -1,10 +1,15 @@
 {
   "id": "scene-empty",
-  "title": "Scène vide",
-  "durationMs": 10000,
-  "durationSource": "arbitrary",
-  "tracks": [],
+  "meta": {
+    "title": "Scène vide",
+    "durationMs": 10000,
+    "durationSource": "arbitrary",
+    "timeUnit": "s",
+    "capsuleOrder": "forward"
+  },
+  "items": [],
+  "contents": {},
   "decors": {},
-  "cues": [],
-  "markerTracks": []
+  "zones": {},
+  "markerTracks": {}
 }
