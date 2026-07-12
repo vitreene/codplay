@@ -1,0 +1,70 @@
+/* ── Variables ──────────────────────────────────────────────────────────── */
+:root {
+  --app-bg: #111827;
+  --app-border: #1f2937;
+  --app-text: #f9fafb;
+  --app-text-muted: #9ca3af;
+
+  --app-font: ui-sans-serif, system-ui, sans-serif;
+  --app-font-size: 13px;
+}
+
+/* ── Grille de page ─────────────────────────────────────────────────────── */
+.app-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr 280px;
+  grid-template-rows: auto 1fr auto auto;
+  grid-template-areas:
+    'menu   menu   menu'
+    'chutier scene panel'
+    'timeline timeline timeline'
+    'telco  telco  telco';
+  width: 100vw;
+  height: 100vh;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--app-font);
+  font-size: var(--app-font-size);
+}
+
+.app-region {
+  display: flex;
+  border: 1px solid var(--app-border);
+  overflow: auto;
+}
+
+.app-region--menu {
+  grid-area: menu;
+}
+
+.app-region--chutier {
+  grid-area: chutier;
+}
+
+.app-region--scene {
+  grid-area: scene;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-region--panel {
+  grid-area: panel;
+}
+
+.app-region--timeline {
+  grid-area: timeline;
+  min-height: 160px;
+}
+
+.app-region--telco {
+  grid-area: telco;
+}
+
+/* ── Contenu de démonstration (étape 2, temporaire) ────────────────────────── */
+.app-demo-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  width: 100%;
+}

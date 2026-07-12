@@ -3,7 +3,7 @@ import { CapsuleDistribution, CapsulePreset, SceneDocEditor, validateSceneDoc } 
 import type { AutoCapsuleChildElementArtifact, AutoCapsuleChildInput, AutoCapsuleEventInput, AutoCapsuleType } from '@codplay/capsule-automation'
 import type { CapsuleKind } from '@codplay/scene-factory'
 import type { Perso, SceneDef, StoryDef } from 'codplay/builder/types'
-import type { EditorScene, Keyframe, TrackDistribution, TrackNode } from '../sequence-editor/types'
+import type { CapsuleDef, Content, Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
 
 /**
  * ed2 scenes are single-story (cf `2026-07-08-builder-plan.md` §2) — no straps, no listen.
@@ -11,8 +11,8 @@ import type { EditorScene, Keyframe, TrackDistribution, TrackNode } from '../seq
 const ROOT_STORY_ID = 'story-main'
 
 /**
- * `AutoCapsuleType` (`capsule-automation`) and `CapsuleKind` (`scene-factory`, `sequence-editor`'s
- * own re-export) are two separately declared types sharing the same 5 literal strings
+ * `AutoCapsuleType` (`capsule-automation`) and `CapsuleKind` (`scene-factory`, re-exported by
+ * `app/commands/types.ts`) are two separately declared types sharing the same 5 literal strings
  * (`carousel`/`rangee`/`liste`/`grille`/`card`, confirmed against `capsule-automation`'s own type
  * registry) — the two packages are deliberately decoupled (same reasoning as capsule-automation
  * losing `TIME_MODE`: each keeps its own concern, grid/placement/CSS vs. timing). This is the ONE
@@ -55,37 +55,39 @@ export type BuildSceneResult = {
 /**
  * # The ed2 Builder — what it does, and how
  *
- * `buildSceneDoc()` is the single entry point: it takes one authored `EditorScene` (the data
- * model `sequence-editor`/`decor-editor` produce) and returns one Codplay `SceneDef` ready to
- * compile and play — plus the CSS the scene needs, as a separate string (see `styleSheet` below).
+ * `buildSceneDoc()` is the single entry point: it takes one authored `EditorScene`
+ * (`app/2026-07-11-ed2-document-model.md`, the normative model) and returns one Codplay `SceneDef`
+ * ready to compile and play — plus the CSS the scene needs, as a separate string (see `styleSheet`
+ * below).
  *
  * ## The shape of an `EditorScene`
  *
- * An `EditorScene` is a flat scene duration (`durationMs`) plus a tree of `TrackNode`s
- * (`scene.tracks`). Each `TrackNode` is one of two kinds:
- * - `kind: 'element'` — a leaf item (today: `contentType: 'text'` only, §5 of the plan; other
- *   content types throw rather than silently falling back to something — `mapContentTypeToPersoType`).
- * - `kind: 'capsule'` — a container with its own `children: TrackNode[]`, its own `capsuleType`
- *   (`carousel`/`rangee`/`liste`/`grille`/`card`), and its own `keyframes` (when it appears/
- *   disappears). A capsule can contain other capsules, to any depth — `capsule-a` holding
- *   `capsule-b` holding a leaf item is exactly as valid as one flat level.
+ * An `EditorScene` is a flat scene duration (`meta.durationMs`) plus a FLAT list of `Item`s
+ * (`scene.items`) — the tree is derived from `parentId` + `order` (a fractional sort key), never
+ * stored as a structure. Each `Item` is one of two kinds:
+ * - a leaf item (today: `type: 'text'` only, §5 of the plan; other types throw rather than
+ *   silently falling back to something — `mapItemTypeToPersoType`).
+ * - `type: 'capsule'` — a container with its own `Item.capsule: CapsuleDef` (sub-type, grid,
+ *   distribution), whose children are every OTHER item sharing this item's `id` as `parentId`. A
+ *   capsule can contain other capsules, to any depth — nesting comes from the parent chain, not
+ *   from a structural `children` field.
  *
  * Every scene also has an IMPLICIT root capsule the author never sees or authors directly (§6 of
  * `2026-07-08-capsule-spec.md`) — it's the one perso that actually bridges to the player's real
- * `mountTarget`, and every top-level track in `scene.tracks` is really a child of it.
+ * `mountTarget`; every item with `parentId: null` is really a child of it.
  *
  * ## The pipeline, capsule by capsule
  *
  * Every capsule (the implicit root, or any authored one) goes through the exact same 3-stage
  * resolution — `resolveCapsule()` is that one function, called once per capsule level:
  *
- * 1. **Timing** — `CapsulePreset.resolve()` turns a capsule's `capsuleType` + its author-chosen
- *    `distribution` setting (`sequential` or `stagger`, `TrackNode.distribution`) into the concrete
- *    input `CapsuleDistribution.compute()` needs. Only `carousel` has a real structural default
- *    (its grid is forced to one cell, so children MUST take turns) — every other type requires an
- *    explicit `distribution`, or the Builder throws rather than guessing (Principe B). This gives
- *    every child of the capsule its resolved `{introMs, outroMs}` — when it appears/disappears,
- *    relative to the capsule's own start.
+ * 1. **Timing** — `CapsulePreset.resolve()` turns a capsule's `CapsuleDef.kind` + its author-chosen
+ *    `distribution` setting (`sequential` or `stagger`) into the concrete input
+ *    `CapsuleDistribution.compute()` needs. Only `carousel` has a real structural default (its grid
+ *    is forced to one cell, so children MUST take turns) — every other type requires an explicit
+ *    `distribution`, or the Builder throws rather than guessing (Principe B). This gives every
+ *    child of the capsule its resolved `{introMs, outroMs}` — when it appears/disappears, relative
+ *    to the capsule's own start.
  * 2. **Grid, placement, transitions, CSS** — that resolved timing feeds a real `AutoCapsule`
  *    instance (`capsule-automation`), which resolves the grid shape, each child's placement (its
  *    own explicit placement if given, or the type's own automatic rule — including the
@@ -101,12 +103,13 @@ export type BuildSceneResult = {
  *
  * ## Walking the tree
  *
- * `buildSceneDoc()` doesn't recurse through `TrackNode.children` as a call stack — it works
- * through a flat worklist (a queue): resolve one capsule's children, and for every child that is
- * ITSELF a capsule, push its own children onto the same queue to be resolved next. Nothing about
- * Codplay's own model requires structural recursion here — a `perso`'s `move.parentId` is just a
- * plain reference to another perso's id, regardless of how deep the authoring tree was, so the
- * worklist just needs to keep track of "these tracks, under this parent perso id" pairs.
+ * `buildSceneDoc()` doesn't recurse through a `children` structure — it works through a flat
+ * worklist (a queue): resolve one capsule's children (looked up by `parentId`, sorted by `order`),
+ * and for every child that is ITSELF a capsule, push its own children onto the same queue to be
+ * resolved next. Nothing about Codplay's own model requires structural recursion here — a
+ * `perso`'s `move.parentId` is just a plain reference to another perso's id, regardless of how
+ * deep the authoring tree was, so the worklist just needs to keep track of "these items, under
+ * this parent perso id" pairs.
  *
  * ## The two outputs
  *
@@ -120,49 +123,52 @@ export type BuildSceneResult = {
 export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
   const editor = new SceneDocEditor()
 
-  const createResult = editor.create({ id: scene.id, name: scene.title })
+  const createResult = editor.create({ id: scene.id, name: scene.meta.title })
   if (!createResult.ok) throw new Error(createResult.error.message)
 
   const rootPersoId = `${ROOT_STORY_ID}__root`
   const rootDecor = scene.rootDecorId ? scene.decors[scene.rootDecorId] : undefined
 
-  // The root capsule is never authored (§6, no TrackNode/no distribution setting of its own) —
-  // its children are each item the author placed directly on the scene, meant to appear on their
-  // own individual keyframes rather than sharing a distributed timeline. `stagger 0/0` is the
+  const rootItems = childrenOf(scene.items, null)
+
+  // The root capsule is never authored (§6, no Item/no distribution setting of its own) — its
+  // children are each item the author placed directly on the scene, meant to appear on their own
+  // individual keyframes rather than sharing a distributed timeline. `stagger 0/0` is the
   // structural choice for that role (see `resolveCapsule`'s own doc), not a guess derived from
   // `card` — every other `card` capsule (a real, authored one) still requires its own explicit
   // `distribution` like any other non-`carousel` type.
-  const rootResolution = resolveCapsule(scene.tracks, CAPSULE_TYPE.card, {
+  const rootResolution = resolveCapsule(rootItems, CAPSULE_TYPE.card, {
     sceneRoot: true,
     distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
   })
 
-  const persos: Perso[] = [buildRootCapsulePerso(rootPersoId, rootDecor?.data, rootResolution.rootArtifact)]
+  const persos: Perso[] = [buildRootCapsulePerso(rootPersoId, rootDecor, rootResolution.rootArtifact)]
   const eventimes: NonNullable<StoryDef['eventimes']> = []
   const styleSheets: string[] = [rootResolution.styleSheet]
 
   // Flat worklist, not a recursive tree walk : Codplay's `move.parentId` is a plain reference
   // between two flat `persos` entries regardless of how deep the *authoring* tree is (no
   // relationship between authoring-tree depth and any structural recursion on the Codplay side)
-  // — so every capsule level, however deeply nested in `TrackNode.children`, just resolves its
-  // own children and pushes into these same flat arrays. Each entry carries the artifact map
-  // resolved for exactly its own sibling group — never shared/mutated across entries, since two
-  // sibling groups at different depths can be pending in the queue at the same time.
-  type WorkItem = { tracks: TrackNode[]; parentPersoId: string; childArtifactById: Map<string, AutoCapsuleChildElementArtifact> }
-  const worklist: WorkItem[] = [{ tracks: scene.tracks, parentPersoId: rootPersoId, childArtifactById: rootResolution.childArtifactById }]
+  // — so every capsule level, however deep in the `parentId` chain, just resolves its own
+  // children (looked up by `parentId`, sorted by `order`) and pushes into these same flat arrays.
+  // Each entry carries the artifact map resolved for exactly its own sibling group — never
+  // shared/mutated across entries, since two sibling groups at different depths can be pending in
+  // the queue at the same time.
+  type WorkItem = { items: Item[]; parentPersoId: string; childArtifactById: Map<string, AutoCapsuleChildElementArtifact> }
+  const worklist: WorkItem[] = [{ items: rootItems, parentPersoId: rootPersoId, childArtifactById: rootResolution.childArtifactById }]
 
   while (worklist.length > 0) {
-    const { tracks, parentPersoId, childArtifactById } = worklist.shift()!
-    for (const track of tracks) {
-      const childArtifact = childArtifactById.get(track.id)!
-      if (track.kind === 'capsule') {
-        const { perso, itemEventimes, ownResolution } = buildNestedCapsulePerso(track, parentPersoId, childArtifact)
+    const { items, parentPersoId, childArtifactById } = worklist.shift()!
+    for (const item of items) {
+      const childArtifact = childArtifactById.get(item.id)!
+      if (item.type === 'capsule') {
+        const { perso, itemEventimes, ownResolution } = buildNestedCapsulePerso(item, parentPersoId, childArtifact, scene)
         persos.push(perso)
         eventimes.push(...itemEventimes)
         styleSheets.push(ownResolution.styleSheet)
-        worklist.push({ tracks: track.children ?? [], parentPersoId: track.id, childArtifactById: ownResolution.childArtifactById })
+        worklist.push({ items: childrenOf(scene.items, item.id), parentPersoId: item.id, childArtifactById: ownResolution.childArtifactById })
       } else {
-        const { perso, itemEventimes } = buildItemPerso(track, parentPersoId, scene, childArtifact)
+        const { perso, itemEventimes } = buildItemPerso(item, parentPersoId, scene, childArtifact)
         persos.push(perso)
         eventimes.push(...itemEventimes)
       }
@@ -199,6 +205,11 @@ export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
   return { sceneDoc: exportResult.data, styleSheet: `${styleSheets.join('\n')}\n${STYLE_CHECK_RULE}` }
 }
 
+/** Every item directly under `parentId` (root items when `null`), sorted by their fractional `order` key. */
+function childrenOf(items: Item[], parentId: string | null): Item[] {
+  return items.filter((item) => item.parentId === parentId).sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
+}
+
 type CapsuleResolution = {
   rootArtifact: { className: string }
   childArtifactById: Map<string, AutoCapsuleChildElementArtifact>
@@ -208,7 +219,7 @@ type CapsuleResolution = {
 /**
  * Resolve one capsule's timing (`CapsuleDistribution`), then grid/placement/transitions/CSS
  * (`AutoCapsule`) — `2026-07-08-capsule-spec.md` §7 pipeline. Used for the root capsule (always
- * `card`, §6) and for any nested capsule (`capsuleType`, §3) — the same pipeline at any depth,
+ * `card`, §6) and for any nested capsule (`CapsuleDef.kind`, §3) — the same pipeline at any depth,
  * only the type and the child list change.
  *
  * Ghost-zone placement (§3/§11, full grid surface) only applies to `card` — `placementPolicy:
@@ -223,10 +234,9 @@ type CapsuleResolution = {
  * Passed straight to `AutoCapsuleDefinition.sceneRoot`, which is capsule-automation's own concern
  * to turn into a `width:100%;height:100%` CSS rule on the generated grid class.
  *
- * `options.grid` reads a capsule track's own `TrackNode.grid` override when present (currently a
- * TEMPORARY field, ed2-builder demo only — cf `sequence-editor/types.ts`) — passed straight to
- * `AutoCapsuleGridInput.rows`/`.cols`, never invented here (Principe B): absent input stays absent,
- * falling back to the type's own default (`config/capsule-types.ts`).
+ * `options.grid` reads a capsule item's own `CapsuleDef.grid` override when present — passed
+ * straight to `AutoCapsuleGridInput.rows`/`.cols`, never invented here (Principe B): absent input
+ * stays absent, falling back to the type's own default (`config/capsule-types.ts`).
  *
  * `options.distribution` is resolved through `CapsulePreset` (`2026-06-12-capsule-distribution-
  * spec.md` §3.3) — the one place `CapsuleKind` → concrete `mode` resolution lives, shared with
@@ -237,28 +247,28 @@ type CapsuleResolution = {
  * case this Builder branches on, present or not it produces the identical result.
  */
 function resolveCapsule(
-  tracks: TrackNode[],
+  items: Item[],
   capsuleType: AutoCapsuleType,
-  options?: { sceneRoot?: boolean; grid?: { rows?: number; cols?: number }; distribution?: TrackDistribution },
+  options?: { sceneRoot?: boolean; grid?: { rows?: number; cols?: number }; distribution?: CapsuleDef['distribution'] },
 ): CapsuleResolution {
   const preset = CapsulePreset.resolve({ capsuleType: toCapsuleKind(capsuleType), distribution: options?.distribution })
   const distribution = CapsuleDistribution.compute({
-    clipDurationMs: tracks.reduce((max, track) => Math.max(max, track.keyframes[track.keyframes.length - 1]?.timeMs ?? 0), 0),
+    clipDurationMs: items.reduce((max, item) => Math.max(max, item.keyframes[item.keyframes.length - 1]?.timeMs ?? 0), 0),
     ...preset,
-    children: tracks.map((track) => ({
-      trackId: track.id,
-      lockedIntroMs: track.keyframes[0]?.timeMs,
-      lockedOutroMs: track.keyframes[track.keyframes.length - 1]?.timeMs,
+    children: items.map((item) => ({
+      trackId: item.id,
+      lockedIntroMs: item.keyframes[0]?.timeMs,
+      lockedOutroMs: item.keyframes[item.keyframes.length - 1]?.timeMs,
     })),
   })
 
-  const childInputs: AutoCapsuleChildInput[] = tracks.map((track, index) => {
-    const timing = distribution.children.find((child) => child.trackId === track.id)!
+  const childInputs: AutoCapsuleChildInput[] = items.map((item, index) => {
+    const timing = distribution.children.find((child) => child.trackId === item.id)!
     return {
-      id: track.id,
+      id: item.id,
       order: index,
       timeRange: { startMs: timing.introMs, endMs: timing.outroMs },
-      events: buildTransitionEvents(track),
+      events: buildTransitionEvents(item),
     }
   })
 
@@ -293,9 +303,9 @@ function resolveCapsule(
 }
 
 /**
- * Read the transition the author actually chose, from the track's own keyframes
+ * Read the transition the author actually chose, from the item's own keyframes
  * (`Keyframe.transitionIn`/`.transitionOut`) — never a value this Builder invents (Principe B).
- * A clean, deterministic name (`${track.id}-intro`/`-outro`) is supplied explicitly too, so the
+ * A clean, deterministic name (`${item.id}-intro`/`-outro`) is supplied explicitly too, so the
  * resolved event doesn't fall back to `AutoCapsule`'s auto-generated synthetic name.
  *
  * If a bound has no named transition, it's simply omitted here — `resolveAutoCapsuleEvents` then
@@ -303,15 +313,15 @@ function resolveCapsule(
  * (acceptable: that fallback path is capsule-automation's documented behavior, not an invented
  * Builder default).
  */
-function buildTransitionEvents(track: TrackNode): AutoCapsuleChildInput['events'] {
-  const introRef = extractNamedTransitionRef(track.keyframes[0]?.transitionIn)
-  const outroRef = extractNamedTransitionRef(track.keyframes[track.keyframes.length - 1]?.transitionOut)
+function buildTransitionEvents(item: Item): AutoCapsuleChildInput['events'] {
+  const introRef = extractNamedTransitionRef(item.keyframes[0]?.transitionIn)
+  const outroRef = extractNamedTransitionRef(item.keyframes[item.keyframes.length - 1]?.transitionOut)
   const events: Partial<Record<string, AutoCapsuleEventInput>> = {}
 
   if (introRef) {
     events[EVENT_ACTION.intro] = {
       action: EVENT_ACTION.intro,
-      name: `${track.id}-intro`,
+      name: `${item.id}-intro`,
       ref: introRef.name,
       durationMs: introRef.durationMs,
     }
@@ -319,7 +329,7 @@ function buildTransitionEvents(track: TrackNode): AutoCapsuleChildInput['events'
   if (outroRef) {
     events[EVENT_ACTION.outro] = {
       action: EVENT_ACTION.outro,
-      name: `${track.id}-outro`,
+      name: `${item.id}-outro`,
       ref: outroRef.name,
       durationMs: outroRef.durationMs,
     }
@@ -345,7 +355,7 @@ function extractNamedTransitionRef(transition: Keyframe['transitionIn']): { name
  */
 function buildRootCapsulePerso(
   rootPersoId: string,
-  decorData: Record<string, unknown> | undefined,
+  rootDecor: Decor | undefined,
   rootArtifact: CapsuleResolution['rootArtifact'],
 ): Perso {
   return {
@@ -357,7 +367,7 @@ function buildRootCapsulePerso(
       tag: 'div',
       className: rootArtifact.className || undefined,
       style: {
-        ...(decorData?.style as Record<string, unknown> | undefined),
+        ...rootDecor?.style,
       },
     },
     actions: {},
@@ -422,9 +432,9 @@ type NestedCapsuleBuildResult = {
  * action treatment as any other item (`resolveTransitionActions`, §5, Principe A: a capsule is a
  * child of its parent capsule exactly like a leaf item is, nothing exempts it from that), but it
  * ALSO resolves its own grid/timing pipeline for its own children (`resolveCapsule`, using its
- * `capsuleType`, §3) — the same pipeline as the root, just parameterized. `flip:false` on its move
- * is the one thing every capsule's own children carry regardless of nesting depth, since it's
- * specifically the FLIP animation on a `list`'s direct children this is defusing
+ * `CapsuleDef.kind`, §3) — the same pipeline as the root, just parameterized. `flip:false` on its
+ * move is the one thing every capsule's own children carry regardless of nesting depth, since
+ * it's specifically the FLIP animation on a `list`'s direct children this is defusing
  * (`2026-07-08-capsule-spec.md` §6), not a root-only concern.
  *
  * `initialStyleFromIntro` is intentionally NOT applied here (unlike `buildItemPerso`) — a capsule
@@ -438,21 +448,22 @@ type NestedCapsuleBuildResult = {
  * table, just a type-level cast at this one boundary between the two packages' vocabularies.
  */
 function buildNestedCapsulePerso(
-  track: TrackNode,
+  item: Item,
   parentPersoId: string,
   childArtifact: AutoCapsuleChildElementArtifact,
+  scene: EditorScene,
 ): NestedCapsuleBuildResult {
-  if (!track.capsuleType) throw new Error(`buildSceneDoc: capsule track '${track.id}' has no capsuleType`)
+  if (!item.capsule) throw new Error(`buildSceneDoc: capsule item '${item.id}' has no CapsuleDef`)
 
-  const ownResolution = resolveCapsule(track.children ?? [], track.capsuleType as AutoCapsuleType, {
-    grid: track.grid,
-    distribution: track.distribution,
+  const ownResolution = resolveCapsule(childrenOf(scene.items, item.id), item.capsule.kind as AutoCapsuleType, {
+    grid: item.capsule.grid,
+    distribution: item.capsule.distribution,
   })
   const { actions, itemEventimes } = resolveTransitionActions(childArtifact)
 
   const perso: Perso = {
-    id: track.id,
-    name: track.label,
+    id: item.id,
+    name: item.id,
     type: 'list',
     initial: {
       move: { parentId: parentPersoId, flip: false },
@@ -474,33 +485,33 @@ type ItemBuildResult = {
  * Build one item's perso and its intro/outro eventimes from the already-resolved
  * `AutoCapsuleChildElementArtifact` — placement class from capsule-automation, transitions
  * turned into named actions (`resolveTransitionActions`, Principe A) : the eventime only
- * triggers `${track.id}-intro`/`${track.id}-outro` at the resolved `triggerMs`, the action itself
+ * triggers `${item.id}-intro`/`${item.id}-outro` at the resolved `triggerMs`, the action itself
  * carries the resolved style diff, never the eventime.
  */
 function buildItemPerso(
-  track: TrackNode,
+  item: Item,
   rootPersoId: string,
   scene: EditorScene,
   childArtifact: AutoCapsuleChildElementArtifact,
 ): ItemBuildResult {
-  const persoType = mapContentTypeToPersoType(track.contentType)
-  const introKf = track.keyframes[0]
-  const introDecor = introKf?.decorId ? scene.decors[introKf.decorId] : undefined
+  const persoType = mapItemTypeToPersoType(item.type)
+  const introDecor = scene.decors[item.initialDecorId]
+  const content = item.contentId ? scene.contents[item.contentId] : undefined
 
   const { actions, itemEventimes, initialStyleFromIntro } = resolveTransitionActions(childArtifact)
 
   const perso: Perso = {
-    id: track.id,
-    name: track.label,
+    id: item.id,
+    name: item.id,
     type: persoType,
     initial: {
       move: { parentId: rootPersoId, flip: false },
       tag: 'div',
       className: [childArtifact.className, STYLE_CHECK_CLASS].filter(Boolean).join(' '),
-      content: introDecor?.data.content,
+      content: resolveContentText(content),
       style: {
         ...initialStyleFromIntro,
-        ...(introDecor?.data.style as Record<string, unknown> | undefined),
+        ...introDecor?.style,
       },
     },
     actions,
@@ -509,7 +520,12 @@ function buildItemPerso(
   return { perso, itemEventimes }
 }
 
-function mapContentTypeToPersoType(contentType: TrackNode['contentType']): string {
-  if (contentType === 'text') return 'text'
-  throw new Error(`buildSceneDoc: unsupported contentType '${contentType}' in this minimal increment`)
+/** The `content` a text perso shows — only `Content.text` is mapped in this increment (§5 of the plan). */
+function resolveContentText(content: Content | undefined): string | undefined {
+  return content?.text
+}
+
+function mapItemTypeToPersoType(itemType: Item['type']): string {
+  if (itemType === 'text') return 'text'
+  throw new Error(`buildSceneDoc: unsupported item type '${itemType}' in this minimal increment`)
 }

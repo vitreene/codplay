@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateSceneDoc } from '@codplay/scene-factory'
 import { buildSceneDoc } from '../src/builder/build-scene'
-import type { EditorScene } from '../src/sequence-editor/types'
+import type { EditorScene } from '../src/app/commands/types'
 import type { SceneDef } from 'codplay/builder/types'
 
 /**
@@ -13,26 +13,33 @@ import type { SceneDef } from 'codplay/builder/types'
 function validSceneFixture(): EditorScene {
   return {
     id: 'validate-demo-scene',
-    title: 'validate demo',
-    durationMs: 3000,
-    durationSource: 'arbitrary',
-    decors: {},
-    rootDecorId: null,
-    tracks: [
+    meta: {
+      title: 'validate demo',
+      durationMs: 3000,
+      durationSource: 'arbitrary',
+      timeUnit: 's',
+      capsuleOrder: 'forward',
+    },
+    decors: {
+      'text-decor': { id: 'text-decor' },
+    },
+    contents: {},
+    zones: {},
+    items: [
       {
         id: 'item-1',
-        kind: 'element',
-        label: 'Texte',
+        type: 'text',
+        parentId: null,
+        order: 'mmm',
         visible: true,
-        contentType: 'text',
+        contentId: null,
+        initialDecorId: 'text-decor',
         keyframes: [
-          { id: 'kf-intro', timeMs: 0, decorId: null, transitionIn: { kind: 'named', name: 'fade', durationMs: 400 } },
-          { id: 'kf-outro', timeMs: 3000, decorId: null, transitionOut: { kind: 'named', name: 'fade', durationMs: 400 } },
+          { id: 'kf-intro', timeMs: 0, decorId: 'text-decor', transitionIn: { kind: 'named', name: 'fade', durationMs: 400 } },
+          { id: 'kf-outro', timeMs: 3000, decorId: 'text-decor', transitionOut: { kind: 'named', name: 'fade', durationMs: 400 } },
         ],
       },
     ],
-    cues: [],
-    markerTracks: [],
   }
 }
 

@@ -1,34 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import { BuilderFacade } from 'codplay/builder/create-builder'
 import { buildSceneDoc } from '../../src/builder/build-scene'
-import type { EditorScene } from '../../src/sequence-editor/types'
+import type { EditorScene } from '../../src/app/commands/types'
+
+function emptyMeta(overrides?: Partial<EditorScene['meta']>): EditorScene['meta'] {
+  return {
+    title: 'ed2 demo',
+    durationMs: 3000,
+    durationSource: 'arbitrary',
+    timeUnit: 's',
+    capsuleOrder: 'forward',
+    ...overrides,
+  }
+}
 
 function fixtureScene(): EditorScene {
   return {
     id: 'ed2-demo-scene',
-    title: 'ed2 demo',
-    durationMs: 3000,
-    durationSource: 'arbitrary',
-    decors: {
-      'root-decor': { id: 'root-decor', data: { style: { background: '#1a1a2e' } } },
-      'text-decor': { id: 'text-decor', data: { content: 'Bonjour ed2', style: { color: '#ffffff', fontSize: '2rem' } } },
-    },
+    meta: emptyMeta(),
     rootDecorId: 'root-decor',
-    tracks: [
+    decors: {
+      'root-decor': { id: 'root-decor', style: { background: '#1a1a2e' } },
+      'text-decor': { id: 'text-decor', style: { color: '#ffffff', fontSize: '2rem' } },
+    },
+    contents: {
+      'text-content': { id: 'text-content', type: 'text', text: 'Bonjour ed2' },
+    },
+    items: [
       {
         id: 'item-1',
-        kind: 'element',
-        label: 'Texte',
+        type: 'text',
+        parentId: null,
+        order: 'mmm',
         visible: true,
-        contentType: 'text',
+        contentId: 'text-content',
+        initialDecorId: 'text-decor',
         keyframes: [
           { id: 'kf-intro', timeMs: 0, decorId: 'text-decor', transitionIn: { kind: 'named', name: 'fade', durationMs: 400 } },
-          { id: 'kf-outro', timeMs: 3000, decorId: null, transitionOut: { kind: 'named', name: 'fade', durationMs: 400 } },
+          { id: 'kf-outro', timeMs: 3000, decorId: 'text-decor', transitionOut: { kind: 'named', name: 'fade', durationMs: 400 } },
         ],
       },
     ],
-    cues: [],
-    markerTracks: [],
+    zones: {},
   }
 }
 
@@ -119,63 +132,65 @@ describe('buildSceneDoc — minimal increment (one item, root capsule, fade)', (
  * Step 6 (`2026-07-08-builder-plan.md`, nested capsule) — 2 levels deep, mixing capsule types:
  * root (card) -> capsule-a (grille, own show/hide transition) -> [capsule-b (liste), item-flat]
  *                                                                    -> item-nested
- * `capsule-a` and `capsule-b` are BOTH `kind: 'capsule'`, each resolving its own grid/timing via
- * `resolveCapsule` — confirms the worklist recurses past one level, not just root -> leaf.
+ * `capsule-a` and `capsule-b` are BOTH `type: 'capsule'`, each resolving its own grid/timing via
+ * `resolveCapsule` — confirms the worklist recurses past one level, not just root -> leaf. Nesting
+ * comes from `parentId` alone (flat `items[]`), never from a structural `children` field.
  */
 function nestedFixtureScene(): EditorScene {
   return {
     id: 'ed2-nested-demo-scene',
-    title: 'ed2 nested demo',
-    durationMs: 3000,
-    durationSource: 'arbitrary',
+    meta: emptyMeta(),
     decors: {},
-    rootDecorId: null,
-    tracks: [
+    contents: {},
+    zones: {},
+    items: [
       {
         id: 'capsule-a',
-        kind: 'capsule',
-        label: 'Capsule A',
+        type: 'capsule',
+        parentId: null,
+        order: 'mmm',
         visible: true,
-        capsuleType: 'grille',
+        contentId: null,
+        initialDecorId: 'unused-a',
         // Required for any non-carousel type (CapsulePreset.resolve — no structural default).
-        distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        capsule: { kind: 'grille', distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 } },
         keyframes: [
-          { id: 'kf-a-intro', timeMs: 0, decorId: null, transitionIn: { kind: 'named', name: 'fade', durationMs: 300 } },
-          { id: 'kf-a-outro', timeMs: 3000, decorId: null, transitionOut: { kind: 'named', name: 'fade', durationMs: 300 } },
-        ],
-        children: [
-          {
-            id: 'capsule-b',
-            kind: 'capsule',
-            label: 'Capsule B',
-            visible: true,
-            capsuleType: 'liste',
-            distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
-            keyframes: [{ id: 'kf-b-intro', timeMs: 0, decorId: null }],
-            children: [
-              {
-                id: 'item-nested',
-                kind: 'element',
-                label: 'Item nested',
-                visible: true,
-                contentType: 'text',
-                keyframes: [{ id: 'kf-nested', timeMs: 0, decorId: null }],
-              },
-            ],
-          },
-          {
-            id: 'item-flat',
-            kind: 'element',
-            label: 'Item flat',
-            visible: true,
-            contentType: 'text',
-            keyframes: [{ id: 'kf-flat', timeMs: 0, decorId: null }],
-          },
+          { id: 'kf-a-intro', timeMs: 0, decorId: 'unused-a', transitionIn: { kind: 'named', name: 'fade', durationMs: 300 } },
+          { id: 'kf-a-outro', timeMs: 3000, decorId: 'unused-a', transitionOut: { kind: 'named', name: 'fade', durationMs: 300 } },
         ],
       },
+      {
+        id: 'capsule-b',
+        type: 'capsule',
+        parentId: 'capsule-a',
+        order: 'mmm',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'unused-b',
+        capsule: { kind: 'liste', distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 } },
+        keyframes: [{ id: 'kf-b-intro', timeMs: 0, decorId: 'unused-b' }],
+      },
+      {
+        id: 'item-nested',
+        type: 'text',
+        parentId: 'capsule-b',
+        order: 'mmm',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'unused-nested',
+        keyframes: [{ id: 'kf-nested', timeMs: 0, decorId: 'unused-nested' }],
+      },
+      {
+        id: 'item-flat',
+        type: 'text',
+        parentId: 'capsule-a',
+        order: 'mmn',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'unused-flat',
+        keyframes: [{ id: 'kf-flat', timeMs: 0, decorId: 'unused-flat' }],
+      },
     ],
-    cues: [],
-    markerTracks: [],
   }
 }
 
@@ -250,25 +265,38 @@ describe('buildSceneDoc — nested capsule (2 levels deep, mixed capsule types)'
   })
 })
 
-describe('buildSceneDoc — nested capsule reads its own TrackNode.grid override (not just the scene root)', () => {
+describe('buildSceneDoc — nested capsule reads its own CapsuleDef.grid override (not just the scene root)', () => {
   it('a nested capsule with an explicit grid resolves to that grid, not the type default (9x16)', () => {
     const scene: EditorScene = {
-      id: 'grid-override-scene', title: 'grid override', durationMs: 3000, durationSource: 'arbitrary',
-      decors: {}, rootDecorId: null,
-      tracks: [{
-        id: 'capsule-a', kind: 'capsule', label: 'A', visible: true, capsuleType: 'grille',
-        grid: { rows: 1, cols: 2 },
-        distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
-        keyframes: [
-          { id: 'kf-a-intro', timeMs: 0, decorId: null },
-          { id: 'kf-a-outro', timeMs: 3000, decorId: null },
-        ],
-        children: [
-          { id: 'item-1', kind: 'element', label: '1', visible: true, contentType: 'text', keyframes: [{ id: 'kf-1', timeMs: 0, decorId: null }, { id: 'kf-1-out', timeMs: 3000, decorId: null }] },
-          { id: 'item-2', kind: 'element', label: '2', visible: true, contentType: 'text', keyframes: [{ id: 'kf-2', timeMs: 0, decorId: null }, { id: 'kf-2-out', timeMs: 3000, decorId: null }] },
-        ],
-      }],
-      cues: [], markerTracks: [],
+      id: 'grid-override-scene',
+      meta: emptyMeta(),
+      decors: {},
+      contents: {},
+      zones: {},
+      items: [
+        {
+          id: 'capsule-a',
+          type: 'capsule',
+          parentId: null,
+          order: 'mmm',
+          visible: true,
+          contentId: null,
+          initialDecorId: 'unused',
+          capsule: { kind: 'grille', grid: { rows: 1, cols: 2 }, distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 } },
+          keyframes: [
+            { id: 'kf-a-intro', timeMs: 0, decorId: 'unused' },
+            { id: 'kf-a-outro', timeMs: 3000, decorId: 'unused' },
+          ],
+        },
+        {
+          id: 'item-1', type: 'text', parentId: 'capsule-a', order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
+          keyframes: [{ id: 'kf-1', timeMs: 0, decorId: 'unused' }, { id: 'kf-1-out', timeMs: 3000, decorId: 'unused' }],
+        },
+        {
+          id: 'item-2', type: 'text', parentId: 'capsule-a', order: 'mmn', visible: true, contentId: null, initialDecorId: 'unused',
+          keyframes: [{ id: 'kf-2', timeMs: 0, decorId: 'unused' }, { id: 'kf-2-out', timeMs: 3000, decorId: 'unused' }],
+        },
+      ],
     }
 
     const { sceneDoc, styleSheet } = buildSceneDoc(scene)
@@ -281,45 +309,59 @@ describe('buildSceneDoc — nested capsule reads its own TrackNode.grid override
 })
 
 describe('buildSceneDoc — error paths (never silently guessed, Principe B)', () => {
-  it('throws when a capsule track has no capsuleType — the Builder never guesses which sub-type pipeline to run', () => {
+  it('throws when a capsule item has no CapsuleDef — the Builder never guesses which sub-type pipeline to run', () => {
     const scene: EditorScene = {
-      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
-      decors: {}, rootDecorId: null,
-      tracks: [{
-        id: 'capsule-untyped', kind: 'capsule', label: 'Untyped', visible: true,
-        // capsuleType intentionally omitted
-        keyframes: [{ id: 'kf', timeMs: 0, decorId: null }],
-        children: [],
-      }],
-      cues: [], markerTracks: [],
+      id: 'error-scene',
+      meta: emptyMeta({ durationMs: 1000 }),
+      decors: {},
+      contents: {},
+      zones: {},
+      items: [
+        {
+          id: 'capsule-untyped', type: 'capsule', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
+          // capsule intentionally omitted
+          keyframes: [{ id: 'kf', timeMs: 0, decorId: 'unused' }],
+        },
+      ],
     }
-    expect(() => buildSceneDoc(scene)).toThrow(/capsule-untyped.*capsuleType/)
+    expect(() => buildSceneDoc(scene)).toThrow(/capsule-untyped.*CapsuleDef/)
   })
 
-  it('throws for any contentType other than text — the only mapped ItemType in this increment (§5 of the plan)', () => {
+  it('throws for any item type other than text — the only mapped ItemType in this increment (§5 of the plan)', () => {
     const scene: EditorScene = {
-      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
-      decors: {}, rootDecorId: null,
-      tracks: [{
-        id: 'item-image', kind: 'element', label: 'Image', visible: true, contentType: 'image',
-        keyframes: [{ id: 'kf', timeMs: 0, decorId: null }],
-      }],
-      cues: [], markerTracks: [],
+      id: 'error-scene',
+      meta: emptyMeta({ durationMs: 1000 }),
+      decors: {},
+      contents: {},
+      zones: {},
+      items: [
+        {
+          id: 'item-image', type: 'image', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
+          keyframes: [{ id: 'kf', timeMs: 0, decorId: 'unused' }],
+        },
+      ],
     }
-    expect(() => buildSceneDoc(scene)).toThrow(/unsupported contentType 'image'/)
+    expect(() => buildSceneDoc(scene)).toThrow(/unsupported item type 'image'/)
   })
 
   it('throws when a non-carousel capsule has no distribution setting — CapsulePreset never guesses a mode (§3.3)', () => {
+    // `distribution` is required by `CapsuleDef` — TypeScript prevents omitting it from a
+    // normally-typed caller. This simulates a document read back from storage (serialized JSON,
+    // no type-level guarantee) rather than a scenario a well-typed command could ever produce —
+    // the Builder still must not guess a default at runtime, whatever the data's origin.
     const scene: EditorScene = {
-      id: 'error-scene', title: 'error', durationMs: 1000, durationSource: 'arbitrary',
-      decors: {}, rootDecorId: null,
-      tracks: [{
-        id: 'capsule-unconfigured', kind: 'capsule', label: 'Unconfigured', visible: true, capsuleType: 'grille',
-        // distribution intentionally omitted — grille has no structural default (only carousel does)
-        keyframes: [{ id: 'kf-intro', timeMs: 0, decorId: null }, { id: 'kf-outro', timeMs: 1000, decorId: null }],
-        children: [],
-      }],
-      cues: [], markerTracks: [],
+      id: 'error-scene',
+      meta: emptyMeta({ durationMs: 1000 }),
+      decors: {},
+      contents: {},
+      zones: {},
+      items: [
+        {
+          id: 'capsule-unconfigured', type: 'capsule', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
+          capsule: { kind: 'grille' } as unknown as EditorScene['items'][number]['capsule'],
+          keyframes: [{ id: 'kf-intro', timeMs: 0, decorId: 'unused' }, { id: 'kf-outro', timeMs: 1000, decorId: 'unused' }],
+        },
+      ],
     }
     expect(() => buildSceneDoc(scene)).toThrow(/has no structural default/)
   })

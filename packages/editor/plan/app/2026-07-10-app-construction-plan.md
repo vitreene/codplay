@@ -6,7 +6,7 @@
 
 ## Cadre
 
-- L'app a sa propre page index. Les démos sont hors de son périmètre : `index.html` et l'aiguillage `?demo=` de `src/main.ts` restent tels quels, à côté.
+- `index.html` est le point d'entrée de l'app (monte `src/app/main.tsx`). Les démos sont hors de son périmètre : déplacées sur `demo.html` (aiguillage `?demo=` de `src/main.ts` inchangé), chemin temporaire, à effacer plus tard.
 - L'interface est en React (stack : React + shadcn + base-ui ; politique de hooks : `skill.md`, racine du repo). Le sequence-editor et le player Codplay restent vanilla et s'intègrent en îlots (montés dans des conteneurs DOM dédiés, pilotés par API et événements).
 - XState possède tout l'état partagé ; React ne fait que du rendu.
 - Le **contrôleur central** possède le document ; toute mutation passe par une **façade de commandes** (voie d'écriture unique). Les fonctionnalités se **composent** de commandes de base, elles ne se codent pas en dur.
@@ -110,14 +110,14 @@ Chaque point est un test d'intégration : il échoue tant que la connexion visé
 
 La page existe avec ses régions vides ; la stack est en place ; zéro logique métier.
 
-1. **Entrée** : `app.html` à la racine du package, monte `src/app/main.tsx`. `vite.config.ts` passe en multi-entrées (démos + app) + plugin React. Dev : `http://localhost:5174/app.html`.
+1. **Entrée** : `index.html` à la racine du package, monte `src/app/main.tsx`. `vite.config.ts` passe en multi-entrées (app + démos) + plugin React. Dev : `http://localhost:5174/index.html`. Démos déplacées sur `demo.html` (temporaire).
 2. **Point d'entrée mince** : montage React + démarrage du contrôleur, rien d'autre.
 3. **Dépendances** : `react`, `react-dom`, `@types/react`, `@types/react-dom`, `@xstate/react`, `@vitejs/plugin-react`, `tailwindcss`, `@tailwindcss/vite`, `@base-ui-components/react`. shadcn = composants **copiés** dans `src/app/ui/`, pas une dépendance — **chaque composant shadcn est proposé à l'utilisateur et validé avant d'être ajouté** (liste soumise, jamais copié d'office ; l'usage d'un composant déjà validé ne redemande pas d'accord).
 4. **TypeScript** : `jsx: "react-jsx"` dans le `tsconfig.json` du package.
 5. **Arborescence** : `src/app/` — `main.tsx`, `layout/`, `ui/`, `controller/`, `commands/` (la façade).
 6. **Layout vide** : les régions (dont **telco**), en classes CSS, marquage minimal.
 
-**Validation** : `app.html` affiche le squelette ; les démos fonctionnent comme avant ; typecheck propre.
+**Validation** : `index.html` affiche le squelette ; les démos fonctionnent comme avant sur `demo.html` ; typecheck propre.
 
 ### Étape 2 — Contrôleur central + façade de commandes
 
@@ -157,6 +157,7 @@ Le travail survit au rechargement, sans backend.
 - **Persisté** : l'`EditorScene` sérialisé, clé versionnée, champ de version dans la charge (format ancien rejeté).
 - **Mécanique** : un **acteur de persistance** abonné aux commits écrit ; la restauration passe par l'événement de chargement au démarrage.
 - **Frontière** : seul cet acteur connaît localStorage.
+- **Plusieurs scènes de test** : localStorage doit tenir **plusieurs** `EditorScene` nommées (pas une seule clé), et l'app doit permettre d'en choisir une à charger — c'est le mécanisme provisoire qui remplace les démos éditeur supprimées (`demo.html`). **Sélecteur** : un simple `<select>` listant les scènes sauvegardées, patch provisoire — à retirer quand un vrai système de navigation entre scènes (backend, étape 6) existera. Détail (clé d'index) à concevoir à l'ouverture de cette étape.
 
 **Validation** : recharger restaure la scène ; tests de sérialisation/restauration, rejet d'une version ancienne.
 

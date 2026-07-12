@@ -166,6 +166,11 @@ EditorScene {
   contents: Record<string, Content>   // indexé par contentId
   decors:   Record<string, Decor>     // indexé par decorId
   zones:    Record<string, Zone>      // indexé par zoneId
+  rootDecorId?: string                // → decors — décor de la capsule racine IMPLICITE (jamais un
+                                       //   item, jamais vue/autorée par l'auteur). Posé une seule
+                                       //   fois, jamais keyframé — même nature que le décor initial
+                                       //   d'un item, mais la racine n'étant pas un item, elle n'a
+                                       //   pas d'initialDecorId propre : ce champ en tient lieu.
   masterItemId?: string               // PROVISOIRE — → l'item média « master » (piste dédiée),
                                        //   facultatif. Ne survivra PAS au multipiste (voir note).
 }
@@ -292,7 +297,7 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
   - **`text` → Content** : le contenu textuel relève de `Content`, pas du décor (c'est *ce qui est montré*, pas *comment*). Retiré de Decor (n'y était que par héritage de `DecorPatch`).
   - **`capsule` → `Item.capsule`** : les réglages d'une capsule sont **statiques** (définis une fois, jamais keyframés) et **uniques à l'item** — leur place est sur l'item (`CapsuleDef`), pas dans la table `decors` faite pour l'aspect variable. L'ancien `CapsulePatch` est **fusionné** dans `CapsuleDef` (plus de dualité def/patch). `capsule` n'a pas vocation à bouger dans le temps → hors décor.
   - **Évolution future possible (notée, pas v1)** : un lien **Content↔Decor** *pourrait* revenir pour du **changement de contenu (texte) via l'interface** — Codplay sait gérer un changement de content. Mais ce serait alors une **référence de content pilotée par keyframe** (le décor d'un kf pointe vers un content différent), pas un champ `text` brut réintroduit dans Decor. Réservé à un besoin réel (cf. discussion : changement de content pas dans l'éditeur en v1) ; ne pas l'anticiper dans le modèle.
-- **`initialDecorId` obligatoire** au niveau item : pas encore porté dans le code (aujourd'hui seul `rootDecorId` de la racine joue ce rôle) — point de migration.
+- **`initialDecorId` (item) et `EditorScene.rootDecorId` (racine implicite) jouent le même rôle** — un décor de base, posé une fois, jamais keyframé. Séparés parce que la racine n'est **pas** un item (§ »racine» ci-dessus) : elle n'a donc pas de champ `initialDecorId` propre, d'où `rootDecorId` porté directement par `EditorScene`.
 
 ---
 

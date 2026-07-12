@@ -9,15 +9,24 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@codplay/capsule-automation": "*",
     "@codplay/scene-factory": "*",
     "@codplay/text-auto-size": "*",
+    "@tailwindcss/vite": "^4.3.2",
+    "@xstate/react": "^6.1.0",
     "codplay": "*",
     "color": "^5.0.3",
     "lucide-static": "^1.23.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.2",
     "xstate": "^5.32.2"
   },
   "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
     "typescript": "~6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
