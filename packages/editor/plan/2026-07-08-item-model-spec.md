@@ -1,5 +1,11 @@
 # Spec — Modèle d'Item (ed2)
 
+> **⚠ PARTIELLEMENT SUPERSÉDÉE (2026-07-12) par `app/2026-07-11-ed2-document-model.md`**, qui fait désormais foi pour le modèle de données. Décisions postérieures qui **remplacent** des points ci-dessous :
+> - **§4 (nesting)** : l'item porte désormais **`parentId` + une clé d'ordre fractionnaire** (modèle plat, arbre dérivé) — et NON « pas de champ parent, l'arbre porte tout ».
+> - **§5 (`bloc`)** : `bloc` **EST** une valeur distincte d'`ItemType` (le type fondateur sans contenu ; tout item naît `bloc` puis se différencie) — et NON « un `text` à contenu vide ».
+> - **§3 / §1** : le **contenu** vit dans une table `contents` séparée (`Content`), distincte du **décor** ; le type ouvre des propriétés dédiées (pas seulement « de décor »).
+> Ces sections restent ci-dessous comme trace ; en cas de conflit, le document-modèle prime. À réécrire au chantier qui rouvrira cette spec.
+
 **Périmètre** : le concept d'« item » — l'entité d'authoring centrale d'ed2, reliant en un seul modèle ce qui était éclaté entre `ItemType` (dedit), `TrackNode` (sequence-editor) et `Perso` (Codplay). Le pourquoi des choix ci-dessous est conservé dans `notes/2026-07-08-item-model-deliberation.md`.
 
 ---

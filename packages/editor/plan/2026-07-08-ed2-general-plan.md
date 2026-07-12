@@ -5,8 +5,11 @@
 **Rôle de ce document** : organiser l'ordre d'implémentation entre les chantiers détaillés ci-dessous. Il ne contient pas le détail de chaque chantier — chacun a son propre document dans ce dossier.
 
 **Organisation du dossier `packages/editor/plan/`** :
-- Fichiers à la racine du dossier = documents **normatifs** : plans et specs, décidés, sans ambiguïté. C'est ici que vit tout ce qui concerne l'app ed2 (y compris la spec capsule — pas de split avec `docs/formalisation/`).
-- `notes/` = discussions, hypothèses, points non tranchés — matière de travail, pas des décisions. Un point qui migre de `notes/` vers un document normatif doit être formulé sans trace de l'hésitation qui a précédé. Contient à ce jour la trace de délibération de la fusion de la spec capsule et de la spec modèle d'Item (dates, arbitrages, raisonnement — extraits des specs elles-mêmes pour les garder normatives).
+- Documents **normatifs** (décidés, déclaratifs) — à garder. Répartis en :
+  - **racine** : ce qui chapeaute ou est transverse — ce plan général, et les specs du domaine (capsule, item) lues par l'app comme par les modules ;
+  - **`app/`** : la construction de l'**app elle-même** — plan de construction, architecture, modèle de données, Builder, SceneDocEditor, moteur de validation ;
+  - **`modules/`** : les **modules** assemblés par l'app — sequence-editor, dedit, capsule-automation, variantes d'orientation, présentation Codplay.
+- `notes/` = discussions, hypothèses, points non tranchés — matière de travail, **jetable** (on finira par l'effacer, on garde les plans). Un point qui migre de `notes/` vers un document normatif doit être formulé sans trace de l'hésitation qui a précédé.
 
 ---
 
@@ -14,15 +17,21 @@
 
 | # | Document | Type | Statut | Emplacement |
 |---|---|---|---|---|
-| 1 | Réconciliation capsule-automation ↔ CapsuleDistribution | Plan | **Terminé et vérifié (2026-07-08)** | `packages/editor/plan/2026-07-08-capsule-automation-reconciliation-plan.md` |
-| 2 | Audit et remise à niveau de `SceneDocEditor` depuis Codplay | Plan | **Terminé et vérifié (2026-07-09)** | `packages/editor/plan/2026-07-08-scenedoceditor-audit-plan.md` |
-| 3 | Construction du Builder | Spec + Plan | **En cours (étapes 1-5/7 faites et rendues en démo, 2026-07-09)** | `packages/editor/plan/2026-07-08-builder-plan.md` |
-| 4 | Moteur de validation métier (ed2) | Plan | Écrit (dépend de 3) | `packages/editor/plan/2026-07-08-validation-engine-plan.md` |
+| 1 | Réconciliation capsule-automation ↔ CapsuleDistribution | Plan | **Terminé et vérifié (2026-07-08)** | `packages/editor/plan/modules/2026-07-08-capsule-automation-reconciliation-plan.md` |
+| 2 | Audit et remise à niveau de `SceneDocEditor` depuis Codplay | Plan | **Terminé et vérifié (2026-07-09)** | `packages/editor/plan/app/2026-07-08-scenedoceditor-audit-plan.md` |
+| 3 | Construction du Builder | Spec + Plan | **Terminé (2026-07-09, étapes 1 à 7 closes)** | `packages/editor/plan/app/2026-07-08-builder-plan.md` |
+| 4 | Moteur de validation métier (ed2) | Plan | Écrit (dépend de 3) | `packages/editor/plan/app/2026-07-08-validation-engine-plan.md` |
 | 5 | Spec capsule (ed2) | Spec | Écrit, fermée (tous les points tranchés) | `packages/editor/plan/2026-07-08-capsule-spec.md` |
 | 6 | Spec modèle d'Item (ed2) | Spec | Écrit, fermée (tous les points tranchés) | `packages/editor/plan/2026-07-08-item-model-spec.md` |
-| 7 | Éditeur de zones (Phase 2 selection-frame) | Plan | **Déjà écrit ailleurs, à exécuter** | `docs/plans/2026-07-03-selection-frame-variantes-plan.md` |
-| 8 | Migration `ZoneDef` dedit → forme grille | Plan | Écrit | `packages/editor/plan/2026-07-08-dedit-zonedef-migration-plan.md` |
-| 9 | Refonte interface dedit (shadcn) | Plan | Écrit (esquisse seulement — détails pilotés par l'utilisateur) | `packages/editor/plan/2026-07-08-dedit-shadcn-ui-plan.md` |
+| 7 | Éditeur de zones (Phase 2 selection-frame) | Plan | **Exécuté pour l'essentiel (2026-07-10)** — `ZoneDef.container` (cf. `docs/plans/2026-07-10-zone-container-design.md`) ; reste cs↔zones | `docs/plans/2026-07-03-selection-frame-variantes-plan.md` |
+| 8 | Migration `ZoneDef` dedit → forme grille | Plan | Écrit — parqué (le décor attend) | `packages/editor/plan/modules/2026-07-08-dedit-zonedef-migration-plan.md` |
+| 9 | Refonte interface dedit (shadcn) | Plan | Écrit (esquisse seulement — détails pilotés par l'utilisateur) — parqué (le décor attend) | `packages/editor/plan/modules/2026-07-08-dedit-shadcn-ui-plan.md` |
+| 10 | Construction de l'app (squelette, contrôleur général, composants, sauvegarde locale) | Plan | **Écrit (2026-07-10)** | `packages/editor/plan/app/2026-07-10-app-construction-plan.md` |
+| 11 | Variantes d'orientation des zones/grilles (capsule-automation) | Plan | **Écrit (2026-07-11)** — chantier autonome, exécutable en parallèle | `packages/editor/plan/modules/2026-07-11-zone-orientation-variants-plan.md` |
+| 12 | Modèle de données (EditorScene, item, capsule, content, décor…) | Spec / structure | **Écrit (2026-07-11)** — structure exhaustive ; arbitrages tranchés | `packages/editor/plan/app/2026-07-11-ed2-document-model.md` |
+| 13 | Représentation sequence-editor (pistes, mini-éditeur audio) | Plan | **Écrit (2026-07-11)** — multipiste audio non fait | `packages/editor/plan/modules/2026-07-11-sequence-editor-representation.md` |
+
+**Schémas de présentation** (pédagogiques, **non normatifs** → `notes/`, jetables) : architecture logique de l'app (`notes/2026-07-11-ed2-architecture.md`), présentation Codplay (`notes/2026-07-11-codplay-presentation.md`). Ils expliquent, ne prescrivent pas.
 
 ## Ordre d'implémentation
 
@@ -36,6 +45,7 @@
 7. **Éditeur de zones (Phase 2)** — indépendant de (1)-(6), peut avancer en parallèle. Plan déjà entièrement arbitré, il ne reste qu'à l'exécuter (`zone-model.ts`, `zone-machine.ts`, `zone-editor.ts`).
 8. **Migration `ZoneDef` dedit** — dépend de (7) (ou au moins de la forme retenue par le plan zones) : dedit possède aujourd'hui un `ZoneDef` incompatible (rectangle cqw) avec celui du plan zones (`{name,row,col,rowSpan,colSpan}`).
 9. **Refonte interface dedit (shadcn)** — dépend de (3)/(5)/(8) autant que possible : éviter de refaire l'UI deux fois si le modèle de décor/zones bouge encore. Dernier de la liste par défaut, sauf besoin contraire de l'utilisateur.
+10. **Construction de l'app** — recadrage utilisateur (2026-07-10) : les points précédents ne sont que des préalables ; l'app passe devant (8)/(9), le décor attend. Séquence : squelette vide (layout général + librairies) → contrôleur général (fondamental, définition avant code) → composants (React ; sequence-editor et player restent vanilla ; Eddy jamais une référence, accès sur invitation) → sauvegarde provisoire localStorage → backend prisma-sqlite (modèles élaborés alors ; piste pressentie : architecture react-router). Détail : `app/2026-07-10-app-construction-plan.md`.
 
 ## Décisions déjà actées (résumé — détail complet en mémoire de session, à reporter dans les documents détaillés)
 
@@ -53,7 +63,7 @@
 - Rôle d'Eddy (prototype sœur) : non normatif. Seuls le chutier (media bin) et whisper (transcription) seront réemployés « au moment adéquat ». Tout le reste écarté (cf conflit React/XState non maîtrisé dans Eddy, à l'origine de la politique de hooks stricte d'ed2).
 - Premier incrément de construction : fixture `EditorScene` → Builder → `SceneDef` → player. **Révisé (2026-07-09)** : validé à la fois par test automatisé ET par un rendu réel dans une démo (`?demo=ed2-builder`) — décision explicite de l'utilisateur, pas seulement « headless ». La coquille React (chutier/menu/télécommande) vient après (interactions timeline, puis décor).
 - « bloc » (ItemType) : pas une valeur distincte, un `text` à contenu vide (surface colorée). Futurs types média (story-comme-média, lotties, rive, threejs) : valeurs `ItemType` distinctes (propriétés dédiées propres à chacun), jamais des discriminants sous `media` — ajoutés à la disponibilité du composant Codplay correspondant.
-- `constraints.minDurationMs`/`maxDurationMs` (capsule-automation) retirés : non consommés nulle part, reliquat Eddy probable (cf `2026-07-08-capsule-automation-reconciliation-plan.md` §3.1).
+- `constraints.minDurationMs`/`maxDurationMs` (capsule-automation) retirés : non consommés nulle part, reliquat Eddy probable (cf `modules/2026-07-08-capsule-automation-reconciliation-plan.md` §3.1).
 - `SceneDocEditor` : `createStory`/`createPerso` acceptent un `id?` explicite (collision rejetée, jamais un écrasement) — ed2 peut imposer ses propres ids déterministes. `scene.onStart`/`scene.onSequenceEnd`/`scene.state` exposés (effets de bord auteur type transmission backend ; état niveau scène, distinct de `story.state`). `SceneDef.name?` ajouté (`create({id, name?})`, symétrique à `story.name`/`perso.name`). `trackId`/`Perso.list` ne se perdent plus au clone. `docs/formalisation/v1-authoring-api.md` étendu pour couvrir ces ajouts — absents de la spec depuis toujours, pas une régression corrigée.
 - Principe transverse posé pendant ce chantier : à chaque ajout/modif de champ sur `SceneDef` ou `StoryDef`, se demander si l'autre niveau en a besoin aussi — pas une équivalence stricte, une question de familiarité auteur (cf mémoire de session `feedback-scene-story-parameter-symmetry`).
 

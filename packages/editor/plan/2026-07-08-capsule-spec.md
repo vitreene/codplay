@@ -4,6 +4,8 @@
 
 Capsule est une notion **inconnue de Codplay** — c'est un concept d'authoring ed2 qui se résout, au build, en perso Codplay ordinaire.
 
+> **⚠ POINT SUPERSÉDÉ (2026-07-12) par `app/2026-07-11-ed2-document-model.md`** : la structure des réglages de capsule est désormais **`CapsuleDef`, portée par l'item (`Item.capsule`)**, statique, définie une fois — elle **absorbe** l'ancien `CapsulePatch` (§10 ci-dessous) et les réglages de distribution (plus de dualité def/patch). La capsule **ne vit pas dans le décor**. `CapsulePatch` reste le **nom de code actuel de dedit** (`decor-editor/types.ts`) — point de migration, pas la cible. Le §10 ci-dessous décrit l'existant/l'historique ; le document-modèle fait foi.
+
 ---
 
 ## 1. Vocabulaire unifié
