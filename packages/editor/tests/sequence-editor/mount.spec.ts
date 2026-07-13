@@ -78,14 +78,32 @@ describe('mountSequenceEditor', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('selecting a track (via the controller) is reflected in the rendered infobar', () => {
+  it('selecting a track only updates the rendered infobar once the central controller echoes it back (§"unicité de la source" — selectTrack alone only emits, never self-applies)', () => {
+    container = document.createElement('div')
+    const scene = minimalScene()
+    controller = new SequenceEditorController(scene)
+    const handle = mountSequenceEditor(container, controller)
+
+    // Simule le pont vers le contrôleur central : celui-ci reçoit la demande de sélection et la
+    // renvoie par écho (`syncFromCenter`) — c'est ce round-trip, pas `selectTrack` seul, qui met
+    // effectivement à jour la sélection lue par le rendu.
+    controller.onSelectionRequest((itemIds, keyframeId) => {
+      controller.syncFromCenter(scene, { itemIds, keyframeId })
+    })
+
+    controller.selectTrack('item-1')
+    expect(container.querySelector('.seq-infobar')?.textContent).toContain('Item')
+
+    handle.destroy()
+  })
+
+  it('selectTrack alone (no bridge listening) does not change the rendered infobar — confirms it only emits', () => {
     container = document.createElement('div')
     controller = new SequenceEditorController(minimalScene())
     const handle = mountSequenceEditor(container, controller)
 
     controller.selectTrack('item-1')
-
-    expect(container.querySelector('.seq-infobar')?.textContent).toContain('Item')
+    expect(container.querySelector('.seq-infobar')?.textContent ?? '').not.toContain('Item')
 
     handle.destroy()
   })

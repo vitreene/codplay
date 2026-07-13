@@ -116,10 +116,18 @@ export function mountSequenceEditor(
   zoomSlider.value = '80'
   zoomWrap.appendChild(zoomSlider)
 
+  const unitLabel = document.createElement('span')
+  unitLabel.classList.add('seq-toolbar__label')
+  unitLabel.textContent = 'unité'
+
   const unitBtn = document.createElement('button')
   unitBtn.classList.add('seq-toolbar__btn')
   unitBtn.textContent = 's'
-  unitBtn.title = 'Basculer unité de temps'
+  unitBtn.title = 'Basculer unité de temps (s / ms)'
+
+  const followLabel = document.createElement('span')
+  followLabel.classList.add('seq-toolbar__label')
+  followLabel.textContent = 'suivre'
 
   const btnFollow = document.createElement('button')
   btnFollow.classList.add('seq-toolbar__btn')
@@ -138,7 +146,7 @@ export function mountSequenceEditor(
   btnClearRange.title = 'Effacer le clip'
   btnClearRange.style.display = 'none'
 
-  toolbar.append(btnPlay, btnStop, timeDisplay, zoomWrap, unitBtn, btnFollow, btnZoomRange, btnClearRange)
+  toolbar.append(btnPlay, btnStop, timeDisplay, zoomWrap, unitLabel, unitBtn, followLabel, btnFollow, btnZoomRange, btnClearRange)
 
   const editor = document.createElement('div')
   editor.classList.add('seq-editor')
@@ -255,12 +263,20 @@ export function mountSequenceEditor(
 
   function onTimelinePointerDown(e: PointerEvent): void {
     if (e.button !== 0) return
+    // La sélection de texte native pendant un drag est bloquée par CSS (`user-select:none` +
+    // `-webkit-user-select:none` sur `.seq-editor`, toujours actif, pas quelque chose que le JS
+    // doit "rattraper" via `preventDefault()`) — vérifié en conditions réelles (Safari) : la
+    // sélection reste vide au drag, avec ou sans `preventDefault` ici. Un `preventDefault()`
+    // systématique sur ce pointerdown avait été ajouté par erreur pour ce même besoin ; retiré —
+    // il s'appliquait aussi au cas d'un simple double-clic (aucun drag prévu), risque inutile.
     if (e.altKey) {
       startPan(e)
       return
     }
     const rowEl = (e.target as HTMLElement).closest('[data-track-id]') as HTMLElement | null
-    if (rowEl?.dataset.kind === 'capsule') startClipDrag(rowEl.dataset.trackId!, e)
+    if (rowEl?.dataset.kind === 'capsule') {
+      startClipDrag(rowEl.dataset.trackId!, e)
+    }
   }
   timeline.addEventListener('pointerdown', onTimelinePointerDown)
 

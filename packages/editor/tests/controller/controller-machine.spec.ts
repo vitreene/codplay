@@ -17,6 +17,7 @@ function sceneFixture(): EditorScene {
     contents: {},
     decors: {},
     zones: {},
+    markerTracks: {},
   }
 }
 

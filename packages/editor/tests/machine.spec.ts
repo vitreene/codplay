@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createActor } from 'xstate'
 import { sequenceEditorMachine } from '../src/sequence-editor/machine'
+import type { Command } from '../src/app/controller/types'
 import type { EditorScene } from '../src/sequence-editor/types'
 import sceneOneTrack from '../src/sequence-editor/fixtures/scene-one-track.json'
 import sceneEmpty from '../src/sequence-editor/fixtures/scene-empty.json'
@@ -16,40 +17,34 @@ function boot(scene: EditorScene, viewWidthPx = 800) {
   return actor
 }
 
-// ─── Add / remove keyframe ───────────────────────────────────────────────────
+/** Même filtre que `SequenceEditorController.onCommand` — un commandBatch vide EST émis au niveau brut (`emit()` doit toujours retourner un event), filtré une couche plus haut. */
+function collectCommands(actor: ReturnType<typeof boot>): Command[][] {
+  const batches: Command[][] = []
+  actor.on('commandBatch', (e) => { if (e.commands.length > 0) batches.push(e.commands) })
+  return batches
+}
+
+// ─── Add / remove keyframe — émettent, ne mutent plus scene localement ──────
 
 describe('KEYFRAME.ADD', () => {
-  it('insère un keyframe et le trie par timeMs', () => {
+  it('émet createNamedKeyframe avec le timeMs demandé, scene locale inchangée', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 3000 })
-    const item = actor.getSnapshot().context.scene.items.find(i => i.id === 'track-01')!
-    expect(item.keyframes).toHaveLength(4)
-    const times = item.keyframes.map(k => k.timeMs)
-    expect(times).toEqual([...times].sort((a, b) => a - b))
-    expect(item.keyframes.find(k => k.timeMs === 3000)).toBeDefined()
+    expect(actor.getSnapshot().context.scene.items[0]!.keyframes).toHaveLength(3) // inchangé — pas d'auto-mutation
+    expect(batches[0]![0]).toMatchObject({ name: 'createNamedKeyframe', args: { itemId: 'track-01', timeMs: 3000 } })
     actor.stop()
   })
 
-  it('clamp le timeMs à [0, durationMs]', () => {
+  it('clampe le timeMs à [0, durationMs] avant émission', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 99999 })
-    const kf = actor.getSnapshot().context.scene.items[0]!.keyframes.find(
-      k => k.timeMs === 10000,
-    )
-    expect(kf).toBeDefined()
+    expect(batches[0]![0]).toMatchObject({ args: { timeMs: 10000 } })
     actor.stop()
   })
 
-  it('snapGrid est mis à jour après ajout', () => {
-    const actor = boot(ONE_TRACK)
-    const beforeCount = actor.getSnapshot().context.snapGrid.length
-    actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 5000 })
-    const afterCount = actor.getSnapshot().context.snapGrid.length
-    expect(afterCount).toBe(beforeCount + 1)
-    actor.stop()
-  })
-
-  it('dégrade le machine en idle après ajout', () => {
+  it('dégrade le machine en idle après émission', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 'track-01', timeMs: 4000 })
     expect(actor.getSnapshot().value).toBe('idle')
@@ -58,21 +53,11 @@ describe('KEYFRAME.ADD', () => {
 })
 
 describe('KEYFRAME.REMOVE', () => {
-  it('supprime le keyframe ciblé', () => {
+  it('émet deleteKeyframe pour le keyframe ciblé', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'KEYFRAME.REMOVE', trackId: 'track-01', keyframeId: 'kf-02' })
-    const item = actor.getSnapshot().context.scene.items[0]!
-    expect(item.keyframes).toHaveLength(2)
-    expect(item.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
-    actor.stop()
-  })
-
-  it('efface la sélection si le kf supprimé était sélectionné', () => {
-    const actor = boot(ONE_TRACK)
-    actor.send({ type: 'KEYFRAME.SELECT', trackId: 'track-01', keyframeId: 'kf-02' })
-    actor.send({ type: 'KEYFRAME.REMOVE', trackId: 'track-01', keyframeId: 'kf-02' })
-    const { selection } = actor.getSnapshot().context
-    expect(selection.keyframeId).toBeNull()
+    expect(batches).toEqual([[{ name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02' } }]])
     actor.stop()
   })
 })
@@ -80,7 +65,7 @@ describe('KEYFRAME.REMOVE', () => {
 // ─── Drag start → move (avec snap) → end ────────────────────────────────────
 
 describe('drag keyframe', () => {
-  it('DRAG.START_KEYFRAME → state dragging-keyframe', () => {
+  it('DRAG.START_KEYFRAME → state dragging-keyframe (interaction reste locale)', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
     expect(actor.getSnapshot().value).toBe('dragging-keyframe')
@@ -93,56 +78,55 @@ describe('drag keyframe', () => {
     actor.stop()
   })
 
-  it('DRAG.MOVE met à jour currentMs (arrondi à 100 ms)', () => {
+  it('DRAG.MOVE met à jour currentMs localement (arrondi à 100 ms) — n\'émet rien', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
     actor.send({ type: 'DRAG.MOVE', pointerMs: 2050 })
     const i = actor.getSnapshot().context.interaction!
-    if (i.kind === 'dragging-keyframe') {
-      expect(i.currentMs).toBe(2100)   // arrondi à 100 ms
-    }
+    if (i.kind === 'dragging-keyframe') expect(i.currentMs).toBe(2100)
+    expect(batches).toHaveLength(0)
     actor.stop()
   })
 
   it('DRAG.MOVE snap sur un marqueur à portée', () => {
-    // ONE_TRACK n'a pas de piste de marqueurs — en ajouter une, puis dragger à portée d'un marqueur.
     // Remplace l'ancien `CUE.ADD` (supprimé — les cues vivent désormais dans `Content`, par item
-    // média ; un point d'aimantation autoportant sur la scène est un marqueur, `markerTracks`).
-    const actor = boot(ONE_TRACK)
-    actor.send({ type: 'MARKER_TRACK.ADD', track: { id: 'mt-test', label: 'test', visible: true, markers: [] } })
-    actor.send({ type: 'MARKER.ADD', markerTrackId: 'mt-test', marker: { id: 'marker-test', timeMs: 3000, label: 'test' } })
+    // média) : un point d'aimantation autoportant sur la scène est un marqueur (`markerTracks`).
+    // Poser directement le marqueur dans la scène de boot (les mutations ne s'appliquent plus
+    // localement — MARKER_TRACK.ADD/MARKER.ADD émettraient, il faudrait un écho pour les voir ici).
+    const scene: EditorScene = {
+      ...ONE_TRACK,
+      markerTracks: { 'mt-test': { id: 'mt-test', label: 'test', visible: true, markers: [{ id: 'marker-test', timeMs: 3000, label: 'test' }] } },
+    }
+    const actor = boot(scene)
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
     // avec ZOOM_DEFAULT=80px/s et snapThresholdPx=8, threshold=100ms.  3020 est dans [2900,3100]
     actor.send({ type: 'DRAG.MOVE', pointerMs: 3020 })
     const i = actor.getSnapshot().context.interaction!
-    if (i.kind === 'dragging-keyframe') {
-      expect(i.currentMs).toBe(3000)   // snappé sur le marqueur
-    }
+    if (i.kind === 'dragging-keyframe') expect(i.currentMs).toBe(3000) // snappé sur le marqueur
     actor.stop()
   })
 
-  it('DRAG.END → idle, keyframe déplacé au currentMs', () => {
+  it('DRAG.END → idle, émet moveKeyframe au currentMs (scene locale inchangée)', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
     actor.send({ type: 'DRAG.MOVE', pointerMs: 4000 })
     actor.send({ type: 'DRAG.END' })
     expect(actor.getSnapshot().value).toBe('idle')
-    const item = actor.getSnapshot().context.scene.items[0]!
-    const kf = item.keyframes.find(k => k.id === 'kf-02')
-    expect(kf?.timeMs).toBe(4000)
-    const times = item.keyframes.map(k => k.timeMs)
-    expect(times).toEqual([...times].sort((a, b) => a - b))
+    expect(batches).toEqual([[{ name: 'moveKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02', timeMs: 4000 } }]])
+    expect(actor.getSnapshot().context.scene.items[0]!.keyframes.find(k => k.id === 'kf-02')?.timeMs).toBe(600) // inchangé localement
     actor.stop()
   })
 
-  it('DRAG.END ignoré si hors [0, durationMs]', () => {
+  it('DRAG.END : currentMs clampé à durationMs, le guard canCommitDrag passe donc toujours (comportement du code, pas juste un test)', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 'track-01', keyframeId: 'kf-02' })
-    // forcer currentMs hors bornes via un pointerMs > durationMs (la machine clamp à durationMs)
     actor.send({ type: 'DRAG.MOVE', pointerMs: 11000 })
-    // currentMs sera clampé à 10000 (durationMs) — guard canCommitDrag passe
     actor.send({ type: 'DRAG.END' })
     expect(actor.getSnapshot().value).toBe('idle')
+    expect(batches[0]![0]).toMatchObject({ args: { timeMs: 10000 } })
     actor.stop()
   })
 })
@@ -157,7 +141,7 @@ describe('clip draw', () => {
     actor.stop()
   })
 
-  it('CLIP.DRAW_MOVE met à jour currentMs', () => {
+  it('CLIP.DRAW_MOVE met à jour currentMs localement', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 0, introId: 'i1', outroId: 'o1' })
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
@@ -166,33 +150,31 @@ describe('clip draw', () => {
     actor.stop()
   })
 
-  it('CLIP.DRAW_END → idle, crée intro et outro avec les bons ids et timeMs', () => {
+  it('CLIP.DRAW_END → idle, émet la suppression des intro/outro existants puis leur recréation aux bons ids/timeMs', () => {
     const actor = boot(ONE_TRACK)
+    const batches = collectCommands(actor)
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 1000, introId: 'new-intro', outroId: 'new-outro' })
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 3000 })
     actor.send({ type: 'CLIP.DRAW_END' })
     expect(actor.getSnapshot().value).toBe('idle')
-    const kfs = actor.getSnapshot().context.scene.items[0]!.keyframes
-    const intro = kfs.find(k => k.id === 'new-intro')
-    const outro = kfs.find(k => k.id === 'new-outro')
-    expect(intro?.timeMs).toBe(1000)
-    expect(outro?.timeMs).toBe(3000)
-    expect(intro?.name).toBe('intro')
-    expect(outro?.name).toBe('outro')
+    // ONE_TRACK a déjà kf-01 (intro) et kf-03 (outro) sur track-01 → deux deleteKeyframe avant les deux creates
+    expect(batches).toEqual([[
+      { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-01' } },
+      { name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-03' } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-intro', timeMs: 1000, name: 'intro' } },
+      { name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: 'new-outro', timeMs: 3000, name: 'outro' } },
+    ]])
     actor.stop()
   })
 
   it('CLIP.DRAW_END normalise les bornes (start > end)', () => {
     const actor = boot(ONE_TRACK)
-    // Dessin en sens inverse : start=4000 → move=2000
+    const batches = collectCommands(actor)
     actor.send({ type: 'CLIP.START_DRAW', trackId: 'track-01', pointerMs: 4000, introId: 'rev-i', outroId: 'rev-o' })
     actor.send({ type: 'CLIP.DRAW_MOVE', pointerMs: 2000 })
     actor.send({ type: 'CLIP.DRAW_END' })
-    const kfs = actor.getSnapshot().context.scene.items[0]!.keyframes
-    const intro = kfs.find(k => k.id === 'rev-i')
-    const outro = kfs.find(k => k.id === 'rev-o')
-    expect(intro?.timeMs).toBe(2000)   // min
-    expect(outro?.timeMs).toBe(4000)   // max
+    expect(batches[0]!.find(c => c.name === 'createNamedKeyframe' && c.args.name === 'intro')).toMatchObject({ args: { timeMs: 2000 } })
+    expect(batches[0]!.find(c => c.name === 'createNamedKeyframe' && c.args.name === 'outro')).toMatchObject({ args: { timeMs: 4000 } })
     actor.stop()
   })
 })
@@ -254,9 +236,7 @@ describe('panning', () => {
   })
 
   it('PAN_MOVE déplace le viewport proportionnellement', () => {
-    // viewWidthPx=400 → viewDuration=5000 ms < durationMs=10000 → pan possible
     const actor = boot(EMPTY, 400)
-    // pixelsPerMs=0.08 → 100 px = 1250 ms. Pan de 200→100 décale +1250 ms
     actor.send({ type: 'VIEWPORT.PAN_START', pointerPx: 200 })
     actor.send({ type: 'VIEWPORT.PAN_MOVE', pointerPx: 100 })
     const { startMs } = actor.getSnapshot().context.viewport
@@ -312,7 +292,7 @@ describe('playhead', () => {
 // ─── SCENE.LOAD ──────────────────────────────────────────────────────────────
 
 describe('SCENE.LOAD', () => {
-  it('remplace la scène et remet playhead à 0', () => {
+  it('remplace la scène et remet playhead à 0 (réservé au vrai changement de document — §ci-dessus)', () => {
     const actor = boot(ONE_TRACK)
     actor.send({ type: 'PLAYHEAD.SET', timeMs: 5000 })
     actor.send({ type: 'SCENE.LOAD', scene: NESTED })
@@ -335,16 +315,11 @@ describe('scène imbriquée (scene-nested-capsule)', () => {
     actor.stop()
   })
 
-  it('TRACK.REMOVE sur la capsule retire aussi ses descendants', () => {
+  it('TRACK.REMOVE émet le deleteItem central (le nettoyage des descendants est la responsabilité de base-commands.ts, testé là-bas)', () => {
     const actor = boot(NESTED)
+    const batches = collectCommands(actor)
     actor.send({ type: 'TRACK.REMOVE', trackId: 'track-capsule-01' })
-    const ids = actor.getSnapshot().context.scene.items.map(i => i.id)
-    expect(ids).not.toContain('track-capsule-01')
-    expect(ids).not.toContain('track-item-01')
-    expect(ids).not.toContain('track-item-02')
-    // les items non descendants (fond, CTA) survivent
-    expect(ids).toContain('track-bg')
-    expect(ids).toContain('track-cta')
+    expect(batches).toEqual([[{ name: 'deleteItem', args: { itemId: 'track-capsule-01' } }]])
     actor.stop()
   })
 })

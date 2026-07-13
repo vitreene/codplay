@@ -15,7 +15,7 @@ const PALETTE_CONFIG: PaletteConfig = {
       fields: [{ path: 'style.background-color', kind: 'color', label: 'Fond' }],
     },
   ],
-  panelsByItemType: { text: ['shape'] },
+  panelsByItemType: { text: ['shape'], image: [], media: [], video: [], capsule: [] },
 }
 
 function minimalController(): DecorEditorController {

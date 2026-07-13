@@ -1,15 +1,17 @@
 import { createActor } from 'xstate'
 import {
   sequenceEditorMachine,
+  applySnapToMs,
   type MachineContext,
   type MachineViewport,
   type MachineSelection,
   type PlayRange,
+  type CentralSelectionEcho,
 } from './machine'
 import type {
-  EditorScene, Item, MarkerTrack, Transition, LayoutProfile, DisplayConfig, Waveform,
+  EditorScene, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
-import { applySnapToMs } from './machine'
+import type { Command } from '../app/controller/types'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
 
@@ -17,6 +19,8 @@ export type SequenceEditorSnapshot = {
   context: MachineContext
   value: string
 }
+
+export type Unsubscribe = () => void
 
 // ─── ID generator ────────────────────────────────────────────────────────────
 
@@ -72,6 +76,32 @@ export class SequenceEditorController {
   getSnapshot(): SequenceEditorSnapshot {
     const s = this.actor.getSnapshot()
     return { context: s.context, value: String(s.value) }
+  }
+
+  // ── Émission vers le contrôleur central (§"unicité de la source" — cette machine ne possède
+  // plus `scene`/`selection`, elle émet ce qui a changé) ────────────────────────────────────────
+
+  /** Une ou plusieurs commandes à appliquer via `RUN_COMMAND`/`RUN_TRANSACTION` central. */
+  onCommand(cb: (commands: Command[]) => void): Unsubscribe {
+    const sub = this.actor.on('commandBatch', (e) => {
+      if (e.commands.length > 0) cb(e.commands)
+    })
+    return () => sub.unsubscribe()
+  }
+
+  /** Intention de sélection — le contrôleur central reste l'unique possesseur de `selection`. */
+  onSelectionRequest(cb: (itemIds: string[], keyframeId?: string) => void): Unsubscribe {
+    const sub = this.actor.on('selectionRequested', (e) => cb(e.itemIds, e.keyframeId))
+    return () => sub.unsubscribe()
+  }
+
+  /**
+   * Écho autoritaire du contrôleur central après un commit — remplace `scene`/`selection` SANS
+   * toucher playhead/geste en cours (`SCENE.SYNC`, distinct de `deserialize()`/`SCENE.LOAD` qui
+   * réinitialise tout : réservé au chargement d'un document DIFFÉRENT, jamais appelé ici).
+   */
+  syncFromCenter(scene: EditorScene, selection: CentralSelectionEcho): void {
+    this.send({ type: 'SCENE.SYNC', scene, selection })
   }
 
   // ── Context accessors ───────────────────────────────────────────────────────
@@ -298,17 +328,13 @@ export class SequenceEditorController {
   }
 
   // ── Track (items) ───────────────────────────────────────────────────────────
-
-  /**
-   * Ajoute un item — la position dans la fratrie (`order`) est de la responsabilité de l'appelant
-   * (façade centrale, hors périmètre du sequence-editor lui-même — ce contrôleur reste un îlot
-   * piloté, pas propriétaire de la politique d'ordre). `parentId: null` = enfant racine.
-   */
-  addTrack(item: Omit<Item, 'id' | 'keyframes'>): string {
-    const id = genId('item')
-    this.send({ type: 'TRACK.ADD', item: { ...item, id } })
-    return id
-  }
+  //
+  // Pas de `addTrack` ici : créer un item est une opération de STRUCTURE du document (type,
+  // contenu, décor initial) qui appartient à la façade centrale (`createItem` + `assignType` +
+  // `assignContent`, composées en transaction) — jamais une opération timeline. L'ancien
+  // `addTrack`/`TRACK.ADD` (un item déjà entièrement formé posé en un seul appel) n'était exercé
+  // par aucun geste réel de `mount.ts`, seulement par des tests — retiré, pas migré (v1, pas de
+  // legacy à traîner pour un besoin qui ne correspond à rien de réel).
 
   removeTrack(trackId: string): void {
     this.send({ type: 'TRACK.REMOVE', trackId })
@@ -331,8 +357,7 @@ export class SequenceEditorController {
 
   addMarkerTrack(label: string, color?: string): string {
     const id = genId('mtrack')
-    const track: MarkerTrack = { id, label, color, visible: true, markers: [] }
-    this.send({ type: 'MARKER_TRACK.ADD', track })
+    this.send({ type: 'MARKER_TRACK.ADD', markerTrackId: id, label, color })
     return id
   }
 

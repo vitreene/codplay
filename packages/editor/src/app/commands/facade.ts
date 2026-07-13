@@ -7,6 +7,7 @@
  */
 
 import * as base from './base-commands'
+import * as sequenceEditor from '../../sequence-editor/commands'
 import type { Command } from '../controller/types'
 import type { EditorScene } from './types'
 
@@ -43,6 +44,50 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: base.placeInZone(scene, command.args) }
     case 'deleteItem':
       return { scene: base.deleteItem(scene, command.args) }
+    // ── Commandes locales au sequence-editor (`sequence-editor/commands.ts`) — même voie
+    // d'écriture, deuxième bibliothèque de fonctions pures (§3bis du plan îlots) ──────────────
+    case 'createNamedKeyframe':
+      return { scene: sequenceEditor.createNamedKeyframe(scene, command.args) }
+    case 'deleteKeyframe':
+      return { scene: sequenceEditor.deleteKeyframe(scene, command.args) }
+    case 'moveKeyframe':
+      return { scene: sequenceEditor.moveKeyframe(scene, command.args) }
+    case 'renameKeyframe':
+      return { scene: sequenceEditor.renameKeyframe(scene, command.args) }
+    case 'assignKeyframeDecor':
+      return { scene: sequenceEditor.assignKeyframeDecor(scene, command.args) }
+    case 'setKeyframeTransitionIn':
+      return { scene: sequenceEditor.setKeyframeTransitionIn(scene, command.args) }
+    case 'setKeyframeTransitionOut':
+      return { scene: sequenceEditor.setKeyframeTransitionOut(scene, command.args) }
+    case 'attachMarkerToKeyframe':
+      return { scene: sequenceEditor.attachMarkerToKeyframe(scene, command.args) }
+    case 'detachMarkerFromKeyframe':
+      return { scene: sequenceEditor.detachMarkerFromKeyframe(scene, command.args) }
+    case 'clearItemKeyframes':
+      return { scene: sequenceEditor.clearItemKeyframes(scene, command.args) }
+    case 'clearCapsuleKeyframes':
+      return { scene: sequenceEditor.clearCapsuleKeyframes(scene, command.args) }
+    case 'toggleItemVisibility':
+      return { scene: sequenceEditor.toggleItemVisibility(scene, command.args) }
+    case 'addMarkerTrack':
+      return { scene: sequenceEditor.addMarkerTrack(scene, command.args) }
+    case 'removeMarkerTrack':
+      return { scene: sequenceEditor.removeMarkerTrack(scene, command.args) }
+    case 'renameMarkerTrack':
+      return { scene: sequenceEditor.renameMarkerTrack(scene, command.args) }
+    case 'toggleMarkerTrackVisibility':
+      return { scene: sequenceEditor.toggleMarkerTrackVisibility(scene, command.args) }
+    case 'addMarker':
+      return { scene: sequenceEditor.addMarker(scene, command.args) }
+    case 'moveMarker':
+      return { scene: sequenceEditor.moveMarker(scene, command.args) }
+    case 'removeMarker':
+      return { scene: sequenceEditor.removeMarker(scene, command.args) }
+    case 'setMasterWaveform':
+      return { scene: sequenceEditor.setMasterWaveform(scene, command.args) }
+    case 'setSceneDuration':
+      return { scene: sequenceEditor.setSceneDuration(scene, command.args) }
   }
 }
 

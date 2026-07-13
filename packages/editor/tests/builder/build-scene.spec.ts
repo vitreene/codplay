@@ -42,6 +42,7 @@ function fixtureScene(): EditorScene {
       },
     ],
     zones: {},
+    markerTracks: {},
   }
 }
 
@@ -143,6 +144,7 @@ function nestedFixtureScene(): EditorScene {
     decors: {},
     contents: {},
     zones: {},
+    markerTracks: {},
     items: [
       {
         id: 'capsule-a',
@@ -273,6 +275,7 @@ describe('buildSceneDoc — nested capsule reads its own CapsuleDef.grid overrid
       decors: {},
       contents: {},
       zones: {},
+      markerTracks: {},
       items: [
         {
           id: 'capsule-a',
@@ -316,6 +319,7 @@ describe('buildSceneDoc — error paths (never silently guessed, Principe B)', (
       decors: {},
       contents: {},
       zones: {},
+      markerTracks: {},
       items: [
         {
           id: 'capsule-untyped', type: 'capsule', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
@@ -334,6 +338,7 @@ describe('buildSceneDoc — error paths (never silently guessed, Principe B)', (
       decors: {},
       contents: {},
       zones: {},
+      markerTracks: {},
       items: [
         {
           id: 'item-image', type: 'image', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',
@@ -355,6 +360,7 @@ describe('buildSceneDoc — error paths (never silently guessed, Principe B)', (
       decors: {},
       contents: {},
       zones: {},
+      markerTracks: {},
       items: [
         {
           id: 'capsule-unconfigured', type: 'capsule', parentId: null, order: 'mmm', visible: true, contentId: null, initialDecorId: 'unused',

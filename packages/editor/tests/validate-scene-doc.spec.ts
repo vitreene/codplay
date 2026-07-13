@@ -25,6 +25,7 @@ function validSceneFixture(): EditorScene {
     },
     contents: {},
     zones: {},
+    markerTracks: {},
     items: [
       {
         id: 'item-1',

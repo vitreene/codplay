@@ -1,6 +1,15 @@
+// `SequenceEditorController` n'auto-applique plus les mutations de document (§"unicité de la
+// source" — `2026-07-13-controller-islands-bridge-plan.md` §3bis) : la plupart des méthodes
+// émettent une commande via `onCommand` plutôt que de la refléter dans `getScene()`. Les EFFETS de
+// chaque commande (ce qu'elle fait réellement à une scène) sont déjà testés dans
+// `tests/sequence-editor/commands.spec.ts` — ce fichier vérifie que la bonne commande, avec les
+// bons arguments, est émise pour chaque méthode publique, plus tout ce qui reste purement local
+// (viewport, playhead, geste, markerId).
+
 import { describe, it, expect, vi } from 'vitest'
 import { SequenceEditorController } from '../src/sequence-editor/controller'
 import type { EditorScene } from '../src/sequence-editor/types'
+import type { Command } from '../src/app/controller/types'
 import sceneOneTrack from '../src/sequence-editor/fixtures/scene-one-track.json'
 import sceneEmpty from '../src/sequence-editor/fixtures/scene-empty.json'
 import sceneNested from '../src/sequence-editor/fixtures/scene-nested-capsule.json'
@@ -10,6 +19,18 @@ const ONE_TRACK = sceneOneTrack as unknown as EditorScene
 const EMPTY     = sceneEmpty    as unknown as EditorScene
 const NESTED    = sceneNested   as unknown as EditorScene
 const EDDY      = sceneEddy     as unknown as EditorScene
+
+function collectCommands(ctrl: SequenceEditorController): Command[][] {
+  const batches: Command[][] = []
+  ctrl.onCommand((commands) => batches.push(commands))
+  return batches
+}
+
+function collectSelectionRequests(ctrl: SequenceEditorController): { itemIds: string[]; keyframeId?: string }[] {
+  const requests: { itemIds: string[]; keyframeId?: string }[] = []
+  ctrl.onSelectionRequest((itemIds, keyframeId) => requests.push({ itemIds, keyframeId }))
+  return requests
+}
 
 // ─── Cycle de vie ────────────────────────────────────────────────────────────
 
@@ -42,13 +63,12 @@ describe('cycle de vie', () => {
     const unsub = ctrl.subscribe(cb)
     unsub()
     ctrl.play()
-    // cb ne doit pas avoir été rappelé après unsub
     expect(cb).toHaveBeenCalledOnce()
     ctrl.destroy()
   })
 })
 
-// ─── Sérialisation / roundtrip ───────────────────────────────────────────────
+// ─── Sérialisation / roundtrip — deserialize() reste réservé au chargement d'un document ──────
 
 describe('serialize / deserialize', () => {
   it('roundtrip exact : scene-one-track', () => {
@@ -78,10 +98,12 @@ describe('serialize / deserialize', () => {
     ctrl.destroy()
   })
 
-  it('deserialize remplace la scène courante', () => {
+  it('deserialize remplace la scène courante ET remet playhead/sélection à zéro (chargement d\'un document différent)', () => {
     const ctrl = new SequenceEditorController(EMPTY)
+    ctrl.seek(5000)
     ctrl.deserialize(EDDY)
     expect(ctrl.getScene().id).toBe('scene-eddy-ref')
+    expect(ctrl.getPlayheadMs()).toBe(0)
     ctrl.destroy()
   })
 
@@ -93,23 +115,32 @@ describe('serialize / deserialize', () => {
   })
 })
 
-// ─── Keyframes ───────────────────────────────────────────────────────────────
+// ─── syncFromCenter — le point d'entrée de resynchronisation post-commit (jamais deserialize) ──
 
-describe('addKeyframe', () => {
-  it('retourne un id string', () => {
+describe('syncFromCenter', () => {
+  it('remplace scene + sélection SANS toucher playhead/interaction (contraste avec deserialize)', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    const id = ctrl.addKeyframe('track-01', 5000)
-    expect(typeof id).toBe('string')
-    expect(id.length).toBeGreaterThan(0)
+    ctrl.seek(5000)
+    ctrl.syncFromCenter(NESTED, { itemIds: ['track-capsule-01'], keyframeId: 'kf-cap-01' })
+
+    expect(ctrl.getScene().id).toBe(NESTED.id)
+    expect(ctrl.getPlayheadMs()).toBe(5000) // préservé — c'est tout l'objet de syncFromCenter
+    expect(ctrl.getSnapshot().context.selection).toEqual({ trackId: 'track-capsule-01', keyframeId: 'kf-cap-01', markerId: null })
     ctrl.destroy()
   })
+})
 
-  it('le kf avec cet id est bien dans la scène', () => {
+// ─── Keyframes — émettent, n'appliquent plus rien localement ──────────────────
+
+describe('addKeyframe / removeKeyframe / moveKeyframe émettent la commande correspondante', () => {
+  it('addKeyframe émet createNamedKeyframe et retourne l\'id choisi — réutilise le décor adjacent (kf-02 à 600ms, decor-02, le plus proche avant 5000ms)', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
+    const batches = collectCommands(ctrl)
     const id = ctrl.addKeyframe('track-01', 5000)
-    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === id)
-    expect(kf).toBeDefined()
-    expect(kf!.timeMs).toBe(5000)
+    expect(typeof id).toBe('string')
+    expect(batches).toEqual([[{ name: 'createNamedKeyframe', args: { itemId: 'track-01', keyframeId: id, timeMs: 5000, decorId: 'decor-02' } }]])
+    // scene locale (cache lecture seule) inchangée sans écho
+    expect(ctrl.getScene().items[0]!.keyframes.find(k => k.id === id)).toBeUndefined()
     ctrl.destroy()
   })
 
@@ -120,237 +151,192 @@ describe('addKeyframe', () => {
     expect(id1).not.toBe(id2)
     ctrl.destroy()
   })
-})
 
-describe('removeKeyframe', () => {
-  it('supprime le kf ciblé', () => {
+  it('removeKeyframe émet deleteKeyframe', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
+    const batches = collectCommands(ctrl)
     ctrl.removeKeyframe('track-01', 'kf-02')
-    expect(ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')).toBeUndefined()
+    expect(batches).toEqual([[{ name: 'deleteKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02' } }]])
     ctrl.destroy()
   })
 
-  it('retire le décor orphelin du registre', () => {
+  it('moveKeyframe (drag start→move→end programmatique) émet moveKeyframe au timeMs snappé', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    // kf-01 référence decor-01, partagé avec personne d'autre
-    ctrl.removeKeyframe('track-01', 'kf-01')
-    expect(ctrl.getScene().decors['decor-01']).toBeUndefined()
-    ctrl.destroy()
-  })
-
-  it('conserve le décor s\'il est encore utilisé', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
-    // kf-02 et kf-03 partagent decor-02 — supprimer kf-02 ne doit pas retirer decor-02
-    ctrl.removeKeyframe('track-01', 'kf-02')
-    expect(ctrl.getScene().decors['decor-02']).toBeDefined()
-    ctrl.destroy()
-  })
-})
-
-describe('moveKeyframe', () => {
-  it('déplace kf-02 à 4000 ms', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
-    ctrl.moveKeyframe('track-01', 'kf-02', 4000)
-    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
-    expect(kf?.timeMs).toBe(4000)
-    ctrl.destroy()
-  })
-
-  it('retourne à idle après le déplacement', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
+    const batches = collectCommands(ctrl)
     ctrl.moveKeyframe('track-01', 'kf-02', 4000)
     expect(ctrl.getSnapshot().value).toBe('idle')
+    expect(batches).toEqual([[{ name: 'moveKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02', timeMs: 4000 } }]])
     ctrl.destroy()
   })
 })
 
-// ─── Tracks (items) ─────────────────────────────────────────────────────────
+// ─── Tracks (items) — pas de addTrack (retiré, §controller.ts) ; le reste émet ────────────────
 
-describe('addTrack / removeTrack / moveTrack', () => {
-  it('addTrack retourne un id et crée l\'item', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    const id = ctrl.addTrack({ type: 'text', label: 'Nouveau', parentId: null, order: 'a', visible: true, contentId: null, initialDecorId: 'd0' })
-    const item = ctrl.getScene().items.find(i => i.id === id)
-    expect(item).toBeDefined()
-    expect(item!.keyframes).toHaveLength(0)
-    ctrl.destroy()
-  })
-
-  it('removeTrack supprime l\'item', () => {
+describe('removeTrack / toggleVisibility / moveTrack émettent leur commande (structure : commandes CENTRALES réutilisées)', () => {
+  it('removeTrack émet le deleteItem central', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
+    const batches = collectCommands(ctrl)
     ctrl.removeTrack('track-01')
-    expect(ctrl.getScene().items.find(i => i.id === 'track-01')).toBeUndefined()
+    expect(batches).toEqual([[{ name: 'deleteItem', args: { itemId: 'track-01' } }]])
     ctrl.destroy()
   })
 
-  it('toggleVisibility inverse visible', () => {
+  it('toggleVisibility émet toggleItemVisibility', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
-    const before = ctrl.getScene().items[0]!.visible
+    const batches = collectCommands(ctrl)
     ctrl.toggleVisibility('track-01')
-    expect(ctrl.getScene().items[0]!.visible).toBe(!before)
+    expect(batches).toEqual([[{ name: 'toggleItemVisibility', args: { itemId: 'track-01' } }]])
     ctrl.destroy()
   })
 
-  it('moveTrack change le parentId (et l\'order si fourni) — remplace l\'ancien afterId/parentId relatif à un tableau children', () => {
+  it('moveTrack émet le attachItem central avec parentId/order', () => {
     const ctrl = new SequenceEditorController(NESTED)
+    const batches = collectCommands(ctrl)
     ctrl.moveTrack('track-cta', 'track-capsule-01', 'z')
-    const moved = ctrl.getScene().items.find(i => i.id === 'track-cta')!
-    expect(moved.parentId).toBe('track-capsule-01')
-    expect(moved.order).toBe('z')
+    expect(batches).toEqual([[{ name: 'attachItem', args: { itemId: 'track-cta', parentId: 'track-capsule-01', order: 'z' } }]])
     ctrl.destroy()
   })
 })
 
-// ─── Markers ─────────────────────────────────────────────────────────────────
-
-function findMarker(scene: EditorScene, markerId: string) {
-  for (const t of Object.values(scene.markerTracks)) {
-    const m = t.markers.find(m => m.id === markerId)
-    if (m) return m
-  }
-  return undefined
-}
+// ─── Markers — chaque méthode émet sa commande ─────────────────────────────────
 
 describe('addMarkerTrack / removeMarkerTrack / renameMarkerTrack / toggleMarkerTrackVisibility', () => {
-  it('addMarkerTrack crée une piste vide visible', () => {
+  it('addMarkerTrack retourne un id et émet addMarkerTrack', () => {
     const ctrl = new SequenceEditorController(EMPTY)
+    const batches = collectCommands(ctrl)
     const id = ctrl.addMarkerTrack('Visèmes')
-    const t = ctrl.getScene().markerTracks[id]
-    expect(t).toMatchObject({ label: 'Visèmes', visible: true, markers: [] })
+    expect(typeof id).toBe('string')
+    expect(batches).toEqual([[{ name: 'addMarkerTrack', args: { markerTrackId: id, label: 'Visèmes', color: undefined } }]])
     ctrl.destroy()
   })
 
-  it('renameMarkerTrack renomme la piste', () => {
+  it('renameMarkerTrack émet renameMarkerTrack', () => {
     const ctrl = new SequenceEditorController(NESTED)
+    const batches = collectCommands(ctrl)
     ctrl.renameMarkerTrack('mtrack-01', 'Gestes')
-    expect(ctrl.getScene().markerTracks['mtrack-01']?.label).toBe('Gestes')
+    expect(batches).toEqual([[{ name: 'renameMarkerTrack', args: { markerTrackId: 'mtrack-01', label: 'Gestes' } }]])
     ctrl.destroy()
   })
 
-  it('toggleMarkerTrackVisibility bascule visible', () => {
+  it('toggleMarkerTrackVisibility émet toggleMarkerTrackVisibility', () => {
     const ctrl = new SequenceEditorController(NESTED)
+    const batches = collectCommands(ctrl)
     ctrl.toggleMarkerTrackVisibility('mtrack-01')
-    expect(ctrl.getScene().markerTracks['mtrack-01']?.visible).toBe(false)
+    expect(batches).toEqual([[{ name: 'toggleMarkerTrackVisibility', args: { markerTrackId: 'mtrack-01' } }]])
     ctrl.destroy()
   })
 
-  it('removeMarkerTrack retire la piste et détache les kf accrochés à ses marqueurs', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
-    const tid = ctrl.addMarkerTrack('Gestes')
-    const mid = ctrl.addMarker(tid, 600, 'mid')
-    ctrl.attachMarker('track-01', 'kf-02', mid)
-    ctrl.removeMarkerTrack(tid)
-    expect(ctrl.getScene().markerTracks[tid]).toBeUndefined()
-    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
-    expect(kf?.markerId).toBeUndefined()
-    expect(kf?.timeMs).toBe(600)
-    ctrl.destroy()
-  })
-})
-
-describe('addMarker / moveMarker / removeMarker', () => {
-  it('addMarker crée un marker dans la piste donnée', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    const tid = ctrl.addMarkerTrack('Repères')
-    const id = ctrl.addMarker(tid, 5000, 'Repère')
-    const m = findMarker(ctrl.getScene(), id)
-    expect(m?.timeMs).toBe(5000)
-    ctrl.destroy()
-  })
-
-  it('moveMarker déplace le marker', () => {
+  it('removeMarkerTrack émet removeMarkerTrack ET efface le markerId local sélectionné s\'il appartenait à la piste', () => {
     const ctrl = new SequenceEditorController(NESTED)
-    ctrl.moveMarker('marker-01', 4000)
-    expect(findMarker(ctrl.getScene(), 'marker-01')?.timeMs).toBe(4000)
-    ctrl.destroy()
-  })
-
-  it('moveMarker propage aux kf accrochés', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
-    const tid = ctrl.addMarkerTrack('Repères')
-    const mid = ctrl.addMarker(tid, 600, 'mid')
-    ctrl.attachMarker('track-01', 'kf-02', mid)
-    ctrl.moveMarker(mid, 800)
-    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
-    expect(kf?.timeMs).toBe(800)
-    ctrl.destroy()
-  })
-
-  it('removeMarker détache les kf (timeMs conservé, markerId retiré)', () => {
-    const ctrl = new SequenceEditorController(ONE_TRACK)
-    const tid = ctrl.addMarkerTrack('Repères')
-    const mid = ctrl.addMarker(tid, 600, 'mid')
-    ctrl.attachMarker('track-01', 'kf-02', mid)
-    ctrl.removeMarker(mid)
-    const kf = ctrl.getScene().items[0]!.keyframes.find(k => k.id === 'kf-02')
-    expect(kf?.markerId).toBeUndefined()
-    expect(kf?.timeMs).toBe(600)
+    ctrl.selectMarker('marker-01') // appartient à mtrack-01 dans la fixture NESTED
+    const batches = collectCommands(ctrl)
+    ctrl.removeMarkerTrack('mtrack-01')
+    expect(batches).toEqual([[{ name: 'removeMarkerTrack', args: { markerTrackId: 'mtrack-01' } }]])
+    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
     ctrl.destroy()
   })
 })
 
-describe('selectMarker', () => {
-  it('sélectionne un marker et efface la sélection track/keyframe', () => {
+describe('addMarker / moveMarker / removeMarker / attachMarker / detachMarker', () => {
+  it('addMarker émet addMarker avec un marker complet', () => {
+    const ctrl = new SequenceEditorController(EMPTY)
+    const batches = collectCommands(ctrl)
+    const id = ctrl.addMarker('mt1', 5000, 'Repère')
+    expect(batches).toEqual([[{ name: 'addMarker', args: { markerTrackId: 'mt1', marker: { id, timeMs: 5000, label: 'Repère' } } }]])
+    ctrl.destroy()
+  })
+
+  it('moveMarker émet moveMarker', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    const batches = collectCommands(ctrl)
+    ctrl.moveMarker('marker-01', 4000)
+    expect(batches).toEqual([[{ name: 'moveMarker', args: { markerId: 'marker-01', timeMs: 4000 } }]])
+    ctrl.destroy()
+  })
+
+  it('removeMarker émet removeMarker ET efface le markerId local sélectionné', () => {
+    const ctrl = new SequenceEditorController(NESTED)
+    ctrl.selectMarker('marker-01')
+    const batches = collectCommands(ctrl)
+    ctrl.removeMarker('marker-01')
+    expect(batches).toEqual([[{ name: 'removeMarker', args: { markerId: 'marker-01' } }]])
+    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
+    ctrl.destroy()
+  })
+
+  it('attachMarker / detachMarker émettent leur commande', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
+    const batches = collectCommands(ctrl)
+    ctrl.attachMarker('track-01', 'kf-02', 'm1')
+    ctrl.detachMarker('track-01', 'kf-02')
+    expect(batches).toEqual([
+      [{ name: 'attachMarkerToKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02', markerId: 'm1' } }],
+      [{ name: 'detachMarkerFromKeyframe', args: { itemId: 'track-01', keyframeId: 'kf-02' } }],
+    ])
+    ctrl.destroy()
+  })
+})
+
+// ─── Sélection — markerId local ; trackId/keyframeId nécessitent un écho pour se refléter ──────
+
+describe('selectTrack / selectKeyframe / selectMarker', () => {
+  it('selectTrack / selectKeyframe émettent onSelectionRequest, ne changent pas la sélection locale sans écho', () => {
+    const ctrl = new SequenceEditorController(ONE_TRACK)
+    const requests = collectSelectionRequests(ctrl)
+    ctrl.selectTrack('track-01')
     ctrl.selectKeyframe('track-01', 'kf-02')
+    expect(requests).toEqual([
+      { itemIds: ['track-01'], keyframeId: undefined },
+      { itemIds: ['track-01'], keyframeId: 'kf-02' },
+    ])
+    expect(ctrl.getSnapshot().context.selection.trackId).toBeNull()
+  })
+
+  it('selectMarker sélectionne un marker localement ET émet une désélection centrale (itemIds: [])', () => {
+    const ctrl = new SequenceEditorController(ONE_TRACK)
+    const requests = collectSelectionRequests(ctrl)
     ctrl.selectMarker('marker-01')
     const { selection } = ctrl.getSnapshot().context
-    expect(selection).toEqual({ trackId: null, keyframeId: null, markerId: 'marker-01' })
+    expect(selection.markerId).toBe('marker-01')
+    expect(requests).toEqual([{ itemIds: [] }])
     ctrl.destroy()
   })
 
-  it('selectKeyframe efface la sélection de marker', () => {
+  it('selectTrack efface le markerId local sélectionné (mutuellement exclusif, purement local)', () => {
     const ctrl = new SequenceEditorController(ONE_TRACK)
     ctrl.selectMarker('marker-01')
-    ctrl.selectKeyframe('track-01', 'kf-02')
-    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
-    ctrl.destroy()
-  })
-
-  it('removeMarker efface la sélection si le marker supprimé était sélectionné', () => {
-    const ctrl = new SequenceEditorController(NESTED)
-    ctrl.selectMarker('marker-01')
-    ctrl.removeMarker('marker-01')
-    expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
-    ctrl.destroy()
-  })
-
-  it('removeMarkerTrack efface la sélection si le marker sélectionné appartenait à la piste', () => {
-    const ctrl = new SequenceEditorController(NESTED)
-    ctrl.selectMarker('marker-01')
-    ctrl.removeMarkerTrack('mtrack-01')
+    ctrl.selectTrack('track-01')
     expect(ctrl.getSnapshot().context.selection.markerId).toBeNull()
     ctrl.destroy()
   })
 })
 
-// ─── Audio (item média + masterItemId, remplace l'ancien scene.audio) ────────
+// ─── Audio (item média + masterItemId) — émet setMasterWaveform ────────────────
 
-describe('audio', () => {
-  it('setMasterWaveform écrit sur le Content de l\'item désigné par masterItemId', () => {
-    const scene: EditorScene = {
-      ...EMPTY,
-      items: [{ id: 'media-1', type: 'media', parentId: null, order: 'a', visible: true, contentId: 'content-1', initialDecorId: 'd0', keyframes: [] }],
-      contents: { 'content-1': { id: 'content-1', type: 'media', source: '/vo.mp3' } },
-      masterItemId: 'media-1',
-    }
-    const ctrl = new SequenceEditorController(scene)
-    const wf = { version: 1 as const, sampleRate: 44100, durationSec: 8, points: 4, min: [-1, -1, -1, -1], max: [1, 1, 1, 1] }
-    ctrl.setMasterWaveform(wf)
-    expect(ctrl.getScene().contents['content-1']!.waveform?.points).toBe(4)
-    ctrl.destroy()
-  })
-
-  it('setMasterWaveform est un no-op sans masterItemId', () => {
+describe('setMasterWaveform', () => {
+  it('émet setMasterWaveform', () => {
     const ctrl = new SequenceEditorController(EMPTY)
+    const batches = collectCommands(ctrl)
     const wf = { version: 1 as const, sampleRate: 44100, durationSec: 8, points: 4, min: [-1, -1, -1, -1], max: [1, 1, 1, 1] }
     ctrl.setMasterWaveform(wf)
-    expect(ctrl.getScene().contents).toEqual({})
+    expect(batches).toEqual([[{ name: 'setMasterWaveform', args: { waveform: wf } }]])
     ctrl.destroy()
   })
 })
 
-// ─── Coordinate utilities ────────────────────────────────────────────────────
+// ─── Duration ───────────────────────────────────────────────────────────────
+
+describe('setDuration', () => {
+  it('émet setSceneDuration', () => {
+    const ctrl = new SequenceEditorController(EMPTY)
+    const batches = collectCommands(ctrl)
+    ctrl.setDuration(20000, 'audio-primary')
+    expect(batches).toEqual([[{ name: 'setSceneDuration', args: { durationMs: 20000, source: 'audio-primary' } }]])
+    ctrl.destroy()
+  })
+})
+
+// ─── Coordinate utilities — purement locales, non affectées ────────────────────
 
 describe('msToPixel / pixelToMs / snapToGrid', () => {
   it('msToPixel(startMs) = 0', () => {
@@ -375,21 +361,18 @@ describe('msToPixel / pixelToMs / snapToGrid', () => {
 
   it('snapToGrid snap sur un marqueur proche (scene-eddy-ref : marqueur à 1000 ms, ex-cue)', () => {
     const ctrl = new SequenceEditorController(EDDY)
-    // marker à 1000 ms. pixelsPerMs=0.08, snapThreshold=8px → thresholdMs=100
-    // 1050 est dans [900,1100] → snappé à 1000
     expect(ctrl.snapToGrid(1050)).toBe(1000)
     ctrl.destroy()
   })
 
   it('snapToGrid arrondi à 100 ms si hors seuil', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    // Pas de marqueurs/keyframes : arrondi à 100 ms
     expect(ctrl.snapToGrid(3450)).toBe(3500)
     ctrl.destroy()
   })
 })
 
-// ─── Viewport ────────────────────────────────────────────────────────────────
+// ─── Viewport — purement local ──────────────────────────────────────────────
 
 describe('zoom / pan / notifyResize', () => {
   it('zoom(2) double pixelsPerMs', () => {
@@ -402,9 +385,9 @@ describe('zoom / pan / notifyResize', () => {
 
   it('pan avance dans le temps', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.notifyResize(400, 600)   // viewWidthPx=400 → viewDuration=5000ms < 10000
+    ctrl.notifyResize(400, 600)
     const before = ctrl.getViewport().startMs
-    ctrl.pan(100)   // 100px = 1250 ms forward
+    ctrl.pan(100)
     expect(ctrl.getViewport().startMs).toBeGreaterThan(before)
     ctrl.destroy()
   })
@@ -419,7 +402,7 @@ describe('zoom / pan / notifyResize', () => {
   })
 })
 
-// ─── Playhead ────────────────────────────────────────────────────────────────
+// ─── Playhead — purement local ──────────────────────────────────────────────
 
 describe('play / stop / seek', () => {
   it('play → snapshot value = playing', () => {

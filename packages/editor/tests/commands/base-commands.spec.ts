@@ -16,6 +16,7 @@ function emptyScene(): EditorScene {
     contents: {},
     decors: {},
     zones: {},
+    markerTracks: {},
   }
 }
 

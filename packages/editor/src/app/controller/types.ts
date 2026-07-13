@@ -3,6 +3,7 @@
  */
 
 import type { CapsuleDef, Content, Decor, EditorScene, ItemType, PositionData } from '../commands/types'
+import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
 
@@ -47,6 +48,13 @@ export interface ControllerContext {
  * Une entrée par commande de `commands/facade.ts` — union discriminée sur `name` pour que la
  * machine ne sache dispatcher QUE vers le vocabulaire de la façade (§4 « voie d'écriture unique »),
  * jamais vers une fonction de mutation arbitraire fournie par l'appelant.
+ *
+ * Composée de deux bibliothèques de commandes pures (jamais deux voies d'écriture — la façade
+ * centrale reste l'unique possesseur de `scene` qui les invoque, `2026-07-13-controller-islands-
+ * bridge-plan.md` §3bis) : les commandes de structure du document ci-dessous (`base-commands.ts`),
+ * et `SequenceEditorCommand` (`sequence-editor/commands.ts`) — le vocabulaire spécifique à la
+ * mécanique timeline (keyframes, marqueurs, visibilité de piste, durée de scène), possédé par le
+ * module sequence-editor plutôt que d'engorger ce vocabulaire central déjà documenté comme fermé.
  */
 export type Command =
   | { name: 'createItem'; args: { geometry: PositionData; parentId?: string | null } }
@@ -59,6 +67,7 @@ export type Command =
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
   | { name: 'placeInZone'; args: { itemId: string; zoneId: string | null } }
   | { name: 'deleteItem'; args: { itemId: string } }
+  | SequenceEditorCommand
 
 // ─── Événements ─────────────────────────────────────────────────────────────
 

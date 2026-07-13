@@ -1,7 +1,8 @@
-import { setup, assign } from 'xstate'
+import { setup, assign, emit } from 'xstate'
 import type {
-  EditorScene, Item, Keyframe, MarkerTrack, Marker, Transition, LayoutProfile, DisplayConfig, Waveform,
+  EditorScene, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
 } from './types'
+import type { Command } from '../app/controller/types'
 import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
 import type { ChildInput } from '@codplay/scene-factory'
 import {
@@ -10,7 +11,30 @@ import {
 } from './constants'
 import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
-import { childrenOf, descendantIds, findParentClipBounds } from './utils'
+import { childrenOf, findParentClipBounds } from './utils'
+
+/**
+ * §"unicité de la source" (`2026-07-13-controller-islands-bridge-plan.md` §3bis, tranché
+ * 2026-07-13) — cette machine NE POSSÈDE PLUS `scene`/`selection` : ce sont des projections en
+ * lecture seule, écrites UNIQUEMENT par `SCENE.SYNC`/`SCENE.LOAD` (l'écho du contrôleur central).
+ * Aucun handler de geste utilisateur n'assigne plus `scene`/`selection` directement — chacun
+ * calcule ce qui a changé et l'ÉMET (`emit`, XState v5) comme commande(s) vers l'extérieur ;
+ * `SequenceEditorController.onCommand`/`onSelectionRequest` relaient vers le contrôleur central,
+ * qui reste l'unique possesseur qui écrit réellement le document.
+ *
+ * Un seul écrivain par champ = pas de double possession, pas de risque d'écho/boucle à filtrer
+ * (l'ancien mécanisme de filtre par timestamp, `lastMutation`, est retiré : plus nécessaire, plus
+ * de deuxième écrivain à distinguer).
+ *
+ * Champs restés PUREMENT locaux (jamais synchronisés, jamais émis) : `viewport`, `playheadMs`,
+ * `isPlaying`, `playRange`, `followPlayhead`, `interaction`, `layoutProfile`, `displayConfig`,
+ * `viewMode` — l'éphémère des gestes, qui n'a jamais été le problème.
+ *
+ * `selection.markerId` fait exception : les marqueurs n'ont pas d'équivalent dans le modèle
+ * `Selection` central (`{itemIds, keyframeId}` — pas de notion de marqueur sélectionné), donc
+ * `MARKER.SELECT` reste une assignation locale directe, jamais émise. `SCENE.SYNC` l'efface tout
+ * de même (toute synchronisation autoritaire prime sur une sélection de marqueur locale).
+ */
 
 // ─── Machine-specific types (§3.1) ──────────────────────────────────────────
 
@@ -51,12 +75,14 @@ export interface VirtualKeyframe {
 }
 
 export interface MachineContext {
+  /** Projection en lecture seule — voir note d'en-tête. Écrit uniquement par SCENE.SYNC/SCENE.LOAD. */
   scene: EditorScene
   viewport: MachineViewport
   playheadMs: number
   isPlaying: boolean
   playRange: PlayRange | null
   followPlayhead: boolean
+  /** trackId/keyframeId : projection en lecture seule (idem `scene`). markerId : possédé localement. */
   selection: MachineSelection
   interaction: MachineInteraction | null
   layoutProfile: LayoutProfile
@@ -71,6 +97,15 @@ export type MachineInput = {
   viewWidthPx?: number
   viewHeightPx?: number
 }
+
+/** Écho du contrôleur central — la forme de `Selection` centrale (`app/controller/types.ts`), pas la forme locale. */
+export type CentralSelectionEcho = { itemIds: string[]; keyframeId?: string }
+
+// ─── Emitted events (vers l'extérieur — XState v5 `emit`) ───────────────────
+
+export type SequenceEditorEmitted =
+  | { type: 'commandBatch'; commands: Command[] }
+  | { type: 'selectionRequested'; itemIds: string[]; keyframeId?: string }
 
 // ─── Events (§3.4) ──────────────────────────────────────────────────────────
 
@@ -110,28 +145,21 @@ export type SequenceEditorEvent =
   | { type: 'VIEWPORT.SET_MODE'; mode: 'full-sequence' | 'text-priority' }
   | { type: 'VIEWPORT.SET_LAYOUT_PROFILE'; profile: LayoutProfile }
   | { type: 'VIEWPORT.SET_DISPLAY_CONFIG'; config: DisplayConfig }
-  | { type: 'TRACK.ADD'; item: Omit<Item, 'keyframes'> & { id: string } }
-  | { type: 'TRACK.REMOVE'; trackId: string }
   | { type: 'TRACK.MOVE'; trackId: string; parentId: string | null; order?: string }
+  | { type: 'TRACK.REMOVE'; trackId: string }
   | { type: 'TRACK.TOGGLE_VISIBILITY'; trackId: string }
-  | { type: 'TRACK.NEST_IN_CAPSULE'; trackId: string; capsuleId: string }
   | { type: 'TRACK.RESET_KEYFRAMES'; trackId: string }
-  | { type: 'MARKER_TRACK.ADD'; track: MarkerTrack }
+  | { type: 'MARKER_TRACK.ADD'; markerTrackId: string; label: string; color?: string }
   | { type: 'MARKER_TRACK.REMOVE'; markerTrackId: string }
   | { type: 'MARKER_TRACK.RENAME'; markerTrackId: string; label: string }
   | { type: 'MARKER_TRACK.TOGGLE_VISIBILITY'; markerTrackId: string }
-  | { type: 'MARKER.ADD'; markerTrackId: string; marker: Marker & { id: string } }
+  | { type: 'MARKER.ADD'; markerTrackId: string; marker: Marker }
   | { type: 'MARKER.MOVE'; markerId: string; timeMs: number }
   | { type: 'MARKER.REMOVE'; markerId: string }
   | { type: 'KEYFRAME.ATTACH_MARKER'; trackId: string; keyframeId: string; markerId: string }
   | { type: 'KEYFRAME.DETACH_MARKER'; trackId: string; keyframeId: string }
-  /**
-   * Le son est un item média + le rôle `masterItemId` (document-model §"Le son master") — plus un
-   * champ scène séparé. `AUDIO.SET` écrit sur l'item DÉJÀ désigné par `masterItemId` (créé par la
-   * façade centrale, hors périmètre de ce module) : ce module ne fait qu'écrire son `Content`, il ne
-   * crée jamais l'item lui-même (pas de commande de création ici — `machine.ts` n'a pas la façade).
-   */
   | { type: 'AUDIO.SET_WAVEFORM'; waveform: Waveform }
+  | { type: 'SCENE.SYNC'; scene: EditorScene; selection: CentralSelectionEcho }
   | { type: 'SCENE.LOAD'; scene: EditorScene }
   | { type: 'SCENE.SET_DURATION'; durationMs: number; source?: EditorScene['meta']['durationSource'] }
 
@@ -150,16 +178,7 @@ function clampViewportStart(startMs: number, vp: MachineViewport, durationMs: nu
   return Math.max(0, Math.min(startMs, durationMs - viewDurationMs))
 }
 
-function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string>): Item[] {
-  return items.map((item) => ({
-    ...item,
-    keyframes: item.keyframes.map((k) =>
-      k.markerId !== undefined && markerIds.has(k.markerId) ? { ...k, markerId: undefined } : k,
-    ),
-  }))
-}
-
-/** Toutes les cues de tous les contents média de la scène — remplace l'ancienne liste globale `scene.cues` (document-model §"Le son master": les cues vivent dans `Content`, par source). */
+/** Toutes les cues de tous les contents média de la scène (document-model §"Le son master" : les cues vivent dans `Content`, par source). */
 function allCues(scene: EditorScene): { timeMs: number; id: string }[] {
   return Object.values(scene.contents).flatMap((content) => content.cues ?? [])
 }
@@ -193,6 +212,7 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
     if (!introKf || !outroKf) continue
     const clipDurationMs = outroKf.timeMs - introKf.timeMs
     if (clipDurationMs <= 0) continue
+    if (!capsule.capsule) continue
 
     const childInputs: ChildInput[] = children.map((child) => {
       const ci = child.keyframes.find((k) => k.name === 'intro')
@@ -204,14 +224,6 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
       }
     })
 
-    // `CapsulePreset` is the one place `CapsuleKind` → concrete distribution resolution lives
-    // (`2026-06-12-capsule-distribution-spec.md` §3.3) — shared with the ed2 Builder's own final
-    // resolution (`resolveCapsule`), so both stay in agreement (§7, "même calcul, une seule
-    // source de vérité"). A capsule mid-authoring may have no `capsule.kind`/`.distribution` set
-    // yet — no virtual keyframes are produced for it until the author supplies what `CapsulePreset`
-    // needs (same skip pattern as the missing intro/outro kf check above), rather than guessing or
-    // letting the resolution error propagate into the live preview.
-    if (!capsule.capsule) continue
     let preset: ReturnType<typeof CapsulePreset.resolve>
     try {
       preset = CapsulePreset.resolve({ capsuleType: capsule.capsule.kind, distribution: capsule.capsule.distribution })
@@ -231,22 +243,10 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
       const hasIntro = child.keyframes.some((k) => k.name === 'intro')
       const hasOutro = child.keyframes.some((k) => k.name === 'outro')
       if (!hasIntro) {
-        result.push({
-          trackId: child.id,
-          id: `vkf-${child.id}-intro`,
-          timeMs: introKf.timeMs + childOut.introMs,
-          name: 'intro',
-          visible: childOut.visible,
-        })
+        result.push({ trackId: child.id, id: `vkf-${child.id}-intro`, timeMs: introKf.timeMs + childOut.introMs, name: 'intro', visible: childOut.visible })
       }
       if (!hasOutro) {
-        result.push({
-          trackId: child.id,
-          id: `vkf-${child.id}-outro`,
-          timeMs: introKf.timeMs + childOut.outroMs,
-          name: 'outro',
-          visible: childOut.visible,
-        })
+        result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: introKf.timeMs + childOut.outroMs, name: 'outro', visible: childOut.visible })
       }
     }
   }
@@ -263,67 +263,25 @@ function findNearestSnap(snapGrid: MachineSnapPoint[], timeMs: number): MachineS
   return nearest
 }
 
-export function applySnapToMs(
-  rawMs: number,
-  snapGrid: MachineSnapPoint[],
-  thresholdMs: number,
-): number {
+export function applySnapToMs(rawMs: number, snapGrid: MachineSnapPoint[], thresholdMs: number): number {
   const nearest = findNearestSnap(snapGrid, rawMs)
   if (nearest && Math.abs(nearest.timeMs - rawMs) <= thresholdMs) return nearest.timeMs
   return Math.round(rawMs / TIME_STEP_MS) * TIME_STEP_MS
 }
 
-/** Remplace `updateTrackInScene` (ancien : parcours récursif de `children`) — un item est trouvé une seule fois dans la liste plate, pas de walk. */
-function updateItemInScene(
-  scene: EditorScene,
-  itemId: string,
-  updater: (item: Item) => Item,
-): EditorScene {
-  return {
-    ...scene,
-    items: scene.items.map((item) => (item.id === itemId ? updater(item) : item)),
-  }
-}
-
-/**
- * Un kf toujours créé avec un décor — jamais `null` (même règle que la façade centrale,
- * `app/commands/base-commands.ts::createKeyframe` : `Keyframe.decorId` est obligatoire dans le
- * modèle cible). Le décor créé est vide (`{ id }`), à remplir ensuite par dedit — pas un décor
- * deviné ici (Principe B, cf. Builder ed2).
- */
-function freshDecorId(): string {
-  return `decor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function pruneOrphanDecors(scene: EditorScene): EditorScene {
-  const used = new Set(scene.items.flatMap((item) => item.keyframes).map((k) => k.decorId))
-  const decors = Object.fromEntries(Object.entries(scene.decors).filter(([id]) => used.has(id)))
-  return { ...scene, decors }
-}
-
-function insertKeyframeSorted(keyframes: Keyframe[], kf: Keyframe): Keyframe[] {
-  return [...keyframes, kf].sort((a, b) => a.timeMs - b.timeMs)
-}
-
-function enforceClipOrder(keyframes: Keyframe[]): Keyframe[] {
-  const intro = keyframes.find((k) => k.name === 'intro')
-  const outro = keyframes.find((k) => k.name === 'outro')
-  if (!intro || !outro || intro.timeMs <= outro.timeMs) return keyframes
-  return keyframes.map((k) => {
-    if (k.id === intro.id) return { ...k, name: 'outro' as const }
-    if (k.id === outro.id) return { ...k, name: 'intro' as const }
-    return k
-  })
-}
-
-function adjacentDecorId(keyframes: Keyframe[], timeMs: number, fallback: string): string {
+/** Choisit le décor adjacent au point d'insertion (lecture seule sur la projection locale — jamais une écriture). */
+function adjacentDecorId(keyframes: Keyframe[], timeMs: number): string | undefined {
   const sorted = [...keyframes].sort((a, b) => a.timeMs - b.timeMs)
   let prev: Keyframe | null = null
   for (const k of sorted) {
     if (k.timeMs <= timeMs) prev = k
     else break
   }
-  return prev?.decorId ?? sorted[0]?.decorId ?? fallback
+  return prev?.decorId ?? sorted[0]?.decorId
+}
+
+function freshId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 // ─── Machine ─────────────────────────────────────────────────────────────────
@@ -333,6 +291,7 @@ export const sequenceEditorMachine = setup({
     context: MachineContext
     events: SequenceEditorEvent
     input: MachineInput
+    emitted: SequenceEditorEmitted
   },
 
   guards: {
@@ -341,33 +300,15 @@ export const sequenceEditorMachine = setup({
       if (!i || i.kind !== 'dragging-keyframe') return false
       return i.currentMs >= 0 && i.currentMs <= context.scene.meta.durationMs
     },
-    snapThresholdReached: ({ context }) => {
-      const i = context.interaction
-      if (!i || (i.kind !== 'dragging-keyframe' && i.kind !== 'dragging-playhead')) return false
-      const nearest = findNearestSnap(context.snapGrid, i.currentMs)
-      if (!nearest) return false
-      const thresholdMs = context.layoutProfile.snapThresholdPx / context.viewport.pixelsPerMs
-      return Math.abs(nearest.timeMs - i.currentMs) <= thresholdMs
-    },
-  },
-
-  actions: {
-    assignSnapGrid: assign(({ context }) => ({
-      snapGrid: computeSnapGrid(context.scene),
-      virtualKeyframes: computeVirtualKeyframes(context.scene, context.displayConfig.capsuleOrder),
-    })),
   },
 
 }).createMachine({
   id: 'sequence-editor',
   initial: 'idle',
 
-  // These events are handled in all states
   on: {
     'PLAYRANGE.SET': {
-      actions: assign(({ event }) => ({
-        playRange: { inMs: event.inMs, outMs: event.outMs },
-      })),
+      actions: assign(({ event }) => ({ playRange: { inMs: event.inMs, outMs: event.outMs } })),
     },
     'PLAYRANGE.CLEAR': {
       actions: assign(() => ({ playRange: null as PlayRange | null })),
@@ -378,13 +319,7 @@ export const sequenceEditorMachine = setup({
     'VIEWPORT.SCROLL': {
       actions: assign(({ context, event }) => {
         const startMs = clampViewportStart(event.startMs, context.viewport, context.scene.meta.durationMs)
-        return {
-          viewport: {
-            ...context.viewport,
-            startMs,
-            endMs: computeEndMs({ ...context.viewport, startMs }),
-          },
-        }
+        return { viewport: { ...context.viewport, startMs, endMs: computeEndMs({ ...context.viewport, startMs }) } }
       }),
     },
     'VIEWPORT.ZOOM': {
@@ -395,14 +330,37 @@ export const sequenceEditorMachine = setup({
         const focusPx = isFinite(event.focusMs) ? (event.focusMs - startMs) * pixelsPerMs : 0
         const rawStartMs = isFinite(event.focusMs) ? event.focusMs - focusPx / newPxPerMs : startMs
         const newStartMs = isFinite(rawStartMs) ? Math.max(0, rawStartMs) : 0
-        const viewport: MachineViewport = {
-          ...context.viewport,
-          pixelsPerMs: newPxPerMs,
-          startMs: newStartMs,
-          endMs: newStartMs + viewWidthPx / newPxPerMs,
-        }
-        return { viewport }
+        return { viewport: { ...context.viewport, pixelsPerMs: newPxPerMs, startMs: newStartMs, endMs: newStartMs + viewWidthPx / newPxPerMs } }
       }),
+    },
+
+    // ── Synchronisation autoritaire — seul point d'écriture de scene/selection ──────────────
+    'SCENE.SYNC': {
+      actions: assign(({ context, event }) => ({
+        scene: event.scene,
+        snapGrid: computeSnapGrid(event.scene),
+        virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
+        selection: {
+          trackId: event.selection.itemIds[0] ?? null,
+          keyframeId: event.selection.keyframeId ?? null,
+          markerId: null,
+        },
+        // playheadMs, isPlaying, playRange, followPlayhead, interaction, viewport : jamais touchés —
+        // c'est tout l'objet de la distinction avec SCENE.LOAD (§ note d'en-tête).
+      })),
+    },
+    // ── Chargement d'un NOUVEAU document — réinitialise tout, y compris playhead/sélection/geste.
+    // Réservé au vrai changement de scène (sélecteur multi-scènes, étape 5) — jamais appelé dans
+    // la boucle de commit. Voir note d'en-tête.
+    'SCENE.LOAD': {
+      actions: assign(({ context, event }) => ({
+        scene: event.scene,
+        snapGrid: computeSnapGrid(event.scene),
+        virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
+        playheadMs: 0,
+        selection: { trackId: null, keyframeId: null, markerId: null },
+        interaction: null,
+      })),
     },
   },
 
@@ -412,13 +370,7 @@ export const sequenceEditorMachine = setup({
     const pixelsPerMs = DEFAULT_PX_PER_MS
     return {
       scene: input.scene,
-      viewport: {
-        startMs: 0,
-        endMs: viewWidthPx / pixelsPerMs,
-        pixelsPerMs,
-        viewWidthPx,
-        viewHeightPx,
-      },
+      viewport: { startMs: 0, endMs: viewWidthPx / pixelsPerMs, pixelsPerMs, viewWidthPx, viewHeightPx },
       playheadMs: 0,
       isPlaying: false,
       playRange: null,
@@ -434,203 +386,136 @@ export const sequenceEditorMachine = setup({
   },
 
   states: {
-
-    // ── idle ────────────────────────────────────────────────────────────────
     idle: {
       on: {
+        // ── Sélection — TRACK/KEYFRAME émettent vers le centre (Selection y a un slot) ;
+        // MARKER reste local (pas de notion de marqueur sélectionné côté central), mais efface la
+        // sélection centrale par une VRAIE émission (jamais en écrivant trackId/keyframeId
+        // localement — ces deux champs n'ont qu'un seul écrivain légitime : l'écho du centre.
+        // Écrire `null` localement sans émettre laisserait la timeline afficher "rien sélectionné"
+        // pendant que le centre/dedit pensent encore qu'un item l'est — un vrai risque
+        // d'incohérence visuelle, pas juste une question de pureté). `markerId` lui-même reste un
+        // assign local direct : c'est le seul champ dont cette machine est l'unique écrivain. ────
         'TRACK.SELECT': {
-          actions: assign(({ event }) => ({
-            selection: { trackId: event.trackId, keyframeId: null, markerId: null },
-          })),
+          actions: [
+            emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: event.trackId ? [event.trackId] : [] })),
+            assign(({ context }) => ({ selection: { ...context.selection, markerId: null } })),
+          ],
         },
         'KEYFRAME.SELECT': {
-          actions: assign(({ event }) => ({
-            selection: { trackId: event.trackId, keyframeId: event.keyframeId, markerId: null },
-          })),
+          actions: [
+            emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: [event.trackId], keyframeId: event.keyframeId ?? undefined })),
+            assign(({ context }) => ({ selection: { ...context.selection, markerId: null } })),
+          ],
         },
         'MARKER.SELECT': {
-          actions: assign(({ event }) => ({
-            selection: { trackId: null, keyframeId: null, markerId: event.markerId },
-          })),
+          actions: [
+            emit(() => ({ type: 'selectionRequested' as const, itemIds: [] })),
+            assign(({ context, event }) => ({ selection: { ...context.selection, markerId: event.markerId } })),
+          ],
         },
 
         'KEYFRAME.ADD': {
-          actions: assign(({ context, event }) => {
-            const timeMs = Math.round(
-              Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) / TIME_STEP_MS,
-            ) * TIME_STEP_MS
+          actions: emit(({ context, event }) => {
+            const timeMs = Math.round(Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) / TIME_STEP_MS) * TIME_STEP_MS
             const item = context.scene.items.find((i) => i.id === event.trackId)
-            let scene = context.scene
-            let decorId = event.decorId
-            if (decorId === undefined) {
-              decorId = item ? adjacentDecorId(item.keyframes, timeMs, freshDecorId()) : freshDecorId()
-              if (!scene.decors[decorId]) {
-                scene = { ...scene, decors: { ...scene.decors, [decorId]: { id: decorId } } }
-              }
+            const decorId = event.decorId ?? (item ? adjacentDecorId(item.keyframes, timeMs) : undefined)
+            return {
+              type: 'commandBatch' as const,
+              commands: [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: event.id ?? freshId('kf'), timeMs, decorId } }],
             }
-            const newKf: Keyframe = { id: event.id ?? `kf-${Date.now()}`, timeMs, decorId }
-            scene = updateItemInScene(scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: insertKeyframeSorted(i.keyframes, newKf),
-            }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
           }),
         },
 
         'KEYFRAME.REMOVE': {
-          actions: assign(({ context, event }) => {
-            const removedKf = context.scene.items
-              .find((i) => i.id === event.trackId)
-              ?.keyframes.find((k) => k.id === event.keyframeId)
-            const removedDecorId = removedKf?.decorId
-
-            const sceneAfterRemove = updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.filter((k) => k.id !== event.keyframeId),
-            }))
-
-            // Remove orphan decor — only if no other kf still references it
-            let decors = sceneAfterRemove.decors
-            if (removedDecorId) {
-              const stillUsed = sceneAfterRemove.items
-                .flatMap((i) => i.keyframes)
-                .some((k) => k.decorId === removedDecorId)
-              if (!stillUsed) {
-                decors = Object.fromEntries(
-                  Object.entries(decors).filter(([id]) => id !== removedDecorId),
-                )
-              }
-            }
-
-            const scene = { ...sceneAfterRemove, decors }
-            const selection: MachineSelection =
-              context.selection.keyframeId === event.keyframeId
-                ? { trackId: null, keyframeId: null, markerId: null }
-                : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'deleteKeyframe', args: { itemId: event.trackId, keyframeId: event.keyframeId } }],
+          })),
         },
 
         'KEYFRAME.CLEAR_TRACK': {
-          actions: assign(({ context, event }) => {
-            const cleared = updateItemInScene(context.scene, event.trackId, (i) => ({ ...i, keyframes: [] }))
-            const scene = pruneOrphanDecors(cleared)
-            const selection: MachineSelection =
-              context.selection.trackId === event.trackId
-                ? { trackId: event.trackId, keyframeId: null, markerId: null }
-                : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'clearItemKeyframes', args: { itemId: event.trackId } }],
+          })),
         },
 
         'KEYFRAME.CLEAR_CAPSULE': {
-          actions: assign(({ context, event }) => {
-            const clearedIds = new Set([event.trackId, ...descendantIds(context.scene.items, event.trackId)])
-            const items = context.scene.items.map((i) => (clearedIds.has(i.id) ? { ...i, keyframes: [] } : i))
-            const cleared = { ...context.scene, items }
-            const scene = pruneOrphanDecors(cleared)
-            const sel = context.selection
-            const selection: MachineSelection =
-              sel.trackId && clearedIds.has(sel.trackId)
-                ? { trackId: null, keyframeId: null, markerId: null }
-                : sel
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'clearCapsuleKeyframes', args: { itemId: event.trackId } }],
+          })),
         },
 
         'KEYFRAME.RENAME': {
-          actions: assign(({ context, event }) => {
-            const scene = updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId ? { ...k, name: event.name ?? undefined } : k,
-              ),
-            }))
-            return { scene, virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'renameKeyframe', args: { itemId: event.trackId, keyframeId: event.keyframeId, name: event.name } }],
+          })),
         },
 
         'KEYFRAME.ASSIGN_DECOR': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId ? { ...k, decorId: event.decorId } : k,
-              ),
-            })),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'assignKeyframeDecor', args: { itemId: event.trackId, keyframeId: event.keyframeId, decorId: event.decorId } }],
           })),
         },
 
         'KEYFRAME.SET_TRANSITION_IN': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId
-                  ? { ...k, transitionIn: event.def ?? undefined }
-                  : k,
-              ),
-            })),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'setKeyframeTransitionIn', args: { itemId: event.trackId, keyframeId: event.keyframeId, transition: event.def } }],
           })),
         },
 
         'KEYFRAME.SET_TRANSITION_OUT': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId
-                  ? { ...k, transitionOut: event.def ?? undefined }
-                  : k,
-              ),
-            })),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'setKeyframeTransitionOut', args: { itemId: event.trackId, keyframeId: event.keyframeId, transition: event.def } }],
           })),
         },
 
         'DRAG.START_KEYFRAME': {
           target: 'dragging-keyframe',
-          actions: assign(({ context, event }) => {
-            const item = context.scene.items.find((i) => i.id === event.trackId)
-            const kf = item?.keyframes.find((k) => k.id === event.keyframeId)
-            return {
-              interaction: {
-                kind: 'dragging-keyframe' as const,
-                trackId: event.trackId,
-                keyframeId: event.keyframeId,
-                originMs: kf?.timeMs ?? 0,
-                currentMs: kf?.timeMs ?? 0,
-              },
-              selection: { trackId: event.trackId, keyframeId: event.keyframeId, markerId: null },
-            }
-          }),
+          actions: [
+            assign(({ context, event }) => {
+              const item = context.scene.items.find((i) => i.id === event.trackId)
+              const kf = item?.keyframes.find((k) => k.id === event.keyframeId)
+              return {
+                interaction: {
+                  kind: 'dragging-keyframe' as const,
+                  trackId: event.trackId,
+                  keyframeId: event.keyframeId,
+                  originMs: kf?.timeMs ?? 0,
+                  currentMs: kf?.timeMs ?? 0,
+                },
+                selection: { ...context.selection, markerId: null },
+              }
+            }),
+            emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: [event.trackId], keyframeId: event.keyframeId })),
+          ],
         },
 
         'CLIP.PLACE': {
-          actions: assign(({ context, event }) => {
+          actions: emit(({ context, event }) => {
             const pointerMs = Math.max(0, Math.min(event.pointerMs, context.scene.meta.durationMs))
             const bounds = findParentClipBounds(event.trackId, context.scene.items, context.scene.meta.durationMs)
             const clampedMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, pointerMs))
             const item = context.scene.items.find((i) => i.id === event.trackId)
-            if (!item) return {}
-            const intro = item.keyframes.find((k) => k.name === 'intro')
-            const outro = item.keyframes.find((k) => k.name === 'outro')
-            const scene = updateItemInScene(context.scene, event.trackId, (i) => {
-              let keyframes = [...i.keyframes]
-              if (!intro) {
-                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'intro', decorId: freshDecorId() })
-              } else if (!outro) {
-                keyframes = insertKeyframeSorted(keyframes, { id: `kf-${Date.now()}`, timeMs: clampedMs, name: 'outro', decorId: freshDecorId() })
-                keyframes = enforceClipOrder(keyframes)
-              } else {
-                const distIntro = Math.abs(clampedMs - intro.timeMs)
-                const distOutro = Math.abs(clampedMs - outro.timeMs)
-                const moveId = distIntro <= distOutro ? intro.id : outro.id
-                keyframes = keyframes.map((k) => (k.id === moveId ? { ...k, timeMs: clampedMs } : k))
-                keyframes = keyframes.sort((a, b) => a.timeMs - b.timeMs)
-              }
-              return { ...i, keyframes }
-            })
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
+            const intro = item?.keyframes.find((k) => k.name === 'intro')
+            const outro = item?.keyframes.find((k) => k.name === 'outro')
+
+            let commands: Command[]
+            if (!intro) {
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs, name: 'intro' } }]
+            } else if (!outro) {
+              commands = [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: freshId('kf'), timeMs: clampedMs, name: 'outro' } }]
+            } else {
+              const moveId = Math.abs(clampedMs - intro.timeMs) <= Math.abs(clampedMs - outro.timeMs) ? intro.id : outro.id
+              commands = [{ name: 'moveKeyframe', args: { itemId: event.trackId, keyframeId: moveId, timeMs: clampedMs } }]
+            }
+            return { type: 'commandBatch' as const, commands }
           }),
         },
 
@@ -649,46 +534,30 @@ export const sequenceEditorMachine = setup({
         },
 
         'PLAYHEAD.SET': {
-          actions: assign(({ context, event }) => ({
-            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)),
-          })),
+          actions: assign(({ context, event }) => ({ playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) })),
         },
-
-        'PLAYHEAD.STOP': {
-          actions: assign({ isPlaying: false, playheadMs: 0 }),
-        },
-
+        'PLAYHEAD.STOP': { actions: assign({ isPlaying: false, playheadMs: 0 }) },
         'PLAYHEAD.START_PLAY': {
           target: 'playing',
-          actions: assign(({ context }) => ({
-            isPlaying: true,
-            playheadMs: context.playRange ? context.playRange.inMs : context.playheadMs,
-          })),
+          actions: assign(({ context }) => ({ isPlaying: true, playheadMs: context.playRange ? context.playRange.inMs : context.playheadMs })),
         },
 
         'VIEWPORT.PAN_START': {
           target: 'panning',
           actions: assign(({ context, event }) => ({
-            interaction: {
-              kind: 'panning' as const,
-              originPx: event.pointerPx,
-              originStartMs: context.viewport.startMs,
-            },
+            interaction: { kind: 'panning' as const, originPx: event.pointerPx, originStartMs: context.viewport.startMs },
           })),
         },
-
         'VIEWPORT.RESIZE': {
-          actions: assign(({ context, event }) => {
-            const vp: MachineViewport = {
+          actions: assign(({ context, event }) => ({
+            viewport: {
               ...context.viewport,
               viewWidthPx: event.widthPx,
               viewHeightPx: event.heightPx,
               endMs: context.viewport.startMs + event.widthPx / context.viewport.pixelsPerMs,
-            }
-            return { viewport: vp }
-          }),
+            },
+          })),
         },
-
         'VIEWPORT.SET_MODE': {
           actions: assign(({ context, event }) => {
             const viewMode = event.mode
@@ -701,255 +570,144 @@ export const sequenceEditorMachine = setup({
             return { viewMode, viewport }
           }),
         },
+        'VIEWPORT.SET_LAYOUT_PROFILE': { actions: assign(({ event }) => ({ layoutProfile: event.profile })) },
+        'VIEWPORT.SET_DISPLAY_CONFIG': { actions: assign(({ event }) => ({ displayConfig: event.config })) },
 
-        'VIEWPORT.SET_LAYOUT_PROFILE': {
-          actions: assign(({ event }) => ({ layoutProfile: event.profile })),
-        },
-
-        'VIEWPORT.SET_DISPLAY_CONFIG': {
-          actions: assign(({ event }) => ({ displayConfig: event.config })),
-        },
-
-        'TRACK.ADD': {
-          actions: assign(({ context, event }) => {
-            const newItem: Item = { ...event.item, keyframes: [] }
-            return { scene: { ...context.scene, items: [...context.scene.items, newItem] } }
-          }),
-        },
-
-        /** Changer de parent/ordre est un simple remplacement de deux champs plats — pas de retrait/insertion dans un tableau `children` imbriqué comme l'ancien modèle l'exigeait. Event déclaré mais jamais géré dans l'ancien `machine.ts` (mort en pratique) — implémenté ici car le modèle plat rend l'opération triviale et réellement utile (glisser-déplacer une piste). */
+        // ── Track (item) — structure du document, commandes CENTRALES réutilisées telles quelles ──
         'TRACK.MOVE': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              parentId: event.parentId,
-              order: event.order ?? i.order,
-            })),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'attachItem', args: { itemId: event.trackId, parentId: event.parentId, order: event.order } }],
           })),
         },
-
         'TRACK.REMOVE': {
-          actions: assign(({ context, event }) => {
-            const removedIds = new Set([event.trackId, ...descendantIds(context.scene.items, event.trackId)])
-            const items = context.scene.items.filter((i) => !removedIds.has(i.id))
-            const scene = { ...context.scene, items }
-            const snapGrid = computeSnapGrid(scene)
-            const virtualKeyframes = computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder)
-            const selection: MachineSelection =
-              context.selection.trackId === event.trackId
-                ? { trackId: null, keyframeId: null, markerId: null }
-                : context.selection
-            return { scene, snapGrid, virtualKeyframes, selection }
-          }),
-        },
-
-        'TRACK.TOGGLE_VISIBILITY': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i, visible: !i.visible,
-            })),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'deleteItem', args: { itemId: event.trackId } }],
           })),
         },
-
+        'TRACK.TOGGLE_VISIBILITY': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'toggleItemVisibility', args: { itemId: event.trackId } }],
+          })),
+        },
         'TRACK.RESET_KEYFRAMES': {
-          actions: assign(({ context, event }) => {
-            const scene = updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i, keyframes: [],
-            }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'clearItemKeyframes', args: { itemId: event.trackId } }],
+          })),
         },
 
         'MARKER_TRACK.ADD': {
-          actions: assign(({ context, event }) => {
-            const scene = { ...context.scene, markerTracks: { ...context.scene.markerTracks, [event.track.id]: event.track } }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'addMarkerTrack', args: { markerTrackId: event.markerTrackId, label: event.label, color: event.color } }],
+          })),
         },
-
         'MARKER_TRACK.REMOVE': {
-          actions: assign(({ context, event }) => {
-            const removedTrack = context.scene.markerTracks[event.markerTrackId]
-            const removedMarkerIds = new Set(removedTrack?.markers.map((m) => m.id) ?? [])
-            const markerTracks = { ...context.scene.markerTracks }
-            delete markerTracks[event.markerTrackId]
-            const items = detachKeyframesByMarkerIds(context.scene.items, removedMarkerIds)
-            const scene = { ...context.scene, markerTracks, items }
-            const selection: MachineSelection = context.selection.markerId !== null && removedMarkerIds.has(context.selection.markerId)
-              ? { trackId: null, keyframeId: null, markerId: null }
-              : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'MARKER_TRACK.RENAME': {
-          actions: assign(({ context, event }) => {
-            const track = context.scene.markerTracks[event.markerTrackId]
-            if (!track) return {}
-            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, label: event.label } }
-            return { scene: { ...context.scene, markerTracks } }
-          }),
-        },
-
-        'MARKER_TRACK.TOGGLE_VISIBILITY': {
-          actions: assign(({ context, event }) => {
-            const track = context.scene.markerTracks[event.markerTrackId]
-            if (!track) return {}
-            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, visible: !track.visible } }
-            return { scene: { ...context.scene, markerTracks } }
-          }),
-        },
-
-        'MARKER.ADD': {
-          actions: assign(({ context, event }) => {
-            const track = context.scene.markerTracks[event.markerTrackId]
-            if (!track) return {}
-            const markerTracks = { ...context.scene.markerTracks, [event.markerTrackId]: { ...track, markers: [...track.markers, event.marker] } }
-            const scene = { ...context.scene, markerTracks }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'MARKER.MOVE': {
-          actions: assign(({ context, event }) => {
-            // propagate to attached keyframes
-            const items = context.scene.items.map((i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.markerId === event.markerId ? { ...k, timeMs: event.timeMs } : k,
-              ),
-            }))
-            const markerTracks = Object.fromEntries(
-              Object.entries(context.scene.markerTracks).map(([id, mt]) => [
-                id,
-                { ...mt, markers: mt.markers.map((m) => (m.id === event.markerId ? { ...m, timeMs: event.timeMs } : m)) },
-              ]),
-            )
-            const scene = { ...context.scene, markerTracks, items }
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'MARKER.REMOVE': {
-          actions: assign(({ context, event }) => {
-            const markerTracks = Object.fromEntries(
-              Object.entries(context.scene.markerTracks).map(([id, mt]) => [
-                id,
-                { ...mt, markers: mt.markers.filter((m) => m.id !== event.markerId) },
-              ]),
-            )
-            const items = detachKeyframesByMarkerIds(context.scene.items, new Set([event.markerId]))
-            const scene = { ...context.scene, markerTracks, items }
-            const selection: MachineSelection = context.selection.markerId === event.markerId
-              ? { trackId: null, keyframeId: null, markerId: null }
-              : context.selection
-            return { scene, selection, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder) }
-          }),
-        },
-
-        'KEYFRAME.ATTACH_MARKER': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId ? { ...k, markerId: event.markerId } : k,
-              ),
+          // `selection.markerId` est purement local (jamais synchronisé depuis le centre, §"MARKER.SELECT
+          // reste local" en tête de fichier) — l'effacer ici s'il appartenait à la piste retirée ne viole
+          // pas "unicité de la source" (rien à réconcilier avec un écho), contrairement à trackId/keyframeId.
+          actions: [
+            emit(({ event }) => ({
+              type: 'commandBatch' as const,
+              commands: [{ name: 'removeMarkerTrack', args: { markerTrackId: event.markerTrackId } }],
             })),
+            assign(({ context, event }) => {
+              const removedIds = new Set(context.scene.markerTracks[event.markerTrackId]?.markers.map((m) => m.id) ?? [])
+              if (context.selection.markerId === null || !removedIds.has(context.selection.markerId)) return {}
+              return { selection: { ...context.selection, markerId: null } }
+            }),
+          ],
+        },
+        'MARKER_TRACK.RENAME': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'renameMarkerTrack', args: { markerTrackId: event.markerTrackId, label: event.label } }],
+          })),
+        },
+        'MARKER_TRACK.TOGGLE_VISIBILITY': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'toggleMarkerTrackVisibility', args: { markerTrackId: event.markerTrackId } }],
           })),
         },
 
-        'KEYFRAME.DETACH_MARKER': {
-          actions: assign(({ context, event }) => ({
-            scene: updateItemInScene(context.scene, event.trackId, (i) => ({
-              ...i,
-              keyframes: i.keyframes.map((k) =>
-                k.id === event.keyframeId ? { ...k, markerId: undefined } : k,
-              ),
+        'MARKER.ADD': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'addMarker', args: { markerTrackId: event.markerTrackId, marker: event.marker } }],
+          })),
+        },
+        'MARKER.MOVE': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'moveMarker', args: { markerId: event.markerId, timeMs: event.timeMs } }],
+          })),
+        },
+        'MARKER.REMOVE': {
+          actions: [
+            emit(({ event }) => ({
+              type: 'commandBatch' as const,
+              commands: [{ name: 'removeMarker', args: { markerId: event.markerId } }],
             })),
+            assign(({ context, event }) =>
+              context.selection.markerId === event.markerId ? { selection: { ...context.selection, markerId: null } } : {},
+            ),
+          ],
+        },
+
+        'KEYFRAME.ATTACH_MARKER': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'attachMarkerToKeyframe', args: { itemId: event.trackId, keyframeId: event.keyframeId, markerId: event.markerId } }],
+          })),
+        },
+        'KEYFRAME.DETACH_MARKER': {
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'detachMarkerFromKeyframe', args: { itemId: event.trackId, keyframeId: event.keyframeId } }],
           })),
         },
 
         'AUDIO.SET_WAVEFORM': {
-          actions: assign(({ context, event }) => {
-            const masterItemId = context.scene.masterItemId
-            const masterItem = masterItemId ? context.scene.items.find((i) => i.id === masterItemId) : undefined
-            if (!masterItem?.contentId) return {}
-            const content = context.scene.contents[masterItem.contentId]
-            if (!content) return {}
-            return {
-              scene: {
-                ...context.scene,
-                contents: { ...context.scene.contents, [content.id]: { ...content, waveform: event.waveform } },
-              },
-            }
-          }),
-        },
-
-        'SCENE.LOAD': {
-          actions: assign(({ context, event }) => ({
-            scene: event.scene,
-            snapGrid: computeSnapGrid(event.scene),
-            virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
-            playheadMs: 0,
-            selection: { trackId: null, keyframeId: null, markerId: null },
-            interaction: null,
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'setMasterWaveform', args: { waveform: event.waveform } }],
           })),
         },
 
         'SCENE.SET_DURATION': {
-          actions: assign(({ context, event }) => ({
-            scene: {
-              ...context.scene,
-              meta: {
-                ...context.scene.meta,
-                durationMs: event.durationMs,
-                durationSource: event.source ?? context.scene.meta.durationSource,
-              },
-            },
+          actions: emit(({ event }) => ({
+            type: 'commandBatch' as const,
+            commands: [{ name: 'setSceneDuration', args: { durationMs: event.durationMs, source: event.source } }],
           })),
         },
       },
     },
 
-    // ── playing ─────────────────────────────────────────────────────────────
     playing: {
       on: {
         'PLAYHEAD.TICK': [
           {
-            // End of play: transition to idle so START_PLAY becomes available again
             guard: ({ context, event }) => {
               const stopMs = context.playRange?.outMs ?? context.scene.meta.durationMs
               return context.playheadMs + event.deltaMs >= stopMs
             },
             target: 'idle',
-            actions: assign(({ context }) => ({
-              isPlaying: false,
-              playheadMs: context.playRange?.outMs ?? context.scene.meta.durationMs,
-            })),
+            actions: assign(({ context }) => ({ isPlaying: false, playheadMs: context.playRange?.outMs ?? context.scene.meta.durationMs })),
           },
-          {
-            actions: assign(({ context, event }) => ({
-              playheadMs: context.playheadMs + event.deltaMs,
-            })),
-          },
+          { actions: assign(({ context, event }) => ({ playheadMs: context.playheadMs + event.deltaMs })) },
         ],
-        'PLAYHEAD.PAUSE': {
-          target: 'idle',
-          actions: assign({ isPlaying: false }),
-        },
-        'PLAYHEAD.STOP': {
-          target: 'idle',
-          actions: assign({ isPlaying: false, playheadMs: 0 }),
-        },
+        'PLAYHEAD.PAUSE': { target: 'idle', actions: assign({ isPlaying: false }) },
+        'PLAYHEAD.STOP': { target: 'idle', actions: assign({ isPlaying: false, playheadMs: 0 }) },
         'PLAYHEAD.SET': {
-          actions: assign(({ context, event }) => ({
-            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)),
-          })),
+          actions: assign(({ context, event }) => ({ playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) })),
         },
       },
     },
 
-    // ── panning ──────────────────────────────────────────────────────────────
     panning: {
       on: {
         'VIEWPORT.PAN_MOVE': {
@@ -958,27 +716,14 @@ export const sequenceEditorMachine = setup({
             if (!i || i.kind !== 'panning') return {}
             const deltaPx = event.pointerPx - i.originPx
             const deltaMs = deltaPx / context.viewport.pixelsPerMs
-            const startMs = clampViewportStart(
-              i.originStartMs - deltaMs,
-              context.viewport,
-              context.scene.meta.durationMs,
-            )
-            const viewport: MachineViewport = {
-              ...context.viewport,
-              startMs,
-              endMs: computeEndMs({ ...context.viewport, startMs }),
-            }
-            return { viewport }
+            const startMs = clampViewportStart(i.originStartMs - deltaMs, context.viewport, context.scene.meta.durationMs)
+            return { viewport: { ...context.viewport, startMs, endMs: computeEndMs({ ...context.viewport, startMs }) } }
           }),
         },
-        'VIEWPORT.PAN_END': {
-          target: 'idle',
-          actions: assign({ interaction: null }),
-        },
+        'VIEWPORT.PAN_END': { target: 'idle', actions: assign({ interaction: null }) },
       },
     },
 
-    // ── dragging-keyframe ────────────────────────────────────────────────────
     'dragging-keyframe': {
       on: {
         'DRAG.MOVE': {
@@ -994,23 +739,21 @@ export const sequenceEditorMachine = setup({
         'DRAG.END': {
           target: 'idle',
           guard: 'canCommitDrag',
-          actions: assign(({ context }) => {
-            const i = context.interaction
-            if (!i || i.kind !== 'dragging-keyframe') return { interaction: null }
-            const timeMs = i.currentMs
-            const scene = updateItemInScene(context.scene, i.trackId, (item) => ({
-              ...item,
-              keyframes: item.keyframes
-                .map((k) => (k.id === i.keyframeId ? { ...k, timeMs } : k))
-                .sort((a, b) => a.timeMs - b.timeMs),
-            }))
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }
-          }),
+          actions: [
+            emit(({ context }) => {
+              const i = context.interaction
+              if (!i || i.kind !== 'dragging-keyframe') return { type: 'commandBatch' as const, commands: [] }
+              return {
+                type: 'commandBatch' as const,
+                commands: [{ name: 'moveKeyframe', args: { itemId: i.trackId, keyframeId: i.keyframeId, timeMs: i.currentMs } }],
+              }
+            }),
+            assign({ interaction: null }),
+          ],
         },
       },
     },
 
-    // ── drawing-clip ─────────────────────────────────────────────────────────
     'drawing-clip': {
       on: {
         'CLIP.DRAW_MOVE': {
@@ -1022,42 +765,36 @@ export const sequenceEditorMachine = setup({
         },
         'CLIP.DRAW_END': {
           target: 'idle',
-          actions: assign(({ context }) => {
-            const i = context.interaction
-            if (!i || i.kind !== 'drawing-clip') return { interaction: null }
+          actions: [
+            emit(({ context }) => {
+              const i = context.interaction
+              if (!i || i.kind !== 'drawing-clip') return { type: 'commandBatch' as const, commands: [] }
 
-            const rawMinMs = Math.min(i.startMs, i.currentMs)
-            const rawMaxMs = Math.max(i.startMs, i.currentMs)
+              const rawMinMs = Math.min(i.startMs, i.currentMs)
+              const rawMaxMs = Math.max(i.startMs, i.currentMs)
+              const bounds = findParentClipBounds(i.trackId, context.scene.items, context.scene.meta.durationMs)
+              const minMs = Math.max(rawMinMs, bounds.minMs)
+              const maxMs = Math.min(rawMaxMs, bounds.maxMs)
+              if (minMs >= maxMs) return { type: 'commandBatch' as const, commands: [] }
 
-            const bounds = findParentClipBounds(i.trackId, context.scene.items, context.scene.meta.durationMs)
-            const minMs = Math.max(rawMinMs, bounds.minMs)
-            const maxMs = Math.min(rawMaxMs, bounds.maxMs)
+              const item = context.scene.items.find((it) => it.id === i.trackId)
+              const existingIntro = item?.keyframes.find((k) => k.name === 'intro')
+              const existingOutro = item?.keyframes.find((k) => k.name === 'outro')
 
-            if (minMs >= maxMs) return { interaction: null }
-
-            const scene = updateItemInScene(context.scene, i.trackId, (item) => {
-              const kept = item.keyframes.filter((k) => k.name !== 'intro' && k.name !== 'outro')
-              const introKf: Keyframe = {
-                id: i.introId || `kf-${Date.now()}`,
-                timeMs: minMs,
-                name: 'intro',
-                decorId: freshDecorId(),
-              }
-              const outroKf: Keyframe = {
-                id: i.outroId || `kf-${Date.now() + 1}`,
-                timeMs: maxMs,
-                name: 'outro',
-                decorId: freshDecorId(),
-              }
-              const keyframes = [...kept, introKf, outroKf].sort((a, b) => a.timeMs - b.timeMs)
-              return { ...item, keyframes }
-            })
-
-            return { scene, snapGrid: computeSnapGrid(scene), virtualKeyframes: computeVirtualKeyframes(scene, context.displayConfig.capsuleOrder), interaction: null }
-          }),
+              // Remplace tout intro/outro existant — DEUX commandes explicites (delete puis create),
+              // pas un filtre implicite sur un tableau local comme avant : `deleteKeyframe` purge
+              // aussi le décor orphelin (l'ancien code ne le faisait pas — fuite corrigée ici).
+              const commands: Command[] = []
+              if (existingIntro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingIntro.id } })
+              if (existingOutro) commands.push({ name: 'deleteKeyframe', args: { itemId: i.trackId, keyframeId: existingOutro.id } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.introId || freshId('kf'), timeMs: minMs, name: 'intro' } })
+              commands.push({ name: 'createNamedKeyframe', args: { itemId: i.trackId, keyframeId: i.outroId || freshId('kf'), timeMs: maxMs, name: 'outro' } })
+              return { type: 'commandBatch' as const, commands }
+            }),
+            assign({ interaction: null }),
+          ],
         },
       },
     },
-
   },
 })

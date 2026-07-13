@@ -17,6 +17,7 @@ function emptyScene(): EditorScene {
     contents: {},
     decors: {},
     zones: {},
+    markerTracks: {},
   }
 }
 
@@ -29,7 +30,6 @@ describe('runCommand', () => {
 
   it('dispatches setDecor by name', () => {
     const created = runCommandWithResult(emptyScene(), { name: 'createItem', args: { geometry: {} } })
-    const itemId = created.itemId as string
     const item = created.scene.items[0]!
 
     const next = runCommand(created.scene, {

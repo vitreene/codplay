@@ -49,6 +49,8 @@
   height: 100%;
   min-height: 0;
   user-select: none;
+  -webkit-user-select: none; /* Safari/WebKit ignore souvent la version non préfixée pendant un drag */
+  -webkit-touch-callout: none;
 }
 
 /* ── Corner ─────────────────────────────────────────────────────────────── */
@@ -309,6 +311,14 @@
   background: var(--seq-surface);
   border-bottom: 1px solid var(--seq-border);
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none; /* sans ça, cliquer sur le glyphe d'un bouton (▶/■/≫) peut déclencher une micro-sélection qui absorbe le clic sur Safari */
+  -webkit-touch-callout: none;
+}
+
+.seq-toolbar__label {
+  color: var(--seq-text-muted);
+  font-size: var(--seq-font-size-sm);
 }
 
 .seq-toolbar__select {
@@ -416,6 +426,8 @@
   z-index: 9999;
   pointer-events: none;
   cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .seq-drag-overlay.active { pointer-events: auto; }
 
