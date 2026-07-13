@@ -16,3 +16,4 @@ Lots apres la phase 1 (a ordonner lors de la prochaine revue):
 - player playback timeline minimal (run manuel Eddy) -> DONE (lot 16)
 - separation `move` en `policy/state/backend DOM` avec conservation stricte de la demo -> `../../formalisation/v1-move-separation-policy-state-backend-dom.md`
 - telco websocket deportee (v2, exploration ulterieure)
+- extraResources CSS (Blob `<style>`) jamais nettoye ni diffe sur `init()` repete — chaque rebuild ajoute un nouveau tag, meme a contenu identique, sans jamais retirer le precedent (constate depuis `packages/editor` : scene minimale, 4 rebuilds consecutifs -> 4 tags `<style>` accumules dans le head). Pas de defaut fonctionnel visible immediatement, mais accumulation reelle sur une session d'edition longue (dedit/sequence-editor rebuildent a chaque commit) — a corriger cote `Player.init()`/gestion des `extraResources`.

@@ -85,3 +85,11 @@ export type ControllerEvent =
   | { type: 'SCENE_LOADED'; scene: EditorScene }
   | { type: 'RUN_COMMAND'; command: Command }
   | { type: 'RUN_TRANSACTION'; commands: Command[] }
+
+// ─── Événements émis (§"modules de câblage impératifs", `2026-07-13-controller-islands-bridge-
+// plan.md` §3) — un pont s'y abonne via `machine.on(...)`, jamais via `subscribe()` sur chaque
+// snapshot : seuls ces deux moments comptent pour resynchroniser un îlot. ─────────────────────────
+
+export type ControllerEmitted =
+  | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
+  | { type: 'sceneLoaded'; scene: EditorScene }

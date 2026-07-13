@@ -9,15 +9,16 @@
  * les événements font. Seul le mode de geste actif (idle vs tracé de création) change ça.
  */
 
-import { assign, setup } from 'xstate'
+import { assign, emit, enqueueActions, setup } from 'xstate'
 import { runCommand, transaction } from '../commands/facade'
 import { EMPTY_SELECTION } from './types'
-import type { ControllerContext, ControllerEvent, EditPanel } from './types'
+import type { ControllerContext, ControllerEmitted, ControllerEvent, EditPanel } from './types'
 
 export const controllerMachine = setup({
   types: {} as {
     context: ControllerContext
     events: ControllerEvent
+    emitted: ControllerEmitted
   },
   actions: {
     /** §5 — deux émetteurs (timeline, player via selection-frame) convergent ici, un seul point de vérité. */
@@ -73,6 +74,21 @@ export const controllerMachine = setup({
       scene: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene : null),
       currentSceneId: ({ event }) => (event.type === 'SCENE_LOADED' ? event.scene.id : null),
     }),
+
+    /**
+     * `bridge-plan.md` §3 — les ponts se resynchronisent via ces deux events émis, jamais via un
+     * `subscribe()` sur chaque snapshot. Placées APRÈS `runCommand`/`runTransaction`/`selectItem`/
+     * `clearSelection` dans chaque liste `actions` : XState v5 exécute un tableau d'actions dans
+     * l'ordre, un `assign` antérieur est donc déjà visible ici. `enqueueActions` (pas un simple
+     * `emit`) : ces transitions (`SELECT_ITEM` notamment) restent valides sans document chargé
+     * (sélection = état d'UI, pas dépendant du document) — rien à émettre dans ce cas, sans pour
+     * autant bloquer toute la transition derrière un `guard`.
+     */
+    emitSceneCommitted: enqueueActions(({ context, enqueue }) => {
+      if (!context.scene) return
+      enqueue.emit({ type: 'sceneCommitted', scene: context.scene, selection: context.selection })
+    }),
+    emitSceneLoaded: emit(({ context }) => ({ type: 'sceneLoaded' as const, scene: context.scene! })),
   },
 }).createMachine({
   id: 'controller',
@@ -90,16 +106,21 @@ export const controllerMachine = setup({
   },
   on: {
     /** Ces événements sont valides quel que soit le mode courant — ni la sélection ni les panneaux ne dépendent du mode de geste. */
-    SELECT_ITEM: { actions: 'selectItem' },
-    CLEAR_SELECTION: { actions: 'clearSelection' },
+    /**
+     * La sélection émet aussi `sceneCommitted` (scène inchangée, `selection` à jour) — sans ça, le
+     * round-trip d'un pont qui a lui-même émis `selectionRequested` (§4) ne se referme jamais : sa
+     * propre projection locale de `selection.trackId`/`.keyframeId` resterait périmée.
+     */
+    SELECT_ITEM: { actions: ['selectItem', 'emitSceneCommitted'] },
+    CLEAR_SELECTION: { actions: ['clearSelection', 'emitSceneCommitted'] },
     TOGGLE_ZONES_VISIBLE: { actions: 'toggleZonesVisible' },
     SET_EDIT_GESTURE: { actions: 'setEditGesture' },
     OPEN_PANEL: { actions: 'openPanel' },
     CLOSE_PANEL: { actions: 'closePanel' },
-    RUN_COMMAND: { actions: 'runCommand' },
-    RUN_TRANSACTION: { actions: 'runTransaction' },
+    RUN_COMMAND: { actions: ['runCommand', 'emitSceneCommitted'] },
+    RUN_TRANSACTION: { actions: ['runTransaction', 'emitSceneCommitted'] },
     LOAD_SCENE: {},
-    SCENE_LOADED: { actions: 'sceneLoaded' },
+    SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
   },
   states: {
     idle: {

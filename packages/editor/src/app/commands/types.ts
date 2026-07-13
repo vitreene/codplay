@@ -1,9 +1,6 @@
 /**
- * Le document d'ed2 — modèle NORMATIF, `app/2026-07-11-ed2-document-model.md`.
- *
- * `sequence-editor/types.ts` est du code de prototype, pas une version antérieure à faire
- * cohabiter : il s'aligne sur ce modèle-ci (`app/2026-07-13-model-alignment-state-and-plan.md`),
- * qui seul fait foi.
+ * Le document d'ed2 — modèle NORMATIF, `app/2026-07-11-ed2-document-model.md`. Seul ce modèle
+ * fait foi ; `sequence-editor/types.ts` le réexporte, ne le redéclare jamais.
  */
 
 import type { CapsuleKind } from '@codplay/scene-factory'
