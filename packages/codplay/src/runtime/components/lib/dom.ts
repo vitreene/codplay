@@ -17,6 +17,7 @@ import {
   resetRuntimeNodeState,
   resolveFinalValue
 } from './dom-component-adapter'
+import { resolveContainerQueryValue } from './container-query-units'
 
 export type ClassNameProps = string | { add?: string; remove?: string }
 export type AttrProps = Record<string, unknown>
@@ -153,7 +154,7 @@ export function applyStyleProps(
         continue
       }
 
-      definedPatch[key] = finalValue
+      definedPatch[key] = resolveContainerQueryValue(nodeRef, finalValue)
     }
 
     if (Object.keys(definedPatch).length > 0) {

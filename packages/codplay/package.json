@@ -24,6 +24,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
-    "animejs": "^4.5.0"
+    "animejs": "^4.5.0",
+    "typed-om-polyfill": "^1.0.0"
   }
 }

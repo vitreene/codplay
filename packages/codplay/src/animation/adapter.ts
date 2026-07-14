@@ -1,7 +1,21 @@
 import { utils } from 'animejs'
 import { morphTo as animeSvgMorphTo } from 'animejs/svg'
 
+import { resolveContainerQueryValue } from '../runtime/components/lib/container-query-units'
 import type { AnimationAdapter, AnimationHandle, AnimationOperation, AnimeSvgMorphOperation, TransitionRequest } from './types'
+
+/**
+ * Resolves one transition value's container query units, when the transition
+ * target is a real DOM element — a no-op for any other target (three.js
+ * meshes, plain objects...) and for any non-container-query value.
+ */
+function resolveTransitionValue(target: unknown, rawValue: string | number | undefined): string | number | undefined {
+  if (rawValue === undefined || typeof globalThis.Element === 'undefined' || !(target instanceof globalThis.Element)) {
+    return rawValue
+  }
+
+  return resolveContainerQueryValue(target, rawValue) as string | number
+}
 
 export type AnimeAnimationLike = {
   pause?: () => void
@@ -160,7 +174,8 @@ function applyTransitionEndValue(transition: TransitionRequest): void {
   const target = transition.target
 
   if (typeof globalThis.Element !== 'undefined' && target instanceof globalThis.Element) {
-    utils.set(target, { [transition.property]: transition.finalValue ?? transition.to } as Parameters<typeof utils.set>[1])
+    const resolvedValue = resolveContainerQueryValue(target, transition.finalValue ?? transition.to)
+    utils.set(target, { [transition.property]: resolvedValue } as Parameters<typeof utils.set>[1])
     return
   }
 
@@ -205,9 +220,11 @@ function isNoOpTransition(transition: TransitionRequest): boolean {
  * Builds the tween value payload for one transition.
  */
 function toTransitionValue(transition: TransitionRequest): Record<string, number | string | ((value: number) => number | string)> {
+  const resolvedTo = resolveTransitionValue(transition.target, transition.to) as number | string
+
   if (transition.from === undefined) {
     const payload: Record<string, number | string | ((value: number) => number | string)> = {
-      to: transition.to
+      to: resolvedTo
     }
     if (transition.modifier !== undefined) {
       payload.modifier = transition.modifier
@@ -216,8 +233,8 @@ function toTransitionValue(transition: TransitionRequest): Record<string, number
   }
 
   const payload: Record<string, number | string | ((value: number) => number | string)> = {
-    from: transition.from,
-    to: transition.to
+    from: resolveTransitionValue(transition.target, transition.from) as number | string,
+    to: resolvedTo
   }
   if (transition.modifier !== undefined) {
     payload.modifier = transition.modifier
