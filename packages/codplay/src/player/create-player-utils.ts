@@ -291,6 +291,27 @@ export class PlayerRuntimePlanner {
       (resolvedActions as Record<string, unknown>)[TWEEN_STOP_ACTION] = 'stop'
     }
 
+    // Reserve one auto-reference action key per `capture.replay: true` emit
+    // declaration, so the runtime-built substitution transition (produced by
+    // capture-session.ts, carried as event.data) is applied to this exact
+    // perso on seek replay — without the author ever declaring the action
+    // themselves. `true` delegates the full action to event.data (see
+    // v1-tween-action-spec.md's `true` shortcut). The triggering event stays
+    // persist-only, so this action is never reached during live playback.
+    for (const emitRule of Object.values(perso.emit ?? {})) {
+      for (const emitAction of Array.isArray(emitRule) ? emitRule : [emitRule]) {
+        const capture = emitAction.capture
+        if (capture?.replay !== true) {
+          continue
+        }
+
+        const substitutionEventName = capture.endEvent?.name ?? capture.event.name
+        if (!(substitutionEventName in resolvedActions)) {
+          (resolvedActions as Record<string, unknown>)[substitutionEventName] = true
+        }
+      }
+    }
+
     // Reserve one auto-reference continuation key per statically-declared
     // ActionSequence (perso.actions[key] = ActionSequenceStep[]), so the
     // sequence's steps after the first can be delivered later to this exact

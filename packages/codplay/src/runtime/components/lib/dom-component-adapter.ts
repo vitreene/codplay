@@ -1,3 +1,5 @@
+import { utils } from 'animejs'
+
 import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../../create-element'
 import { startCaptureSession } from '../../capture-session'
 import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf } from '../../types'
@@ -453,6 +455,8 @@ export function applyStylePatch(
       removeProperty?: (propertyName: string) => void
     }
 
+    const definedPatch: Record<string, unknown> = {}
+
     for (const [key, rawValue] of Object.entries(patch)) {
       if (options.skipTransitionValues && isTransitionStyleValue(rawValue)) {
         continue
@@ -468,13 +472,11 @@ export function applyStylePatch(
         continue
       }
 
-      const value = String(finalValue)
-      if (key.includes('-') && styleWithSetProperty.setProperty) {
-        styleWithSetProperty.setProperty(key, value)
-        continue
-      }
+      definedPatch[key] = finalValue
+    }
 
-      style[key] = value
+    if (Object.keys(definedPatch).length > 0) {
+      utils.set(nodeRef, definedPatch as Parameters<typeof utils.set>[1])
     }
     return
   }

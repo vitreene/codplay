@@ -67,6 +67,15 @@ export type EmitCapture = {
   trackOn?: string[]
   /** DOM event names that end the capture session. Defaults to ['pointerup']. */
   endOn?: string[]
+  /**
+   * When true, the capture-end event carries a runtime-built substitution
+   * transition (from the captured start position to the end position, over
+   * `duration`) that is never applied live — the live pointer tracking already
+   * produced that effect — but is replayed as a full animated transition on
+   * seek, reconstructing the drag trajectory without needing the intermediate
+   * tracking events (which are never materialized in the track).
+   */
+  replay?: boolean
 }
 
 /**

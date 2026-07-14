@@ -154,11 +154,13 @@ function createPersistOnlyParentSceneFixture(): SceneDef {
 }
 
 /**
- * Creates one scene fixture where one transform-derived child event must inherit persist-only timing.
+ * Creates one scene fixture where one transform-derived child event has no
+ * explicit mode of its own. It must default to apply-now regardless of the
+ * triggering event's mode: apply-now is never inherited or overridden implicitly.
  */
-function createPersistOnlyTransformSceneFixture(): SceneDef {
+function createTransformDefaultModeSceneFixture(): SceneDef {
   return {
-    id: 'scene-persist-only-transform',
+    id: 'scene-transform-default-mode',
     initial: undefined,
     straps: undefined,
     listen: [],
@@ -183,7 +185,7 @@ function createPersistOnlyTransformSceneFixture(): SceneDef {
         listen: [
           {
             on: 'raw:end',
-            transform: [() => [{ name: 'reveal' }]]
+            transform: [() => [{ name: 'reveal', mode: 'persist-only' }]]
           }
         ]
       }
@@ -350,14 +352,14 @@ describe('V1 - scene bootstrap', () => {
     })
   })
 
-  it('keeps transform-derived child events of one persist-only author event off the live runtime', async () => {
+  it('applies transform-derived child events live by default, even when the triggering event is persist-only', async () => {
     const builder = new BuilderFacade()
     const player = new Player({
       createElementOptions: {
         nodeFactory: (item) => createRuntimeNodeFixture(item.type === 'list' ? 'SECTION' : 'DIV')
       }
     })
-    const compileResult = builder.compile({ scene: createPersistOnlyTransformSceneFixture() })
+    const compileResult = builder.compile({ scene: createTransformDefaultModeSceneFixture() })
 
     expect(compileResult.ok).toBe(true)
     if (!compileResult.ok) {
@@ -393,11 +395,6 @@ describe('V1 - scene bootstrap', () => {
       }
     )).toEqual({ ok: true, data: undefined })
 
-    expect(player.getRuntimeRegistry().getNodeById('title')).toMatchObject({
-      className: ''
-    })
-
-    expect(await player.seek({ timelineMs: 0 })).toEqual({ ok: true, data: undefined })
     expect(player.getRuntimeRegistry().getNodeById('title')).toMatchObject({
       className: 'revealed'
     })

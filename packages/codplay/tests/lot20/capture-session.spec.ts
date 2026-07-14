@@ -192,6 +192,36 @@ describe('Lot 20 — capture session', () => {
     expect(emittedEvents[0].name).toBe('drag:ended')
   })
 
+  it('T9 — endEvent présent : le mode reste persist-only (le geste live a déjà produit l\'effet visuel)', () => {
+    const cleanup = startCaptureSession({
+      capture: createCapture({ endEvent: { name: 'drag:ended' } }),
+      startX: 0, startY: 0, baseX: 0, baseY: 0,
+      startMs: Date.now(),
+      emitRuntimeEvent
+    })
+    activeCleanups.push(cleanup)
+
+    firePointerEvent(window, 'pointerup', { clientX: 50, clientY: 50 })
+
+    expect(emittedEvents).toHaveLength(1)
+    expect(emittedEvents[0].mode).toBe('persist-only')
+  })
+
+  it('T10 — sans endEvent (capture.event réutilisé) : le mode reste aussi persist-only', () => {
+    const cleanup = startCaptureSession({
+      capture: createCapture(),
+      startX: 0, startY: 0, baseX: 0, baseY: 0,
+      startMs: Date.now(),
+      emitRuntimeEvent
+    })
+    activeCleanups.push(cleanup)
+
+    firePointerEvent(window, 'pointerup', { clientX: 50, clientY: 50 })
+
+    expect(emittedEvents).toHaveLength(1)
+    expect(emittedEvents[0].mode).toBe('persist-only')
+  })
+
   it('T7 — pointerup ne s\'émet qu\'une seule fois même si déclenché plusieurs fois', () => {
     startCaptureSession({
       capture: createCapture(),

@@ -4,7 +4,6 @@ Current implementation targets:
 
 - `create-element.ts`
 - `mount-elements.ts`
-- `apply-actions.ts`
 - `components/`
 - `wait-flow.ts`
 - `list-plugin/`
@@ -27,6 +26,5 @@ Reference:
 
 Notes:
 
-- Renderer runtime now routes updates through `components/` orchestrator.
-- `apply-actions.ts` remains for compatibility tests and focused utility coverage.
-- direct same-tick facade removal: `apply-actions.ts` now calls `resolveHtmlRenderMutations(...)` directly.
+- Renderer runtime routes updates through `components/` orchestrator.
+- Same-tick conflict resolution lives in `html-render-mutation-resolver.ts` (`resolveHtmlRenderMutations`), exercised directly by `tests/v1/render-mutation-resolver.spec.ts`.

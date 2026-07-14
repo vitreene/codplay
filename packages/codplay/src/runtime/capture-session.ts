@@ -1,3 +1,4 @@
+import { buildCaptureSubstitutionStyle } from './capture-substitution'
 import type { EmitCapture, RuntimeEmitEvent } from './types'
 
 const DEFAULT_TRACK_ON = ['pointermove']
@@ -45,7 +46,10 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
     const eventMs = capture.snapAt === 'end' ? nowMs - capture.duration : nowMs
 
     const endEventSpec = capture.endEvent ?? capture.event
-    const endEventMode = capture.endEvent !== undefined ? undefined : 'persist-only'
+    const substitution =
+      capture.replay === true
+        ? buildCaptureSubstitutionStyle({ fromX: baseX, fromY: baseY, toX, toY, duration: capture.duration })
+        : undefined
 
     emitRuntimeEvent({
       name: endEventSpec.name,
@@ -53,7 +57,7 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
       scopeStoryId: endEventSpec.cascade === true ? undefined : scopeStoryId,
       source: 'system',
       ms: eventMs,
-      mode: endEventMode,
+      mode: 'persist-only',
       data: {
         fromX: baseX,
         fromY: baseY,
@@ -64,7 +68,8 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
         deltaMs,
         duration: capture.duration,
         snapAt: capture.snapAt,
-        persoId
+        persoId,
+        ...substitution
       }
     })
   }

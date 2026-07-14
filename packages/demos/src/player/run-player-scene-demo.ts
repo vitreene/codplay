@@ -4,11 +4,46 @@ import { animate, engine } from 'animejs';
 
 import { createAnimationAdapter, type AnimeImplementation } from 'codplay/animation/adapter';
 import { PlayerFacade } from 'codplay/player/create-player';
-import { createSequenceCommandPanel } from './player-scene-demo/sequence-command-panel';
+import type { PlayerApi } from 'codplay/player/player';
+import type { ApiResult } from 'codplay/builder/types';
+import { createTelco } from 'codplay/telco/create-telco';
+import { createDemoRemote } from '@codplay/remote';
 import { createTraceLogPanel } from '../shared/trace-log-panel';
 import { resolveSceneSeekMaxMs } from '../shared/resolve-scene-seek-max-ms';
 import { buildDemoLinksMarkup } from '../shared/demo-registry';
 import type { PlayerSceneDemoConfig } from '../shared/demo-scene-types';
+
+/**
+ * Adapts one low-level `PlayerFacade` to the public `PlayerApi` shape consumed
+ * by `createTelco`, so the shared demo remote can drive it like any other
+ * player. Only the subset of `PlayerApi` that `createTelco` actually calls is
+ * meaningfully implemented; the rest is present only to satisfy the type.
+ */
+function adaptPlayerFacadeToPlayerApi(facade: PlayerFacade): PlayerApi {
+	const toApiResult = async (command: Promise<{ ok: boolean; error?: { code: string; message: string } }>): Promise<ApiResult<void>> => {
+		const result = await command;
+		return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error as { code: string; message: string } };
+	};
+
+	return {
+		init: async () => ({ ok: true, data: undefined }),
+		play: () => toApiResult(facade.play()),
+		pause: () => toApiResult(facade.pause()),
+		resume: () => toApiResult(facade.play()),
+		stop: () => toApiResult(facade.destroy()),
+		destroy: () => toApiResult(facade.destroy()),
+		rewind: () => toApiResult(facade.rewind()),
+		seek: (input) => toApiResult(facade.seek(input.timelineMs)),
+		emit: (input) => toApiResult(facade.emit({ name: input.name, payload: input.data, cascade: input.cascade })),
+		getState: () => facade.getState(),
+		getRate: () => facade.getRate(),
+		setRate: (rate) => { facade.setRate(rate); },
+		onChange: (listener) => facade.onStateChange(listener),
+		onTrace: (listener) => facade.onTrace(listener),
+		subscribeToNode: () => () => {},
+		schedule: null as unknown as PlayerApi['schedule'],
+	};
+}
 
 /**
  * Builds an animejs wrapper compatible with the runtime animation adapter.
@@ -71,6 +106,14 @@ function syncInteractionLock(containerNode: HTMLDivElement, status: string): voi
 	containerNode.removeAttribute('inert');
 }
 
+/**
+ * Subscribes one callback to the next animation frame, cancellable.
+ */
+function subscribeOnTick(callback: () => void): () => void {
+	const frameId = globalThis.requestAnimationFrame(callback);
+	return () => { globalThis.cancelAnimationFrame(frameId); };
+}
+
 type PlayerDemoConfig = PlayerSceneDemoConfig & { rootNodeIds: string[] }
 
 /**
@@ -84,12 +127,6 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 
 	const seekMaxMsFromScene = resolveSceneSeekMaxMs(config.scene);
 	const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo, config.demoLinks);
-	const actionButtonsMarkup = (config.actions ?? [])
-		.map(
-			(action) =>
-				`<button id="${action.id}" class="demo-button ${action.className ?? 'demo-button-secondary'}" type="button">${action.label}</button>`,
-		)
-		.join('');
 
 	appNode.innerHTML = `
     <main class="demo-shell">
@@ -98,17 +135,7 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
         ${demoLinksMarkup.length > 0 ? `<nav class="demo-links">${demoLinksMarkup}</nav>` : ''}
         <h1>${config.title}</h1>
         <p class="subtitle">${config.subtitle}</p>
-        <div class="demo-controls">
-          <button id="demo-play-button" class="demo-button" type="button">Play</button>
-          <button id="demo-rewind-button" class="demo-button demo-button-secondary" type="button">Rewind</button>
-          <label class="demo-progress-control" for="demo-seek-range">
-            <span>Seek</span>
-            <input id="demo-seek-range" class="demo-progress-range" type="range" min="0" max="${seekMaxMsFromScene}" step="10" value="0" />
-            <span id="demo-seek-label" class="demo-progress-label">0ms / ${Math.max(0, Math.round(seekMaxMsFromScene))}ms</span>
-          </label>
-        </div>
-        ${actionButtonsMarkup.length > 0 ? `<div class="demo-controls demo-actions">${actionButtonsMarkup}</div>` : ''}
-        <div id="player-state" class="player-state"></div>
+        <div id="demo-remote-slot"></div>
         <div id="player-trace" class="player-state player-trace"></div>
       </aside>
       <div class="container" id="demo-container"></div>
@@ -121,6 +148,17 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 	}
 
 	containerNode.style.position = 'relative';
+
+	const remoteSlotNode = globalThis.document.querySelector<HTMLDivElement>('#demo-remote-slot');
+	if (remoteSlotNode === null) {
+		throw new Error('Expected #demo-remote-slot element');
+	}
+
+	const playerTrace = globalThis.document.querySelector<HTMLDivElement>('#player-trace');
+	if (playerTrace === null) {
+		throw new Error('Expected #player-trace element');
+	}
+	const playerTraceNode = playerTrace;
 
 	const animationAdapter = createAnimationAdapter(createAnimeImplementation(), {
 		renderFrame: () => {
@@ -143,63 +181,27 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 		},
 	});
 
-	const playerState = globalThis.document.querySelector<HTMLDivElement>('#player-state');
-	if (playerState === null) {
-		throw new Error('Expected #player-state element');
-	}
-	const playerStateNode = playerState;
+	const telco = createTelco(adaptPlayerFacadeToPlayerApi(player), { subscribeOnTick });
 
-	const playerTrace = globalThis.document.querySelector<HTMLDivElement>('#player-trace');
-	if (playerTrace === null) {
-		throw new Error('Expected #player-trace element');
-	}
-	const playerTraceNode = playerTrace;
-
-	const playButton = globalThis.document.querySelector<HTMLButtonElement>('#demo-play-button');
-	if (playButton === null) {
-		throw new Error('Expected #demo-play-button element');
-	}
-	const playButtonNode = playButton;
-
-	const rewindButton = globalThis.document.querySelector<HTMLButtonElement>('#demo-rewind-button');
-	if (rewindButton === null) {
-		throw new Error('Expected #demo-rewind-button element');
-	}
-	const rewindButtonNode = rewindButton;
-
-	const seekRange = globalThis.document.querySelector<HTMLInputElement>('#demo-seek-range');
-	if (seekRange === null) {
-		throw new Error('Expected #demo-seek-range element');
-	}
-	const seekRangeNode = seekRange;
-
-	const seekLabel = globalThis.document.querySelector<HTMLSpanElement>('#demo-seek-label');
-	if (seekLabel === null) {
-		throw new Error('Expected #demo-seek-label element');
-	}
-	const seekLabelNode = seekLabel;
-
-	const actionButtonNodes = new Map<string, HTMLButtonElement>();
-	for (const action of config.actions ?? []) {
-		const actionButtonNode = globalThis.document.querySelector<HTMLButtonElement>(`#${action.id}`);
-		if (actionButtonNode === null) {
-			throw new Error(`Expected #${action.id} element`);
-		}
-
-		actionButtonNodes.set(action.id, actionButtonNode);
-	}
-	const traceLogPanel = createTraceLogPanel(playerTraceNode);
-	const commandPanel = createSequenceCommandPanel({
-		player,
+	const remote = createDemoRemote({
+		telco,
 		seekMaxMsFromScene,
-		playButtonNode,
-		rewindButtonNode,
-		seekRangeNode,
-		seekLabelNode,
-		playerStateNode,
 		actions: config.actions,
-		actionButtonNodes,
+		emit:
+			(config.actions?.length ?? 0) > 0 ?
+				async (event) => {
+					await player.emit({
+						name: event.name,
+						payload: event.payload,
+						cascade: event.cascade,
+						scopeStoryId: event.scopeStoryId,
+					});
+				}
+			: undefined,
 	});
+	remoteSlotNode.appendChild(remote.element);
+
+	const traceLogPanel = createTraceLogPanel(playerTraceNode);
 
 	let mountedRuntimeRevision = -1;
 	player.onStateChange((state) => {
@@ -209,8 +211,6 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 		}
 
 		syncInteractionLock(containerNode, state.status);
-
-		commandPanel.syncFromState(state);
 	});
 
 	player.onTrace((row) => {
@@ -226,5 +226,5 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 	const initialState = player.getState();
 	mountedRuntimeRevision = initialState.runtimeRevision;
 	syncInteractionLock(containerNode, initialState.status);
-	commandPanel.syncFromState(initialState);
+	remote.sync();
 }

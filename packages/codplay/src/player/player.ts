@@ -1274,7 +1274,8 @@ export class Player implements PlayerApi {
       for (const transformFn of (rule.transform ?? []) as TransformFn[]) {
         emittedEvents.push(...transformFn(event).map((e) => ({
           event: e,
-          eventInsertMode: scope.eventInsertMode
+          // apply-now is the natural mode for every event; persist-only is never inherited.
+          eventInsertMode: undefined as StrapExecutionScope['eventInsertMode']
         })))
       }
       for (const strapName of rule.straps ?? []) {

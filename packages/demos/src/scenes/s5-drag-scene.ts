@@ -17,28 +17,6 @@ const trackMove: TransformFn = (event) => {
   ];
 };
 
-const dragToStyle: TransformFn = (event) => {
-  const { fromX, fromY, toX, toY, duration } = event.data as {
-    fromX: number;
-    fromY: number;
-    toX: number;
-    toY: number;
-    duration: number;
-  };
-  return [
-    {
-      name: "drag:apply",
-      cascade: true,
-      data: {
-        style: {
-          x: { from: fromX, to: toX, duration },
-          y: { from: fromY, to: toY, duration },
-        },
-      },
-    },
-  ];
-};
-
 export function createS5DragScene(): SceneDoc {
   return {
     id: "s5-drag-scene",
@@ -52,7 +30,6 @@ export function createS5DragScene(): SceneDoc {
         straps: [],
         listen: [
           { on: "drag:moved", transform: [trackMove] },
-          { on: "drag:ended", transform: [dragToStyle] },
         ],
         eventimes: [{ name: "sequence:end", startAt: 6000 }],
         persos: [
@@ -82,6 +59,7 @@ export function createS5DragScene(): SceneDoc {
                   endEvent: { name: "drag:ended" },
                   duration: 400,
                   snapAt: "end",
+                  replay: true,
                 },
               },
             },
@@ -91,7 +69,6 @@ export function createS5DragScene(): SceneDoc {
             // implicite ou un mode "passthrough" pour les events portant un payload style.
             actions: {
               "drag:tracking": {},
-              "drag:apply": {},
             },
           },
         ],

@@ -48,7 +48,13 @@ export function createDemoRemote(config: DemoRemoteConfig): {
 
   // Transport row
   const transportRow = mkEl('div', 'demo-controls')
-  const playBtn = mkBtn('Play', 'demo-button')
+  const playBtn = mkBtn('', 'demo-button')
+  // Label lives in its own span, never reassigned onto the button's own
+  // textContent — Safari's hit-testing on a live-reassigned text node
+  // directly inside a <button> can miss clicks on the rendered word.
+  const playBtnLabel = mkEl('span')
+  playBtnLabel.textContent = 'Play'
+  playBtn.appendChild(playBtnLabel)
   const rewindBtn = mkBtn('Rewind', 'demo-button demo-button-secondary')
 
   const seekWrapper = mkEl('label', 'demo-progress-control')
@@ -113,9 +119,39 @@ export function createDemoRemote(config: DemoRemoteConfig): {
     for (const r of rateBtns) r.node.classList.toggle('demo-rate-active', r.rate === current)
   }
 
+  /**
+   * Assigns one DOM text/attribute value only when it actually changed, to
+   * avoid needless per-frame DOM writes (observed to break Safari's
+   * hit-testing on the play/pause button label when rewritten every frame).
+   */
+  function setIfChanged<T extends string | boolean>(currentValue: T, nextValue: T, apply: (value: T) => void): void {
+    if (currentValue !== nextValue) apply(nextValue)
+  }
+
+  function resolveDisplayedMs(state: PlayerStateSnapshot): { displayMs: number; maxMs: number } {
+    const maxMs = seekScaleLockMaxMs !== null ? seekScaleLockMaxMs : Math.round(state.horizon.progressEndMs)
+    const clampedMs = Math.min(Math.max(0, Math.round(state.timelineMs)), maxMs)
+    const interactMs = Math.min(readRangeMs(), maxMs)
+    const seekTargetMs = activeSeekTargetMs ?? pendingSeekTargetMs
+    const pendingMs = seekTargetMs === null ? null : Math.min(seekTargetMs, maxMs)
+    const displayMs = seekInteractionActive ? interactMs : (pendingMs ?? clampedMs)
+    return { displayMs, maxMs }
+  }
+
+  /**
+   * Refreshes only what actually changes every frame during playback: the
+   * seek range position, its label, and the state readout.
+   */
+  function syncProgress(state: PlayerStateSnapshot = telco.getState()): void {
+    const { displayMs, maxMs } = resolveDisplayedMs(state)
+    setIfChanged(seekRange.value, String(displayMs), (v) => { seekRange.value = v })
+    seekLabel.textContent = formatPct(displayMs, maxMs)
+    stateEl.textContent = `status=${state.status} timelineMs=${Math.round(state.timelineMs)} revision=${state.runtimeRevision}`
+  }
+
   function syncState(state: PlayerStateSnapshot = telco.getState()): void {
     const inFlight = telco.commandInFlight
-    const { status, sequenceEnded, initialized, horizon, timelineMs, runtimeRevision } = state
+    const { status, sequenceEnded, initialized } = state
 
     const canPlay = sequenceEnded || status === 'ready' || status === 'paused'
     const canPause = !sequenceEnded && status === 'playing'
@@ -124,21 +160,16 @@ export function createDemoRemote(config: DemoRemoteConfig): {
     const canSeek =
       !sequenceEnded && initialized && (status === 'paused' || status === 'playing' || status === 'seeking')
 
-    const maxMs = seekScaleLockMaxMs !== null ? seekScaleLockMaxMs : Math.round(horizon.progressEndMs)
-    const clampedMs = Math.min(Math.max(0, Math.round(timelineMs)), maxMs)
-    const interactMs = Math.min(readRangeMs(), maxMs)
-    const seekTargetMs = activeSeekTargetMs ?? pendingSeekTargetMs
-    const pendingMs = seekTargetMs === null ? null : Math.min(seekTargetMs, maxMs)
-    const displayMs = seekInteractionActive ? interactMs : (pendingMs ?? clampedMs)
+    const { displayMs, maxMs } = resolveDisplayedMs(state)
 
-    playBtn.disabled = inFlight || (!canPlay && !canPause)
-    playBtn.textContent = canPause ? 'Pause' : 'Play'
-    rewindBtn.disabled = inFlight || !canRewind
-    seekRange.disabled = !canSeek
-    seekRange.max = String(maxMs)
-    seekRange.value = String(displayMs)
+    setIfChanged(playBtn.disabled, inFlight || (!canPlay && !canPause), (v) => { playBtn.disabled = v })
+    setIfChanged(playBtnLabel.textContent, canPause ? 'Pause' : 'Play', (v) => { playBtnLabel.textContent = v })
+    setIfChanged(rewindBtn.disabled, inFlight || !canRewind, (v) => { rewindBtn.disabled = v })
+    setIfChanged(seekRange.disabled, !canSeek, (v) => { seekRange.disabled = v })
+    setIfChanged(seekRange.max, String(maxMs), (v) => { seekRange.max = v })
+    setIfChanged(seekRange.value, String(displayMs), (v) => { seekRange.value = v })
     seekLabel.textContent = formatPct(displayMs, maxMs)
-    stateEl.textContent = `status=${status} timelineMs=${Math.round(timelineMs)} revision=${runtimeRevision}`
+    stateEl.textContent = `status=${status} timelineMs=${Math.round(state.timelineMs)} revision=${state.runtimeRevision}`
 
     for (const action of config.actions ?? []) {
       const btn = actionBtns.get(action.id)
@@ -261,7 +292,7 @@ export function createDemoRemote(config: DemoRemoteConfig): {
   }
 
   const stopOnChange = telco.onChange((state) => syncState(state))
-  const stopOnProgress = telco.onProgress((state) => syncState(state))
+  const stopOnProgress = telco.onProgress((state) => syncProgress(state))
 
   syncRates()
 
