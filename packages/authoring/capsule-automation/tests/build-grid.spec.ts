@@ -129,13 +129,13 @@ describe('buildGrid() — sceneRoot fills its real host container', () => {
     expect(grid.inlineStyle.height).toBeUndefined()
   })
 
-  it('propagates a dedicated .ac-scene-root rule (dimension, grid-area, min-width/height:0, overflow) into the resolved styleSheet', () => {
+  it('propagates a dedicated .ac-scene-root rule (dimension, grid-area, min-width/height:0, overflow, container-type) into the resolved styleSheet', () => {
     const capsule = new AutoCapsule({
       capsule: { id: 'root', type: CAPSULE_TYPE.card, grid: {}, sceneRoot: true },
       children: [],
     })
     const result = capsule.resolve()
-    expect(result.styleSheet).toContain('.ac-scene-root{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;}')
+    expect(result.styleSheet).toContain('.ac-scene-root{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;container-type:size;}')
   })
 
   it('min-width:0/min-height:0 prevent the capsule\'s own oversized children from growing the parent grid track (and it) beyond the real container', () => {

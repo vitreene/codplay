@@ -64,7 +64,7 @@ describe('buildSceneDoc — minimal increment (one item, root capsule, fade)', (
     expect((root.initial as { className?: string }).className!.split(' ')).toContain('ac-scene-root')
     expect(root.initial).not.toHaveProperty(['style', 'width'])
     expect(root.initial).not.toHaveProperty(['style', 'height'])
-    expect(styleSheet).toContain('.ac-scene-root{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;}')
+    expect(styleSheet).toContain('.ac-scene-root{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;container-type:size;}')
   })
 
   it('builds the item perso as a child of the root capsule, flip:false, placed on the ghost zone (full grid surface)', () => {
@@ -242,8 +242,8 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
     expect(item.actions['item-1-kf-kf-b']).toEqual({
       style: {
         'background-color': { to: '#00ff00', duration: 1000, ease: 'easeInOut' },
-        x: { to: 120, duration: 1000, ease: 'easeInOut' },
-        y: { to: -40, duration: 1000, ease: 'easeInOut' },
+        x: { to: '120cqw', duration: 1000, ease: 'easeInOut' },
+        y: { to: '-40cqw', duration: 1000, ease: 'easeInOut' },
         rotate: { to: 15, duration: 1000, ease: 'easeInOut' },
         scaleX: { to: 1.2, duration: 1000, ease: 'easeInOut' },
         scaleY: { to: 0.9, duration: 1000, ease: 'easeInOut' },
@@ -257,7 +257,16 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
     const { sceneDoc } = buildSceneDoc(scene)
     const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
 
-    expect(item.initial).toMatchObject({ style: { x: 10, y: 20, rotate: 5, 'background-color': '#ff0000' } })
+    expect(item.initial).toMatchObject({ style: { x: '10cqw', y: '20cqw', rotate: 5, 'background-color': '#ff0000' } })
+  })
+
+  it('width/height in offset resolve to cqw CSS strings too — the poignée-driven resize the author actually performs changes all four at once (nw handle)', () => {
+    const scene = interpolatedFixtureScene()
+    scene.decors['d-a']!.offset = { translate: { x: 5, y: 8 }, width: 40, height: 25 }
+    const { sceneDoc } = buildSceneDoc(scene)
+    const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
+
+    expect(item.initial).toMatchObject({ style: { x: '5cqw', y: '8cqw', width: '40cqw', height: '25cqw' } })
   })
 })
 

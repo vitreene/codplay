@@ -49,6 +49,29 @@ function readLocalDims(node: HTMLElement): { w: number; h: number } {
   return { w, h }
 }
 
+/**
+ * Re-pins `translate`/`width`/`height` to explicit resolved px the instant a node is (re)captured
+ * — never assumes the inline value is already px. A node freshly mounted by the player can carry
+ * any CSS unit on these properties (e.g. `cqw`, written by the editor's own document); this
+ * adapter's own delta math (`readTranslate`/`readPx` on the RAW inline string) only holds once the
+ * inline value is unambiguously px, otherwise a later `current + rawDeltaPx` silently treats a
+ * foreign unit's number as px — a real, confirmed double-conversion bug, not a hypothetical.
+ * `getComputedStyle` always resolves to real px regardless of the declared unit, so it's the one
+ * safe read for this one-time re-pin (never used for the running deltas themselves — those still
+ * read the inline value, now guaranteed already px by this call).
+ */
+function pinToResolvedPx(node: HTMLElement): void {
+  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
+  if (!computed) return
+  const translateRaw = computed.translate
+  if (translateRaw && translateRaw !== 'none') {
+    const parts = translateRaw.split(/\s+/).map((part) => Number.parseFloat(part))
+    node.style.translate = `${parts[0] || 0}px ${parts[1] || 0}px`
+  }
+  if (node.style.width) node.style.width = `${readPx(computed.width)}px`
+  if (node.style.height) node.style.height = `${readPx(computed.height)}px`
+}
+
 function parseOriginComponentPx(part: string | undefined, sizePx: number): number {
   if (part === undefined) return sizePx / 2
   const parsed = Number.parseFloat(part)
@@ -95,6 +118,7 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
 
   const unsubscribe = options.authorApi.subscribeToNode(options.itemId, (next) => {
     node = next instanceof HTMLElement ? next : null
+    if (node !== null) pinToResolvedPx(node)
   })
 
   return {

@@ -57,8 +57,6 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   async function rebuild(scene: EditorScene): Promise<void> {
     lastScene = scene
     try {
-      console.log('[DEBUG INPUT scene.items]', JSON.stringify(scene.items, null, 2))
-      console.log('[DEBUG INPUT scene.decors]', JSON.stringify(scene.decors, null, 2))
       // `buildSceneDoc` lève plutôt que de renvoyer un Result (§6 du plan : `type: 'text'` seul
       // supporté aujourd'hui — un item resté `bloc` lève ici, pas un bug de ce pont).
       const { sceneDoc, styleSheet, rootGrid, preRollMs } = buildSceneDoc(scene)
@@ -131,7 +129,6 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
         const { scene, selection, referenceWidthPx } = machine.getSnapshot().context
         if (!scene || !node || referenceWidthPx <= 0) return
         const decorId = resolveTargetDecorId(scene, selection)
-        console.log('[DEBUG persistOffset] selection=', JSON.stringify(selection), 'resolved decorId=', decorId)
         if (!decorId) return
         const current = readCurrentOffsetPx(node)
         const offset: OffsetData = {

@@ -46,9 +46,17 @@ function toKebabCase(value: string): string {
  * larger than the real container: the track grows around the content instead of the content
  * being constrained to the track. `overflow:hidden` is the final backstop once the size is
  * actually bounded, containing anything (ex. oversized child content) that still doesn't fit.
+ *
+ * `container-type:size` makes the scene-root capsule the query-container `cqw`/`cqh` (offset/
+ * dimension values authored in ed2's decor module) resolve against — without it, a descendant's
+ * `cqw` has no valid container-query context and the browser falls back to a near-zero/garbage
+ * size (confirmed live: `width:8px` instead of the authored `100cqw`). `size` (not `inline-size`):
+ * both axes are queried here (`width`/`height` both use `cqw`/`cqh`-style units in this codebase),
+ * and `overflow:hidden` (already required above) is a prerequisite CSS already satisfies
+ * `container-type:size`'s own requirement of establishing size containment.
  */
 const SCENE_ROOT_CLASS_NAME = "ac-scene-root";
-const SCENE_ROOT_CSS_RULE = `.${SCENE_ROOT_CLASS_NAME}{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;}`;
+const SCENE_ROOT_CSS_RULE = `.${SCENE_ROOT_CLASS_NAME}{width:100%;height:100%;grid-area:1/-1;min-width:0;min-height:0;overflow:hidden;container-type:size;}`;
 
 /**
  * Build the capsule grid artifact and its reusable context.

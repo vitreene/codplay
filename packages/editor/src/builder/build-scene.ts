@@ -671,17 +671,27 @@ function buildKeyframeDecorActions(
  * animable se résout vers les mêmes clés que `Decor.style` porte déjà pour ce même rôle,
  * confirmées par une scène ed2 réelle (`packages/demos/src/scenes/s6-dnd-list-scene.ts`, `x`/`y`
  * mélangés à du CSS classique — `zIndex` — dans le même objet `style`, aussi bien en action qu'en
- * `event.data`). `width`/`height`/`anchor`/`ratio` (partie statique de `OffsetData`) restent hors
- * périmètre ici — aucune résolution ne leur correspond nulle part dans ce dépôt, gap séparé.
+ * `event.data`). Codplay applique `style` (aussi bien `initial` que les actions) via
+ * `animejs.utils.set`/le moteur de transition — jamais une assignation DOM littérale — donc toute
+ * grandeur numérique y suit la convention anime.js « unitless = px » (`core/consts.js`,
+ * `unitsExecRgx`, un suffixe alphabétique est requis pour toute autre unité). `translate`/`width`/
+ * `height` sont en `cqw` dans `OffsetData` (jamais des px) : ils sortent donc en CHAÎNE avec
+ * suffixe (`'50.39cqw'`), jamais en nombre brut, `width`/`height` confirmés par la même scène
+ * réelle (`width: '480px'`, jamais un nombre nu). `rotate` (degrés) et `scaleX`/`scaleY` (facteurs
+ * sans dimension) n'ont pas cette ambiguïté — nombre brut inchangé. `anchor`/`ratio` (reste de la
+ * partie statique de `OffsetData`) restent hors périmètre ici — aucune résolution ne leur
+ * correspond nulle part dans ce dépôt, gap séparé.
  */
 function resolveOffsetAsStyle(offset: OffsetData | undefined): Record<string, unknown> {
   if (!offset) return {}
   const out: Record<string, unknown> = {}
-  if (offset.translate?.x !== undefined) out.x = offset.translate.x
-  if (offset.translate?.y !== undefined) out.y = offset.translate.y
+  if (offset.translate?.x !== undefined) out.x = `${offset.translate.x}cqw`
+  if (offset.translate?.y !== undefined) out.y = `${offset.translate.y}cqw`
   if (offset.rotate !== undefined) out.rotate = offset.rotate
   if (offset.scale?.x !== undefined) out.scaleX = offset.scale.x
   if (offset.scale?.y !== undefined) out.scaleY = offset.scale.y
+  if (offset.width !== undefined) out.width = `${offset.width}cqw`
+  if (offset.height !== undefined) out.height = `${offset.height}cqw`
   return out
 }
 
