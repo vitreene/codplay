@@ -345,6 +345,10 @@
   min-width: 28px;
   text-align: center;
 }
+/* Glyphe posé via `content: attr(...)`, jamais en `textContent` réel (`mount.ts::setButtonGlyph`)
+   — du texte généré par CSS n'est jamais sélectionnable, ce qui évite qu'un clic sur le glyphe
+   (▶/■/≫/⊡/×) soit intercepté par la machinerie de sélection de texte de Safari. */
+.seq-toolbar__btn::before { content: attr(data-glyph); }
 .seq-toolbar__btn:hover { border-color: var(--seq-accent); color: var(--seq-accent); }
 .seq-toolbar__btn--active { background: var(--seq-accent); border-color: var(--seq-accent); color: #fff; }
 
@@ -365,37 +369,14 @@
 }
 .seq-toolbar__zoom input[type=range] { width: 80px; accent-color: var(--seq-accent); }
 
-/* ── Main area (editor left + output right) ─────────────────────────────── */
+/* ── Main area (editor + infobar, colonne) ──────────────────────────────── */
 .seq-main {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.seq-left {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   min-width: 0;
-}
-
-/* ── JSON output panel ──────────────────────────────────────────────────── */
-.seq-output {
-  width: 300px;
-  flex-shrink: 0;
-  overflow: auto;
-  background: #0d1117;
-  border-left: 1px solid var(--seq-border);
-  padding: 8px 12px;
-  margin: 0;
-  font-family: var(--seq-font);
-  font-size: 10px;
-  color: #e6edf3;
-  line-height: 1.5;
-  white-space: pre;
-  tab-size: 2;
+  overflow: hidden;
 }
 
 /* ── Clip bands ─────────────────────────────────────────────────────────── */

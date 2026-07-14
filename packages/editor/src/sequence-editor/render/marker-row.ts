@@ -1,4 +1,5 @@
 import type { MachineContext } from '../machine'
+import { timeToPixel, pixelToTime } from './geometry'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -18,7 +19,6 @@ export function renderMarkerTrackRows(
   container.innerHTML = ''
 
   const { viewport, scene, selection, layoutProfile } = ctx
-  const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightMarkers
 
   for (const track of Object.values(scene.markerTracks)) {
@@ -30,7 +30,7 @@ export function renderMarkerTrackRows(
     svg.setAttribute('aria-hidden', 'true')
 
     for (const marker of track.markers) {
-      const x = (marker.timeMs - startMs) * pixelsPerMs
+      const x = timeToPixel(marker.timeMs, viewport, layoutProfile)
       const color = marker.color ?? track.color ?? 'var(--seq-marker-default-color)'
 
       const flag = document.createElementNS(SVG_NS, 'polygon')
@@ -66,7 +66,7 @@ export function renderMarkerTrackRows(
       svg.style.cursor = 'pointer'
       svg.addEventListener('dblclick', e => {
         const rect = svg.getBoundingClientRect()
-        const rawMs = startMs + (e.clientX - rect.left) / pixelsPerMs
+        const rawMs = pixelToTime(e.clientX - rect.left, viewport, layoutProfile)
         onAddMarker(track.id, rawMs)
       })
     }

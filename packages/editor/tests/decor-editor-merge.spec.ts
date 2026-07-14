@@ -28,10 +28,10 @@ describe('mergePatch', () => {
     expect(result.style).toEqual({ 'clip-path': 'circle(50%)', 'z-index': '3' })
   })
 
-  it('position (module distinct, pas du style) fusionne indépendamment', () => {
-    const base: DecorPatch = { position: { x: 1, y: 2 } }
+  it('offset (module distinct, pas du style) fusionne indépendamment', () => {
+    const base: DecorPatch = { offset: { x: 1, y: 2 } }
     const result = mergePatch(base, { style: { color: 'red' } })
-    expect(result.position).toEqual({ x: 1, y: 2 })
+    expect(result.offset).toEqual({ x: 1, y: 2 })
   })
 
   it('textAutoSize (module distinct, pas du style) fusionne indépendamment', () => {

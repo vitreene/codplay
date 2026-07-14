@@ -11,6 +11,20 @@ import { createCueRow, renderCueRow } from './render/cue-row'
 import { createMarkerTrackRows, renderMarkerTrackRows } from './render/marker-row'
 import { createWaveformRow, renderWaveformRow } from './render/waveform-row'
 
+/**
+ * Un `<button>` dont le `textContent` est un glyphe Unicode seul (▶/■/≫/⊡/×) expose ce nœud texte
+ * au hit-test du pointeur — WebKit peut router un clic dessus vers sa machinerie de sélection de
+ * texte au lieu de le laisser remonter en `click` sur le bouton (`-webkit-user-select:none` sur le
+ * conteneur, déjà posé, ne suffit pas dans tous les cas : signalé toujours reproductible). Le
+ * contenu généré par CSS (`::before`/`content: attr(...)`) n'est jamais sélectionnable par
+ * construction (aucun moteur ne permet de sélectionner du texte généré) — aucun nœud texte réel
+ * dans le bouton, donc rien à intercepter. Pas de balisage ajouté, seulement l'attribut de données
+ * que la règle `::before` de `sequence-editor.css` consomme.
+ */
+function setButtonGlyph(btn: HTMLButtonElement, glyph: string): void {
+  btn.dataset.glyph = glyph
+}
+
 export interface MountSequenceEditorOptions {
   /** Notifié à chaque changement de playhead — le pont vers `player.seek({ timelineMs })` vit chez l'appelant, pas ici. */
   onPlayheadChange?: (timeMs: number) => void
@@ -95,12 +109,12 @@ export function mountSequenceEditor(
 
   const btnPlay = document.createElement('button')
   btnPlay.classList.add('seq-toolbar__btn')
-  btnPlay.textContent = '▶'
+  setButtonGlyph(btnPlay, '▶')
   btnPlay.title = 'Play / Pause'
 
   const btnStop = document.createElement('button')
   btnStop.classList.add('seq-toolbar__btn')
-  btnStop.textContent = '■'
+  setButtonGlyph(btnStop, '■')
   btnStop.title = 'Stop'
 
   const timeDisplay = document.createElement('span')
@@ -122,7 +136,7 @@ export function mountSequenceEditor(
 
   const unitBtn = document.createElement('button')
   unitBtn.classList.add('seq-toolbar__btn')
-  unitBtn.textContent = 's'
+  setButtonGlyph(unitBtn, 's')
   unitBtn.title = 'Basculer unité de temps (s / ms)'
 
   const followLabel = document.createElement('span')
@@ -131,18 +145,18 @@ export function mountSequenceEditor(
 
   const btnFollow = document.createElement('button')
   btnFollow.classList.add('seq-toolbar__btn')
-  btnFollow.textContent = '≫'
+  setButtonGlyph(btnFollow, '≫')
   btnFollow.title = 'Suivre la tête de lecture (mode paginé)'
 
   const btnZoomRange = document.createElement('button')
   btnZoomRange.classList.add('seq-toolbar__btn')
-  btnZoomRange.textContent = '⊡'
+  setButtonGlyph(btnZoomRange, '⊡')
   btnZoomRange.title = 'Zoom sur le clip'
   btnZoomRange.style.display = 'none'
 
   const btnClearRange = document.createElement('button')
   btnClearRange.classList.add('seq-toolbar__btn')
-  btnClearRange.textContent = '×'
+  setButtonGlyph(btnClearRange, '×')
   btnClearRange.title = 'Effacer le clip'
   btnClearRange.style.display = 'none'
 
@@ -184,16 +198,9 @@ export function mountSequenceEditor(
   const infobar = document.createElement('div')
   infobar.classList.add('seq-infobar')
 
-  const outputPanel = document.createElement('pre')
-  outputPanel.classList.add('seq-output')
-
-  const leftCol = document.createElement('div')
-  leftCol.classList.add('seq-left')
-  leftCol.append(editor, infobar)
-
   const mainArea = document.createElement('div')
   mainArea.classList.add('seq-main')
-  mainArea.append(leftCol, outputPanel)
+  mainArea.append(editor, infobar)
 
   const dragOverlay = document.createElement('div')
   dragOverlay.classList.add('seq-drag-overlay')
@@ -348,47 +355,63 @@ export function mountSequenceEditor(
     dragOverlay.addEventListener('pointerup', onUp)
   }
 
-  // ── Ruler: seek (click) or range draw (drag) ──────────────────────────────────
+  // ── Seek (click) ou création de segment (Maj+glisser) — depuis la règle ET depuis le corps de
+  // la timeline (n'importe où dans la bande où la tête de lecture se trouve réellement : cue row,
+  // marqueurs, waveform, pistes — pas seulement la fine bande de graduations au-dessus, contre-
+  // intuitive comme seul point d'accroche). Les éléments plus spécifiques (poignée de kf, drapeau
+  // de marqueur, …) appellent déjà `stopPropagation()` sur leur propre pointerdown — ce geste
+  // générique ne les court-circuite donc jamais, il ne réagit que sur l'espace resté libre. ──────
 
-  function onRulerPointerDown(e: PointerEvent): void {
+  function startPlayheadScrub(e: PointerEvent): void {
     if (e.button !== 0) return
+    // La règle reste la référence horizontale commune, même quand le geste démarre ailleurs dans
+    // le corps de la timeline — les deux zones sont alignées sur le même axe temporel.
     const rect = rulerWrapper.getBoundingClientRect()
     const startMs = ctrl.pixelToMs(e.clientX - rect.left + timeline.scrollLeft)
-    let dragStartX = e.clientX
-    let rangeMode = false
+    // Décidé au tout début du geste, jamais pendant : un glisser simple doit rester un scrub continu
+    // de la tête de lecture du début à la fin — le seuil de 5px qui basculait automatiquement en
+    // création de segment rendait le scrub impossible (retour utilisateur direct). Le segment est un
+    // geste secondaire, explicite (Maj+glisser), jamais une conséquence accidentelle d'un glisser.
+    const rangeMode = e.shiftKey
+    const pointerId = e.pointerId
 
-    rulerWrapper.setPointerCapture(e.pointerId)
+    // PAS de `setPointerCapture` ici (contrairement à un drag de poignée/marqueur, qui n'a aucun
+    // enfant concurrent) : la règle capture proprement, mais le corps de la timeline porte les
+    // pistes, dont le double-clic (ajout de kf, `track-row.ts`) a besoin que `click`/`dblclick`
+    // continuent de cibler la ligne réellement cliquée — une capture ici les redirigerait tous vers
+    // ce conteneur, et le double-clic ne pourrait plus jamais atteindre son propre gestionnaire.
+    // `window` reçoit `pointermove`/`pointerup` même hors des bornes de l'élément, sans ce risque.
     ctrl.seek(startMs)
 
     function onMove(ev: PointerEvent): void {
-      if (!rangeMode && Math.abs(ev.clientX - dragStartX) > 5) {
-        rangeMode = true
-      }
+      if (ev.pointerId !== pointerId) return
+      const curMs = ctrl.pixelToMs(ev.clientX - rect.left + timeline.scrollLeft)
       if (rangeMode) {
-        const curMs = ctrl.pixelToMs(ev.clientX - rect.left + timeline.scrollLeft)
         const inMs = Math.min(startMs, curMs)
         const outMs = Math.max(startMs, curMs)
         ctrl.setPlayRange(inMs, outMs)
       } else {
-        ctrl.seek(ctrl.pixelToMs(ev.clientX - rect.left + timeline.scrollLeft))
+        ctrl.seek(curMs)
       }
     }
 
     function onUp(ev: PointerEvent): void {
+      if (ev.pointerId !== pointerId) return
       if (rangeMode) {
         const curMs = ctrl.pixelToMs(ev.clientX - rect.left + timeline.scrollLeft)
         const inMs = Math.min(startMs, curMs)
         const outMs = Math.max(startMs, curMs)
         ctrl.setPlayRange(inMs, outMs)
       }
-      rulerWrapper.removeEventListener('pointermove', onMove)
-      rulerWrapper.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
 
-    rulerWrapper.addEventListener('pointermove', onMove)
-    rulerWrapper.addEventListener('pointerup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
-  rulerWrapper.addEventListener('pointerdown', onRulerPointerDown)
+  rulerWrapper.addEventListener('pointerdown', startPlayheadScrub)
+  timelineInner.addEventListener('pointerdown', startPlayheadScrub)
 
   // ── Controls ──────────────────────────────────────────────────────────────────
 
@@ -430,7 +453,7 @@ export function mountSequenceEditor(
   function onUnitClick(): void {
     const next = ctrl.getSnapshot().context.displayConfig.timeUnit === 's' ? 'ms' : 's'
     ctrl.setDisplayConfig({ timeUnit: next })
-    unitBtn.textContent = next
+    setButtonGlyph(unitBtn, next)
   }
   unitBtn.addEventListener('click', onUnitClick)
 
@@ -438,11 +461,25 @@ export function mountSequenceEditor(
 
   let scrollSyncing = false
   let lastPlayheadMs: number | null = null
+  /**
+   * `renderTrackRows` fait `container.innerHTML = ''` puis reconstruit toutes les lignes — aucune
+   * de leurs propriétés ne dépend de `playheadMs`/`isPlaying` (positions = `kf.timeMs`, jamais la
+   * tête de lecture). Sans ce filtre, chaque scrub/tick détruit et recrée les nœuds DOM des lignes
+   * en continu — un double-clic en cours (ajout de kf) perd sa cible entre les deux clics, puisque
+   * le navigateur exige le même nœud pour reconnaître un `dblclick` (signalé en test réel : "la
+   * tête de lecture capte le click", un simple clic pour scruter suffit à casser le geste suivant).
+   */
+  let lastRowsViewport: MachineContext['viewport'] | null = null
+  let lastRowsScene: MachineContext['scene'] | null = null
+  let lastRowsSelection: MachineContext['selection'] | null = null
+  let lastRowsInteraction: MachineContext['interaction'] | null = null
+  let lastRowsVirtualKeyframes: MachineContext['virtualKeyframes'] | null = null
+  let lastRowsLayoutProfile: MachineContext['layoutProfile'] | null = null
 
   function render(snap: { context: MachineContext }): void {
     const ctx = snap.context
     timeDisplay.textContent = formatTimeMs(ctx.playheadMs, ctx.displayConfig.timeUnit)
-    btnPlay.textContent = ctx.isPlaying ? '⏸' : '▶'
+    setButtonGlyph(btnPlay, ctx.isPlaying ? '⏸' : '▶')
     btnFollow.classList.toggle('seq-toolbar__btn--active', ctx.followPlayhead)
     const hasRange = ctx.playRange !== null
     btnZoomRange.style.display = hasRange ? '' : 'none'
@@ -489,21 +526,36 @@ export function mountSequenceEditor(
       (id) => ctrl.removeMarkerTrack(id),
     )
     markerAddSpacer.style.height = `${ctx.layoutProfile.rowHeightMarkers + 1}px`
-    renderTrackRows(
-      trackRows,
-      ctx,
-      (trackId, rawMs) => {
-        if (isTooCloseToExisting(trackId, rawMs, ctx)) return
-        ctrl.addKeyframe(trackId, rawMs)
-      },
-      (trackId, kfId) => ctrl.selectKeyframe(trackId, kfId),
-      collapsedCapsuleIds,
-      startKeyframeDrag,
-      (vkf: VirtualKeyframe) => {
-        const id = ctrl.addKeyframe(vkf.trackId, vkf.timeMs)
-        ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
-      },
-    )
+    if (
+      ctx.viewport !== lastRowsViewport ||
+      ctx.scene !== lastRowsScene ||
+      ctx.selection !== lastRowsSelection ||
+      ctx.interaction !== lastRowsInteraction ||
+      ctx.virtualKeyframes !== lastRowsVirtualKeyframes ||
+      ctx.layoutProfile !== lastRowsLayoutProfile
+    ) {
+      lastRowsViewport = ctx.viewport
+      lastRowsScene = ctx.scene
+      lastRowsSelection = ctx.selection
+      lastRowsInteraction = ctx.interaction
+      lastRowsVirtualKeyframes = ctx.virtualKeyframes
+      lastRowsLayoutProfile = ctx.layoutProfile
+      renderTrackRows(
+        trackRows,
+        ctx,
+        (trackId, rawMs) => {
+          if (isTooCloseToExisting(trackId, rawMs, ctx)) return
+          ctrl.addKeyframe(trackId, rawMs)
+        },
+        (trackId, kfId) => ctrl.selectKeyframe(trackId, kfId),
+        collapsedCapsuleIds,
+        startKeyframeDrag,
+        (vkf: VirtualKeyframe) => {
+          const id = ctrl.addKeyframe(vkf.trackId, vkf.timeMs)
+          ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
+        },
+      )
+    }
     renderCueRow(cueRow, ctx)
     renderMarkerTrackRows(
       markerRow,
@@ -515,7 +567,6 @@ export function mountSequenceEditor(
     renderWaveformRow(waveformRow, ctx)
     renderPlayhead(playheadOverlay, ctx)
     renderInfobar(infobar, ctx)
-    outputPanel.textContent = JSON.stringify(ctx.scene, null, 2)
   }
 
   function renderInfobar(bar: HTMLElement, ctx: MachineContext): void {

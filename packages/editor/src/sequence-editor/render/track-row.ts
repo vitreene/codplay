@@ -2,6 +2,7 @@ import type { MachineContext, VirtualKeyframe } from '../machine'
 import type { Item } from '../types'
 import { childrenOf, getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
+import { timeToPixel, pixelToTime } from './geometry'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -47,7 +48,8 @@ export function renderTrackRows(
   container.innerHTML = ''
 
   const { viewport, scene, selection, layoutProfile } = ctx
-  const { pixelsPerMs, startMs } = viewport
+  const { pixelsPerMs } = viewport
+  const toPx = (timeMs: number) => timeToPixel(timeMs, viewport, layoutProfile)
   const collapsed = collapsedIds ?? new Set<string>()
   const drag = ctx.interaction?.kind === 'dragging-keyframe' ? ctx.interaction : null
 
@@ -78,8 +80,8 @@ export function renderTrackRows(
         }
       }
       if (clipMinMs !== null && clipMaxMs !== null) {
-        const bx = (clipMinMs - startMs) * pixelsPerMs
-        const bw = (clipMaxMs - clipMinMs) * pixelsPerMs
+        const bx = toPx(clipMinMs)
+        const bw = toPx(clipMaxMs) - bx
         const band = document.createElementNS(SVG_NS, 'rect')
         band.setAttribute('x', String(bx))
         band.setAttribute('y', '0')
@@ -95,8 +97,8 @@ export function renderTrackRows(
       const kf = item.keyframes[i]!
       const next = item.keyframes[i + 1]
       if (!next) break
-      const x1 = (getEffectiveMs(kf.id, kf.timeMs, ctx) - startMs) * pixelsPerMs
-      const x2 = (getEffectiveMs(next.id, next.timeMs, ctx) - startMs) * pixelsPerMs
+      const x1 = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
+      const x2 = toPx(getEffectiveMs(next.id, next.timeMs, ctx))
       const rect = document.createElementNS(SVG_NS, 'rect')
       rect.setAttribute('x', String(Math.min(x1, x2)))
       rect.setAttribute('y', String(rowHeight / 2 - 2))
@@ -106,21 +108,38 @@ export function renderTrackRows(
       svg.appendChild(rect)
     }
 
-    // Transition duration bands (named = amber, interpolated = blue)
+    // Transition duration bands (named = amber, interpolated = blue). Un kf FIXE le décor à son
+    // instant : `transitionIn` le PRÉCÈDE (bande à gauche, se termine AU kf) ; `transitionOut` le
+    // SUIT (bande à droite, débute AU kf) — intro/outro sont les bornes du clip, la transition ne se
+    // fait donc que d'un seul côté (règle d'exclusivité, `2026-06-11-sequence-editor-grid-spec.md`).
     for (const kf of item.keyframes) {
-      if (!kf.transitionOut) continue
-      const kfX = (getEffectiveMs(kf.id, kf.timeMs, ctx) - startMs) * pixelsPerMs
-      const bandW = kf.transitionOut.durationMs * pixelsPerMs
-      const band = document.createElementNS(SVG_NS, 'rect')
-      band.setAttribute('x', String(kfX))
-      band.setAttribute('y', String(rowHeight / 2 - 5))
-      band.setAttribute('width', String(Math.max(1, bandW)))
-      band.setAttribute('height', '10')
-      band.classList.add(
-        'seq-row__transition',
-        kf.transitionOut.kind === 'named' ? 'seq-row__transition--named' : 'seq-row__transition--interp',
-      )
-      svg.appendChild(band)
+      const kfX = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
+      if (kf.transitionIn) {
+        const bandW = kf.transitionIn.durationMs * pixelsPerMs
+        const band = document.createElementNS(SVG_NS, 'rect')
+        band.setAttribute('x', String(kfX - Math.max(1, bandW)))
+        band.setAttribute('y', String(rowHeight / 2 - 5))
+        band.setAttribute('width', String(Math.max(1, bandW)))
+        band.setAttribute('height', '10')
+        band.classList.add(
+          'seq-row__transition',
+          kf.transitionIn.kind === 'named' ? 'seq-row__transition--named' : 'seq-row__transition--interp',
+        )
+        svg.appendChild(band)
+      }
+      if (kf.transitionOut) {
+        const bandW = kf.transitionOut.durationMs * pixelsPerMs
+        const band = document.createElementNS(SVG_NS, 'rect')
+        band.setAttribute('x', String(kfX))
+        band.setAttribute('y', String(rowHeight / 2 - 5))
+        band.setAttribute('width', String(Math.max(1, bandW)))
+        band.setAttribute('height', '10')
+        band.classList.add(
+          'seq-row__transition',
+          kf.transitionOut.kind === 'named' ? 'seq-row__transition--named' : 'seq-row__transition--interp',
+        )
+        svg.appendChild(band)
+      }
     }
 
     // Parent clip boundary markers + out-of-bounds detection
@@ -129,7 +148,7 @@ export function renderTrackRows(
     // Keyframe handles (position follows active drag for the dragged keyframe)
     for (const kf of item.keyframes) {
       const effectiveMs = getEffectiveMs(kf.id, kf.timeMs, ctx)
-      const x = (effectiveMs - startMs) * pixelsPerMs
+      const x = toPx(effectiveMs)
       const handle = createKeyframeHandle(kf, x, rowHeight, layoutProfile)
       const isDragging = drag?.keyframeId === kf.id && drag.trackId === item.id
 
@@ -164,7 +183,7 @@ export function renderTrackRows(
     // Virtual keyframes (hollow diamonds — distribution-computed, not stored)
     const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === item.id)
     for (const vkf of vkfsForTrack) {
-      const x = (vkf.timeMs - startMs) * pixelsPerMs
+      const x = toPx(vkf.timeMs)
       const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: '' }
       const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile)
       handle.classList.add('seq-kf--virtual')
@@ -185,7 +204,7 @@ export function renderTrackRows(
       [parentMarkers.outroMs, 'seq-row__clip-marker seq-row__clip-marker--outro'],
     ] as [number | null, string][]) {
       if (markerMs === null) continue
-      const mx = (markerMs - startMs) * pixelsPerMs
+      const mx = toPx(markerMs)
       const line = document.createElementNS(SVG_NS, 'line')
       line.setAttribute('x1', String(mx))
       line.setAttribute('x2', String(mx))
@@ -197,7 +216,7 @@ export function renderTrackRows(
 
     rowEl.addEventListener('dblclick', e => {
       const rect = rowEl.getBoundingClientRect()
-      const rawMs = viewport.startMs + (e.clientX - rect.left) / viewport.pixelsPerMs
+      const rawMs = pixelToTime(e.clientX - rect.left, viewport, layoutProfile)
       onAddKeyframe(item.id, rawMs)
     })
 

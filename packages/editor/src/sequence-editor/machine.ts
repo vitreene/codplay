@@ -3,7 +3,7 @@ import type {
   EditorScene, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
 } from './types'
 import type { Command } from '../app/controller/types'
-import { CapsuleDistribution, CapsulePreset } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset, TransitionTiming } from '@codplay/scene-factory'
 import type { ChildInput } from '@codplay/scene-factory'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
@@ -214,13 +214,19 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
     if (clipDurationMs <= 0) continue
     if (!capsule.capsule) continue
 
+    // Même formule que `build-scene.ts`'s `resolveCapsule()` (`TransitionTiming`, `@codplay/
+    // scene-factory`) — sans `preRollMs` (concept Builder/player, invisible ici par conception,
+    // l'éditeur reste dans son propre référentiel temporel local). Sans cet appel partagé, cet
+    // aperçu divergeait de la construction réelle : il ignorait `transitionIn.durationMs`.
     const childInputs: ChildInput[] = children.map((child) => {
       const ci = child.keyframes.find((k) => k.name === 'intro')
       const co = child.keyframes.find((k) => k.name === 'outro')
       return {
         trackId: child.id,
-        lockedIntroMs: ci !== undefined ? ci.timeMs - introKf.timeMs : undefined,
-        lockedOutroMs: co !== undefined ? co.timeMs - introKf.timeMs : undefined,
+        lockedIntroMs: TransitionTiming.lockedIntroMs(
+          ci !== undefined ? { timeMs: ci.timeMs - introKf.timeMs, transitionInDurationMs: ci.transitionIn?.durationMs } : undefined,
+        ),
+        lockedOutroMs: TransitionTiming.lockedOutroMs(co !== undefined ? { timeMs: co.timeMs - introKf.timeMs } : undefined),
       }
     })
 
@@ -405,7 +411,20 @@ export const sequenceEditorMachine = setup({
         'KEYFRAME.SELECT': {
           actions: [
             emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: [event.trackId], keyframeId: event.keyframeId ?? undefined })),
-            assign(({ context }) => ({ selection: { ...context.selection, markerId: null } })),
+            // Sélectionner un kf amène aussi la tête de lecture à son `timeMs` — même logique que
+            // pour éditer le décor : il faut voir l'item dans son aspect au moment où il est fixé,
+            // pas dans un état de lecture arbitraire. `playheadMs` est purement local (jamais émis
+            // ici en tant que tel) mais la boucle de rendu de `mount.ts` détecte tout changement de
+            // `ctx.playheadMs` et déclenche `onPlayheadChange` → le pont `seek` existant s'en charge.
+            assign(({ context, event }) => {
+              const kf = event.keyframeId
+                ? context.scene.items.find((i) => i.id === event.trackId)?.keyframes.find((k) => k.id === event.keyframeId)
+                : undefined
+              return {
+                selection: { ...context.selection, markerId: null },
+                playheadMs: kf ? Math.max(0, Math.min(kf.timeMs, context.scene.meta.durationMs)) : context.playheadMs,
+              }
+            }),
           ],
         },
         'MARKER.SELECT': {
@@ -479,6 +498,11 @@ export const sequenceEditorMachine = setup({
         'DRAG.START_KEYFRAME': {
           target: 'dragging-keyframe',
           actions: [
+            // Le vrai chemin de sélection au clic (`track-row.ts` route toujours ici via
+            // `onDragStart`, jamais vers `KEYFRAME.SELECT` — un clic simple ET un drag démarrent
+            // tous les deux par un pointerdown). La tête de lecture suit le kf sélectionné : même
+            // logique que pour éditer le décor, il faut voir l'item dans son aspect au moment où
+            // il est fixé, pas dans un état de lecture arbitraire.
             assign(({ context, event }) => {
               const item = context.scene.items.find((i) => i.id === event.trackId)
               const kf = item?.keyframes.find((k) => k.id === event.keyframeId)
@@ -491,6 +515,7 @@ export const sequenceEditorMachine = setup({
                   currentMs: kf?.timeMs ?? 0,
                 },
                 selection: { ...context.selection, markerId: null },
+                playheadMs: kf ? Math.max(0, Math.min(kf.timeMs, context.scene.meta.durationMs)) : context.playheadMs,
               }
             }),
             emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: [event.trackId], keyframeId: event.keyframeId })),

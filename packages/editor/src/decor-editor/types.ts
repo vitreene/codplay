@@ -25,9 +25,13 @@ export interface CapsulePatch {
   grid?: { rows: number; cols: number } | { preset: string }
 }
 
-// ─── Position (module non-CSS, transposé en aval — spec §6) ───────────────
+// ─── Offset (module non-CSS, transposé en aval — spec §6) ──────────────────
+//
+// Décalage libre (transform + dimensions), distinct de la future `position` (placement dans la
+// grille d'une capsule, pas encore construite) — nommage précisé par l'auteur pour ne pas les
+// confondre une fois `position` construite : ce module ne porte jamais de placement de grille.
 
-export interface PositionPatch {
+export interface OffsetPatch {
   x?: number // cqw
   y?: number // cqw
   width?: number // cqw
@@ -42,7 +46,7 @@ export interface PositionPatch {
 // ─── Text auto-size (module non-CSS, transposé en aval — spec text-auto-size §5) ──
 //
 // La coche « auto » ne peut pas vivre dans `style` (valeurs CSS finales uniquement) :
-// elle vit dans ce module à part, comme `position`. Le calcul lui-même (taille de police,
+// elle vit dans ce module à part, comme `offset`. Le calcul lui-même (taille de police,
 // line-height) est produit par `@codplay/text-auto-size`, jamais stocké ici — seule
 // l'intention (`enabled`) est persistée dans l'écart.
 
@@ -59,17 +63,17 @@ export interface TextAutoSizePatch {
 // d'être écrite ici, jamais stockée comme valeur intermédiaire à convertir.
 // La couleur suit la même règle (chaîne CSS, ex. "oklch(...)" ou un
 // "linear-gradient(...)") ; elle pourra devenir un module dédié plus tard,
-// comme `position`, si son édition a besoin d'un état structuré propre.
+// comme `offset`, si son édition a besoin d'un état structuré propre.
 //
 // Seuls les modules qui produisent du CSS via une interface intermédiaire
-// (position aujourd'hui ; d'autres demain — bordures par côté, clip-path…)
+// (offset aujourd'hui ; d'autres demain — bordures par côté, clip-path…)
 // sortent de `style` : leurs données ne sont pas elles-mêmes des valeurs CSS.
 
 export interface DecorPatch {
   style?: Record<string, string>
   /** Même modèle que le runtime codplay (add/remove sur chaînes espacées, ou remplacement total). */
   classes?: ClassNameValue
-  position?: PositionPatch
+  offset?: OffsetPatch
   zone?: string | null // référence PAR NOM ; null = surface de la capsule
   capsule?: CapsulePatch // items capsule uniquement (§ 8)
   text?: string // contenu textuel (saisie dans dedit)
@@ -84,7 +88,7 @@ export type ResolvedDecor = DecorPatch
 
 export interface DecorPreset {
   name: string
-  /** Jamais `position`, `zone`, `capsule` — cf spec §9. */
+  /** Jamais `offset`, `zone`, `capsule` — cf spec §9. */
   patch: DecorPatch
 }
 
@@ -108,9 +112,9 @@ export interface ZoneCard {
   zones: ZoneTable
 }
 
-// ─── Position bridge (px, contrats actuels du cadre de sélection) ─────────
+// ─── Offset bridge (px, contrats actuels du cadre de sélection) ───────────
 
-export interface PositionValuesPx {
+export interface OffsetValuesPx {
   x?: number
   y?: number
   width?: number

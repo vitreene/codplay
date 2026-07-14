@@ -8,6 +8,8 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { SequenceEditorController } from '../src/sequence-editor/controller'
+import { renderMarginPx } from '../src/sequence-editor/render/geometry'
+import { LAYOUT_PROFILE_DEFAULT } from '../src/sequence-editor/layout-profile'
 import type { EditorScene } from '../src/sequence-editor/types'
 import type { Command } from '../src/app/controller/types'
 import sceneOneTrack from '../src/sequence-editor/fixtures/scene-one-track.json'
@@ -339,16 +341,16 @@ describe('setDuration', () => {
 // ─── Coordinate utilities — purement locales, non affectées ────────────────────
 
 describe('msToPixel / pixelToMs / snapToGrid', () => {
-  it('msToPixel(startMs) = 0', () => {
+  it('msToPixel(startMs) = the render margin, not 0 — keeps a kf/playhead at startMs fully visible (geometry.ts)', () => {
     const ctrl = new SequenceEditorController(EMPTY)
     const startMs = ctrl.getViewport().startMs
-    expect(ctrl.msToPixel(startMs)).toBeCloseTo(0)
+    expect(ctrl.msToPixel(startMs)).toBeCloseTo(renderMarginPx(LAYOUT_PROFILE_DEFAULT))
     ctrl.destroy()
   })
 
-  it('pixelToMs(0) = startMs', () => {
+  it('pixelToMs(margin) = startMs — pixel 0 is left of startMs by design (the reserved margin)', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    expect(ctrl.pixelToMs(0)).toBeCloseTo(ctrl.getViewport().startMs)
+    expect(ctrl.pixelToMs(renderMarginPx(LAYOUT_PROFILE_DEFAULT))).toBeCloseTo(ctrl.getViewport().startMs)
     ctrl.destroy()
   })
 

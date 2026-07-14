@@ -1,8 +1,8 @@
 export type {
-  OrientationContext, ItemType, FlexAnchor, CapsulePatch, PositionPatch, TextAutoSizePatch,
+  OrientationContext, ItemType, FlexAnchor, CapsulePatch, OffsetPatch, TextAutoSizePatch,
   DecorPatch, ResolvedDecor, DecorPreset,
   ZoneCoords, ZoneDef, ZoneTable, ZoneCard,
-  PositionValuesPx,
+  OffsetValuesPx,
 } from './types'
 
 export { mergePatch, resolveDecor } from './merge'

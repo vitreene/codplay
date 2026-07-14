@@ -8,7 +8,7 @@ import { iconSvg } from './icons'
 // ─── Palette shell ───────────────────────────────────────────────────────────
 //
 // Couche de RENDU — dupliquable/adaptable sans toucher au contrat (domaine,
-// machine, contrôleur). Cf docs/formalisation/2026-07-07-dedit-palette-panels-plan.md
+// machine, contrôleur). Cf plan/2026-07-07-dedit-palette-panels-plan.md
 
 export interface DecorEditorPaletteHandle {
   element: HTMLElement

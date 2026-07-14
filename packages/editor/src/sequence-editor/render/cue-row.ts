@@ -1,4 +1,5 @@
 import type { MachineContext } from '../machine'
+import { timeToPixel } from './geometry'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -18,13 +19,12 @@ export function renderCueRow(svg: SVGSVGElement, ctx: MachineContext): void {
   while (svg.firstChild) svg.removeChild(svg.firstChild)
 
   const { viewport, layoutProfile } = ctx
-  const { pixelsPerMs, startMs } = viewport
   const h = layoutProfile.rowHeightCues
 
   svg.setAttribute('height', String(h))
 
   for (const cue of allCues(ctx)) {
-    const x = (cue.timeMs - startMs) * pixelsPerMs
+    const x = timeToPixel(cue.timeMs, viewport, layoutProfile)
 
     const line = document.createElementNS(SVG_NS, 'line')
     line.setAttribute('x1', String(x))

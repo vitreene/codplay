@@ -42,7 +42,30 @@ export function DemoMenuRegion({ controller }: DemoMenuRegionProps) {
       <button
         type="button"
         disabled={!hasScene}
-        onClick={() => controller.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry: {} } } })}
+        onClick={() => {
+          // `buildSceneDoc` ne supporte que `type: 'text'` (§6 du plan) — sans ce second temps,
+          // l'item reste `bloc` et ne peut pas être rendu par `scenePlayer`. `createItem` ne
+          // renvoie pas son id via `RUN_COMMAND` (§4 : la seule sortie du contrôleur est `scene`) ;
+          // il est ajouté en fin de tableau (`base-commands.ts::createItem`), donc lisible juste après.
+          controller.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry: {} } } })
+          const items = controller.getSnapshot().context.scene?.items ?? []
+          const itemId = items[items.length - 1]?.id
+          if (!itemId) return
+          controller.send({
+            type: 'RUN_TRANSACTION',
+            commands: [
+              { name: 'assignType', args: { itemId, type: 'text' } },
+              { name: 'assignContent', args: { itemId, content: { type: 'text', text: 'Nouvel item' } } },
+              // Sans keyframe, `CapsuleDistribution` n'a ni introMs ni outroMs à verrouiller — l'item
+              // hérite du fade-in par défaut du type `card` sans jamais recevoir l'eventime qui le
+              // déclenche (`buildTransitionEvents` lit `item.keyframes[0]`/`[…length-1]`) : il reste
+              // à `opacity:0` en permanence. Deux keyframes (bornes du clip) donnent un intro/outro
+              // résolus sur toute la durée de la scène plutôt que confondus au même instant.
+              { name: 'createKeyframe', args: { itemId, timeMs: 0 } },
+              { name: 'createKeyframe', args: { itemId, timeMs: emptyScene.meta.durationMs } },
+            ],
+          })
+        }}
       >
         Créer un item
       </button>

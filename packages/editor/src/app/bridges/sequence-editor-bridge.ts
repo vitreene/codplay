@@ -2,10 +2,7 @@ import type { Actor } from 'xstate'
 import { SequenceEditorController } from '../../sequence-editor/controller'
 import { mountSequenceEditor } from '../../sequence-editor/mount'
 import type { controllerMachine } from '../controller/controller-machine'
-
-export interface BridgeHandle {
-  destroy(): void
-}
+import type { BridgeHandle } from './types'
 
 /**
  * Pont `sequenceEditor` — `2026-07-13-controller-islands-bridge-plan.md` §3.1. Module de câblage
@@ -16,9 +13,7 @@ export interface BridgeHandle {
 export function createSequenceEditorBridge(container: HTMLElement, machine: Actor<typeof controllerMachine>): BridgeHandle {
   const controller = new SequenceEditorController(machine.getSnapshot().context.scene ?? undefined)
   const handle = mountSequenceEditor(container, controller, {
-    onPlayheadChange: () => {
-      // Pont `scenePlayer` (§3.3) pas encore construit — rien à notifier pour l'instant.
-    },
+    onPlayheadChange: (timeMs) => machine.send({ type: 'SEEK', timelineMs: timeMs }),
   })
 
   const unsubscribeCommand = controller.onCommand((commands) => {

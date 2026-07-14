@@ -323,10 +323,12 @@ interface Keyframe {
   name?: string              // lie ce kf à un repère nommé global
   decorId: string | null     // référence vers EditorScene.decors — opaque pour la grille
   markerId?: string          // accrochage à un AuthorMarker — optionnel
-  transitionIn?: TransitionDef   // transition vers ce kf (s'achève au timeMs)
-  transitionOut?: TransitionDef  // transition depuis ce kf (débute au timeMs)
+  transitionIn?: TransitionDef   // transition vers ce kf (s'achève au timeMs) — un kf `intro` ne porte JAMAIS que celle-ci
+  transitionOut?: TransitionDef  // transition depuis ce kf (débute au timeMs) — un kf `outro` ne porte JAMAIS que celle-ci
 }
 ```
+
+**Par nature, un kf `intro` ne porte qu'une transition AVANT lui (`transitionIn`), un kf `outro` qu'une transition APRÈS lui (`transitionOut`)** — jamais l'inverse, jamais les deux. `intro`/`outro` sont des bornes (§2.4) : rien ne précède `intro` dans la fenêtre de l'item, rien ne suit `outro`. Un keyframe intermédiaire (ni `intro` ni `outro`) peut porter les deux : une transition entrante depuis son voisin précédent, une transition sortante vers son voisin suivant.
 
 `decorId` est la seule information de décor que la grille connaît. Elle ne lit pas `EditorScene.decors[decorId]`. Quand un keyframe est créé, la grille copie le `decorId` du keyframe adjacent le plus proche (voir §2.5).
 
@@ -347,26 +349,34 @@ Le décrochage reste dans les deux cas une action explicite : le keyframe conser
 
 La résolution `markerId → timeMs` est faite par le builder lors de la compilation vers `SceneDoc` ; dans le modèle éditeur, `timeMs` est toujours la valeur résolue et à jour.
 
-**Sémantique des transitions** :
+**Sémantique des transitions — deux natures, jamais confondues.**
 
-- `transitionIn.durationMs = 800` sur kf2 à t=5000 ms : la transition débute à t=4200 ms et se termine à t=5000 ms. Entre kf1 et t=4200 ms, l'état de kf1 est maintenu.
-- `transitionOut` sur kf1 : la transition débute à l'instant de kf1 et s'achève `durationMs` plus tard.
+Un kf agit sur le décor ; il est précédé et/ou suivi d'une transition. Deux natures distinctes, chacune avec son propre jeu de réglages (tous facultatifs, chacun a une valeur par défaut) :
 
-**Règle d'exclusivité** : entre deux keyframes adjacents, `transitionOut` (sur le keyframe source) et `transitionIn` (sur le keyframe destination) ne peuvent pas coexister. L'UI l'interdit : créer l'une exige d'avoir supprimé l'autre. Le modèle ne peut donc pas se trouver dans cet état — aucune logique de résolution de priorité n'est nécessaire.
+**1. Transition nommée** — exclusivement sur les kf `intro`/`outro` (`kind: 'named'`) : signale la façon dont l'item apparaît/disparaît. Le nom est un preset (identique à Eddy) ; les propriétés animées (opacité, x, y, scale…) vivent dans le preset, jamais dans le décor.
+   - Réglages : `durationMs`, `name` (le preset).
+   - `transitionIn.durationMs = 800` sur le kf `intro` à t=5000 ms : la transition débute à t=4200 ms, se termine à t=5000 ms — l'item arrive réglé exactement au kf.
+   - `transitionOut` sur le kf `outro` : débute à l'instant du kf, s'achève `durationMs` plus tard.
+
+**2. Transition d'état de décor** — entre deux kf quelconques (`kind: 'interpolated'`) : par défaut automatique, couvre tout l'intervalle entre les deux. Peut être **raccourcie** : une durée limite avant OU après un kf borne la transition à une fenêtre plus courte que l'intervalle complet — le reste de l'intervalle maintient l'état du kf de départ (ou d'arrivée, selon le bord choisi).
+   - Réglages : `durationMs`, `easing`, `direction` (`'before' | 'after'` — quel bord de l'intervalle porte la fenêtre raccourcie).
+   - Exemple : kf1 à t=0, kf2 à t=5000 ms, limite de transition 2000 ms **avant** kf2 → le décor kf1 est maintenu de t=0 à t=3000 ms, la transition se joue de t=3000 ms à t=5000 ms (fin sur kf2), puis le décor kf2 est maintenu.
+   - Le builder calcule l'animation depuis le diff entre les décors adjacents ; la grille ne stocke que durée/easing/direction, jamais le diff lui-même.
+
+**Règle d'exclusivité** (inchangée) : entre deux keyframes adjacents, `transitionOut` (keyframe source) et `transitionIn` (keyframe destination) ne peuvent pas représenter le MÊME segment simultanément. L'UI l'interdit : créer l'une exige d'avoir supprimé l'autre sur ce même segment. Le modèle ne peut donc pas se trouver dans cet état — aucune logique de résolution de priorité n'est nécessaire.
+
+**Fusion des transitions aux bords d'une capsule.** Quand un item porte une transition d'entrée ET qu'il est le tout premier enfant d'une capsule qui a elle-même sa propre transition d'entrée, la transition PROPRE de l'item est annulée (`cut`) — la capsule anime déjà l'ensemble, l'animer une deuxième fois individuellement serait redondant. Symétrique en sortie (dernier enfant, transition de sortie capsule). Se règle par de simples presets côté `capsule-automation` (catalogue de comportement par type de capsule) — jamais une condition codée en dur dans le Builder ed2 (Principe B, `2026-07-08-builder-plan.md`).
+
+**Représentation visuelle dans la grille.** Chaque transition est matérialisée par un triangle (rampe) et une surface reliant l'extrémité de la transition au kf — pas une simple bande rectangulaire de durée. Existant dans la version d'origine de l'éditeur (hors de ce dépôt), à reconstruire.
 
 #### `TransitionDef`
-
-`TransitionDef` est une union discriminée selon la position du keyframe :
-
-- **intro/outro** (`kind: 'named'`) : transition par preset nommé (identique à Eddy). Les propriétés animées (opacité, x, y, scale…) sont définies dans le preset, hors du décor.
-- **inter-keyframes** (`kind: 'interpolated'`) : le builder calcule l'animation à partir du diff entre les décors adjacents. La grille stocke uniquement la durée et l'easing.
 
 ```typescript
 type TransitionKey = '--' | 'cut' | 'fade' | 'swipe-left' | 'swipe-right' | 'swipe-top' | 'swipe-down' | 'zoom'
 
 type TransitionDef =
   | { kind: 'named'; name: TransitionKey; durationMs: number }
-  | { kind: 'interpolated'; durationMs: number; easing: EasingValue }
+  | { kind: 'interpolated'; durationMs: number; easing: EasingValue; direction?: 'before' | 'after' }
 
 type EasingValue =
   | 'linear'
@@ -376,7 +386,26 @@ type EasingValue =
   | { type: 'cubic-bezier'; p1x: number; p1y: number; p2x: number; p2y: number }
 ```
 
-`transitionIn` et `transitionOut` sur les keyframes intro/outro utilisent `kind: 'named'`. Les keyframes intermédiaires utilisent `kind: 'interpolated'`.
+`transitionIn`/`transitionOut` sur les kf `intro`/`outro` utilisent `kind: 'named'`. Les kf intermédiaires utilisent `kind: 'interpolated'`, `direction` par défaut `'after'` (transition pleine, dès le kf source, comportement historique inchangé si le réglage est omis).
+
+#### `Sustain` — comportement de transition indépendant du décor
+
+Nouvelle notion, distincte d'un kf : `Sustain` ne fixe pas un état de décor à un instant, c'est un comportement de transition appliqué **par-dessus** le décor, sur toute la durée entre deux kf (typiquement `intro`→`outro`, mais pas nécessairement). Comme une transition nommée : un preset nommé + un réglage début/fin.
+
+```typescript
+interface Sustain {
+  id: string
+  presetName: string          // catalogue de presets, même principe que TransitionKey pour les transitions nommées
+  fromKeyframeId: string      // borne de départ — valeur du preset à cet instant
+  toKeyframeId: string        // borne de fin — valeur du preset à cet instant
+  startValue: unknown         // forme dépendante du preset (ex. { scale: 1 })
+  endValue: unknown           // forme dépendante du preset (ex. { scale: 1.10 })
+}
+```
+
+Exemple : un `Sustain` posé entre les kf `intro` et `outro` d'un item de carrousel, preset `'scale'`, `startValue: { scale: 1 }` à `intro`, `endValue: { scale: 1.10 }` à `outro` — un zoom lent continu sur toute la durée de vie visible de l'item, indépendant de tout changement de décor.
+
+`Sustain` n'appartient pas au décor (`EditorDecor.data` reste inchangé) — table séparée, même principe que `cues`/`markers` (§2.2). Emplacement exact dans `EditorScene` (registre plat vs. porté par l'item) — à trancher à l'implémentation, pas encore fixé par ce document.
 
 #### `EditorDecor`
 

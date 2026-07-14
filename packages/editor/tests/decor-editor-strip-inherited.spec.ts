@@ -52,9 +52,9 @@ describe('stripInherited', () => {
     expect(patch.style).toEqual({ 'font-size': '20cqw', 'font-weight': 'bold' })
   })
 
-  it('retire une propriété de position (module structuré)', () => {
-    const patch: DecorPatch = { position: { x: 1, y: 2 } }
-    const result = stripInherited(patch, 'position.x')
-    expect(result.position).toEqual({ y: 2 })
+  it('retire une propriété d\'offset (module structuré)', () => {
+    const patch: DecorPatch = { offset: { x: 1, y: 2 } }
+    const result = stripInherited(patch, 'offset.x')
+    expect(result.offset).toEqual({ y: 2 })
   })
 })

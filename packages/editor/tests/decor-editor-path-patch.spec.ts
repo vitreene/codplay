@@ -10,8 +10,8 @@ describe('buildPatchFromPath (symétrique de readPath, spec dedit §4 bis)', () 
     expect(buildPatchFromPath('zone', 'header')).toEqual({ zone: 'header' })
   })
 
-  it('module hors style (position)', () => {
-    expect(buildPatchFromPath('position.x', 10)).toEqual({ position: { x: 10 } })
+  it('module hors style (offset)', () => {
+    expect(buildPatchFromPath('offset.x', 10)).toEqual({ offset: { x: 10 } })
   })
 
   it('module hors style avec valeur booléenne réelle (textAutoSize)', () => {

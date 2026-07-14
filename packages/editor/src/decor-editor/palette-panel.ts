@@ -5,7 +5,7 @@ import type { IconName } from './icons'
 //
 // Sépare strictement le CONTRAT (décor, résolution d'héritage, multi-sélection —
 // aucune notion de panneau) de la couche de RENDU (dupliquable/adaptable sans
-// toucher au contrat). Cf docs/formalisation/2026-07-07-dedit-palette-panels-plan.md
+// toucher au contrat). Cf plan/2026-07-07-dedit-palette-panels-plan.md
 
 export type PanelId = string
 

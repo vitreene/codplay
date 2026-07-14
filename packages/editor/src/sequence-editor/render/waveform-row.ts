@@ -1,5 +1,6 @@
-import type { MachineContext } from '../machine'
-import type { Waveform } from '../types'
+import type { MachineContext, MachineViewport } from '../machine'
+import type { LayoutProfile, Waveform } from '../types'
+import { timeToPixel } from './geometry'
 
 export function createWaveformRow(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
@@ -34,14 +35,14 @@ export function renderWaveformRow(canvas: HTMLCanvasElement, ctx: MachineContext
   if (!gc) return
 
   gc.clearRect(0, 0, w, h)
-  drawWaveform(gc, waveform, viewport.pixelsPerMs, viewport.startMs, w, h)
+  drawWaveform(gc, waveform, viewport, layoutProfile, w, h)
 }
 
 function drawWaveform(
   gc: CanvasRenderingContext2D,
   wf: Waveform,
-  pixelsPerMs: number,
-  startMs: number,
+  viewport: MachineViewport,
+  layoutProfile: LayoutProfile,
   width: number,
   height: number,
 ): void {
@@ -53,7 +54,7 @@ function drawWaveform(
   gc.beginPath()
 
   for (let i = 0; i < wf.points; i++) {
-    const x = (i * msPerSample - startMs) * pixelsPerMs
+    const x = timeToPixel(i * msPerSample, viewport, layoutProfile)
     if (x < 0 || x > width) continue
     const ampMax = (wf.max[i] ?? 0) * mid
     const ampMin = (wf.min[i] ?? 0) * mid

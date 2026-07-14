@@ -145,7 +145,7 @@ interface CapsulePatch {
 
 Défauts de la capsule — overridés par les choix individuels sur un enfant (kf réels). `sequencing` correspond exactement à `CapsuleDistributionInput.mode`. `order` (forward/backward) n'a volontairement pas d'équivalent ici : c'est un réglage global de scène (`DisplayConfig.capsuleOrder`), pas par capsule.
 
-Panneau UI inexistant à ce jour (mécaniquement câblé côté dedit, zéro rendu — cf `2026-07-08-dedit-shadcn-ui-plan.md`). **Cette forme de `CapsulePatch` n'est pas encore reportée dans `docs/formalisation/2026-07-07-dedit-spec.md` §8 ni dans `packages/editor/src/decor-editor/types.ts`** (source de code actuelle) — à faire au moment du chantier UI dedit.
+Panneau UI inexistant à ce jour (mécaniquement câblé côté dedit, zéro rendu — cf `2026-07-08-dedit-shadcn-ui-plan.md`). **Cette forme de `CapsulePatch` n'est pas encore reportée dans `2026-07-07-dedit-spec.md` §8 ni dans `packages/editor/src/decor-editor/types.ts`** (source de code actuelle) — à faire au moment du chantier UI dedit.
 
 ## 11. Zones
 

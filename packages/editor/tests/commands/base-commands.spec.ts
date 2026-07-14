@@ -28,7 +28,7 @@ describe('createItem', () => {
     expect(item.type).toBe('bloc')
     expect(item.parentId).toBeNull()
     expect(item.contentId).toBeNull()
-    expect(scene.decors[item.initialDecorId]?.position).toEqual({ width: 100, height: 50 })
+    expect(scene.decors[item.initialDecorId]?.offset).toEqual({ width: 100, height: 50 })
   })
 
   it('attaches the item under the given parent and orders it after existing siblings', () => {
@@ -85,7 +85,7 @@ describe('setDecor', () => {
 
     const decor = next.decors[item.initialDecorId]!
     expect(decor.style).toEqual({ color: 'red' })
-    expect(decor.position).toEqual({ width: 10 })
+    expect(decor.offset).toEqual({ width: 10 })
   })
 
   it('throws for an unknown decor id', () => {

@@ -12,6 +12,7 @@ import type {
   EditorScene, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
 import type { Command } from '../app/controller/types'
+import { timeToPixel, pixelToTime } from './render/geometry'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
 
@@ -425,13 +426,13 @@ export class SequenceEditorController {
   // ── Coordinate utilities ─────────────────────────────────────────────────────
 
   msToPixel(timeMs: number): number {
-    const { startMs, pixelsPerMs } = this.getViewport()
-    return (timeMs - startMs) * pixelsPerMs
+    const ctx = this.actor.getSnapshot().context
+    return timeToPixel(timeMs, ctx.viewport, ctx.layoutProfile)
   }
 
   pixelToMs(px: number): number {
-    const { startMs, pixelsPerMs } = this.getViewport()
-    return startMs + px / pixelsPerMs
+    const ctx = this.actor.getSnapshot().context
+    return pixelToTime(px, ctx.viewport, ctx.layoutProfile)
   }
 
   clampToViewport(timeMs: number): number {

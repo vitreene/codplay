@@ -26,7 +26,18 @@ export type Easing =
 
 export type Transition =
   | { kind: 'named'; name: TransitionKey; durationMs: number }
-  | { kind: 'interpolated'; durationMs: number; easing: Easing }
+  | {
+      kind: 'interpolated'
+      durationMs: number
+      easing: Easing
+      /**
+       * Raccourcissement d'une transition d'état de décor entre deux kf internes quelconques
+       * (`2026-06-11-sequence-editor-grid-spec.md` §2.2) — `'before'` la fait se terminer AU kf
+       * destination (même logique de recul qu'une `transitionIn` nommée) ; `'after'` (défaut) la
+       * fait démarrer AU kf source, comportement historique inchangé.
+       */
+      direction?: 'before' | 'after'
+    }
 
 // ─── Item ───────────────────────────────────────────────────────────────────
 
@@ -108,7 +119,14 @@ export interface Content {
 
 // ─── Decor ──────────────────────────────────────────────────────────────────
 
-export interface PositionData {
+/**
+ * Décalage libre (transform + dimensions) — distinct de la future notion de `position` (placement
+ * dans la grille d'une capsule, pas encore construite). Nommage précisé par l'auteur : ce que ce
+ * type porte (translate/rotate/scale/x/y/width/height) est un OFFSET par rapport à l'état résolu
+ * normalement (zone/placement automatique), jamais une position de grille — `position` reste
+ * réservé à ce concept futur, pour ne pas les confondre une fois construit.
+ */
+export interface OffsetData {
   x?: number
   y?: number
   width?: number
@@ -126,7 +144,7 @@ export interface Decor {
   id: string
   style?: Record<string, string>
   classes?: ClassNameValue
-  position?: PositionData
+  offset?: OffsetData
   zoneId?: string | null
 }
 

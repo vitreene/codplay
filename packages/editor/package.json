@@ -12,6 +12,7 @@
     "@base-ui/react": "^1.6.0",
     "@codplay/capsule-automation": "*",
     "@codplay/scene-factory": "*",
+    "@codplay/selection-frame": "*",
     "@codplay/text-auto-size": "*",
     "@tailwindcss/vite": "^4.3.2",
     "@xstate/react": "^6.1.0",

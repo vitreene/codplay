@@ -2,8 +2,9 @@
  * Contexte et événements du contrôleur central — `plan/app/2026-07-12-app-controller-definition.md`.
  */
 
-import type { CapsuleDef, Content, Decor, EditorScene, ItemType, PositionData } from '../commands/types'
+import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
+import type { AuthorApi } from '@codplay/selection-frame'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
 
@@ -36,10 +37,19 @@ export interface ControllerContext {
 
   selection: Selection
   openPanels: EditPanel[]
-  editGesture: 'zone' | 'position' | null
+  editGesture: 'zone' | 'offset' | null
   zonesVisible: boolean
   /** Le type en cours de création pendant l'état `creating` — `null` en dehors de ce mode. */
   creatingType: ItemType | null
+
+  /**
+   * Posé une fois par le pont `scenePlayer` après son premier rebuild réussi (§7 étape 4) — le pont
+   * `decorEditor` en a besoin pour `subscribeToNode` (preview live) ; jamais recréé par la suite,
+   * `studio.player` reste la même instance à travers tous les rebuilds.
+   */
+  authorApi: AuthorApi | null
+  /** Largeur réelle (px) du substrat de scène rendu — conversion cqw↔px côté dedit (spec text-auto-size). */
+  referenceWidthPx: number
 }
 
 // ─── Commandes de la façade (§4.1 — vocabulaire fermé, jamais une mutation arbitraire) ─────────
@@ -57,13 +67,13 @@ export interface ControllerContext {
  * module sequence-editor plutôt que d'engorger ce vocabulaire central déjà documenté comme fermé.
  */
 export type Command =
-  | { name: 'createItem'; args: { geometry: PositionData; parentId?: string | null } }
+  | { name: 'createItem'; args: { geometry: OffsetData; parentId?: string | null } }
   | { name: 'assignType'; args: { itemId: string; type: ItemType } }
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string } }
   | { name: 'setDecor'; args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> } }
   | { name: 'createKeyframe'; args: { itemId: string; timeMs: number; decorId?: string } }
-  | { name: 'createCapsule'; args: { geometry: PositionData; capsuleDef: CapsuleDef; parentId?: string | null } }
+  | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null } }
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
   | { name: 'placeInZone'; args: { itemId: string; zoneId: string | null } }
   | { name: 'deleteItem'; args: { itemId: string } }
@@ -78,18 +88,24 @@ export type ControllerEvent =
   | { type: 'SELECT_ITEM'; itemIds: string[]; keyframeId?: string }
   | { type: 'CLEAR_SELECTION' }
   | { type: 'TOGGLE_ZONES_VISIBLE' }
-  | { type: 'SET_EDIT_GESTURE'; gesture: 'zone' | 'position' | null }
+  | { type: 'SET_EDIT_GESTURE'; gesture: 'zone' | 'offset' | null }
   | { type: 'OPEN_PANEL'; panel: EditPanel }
   | { type: 'CLOSE_PANEL'; panel: EditPanel }
   | { type: 'LOAD_SCENE'; sceneId: string }
   | { type: 'SCENE_LOADED'; scene: EditorScene }
   | { type: 'RUN_COMMAND'; command: Command }
   | { type: 'RUN_TRANSACTION'; commands: Command[] }
+  /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
+  | { type: 'SEEK'; timelineMs: number }
+  /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`). */
+  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number }
 
 // ─── Événements émis (§"modules de câblage impératifs", `2026-07-13-controller-islands-bridge-
 // plan.md` §3) — un pont s'y abonne via `machine.on(...)`, jamais via `subscribe()` sur chaque
-// snapshot : seuls ces deux moments comptent pour resynchroniser un îlot. ─────────────────────────
+// snapshot : seuls ces moments comptent pour resynchroniser un îlot. ─────────────────────────
 
 export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
+  | { type: 'seek'; timelineMs: number }
+  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number }

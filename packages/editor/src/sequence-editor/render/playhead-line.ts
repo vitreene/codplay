@@ -1,4 +1,5 @@
 import type { MachineContext } from '../machine'
+import { timeToPixel } from './geometry'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -22,8 +23,8 @@ export function createPlayheadOverlay(): SVGSVGElement {
 }
 
 export function renderPlayhead(svg: SVGSVGElement, ctx: MachineContext): void {
-  const { viewport, playheadMs } = ctx
-  const x = (playheadMs - viewport.startMs) * viewport.pixelsPerMs
+  const { viewport, playheadMs, layoutProfile } = ctx
+  const x = timeToPixel(playheadMs, viewport, layoutProfile)
   if (!isFinite(x)) return
   const h = svg.clientHeight || 400
 

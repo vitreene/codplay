@@ -5,7 +5,7 @@
  * le document dans son contexte — il n'y a pas d'autre voie d'écriture du document.
  */
 
-import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, PositionData } from './types'
+import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData } from './types'
 import { nextOrderKey } from './order-key'
 
 let idCounter = 0
@@ -29,13 +29,13 @@ function childrenOf(scene: EditorScene, parentId: string | null): Item[] {
  */
 export function createItem(
   scene: EditorScene,
-  args: { geometry: PositionData; parentId?: string | null },
+  args: { geometry: OffsetData; parentId?: string | null },
 ): { scene: EditorScene; itemId: string } {
   const parentId = args.parentId ?? null
   const itemId = freshId('item')
   const decorId = freshId('decor')
 
-  const decor: Decor = { id: decorId, position: args.geometry }
+  const decor: Decor = { id: decorId, offset: args.geometry }
   const order = nextOrderKey(childrenOf(scene, parentId).map((i) => i.order))
 
   const item: Item = {
@@ -91,7 +91,7 @@ export function attachItem(scene: EditorScene, args: { itemId: string; parentId:
   return updateItem(scene, args.itemId, (i) => ({ ...i, parentId: args.parentId, order }))
 }
 
-/** Applique un patch sur un décor existant (style/classes/position/zone) — fusion superficielle, pas de remplacement total. */
+/** Applique un patch sur un décor existant (style/classes/offset/zone) — fusion superficielle, pas de remplacement total. */
 export function setDecor(scene: EditorScene, args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> }): EditorScene {
   const decor = scene.decors[args.decorId]
   if (!decor) throw new Error(`setDecor: no decor '${args.decorId}' in scene`)
@@ -128,7 +128,7 @@ export function createKeyframe(scene: EditorScene, args: { itemId: string; timeM
 /** Crée un item capsule avec son `CapsuleDef` (statique, défini une fois — pas reconfigurable en cours de vie). */
 export function createCapsule(
   scene: EditorScene,
-  args: { geometry: PositionData; capsuleDef: CapsuleDef; parentId?: string | null },
+  args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null },
 ): { scene: EditorScene; itemId: string } {
   const created = createItem(scene, { geometry: args.geometry, parentId: args.parentId })
   const withType = assignType(created.scene, { itemId: created.itemId, type: 'capsule' })

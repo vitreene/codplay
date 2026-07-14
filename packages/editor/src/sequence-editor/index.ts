@@ -11,4 +11,5 @@ export {
   ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC, ZOOM_DEFAULT_PX_PER_SEC,
   formatTimeMs, TIME_STEP_MS, DEFAULT_TRANSITION_DURATION_MS, DEFAULT_EASING,
 } from './constants'
-export { msToPixel, pixelToMs, snapToGrid, childrenOf, getTrackRowHeight } from './utils'
+export { childrenOf, getTrackRowHeight } from './utils'
+export { timeToPixel, pixelToTime, renderMarginPx } from './render/geometry'

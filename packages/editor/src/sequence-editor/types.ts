@@ -7,7 +7,7 @@
 
 export type {
   EditorScene, Item, ItemType, Keyframe, Content, Decor, Zone, ZoneRect, ZoneContainer, Orientation,
-  MarkerTrack, Marker, CapsuleDef, CapsuleKind, PositionData, ClassNameValue, SceneMeta, DurationSource,
+  MarkerTrack, Marker, CapsuleDef, CapsuleKind, OffsetData, ClassNameValue, SceneMeta, DurationSource,
   Transition, TransitionKey, Easing, Waveform, Cue,
 } from '../app/commands/types'
 

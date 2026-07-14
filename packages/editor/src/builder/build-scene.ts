@@ -1,9 +1,10 @@
 import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automation'
-import { CapsuleDistribution, CapsulePreset, SceneDocEditor, validateSceneDoc } from '@codplay/scene-factory'
+import { CapsuleDistribution, CapsulePreset, SceneDocEditor, TransitionTiming, validateSceneDoc } from '@codplay/scene-factory'
 import type { AutoCapsuleChildElementArtifact, AutoCapsuleChildInput, AutoCapsuleEventInput, AutoCapsuleType } from '@codplay/capsule-automation'
 import type { CapsuleKind } from '@codplay/scene-factory'
 import type { Perso, SceneDef, StoryDef } from 'codplay/builder/types'
-import type { CapsuleDef, Content, Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
+import type { CapsuleDef, Content, Decor, Easing, EditorScene, Item, Keyframe, OffsetData } from '../app/commands/types'
+import { DEFAULT_EASING } from '../sequence-editor/constants'
 
 /**
  * ed2 scenes are single-story (cf `2026-07-08-builder-plan.md` §2) — no straps, no listen.
@@ -50,6 +51,22 @@ export type BuildSceneResult = {
    * `<style>` tag. Comes straight from `AutoCapsule.resolve().styleSheet` for the root capsule.
    */
   styleSheet: string
+  /**
+   * Grille résolue du capsule racine (implicite, §6) — source du ratio d'affichage de la scène
+   * (`cols/rows`, `2026-07-13-controller-islands-bridge-plan.md`, aparté sur le ratio). Rien
+   * n'est placé hors de cet élément ; ses dimensions réelles sont adaptatives, seul le ratio est
+   * une contrainte. Pas encore un réglage de `EditorScene` — vient du défaut du type `card`
+   * (`capsule-automation/config/capsule-types.ts`) tant qu'aucun champ document ne l'expose.
+   */
+  rootGrid: { rows: number; cols: number }
+  /**
+   * Temps réservé avant le `0` de la timeline auteur, pour qu'aucune `transitionIn` (qui se
+   * termine AU kf, `2026-06-11-sequence-editor-grid-spec.md` §2.2) n'ait besoin de démarrer à un
+   * temps négatif — `TransitionTiming.computeScenePreRollMs()`, une seule valeur pour toute la
+   * scène. Le player doit décaler tout `seek({timelineMs})` de cette valeur (le `0` que voit
+   * l'auteur correspond à `preRollMs` côté player).
+   */
+  preRollMs: number
 }
 
 /**
@@ -131,13 +148,24 @@ export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
 
   const rootItems = childrenOf(scene.items, null)
 
+  // Une seule valeur pour toute la scène (pas par niveau de capsule) — calculée une fois ici sur
+  // `scene.items` à plat, jamais recalculée par appel à `resolveCapsule()`. Voir la doc de
+  // `BuildSceneResult.preRollMs`.
+  const preRollMs = TransitionTiming.computeScenePreRollMs(
+    scene.items.map((item) => ({
+      firstKeyframe: item.keyframes[0]
+        ? { timeMs: item.keyframes[0].timeMs, transitionInDurationMs: item.keyframes[0].transitionIn?.durationMs }
+        : undefined,
+    })),
+  )
+
   // The root capsule is never authored (§6, no Item/no distribution setting of its own) — its
   // children are each item the author placed directly on the scene, meant to appear on their own
   // individual keyframes rather than sharing a distributed timeline. `stagger 0/0` is the
   // structural choice for that role (see `resolveCapsule`'s own doc), not a guess derived from
   // `card` — every other `card` capsule (a real, authored one) still requires its own explicit
   // `distribution` like any other non-`carousel` type.
-  const rootResolution = resolveCapsule(rootItems, CAPSULE_TYPE.card, {
+  const rootResolution = resolveCapsule(rootItems, CAPSULE_TYPE.card, preRollMs, {
     sceneRoot: true,
     distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
   })
@@ -162,13 +190,13 @@ export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
     for (const item of items) {
       const childArtifact = childArtifactById.get(item.id)!
       if (item.type === 'capsule') {
-        const { perso, itemEventimes, ownResolution } = buildNestedCapsulePerso(item, parentPersoId, childArtifact, scene)
+        const { perso, itemEventimes, ownResolution } = buildNestedCapsulePerso(item, parentPersoId, childArtifact, scene, preRollMs)
         persos.push(perso)
         eventimes.push(...itemEventimes)
         styleSheets.push(ownResolution.styleSheet)
         worklist.push({ items: childrenOf(scene.items, item.id), parentPersoId: item.id, childArtifactById: ownResolution.childArtifactById })
       } else {
-        const { perso, itemEventimes } = buildItemPerso(item, parentPersoId, scene, childArtifact)
+        const { perso, itemEventimes } = buildItemPerso(item, parentPersoId, scene, childArtifact, preRollMs)
         persos.push(perso)
         eventimes.push(...itemEventimes)
       }
@@ -202,7 +230,12 @@ export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
     throw new Error(`buildSceneDoc: scene validation failed —\n${errorMessages.join('\n')}`)
   }
 
-  return { sceneDoc: exportResult.data, styleSheet: `${styleSheets.join('\n')}\n${STYLE_CHECK_RULE}` }
+  return {
+    sceneDoc: exportResult.data,
+    styleSheet: `${styleSheets.join('\n')}\n${STYLE_CHECK_RULE}`,
+    rootGrid: rootResolution.grid,
+    preRollMs,
+  }
 }
 
 /** Every item directly under `parentId` (root items when `null`), sorted by their fractional `order` key. */
@@ -210,10 +243,17 @@ function childrenOf(items: Item[], parentId: string | null): Item[] {
   return items.filter((item) => item.parentId === parentId).sort((a, b) => (a.order < b.order ? -1 : a.order > b.order ? 1 : 0))
 }
 
+/** `item.keyframes` in chronological order — the array itself carries no ordering guarantee (`createKeyframe` only ever appends). */
+function sortedKeyframes(item: Item): Keyframe[] {
+  return [...item.keyframes].sort((a, b) => a.timeMs - b.timeMs)
+}
+
 type CapsuleResolution = {
   rootArtifact: { className: string }
   childArtifactById: Map<string, AutoCapsuleChildElementArtifact>
   styleSheet: string
+  /** Grille effectivement résolue pour ce niveau — `result.grid.context` (`AutoCapsule.resolve()`). */
+  grid: { rows: number; cols: number }
 }
 
 /**
@@ -245,20 +285,33 @@ type CapsuleResolution = {
  * a genuine no-op of `CapsuleDistribution.computeStagger`'s own math (every free child resolves to
  * the whole clip span; a fully-locked child keeps its exact range regardless) — not a special
  * case this Builder branches on, present or not it produces the identical result.
+ *
+ * `preRollMs` (see `BuildSceneResult.preRollMs`) is computed ONCE in `buildSceneDoc()` and passed
+ * down unchanged to every level — every item is resolved by exactly one `resolveCapsule()` call
+ * (root, or exactly one parent capsule), so it is never applied twice to the same item. The actual
+ * bound math (`kf.timeMs ± duration`, shifted by `preRollMs`) lives in `TransitionTiming`
+ * (`@codplay/scene-factory`) — this Builder only calls it, per Principe B/the Builder's own
+ * orchestrator-only convention (same reasoning as `CapsulePreset`/`CapsuleDistribution` above).
  */
 function resolveCapsule(
   items: Item[],
   capsuleType: AutoCapsuleType,
+  preRollMs: number,
   options?: { sceneRoot?: boolean; grid?: { rows?: number; cols?: number }; distribution?: CapsuleDef['distribution'] },
 ): CapsuleResolution {
   const preset = CapsulePreset.resolve({ capsuleType: toCapsuleKind(capsuleType), distribution: options?.distribution })
   const distribution = CapsuleDistribution.compute({
-    clipDurationMs: items.reduce((max, item) => Math.max(max, item.keyframes[item.keyframes.length - 1]?.timeMs ?? 0), 0),
+    clipDurationMs: items.reduce((max, item) => Math.max(max, item.keyframes[item.keyframes.length - 1]?.timeMs ?? 0), 0) + preRollMs,
     ...preset,
     children: items.map((item) => ({
       trackId: item.id,
-      lockedIntroMs: item.keyframes[0]?.timeMs,
-      lockedOutroMs: item.keyframes[item.keyframes.length - 1]?.timeMs,
+      lockedIntroMs: TransitionTiming.lockedIntroMs(
+        item.keyframes[0]
+          ? { timeMs: item.keyframes[0].timeMs, transitionInDurationMs: item.keyframes[0].transitionIn?.durationMs }
+          : undefined,
+        preRollMs,
+      ),
+      lockedOutroMs: TransitionTiming.lockedOutroMs(item.keyframes[item.keyframes.length - 1], preRollMs),
     })),
   })
 
@@ -279,10 +332,16 @@ function resolveCapsule(
         type: capsuleType,
         grid: { rows: options?.grid?.rows, cols: options?.grid?.cols },
         sceneRoot: options?.sceneRoot,
-        // No capsule-level transition override here — the type's own default (`config/
-        // capsule-types.ts`) is what a child without its own keyframe transition falls back to.
-        // Repeating the same value at the capsule level would just be an inert duplicate, not a
-        // real default supplied by this Builder (Principe B).
+        // `card` (et d'autres types) portent un défaut de type `fade` (`config/capsule-types.ts`,
+        // hérité d'Eddy, pensé pour d'autres appelants) — sans cette surcharge, un enfant SANS
+        // transition authored sur son propre keyframe hérite silencieusement de ce fondu : une
+        // transition qu'aucune donnée du document ne porte, invisible dans la timeline, non
+        // éditable, et qui produit des cas de bord insolubles (ex. un kf à t=0 « au milieu » d'un
+        // fondu qui n'a matériellement pas la place de se jouer). C'est exactement ce que Principe
+        // B interdit — corrigé ici, pas en amont dans `capsule-automation` (comportement partagé
+        // par d'autres appelants, hors périmètre ed2). `cut` = aucune animation, visibilité
+        // instantanée : le seul « défaut » qui ne soit pas lui-même une donnée inventée.
+        defaults: { introTransitionRef: 'cut', outroTransitionRef: 'cut' },
       },
       children: childInputs,
     },
@@ -299,6 +358,7 @@ function resolveCapsule(
     rootArtifact: { className: result.capsule.className },
     childArtifactById: new Map(result.children.map((child) => [child.id, child])),
     styleSheet: result.styleSheet,
+    grid: { rows: result.grid.context.rows, cols: result.grid.context.cols },
   }
 }
 
@@ -400,13 +460,15 @@ function resolveTransitionActions(childArtifact: AutoCapsuleChildElementArtifact
 
   for (const event of Object.values(childArtifact.events)) {
     const styleDiff = event.definition?.style?.[event.action]
-    if (styleDiff) {
-      const stylePayload: Record<string, unknown> = {}
-      for (const [prop, transition] of Object.entries(styleDiff)) {
-        stylePayload[prop] = { ...transition, duration: event.durationMs || undefined }
-      }
-      actions[event.name] = { style: stylePayload }
+    // `cut` resolves to a truthy but EMPTY style object ({}), not undefined — Object.keys catches
+    // it where a bare `!styleDiff` check wouldn't. No resolved style → no action, so no eventime
+    // to trigger it either (nothing to fire, Principe B: no dangling no-op event).
+    if (!styleDiff || Object.keys(styleDiff).length === 0) continue
+    const stylePayload: Record<string, unknown> = {}
+    for (const [prop, transition] of Object.entries(styleDiff)) {
+      stylePayload[prop] = { ...transition, duration: event.durationMs || undefined }
     }
+    actions[event.name] = { style: stylePayload }
     itemEventimes.push({ name: event.name, startAt: event.triggerMs })
   }
 
@@ -452,10 +514,11 @@ function buildNestedCapsulePerso(
   parentPersoId: string,
   childArtifact: AutoCapsuleChildElementArtifact,
   scene: EditorScene,
+  preRollMs: number,
 ): NestedCapsuleBuildResult {
   if (!item.capsule) throw new Error(`buildSceneDoc: capsule item '${item.id}' has no CapsuleDef`)
 
-  const ownResolution = resolveCapsule(childrenOf(scene.items, item.id), item.capsule.kind as AutoCapsuleType, {
+  const ownResolution = resolveCapsule(childrenOf(scene.items, item.id), item.capsule.kind as AutoCapsuleType, preRollMs, {
     grid: item.capsule.grid,
     distribution: item.capsule.distribution,
   })
@@ -493,31 +556,199 @@ function buildItemPerso(
   rootPersoId: string,
   scene: EditorScene,
   childArtifact: AutoCapsuleChildElementArtifact,
+  preRollMs: number,
 ): ItemBuildResult {
   const persoType = mapItemTypeToPersoType(item.type)
   const introDecor = scene.decors[item.initialDecorId]
+  const firstKf = sortedKeyframes(item)[0]
+  const firstKfDecor = firstKf ? scene.decors[firstKf.decorId] : undefined
   const content = item.contentId ? scene.contents[item.contentId] : undefined
 
-  const { actions, itemEventimes, initialStyleFromIntro } = resolveTransitionActions(childArtifact)
+  const { actions: transitionActions, itemEventimes: transitionEventimes, initialStyleFromIntro } = resolveTransitionActions(childArtifact)
+  const { actions: decorActions, itemEventimes: decorEventimes } = buildKeyframeDecorActions(item, scene, preRollMs)
+
+  const common = {
+    move: { parentId: rootPersoId, flip: false },
+    className: [childArtifact.className, STYLE_CHECK_CLASS].filter(Boolean).join(' '),
+    // Un seul état initial, une seule autorité par propriété : `initialStyleFromIntro` (le `from`
+    // de la transition nommée d'entrée, s'il y en a une) < `introDecor` (`item.initialDecorId`,
+    // réglages qui ne dépendent d'aucun kf) < le décor du PREMIER kf (le plus spécifique — ce que
+    // l'auteur a réellement fixé à cet instant), `translate`/`rotate`/`scale` inclus (fusionnés en
+    // style, `resolveDecorStyle` — cf `OffsetData`, un module dedit qui fusionne avec le style,
+    // pas un mécanisme séparé). Le premier kf n'a donc jamais sa propre action
+    // (`buildKeyframeDecorActions` ne lui en crée pas) : sans ça, cette même propriété serait
+    // réglée deux fois au même instant — un cut ici ET une animation démarrant juste après,
+    // en course l'une contre l'autre (lecture hachée, signalé en test réel).
+    style: {
+      ...initialStyleFromIntro,
+      ...resolveDecorStyle(introDecor),
+      ...resolveDecorStyle(firstKfDecor),
+    },
+  }
 
   const perso: Perso = {
     id: item.id,
     name: item.id,
     type: persoType,
-    initial: {
-      move: { parentId: rootPersoId, flip: false },
-      tag: 'div',
-      className: [childArtifact.className, STYLE_CHECK_CLASS].filter(Boolean).join(' '),
-      content: resolveContentText(content),
-      style: {
-        ...initialStyleFromIntro,
-        ...introDecor?.style,
-      },
-    },
-    actions,
+    initial: buildItemInitial(persoType, item, scene, content, common),
+    actions: { ...transitionActions, ...decorActions },
   }
 
-  return { perso, itemEventimes }
+  return { perso, itemEventimes: [...transitionEventimes, ...decorEventimes] }
+}
+
+/**
+ * `2026-06-11-sequence-editor-grid-spec.md` §2.2, "Transition d'état de décor" : « **par défaut
+ * automatique, couvre tout l'intervalle entre les deux [kf]**... Le builder calcule l'animation
+ * depuis le diff entre les décors adjacents ; la grille ne stocke que durée/easing/direction,
+ * jamais le diff lui-même. » — l'interpolation N'EST PAS conditionnée à la présence d'un
+ * `TransitionDef` explicite : deux kf adjacents dont le décor diffère s'animent TOUJOURS sur tout
+ * l'intervalle qui les sépare, par défaut. Un `TransitionDef` (`kf.transitionIn`/`prevKf.
+ * transitionOut`, règle d'exclusivité §2.2, jamais les deux à la fois) ne fait que SURCHARGER ce
+ * défaut — raccourcir la fenêtre (`durationMs` < intervalle, `direction` choisit quel bord la
+ * porte), changer l'`easing`, ou couper franchement (`durationMs:0`). Principe A étendu aux kf
+ * intermédiaires, pas seulement intro/outro (`resolveTransitionActions` ne couvre que le diff de la
+ * transition NOMMÉE d'une borne, ex. `fade` → `opacity` ; jamais `Keyframe.decorId` lui-même, donc
+ * jamais une propriété de décor hors du preset, ex. `background-color`).
+ *
+ * Pour chaque paire de kf adjacents (triés par `timeMs` — l'ordre du tableau n'est pas garanti,
+ * `createKeyframe` se contente d'ajouter en fin) : diff des décors résolus, propriété par
+ * propriété. Une propriété inchangée n'émet rien (Principe B). `{to,duration,easing}` — `from` est
+ * facultatif sur `StyleTransitionValue`, jamais fourni ici : le runtime interpole depuis la valeur
+ * actuelle du perso, plus robuste qu'un `from` figé recalculé depuis le document au moment du
+ * build. Déclenchement via `TransitionTiming.interpolatedTransitionTriggerMs` (`direction:'before'`
+ * s'achève AU kf destination, `'after'` — défaut — démarre AU kf source, §2.2) ; `durationMs:0`
+ * (cut explicite) dégénère en cut instantané, `Math.max` évite toute durée négative égarée.
+ * Le premier kf n'a pas de prédécesseur : son décor est déjà porté par `initial.style`
+ * (`buildItemPerso`, `sortedKeyframes(item)[0]`) — jamais une action ici, sinon la même propriété
+ * serait réglée deux fois au même instant (un cut ET l'animation du segment suivant, en course).
+ */
+function buildKeyframeDecorActions(
+  item: Item,
+  scene: EditorScene,
+  preRollMs: number,
+): { actions: Record<string, unknown>; itemEventimes: NonNullable<StoryDef['eventimes']> } {
+  const actions: Record<string, unknown> = {}
+  const itemEventimes: NonNullable<StoryDef['eventimes']> = []
+  const keyframes = sortedKeyframes(item)
+
+  for (let i = 1; i < keyframes.length; i++) {
+    const kf = keyframes[i]!
+    const prevKf = keyframes[i - 1]!
+    const actionName = `${item.id}-kf-${kf.id}`
+    const diff = computeStyleDiff(resolveDecorStyle(scene.decors[prevKf.decorId]), resolveDecorStyle(scene.decors[kf.decorId]))
+    if (Object.keys(diff).length === 0) continue
+
+    const transition = kf.transitionIn ?? prevKf.transitionOut
+    const fullIntervalMs = Math.max(0, kf.timeMs - prevKf.timeMs)
+    const durationMs = transition?.kind === 'interpolated' ? transition.durationMs : fullIntervalMs
+    const ease = transition?.kind === 'interpolated' ? resolveEasingString(transition.easing) : resolveEasingString(DEFAULT_EASING)
+    const direction = transition?.kind === 'interpolated' ? transition.direction ?? 'after' : 'after'
+
+    if (durationMs <= 0) {
+      actions[actionName] = { style: diff }
+      itemEventimes.push({ name: actionName, startAt: kf.timeMs + preRollMs })
+    } else {
+      const stylePayload: Record<string, unknown> = {}
+      for (const [prop, value] of Object.entries(diff)) stylePayload[prop] = { to: value, duration: durationMs, ease }
+      actions[actionName] = { style: stylePayload }
+      const triggerMs = TransitionTiming.interpolatedTransitionTriggerMs({
+        sourceKfTimeMs: prevKf.timeMs,
+        destKfTimeMs: kf.timeMs,
+        durationMs,
+        direction,
+      })
+      itemEventimes.push({ name: actionName, startAt: triggerMs + preRollMs })
+    }
+  }
+
+  return { actions, itemEventimes }
+}
+
+/**
+ * `OffsetData` (décalage libre — transform + dimensions, distinct de la future `position` de
+ * grille) est un module dedit qui fusionne avec le style (pas un mécanisme séparé) — sa partie
+ * animable se résout vers les mêmes clés que `Decor.style` porte déjà pour ce même rôle,
+ * confirmées par une scène ed2 réelle (`packages/demos/src/scenes/s6-dnd-list-scene.ts`, `x`/`y`
+ * mélangés à du CSS classique — `zIndex` — dans le même objet `style`, aussi bien en action qu'en
+ * `event.data`). `width`/`height`/`anchor`/`ratio` (partie statique de `OffsetData`) restent hors
+ * périmètre ici — aucune résolution ne leur correspond nulle part dans ce dépôt, gap séparé.
+ */
+function resolveOffsetAsStyle(offset: OffsetData | undefined): Record<string, unknown> {
+  if (!offset) return {}
+  const out: Record<string, unknown> = {}
+  if (offset.translate?.x !== undefined) out.x = offset.translate.x
+  if (offset.translate?.y !== undefined) out.y = offset.translate.y
+  if (offset.rotate !== undefined) out.rotate = offset.rotate
+  if (offset.scale?.x !== undefined) out.scaleX = offset.scale.x
+  if (offset.scale?.y !== undefined) out.scaleY = offset.scale.y
+  return out
+}
+
+/** Le style résolu d'un décor pour toute fin de diff/action — `Decor.style` et la partie animable de `Decor.offset` fusionnés, un seul enregistrement. */
+function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
+  return { ...decor?.style, ...resolveOffsetAsStyle(decor?.offset) }
+}
+
+/**
+ * Diff propriété par propriété entre deux styles de décor résolus — seules les propriétés qui
+ * changent réellement émettent une entrée (Principe B, rien d'inventé pour une valeur inchangée).
+ * Une propriété présente dans `fromStyle` mais absente de `toStyle` n'apparaît jamais dans le diff
+ * — on ne parcourt que les clés de `toStyle` : rien ne la touche, elle reste telle quelle (principe
+ * du diff — l'absence d'un réglage n'est pas une instruction de le retirer).
+ */
+function computeStyleDiff(
+  fromStyle: Record<string, unknown> | undefined,
+  toStyle: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const diff: Record<string, unknown> = {}
+  for (const [prop, toValue] of Object.entries(toStyle ?? {})) {
+    if (fromStyle?.[prop] === toValue) continue
+    diff[prop] = toValue
+  }
+  return diff
+}
+
+/**
+ * `Easing` (`app/commands/types.ts`, casse à tiret CSS-like — `'ease-in'`) → nom historique CodPlay
+ * (`packages/codplay/src/animation/adapter.ts::normalizeAnimeEase`, casse `easeIn`/`easeOut`/
+ * `easeInOut`, converti ensuite vers Anime.js v4). Simple question de nomenclature entre les deux
+ * packages, pas de logique — alignée sur CodPlay ici plutôt que l'inverse (un seul point de
+ * conversion, même patron que `toCapsuleKind`). `cubic-bezier` produit la syntaxe CSS standard.
+ */
+const EASING_TO_CODPLAY: Record<string, string> = {
+  linear: 'linear',
+  'ease-in': 'easeIn',
+  'ease-out': 'easeOut',
+  'ease-in-out': 'easeInOut',
+}
+
+function resolveEasingString(easing: Easing): string {
+  if (typeof easing === 'string') return EASING_TO_CODPLAY[easing] ?? easing
+  return `cubic-bezier(${easing.p1x},${easing.p1y},${easing.p2x},${easing.p2y})`
+}
+
+/**
+ * Forme d'`initial` propre à chaque type de perso (`2026-07-08-builder-plan.md` §5) — `move`/
+ * `className`/`style` sont communs (placement/transition, indifférents au type de contenu) ;
+ * `tag`/`src`/`content`/`master` divergent. `content?.source` absent reste absent (Principe B,
+ * jamais une chaîne vide inventée) ; `master` est une vraie donnée dérivée du document
+ * (`scene.masterItemId`), jamais un défaut deviné.
+ */
+function buildItemInitial(
+  persoType: string,
+  item: Item,
+  scene: EditorScene,
+  content: Content | undefined,
+  common: { move: { parentId: string; flip: boolean }; className: string; style: Record<string, unknown> },
+): Record<string, unknown> {
+  if (persoType === 'img') {
+    return { ...common, src: content?.source }
+  }
+  if (persoType === 'media') {
+    return { ...common, tag: item.type === 'video' ? 'video' : 'audio', src: content?.source, master: item.id === scene.masterItemId }
+  }
+  return { ...common, tag: 'div', content: resolveContentText(content) }
 }
 
 /** The `content` a text perso shows — only `Content.text` is mapped in this increment (§5 of the plan). */
@@ -525,7 +756,17 @@ function resolveContentText(content: Content | undefined): string | undefined {
   return content?.text
 }
 
+/**
+ * `2026-07-08-builder-plan.md` §5 — table de mapping complète. `bloc` (item pas encore différencié,
+ * `2026-07-08-item-model-spec.md` §5) rend un `text` à contenu vide, jamais une levée — ce n'est
+ * pas une valeur `ItemType` distincte, seulement l'état initial de tout item avant `assignType`.
+ * `image` → `img` (piège de nom confirmé : `ResourceManifestEntry.type` utilise `'image'`, le
+ * perso Codplay utilise `'img'`). `capsule` n'atteint jamais cette fonction (branché séparément,
+ * `buildNestedCapsulePerso`) — le throw n'est qu'un filet d'exhaustivité.
+ */
 function mapItemTypeToPersoType(itemType: Item['type']): string {
-  if (itemType === 'text') return 'text'
-  throw new Error(`buildSceneDoc: unsupported item type '${itemType}' in this minimal increment`)
+  if (itemType === 'bloc' || itemType === 'text') return 'text'
+  if (itemType === 'image') return 'img'
+  if (itemType === 'video' || itemType === 'media') return 'media'
+  throw new Error(`buildSceneDoc: unsupported item type '${itemType}'`)
 }

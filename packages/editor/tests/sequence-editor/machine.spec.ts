@@ -142,6 +142,13 @@ describe('sequenceEditorMachine — drag (l\'état/interaction reste local ; le 
     expect(actor.getSnapshot().context.selection).toEqual({ trackId: null, keyframeId: null, markerId: null })
   })
 
+  it('DRAG.START_KEYFRAME (un clic simple, pas seulement un drag effectif) amène aussi la tête de lecture au timeMs du kf — voir l\'item dans son état au moment fixé', () => {
+    const actor = actorWithScene(baseScene([elementItem('t1', { keyframes: [{ id: 'kf-a', timeMs: 2500, decorId: 'd1' }] })]))
+    actor.send({ type: 'PLAYHEAD.SET', timeMs: 0 })
+    actor.send({ type: 'DRAG.START_KEYFRAME', trackId: 't1', keyframeId: 'kf-a' })
+    expect(actor.getSnapshot().context.playheadMs).toBe(2500)
+  })
+
   it('DRAG.MOVE updates local currentMs (rounded to 100ms) — purely local, no emission', () => {
     const actor = actorWithScene(baseScene([elementItem('t1', { keyframes: [{ id: 'kf-a', timeMs: 1000, decorId: 'd1' }] })]))
     const batches = collectCommands(actor)
@@ -235,6 +242,31 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
     const vkfs = actor.getSnapshot().context.virtualKeyframes
     expect(vkfs.some((v) => v.trackId === 'child-1' && v.name === 'intro')).toBe(true)
     expect(vkfs.some((v) => v.trackId === 'child-1' && v.name === 'outro')).toBe(true)
+  })
+
+  it('a locked child\'s own transitionIn duration shortens its distribution slot, same formula as build-scene.ts (TransitionTiming)', () => {
+    const capsule = capsuleItem('cap', {
+      keyframes: [
+        { id: 'kf-intro', timeMs: 0, decorId: 'd0', name: 'intro' },
+        { id: 'kf-outro', timeMs: 4000, decorId: 'd0', name: 'outro' },
+      ],
+    })
+    // child-a: real intro kf only (300ms transitionIn) — its own virtual outro, and the
+    // following free child's virtual intro, both fall at 2350 (not 2500) because the transition
+    // is subtracted before the remaining space is shared out (sequential, cursor stays at 0
+    // through a half-locked child, so only this subtraction moves the shared boundary).
+    const childA = elementItem('child-a', {
+      parentId: 'cap',
+      order: 'a',
+      keyframes: [{ id: 'kf-a-intro', timeMs: 1000, decorId: 'd0', name: 'intro', transitionIn: { kind: 'named', name: 'fade', durationMs: 300 } }],
+    })
+    const childB = elementItem('child-b', { parentId: 'cap', order: 'b' })
+    const actor = actorWithScene(baseScene([capsule, childA, childB]))
+    const vkfs = actor.getSnapshot().context.virtualKeyframes
+
+    expect(vkfs.find((v) => v.trackId === 'child-a' && v.name === 'outro')).toMatchObject({ timeMs: 2350 })
+    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'intro')).toMatchObject({ timeMs: 2350 })
+    expect(vkfs.find((v) => v.trackId === 'child-b' && v.name === 'outro')).toMatchObject({ timeMs: 4000 })
   })
 })
 
