@@ -59,8 +59,16 @@ function readLocalDims(node: HTMLElement): { w: number; h: number } {
  * `getComputedStyle` always resolves to real px regardless of the declared unit, so it's the one
  * safe read for this one-time re-pin (never used for the running deltas themselves — those still
  * read the inline value, now guaranteed already px by this call).
+ *
+ * Skipped while the node is not yet attached (`isConnected === false`): codplay resolves cqw
+ * against its scene-root node during the same synchronous loadPersos pass that creates this node,
+ * before the scene root itself is inserted into the document — a transient, expected `0px`/raw-cqw
+ * state, corrected by the seek that scene-player-bridge.ts always runs right after every rebuild.
+ * Pinning during that window would freeze the transient value in place before that corrective seek
+ * — confirmed live: a `width:0px` written here survives past the following correct seek write.
  */
 function pinToResolvedPx(node: HTMLElement): void {
+  if (!node.isConnected) return
   const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
   if (!computed) return
   const translateRaw = computed.translate

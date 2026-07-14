@@ -1,23 +1,29 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { applyStylePatch } from '../../src/runtime/components/lib/dom-component-adapter'
 import { applyStyleProps } from '../../src/runtime/components/lib/dom'
+import { setContainerQueryRootNode } from '../../src/runtime/components/lib/container-query-units'
 
 function temp__createSceneRootWithChild(rect: { width: number; height: number }): HTMLElement {
   const container = document.createElement('div')
-  container.className = 'ac-scene-root'
   vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(rect as DOMRect)
 
   const child = document.createElement('div')
   container.appendChild(child)
   document.body.appendChild(container)
 
+  setContainerQueryRootNode(container)
+
   return child
 }
 
 describe('V1 - applyStyleProps/applyStylePatch resolve container query units before anime.js', () => {
+  afterEach(() => {
+    setContainerQueryRootNode(null)
+  })
+
   it('applyStyleProps converts a cqw width into a plain px number', () => {
     const child = temp__createSceneRootWithChild({ width: 1000, height: 500 })
 
@@ -34,7 +40,8 @@ describe('V1 - applyStyleProps/applyStylePatch resolve container query units bef
     expect(child.style.transform).toBe('translate(100px,50px)')
   })
 
-  it('a node outside any .ac-scene-root is left with the raw cqw value passed through unresolved', () => {
+  it('a node is left with the raw cqw value passed through unresolved when no root node is registered', () => {
+    setContainerQueryRootNode(null)
     const orphan = document.createElement('div')
     document.body.appendChild(orphan)
 

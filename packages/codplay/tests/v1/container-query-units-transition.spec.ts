@@ -1,18 +1,20 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createAnimationAdapter } from '../../src/animation/adapter'
+import { setContainerQueryRootNode } from '../../src/runtime/components/lib/container-query-units'
 import type { TransitionRequest } from '../../src/animation/types'
 
 function temp__createSceneRootWithChild(rect: { width: number; height: number }): HTMLElement {
   const container = document.createElement('div')
-  container.className = 'ac-scene-root'
   vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(rect as DOMRect)
 
   const child = document.createElement('div')
   container.appendChild(child)
   document.body.appendChild(container)
+
+  setContainerQueryRootNode(container)
 
   return child
 }
@@ -32,6 +34,10 @@ function temp__makeTransitionRequest(partial: Partial<TransitionRequest>): Trans
 }
 
 describe('V1 - createAnimationAdapter resolves container query units before calling anime.js', () => {
+  afterEach(() => {
+    setContainerQueryRootNode(null)
+  })
+
   it('converts a cqw `to` value into a resolved px number before the anime call', () => {
     const child = temp__createSceneRootWithChild({ width: 1000, height: 500 })
     const animeImplementation = vi.fn((_parameters: Record<string, unknown>) => ({ pause: vi.fn() }))

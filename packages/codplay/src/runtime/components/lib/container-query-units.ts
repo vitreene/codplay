@@ -8,11 +8,20 @@ import { CSSStyleValue, CSSUnitValue } from 'typed-om-polyfill'
 const CONTAINER_QUERY_UNITS = new Set(['cqw', 'cqh', 'cqi', 'cqb', 'cqmin', 'cqmax'])
 
 /**
- * Only class in the codebase that establishes a CSS container query context
- * (`container-type`, see packages/authoring/capsule-automation/src/core/build-grid.ts).
- * A fixed, known selector — not something to discover generically.
+ * The scene's single root container node (the perso resolved from
+ * `CompiledScene.rootNodeIds`), set once by the player after mount. Never
+ * discovered via DOM traversal (`closest`, class selector) — the scene has
+ * exactly one root, known from data, not from CSS convention.
  */
-const SCENE_ROOT_SELECTOR = '.ac-scene-root'
+let containerQueryRootNode: Element | null = null
+
+/**
+ * Sets the scene's container-query root node, resolved once from
+ * `CompiledScene.rootNodeIds` by the player after mount.
+ */
+export function setContainerQueryRootNode(node: Element | null): void {
+  containerQueryRootNode = node
+}
 
 type ParsedContainerQueryValue = {
   value: number
@@ -60,23 +69,22 @@ function resolveContainerDimensionPx(containerNode: Element, unit: string): numb
 
 /**
  * Resolves one style value expressed in a container query unit into an
- * explicit px string, using `node`'s own nearest `.ac-scene-root` ancestor
- * as the query container. Any other value (including a container query
- * value with no `.ac-scene-root` ancestor — a scene not authored with this
- * convention) is returned unchanged.
+ * explicit px string, against the scene's single root container node (set via
+ * `setContainerQueryRootNode`). Any other value (including a container query
+ * value resolved before the root node is known) is returned unchanged.
  *
  * Resolves to a `"Npx"` string rather than a bare number: anime.js only
  * defaults unitless numbers to px for its own transform properties
  * (x/y/rotate/scale) — a bare number handed to a generic CSS property like
  * `width` is not a valid CSS length and is silently dropped.
  */
-export function resolveContainerQueryValue(node: Element, rawValue: unknown): unknown {
+export function resolveContainerQueryValue(_node: Element, rawValue: unknown): unknown {
   const parsed = parseContainerQueryValue(rawValue)
   if (parsed === null) {
     return rawValue
   }
 
-  const containerNode = node.closest(SCENE_ROOT_SELECTOR)
+  const containerNode = containerQueryRootNode
   if (containerNode === null) {
     return rawValue
   }

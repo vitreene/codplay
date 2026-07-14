@@ -1,5 +1,14 @@
 # Notes — délibération résolution des unités container-query
 
+**Statut : arbitrage renversé.** La section « Pourquoi le conteneur de requête n'a pas besoin
+d'être découvert par un paramètre injecté ni un parcours DOM générique » ci-dessous est
+**écartée** — `.closest('.ac-scene-root')` est une violation du principe « le moteur ne
+découvre jamais une relation structurelle par traversée DOM », signalée après coup. Voir la
+spec normative qui remplace cet arbitrage : `docs/formalisation/2026-07-14-container-query-resolution-spec.md`.
+Le reste de ce document (carte d'usage anime.js, formule `cqwToPx`, raisons d'écarter `%` et
+l'indirection CSS var) reste valable — seule la section sur la découverte du conteneur est
+renversée.
+
 ## Pourquoi `%` a été écarté
 
 `%` a une sémantique dépendante de la propriété CSS qui le porte (référence au content-box du parent pour `width`, à la containing block padding-box pour `top` en position absolue, etc.) — fragile dès qu'une marge ou un padding intervient. `cqw`/`cqh`/etc. n'ont pas ce problème : ils désignent toujours 1% de l'inline-size/block-size du conteneur de requête, quelle que soit la propriété. Mais ce n'était pas la seule raison de l'écarter : `%` déclenche la même réconciliation d'unité fragile qu'anime.js effectue pour `cqw` au premier mount (valeur "from" lue en px sur le DOM vs "to" en `%`) — donc passer à `%` n'aurait pas résolu le problème de fond, seulement changé l'unité qui le déclenche.

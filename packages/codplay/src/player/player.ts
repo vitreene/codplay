@@ -36,6 +36,7 @@ import type {
 } from './strap-types'
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
+import { setContainerQueryRootNode } from '../runtime/components/lib/container-query-units'
 
 export type PreloadPolicy = {
   releaseOnSequenceEnd?: boolean
@@ -98,6 +99,7 @@ export class Player implements PlayerApi {
   private rootNodeIds: string[] = []
   private mountedRuntimeRevision = -1
   private unsubscribeMountSync: (() => void) | null = null
+  private unsubscribeContainerQueryRoot: (() => void) | null = null
 
   readonly schedule: PlayerScheduleApi
 
@@ -130,6 +132,7 @@ export class Player implements PlayerApi {
     const nodes = this.rootNodeIds
       .map(id => registry.getNodeById(id))
       .filter(Player.isNode)
+
     const current = this.mountTarget.childNodes
     if (nodes.length === current.length && nodes.every((node, i) => node === current[i])) {
       return
@@ -252,6 +255,20 @@ export class Player implements PlayerApi {
         }
         this.syncMountTargetInteractionLock(state.status)
       })
+
+      // Tracks the scene's container-query root node across every rebuild —
+      // subscribeToNode re-fires on node replacement (survives destroy/re-init,
+      // runtime-component-orchestrator.ts), so this never resolves cqw/cqh
+      // against a stale detached node the way a one-shot capture in
+      // mountRootNodes() could (ex. a seek right after a rebuild's remount).
+      this.unsubscribeContainerQueryRoot?.()
+      const rootPersoId = this.rootNodeIds[0]
+      this.unsubscribeContainerQueryRoot =
+        rootPersoId !== undefined
+          ? this.player.getRuntimeRegistry().subscribeToNode(rootPersoId, (node) => {
+              setContainerQueryRootNode(node)
+            })
+          : null
     }
 
     return readyResult

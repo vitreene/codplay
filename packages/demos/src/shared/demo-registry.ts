@@ -20,6 +20,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "move-off", label: "Détachement DOM", href: "?demo=move-off" },
   { id: "overlay-world-outlet", label: "Overlay-world outlet", href: "?demo=overlay-world-outlet" },
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
+  { id: "container-query-placement", label: "Placement cqw/cqh", href: "?demo=container-query-placement" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
   { id: "selection-frame", label: "Selection Frame", href: "?demo=selection-frame" },
   { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },

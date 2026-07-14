@@ -2,6 +2,33 @@
 
 Note de travail, contexte figé à l'instant où l'investigation s'est arrêtée pour réflexion. Écrite pour reprise dans une autre session — chaque affirmation ci-dessous est soit vérifiée en live (marquée **CONFIRMÉ**), soit une hypothèse non encore tranchée (marquée **HYPOTHÈSE**).
 
+## Mise à jour 2026-07-14 (suite) — résolu côté Codplay
+
+Le blocage `width`/`height` → `8px` documenté ci-dessous est **résolu** par le commit Codplay `d771a1e` (« container-query-units ») : la conversion `cqw`→px se fait désormais **en amont**, avant d'atteindre anime.js — `packages/codplay/src/runtime/components/lib/container-query-units.ts` mesure directement le conteneur de requête réel (`node.closest('.ac-scene-root')` + `getBoundingClientRect`, une fois) et calcule par arithmétique pure (formule `cqwToPx`, dupliquée depuis `packages/editor/src/decor-editor/units.ts`, même précédent que `packages/authoring/text-auto-size/src/core/cqw.ts`). Anime.js/`utils.set` ne voit plus jamais de valeur `cqw` brute — seulement des px déjà résolus. Détail complet de la délibération : `packages/codplay/plan/notes/2026-07-14-container-query-unit-resolution-deliberation.md`.
+
+Confirmé après reprise des tests (voir section suivante) : **tout le pipeline offset (Fix 1/2/3 ci-dessous + ce correctif Codplay) est maintenant vert** — 290/290 (codplay), 167/167 (selection-frame), 28/28 (capsule-automation), 400/400 (editor).
+
+**Point technique annexe non résolu, sans impact fonctionnel** : `packages/codplay/src/types/typed-om-polyfill.d.ts` (shim pour un `.d.ts` cassé de la dépendance `typed-om-polyfill`) n'est vu que lorsque `packages/codplay` compile lui-même. Quand `packages/editor` compile isolément (`tsc --noEmit`, `include:["src"]`, atteint `codplay/*` seulement via `paths` de résolution de module, jamais les fichiers physiques de `codplay/src/types/`), l'erreur `File '.../typed-om-polyfill/build/index.d.ts' is not a module` apparaît — un problème de propagation de shim `.d.ts` entre projets TS séparés du monorepo (pas de project references ici), pas un défaut du shim lui-même (confirmé : aucune erreur quand `codplay` compile seul). Les 400 tests d'`editor` passent malgré ça — décision explicite de l'auteur : ne pas corriger maintenant, documenter seulement.
+
+## Mise à jour 2026-07-14 (suite 2) — `width`/`height` toujours faux en live, cause racine trouvée
+
+Contrairement à ce qu'affirmait la mise à jour précédente, **`width`/`height` restent `8px` en live après un cycle drag → persist → rebuild**, même avec le fix `container-query-units` en place — CONFIRMÉ par re-test identique au précédent (poignée `nw`, `kf-4`/`decor-5`, `initial.style` produit par le Builder contenant `x/y/width/height` en `cqw`).
+
+**Cause racine, CONFIRMÉE par instrumentation directe** (log temporaire posé puis retiré dans `resolveContainerQueryValue`, `packages/codplay/src/runtime/components/lib/container-query-units.ts`) :
+
+```
+[DEBUG resolveContainerQueryValue] rawValue= 93.03921568627452cqw parsed= Object   ← parsing réussit
+[DEBUG resolveContainerQueryValue] containerNode= null                              ← .closest() échoue
+```
+
+`parseContainerQueryValue` réussit systématiquement (confirmé : `CSSStyleValue.parse('width', '93.03...cqw')` fonctionne correctement en isolation, testé directement dans la console via un `<script type="module">` injecté — `registerParsers` du polyfill `typed-om-polyfill` est bien exécuté, aucun souci de bundle/singleton ESM, même URL de module des deux côtés). Mais **`node.closest('.ac-scene-root')` retourne systématiquement `null`** au moment précis où `resolveContainerQueryValue` est appelée pendant le montage (`applyStyleProps`/`utils.set`, `dom.ts:157`).
+
+Hypothèse la plus probable (non encore vérifiée formellement, mais cohérente avec tous les faits) : **au moment où Codplay applique `initial.style` sur le node, celui-ci n'est pas encore inséré dans l'arbre DOM réel** (encore détaché / en cours de construction par le runtime), donc `.closest()` ne peut pas remonter jusqu'à `.ac-scene-root`. Un test manuel ultérieur sur le MÊME node, une fois pleinement monté et présent dans le DOM final, confirme que `.closest('.ac-scene-root')` fonctionne alors parfaitement (`closestFound: true`) — donc le problème est bien un problème de timing (node détaché au moment de l'appel), pas un problème de sélecteur ou de structure DOM en soi.
+
+Fait notable et cohérent avec cette hypothèse : le `transform` shorthand (`x`/`y`/`rotate`/`scale`) est ÉGALEMENT resté en `cqw` non résolu dans le même test (`transform: translate(6.960784cqw, 3.921569cqw) rotate(0deg) scale(1, 1)`) — donc ce n'est pas un problème spécifique à `width`/`height`, c'est un problème global de timing qui affecte TOUTES les valeurs `cqw`, y compris celles qui semblaient "marcher" lors d'un test antérieur (ce test antérieur lisait probablement `getComputedStyle().transform`, qui RÉSOUT le `cqw` littéral côté navigateur au moment de la lecture — masquant que la valeur CSS elle-même, elle, n'avait jamais été convertie en px par Codplay).
+
+**Prochaine étape suggérée** : trouver le bon moment/mécanisme pour résoudre `cqw`→px — soit en différant l'appel à `resolveContainerQueryValue` jusqu'à ce que le node soit confirmé attaché au DOM (ex. après l'insertion réelle, pas pendant la construction de `definedPatch`), soit en remontant au conteneur autrement qu'en dépendant de la position du node dans l'arbre (ex. le node de montage racine étant déjà connu par ailleurs dans le pipeline Codplay, sans passer par `.closest()`).
+
 ## Point de départ : la mission
 
 Faire que l'offset (position/dimension libre d'un item, posé via `SelectionFrame`/`LibreAdapter`) s'écrive correctement dans `initial.style` du perso Codplay, pour que Codplay/anime.js l'applique réellement au montage — pas seulement dans le document.
@@ -109,3 +136,39 @@ Tous les fixes 1-3 ci-dessus SONT appliqués et commités dans l'arbre de travai
 - Instrumentation de debug (`console.log`) retirée de `scene-player-bridge.ts`, SAUF le log préexistant `[DEBUG sceneDoc.stories.story-main]` dans `rebuild()` (accord permanent en attente : « dites-moi quand je peux le retirer », jamais confirmé).
 
 Aucun de ces fixes n'est faux ou à annuler — ils sont tous nécessaires et corrects pour ce qu'ils couvrent. Le blocage restant (`width`/`height` → `8px`) est un problème distinct, plus profond, situé soit dans anime.js (`convertValueUnit`), soit dans une interaction entre le CSS Grid réel de l'item et le mécanisme de résolution `cqw` que ni le Fix 2 ni le Fix container-type n'ont suffi à couvrir.
+
+## Mise à jour 2026-07-14 (suite 3) — le vrai défaut de conception : `.closest()` interroge le DOM directement
+
+Correction de trajectoire de l'auteur, décisive : **la faute n'est pas un problème de timing à contourner, c'est une violation du principe fondamental de Codplay** — *jamais interroger le DOM directement* pour retrouver une relation structurelle. `node.closest('.ac-scene-root')` (`container-query-units.ts:79`) fait exactement ça : une traversée DOM physique pour retrouver un ancêtre, alors que Codplay connaît déjà cette hiérarchie de façon déclarative, indépendamment de tout montage.
+
+**Le bon mécanisme existe déjà dans le runtime**, repéré dans `packages/codplay/src/runtime/components/runtime-component-orchestrator.ts` :
+- `nodeByPersoId: Map<string, unknown>` (l. 97) — le node réel de chaque perso, indexé par `persoId`, jamais par recherche DOM.
+- `parentListByPersoId: Map<string, string | null>` (l. 99) — la chaîne de parenté déclarée (`move.parentId`), connue dès la compilation, avant tout montage physique.
+
+C'est CETTE hiérarchie qu'il faut remonter pour trouver le perso racine porteur de `container-type` (celui marqué `ac-scene-root`), pas une traversée `.closest()`.
+
+**Ce qui reste à trancher (pas fait, decision de conception qui revient à l'auteur)** : `resolveContainerQueryValue` est appelée depuis `dom.ts::applyStyleProps`, qui est lui-même appelé depuis `component-services.ts:56` — un chemin qui ne reçoit que le `node` brut, jamais le `persoId` ni une référence à l'orchestrateur/ses maps. Combler cet écart demande de choisir COMMENT faire transiter soit le `persoId` soit une résolution déjà faite (le node racine, ou directement la largeur de référence en px) jusqu'à ce point précis — injection de dépendance dans `component-services.ts`, service dédié consulté par `applyStyleProps`, ou un autre mécanisme. Non commencé, à concevoir avec l'auteur avant tout code.
+
+**État du code à cette étape** : `container-query-units.ts` est revenu à l'état exact du commit `d771a1e` (instrumentation de debug ajoutée puis intégralement retirée, aucune modification de fond conservée) — le défaut de conception ci-dessus reste entier, non corrigé, en attente d'une décision.
+
+## Mise à jour 2026-07-14 (suite 4) — référence normative déjà existante, jamais consultée avant cette section
+
+Faute de méthode signalée sèchement par l'auteur : la section précédente traitait `.closest()` comme une découverte de conception nouvelle, sans avoir vérifié si `docs/formalisation/` documentait déjà le bon mécanisme. Il le fait.
+
+**`docs/formalisation/2026-07-07-text-auto-size-spec.md` §3.1 "Environnement de mesure"** (normatif, déjà écrit avant ce chantier) :
+> « La mesure ne se fait **pas** dans le DOM visible de dedit : un environnement de mesure séparé (`OffscreenCanvas`, jamais rattaché au DOM — pas même un `<canvas>` détaché)... Ce choix isole le module de tout DOM monté... et l'aligne sur la pureté de `capsule-automation` (aucune dépendance DOM affichée, résultat déterministe à entrée identique). »
+
+**§3.3 "Conversion en cqw"** :
+> « La mesure est nécessairement faite à une largeur de conteneur de référence, en pixels... Conversion par règle de 3 simple, même principe que la conversion px ↔ cqw déjà prévue pour le pont position (`2026-07-07-dedit-spec.md` §3.3, §6) : `fontSizeCqw = fontSizePx / largeurConteneurPx × 100`. Pas de nouvelle mécanique de conversion : réutilisation du principe existant. »
+
+Le paramètre porté explicitement s'appelle **`referenceWidthPx`** (déjà nommé ainsi dans `text-auto-size-spec.md` §4, ligne 265 de son schéma de types) — le même nom que celui déjà utilisé côté ed2 (`app/controller/types.ts::ControllerContext.referenceWidthPx`, `scene-player-bridge.ts`). C'est un principe **déjà établi et nommé de façon cohérente dans ce dépôt**, pas quelque chose à inventer : toute résolution `cqw`→px doit recevoir sa largeur de référence en paramètre explicite, jamais la déduire d'une lecture DOM en direct (`.closest()`, `getBoundingClientRect()` sur un ancêtre trouvé par traversée).
+
+Ceci **contredit directement l'approche retenue dans `packages/codplay/plan/notes/2026-07-14-container-query-unit-resolution-deliberation.md`**, section "Pourquoi le conteneur de requête n'a pas besoin d'être découvert par un paramètre injecté ni un parcours DOM générique" — qui écarte explicitement l'option `referenceWidthPx` injecté au profit de `node.closest('.ac-scene-root')`. Cette décision doit être rouverte à la lumière de la spec text-auto-size, qui établit déjà ce précédent nommé et normatif pour exactement ce problème (conversion `cqw`→px sans jamais toucher le DOM monté).
+
+## Mise à jour 2026-07-14 (suite 5) — arbitrage tranché, spec normative écrite
+
+Décision de l'auteur : `.closest('.ac-scene-root')` est confirmé invalide — « il interroge le DOM directement sur un id sans aucune garantie de continuité ». Le conteneur de requête doit être identifié par le perso root de la scène (déjà connu via `CompiledScene.rootNodeIds`, calculé au build), pas redécouvert par traversée DOM.
+
+Granularité tranchée : détail d'implémentation. Principe retenu — codplay est un routeur d'events ; il y a toujours un root défini pour projeter les items de la scène ; la résolution du conteneur se fait à la lecture de la scène (build/init), une seule fois ; le node du perso root est ensuite mis à disposition via le registre runtime existant (`nodeByPersoId`) ; si `container-type` n'est pas encore posé sur ce node, le runtime l'assure lui-même à ce même moment d'init.
+
+Spec normative écrite : `docs/formalisation/2026-07-14-container-query-resolution-spec.md`. La délibération `container-query-unit-resolution-deliberation.md` est annotée comme arbitrage renversé sur ce point précis. **Implémentation non commencée** — reste à faire : `container-query-units.ts` (et ses 3 call-sites : `dom.ts`, `dom-component-adapter.ts`, `animation/adapter.ts`) doivent être adaptés pour consulter la résolution faite à l'init au lieu de `.closest()`.
