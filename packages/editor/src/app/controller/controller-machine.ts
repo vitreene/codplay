@@ -97,10 +97,11 @@ export const controllerMachine = setup({
     setAuthorApi: assign({
       authorApi: ({ event }) => (event.type === 'PLAYER_READY' ? event.authorApi : null),
       referenceWidthPx: ({ event }) => (event.type === 'PLAYER_READY' ? event.referenceWidthPx : 0),
+      offsetBridge: ({ event }) => (event.type === 'PLAYER_READY' ? event.offsetBridge : null),
     }),
     emitAuthorApiReady: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'PLAYER_READY') return
-      enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx })
+      enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx, offsetBridge: event.offsetBridge })
     }),
   },
 }).createMachine({
@@ -119,6 +120,7 @@ export const controllerMachine = setup({
 
     authorApi: null,
     referenceWidthPx: 0,
+    offsetBridge: null,
   },
   on: {
     /** Ces événements sont valides quel que soit le mode courant — ni la sélection ni les panneaux ne dépendent du mode de geste. */

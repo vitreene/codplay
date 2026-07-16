@@ -221,6 +221,9 @@ function renderColorField(
     input.addEventListener('input', () => {
       controller.applyPathPatch(path, hexToCssOklch(input.value))
     })
+    // 'change' est le seul signal natif de fin de geste sur un picker couleur — généralise le
+    // flush de fin de phase (chantier 3) à cette édition continue, symétrique du CS.
+    input.addEventListener('change', () => controller.notifyInteractionEnd())
 
     return () => {
       const state = controller.resolveField<string | undefined>(path)
@@ -255,6 +258,7 @@ function renderNumberField(
     input.addEventListener('change', () => {
       if (input.value === '') return
       controller.applyPathPatch(path, formatNumberForCssProperty(cssProperty, Number(input.value)))
+      controller.notifyInteractionEnd()
     })
     return () => {
       if (document.activeElement === input) return
@@ -288,6 +292,8 @@ function renderSliderField(
     input.addEventListener('input', () => {
       controller.applyPathPatch(path, formatNumberForCssProperty(cssProperty, Number(input.value)))
     })
+    // Symétrique du picker couleur — 'change' est le seul signal natif de fin de geste sur un curseur.
+    input.addEventListener('change', () => controller.notifyInteractionEnd())
     return () => {
       if (document.activeElement === input) return
       const state = controller.resolveField<string | undefined>(path)
@@ -334,6 +340,7 @@ function renderIconToggleField(
       const state = controller.resolveField<string | boolean | undefined>(path)
       const isActive = state.kind === 'uniform' && state.value === trueValue
       controller.applyPathPatch(path, isActive ? falseValue : trueValue)
+      controller.notifyInteractionEnd()
     })
     return () => {
       const state = controller.resolveField<string | boolean | undefined>(path)
@@ -358,6 +365,7 @@ function renderCheckboxField(
     control.appendChild(input)
     input.addEventListener('change', () => {
       controller.applyPathPatch(path, input.checked ? trueValue : falseValue)
+      controller.notifyInteractionEnd()
     })
     return () => {
       const state = controller.resolveField<string | boolean | undefined>(path)
@@ -390,6 +398,7 @@ function renderSelectField(
     select.addEventListener('change', () => {
       if (select.value === '') return
       controller.applyPathPatch(path, select.value)
+      controller.notifyInteractionEnd()
     })
     return () => {
       const state = controller.resolveField<string | undefined>(path)
@@ -419,7 +428,10 @@ function renderIconSelectField(
       btn.classList.add('dedit-toggle-btn')
       btn.innerHTML = iconSvg(opt.icon)
       btn.title = opt.value
-      btn.addEventListener('click', () => controller.applyPathPatch(path, opt.value))
+      btn.addEventListener('click', () => {
+        controller.applyPathPatch(path, opt.value)
+        controller.notifyInteractionEnd()
+      })
       control.appendChild(btn)
       return { btn, value: opt.value }
     })
@@ -444,7 +456,10 @@ function renderTextField(
     const input = document.createElement('input')
     input.type = 'text'
     control.appendChild(input)
-    input.addEventListener('change', () => controller.applyPathPatch(path, input.value))
+    input.addEventListener('change', () => {
+      controller.applyPathPatch(path, input.value)
+      controller.notifyInteractionEnd()
+    })
     return () => {
       if (document.activeElement === input) return
       const state = controller.resolveField<string | undefined>(path)
@@ -472,6 +487,7 @@ function renderCustomCodePanel(container: HTMLElement, controller: DecorEditorCo
     } else {
       controller.applyPatch({ custom: textarea.value })
     }
+    controller.notifyInteractionEnd()
   })
 
   return () => {
@@ -492,7 +508,10 @@ function renderPresetListPanel(container: HTMLElement, controller: DecorEditorCo
     btn.type = 'button'
     btn.classList.add('dedit-preset-btn')
     btn.textContent = preset.name
-    btn.addEventListener('click', () => controller.applyPreset(preset.name))
+    btn.addEventListener('click', () => {
+      controller.applyPreset(preset.name)
+      controller.notifyInteractionEnd()
+    })
     wrapper.appendChild(btn)
   }
   container.appendChild(wrapper)

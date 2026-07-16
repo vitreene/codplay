@@ -5,6 +5,7 @@
 import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 import type { AuthorApi } from '@codplay/selection-frame'
+import type { OffsetEditorBridge } from '../../decor-editor/types'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
 
@@ -50,6 +51,13 @@ export interface ControllerContext {
   authorApi: AuthorApi | null
   /** Largeur réelle (px) du substrat de scène rendu — conversion cqw↔px côté dedit (spec text-auto-size). */
   referenceWidthPx: number
+  /**
+   * Posé une fois par le pont `scenePlayer`, en même temps qu'`authorApi` (§7 étape 4) — le pont
+   * `decorEditor` est le SEUL consommateur (`2026-07-16-position-bridge-reconciliation-plan.md`
+   * §Étape A) : dedit reste le seul interlocuteur de l'app pour le décor, l'offset ne doit jamais
+   * apparaître comme un pont indépendant que l'app câblerait elle-même.
+   */
+  offsetBridge: OffsetEditorBridge | null
 }
 
 // ─── Commandes de la façade (§4.1 — vocabulaire fermé, jamais une mutation arbitraire) ─────────
@@ -98,7 +106,7 @@ export type ControllerEvent =
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
   | { type: 'SEEK'; timelineMs: number }
   /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`). */
-  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number }
+  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }
 
 // ─── Événements émis (§"modules de câblage impératifs", `2026-07-13-controller-islands-bridge-
 // plan.md` §3) — un pont s'y abonne via `machine.on(...)`, jamais via `subscribe()` sur chaque
@@ -108,4 +116,4 @@ export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
   | { type: 'seek'; timelineMs: number }
-  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number }
+  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }

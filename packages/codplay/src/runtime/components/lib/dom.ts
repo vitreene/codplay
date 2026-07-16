@@ -38,6 +38,33 @@ function isTransitionStyleValue(rawValue: unknown): rawValue is { to: unknown } 
   return typeof rawValue === 'object' && rawValue !== null && 'to' in rawValue
 }
 
+const IDENTITY_TRANSLATE = /translate\(\s*([^,)]+)\s*,\s*([^,)]+)\s*\)\s*/i
+const IDENTITY_ROTATE = /rotate\(\s*([^)]+)\s*\)\s*/i
+const IDENTITY_SCALE = /scale\(\s*([^,)]+)\s*,\s*([^,)]+)\s*\)\s*/i
+
+/**
+ * Strips `translate(0, 0)` / `rotate(0deg)` / `scale(1, 1)` segments from a composed
+ * `transform` string — anime.js (`buildTransformString`) always emits every cached
+ * transform sub-property unconditionally, identity value or not (confirmed:
+ * `node_modules/animejs/dist/modules/core/transforms.js`). Only these 3 two-argument
+ * forms are ever produced by this runtime's own transform usage (translate/rotate/scale,
+ * never translate3d/matrix) — not a general-purpose transform parser.
+ */
+function stripIdentityTransforms(transform: string): string {
+  if (transform === '' || transform === 'none') {
+    return transform
+  }
+  let result = transform
+  result = result.replace(IDENTITY_TRANSLATE, (segment, x: string, y: string) =>
+    Number.parseFloat(x) === 0 && Number.parseFloat(y) === 0 ? '' : segment
+  )
+  result = result.replace(IDENTITY_ROTATE, (segment, deg: string) => (Number.parseFloat(deg) === 0 ? '' : segment))
+  result = result.replace(IDENTITY_SCALE, (segment, x: string, y: string) =>
+    Number.parseFloat(x) === 1 && Number.parseFloat(y) === 1 ? '' : segment
+  )
+  return result.trim()
+}
+
 /**
  * Resolves one image fit mode into the corresponding object-fit value.
  */
@@ -159,6 +186,13 @@ export function applyStyleProps(
 
     if (Object.keys(definedPatch).length > 0) {
       utils.set(nodeRef, definedPatch as Parameters<typeof utils.set>[1])
+      const composedTransform = style.transform
+      if (typeof composedTransform === 'string' && composedTransform !== '') {
+        const cleaned = stripIdentityTransforms(composedTransform)
+        if (cleaned !== composedTransform) {
+          style.transform = cleaned === '' ? '' : cleaned
+        }
+      }
     }
     return
   }

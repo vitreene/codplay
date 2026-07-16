@@ -4,8 +4,8 @@ import { createAuthorApi, createLibreAdapter, createSelectionFrame, createTracke
 import type { AuthorApi, SelectionFrameHandle, TrackedSession } from '@codplay/selection-frame'
 import type { SceneDoc } from 'codplay/player/types'
 import { buildSceneDoc } from '../../builder/build-scene'
-import { pxToCqw } from '../../decor-editor/units'
-import type { EditorScene, OffsetData } from '../commands/types'
+import { createOffsetEditorBridge } from './offset-editor-bridge'
+import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
 
@@ -20,28 +20,6 @@ const CS_GESTURE_KINDS = [
   { kind: 'resize', state: 'resizing', startEvent: 'RESIZE_START', endEvent: 'RESIZE_END' },
   { kind: 'rotate', state: 'rotating', startEvent: 'ROTATE_START', endEvent: 'ROTATE_END' }
 ] as const
-
-/** Même lecture que `libre-adapter.ts` (readTranslate/readPx) — ne relit jamais un delta, seul l'état CSS final du node fait foi. */
-function readCurrentOffsetPx(node: HTMLElement): { x: number; y: number; width: number; height: number; rotate: number; scale: { x: number; y: number } } {
-  const translateRaw = node.style.translate
-  const translateParts = translateRaw && translateRaw !== 'none' ? translateRaw.split(/\s+/).map((p) => Number.parseFloat(p)) : []
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-  const width = Number.parseFloat(node.style.width) || (computed ? Number.parseFloat(computed.width) : 0) || node.offsetWidth
-  const height = Number.parseFloat(node.style.height) || (computed ? Number.parseFloat(computed.height) : 0) || node.offsetHeight
-  const rotate = Number.parseFloat(node.style.rotate) || 0
-  const scaleRaw = node.style.scale
-  const scaleParts = scaleRaw && scaleRaw !== 'none' ? scaleRaw.split(/\s+/).map((p) => Number.parseFloat(p)) : []
-  const scaleX = Number.isFinite(scaleParts[0]) ? scaleParts[0]! : 1
-  const scaleY = Number.isFinite(scaleParts[1]) ? scaleParts[1]! : scaleX
-  return {
-    x: translateParts[0] || 0,
-    y: translateParts[1] || 0,
-    width,
-    height,
-    rotate,
-    scale: { x: scaleX, y: scaleY },
-  }
-}
 
 /**
  * Pont `scenePlayer` — `2026-07-13-controller-islands-bridge-plan.md` §3.3. Rebuild complet à
@@ -62,8 +40,14 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   let session: TrackedSession | null = null
   /** itemId actuellement attaché — permet à `selectItem` de ne rien faire quand un rebuild ne fait que recommitter le MÊME item (l'ancre existante suit déjà le node remonté, Chantier 1). */
   let currentItemId: string | null = null
-  /** Minuteur de flush différé (Chantier 3) — armé à la fin d'un micro-geste, annulé si un nouveau démarre avant d'expirer. Un seul, partagé entre rebuilds successifs du même item (pas recréé à chaque `attachSelection`). */
-  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * Pont offset (spec `2026-07-07-dedit-spec.md` §6) — construit une fois, publié via
+   * `PLAYER_READY`/`context.offsetBridge`, jamais recréé (`2026-07-16-position-bridge-
+   * reconciliation-plan.md` §Étape A). dedit est le seul consommateur ; ce pont ne commet plus
+   * rien lui-même — `persistOffset` a été retiré (§Étape C), la position transite désormais par
+   * dedit comme tout le reste du décor.
+   */
+  const offsetBridge = createOffsetEditorBridge()
   /** `SELECT_ITEM` seul ne change pas `context.scene` (même référence) — sert à ne rebuild QUE sur une vraie mutation du document, jamais sur un simple changement de sélection. */
   let lastScene: EditorScene | null = null
   /** `BuildSceneResult.preRollMs` du dernier rebuild réussi — le `0` que voit l'auteur au seek correspond à ce décalage côté player (`2026-06-11-sequence-editor-grid-spec.md` §2.2). */
@@ -116,7 +100,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       authorApi = createAuthorApi(studio.player)
       // `studio.player` est la même instance à travers tous les rebuilds (§2.1) — un seul envoi suffit.
       if (isFirstReady) {
-        machine.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: mountTarget.getBoundingClientRect().width })
+        machine.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: mountTarget.getBoundingClientRect().width, offsetBridge })
       }
       // Un rebuild remonte toujours le player à t=0 — rejouer la position courante immédiatement,
       // sinon toute modification (décor, transition…) reste invisible jusqu'au prochain geste de
@@ -125,17 +109,6 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     } catch (error) {
       console.error('[scenePlayer bridge] rebuild failed', error)
     }
-  }
-
-  /** `resolveTarget` de `decor-editor-bridge.ts` — même résolution decorId (kf sélectionné sinon décor initial), dupliquée ici faute d'un point de partage entre ponts (§3bis, chacun reste autonome). */
-  function resolveTargetDecorId(scene: EditorScene, selection: { itemIds: string[]; keyframeId?: string }): string | null {
-    const itemId = selection.itemIds[0]
-    if (!itemId) return null
-    const item = scene.items.find((i) => i.id === itemId)
-    if (!item) return null
-    return selection.keyframeId
-      ? (item.keyframes.find((k) => k.id === selection.keyframeId)?.decorId ?? null)
-      : item.initialDecorId
   }
 
   /**
@@ -178,58 +151,29 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     const newSession = createTrackedSession({ authorApi, persoIds: [itemId], gestureKinds: CS_GESTURE_KINDS })
     session = newSession
 
-    const persistOffset = (): void => {
-      const { scene, selection, referenceWidthPx } = machine.getSnapshot().context
-      if (!scene || !newSession.canAct() || referenceWidthPx <= 0) return
-      const node = newSession.getNode(itemId)
-      if (!(node instanceof HTMLElement)) return
-      const decorId = resolveTargetDecorId(scene, selection)
-      if (!decorId) return
-      const current = readCurrentOffsetPx(node)
-      const offset: OffsetData = {
-        translate: { x: pxToCqw(current.x, referenceWidthPx), y: pxToCqw(current.y, referenceWidthPx) },
-        rotate: current.rotate,
-        scale: current.scale,
-      }
-      if (current.width) offset.width = pxToCqw(current.width, referenceWidthPx)
-      if (current.height) offset.height = pxToCqw(current.height, referenceWidthPx)
-      machine.send({
-        type: 'RUN_TRANSACTION',
-        commands: [{ name: 'setDecor', args: { decorId, patch: { offset } } }],
-      })
-    }
-
-    // Chantier 3 — un seul commit par phase de manipulation, pas un par micro-geste : flush différé
-    // armé à la FIN d'un micro-geste (dragging/resizing/rotating → still), annulé si un NOUVEAU
-    // micro-geste démarre avant d'expirer (resize→rotate enchaînés = une seule phase, un seul
-    // commit à la fin). Remplace l'ancien `onApplied`+`setTimeout(250ms)` réarmé à chaque delta —
-    // LibreAdapter n'a donc plus besoin de `onApplied` ici.
-    let wasGestureActive = newSession.isGestureActive()
-    const unsubscribeActivity = newSession.subscribe(() => {
-      const isActive = newSession.isGestureActive()
-      if (isActive === wasGestureActive) return
-      wasGestureActive = isActive
-      if (isActive) {
-        if (persistTimer !== null) {
-          clearTimeout(persistTimer)
-          persistTimer = null
-        }
-      } else if (newSession.canAct()) {
-        persistTimer = setTimeout(persistOffset, 250)
-      }
+    // Le pont offset relaie chaque delta LibreAdapter vers dedit (spec §6, `onApplied` — émission
+    // continue, jamais de debounce ici) ; dedit décide seul quand committer (Chantier 3 généralisé,
+    // `2026-07-16-position-bridge-reconciliation-plan.md` §Étape D). Ce pont ne commet plus rien
+    // lui-même — l'ancien `persistOffset`/`RUN_TRANSACTION` direct est retiré (§Étape C).
+    const adapter = createLibreAdapter({
+      authorApi,
+      itemId,
+      anchor: newSession,
+      onApplied: () => offsetBridge.notifyNow(),
+    })
+    offsetBridge.rebind({
+      session: newSession,
+      adapter,
+      itemId,
+      referenceWidthPx: () => machine.getSnapshot().context.referenceWidthPx,
     })
 
-    const adapter = createLibreAdapter({ authorApi, itemId, anchor: newSession })
     const newFrame = createSelectionFrame({ itemId, authorApi, anchor: newSession, sceneRoot: mountTarget, adapter })
 
     frame = newFrame
     const frameDestroy = newFrame.destroy.bind(newFrame)
     newFrame.destroy = () => {
-      if (persistTimer !== null) {
-        clearTimeout(persistTimer)
-        persistTimer = null
-      }
-      unsubscribeActivity()
+      offsetBridge.rebind(null)
       newSession.destroy()
       frameDestroy()
     }
@@ -237,10 +181,10 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
 
   /**
    * Ne remplace le frame/session que si la sélection a réellement changé — un rebuild qui recommit
-   * le MÊME item (le cas courant : `persistOffset` de ce même item) est un no-op ici, la session
-   * existante suit déjà le node remonté (Chantier 1). Avant cette distinction, `selectItem` détruisait
-   * et reconstruisait frame+adapter+session à CHAQUE commit, y compris ceux déclenchés par ses
-   * propres gestes — la cause directe de §1.4 du plan parent.
+   * le MÊME item (le cas courant : le commit de dedit sur ce même item) est un no-op ici, la
+   * session existante suit déjà le node remonté (Chantier 1). Avant cette distinction, `selectItem`
+   * détruisait et reconstruisait frame+adapter+session à CHAQUE commit, y compris ceux déclenchés
+   * par ses propres gestes — la cause directe de §1.4 du plan parent.
    */
   function selectItem(itemIds: string[]): void {
     const itemId = itemIds[0] ?? null

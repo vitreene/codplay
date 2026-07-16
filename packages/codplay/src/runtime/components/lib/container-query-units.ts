@@ -39,7 +39,11 @@ function parseContainerQueryValue(rawValue: unknown): ParsedContainerQueryValue 
 
   let parsed: CSSStyleValue
   try {
-    parsed = CSSStyleValue.parse('width', rawValue)
+    // Parsed against `margin-left`, never `width` — CSS forbids negative `<length>` for `width`,
+    // so `CSSStyleValue.parse('width', ...)` throws on any negative cqw value (ex. a leftward/
+    // upward `translate`), silently falling through to the raw, unresolved cqw string below.
+    // `margin-left` accepts the same `cqw` unit grammar without a sign restriction.
+    parsed = CSSStyleValue.parse('margin-left', rawValue)
   } catch {
     return null
   }
@@ -90,5 +94,8 @@ export function resolveContainerQueryValue(_node: Element, rawValue: unknown): u
   }
 
   const containerDimensionPx = resolveContainerDimensionPx(containerNode, parsed.unit)
-  return `${(parsed.value / 100) * containerDimensionPx}px`
+  const resolvedPx = (parsed.value / 100) * containerDimensionPx
+  // Rounded to at most 2 decimals — cqw source values (percent of a measured pixel
+  // rect) routinely carry more float noise than any visual difference can express.
+  return `${Math.round(resolvedPx * 100) / 100}px`
 }

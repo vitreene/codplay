@@ -96,9 +96,60 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
   const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, cards: [], palette: DEFAULT_PALETTE }
   const controller = new DecorEditorController(catalogs)
   let mountHandle: DecorEditorMountHandle | null = null
+  let offsetBridgeWired = false
+
+  // ── Flush de fin de phase (chantier 3 généralisé — `2026-07-16-position-bridge-reconciliation-
+  // plan.md` §Étape D) — dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est
+  // ce pont, l'hôte, qui décide seul quand committer réellement vers la scène. ────────────────────
+
+  let pendingCommands: Command[] | null = null
+  let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+  function armFlush(): void {
+    if (flushTimer !== null) clearTimeout(flushTimer)
+    flushTimer = setTimeout(flushNow, 250)
+  }
+
+  function cancelFlush(): void {
+    if (flushTimer !== null) {
+      clearTimeout(flushTimer)
+      flushTimer = null
+    }
+  }
+
+  /**
+   * Double garde avec `armFlush`/`onGestureActiveChange` : un geste CS repris entre-temps (ex.
+   * resize→rotate enchaînés sans pause) laisse `pendingCommands` en place sans committer — sa
+   * propre fin réarmera. Sans ce second contrôle au moment du tir, un minuteur déjà en vol au
+   * moment où un nouveau geste démarre pourrait committer une position intermédiaire.
+   */
+  function flushNow(): void {
+    flushTimer = null
+    if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) return
+    const commands = pendingCommands
+    pendingCommands = null
+    if (commands && commands.length > 0) machine.send({ type: 'RUN_TRANSACTION', commands })
+  }
+
+  /** Câblé une fois le pont offset disponible (`context.offsetBridge`, publié avec `authorApi`). */
+  function wireOffsetBridge(): void {
+    if (offsetBridgeWired) return
+    const { offsetBridge } = machine.getSnapshot().context
+    if (!offsetBridge) return
+    offsetBridgeWired = true
+    controller.setOffsetBridge(offsetBridge)
+    // Fin d'un geste CS — arme le délai court (réarmé si un nouveau geste, ou une autre édition
+    // continue, s'enchaîne avant qu'il n'expire) plutôt que de committer immédiatement : c'est
+    // exactement le comportement qui empêchait resize→rotate→move de produire 3 commits distincts.
+    offsetBridge.onGestureActiveChange(active => {
+      if (active) cancelFlush()
+      else if (pendingCommands !== null) armFlush()
+    })
+  }
 
   /** Différé jusqu'au premier `PLAYER_READY` (`authorApi` requis pour `subscribeToNode`, §3.2). */
   function ensureMounted(): void {
+    wireOffsetBridge()
     if (mountHandle) return
     const { authorApi, referenceWidthPx } = machine.getSnapshot().context
     if (!authorApi) return
@@ -150,7 +201,22 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (entry.patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
     if (entry.patch.custom !== undefined) console.warn('[decorEditor bridge] patch.custom non routé — aucun champ document ne correspond à du CSS libre')
 
-    if (commands.length > 0) machine.send({ type: 'RUN_TRANSACTION', commands })
+    // Ne commet plus immédiatement — armé pour la fin de phase (chantier 3 généralisé, ci-dessus).
+    // `entry.patch` porte déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour
+    // (pont §Étape A) : c'est ce qui ferme le bug de patch périmé constaté en direct cette session.
+    if (commands.length > 0) {
+      pendingCommands = commands
+      armFlush()
+    }
+  })
+
+  const unsubscribeInteractionEnd = controller.onInteractionEnd(() => {
+    if (pendingCommands === null) return
+    if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) {
+      cancelFlush()
+      return
+    }
+    armFlush()
   })
 
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
@@ -169,10 +235,13 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
 
   return {
     destroy(): void {
+      cancelFlush()
+      pendingCommands = null
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
       unsubscribeAuthorApiReady.unsubscribe()
       unsubscribeDecorChange()
+      unsubscribeInteractionEnd()
       mountHandle?.destroy()
       controller.destroy()
     },

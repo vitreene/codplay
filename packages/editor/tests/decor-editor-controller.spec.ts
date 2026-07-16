@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { DecorEditorController } from '../src/decor-editor/controller'
 import type { DecorEditorCatalogs, AttachItemInput } from '../src/decor-editor/controller'
 import type { PaletteConfig } from '../src/decor-editor/palette-panel'
-import type { ResolvedDecor } from '../src/decor-editor/types'
+import type { OffsetEditorBridge, OffsetValuesPx, ResolvedDecor } from '../src/decor-editor/types'
 
 function paletteConfig(): PaletteConfig {
   return {
@@ -374,5 +374,125 @@ describe('DecorEditorController — modes', () => {
     // pas d'assertion sur l'acteur arrêté (xstate ne re-livre plus après stop) —
     // on vérifie juste l'absence d'exception après destroy
     expect(() => ctrl.getPatches()).not.toThrow()
+  })
+})
+
+function stubOffsetBridge(containerWidthPx = 500): OffsetEditorBridge & {
+  emitValues: (v: OffsetValuesPx) => void
+  activateCalls: Array<'position' | 'transform' | 'flex-anchor'>
+  deactivateCalls: number
+  applyCalls: OffsetValuesPx[]
+} {
+  const listeners = new Set<(v: OffsetValuesPx) => void>()
+  return {
+    activateCalls: [],
+    deactivateCalls: 0,
+    applyCalls: [],
+    activate(mode) {
+      this.activateCalls.push(mode)
+    },
+    deactivate() {
+      this.deactivateCalls++
+    },
+    apply(patch) {
+      this.applyCalls.push(patch)
+    },
+    onValues(cb) {
+      listeners.add(cb)
+      return () => listeners.delete(cb)
+    },
+    containerRefWidthPx() {
+      return containerWidthPx
+    },
+    isGestureActive() {
+      return false
+    },
+    onGestureActiveChange() {
+      return () => {}
+    },
+    emitValues(v) {
+      for (const cb of listeners) cb(v)
+    },
+  }
+}
+
+describe('DecorEditorController — pont offset (spec §6, 2026-07-16-position-bridge-reconciliation-plan.md)', () => {
+  it('active le pont en mode transform sur un item unique attaché', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge()
+    ctrl.setOffsetBridge(bridge)
+    ctrl.attachItems([attachInput()])
+    expect(bridge.activateCalls).toEqual(['transform'])
+    ctrl.destroy()
+  })
+
+  it('désactive le pont sans item, et en multi-sélection', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge()
+    ctrl.setOffsetBridge(bridge) // pas encore d'item attaché — désactive déjà une fois ici
+    ctrl.attachItems([attachInput({ itemId: 'a' }), attachInput({ itemId: 'b' })])
+    expect(bridge.deactivateCalls).toBe(2)
+    expect(bridge.activateCalls).toEqual([])
+    ctrl.destroy()
+  })
+
+  it('geste → champs : une valeur du pont (px) fusionne dans l\'écart en cqw, sans la repousser au pont (pas de boucle)', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge(500)
+    ctrl.setOffsetBridge(bridge)
+    ctrl.attachItems([attachInput()])
+
+    bridge.emitValues({ translate: { x: 50, y: 25 }, rotate: 30 })
+
+    expect(ctrl.getPatches()).toEqual([{ itemId: 'item-1', patch: { offset: { translate: { x: 10, y: 5 }, rotate: 30 } } }])
+    expect(bridge.applyCalls).toEqual([])
+    ctrl.destroy()
+  })
+
+  it('champs → geste : applyPatch({offset}) hors du pont convertit cqw → px et appelle apply()', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge(500)
+    ctrl.setOffsetBridge(bridge)
+    ctrl.attachItems([attachInput()])
+
+    ctrl.applyPatch({ offset: { translate: { x: 10, y: 5 }, rotate: 30 } })
+
+    expect(bridge.applyCalls).toEqual([{ translate: { x: 50, y: 25 }, rotate: 30 }])
+    ctrl.destroy()
+  })
+
+  it('un applyPatch sans offset ne touche pas le pont', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge()
+    ctrl.setOffsetBridge(bridge)
+    ctrl.attachItems([attachInput()])
+
+    ctrl.applyPatch({ style: { 'background-color': 'red' } })
+
+    expect(bridge.applyCalls).toEqual([])
+    ctrl.destroy()
+  })
+
+  it('detach() désactive le pont et coupe l\'abonnement', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge()
+    ctrl.setOffsetBridge(bridge) // pas encore d'item attaché — désactive déjà une fois ici
+    ctrl.attachItems([attachInput()])
+    ctrl.detach()
+    expect(bridge.deactivateCalls).toBe(2)
+
+    bridge.emitValues({ rotate: 45 })
+    expect(ctrl.getPatches()).toEqual([])
+    ctrl.destroy()
+  })
+
+  it('destroy() désactive le pont et coupe l\'abonnement', () => {
+    const ctrl = new DecorEditorController(emptyCatalogs())
+    const bridge = stubOffsetBridge()
+    ctrl.setOffsetBridge(bridge) // pas encore d'item attaché — désactive déjà une fois ici
+    ctrl.attachItems([attachInput()])
+    ctrl.destroy()
+    expect(bridge.deactivateCalls).toBe(2)
+    expect(() => bridge.emitValues({ rotate: 45 })).not.toThrow()
   })
 })

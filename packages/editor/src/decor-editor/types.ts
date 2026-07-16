@@ -124,3 +124,40 @@ export interface OffsetValuesPx {
   scale?: { x: number; y: number }
   anchor?: FlexAnchor
 }
+
+// ─── Offset editor bridge (spec 2026-07-07-dedit-spec.md §6, "PositionEditorBridge") ──────
+//
+// dedit est le seul interlocuteur de l'app pour l'édition du décor — l'éditeur visuel de
+// position (cadre de sélection) lui est subordonné, jamais un pont indépendant câblé par
+// l'app (`2026-07-16-position-bridge-reconciliation-plan.md`). dedit n'importe jamais
+// `selection-frame` : cette interface, fournie par l'hôte, est le seul lien.
+
+export type Unsubscribe = () => void
+
+export interface OffsetEditorBridge {
+  /** `'transform'` est le mode sélectionné par défaut (spec §6) — seul mode câblé à ce stade
+   *  (`'position'`/`'flex-anchor'` n'ont pas encore d'éditeur visuel intégré à l'app). */
+  activate(mode: 'position' | 'transform' | 'flex-anchor'): void
+  deactivate(): void
+  /** champs → geste : une saisie dedit convertie en px, appliquée sur l'élément. */
+  apply(patch: OffsetValuesPx): void
+  /** geste → champs : diffs continus du cadre de sélection, en px (pas de debounce ici). */
+  onValues(cb: (values: OffsetValuesPx) => void): Unsubscribe
+  /** Référence de conversion cqw — largeur du conteneur en px. */
+  containerRefWidthPx(): number
+  /**
+   * Extension au-delà du spec §6 (`2026-07-16-position-bridge-reconciliation-plan.md` §Étape D) :
+   * un geste CS est-il actuellement en cours ? Seul moyen pour l'hôte de généraliser le flush de
+   * fin de phase (chantier 3) à TOUTE édition continue du décor (position ET couleur ET curseur),
+   * pas seulement au CS — sans ça, le pont couleur/curseur n'aurait aucun moyen de savoir qu'une
+   * phase de manipulation de position est en cours ailleurs.
+   */
+  isGestureActive(): boolean
+  /**
+   * Signal de bord (pas un sondage) pour la même raison — un geste CS peut rester actif plus de
+   * 250ms sans produire de nouveau delta (pointer immobile, toujours enfoncé) ; un flush purement
+   * temporisé le couperait à tort. L'hôte s'abonne pour déclencher le flush exactement à la
+   * transition actif → inactif, jamais avant.
+   */
+  onGestureActiveChange(cb: (active: boolean) => void): Unsubscribe
+}
