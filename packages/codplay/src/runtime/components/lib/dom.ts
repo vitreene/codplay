@@ -185,6 +185,48 @@ export function applyStyleProps(
   mutableNode.style = currentStyle
 }
 
+export type NodePose = {
+  x: number
+  y: number
+  rotate: number
+  scaleX: number
+  scaleY: number
+  width: number
+  height: number
+}
+
+/**
+ * Reads back the pose anime.js currently holds for one node — the same
+ * engine `applyStyleProps` hands x/y/rotate/scaleX/scaleY/width/height to via
+ * `utils.set`, and the only one guaranteed to know which DOM representation
+ * it chose (discrete properties or a composed `transform`) for a given
+ * target. Authoring code must never re-derive this from `getComputedStyle`
+ * itself — that reconstruction silently drifts from whatever anime actually
+ * wrote (confirmed: a rotation applied via `utils.set` composes into
+ * `transform`, never into the discrete `rotate` CSS property, so re-deriving
+ * from computed style loses it across a node replacement).
+ */
+export function readNodePose(nodeRef: unknown): NodePose | null {
+  if (!isDomElement(nodeRef)) {
+    return null
+  }
+
+  const read = (prop: string, fallback: number): number => {
+    const value = Number(utils.get(nodeRef, prop, false))
+    return Number.isFinite(value) ? value : fallback
+  }
+
+  return {
+    x: read('x', 0),
+    y: read('y', 0),
+    rotate: read('rotate', 0),
+    scaleX: read('scaleX', 1),
+    scaleY: read('scaleY', 1),
+    width: read('width', 0),
+    height: read('height', 0)
+  }
+}
+
 /**
  * Applies one text content value on one node-like target.
  */

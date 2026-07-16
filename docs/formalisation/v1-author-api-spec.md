@@ -14,6 +14,7 @@ Spec normative v1. Définit la surface d'interface entre les modules authoring e
 
 **Inclus :**
 - Observation du cycle de vie des nœuds DOM par persoId (`subscribeToNode`)
+- Lecture de la pose résolue d'un nœud (`getNodePose`)
 - Observation de l'état de lecture du player (`subscribeToPlayerState`, `getPlayerState`)
 - Convention d'instanciation des modules authoring
 
@@ -32,7 +33,11 @@ Un module authoring est différent par nature : il est instancié par l'éditeur
 
 ### `PlayerApi`
 
-`AuthorApi` wrape `PlayerApi`. `subscribeToNode` est ajouté à `PlayerApi` (voir section ci-dessous) ; les autres méthodes d'`AuthorApi` sont implémentées dans `createAuthorApi` à partir des informations disponibles via `PlayerApi`.
+`AuthorApi` wrape `PlayerApi`. `subscribeToNode` et `getNodePose` sont ajoutés à `PlayerApi` (voir section ci-dessous) ; les autres méthodes d'`AuthorApi` sont implémentées dans `createAuthorApi` à partir des informations disponibles via `PlayerApi`.
+
+### anime.js comme unique source de vérité de la pose
+
+codplay résout `x`/`y`/`rotate`/`scaleX`/`scaleY`/`width`/`height` via anime.js (`utils.set`, `packages/codplay/src/runtime/components/lib/dom.ts`), qui choisit librement sa représentation DOM (propriétés CSS discrètes ou `transform` composé) — ce choix n'est pas un contrat stable. Un module authoring qui reconstruit cette pose lui-même depuis `getComputedStyle` peut diverger silencieusement de ce qu'anime a réellement écrit, en particulier après un remplacement de nœud (rebuild) où le nouveau nœud ne porte que ce qu'anime y a mis. `getNodePose` élimine cette reconstruction : seul le module qui écrit la pose (anime.js, via codplay) est habilité à la relire (`utils.get`, symétrique de `utils.set`). Aucun module authoring ne doit dépendre d'anime.js directement ni re-décoder le style d'un nœud pour en déduire sa pose.
 
 ## Interface
 
@@ -41,11 +46,23 @@ type PlayerAuthorState = {
   isPlaying: boolean
 }
 
+type NodePose = {
+  x: number
+  y: number
+  rotate: number
+  scaleX: number
+  scaleY: number
+  width: number
+  height: number
+}
+
 type AuthorApi = {
   subscribeToNode(
     persoId: string,
     cb: (node: Element | null) => void
   ): () => void
+
+  getNodePose(persoId: string): NodePose | null
 
   subscribeToPlayerState(
     cb: (state: PlayerAuthorState) => void
@@ -75,6 +92,16 @@ Retourne une fonction de désinscription. La désinscription est idempotente. Ap
 
 **Pré-condition** : `player.init()` doit avoir été appelé.
 
+### `getNodePose`
+
+Retourne, de façon synchrone, la pose actuellement résolue par anime.js pour le nœud correspondant à `persoId` : `{ x, y, rotate, scaleX, scaleY, width, height }`, toutes valeurs numériques déjà résolues en px/deg/facteur (aucune unité à interpréter côté appelant).
+
+Retourne `null` quand le perso n'a aucun nœud monté (jamais chargé, ou détruit).
+
+Ne lit jamais `getComputedStyle` ni ne décode `style.transform` — délègue entièrement à `utils.get` (anime.js), la même bibliothèque qui a résolu ces valeurs via `utils.set`. Reste correct après un rebuild complet (nouveau nœud, même `persoId`) puisque la lecture porte sur le nœud courant, jamais sur un état mis en cache côté authoring.
+
+**Pré-condition** : `player.init()` doit avoir été appelé.
+
 ### `subscribeToPlayerState`
 
 Souscrit aux changements de `PlayerAuthorState`. Le callback est appelé à chaque transition du player qui modifie cet état.
@@ -101,6 +128,15 @@ subscribeToNode(persoId: string, cb: (node: Element | null) => void): () => void
 Ajouter un `Map<string, Set<(node: Element | null) => void>>` de subscribers. Chaque appel à `nodeByPersoId.set(persoId, node)` notifie les abonnés avec le nœud. `clear()` notifie tous les abonnés avec `null`. Le player délègue `subscribeToNode` à l'orchestrateur.
 
 Aucun attribut DOM n'est ajouté — la résolution reste dans le runtime.
+
+`getNodePose` doit être ajouté à `PlayerApi` :
+
+```ts
+// packages/codplay/src/player/player.ts
+getNodePose(persoId: string): NodePose | null
+```
+
+**Implémentation** : `Player.getNodePose` résout le nœud via `getRuntimeRegistry().getNodeById(persoId)` (déjà exposé) puis délègue à `readNodePose` (`packages/codplay/src/runtime/components/lib/dom.ts`), qui appelle `utils.get(node, prop, false)` pour chacune des sept propriétés — symétrique de `applyStyleProps`/`utils.set` qui les écrit. Retourne `null` si le nœud résolu n'est pas un `Element`.
 
 `subscribeToPlayerState` et `getPlayerState` sont implémentés dans `createAuthorApi` à partir de l'état interne du player, sans addition nécessaire à `PlayerApi`.
 

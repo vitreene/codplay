@@ -37,6 +37,7 @@ import type {
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
 import { setContainerQueryRootNode } from '../runtime/components/lib/container-query-units'
+import { readNodePose, type NodePose } from '../runtime/components/lib/dom'
 
 export type PreloadPolicy = {
   releaseOnSequenceEnd?: boolean
@@ -72,8 +73,11 @@ export type PlayerApi = {
   onChange: (listener: PlayerStateListener) => () => void
   onTrace: (listener: (row: RuntimeTraceRow) => void) => () => void
   subscribeToNode: (persoId: string, cb: (node: Element | null) => void) => () => void
+  getNodePose: (persoId: string) => NodePose | null
   schedule: PlayerScheduleApi
 }
+
+export type { NodePose }
 
 /**
  * Adapts the internal player facade to the public compiled-scene contract.
@@ -454,6 +458,15 @@ export class Player implements PlayerApi {
    */
   subscribeToNode(persoId: string, cb: (node: Element | null) => void): () => void {
     return this.player.getRuntimeRegistry().subscribeToNode(persoId, cb)
+  }
+
+  /**
+   * Reads the pose (x/y/rotate/scaleX/scaleY/width/height) currently resolved
+   * for one perso's node, straight from anime.js's own bookkeeping
+   * (v1-author-api-spec). Returns null when the perso has no node mounted.
+   */
+  getNodePose(persoId: string): NodePose | null {
+    return readNodePose(this.player.getRuntimeRegistry().getNodeById(persoId))
   }
 
   /**
