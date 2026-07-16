@@ -11,7 +11,7 @@ import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import { csMachine } from './machine'
 import { bindGestureSession } from './gesture-session'
-import { createMinimalAnchor, type TrackedTarget } from './tracked-session'
+import { createMinimalAnchor, isTrackedSession, type TrackedTarget } from './tracked-session'
 import { CHARACTERISTIC_POINTS, HANDLE_SIZE_PX, OPPOSITE_POINT, createHandleNode } from './handle-geometry'
 import type { HandleId } from './handle-geometry'
 import type { GridTrackGeometry } from './grid-geometry'
@@ -1560,6 +1560,30 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   // only once attachItem hands off a real one.
   let unsubscribeElement: (() => void) | null =
     options.itemId !== undefined ? attachAnchor(options.itemId, options.anchor) : null
+
+  // Mirrors csMachine's own gesture sub-state onto the shared anchor's gesture session, when it IS
+  // one (`isTrackedSession`) — a separate concern from csMachine itself, which stays exactly as it
+  // is, governing only this module's own rendering/capabilities (Étape 2's precedent). This lets a
+  // caller that constructed a shared session (`scene-player-bridge.ts`, gating a rebuild on "is a
+  // gesture active") observe it without csMachine needing to be replaced or exposed
+  // (`2026-07-16-rebuild-ordering-execution-plan.md` §2, Option B). A no-op when the anchor is a
+  // plain `TrackedTarget` (`createMinimalAnchor`, e.g. every existing standalone/test usage).
+  const GESTURE_KIND_BY_ACTIVE_SUBSTATE = { dragging: 'move', resizing: 'resize', rotating: 'rotate' } as const
+  let mirroredGestureKind: 'move' | 'resize' | 'rotate' | null = null
+  actor.subscribe((snapshot) => {
+    if (anchor === null || !isTrackedSession(anchor)) return
+    const nextKind = snapshot.matches({ active: 'dragging' })
+      ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.dragging
+      : snapshot.matches({ active: 'resizing' })
+        ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.resizing
+        : snapshot.matches({ active: 'rotating' })
+          ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.rotating
+          : null
+    if (nextKind === mirroredGestureKind) return
+    if (mirroredGestureKind !== null) anchor.endGesture(mirroredGestureKind)
+    if (nextKind !== null) anchor.startGesture(nextKind)
+    mirroredGestureKind = nextKind
+  })
 
   const unsubscribeContainer =
     options.containerId !== undefined

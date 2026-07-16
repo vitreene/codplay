@@ -19,7 +19,8 @@ function temp__createAuthorApiStub(node: Element | null): AuthorApi {
       cb({ isPlaying: false })
       return () => {}
     },
-    getPlayerState: () => ({ isPlaying: false })
+    getPlayerState: () => ({ isPlaying: false }),
+    getNodePose: () => null
   }
 }
 
@@ -91,6 +92,36 @@ describe('LibreAdapter', () => {
 
     adapter.applyMove({ dx: 10, dy: 10 })
     expect(node.style.translate).toBe('0px 0px')
+  })
+
+  it('seeds rotate/scale/translate from getNodePose on node capture, so a later move never drops the rotation (the resize→rotate→move corruption getNodePose was added to close)', () => {
+    const node = document.createElement('div')
+    document.body.appendChild(node)
+    const authorApi: AuthorApi = {
+      subscribeToNode: (_persoId, cb) => {
+        cb(node)
+        return () => {}
+      },
+      subscribeToPlayerState: (cb) => {
+        cb({ isPlaying: false })
+        return () => {}
+      },
+      getPlayerState: () => ({ isPlaying: false }),
+      getNodePose: () => ({ x: 10, y: 20, rotate: 66, scaleX: 1, scaleY: 1, width: 100, height: 50 })
+    }
+    const adapter = createLibreAdapter({ authorApi, itemId: 'a' })
+
+    // Seeded synchronously at capture, straight from getNodePose — not 0/empty.
+    expect(node.style.translate).toBe('10px 20px')
+    expect(node.style.rotate).toBe('66deg')
+    expect(node.style.transform).toBe('none')
+
+    // A gesture that never touches rotation must not reset it.
+    adapter.applyMove({ dx: 5, dy: 5 })
+    expect(node.style.translate).toBe('15px 25px')
+    expect(node.style.rotate).toBe('66deg')
+
+    node.remove()
   })
 
   it('uses a shared anchor when given one, and never destroys it (owned by the caller)', () => {

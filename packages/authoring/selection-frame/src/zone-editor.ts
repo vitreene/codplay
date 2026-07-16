@@ -31,6 +31,7 @@ import type { GridTrackGeometry } from './grid-geometry'
 import { bindGestureSession } from './gesture-session'
 import { CHARACTERISTIC_POINTS, createHandleNode } from './handle-geometry'
 import type { HandleId } from './handle-geometry'
+import { createMinimalAnchor } from './tracked-session'
 import { zoneMachine } from './zone-machine'
 import * as zoneModel from './zone-model'
 import type { Axis, ZoneDef, ZoneEditorState, ZoneGridModel } from './zone-model'
@@ -379,10 +380,19 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
   }
 
   // ── accrochage + calibration (mêmes dispositifs que le gabarit du cs) ───────
+  // Node tracking shared via l'ancrage minimal (`2026-07-16-authoring-shared-tracking-layer-plan.md`
+  // §3 Étape 4) instead of a raw `authorApi.subscribeToNode` — `zoneMachine` itself stays untouched
+  // (same precedent as `SelectionFrame`/`csMachine` in Étape 2: it owns selection/visibility/
+  // container-lifecycle state well beyond a plain gesture skeleton, not a candidate for replacement
+  // here). `refresh()` is gated on `anchor.canAct()`, not mere presence — the correctif central this
+  // migration exists for: a `containerNode` can be notified before it's actually attached
+  // (`tracked-nodes.ts`), and reading its pose at that instant produced the same class of transient
+  // 0×0 geometry `positionCs()` used to.
+
+  const anchor = createMinimalAnchor({ authorApi: options.authorApi, persoIds: [options.containerId] })
 
   function refresh(): void {
-    const active = containerNode !== null && !destroyed
-    if (!active) {
+    if (destroyed || !anchor.canAct()) {
       editorRoot.style.display = 'none'
       return
     }
@@ -397,11 +407,13 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
     calibrateGhostToWorldSnapshot(editorRoot, containerPose.rect)
   }
 
-  const unsubscribeContainer = options.authorApi.subscribeToNode(options.containerId, (node) => {
+  const unsubscribeContainer = anchor.subscribe(() => {
     if (destroyed) return
-    const appeared = node !== null && containerNode === null
-    const disappeared = node === null && containerNode !== null
-    containerNode = node instanceof HTMLElement ? node : null
+    const node = anchor.getNode(options.containerId)
+    const nextContainerNode = node instanceof HTMLElement ? node : null
+    const appeared = nextContainerNode !== null && containerNode === null
+    const disappeared = nextContainerNode === null && containerNode !== null
+    containerNode = nextContainerNode
     if (appeared) actor.send({ type: 'NODE_APPEARED' })
     if (disappeared) actor.send({ type: 'NODE_DISAPPEARED' })
     refresh()
@@ -861,6 +873,7 @@ export function createZoneEditor(options: ZoneEditorOptions): ZoneEditorHandle {
       if (destroyed) return
       destroyed = true
       unsubscribeContainer()
+      anchor.destroy()
       traceGesture.unbind()
       doc.removeEventListener('keydown', onContainerResizeKeydown)
       actor.stop()

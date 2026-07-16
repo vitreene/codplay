@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AuthorApi } from '../src/author-api'
 import { createZoneEditor } from '../src/zone-editor'
 import type { ZoneEditorState } from '../src/zone-model'
+
+const temp__emittedNodes = new Set<Element>()
+
+afterEach(() => {
+  for (const node of temp__emittedNodes) node.remove()
+  temp__emittedNodes.clear()
+})
 
 // Same polyfill as selection-frame.spec.ts — jsdom does not implement the
 // Pointer Capture API, which gesture-session.ts relies on.
@@ -46,7 +53,12 @@ function temp__createAuthorApiStub(): AuthorApi & { emitNode: (persoId: string, 
       return () => {}
     },
     getPlayerState: () => ({ isPlaying: false }),
+    getNodePose: () => null,
     emitNode(persoId, node) {
+      if (node !== null && !node.isConnected) {
+        document.body.appendChild(node)
+        temp__emittedNodes.add(node)
+      }
       current.set(persoId, node)
       for (const cb of subscribers.get(persoId) ?? []) cb(node)
     },

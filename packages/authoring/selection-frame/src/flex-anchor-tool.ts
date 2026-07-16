@@ -7,6 +7,7 @@ import {
   ensureOverlayLayer,
   localFractionToViewportPoint
 } from './overlay-pose'
+import { createTrackedNodes } from './tracked-nodes'
 
 const POINT_SIZE_PX = 14
 const POINT_INSET_PX = 6
@@ -153,15 +154,26 @@ export function createFlexAnchorTool(options: FlexAnchorToolOptions): FlexAnchor
     positionStretchPoints()
   }
 
-  const unsubscribeContainer = options.authorApi.subscribeToNode(options.containerId, (node) => {
-    if (destroyed) return
-    containerNode = node instanceof HTMLElement ? node : null
-    sync()
-  })
+  // Shared node tracking (`2026-07-16-authoring-shared-tracking-layer-plan.md` §3 Étape 5 — this
+  // module's own "ancrage minimal, 2 cibles" case) via `createTrackedNodes` directly rather than
+  // `createMinimalAnchor`: that factory's `canAct()` requires EVERY tracked id connected, which
+  // doesn't fit this module's actual (asymmetric) contract — the container alone already gates the
+  // whole tool (`sync()`), the element only additionally gates the 2 stretch points
+  // (`positionStretchPoints()`); the existing test "stays hidden while the container node is absent
+  // and shows on arrival" never emits the item at all and still expects the tool to show. Each read
+  // below is isConnected-safe (a node can be notified before it's attached, `tracked-nodes.ts`) —
+  // that part IS the correctif this migration adds, unlike the gating granularity, which stays as-is.
+  const nodeTracker = createTrackedNodes(options.authorApi, [options.containerId, options.itemId])
 
-  const unsubscribeElement = options.authorApi.subscribeToNode(options.itemId, (node) => {
+  const resolveConnected = (persoId: string): HTMLElement | null => {
+    const node = nodeTracker.getNode(persoId)
+    return node instanceof HTMLElement && node.isConnected ? node : null
+  }
+
+  const unsubscribeNodes = nodeTracker.subscribe(() => {
     if (destroyed) return
-    elementNode = node instanceof HTMLElement ? node : null
+    containerNode = resolveConnected(options.containerId)
+    elementNode = resolveConnected(options.itemId)
     sync()
   })
 
@@ -169,8 +181,8 @@ export function createFlexAnchorTool(options: FlexAnchorToolOptions): FlexAnchor
     destroy(): void {
       if (destroyed) return
       destroyed = true
-      unsubscribeContainer()
-      unsubscribeElement()
+      unsubscribeNodes()
+      nodeTracker.destroy()
       toolRoot.remove()
     },
 

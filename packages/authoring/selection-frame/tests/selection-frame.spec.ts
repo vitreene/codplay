@@ -6,7 +6,7 @@ import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import type { AuthorApi } from '../src/author-api'
 import { createSelectionFrame } from '../src/selection-frame'
 import { createMultiSelectionFrame } from '../src/multi-selection-frame'
-import { createMinimalAnchor } from '../src/tracked-session'
+import { createMinimalAnchor, createTrackedSession } from '../src/tracked-session'
 import type { CsValueAdapter } from '../src/types'
 
 function temp__createGridArtifact(rows: number, cols: number): AutoCapsuleGridArtifact {
@@ -92,6 +92,7 @@ function temp__createAuthorApiStub(): AuthorApi & {
       return () => {}
     },
     getPlayerState: () => ({ isPlaying: false }),
+    getNodePose: () => null,
     emitNode(persoId, node) {
       if (node !== null && !node.isConnected) {
         document.body.appendChild(node)
@@ -166,7 +167,8 @@ describe('createSelectionFrame', () => {
         cb({ isPlaying: false })
         return () => {}
       },
-      getPlayerState: () => ({ isPlaying: false })
+      getPlayerState: () => ({ isPlaying: false }),
+      getNodePose: () => null
     }
 
     const handle = createSelectionFrame({
@@ -635,6 +637,49 @@ describe('createSelectionFrame — create mode', () => {
   })
 })
 
+describe('createSelectionFrame — mirrors gestures onto a shared TrackedSession anchor (2026-07-16-rebuild-ordering-execution-plan.md §2)', () => {
+  it('calls startGesture/endGesture on the shared session as the cs drags — a plain TrackedTarget anchor stays a no-op', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const node = document.createElement('div')
+    node.style.width = '100px'
+    node.style.height = '100px'
+    authorApi.emitNode('item-1', node)
+
+    const session = createTrackedSession({
+      authorApi,
+      persoIds: ['item-1'],
+      gestureKinds: [
+        { kind: 'move', state: 'dragging', startEvent: 'DRAG_START', endEvent: 'DRAG_END' },
+        { kind: 'resize', state: 'resizing', startEvent: 'RESIZE_START', endEvent: 'RESIZE_END' },
+        { kind: 'rotate', state: 'rotating', startEvent: 'ROTATE_START', endEvent: 'ROTATE_END' }
+      ]
+    })
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      anchor: session,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter()
+    })
+    const cs = temp__csRoot('item-1')!
+
+    expect(session.isGestureActive()).toBe(false)
+
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    expect(session.isGestureActive()).toBe(true)
+
+    temp__firePointer(cs, 'pointermove', { clientX: 30, clientY: 20 })
+    expect(session.isGestureActive()).toBe(true)
+
+    temp__firePointer(cs, 'pointerup', { clientX: 30, clientY: 20 })
+    expect(session.isGestureActive()).toBe(false)
+
+    handle.destroy()
+    session.destroy()
+  })
+})
+
 describe('createSelectionFrame — Alt+click cycle (item stacked underneath)', () => {
   it('Alt+click resolves the stacked candidates (topmost first) and hands them to onAltClickCycle, additive:false', () => {
     const authorApi = temp__createAuthorApiStub()
@@ -866,5 +911,46 @@ describe('createMultiSelectionFrame', () => {
     expect(moves.length).toBeGreaterThan(0)
 
     handle.destroy()
+  })
+
+  it('excludes a present-but-not-yet-connected node from the union — the guard this migration added (a node can be notified before it is attached, tracked-nodes.ts)', () => {
+    const delivered = new Map<string, (node: Element | null) => void>()
+    const authorApi: AuthorApi = {
+      subscribeToNode: (persoId, cb) => {
+        delivered.set(persoId, cb)
+        cb(null)
+        return () => {
+          delivered.delete(persoId)
+        }
+      },
+      subscribeToPlayerState: (cb) => {
+        cb({ isPlaying: false })
+        return () => {}
+      },
+      getPlayerState: () => ({ isPlaying: false }),
+      getNodePose: () => null
+    }
+
+    const handle = createMultiSelectionFrame({
+      items: [
+        { itemId: 'a', adapter: temp__createNoopAdapter() },
+        { itemId: 'b', adapter: temp__createNoopAdapter() }
+      ],
+      authorApi,
+      sceneRoot: document.body
+    })
+    const cs = document.querySelector<HTMLElement>('[data-selection-frame-multi]')!
+
+    const disconnectedNode = document.createElement('div')
+    delivered.get('a')!(disconnectedNode)
+    expect(cs.style.display).toBe('none')
+
+    // The corrective re-notification once the tree is actually attached (same node, tracked-nodes.ts).
+    document.body.appendChild(disconnectedNode)
+    delivered.get('a')!(disconnectedNode)
+    expect(cs.style.display).not.toBe('none')
+
+    handle.destroy()
+    disconnectedNode.remove()
   })
 })

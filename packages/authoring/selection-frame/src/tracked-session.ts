@@ -77,6 +77,18 @@ export type TrackedSession = TrackedTarget & {
 }
 
 /**
+ * Distinguishes a `TrackedSession` from a plain `TrackedTarget` (e.g. a
+ * `createMinimalAnchor` result) at runtime — for a caller like
+ * `SelectionFrame` that accepts either through the same `anchor` option
+ * (`2026-07-16-rebuild-ordering-execution-plan.md` §2, Option B: the shared
+ * anchor a caller passes in MAY be a full session carrying gesture
+ * start/end, but doesn't have to be — a module must not assume one shape).
+ */
+export function isTrackedSession(target: TrackedTarget): target is TrackedSession {
+  return 'startGesture' in target
+}
+
+/**
  * Session complète (§2.1): node tracking + the shared gesture-lifecycle
  * machine (`idle → active(still/<gesture>) ⇄ suspended`). For
  * `SelectionFrame`, `MultiSelectionFrame`, `ZoneEditor` — one instance can

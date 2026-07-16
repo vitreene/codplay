@@ -4,6 +4,7 @@ import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import { csMachine } from './machine'
 import { bindGestureSession } from './gesture-session'
 import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, measureWorldRect } from './overlay-pose'
+import { createTrackedNodes } from './tracked-nodes'
 import type {
   CapabilityPreset,
   CreationGeometry,
@@ -20,8 +21,9 @@ const IDENTITY: Matrix2D = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 type TrackedItem = {
   itemId: string
   adapter: CsValueAdapter
-  node: HTMLElement | null
 }
+
+type PresentItem = TrackedItem & { node: HTMLElement }
 
 /**
  * One shared cs over the union bounding rect of several items. Emits the same
@@ -35,12 +37,27 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
 
   const items: TrackedItem[] = options.items.map((item) => ({
     itemId: item.itemId,
-    adapter: item.adapter,
-    node: null
+    adapter: item.adapter
   }))
+  // Shared node tracking (`2026-07-16-authoring-shared-tracking-layer-plan.md` §2.2, §3 Étape 3)
+  // instead of one raw `authorApi.subscribeToNode` per item — and, unlike the field this replaces
+  // (`TrackedItem.node`, set from the raw callback with no connectedness check), `presentItems()`
+  // below now filters on `isConnected`, closing the same premature-node gap already fixed for
+  // `SelectionFrame`/`LibreAdapter` (a node can be notified before it's attached — `tracked-nodes.ts`).
+  const nodeTracker = createTrackedNodes(options.authorApi, items.map((item) => item.itemId))
   let destroyed = false
   let unionRect: { left: number; top: number; width: number; height: number } | null = null
   let commonMatrix: Matrix2D = IDENTITY
+
+  // "At least one present" (`anyConnected`), not "all present": a multi-selection tolerates partial
+  // presence by design (§2.2 — the aggregate this module already computed by hand as `anyPresent`
+  // before this migration) — the union rect and the broadcast gesture both already degrade correctly
+  // over whichever items are currently connected.
+  const presentItems = (): PresentItem[] =>
+    items.flatMap((item) => {
+      const node = nodeTracker.getNode(item.itemId)
+      return node instanceof HTMLElement && node.isConnected ? [{ ...item, node }] : []
+    })
 
   const actor = createActor(csMachine)
   actor.start()
@@ -58,8 +75,6 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
   csRoot.style.touchAction = 'none'
   csRoot.style.cursor = 'move'
   overlayLayer.appendChild(csRoot)
-
-  const presentItems = (): TrackedItem[] => items.filter((item) => item.node !== null)
 
   const detectCommonMatrix = (nodes: HTMLElement[]): Matrix2D => {
     const poses = nodes.map((node) => captureOverlayPose(node))
@@ -82,14 +97,14 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
     let right = -Infinity
     let bottom = -Infinity
     for (const item of present) {
-      const rect = measureWorldRect(item.node!)
+      const rect = measureWorldRect(item.node)
       left = Math.min(left, rect.left)
       top = Math.min(top, rect.top)
       right = Math.max(right, rect.left + rect.width)
       bottom = Math.max(bottom, rect.top + rect.height)
     }
     unionRect = { left, top, width: right - left, height: bottom - top }
-    commonMatrix = detectCommonMatrix(present.map((item) => item.node!))
+    commonMatrix = detectCommonMatrix(present.map((item) => item.node))
 
     if (
       options.minSizePx !== undefined &&
@@ -131,7 +146,7 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
     let left = Infinity
     let top = Infinity
     for (const item of present) {
-      const rect = measureWorldRect(item.node!)
+      const rect = measureWorldRect(item.node)
       left = Math.min(left, rect.left)
       top = Math.min(top, rect.top)
     }
@@ -186,21 +201,19 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
 
   // ── node lifecycle ───────────────────────────────────────────────────────
 
-  const unsubscribers = items.map((item) =>
-    options.authorApi.subscribeToNode(item.itemId, (node) => {
-      if (destroyed) return
-      item.node = node instanceof HTMLElement ? node : null
-      const anyPresent = presentItems().length > 0
-      actor.send({ type: anyPresent ? 'NODE_APPEARED' : 'NODE_DISAPPEARED' })
-      recompute()
-    })
-  )
+  const unsubscribeNodes = nodeTracker.subscribe(() => {
+    if (destroyed) return
+    const anyPresent = presentItems().length > 0
+    actor.send({ type: anyPresent ? 'NODE_APPEARED' : 'NODE_DISAPPEARED' })
+    recompute()
+  })
 
   return {
     destroy(): void {
       if (destroyed) return
       destroyed = true
-      for (const unsubscribe of unsubscribers) unsubscribe()
+      unsubscribeNodes()
+      nodeTracker.destroy()
       actor.stop()
       csRoot.remove()
     },
@@ -209,7 +222,7 @@ export function createMultiSelectionFrame(options: MultiSelectionFrameOptions): 
       actor.send({ type: 'VISIBILITY_CHANGED', part, visible })
       if (part === 'element') {
         for (const item of presentItems()) {
-          item.node!.style.visibility = visible ? '' : 'hidden'
+          item.node.style.visibility = visible ? '' : 'hidden'
         }
       }
       recompute()

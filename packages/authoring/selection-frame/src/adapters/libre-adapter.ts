@@ -1,4 +1,4 @@
-import type { AuthorApi } from '../author-api'
+import type { AuthorApi, NodePose } from '../author-api'
 import { captureNodeOwnMatrix } from '../overlay-pose'
 import { createMinimalAnchor, type TrackedTarget } from '../tracked-session'
 import type { CsRawMoveDiff, CsRawRotateDiff, CsRawScaleDiff, CsRawSizeDiff, CsValueAdapter } from '../types'
@@ -61,34 +61,34 @@ function readLocalDims(node: HTMLElement): { w: number; h: number } {
 }
 
 /**
- * Re-pins `translate`/`width`/`height` to explicit resolved px the instant a node is (re)captured
- * — never assumes the inline value is already px. A node freshly mounted by the player can carry
- * any CSS unit on these properties (e.g. `cqw`, written by the editor's own document); this
- * adapter's own delta math (`readTranslate`/`readPx` on the RAW inline string) only holds once the
- * inline value is unambiguously px, otherwise a later `current + rawDeltaPx` silently treats a
- * foreign unit's number as px — a real, confirmed double-conversion bug, not a hypothetical.
- * `getComputedStyle` always resolves to real px regardless of the declared unit, so it's the one
- * safe read for this one-time re-pin (never used for the running deltas themselves — those still
- * read the inline value, now guaranteed already px by this call).
+ * Seeds `translate`/`rotate`/`scale`/`width`/`height` as explicit resolved px/deg/factor the
+ * instant a node is (re)captured — from `getNodePose`, never from `getComputedStyle`. codplay
+ * resolves the authored pose via anime.js (`utils.set`), which freely picks its own DOM
+ * representation (discrete properties or a composed `transform`) — not a stable contract. Only
+ * anime.js itself (`utils.get`, what `getNodePose` calls) is guaranteed to read back what it
+ * actually wrote; reconstructing from `getComputedStyle` drifts silently, in two confirmed ways:
+ * a value in a foreign unit (e.g. `cqw`) read as if it were already px (the original
+ * double-conversion bug this replaced), and — the harder one — a rotation anime composed only
+ * into `transform` reading back as 0 from the discrete `rotate` property on a fresh node after a
+ * rebuild, silently dropped by the next gesture that doesn't itself touch rotation (e.g. a plain
+ * move). `getNodePose` is symmetric with anime's own write, so neither failure mode exists here.
+ *
+ * Clears `transform` before seeding: the fresh node may still carry anime's own composed
+ * `transform` holding this exact pose — leaving it in place while also seeding the same values as
+ * discrete `translate`/`rotate`/`scale` would compose the two and apply the pose twice. From this
+ * point on the node's pose is exclusively expressed via the discrete properties, matching every
+ * other write in this adapter (`applyMove`/`applyResize`/`applyRotate`/`applyScale`).
  *
  * The caller (the tracked anchor's `subscribe`, below) gates every call on `canAct()` — never called
- * while the node is absent or not yet connected. codplay resolves `cqw` against its scene-root node
- * during the same synchronous `loadPersos` pass that creates this node, before the scene root itself
- * is inserted into the document — a transient, expected `0px`/raw-cqw state, corrected by the seek
- * that `scene-player-bridge.ts` always runs right after every rebuild. Pinning during that window
- * would freeze the transient value in place before that corrective seek — confirmed live: a
- * `width:0px` written here survives past the following correct seek write.
+ * while the node is absent or not yet connected.
  */
-function pinToResolvedPx(node: HTMLElement): void {
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-  if (!computed) return
-  const translateRaw = computed.translate
-  if (translateRaw && translateRaw !== 'none') {
-    const parts = translateRaw.split(/\s+/).map((part) => Number.parseFloat(part))
-    node.style.translate = `${parts[0] || 0}px ${parts[1] || 0}px`
-  }
-  if (node.style.width) node.style.width = `${readPx(computed.width)}px`
-  if (node.style.height) node.style.height = `${readPx(computed.height)}px`
+function seedResolvedPose(node: HTMLElement, pose: NodePose): void {
+  node.style.transform = 'none'
+  node.style.translate = `${pose.x}px ${pose.y}px`
+  node.style.rotate = `${pose.rotate}deg`
+  node.style.scale = `${pose.scaleX} ${pose.scaleY}`
+  node.style.width = `${pose.width}px`
+  node.style.height = `${pose.height}px`
 }
 
 function parseOriginComponentPx(part: string | undefined, sizePx: number): number {
@@ -149,7 +149,9 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
 
   const unsubscribe = anchor.subscribe(() => {
     const node = getActiveNode()
-    if (node !== null) pinToResolvedPx(node)
+    if (node === null) return
+    const pose = options.authorApi.getNodePose(options.itemId)
+    if (pose !== null) seedResolvedPose(node, pose)
   })
 
   return {

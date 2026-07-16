@@ -31,6 +31,7 @@ function temp__createAuthorApiStub(): AuthorApi & {
       return () => {}
     },
     getPlayerState: () => ({ isPlaying: false }),
+    getNodePose: () => null,
     emitNode(persoId, node) {
       current.set(persoId, node)
       for (const cb of subscribers.get(persoId) ?? []) cb(node)

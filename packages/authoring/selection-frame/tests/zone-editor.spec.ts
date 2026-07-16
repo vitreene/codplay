@@ -1,12 +1,25 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AuthorApi } from '../src/author-api'
 import { createZoneEditor } from '../src/zone-editor'
 import type { ZoneEditorState } from '../src/zone-model'
 
-/** Same stub pattern as `selection-frame.spec.ts` — controllable node lifecycle per persoId. */
+const temp__emittedNodes = new Set<Element>()
+
+function temp__cleanupEmittedNodes(): void {
+  for (const node of temp__emittedNodes) node.remove()
+  temp__emittedNodes.clear()
+}
+
+/**
+ * Same stub pattern as `selection-frame.spec.ts` — controllable node lifecycle per persoId.
+ * `emitNode` auto-attaches a not-yet-connected element (matching real usage — a node handed to a
+ * live scene is always eventually attached): `createZoneEditor`'s node tracking now gates on
+ * `anchor.canAct()` (isConnected-safe, Étape 4 of the shared-tracking-layer migration), so a
+ * detached test node would leave the editor permanently hidden instead of exercising it.
+ */
 function temp__createAuthorApiStub(): AuthorApi & { emitNode: (persoId: string, node: Element | null) => void } {
   const subscribers = new Map<string, Set<(node: Element | null) => void>>()
   const current = new Map<string, Element | null>()
@@ -27,12 +40,21 @@ function temp__createAuthorApiStub(): AuthorApi & { emitNode: (persoId: string, 
       return () => {}
     },
     getPlayerState: () => ({ isPlaying: false }),
+    getNodePose: () => null,
     emitNode(persoId, node) {
+      if (node !== null && !node.isConnected) {
+        document.body.appendChild(node)
+        temp__emittedNodes.add(node)
+      }
       current.set(persoId, node)
       for (const cb of subscribers.get(persoId) ?? []) cb(node)
     },
   }
 }
+
+afterEach(() => {
+  temp__cleanupEmittedNodes()
+})
 
 function temp__editorRoot(): HTMLElement | null {
   return document.querySelector('[data-zone-editor="capsule-1"]')
@@ -62,6 +84,47 @@ describe('createZoneEditor — accrochage + visibilité', () => {
     expect(root!.style.display).not.toBe('none')
 
     handle.destroy()
+  })
+
+  it('stays hidden while the container node is present but not yet connected — the guard this migration added (a node can be notified before it is attached, tracked-nodes.ts)', () => {
+    let deliver: ((node: Element | null) => void) | null = null
+    const authorApi: AuthorApi = {
+      subscribeToNode: (_persoId, cb) => {
+        deliver = cb
+        cb(null)
+        return () => {
+          deliver = null
+        }
+      },
+      subscribeToPlayerState: (cb) => {
+        cb({ isPlaying: false })
+        return () => {}
+      },
+      getPlayerState: () => ({ isPlaying: false }),
+      getNodePose: () => null,
+    }
+
+    const handle = createZoneEditor({
+      authorApi,
+      sceneRoot: document.body,
+      containerId: 'capsule-1',
+      initialState: stateOf(4, 4),
+      onZonesChange: () => {},
+      onSelectionChange: () => {},
+    })
+    const root = temp__editorRoot()!
+
+    const disconnectedNode = document.createElement('div')
+    deliver!(disconnectedNode)
+    expect(root.style.display).toBe('none')
+
+    // The corrective re-notification once the tree is actually attached (same node, tracked-nodes.ts).
+    document.body.appendChild(disconnectedNode)
+    deliver!(disconnectedNode)
+    expect(root.style.display).not.toBe('none')
+
+    handle.destroy()
+    disconnectedNode.remove()
   })
 
   it('destroy() removes the editor node and stops reacting to further node changes', () => {
