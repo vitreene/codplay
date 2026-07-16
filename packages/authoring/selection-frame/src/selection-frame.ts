@@ -1520,7 +1520,19 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       // follows (once the tree is attached) re-enters this same branch with
       // `canAct()` true and positions it then — nothing is lost, only
       // deferred by the one tick codplay itself needs.
-      if (anchor?.canAct() ?? false) {
+      //
+      // Same gesture-active guard the ResizeObserver already applies below
+      // (`!dragGesture.isActive() && !anyResizeActive && !rotateGesture.isActive()`)
+      // — this handler used to run unconditionally on every notification, the
+      // exact gap `2026-07-16-gesture-rebuild-ordering-plan.md` §1.2 names.
+      // Now load-bearing for a second reason: a shared `TrackedSession`
+      // anchor's own `subscribe` also fires on gesture start/end (mirrored
+      // from this module's own `csMachine`, `2026-07-16-rebuild-ordering-
+      // execution-plan.md` §2), re-entering this branch mid-gesture with the
+      // SAME node — repositioning from its current style would fight the
+      // gesture's own live `onMove` writes.
+      const anyResizeActive = Array.from(resizeGestures.values()).some((gesture) => gesture.isActive())
+      if ((anchor?.canAct() ?? false) && !dragGesture.isActive() && !anyResizeActive && !rotateGesture.isActive()) {
         positionCs()
         observeElement(node)
       }
@@ -1549,8 +1561,22 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     ownsAnchor = shared === undefined
     anchor = shared ?? createMinimalAnchor({ authorApi: options.authorApi, persoIds: [itemId] })
     unsubscribeAnchor = anchor.subscribe(() => handleElementNode(anchor!.getNode(itemId)))
+    // External abort point (`2026-07-16-authoring-shared-tracking-layer-plan.md` §2.5, wired here):
+    // when a shared `TrackedSession` transitions to `suspended` (node genuinely gone, e.g. mid-
+    // rebuild), cut whichever pointer-capture gesture is in flight — never let it keep producing
+    // deltas `applyMove`/etc already silently discard (`canAct()`), which would otherwise leave the
+    // cs looking like it's still dragging while nothing underneath is actually moving.
+    const unsubscribeAbort = isTrackedSession(anchor)
+      ? anchor.onSuspend(() => {
+          dragGesture.abort()
+          for (const gesture of resizeGestures.values()) gesture.abort()
+          rotateGesture.abort()
+          pivotGesture.abort()
+        })
+      : null
     return () => {
       unsubscribeAnchor?.()
+      unsubscribeAbort?.()
       if (ownsAnchor) anchor?.destroy()
       anchor = null
     }

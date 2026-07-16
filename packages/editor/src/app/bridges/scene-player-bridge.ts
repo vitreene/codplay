@@ -1,13 +1,25 @@
 import type { Actor } from 'xstate'
 import { CodPlay } from 'codplay/creator'
-import { createAuthorApi, createLibreAdapter, createMinimalAnchor, createSelectionFrame } from '@codplay/selection-frame'
-import type { AuthorApi, SelectionFrameHandle } from '@codplay/selection-frame'
+import { createAuthorApi, createLibreAdapter, createSelectionFrame, createTrackedSession } from '@codplay/selection-frame'
+import type { AuthorApi, SelectionFrameHandle, TrackedSession } from '@codplay/selection-frame'
 import type { SceneDoc } from 'codplay/player/types'
 import { buildSceneDoc } from '../../builder/build-scene'
 import { pxToCqw } from '../../decor-editor/units'
 import type { EditorScene, OffsetData } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
+
+/**
+ * Vocabulaire de gestes partagé par LibreAdapter+SelectionFrame sur une session — `resize` couvre
+ * aussi le scale (même sous-état côté `csMachine`, `machine.ts`, pas de ROTATE/SCALE distinct pour
+ * un pincement). Miroir exact de `selection-frame.ts`'s propre mirroring vers la session partagée
+ * (`2026-07-16-rebuild-ordering-execution-plan.md` §2, Option B).
+ */
+const CS_GESTURE_KINDS = [
+  { kind: 'move', state: 'dragging', startEvent: 'DRAG_START', endEvent: 'DRAG_END' },
+  { kind: 'resize', state: 'resizing', startEvent: 'RESIZE_START', endEvent: 'RESIZE_END' },
+  { kind: 'rotate', state: 'rotating', startEvent: 'ROTATE_START', endEvent: 'ROTATE_END' }
+] as const
 
 /** Même lecture que `libre-adapter.ts` (readTranslate/readPx) — ne relit jamais un delta, seul l'état CSS final du node fait foi. */
 function readCurrentOffsetPx(node: HTMLElement): { x: number; y: number; width: number; height: number; rotate: number; scale: { x: number; y: number } } {
@@ -41,6 +53,17 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   const studio = new CodPlay({})
   let authorApi: AuthorApi | null = null
   let frame: SelectionFrameHandle | null = null
+  /**
+   * Session partagée (LibreAdapter+SelectionFrame) de l'item actuellement sélectionné —
+   * `session.isGestureActive()` est la décision unique qui gouverne à la fois le déclenchement du
+   * rebuild (§Chantier 2.1) et le remplacement du frame (§Chantier 2.2), remplaçant les anciennes
+   * garanties implicites (debounce réarmé, `.then()` aveugle).
+   */
+  let session: TrackedSession | null = null
+  /** itemId actuellement attaché — permet à `selectItem` de ne rien faire quand un rebuild ne fait que recommitter le MÊME item (l'ancre existante suit déjà le node remonté, Chantier 1). */
+  let currentItemId: string | null = null
+  /** Minuteur de flush différé (Chantier 3) — armé à la fin d'un micro-geste, annulé si un nouveau démarre avant d'expirer. Un seul, partagé entre rebuilds successifs du même item (pas recréé à chaque `attachSelection`). */
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
   /** `SELECT_ITEM` seul ne change pas `context.scene` (même référence) — sert à ne rebuild QUE sur une vraie mutation du document, jamais sur un simple changement de sélection. */
   let lastScene: EditorScene | null = null
   /** `BuildSceneResult.preRollMs` du dernier rebuild réussi — le `0` que voit l'auteur au seek correspond à ce décalage côté player (`2026-06-11-sequence-editor-grid-spec.md` §2.2). */
@@ -115,66 +138,137 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       : item.initialDecorId
   }
 
-  function selectItem(itemIds: string[]): void {
-    frame?.destroy()
+  /**
+   * Détruit le frame/session courants — attend la fin d'un geste en cours plutôt que de couper le
+   * frame sous la main de l'utilisateur (`2026-07-16-rebuild-ordering-execution-plan.md` §3.2).
+   * `then` ne s'exécute qu'une fois la destruction réellement effective.
+   */
+  function destroySelection(then: () => void): void {
+    const oldFrame = frame
+    const oldSession = session
     frame = null
-    let persistTimer: ReturnType<typeof setTimeout> | null = null
-    const itemId = itemIds[0]
-    if (itemId && authorApi) {
-      // One shared anchor for this itemId, handed to both LibreAdapter and
-      // SelectionFrame (and used directly here for persistOffset's own node
-      // read) instead of three independent subscribeToNode calls on the same
-      // id — `2026-07-16-authoring-shared-tracking-layer-plan.md` §3, Étape
-      // 2. scene-player-bridge.ts is the sole owner: destroyed in
-      // frame.destroy below, never by the adapter/frame that borrow it.
-      const anchor = createMinimalAnchor({ authorApi, persoIds: [itemId] })
-      const persistOffset = (): void => {
-        const { scene, selection, referenceWidthPx } = machine.getSnapshot().context
-        if (!scene || !anchor.canAct() || referenceWidthPx <= 0) return
-        const node = anchor.getNode(itemId)
-        if (!(node instanceof HTMLElement)) return
-        const decorId = resolveTargetDecorId(scene, selection)
-        if (!decorId) return
-        const current = readCurrentOffsetPx(node)
-        const offset: OffsetData = {
-          translate: { x: pxToCqw(current.x, referenceWidthPx), y: pxToCqw(current.y, referenceWidthPx) },
-          rotate: current.rotate,
-          scale: current.scale,
-        }
-        if (current.width) offset.width = pxToCqw(current.width, referenceWidthPx)
-        if (current.height) offset.height = pxToCqw(current.height, referenceWidthPx)
-        machine.send({
-          type: 'RUN_TRANSACTION',
-          commands: [{ name: 'setDecor', args: { decorId, patch: { offset } } }],
-        })
+    session = null
+    if (oldFrame === null || oldSession === null) {
+      then()
+      return
+    }
+    if (!oldSession.isGestureActive()) {
+      oldFrame.destroy()
+      then()
+      return
+    }
+    const unsubscribe = oldSession.subscribe(() => {
+      if (!oldSession.isGestureActive()) {
+        unsubscribe()
+        oldFrame.destroy()
+        then()
       }
-      const adapter = createLibreAdapter({
-        authorApi,
-        itemId,
-        anchor,
-        // Application DOM déjà immédiate (adapter lui-même) — ici seulement la persistance
-        // document, debattue pour ne pas écrire à chaque micro-pas de pointermove.
-        onApplied: () => {
-          if (persistTimer !== null) clearTimeout(persistTimer)
-          persistTimer = setTimeout(persistOffset, 250)
-        },
+    })
+  }
+
+  /** Construit la session+frame pour `itemId` — no-op si supplanté par une sélection plus récente pendant l'attente de `destroySelection`. */
+  function attachSelection(itemId: string | null): void {
+    if (itemId !== currentItemId) return
+    if (itemId === null || authorApi === null) return
+
+    // Session partagée (LibreAdapter+SelectionFrame) au lieu de deux abonnements séparés sur le même
+    // id — `2026-07-16-authoring-shared-tracking-layer-plan.md` §3, Étape 2. Porte aussi, depuis ce
+    // chantier, `isGestureActive()`/`canAct()`/`onSuspend`, seule source consultée pour gater le
+    // rebuild (Chantier 2.1), le remplacement du frame (Chantier 2.2) et le commit (Chantier 3).
+    const newSession = createTrackedSession({ authorApi, persoIds: [itemId], gestureKinds: CS_GESTURE_KINDS })
+    session = newSession
+
+    const persistOffset = (): void => {
+      const { scene, selection, referenceWidthPx } = machine.getSnapshot().context
+      if (!scene || !newSession.canAct() || referenceWidthPx <= 0) return
+      const node = newSession.getNode(itemId)
+      if (!(node instanceof HTMLElement)) return
+      const decorId = resolveTargetDecorId(scene, selection)
+      if (!decorId) return
+      const current = readCurrentOffsetPx(node)
+      const offset: OffsetData = {
+        translate: { x: pxToCqw(current.x, referenceWidthPx), y: pxToCqw(current.y, referenceWidthPx) },
+        rotate: current.rotate,
+        scale: current.scale,
+      }
+      if (current.width) offset.width = pxToCqw(current.width, referenceWidthPx)
+      if (current.height) offset.height = pxToCqw(current.height, referenceWidthPx)
+      machine.send({
+        type: 'RUN_TRANSACTION',
+        commands: [{ name: 'setDecor', args: { decorId, patch: { offset } } }],
       })
-      frame = createSelectionFrame({ itemId, authorApi, anchor, sceneRoot: mountTarget, adapter })
-      const frameDestroy = frame.destroy.bind(frame)
-      frame.destroy = () => {
-        if (persistTimer !== null) clearTimeout(persistTimer)
-        anchor.destroy()
-        frameDestroy()
+    }
+
+    // Chantier 3 — un seul commit par phase de manipulation, pas un par micro-geste : flush différé
+    // armé à la FIN d'un micro-geste (dragging/resizing/rotating → still), annulé si un NOUVEAU
+    // micro-geste démarre avant d'expirer (resize→rotate enchaînés = une seule phase, un seul
+    // commit à la fin). Remplace l'ancien `onApplied`+`setTimeout(250ms)` réarmé à chaque delta —
+    // LibreAdapter n'a donc plus besoin de `onApplied` ici.
+    let wasGestureActive = newSession.isGestureActive()
+    const unsubscribeActivity = newSession.subscribe(() => {
+      const isActive = newSession.isGestureActive()
+      if (isActive === wasGestureActive) return
+      wasGestureActive = isActive
+      if (isActive) {
+        if (persistTimer !== null) {
+          clearTimeout(persistTimer)
+          persistTimer = null
+        }
+      } else if (newSession.canAct()) {
+        persistTimer = setTimeout(persistOffset, 250)
       }
+    })
+
+    const adapter = createLibreAdapter({ authorApi, itemId, anchor: newSession })
+    const newFrame = createSelectionFrame({ itemId, authorApi, anchor: newSession, sceneRoot: mountTarget, adapter })
+
+    frame = newFrame
+    const frameDestroy = newFrame.destroy.bind(newFrame)
+    newFrame.destroy = () => {
+      if (persistTimer !== null) {
+        clearTimeout(persistTimer)
+        persistTimer = null
+      }
+      unsubscribeActivity()
+      newSession.destroy()
+      frameDestroy()
     }
   }
 
+  /**
+   * Ne remplace le frame/session que si la sélection a réellement changé — un rebuild qui recommit
+   * le MÊME item (le cas courant : `persistOffset` de ce même item) est un no-op ici, la session
+   * existante suit déjà le node remonté (Chantier 1). Avant cette distinction, `selectItem` détruisait
+   * et reconstruisait frame+adapter+session à CHAQUE commit, y compris ceux déclenchés par ses
+   * propres gestes — la cause directe de §1.4 du plan parent.
+   */
+  function selectItem(itemIds: string[]): void {
+    const itemId = itemIds[0] ?? null
+    if (itemId === currentItemId) return
+    currentItemId = itemId
+    destroySelection(() => attachSelection(itemId))
+  }
+
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
-    if (scene !== lastScene) {
-      void rebuild(scene).then(() => selectItem(selection.itemIds))
-    } else {
-      selectItem(selection.itemIds)
+    const proceed = (): void => {
+      if (scene !== lastScene) {
+        void rebuild(scene).then(() => selectItem(selection.itemIds))
+      } else {
+        selectItem(selection.itemIds)
+      }
     }
+    // Chantier 2.1 — un rebuild ne démarre jamais tant qu'un geste est actif sur la session
+    // courante, explicitement consulté plutôt qu'implicite via le seul timing du debounce.
+    if (session !== null && session.isGestureActive()) {
+      const unsubscribe = session.subscribe(() => {
+        if (session === null || !session.isGestureActive()) {
+          unsubscribe()
+          proceed()
+        }
+      })
+      return
+    }
+    proceed()
   })
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
     void rebuild(scene)

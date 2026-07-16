@@ -124,6 +124,38 @@ describe('LibreAdapter', () => {
     node.remove()
   })
 
+  it('does not re-seed from getNodePose on a same-node renotification — a shared session also notifies on every gesture start/end, not just a real rebuild', () => {
+    let deliver: ((node: Element | null) => void) | null = null
+    const node = document.createElement('div')
+    document.body.appendChild(node)
+    const authorApi: AuthorApi = {
+      subscribeToNode: (_persoId, cb) => {
+        deliver = cb
+        cb(node)
+        return () => {
+          deliver = null
+        }
+      },
+      subscribeToPlayerState: (cb) => {
+        cb({ isPlaying: false })
+        return () => {}
+      },
+      getPlayerState: () => ({ isPlaying: false }),
+      getNodePose: () => ({ x: 0, y: 0, rotate: 0, scaleX: 1, scaleY: 1, width: 100, height: 50 })
+    }
+    const adapter = createLibreAdapter({ authorApi, itemId: 'a' })
+
+    adapter.applyRotate({ dr: 66 })
+    expect(node.style.rotate).toBe('66deg')
+
+    // Same node, renotified — a shared TrackedSession's own subscribe fires on gesture start/end
+    // too (mirrored from SelectionFrame's machine), not only on a genuine node replacement.
+    deliver!(node)
+    expect(node.style.rotate).toBe('66deg')
+
+    node.remove()
+  })
+
   it('uses a shared anchor when given one, and never destroys it (owned by the caller)', () => {
     const node = document.createElement('div')
     document.body.appendChild(node)

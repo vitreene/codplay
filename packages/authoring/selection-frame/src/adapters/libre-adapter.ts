@@ -147,9 +147,23 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     return node instanceof HTMLElement ? node : null
   }
 
+  // Re-seeds only once per genuine node reference change (a real rebuild/remount) — a shared
+  // `TrackedSession` anchor's `subscribe` also fires on every gesture start/end (mirrored from
+  // `SelectionFrame`'s own machine, `2026-07-16-rebuild-ordering-execution-plan.md` §2). Without
+  // this guard, ending one gesture (e.g. resize) and starting the next (e.g. rotate) on the SAME
+  // still-connected node would re-seed from `getNodePose` — which only knows the last PERSISTED
+  // pose — silently discarding whatever this session's own prior gestures already accumulated live
+  // and not yet committed. Confirmed live: a resize→rotate→move chain lost the resize's rotate/
+  // translate this way before this guard existed.
+  let lastSeededNode: HTMLElement | null = null
   const unsubscribe = anchor.subscribe(() => {
     const node = getActiveNode()
-    if (node === null) return
+    if (node === null) {
+      lastSeededNode = null
+      return
+    }
+    if (node === lastSeededNode) return
+    lastSeededNode = node
     const pose = options.authorApi.getNodePose(options.itemId)
     if (pose !== null) seedResolvedPose(node, pose)
   })

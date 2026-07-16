@@ -678,6 +678,49 @@ describe('createSelectionFrame — mirrors gestures onto a shared TrackedSession
     handle.destroy()
     session.destroy()
   })
+
+  it('aborts an in-flight drag when the shared session suspends (node genuinely gone) — no more deltas reach the adapter after that (2026-07-16-authoring-shared-tracking-layer-plan.md §2.5)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    authorApi.emitNode('item-1', document.createElement('div'))
+
+    const session = createTrackedSession({
+      authorApi,
+      persoIds: ['item-1'],
+      gestureKinds: [
+        { kind: 'move', state: 'dragging', startEvent: 'DRAG_START', endEvent: 'DRAG_END' },
+        { kind: 'resize', state: 'resizing', startEvent: 'RESIZE_START', endEvent: 'RESIZE_END' },
+        { kind: 'rotate', state: 'rotating', startEvent: 'ROTATE_START', endEvent: 'ROTATE_END' }
+      ]
+    })
+
+    const moves: Array<{ dx: number; dy: number }> = []
+    const adapter: CsValueAdapter = { ...temp__createNoopAdapter(), applyMove: (diff) => moves.push(diff) }
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      anchor: session,
+      sceneRoot: document.body,
+      adapter
+    })
+    const cs = temp__csRoot('item-1')!
+
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(cs, 'pointermove', { clientX: 20, clientY: 20 })
+    const movesBeforeSuspend = moves.length
+    expect(movesBeforeSuspend).toBeGreaterThan(0)
+
+    // The node genuinely disappears mid-drag (e.g. a rebuild) — the shared session suspends.
+    authorApi.emitNode('item-1', null)
+
+    // Further pointer movement must reach nothing — the gesture session itself was cut, not just
+    // silently ignored by a downstream guard.
+    temp__firePointer(cs, 'pointermove', { clientX: 40, clientY: 40 })
+    expect(moves.length).toBe(movesBeforeSuspend)
+
+    handle.destroy()
+    session.destroy()
+  })
 })
 
 describe('createSelectionFrame — Alt+click cycle (item stacked underneath)', () => {
