@@ -13,5 +13,5 @@
       "@codplay/text-auto-size/*": ["../authoring/text-auto-size/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../codplay/src/types/typed-om-polyfill.d.ts"]
 }

@@ -102,11 +102,20 @@ export async function buildModelInstance(
     // Register morph targets from SkinnedMesh
     const mesh = node as {
       isSkinnedMesh?: boolean
+      frustumCulled?: boolean
       morphTargetDictionary?: Record<string, number>
       morphTargetInfluences?: number[]
     }
 
-    if (!mesh.isSkinnedMesh || !mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
+    if (!mesh.isSkinnedMesh) {
+      return
+    }
+
+    // Skinned mesh bounds are static in Three.js; animated limbs can otherwise
+    // disappear when gestures move hands outside the initial bounding volume.
+    mesh.frustumCulled = false
+
+    if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) {
       return
     }
 

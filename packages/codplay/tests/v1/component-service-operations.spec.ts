@@ -98,8 +98,9 @@ describe('V1 - component service animation operations', () => {
     expect(renderer.load({ runtimePersos: createRuntimePersos() })).toEqual({ ok: true })
     expect(renderer.enqueueCommit({
       commitSeq: 1,
-      applyAtMs: 0,
+      applyAtMs: 75,
       target: { itemId: 'probe' },
+      causeEventId: 'event-1',
       operations: [{
         eventId: 'event-1',
         eventName: 'probe:run',
@@ -109,7 +110,7 @@ describe('V1 - component service animation operations', () => {
       }],
     })).toEqual({ ok: true })
 
-    expect(renderer.tick(0)).toMatchObject({
+    expect(renderer.tick(75)).toMatchObject({
       appliedCommitCount: 1,
       appliedActionCount: 1,
       animationAppliedCount: 1,
@@ -117,6 +118,7 @@ describe('V1 - component service animation operations', () => {
     expect(contexts[0]).toMatchObject({
       eventId: 'event-1',
       eventName: 'probe:run',
+      eventMs: 75,
       eventSeq: 1,
       listenerId: 'probe',
       persoId: 'probe',

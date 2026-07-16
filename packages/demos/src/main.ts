@@ -9,6 +9,7 @@ import { runQuizReferenceDemo } from './codplay/quiz-reference-demo'
 import { runQuizSeriesDemo } from './codplay/quiz-series-demo'
 import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
+import { runAvatarMoodTransitionDemo } from './codplay/avatar-mood-transition-demo'
 import { runRiveCoachDemo } from './codplay/rive-coach-demo'
 import { runChronoDemo } from './codplay/chrono-demo'
 import { runQuizHuntDemo } from './codplay/quiz-hunt-demo'
@@ -36,6 +37,7 @@ switch (demoName) {
 	case 'carousel':        void runCarouselDemo(); break
 	case 'replace-carousel': void runReplaceCarouselDemo(); break
 	case 'avatar-poc-1':    void runAvatarPoc1Demo(); break
+	case 'avatar-mood-transition': void runAvatarMoodTransitionDemo(); break
 	case 'rive-coach':      void runRiveCoachDemo(); break
 	case 'threejs-anime-grid': void runThreejsAnimeGridDemo(); break
 	case 'mashup-rive-three-quiz': void runMashupRiveThreeQuizDemo(); break

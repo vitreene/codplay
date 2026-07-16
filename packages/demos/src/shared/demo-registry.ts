@@ -13,6 +13,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "preload-media", label: "Preload Media", href: "?demo=preload-media" },
   { id: "replace-carousel", label: "Replace Carousel", href: "?demo=replace-carousel" },
   { id: "avatar-poc-1", label: "Avatar 3D", href: "?demo=avatar-poc-1" },
+  { id: "avatar-mood-transition", label: "Avatar Mood", href: "?demo=avatar-mood-transition" },
   { id: "rive-coach", label: "Rive lip-sync", href: "?demo=rive-coach" },
   { id: "threejs-anime-grid", label: "animation 3D", href: "?demo=threejs-anime-grid" },
   { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "?demo=mashup-rive-three-quiz" },

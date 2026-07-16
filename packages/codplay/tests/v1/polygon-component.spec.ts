@@ -68,6 +68,7 @@ describe('V1 - polygon core component', () => {
     component.update({
       persoId: 'polygon-demo',
       eventId: 'polygon:heptagone',
+      eventMs: 0,
       eventSeq: 1,
       action: {
         className: 'polygon-shape is-updated',

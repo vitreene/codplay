@@ -6,7 +6,7 @@ export function runAvatarPoc1Demo(): Promise<void> {
   return runCodPlaySceneDemo({
     title: 'Avatar 3D',
     subtitle:
-      'Avatar 3D piloté exclusivement par CodPlay — visèmes, geste, gaze, idle strap, tick Three.js via renderAdapter.',
+      'Avatar 3D piloté par CodPlay — visèmes continus, gestes, gaze, idle et motions sémantiques intégrées.',
     scene: createAvatarPocScene(),
     activeDemo: 'avatar-poc-1',
     bindings: [createAvatar3DBinding()],

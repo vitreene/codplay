@@ -10,8 +10,8 @@ export type { MoodName } from './expression-engine.js'
 export { MOOD_BASELINES } from './expression-engine.js'
 
 export { GestureEngine } from './gesture-engine.js'
-export type { Rng, ResolvedPose, GestureTemplate } from './gesture-engine.js'
-export { GESTURE_TEMPLATES } from './gesture-engine.js'
+export type { Rng, ResolvedPose, GestureTemplate, BodyPoseTemplate } from './gesture-engine.js'
+export { GESTURE_TEMPLATES, POSE_TEMPLATES } from './gesture-engine.js'
 
 export { buildModelInstance } from './model-loader.js'
 export type { LoadedModel, ModelLoaderOptions, RetargetConfig } from './model-loader.js'

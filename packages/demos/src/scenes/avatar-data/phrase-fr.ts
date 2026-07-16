@@ -1,3 +1,5 @@
+import { RHUBARB_TO_TALKING_HEAD_VISEME, type RhubarbVisemeCode } from './rhubarb-viseme-map'
+
 export interface WordCue {
   word: string
   startMs: number
@@ -75,23 +77,12 @@ export const speakAudioFR = {
   wdurations: phraseWordsFR.map(w => w.durationMs),
 }
 
-// ── Phonèmes Preston Blair → visèmes TalkingHead ──────────────────────────────
-// Mapping conforme au plan Phase 3 (docs/formalisation/2026-06-11-avatar3d-poc-implementation-plan.md)
-// null = silence/neutre → entrée ignorée, la bouche revient à zéro entre les phonèmes actifs
+// ── Rhubarb mouth shapes → visèmes TalkingHead ────────────────────────────────
+// A-H, X are Rhubarb mouth-shape codes. X = silence/neutral.
 
-export const PRESTON_TO_TH: Record<string, string | null> = {
-  A: 'PP',   // bilabial fermé        (poids 0.9 dans TH)
-  B: null,   // repos / neutre        (saut — bouche neutre)
-  C: 'aa',   // bouche ouverte "ah"
-  D: 'aa',   // schwa ≈ aa
-  E: 'E',    // voyelle antérieure
-  F: 'O',    // voyelle arrondie
-  G: 'FF',   // labiodental           (poids 0.9 dans TH)
-  H: 'DD',   // dental/alvéolaire
-  X: null,   // silence               (saut)
-}
+export const PRESTON_TO_TH = RHUBARB_TO_TALKING_HEAD_VISEME
 
-export const MOUTH_CUES: Array<{ start: number; end: number; value: string }> = [
+export const MOUTH_CUES: Array<{ start: number; end: number; value: RhubarbVisemeCode }> = [
   { start: 0.0,   end: 0.08,  value: 'X' }, { start: 0.08,  end: 0.15,  value: 'B' },
   { start: 0.15,  end: 0.29,  value: 'F' }, { start: 0.29,  end: 0.5,   value: 'B' },
   { start: 0.5,   end: 0.57,  value: 'E' }, { start: 0.57,  end: 0.71,  value: 'B' },

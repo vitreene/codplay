@@ -204,8 +204,10 @@ export class TweenRunner implements RenderAdapter, ContinuousAnimationEngine {
         component?.update({
           persoId: tween.persoId,
           eventId: tween.eventId,
+          eventMs: tween.startMs,
           eventSeq: 0,
           action: output,
+          isSeekReplay: isSeek,
         })
       }
 

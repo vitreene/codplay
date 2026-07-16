@@ -462,6 +462,7 @@ export class RendererFacade implements RendererApi {
       const routed = this.orchestrator.routeUpdates(
         conflictResolution.resolvedMutations.map((resolvedAction) => ({
           resolvedAction,
+          eventMs: eventMsByEventId.get(resolvedAction.eventId) ?? 0,
           eventSeq: eventSeqByEventId.get(resolvedAction.eventId) ?? 0,
           isSeekReplay: isSeekReplayByEventId.get(resolvedAction.eventId) === true
         }))

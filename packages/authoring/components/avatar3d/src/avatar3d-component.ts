@@ -36,8 +36,8 @@ function mulberry32(seed: number): () => number {
  */
 export function createHeadDriftFn(): HeadDriftFn {
   return ({ elapsed }) => ({
-    headRotateX: Math.sin(elapsed * 0.00032) * 0.10 + Math.sin(elapsed * 0.00071) * 0.04,
-    headRotateY: Math.sin(elapsed * 0.00051) * 0.14 + Math.sin(elapsed * 0.00087) * 0.06,
+    headRotateX: Math.sin(elapsed * 0.00032) * 0.025 + Math.sin(elapsed * 0.00071) * 0.01,
+    headRotateY: Math.sin(elapsed * 0.00051) * 0.035 + Math.sin(elapsed * 0.00087) * 0.015,
   })
 }
 
@@ -84,7 +84,23 @@ export function createBreathTriggerFn(): BreathTriggerFn {
 
 export const ALL_VISEMES = [
   'PP', 'FF', 'TH', 'DD', 'kk', 'CH', 'SS', 'nn', 'RR', 'aa', 'E', 'I', 'O', 'U',
+  'sil',
 ] as const
+
+/** Resolves an optional continuous action end time, prioritizing absolute endMs. */
+export function resolveContinuousEndMs(action: Record<string, unknown>, eventMs: number): number | null {
+  const endMs = action['endMs']
+  if (typeof endMs === 'number' && Number.isFinite(endMs)) {
+    return endMs
+  }
+
+  const durationMs = action['durationMs']
+  if (typeof durationMs === 'number' && Number.isFinite(durationMs)) {
+    return eventMs + durationMs
+  }
+
+  return null
+}
 
 export type ActionHandler = (action: Record<string, unknown>, eventSeq: number) => void
 

@@ -94,6 +94,9 @@ export type AvatarEngine = {
   /** Transition to a mood, updating morph baselines. */
   setMood(name: MoodName): void
 
+  /** Transition to a TH body pose baseline. Gestures release back to this pose. */
+  setPose(name: string): boolean
+
   /**
    * Start an eased transition to a named gesture pose.
    * @param name - Key from GESTURE_TEMPLATES ("handup", "shrug", etc.)
@@ -148,12 +151,12 @@ export type AvatarEngine = {
  * Values are ABSOLUTE (not deltas). Rest rotations are captured at construction.
  */
 function createBoneCallback(boneMap: Map<string, Object3D>): { callback: BoneCallback; dispose: () => void } {
-  interface BoneRest { bone: Object3D; rx: number; ry: number; rz: number }
+  interface BoneRest { bone: Object3D; rx: number; ry: number; rz: number; sx: number; sy: number; sz: number }
 
   function capture(name: string): BoneRest | null {
     const b = boneMap.get(name)
     if (!b) return null
-    return { bone: b, rx: b.rotation.x, ry: b.rotation.y, rz: b.rotation.z }
+    return { bone: b, rx: b.rotation.x, ry: b.rotation.y, rz: b.rotation.z, sx: b.scale.x, sy: b.scale.y, sz: b.scale.z }
   }
 
   const head    = capture('Head')
@@ -241,7 +244,8 @@ function createBoneCallback(boneMap: Map<string, Object3D>): { callback: BoneCal
         break
       }
       case 'chestInhale':
-        // Chest scale via Spine — skipped, no visual bones available here
+        if (spine1) spine1.bone.scale.set(spine1.sx, spine1.sy + value * 0.04, spine1.sz)
+        else if (spine) spine.bone.scale.set(spine.sx, spine.sy + value * 0.04, spine.sz)
         break
     }
   }
@@ -345,6 +349,10 @@ export function createAvatarEngine(opts: AvatarEngineOptions = {}): AvatarEngine
 
     setMood(name) {
       expressionEngine.setMood(name)
+    },
+
+    setPose(name) {
+      return gestureEngine?.setBodyPose(name) ?? false
     },
 
     playGesture(name, rng) {

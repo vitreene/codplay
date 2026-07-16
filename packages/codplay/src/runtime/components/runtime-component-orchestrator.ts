@@ -38,6 +38,7 @@ import type {
   RuntimeModuleHost,
   RuntimeModuleRuntimeBinding,
   RuntimeRegistrySnapshot,
+  RuntimeComponentUpdateInput,
   RuntimeResolvedUpdate,
   RuntimeUpdateRoutingResult,
   ServiceRegisterInput,
@@ -663,11 +664,13 @@ export class RuntimeComponentOrchestrator {
     }
 
     const moveDecision = input.moveDecision ?? null;
+    const eventMs = input.update.eventMs ?? 0;
     const hookOutput: RuntimeModuleHookOutput = { directTransitions: [] };
     const serviceOutput: RuntimeServiceOutput = { animationOperations: [] };
     const serviceContext: ServiceApplyContext = {
       eventId: input.update.resolvedAction.eventId,
       eventName: input.update.resolvedAction.eventName,
+      eventMs,
       eventSeq: input.update.eventSeq,
       listenerId: input.update.resolvedAction.listenerId,
       persoId: targetPersoId,
@@ -688,8 +691,10 @@ export class RuntimeComponentOrchestrator {
       !this.tryUpdateComponent(component, {
         persoId: targetPersoId,
         eventId: input.update.resolvedAction.eventId,
+        eventMs,
         eventSeq: input.update.eventSeq,
         action: input.update.resolvedAction.action as Record<string, unknown>,
+        isSeekReplay: input.update.isSeekReplay,
         serviceContext,
       })
     ) {
@@ -752,13 +757,7 @@ export class RuntimeComponentOrchestrator {
    */
   private tryUpdateComponent(
     component: RuntimeComponent,
-    input: {
-      persoId: string;
-      eventId: string;
-      eventSeq: number;
-      action: Record<string, unknown>;
-      serviceContext?: ServiceApplyContext;
-    },
+    input: RuntimeComponentUpdateInput,
   ): boolean {
     try {
       component.update(input);

@@ -29,8 +29,10 @@ export type RuntimeComponentWarningReporter = (warning: RuntimeComponentWarning)
 export type RuntimeComponentUpdateInput = {
   persoId: string
   eventId: string
+  eventMs: number
   eventSeq: number
   action: Record<string, unknown>
+  isSeekReplay?: boolean
   serviceContext?: ServiceApplyContext
 }
 
@@ -188,6 +190,7 @@ export type ServiceRegistryApi = {
  */
 export type RuntimeResolvedUpdate = {
   resolvedAction: AnimationResolvedAction
+  eventMs?: number
   eventSeq: number
   isSeekReplay?: boolean
 }

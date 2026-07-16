@@ -1,4 +1,5 @@
 import type { MoodName, RetargetConfig } from '@codplay/avatar-engine'
+import type { Avatar3DMotionCatalog } from './semantic-motion/avatar3d-motion-types.js'
 
 /**
  * Declarative config for the 'avatar3d' perso type — read from perso.initial.
@@ -19,7 +20,9 @@ export type Avatar3DInitial = {
   retarget?: RetargetConfig
   /** Initial mood (expression baselines). Default: 'neutral' */
   mood?: MoodName
-  /** Max viseme morph weight. Default: 0.75 */
+  /** Local semantic motion catalog, resolved before any future built-in catalog. */
+  motions?: Avatar3DMotionCatalog
+  /** Global multiplier for TalkingHead viseme weights. Default: 1. */
   visemeWeight?: number
   /** Canvas size in CSS pixels. Default: 600x600 */
   width?: number
@@ -30,6 +33,8 @@ export type Avatar3DInitial = {
     position?: { x?: number; y?: number; z?: number }
     lookAt?: { x?: number; y?: number; z?: number }
   }
+  /** Optional model yaw in radians, used for controlled three-quarter framing. */
+  modelRotationY?: number
   /** Generic cross-component reparenting, consumed by the runtime orchestrator. */
   move?: { parentId: string }
 }

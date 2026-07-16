@@ -12,5 +12,5 @@
       "three/*": ["../../../../../timeline/node_modules/@types/three/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../../codplay/src/types/typed-om-polyfill.d.ts"]
 }

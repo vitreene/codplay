@@ -15,6 +15,7 @@ export type RuntimeServiceOutput = {
 export type ServiceApplyContext = {
   eventId: string
   eventName: string
+  eventMs: number
   eventSeq: number
   listenerId: string
   persoId: string
