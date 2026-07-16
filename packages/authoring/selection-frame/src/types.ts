@@ -1,5 +1,6 @@
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import type { AuthorApi } from './author-api'
+import type { TrackedTarget } from './tracked-session'
 
 /**
  * Raw move delta emitted by the cs, in local element space, rounded to whole pixels.
@@ -139,6 +140,17 @@ export type SelectionFrameOptions = {
   itemId?: string
   /** Author-mode access surface to the player (v1-author-api-spec). */
   authorApi: AuthorApi
+  /**
+   * Shares the node-tracking anchor for `itemId` with another module
+   * watching the same id (typically `LibreAdapter`, co-constructed by the
+   * same caller — `2026-07-16-authoring-shared-tracking-layer-plan.md` §3,
+   * Étape 2: "une seule session... transmise aux deux" instead of two
+   * independent `subscribeToNode` calls on the same id). Built internally
+   * when absent (standalone/test usage, and always for create mode's later
+   * `attachItem` handoff — see there). Ignored when `creation` is provided,
+   * since there is no `itemId` yet at construction time.
+   */
+  anchor?: TrackedTarget
   /** Scene mount container — reference for the overlay layer. */
   sceneRoot: Element
   /** Transposition of raw deltas into CSS mutations. Required unless `creation` is provided. */

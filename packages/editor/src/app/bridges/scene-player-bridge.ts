@@ -1,6 +1,6 @@
 import type { Actor } from 'xstate'
 import { CodPlay } from 'codplay/creator'
-import { createAuthorApi, createLibreAdapter, createSelectionFrame } from '@codplay/selection-frame'
+import { createAuthorApi, createLibreAdapter, createMinimalAnchor, createSelectionFrame } from '@codplay/selection-frame'
 import type { AuthorApi, SelectionFrameHandle } from '@codplay/selection-frame'
 import type { SceneDoc } from 'codplay/player/types'
 import { buildSceneDoc } from '../../builder/build-scene'
@@ -119,15 +119,20 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     frame?.destroy()
     frame = null
     let persistTimer: ReturnType<typeof setTimeout> | null = null
-    let node: HTMLElement | null = null
     const itemId = itemIds[0]
     if (itemId && authorApi) {
-      const unsubscribeNode = authorApi.subscribeToNode(itemId, (next) => {
-        node = next instanceof HTMLElement ? next : null
-      })
+      // One shared anchor for this itemId, handed to both LibreAdapter and
+      // SelectionFrame (and used directly here for persistOffset's own node
+      // read) instead of three independent subscribeToNode calls on the same
+      // id — `2026-07-16-authoring-shared-tracking-layer-plan.md` §3, Étape
+      // 2. scene-player-bridge.ts is the sole owner: destroyed in
+      // frame.destroy below, never by the adapter/frame that borrow it.
+      const anchor = createMinimalAnchor({ authorApi, persoIds: [itemId] })
       const persistOffset = (): void => {
         const { scene, selection, referenceWidthPx } = machine.getSnapshot().context
-        if (!scene || !node || referenceWidthPx <= 0) return
+        if (!scene || !anchor.canAct() || referenceWidthPx <= 0) return
+        const node = anchor.getNode(itemId)
+        if (!(node instanceof HTMLElement)) return
         const decorId = resolveTargetDecorId(scene, selection)
         if (!decorId) return
         const current = readCurrentOffsetPx(node)
@@ -146,6 +151,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       const adapter = createLibreAdapter({
         authorApi,
         itemId,
+        anchor,
         // Application DOM déjà immédiate (adapter lui-même) — ici seulement la persistance
         // document, debattue pour ne pas écrire à chaque micro-pas de pointermove.
         onApplied: () => {
@@ -153,11 +159,11 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
           persistTimer = setTimeout(persistOffset, 250)
         },
       })
-      frame = createSelectionFrame({ itemId, authorApi, sceneRoot: mountTarget, adapter })
+      frame = createSelectionFrame({ itemId, authorApi, anchor, sceneRoot: mountTarget, adapter })
       const frameDestroy = frame.destroy.bind(frame)
       frame.destroy = () => {
         if (persistTimer !== null) clearTimeout(persistTimer)
-        unsubscribeNode()
+        anchor.destroy()
         frameDestroy()
       }
     }

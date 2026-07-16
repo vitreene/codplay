@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 
 import type { AuthorApi } from '../src/author-api'
 import { createSelectionFrame } from '../src/selection-frame'
 import { createMultiSelectionFrame } from '../src/multi-selection-frame'
+import { createMinimalAnchor } from '../src/tracked-session'
 import type { CsValueAdapter } from '../src/types'
 
 function temp__createGridArtifact(rows: number, cols: number): AutoCapsuleGridArtifact {
@@ -54,8 +55,21 @@ if (typeof document.elementsFromPoint !== 'function') {
 }
 
 /**
- * AuthorApi stub with controllable node lifecycle per persoId.
+ * AuthorApi stub with controllable node lifecycle per persoId. `emitNode`
+ * auto-attaches a non-null Element to `document.body` when not already
+ * connected — "emitting a node" represents the item becoming live/mounted,
+ * and `canAct()` (`tracked-session.ts`) now correctly requires real
+ * connectedness before `SelectionFrame` acts on it (the guard this whole
+ * migration exists for). Centralized here rather than in each of this
+ * file's ~30 call sites — `temp__cleanupEmittedNodes` (afterEach below)
+ * removes them again so tests stay isolated from one another.
  */
+const temp__emittedNodes = new Set<Element>()
+function temp__cleanupEmittedNodes(): void {
+  for (const node of temp__emittedNodes) node.remove()
+  temp__emittedNodes.clear()
+}
+
 function temp__createAuthorApiStub(): AuthorApi & {
   emitNode: (persoId: string, node: Element | null) => void
 } {
@@ -79,11 +93,19 @@ function temp__createAuthorApiStub(): AuthorApi & {
     },
     getPlayerState: () => ({ isPlaying: false }),
     emitNode(persoId, node) {
+      if (node !== null && !node.isConnected) {
+        document.body.appendChild(node)
+        temp__emittedNodes.add(node)
+      }
       current.set(persoId, node)
       for (const cb of subscribers.get(persoId) ?? []) cb(node)
     }
   }
 }
+
+afterEach(() => {
+  temp__cleanupEmittedNodes()
+})
 
 function temp__createNoopAdapter(): CsValueAdapter {
   return { applyMove: () => {}, applyResize: () => {}, applyRotate: () => {}, applyScale: () => {} }
@@ -123,6 +145,70 @@ describe('createSelectionFrame', () => {
     expect(cs!.style.display).not.toBe('none')
 
     handle.destroy()
+  })
+
+  it('stays hidden while the node is present but not yet connected — the guard this session layer exists for', () => {
+    // Raw stub, deliberately NOT the auto-attaching temp__createAuthorApiStub:
+    // this test needs a node codplay's own render pass has created but not
+    // yet attached (see tracked-nodes.ts / 2026-07-16-gesture-rebuild-
+    // ordering-plan.md §1.2-1.3) — the exact premature notification that
+    // used to make positionCs() run unconditionally.
+    let deliver: ((node: Element | null) => void) | null = null
+    const authorApi: AuthorApi = {
+      subscribeToNode: (_persoId, cb) => {
+        deliver = cb
+        cb(null)
+        return () => {
+          deliver = null
+        }
+      },
+      subscribeToPlayerState: (cb) => {
+        cb({ isPlaying: false })
+        return () => {}
+      },
+      getPlayerState: () => ({ isPlaying: false })
+    }
+
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter()
+    })
+    const cs = temp__csRoot('item-1')!
+
+    const detached = document.createElement('div')
+    deliver!(detached)
+    expect(cs.style.display).toBe('none')
+
+    // The corrective notification that always follows once codplay actually
+    // attaches the tree — same node object, now connected.
+    document.body.appendChild(detached)
+    deliver!(detached)
+    expect(cs.style.display).not.toBe('none')
+
+    handle.destroy()
+    detached.remove()
+  })
+
+  it('uses a shared anchor when given one (same instance as LibreAdapter, scene-player-bridge.ts::selectItem), and never destroys it', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const anchor = createMinimalAnchor({ authorApi, persoIds: ['item-1'] })
+    const handle = createSelectionFrame({
+      itemId: 'item-1',
+      authorApi,
+      anchor,
+      sceneRoot: document.body,
+      adapter: temp__createNoopAdapter()
+    })
+
+    authorApi.emitNode('item-1', document.createElement('div'))
+    expect(temp__csRoot('item-1')!.style.display).not.toBe('none')
+
+    handle.destroy()
+    // Still usable after the frame that borrowed it is gone — owned by the caller.
+    expect(anchor.canAct()).toBe(true)
+    anchor.destroy()
   })
 
   it('never calibrates the cs while it is display:none on first attach (same path attachItem uses for a synchronously-resolved node)', () => {

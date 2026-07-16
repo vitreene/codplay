@@ -11,6 +11,7 @@ import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
 import type { AutoCapsuleGridArtifact } from '@codplay/capsule-automation'
 import { csMachine } from './machine'
 import { bindGestureSession } from './gesture-session'
+import { createMinimalAnchor, type TrackedTarget } from './tracked-session'
 import { CHARACTERISTIC_POINTS, HANDLE_SIZE_PX, OPPOSITE_POINT, createHandleNode } from './handle-geometry'
 import type { HandleId } from './handle-geometry'
 import type { GridTrackGeometry } from './grid-geometry'
@@ -1509,8 +1510,20 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     if (node instanceof HTMLElement) {
       elementNode = node
       actor.send({ type: 'NODE_APPEARED' })
-      positionCs()
-      observeElement(node)
+      // Reposition/observe only once the shared anchor confirms the node is
+      // actually connected — never on the raw presence alone. codplay's own
+      // render pass routinely notifies with a not-yet-connected node (see
+      // `tracked-nodes.ts`); acting on it here is exactly the race this
+      // migration closes (`2026-07-16-gesture-rebuild-ordering-plan.md`
+      // §1.2-1.3 — `positionCs()` used to run unconditionally on this same
+      // premature notification). The corrective notification that always
+      // follows (once the tree is attached) re-enters this same branch with
+      // `canAct()` true and positions it then — nothing is lost, only
+      // deferred by the one tick codplay itself needs.
+      if (anchor?.canAct() ?? false) {
+        positionCs()
+        observeElement(node)
+      }
     } else {
       elementNode = null
       pose = null
@@ -1520,10 +1533,33 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     applyMachineState()
   }
 
-  // In create mode there is no itemId yet — the subscription starts only
-  // once attachItem hands off a real one.
+  let anchor: TrackedTarget | null = null
+  let ownsAnchor = false
+  let unsubscribeAnchor: (() => void) | null = null
+
+  /**
+   * Builds (or reuses a caller-shared) anchor for `itemId` and wires
+   * `handleElementNode` to it — replaces the direct
+   * `authorApi.subscribeToNode(itemId, handleElementNode)` this file used to
+   * open on its own. Used both at construction and by `attachItem` (create
+   * mode's handoff to a real item never has an externally-shared anchor to
+   * reuse — nothing else is watching this itemId yet at that point).
+   */
+  const attachAnchor = (itemId: string, shared?: TrackedTarget): (() => void) => {
+    ownsAnchor = shared === undefined
+    anchor = shared ?? createMinimalAnchor({ authorApi: options.authorApi, persoIds: [itemId] })
+    unsubscribeAnchor = anchor.subscribe(() => handleElementNode(anchor!.getNode(itemId)))
+    return () => {
+      unsubscribeAnchor?.()
+      if (ownsAnchor) anchor?.destroy()
+      anchor = null
+    }
+  }
+
+  // In create mode there is no itemId yet — the anchor/subscription starts
+  // only once attachItem hands off a real one.
   let unsubscribeElement: (() => void) | null =
-    options.itemId !== undefined ? options.authorApi.subscribeToNode(options.itemId, handleElementNode) : null
+    options.itemId !== undefined ? attachAnchor(options.itemId, options.anchor) : null
 
   const unsubscribeContainer =
     options.containerId !== undefined
@@ -1663,7 +1699,10 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       creationSurface = null
       actor.send({ type: 'ITEM_ATTACHED' })
       applyMachineState()
-      unsubscribeElement = options.authorApi.subscribeToNode(input.itemId, handleElementNode)
+      // Always a freshly built anchor: nothing else is watching this itemId
+      // yet at the moment create mode hands off (unlike the constructor
+      // path, which may receive one shared by the caller).
+      unsubscribeElement = attachAnchor(input.itemId)
     }
   }
 }

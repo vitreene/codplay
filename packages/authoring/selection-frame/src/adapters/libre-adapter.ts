@@ -1,5 +1,6 @@
 import type { AuthorApi } from '../author-api'
 import { captureNodeOwnMatrix } from '../overlay-pose'
+import { createMinimalAnchor, type TrackedTarget } from '../tracked-session'
 import type { CsRawMoveDiff, CsRawRotateDiff, CsRawScaleDiff, CsRawSizeDiff, CsValueAdapter } from '../types'
 
 export type LibreAdapterMode = 'translate' | 'top-left'
@@ -7,6 +8,16 @@ export type LibreAdapterMode = 'translate' | 'top-left'
 export type LibreAdapterOptions = {
   authorApi: AuthorApi
   itemId: string
+  /**
+   * Shares the node-tracking anchor with another module watching the same
+   * `itemId` (typically `SelectionFrame`, co-constructed by the same caller
+   * — `2026-07-16-authoring-shared-tracking-layer-plan.md` §3, Étape 2:
+   * "une seule session... transmise aux deux" instead of two independent
+   * `subscribeToNode` calls on the same id). Built internally when absent
+   * (standalone/test usage) — either way this adapter never owns/destroys an
+   * anchor it didn't build itself (see `destroy()`).
+   */
+  anchor?: TrackedTarget
   /**
    * 'translate' (default) mutates the individual CSS `translate` property and
    * never affects layout. 'top-left' is only meaningful when the element is
@@ -60,15 +71,15 @@ function readLocalDims(node: HTMLElement): { w: number; h: number } {
  * safe read for this one-time re-pin (never used for the running deltas themselves — those still
  * read the inline value, now guaranteed already px by this call).
  *
- * Skipped while the node is not yet attached (`isConnected === false`): codplay resolves cqw
- * against its scene-root node during the same synchronous loadPersos pass that creates this node,
- * before the scene root itself is inserted into the document — a transient, expected `0px`/raw-cqw
- * state, corrected by the seek that scene-player-bridge.ts always runs right after every rebuild.
- * Pinning during that window would freeze the transient value in place before that corrective seek
- * — confirmed live: a `width:0px` written here survives past the following correct seek write.
+ * The caller (the tracked anchor's `subscribe`, below) gates every call on `canAct()` — never called
+ * while the node is absent or not yet connected. codplay resolves `cqw` against its scene-root node
+ * during the same synchronous `loadPersos` pass that creates this node, before the scene root itself
+ * is inserted into the document — a transient, expected `0px`/raw-cqw state, corrected by the seek
+ * that `scene-player-bridge.ts` always runs right after every rebuild. Pinning during that window
+ * would freeze the transient value in place before that corrective seek — confirmed live: a
+ * `width:0px` written here survives past the following correct seek write.
  */
 function pinToResolvedPx(node: HTMLElement): void {
-  if (!node.isConnected) return
   const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
   if (!computed) return
   const translateRaw = computed.translate
@@ -119,18 +130,31 @@ function applyRotationOrigin(node: HTMLElement, origin: { fx: number; fy: number
 
 /**
  * Free-placement adapter: applies raw pixel deltas straight onto the element.
+ * Node lifecycle and the "safe to act" decision come from the shared
+ * ancrage minimal (`tracked-session.ts` — `2026-07-16-authoring-shared-
+ * tracking-layer-plan.md` §2.1): this adapter has no gesture of its own to
+ * declare, only a question to ask (`canAct()`) before each apply call —
+ * replaces this file's own former `node`/`subscribeToNode` closure.
  */
 export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
   const mode: LibreAdapterMode = options.mode ?? 'translate'
-  let node: HTMLElement | null = null
+  const ownsAnchor = options.anchor === undefined
+  const anchor = options.anchor ?? createMinimalAnchor({ authorApi: options.authorApi, persoIds: [options.itemId] })
 
-  const unsubscribe = options.authorApi.subscribeToNode(options.itemId, (next) => {
-    node = next instanceof HTMLElement ? next : null
+  const getActiveNode = (): HTMLElement | null => {
+    if (!anchor.canAct()) return null
+    const node = anchor.getNode(options.itemId)
+    return node instanceof HTMLElement ? node : null
+  }
+
+  const unsubscribe = anchor.subscribe(() => {
+    const node = getActiveNode()
     if (node !== null) pinToResolvedPx(node)
   })
 
   return {
     applyMove(raw: CsRawMoveDiff): void {
+      const node = getActiveNode()
       if (node === null) return
       if (mode === 'translate') {
         const current = readTranslate(node)
@@ -143,6 +167,7 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     },
 
     applyResize(raw: CsRawSizeDiff): void {
+      const node = getActiveNode()
       if (node === null) return
       // Local dimensions from inline/computed styles and offsets — never from
       // getBoundingClientRect (transform-dependent AABB).
@@ -155,6 +180,7 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     },
 
     applyRotate(raw: CsRawRotateDiff): void {
+      const node = getActiveNode()
       if (node === null) return
       if (raw.origin !== undefined) {
         applyRotationOrigin(node, raw.origin)
@@ -165,6 +191,7 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     },
 
     applyScale(raw: CsRawScaleDiff): void {
+      const node = getActiveNode()
       if (node === null) return
       const parts = (node.style.scale === '' || node.style.scale === 'none' ? '1 1' : node.style.scale)
         .split(/\s+/)
@@ -177,7 +204,11 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
 
     destroy(): void {
       unsubscribe()
-      node = null
+      // Only tear down an anchor this adapter built itself — a shared anchor
+      // (options.anchor) is owned by whoever constructed it (typically the
+      // same caller that also handed it to SelectionFrame) and outlives this
+      // adapter's own destroy().
+      if (ownsAnchor) anchor.destroy()
     }
   }
 }

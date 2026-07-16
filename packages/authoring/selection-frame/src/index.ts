@@ -7,6 +7,15 @@ export { createMultiSelectionFrame } from './multi-selection-frame'
 export { csMachine, DEFAULT_CAPABILITIES } from './machine'
 export type { CsMachineContext, CsMachineEvent } from './machine'
 
+export { createTrackedNodes } from './tracked-nodes'
+export type { TrackedNodes } from './tracked-nodes'
+
+export { createGestureLifecycleMachine } from './gesture-lifecycle-machine'
+export type { GestureKindConfig } from './gesture-lifecycle-machine'
+
+export { createMinimalAnchor, createTrackedSession } from './tracked-session'
+export type { MinimalAnchorOptions, TrackedSession, TrackedSessionOptions, TrackedTarget } from './tracked-session'
+
 export { createLibreAdapter } from './adapters/libre-adapter'
 export type { LibreAdapter, LibreAdapterMode, LibreAdapterOptions } from './adapters/libre-adapter'
 

@@ -55,6 +55,15 @@ export type GestureSessionHandle = {
   unbind: () => void
   /** Whether a session is currently in flight on this target. */
   isActive: () => boolean
+  /**
+   * External abort — for a tracked session (`tracked-session.ts`) whose
+   * `onSuspend` fires because the node disappeared mid-gesture, independent
+   * of the native pointer event stream (`2026-07-16-authoring-shared-
+   * tracking-layer-plan.md` §2.5). Treated like `pointercancel`: a genuine
+   * interruption (`apply = false`), never a completed gesture. A no-op when
+   * no session is in flight — safe to call unconditionally.
+   */
+  abort: () => void
 }
 
 /**
@@ -130,6 +139,7 @@ export function bindGestureSession<S>(
       targetNode.removeEventListener('pointercancel', onPointerCancel)
       targetNode.removeEventListener('lostpointercapture', onLostPointerCapture)
     },
-    isActive: () => session !== null
+    isActive: () => session !== null,
+    abort: () => end(false, null)
   }
 }

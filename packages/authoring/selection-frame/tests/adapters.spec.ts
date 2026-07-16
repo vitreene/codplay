@@ -7,6 +7,7 @@ import type { AuthorApi } from '../src/author-api'
 import { createLibreAdapter } from '../src/adapters/libre-adapter'
 import { createFlexAdapter, FLEX_POINT_ALIGNMENT } from '../src/adapters/flex-adapter'
 import { createGridPlacementAdapter } from '../src/adapters/grid-placement-adapter'
+import { createMinimalAnchor } from '../src/tracked-session'
 
 function temp__createAuthorApiStub(node: Element | null): AuthorApi {
   return {
@@ -34,6 +35,7 @@ function temp__createGridArtifact(rows: number, cols: number): AutoCapsuleGridAr
 describe('LibreAdapter', () => {
   it('accumulates move deltas on the translate property by default', () => {
     const node = document.createElement('div')
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
 
     adapter.applyMove({ dx: 10, dy: 5 })
@@ -41,29 +43,37 @@ describe('LibreAdapter', () => {
 
     adapter.applyMove({ dx: -3, dy: 7 })
     expect(node.style.translate).toBe('7px 12px')
+
+    node.remove()
   })
 
   it('mutates top/left in top-left mode', () => {
     const node = document.createElement('div')
     node.style.left = '100px'
     node.style.top = '50px'
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a', mode: 'top-left' })
 
     adapter.applyMove({ dx: 20, dy: -10 })
     expect(node.style.left).toBe('120px')
     expect(node.style.top).toBe('40px')
     expect(node.style.translate).toBe('')
+
+    node.remove()
   })
 
   it('applies resize deltas onto style width/height', () => {
     const node = document.createElement('div')
     node.style.width = '200px'
     node.style.height = '100px'
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
 
     adapter.applyResize({ dw: 30, dh: -20 })
     expect(node.style.width).toBe('230px')
     expect(node.style.height).toBe('80px')
+
+    node.remove()
   })
 
   it('does nothing when the node is absent (suspended)', () => {
@@ -71,8 +81,39 @@ describe('LibreAdapter', () => {
     expect(() => adapter.applyMove({ dx: 5, dy: 5 })).not.toThrow()
   })
 
+  it('does nothing when the node is present but not yet connected — the guard this session layer exists for', () => {
+    // A node codplay's render() has created but not yet attached (see
+    // libre-adapter.ts::pinToResolvedPx and tracked-nodes.ts) — canAct()
+    // must stay false, applyMove must not touch it.
+    const node = document.createElement('div')
+    node.style.translate = '0px 0px'
+    const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
+
+    adapter.applyMove({ dx: 10, dy: 10 })
+    expect(node.style.translate).toBe('0px 0px')
+  })
+
+  it('uses a shared anchor when given one, and never destroys it (owned by the caller)', () => {
+    const node = document.createElement('div')
+    document.body.appendChild(node)
+    const authorApi = temp__createAuthorApiStub(node)
+    const anchor = createMinimalAnchor({ authorApi, persoIds: ['a'] })
+    const adapter = createLibreAdapter({ authorApi, itemId: 'a', anchor })
+
+    adapter.applyMove({ dx: 10, dy: 5 })
+    expect(node.style.translate).toBe('10px 5px')
+
+    adapter.destroy()
+    // The shared anchor must still work after the adapter that borrowed it is gone.
+    expect(anchor.canAct()).toBe(true)
+
+    anchor.destroy()
+    node.remove()
+  })
+
   it('accumulates rotation deltas on the rotate property', () => {
     const node = document.createElement('div')
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
 
     adapter.applyRotate({ dr: 15 })
@@ -80,6 +121,8 @@ describe('LibreAdapter', () => {
 
     adapter.applyRotate({ dr: -5 })
     expect(node.style.rotate).toBe('10deg')
+
+    node.remove()
   })
 
   it('compensates translate when the rotation origin changes on a rotated element', () => {
@@ -104,6 +147,7 @@ describe('LibreAdapter', () => {
 
   it('transposes the rotation origin into transform-origin', () => {
     const node = document.createElement('div')
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
 
     adapter.applyRotate({ dr: 10, origin: { fx: 0, fy: 1 } })
@@ -113,10 +157,13 @@ describe('LibreAdapter', () => {
     adapter.applyRotate({ dr: 5 })
     expect(node.style.transformOrigin).toBe('0% 100%')
     expect(node.style.rotate).toBe('15deg')
+
+    node.remove()
   })
 
   it('composes scale factors on the scale property', () => {
     const node = document.createElement('div')
+    document.body.appendChild(node)
     const adapter = createLibreAdapter({ authorApi: temp__createAuthorApiStub(node), itemId: 'a' })
 
     adapter.applyScale({ fx: 2, fy: 2 })
@@ -124,6 +171,8 @@ describe('LibreAdapter', () => {
 
     adapter.applyScale({ fx: 0.5, fy: 1 })
     expect(node.style.scale).toBe('1 2')
+
+    node.remove()
   })
 })
 
