@@ -27,8 +27,12 @@ import { childrenOf, findParentClipBounds } from './utils'
  * de deuxième écrivain à distinguer).
  *
  * Champs restés PUREMENT locaux (jamais synchronisés, jamais émis) : `viewport`, `playheadMs`,
- * `isPlaying`, `playRange`, `followPlayhead`, `interaction`, `layoutProfile`, `displayConfig`,
- * `viewMode` — l'éphémère des gestes, qui n'a jamais été le problème.
+ * `playRange`, `followPlayhead`, `interaction`, `layoutProfile`, `displayConfig`, `viewMode` —
+ * l'éphémère des gestes, qui n'a jamais été le problème. `isPlaying` a existé ici (drapeau local
+ * piloté par une simulation de lecture propre à ce module) puis a été retiré
+ * (`2026-07-17-telco-real-transport-plan.md` §Étape C) : le statut de lecture réel vit désormais
+ * dans `TelcoApi` (`codplay`), jamais dupliqué ici — `playheadMs` reste, mais reçu depuis `telco`
+ * (`TELCO.SYNC_PLAYHEAD`), jamais accumulé localement par un tick.
  *
  * `selection.markerId` fait exception : les marqueurs n'ont pas d'équivalent dans le modèle
  * `Selection` central (`{itemIds, keyframeId}` — pas de notion de marqueur sélectionné), donc
@@ -79,7 +83,6 @@ export interface MachineContext {
   scene: EditorScene
   viewport: MachineViewport
   playheadMs: number
-  isPlaying: boolean
   playRange: PlayRange | null
   followPlayhead: boolean
   /** trackId/keyframeId : projection en lecture seule (idem `scene`). markerId : possédé localement. */
@@ -129,10 +132,9 @@ export type SequenceEditorEvent =
   | { type: 'CLIP.DRAW_MOVE'; pointerMs: number }
   | { type: 'CLIP.DRAW_END' }
   | { type: 'PLAYHEAD.SET'; timeMs: number }
-  | { type: 'PLAYHEAD.START_PLAY' }
-  | { type: 'PLAYHEAD.PAUSE' }
-  | { type: 'PLAYHEAD.STOP' }
-  | { type: 'PLAYHEAD.TICK'; deltaMs: number }
+  /** Miroir du statut réel de lecture (`TelcoApi.onProgress`/`.onChange`, `attachTelco` dans `mount.ts`)
+   * — jamais un tick local, jamais d'accumulation ; `timelineMs` vient toujours de `telco`. */
+  | { type: 'TELCO.SYNC_PLAYHEAD'; timelineMs: number }
   | { type: 'VIEWPORT.PAN_START'; pointerPx: number }
   | { type: 'VIEWPORT.PAN_MOVE'; pointerPx: number }
   | { type: 'VIEWPORT.PAN_END' }
@@ -322,6 +324,11 @@ export const sequenceEditorMachine = setup({
     'FOLLOW.TOGGLE': {
       actions: assign(({ context }) => ({ followPlayhead: !context.followPlayhead })),
     },
+    // Miroir telco — valide quel que soit le mode de geste courant (un pan/drag en cours ne doit
+    // pas bloquer la synchronisation du curseur avec la lecture réelle).
+    'TELCO.SYNC_PLAYHEAD': {
+      actions: assign(({ event }) => ({ playheadMs: event.timelineMs })),
+    },
     'VIEWPORT.SCROLL': {
       actions: assign(({ context, event }) => {
         const startMs = clampViewportStart(event.startMs, context.viewport, context.scene.meta.durationMs)
@@ -351,8 +358,8 @@ export const sequenceEditorMachine = setup({
           keyframeId: event.selection.keyframeId ?? null,
           markerId: null,
         },
-        // playheadMs, isPlaying, playRange, followPlayhead, interaction, viewport : jamais touchés —
-        // c'est tout l'objet de la distinction avec SCENE.LOAD (§ note d'en-tête).
+        // playheadMs, playRange, followPlayhead, interaction, viewport : jamais touchés — c'est tout
+        // l'objet de la distinction avec SCENE.LOAD (§ note d'en-tête).
       })),
     },
     // ── Chargement d'un NOUVEAU document — réinitialise tout, y compris playhead/sélection/geste.
@@ -378,7 +385,6 @@ export const sequenceEditorMachine = setup({
       scene: input.scene,
       viewport: { startMs: 0, endMs: viewWidthPx / pixelsPerMs, pixelsPerMs, viewWidthPx, viewHeightPx },
       playheadMs: 0,
-      isPlaying: false,
       playRange: null,
       followPlayhead: false,
       selection: { trackId: null, keyframeId: null, markerId: null },
@@ -561,11 +567,6 @@ export const sequenceEditorMachine = setup({
         'PLAYHEAD.SET': {
           actions: assign(({ context, event }) => ({ playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) })),
         },
-        'PLAYHEAD.STOP': { actions: assign({ isPlaying: false, playheadMs: 0 }) },
-        'PLAYHEAD.START_PLAY': {
-          target: 'playing',
-          actions: assign(({ context }) => ({ isPlaying: true, playheadMs: context.playRange ? context.playRange.inMs : context.playheadMs })),
-        },
 
         'VIEWPORT.PAN_START': {
           target: 'panning',
@@ -708,27 +709,6 @@ export const sequenceEditorMachine = setup({
             type: 'commandBatch' as const,
             commands: [{ name: 'setSceneDuration', args: { durationMs: event.durationMs, source: event.source } }],
           })),
-        },
-      },
-    },
-
-    playing: {
-      on: {
-        'PLAYHEAD.TICK': [
-          {
-            guard: ({ context, event }) => {
-              const stopMs = context.playRange?.outMs ?? context.scene.meta.durationMs
-              return context.playheadMs + event.deltaMs >= stopMs
-            },
-            target: 'idle',
-            actions: assign(({ context }) => ({ isPlaying: false, playheadMs: context.playRange?.outMs ?? context.scene.meta.durationMs })),
-          },
-          { actions: assign(({ context, event }) => ({ playheadMs: context.playheadMs + event.deltaMs })) },
-        ],
-        'PLAYHEAD.PAUSE': { target: 'idle', actions: assign({ isPlaying: false }) },
-        'PLAYHEAD.STOP': { target: 'idle', actions: assign({ isPlaying: false, playheadMs: 0 }) },
-        'PLAYHEAD.SET': {
-          actions: assign(({ context, event }) => ({ playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) })),
         },
       },
     },

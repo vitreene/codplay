@@ -29,6 +29,28 @@ const CS_GESTURE_KINDS = [
  */
 export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor<typeof controllerMachine>): BridgeHandle {
   const studio = new CodPlay({})
+  /**
+   * `TelcoApi` — façade transport (`2026-07-17-telco-real-transport-plan.md` §0) : existe dès la
+   * construction de `studio` (contrairement à `authorApi`, qui a besoin d'un premier rebuild réussi),
+   * jamais recréée. Référence locale utilisée directement par ce pont (le handler `seek` ci-dessous,
+   * le statut de lecture pour le CS) ; publiée aussi via `context.telco` (`PLAYER_READY`) pour les
+   * autres bridges.
+   */
+  const telco = studio.telco
+  // Le CS doit se désactiver ET disparaître pendant la lecture — `telco.onChange` est la source la
+  // plus riche (snapshot complet, pas seulement `isPlaying`) et déjà testée (`2026-07-17-telco-real-
+  // transport-plan.md` §5) : posé une seule fois ici, indépendamment de tout rebuild, puisque `telco`
+  // existe déjà à cet instant. `setPartActive('cs', false)` ne retire QUE l'interactivité
+  // (`pointerEvents`) — les poignées restaient visibles à l'écran pendant une vraie lecture (bug
+  // constaté en direct, remontant à la remarque d'origine de ce chantier) ; `setPartVisibility('cs',
+  // false)` (déjà exposé par la façade, jamais câblé dans ed2 avant ce fix) cache le cadre lui-même.
+  // La même paire est réappliquée depuis `attachSelection` pour qu'un frame flambant neuf (nouvelle
+  // sélection en cours de lecture) reflète immédiatement l'état courant, pas seulement au prochain
+  // changement.
+  telco.onChange((state) => {
+    frame?.setPartActive('cs', state.status !== 'playing')
+    frame?.setPartVisibility('cs', state.status !== 'playing')
+  })
   let authorApi: AuthorApi | null = null
   let frame: SelectionFrameHandle | null = null
   /**
@@ -99,15 +121,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       authorApi = createAuthorApi(studio.player)
       // `studio.player` est la même instance à travers tous les rebuilds (§2.1) — un seul envoi suffit.
       if (isFirstReady) {
-        machine.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: mountTarget.getBoundingClientRect().width, offsetBridge })
-        // Le CS doit se désactiver pendant la lecture — jamais câblé jusqu'ici (`AuthorApi.
-        // subscribeToPlayerState` existe précisément pour ça). `setPartActive('cs', false)` retire
-        // l'interactivité/l'affichage du cadre, `true` la restaure — la même bascule est réappliquée
-        // depuis `attachSelection` pour qu'un frame flambant neuf (nouvelle sélection en cours de
-        // lecture) reflète immédiatement l'état courant, pas seulement au prochain changement.
-        authorApi.subscribeToPlayerState((state) => {
-          frame?.setPartActive('cs', !state.isPlaying)
-        })
+        machine.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: mountTarget.getBoundingClientRect().width, offsetBridge, telco })
       }
       // Un rebuild remonte toujours le player à t=0 — rejouer la position courante immédiatement,
       // sinon toute modification (décor, transition…) reste invisible jusqu'au prochain geste de
@@ -181,7 +195,9 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     const newFrame = createSelectionFrame({ itemId, authorApi, anchor: newSession, sceneRoot: mountTarget, adapter })
     // Reflète l'état de lecture courant immédiatement — la souscription globale (ci-dessus) ne
     // notifie qu'au PROCHAIN changement, un frame flambant neuf doit déjà être correct sans attendre.
-    newFrame.setPartActive('cs', !authorApi.getPlayerState().isPlaying)
+    const notPlaying = telco.getState().status !== 'playing'
+    newFrame.setPartActive('cs', notPlaying)
+    newFrame.setPartVisibility('cs', notPlaying)
 
     frame = newFrame
     const frameDestroy = newFrame.destroy.bind(newFrame)
@@ -249,11 +265,15 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     lastSeekMs = timelineMs
     // Avant le premier rebuild réussi (`authorApi` non posé), le player n'a rien à rejouer.
     if (!authorApi) return
-    // `player.seek()` fait bouger la pose anime.js du node SANS le remplacer ni changer sa taille —
-    // ni `handleElementNode` (changement de node) ni le `ResizeObserver` (changement de taille) du
-    // CS ne se déclenchent dans ce cas. Sans `sync()` explicite ici, le cadre reste figé sur la
-    // position d'avant le seek jusqu'au prochain événement qui le repositionne par accident.
-    void studio.player.seek({ timelineMs: timelineMs + lastPreRollMs }).then(() => frame?.sync())
+    // `telco.seek()` (façade, `2026-07-17-telco-real-transport-plan.md` §Étape E — jamais
+    // `studio.player.seek()` en direct) fait bouger la pose anime.js du node SANS le remplacer ni
+    // changer sa taille — ni `handleElementNode` (changement de node) ni le `ResizeObserver`
+    // (changement de taille) du CS ne se déclenchent dans ce cas. Sans `sync()` explicite ici, le
+    // cadre reste figé sur la position d'avant le seek jusqu'au prochain événement qui le
+    // repositionne par accident. Ce point d'écoute reste le SEUL chemin d'exécution réelle du seek
+    // (scrub du sequence-editor comme Stop, §3 bis du plan) — décor-editor-bridge's flush (signal 3)
+    // et `lastSeekMs` en dépendent tous les deux, jamais court-circuités.
+    void telco.seek(timelineMs + lastPreRollMs).then(() => frame?.sync())
   })
   /**
    * Abandon de phase (Échap côté pont `decorEditor`) — `scene` est le document INCHANGÉ (rien n'a

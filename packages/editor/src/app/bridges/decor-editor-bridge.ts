@@ -16,7 +16,7 @@ import type { BridgeHandle } from './types'
  * aujourd'hui — `patch` porte donc, à lui seul, le décor résolu.
  */
 
-type Target = { itemId: string; contentId: string | null; decorId: string; itemType: 'text' | 'image' | 'media' | 'video' | 'capsule' }
+type Target = { itemId: string; keyframeId: string | null; contentId: string | null; decorId: string; itemType: 'text' | 'image' | 'media' | 'video' | 'capsule' }
 
 /** `bloc` n'a pas encore de type visuel (§6 du plan) — rien à décorer tant qu'il n'est pas différencié. */
 function resolveTarget(scene: EditorScene, selection: Selection): Target | null {
@@ -28,7 +28,25 @@ function resolveTarget(scene: EditorScene, selection: Selection): Target | null 
     ? item.keyframes.find((k) => k.id === selection.keyframeId)?.decorId
     : item.initialDecorId
   if (!decorId) return null
-  return { itemId: item.id, contentId: item.contentId, decorId, itemType: item.type }
+  return { itemId: item.id, keyframeId: selection.keyframeId ?? null, contentId: item.contentId, decorId, itemType: item.type }
+}
+
+/**
+ * Copy-on-write (`2026-06-11-sequence-editor-grid-spec.md` §2.3) : un `decorId` peut être partagé
+ * entre plusieurs keyframes adjacents (`KEYFRAME.ADD` en hérite délibérément, §2.3 « à la création
+ * d'un keyframe » — pour ne pas dupliquer inutilement des décors identiques). Le muter en place
+ * (`setDecor`) modifierait TOUS les keyframes qui le référencent, pas seulement celui en cours
+ * d'édition — bug constaté 2026-07-17 (kf2 hérite du décor de kf1, éditer kf2 change aussi kf1, et
+ * `buildKeyframeDecorActions` ne voit alors aucun diff entre les deux, donc aucune interpolation).
+ * Portée volontairement limitée aux keyframes (`target.keyframeId`) : `item.initialDecorId` est créé
+ * frais par `createItem`, jamais partagé par construction — rien à forker dans ce cas.
+ */
+function isDecorSharedByAnotherKeyframe(scene: EditorScene, decorId: string, keyframeId: string): boolean {
+  return scene.items.some((item) => item.keyframes.some((k) => k.id !== keyframeId && k.decorId === decorId))
+}
+
+function freshDecorId(): string {
+  return `decor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 /**
@@ -222,8 +240,16 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (!entry) return
 
     const commands: Command[] = []
+    let writeDecorId = target.decorId
+    if (target.keyframeId && isDecorSharedByAnotherKeyframe(scene, target.decorId, target.keyframeId)) {
+      // Fork avant d'écrire, jamais après (spec §2.3) — sinon la mutation en place a déjà atteint
+      // le keyframe voisin le temps que le fork soit décidé.
+      writeDecorId = freshDecorId()
+      commands.push({ name: 'registerDecor', args: { decorId: writeDecorId } })
+      commands.push({ name: 'assignKeyframeDecor', args: { itemId: target.itemId, keyframeId: target.keyframeId, decorId: writeDecorId } })
+    }
     const decorArgs = patchToDecorArgs(entry.patch, scene)
-    if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: target.decorId, patch: decorArgs } })
+    if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: writeDecorId, patch: decorArgs } })
 
     const existingContent = target.contentId ? scene.contents[target.contentId] : undefined
     const contentArgs = patchToContentArgs(entry.patch, existingContent, target.itemType)

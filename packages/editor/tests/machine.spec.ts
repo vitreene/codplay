@@ -256,35 +256,15 @@ describe('panning', () => {
 
 // ─── Playhead ────────────────────────────────────────────────────────────────
 
+// Le statut de lecture réel et son avance ne sont plus simulés localement (`PLAYHEAD.TICK`/
+// `START_PLAY`/`PAUSE`/`STOP` retirés) — `TelcoApi` (`codplay`) les possède désormais ;
+// `TELCO.SYNC_PLAYHEAD` en est le seul écho (`2026-07-17-telco-real-transport-plan.md` §Étape C).
 describe('playhead', () => {
-  it('PLAYHEAD.START_PLAY → state playing', () => {
+  it('TELCO.SYNC_PLAYHEAD reflète le curseur telco', () => {
     const actor = boot(EMPTY)
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    expect(actor.getSnapshot().value).toBe('playing')
-    actor.stop()
-  })
-
-  it('PLAYHEAD.TICK avance le playhead', () => {
-    const actor = boot(EMPTY)
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    actor.send({ type: 'PLAYHEAD.TICK', deltaMs: 500 })
-    expect(actor.getSnapshot().context.playheadMs).toBe(500)
-    actor.stop()
-  })
-
-  it('PLAYHEAD.TICK s\'arrête à durationMs', () => {
-    const actor = boot(EMPTY)
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    actor.send({ type: 'PLAYHEAD.TICK', deltaMs: 99999 })
-    expect(actor.getSnapshot().context.playheadMs).toBe(EMPTY.meta.durationMs)
-    actor.stop()
-  })
-
-  it('PLAYHEAD.STOP → idle', () => {
-    const actor = boot(EMPTY)
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    actor.send({ type: 'PLAYHEAD.STOP' })
+    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 500 })
     expect(actor.getSnapshot().value).toBe('idle')
+    expect(actor.getSnapshot().context.playheadMs).toBe(500)
     actor.stop()
   })
 })

@@ -16,6 +16,37 @@ import type { OffsetEditorBridge, OffsetValuesPx } from '../src/decor-editor/typ
  * nécessite pas de faire interagir du DOM de palette rendu).
  */
 
+/**
+ * Deux keyframes du MÊME item référençant le MÊME `decorId` — reproduit `KEYFRAME.ADD`'s héritage
+ * délibéré du décor voisin (`2026-06-11-sequence-editor-grid-spec.md` §2.3), le point de départ du
+ * bug de partage (2026-07-17) : éditer kf-2 ne doit jamais muter le décor que kf-1 lit aussi.
+ */
+function sceneWithSharedKeyframeDecor(): EditorScene {
+  return {
+    id: 'scene-1',
+    meta: { title: 'Fixture', durationMs: 5000, durationSource: 'arbitrary', timeUnit: 's', capsuleOrder: 'forward' },
+    items: [
+      {
+        id: 'item-1',
+        type: 'text',
+        parentId: null,
+        order: 'a0',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'decor-shared',
+        keyframes: [
+          { id: 'kf-1', timeMs: 0, decorId: 'decor-shared' },
+          { id: 'kf-2', timeMs: 1000, decorId: 'decor-shared' },
+        ],
+      },
+    ],
+    contents: {},
+    decors: { 'decor-shared': { id: 'decor-shared', style: { 'background-color': 'red' } } },
+    zones: {},
+    markerTracks: {},
+  }
+}
+
 function sceneWithTwoItems(): EditorScene {
   return {
     id: 'scene-1',
@@ -208,5 +239,36 @@ describe('decor-editor-bridge — commit de fin de phase (§Étape B)', () => {
 
     expect(commits()).toBe(1)
     expectTranslate(committedOffset(actor, 'decor-1')?.translate, 20, 20)
+  })
+})
+
+describe('decor-editor-bridge — copy-on-write sur décor partagé entre keyframes (2026-07-17)', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('éditer le fond de kf-2 (décor partagé avec kf-1) fork un nouveau décor — kf-1 reste inchangé', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    const container = document.createElement('div')
+    createDecorEditorBridge(container, actor)
+    actor.send({ type: 'PLAYER_READY', authorApi: fakeAuthorApi(), referenceWidthPx: 100, offsetBridge: fakeOffsetBridge() })
+    actor.send({ type: 'SCENE_LOADED', scene: sceneWithSharedKeyframeDecor() })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-2' })
+
+    const colorInput = container.querySelectorAll<HTMLInputElement>('input[type="color"]')[0]!
+    colorInput.value = '#0000ff'
+    colorInput.dispatchEvent(new Event('input', { bubbles: true }))
+    colorInput.dispatchEvent(new Event('change', { bubbles: true }))
+    vi.advanceTimersByTime(PHASE_IDLE_FLUSH_MS)
+
+    const scene = actor.getSnapshot().context.scene!
+    const item = scene.items[0]!
+    const kf1DecorId = item.keyframes.find((k) => k.id === 'kf-1')!.decorId
+    const kf2DecorId = item.keyframes.find((k) => k.id === 'kf-2')!.decorId
+
+    expect(kf1DecorId).toBe('decor-shared')
+    expect(kf2DecorId).not.toBe('decor-shared')
+    expect(scene.decors['decor-shared']?.style?.['background-color']).toBe('red')
+    expect(scene.decors[kf2DecorId]?.style?.['background-color']).not.toBe('red')
   })
 })

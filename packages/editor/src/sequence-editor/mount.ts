@@ -2,6 +2,8 @@ import './sequence-editor.css'
 
 import type { MachineContext, VirtualKeyframe } from './machine'
 import type { SequenceEditorController } from './controller'
+import type { TelcoApi } from 'codplay/telco/types'
+import type { PlayerStateSnapshot } from 'codplay/player/types'
 import { formatTimeMs } from './constants'
 import { createTimeRuler, renderTimeRuler } from './render/time-ruler'
 import { createTrackLabelList, renderTrackLabelList } from './render/track-label-list'
@@ -31,6 +33,14 @@ export interface MountSequenceEditorOptions {
 }
 
 export interface SequenceEditorMountHandle {
+  /**
+   * `context.telco` (contrôleur central) n'existe qu'après le premier rebuild réussi de
+   * `scenePlayer` — jamais disponible à la construction de ce module (même contrainte que
+   * `decorEditor`/`AuthorApi`, `2026-07-16-position-bridge-reconciliation-plan.md`). L'appelant
+   * (`sequence-editor-bridge.ts`) l'invoque une fois ce moment venu ; tant que ce n'est pas fait,
+   * Play/Pause/Stop restent inertes (`telco` reste `null`).
+   */
+  attachTelco(telco: TelcoApi): void
   destroy(): void
 }
 
@@ -78,27 +88,16 @@ export function mountSequenceEditor(
     render(ctrl.getSnapshot())
   }
 
-  // ── RAF ticker ────────────────────────────────────────────────────────────────
+  // ── Telco (transport réel) ──────────────────────────────────────────────────────
+  // La lecture réelle est pilotée par `TelcoApi` (`codplay`), jamais par une boucle RAF locale —
+  // `2026-07-17-telco-real-transport-plan.md` §1/§Étape C. `telco` n'est branché qu'après coup via
+  // `attachTelco` (voir `SequenceEditorMountHandle`) ; tant que c'est `null`, Play/Pause/Stop sont
+  // inertes plutôt que de lever une erreur (même tolérance que `decorEditor` avant son propre
+  // branchement tardif).
 
-  let prevTs: number | null = null
-  let rafHandle: number | null = null
-
-  function rafLoop(ts: number): void {
-    if (ctrl.isPlaying()) {
-      if (prevTs !== null) ctrl.tick(ts - prevTs)
-      prevTs = ts
-
-      const ctx = ctrl.getSnapshot().context
-      if (ctx.followPlayhead && ctx.playheadMs >= ctx.viewport.endMs) {
-        ctrl.scrollToMs(ctx.playheadMs)
-      }
-
-      rafHandle = requestAnimationFrame(rafLoop)
-    } else {
-      prevTs = null
-      rafHandle = null
-    }
-  }
+  let telco: TelcoApi | null = null
+  let unsubscribeTelcoGlyph: (() => void) | null = null
+  let unsubscribeTelcoProgress: (() => void) | null = null
 
   // ── Build shell ───────────────────────────────────────────────────────────────
 
@@ -416,17 +415,16 @@ export function mountSequenceEditor(
   // ── Controls ──────────────────────────────────────────────────────────────────
 
   function onPlayClick(): void {
-    if (ctrl.isPlaying()) {
-      ctrl.pause()
-    } else {
-      ctrl.play()
-      rafHandle = requestAnimationFrame(rafLoop)
-    }
+    if (!telco) return
+    void (telco.getState().status === 'playing' ? telco.pause() : telco.play())
   }
   btnPlay.addEventListener('click', onPlayClick)
 
   function onStopClick(): void {
-    ctrl.stop()
+    // Stop = seek(0), pas un appel direct à telco ici — ce chemin reste le même relais central
+    // que le scrub (`SEEK` → `scene-player-bridge.ts`), pour préserver le flush décor, `lastSeekMs`
+    // et la resynchro CS qui en dépendent (§3 bis du plan).
+    options.onPlayheadChange?.(0)
   }
   btnStop.addEventListener('click', onStopClick)
 
@@ -463,8 +461,8 @@ export function mountSequenceEditor(
   let lastPlayheadMs: number | null = null
   /**
    * `renderTrackRows` fait `container.innerHTML = ''` puis reconstruit toutes les lignes — aucune
-   * de leurs propriétés ne dépend de `playheadMs`/`isPlaying` (positions = `kf.timeMs`, jamais la
-   * tête de lecture). Sans ce filtre, chaque scrub/tick détruit et recrée les nœuds DOM des lignes
+   * de leurs propriétés ne dépend de `playheadMs` (positions = `kf.timeMs`, jamais la tête de
+   * lecture). Sans ce filtre, chaque scrub/tick détruit et recrée les nœuds DOM des lignes
    * en continu — un double-clic en cours (ajout de kf) perd sa cible entre les deux clics, puisque
    * le navigateur exige le même nœud pour reconnaître un `dblclick` (signalé en test réel : "la
    * tête de lecture capte le click", un simple clic pour scruter suffit à casser le geste suivant).
@@ -479,7 +477,8 @@ export function mountSequenceEditor(
   function render(snap: { context: MachineContext }): void {
     const ctx = snap.context
     timeDisplay.textContent = formatTimeMs(ctx.playheadMs, ctx.displayConfig.timeUnit)
-    setButtonGlyph(btnPlay, ctx.isPlaying ? '⏸' : '▶')
+    // Le glyphe play/pause est piloté par `telco.onChange` (`attachTelco`), pas par le contexte de
+    // cette machine — le statut de lecture réel n'y est plus dupliqué (§Étape C).
     btnFollow.classList.toggle('seq-toolbar__btn--active', ctx.followPlayhead)
     const hasRange = ctx.playRange !== null
     btnZoomRange.style.display = hasRange ? '' : 'none'
@@ -647,17 +646,63 @@ export function mountSequenceEditor(
   const ro = new ResizeObserver(() => ctrl.notifyResize(timeline.clientWidth, timeline.clientHeight))
   ro.observe(timeline)
 
+  // ── Telco attach (tardif — voir SequenceEditorMountHandle) ─────────────────────
+
+  function attachTelco(t: TelcoApi): void {
+    unsubscribeTelcoGlyph?.()
+    unsubscribeTelcoProgress?.()
+
+    telco = t
+    setButtonGlyph(btnPlay, t.getState().status === 'playing' ? '⏸' : '▶')
+    unsubscribeTelcoGlyph = t.onChange((state) => {
+      setButtonGlyph(btnPlay, state.status === 'playing' ? '⏸' : '▶')
+    })
+
+    // Marque `lastPlayheadMs` AVANT la transition — sans ça, le diff de `render()` (ligne ~488)
+    // reforwarderait cette valeur via `onPlayheadChange`, ré-émettant un SEEK vers ce même telco :
+    // boucle. Abonné à `onProgress` SEUL, jamais `onChange` : `PlayerFacade.seek()` appelle
+    // `setStatus('seeking')` — donc émet `onChange` — AVANT de mettre à jour `this.timelineMs`
+    // (`create-player.ts::seek()`) ; un `onChange` y était abonné en plus jusqu'ici, et recevait
+    // cette notification transitoire avec l'ANCIENNE position, qu'il remirait aussitôt dans le
+    // contexte — la tête sautait brièvement sur le kf cliqué puis revenait en arrière avant que le
+    // seek ne s'achève (bug constaté 2026-07-17). `onProgress` ne fire jamais pendant un `seek` (family
+    // gate `status === 'playing'` seulement), donc insensible à cette transition intermédiaire.
+    function syncFromTelco(state: PlayerStateSnapshot): void {
+      lastPlayheadMs = state.timelineMs
+      ctrl.syncPlayheadFromTelco(state.timelineMs)
+
+      const ctx = ctrl.getSnapshot().context
+      // Suivi de tête — l'ancien `rafLoop` en était l'unique lecteur (retiré avec la simulation
+      // locale) ; rebranché ici, sur le flux réel de `telco`, plutôt que sur le diff de `render()`
+      // (indépendant de la garde anti-boucle ci-dessus, qui ne concerne que `onPlayheadChange`).
+      if (ctx.followPlayhead && ctx.playheadMs >= ctx.viewport.endMs) {
+        ctrl.scrollToMs(ctx.playheadMs)
+      }
+
+      // Fin de scène — l'ancienne garde locale (`PLAYHEAD.TICK`) stoppait à `scene.meta.durationMs`
+      // ; ce plafond n'existe pas côté `telco` pour une scène ed2 (`sequenceEnded`/`authorEndMs`
+      // dépendent d'un event `sequenceEnd` que le Builder n'émet pas forcément ici), donc sans ce
+      // garde-fou la lecture réelle continue indéfiniment au-delà de la durée affichée.
+      if (state.status === 'playing' && state.timelineMs >= ctx.scene.meta.durationMs) {
+        void telco?.pause()
+      }
+    }
+    unsubscribeTelcoProgress = t.onProgress(syncFromTelco)
+  }
+
   // ── Boot ──────────────────────────────────────────────────────────────────────
 
   ctrl.notifyResize(timeline.clientWidth, timeline.clientHeight)
   const unsubscribe = ctrl.subscribe(render)
 
   return {
+    attachTelco,
     destroy(): void {
       unsubscribe()
       ro.disconnect()
       document.removeEventListener('keydown', onKeyDown)
-      if (rafHandle !== null) cancelAnimationFrame(rafHandle)
+      unsubscribeTelcoGlyph?.()
+      unsubscribeTelcoProgress?.()
       container.innerHTML = ''
     },
   }

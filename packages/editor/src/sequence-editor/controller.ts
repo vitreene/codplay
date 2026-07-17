@@ -184,15 +184,12 @@ export class SequenceEditorController {
 
   // ── Playhead ────────────────────────────────────────────────────────────────
 
-  play(): void  { this.send({ type: 'PLAYHEAD.START_PLAY' }) }
-  pause(): void { this.send({ type: 'PLAYHEAD.PAUSE' }) }
-  stop(): void  { this.send({ type: 'PLAYHEAD.STOP' }) }
   seek(timeMs: number): void { this.send({ type: 'PLAYHEAD.SET', timeMs }) }
 
-  /** Appelé par la boucle RAF externe — avance le playhead si isPlaying */
-  tick(deltaMs: number): void { this.send({ type: 'PLAYHEAD.TICK', deltaMs }) }
-
-  isPlaying(): boolean { return this.actor.getSnapshot().context.isPlaying }
+  /** Miroir du statut réel de lecture — appelé depuis `attachTelco` (`mount.ts`) sur chaque
+   * `telco.onProgress`/`.onChange`, jamais depuis une boucle locale (`2026-07-17-telco-real-
+   * transport-plan.md` §Étape D). */
+  syncPlayheadFromTelco(timelineMs: number): void { this.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs }) }
 
   // ── Play range ───────────────────────────────────────────────────────────────
 

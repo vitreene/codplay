@@ -271,23 +271,16 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
 })
 
 describe('sequenceEditorMachine — playhead / play range / viewport (purement locaux, aucun changement)', () => {
-  it('PLAYHEAD.START_PLAY / TICK / PAUSE / STOP', () => {
+  // Le statut de lecture réel et son avance ne sont plus simulés localement (`PLAYHEAD.TICK`/
+  // `START_PLAY`/`PAUSE`/`STOP` retirés) — `TelcoApi` (`codplay`) les possède désormais ;
+  // `TELCO.SYNC_PLAYHEAD` en est le seul écho (`2026-07-17-telco-real-transport-plan.md` §Étape C).
+  it('TELCO.SYNC_PLAYHEAD reflète le curseur telco, quel que soit l’état de geste courant', () => {
     const actor = actorWithScene(baseScene())
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    expect(actor.getSnapshot().value).toBe('playing')
-    actor.send({ type: 'PLAYHEAD.TICK', deltaMs: 500 })
-    expect(actor.getSnapshot().context.playheadMs).toBe(500)
-    actor.send({ type: 'PLAYHEAD.PAUSE' })
+    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 500 })
     expect(actor.getSnapshot().value).toBe('idle')
     expect(actor.getSnapshot().context.playheadMs).toBe(500)
-  })
-
-  it('PLAYHEAD.TICK past durationMs stops playback and clamps at duration', () => {
-    const actor = actorWithScene(baseScene())
-    actor.send({ type: 'PLAYHEAD.START_PLAY' })
-    actor.send({ type: 'PLAYHEAD.TICK', deltaMs: 999999 })
-    expect(actor.getSnapshot().context.isPlaying).toBe(false)
-    expect(actor.getSnapshot().context.playheadMs).toBe(10000)
+    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 9999999 })
+    expect(actor.getSnapshot().context.playheadMs).toBe(9999999)
   })
 
   it('PLAYRANGE.SET / CLEAR', () => {

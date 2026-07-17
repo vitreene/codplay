@@ -29,10 +29,26 @@ export function createSequenceEditorBridge(container: HTMLElement, machine: Acto
     controller.deserialize(scene)
   })
 
+  // `context.telco` n'est publié qu'au premier `PLAYER_READY` (`2026-07-17-telco-real-transport-
+  // plan.md` §Étape A bis) — même contrainte de disponibilité tardive qu'`authorApi`/`offsetBridge`
+  // (`decor-editor-bridge.ts::ensureMounted()`) : vérifié immédiatement (rebuild déjà survenu avant
+  // la construction de ce pont) puis à chaque `authorApiReady` tant que non encore branché.
+  let telcoAttached = false
+  function ensureTelco(): void {
+    if (telcoAttached) return
+    const { telco } = machine.getSnapshot().context
+    if (!telco) return
+    telcoAttached = true
+    handle.attachTelco(telco)
+  }
+  ensureTelco()
+  const unsubscribeAuthorApiReady = machine.on('authorApiReady', () => ensureTelco())
+
   return {
     destroy(): void {
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
+      unsubscribeAuthorApiReady.unsubscribe()
       unsubscribeCommand()
       unsubscribeSelection()
       handle.destroy()

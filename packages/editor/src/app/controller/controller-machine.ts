@@ -98,10 +98,11 @@ export const controllerMachine = setup({
       authorApi: ({ event }) => (event.type === 'PLAYER_READY' ? event.authorApi : null),
       referenceWidthPx: ({ event }) => (event.type === 'PLAYER_READY' ? event.referenceWidthPx : 0),
       offsetBridge: ({ event }) => (event.type === 'PLAYER_READY' ? event.offsetBridge : null),
+      telco: ({ event }) => (event.type === 'PLAYER_READY' ? event.telco : null),
     }),
     emitAuthorApiReady: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'PLAYER_READY') return
-      enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx, offsetBridge: event.offsetBridge })
+      enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx, offsetBridge: event.offsetBridge, telco: event.telco })
     }),
 
     /** §Étape B.6 — pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
@@ -109,12 +110,6 @@ export const controllerMachine = setup({
       if (!context.scene) return
       enqueue.emit({ type: 'sceneReverted', scene: context.scene })
     }),
-
-    /** Relais pur — `isPlaying` reste possédé par le sequence-editor, jamais stocké ici (même principe que `emitSeek`). */
-    emitPlayingChanged: emit(({ event }) => ({
-      type: 'playingChanged' as const,
-      isPlaying: event.type === 'PLAYHEAD_PLAYING_CHANGED' ? event.isPlaying : false,
-    })),
   },
 }).createMachine({
   id: 'controller',
@@ -133,6 +128,7 @@ export const controllerMachine = setup({
     authorApi: null,
     referenceWidthPx: 0,
     offsetBridge: null,
+    telco: null,
   },
   on: {
     /** Ces événements sont valides quel que soit le mode courant — ni la sélection ni les panneaux ne dépendent du mode de geste. */

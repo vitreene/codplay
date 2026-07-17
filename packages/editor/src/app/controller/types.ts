@@ -5,6 +5,7 @@
 import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 import type { AuthorApi } from '@codplay/selection-frame'
+import type { TelcoApi } from 'codplay/telco/types'
 import type { OffsetEditorBridge } from '../../decor-editor/types'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
@@ -58,6 +59,14 @@ export interface ControllerContext {
    * apparaître comme un pont indépendant que l'app câblerait elle-même.
    */
   offsetBridge: OffsetEditorBridge | null
+  /**
+   * Publié une fois, en même temps qu'`authorApi` (§7 étape 4) — `TelcoApi` existe en réalité dès la
+   * construction de `studio` (`CodPlay`'s constructeur, `2026-07-17-telco-real-transport-plan.md`
+   * §0), bien avant ce point ; publier au même instant qu'`authorApi` évite un second signal de
+   * disponibilité pour une différence négligeable. Façade transport (play/pause/seek/rewind/rate) —
+   * chaque bridge qui en a besoin l'appelle directement, jamais de relais d'événements par-dessus.
+   */
+  telco: TelcoApi | null
 }
 
 // ─── Commandes de la façade (§4.1 — vocabulaire fermé, jamais une mutation arbitraire) ─────────
@@ -80,6 +89,7 @@ export type Command =
   | { name: 'assignContent'; args: { itemId: string; content: Omit<Content, 'id'> } }
   | { name: 'attachItem'; args: { itemId: string; parentId: string | null; order?: string } }
   | { name: 'setDecor'; args: { decorId: string; patch: Partial<Omit<Decor, 'id'>> } }
+  | { name: 'registerDecor'; args: { decorId: string } }
   | { name: 'createKeyframe'; args: { itemId: string; timeMs: number; decorId?: string } }
   | { name: 'createCapsule'; args: { geometry: OffsetData; capsuleDef: CapsuleDef; parentId?: string | null } }
   | { name: 'setCapsuleDef'; args: { itemId: string; patch: Partial<CapsuleDef> } }
@@ -105,8 +115,8 @@ export type ControllerEvent =
   | { type: 'RUN_TRANSACTION'; commands: Command[] }
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
   | { type: 'SEEK'; timelineMs: number }
-  /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`). */
-  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }
+  /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`/`.telco`). */
+  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /**
    * Abandon de phase (Échap) — envoyé par le pont `decorEditor` quand une édition en attente
    * (`pendingCommands`) est jetée sans commit (`2026-07-17-phase-commit-selection-recovery-plan.md`
@@ -115,16 +125,6 @@ export type ControllerEvent =
    * ainsi effacer toute preview live désormais périmée.
    */
   | { type: 'PHASE_ABORT' }
-  /**
-   * `2026-07-17-telco-real-transport-plan.md` §3 étape A — requête de lecture/pause RÉELLE, relais
-   * pur vers `scene-player-bridge.ts` (seul possesseur de `studio.player`). `isPlaying`/`playheadMs`
-   * restent purement locaux au sequence-editor (`machine.ts:29-30`, jamais dupliqués ici) — ces
-   * events ne portent qu'une INTENTION d'agir sur le vrai player, jamais un état à synchroniser.
-   */
-  | { type: 'PLAYBACK_PLAY_REQUESTED' }
-  | { type: 'PLAYBACK_PAUSE_REQUESTED' }
-  /** Résultat (pas une requête) — la position réelle où `player.pause()` a figé la scène, pour resynchroniser le curseur local du sequence-editor (§3 étape D). */
-  | { type: 'PLAYBACK_PAUSED_AT'; timelineMs: number }
 
 // ─── Événements émis (§"modules de câblage impératifs", `2026-07-13-controller-islands-bridge-
 // plan.md` §3) — un pont s'y abonne via `machine.on(...)`, jamais via `subscribe()` sur chaque
@@ -134,9 +134,6 @@ export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
   | { type: 'seek'; timelineMs: number }
-  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }
+  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /** Réponse à `PHASE_ABORT` — `scene` est le document INCHANGÉ (rien n'a été committé). */
   | { type: 'sceneReverted'; scene: EditorScene }
-  | { type: 'playbackPlayRequested' }
-  | { type: 'playbackPauseRequested' }
-  | { type: 'playbackPausedAt'; timelineMs: number }

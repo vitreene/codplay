@@ -102,6 +102,19 @@ export function setDecor(scene: EditorScene, args: { decorId: string; patch: Par
 }
 
 /**
+ * Crée (ou remplace) une entrée vide dans `scene.decors` — le `registerDecor` du copy-on-write
+ * (`2026-06-11-sequence-editor-grid-spec.md` §2.3 : « à la modification d'un décor partagé,
+ * l'éditeur de décors doit créer une nouvelle entrée via `registerDecor` et appeler `assignDecor`
+ * pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés »). Toujours suivie d'un
+ * `assignKeyframeDecor` puis d'un `setDecor` dans la même transaction (`decor-editor-bridge.ts`) —
+ * jamais appelée seule, même convention que `createKeyframe`/`createNamedKeyframe` (entrée `{id}`
+ * vide, remplie par le `setDecor` qui suit).
+ */
+export function registerDecor(scene: EditorScene, args: { decorId: string }): EditorScene {
+  return { ...scene, decors: { ...scene.decors, [args.decorId]: { id: args.decorId } } }
+}
+
+/**
  * Pose un keyframe explicite sur l'item à l'instant donné — l'acte VOLONTAIRE qui seul fait naître
  * un kf (jamais un effet de bord de `setDecor`). Si `decorId` n'est pas fourni, un nouveau décor
  * vide est créé pour ce kf ; s'il est fourni, il doit référencer un décor déjà existant.

@@ -64,7 +64,7 @@ describe('cycle de vie', () => {
     const cb = vi.fn()
     const unsub = ctrl.subscribe(cb)
     unsub()
-    ctrl.play()
+    ctrl.seek(1000)
     expect(cb).toHaveBeenCalledOnce()
     ctrl.destroy()
   })
@@ -405,27 +405,23 @@ describe('zoom / pan / notifyResize', () => {
 })
 
 // ─── Playhead — purement local ──────────────────────────────────────────────
+// `play()`/`pause()`/`stop()`/`tick()`/`isPlaying()` retirés (`2026-07-17-telco-real-transport-
+// plan.md` §Étape C) : la lecture réelle vit désormais dans `TelcoApi` (`codplay`), jamais simulée
+// ici. `syncPlayheadFromTelco` en est le seul écho.
 
-describe('play / stop / seek', () => {
-  it('play → snapshot value = playing', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.play()
-    expect(ctrl.getSnapshot().value).toBe('playing')
-    ctrl.destroy()
-  })
-
-  it('stop → snapshot value = idle', () => {
-    const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.play()
-    ctrl.stop()
-    expect(ctrl.getSnapshot().value).toBe('idle')
-    ctrl.destroy()
-  })
-
+describe('seek / syncPlayheadFromTelco', () => {
   it('seek met à jour playheadMs', () => {
     const ctrl = new SequenceEditorController(EMPTY)
     ctrl.seek(4000)
     expect(ctrl.getPlayheadMs()).toBe(4000)
+    ctrl.destroy()
+  })
+
+  it('syncPlayheadFromTelco met à jour playheadMs sans changer l\'état de geste', () => {
+    const ctrl = new SequenceEditorController(EMPTY)
+    ctrl.syncPlayheadFromTelco(2500)
+    expect(ctrl.getPlayheadMs()).toBe(2500)
+    expect(ctrl.getSnapshot().value).toBe('idle')
     ctrl.destroy()
   })
 })

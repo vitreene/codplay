@@ -318,3 +318,116 @@ bascule sur `telco.seek` — aucun changement visible pour les consommateurs de 
 
 **Ce plan est soumis pour relecture avant toute implémentation — aucun code n'a été touché pour
 l'écrire.**
+
+## 8. Statut d'implémentation (2026-07-17)
+
+Toutes les étapes A/A bis/B/C/D/E/§5 implémentées, dans l'ordre prescrit par §7. `tsc --noEmit`
+propre, suite complète (1045 tests) + gates verts. Validé en Safari en conditions réelles (scène de
+démo + item créé, vraie sélection via `.seq-label-row`, pas seulement un mock) : Play/Pause/Stop au
+même emplacement, glyphe piloté par `telco.onChange`, curseur miroir de `telco.onProgress` sans
+boucle de seek, CS (`pointerEvents`) bascule `auto`↔`none` avec la lecture réelle, scrub sur la
+règle toujours fonctionnel (relais central `SEEK` inchangé), aucune erreur console. §5 tranché :
+`AuthorApi.subscribeToPlayerState` reste dans `@codplay/selection-frame` (facade partagée, contrat de
+type encore utilisé par les fixtures de test du package et par `offset-editor-bridge.spec.ts`/
+`decor-editor-bridge.spec.ts` — retirer un champ d'une facade partagée dépasse le périmètre de ce
+chantier, propre au seul sequence-editor).
+
+**Écart suivi (2026-07-17, corrigé)** : `followPlayhead` rebranché directement dans `attachTelco`'s
+`syncFromTelco` (`mount.ts`) — `on peut subscribre followPlayhead à telco` (direction auteur) : plus
+simple que redouté, aucun risque de boucle puisque ce point d'observation est indépendant de la garde
+anti-boucle `lastPlayheadMs` (qui ne concerne que `onPlayheadChange`/`SEEK`).
+
+## 9. Bugs remontés après relecture d'ensemble (2026-07-17, « en vrac »)
+
+Cinq points signalés par l'auteur après avoir testé le chantier ci-dessus en conditions réelles.
+Diagnostic complet avant tout correctif (lecture de code + tests live Safari, plusieurs faux
+positifs écartés en cours de route — voir note méthodologique en fin de section).
+
+1. **Kf sélectionné → playhead** : non reproduit. Un vrai geste (pointerdown sur `.seq-kf` →
+   pointerup sur `.seq-drag-overlay`, le chemin réel — `track-row.ts` route via `onDragStart`/
+   `DRAG.START_KEYFRAME`, jamais l'event `click`) déplace bien le playhead dans les deux sens, testé
+   à répétition. Deux premières tentatives de repro invalidées par des events synthétiques mal formés
+   (`click` au lieu de `pointerdown`, puis `pointerup` sur `window` au lieu de `.seq-drag-overlay` —
+   la machine restait bloquée en état `dragging-keyframe`, expliquant un faux « ça ne bouge plus »).
+   Laissé tel quel — pas de repro exacte fournie à ce stade.
+
+2. **CS ne se désélectionne pas pendant le play — corrigé.** `setPartActive('cs', false)`
+   (`@codplay/selection-frame`) ne retirait que `pointerEvents` ; les poignées restaient visibles à
+   l'écran (vérifié capture à l'appui). La façade exposait déjà `setPartVisibility('cs', boolean)`
+   (jamais câblé côté ed2) — `scene-player-bridge.ts` l'appelle maintenant en plus de
+   `setPartActive`, aux deux mêmes points (`telco.onChange` global + état initial d'`attachSelection`).
+   Zéro changement dans `@codplay/selection-frame` : la façade avait déjà tout, il manquait juste
+   l'appel côté ed2.
+
+3. **Décor « s'applique partout » + 4. Pas de sync apparence/dedit à la création — même cause,
+   corrigée.** `DemoMenuRegion.tsx` (« démonstration temporaire de l'étape 2… pas la vraie région
+   menu », commentaire d'origine) créait l'item + ses 2 keyframes via `RUN_TRANSACTION` mais
+   n'envoyait jamais `SELECT_ITEM` — la sélection centrale restait sur l'item précédent. Comme tout
+   item créé partage la même géométrie par défaut (superposition exacte), éditer le décor de l'ancien
+   item sélectionné donnait l'illusion visuelle d'un effet global. Vérifié en DOM (`getComputedStyle`
+   sur chaque `#item-N`) : avant fix, la couleur posée pendant que dedit affichait « item-8 » atterrissait
+   sur `item-1` ; après fix (`controller.send({ type: 'SELECT_ITEM', itemIds: [itemId] })` ajouté juste
+   après la transaction), l'infobar affiche immédiatement le bon item et seul lui reçoit la couleur.
+
+5. **Plus de limite par défaut à 5s — régression confirmée de ce chantier, corrigée.** L'ancien garde-fou
+   local (`PLAYHEAD.TICK`, retiré §Étape C) stoppait la simulation à `scene.meta.durationMs`
+   (`emptyScene.meta.durationMs = 5000` dans `DemoMenuRegion.tsx`). `telco`/le vrai player n'a pas
+   d'équivalent actif ici (`sequenceEnded`/`horizon.authorEndMs` dépendent d'un event `sequenceEnd` que
+   le Builder n'émet pas forcément pour ces scènes) — sans lecteur, la vraie lecture continuait
+   indéfiniment (vérifié : 111s et au-delà). Corrigé côté éditeur (direction choisie plutôt que
+   creuser `codplay`) : `attachTelco`'s `syncFromTelco` appelle `telco.pause()` dès que
+   `state.timelineMs >= scene.meta.durationMs` pendant une lecture. Revalidé en direct : arrêt net à
+   5.0s, glyphe repassé à ▶.
+
+**Note méthodologique** : deux artefacts de test à eux seuls ont produit trois faux diagnostics
+avant les vrais : `elem.click(); expr` (deux statements séparés) ne retourne PAS la valeur de `expr`
+dans cet outil d'évaluation JS — utiliser un IIFE avec `return` explicite. Un clic sur `rows[0]` d'une
+`NodeList` de `.seq-label-row` peut tomber sur la ligne « + piste marqueur » (premier élément du DOM)
+et déclencher son `window.prompt()` bloquant, gelant tout appel `evaluate_javascript`/`screenshot`
+suivant jusqu'à dismiss — toujours filtrer par contenu exact, jamais indexer à l'aveugle.
+
+## 10. Deux points supplémentaires remontés après relecture des points #1/#3 ci-dessus (2026-07-17)
+
+L'auteur précise que #3/#4 (§9) n'étaient pas son problème d'origine — trouvé au passage, corrigé,
+mais distinct. Deux nouveaux points, tous deux confirmés et root-causés par lecture de code :
+
+1. **Playhead : bref aller-retour au clic sur un kf — corrigé.** `PlayerFacade.seek()`
+   (`create-player.ts:2178`) appelle `setStatus('seeking')` — donc émet `onChange` — AVANT de mettre
+   à jour `this.timelineMs` (ligne 2222) ; un second `setStatus('paused')` à la fin (ligne 2283) émet
+   la position correcte. `attachTelco`'s `syncFromTelco` (`mount.ts`) était abonné à `onChange` ET
+   `onProgress` (§Étape D d'origine) : le premier événement `onChange` intermédiaire, avec l'ANCIENNE
+   position, était remiré dans le contexte — la tête sautait sur le kf cliqué puis revenait en arrière
+   avant que le seek ne s'achève. Corrigé : `syncFromTelco` n'est plus abonné qu'à `onProgress`
+   (jamais émis pendant un seek — condition `status === 'playing'` côté `telco`), `onChange` reste
+   réservé au glyphe play/pause (aucun rapport avec `timelineMs`). Testé : polling 15×30ms après un
+   clic de kf, aucune variation. Régression ajoutée (`mount.spec.ts`) simulant l'event `onChange`
+   transitoire à la main.
+
+2. **Décor partagé entre keyframes adjacents — corrigé, conforme au spec (pas une invention).**
+   Répro exacte de l'auteur : fond posé sur kf1, déplacement à kf2, fond différent posé sur kf2 →
+   au lieu d'une interpolation, kf1 change aussi. Cause : quand un nouveau kf est ajouté par
+   double-clic sur la timeline (`machine.ts::KEYFRAME.ADD` → `adjacentDecorId()`), son `decorId` est
+   celui du kf voisin EXISTANT — kf1 et kf2 référencent littéralement le même objet `Decor`. Éditer
+   le décor de kf2 (`setDecor`, mutation par id) modifie donc aussi kf1, et `buildKeyframeDecorActions`
+   ne voit aucun diff entre deux décors identiques, donc aucune transition n'est émise.
+   **`2026-06-11-sequence-editor-grid-spec.md` §2.3 « Cycle de vie des décors (copy-on-write) »
+   documente ce protocole EXACTEMENT** (daté d'avant ce chantier, jamais implémenté) : partage
+   délibéré à la création (`addKeyframe` hérite du voisin — évite de dupliquer des décors identiques),
+   mais **« à la modification d'un décor (externe) : l'éditeur de décors est responsable de vérifier
+   si le decorId courant est partagé. Si oui, il doit créer une nouvelle entrée dans `scene.decors`
+   (via `registerDecor`) et appeler `assignDecor` pour lier le keyframe à ce nouvel id, avant
+   d'écrire les propriétés »** — une lacune d'implémentation contre un spec déjà tranché, pas une
+   ambiguïté de modèle à trancher aujourd'hui.
+   Implémenté à la lettre :
+   - `registerDecor` (nouvelle commande, `base-commands.ts`) — crée une entrée `{id}` vide, même
+     convention que `createKeyframe`/`createNamedKeyframe`.
+   - `assignKeyframeDecor` — déjà existant (`sequence-editor/commands.ts:126`), rien à ajouter.
+   - `decor-editor-bridge.ts::unsubscribeDecorChange` — avant `setDecor`, si `target.keyframeId` est
+     défini et que `target.decorId` est référencé par un AUTRE keyframe de la scène
+     (`isDecorSharedByAnotherKeyframe`), fork : `registerDecor` + `assignKeyframeDecor` vers un id
+     frais, puis `setDecor` écrit sur ce nouvel id — jamais sur l'original. Portée volontairement
+     limitée aux keyframes : `item.initialDecorId` est toujours créé frais par `createItem`, jamais
+     partagé par construction.
+   Validé en direct (Safari, répro exacte : kf1 rouge → nouveau kf hérite `decor-5` → kf édité en
+   bleu → re-sélection de kf1 : toujours `decor-5`, toujours rouge) + régression ajoutée
+   (`decor-editor-bridge.spec.ts`, scène à deux keyframes partageant un `decorId`).

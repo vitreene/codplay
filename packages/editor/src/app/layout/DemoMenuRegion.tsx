@@ -65,6 +65,11 @@ export function DemoMenuRegion({ controller }: DemoMenuRegionProps) {
               { name: 'createKeyframe', args: { itemId, timeMs: emptyScene.meta.durationMs } },
             ],
           })
+          // Sans ça, la sélection centrale reste sur l'item précédent — dedit continue d'éditer sa
+          // cible d'avant, pas le nouvel item (bug constaté : un réglage de décor semblait « s'appliquer
+          // partout » alors qu'il touchait en fait l'ancien item, invisible sous le nouveau qui partage
+          // la même géométrie par défaut).
+          controller.send({ type: 'SELECT_ITEM', itemIds: [itemId] })
         }}
       >
         Créer un item

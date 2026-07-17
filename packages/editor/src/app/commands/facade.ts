@@ -34,6 +34,8 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
       return { scene: base.attachItem(scene, command.args) }
     case 'setDecor':
       return { scene: base.setDecor(scene, command.args) }
+    case 'registerDecor':
+      return { scene: base.registerDecor(scene, command.args) }
     case 'createKeyframe':
       return base.createKeyframe(scene, command.args)
     case 'createCapsule':
