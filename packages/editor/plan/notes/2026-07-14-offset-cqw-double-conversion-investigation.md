@@ -172,3 +172,25 @@ Décision de l'auteur : `.closest('.ac-scene-root')` est confirmé invalide — 
 Granularité tranchée : détail d'implémentation. Principe retenu — codplay est un routeur d'events ; il y a toujours un root défini pour projeter les items de la scène ; la résolution du conteneur se fait à la lecture de la scène (build/init), une seule fois ; le node du perso root est ensuite mis à disposition via le registre runtime existant (`nodeByPersoId`) ; si `container-type` n'est pas encore posé sur ce node, le runtime l'assure lui-même à ce même moment d'init.
 
 Spec normative écrite : `docs/formalisation/2026-07-14-container-query-resolution-spec.md`. La délibération `container-query-unit-resolution-deliberation.md` est annotée comme arbitrage renversé sur ce point précis. **Implémentation non commencée** — reste à faire : `container-query-units.ts` (et ses 3 call-sites : `dom.ts`, `dom-component-adapter.ts`, `animation/adapter.ts`) doivent être adaptés pour consulter la résolution faite à l'init au lieu de `.closest()`.
+
+## Mise à jour 2026-07-16 — clôture : `.closest()` était déjà résolu, la vraie cause était ailleurs
+
+Reprise de session : `.closest('.ac-scene-root')` **n'existe plus du tout** dans le
+code (confirmé par grep, deux commits déjà en place et propres, `d771a1e` +
+`5fe0777 fix w-h null` — le registre déclaratif `setContainerQueryRootNode`/
+`nodeByPersoId` décrit ci-dessus était déjà implémenté entre l'écriture de cette note
+et cette reprise). Le symptôme observé en direct (`transform: translate(60px,
+-8.62069cqw)...`, unités mixtes) n'avait donc **aucun rapport** avec ce défaut de
+conception — fausse piste.
+
+**Cause racine réelle, trouvée et corrigée** : `container-query-units.ts::
+parseContainerQueryValue` parsait chaque valeur cqw via
+`CSSStyleValue.parse('width', rawValue)` — la propriété CSS `width` interdit les
+longueurs négatives, donc toute valeur cqw négative (typiquement `y` d'une
+translation vers le haut) faisait lever un `TypeError` silencieusement avalé par le
+`catch`, repassant non convertie. Confirmé empiriquement : `CSSStyleValue.parse
+('width','-8.62cqw')` lève, `CSSStyleValue.parse('margin-left','-8.62cqw')` réussit.
+Corrigé en parsant contre `margin-left`. Détail complet, plus la réflexion
+architecturale plus large que cette investigation a déclenchée (réduction du rôle
+d'anime.js, doublons relevés, chantiers) :
+`packages/codplay/plan/notes/2026-07-16-anime-js-native-substitution-chantiers.md`.

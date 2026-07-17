@@ -1,5 +1,5 @@
 export { createAuthorApi } from './author-api'
-export type { AuthorApi, PlayerAuthorState } from './author-api'
+export type { AuthorApi, NodePose, PlayerAuthorState } from './author-api'
 
 export { createSelectionFrame } from './selection-frame'
 export { createMultiSelectionFrame } from './multi-selection-frame'

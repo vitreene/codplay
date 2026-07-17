@@ -164,6 +164,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     offsetBridge.rebind({
       session: newSession,
       adapter,
+      authorApi,
       itemId,
       referenceWidthPx: () => machine.getSnapshot().context.referenceWidthPx,
     })

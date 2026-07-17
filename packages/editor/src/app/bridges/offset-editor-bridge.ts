@@ -1,4 +1,4 @@
-import type { LibreAdapter, TrackedSession } from '@codplay/selection-frame'
+import type { AuthorApi, LibreAdapter, NodePose, TrackedSession } from '@codplay/selection-frame'
 import type { OffsetEditorBridge, OffsetValuesPx } from '../../decor-editor/types'
 
 /**
@@ -21,6 +21,7 @@ import type { OffsetEditorBridge, OffsetValuesPx } from '../../decor-editor/type
 export type OffsetEditorBinding = {
   session: TrackedSession
   adapter: LibreAdapter
+  authorApi: AuthorApi
   itemId: string
   referenceWidthPx: () => number
 }
@@ -30,10 +31,35 @@ export type OffsetEditorBridgeHandle = OffsetEditorBridge & {
   notifyNow(): void
 }
 
-/** Même lecture que l'ancien `readCurrentOffsetPx` (`scene-player-bridge.ts`) — ne relit jamais un
- *  delta, seul l'état CSS final du node fait foi. `x`/`y` bruts (`style.translate`) sont exposés
- *  sous `translate` (`OffsetValuesPx.x`/`.y` sont un concept distinct, non encore câblé). */
-function readOffsetValuesPx(node: HTMLElement): OffsetValuesPx {
+/** `NodePose` (`AuthorApi.getNodePose`) → `OffsetValuesPx` — pur remappage de forme, aucune
+ *  relecture DOM ici : `v1-author-api-spec.md` §"anime.js comme unique source de vérité de la
+ *  pose" interdit à tout module authoring de re-décoder `style`/`getComputedStyle` pour déduire
+ *  une pose — seul `getNodePose` (symétrique de `utils.set` côté codplay, via `utils.get`) le
+ *  fait correctement, y compris après un remplacement de nœud (rebuild). */
+function nodePoseToOffsetValuesPx(pose: NodePose): OffsetValuesPx {
+  return {
+    translate: { x: pose.x, y: pose.y },
+    width: pose.width,
+    height: pose.height,
+    rotate: pose.rotate,
+    scale: { x: pose.scaleX, y: pose.scaleY },
+  }
+}
+
+/**
+ * EXCEPTION TEMPORAIRE à "anime.js comme unique source de vérité de la pose" — pendant un
+ * geste CS en cours, c'est `LibreAdapter` lui-même qui écrit la pose (propriétés CSS discrètes
+ * brutes, `style.translate`/`.rotate`/`.scale`), entièrement hors du `utils.set` d'anime — le
+ * cache d'anime (`getNodePose`) ne voit donc rien de ce geste tant qu'il n'y a pas eu de
+ * commit+rebuild. Confirmé en direct (2026-07-16) : `getNodePose` reste figé à `{x:0,y:0}`
+ * pendant tout un drag alors que `style.translate` suit correctement `"60px -45px"`.
+ *
+ * Ne fermer ce trou qu'en faisant écrire `LibreAdapter` via le même module partagé qu'anime
+ * (chantier 3/6, `packages/codplay/plan/notes/2026-07-16-anime-js-native-substitution-
+ * chantiers.md`) — à ce moment cette fonction et la branche `isGestureActive()` de
+ * `readActivePose` doivent être supprimées, `getNodePose` devenant correct sans exception.
+ */
+function readLiveGestureNodePose(node: HTMLElement): OffsetValuesPx {
   const translateRaw = node.style.translate
   const translateParts = translateRaw && translateRaw !== 'none' ? translateRaw.split(/\s+/).map(p => Number.parseFloat(p)) : []
   const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
@@ -60,10 +86,20 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
   let unsubscribeSessionActivity: (() => void) | null = null
   let wasGestureActive = false
 
-  const getActiveNode = (): HTMLElement | null => {
+  /**
+   * Gate via `session.canAct()` (santé de la session — connexion + non-suspendue). Pose lue via
+   * `authorApi.getNodePose` (jamais une relecture DOM, cf. `nodePoseToOffsetValuesPx`) — SAUF
+   * pendant un geste CS actif, où `readLiveGestureNodePose` prend le relais (voir son
+   * commentaire — exception temporaire, à supprimer avec le chantier 3/6).
+   */
+  const readActivePose = (): OffsetValuesPx | null => {
     if (binding === null || !binding.session.canAct()) return null
-    const node = binding.session.getNode(binding.itemId)
-    return node instanceof HTMLElement ? node : null
+    if (binding.session.isGestureActive()) {
+      const node = binding.session.getNode(binding.itemId)
+      return node instanceof HTMLElement ? readLiveGestureNodePose(node) : null
+    }
+    const pose = binding.authorApi.getNodePose(binding.itemId)
+    return pose === null ? null : nodePoseToOffsetValuesPx(pose)
   }
 
   const notifyGestureActiveChange = (active: boolean): void => {
@@ -86,9 +122,8 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
     },
 
     apply(patch) {
-      const node = getActiveNode()
-      if (node === null || binding === null) return
-      const current = readOffsetValuesPx(node)
+      const current = readActivePose()
+      if (current === null || binding === null) return
       if (patch.translate !== undefined) {
         const cur = current.translate ?? { x: 0, y: 0 }
         binding.adapter.applyMove({ dx: patch.translate.x - cur.x, dy: patch.translate.y - cur.y })
@@ -142,9 +177,8 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
     },
 
     notifyNow() {
-      const node = getActiveNode()
-      if (node === null) return
-      const values = readOffsetValuesPx(node)
+      const values = readActivePose()
+      if (values === null) return
       for (const cb of valueListeners) cb(values)
     },
   }
