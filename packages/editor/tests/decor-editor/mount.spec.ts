@@ -34,9 +34,18 @@ function minimalController(): DecorEditorController {
   return controller
 }
 
-/** Émule `subscribeToNode` : un test appelle `emit(itemId, node)` pour simuler l'apparition/disparition du node réel (seek, rebuild). */
+/**
+ * Émule `subscribeToNode` : un test appelle `emit(itemId, node)` pour simuler l'apparition/
+ * disparition du node réel (seek, rebuild). Implémente le contrat « appel immédiat » du vrai
+ * `AuthorApi.subscribeToNode` (`v1-author-api-spec.md` §subscribeToNode) : si `emit` a déjà été
+ * appelé pour cet `itemId` avant qu'un abonnement n'arrive (cas réel — le node est déjà monté
+ * quand `syncNodeSubscriptions()` souscrit pour un item fraîchement attaché), l'abonné reçoit ce
+ * node synchronement, pas seulement au prochain `emit` — sans quoi ce fake masquerait la classe
+ * de bug qu'il sert justement à détecter (`mount.spec.ts`, « production order » ci-dessous).
+ */
 function fakeSubscribeToNode(): { subscribeToNode: SubscribeToNode; emit: (itemId: string, node: Element | null) => void } {
   const callbacks = new Map<string, Set<(node: Element | null) => void>>()
+  const currentNodeByItemId = new Map<string, Element | null>()
   const subscribeToNode: SubscribeToNode = (itemId, cb) => {
     let set = callbacks.get(itemId)
     if (!set) {
@@ -44,9 +53,11 @@ function fakeSubscribeToNode(): { subscribeToNode: SubscribeToNode; emit: (itemI
       callbacks.set(itemId, set)
     }
     set.add(cb)
+    if (currentNodeByItemId.has(itemId)) cb(currentNodeByItemId.get(itemId) ?? null)
     return () => set!.delete(cb)
   }
   const emit = (itemId: string, node: Element | null): void => {
+    currentNodeByItemId.set(itemId, node)
     for (const cb of callbacks.get(itemId) ?? []) cb(node)
   }
   return { subscribeToNode, emit }
@@ -129,6 +140,38 @@ describe('mountDecorEditor', () => {
 
     controller.applyPathPatch('style.background-color', 'blue')
 
+    expect(itemEl.style.getPropertyValue('background-color')).toBe('blue')
+
+    document.body.removeChild(itemEl)
+    handle.destroy()
+  })
+
+  it('previews decor on an item attached AFTER mount (production order — regression, 2026-07-17)', () => {
+    // `decor-editor-bridge.ts::ensureMounted()` always constructs `mountDecorEditor` BEFORE
+    // `syncSelection()`/`attachItems()` runs for the current selection — `controller.getPatches()`
+    // is empty at construction in every real scenario, never populated ahead of time like
+    // `minimalController()` (above) does. A node-subscription loop that only runs once at
+    // construction (the pre-fix behavior) never sees any subsequently attached item — the live
+    // preview stayed inert until the deferred commit's rebuild painted the color from the document
+    // instead. `syncNodeSubscriptions()` must re-run on every controller change, not just once.
+    container = document.createElement('div')
+    const catalogs: DecorEditorCatalogs = { presets: [], cards: [], palette: PALETTE_CONFIG }
+    controller = new DecorEditorController(catalogs) // no attachItems yet — mirrors production order
+    const { subscribeToNode, emit } = fakeSubscribeToNode()
+
+    const handle = mountDecorEditor(container, controller, subscribeToNode, { referenceWidthPx: 600 })
+
+    const itemEl = document.createElement('div')
+    document.body.appendChild(itemEl)
+    emit('item-1', itemEl) // node already present when the item gets attached below
+
+    const defaults: ResolvedDecor = { style: { 'background-color': 'red' }, text: 'hello' }
+    controller.attachItems([{ itemId: 'item-1', itemType: 'text', defaults, chain: [], patch: {}, zones: [], context: 'horizontal' }])
+
+    expect(itemEl.style.getPropertyValue('background-color')).toBe('red')
+    expect(itemEl.textContent).toBe('hello')
+
+    controller.applyPathPatch('style.background-color', 'blue')
     expect(itemEl.style.getPropertyValue('background-color')).toBe('blue')
 
     document.body.removeChild(itemEl)

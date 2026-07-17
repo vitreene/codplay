@@ -103,6 +103,18 @@ export const controllerMachine = setup({
       if (event.type !== 'PLAYER_READY') return
       enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx, offsetBridge: event.offsetBridge })
     }),
+
+    /** §Étape B.6 — pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
+    emitSceneReverted: enqueueActions(({ context, enqueue }) => {
+      if (!context.scene) return
+      enqueue.emit({ type: 'sceneReverted', scene: context.scene })
+    }),
+
+    /** Relais pur — `isPlaying` reste possédé par le sequence-editor, jamais stocké ici (même principe que `emitSeek`). */
+    emitPlayingChanged: emit(({ event }) => ({
+      type: 'playingChanged' as const,
+      isPlaying: event.type === 'PLAYHEAD_PLAYING_CHANGED' ? event.isPlaying : false,
+    })),
   },
 }).createMachine({
   id: 'controller',
@@ -141,6 +153,7 @@ export const controllerMachine = setup({
     SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
     SEEK: { actions: 'emitSeek' },
     PLAYER_READY: { actions: ['setAuthorApi', 'emitAuthorApiReady'] },
+    PHASE_ABORT: { actions: 'emitSceneReverted' },
   },
   states: {
     idle: {

@@ -41,7 +41,7 @@ export function mountDecorEditor(
   options: MountDecorEditorOptions,
 ): DecorEditorMountHandle {
   const nodesByItemId = new Map<string, Element | null>()
-  const unsubscribeNodes: Array<() => void> = []
+  const unsubscribeNodeByItemId = new Map<string, () => void>()
 
   /** `getPatches()`/`getResolvedDecors()` sont deux `.map()` sur la même liste d'items attachés — même ordre, zippés une seule fois plutôt que ré-appariés par un second appel. */
   function applyToAllAttachedNodes(): void {
@@ -54,13 +54,34 @@ export function mountDecorEditor(
     })
   }
 
-  for (const { itemId } of controller.getPatches()) {
-    const unsubscribe = subscribeToNode(itemId, (node) => {
-      nodesByItemId.set(itemId, node)
-      applyToAllAttachedNodes()
-    })
-    unsubscribeNodes.push(unsubscribe)
+  /**
+   * Réconcilie les abonnements `subscribeToNode` avec le jeu COURANT d'items attachés — appelé à
+   * chaque changement du contrôleur, jamais une seule fois à la construction. `ensureMounted()`
+   * (`decor-editor-bridge.ts`) appelle toujours ce module AVANT `syncSelection()`/`attachItems()` :
+   * un abonnement figé à la construction ne verrait donc JAMAIS aucun item (`getPatches()` toujours
+   * vide à cet instant) — c'est ce qui rendait la preview live totalement inerte (couleur visible
+   * seulement au commit+rebuild, jamais avant). Symétrique de ce que `selection-frame.ts` fait déjà
+   * pour le cadre (réabonnement à chaque changement de sélection).
+   */
+  function syncNodeSubscriptions(): void {
+    const currentIds = new Set(controller.getPatches().map((entry) => entry.itemId))
+    for (const itemId of unsubscribeNodeByItemId.keys()) {
+      if (currentIds.has(itemId)) continue
+      unsubscribeNodeByItemId.get(itemId)?.()
+      unsubscribeNodeByItemId.delete(itemId)
+      nodesByItemId.delete(itemId)
+    }
+    for (const itemId of currentIds) {
+      if (unsubscribeNodeByItemId.has(itemId)) continue
+      const unsubscribe = subscribeToNode(itemId, (node) => {
+        nodesByItemId.set(itemId, node)
+        applyToAllAttachedNodes()
+      })
+      unsubscribeNodeByItemId.set(itemId, unsubscribe)
+    }
   }
+
+  syncNodeSubscriptions()
 
   const palette = createDecorEditorPalette(controller)
   palette.element.style.top = '24px'
@@ -70,6 +91,7 @@ export function mountDecorEditor(
   groupTypoIconFields(palette.element)
 
   const unsubscribeController = controller.subscribe(() => {
+    syncNodeSubscriptions()
     applyToAllAttachedNodes()
     groupTypoIconFields(palette.element)
   })
@@ -77,7 +99,7 @@ export function mountDecorEditor(
   return {
     destroy(): void {
       unsubscribeController()
-      for (const unsubscribe of unsubscribeNodes) unsubscribe()
+      for (const unsubscribe of unsubscribeNodeByItemId.values()) unsubscribe()
       container.innerHTML = ''
     },
   }

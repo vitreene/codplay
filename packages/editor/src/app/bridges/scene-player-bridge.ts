@@ -68,7 +68,6 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       // supporté aujourd'hui — un item resté `bloc` lève ici, pas un bug de ce pont).
       const { sceneDoc, styleSheet, rootGrid, preRollMs } = buildSceneDoc(scene)
       lastPreRollMs = preRollMs
-      console.log('[DEBUG sceneDoc.stories.story-main]', JSON.stringify(sceneDoc.stories['story-main'], null, 2))
       // Rien n'est placé hors du capsule racine ; ses dimensions réelles sont adaptatives, seul le
       // ratio (`cols/rows` de sa grille) est une contrainte — letterboxing dans `.app-region--scene`
       // plutôt qu'un étirement. Posé sur `mountTarget` lui-même (pas le node racine que Codplay monte
@@ -101,6 +100,14 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       // `studio.player` est la même instance à travers tous les rebuilds (§2.1) — un seul envoi suffit.
       if (isFirstReady) {
         machine.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: mountTarget.getBoundingClientRect().width, offsetBridge })
+        // Le CS doit se désactiver pendant la lecture — jamais câblé jusqu'ici (`AuthorApi.
+        // subscribeToPlayerState` existe précisément pour ça). `setPartActive('cs', false)` retire
+        // l'interactivité/l'affichage du cadre, `true` la restaure — la même bascule est réappliquée
+        // depuis `attachSelection` pour qu'un frame flambant neuf (nouvelle sélection en cours de
+        // lecture) reflète immédiatement l'état courant, pas seulement au prochain changement.
+        authorApi.subscribeToPlayerState((state) => {
+          frame?.setPartActive('cs', !state.isPlaying)
+        })
       }
       // Un rebuild remonte toujours le player à t=0 — rejouer la position courante immédiatement,
       // sinon toute modification (décor, transition…) reste invisible jusqu'au prochain geste de
@@ -154,12 +161,14 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     // Le pont offset relaie chaque delta LibreAdapter vers dedit (spec §6, `onApplied` — émission
     // continue, jamais de debounce ici) ; dedit décide seul quand committer (Chantier 3 généralisé,
     // `2026-07-16-position-bridge-reconciliation-plan.md` §Étape D). Ce pont ne commet plus rien
-    // lui-même — l'ancien `persistOffset`/`RUN_TRANSACTION` direct est retiré (§Étape C).
+    // lui-même — l'ancien `persistOffset`/`RUN_TRANSACTION` direct est retiré (§Étape C du plan de
+    // réconciliation). `change.kind` propagé au pont offset : seuls les composants réellement
+    // manipulés entrent dans l'écart (`2026-07-17-phase-commit-selection-recovery-plan.md` §Étape C).
     const adapter = createLibreAdapter({
       authorApi,
       itemId,
       anchor: newSession,
-      onApplied: () => offsetBridge.notifyNow(),
+      onApplied: (change) => offsetBridge.notifyNow(change.kind),
     })
     offsetBridge.rebind({
       session: newSession,
@@ -170,6 +179,9 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     })
 
     const newFrame = createSelectionFrame({ itemId, authorApi, anchor: newSession, sceneRoot: mountTarget, adapter })
+    // Reflète l'état de lecture courant immédiatement — la souscription globale (ci-dessus) ne
+    // notifie qu'au PROCHAIN changement, un frame flambant neuf doit déjà être correct sans attendre.
+    newFrame.setPartActive('cs', !authorApi.getPlayerState().isPlaying)
 
     frame = newFrame
     const frameDestroy = newFrame.destroy.bind(newFrame)
@@ -181,11 +193,14 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   }
 
   /**
-   * Ne remplace le frame/session que si la sélection a réellement changé — un rebuild qui recommit
-   * le MÊME item (le cas courant : le commit de dedit sur ce même item) est un no-op ici, la
-   * session existante suit déjà le node remonté (Chantier 1). Avant cette distinction, `selectItem`
-   * détruisait et reconstruisait frame+adapter+session à CHAQUE commit, y compris ceux déclenchés
-   * par ses propres gestes — la cause directe de §1.4 du plan parent.
+   * Ne remplace le frame/session que si la sélection a réellement changé — un simple écho de
+   * sélection (`SELECT_ITEM` sans mutation du document, `scene === lastScene`) sur le MÊME item est
+   * un no-op ici. Après un rebuild réel (nouveau document), voir `reattachSelection` ci-dessous —
+   * codplay n'émet aucune notification `subscribeToNode` au moment où un enfant de liste est
+   * réellement attaché par replay de move (seule la racine l'est avant ce point), donc la session
+   * existante ne peut PAS être supposée suivre le node remonté dans ce cas (`2026-07-17-phase-
+   * commit-selection-recovery-plan.md` — restaure le comportement de `db18e52`, régressé par
+   * `7e4534f`).
    */
   function selectItem(itemIds: string[]): void {
     const itemId = itemIds[0] ?? null
@@ -194,10 +209,22 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     destroySelection(() => attachSelection(itemId))
   }
 
+  /**
+   * Reconstruction inconditionnelle après un rebuild réel — même item ou non. `attachSelection`
+   * ouvre une souscription `subscribeToNode` fraîche, qui reçoit son node immédiatement (contrat
+   * « appel immédiat ») : c'est le seul chemin fiable pour voir le node effectivement attaché
+   * aujourd'hui, cf. commentaire de `selectItem`.
+   */
+  function reattachSelection(itemIds: string[]): void {
+    const itemId = itemIds[0] ?? null
+    currentItemId = itemId
+    destroySelection(() => attachSelection(itemId))
+  }
+
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
     const proceed = (): void => {
       if (scene !== lastScene) {
-        void rebuild(scene).then(() => selectItem(selection.itemIds))
+        void rebuild(scene).then(() => reattachSelection(selection.itemIds))
       } else {
         selectItem(selection.itemIds)
       }
@@ -221,8 +248,43 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   const unsubscribeSeek = machine.on('seek', ({ timelineMs }) => {
     lastSeekMs = timelineMs
     // Avant le premier rebuild réussi (`authorApi` non posé), le player n'a rien à rejouer.
-    if (authorApi) void studio.player.seek({ timelineMs: timelineMs + lastPreRollMs })
+    if (!authorApi) return
+    // `player.seek()` fait bouger la pose anime.js du node SANS le remplacer ni changer sa taille —
+    // ni `handleElementNode` (changement de node) ni le `ResizeObserver` (changement de taille) du
+    // CS ne se déclenchent dans ce cas. Sans `sync()` explicite ici, le cadre reste figé sur la
+    // position d'avant le seek jusqu'au prochain événement qui le repositionne par accident.
+    void studio.player.seek({ timelineMs: timelineMs + lastPreRollMs }).then(() => frame?.sync())
   })
+  /**
+   * Abandon de phase (Échap côté pont `decorEditor`) — `scene` est le document INCHANGÉ (rien n'a
+   * été committé pour la phase annulée), mais la preview live du geste/de la palette a déjà mué le
+   * DOM en dehors de tout commit. Un rebuild inconditionnel depuis ce même document efface cette
+   * preview périmée ; `reattachSelection` (étape A) redonne un cadre fonctionnel sur le résultat.
+   */
+  const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
+    void rebuild(scene).then(() => reattachSelection(machine.getSnapshot().context.selection.itemIds))
+  })
+
+  // Clic hors CS → `CLEAR_SELECTION` : déjà câblé, pas ici — `AppLayout.tsx::useClearSelectionShortcuts`
+  // (`mousedown` sur `.app-region--scene` hors `[data-selection-frame]`) le fait depuis
+  // `2026-07-16-rebuild-ordering-execution-plan.md` §4.2. Signal 1 (flush sur changement de
+  // sélection, `decor-editor-bridge.ts`) s'en sert déjà tel quel — rien à ajouter ici.
+
+  /**
+   * Resize fenêtre / scroll — `SelectionFrameHandle.sync()` existe précisément pour ça
+   * (`positionCs()` recalculé depuis `getBoundingClientRect()` courant) mais n'était câblé nulle
+   * part dans ed2 — seulement dans les démos autonomes du module (`selection-frame-demo.ts`,
+   * `selection-frame-grid-demo.ts`), jamais dans `scene-player-bridge.ts`. Le `ResizeObserver`
+   * interne de `SelectionFrame` observe uniquement le NODE de l'item (ses changements de taille
+   * propre) — ni un resize de fenêtre ni un scroll d'ancêtre ne le déclenchent, aucun des deux ne
+   * change la taille du node, seulement sa position à l'écran. `scroll` en phase de capture (ne
+   * bulle pas nativement) pour attraper le scroll de n'importe quel ancêtre scrollable, pas
+   * seulement `window` — même portée que les démos.
+   */
+  const onWindowResize = (): void => frame?.sync()
+  const onAncestorScroll = (): void => frame?.sync()
+  window.addEventListener('resize', onWindowResize)
+  document.addEventListener('scroll', onAncestorScroll, { capture: true, passive: true })
 
   const initialScene = machine.getSnapshot().context.scene
   if (initialScene) void rebuild(initialScene)
@@ -232,6 +294,9 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
       unsubscribeSeek.unsubscribe()
+      unsubscribeReverted.unsubscribe()
+      window.removeEventListener('resize', onWindowResize)
+      document.removeEventListener('scroll', onAncestorScroll, { capture: true })
       frame?.destroy()
       void studio.player.destroy()
     },

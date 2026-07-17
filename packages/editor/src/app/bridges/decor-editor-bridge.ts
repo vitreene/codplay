@@ -92,44 +92,81 @@ function patchToContentArgs(patch: DecorPatch, existing: Content | undefined, it
   }
 }
 
+/** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif (spec §4.3, `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B.4). Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
+export const PHASE_IDLE_FLUSH_MS = 4000
+
 export function createDecorEditorBridge(container: HTMLElement, machine: Actor<typeof controllerMachine>): BridgeHandle {
   const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, cards: [], palette: DEFAULT_PALETTE }
   const controller = new DecorEditorController(catalogs)
   let mountHandle: DecorEditorMountHandle | null = null
   let offsetBridgeWired = false
 
-  // ── Flush de fin de phase (chantier 3 généralisé — `2026-07-16-position-bridge-reconciliation-
-  // plan.md` §Étape D) — dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est
-  // ce pont, l'hôte, qui décide seul quand committer réellement vers la scène. ────────────────────
+  // ── Commit de fin de phase (`2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B) —
+  // dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est ce pont, l'hôte, qui
+  // décide seul QUAND committer. Six signaux de fin de phase, jamais un minuteur court réarmé à
+  // chaque micro-geste : changement de sélection, seek, mutation externe du document et Échap sont
+  // immédiats (`flushNow`/`abortPhase` appelés directement) ; seule l'inactivité prolongée passe par
+  // un minuteur (`armIdleFlush`, réarmé à chaque signal d'activité). ─────────────────────────────
 
   let pendingCommands: Command[] | null = null
-  let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let idleFlushTimer: ReturnType<typeof setTimeout> | null = null
+  /** Dernière scène/sélection observées — distingue une vraie mutation externe (signal 5) et un simple écho de notre propre flush (qui vide `pendingCommands` avant d'émettre). */
+  let lastObservedScene: EditorScene | null = null
+  let lastSelectionKey: string | null = null
 
-  function armFlush(): void {
-    if (flushTimer !== null) clearTimeout(flushTimer)
-    flushTimer = setTimeout(flushNow, 250)
+  function selectionKey(selection: Selection): string {
+    return JSON.stringify([selection.itemIds, selection.keyframeId ?? null])
   }
 
-  function cancelFlush(): void {
-    if (flushTimer !== null) {
-      clearTimeout(flushTimer)
-      flushTimer = null
+  function armIdleFlush(): void {
+    if (idleFlushTimer !== null) clearTimeout(idleFlushTimer)
+    idleFlushTimer = setTimeout(flushNow, PHASE_IDLE_FLUSH_MS)
+  }
+
+  function cancelIdleFlush(): void {
+    if (idleFlushTimer !== null) {
+      clearTimeout(idleFlushTimer)
+      idleFlushTimer = null
     }
   }
 
   /**
-   * Double garde avec `armFlush`/`onGestureActiveChange` : un geste CS repris entre-temps (ex.
-   * resize→rotate enchaînés sans pause) laisse `pendingCommands` en place sans committer — sa
-   * propre fin réarmera. Sans ce second contrôle au moment du tir, un minuteur déjà en vol au
-   * moment où un nouveau geste démarre pourrait committer une position intermédiaire.
+   * Double garde avec `onGestureActiveChange` : un geste CS repris entre-temps (ex. resize→rotate
+   * enchaînés) laisse `pendingCommands` en place sans committer — sa propre fin réarmera. Sans ce
+   * second contrôle au moment du tir, un signal de fin de phase déjà en vol au moment où un nouveau
+   * geste démarre pourrait committer une position intermédiaire.
    */
   function flushNow(): void {
-    flushTimer = null
+    cancelIdleFlush()
     if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) return
     const commands = pendingCommands
     pendingCommands = null
     if (commands && commands.length > 0) machine.send({ type: 'RUN_TRANSACTION', commands })
   }
+
+  /** Échap — abandon de phase (§Étape B.6) : jette l'écart en attente sans committer, puis force le pont `scenePlayer` à rejouer le document inchangé pour effacer la preview live devenue périmée. */
+  function abortPhase(): void {
+    if (pendingCommands === null) return
+    cancelIdleFlush()
+    pendingCommands = null
+    machine.send({ type: 'PHASE_ABORT' })
+  }
+
+  /**
+   * `AppLayout.tsx::useClearSelectionShortcuts` écoute déjà `Escape` sur `document` (phase de
+   * bulles, déjà câblé) et envoie `CLEAR_SELECTION` — ce qui, via le signal 1 ci-dessus, COMMIT le
+   * patch en attente. Sans précaution, Échap ferait donc l'inverse du contrat validé (« abandon,
+   * jamais de commit »). Capturée en phase de capture sur `document` (jamais `window` en phase de
+   * bulles, qui s'exécuterait APRÈS le `CLEAR_SELECTION` de la bulle) : la capture descend
+   * `window → document → …` STRICTEMENT avant toute bulle, donc `abortPhase()` vide
+   * `pendingCommands` avant que `CLEAR_SELECTION` n'atteigne le signal 1 — son flush devient un
+   * no-op. Ne duplique pas la désélection elle-même, seulement l'abandon du patch en attente.
+   */
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return
+    abortPhase()
+  }
+  document.addEventListener('keydown', onKeyDown, { capture: true })
 
   /** Câblé une fois le pont offset disponible (`context.offsetBridge`, publié avec `authorApi`). */
   function wireOffsetBridge(): void {
@@ -138,12 +175,11 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (!offsetBridge) return
     offsetBridgeWired = true
     controller.setOffsetBridge(offsetBridge)
-    // Fin d'un geste CS — arme le délai court (réarmé si un nouveau geste, ou une autre édition
-    // continue, s'enchaîne avant qu'il n'expire) plutôt que de committer immédiatement : c'est
-    // exactement le comportement qui empêchait resize→rotate→move de produire 3 commits distincts.
+    // Fin d'un geste CS — désormais un simple signal d'activité de phase (harmonisé avec le `change`
+    // palette, arbitrage 2026-07-17), jamais un commit immédiat : arme le minuteur d'inactivité.
     offsetBridge.onGestureActiveChange(active => {
-      if (active) cancelFlush()
-      else if (pendingCommands !== null) armFlush()
+      if (active) cancelIdleFlush()
+      else if (pendingCommands !== null) armIdleFlush()
     })
   }
 
@@ -201,41 +237,68 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (entry.patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
     if (entry.patch.custom !== undefined) console.warn('[decorEditor bridge] patch.custom non routé — aucun champ document ne correspond à du CSS libre')
 
-    // Ne commet plus immédiatement — armé pour la fin de phase (chantier 3 généralisé, ci-dessus).
-    // `entry.patch` porte déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour
-    // (pont §Étape A) : c'est ce qui ferme le bug de patch périmé constaté en direct cette session.
+    // Ne commet plus immédiatement — accumulé pour la fin de phase (§Étape B). `entry.patch` porte
+    // déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour (pont §Étape A) :
+    // c'est ce qui ferme le bug de patch périmé constaté en direct cette session.
     if (commands.length > 0) {
       pendingCommands = commands
-      armFlush()
+      armIdleFlush()
     }
   })
 
   const unsubscribeInteractionEnd = controller.onInteractionEnd(() => {
     if (pendingCommands === null) return
     if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) {
-      cancelFlush()
+      cancelIdleFlush()
       return
     }
-    armFlush()
+    // `change` d'un champ palette — harmonisé (arbitrage 2026-07-17) : un signal d'activité de
+    // phase comme la fin d'un geste CS, jamais un commit en soi.
+    armIdleFlush()
   })
 
   const unsubscribeCommitted = machine.on('sceneCommitted', ({ scene, selection }) => {
     ensureMounted()
+    const key = selectionKey(selection)
+    // Signal 1 — changement de sélection : flush avant de resynchroniser la palette sur la
+    // nouvelle cible, quelle que soit l'origine (timeline, clic hors CS, etc.).
+    if (key !== lastSelectionKey) {
+      flushNow()
+    } else if (scene !== lastObservedScene && pendingCommands !== null) {
+      // Signal 5 — mutation externe du document (ex. édition timeline) survenue pendant une phase
+      // décor en cours : notre propre flush vide `pendingCommands` AVANT d'émettre son propre
+      // commit, donc son écho ne peut jamais retomber dans cette branche (pas de boucle).
+      flushNow()
+    }
+    lastSelectionKey = key
+    lastObservedScene = scene
     syncSelection(scene, selection)
   })
   const unsubscribeLoaded = machine.on('sceneLoaded', ({ scene }) => {
+    // Un chargement de document supplante toute phase en cours — rien à committer, rien à préserver.
+    cancelIdleFlush()
+    pendingCommands = null
     ensureMounted()
-    syncSelection(scene, machine.getSnapshot().context.selection)
+    const selection = machine.getSnapshot().context.selection
+    syncSelection(scene, selection)
+    lastObservedScene = scene
+    lastSelectionKey = selectionKey(selection)
   })
   const unsubscribeAuthorApiReady = machine.on('authorApiReady', () => ensureMounted())
+  // Signal 3 — seek de l'auteur : flush immédiat (le rebuild qui suit rejoue la position demandée).
+  const unsubscribeSeek = machine.on('seek', () => flushNow())
 
   ensureMounted()
   const initial = machine.getSnapshot().context
   if (initial.scene) syncSelection(initial.scene, initial.selection)
+  lastObservedScene = initial.scene
+  lastSelectionKey = selectionKey(initial.selection)
 
   return {
     destroy(): void {
-      cancelFlush()
+      cancelIdleFlush()
+      document.removeEventListener('keydown', onKeyDown, { capture: true })
+      unsubscribeSeek.unsubscribe()
       pendingCommands = null
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()

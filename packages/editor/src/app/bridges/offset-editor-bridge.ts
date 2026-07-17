@@ -26,9 +26,19 @@ export type OffsetEditorBinding = {
   referenceWidthPx: () => number
 }
 
+/** Composant manipulé — vocabulaire de `LibreAdapter.onApplied`'s `change.kind`. */
+export type OffsetGestureKind = 'move' | 'resize' | 'rotate' | 'scale'
+
 export type OffsetEditorBridgeHandle = OffsetEditorBridge & {
   rebind(binding: OffsetEditorBinding | null): void
-  notifyNow(): void
+  /**
+   * `kind` — composant que ce delta vient de manipuler (`2026-07-17-phase-commit-selection-
+   * recovery-plan.md` §Étape C, « props intouchées ») : accumulé dans l'ensemble des composants
+   * manipulés depuis le dernier `rebind` (une phase committée en repart à zéro, cf. étape A qui
+   * fait suivre chaque rebuild réel d'un `rebind`). `onValues` n'émet alors QUE ces composants —
+   * un move seul ne fige plus `width`/`height`/`rotate`/`scale` dans l'écart.
+   */
+  notifyNow(kind: OffsetGestureKind): void
 }
 
 /** `NodePose` (`AuthorApi.getNodePose`) → `OffsetValuesPx` — pur remappage de forme, aucune
@@ -79,12 +89,27 @@ function readLiveGestureNodePose(node: HTMLElement): OffsetValuesPx {
   }
 }
 
+/** `kind` → sous-ensemble de `OffsetValuesPx` qu'il autorise à traverser vers l'écart. */
+function restrictToManipulated(values: OffsetValuesPx, kinds: ReadonlySet<OffsetGestureKind>): OffsetValuesPx {
+  const restricted: OffsetValuesPx = {}
+  if (kinds.has('move') && values.translate !== undefined) restricted.translate = values.translate
+  if (kinds.has('resize')) {
+    if (values.width !== undefined) restricted.width = values.width
+    if (values.height !== undefined) restricted.height = values.height
+  }
+  if (kinds.has('rotate') && values.rotate !== undefined) restricted.rotate = values.rotate
+  if (kinds.has('scale') && values.scale !== undefined) restricted.scale = values.scale
+  return restricted
+}
+
 export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
   let binding: OffsetEditorBinding | null = null
   const valueListeners = new Set<(values: OffsetValuesPx) => void>()
   const gestureActiveListeners = new Set<(active: boolean) => void>()
   let unsubscribeSessionActivity: (() => void) | null = null
   let wasGestureActive = false
+  /** Composants manipulés depuis le dernier `rebind` (§Étape C) — vidé à chaque rebind, jamais pendant une phase en cours. */
+  const manipulatedKinds = new Set<OffsetGestureKind>()
 
   /**
    * Gate via `session.canAct()` (santé de la session — connexion + non-suspendue). Pose lue via
@@ -167,6 +192,7 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
       unsubscribeSessionActivity?.()
       unsubscribeSessionActivity = null
       binding = nextBinding
+      manipulatedKinds.clear()
       if (nextBinding !== null) {
         unsubscribeSessionActivity = nextBinding.session.subscribe(() => {
           notifyGestureActiveChange(nextBinding.session.isGestureActive())
@@ -176,10 +202,12 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
       }
     },
 
-    notifyNow() {
+    notifyNow(kind) {
+      manipulatedKinds.add(kind)
       const values = readActivePose()
       if (values === null) return
-      for (const cb of valueListeners) cb(values)
+      const restricted = restrictToManipulated(values, manipulatedKinds)
+      for (const cb of valueListeners) cb(restricted)
     },
   }
 }

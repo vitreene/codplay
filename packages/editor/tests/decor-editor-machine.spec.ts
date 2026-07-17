@@ -64,15 +64,35 @@ describe('decorEditorMachine — cycle de vie', () => {
     actor.stop()
   })
 
-  it('ITEMS.ATTACH pose activePanelId depuis initialPanelId et réinitialise visualPosition/zoneMode', () => {
+  it('ITEMS.ATTACH pose activePanelId depuis initialPanelId et réinitialise visualPosition/zoneMode pour une sélection RÉELLEMENT différente', () => {
     const actor = boot()
     actor.send(attachEvent())
     actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })
     actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: true })
-    actor.send({ ...attachEvent(), initialPanelId: 'typo' }) // ré-attache (nouvel item)
+    actor.send({
+      type: 'ITEMS.ATTACH',
+      items: [entry({ itemId: 'item-2' })], // sélection différente (autre itemId)
+      zones: [],
+      initialPanelId: 'typo',
+    })
     const snap = actor.getSnapshot()
     expect(snap.context.activePanelId).toBe('typo')
     expect(snap.context.visualPosition).toBe(false)
+    actor.stop()
+  })
+
+  it('ITEMS.ATTACH sur la MÊME sélection préserve activePanelId/visualPosition/zoneMode (présentation — réservée à l\'utilisateur)', () => {
+    // `decor-editor-bridge.ts::syncSelection` réattache le même item à CHAQUE `sceneCommitted` (pour
+    // rafraîchir ses données depuis le document) — pas seulement quand la sélection change. Un
+    // re-attach de ce type ne doit jamais écraser la présentation choisie par l'utilisateur.
+    const actor = boot()
+    actor.send(attachEvent())
+    actor.send({ type: 'PANEL.SELECT', panelId: 'transform' })
+    actor.send({ type: 'VISUAL_POSITION.TOGGLE', on: true })
+    actor.send({ ...attachEvent(), initialPanelId: 'typo' }) // même item-1, données rafraîchies
+    const snap = actor.getSnapshot()
+    expect(snap.context.activePanelId).toBe('transform')
+    expect(snap.context.visualPosition).toBe(true)
     actor.stop()
   })
 

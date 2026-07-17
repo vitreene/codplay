@@ -31,6 +31,7 @@
 | 12 | Modèle de données (EditorScene, item, capsule, content, décor…) | Spec / structure | **Écrit (2026-07-11)** — structure exhaustive ; arbitrages tranchés | `packages/editor/plan/app/2026-07-11-ed2-document-model.md` |
 | 13 | Représentation sequence-editor (pistes, mini-éditeur audio) | Plan | **Écrit (2026-07-11)** — multipiste audio non fait | `packages/editor/plan/modules/2026-07-11-sequence-editor-representation.md` |
 | 14 | Item avatar (typeDef, pistes, macros, tempérament) | Spec + Plan | **Écrit (2026-07-16)** — chantier futur, rien d'implémenté | `packages/editor/plan/2026-07-16-avatar-item-plan.md` |
+| 15 | Récupération sélection/commit de phase (régression chantiers 1-3) | Plan | **Terminé et vérifié (2026-07-17)** — vitest + Safari, zéro régression | `packages/editor/plan/app/2026-07-17-phase-commit-selection-recovery-plan.md` |
 
 **Schémas de présentation** (pédagogiques, **non normatifs** → `notes/`, jetables) : architecture logique de l'app (`notes/2026-07-11-ed2-architecture.md`), présentation Codplay (`notes/2026-07-11-codplay-presentation.md`). Ils expliquent, ne prescrivent pas.
 

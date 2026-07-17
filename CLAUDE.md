@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - Demos exist to validate the project and reveal missing pieces; they must not hide gaps or be made to work at all costs.
+- Never deviate from a validated plan's text at implementation time — even for an apparent improvement (an optimization, a shortcut). Stop and ask first.
+- Before calling a chantier done, actually exercise the base interaction it touches (not just its own target scenario) — run the app, don't just read the diff.
 
 ## Commands
 

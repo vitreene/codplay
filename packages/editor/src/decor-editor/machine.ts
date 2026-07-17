@@ -64,6 +64,21 @@ function toAttachedItems(entries: AttachItemEntry[]): AttachedItem[] {
   }))
 }
 
+/**
+ * `syncSelection` (`decor-editor-bridge.ts`) réattache le MÊME ensemble d'items à chaque
+ * `sceneCommitted` — pas seulement quand la sélection change réellement — pour rafraîchir leurs
+ * données (`defaults`/`chain`/`patch`) depuis le document à jour. Un re-attach de ce type ne doit
+ * jamais réinitialiser la présentation (panneau actif, mode position visuelle, mode zone) : seul un
+ * geste de l'utilisateur (choisir un panneau, changer de sélection) a le droit de la changer.
+ * Comparaison par ensemble (pas par ordre) — une multi-sélection resynchronisée dans un ordre
+ * différent reste « la même sélection ».
+ */
+function sameItemIdSet(previous: AttachedItem[], next: AttachItemEntry[]): boolean {
+  if (previous.length !== next.length) return false
+  const nextIds = new Set(next.map(item => item.itemId))
+  return previous.every(item => nextIds.has(item.itemId))
+}
+
 export const decorEditorMachine = setup({
   types: {
     context: {} as DecorEditorMachineContext,
@@ -110,13 +125,16 @@ export const decorEditorMachine = setup({
         },
 
         'ITEMS.ATTACH': {
-          actions: assign(({ event }) => ({
-            items: toAttachedItems(event.items),
-            zones: event.zones,
-            activePanelId: event.initialPanelId,
-            visualPosition: false,
-            zoneMode: false,
-          })),
+          actions: assign(({ context, event }) => {
+            const sameSelection = sameItemIdSet(context.items, event.items)
+            return {
+              items: toAttachedItems(event.items),
+              zones: event.zones,
+              activePanelId: sameSelection ? context.activePanelId : event.initialPanelId,
+              visualPosition: sameSelection ? context.visualPosition : false,
+              zoneMode: sameSelection ? context.zoneMode : false,
+            }
+          }),
         },
 
         'CHAIN.SET': {

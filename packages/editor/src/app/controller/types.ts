@@ -107,6 +107,24 @@ export type ControllerEvent =
   | { type: 'SEEK'; timelineMs: number }
   /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`). */
   | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }
+  /**
+   * Abandon de phase (Échap) — envoyé par le pont `decorEditor` quand une édition en attente
+   * (`pendingCommands`) est jetée sans commit (`2026-07-17-phase-commit-selection-recovery-plan.md`
+   * §Étape B.6). Ne mute jamais `context.scene` (rien n'a été committé) — sert uniquement à
+   * déclencher `sceneReverted`, qui force le pont `scenePlayer` à rejouer le document inchangé et
+   * ainsi effacer toute preview live désormais périmée.
+   */
+  | { type: 'PHASE_ABORT' }
+  /**
+   * `2026-07-17-telco-real-transport-plan.md` §3 étape A — requête de lecture/pause RÉELLE, relais
+   * pur vers `scene-player-bridge.ts` (seul possesseur de `studio.player`). `isPlaying`/`playheadMs`
+   * restent purement locaux au sequence-editor (`machine.ts:29-30`, jamais dupliqués ici) — ces
+   * events ne portent qu'une INTENTION d'agir sur le vrai player, jamais un état à synchroniser.
+   */
+  | { type: 'PLAYBACK_PLAY_REQUESTED' }
+  | { type: 'PLAYBACK_PAUSE_REQUESTED' }
+  /** Résultat (pas une requête) — la position réelle où `player.pause()` a figé la scène, pour resynchroniser le curseur local du sequence-editor (§3 étape D). */
+  | { type: 'PLAYBACK_PAUSED_AT'; timelineMs: number }
 
 // ─── Événements émis (§"modules de câblage impératifs", `2026-07-13-controller-islands-bridge-
 // plan.md` §3) — un pont s'y abonne via `machine.on(...)`, jamais via `subscribe()` sur chaque
@@ -117,3 +135,8 @@ export type ControllerEmitted =
   | { type: 'sceneLoaded'; scene: EditorScene }
   | { type: 'seek'; timelineMs: number }
   | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge }
+  /** Réponse à `PHASE_ABORT` — `scene` est le document INCHANGÉ (rien n'a été committé). */
+  | { type: 'sceneReverted'; scene: EditorScene }
+  | { type: 'playbackPlayRequested' }
+  | { type: 'playbackPauseRequested' }
+  | { type: 'playbackPausedAt'; timelineMs: number }
