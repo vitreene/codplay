@@ -1,5 +1,5 @@
 import type { AuthorApi, LibreAdapter, NodePose, TrackedSession } from '@codplay/selection-frame'
-import type { OffsetEditorBridge, OffsetValuesPx } from '../../decor-editor/types'
+import type { OffsetEditorBridge, OffsetValuesPx, Unsubscribe } from '../../decor-editor/types'
 
 /**
  * Pont offset — implémente `PositionEditorBridge` du spec `2026-07-07-dedit-spec.md` §6, renommé
@@ -39,6 +39,22 @@ export type OffsetEditorBridgeHandle = OffsetEditorBridge & {
    * un move seul ne fige plus `width`/`height`/`rotate`/`scale` dans l'écart.
    */
   notifyNow(kind: OffsetGestureKind): void
+  /**
+   * Called by `scene-player-bridge.ts` (relaying `LibreAdapter.onCommit`) exactly once per completed
+   * gesture — an explicit "this gesture is done" message, distinct from `notifyNow`'s continuous
+   * preview stream (`2026-07-18-pose-edit-architecture-study.md` §7). Carries no value of its own —
+   * the value already reached `onValues` via `notifyNow`. Re-broadcast to the host through
+   * `onCommit` below.
+   */
+  commitNow(kind: OffsetGestureKind): void
+  /**
+   * Host subscription (`decor-editor-bridge.ts`) to the signal `commitNow` re-broadcasts — replaces
+   * the previous `onGestureActiveChange(false)` (a state transition re-derived from
+   * `isGestureActive()` at an unrelated instant) as the trigger that arms the phase-grouping flush:
+   * the host now reacts to a direct message from the gesture that just ended, not to an observed
+   * absence of activity.
+   */
+  onCommit(cb: (kind: OffsetGestureKind) => void): Unsubscribe
 }
 
 /** `NodePose` (`AuthorApi.getNodePose`) → `OffsetValuesPx` — pur remappage de forme, aucune
@@ -53,39 +69,6 @@ function nodePoseToOffsetValuesPx(pose: NodePose): OffsetValuesPx {
     height: pose.height,
     rotate: pose.rotate,
     scale: { x: pose.scaleX, y: pose.scaleY },
-  }
-}
-
-/**
- * EXCEPTION TEMPORAIRE à "anime.js comme unique source de vérité de la pose" — pendant un
- * geste CS en cours, c'est `LibreAdapter` lui-même qui écrit la pose (propriétés CSS discrètes
- * brutes, `style.translate`/`.rotate`/`.scale`), entièrement hors du `utils.set` d'anime — le
- * cache d'anime (`getNodePose`) ne voit donc rien de ce geste tant qu'il n'y a pas eu de
- * commit+rebuild. Confirmé en direct (2026-07-16) : `getNodePose` reste figé à `{x:0,y:0}`
- * pendant tout un drag alors que `style.translate` suit correctement `"60px -45px"`.
- *
- * Ne fermer ce trou qu'en faisant écrire `LibreAdapter` via le même module partagé qu'anime
- * (chantier 3/6, `packages/codplay/plan/notes/2026-07-16-anime-js-native-substitution-
- * chantiers.md`) — à ce moment cette fonction et la branche `isGestureActive()` de
- * `readActivePose` doivent être supprimées, `getNodePose` devenant correct sans exception.
- */
-function readLiveGestureNodePose(node: HTMLElement): OffsetValuesPx {
-  const translateRaw = node.style.translate
-  const translateParts = translateRaw && translateRaw !== 'none' ? translateRaw.split(/\s+/).map(p => Number.parseFloat(p)) : []
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-  const width = Number.parseFloat(node.style.width) || (computed ? Number.parseFloat(computed.width) : 0) || node.offsetWidth
-  const height = Number.parseFloat(node.style.height) || (computed ? Number.parseFloat(computed.height) : 0) || node.offsetHeight
-  const rotate = Number.parseFloat(node.style.rotate) || 0
-  const scaleRaw = node.style.scale
-  const scaleParts = scaleRaw && scaleRaw !== 'none' ? scaleRaw.split(/\s+/).map(p => Number.parseFloat(p)) : []
-  const scaleX = Number.isFinite(scaleParts[0]) ? scaleParts[0]! : 1
-  const scaleY = Number.isFinite(scaleParts[1]) ? scaleParts[1]! : scaleX
-  return {
-    translate: { x: translateParts[0] || 0, y: translateParts[1] || 0 },
-    width,
-    height,
-    rotate,
-    scale: { x: scaleX, y: scaleY },
   }
 }
 
@@ -106,6 +89,7 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
   let binding: OffsetEditorBinding | null = null
   const valueListeners = new Set<(values: OffsetValuesPx) => void>()
   const gestureActiveListeners = new Set<(active: boolean) => void>()
+  const commitListeners = new Set<(kind: OffsetGestureKind) => void>()
   let unsubscribeSessionActivity: (() => void) | null = null
   let wasGestureActive = false
   /** Composants manipulés depuis le dernier `rebind` (§Étape C) — vidé à chaque rebind, jamais pendant une phase en cours. */
@@ -113,16 +97,16 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
 
   /**
    * Gate via `session.canAct()` (santé de la session — connexion + non-suspendue). Pose lue via
-   * `authorApi.getNodePose` (jamais une relecture DOM, cf. `nodePoseToOffsetValuesPx`) — SAUF
-   * pendant un geste CS actif, où `readLiveGestureNodePose` prend le relais (voir son
-   * commentaire — exception temporaire, à supprimer avec le chantier 3/6).
+   * `authorApi.getNodePose` (jamais une relecture DOM, cf. `nodePoseToOffsetValuesPx`), y compris
+   * pendant un geste CS actif : `LibreAdapter` écrit désormais la pose via `AuthorApi.setNodePose`
+   * (anime.js `utils.set`), plus jamais directement sur `node.style.*` — le cache d'anime.js reste
+   * donc cohérent en permanence, aucune exception de lecture nécessaire (ancienne branche
+   * `isGestureActive()`/`readLiveGestureNodePose` supprimée — elle lisait les propriétés CSS
+   * discrètes `style.translate`/`.rotate`/`.scale`, jamais écrites par ce nouveau mécanisme, ce qui
+   * y renvoyait silencieusement `{x:0,y:0}` en boucle pendant tout le geste).
    */
   const readActivePose = (): OffsetValuesPx | null => {
     if (binding === null || !binding.session.canAct()) return null
-    if (binding.session.isGestureActive()) {
-      const node = binding.session.getNode(binding.itemId)
-      return node instanceof HTMLElement ? readLiveGestureNodePose(node) : null
-    }
     const pose = binding.authorApi.getNodePose(binding.itemId)
     return pose === null ? null : nodePoseToOffsetValuesPx(pose)
   }
@@ -208,6 +192,15 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
       if (values === null) return
       const restricted = restrictToManipulated(values, manipulatedKinds)
       for (const cb of valueListeners) cb(restricted)
+    },
+
+    commitNow(kind) {
+      for (const cb of commitListeners) cb(kind)
+    },
+
+    onCommit(cb) {
+      commitListeners.add(cb)
+      return () => commitListeners.delete(cb)
     },
   }
 }

@@ -160,4 +160,12 @@ export interface OffsetEditorBridge {
    * transition actif → inactif, jamais avant.
    */
   onGestureActiveChange(cb: (active: boolean) => void): Unsubscribe
+  /**
+   * Message explicite « ce geste vient de se terminer » (`2026-07-18-pose-edit-architecture-
+   * study.md` §7) — remplace `onGestureActiveChange(false)` comme déclencheur du regroupement de
+   * phase : l'hôte réagit désormais à un événement reçu directement du geste qui vient de finir,
+   * jamais à un état (`isGestureActive()`) redéduit à un instant sans rapport garanti avec la fin
+   * réelle du geste. Ne porte aucune valeur — celle-ci a déjà atteint `onValues` en continu.
+   */
+  onCommit(cb: (kind: 'move' | 'resize' | 'rotate' | 'scale') => void): Unsubscribe
 }

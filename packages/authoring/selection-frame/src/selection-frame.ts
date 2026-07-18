@@ -838,6 +838,25 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
 
   // ── drag (cs body) ───────────────────────────────────────────────────────
 
+  /**
+   * `csMachine` stays the single decision point for "can this gesture start" (its `canMove`/
+   * `canResize`/`canRotate` guards, driven by `capabilities`/`disabledOperations`/`csActive` —
+   * vocabulary `TrackedSession` doesn't have and has no reason to grow). Once `csMachine` accepts a
+   * gesture, the shared `TrackedSession` anchor (when the caller passed one, e.g. `scene-player-
+   * bridge.ts`'s shared session with `LibreAdapter`) is notified SYNCHRONOUSLY, in the same call —
+   * replacing the former passive mirror (`actor.subscribe` reacting to a snapshot change after the
+   * fact) with a direct call at the exact moment `csMachine` itself transitions. No second gesture
+   * state machine is driven independently anymore; `TrackedSession` simply observes what `csMachine`
+   * already decided. A no-op when `anchor` is a plain `TrackedTarget` (`createMinimalAnchor` — no
+   * `startGesture`/`endGesture` to call).
+   */
+  const syncTrackedGestureStart = (kind: 'move' | 'resize' | 'rotate'): void => {
+    if (anchor !== null && isTrackedSession(anchor)) anchor.startGesture(kind)
+  }
+  const syncTrackedGestureEnd = (kind: 'move' | 'resize' | 'rotate'): void => {
+    if (anchor !== null && isTrackedSession(anchor)) anchor.endGesture(kind)
+  }
+
   type DragSession = {
     /** Conversion space frozen at session start. */
     parentMatrix: Matrix2D
@@ -888,6 +907,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
 
       actor.send({ type: 'DRAG_START' })
       if (!actor.getSnapshot().matches({ active: 'dragging' })) return null
+      syncTrackedGestureStart('move')
 
       let gridClone: HTMLElement | null = null
       if (gridDragActive() && elementNode !== null) {
@@ -1062,6 +1082,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
     },
     onEnd: (session, apply, event) => {
       actor.send({ type: 'DRAG_END' })
+      syncTrackedGestureEnd('move')
 
       if (session.gridClone !== null) {
         session.cloneAnimation?.cancel()
@@ -1081,6 +1102,10 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
           }
         }
       }
+
+      // Commit signal fires after the grid drop's own last-value adjustment above (if any) — never
+      // before it, or the commit would carry a stale value on a grid release.
+      if (apply) adapter?.onCommit?.('move')
 
       csRoot.style.translate = '0px 0px'
       sync()
@@ -1202,6 +1227,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
 
         actor.send({ type: 'RESIZE_START' })
         if (!actor.getSnapshot().matches({ active: 'resizing' })) return null
+        syncTrackedGestureStart('resize')
         const anchorPoint = CHARACTERISTIC_POINTS[OPPOSITE_POINT[handleId]]
         const anchorStart = localFractionToViewportPoint(pose, anchorPoint.fx, anchorPoint.fy)
         event.preventDefault()
@@ -1344,8 +1370,14 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
         lockAnchor(session)
         positionCs()
       },
-      onEnd: () => {
+      onEnd: (session, apply) => {
         actor.send({ type: 'RESIZE_END' })
+        syncTrackedGestureEnd('resize')
+        // The XState gesture kind stays 'resize' regardless of handle mode (no 'scale' sub-state —
+        // scale is a value-space distinction, not a gesture-lifecycle one), but the commit signal
+        // must name whichever `apply*` this session actually called (`session.mode`, captured at
+        // onStart), matching `applyResize`/`applyScale`'s own split above.
+        if (apply) adapter?.onCommit?.(session.mode)
         sync()
       }
     })
@@ -1392,6 +1424,7 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       if (pose === null) return null
       actor.send({ type: 'ROTATE_START' })
       if (!actor.getSnapshot().matches({ active: 'rotating' })) return null
+      syncTrackedGestureStart('rotate')
       const pivot = pivotViewportPoint()
       if (pivot === null) return null
       event.preventDefault()
@@ -1426,8 +1459,10 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
       // the drag, using the pose refreshed by the emission above.
       followPointerWithNeedle(event)
     },
-    onEnd: () => {
+    onEnd: (_session, apply) => {
       actor.send({ type: 'ROTATE_END' })
+      syncTrackedGestureEnd('rotate')
+      if (apply) adapter?.onCommit?.('rotate')
       // The needle retracts to its resting length once the gesture ends.
       needleLengthPx = NEEDLE_LENGTH_PX
       sync()
@@ -1586,30 +1621,6 @@ export function createSelectionFrame(options: SelectionFrameOptions): SelectionF
   // only once attachItem hands off a real one.
   let unsubscribeElement: (() => void) | null =
     options.itemId !== undefined ? attachAnchor(options.itemId, options.anchor) : null
-
-  // Mirrors csMachine's own gesture sub-state onto the shared anchor's gesture session, when it IS
-  // one (`isTrackedSession`) — a separate concern from csMachine itself, which stays exactly as it
-  // is, governing only this module's own rendering/capabilities (Étape 2's precedent). This lets a
-  // caller that constructed a shared session (`scene-player-bridge.ts`, gating a rebuild on "is a
-  // gesture active") observe it without csMachine needing to be replaced or exposed
-  // (`2026-07-16-rebuild-ordering-execution-plan.md` §2, Option B). A no-op when the anchor is a
-  // plain `TrackedTarget` (`createMinimalAnchor`, e.g. every existing standalone/test usage).
-  const GESTURE_KIND_BY_ACTIVE_SUBSTATE = { dragging: 'move', resizing: 'resize', rotating: 'rotate' } as const
-  let mirroredGestureKind: 'move' | 'resize' | 'rotate' | null = null
-  actor.subscribe((snapshot) => {
-    if (anchor === null || !isTrackedSession(anchor)) return
-    const nextKind = snapshot.matches({ active: 'dragging' })
-      ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.dragging
-      : snapshot.matches({ active: 'resizing' })
-        ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.resizing
-        : snapshot.matches({ active: 'rotating' })
-          ? GESTURE_KIND_BY_ACTIVE_SUBSTATE.rotating
-          : null
-    if (nextKind === mirroredGestureKind) return
-    if (mirroredGestureKind !== null) anchor.endGesture(mirroredGestureKind)
-    if (nextKind !== null) anchor.startGesture(nextKind)
-    mirroredGestureKind = nextKind
-  })
 
   const unsubscribeContainer =
     options.containerId !== undefined

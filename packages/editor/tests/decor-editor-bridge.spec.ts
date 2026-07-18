@@ -129,12 +129,14 @@ function fakeAuthorApiWithNodes(
 type FakeOffsetBridge = OffsetEditorBridge & {
   emitValues: (v: OffsetValuesPx) => void
   setGestureActive: (active: boolean) => void
+  emitCommit: (kind: 'move' | 'resize' | 'rotate' | 'scale') => void
 }
 
 /** 100px de large : `pxToCqw(px, 100) === px` — conversion identité, assertions lisibles directement en px. */
 function fakeOffsetBridge(containerWidthPx = 100): FakeOffsetBridge {
   const valueListeners = new Set<(v: OffsetValuesPx) => void>()
   const gestureListeners = new Set<(active: boolean) => void>()
+  const commitListeners = new Set<(kind: 'move' | 'resize' | 'rotate' | 'scale') => void>()
   let gestureActive = false
   return {
     activate() {},
@@ -150,12 +152,19 @@ function fakeOffsetBridge(containerWidthPx = 100): FakeOffsetBridge {
       gestureListeners.add(cb)
       return () => gestureListeners.delete(cb)
     },
+    onCommit(cb) {
+      commitListeners.add(cb)
+      return () => commitListeners.delete(cb)
+    },
     emitValues(v) {
       for (const cb of valueListeners) cb(v)
     },
     setGestureActive(active) {
       gestureActive = active
       for (const cb of gestureListeners) cb(active)
+    },
+    emitCommit(kind) {
+      for (const cb of commitListeners) cb(kind)
     },
   }
 }
@@ -261,11 +270,15 @@ describe('decor-editor-bridge — commit de fin de phase (§Étape B)', () => {
 
   it('un geste actif bloque le flush même si le minuteur d\'inactivité expire', () => {
     const { actor, offsetBridge } = setup()
-    offsetBridge.emitValues({ translate: { x: 1, y: 1 } })
     offsetBridge.setGestureActive(true)
+    offsetBridge.emitValues({ translate: { x: 1, y: 1 } })
     vi.advanceTimersByTime(PHASE_IDLE_FLUSH_MS * 2)
     expect(committedOffset(actor, 'decor-1')).toBeUndefined()
     offsetBridge.setGestureActive(false)
+    // `onCommit` — message explicite de fin de geste (§7 de l'étude pose-edit) : c'est lui, pas
+    // `setGestureActive(false)` seul, qui arme le flush en production (`selection-frame.ts`'s
+    // `onEnd` appelle `syncTrackedGestureEnd` PUIS `adapter.onCommit`).
+    offsetBridge.emitCommit('move')
     vi.advanceTimersByTime(PHASE_IDLE_FLUSH_MS)
     expectTranslate(committedOffset(actor, 'decor-1')?.translate, 1, 1)
   })
@@ -565,9 +578,10 @@ describe('decor-editor-bridge — décor temporaire entre deux kf (2026-07-17-re
     const container = document.createElement('div')
     createDecorEditorBridge(container, actor)
     const authorApi = fakeAuthorApiWithNodes(snapshots)
-    actor.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: 100, offsetBridge: fakeOffsetBridge() })
+    const offsetBridge = fakeOffsetBridge()
+    actor.send({ type: 'PLAYER_READY', authorApi, referenceWidthPx: 100, offsetBridge })
     actor.send({ type: 'SCENE_LOADED', scene })
-    return { actor, container }
+    return { actor, container, offsetBridge }
   }
 
   it('playhead entre kf1 et kf2, item sélectionné sans kf : affiche la couleur live du node (ni kf1 ni le preset), marque le décor temporaire', () => {
@@ -580,6 +594,23 @@ describe('decor-editor-bridge — décor temporaire entre deux kf (2026-07-17-re
     const palette = container.querySelector('.dedit-palette')!
     expect(palette.classList.contains('dedit-palette--temporary')).toBe(true)
     expect(actor.getSnapshot().context.scene?.decors).not.toHaveProperty('decor-live')
+  })
+
+  it('reste fiable pendant un geste CS actif — plus d\'exception isGestureActive (2026-07-18-pose-edit-architecture-study.md §8)', () => {
+    // Couleur live délibérément DIFFÉRENTE de celle de kf1 (`oklch(0.6 0.24 25)`, rouge) — sinon un
+    // patch retombé sur la base (kf1 seul, l'ancien comportement bogué) serait indiscernable d'une
+    // lecture live réussie. `oklch(0.4 0.15 200)` → un bleu-vert net, jamais confondu avec le rouge.
+    const { actor, container, offsetBridge } = mount(sceneWithGapBetweenKeyframes(), { 'item-1': { 'background-color': 'oklch(0.4 0.15 200)' } })
+    actor.send({ type: 'SEEK', timelineMs: 500 })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'] })
+    const colorInput = container.querySelectorAll<HTMLInputElement>('input[type="color"]')[0]!
+    const liveColorWhenIdle = colorInput.value.toLowerCase()
+
+    offsetBridge.setGestureActive(true)
+    // Resynchronise explicitement (comme un vrai onValues/onDecorChange le ferait pendant le geste).
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'] })
+
+    expect(colorInput.value.toLowerCase()).toBe(liveColorWhenIdle)
   })
 
   it('raccourci « aller à kf1 » depuis le décor temporaire : seek vers kf1, la palette redevient non-temporaire', () => {

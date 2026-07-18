@@ -15,6 +15,7 @@ Spec normative v1. Définit la surface d'interface entre les modules authoring e
 **Inclus :**
 - Observation du cycle de vie des nœuds DOM par persoId (`subscribeToNode`)
 - Lecture de la pose résolue d'un nœud (`getNodePose`)
+- Écriture d'une pose partielle sur un nœud (`setNodePose`)
 - Lecture d'un ensemble arbitraire de propriétés résolues d'un nœud (`getNodeSnapshot`)
 - Observation de l'état de lecture du player (`subscribeToPlayerState`, `getPlayerState`)
 - Convention d'instanciation des modules authoring
@@ -65,6 +66,8 @@ type AuthorApi = {
 
   getNodePose(persoId: string): NodePose | null
 
+  setNodePose(persoId: string, pose: Partial<NodePose>): void
+
   getNodeSnapshot(
     persoId: string,
     props: readonly string[]
@@ -108,6 +111,25 @@ Ne lit jamais `getComputedStyle` ni ne décode `style.transform` — délègue e
 
 **Pré-condition** : `player.init()` doit avoir été appelé.
 
+### `setNodePose`
+
+Écrit, de façon synchrone, une pose PARTIELLE sur le nœud correspondant à `persoId` — symétrie
+d'écriture de `getNodePose`. Seules les clés présentes dans `pose` sont modifiées ; les propriétés
+absentes du patch restent inchangées.
+
+Délègue entièrement à `utils.set` (anime.js) — jamais une écriture directe sur `node.style.*` pour
+une propriété du vocabulaire de pose. C'est le seul chemin d'écriture correct : anime.js compose
+`x`/`y`/`rotate`/`scaleX`/`scaleY` dans `style.transform`, jamais dans les propriétés CSS discrètes
+(`style.translate`/`.rotate`/`.scale`) — un module authoring qui écrirait directement ces propriétés
+discrètes ne remplacerait pas ce qu'anime.js y écrit ensuite, les deux mécanismes se cumuleraient
+visuellement au lieu de s'écraser (confirmé empiriquement, `2026-07-18-pose-edit-architecture-
+study.md` §1-§2 — c'est la cause racine du bug qui a motivé l'ajout de cette méthode).
+
+No-op quand le perso n'a aucun nœud monté (jamais chargé, ou détruit) — même contrat d'absence que
+`getNodePose`, sans lever d'erreur.
+
+**Pré-condition** : `player.init()` doit avoir été appelé.
+
 ### `getNodeSnapshot`
 
 Généralisation de `getNodePose` au-delà de son vocabulaire fixe de 7 propriétés de pose : retourne,
@@ -131,12 +153,14 @@ Ne lit jamais `getComputedStyle` — délègue entièrement à `utils.get` (anim
 raison que `getNodePose` (seul anime.js sait quelle représentation DOM il a choisie pour une
 propriété donnée).
 
-**Non sûr pendant un geste CS actif** : `LibreAdapter` (`packages/authoring/selection-frame`)
-écrit `translate`/`rotate`/`scale`/`width`/`height` directement sur le nœud pendant un geste, en
-contournant `utils.set` — le cache d'anime (ce que lit `getNodeSnapshot`) est alors périmé jusqu'au
-rebuild suivant. Un appelant qui a besoin d'une lecture fiable pendant un geste actif doit gérer ce
-cas lui-même (même limitation, déjà documentée, que `getNodePose` pour la pose — cf.
-`offset-editor-bridge.ts::readLiveGestureNodePose`, l'exception existante pour ce cas précis).
+**Sûr pendant un geste CS actif** : `LibreAdapter` (`packages/authoring/selection-frame`) écrit la
+pose exclusivement via `AuthorApi.setNodePose` (`utils.set`, symétrique de cette lecture) — jamais
+directement sur `node.style.*` pour les propriétés du vocabulaire de pose. Le cache d'anime.js reste
+donc cohérent en permanence, y compris pendant un geste en cours ; aucune exception de lecture n'est
+nécessaire côté appelant (`2026-07-18-pose-edit-architecture-study.md` §2/§6-§8, package
+`selection-frame`). `LibreAdapter` continue d'écrire directement `transformOrigin` (hors vocabulaire
+de pose, jamais composé dans `transform`) et, en mode `top-left`, `left`/`top` — ni l'un ni l'autre
+n'entre en conflit avec une lecture `getNodeSnapshot`, qui ne demande jamais ces propriétés.
 
 **Pré-condition** : `player.init()` doit avoir été appelé.
 
@@ -175,6 +199,15 @@ getNodePose(persoId: string): NodePose | null
 ```
 
 **Implémentation** : `Player.getNodePose` résout le nœud via `getRuntimeRegistry().getNodeById(persoId)` (déjà exposé) puis délègue à `readNodePose` (`packages/codplay/src/runtime/components/lib/dom.ts`), qui appelle `utils.get(node, prop, false)` pour chacune des sept propriétés — symétrique de `applyStyleProps`/`utils.set` qui les écrit. Retourne `null` si le nœud résolu n'est pas un `Element`.
+
+`setNodePose` doit être ajouté à `PlayerApi` :
+
+```ts
+// packages/codplay/src/player/player.ts
+setNodePose(persoId: string, pose: Partial<NodePose>): void
+```
+
+**Implémentation** : `Player.setNodePose` résout le nœud de la même façon que `getNodePose`, puis délègue à `writeNodePose` (`dom.ts`), qui appelle `utils.set(node, pose)` — symétrique de `readNodePose`. No-op si le nœud résolu n'est pas un `Element`.
 
 `getNodeSnapshot` doit être ajouté à `PlayerApi` :
 

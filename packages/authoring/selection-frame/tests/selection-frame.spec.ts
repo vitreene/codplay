@@ -723,6 +723,51 @@ describe('createSelectionFrame — mirrors gestures onto a shared TrackedSession
   })
 })
 
+describe('createSelectionFrame — onCommit (2026-07-18-pose-edit-architecture-study.md §7)', () => {
+  it('calls adapter.onCommit exactly once, with the right kind, on a completed drag — never during the gesture', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const node = document.createElement('div')
+    node.style.width = '100px'
+    node.style.height = '100px'
+    authorApi.emitNode('item-1', node)
+
+    const commits: string[] = []
+    const adapter: CsValueAdapter = { ...temp__createNoopAdapter(), onCommit: (kind) => commits.push(kind) }
+
+    const handle = createSelectionFrame({ itemId: 'item-1', authorApi, sceneRoot: document.body, adapter })
+    const cs = temp__csRoot('item-1')!
+
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(cs, 'pointermove', { clientX: 30, clientY: 20 })
+    expect(commits).toEqual([])
+
+    temp__firePointer(cs, 'pointerup', { clientX: 30, clientY: 20 })
+    expect(commits).toEqual(['move'])
+
+    handle.destroy()
+  })
+
+  it('does not call onCommit on an aborted gesture (pointercancel)', () => {
+    const authorApi = temp__createAuthorApiStub()
+    const node = document.createElement('div')
+    node.style.width = '100px'
+    node.style.height = '100px'
+    authorApi.emitNode('item-1', node)
+
+    const commits: string[] = []
+    const adapter: CsValueAdapter = { ...temp__createNoopAdapter(), onCommit: (kind) => commits.push(kind) }
+
+    const handle = createSelectionFrame({ itemId: 'item-1', authorApi, sceneRoot: document.body, adapter })
+    const cs = temp__csRoot('item-1')!
+
+    temp__firePointer(cs, 'pointerdown', { clientX: 10, clientY: 10 })
+    temp__firePointer(cs, 'pointercancel', { clientX: 30, clientY: 20 })
+    expect(commits).toEqual([])
+
+    handle.destroy()
+  })
+})
+
 describe('createSelectionFrame — Alt+click cycle (item stacked underneath)', () => {
   it('Alt+click resolves the stacked candidates (topmost first) and hands them to onAltClickCycle, additive:false', () => {
     const authorApi = temp__createAuthorApiStub()

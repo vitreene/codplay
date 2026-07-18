@@ -121,3 +121,34 @@ describe('offset-editor-bridge — props intouchées de l\'écart offset (§Éta
     expect(received).toEqual([{ width: 300, height: 150 }])
   })
 })
+
+describe('offset-editor-bridge — commitNow/onCommit (2026-07-18-pose-edit-architecture-study.md §7)', () => {
+  it('commitNow broadcasts the kind to onCommit subscribers, distinct from notifyNow/onValues', () => {
+    const bridge = createOffsetEditorBridge()
+    const values: OffsetValuesPx[] = []
+    const commits: string[] = []
+    bridge.onValues((v) => values.push(v))
+    bridge.onCommit((kind) => commits.push(kind))
+    bridge.rebind(binding())
+
+    bridge.notifyNow('move')
+    expect(commits).toEqual([])
+
+    bridge.commitNow('move')
+    expect(commits).toEqual(['move'])
+    // commitNow carries no value of its own — the value already reached onValues via notifyNow.
+    expect(values).toEqual([{ translate: { x: 42, y: 7 } }])
+  })
+
+  it('onCommit returns a working unsubscribe', () => {
+    const bridge = createOffsetEditorBridge()
+    const commits: string[] = []
+    const unsubscribe = bridge.onCommit((kind) => commits.push(kind))
+
+    bridge.commitNow('rotate')
+    unsubscribe()
+    bridge.commitNow('scale')
+
+    expect(commits).toEqual(['rotate'])
+  })
+})

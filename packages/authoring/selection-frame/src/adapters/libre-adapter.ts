@@ -1,4 +1,4 @@
-import type { AuthorApi, NodePose } from '../author-api'
+import type { AuthorApi } from '../author-api'
 import { captureNodeOwnMatrix } from '../overlay-pose'
 import { createMinimalAnchor, type TrackedTarget } from '../tracked-session'
 import type { CsRawMoveDiff, CsRawRotateDiff, CsRawScaleDiff, CsRawSizeDiff, CsValueAdapter } from '../types'
@@ -35,17 +35,12 @@ export type LibreAdapterOptions = {
     fx?: number
     fy?: number
   }) => void
+  /** Relayed straight through to `CsValueAdapter.onCommit` — see that field's own doc. */
+  onCommit?: (kind: 'move' | 'resize' | 'rotate' | 'scale') => void
 }
 
 export type LibreAdapter = CsValueAdapter & {
   destroy: () => void
-}
-
-function readTranslate(el: HTMLElement): { x: number; y: number } {
-  const raw = el.style.translate
-  if (!raw || raw === 'none') return { x: 0, y: 0 }
-  const parts = raw.split(/\s+/).map((part) => Number.parseFloat(part))
-  return { x: parts[0] || 0, y: parts[1] || 0 }
 }
 
 function readPx(value: string): number {
@@ -60,37 +55,6 @@ function readLocalDims(node: HTMLElement): { w: number; h: number } {
   return { w, h }
 }
 
-/**
- * Seeds `translate`/`rotate`/`scale`/`width`/`height` as explicit resolved px/deg/factor the
- * instant a node is (re)captured — from `getNodePose`, never from `getComputedStyle`. codplay
- * resolves the authored pose via anime.js (`utils.set`), which freely picks its own DOM
- * representation (discrete properties or a composed `transform`) — not a stable contract. Only
- * anime.js itself (`utils.get`, what `getNodePose` calls) is guaranteed to read back what it
- * actually wrote; reconstructing from `getComputedStyle` drifts silently, in two confirmed ways:
- * a value in a foreign unit (e.g. `cqw`) read as if it were already px (the original
- * double-conversion bug this replaced), and — the harder one — a rotation anime composed only
- * into `transform` reading back as 0 from the discrete `rotate` property on a fresh node after a
- * rebuild, silently dropped by the next gesture that doesn't itself touch rotation (e.g. a plain
- * move). `getNodePose` is symmetric with anime's own write, so neither failure mode exists here.
- *
- * Clears `transform` before seeding: the fresh node may still carry anime's own composed
- * `transform` holding this exact pose — leaving it in place while also seeding the same values as
- * discrete `translate`/`rotate`/`scale` would compose the two and apply the pose twice. From this
- * point on the node's pose is exclusively expressed via the discrete properties, matching every
- * other write in this adapter (`applyMove`/`applyResize`/`applyRotate`/`applyScale`).
- *
- * The caller (the tracked anchor's `subscribe`, below) gates every call on `canAct()` — never called
- * while the node is absent or not yet connected.
- */
-function seedResolvedPose(node: HTMLElement, pose: NodePose): void {
-  node.style.transform = 'none'
-  node.style.translate = `${pose.x}px ${pose.y}px`
-  node.style.rotate = `${pose.rotate}deg`
-  node.style.scale = `${pose.scaleX} ${pose.scaleY}`
-  node.style.width = `${pose.width}px`
-  node.style.height = `${pose.height}px`
-}
-
 function parseOriginComponentPx(part: string | undefined, sizePx: number): number {
   if (part === undefined) return sizePx / 2
   const parsed = Number.parseFloat(part)
@@ -103,9 +67,14 @@ function parseOriginComponentPx(part: string | undefined, sizePx: number): numbe
  * Changing transform-origin on an already-transformed element re-applies the
  * current transform around the new point — the element jumps. Compensation:
  * delta = (I − M)·(O_prev − O_next) added to `translate`, with M the current
- * own linear matrix (rotate·scale·transform composed).
+ * own linear matrix (rotate·scale·transform composed). `transformOrigin`
+ * itself stays a direct style write — outside anime.js's pose vocabulary
+ * (`x`/`y`/`rotate`/`scaleX`/`scaleY`/`width`/`height`), never composed into
+ * `transform`, so no conflict with `AuthorApi.setNodePose` exists here. The
+ * translate compensation, however, must go through `getNodePose`/
+ * `setNodePose` like every other pose read/write in this adapter.
  */
-function applyRotationOrigin(node: HTMLElement, origin: { fx: number; fy: number }): void {
+function applyRotationOrigin(authorApi: AuthorApi, itemId: string, node: HTMLElement, origin: { fx: number; fy: number }): void {
   const { w, h } = readLocalDims(node)
   const prevParts = (node.style.transformOrigin || '').split(/\s+/).filter(Boolean)
   const prevX = parseOriginComponentPx(prevParts[0], w)
@@ -120,8 +89,10 @@ function applyRotationOrigin(node: HTMLElement, origin: { fx: number; fy: number
     const deltaX = vx - (m.a * vx + m.c * vy)
     const deltaY = vy - (m.b * vx + m.d * vy)
     if (Math.abs(deltaX) > 1e-6 || Math.abs(deltaY) > 1e-6) {
-      const current = readTranslate(node)
-      node.style.translate = `${current.x + deltaX}px ${current.y + deltaY}px`
+      const pose = authorApi.getNodePose(itemId)
+      if (pose !== null) {
+        authorApi.setNodePose(itemId, { x: pose.x + deltaX, y: pose.y + deltaY })
+      }
     }
   }
 
@@ -147,34 +118,14 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     return node instanceof HTMLElement ? node : null
   }
 
-  // Re-seeds only once per genuine node reference change (a real rebuild/remount) — a shared
-  // `TrackedSession` anchor's `subscribe` also fires on every gesture start/end (mirrored from
-  // `SelectionFrame`'s own machine, `2026-07-16-rebuild-ordering-execution-plan.md` §2). Without
-  // this guard, ending one gesture (e.g. resize) and starting the next (e.g. rotate) on the SAME
-  // still-connected node would re-seed from `getNodePose` — which only knows the last PERSISTED
-  // pose — silently discarding whatever this session's own prior gestures already accumulated live
-  // and not yet committed. Confirmed live: a resize→rotate→move chain lost the resize's rotate/
-  // translate this way before this guard existed.
-  let lastSeededNode: HTMLElement | null = null
-  const unsubscribe = anchor.subscribe(() => {
-    const node = getActiveNode()
-    if (node === null) {
-      lastSeededNode = null
-      return
-    }
-    if (node === lastSeededNode) return
-    lastSeededNode = node
-    const pose = options.authorApi.getNodePose(options.itemId)
-    if (pose !== null) seedResolvedPose(node, pose)
-  })
-
   return {
     applyMove(raw: CsRawMoveDiff): void {
       const node = getActiveNode()
       if (node === null) return
       if (mode === 'translate') {
-        const current = readTranslate(node)
-        node.style.translate = `${current.x + raw.dx}px ${current.y + raw.dy}px`
+        const pose = options.authorApi.getNodePose(options.itemId)
+        if (pose === null) return
+        options.authorApi.setNodePose(options.itemId, { x: pose.x + raw.dx, y: pose.y + raw.dy })
       } else {
         node.style.left = `${readPx(node.style.left) + raw.dx}px`
         node.style.top = `${readPx(node.style.top) + raw.dy}px`
@@ -185,13 +136,12 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
     applyResize(raw: CsRawSizeDiff): void {
       const node = getActiveNode()
       if (node === null) return
-      // Local dimensions from inline/computed styles and offsets — never from
-      // getBoundingClientRect (transform-dependent AABB).
-      const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-      const baseWidth = readPx(node.style.width) || (computed ? readPx(computed.width) : 0) || node.offsetWidth
-      const baseHeight = readPx(node.style.height) || (computed ? readPx(computed.height) : 0) || node.offsetHeight
-      node.style.width = `${Math.max(0, baseWidth + raw.dw)}px`
-      node.style.height = `${Math.max(0, baseHeight + raw.dh)}px`
+      const pose = options.authorApi.getNodePose(options.itemId)
+      if (pose === null) return
+      options.authorApi.setNodePose(options.itemId, {
+        width: Math.max(0, pose.width + raw.dw),
+        height: Math.max(0, pose.height + raw.dh)
+      })
       options.onApplied?.({ kind: 'resize', dw: raw.dw, dh: raw.dh })
     },
 
@@ -199,27 +149,28 @@ export function createLibreAdapter(options: LibreAdapterOptions): LibreAdapter {
       const node = getActiveNode()
       if (node === null) return
       if (raw.origin !== undefined) {
-        applyRotationOrigin(node, raw.origin)
+        applyRotationOrigin(options.authorApi, options.itemId, node, raw.origin)
       }
-      const current = Number.parseFloat(node.style.rotate) || 0
-      node.style.rotate = `${current + raw.dr}deg`
+      const pose = options.authorApi.getNodePose(options.itemId)
+      if (pose === null) return
+      options.authorApi.setNodePose(options.itemId, { rotate: pose.rotate + raw.dr })
       options.onApplied?.({ kind: 'rotate', dr: raw.dr })
     },
 
     applyScale(raw: CsRawScaleDiff): void {
       const node = getActiveNode()
       if (node === null) return
-      const parts = (node.style.scale === '' || node.style.scale === 'none' ? '1 1' : node.style.scale)
-        .split(/\s+/)
-        .map((part) => Number.parseFloat(part))
-      const currentX = Number.isFinite(parts[0]) ? parts[0]! : 1
-      const currentY = Number.isFinite(parts[1]) ? parts[1]! : currentX
-      node.style.scale = `${currentX * raw.fx} ${currentY * raw.fy}`
+      const pose = options.authorApi.getNodePose(options.itemId)
+      if (pose === null) return
+      options.authorApi.setNodePose(options.itemId, { scaleX: pose.scaleX * raw.fx, scaleY: pose.scaleY * raw.fy })
       options.onApplied?.({ kind: 'scale', fx: raw.fx, fy: raw.fy })
     },
 
+    onCommit(kind): void {
+      options.onCommit?.(kind)
+    },
+
     destroy(): void {
-      unsubscribe()
       // Only tear down an anchor this adapter built itself — a shared anchor
       // (options.anchor) is owned by whoever constructed it (typically the
       // same caller that also handed it to SelectionFrame) and outlives this

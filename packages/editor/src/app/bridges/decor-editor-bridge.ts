@@ -344,11 +344,16 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (!offsetBridge) return
     offsetBridgeWired = true
     controller.setOffsetBridge(offsetBridge)
-    // Fin d'un geste CS — désormais un simple signal d'activité de phase (harmonisé avec le `change`
-    // palette, arbitrage 2026-07-17), jamais un commit immédiat : arme le minuteur d'inactivité.
+    // Début de geste — annule un flush déjà armé, jamais un commit en soi (arbitrage 2026-07-17,
+    // regroupement de phase préservé). Fin de geste — armée par `onCommit` (message explicite du
+    // geste qui vient de finir, `2026-07-18-pose-edit-architecture-study.md` §7), pas par
+    // `onGestureActiveChange(false)` (état redéduit) : même comportement observable (un seul flush
+    // pour une salve de gestes enchaînés, idle en déclenche un), signal de déclenchement fiabilisé.
     offsetBridge.onGestureActiveChange(active => {
       if (active) cancelIdleFlush()
-      else if (pendingCommands !== null) armIdleFlush()
+    })
+    offsetBridge.onCommit(() => {
+      if (pendingCommands !== null) armIdleFlush()
     })
   }
 
@@ -380,12 +385,14 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
       const base = alignment.kind === 'between' ? resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content) : {}
-      const { authorApi, offsetBridge, referenceWidthPx } = machine.getSnapshot().context
-      const gestureActive = offsetBridge?.isGestureActive() ?? false
-      // Pas sûr pendant un geste CS actif (`v1-author-api-spec.md::getNodeSnapshot`, audit
-      // 2026-07-17) — le cache d'anime diverge du node tant que `LibreAdapter` écrit dessus en
-      // direct. Retombe sur le kf précédent seul, jamais une lecture live potentiellement périmée.
-      const live = authorApi && !gestureActive ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType), referenceWidthPx) : {}
+      const { authorApi, referenceWidthPx } = machine.getSnapshot().context
+      // Fiable même pendant un geste CS actif : `LibreAdapter` écrit désormais la pose via
+      // `AuthorApi.setNodePose` (anime.js `utils.set`), plus jamais directement sur `node.style.*`
+      // — le cache d'anime.js reste cohérent en permanence (même correctif que `offset-editor-
+      // bridge.ts::readActivePose`, `2026-07-18-pose-edit-architecture-study.md` §2/§6). L'ancienne
+      // exception `!gestureActive` retombait sur le kf précédent seul pendant tout geste — le décor
+      // temporaire restait figé au lieu de suivre le geste en cours.
+      const live = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType), referenceWidthPx) : {}
       patch = mergePatch(base, live)
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)

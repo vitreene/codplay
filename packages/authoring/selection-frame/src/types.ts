@@ -53,6 +53,16 @@ export interface CsValueAdapter {
    * pixel deltas.
    */
   applyCellArea?(area: { row: number; col: number; rowSpan: number; colSpan: number }): void
+  /**
+   * Explicit end-of-gesture signal — called exactly once, at gesture release, distinct from the
+   * continuous `applyMove`/`applyResize`/`applyRotate`/`applyScale` preview stream. The commit
+   * channel this gesture's final value should travel on, instead of being re-deduced downstream
+   * from an observed state (`isGestureActive()` going false, `2026-07-18-pose-edit-architecture-
+   * study.md` §3/§7 — the study's core finding: no hop in the pointer→document chain used to carry
+   * an explicit "gesture ended, here's its value" message). `kind` identifies which gesture just
+   * ended, mirroring `LibreAdapter.onApplied`'s vocabulary.
+   */
+  onCommit?(kind: 'move' | 'resize' | 'rotate' | 'scale'): void
 }
 
 export type CsCapability =

@@ -200,6 +200,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       itemId,
       anchor: newSession,
       onApplied: (change) => offsetBridge.notifyNow(change.kind),
+      onCommit: (kind) => offsetBridge.commitNow(kind),
     })
     offsetBridge.rebind({
       session: newSession,

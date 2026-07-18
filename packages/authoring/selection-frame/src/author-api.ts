@@ -25,6 +25,17 @@ export type AuthorApi = {
    */
   getNodePose: (persoId: string) => NodePose | null
   /**
+   * Write-side symmetry of `getNodePose` — routes a partial pose through anime.js's own bookkeeping
+   * (`utils.set`) instead of writing `node.style.*` directly. Authoring code must never write pose
+   * properties straight onto the node: anime.js composes `x`/`y`/`rotate`/`scaleX`/`scaleY` into
+   * `style.transform`, never into the discrete CSS properties (`style.translate`/`.rotate`/
+   * `.scale`) — a direct write to those discrete properties does not replace what anime.js holds,
+   * it accumulates alongside it the next time anime.js writes (confirmed: CSS `transform` and the
+   * discrete transform properties compose additively). Only the keys present in `pose` are
+   * touched. No-op when the perso has no node mounted.
+   */
+  setNodePose: (persoId: string, pose: Partial<NodePose>) => void
+  /**
    * Generalization of `getNodePose` beyond its fixed 7-property pose vocabulary — reads whatever
    * properties the caller asks for, straight from anime.js's own bookkeeping (`utils.get`, never
    * `getComputedStyle`). Values are returned AS-IS: a color comes back as a CSS string
@@ -50,6 +61,8 @@ export function createAuthorApi(player: PlayerApi): AuthorApi {
     subscribeToNode: (persoId, cb) => player.subscribeToNode(persoId, cb),
 
     getNodePose: (persoId) => player.getNodePose(persoId),
+
+    setNodePose: (persoId, pose) => player.setNodePose(persoId, pose),
 
     getNodeSnapshot: (persoId, props) => player.getNodeSnapshot(persoId, props),
 
