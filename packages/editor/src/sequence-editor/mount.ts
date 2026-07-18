@@ -30,6 +30,23 @@ function setButtonGlyph(btn: HTMLButtonElement, glyph: string): void {
 export interface MountSequenceEditorOptions {
   /** Notifié à chaque changement de playhead — le pont vers `player.seek({ timelineMs })` vit chez l'appelant, pas ici. */
   onPlayheadChange?: (timeMs: number) => void
+  /**
+   * Notifié juste AVANT tout appel `telco.*` engageant une lecture/relecture du document (play
+   * aujourd'hui — même patron pour un futur stop/rewind direct, remarque utilisateur 2026-07-17 :
+   * « pas besoin de dupliquer le flush, factoriser plutôt »). Le pont vers `TELCO_ACTION_REQUEST`
+   * vit chez l'appelant, pas ici — même séparation que `onPlayheadChange`/`SEEK`.
+   */
+  onTelcoActionRequest?: () => void
+  /**
+   * Notifié juste AVANT tout appel `telco.pause()` — geste explicite (clic Play/Pause) OU pause
+   * automatique en fin de scène (`syncFromTelco`). Sort l'état `playing` du contrôleur
+   * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) : point d'entrée/sortie tous deux au
+   * niveau du GESTE éditeur, jamais du statut brut du transport (`isPlaying`) — un rebuild forcé
+   * déclenché à l'entrée dans `playing` produit lui-même du bruit transitoire sur ce statut,
+   * confirmé en direct (2026-07-18) : `isPlaying` comme signal de sortie sortait de l'état AVANT
+   * que le rebuild forcé n'ait fini, quel que soit l'ordre d'exécution.
+   */
+  onTelcoPauseRequest?: () => void
 }
 
 export interface SequenceEditorMountHandle {
@@ -416,7 +433,13 @@ export function mountSequenceEditor(
 
   function onPlayClick(): void {
     if (!telco) return
-    void (telco.getState().status === 'playing' ? telco.pause() : telco.play())
+    if (telco.getState().status === 'playing') {
+      options.onTelcoPauseRequest?.()
+      void telco.pause()
+      return
+    }
+    options.onTelcoActionRequest?.()
+    void telco.play()
   }
   btnPlay.addEventListener('click', onPlayClick)
 
@@ -684,6 +707,7 @@ export function mountSequenceEditor(
       // dépendent d'un event `sequenceEnd` que le Builder n'émet pas forcément ici), donc sans ce
       // garde-fou la lecture réelle continue indéfiniment au-delà de la durée affichée.
       if (state.status === 'playing' && state.timelineMs >= ctx.scene.meta.durationMs) {
+        options.onTelcoPauseRequest?.()
         void telco?.pause()
       }
     }

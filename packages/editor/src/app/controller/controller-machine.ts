@@ -93,6 +93,9 @@ export const controllerMachine = setup({
     /** Relais pur (§7 étape 5) — `playheadMs` n'est jamais stocké ici, `sequence-editor` en reste l'unique possesseur. */
     emitSeek: emit(({ event }) => ({ type: 'seek' as const, timelineMs: event.type === 'SEEK' ? event.timelineMs : 0 })),
 
+    /** Réponse à `TELCO_ACTION_REQUEST` — même flush que `'seek'`, déclenché AVANT tout appel `telco.*` (voir `types.ts`). */
+    emitFlushPending: emit(() => ({ type: 'flushPending' as const })),
+
     /** §7 étape 4 — posé une fois par `scenePlayer`, stocké (contrairement à `seek`) : un pont `decorEditor` créé après coup doit pouvoir le lire immédiatement via `getSnapshot()`, pas seulement via l'émission. */
     setAuthorApi: assign({
       authorApi: ({ event }) => (event.type === 'PLAYER_READY' ? event.authorApi : null),
@@ -110,6 +113,10 @@ export const controllerMachine = setup({
       if (!context.scene) return
       enqueue.emit({ type: 'sceneReverted', scene: context.scene })
     }),
+
+    /** Entrée/sortie de l'état `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`). */
+    emitPlaybackActive: emit(() => ({ type: 'playbackActiveChanged' as const, active: true })),
+    emitPlaybackInactive: emit(() => ({ type: 'playbackActiveChanged' as const, active: false })),
   },
 }).createMachine({
   id: 'controller',
@@ -148,6 +155,14 @@ export const controllerMachine = setup({
     LOAD_SCENE: {},
     SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
     SEEK: { actions: 'emitSeek' },
+    /**
+     * Émis une seule fois, juste avant `telco.play()`, jamais pour pause (`mount.ts::onPlayClick`)
+     * — point d'entrée de l'état `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`
+     * §2). `emitFlushPending` reste une action de TRANSITION, donc exécutée avant les actions
+     * `entry` de `playing` (ordre XState : sortie → actions de transition → entrée) — une édition
+     * dedit tout juste faite est déjà committée avant que `playing` ne désactive dedit.
+     */
+    TELCO_ACTION_REQUEST: { target: '.playing', actions: 'emitFlushPending' },
     PLAYER_READY: { actions: ['setAuthorApi', 'emitAuthorApiReady'] },
     PHASE_ABORT: { actions: 'emitSceneReverted' },
   },
@@ -161,6 +176,28 @@ export const controllerMachine = setup({
       on: {
         CREATE_COMMIT: { target: 'idle', actions: 'exitCreateMode' },
         CREATE_CANCEL: { target: 'idle', actions: 'exitCreateMode' },
+      },
+    },
+    /**
+     * `2026-07-17-play-mode-decor-editor-deactivation-plan.md` — aucune situation où dedit est actif
+     * pendant qu'on joue. Sibling d'`idle`/`creating`, jamais imbriqué : jouer coupe court à un
+     * geste de création en cours exactement comme il coupe court à une édition dedit en cours (même
+     * règle, un seul état macro plutôt que deux gestes indépendants à synchroniser).
+     *
+     * Entrée ET sortie au niveau du GESTE éditeur (`TELCO_ACTION_REQUEST`/`TELCO_PAUSE_REQUEST`/
+     * `SEEK`), jamais du statut brut du transport (`isPlaying`) — les deux ne jouent pas au même
+     * niveau : le rebuild forcé que cet état déclenche lui-même (`scene-player-bridge.ts`) produit
+     * du bruit transitoire sur ce statut, confirmé en direct (2026-07-18) — `isPlaying` comme signal
+     * de sortie faisait sortir la machine AVANT que ce rebuild n'ait fini, quel que soit
+     * l'ordonnancement. `SEEK` reste aussi un event racine (`emitSeek`, inchangé pour `idle`/
+     * `creating`) — sa présence ici ne fait qu'AJOUTER la sortie vers `idle` pour cet état précis.
+     */
+    playing: {
+      entry: 'emitPlaybackActive',
+      exit: 'emitPlaybackInactive',
+      on: {
+        TELCO_PAUSE_REQUEST: { target: 'idle' },
+        SEEK: { target: 'idle', actions: 'emitSeek' },
       },
     },
   },

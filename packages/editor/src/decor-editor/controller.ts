@@ -39,6 +39,7 @@ export interface AttachItemInput {
   patch: DecorPatch
   zones: ZoneTable
   context: OrientationContext
+  isTemporary?: boolean
 }
 
 // ─── Controller ──────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export class DecorEditorController {
   private decorChangeCallbacks = new Set<(entries: DecorChangeEntry[]) => void>()
   private zonesChangeCallbacks = new Set<(zones: ZoneTable) => void>()
   private interactionEndCallbacks = new Set<() => void>()
+  private snapToFirstKeyframeCallbacks = new Set<() => void>()
   /** Pont vers l'éditeur visuel de position (spec §6) — dedit reste le seul interlocuteur de
    *  l'app, jamais `selection-frame` importé directement. Peut arriver après construction
    *  (`setOffsetBridge`) : le pont dépend de `authorApi`, prêt après le premier rebuild. */
@@ -77,6 +79,7 @@ export class DecorEditorController {
     this.decorChangeCallbacks.clear()
     this.zonesChangeCallbacks.clear()
     this.interactionEndCallbacks.clear()
+    this.snapToFirstKeyframeCallbacks.clear()
   }
 
   // ── Subscription ────────────────────────────────────────────────────────────
@@ -115,6 +118,7 @@ export class DecorEditorController {
         defaults: input.defaults,
         chain: input.chain,
         patch: input.patch,
+        isTemporary: input.isTemporary,
       })),
       zones: inputs[0]?.zones ?? [],
       initialPanelId,
@@ -272,6 +276,17 @@ export class DecorEditorController {
     return true
   }
 
+  /**
+   * Vrai si l'item unique attaché affiche un décor temporaire (état live au playhead, jamais
+   * enregistré) plutôt qu'un décor réel — `2026-07-17-resolved-state-at-time-notes.md`. Piloté en
+   * DONNÉE ; le rendu décide seul comment le signaler visuellement. Toujours faux en multi-
+   * sélection (même garde que `hasOwnPatch`).
+   */
+  isTemporary(): boolean {
+    const items = this.getItems()
+    return items.length === 1 && items[0]!.isTemporary === true
+  }
+
   // ── Read access ──────────────────────────────────────────────────────────────
 
   /** Écart de chaque item attaché (item unique = tableau à 1 élément). */
@@ -315,6 +330,21 @@ export class DecorEditorController {
 
   notifyInteractionEnd(): void {
     for (const cb of this.interactionEndCallbacks) cb()
+  }
+
+  /**
+   * Raccourci « aller à kf1 » (`2026-07-17-resolved-state-at-time-notes.md`), accessible depuis
+   * l'état temporaire — dedit n'a aucune notion de temps/keyframe dans son propre domaine (ça vit
+   * dans `EditorScene`, côté pont) ; il ne fait que relayer la demande à l'hôte, qui seul sait
+   * résoudre le premier keyframe de l'item courant et déclencher le `SEEK`.
+   */
+  onSnapToFirstKeyframeRequest(cb: () => void): Unsubscribe {
+    this.snapToFirstKeyframeCallbacks.add(cb)
+    return () => this.snapToFirstKeyframeCallbacks.delete(cb)
+  }
+
+  requestSnapToFirstKeyframe(): void {
+    for (const cb of this.snapToFirstKeyframeCallbacks) cb()
   }
 
   private emitDecorChange(): void {

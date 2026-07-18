@@ -37,7 +37,7 @@ import type {
 import { createStrapTrackId } from './create-player-utils'
 import { PLAYER_RUNTIME_EVENT } from './player-constants'
 import { setContainerQueryRootNode } from '../runtime/components/lib/container-query-units'
-import { readNodePose, type NodePose } from '../runtime/components/lib/dom'
+import { readNodePose, readNodeSnapshot, type NodePose } from '../runtime/components/lib/dom'
 
 export type PreloadPolicy = {
   releaseOnSequenceEnd?: boolean
@@ -74,6 +74,7 @@ export type PlayerApi = {
   onTrace: (listener: (row: RuntimeTraceRow) => void) => () => void
   subscribeToNode: (persoId: string, cb: (node: Element | null) => void) => () => void
   getNodePose: (persoId: string) => NodePose | null
+  getNodeSnapshot: (persoId: string, props: readonly string[]) => Record<string, string | number> | null
   schedule: PlayerScheduleApi
 }
 
@@ -467,6 +468,15 @@ export class Player implements PlayerApi {
    */
   getNodePose(persoId: string): NodePose | null {
     return readNodePose(this.player.getRuntimeRegistry().getNodeById(persoId))
+  }
+
+  /**
+   * Reads an arbitrary, caller-supplied set of resolved style properties for one perso's node,
+   * straight from anime.js's own bookkeeping (v1-author-api-spec) — generalization of `getNodePose`
+   * beyond its fixed 7-property pose vocabulary. Returns null when the perso has no node mounted.
+   */
+  getNodeSnapshot(persoId: string, props: readonly string[]): Record<string, string | number> | null {
+    return readNodeSnapshot(this.player.getRuntimeRegistry().getNodeById(persoId), props)
   }
 
   /**

@@ -146,6 +146,11 @@ export interface Decor {
   classes?: ClassNameValue
   offset?: OffsetData
   zoneId?: string | null
+  /** CSS libre, responsabilité auteur (`decor-editor/types.ts`'s `DecorPatch.custom`, panneau
+   * « Custom ») — même traitement qu'`offset` : un champ structuré côté document, résolu en
+   * propriétés de style au build (`build-scene.ts::resolveCustomAsStyle`), bien plus simple
+   * (une chaîne à parser, pas plusieurs champs à convertir) mais de même nature. */
+  custom?: string
 }
 
 // ─── Zone ───────────────────────────────────────────────────────────────────

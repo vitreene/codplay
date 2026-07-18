@@ -15,6 +15,7 @@ Spec normative v1. Définit la surface d'interface entre les modules authoring e
 **Inclus :**
 - Observation du cycle de vie des nœuds DOM par persoId (`subscribeToNode`)
 - Lecture de la pose résolue d'un nœud (`getNodePose`)
+- Lecture d'un ensemble arbitraire de propriétés résolues d'un nœud (`getNodeSnapshot`)
 - Observation de l'état de lecture du player (`subscribeToPlayerState`, `getPlayerState`)
 - Convention d'instanciation des modules authoring
 
@@ -64,6 +65,11 @@ type AuthorApi = {
 
   getNodePose(persoId: string): NodePose | null
 
+  getNodeSnapshot(
+    persoId: string,
+    props: readonly string[]
+  ): Record<string, string | number> | null
+
   subscribeToPlayerState(
     cb: (state: PlayerAuthorState) => void
   ): () => void
@@ -102,6 +108,38 @@ Ne lit jamais `getComputedStyle` ni ne décode `style.transform` — délègue e
 
 **Pré-condition** : `player.init()` doit avoir été appelé.
 
+### `getNodeSnapshot`
+
+Généralisation de `getNodePose` au-delà de son vocabulaire fixe de 7 propriétés de pose : retourne,
+de façon synchrone, les valeurs actuellement résolues par anime.js pour l'ensemble `props` fourni
+par l'appelant — jamais une liste devinée ou exhaustive côté `AuthorApi`, le choix des propriétés
+reste entièrement la responsabilité de l'appelant.
+
+Chaque valeur est retournée TELLE QUELLE (aucune coercion `Number()`, contrairement à
+`getNodePose`) : une couleur résolue est une chaîne CSS (`"oklch(...)"`), une longueur hors du
+vocabulaire de pose propre d'anime (ex. `border-width`) revient suffixée de son unité
+(`"8.52px"`) plutôt qu'en nombre nu — anime traite ces deux catégories différemment en interne, ce
+contrat ne les uniformise pas artificiellement. La conversion vers le format attendu par l'appelant
+(ex. `cqw` pour un module authoring qui persiste en unités container-query) est entièrement à sa
+charge.
+
+Retourne `null` quand le perso n'a aucun nœud monté (jamais chargé, ou détruit) — même contrat que
+`getNodePose`. Une propriété absente du nœud/du cache d'anime est simplement omise du résultat
+(jamais une entrée `undefined`), plutôt que de faire échouer tout l'appel.
+
+Ne lit jamais `getComputedStyle` — délègue entièrement à `utils.get` (anime.js), pour la même
+raison que `getNodePose` (seul anime.js sait quelle représentation DOM il a choisie pour une
+propriété donnée).
+
+**Non sûr pendant un geste CS actif** : `LibreAdapter` (`packages/authoring/selection-frame`)
+écrit `translate`/`rotate`/`scale`/`width`/`height` directement sur le nœud pendant un geste, en
+contournant `utils.set` — le cache d'anime (ce que lit `getNodeSnapshot`) est alors périmé jusqu'au
+rebuild suivant. Un appelant qui a besoin d'une lecture fiable pendant un geste actif doit gérer ce
+cas lui-même (même limitation, déjà documentée, que `getNodePose` pour la pose — cf.
+`offset-editor-bridge.ts::readLiveGestureNodePose`, l'exception existante pour ce cas précis).
+
+**Pré-condition** : `player.init()` doit avoir été appelé.
+
 ### `subscribeToPlayerState`
 
 Souscrit aux changements de `PlayerAuthorState`. Le callback est appelé à chaque transition du player qui modifie cet état.
@@ -137,6 +175,15 @@ getNodePose(persoId: string): NodePose | null
 ```
 
 **Implémentation** : `Player.getNodePose` résout le nœud via `getRuntimeRegistry().getNodeById(persoId)` (déjà exposé) puis délègue à `readNodePose` (`packages/codplay/src/runtime/components/lib/dom.ts`), qui appelle `utils.get(node, prop, false)` pour chacune des sept propriétés — symétrique de `applyStyleProps`/`utils.set` qui les écrit. Retourne `null` si le nœud résolu n'est pas un `Element`.
+
+`getNodeSnapshot` doit être ajouté à `PlayerApi` :
+
+```ts
+// packages/codplay/src/player/player.ts
+getNodeSnapshot(persoId: string, props: readonly string[]): Record<string, string | number> | null
+```
+
+**Implémentation** : `Player.getNodeSnapshot` résout le nœud de la même façon que `getNodePose`, puis délègue à `readNodeSnapshot` (`dom.ts`) — même accesseur `utils.get`, généralisé à `props` plutôt qu'aux sept propriétés fixes de pose, sans coercion `Number()`.
 
 `subscribeToPlayerState` et `getPlayerState` sont implémentés dans `createAuthorApi` à partir de l'état interne du player, sans addition nécessaire à `PlayerApi`.
 

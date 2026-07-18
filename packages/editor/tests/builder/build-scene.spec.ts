@@ -268,6 +268,42 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
 
     expect(item.initial).toMatchObject({ style: { x: '5cqw', y: '8cqw', width: '40cqw', height: '25cqw' } })
   })
+
+  // `Decor.custom` (CSS libre, panneau « Custom ») — même traitement qu'`offset` ci-dessus
+  // (`2026-07-17-decor-keyframe-layering-plan.md`, suite du 2026-07-17) : résolu dans le MÊME
+  // enregistrement de style, participe donc au diff/interpolation comme n'importe quelle propriété.
+  it('Decor.custom (free CSS) resolves into the SAME style record as Decor.style/offset — participates in the diff like any other property', () => {
+    const scene = interpolatedFixtureScene()
+    scene.decors['d-b']!.custom = 'align-items: center; justify-content: center'
+    const { sceneDoc } = buildSceneDoc(scene)
+    const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
+
+    expect(item.actions['item-1-kf-kf-b']).toEqual({
+      style: {
+        'background-color': { to: '#00ff00', duration: 1000, ease: 'easeInOut' },
+        'align-items': { to: 'center', duration: 1000, ease: 'easeInOut' },
+        'justify-content': { to: 'center', duration: 1000, ease: 'easeInOut' },
+      },
+    })
+  })
+
+  it('the first keyframe\'s custom CSS folds into initial.style too, right alongside its own style/offset', () => {
+    const scene = interpolatedFixtureScene()
+    scene.decors['d-a']!.custom = 'display: flex'
+    const { sceneDoc } = buildSceneDoc(scene)
+    const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
+
+    expect(item.initial).toMatchObject({ style: { display: 'flex', 'background-color': '#ff0000' } })
+  })
+
+  it('a malformed declaration (no ":") is ignored rather than thrown — "CSS libre, responsabilité auteur"', () => {
+    const scene = interpolatedFixtureScene()
+    scene.decors['d-a']!.custom = 'not-a-declaration; color: blue'
+    const { sceneDoc } = buildSceneDoc(scene)
+    const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
+
+    expect(item.initial).toMatchObject({ style: { color: 'blue' } })
+  })
 })
 
 describe('buildSceneDoc — minimal increment, continued', () => {

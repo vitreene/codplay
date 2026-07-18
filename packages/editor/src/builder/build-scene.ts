@@ -248,6 +248,27 @@ function sortedKeyframes(item: Item): Keyframe[] {
   return [...item.keyframes].sort((a, b) => a.timeMs - b.timeMs)
 }
 
+/**
+ * Style résolu EN CASCADE d'un keyframe donné — `item.initialDecorId` ⊕ tous les kf antérieurs
+ * (triés) ⊕ le décor propre du kf, chacun passé par `resolveDecorStyle` puis fusionnés dans cet
+ * ordre. Même cascade que `decor-editor-bridge.ts::resolveEffectiveKeyframePatch` (dedit) — un kf
+ * dont le décor est vide (rien n'a encore divergé dessus) hérite donc bien du style de ses
+ * prédécesseurs ici aussi, au lieu d'apparaître comme "aucun style" au diff.
+ * Divergence corrigée le jour où `buildKeyframeDecorActions` comparait `scene.decors[kf.decorId]`
+ * BRUT (jamais la cascade) — un kf1 vide produisait un diff `{} → styleDeKf2`, donc TOUTES les
+ * propriétés de kf2 (y compris celles inchangées depuis le preset) apparaissaient comme animées
+ * depuis rien, cassant l'interpolation réelle (`2026-07-17`, repro utilisateur en direct).
+ */
+function resolveKeyframeCascadeStyle(item: Item, scene: EditorScene, targetKf: Keyframe): Record<string, unknown> {
+  const initial = scene.decors[item.initialDecorId]
+  const precedingDecors = sortedKeyframes(item)
+    .filter((k) => k.timeMs < targetKf.timeMs)
+    .map((k) => scene.decors[k.decorId])
+  const ownDecor = scene.decors[targetKf.decorId]
+  const layers = [initial, ...precedingDecors, ownDecor]
+  return layers.reduce((acc, d) => ({ ...acc, ...resolveDecorStyle(d) }), {} as Record<string, unknown>)
+}
+
 type CapsuleResolution = {
   rootArtifact: { className: string }
   childArtifactById: Map<string, AutoCapsuleChildElementArtifact>
@@ -636,7 +657,7 @@ function buildKeyframeDecorActions(
     const kf = keyframes[i]!
     const prevKf = keyframes[i - 1]!
     const actionName = `${item.id}-kf-${kf.id}`
-    const diff = computeStyleDiff(resolveDecorStyle(scene.decors[prevKf.decorId]), resolveDecorStyle(scene.decors[kf.decorId]))
+    const diff = computeStyleDiff(resolveKeyframeCascadeStyle(item, scene, prevKf), resolveKeyframeCascadeStyle(item, scene, kf))
     if (Object.keys(diff).length === 0) continue
 
     const transition = kf.transitionIn ?? prevKf.transitionOut
@@ -695,9 +716,30 @@ function resolveOffsetAsStyle(offset: OffsetData | undefined): Record<string, un
   return out
 }
 
-/** Le style résolu d'un décor pour toute fin de diff/action — `Decor.style` et la partie animable de `Decor.offset` fusionnés, un seul enregistrement. */
+/**
+ * `Decor.custom` (CSS libre, panneau « Custom ») résolu en propriétés de style — même traitement
+ * qu'`resolveOffsetAsStyle` ci-dessus (un champ structuré du décor, converti en `Record` de style),
+ * juste plus simple : une chaîne à découper, pas plusieurs champs à convertir avec leurs unités.
+ * Déclarations séparées par `;`, `propriété: valeur` — une déclaration mal formée (pas de `:`) est
+ * ignorée plutôt que de lever, cohérent avec « CSS libre, responsabilité auteur »
+ * (`decor-editor/types.ts`).
+ */
+function resolveCustomAsStyle(custom: string | undefined): Record<string, unknown> {
+  if (!custom) return {}
+  const out: Record<string, unknown> = {}
+  for (const declaration of custom.split(';')) {
+    const separatorIndex = declaration.indexOf(':')
+    if (separatorIndex === -1) continue
+    const prop = declaration.slice(0, separatorIndex).trim()
+    const value = declaration.slice(separatorIndex + 1).trim()
+    if (prop && value) out[prop] = value
+  }
+  return out
+}
+
+/** Le style résolu d'un décor pour toute fin de diff/action — `Decor.style`, la partie animable de `Decor.offset`, et `Decor.custom` fusionnés, un seul enregistrement (`custom` en dernier : « responsabilité auteur », l'emporte en cas de conflit). */
 function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
-  return { ...decor?.style, ...resolveOffsetAsStyle(decor?.offset) }
+  return { ...decor?.style, ...resolveOffsetAsStyle(decor?.offset), ...resolveCustomAsStyle(decor?.custom) }
 }
 
 /**

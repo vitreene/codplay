@@ -31,6 +31,30 @@
   display: none;
 }
 
+/* Décor temporaire (état live au playhead, pas encore un kf réel) — fond plus clair, signal
+   purement visuel, jamais lié à la détection elle-même (`render.ts`). */
+.dedit-palette--temporary {
+  background: #374151;
+}
+
+.dedit-snap-to-kf1 {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: var(--dedit-accent);
+  color: var(--dedit-text);
+  border: none;
+  border-radius: 4px;
+  font-family: var(--dedit-font);
+  font-size: var(--dedit-font-size);
+  cursor: pointer;
+}
+
+.dedit-snap-to-kf1--hidden {
+  display: none;
+}
+
 /* ── Family tabs ────────────────────────────────────────────────────────── */
 .dedit-tabs {
   display: flex;

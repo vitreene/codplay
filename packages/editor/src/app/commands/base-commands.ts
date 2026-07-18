@@ -7,6 +7,7 @@
 
 import type { CapsuleDef, Content, Decor, EditorScene, Item, ItemType, OffsetData } from './types'
 import { nextOrderKey } from './order-key'
+import { DEFAULT_DECOR_PRESET } from './default-decor-presets'
 
 let idCounter = 0
 
@@ -64,12 +65,20 @@ export function createItem(
  * (document-model, discussion §« Tout item naît en type bloc »). Lève si l'item n'est pas un
  * `bloc` : ce n'est pas une commande de changement de type général.
  */
+/**
+ * Applique aussi le preset par défaut du type (s'il en existe un) à `item.initialDecorId`, dans le
+ * même geste — jamais une commande séparée que l'appelant devrait penser à enchaîner
+ * (`2026-07-17-decor-keyframe-layering-plan.md` §2). Un objet JSON simple appliqué une fois, pas
+ * une couche vivante — changer le preset plus tard ne rétroagit pas sur les items déjà créés.
+ */
 export function assignType(scene: EditorScene, args: { itemId: string; type: ItemType }): EditorScene {
   const item = requireItem(scene, args.itemId)
   if (item.type !== 'bloc') {
     throw new Error(`assignType: item '${args.itemId}' is already type '${item.type}' — type change is only allowed from 'bloc'`)
   }
-  return updateItem(scene, args.itemId, (i) => ({ ...i, type: args.type }))
+  const withType = updateItem(scene, args.itemId, (i) => ({ ...i, type: args.type }))
+  const preset = DEFAULT_DECOR_PRESET[args.type]
+  return preset ? setDecor(withType, { decorId: item.initialDecorId, patch: preset }) : withType
 }
 
 /** Renseigne le contenu d'un item déjà typé — crée l'entrée `Content` et la relie via `contentId`. */

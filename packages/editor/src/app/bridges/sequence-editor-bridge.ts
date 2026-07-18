@@ -14,6 +14,8 @@ export function createSequenceEditorBridge(container: HTMLElement, machine: Acto
   const controller = new SequenceEditorController(machine.getSnapshot().context.scene ?? undefined)
   const handle = mountSequenceEditor(container, controller, {
     onPlayheadChange: (timeMs) => machine.send({ type: 'SEEK', timelineMs: timeMs }),
+    onTelcoActionRequest: () => machine.send({ type: 'TELCO_ACTION_REQUEST' }),
+    onTelcoPauseRequest: () => machine.send({ type: 'TELCO_PAUSE_REQUEST' }),
   })
 
   const unsubscribeCommand = controller.onCommand((commands) => {

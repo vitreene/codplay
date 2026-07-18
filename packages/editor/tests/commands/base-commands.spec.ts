@@ -55,6 +55,25 @@ describe('assignType', () => {
     const typed = commands.assignType(scene, { itemId, type: 'text' })
     expect(() => commands.assignType(typed, { itemId, type: 'image' })).toThrow()
   })
+
+  // `2026-07-17-decor-keyframe-layering-plan.md` §2 — le preset se pose une seule fois, bundlé
+  // dans `assignType`, jamais une commande séparée que l'appelant devrait penser à enchaîner.
+  it('applies the type default preset to initialDecorId, bundled in the same command', () => {
+    const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {} })
+    const next = commands.assignType(scene, { itemId, type: 'text' })
+    const item = next.items.find((i) => i.id === itemId)!
+    const decor = next.decors[item.initialDecorId]
+    expect(decor?.style?.['background-color']).toBe('oklch(0.45 0.12 235)')
+    expect(decor?.style?.['text-align']).toBe('center')
+    expect(decor?.offset?.width).toBe(80)
+  })
+
+  it('leaves initialDecorId untouched for a type with no preset entry', () => {
+    const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {} })
+    const next = commands.assignType(scene, { itemId, type: 'image' })
+    const item = next.items.find((i) => i.id === itemId)!
+    expect(next.decors[item.initialDecorId]).toEqual({ id: item.initialDecorId, offset: {} })
+  })
 })
 
 describe('assignContent', () => {

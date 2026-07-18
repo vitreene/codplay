@@ -24,6 +24,19 @@ export type AuthorApi = {
    * pose from getComputedStyle in authoring code — use this instead.
    */
   getNodePose: (persoId: string) => NodePose | null
+  /**
+   * Generalization of `getNodePose` beyond its fixed 7-property pose vocabulary — reads whatever
+   * properties the caller asks for, straight from anime.js's own bookkeeping (`utils.get`, never
+   * `getComputedStyle`). Values are returned AS-IS: a color comes back as a CSS string
+   * (`"oklch(...)"`), a length outside anime's own pose vocabulary comes back px-suffixed
+   * (`"8.52px"`) — no `Number()` coercion, unlike `getNodePose`.
+   *
+   * NOT gesture-safe: while a CS gesture is active on this node, `LibreAdapter` writes pose
+   * directly to the node, bypassing `utils.set` — anime's cache (what this reads) is stale until
+   * the next rebuild. Callers must gate on `session.isGestureActive()` themselves, same as
+   * `offset-editor-bridge.ts::readLiveGestureNodePose` already does for pose.
+   */
+  getNodeSnapshot: (persoId: string, props: readonly string[]) => Record<string, string | number> | null
   subscribeToPlayerState: (cb: (state: PlayerAuthorState) => void) => () => void
   getPlayerState: () => PlayerAuthorState
 }
@@ -37,6 +50,8 @@ export function createAuthorApi(player: PlayerApi): AuthorApi {
     subscribeToNode: (persoId, cb) => player.subscribeToNode(persoId, cb),
 
     getNodePose: (persoId) => player.getNodePose(persoId),
+
+    getNodeSnapshot: (persoId, props) => player.getNodeSnapshot(persoId, props),
 
     subscribeToPlayerState: (cb) => {
       let last = toAuthorState(player.getState().status)

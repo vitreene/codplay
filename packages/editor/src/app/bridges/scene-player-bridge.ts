@@ -47,9 +47,26 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   // La même paire est réappliquée depuis `attachSelection` pour qu'un frame flambant neuf (nouvelle
   // sélection en cours de lecture) reflète immédiatement l'état courant, pas seulement au prochain
   // changement.
+  // Dédupliqué sur la VALEUR (pas sur chaque notification) — `state.status` peut transiter par
+  // plusieurs valeurs "not playing" à la suite (ex. `seeking` puis `paused`) sans jamais repasser
+  // par `playing` entre les deux ; sans ce garde, `setPart*`/`sync()` s'exécuteraient une fois par
+  // notification plutôt qu'une fois par vraie transition. Même patron que
+  // `author-api.ts::subscribeToPlayerState` (`if (next.isPlaying === last.isPlaying) return`).
+  let wasPlaying = false
   telco.onChange((state) => {
-    frame?.setPartActive('cs', state.status !== 'playing')
-    frame?.setPartVisibility('cs', state.status !== 'playing')
+    const isPlaying = state.status === 'playing'
+    if (isPlaying === wasPlaying) return
+    wasPlaying = isPlaying
+    frame?.setPartActive('cs', !isPlaying)
+    frame?.setPartVisibility('cs', !isPlaying)
+    // Le frame n'est jamais resynchronisé pendant qu'il est inactif/invisible (aucune position ne
+    // change tant qu'il n'observe rien) — à la réapparition, il ne redevient donc correct QUE s'il
+    // est explicitement resynchronisé ici : sans ce `sync()`, il reste figé sur la pose qu'il avait
+    // au moment de son dernier rattachement (généralement le rebuild forcé de l'entrée en lecture,
+    // donc kf1), jamais sur la pose réelle courante du node à la fin de la lecture (bug constaté en
+    // direct, 2026-07-18 — même mécanisme que `unsubscribeSeek` ci-dessous, qui le fait déjà après
+    // un vrai seek).
+    if (!isPlaying) frame?.sync()
   })
   let authorApi: AuthorApi | null = null
   let frame: SelectionFrameHandle | null = null
@@ -284,6 +301,27 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
   const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
     void rebuild(scene).then(() => reattachSelection(machine.getSnapshot().context.selection.itemIds))
   })
+  /**
+   * Entrée dans l'état `playing` — rebuild inconditionnel, même idiome que `sceneReverted` ci-dessus
+   * (efface toute preview dedit périmée sur les nodes réels, `2026-07-17-play-mode-decor-editor-
+   * deactivation-plan.md` §1/§3.2). `reattachSelection` derrière : le CS reste correctement ancré
+   * sur le node remonté pour quand il redevient visible/actif à la pause/au stop (`telco.onChange`
+   * ci-dessus). Rien à faire sur `active: false` — aucun rebuild n'est nécessaire pour sortir de
+   * lecture, le player reste où `telco` l'a laissé.
+   */
+  const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
+    if (!active || lastScene === null) return
+    void rebuild(lastScene).then(() => {
+      reattachSelection(machine.getSnapshot().context.selection.itemIds)
+      // `rebuild()` (`studio.load()` + `seek`) ne joue jamais — il remonte le player en PAUSE à la
+      // position courante. `mount.ts::onPlayClick` a déjà appelé `telco.play()` avant que ce rebuild
+      // (async) ne se termine ; ce `load()` réinitialise le même player (jamais recréé) et écrase
+      // silencieusement cet appel, la lecture retombant en pause à la position sans jamais avancer
+      // (confirmé en direct). Reprendre ici, après coup — seulement si l'état `playing` tient
+      // toujours (une pause déclenchée pendant le rebuild ne doit pas relancer la lecture).
+      if (machine.getSnapshot().value === 'playing') void telco.play()
+    })
+  })
 
   // Clic hors CS → `CLEAR_SELECTION` : déjà câblé, pas ici — `AppLayout.tsx::useClearSelectionShortcuts`
   // (`mousedown` sur `.app-region--scene` hors `[data-selection-frame]`) le fait depuis
@@ -315,6 +353,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       unsubscribeLoaded.unsubscribe()
       unsubscribeSeek.unsubscribe()
       unsubscribeReverted.unsubscribe()
+      unsubscribePlaybackActive.unsubscribe()
       window.removeEventListener('resize', onWindowResize)
       document.removeEventListener('scroll', onAncestorScroll, { capture: true })
       frame?.destroy()

@@ -173,6 +173,91 @@ describe('controllerMachine — panels', () => {
   })
 })
 
+describe('controllerMachine — playing state (2026-07-17-play-mode-decor-editor-deactivation-plan)', () => {
+  it('TELCO_ACTION_REQUEST moves from idle to playing and emits playbackActiveChanged(active: true)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    const activeChanges: boolean[] = []
+    actor.on('playbackActiveChanged', (e) => activeChanges.push(e.active))
+
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+
+    expect(actor.getSnapshot().value).toBe('playing')
+    expect(activeChanges).toEqual([true])
+  })
+
+  it('TELCO_ACTION_REQUEST also flushes pending edits (emitFlushPending unchanged)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    const flushes: unknown[] = []
+    actor.on('flushPending', (e) => flushes.push(e))
+
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+
+    expect(flushes).toHaveLength(1)
+  })
+
+  it('TELCO_ACTION_REQUEST moves from creating to playing too (root-level target, not nested under idle)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'CREATE_MODE_ENTER', itemType: 'text' })
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+
+    expect(actor.getSnapshot().value).toBe('playing')
+  })
+
+  it('TELCO_PAUSE_REQUEST returns to idle and emits playbackActiveChanged(active: false)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+    const activeChanges: boolean[] = []
+    actor.on('playbackActiveChanged', (e) => activeChanges.push(e.active))
+
+    actor.send({ type: 'TELCO_PAUSE_REQUEST' })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+    expect(activeChanges).toEqual([false])
+  })
+
+  it('SEEK also returns to idle (covers Stop and scrub-while-playing) and still emits seek', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+    const activeChanges: boolean[] = []
+    const seeks: number[] = []
+    actor.on('playbackActiveChanged', (e) => activeChanges.push(e.active))
+    actor.on('seek', (e) => seeks.push(e.timelineMs))
+
+    actor.send({ type: 'SEEK', timelineMs: 1200 })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+    expect(activeChanges).toEqual([false])
+    expect(seeks).toEqual([1200])
+  })
+
+  it('SEEK outside playing stays in the current state (unchanged root-level behaviour)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    const seeks: number[] = []
+    actor.on('seek', (e) => seeks.push(e.timelineMs))
+
+    actor.send({ type: 'SEEK', timelineMs: 300 })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+    expect(seeks).toEqual([300])
+  })
+
+  it('selection made while playing still applies (SELECT_ITEM is a root-level event, not gated by state)', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'] })
+
+    expect(actor.getSnapshot().value).toBe('playing')
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'] })
+  })
+})
+
 describe('controllerMachine — zones visibility (§3, ephemeral toggle)', () => {
   it('TOGGLE_ZONES_VISIBLE flips the flag', () => {
     const actor = createActor(controllerMachine)

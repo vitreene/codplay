@@ -22,6 +22,17 @@ export interface MountDecorEditorOptions {
 }
 
 export interface DecorEditorMountHandle {
+  /**
+   * Coupe/reprend l'écriture de la preview live sur les nodes réels (`applyResolvedDecor`) — sans
+   * toucher `controller`/`decorEditorMachine` (panneau actif, `visualPosition`/`zoneMode` restent
+   * intacts, contrairement à `controller.detach()` qui les réinitialise via `ITEMS.DETACH`).
+   * Utilisé par `decor-editor-bridge.ts` pour l'état `playing`
+   * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) : suspendu à l'entrée (aucune
+   * écriture, y compris quand le node est remplacé par le rebuild forcé du pont `scenePlayer` et
+   * que `subscribeToNode` notifie le nouveau node) ; la reprise réapplique immédiatement la preview
+   * courante sur le node actuel.
+   */
+  setPreviewSuspended(suspended: boolean): void
   destroy(): void
 }
 
@@ -42,9 +53,11 @@ export function mountDecorEditor(
 ): DecorEditorMountHandle {
   const nodesByItemId = new Map<string, Element | null>()
   const unsubscribeNodeByItemId = new Map<string, () => void>()
+  let previewSuspended = false
 
   /** `getPatches()`/`getResolvedDecors()` sont deux `.map()` sur la même liste d'items attachés — même ordre, zippés une seule fois plutôt que ré-appariés par un second appel. */
   function applyToAllAttachedNodes(): void {
+    if (previewSuspended) return
     const itemIds = controller.getPatches().map((entry) => entry.itemId)
     const resolvedDecors = controller.getResolvedDecors()
     itemIds.forEach((itemId, index) => {
@@ -97,6 +110,10 @@ export function mountDecorEditor(
   })
 
   return {
+    setPreviewSuspended(suspended: boolean): void {
+      previewSuspended = suspended
+      if (!suspended) applyToAllAttachedNodes()
+    },
     destroy(): void {
       unsubscribeController()
       for (const unsubscribe of unsubscribeNodeByItemId.values()) unsubscribe()

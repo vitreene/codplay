@@ -262,6 +262,37 @@ export function readNodePose(nodeRef: unknown): NodePose | null {
 }
 
 /**
+ * Generalization of `readNodePose` to an arbitrary, caller-supplied property list — same accessor
+ * (`utils.get`, never `getComputedStyle`), same reasoning (anime.js is the only module that knows
+ * which DOM representation it chose for a given target). Unlike `readNodePose`, this calls the
+ * 2-argument form of `utils.get` (no `unit` argument) rather than `utils.get(nodeRef, prop, false)`
+ * — confirmed empirically: the 3-argument `false` form (bare-number coercion) only works for
+ * anime's own fixed pose vocabulary (`x`/`y`/`rotate`/`scaleX`/`scaleY`/`width`/`height`) and
+ * silently returns `undefined` for anything else (e.g. `background-color`), even right after a
+ * `utils.set` on that exact property. The 2-argument form works universally — always a string,
+ * unit-suffixed for lengths (`"8px"`), verbatim for colors (`"oklch(...)"`), and `null` for a
+ * property anime can't resolve at all (never a default/zero value standing in for "unknown").
+ *
+ * Not gesture-safe: while `LibreAdapter` (`packages/authoring/selection-frame`) is actively
+ * mutating a node during a CS gesture, it writes `translate`/`rotate`/`scale`/`width`/`height`
+ * directly on the node, bypassing `utils.set` — anime's cache (what this function reads) is stale
+ * until the next rebuild reconciles it. Callers must gate on gesture-active state themselves, same
+ * as `offset-editor-bridge.ts::readLiveGestureNodePose` already does for pose.
+ */
+export function readNodeSnapshot(nodeRef: unknown, props: readonly string[]): Record<string, string | number> | null {
+  if (!isDomElement(nodeRef)) {
+    return null
+  }
+
+  const snapshot: Record<string, string | number> = {}
+  for (const prop of props) {
+    const value = utils.get(nodeRef, prop)
+    if (value !== undefined && value !== null) snapshot[prop] = value
+  }
+  return snapshot
+}
+
+/**
  * Applies one text content value on one node-like target.
  */
 export function setTextContent(nodeRef: unknown, content: string): void {

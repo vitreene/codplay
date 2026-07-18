@@ -115,6 +115,29 @@ export type ControllerEvent =
   | { type: 'RUN_TRANSACTION'; commands: Command[] }
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
   | { type: 'SEEK'; timelineMs: number }
+  /**
+   * Envoyé par tout point d'entrée `telco` (`onPlayClick` aujourd'hui — même besoin pour un futur
+   * stop/rewind/setRate direct, `2026-07-17` remarque utilisateur : « patron commun, pas besoin de
+   * dupliquer le flush ») juste AVANT l'appel `telco.*`, jamais après. Une édition dedit tout juste
+   * faite peut encore être dans `pendingCommands` (commit différé, §Étape B) : sans ce signal, le
+   * document lu par le rebuild déclenché par cette action telco n'a pas encore la mutation,
+   * contrairement à un `SEEK` qui flush déjà via l'event `'seek'` (changement de sélection/lecture
+   * de tête). Root cause du "play juste après édition n'anime pas la correction" (2026-07-17, repro
+   * utilisateur en direct : play immédiat ignore l'édit, un seek puis play la voit).
+   */
+  | { type: 'TELCO_ACTION_REQUEST' }
+  /**
+   * Émis juste avant tout `telco.pause()` — geste explicite (clic Play/Pause) ou pause automatique
+   * en fin de scène (`sequence-editor/mount.ts::syncFromTelco`). Fait sortir l'état `playing`
+   * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — entrée ET sortie au niveau du GESTE
+   * éditeur, jamais du statut brut du transport (`AuthorApi.subscribeToPlayerState`/`isPlaying`) :
+   * ce dernier est pollué par le rebuild forcé que l'entrée dans `playing` déclenche elle-même
+   * (confirmé en direct, 2026-07-18 — `isPlaying` comme signal de sortie sortait de l'état avant
+   * même que ce rebuild ait fini). `SEEK` (déjà un event racine) sert de second signal de sortie,
+   * géré directement dans l'état `playing` — couvre Stop (`onStopClick` → seek 0) et le scrub
+   * pendant la lecture.
+   */
+  | { type: 'TELCO_PAUSE_REQUEST' }
   /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`/`.telco`). */
   | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /**
@@ -134,6 +157,14 @@ export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
   | { type: 'seek'; timelineMs: number }
+  /** Émis en réponse à `TELCO_ACTION_REQUEST` — `decor-editor-bridge.ts` s'y abonne comme sur `'seek'` (même `flushNow`). */
+  | { type: 'flushPending' }
   | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /** Réponse à `PHASE_ABORT` — `scene` est le document INCHANGÉ (rien n'a été committé). */
   | { type: 'sceneReverted'; scene: EditorScene }
+  /**
+   * Émis à l'entrée ET à la sortie de l'état `playing` (`2026-07-17-play-mode-decor-editor-
+   * deactivation-plan.md`) — `scenePlayer` force un rebuild inconditionnel sur `active: true` (même
+   * idiome que `sceneReverted`) ; `decorEditor` désactive/réactive sa preview live.
+   */
+  | { type: 'playbackActiveChanged'; active: boolean }

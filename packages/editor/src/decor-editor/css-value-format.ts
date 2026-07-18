@@ -13,6 +13,8 @@
 // l'unité saisie du rendu visuel réel. Valeur = évaluation empirique, à ajuster
 // ici sans toucher au reste du code.
 
+import { pxToCqw } from './units'
+
 export type NumberFormat = 'cqw' | 'raw'
 
 interface NumberFormatEntry {
@@ -53,4 +55,22 @@ export function parseNumberFromCssValue(cssProperty: string, value: string): num
   const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
   const scale = entry.format === 'cqw' ? (entry.scale ?? 1) : 1
   return Number(match[0]) / scale
+}
+
+/**
+ * Convertit une valeur RÉSOLUE (lue en direct sur le node via `AuthorApi.getNodeSnapshot`, jamais
+ * saisie par l'auteur) en chaîne CSS finale pour une propriété donnée — pendant du décor temporaire
+ * (`2026-07-17-resolved-state-at-time-notes.md`). Différent de `formatNumberForCssProperty` :
+ * jamais de `scale` (ce facteur n'ajuste que la granularité perçue d'une SAISIE, sans rapport avec
+ * une valeur déjà résolue) — seule la conversion physique px→cqw s'applique, pour les propriétés
+ * qui en ont besoin (`format:'cqw'`). `getNodeSnapshot` renvoie ces longueurs suffixées ("8.52px")
+ * pour toute propriété hors du vocabulaire de pose propre d'anime — jamais un nombre nu, d'où le
+ * parsing ici plutôt qu'un `Number()` direct.
+ */
+export function formatLiveValueForCssProperty(cssProperty: string, liveValue: string | number, containerWidthPx: number): string {
+  const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
+  const parsed = typeof liveValue === 'number' ? liveValue : Number.parseFloat(liveValue)
+  if (!Number.isFinite(parsed)) return String(liveValue)
+  if (entry.format === 'raw') return String(parsed)
+  return `${pxToCqw(parsed, containerWidthPx)}cqw`
 }

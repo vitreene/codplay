@@ -20,6 +20,17 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
   const el = document.createElement('div')
   el.classList.add('dedit-palette', 'dedit-palette--hidden')
 
+  // Raccourci « aller à kf1 » — visible seulement pendant un décor temporaire
+  // (`2026-07-17-resolved-state-at-time-notes.md`), pour revenir à l'ancrage réel sans chercher le
+  // kf dans la timeline. dedit ne résout pas lui-même « où est kf1 » (aucune notion de temps/
+  // keyframe dans son propre domaine) — relaie seulement la demande à l'hôte via le contrôleur.
+  const snapButton = document.createElement('button')
+  snapButton.type = 'button'
+  snapButton.classList.add('dedit-snap-to-kf1', 'dedit-snap-to-kf1--hidden')
+  snapButton.textContent = 'Aller à kf1'
+  snapButton.addEventListener('click', () => controller.requestSnapToFirstKeyframe())
+  el.appendChild(snapButton)
+
   const tabs = document.createElement('div')
   tabs.classList.add('dedit-tabs')
   el.appendChild(tabs)
@@ -38,6 +49,12 @@ export function createDecorEditorPalette(controller: DecorEditorController): Dec
     const snapshot = controller.getSnapshot()
     const active = snapshot.value === 'active'
     el.classList.toggle('dedit-palette--hidden', !active)
+    // Signal visuel « décor temporaire » (état live au playhead, pas encore un kf réel) — piloté
+    // en donnée par `controller.isTemporary()` (`2026-07-17-resolved-state-at-time-notes.md`),
+    // le CSS (`dedit-palette--temporary`, fond plus clair) reste le seul endroit qui décide de la
+    // présentation, jamais mêlé à la détection elle-même.
+    el.classList.toggle('dedit-palette--temporary', controller.isTemporary())
+    snapButton.classList.toggle('dedit-snap-to-kf1--hidden', !controller.isTemporary())
     if (!active) return
 
     const config = controller.getPaletteConfig()
@@ -225,13 +242,22 @@ function renderColorField(
     // flush de fin de phase (chantier 3) à cette édition continue, symétrique du CS.
     input.addEventListener('change', () => controller.notifyInteractionEnd())
 
-    return () => {
+    const applyResolvedValue = (): void => {
       const state = controller.resolveField<string | undefined>(path)
       const hex = state.kind === 'uniform' && state.value !== undefined ? toHexForPicker(state.value) : '#808080'
-      if (input.value.toLowerCase() !== hex.toLowerCase() && document.activeElement !== input) {
-        input.value = hex
-      }
+      if (input.value.toLowerCase() !== hex.toLowerCase()) input.value = hex
       control.parentElement?.classList.toggle('dedit-field--mixed', state.kind === 'mixed')
+    }
+
+    // Un patch externe (raccourci « aller à kf1 », undo…) peut survenir pendant que ce champ a
+    // encore le focus — la mise à jour est alors différée (guard ci-dessous) mais rien d'autre ne
+    // la redéclenche ensuite (perte de focus native ≠ notification machine) : sans ce handler,
+    // la valeur reste figée sur l'ancien état jusqu'au prochain événement quelconque.
+    input.addEventListener('blur', applyResolvedValue)
+
+    return () => {
+      if (document.activeElement === input) return
+      applyResolvedValue()
     }
   })
 }

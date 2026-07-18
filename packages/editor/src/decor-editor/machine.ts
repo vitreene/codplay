@@ -12,6 +12,12 @@ export interface AttachedItem {
   defaults: ResolvedDecor
   chain: DecorPatch[]
   patch: DecorPatch
+  /**
+   * `patch` reflète l'état live du node (playhead entre deux kf), pas un décor enregistré —
+   * `2026-07-17-resolved-state-at-time-notes.md`. Piloté en donnée jusqu'ici ; la présentation
+   * (ex. fond de palette plus clair) reste un choix du rendu, jamais décidé ici.
+   */
+  isTemporary?: boolean
 }
 
 export interface DecorEditorMachineContext {
@@ -35,6 +41,7 @@ export interface AttachItemEntry {
   defaults: ResolvedDecor
   chain: DecorPatch[]
   patch: DecorPatch
+  isTemporary?: boolean
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -61,6 +68,7 @@ function toAttachedItems(entries: AttachItemEntry[]): AttachedItem[] {
     defaults: e.defaults,
     chain: e.chain,
     patch: e.patch,
+    isTemporary: e.isTemporary,
   }))
 }
 
