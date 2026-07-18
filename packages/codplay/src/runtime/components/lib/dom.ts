@@ -262,6 +262,25 @@ export function readNodePose(nodeRef: unknown): NodePose | null {
 }
 
 /**
+ * Writes a partial pose through anime.js (`utils.set`) — the write-side symmetry of `readNodePose`.
+ * Authoring code must never write `x`/`y`/`rotate`/`scaleX`/`scaleY`/`width`/`height` straight onto
+ * `node.style.*`: anime.js composes this vocabulary into `style.transform` (confirmed in its own
+ * source, `animejs/dist/modules/core/transforms.js`), never into the discrete CSS properties
+ * (`style.translate`/`.rotate`/`.scale`) — a direct write to those discrete properties does not
+ * replace what anime.js holds, it accumulates alongside it the next time anime.js writes (CSS
+ * `transform` and the discrete transform properties compose additively, they don't override one
+ * another). Routing every pose write through `utils.set` keeps anime.js's own bookkeeping — and
+ * therefore every subsequent `readNodePose`/animation frame — consistent with what's actually on
+ * the node. Only the keys present in `pose` are touched; a partial pose leaves the rest untouched.
+ */
+export function writeNodePose(nodeRef: unknown, pose: Partial<NodePose>): void {
+  if (!isDomElement(nodeRef)) {
+    return
+  }
+  utils.set(nodeRef, pose as Parameters<typeof utils.set>[1])
+}
+
+/**
  * Generalization of `readNodePose` to an arbitrary, caller-supplied property list — same accessor
  * (`utils.get`, never `getComputedStyle`), same reasoning (anime.js is the only module that knows
  * which DOM representation it chose for a given target). Unlike `readNodePose`, this calls the
