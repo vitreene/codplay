@@ -164,6 +164,34 @@ describe('V1 - player schedule', () => {
     schedule.destroy()
   })
 
+  it('realigns a live loop after seeking backward without re-emitting its past occurrences', () => {
+    const emitted: string[] = []
+
+    const schedule = new PlayerScheduleFacade({
+      emitEvent: async (event) => {
+        emitted.push(event.name)
+        return { ok: true, data: undefined }
+      },
+    })
+
+    schedule.loop(
+      { eachMs: 1000, until: { type: 'times', max: 11 } },
+      ({ index }) => [{ name: `count-${10 - index}` }]
+    )
+    schedule.tick(0)
+    schedule.tick(5000)
+
+    expect(emitted).toEqual(['count-10', 'count-9', 'count-8', 'count-7', 'count-6', 'count-5'])
+
+    schedule.seek(0)
+    expect(emitted).toEqual(['count-10', 'count-9', 'count-8', 'count-7', 'count-6', 'count-5'])
+
+    schedule.tick(1000)
+    expect(emitted).toEqual(['count-10', 'count-9', 'count-8', 'count-7', 'count-6', 'count-5', 'count-9'])
+
+    schedule.destroy()
+  })
+
   it('warns and falls back to jit when loop planned mode depends on one event stop', () => {
     const emitted: string[] = []
     const warnings: string[] = []

@@ -87,6 +87,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
   private readonly resolveState: () => DeepReadonly<Record<string, unknown>>
   private readonly onIdle?: () => void
   private readonly jobs = new Map<string, ScheduleJob>()
+  private readonly initialJobs = new Map<string, ScheduleJob>()
   private policy: ResolvedRuntimeEventPolicy
 
   private virtualNowMs = 0
@@ -122,7 +123,37 @@ export class PlayerScheduleFacade implements StrapHelpers {
    */
   reset(): void {
     this.jobs.clear()
+    this.initialJobs.clear()
     this.virtualNowMs = 0
+  }
+
+  /**
+   * Rebuilds pending helper jobs at one timeline-relative position without
+   * emitting their already-materialized occurrences again.
+   */
+  seek(targetMs: number): void {
+    const targetVirtualMs = Math.max(0, targetMs)
+    this.jobs.clear()
+
+    for (const [jobId, initialJob] of this.initialJobs) {
+      this.jobs.set(jobId, { ...initialJob })
+    }
+
+    this.virtualNowMs = targetVirtualMs
+
+    while (true) {
+      const dueJobs = [...this.jobs.values()]
+        .filter((job) => !job.cancelled && job.dueAtMs <= targetVirtualMs)
+        .sort((left, right) => left.dueAtMs - right.dueAtMs || left.order - right.order)
+
+      if (dueJobs.length === 0) {
+        return
+      }
+
+      for (const job of dueJobs) {
+        this.advanceJobAfterBatch(job)
+      }
+    }
   }
 
   /**
@@ -139,6 +170,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
    */
   stop(): void {
     this.jobs.clear()
+    this.initialJobs.clear()
     this.virtualNowMs = 0
   }
 
@@ -310,13 +342,22 @@ export class PlayerScheduleFacade implements StrapHelpers {
   /**
    * Builds one new runtime job with deterministic ordering.
    */
-  private createJob(job: Omit<ScheduleJob, 'id' | 'order' | 'cancelled'>): ScheduleJob {
-    return {
+  private createJob(
+    job: Omit<ScheduleJob, 'id' | 'order' | 'cancelled'>,
+    recordInitial = true
+  ): ScheduleJob {
+    const scheduledJob = {
       ...job,
       id: `schedule-${this.nextJobId++}`,
       order: this.nextJobOrder++,
       cancelled: false
     }
+
+    if (recordInitial) {
+      this.initialJobs.set(scheduledJob.id, { ...scheduledJob })
+    }
+
+    return scheduledJob
   }
 
   /**
@@ -333,6 +374,7 @@ export class PlayerScheduleFacade implements StrapHelpers {
 
         job.cancelled = true
         this.jobs.delete(jobId)
+        this.initialJobs.delete(jobId)
         this.notifyIdleIfNeeded()
       }
     }
@@ -395,13 +437,16 @@ export class PlayerScheduleFacade implements StrapHelpers {
       }
 
       for (const emission of [...batchEmissions.deferred, ...overflowEmissions]) {
-        const deferredJob = this.createJob({
-          kind: 'delay',
-          dueAtMs: batchDueAtMs + 1,
-          startedAtMs: batchDueAtMs,
-          index: 0,
-          input: emission.event
-        })
+        const deferredJob = this.createJob(
+          {
+            kind: 'delay',
+            dueAtMs: batchDueAtMs + 1,
+            startedAtMs: batchDueAtMs,
+            index: 0,
+            input: emission.event
+          },
+          false
+        )
         this.jobs.set(deferredJob.id, deferredJob)
       }
 

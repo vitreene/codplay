@@ -93,6 +93,7 @@ export class Player implements PlayerApi {
   private strapCollection: StrapCollection = {}
   private readonly strapLoopSchedulers = new Set<PlayerScheduleFacade>()
   private readonly strapLoopUnsubscribers = new Map<PlayerScheduleFacade, () => void>()
+  private readonly strapLoopStartedAtMs = new Map<PlayerScheduleFacade, number>()
   private scheduleRuntimeUnsubscribe: (() => void) | null = null
   private initialSceneState: Record<string, unknown> | undefined
   private initialStoryStateById = new Map<string, Record<string, unknown> | undefined>()
@@ -381,7 +382,12 @@ export class Player implements PlayerApi {
 
       this.resetAuthorState()
 
-      return this.normalizeResult(await this.player.seek(input.timelineMs))
+      const seekResult = this.normalizeResult(await this.player.seek(input.timelineMs))
+      if (seekResult.ok) {
+        this.seekStrapLoopSchedulers(this.player.getState().timelineMs)
+      }
+
+      return seekResult
     })()
   }
 
@@ -520,6 +526,7 @@ export class Player implements PlayerApi {
   private destroySingleScheduler(scheduler: PlayerScheduleFacade): void {
     this.strapLoopUnsubscribers.get(scheduler)?.()
     this.strapLoopUnsubscribers.delete(scheduler)
+    this.strapLoopStartedAtMs.delete(scheduler)
     scheduler.destroy()
     this.strapLoopSchedulers.delete(scheduler)
   }
@@ -533,7 +540,24 @@ export class Player implements PlayerApi {
       scheduler.destroy()
     }
     this.strapLoopUnsubscribers.clear()
+    this.strapLoopStartedAtMs.clear()
     this.strapLoopSchedulers.clear()
+  }
+
+  /**
+   * Aligns active live helpers with a seek target so resumed playback cannot
+   * emit occurrences from the timeline position that preceded the seek.
+   */
+  private seekStrapLoopSchedulers(targetTimelineMs: number): void {
+    for (const scheduler of [...this.strapLoopSchedulers]) {
+      const startedAtMs = this.strapLoopStartedAtMs.get(scheduler)
+      if (startedAtMs === undefined || startedAtMs > targetTimelineMs) {
+        this.destroySingleScheduler(scheduler)
+        continue
+      }
+
+      scheduler.seek(targetTimelineMs - startedAtMs)
+    }
   }
 
   /**
@@ -810,6 +834,7 @@ export class Player implements PlayerApi {
         onIdle: () => {
           unsubscribe?.()
           this.strapLoopUnsubscribers.delete(scheduler)
+          this.strapLoopStartedAtMs.delete(scheduler)
           scheduler.destroy()
           this.strapLoopSchedulers.delete(scheduler)
         },
@@ -817,6 +842,7 @@ export class Player implements PlayerApi {
       })
 
       this.strapLoopSchedulers.add(scheduler)
+      this.strapLoopStartedAtMs.set(scheduler, startedAtMs)
       unsubscribe = this.player.subscribeJitTick((deltaMs) => {
         scheduler.tick(deltaMs)
       })
