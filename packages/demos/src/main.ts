@@ -23,6 +23,7 @@ import { runSelectionFrameDemo } from './codplay/selection-frame-demo'
 import { runSelectionFrameGridDemo } from './codplay/selection-frame-grid-demo'
 import { runZoneEditorDemo } from './codplay/zone-editor-demo'
 import { runEd2BuilderDemo } from './codplay/ed2-builder-demo'
+import { runSpaceBubblesDemo } from './codplay/space-bubbles-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -51,5 +52,6 @@ switch (demoName) {
 	case 'zone-editor':     void runZoneEditorDemo(); break
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	case 'ed2-builder':     void runEd2BuilderDemo(); break
+	case 'space-bubbles':   void runSpaceBubblesDemo(); break
 	default:                void runPlayerPocDemo()
 }

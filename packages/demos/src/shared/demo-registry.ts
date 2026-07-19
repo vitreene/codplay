@@ -23,6 +23,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
   { id: "container-query-placement", label: "Placement cqw/cqh", href: "?demo=container-query-placement" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
+  { id: "space-bubbles", label: "Space Bubbles", href: "?demo=space-bubbles" },
   { id: "selection-frame", label: "Selection Frame", href: "?demo=selection-frame" },
   { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },
   { id: "zone-editor", label: "Éditeur de zones", href: "?demo=zone-editor" },
