@@ -13,7 +13,7 @@ import {
   type RuntimeTraceStatus,
 } from "../runtime/trace-store";
 import type { CreateElementOptions } from "../runtime/create-element";
-import type { MoveCommand, RuntimePersos } from "../runtime/types";
+import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from "../runtime/types";
 import { normalizeMoveCommand } from "../runtime/modules/move";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
 import { RUNTIME_TRACE_STATUS } from "../runtime/trace-constants";
@@ -76,6 +76,7 @@ export type CreatePlayerOptions = {
    */
   bindings?: ThirdPartyBinding[];
   onRuntimeEmit?: (event: PlayerPublicEventInput) => void;
+  onLiveCapture?: (event: RuntimeEmitEvent) => void;
   onTimelineEvent?: (event: PlayerPublicEventInput) => Promise<PlayerCommandResult>;
 };
 
@@ -483,6 +484,7 @@ export class PlayerFacade implements PlayerApi {
       coreServices: [{ name: "animeSvg", service: createAnimeSvgService() }],
       createElementOptions: options.createElementOptions,
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
+      emitLiveCapture: options.onLiveCapture,
       emitRuntimeEvent: (event) => {
         const runtimeEvent: PlayerPublicEventInput = {
           name: event.name,

@@ -2,6 +2,7 @@ import { utils } from 'animejs'
 
 import { RUNTIME_OBJECT_EVENT_HANDLERS } from '../../create-element'
 import type { CreateElementOptions } from '../../create-element'
+import { startCaptureSession } from '../../capture-session'
 import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitSelf } from '../../types'
 import type { RuntimeComponentClassInput, RuntimeComponentWarningReporter } from '../types'
 import {
@@ -30,6 +31,8 @@ export type ImageFitMode = 'wallpaper' | 'sprite'
 type RuntimeObjectEventNode = Record<string, unknown> & {
   [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
+
+const componentEmitCleanupByNode = new WeakMap<object, Set<() => void>>()
 
 /**
  * Checks whether one style entry uses one transition-like payload.
@@ -385,10 +388,15 @@ export function bindComponentEmitDeclarations(input: {
   }
 
   const handlersByTarget = new Map<unknown, Map<string, EmitRuleAction[]>>()
+  const ownerNode = input.resolveRef()
+  const cleanups = ownerNode !== null && typeof ownerNode === 'object' ? new Set<() => void>() : null
+  if (ownerNode !== null && typeof ownerNode === 'object' && cleanups !== null) {
+    componentEmitCleanupByNode.set(ownerNode, cleanups)
+  }
 
   for (const [eventName, rule] of Object.entries(input.perso.emit)) {
     for (const action of normalizeEmitRuleActions(rule as EmitRule)) {
-      const targetNode = input.resolveRef(action.ref)
+      const targetNode = action.keyCode !== undefined ? globalThis.window : input.resolveRef(action.ref)
       if (targetNode === null) {
         input.report({
           code: 'AUTHOR_COMPONENT_REF_UNKNOWN',
@@ -417,6 +425,18 @@ export function bindComponentEmitDeclarations(input: {
       handleEvent(event: Event): void {
         const rules = eventRulesByName.get(event.type) ?? []
         for (const action of rules) {
+          if (action.keyCode !== undefined && (!(event instanceof KeyboardEvent) || event.code !== action.keyCode)) {
+            continue
+          }
+
+          if (action.preventDefault === true) {
+            event.preventDefault()
+          }
+
+          if (action.capture !== undefined && event instanceof KeyboardEvent && event.repeat) {
+            continue
+          }
+
           const data = action.data === undefined ? { self } : { ...action.data, self }
           emitRuntimeEvent({
             name: action.event.name,
@@ -424,13 +444,37 @@ export function bindComponentEmitDeclarations(input: {
             cascade: action.event.cascade,
             scopeStoryId: action.event.cascade === true ? undefined : input.perso.storyId
           })
+
+          if (action.capture !== undefined && event instanceof KeyboardEvent) {
+            const pose = readNodePose(ownerNode)
+            const cleanup = startCaptureSession({
+              capture: action.capture,
+              startX: 0,
+              startY: 0,
+              baseX: pose?.x ?? 0,
+              baseY: pose?.y ?? 0,
+              startMs: Date.now(),
+              persoId: input.perso.id,
+              scopeStoryId: input.perso.storyId,
+              emitRuntimeEvent,
+              emitLiveCapture: input.createElementOptions?.emitLiveCapture,
+              getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs,
+              keyCode: event.code,
+              getCurrentPosition: () => readNodePose(ownerNode)
+            })
+            cleanups?.add(cleanup)
+          }
         }
       }
     }
 
     for (const eventName of eventRulesByName.keys()) {
-      if (isDomElement(targetNode)) {
-        targetNode.addEventListener(eventName, eventHandler)
+      const eventTarget = targetNode as { addEventListener?: unknown; removeEventListener?: unknown }
+      if (isDomElement(targetNode) || (typeof eventTarget.addEventListener === 'function' && typeof eventTarget.removeEventListener === 'function')) {
+        const addEventListener = eventTarget.addEventListener as (eventName: string, listener: EventListenerObject) => void
+        const removeEventListener = eventTarget.removeEventListener as (eventName: string, listener: EventListenerObject) => void
+        addEventListener.call(targetNode, eventName, eventHandler)
+        cleanups?.add(() => removeEventListener.call(targetNode, eventName, eventHandler))
         continue
       }
 
@@ -445,4 +489,23 @@ export function bindComponentEmitDeclarations(input: {
       }
     }
   }
+}
+
+/**
+ * Removes component-level emit listeners and active capture sessions.
+ */
+export function unbindComponentEmitDeclarations(nodeRef: unknown): void {
+  if (typeof nodeRef !== 'object' || nodeRef === null) {
+    return
+  }
+
+  const cleanups = componentEmitCleanupByNode.get(nodeRef)
+  if (cleanups === undefined) {
+    return
+  }
+
+  for (const cleanup of cleanups) {
+    cleanup()
+  }
+  componentEmitCleanupByNode.delete(nodeRef)
 }

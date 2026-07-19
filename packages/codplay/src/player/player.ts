@@ -173,6 +173,12 @@ export class Player implements PlayerApi {
       onTimelineEvent: async (event) => {
         return this.routeTimelineEvent(event)
       },
+      onLiveCapture: (event) => {
+        this.applyLiveSceneEvent(
+          { name: event.name, data: event.data, cascade: event.cascade },
+          event.scopeStoryId
+        )
+      },
       onRuntimeEmit: (event) => {
         const source = event.source ?? RUNTIME_EVENT_SOURCE.user
         const isLiveTracking = source === RUNTIME_EVENT_SOURCE.system && event.ms === undefined
@@ -1084,6 +1090,9 @@ export class Player implements PlayerApi {
             }
           }
           return null
+        },
+        setNodePose: (persoId: string, pose: Partial<NodePose>): void => {
+          this.setNodePose(persoId, pose)
         }
       },
       planned: {
@@ -1165,6 +1174,9 @@ export class Player implements PlayerApi {
     const resolvedChunks = this.normalizeStrapReturnValue(output)
     for (const chunk of resolvedChunks) {
       if (Array.isArray(chunk)) {
+        if (scope.liveOnly) {
+          continue
+        }
         const helperResult = this.materializeHelperSteps(
           strapTrackId,
           scope,
@@ -1180,6 +1192,9 @@ export class Player implements PlayerApi {
 
       if (chunk.update) {
         Object.assign(this.resolveStateTarget(scope.scopeStoryId), chunk.update)
+        if (scope.liveOnly) {
+          continue
+        }
         const updateResult = this.materializeHelperSteps(strapTrackId, scope, [{ offsetMs: 0, step: { update: chunk.update } }])
         if (!updateResult.ok) {
           return updateResult
@@ -1199,6 +1214,9 @@ export class Player implements PlayerApi {
       }
 
       for (const emittedEvent of chunk.events ?? []) {
+        if (scope.liveOnly) {
+          continue
+        }
         const nextScopeStoryId = emittedEvent.cascade === true ? undefined : scope.scopeStoryId
         const childResult = await this.routeSceneEvent(
           emittedEvent,
@@ -1224,8 +1242,7 @@ export class Player implements PlayerApi {
   }
 
   /**
-   * Applies one live tracking event synchronously through story listen transforms without timeline persistence.
-   * Used for per-pointermove capture events that drive real-time visual feedback.
+   * Applies one live capture value without creating timeline events.
    */
   private applyLiveSceneEvent(event: StoryEvent, scopeStoryId?: string): void {
     const scene = this.currentScene
@@ -1239,9 +1256,23 @@ export class Player implements PlayerApi {
     const rules = storyRules.length > 0
       ? storyRules
       : scene.listen.filter((r) => r.on === event.name)
+    const ruleScopeStoryId = storyRules.length > 0 ? scopeStoryId : undefined
 
     const emittedEvents: StoryEvent[] = []
     for (const rule of rules) {
+      for (const strapName of rule.straps ?? []) {
+        void this.executeStrap(
+          strapName,
+          event,
+          {
+            scopeStoryId: ruleScopeStoryId,
+            source: RUNTIME_EVENT_SOURCE.system,
+            ms: this.player.getState().timelineMs,
+            liveOnly: true
+          },
+          0
+        )
+      }
       for (const transformFn of (rule.transform ?? []) as TransformFn[]) {
         emittedEvents.push(...transformFn(event))
       }

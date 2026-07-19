@@ -4,11 +4,10 @@ import { seedToUnit } from "./space-bubbles-random"
 import { FAILURE_FALL_DURATION_MS, buildBubbleImpactEvents, buildFailureFallEvents, buildGameEndEvents, buildGameStartEvents, buildImpactClearEvents, buildMaluserEndEvents, buildMaluserHitBubbleEvents, buildMaluserHitClearEvents, buildMaluserShotClearEvents, buildMaluserShotEvents, buildMaluserSpawnEvents, buildPickerEndEvents, buildPickerHeightEvents, buildPickerSpawnEvents, buildProjectileFireEvents, buildTurretMoveEvent, buildTurretRecoilClearEvents } from "./space-bubbles-render-events"
 import { createInitialSpaceBubblesState, hasSuccessfulOrder, isExpectedDestruction } from "./space-bubbles-state"
 import { resolveBubblePosition, resolveProjectilePosition } from "./space-bubbles-trajectories"
-import { SPACE_BUBBLE_COLORS, SPACE_BUBBLES_WORLD, type BubbleState, type ProjectileState, type SpaceBubbleColor, type SpaceBubblesState, type SpaceBubblesStatus, type TurretMotionState } from "./space-bubbles-types"
+import { SPACE_BUBBLE_COLORS, SPACE_BUBBLES_WORLD, type BubbleState, type ProjectileState, type SpaceBubbleColor, type SpaceBubblesState, type SpaceBubblesStatus } from "./space-bubbles-types"
 
 const TURRET_STEP = 70
 const TURRET_KEYBOARD_SPEED = 520
-const TURRET_KEYBOARD_STEP_MS = 33
 const IMPACT_SCAN_STEP_MS = 24
 const PICKER_DURATION_MS = 5200
 const PICKER_CHECK_EVERY_MS = 240
@@ -42,16 +41,6 @@ function resolveTurretXAt(state: SpaceBubblesState, timelineMs: number): number 
 
   const progress = Math.max(0, Math.min(1, (timelineMs - motion.startedAtMs) / motion.durationMs))
   return clampTurretX(motion.fromX + (motion.toX - motion.fromX) * progress)
-}
-
-function createTurretMotion(fromX: number, toX: number, startedAtMs: number): TurretMotionState {
-  const distance = Math.abs(toX - fromX)
-  return {
-    fromX,
-    toX,
-    startedAtMs,
-    durationMs: Math.max(1, (distance / TURRET_KEYBOARD_SPEED) * 1000),
-  }
 }
 
 function resolveWorldUnitsPerClientPixel(): number {
@@ -183,69 +172,20 @@ function moveTurretStrap(direction: -1 | 1): StrapFn {
   }
 }
 
-function moveTurretOnlyStrap(direction: -1 | 1): StrapFn {
-  return ({ state }) => {
+function moveTurretFromCapture(direction: -1 | 1): StrapFn {
+  return ({ event, state, context }) => {
     const gameState = readGameState(state)
     if (gameState === null || gameState.status !== "playing") {
       return undefined
     }
 
-    const turretX = clampTurretX(gameState.turretX + direction * TURRET_STEP)
+    const elapsedMs = typeof event.data?.elapsedMs === "number" ? event.data.elapsedMs : 0
+    const baseX = typeof event.data?.baseX === "number" ? event.data.baseX : gameState.turretX
+    const turretX = clampTurretX(baseX + direction * TURRET_KEYBOARD_SPEED * (elapsedMs / 1000))
+    context.api.setNodePose("space-turret", { x: turretX })
     return {
-      update: { turretX },
-      events: [buildTurretMoveEvent(turretX)],
+      update: { turretX, turretMotion: null },
     }
-  }
-}
-
-function startKeyboardTurretMotion(direction: -1 | 1): StrapFn {
-  return ({ state, meta, context }) => {
-    const gameState = readGameState(state)
-    if (gameState === null || gameState.status !== "playing") {
-      return undefined
-    }
-
-    const nowMs = meta.ms ?? 0
-    const fromX = resolveTurretXAt(gameState, nowMs)
-    context.live.loop(
-      { eachMs: TURRET_KEYBOARD_STEP_MS, until: { type: "event", name: "space:keyboard:stop" } },
-      () => ({ event: { name: "space:keyboard:step" } }),
-    )
-
-    return {
-      update: { turretX: fromX, turretMotion: null, keyboardDirection: direction, keyboardLastMoveMs: nowMs },
-      events: [buildTurretMoveEvent(fromX, { fromX, durationMs: 0, ease: "linear" })],
-    }
-  }
-}
-
-const keyboardStepStrap: StrapFn = ({ state, meta }) => {
-  const gameState = readGameState(state)
-  if (gameState === null || gameState.status !== "playing" || gameState.keyboardDirection === null) {
-    return undefined
-  }
-
-  const nowMs = meta.ms ?? 0
-  const previousMs = gameState.keyboardLastMoveMs ?? nowMs
-  const deltaMs = Math.max(0, Math.min(80, nowMs - previousMs))
-  const turretX = clampTurretX(gameState.turretX + gameState.keyboardDirection * TURRET_KEYBOARD_SPEED * (deltaMs / 1000))
-  return {
-    update: { turretX, keyboardLastMoveMs: nowMs },
-    events: [buildTurretMoveEvent(turretX, { durationMs: TURRET_KEYBOARD_STEP_MS, ease: "linear" })],
-  }
-}
-
-const stopKeyboardTurretMotion: StrapFn = ({ state, meta }) => {
-  const gameState = readGameState(state)
-  if (gameState === null || gameState.status !== "playing") {
-    return undefined
-  }
-
-  const nowMs = meta.ms ?? 0
-  const turretX = resolveTurretXAt(gameState, nowMs)
-  return {
-    update: { turretX, turretMotion: null, keyboardDirection: null, keyboardLastMoveMs: null },
-    events: [buildTurretMoveEvent(turretX, { fromX: turretX, durationMs: 0, ease: "linear" })],
   }
 }
 
@@ -700,12 +640,8 @@ export function createSpaceBubblesStraps(): StrapCollection {
     "space-bubbles-start": startGameStrap(),
     "space-bubbles-left": moveTurretStrap(-1),
     "space-bubbles-right": moveTurretStrap(1),
-    "space-bubbles-keyboard-left": moveTurretOnlyStrap(-1),
-    "space-bubbles-keyboard-right": moveTurretOnlyStrap(1),
-    "space-bubbles-keyboard-left-start": startKeyboardTurretMotion(-1),
-    "space-bubbles-keyboard-right-start": startKeyboardTurretMotion(1),
-    "space-bubbles-keyboard-step": keyboardStepStrap,
-    "space-bubbles-keyboard-stop": stopKeyboardTurretMotion,
+    "space-bubbles-turret-key-left": moveTurretFromCapture(-1),
+    "space-bubbles-turret-key-right": moveTurretFromCapture(1),
     "space-bubbles-turret-drag-start": turretDragStartStrap,
     "space-bubbles-turret-drag": turretDragStrap,
     "space-bubbles-turret-drag-end": turretDragEndStrap,

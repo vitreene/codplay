@@ -43,8 +43,6 @@ export function createInitialSpaceBubblesState(startedAtMs: number, seed = creat
     turretX: SPACE_BUBBLES_WORLD.width / 2,
     turretDragStartX: null,
     turretMotion: null,
-    keyboardDirection: null,
-    keyboardLastMoveMs: null,
     pickerActive: false,
     pickerY: 255,
     pickerPassId: 0,

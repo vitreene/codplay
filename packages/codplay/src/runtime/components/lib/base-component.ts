@@ -1,6 +1,6 @@
 import { htmlRenderMutationResolver } from '../../html-render-mutation-resolver'
-import { createComponentRoot, resetComponentRoot, setComponentRootId } from './dom'
-import { collectDataParts, resetRuntimeNodeStyleState } from './dom-component-adapter'
+import { createComponentRoot, resetComponentRoot, setComponentRootId, unbindComponentEmitDeclarations } from './dom'
+import { collectDataParts, resetRuntimeNodeStyleState, unbindRuntimeEmitDeclarations } from './dom-component-adapter'
 import type { ComponentModules, ComponentRenderResult, ComponentServices, RuntimeComponent, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from '../types'
 
 /**
@@ -112,6 +112,14 @@ export abstract class BaseComponent implements RuntimeComponent {
   _init(): void {
     this.node = this.render()
     this.init?.()
+  }
+
+  /**
+   * Releases component-owned runtime listeners.
+   */
+  destroy(): void {
+    unbindRuntimeEmitDeclarations(this.node)
+    unbindComponentEmitDeclarations(this.node)
   }
 
   /**

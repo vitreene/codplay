@@ -14,32 +14,90 @@ export type CaptureSessionInput = {
   persoId?: string
   scopeStoryId?: string
   emitRuntimeEvent: (event: RuntimeEmitEvent) => void
+  emitLiveCapture?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
+  keyCode?: string
+  getCurrentPosition?: () => { x: number; y: number } | null
 }
 
 /**
- * Starts one window-level interaction capture session triggered by a pointer event.
+ * Starts one window-level interaction capture session triggered by pointer or keyboard input.
  * Returns a cleanup function that removes all installed listeners immediately.
  */
 export function startCaptureSession(input: CaptureSessionInput): () => void {
-  const { capture, startX, startY, baseX, baseY, startMs, persoId, scopeStoryId, emitRuntimeEvent, getCurrentTimelineMs } = input
+  const {
+    capture,
+    startX,
+    startY,
+    baseX,
+    baseY,
+    startMs,
+    persoId,
+    scopeStoryId,
+    emitRuntimeEvent,
+    emitLiveCapture,
+    getCurrentTimelineMs,
+    keyCode,
+    getCurrentPosition
+  } = input
   const endOn = capture.endOn ?? DEFAULT_END_ON
   const trackOn = capture.trackOn ?? DEFAULT_TRACK_ON
 
   let ended = false
+  let keyboardFrame: number | null = null
+  let keyboardLastSampleAtMs = startMs
+
+  const emitKeyboardValue = (nowMs: number): void => {
+    emitLiveCapture?.({
+      name: capture.event.name,
+      cascade: capture.event.cascade,
+      scopeStoryId: capture.event.cascade === true ? undefined : scopeStoryId,
+      source: 'system',
+      data: {
+        elapsedMs: Math.max(0, nowMs - startMs),
+        deltaMs: Math.max(0, nowMs - keyboardLastSampleAtMs),
+        baseX,
+        baseY,
+        keyCode,
+        persoId
+      }
+    })
+    keyboardLastSampleAtMs = nowMs
+  }
+
+  const scheduleKeyboardFrame = (): void => {
+    if (keyCode === undefined || typeof globalThis.requestAnimationFrame !== 'function') {
+      return
+    }
+
+    keyboardFrame = globalThis.requestAnimationFrame(() => {
+      if (ended) {
+        return
+      }
+      emitKeyboardValue(Date.now())
+      scheduleKeyboardFrame()
+    })
+  }
+
+  if (keyCode !== undefined && emitLiveCapture !== undefined) {
+    emitKeyboardValue(startMs)
+    scheduleKeyboardFrame()
+  }
 
   function onEnd(domEvent: Event): void {
-    if (ended) {
+    if (ended || (keyCode !== undefined && (!(domEvent instanceof KeyboardEvent) || domEvent.code !== keyCode))) {
       return
     }
 
     ended = true
     cleanup()
 
+    const isKeyboardCapture = keyCode !== undefined
     const endPointerX = domEvent instanceof PointerEvent ? domEvent.clientX : startX
     const endPointerY = domEvent instanceof PointerEvent ? domEvent.clientY : startY
-    const toX = baseX + (endPointerX - startX)
-    const toY = baseY + (endPointerY - startY)
+    const currentPosition = isKeyboardCapture ? getCurrentPosition?.() : null
+    const toX = currentPosition?.x ?? baseX + (endPointerX - startX)
+    const toY = currentPosition?.y ?? baseY + (endPointerY - startY)
 
     const nowMs = getCurrentTimelineMs?.() ?? 0
     const deltaMs = Date.now() - startMs
@@ -69,12 +127,17 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
         duration: capture.duration,
         snapAt: capture.snapAt,
         persoId,
+        keyCode,
         ...substitution
       }
     })
   }
 
   function onTrack(domEvent: Event): void {
+    if (keyCode !== undefined) {
+      return
+    }
+
     if (!(domEvent instanceof PointerEvent)) {
       return
     }
@@ -100,6 +163,11 @@ export function startCaptureSession(input: CaptureSessionInput): () => void {
   }
 
   function cleanup(): void {
+    if (keyboardFrame !== null && typeof globalThis.cancelAnimationFrame === 'function') {
+      globalThis.cancelAnimationFrame(keyboardFrame)
+      keyboardFrame = null
+    }
+
     for (const eventName of endOn) {
       globalThis.window?.removeEventListener(eventName, onEnd, { capture: true })
     }

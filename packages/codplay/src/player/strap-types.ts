@@ -1,4 +1,5 @@
 import type { RuntimeEventSource } from '../core/events/types'
+import type { NodePose } from '../runtime/components/lib/dom'
 import type { DeepReadonly, HelperHandle, HelperTickContext, LoopOptions, RepeatOptions, StaggerOptions, StoryEvent, WaitOptions } from './helper-types'
 
 export type StrapMeta = {
@@ -87,6 +88,7 @@ export type StrapHelpers = LiveStrapHelpers
 
 export type PlayerStrapApi = {
   getPersoIdAt: (x: number, y: number, excludeId?: string) => string | null
+  setNodePose: (persoId: string, pose: Partial<NodePose>) => void
 }
 
 export type StrapContext = {
@@ -120,5 +122,6 @@ export type StrapExecutionScope = {
   ms: number
   trackId?: string
   materialized?: boolean
+  liveOnly?: boolean
   eventInsertMode?: 'apply-now' | 'persist-future' | 'persist-only'
 }

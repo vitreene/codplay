@@ -11,6 +11,8 @@ type RuntimeObjectEventNode = Record<string, unknown> & {
   [RUNTIME_OBJECT_EVENT_HANDLERS]?: Record<string, () => void>
 }
 
+const emitCleanupByNode = new WeakMap<object, Set<() => void>>()
+
 /**
  * Normalizes one authored emit declaration into one action list.
  */
@@ -107,15 +109,40 @@ function emitDeclaredRuntimeEvents(
       : undefined
 
   for (const action of resolveRootEmitRule(rule)) {
-    const base = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
-    const data = inputPayload !== undefined ? { ...base, ...inputPayload } : base
-    emitRuntimeEvent({
-      name: action.event.name,
-      data,
-      cascade: action.event.cascade,
-      scopeStoryId: item.storyId
-    })
+    if (action.keyCode !== undefined && (!(domEvent instanceof KeyboardEvent) || domEvent.code !== action.keyCode)) {
+      continue
+    }
+    if (action.preventDefault === true) {
+      domEvent?.preventDefault()
+    }
+    emitDeclaredRuntimeAction(item, action, emitRuntimeEvent, domEvent, self, inputPayload)
   }
+}
+
+/**
+ * Emits one already-matched action while preserving the standard emit payload.
+ */
+function emitDeclaredRuntimeAction(
+  item: ItemDoc,
+  action: EmitRuleAction,
+  emitRuntimeEvent: (event: RuntimeEmitEvent) => void,
+  domEvent?: Event,
+  self = createRuntimeEmitSelf(item),
+  inputPayload?: Record<string, unknown>,
+): void {
+  const htmlInputElement = globalThis.HTMLInputElement
+  const resolvedInputPayload = inputPayload ??
+    (typeof htmlInputElement === 'function' && domEvent?.target instanceof htmlInputElement
+      ? { value: domEvent.target.value, valueAsNumber: domEvent.target.valueAsNumber }
+      : undefined)
+  const base = action.data === undefined ? { [SELF_PAYLOAD_KEY]: self } : { ...action.data, [SELF_PAYLOAD_KEY]: self }
+  const data = resolvedInputPayload === undefined ? base : { ...base, ...resolvedInputPayload }
+  emitRuntimeEvent({
+    name: action.event.name,
+    data,
+    cascade: action.event.cascade,
+    scopeStoryId: item.storyId
+  })
 }
 
 /**
@@ -145,30 +172,73 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
     return
   }
 
-  for (const userEvent of Object.keys(item.emit)) {
-    const rule = item.emit[userEvent]
-    const captureSpec = resolveRootEmitRule(rule).find((action) => action.capture !== undefined)?.capture
+  const cleanups = new Set<() => void>()
+  if (typeof nodeRef === 'object' && nodeRef !== null) {
+    emitCleanupByNode.set(nodeRef, cleanups)
+  }
+
+  for (const [userEvent, rule] of Object.entries(item.emit)) {
+    const actions = resolveRootEmitRule(rule)
 
     if (isDomElement(nodeRef)) {
-      nodeRef.addEventListener(userEvent, (domEvent) => {
-        emitDeclaredRuntimeEvents(item, userEvent, emitRuntimeEvent, domEvent)
-
-        if (captureSpec !== undefined && domEvent instanceof PointerEvent) {
-          const base = readElementTranslation(nodeRef)
-          startCaptureSession({
-            capture: captureSpec,
-            startX: domEvent.clientX,
-            startY: domEvent.clientY,
-            baseX: base.x,
-            baseY: base.y,
-            startMs: Date.now(),
-            persoId: item.id,
-            scopeStoryId: item.storyId,
-            emitRuntimeEvent,
-            getCurrentTimelineMs: options?.getCurrentTimelineMs
-          })
+      for (const action of actions) {
+        const target = action.keyCode === undefined ? nodeRef : globalThis.window
+        if (target === undefined) {
+          continue
         }
-      })
+
+        const onEvent = (domEvent: Event): void => {
+          if (action.keyCode !== undefined && (!(domEvent instanceof KeyboardEvent) || domEvent.code !== action.keyCode)) {
+            return
+          }
+          if (action.preventDefault === true) {
+            domEvent.preventDefault()
+          }
+          if (action.capture !== undefined && domEvent instanceof KeyboardEvent && domEvent.repeat) {
+            return
+          }
+
+          emitDeclaredRuntimeAction(item, action, emitRuntimeEvent, domEvent)
+
+          if (action.capture !== undefined && domEvent instanceof PointerEvent) {
+            const base = readElementTranslation(nodeRef)
+            cleanups.add(startCaptureSession({
+              capture: action.capture,
+              startX: domEvent.clientX,
+              startY: domEvent.clientY,
+              baseX: base.x,
+              baseY: base.y,
+              startMs: Date.now(),
+              persoId: item.id,
+              scopeStoryId: item.storyId,
+              emitRuntimeEvent,
+              getCurrentTimelineMs: options?.getCurrentTimelineMs
+            }))
+          }
+
+          if (action.capture !== undefined && domEvent instanceof KeyboardEvent) {
+            const base = readElementTranslation(nodeRef)
+            cleanups.add(startCaptureSession({
+              capture: action.capture,
+              startX: 0,
+              startY: 0,
+              baseX: base.x,
+              baseY: base.y,
+              startMs: Date.now(),
+              persoId: item.id,
+              scopeStoryId: item.storyId,
+              emitRuntimeEvent,
+              emitLiveCapture: options?.emitLiveCapture,
+              getCurrentTimelineMs: options?.getCurrentTimelineMs,
+              keyCode: domEvent.code,
+              getCurrentPosition: () => readElementTranslation(nodeRef)
+            }))
+          }
+        }
+
+        target.addEventListener(userEvent, onEvent)
+        cleanups.add(() => target.removeEventListener(userEvent, onEvent))
+      }
       continue
     }
 
@@ -182,6 +252,25 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
       }
     }
   }
+}
+
+/**
+ * Removes DOM emit listeners and active capture sessions for one runtime node.
+ */
+export function unbindRuntimeEmitDeclarations(nodeRef: unknown): void {
+  if (typeof nodeRef !== 'object' || nodeRef === null) {
+    return
+  }
+
+  const cleanups = emitCleanupByNode.get(nodeRef)
+  if (cleanups === undefined) {
+    return
+  }
+
+  for (const cleanup of cleanups) {
+    cleanup()
+  }
+  emitCleanupByNode.delete(nodeRef)
 }
 
 /**

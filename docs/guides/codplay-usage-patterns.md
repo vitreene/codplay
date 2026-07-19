@@ -546,9 +546,10 @@ quizStory.persos.unshift({ id: 'mashup-quiz-count', ... })
   `story.state` pour les retries, track debug activable en direct.
 - **space-bubbles** (`packages/demos/src/scenes/space-bubbles/`) : jeu temps
   réel (tourelle/bulles/collisions), 4 stories fixes, ~26 straps scene-level,
-  seul exemple de `context.live.loop` pour un déplacement clavier continu,
-  moteur de collision maison, PRNG déterministe par seed, track d'intro
-  pilotée par `ms`. Seul exemple de câblage clavier natif.
+  capture clavier native déclarée dans `emit.keydown` : le maintien
+  échantillonne une valeur continue vers un strap live sans créer d'events de
+  timeline, puis le `keyup` matérialise la position finale. Moteur de collision maison, PRNG
+  déterministe par seed, track d'intro pilotée par `ms`.
 - **mashup-rive-three-quiz** (`mashup-rive-three-quiz-scene.ts`) : assemblage
   de briques hétérogènes (avatar Rive, scène Three.js, story de quiz
   réutilisée et enrichie par composition JS). Bon exemple de story factory

@@ -13,6 +13,7 @@ export type CreateRendererOptions = {
   continuousAnimationEngines?: ContinuousAnimationEngine[]
   coreServices?: readonly ServiceRegisterInput[]
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
+  emitLiveCapture?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
 }
 

@@ -580,6 +580,9 @@ export class RuntimeComponentOrchestrator {
    */
   destroy(): RuntimeElementMap {
     this.runHook("onDestroy", {});
+    for (const component of this.componentByPersoId.values()) {
+      component.destroy?.();
+    }
     for (const persoId of this.nodeSubscribersByPersoId.keys()) {
       this.notifyNodeSubscribers(persoId, null);
     }

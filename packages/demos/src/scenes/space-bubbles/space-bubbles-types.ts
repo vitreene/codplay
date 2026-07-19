@@ -61,8 +61,6 @@ export type SpaceBubblesState = {
   turretX: number
   turretDragStartX: number | null
   turretMotion: TurretMotionState
-  keyboardDirection: -1 | 1 | null
-  keyboardLastMoveMs: number | null
   pickerActive: boolean
   pickerY: number
   pickerPassId: number
