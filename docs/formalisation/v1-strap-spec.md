@@ -29,6 +29,8 @@ Un `Strap` est une fonction stateless enregistree dans une collection partagee.
 ## Contrat canonique
 
 ```ts
+type FunctionName = string
+
 type DeepReadonly<T> =
   T extends (...args: never[]) => unknown ? T :
   T extends readonly (infer U)[] ? readonly DeepReadonly<U>[] :
@@ -110,7 +112,7 @@ type StrapReturnValue =
 
 type StrapFn = (input: StrapInput) => Promise<StrapReturnValue> | StrapReturnValue
 
-type StrapCollection = Record<string, StrapFn>
+type StrapCollection = Record<FunctionName, StrapFn>
 ```
 
 ## Regles normatives

@@ -1,4 +1,5 @@
 import { createListPlugin } from './list-plugin/create-list-plugin'
+import type { CaptureAction } from './capture-types'
 import type {
   EmitRule,
   EmitRuleAction,
@@ -17,7 +18,20 @@ export type CreateElementOptions = {
   nodeFactory?: RuntimeNodeFactory
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
   emitLiveCapture?: (event: RuntimeEmitEvent) => void
+  subscribeJitTick?: (listener: (deltaMs: number) => void) => () => void
   getCurrentTimelineMs?: () => number
+  /** Reads the current story state in read-only mode — used by capture `initCaptureState`. */
+  getStoryState?: (storyId: string) => Readonly<Record<string, unknown>>
+  /** Reads the current scene state in read-only mode — used by capture `initCaptureState` when `stateScope: 'scene'`. */
+  getSceneState?: () => Readonly<Record<string, unknown>>
+  /**
+   * Subscribes one capture's `trackCommand` emitter to the playback ticker.
+   * Capture is the emitter — it never applies its own output; the ticker
+   * polls every subscriber once per frame and channels delivery through the
+   * renderer's single render cycle (`PlayerFacade.applyCaptureTickActions`).
+   * See `v1-capture-spec.md` regle 5.
+   */
+  subscribeCaptureTick?: (fn: () => CaptureAction | void) => () => void
 }
 
 /**

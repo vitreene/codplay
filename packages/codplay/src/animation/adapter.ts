@@ -457,6 +457,8 @@ export function createAnimationAdapter(
    * Starts a batch of animation operations and stores stoppable handles.
    */
   function run(operations: AnimationOperation[]): AnimationHandle[] {
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG anim-adapter] run() called', { operationCount: operations.length, operations: JSON.parse(JSON.stringify(operations)) })
     const transitions = operations.filter(isTransitionRequest)
     const morphOperations = operations.filter(isAnimeSvgMorphOperation)
     registerGroups(transitions)

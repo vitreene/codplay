@@ -26,6 +26,21 @@ export class DirectorCore implements DirectorApi {
   private nextCommitSeq = 1
 
   /**
+   * Reserves and returns the next `commitSeq`, from the SAME monotonic
+   * counter `createCommit` uses — the single source of ordering the renderer
+   * compares against (`lastAppliedCommitSeq`). Lets a caller outside the
+   * normal event pipeline (e.g. the capture tick channel, see
+   * `PlayerFacade.applyCaptureTickActions`) build one `RuntimeCommit` that
+   * sorts correctly against ordinary event-driven commits, without a second,
+   * independent counter that could collide or stall the renderer's guard.
+   */
+  reserveCommitSeq(): number {
+    const commitSeq = this.nextCommitSeq
+    this.nextCommitSeq += 1
+    return commitSeq
+  }
+
+  /**
    * Loads one runtime plan and prepares director state.
    */
   load(plan: DirectorRuntimePlan): void {

@@ -1,0 +1,105 @@
+import type { DeepReadonly, StoryEvent } from '../player/helper-types'
+import type { StrapMeta } from '../player/strap-types'
+
+export type NativeEventName = string
+
+export type CaptureSample = Record<string, unknown>
+export type CaptureState = Record<string, unknown>
+
+/**
+ * Forme concrete d'un CaptureSample issu d'un `trackOn` pointeur (ex:
+ * 'pointermove'). `movementX`/`movementY` sont le delta natif depuis le
+ * dernier `PointerEvent` (herite de `MouseEvent`), fournis par le navigateur
+ * lui-meme — pas un calcul du player, unifie souris/trackpad/tactile.
+ */
+export type PointerCaptureSample = CaptureSample & {
+  clientX: number
+  clientY: number
+  movementX: number
+  movementY: number
+}
+
+/**
+ * Forme concrete d'un CaptureSample issu d'un `trackOn` clavier (ex: 'keydown').
+ * `deltaMs`/`elapsedMs` proviennent du tick du player, pas de `KeyboardEvent` :
+ * le clavier ne fournit aucune valeur continue entre `keydown` et `keyup`.
+ * `altKey`/`shiftKey`/`ctrlKey`/`metaKey` sont les modificateurs natifs de
+ * `KeyboardEvent`, lus a l'etat courant a chaque tick.
+ */
+export type KeyboardCaptureSample = CaptureSample & {
+  keyCode: string
+  deltaMs: number
+  elapsedMs: number
+  altKey: boolean
+  shiftKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+}
+
+export type CaptureAction = {
+  actionName: string
+  data?: Record<string, unknown>
+}
+
+export type CaptureInitInput = {
+  state: DeepReadonly<Record<string, unknown>>
+}
+
+export type CaptureInitFn = (input: CaptureInitInput) => CaptureState
+
+export type CaptureTrackInput = {
+  sample: CaptureSample
+  samples: readonly CaptureSample[]
+  captureState: DeepReadonly<CaptureState>
+}
+
+export type CaptureTrackOutput = {
+  action?: CaptureAction
+  captureState?: CaptureState
+}
+
+export type CaptureTrackFn = (input: CaptureTrackInput) => CaptureTrackOutput | void
+
+export type CaptureEndInput = {
+  samples: readonly CaptureSample[]
+  captureState: DeepReadonly<CaptureState>
+  state: DeepReadonly<Record<string, unknown>>
+  meta: StrapMeta
+}
+
+export type CaptureEndDurationMode = 'value' | 'default' | 'capture'
+
+export type CaptureEndOutput = {
+  events?: StoryEvent[]
+  duration?: number
+  durationMode?: CaptureEndDurationMode
+}
+
+export type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
+
+/**
+ * Declares one capture cycle attached to one emit trigger. `initCaptureState`/
+ * `trackCommand`/`endCapture` are plain JS functions carried directly by this
+ * declaration — never resolved by name from a separate collection, mirroring
+ * how `StoryDef.straps`/`listen[].transform` already carry real functions
+ * through `CompiledScene` (see `v1-capture-spec.md`, "Forme d'authoring").
+ */
+export type CaptureDeclaration = {
+  trackOn?: NativeEventName[]
+  endOn?: NativeEventName[]
+  /**
+   * Scope of the `state` read by `initCaptureState`/`endCapture`. Defaults to
+   * `'story'` (the story owning the capture's host perso) — a capture always
+   * belongs to a perso (`emit` only exists on `PersoDoc`), never directly to
+   * a story or scene, so this is the natural default. `'scene'` reads
+   * `scene.state` instead. Fixed once at capture declaration — never changes
+   * mid-capture. Governs reading only: writing (via the strap triggered by
+   * `endEmit`/`endCapture.events`) picks its own scope through `cascade`,
+   * independently of `stateScope`.
+   */
+  stateScope?: 'scene' | 'story'
+  initCaptureState?: CaptureInitFn
+  trackCommand?: CaptureTrackFn
+  endEmit?: StoryEvent
+  endCapture?: CaptureEndFn
+}

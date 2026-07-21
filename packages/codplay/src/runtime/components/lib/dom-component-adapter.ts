@@ -1,7 +1,7 @@
 import { utils } from 'animejs'
 
 import { RUNTIME_OBJECT_EVENT_HANDLERS, type CreateElementOptions } from '../../create-element'
-import { startCaptureSession } from '../../capture-session'
+import { startCapture } from '../../capture-runtime'
 import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitEvent, RuntimeEmitSelf } from '../../types'
 import { resolveContainerQueryValue } from './container-query-units'
 
@@ -146,24 +146,6 @@ function emitDeclaredRuntimeAction(
 }
 
 /**
- * Reads the current translateX/translateY from one DOM element's computed transform.
- */
-function readElementTranslation(element: Element): { x: number; y: number } {
-  const style = globalThis.getComputedStyle?.(element as HTMLElement)
-  const transform = style?.transform
-  if (!transform || transform === 'none') {
-    return { x: 0, y: 0 }
-  }
-
-  if (typeof globalThis.DOMMatrix === 'undefined') {
-    return { x: 0, y: 0 }
-  }
-
-  const matrix = new globalThis.DOMMatrix(transform)
-  return { x: matrix.m41, y: matrix.m42 }
-}
-
-/**
  * Binds authored user event emits on DOM and object runtime nodes.
  */
 function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: CreateElementOptions | undefined): void {
@@ -201,37 +183,33 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
           emitDeclaredRuntimeAction(item, action, emitRuntimeEvent, domEvent)
 
           if (action.capture !== undefined && domEvent instanceof PointerEvent) {
-            const base = readElementTranslation(nodeRef)
-            cleanups.add(startCaptureSession({
+            cleanups.add(startCapture({
               capture: action.capture,
-              startX: domEvent.clientX,
-              startY: domEvent.clientY,
-              baseX: base.x,
-              baseY: base.y,
-              startMs: Date.now(),
               persoId: item.id,
-              scopeStoryId: item.storyId,
+              storyId: item.storyId,
+              originEventName: action.event.name,
               emitRuntimeEvent,
+              subscribeCaptureTick: options?.subscribeCaptureTick,
+              getStoryState: options?.getStoryState,
+              getSceneState: options?.getSceneState,
               getCurrentTimelineMs: options?.getCurrentTimelineMs
             }))
           }
 
           if (action.capture !== undefined && domEvent instanceof KeyboardEvent) {
-            const base = readElementTranslation(nodeRef)
-            cleanups.add(startCaptureSession({
+            cleanups.add(startCapture({
               capture: action.capture,
-              startX: 0,
-              startY: 0,
-              baseX: base.x,
-              baseY: base.y,
-              startMs: Date.now(),
               persoId: item.id,
-              scopeStoryId: item.storyId,
+              storyId: item.storyId,
+              originEventName: action.event.name,
               emitRuntimeEvent,
-              emitLiveCapture: options?.emitLiveCapture,
+              subscribeCaptureTick: options?.subscribeCaptureTick,
+              getStoryState: options?.getStoryState,
+              getSceneState: options?.getSceneState,
               getCurrentTimelineMs: options?.getCurrentTimelineMs,
+              subscribeJitTick: options?.subscribeJitTick,
               keyCode: domEvent.code,
-              getCurrentPosition: () => readElementTranslation(nodeRef)
+              triggerKeyboardEvent: domEvent
             }))
           }
         }

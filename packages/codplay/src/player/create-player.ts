@@ -13,6 +13,7 @@ import {
   type RuntimeTraceStatus,
 } from "../runtime/trace-store";
 import type { CreateElementOptions } from "../runtime/create-element";
+import type { CaptureAction } from "../runtime/capture-types";
 import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from "../runtime/types";
 import { normalizeMoveCommand } from "../runtime/modules/move";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
@@ -167,6 +168,14 @@ export class PlayerFacade implements PlayerApi {
   private sequenceEnded = false;
   private sequenceEndTriggerMs: number | null = null;
   private readonly jitTickSubscribers = new Set<(deltaMs: number) => void>();
+  /**
+   * Emitters of one capture's `trackCommand` output, polled once per frame by
+   * `runPlaybackTick` — capture is the emitter, the ticker channels delivery
+   * to the renderer's single render cycle (`v1-capture-spec.md`). Distinct
+   * from `jitTickSubscribers`, reserved for `context.live` helpers.
+   */
+  private readonly captureTickSubscribers = new Set<() => CaptureAction | void>();
+  private readonly lastCaptureActionDataByActionName = new Map<string, string>();
   private readonly tweenRunner = new TweenRunner(
     (persoId) => this.renderer.getRuntimeRegistry().getComponentById(persoId),
   );
@@ -482,8 +491,30 @@ export class PlayerFacade implements PlayerApi {
       animationAdapter,
       continuousAnimationEngines: [this.tweenRunner],
       coreServices: [{ name: "animeSvg", service: createAnimeSvgService() }],
-      createElementOptions: options.createElementOptions,
+      createElementOptions: {
+        ...options.createElementOptions,
+        subscribeJitTick: (listener) => this.subscribeJitTick(listener),
+        subscribeCaptureTick: (fn) => this.subscribeCaptureTick(fn)
+      },
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
+      getStoryState: (storyId) => {
+        if (this.scene === null) {
+          return {};
+        }
+        const story = this.scene.stories[storyId];
+        if (!story) {
+          return {};
+        }
+        story.state = typeof story.state === "object" && story.state !== null ? story.state : {};
+        return story.state;
+      },
+      getSceneState: () => {
+        if (this.scene === null) {
+          return {};
+        }
+        this.scene.state = typeof this.scene.state === "object" && this.scene.state !== null ? this.scene.state : {};
+        return this.scene.state;
+      },
       emitLiveCapture: options.onLiveCapture,
       emitRuntimeEvent: (event) => {
         const runtimeEvent: PlayerPublicEventInput = {
@@ -719,6 +750,107 @@ export class PlayerFacade implements PlayerApi {
   subscribeJitTick(fn: (deltaMs: number) => void): () => void {
     this.jitTickSubscribers.add(fn);
     return () => { this.jitTickSubscribers.delete(fn); };
+  }
+
+  /**
+   * Subscribes one capture's `trackCommand` emitter, polled once per playback
+   * frame. The capture is the emitter — it never applies its own output; the
+   * ticker collects every subscriber's `CaptureAction` this frame and
+   * channels it to the renderer's single render cycle (see
+   * `applyCaptureTickActions`). Returns an unsubscribe function, called by
+   * the capture at `endOn`.
+   */
+  subscribeCaptureTick(fn: () => CaptureAction | void): () => void {
+    this.captureTickSubscribers.add(fn);
+    return () => { this.captureTickSubscribers.delete(fn); };
+  }
+
+  /**
+   * Resolves every mounted perso declaring `actionName` in its `actions`,
+   * across all mounted stories — the same open, story-scoped multi-perso
+   * routing an `event` already gets via `actions[event.name]`
+   * (`v1-capture-spec.md` regle 5), but without ever building a `TimelineEvent`.
+   */
+  private resolvePersoIdsForActionName(actionName: string): string[] {
+    if (this.scene === null) {
+      return [];
+    }
+
+    const persoIds: string[] = [];
+    for (const storyId of this.mountedStoryIds) {
+      const story = this.scene.stories[storyId];
+      if (!story) {
+        continue;
+      }
+      for (const perso of story.persos) {
+        if (actionName in (perso.actions ?? {})) {
+          persoIds.push(perso.id);
+        }
+      }
+    }
+    return persoIds;
+  }
+
+  /**
+   * Polls every `captureTickSubscribers` emitter once, deduplicates against
+   * the last data sent for the same `actionName` (no DOM/node read — the
+   * comparison is on the emitted data itself, per `v1-capture-spec.md`
+   * discussion 2026-07-21), resolves target persos, and applies the result
+   * through the SAME `enqueueCommit`/`renderer.tick` pair `runTimelineEvent`
+   * already uses for a normal event — never `director`/`dispatchEvents`,
+   * never a track, never `emitStateSnapshot`.
+   */
+  private applyCaptureTickActions(nowMs: number): void {
+    if (this.captureTickSubscribers.size === 0) {
+      return;
+    }
+
+    let hasNewOperations = false;
+    const operationsByPersoId = new Map<string, AnimationResolvedAction[]>();
+
+    for (const subscriber of this.captureTickSubscribers) {
+      const action = subscriber();
+      if (!action) {
+        continue;
+      }
+
+      const serializedData = JSON.stringify(action.data ?? null);
+      if (this.lastCaptureActionDataByActionName.get(action.actionName) === serializedData) {
+        continue;
+      }
+      this.lastCaptureActionDataByActionName.set(action.actionName, serializedData);
+
+      const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
+
+      for (const persoId of resolvedPersoIds) {
+        const resolvedAction: AnimationResolvedAction = {
+          eventId: `capture-tick-${persoId}-${action.actionName}`,
+          eventName: action.actionName,
+          listenerId: persoId,
+          actionKey: action.actionName,
+          action: (action.data ?? {}) as AnimationAction,
+        };
+        const existing = operationsByPersoId.get(persoId) ?? [];
+        existing.push(resolvedAction);
+        operationsByPersoId.set(persoId, existing);
+        hasNewOperations = true;
+      }
+    }
+
+    if (!hasNewOperations) {
+      return;
+    }
+
+    for (const [persoId, operations] of operationsByPersoId) {
+      this.renderer.enqueueCommit({
+        commitSeq: this.director.reserveCommitSeq(),
+        applyAtMs: nowMs,
+        target: { itemId: persoId },
+        operations,
+      });
+    }
+
+    this.renderer.tick(nowMs);
   }
 
   /**
@@ -1414,6 +1546,10 @@ export class PlayerFacade implements PlayerApi {
     for (const subscriber of this.jitTickSubscribers) {
       subscriber(jitDeltaMs);
     }
+
+    // Capture is the emitter; this ticker frame channels delivery to the
+    // renderer's single render cycle — see `applyCaptureTickActions`.
+    this.applyCaptureTickActions(syncTimelineMs);
 
     if (!this.onTimelineEvent) {
       this.timelineMs = syncTimelineMs;

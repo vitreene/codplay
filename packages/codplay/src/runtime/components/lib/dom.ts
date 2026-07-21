@@ -2,7 +2,7 @@ import { utils } from 'animejs'
 
 import { RUNTIME_OBJECT_EVENT_HANDLERS } from '../../create-element'
 import type { CreateElementOptions } from '../../create-element'
-import { startCaptureSession } from '../../capture-session'
+import { startCapture } from '../../capture-runtime'
 import type { EmitRule, EmitRuleAction, ItemDoc, RuntimeEmitSelf } from '../../types'
 import type { RuntimeComponentClassInput, RuntimeComponentWarningReporter } from '../types'
 import {
@@ -446,21 +446,34 @@ export function bindComponentEmitDeclarations(input: {
           })
 
           if (action.capture !== undefined && event instanceof KeyboardEvent) {
-            const pose = readNodePose(ownerNode)
-            const cleanup = startCaptureSession({
+            const cleanup = startCapture({
               capture: action.capture,
-              startX: 0,
-              startY: 0,
-              baseX: pose?.x ?? 0,
-              baseY: pose?.y ?? 0,
-              startMs: Date.now(),
               persoId: input.perso.id,
-              scopeStoryId: input.perso.storyId,
+              storyId: input.perso.storyId,
+              originEventName: action.event.name,
               emitRuntimeEvent,
-              emitLiveCapture: input.createElementOptions?.emitLiveCapture,
+              subscribeCaptureTick: input.createElementOptions?.subscribeCaptureTick,
+              getStoryState: input.createElementOptions?.getStoryState,
+              getSceneState: input.createElementOptions?.getSceneState,
               getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs,
+              subscribeJitTick: input.createElementOptions?.subscribeJitTick,
               keyCode: event.code,
-              getCurrentPosition: () => readNodePose(ownerNode)
+              triggerKeyboardEvent: event
+            })
+            cleanups?.add(cleanup)
+          }
+
+          if (action.capture !== undefined && event instanceof PointerEvent) {
+            const cleanup = startCapture({
+              capture: action.capture,
+              persoId: input.perso.id,
+              storyId: input.perso.storyId,
+              originEventName: action.event.name,
+              emitRuntimeEvent,
+              subscribeCaptureTick: input.createElementOptions?.subscribeCaptureTick,
+              getStoryState: input.createElementOptions?.getStoryState,
+              getSceneState: input.createElementOptions?.getSceneState,
+              getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs
             })
             cleanups?.add(cleanup)
           }

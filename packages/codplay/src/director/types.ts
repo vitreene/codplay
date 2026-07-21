@@ -32,4 +32,5 @@ export type DirectorApi = {
   getSortedEvents: () => TimelineEvent[]
   runTimelineEvent: (event: TimelineEvent, options?: { dryRun?: boolean }) => DirectorEventResult
   getState: () => DirectorStateSnapshot
+  reserveCommitSeq: () => number
 }

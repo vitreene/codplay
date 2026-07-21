@@ -119,7 +119,9 @@ export class RendererFacade implements RendererApi {
       ...options.createElementOptions,
       emitRuntimeEvent: options.emitRuntimeEvent,
       emitLiveCapture: options.emitLiveCapture,
-      getCurrentTimelineMs: options.getCurrentTimelineMs
+      getCurrentTimelineMs: options.getCurrentTimelineMs,
+      getStoryState: options.getStoryState,
+      getSceneState: options.getSceneState
     }
     this.orchestrator = new RuntimeComponentOrchestrator({
       warn: (warning) => {

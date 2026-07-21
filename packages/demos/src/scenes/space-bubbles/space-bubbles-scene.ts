@@ -1,5 +1,6 @@
 import type { SceneDoc, SceneStoryDoc } from "codplay/player/types"
 import { createInitialBubbles, resolveBubbleLevelScale } from "./space-bubbles-state"
+import { initTurretCaptureState, trackTurret } from "./space-bubbles-straps"
 import { resolveBubblePosition } from "./space-bubbles-trajectories"
 import { SPACE_BUBBLE_COLORS, SPACE_BUBBLES_MAX_DURATION_MS, SPACE_BUBBLES_WORLD, type BubbleState, type SpaceBubbleColor } from "./space-bubbles-types"
 
@@ -205,7 +206,6 @@ function createWorldStory(): SceneStoryDoc {
         },
         actions: {
           "space:turret:move": {},
-          "space:turret:key:end": {},
           "space:turret:recoil": {},
           "space:turret:recoil-clear": {},
         },
@@ -216,12 +216,11 @@ function createWorldStory(): SceneStoryDoc {
               preventDefault: true,
               event: { name: "space:turret:key:start", cascade: true },
               capture: {
-                event: { name: "space:turret:key:left", cascade: true },
-                endEvent: { name: "space:turret:key:end", cascade: true },
-                duration: 120,
-                replay: true,
-                trackOn: [],
                 endOn: ["keyup"],
+                stateScope: "scene",
+                initCaptureState: initTurretCaptureState,
+                trackCommand: trackTurret,
+                endEmit: { name: "space:turret:capture:settled", cascade: true },
               },
             },
             {
@@ -229,12 +228,11 @@ function createWorldStory(): SceneStoryDoc {
               preventDefault: true,
               event: { name: "space:turret:key:start", cascade: true },
               capture: {
-                event: { name: "space:turret:key:right", cascade: true },
-                endEvent: { name: "space:turret:key:end", cascade: true },
-                duration: 120,
-                replay: true,
-                trackOn: [],
                 endOn: ["keyup"],
+                stateScope: "scene",
+                initCaptureState: initTurretCaptureState,
+                trackCommand: trackTurret,
+                endEmit: { name: "space:turret:capture:settled", cascade: true },
               },
             },
           ],
@@ -470,8 +468,7 @@ export function createSpaceBubblesScene(): SceneDoc {
       { on: "space:game:start", straps: ["space-bubbles-start"] },
       { on: "space:control:left", straps: ["space-bubbles-left"] },
       { on: "space:control:right", straps: ["space-bubbles-right"] },
-      { on: "space:turret:key:left", straps: ["space-bubbles-turret-key-left"] },
-      { on: "space:turret:key:right", straps: ["space-bubbles-turret-key-right"] },
+      { on: "space:turret:capture:settled", straps: ["space-bubbles-turret-settle"] },
       { on: "space:turret:drag-start", straps: ["space-bubbles-turret-drag-start"] },
       { on: "space:turret:drag", straps: ["space-bubbles-turret-drag"] },
       { on: "space:turret:drag-end", straps: ["space-bubbles-turret-drag-end"] },

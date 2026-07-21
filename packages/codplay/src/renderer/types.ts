@@ -15,6 +15,8 @@ export type CreateRendererOptions = {
   emitRuntimeEvent?: (event: RuntimeEmitEvent) => void
   emitLiveCapture?: (event: RuntimeEmitEvent) => void
   getCurrentTimelineMs?: () => number
+  getStoryState?: (storyId: string) => Readonly<Record<string, unknown>>
+  getSceneState?: () => Readonly<Record<string, unknown>>
 }
 
 /**

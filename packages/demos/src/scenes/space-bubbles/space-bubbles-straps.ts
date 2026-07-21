@@ -1,4 +1,5 @@
 import type { StrapCollection, StrapFn, StrapReturnValue } from "codplay/player/strap-types"
+import type { CaptureInitFn, CaptureTrackFn, KeyboardCaptureSample } from "codplay/runtime/capture-types"
 import { circleHitsCircle, rectHitsCircle, segmentHitsCircle } from "./space-bubbles-collisions"
 import { seedToUnit } from "./space-bubbles-random"
 import { FAILURE_FALL_DURATION_MS, buildBubbleImpactEvents, buildFailureFallEvents, buildGameEndEvents, buildGameStartEvents, buildImpactClearEvents, buildMaluserEndEvents, buildMaluserHitBubbleEvents, buildMaluserHitClearEvents, buildMaluserShotClearEvents, buildMaluserShotEvents, buildMaluserSpawnEvents, buildPickerEndEvents, buildPickerHeightEvents, buildPickerSpawnEvents, buildProjectileFireEvents, buildTurretMoveEvent, buildTurretRecoilClearEvents } from "./space-bubbles-render-events"
@@ -172,21 +173,45 @@ function moveTurretStrap(direction: -1 | 1): StrapFn {
   }
 }
 
-function moveTurretFromCapture(direction: -1 | 1): StrapFn {
-  return ({ event, state, context }) => {
-    const gameState = readGameState(state)
-    if (gameState === null || gameState.status !== "playing") {
-      return undefined
-    }
+type TurretCaptureState = { x: number }
 
-    const elapsedMs = typeof event.data?.elapsedMs === "number" ? event.data.elapsedMs : 0
-    const baseX = typeof event.data?.baseX === "number" ? event.data.baseX : gameState.turretX
-    const turretX = clampTurretX(baseX + direction * TURRET_KEYBOARD_SPEED * (elapsedMs / 1000))
-    context.api.setNodePose("space-turret", { x: turretX })
-    return {
-      update: { turretX, turretMotion: null },
-    }
+/**
+ * Capture clavier du turret — voir `v1-capture-spec.md`, exemple
+ * "deplacement clavier borne". `initCaptureState`/`trackCommand`/
+ * `endCapture` remplacent l'ancien strap `moveTurretFromCapture`, qui
+ * accedait directement au node (`context.api.setNodePose`), une pratique
+ * desormais interdite pour le canal capture.
+ */
+export const initTurretCaptureState: CaptureInitFn = ({ state }) => {
+  const gameState = readGameState(state)
+  return { x: gameState?.turretX ?? SPACE_BUBBLES_WORLD.width / 2 }
+}
+
+export const trackTurret: CaptureTrackFn = ({ sample, captureState }) => {
+  const keySample = sample as KeyboardCaptureSample
+  const turretCaptureState = captureState as TurretCaptureState
+  const direction = keySample.keyCode === "ArrowLeft" ? -1 : 1
+  const x = clampTurretX(turretCaptureState.x + direction * TURRET_KEYBOARD_SPEED * (keySample.deltaMs / 1000))
+
+  return {
+    action: { actionName: "space:turret:move", data: { style: { x } } },
+    captureState: { x }
   }
+}
+
+/**
+ * Applies the position settled by the turret keyboard capture to `state`.
+ * Triggered live by `capture.endEmit` (data defaults to `captureState` when
+ * unset — same fallback pattern as `ListenEmit.data ?? event.data` in
+ * `applyLiveSceneEvent`, `player.ts`), never by `endCapture.events` (which
+ * stays `persist-only`, reserved for seek reconstruction).
+ */
+const turretSettleStrap: StrapFn = ({ event }) => {
+  const x = event.data?.x
+  if (typeof x !== "number") {
+    return undefined
+  }
+  return { update: { turretX: x, turretMotion: null } }
 }
 
 function movePickerStrap(direction: -1 | 1): StrapFn {
@@ -640,8 +665,7 @@ export function createSpaceBubblesStraps(): StrapCollection {
     "space-bubbles-start": startGameStrap(),
     "space-bubbles-left": moveTurretStrap(-1),
     "space-bubbles-right": moveTurretStrap(1),
-    "space-bubbles-turret-key-left": moveTurretFromCapture(-1),
-    "space-bubbles-turret-key-right": moveTurretFromCapture(1),
+    "space-bubbles-turret-settle": turretSettleStrap,
     "space-bubbles-turret-drag-start": turretDragStartStrap,
     "space-bubbles-turret-drag": turretDragStrap,
     "space-bubbles-turret-drag-end": turretDragEndStrap,

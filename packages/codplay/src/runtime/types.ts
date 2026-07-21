@@ -1,4 +1,5 @@
 import type { InputCorrectionIconDefinition, InputPartDefinition } from './components/input-component'
+import type { CaptureDeclaration } from './capture-types'
 import type { CorePersoType, PersoTypeRegistry } from './perso-type-registry'
 
 export type {
@@ -54,32 +55,6 @@ export type EmitRuleEvent = {
 }
 
 /**
- * Defines one interaction capture session attached to one emit trigger.
- */
-export type EmitCapture = {
-  /** Event forwarded live to the declared perso or strap for each native tracked input. */
-  event: EmitRuleEvent
-  /** Event persisted when the capture ends. If absent, falls back to `event`. */
-  endEvent?: EmitRuleEvent
-  duration: number
-  /** Dates the terminal event retroactively by `duration`. Omitted means apply now. */
-  snapAt?: 'start' | 'end'
-  /** DOM event names that forward a live capture value. Defaults to ['pointermove']. */
-  trackOn?: string[]
-  /** DOM event names that end the capture session. Defaults to ['pointerup']. */
-  endOn?: string[]
-  /**
-   * When true, the capture-end event carries a runtime-built substitution
-   * transition (from the captured start position to the end position, over
-   * `duration`) that is never applied live — the live pointer tracking already
-   * produced that effect — but is replayed as a full animated transition on
-   * seek, reconstructing the drag trajectory without needing the intermediate
-   * tracking events (which are never materialized in the track).
-   */
-  replay?: boolean
-}
-
-/**
  * Defines one runtime event declaration emitted from one user interaction.
  */
 export type EmitRuleAction = {
@@ -90,7 +65,8 @@ export type EmitRuleAction = {
   preventDefault?: boolean
   event: EmitRuleEvent
   data?: Record<string, unknown>
-  capture?: EmitCapture
+  /** See `v1-capture-spec.md` for the full capture contract. */
+  capture?: CaptureDeclaration
 }
 
 /**

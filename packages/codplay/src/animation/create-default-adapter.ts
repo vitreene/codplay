@@ -16,6 +16,11 @@ export function createDefaultAnimationAdapter(): AnimationAdapter {
   return createAnimationAdapter(animeImpl, {
     renderFrame: () => {
       engine.update()
+      const bubble = globalThis.document?.querySelector?.('.space-bubble-red')
+      if (bubble instanceof globalThis.SVGElement) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG anim-adapter] bubble transform', { at: performance.now(), transform: bubble.style.transform })
+      }
     },
     setRate: (rate) => {
       engine.speed = rate

@@ -121,6 +121,17 @@ type HorizonSnapshot = {
 - pendant `seek`, toute logique de `listen` / strap / emission reactive est hors champ de la relecture.
 - les loops helper actifs sont suspendus pendant le seek et reprennent a la reprise de lecture (`play` ou `resume`); ils ne sont pas detruits.
 - les events `persist-only` presentes dans les tracks sont rejoues normalement au seek: leur mode d'insertion ne s'applique que lors de l'emission live initiale.
+- un event persiste en live (`persistTrackEvent`, incluant tout event
+  `persist-only`) ne risque jamais d'etre execute par la lecture en cours au
+  moment meme de sa materialisation, quelle que soit sa valeur `ms` : le
+  curseur de chaque track est resynchronise immediatement apres l'insertion
+  (`syncCursor`), avancant au-dela de tout event dont `ms <= nowMs` — l'event
+  fraichement ecrit est donc toujours considere comme deja passe par le
+  curseur, jamais rejoue accidentellement en direct
+- cette garantie est independante du choix de `ms` fait par l'emetteur de
+  l'event (auteur, strap, ou capture) : `ms` ne sert qu'a positionner l'event
+  dans la timeline pour un futur seek, jamais a eviter une collision avec la
+  lecture en cours
 
 2. Role du master
 
