@@ -1,6 +1,6 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
-import type { AnimationAdapter, AnimationResolvedAction, ContinuousAnimationEngine } from '../animation/types'
+import type { AnimationAdapter, AnimationResolvedAction, CaptureUpdate, ContinuousAnimationEngine } from '../animation/types'
 import type { RenderMutationTraceEntry, RenderMutationResolver, RuntimeResolvedMutation } from '../runtime/render-mutation-resolver'
 import { passThroughRenderMutationResolver } from '../runtime/render-mutation-resolver'
 import { RuntimeComponentOrchestrator } from '../runtime/components'
@@ -19,6 +19,12 @@ import type {
 
 const NOOP_ANIMATION_ADAPTER: AnimationAdapter = {
   run: () => [],
+  applyCaptureUpdate: () => {
+    return
+  },
+  releaseCaptureUpdate: () => {
+    return
+  },
   stop: () => {
     return
   }
@@ -390,6 +396,22 @@ export class RendererFacade implements RendererApi {
 
   setRate(rate: number): void {
     this.animationAdapter.setRate?.(rate)
+  }
+
+  /**
+   * Applies one `CaptureUpdate` directly, bypassing `run()`/transitions
+   * entirely — see `AnimationAdapter.applyCaptureUpdate`.
+   */
+  applyCaptureUpdate(update: CaptureUpdate): void {
+    this.animationAdapter.applyCaptureUpdate(update)
+  }
+
+  /**
+   * Releases whatever persistent handle backs one target/property's capture
+   * updates, if any — called when a capture ends.
+   */
+  releaseCaptureUpdate(target: unknown, property: string): void {
+    this.animationAdapter.releaseCaptureUpdate(target, property)
   }
 
   /**

@@ -87,6 +87,15 @@ type EmitSelf = {
   storyId: string
 }
 
+type PersoTransitionEase = string | {
+  type: 'physics'
+  velocity?: number
+  mass?: number
+  stiffness?: number
+  damping?: number
+  bounce?: number
+}
+
 type PersoTransitionTiming = {
   duration?: number
   delay?: number
@@ -94,7 +103,7 @@ type PersoTransitionTiming = {
   reversed?: boolean
   alternate?: boolean
   loop?: boolean | number
-  ease?: string
+  ease?: PersoTransitionEase
   stagger?: number
   ignoreDuration?: boolean
 }
@@ -163,6 +172,12 @@ type PersoTransitionTiming = {
 - si `ref` est absent, l'action cible implicitement le `root` du composant.
 - quand une action `style` decrit une transition animee, elle peut transporter les options de timing compatibles runtime: `duration`, `delay`, `loopDelay`, `reversed`, `alternate`, `loop`, `ease`, `stagger`.
 - ces options sont purement descriptives et ne changent pas la semantique de portee ou de propagation des events.
+- `ease` accepte soit une chaine (nom d'easing), soit un descripteur neutre cote codplay,
+  jamais le vocabulaire d'une bibliotheque tierce — `{ type: 'physics', velocity?, mass?,
+  stiffness?, damping?, bounce? }` decrit une transition physique (ressort/decroissance) a
+  partir d'une vitesse initiale ; `bounce` absent ou `0` produit un ralentissement progressif
+  jusqu'a l'arret, sans rebond ni oscillation ; sa traduction vers un mecanisme d'animation
+  concret est un detail d'implementation de l'adaptateur, jamais expose a l'auteur.
 - `ignoreDuration: true` permet d'indiquer explicitement qu'une transition ne contribue pas au calcul de duree de sequence.
 - l'absence de `ignoreDuration` signifie que la transition contribue normalement au calcul de duree via sa `duration` et son `delay` quand ils existent.
 

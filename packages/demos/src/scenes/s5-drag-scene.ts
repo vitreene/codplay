@@ -1,20 +1,54 @@
-import type { TransformFn } from "codplay/player";
+import type { StrapCollection } from "codplay/player/strap-types";
+import type { CaptureEndFn, CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay/runtime/capture-types";
 import type { SceneDoc } from "codplay/player/types";
 
-const trackMove: TransformFn = (event) => {
-  const { dx, dy, baseX, baseY } = event.data as { dx: number; dy: number; baseX: number; baseY: number };
-  return [
-    {
-      name: "drag:tracking",
-      cascade: true,
-      data: {
-        style: {
-          x: { to: baseX + dx, duration: 0 },
-          y: { to: baseY + dy, duration: 0 },
+type DragStoryState = { draggableX: number; draggableY: number };
+type DragCaptureState = { x: number; y: number };
+
+const initDragCaptureState: CaptureInitFn = ({ state }) => {
+  const dragState = state as DragStoryState;
+  return { x: dragState.draggableX, y: dragState.draggableY };
+};
+
+const trackDrag: CaptureTrackFn = ({ sample, captureState }) => {
+  const pointerSample = sample as PointerCaptureSample;
+  const dragCaptureState = captureState as DragCaptureState;
+  const x = dragCaptureState.x + pointerSample.movementX;
+  const y = dragCaptureState.y + pointerSample.movementY;
+
+  return {
+    action: { actionName: "drag:tracking", data: { style: { x, y } } },
+    captureState: { x, y },
+  };
+};
+
+const endDragCapture: CaptureEndFn = ({ captureState, state }) => {
+  const dragCaptureState = captureState as DragCaptureState;
+  const dragState = state as DragStoryState;
+
+  return {
+    events: [
+      {
+        name: "drag:dropped",
+        data: {
+          x: dragCaptureState.x,
+          y: dragCaptureState.y,
+          style: {
+            x: { from: dragState.draggableX, to: dragCaptureState.x },
+            y: { from: dragState.draggableY, to: dragCaptureState.y },
+          },
         },
       },
-    },
-  ];
+    ],
+    durationMode: "capture",
+  };
+};
+
+const s5Straps: StrapCollection = {
+  "drag-settle": ({ event }) => {
+    const data = event.data as { x: number; y: number };
+    return { update: { draggableX: data.x, draggableY: data.y } };
+  },
 };
 
 export function createS5DragScene(): SceneDoc {
@@ -26,10 +60,11 @@ export function createS5DragScene(): SceneDoc {
     stories: {
       "s5-drag-story": {
         id: "s5-drag-story",
+        state: { draggableX: 0, draggableY: 0 },
         initial: { move: "@root" },
-        straps: [],
+        straps: s5Straps,
         listen: [
-          { on: "drag:moved", transform: [trackMove] },
+          { on: "drag:dropped", straps: ["drag-settle"] },
         ],
         eventimes: [{ name: "sequence:end", startAt: 6000 }],
         persos: [
@@ -40,9 +75,8 @@ export function createS5DragScene(): SceneDoc {
               move: "@root",
               content: "Déplacez-moi",
               style: {
-                position: "absolute",
-                top: "200px",
-                left: "200px",
+                x: 0,
+                y: 0,
                 padding: "12px 20px",
                 background: "#4f46e5",
                 color: "#fff",
@@ -55,20 +89,18 @@ export function createS5DragScene(): SceneDoc {
               pointerdown: {
                 event: { name: "drag:started", cascade: true },
                 capture: {
-                  event: { name: "drag:moved" },
-                  endEvent: { name: "drag:ended" },
-                  duration: 400,
-                  snapAt: "end",
-                  replay: true,
+                  trackOn: ["pointermove"],
+                  endOn: ["pointerup"],
+                  initCaptureState: initDragCaptureState,
+                  trackCommand: trackDrag,
+                  endEmit: { name: "drag:dropped" },
+                  endCapture: endDragCapture,
                 },
               },
             },
-            // TODO: amélioration future — les actions vides sont requises pour que le director
-            // route les events vers le perso. Un perso sans action déclarée ignore l'event,
-            // même si le payload event contient un style valide. Envisager une déclaration
-            // implicite ou un mode "passthrough" pour les events portant un payload style.
             actions: {
               "drag:tracking": {},
+              "drag:dropped": {},
             },
           },
         ],

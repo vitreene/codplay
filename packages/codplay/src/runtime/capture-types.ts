@@ -56,6 +56,14 @@ export type CaptureTrackInput = {
 export type CaptureTrackOutput = {
   action?: CaptureAction
   captureState?: CaptureState
+  /**
+   * Merged (`Object.assign`) into `state` at the scope `stateScope` resolves
+   * to, on every sample — the only way another strap can read an up-to-date
+   * value while a capture is still active (e.g. firing while a keyboard
+   * capture is still held). Never materialized, never replayed at seek (see
+   * `v1-capture-spec.md`, "Phase de tracking"/"Materialisation").
+   */
+  updateState?: Record<string, unknown>
 }
 
 export type CaptureTrackFn = (input: CaptureTrackInput) => CaptureTrackOutput | void

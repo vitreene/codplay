@@ -32,6 +32,10 @@ export type CreateElementOptions = {
    * See `v1-capture-spec.md` regle 5.
    */
   subscribeCaptureTick?: (fn: () => CaptureAction | void) => () => void
+  /** Releases whatever persistent `CaptureUpdate` handles were created for one persoId, called when its capture ends. */
+  releaseCaptureUpdates?: (persoId: string) => void
+  /** Merges `trackCommand`'s `updateState` into `state` at the given scope, on every sample. */
+  applyStateUpdate?: (scope: 'scene' | 'story', storyId: string, update: Record<string, unknown>) => void
 }
 
 /**

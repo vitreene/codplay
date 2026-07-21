@@ -173,7 +173,7 @@ function moveTurretStrap(direction: -1 | 1): StrapFn {
   }
 }
 
-type TurretCaptureState = { x: number }
+type TurretCaptureState = { x: number; velocity: number }
 
 /**
  * Capture clavier du turret — voir `v1-capture-spec.md`, exemple
@@ -184,25 +184,38 @@ type TurretCaptureState = { x: number }
  */
 export const initTurretCaptureState: CaptureInitFn = ({ state }) => {
   const gameState = readGameState(state)
-  return { x: gameState?.turretX ?? SPACE_BUBBLES_WORLD.width / 2 }
+  return { x: gameState?.turretX ?? SPACE_BUBBLES_WORLD.width / 2, velocity: 0 }
 }
 
 export const trackTurret: CaptureTrackFn = ({ sample, captureState }) => {
   const keySample = sample as KeyboardCaptureSample
   const turretCaptureState = captureState as TurretCaptureState
   const direction = keySample.keyCode === "ArrowLeft" ? -1 : 1
-  const x = clampTurretX(turretCaptureState.x + direction * TURRET_KEYBOARD_SPEED * (keySample.deltaMs / 1000))
+  const velocity = direction * TURRET_KEYBOARD_SPEED
+  const x = clampTurretX(turretCaptureState.x + velocity * (keySample.deltaMs / 1000))
 
   return {
     action: { actionName: "space:turret:move", data: { style: { x } } },
-    captureState: { x }
+    captureState: { x, velocity },
+    updateState: { turretX: x }
   }
 }
 
+const TURRET_SLIDE_LEAD_MS = 90
+
 /**
- * Applies the position settled by the turret keyboard capture to `state`.
+ * Applies the position settled by the turret keyboard capture to `state`,
+ * and plays a brief decelerating slide continuing past the release point —
+ * a purely visual-with-state-consequence flourish: the turret keeps coasting
+ * in the release direction for a short distance (`overshootX`, derived from
+ * the release `velocity` over a fixed lead time) and settles there, it never
+ * slides back to `x`. `state.turretX` is therefore fixed to `overshootX`
+ * (the real resting position), not `x` — anything else would desync state
+ * from the visual again, the exact bug already fixed once this session.
+ * When `overshootX` would cross a world bound, the capped `x` is used
+ * instead and no slide plays at all (clamped edge stop = no coast).
  * Triggered live by `capture.endEmit` (data defaults to `captureState` when
- * unset — same fallback pattern as `ListenEmit.data ?? event.data` in
+ * unset — same fallback pattern as `ListenEmit.data` in
  * `applyLiveSceneEvent`, `player.ts`), never by `endCapture.events` (which
  * stays `persist-only`, reserved for seek reconstruction).
  */
@@ -211,7 +224,19 @@ const turretSettleStrap: StrapFn = ({ event }) => {
   if (typeof x !== "number") {
     return undefined
   }
-  return { update: { turretX: x, turretMotion: null } }
+  const velocity = typeof event.data?.velocity === "number" ? event.data.velocity : 0
+  const rawOvershootX = x + velocity * (TURRET_SLIDE_LEAD_MS / 1000)
+  const overshootX = clampTurretX(rawOvershootX)
+  const hitBound = overshootX !== rawOvershootX
+
+  if (hitBound || velocity === 0) {
+    return { update: { turretX: x, turretMotion: null } }
+  }
+
+  return {
+    update: { turretX: overshootX, turretMotion: null },
+    events: [buildTurretMoveEvent(overshootX, { fromX: x, durationMs: 600, ease: { type: "physics", velocity, bounce: 0 } })]
+  }
 }
 
 function movePickerStrap(direction: -1 | 1): StrapFn {

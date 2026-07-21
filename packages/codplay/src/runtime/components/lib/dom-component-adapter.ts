@@ -192,7 +192,9 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
               subscribeCaptureTick: options?.subscribeCaptureTick,
               getStoryState: options?.getStoryState,
               getSceneState: options?.getSceneState,
-              getCurrentTimelineMs: options?.getCurrentTimelineMs
+              getCurrentTimelineMs: options?.getCurrentTimelineMs,
+              releaseCaptureUpdates: options?.releaseCaptureUpdates,
+              applyStateUpdate: options?.applyStateUpdate
             }))
           }
 
@@ -209,7 +211,9 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
               getCurrentTimelineMs: options?.getCurrentTimelineMs,
               subscribeJitTick: options?.subscribeJitTick,
               keyCode: domEvent.code,
-              triggerKeyboardEvent: domEvent
+              triggerKeyboardEvent: domEvent,
+              releaseCaptureUpdates: options?.releaseCaptureUpdates,
+              applyStateUpdate: options?.applyStateUpdate
             }))
           }
         }

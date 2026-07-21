@@ -176,6 +176,8 @@ export class PlayerFacade implements PlayerApi {
    */
   private readonly captureTickSubscribers = new Set<() => CaptureAction | void>();
   private readonly lastCaptureActionDataByActionName = new Map<string, string>();
+  /** Style properties `applyCaptureTickActions` has created a `CaptureUpdate` handle for, per persoId — read by `releaseCaptureUpdatesForPerso` at `endOn`. */
+  private readonly captureUpdatePropertiesByPersoId = new Map<string, Set<string>>();
   private readonly tweenRunner = new TweenRunner(
     (persoId) => this.renderer.getRuntimeRegistry().getComponentById(persoId),
   );
@@ -494,27 +496,18 @@ export class PlayerFacade implements PlayerApi {
       createElementOptions: {
         ...options.createElementOptions,
         subscribeJitTick: (listener) => this.subscribeJitTick(listener),
-        subscribeCaptureTick: (fn) => this.subscribeCaptureTick(fn)
+        subscribeCaptureTick: (fn) => this.subscribeCaptureTick(fn),
+        releaseCaptureUpdates: (persoId) => this.releaseCaptureUpdatesForPerso(persoId),
+        applyStateUpdate: (scope, storyId, update) => {
+          const target = scope === "scene"
+            ? this.resolveSceneStateTarget()
+            : this.resolveStoryStateTarget(storyId);
+          Object.assign(target, update);
+        }
       },
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
-      getStoryState: (storyId) => {
-        if (this.scene === null) {
-          return {};
-        }
-        const story = this.scene.stories[storyId];
-        if (!story) {
-          return {};
-        }
-        story.state = typeof story.state === "object" && story.state !== null ? story.state : {};
-        return story.state;
-      },
-      getSceneState: () => {
-        if (this.scene === null) {
-          return {};
-        }
-        this.scene.state = typeof this.scene.state === "object" && this.scene.state !== null ? this.scene.state : {};
-        return this.scene.state;
-      },
+      getStoryState: (storyId) => this.resolveStoryStateTarget(storyId),
+      getSceneState: () => this.resolveSceneStateTarget(),
       emitLiveCapture: options.onLiveCapture,
       emitRuntimeEvent: (event) => {
         const runtimeEvent: PlayerPublicEventInput = {
@@ -765,6 +758,28 @@ export class PlayerFacade implements PlayerApi {
     return () => { this.captureTickSubscribers.delete(fn); };
   }
 
+  /** Resolves the mutable `story.state` object for one storyId, creating it lazily if absent. */
+  private resolveStoryStateTarget(storyId: string): Record<string, unknown> {
+    if (this.scene === null) {
+      return {};
+    }
+    const story = this.scene.stories[storyId];
+    if (!story) {
+      return {};
+    }
+    story.state = typeof story.state === "object" && story.state !== null ? story.state : {};
+    return story.state;
+  }
+
+  /** Resolves the mutable `scene.state` object, creating it lazily if absent. */
+  private resolveSceneStateTarget(): Record<string, unknown> {
+    if (this.scene === null) {
+      return {};
+    }
+    this.scene.state = typeof this.scene.state === "object" && this.scene.state !== null ? this.scene.state : {};
+    return this.scene.state;
+  }
+
   /**
    * Resolves every mounted perso declaring `actionName` in its `actions`,
    * across all mounted stories — the same open, story-scoped multi-perso
@@ -795,18 +810,19 @@ export class PlayerFacade implements PlayerApi {
    * Polls every `captureTickSubscribers` emitter once, deduplicates against
    * the last data sent for the same `actionName` (no DOM/node read — the
    * comparison is on the emitted data itself, per `v1-capture-spec.md`
-   * discussion 2026-07-21), resolves target persos, and applies the result
-   * through the SAME `enqueueCommit`/`renderer.tick` pair `runTimelineEvent`
-   * already uses for a normal event — never `director`/`dispatchEvents`,
-   * never a track, never `emitStateSnapshot`.
+   * discussion 2026-07-21), resolves target persos, and applies each numeric/
+   * string `style` value directly through `renderer.applyCaptureUpdate` —
+   * never `enqueueCommit`/`renderer.tick()`/`director`/`dispatchEvents`/a
+   * track/`emitStateSnapshot`. A capture's continuous flow must never create
+   * a new transition per frame (see
+   * `2026-07-21-capture-animatable-channel-plan.md`): this is the dedicated
+   * `CaptureUpdate` channel, not the commit/transition pipeline a normal
+   * event uses.
    */
-  private applyCaptureTickActions(nowMs: number): void {
+  private applyCaptureTickActions(): void {
     if (this.captureTickSubscribers.size === 0) {
       return;
     }
-
-    let hasNewOperations = false;
-    const operationsByPersoId = new Map<string, AnimationResolvedAction[]>();
 
     for (const subscriber of this.captureTickSubscribers) {
       const action = subscriber();
@@ -820,37 +836,52 @@ export class PlayerFacade implements PlayerApi {
       }
       this.lastCaptureActionDataByActionName.set(action.actionName, serializedData);
 
-      const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
+      const style = (action.data as { style?: Record<string, unknown> } | undefined)?.style;
+      if (style === undefined || typeof style !== 'object' || style === null) {
+        continue;
+      }
 
+      const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
       for (const persoId of resolvedPersoIds) {
-        const resolvedAction: AnimationResolvedAction = {
-          eventId: `capture-tick-${persoId}-${action.actionName}`,
-          eventName: action.actionName,
-          listenerId: persoId,
-          actionKey: action.actionName,
-          action: (action.data ?? {}) as AnimationAction,
-        };
-        const existing = operationsByPersoId.get(persoId) ?? [];
-        existing.push(resolvedAction);
-        operationsByPersoId.set(persoId, existing);
-        hasNewOperations = true;
+        const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
+        if (target === null || target === undefined) {
+          continue;
+        }
+
+        for (const [property, value] of Object.entries(style)) {
+          if (typeof value !== 'number' && typeof value !== 'string') {
+            continue;
+          }
+
+          this.renderer.applyCaptureUpdate({ target, property, value });
+
+          const properties = this.captureUpdatePropertiesByPersoId.get(persoId) ?? new Set<string>();
+          properties.add(property);
+          this.captureUpdatePropertiesByPersoId.set(persoId, properties);
+        }
       }
     }
+  }
 
-    if (!hasNewOperations) {
+  /**
+   * Releases every `CaptureUpdate` handle `applyCaptureTickActions` created
+   * for one persoId, called at `endOn` (`capture-runtime.ts::cleanup`) so the
+   * next capture on the same node starts clean.
+   */
+  private releaseCaptureUpdatesForPerso(persoId: string): void {
+    const properties = this.captureUpdatePropertiesByPersoId.get(persoId);
+    if (properties === undefined) {
       return;
     }
 
-    for (const [persoId, operations] of operationsByPersoId) {
-      this.renderer.enqueueCommit({
-        commitSeq: this.director.reserveCommitSeq(),
-        applyAtMs: nowMs,
-        target: { itemId: persoId },
-        operations,
-      });
+    const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
+    if (target !== null && target !== undefined) {
+      for (const property of properties) {
+        this.renderer.releaseCaptureUpdate(target, property);
+      }
     }
 
-    this.renderer.tick(nowMs);
+    this.captureUpdatePropertiesByPersoId.delete(persoId);
   }
 
   /**
@@ -1549,7 +1580,7 @@ export class PlayerFacade implements PlayerApi {
 
     // Capture is the emitter; this ticker frame channels delivery to the
     // renderer's single render cycle — see `applyCaptureTickActions`.
-    this.applyCaptureTickActions(syncTimelineMs);
+    this.applyCaptureTickActions();
 
     if (!this.onTimelineEvent) {
       this.timelineMs = syncTimelineMs;

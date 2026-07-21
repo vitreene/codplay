@@ -458,7 +458,9 @@ export function bindComponentEmitDeclarations(input: {
               getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs,
               subscribeJitTick: input.createElementOptions?.subscribeJitTick,
               keyCode: event.code,
-              triggerKeyboardEvent: event
+              triggerKeyboardEvent: event,
+              releaseCaptureUpdates: input.createElementOptions?.releaseCaptureUpdates,
+              applyStateUpdate: input.createElementOptions?.applyStateUpdate
             })
             cleanups?.add(cleanup)
           }
@@ -473,7 +475,9 @@ export function bindComponentEmitDeclarations(input: {
               subscribeCaptureTick: input.createElementOptions?.subscribeCaptureTick,
               getStoryState: input.createElementOptions?.getStoryState,
               getSceneState: input.createElementOptions?.getSceneState,
-              getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs
+              getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs,
+              releaseCaptureUpdates: input.createElementOptions?.releaseCaptureUpdates,
+              applyStateUpdate: input.createElementOptions?.applyStateUpdate
             })
             cleanups?.add(cleanup)
           }

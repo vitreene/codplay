@@ -1,5 +1,5 @@
 import { ANIMATION_RUNTIME_CONFIG } from './config'
-import type { AnimationResolvedAction, TransitionRequest } from './types'
+import type { AnimationResolvedAction, TransitionEase, TransitionRequest } from './types'
 
 type StylePropertyDefinition = {
   from?: number | string
@@ -7,7 +7,7 @@ type StylePropertyDefinition = {
   duration?: number
   delay?: number
   easing?: string
-  ease?: string
+  ease?: TransitionEase
   stagger?: number
   loopDelay?: number
   reversed?: boolean
@@ -24,20 +24,16 @@ function resolveTarget(action: AnimationResolvedAction['action'], listenerId: st
 }
 
 /**
- * Extracts one style property definition from an arbitrary style object.
+ * Extracts one style property definition from an arbitrary style object. A
+ * bare number/string is a direct set, never an implicit transition — only an
+ * explicit `{ to, ... }` object requests a transition (see
+ * `v1-capture-spec.md` regle 5bis, and the 2026-07-21 decision that the
+ * library must never infer authoring intent that was not expressed).
  */
 function getStylePropertyDefinition(
   rawValue: unknown
 ): StylePropertyDefinition | null {
-  if (rawValue === null || rawValue === undefined) {
-    return null
-  }
-
-  if (typeof rawValue === 'number' || typeof rawValue === 'string') {
-    return { to: rawValue }
-  }
-
-  if (typeof rawValue !== 'object') {
+  if (rawValue === null || rawValue === undefined || typeof rawValue !== 'object') {
     return null
   }
 
@@ -81,7 +77,7 @@ export function deriveSimpleTransitions(resolvedActions: AnimationResolvedAction
         to: definition.to,
         duration: definition.duration ?? ANIMATION_RUNTIME_CONFIG.defaultDurationMs,
         delayMs: definition.delay,
-        easing: definition.easing ?? definition.ease,
+        easing: definition.easing ?? (typeof definition.ease === 'string' ? definition.ease : undefined),
         ease: definition.ease ?? definition.easing,
         stagger: definition.stagger,
         loopDelayMs: definition.loopDelay,

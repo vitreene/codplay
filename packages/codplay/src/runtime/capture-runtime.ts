@@ -38,6 +38,13 @@ export type CaptureRuntimeInput = {
   getStoryState?: (storyId: string) => Readonly<Record<string, unknown>>
   /** Reads the current scene state, read-only — used when `capture.stateScope === 'scene'`. */
   getSceneState?: () => Readonly<Record<string, unknown>>
+  /**
+   * Merges `trackCommand`'s `updateState` into the mutable `state` object at
+   * the given scope — the same scope `stateScope` already resolves for
+   * reading. Never materialized, never replayed at seek (see
+   * `v1-capture-spec.md`, "Phase de tracking").
+   */
+  applyStateUpdate?: (scope: 'scene' | 'story', storyId: string, update: Record<string, unknown>) => void
   getCurrentTimelineMs?: () => number
   /**
    * Advances keyboard sampling once per playback frame — distinct from
@@ -52,6 +59,13 @@ export type CaptureRuntimeInput = {
   keyCode?: string
   /** The triggering `keydown` — its modifier keys are read at every tick (see `buildKeyboardSample`). Required when `keyCode` is set. */
   triggerKeyboardEvent?: KeyboardEvent
+  /**
+   * Releases whatever persistent `CaptureUpdate` handles the ticker created
+   * for this capture's persoId, called once at `endOn`. `capture-runtime.ts`
+   * never knows the target node or which `style` properties were used — only
+   * `PlayerFacade` (which resolved them frame by frame) can release them.
+   */
+  releaseCaptureUpdates?: (persoId: string) => void
 }
 
 const DEFAULT_TRACK_ON = ['pointermove']
@@ -149,7 +163,9 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
     getCurrentTimelineMs,
     subscribeJitTick,
     keyCode,
-    triggerKeyboardEvent
+    triggerKeyboardEvent,
+    releaseCaptureUpdates,
+    applyStateUpdate
   } = input
   const isKeyboardCapture = keyCode !== undefined
   const trackOn = capture.trackOn ?? (isKeyboardCapture ? [] : DEFAULT_TRACK_ON)
@@ -200,6 +216,9 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
     }
     if (output.action !== undefined) {
       pendingAction = output.action
+    }
+    if (output.updateState !== undefined) {
+      applyStateUpdate?.(capture.stateScope ?? 'story', storyId, output.updateState)
     }
   }
 
@@ -290,13 +309,20 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
       // `data` absent falls back to the accumulated `captureState`, same
       // pattern already used for `ListenEmit.data` in `applyLiveSceneEvent`
       // (`player.ts`: `data: e.data ?? event.data`) — no function needed to
-      // carry captured data into a statically-declared event.
+      // carry captured data into a statically-declared event. `ms: nowMs` is
+      // required: `player.ts`'s `onRuntimeEmit` heuristic
+      // (`isLiveTracking = source === 'system' && event.ms === undefined`)
+      // otherwise misroutes `endEmit` to `applyLiveSceneEvent` (the OLD
+      // live-tracking path, which silently drops a triggered strap's
+      // `events` — `liveOnly: true`) instead of the normal `apply-now`
+      // pipeline `endEmit` is meant to use.
       emitRuntimeEvent({
         name: capture.endEmit.name,
         data: capture.endEmit.data ?? captureState,
         cascade: capture.endEmit.cascade,
         scopeStoryId: capture.endEmit.cascade === true ? undefined : storyId,
-        source: 'system' as const
+        source: 'system' as const,
+        ms: nowMs
       })
     }
   }
@@ -310,6 +336,7 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
     unsubscribeKeyboardTick = null
     unsubscribeCaptureTick?.()
     unsubscribeCaptureTick = null
+    releaseCaptureUpdates?.(persoId)
 
     for (const eventName of endOn) {
       globalThis.window?.removeEventListener(eventName, onEnd, { capture: true })

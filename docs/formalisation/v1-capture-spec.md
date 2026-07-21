@@ -118,6 +118,7 @@ type CaptureTrackInput = {
 type CaptureTrackOutput = {
   action?: CaptureAction
   captureState?: CaptureState
+  updateState?: Record<string, unknown>
 }
 
 type CaptureTrackFn = (input: CaptureTrackInput) => CaptureTrackOutput | void
@@ -201,18 +202,31 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
   `captureState` telle qu'elle se trouve apres le dernier appel (ou apres
   `initCaptureState`)
 - `trackCommand` peut retourner `action` (une `CaptureAction` ciblant une
-  `actionName`, avec ses donnees d'action) et/ou `captureState` (la nouvelle
-  valeur, remplacant integralement la precedente) ; les deux sont optionnels
-  et independants
+  `actionName`, avec ses donnees d'action), `captureState` (la nouvelle
+  valeur, remplacant integralement la precedente), et/ou `updateState` (une
+  mutation partielle de `state`) ; les trois sont optionnels et independants
 - tout perso declarant `actionName` dans ses `actions` recoit `action` et
   l'applique immediatement, comme le fait `actions[event.name]` pour un event
   standard
 - une `CaptureAction` n'est jamais un `event` : elle ne porte pas de
   `name`/`cascade`/`context`, n'est jamais routee par `story.listen` ou
   `scene.listen`, et n'est jamais materialisee en track
+- `updateState`, s'il est retourne, est fusionne (`Object.assign`) dans le
+  `state` du scope choisi par `stateScope` (le meme scope que celui lu par
+  `initCaptureState`/`endCapture` — voir regle 1), a chaque `CaptureSample`
+  traite : c'est la seule facon pour un autre strap, dans le reste de
+  l'application, de lire une valeur a jour pendant qu'une capture est encore
+  active (ex: un tir declenche pendant un deplacement clavier maintenu doit
+  voir la position courante, pas celle d'avant l'ouverture de la capture)
+- `updateState` n'est jamais materialise en track ni rejoue au seek — au
+  meme titre que le reste du tracking (regle 4, Materialisation) ; l'etat
+  final visible au seek vient exclusivement de la reconstruction normale
+  (`endEmit`/`endCapture.events` -> strap -> `update`), jamais de
+  `updateState`
 - en dehors de `trackCommand`, la phase de tracking ne peut ni emettre
-  d'`event`, ni planifier via `context.planned`/`context.live`, ni muter
-  `state`, ni acceder directement aux nodes runtime
+  d'`event`, ni planifier via `context.planned`/`context.live`, ni acceder
+  directement aux nodes runtime ; `trackCommand` lui-meme ne mute `state` que
+  via `updateState`, jamais directement ou par un autre moyen
 
 3. Phase de fin
 
@@ -284,8 +298,8 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
 4. Materialisation
 
 - le tracking n'est jamais materialise en track, quel que soit son volume,
-  y compris les `CaptureAction` et les mises a jour de `captureState`
-  produites par `trackCommand`
+  y compris les `CaptureAction`, les mises a jour de `captureState`, et les
+  mutations `updateState` de `state`, produites par `trackCommand`
 - `endEmit` est materialise selon l'`eventInsertMode` de l'event `StoryEvent`
   standard (`apply-now` par defaut)
 - les `events` de `endCapture` sont materialises en `persist-only`

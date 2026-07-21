@@ -1,8 +1,8 @@
-import { utils } from 'animejs'
+import { createSpring, utils } from 'animejs'
 import { morphTo as animeSvgMorphTo } from 'animejs/svg'
 
 import { resolveContainerQueryValue } from '../runtime/components/lib/container-query-units'
-import type { AnimationAdapter, AnimationHandle, AnimationOperation, AnimeSvgMorphOperation, TransitionRequest } from './types'
+import type { AnimationAdapter, AnimationHandle, AnimationOperation, AnimeSvgMorphOperation, CaptureUpdate, TransitionEase, TransitionRequest } from './types'
 
 /**
  * Resolves one transition value's container query units, when the transition
@@ -27,9 +27,22 @@ export type AnimeAnimationLike = {
 
 export type AnimeImplementation = (parameters: Record<string, unknown>) => AnimeAnimationLike | null | undefined
 
+/**
+ * One persistent, per-property setter — the shape `createAnimatable` (or any
+ * future replacement) exposes per animated property: calling it again
+ * updates the same underlying handle instead of creating a new one. See
+ * `CaptureUpdate` in `./types` and `2026-07-21-capture-animatable-channel-plan.md`.
+ */
+export type CaptureUpdater = {
+  set: (value: number | string) => void
+}
+
+export type CaptureUpdaterImplementation = (target: unknown, property: string) => CaptureUpdater
+
 export type AnimationAdapterOptions = {
   renderFrame?: (frameNowMs: number) => void
   setRate?: (rate: number) => void
+  captureUpdaterImplementation?: CaptureUpdaterImplementation
 }
 
 type TransitionGroup = {
@@ -103,10 +116,34 @@ function finalizeAnimeSvgMorphOperation(operation: AnimeSvgMorphOperation, reaso
 }
 
 /**
- * Converts historical CodPlay easing names to Anime.js v4 names.
+ * Translates codplay's neutral `physics` ease descriptor into anime.js's own
+ * `Spring` — the one place this contract's `TransitionEase` (see
+ * `./types`) touches an anime.js-specific type, kept local to this adapter.
  */
-function normalizeAnimeEase(ease: string | undefined): string | undefined {
-  if (ease === undefined || !ease.startsWith('ease')) {
+function buildAnimePhysicsEase(descriptor: Extract<TransitionEase, { type: 'physics' }>) {
+  return createSpring({
+    velocity: descriptor.velocity,
+    mass: descriptor.mass,
+    stiffness: descriptor.stiffness,
+    damping: descriptor.damping,
+    bounce: descriptor.bounce
+  })
+}
+
+/**
+ * Converts historical CodPlay easing names to Anime.js v4 names, or
+ * translates a `physics` descriptor into a `Spring` instance.
+ */
+function normalizeAnimeEase(ease: TransitionEase | undefined): string | ReturnType<typeof createSpring> | undefined {
+  if (ease === undefined) {
+    return undefined
+  }
+
+  if (typeof ease !== 'string') {
+    return buildAnimePhysicsEase(ease)
+  }
+
+  if (!ease.startsWith('ease')) {
     return ease
   }
 
@@ -348,6 +385,15 @@ export function createAnimationAdapter(
   const activeHandles: AnimationHandle[] = []
   const activeAnimations: ActiveAnimation[] = []
   const groupEntries = new Map<string, GroupEntry>()
+  /**
+   * Per-target, per-property registry of `CaptureUpdater` handles — created
+   * lazily on the first `applyCaptureUpdate` call for a given target/property,
+   * reused on every subsequent frame instead of creating a new one. `WeakMap`
+   * keyed directly on the target avoids the string-keying dance `groupTransitions`
+   * needs (that one is per-`run()`-call local; this one must stay stable across
+   * calls for the whole life of a capture).
+   */
+  const captureUpdatersByTarget = new WeakMap<object, Map<string, CaptureUpdater>>()
 
   /**
    * Removes active handles associated with one transition set.
@@ -457,8 +503,6 @@ export function createAnimationAdapter(
    * Starts a batch of animation operations and stores stoppable handles.
    */
   function run(operations: AnimationOperation[]): AnimationHandle[] {
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG anim-adapter] run() called', { operationCount: operations.length, operations: JSON.parse(JSON.stringify(operations)) })
     const transitions = operations.filter(isTransitionRequest)
     const morphOperations = operations.filter(isAnimeSvgMorphOperation)
     registerGroups(transitions)
@@ -676,8 +720,61 @@ export function createAnimationAdapter(
     }
   }
 
+  /**
+   * Resolves (creating lazily if needed) the `CaptureUpdater` handle for one
+   * target/property pair, then applies `value` through it — never through
+   * `run()`/`animeImplementation`, so no new transition is ever created for
+   * a capture's continuous flow, no matter how many frames call this.
+   */
+  function applyCaptureUpdate(update: CaptureUpdate): void {
+    const captureUpdaterImplementation = options.captureUpdaterImplementation
+    if (captureUpdaterImplementation === undefined || typeof update.target !== 'object' || update.target === null) {
+      return
+    }
+
+    const target = update.target as object
+    let updatersByProperty = captureUpdatersByTarget.get(target)
+    if (updatersByProperty === undefined) {
+      updatersByProperty = new Map()
+      captureUpdatersByTarget.set(target, updatersByProperty)
+    }
+
+    let updater = updatersByProperty.get(update.property)
+    if (updater === undefined) {
+      updater = captureUpdaterImplementation(target, update.property)
+      updatersByProperty.set(update.property, updater)
+    }
+
+    updater.set(update.value)
+  }
+
+  /**
+   * Releases the `CaptureUpdater` registry entry for one target/property, if
+   * any — called when a capture ends so the next capture on the same node
+   * creates a fresh handle instead of reusing a stale one. Never calls
+   * `updater.revert()`: that snaps the property back to its value from
+   * *before* the capture even started (confirmed in anime.js's own source —
+   * `Animatable.revert()` "revert[s] all the values affected by this
+   * animation to their original state"), which is never what's wanted here —
+   * the value the capture left on the node is the correct one, and whatever
+   * strap `endEmit` triggers (if any) is the only thing allowed to move it
+   * from there.
+   */
+  function releaseCaptureUpdate(target: unknown, property: string): void {
+    if (typeof target !== 'object' || target === null) {
+      return
+    }
+
+    const updatersByProperty = captureUpdatersByTarget.get(target)
+    if (updatersByProperty === undefined) {
+      return
+    }
+
+    updatersByProperty.delete(property)
+  }
+
   const renderFrame = options.renderFrame
   const setRate = options.setRate
 
-  return { run, stop, pause, resume, seek, renderFrame, setRate }
+  return { run, applyCaptureUpdate, releaseCaptureUpdate, stop, pause, resume, seek, renderFrame, setRate }
 }

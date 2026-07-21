@@ -1,4 +1,5 @@
 import type { TweenFn } from "codplay/tween/tween-runner"
+import type { TransitionEase } from "codplay/animation/types"
 import { SPACE_BUBBLE_COLORS, SPACE_BUBBLES_MAX_DURATION_MS, SPACE_BUBBLES_WORLD, type SpaceBubbleColor, type SpaceBubblesState, type WorldPoint } from "./space-bubbles-types"
 import { resolveBubbleLevelScale } from "./space-bubbles-state"
 
@@ -147,7 +148,7 @@ export function buildMaluserShotClearEvents(): EventLike[] {
 }
 
 /** Builds one turret visual movement event. */
-export function buildTurretMoveEvent(x: number, options: { fromX?: number; durationMs?: number; ease?: string } = {}): EventLike {
+export function buildTurretMoveEvent(x: number, options: { fromX?: number; durationMs?: number; ease?: TransitionEase } = {}): EventLike {
   const transition: Record<string, unknown> = {
     to: x,
     duration: options.durationMs ?? 120,

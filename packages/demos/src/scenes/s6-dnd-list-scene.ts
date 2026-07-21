@@ -1,4 +1,5 @@
-import type { TransformFn, StrapCollection } from 'codplay/player/strap-types'
+import type { StrapCollection } from 'codplay/player/strap-types'
+import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from 'codplay/runtime/capture-types'
 import type { SceneDoc } from 'codplay/player/types'
 
 const DROP_ZONES: Record<string, 'a' | 'b'> = {
@@ -6,24 +7,51 @@ const DROP_ZONES: Record<string, 'a' | 'b'> = {
   'list-b': 'b',
 }
 
-// ─── transforms ──────────────────────────────────────────────────────────────
+// ─── capture (drag pointeur, un cycle par item) ─────────────────────────────
 
-// Tracking live : un seul listen, persoId injecté par la capture session.
-const trackMove: TransformFn = (event) => {
-  const { dx, dy, baseX, baseY, persoId } = event.data as {
-    dx: number; dy: number; baseX: number; baseY: number; persoId: string
-  }
-  return [{
-    name: `item:drag:tracking:${persoId}`,
-    cascade: true,
-    data: {
-      style: {
-        x: { to: baseX + dx, duration: 0 },
-        y: { to: baseY + dy, duration: 0 },
-        zIndex: '10',
+type ItemDragCaptureState = { x: number; y: number; clientX: number; clientY: number; persoId: string }
+
+/**
+ * An item always sits at x:0/y:0 when idle — a successful drop reparents it
+ * (`flipMode`, no explicit x/y reset needed) and an invalid drop resets it to
+ * 0/0 (`item:drop-reset`). No `state` read needed: 0/0 is always the truth.
+ * `persoId` is closed over `itemId` (a factory per item, like `makeItemPerso`
+ * already does for everything else): neither `initCaptureState` nor
+ * `trackCommand` receive it natively (`v1-capture-spec.md` regle 5), but
+ * `drop-resolver` needs it in `endEmit`'s `captureState` fallback.
+ */
+function makeInitItemDragCaptureState(itemId: string): CaptureInitFn {
+  return () => ({ x: 0, y: 0, clientX: 0, clientY: 0, persoId: itemId })
+}
+
+/**
+ * `actionName` must be per-item (`item:drag:tracking:${itemId}`), never a
+ * name shared by all three items: `v1-capture-spec.md` regle 5 routes a
+ * `CaptureAction` to every perso declaring that `actionName` in `actions` —
+ * a shared name would move all three items together. Mirrors the per-item
+ * drop actions (`item:drop:${id}:to-a`) already used below.
+ */
+function makeTrackItemDrag(itemId: string): CaptureTrackFn {
+  return ({ sample, captureState }) => {
+    const pointerSample = sample as PointerCaptureSample
+    const dragCaptureState = captureState as ItemDragCaptureState
+    const x = dragCaptureState.x + pointerSample.movementX
+    const y = dragCaptureState.y + pointerSample.movementY
+
+    return {
+      action: {
+        actionName: `item:drag:tracking:${itemId}`,
+        data: { style: { x, y, zIndex: '10' } },
       },
-    },
-  }]
+      captureState: {
+        x,
+        y,
+        clientX: pointerSample.clientX,
+        clientY: pointerSample.clientY,
+        persoId: dragCaptureState.persoId,
+      },
+    }
+  }
 }
 
 //─── straps ───────────────────────────────────────────────────────────────────
@@ -88,10 +116,14 @@ function makeItemPerso(
       pointerdown: {
         event: { name: 'item:drag:start', cascade: true },
         capture: {
-          event: { name: 'item:drag:tracking' },
-          endEvent: { name: 'item:drag:end' },
-          duration: 400,
-          snapAt: 'end',
+          trackOn: ['pointermove'],
+          endOn: ['pointerup'],
+          stateScope: 'story',
+          initCaptureState: makeInitItemDragCaptureState(id),
+          trackCommand: makeTrackItemDrag(id),
+          // `endEmit.data` absent falls back to `captureState`, which already
+          // carries `persoId` (closed over `id` in `makeInitItemDragCaptureState`).
+          endEmit: { name: 'item:drag:end' },
         },
       },
     },
@@ -135,7 +167,6 @@ export function createS6DndListScene(): SceneDoc {
         initial: { move: '@root' },
         straps: s6Straps,
         listen: [
-          { on: 'item:drag:tracking', transform: [trackMove] },
           { on: 'item:drag:end', straps: ['drop-resolver'] },
         ],
         eventimes: [{ name: 'sequence:end', startAt: 60000 }],

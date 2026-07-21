@@ -4,6 +4,24 @@ import type { BroadcastAction, InputVisualStateValue, MoveValue, ReplaceActionVa
 
 export type AnimatedProperty = string
 
+/**
+ * A transition ease, either a plain named easing (forwarded to whatever
+ * animation library the adapter wraps) or a codplay-side descriptor — never
+ * a third-party vocabulary above the adapter. `'physics'` describes a
+ * spring/decay transition from an initial `velocity`; `bounce` absent or `0`
+ * produces a progressive slowdown to rest with no overshoot (see
+ * `v1-perso-spec.md` regle 5). Translating it into a concrete mechanism is
+ * the adapter's job alone.
+ */
+export type TransitionEase = string | {
+  type: 'physics'
+  velocity?: number
+  mass?: number
+  stiffness?: number
+  damping?: number
+  bounce?: number
+}
+
 export type AnimationTimerOptions = {
   duration?: number
   delayMs?: number
@@ -11,7 +29,7 @@ export type AnimationTimerOptions = {
   reversed?: boolean
   alternate?: boolean
   loop?: boolean | number
-  ease?: string
+  ease?: TransitionEase
   stagger?: number
   ignoreDuration?: boolean
 }
@@ -95,6 +113,21 @@ export type AnimeSvgMorphOperation = {
  */
 export type AnimationOperation = TransitionRequest | AnimeSvgMorphOperation
 
+/**
+ * One value update from a capture's continuous flow (`v1-capture-spec.md`).
+ * Distinct from `TransitionRequest`: there is no `from`/`to`/`duration` to
+ * interpolate — the capture already samples at frame rate, so each update is
+ * the exact value for that frame. Applying it must never create a new
+ * transition per call; see `AnimationAdapter.applyCaptureUpdate`. Naming and
+ * shape stay codplay-side (no reference to the underlying animation
+ * library), since that library is expected to be replaced over time.
+ */
+export type CaptureUpdate = {
+  target: unknown
+  property: AnimatedProperty
+  value: number | string
+}
+
 export type AnimationTraceEntry = {
   traceId: string
   eventId: string
@@ -112,6 +145,20 @@ export type AnimationHandle = {
 
 export type AnimationAdapter = {
   run: (operations: AnimationOperation[]) => AnimationHandle[]
+  /**
+   * Applies one `CaptureUpdate` without ever creating a new transition —
+   * the counterpart to `run()` for capture's continuous flow. Safe to call
+   * every frame: reuses one persistent handle per target/property instead
+   * of instantiating a fresh animation each time (see
+   * `2026-07-21-capture-animatable-channel-plan.md`).
+   */
+  applyCaptureUpdate: (update: CaptureUpdate) => void
+  /**
+   * Releases whatever persistent handle `applyCaptureUpdate` created for
+   * this target/property, if any. Called when a capture ends, so the next
+   * capture on the same node starts clean.
+   */
+  releaseCaptureUpdate: (target: unknown, property: AnimatedProperty) => void
   stop: (target?: unknown) => void
   pause?: (target?: unknown) => void
   resume?: (target?: unknown) => void
