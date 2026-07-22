@@ -1,8 +1,8 @@
 import type {
-  CaptureAction,
   CaptureDeclaration,
   CaptureSample,
   CaptureState,
+  CaptureTickResult,
   KeyboardCaptureSample,
   PointerCaptureSample
 } from './capture-types'
@@ -17,14 +17,15 @@ export type CaptureRuntimeInput = {
   emitRuntimeEvent: (event: RuntimeEmitEvent) => void
   /**
    * Subscribes to the playback ticker for delivery of `trackCommand`'s
-   * `CaptureAction` output. Capture is the emitter only — it never applies
-   * its own output; the returned unsubscribe is called at `endOn`. The
-   * ticker polls every subscriber once per frame and channels the result
-   * through the renderer's single render cycle
-   * (`PlayerFacade.applyCaptureTickActions`) — never `director`/
-   * `dispatchEvents`/track. See `v1-capture-spec.md` regle 5.
+   * result. Capture is the emitter only — it never applies its own output;
+   * the returned unsubscribe is called at `endOn`. The ticker polls every
+   * subscriber once per frame and channels the result through the
+   * renderer's single render cycle (`PlayerFacade.applyCaptureTickActions`)
+   * — never `director`/`dispatchEvents`/track. `persoId` travels through the
+   * subscription itself (known once, at capture start), never through the
+   * per-tick data. See `v1-capture-spec.md` regle 5.
    */
-  subscribeCaptureTick?: (fn: () => CaptureAction | void) => () => void
+  subscribeCaptureTick?: (persoId: string, fn: () => CaptureTickResult | void) => () => void
   /**
    * Reads the current story state, read-only — used by `initCaptureState`
    * when `capture.stateScope` is absent or `'story'` (the default). Wired by
@@ -50,7 +51,7 @@ export type CaptureRuntimeInput = {
    * Advances keyboard sampling once per playback frame — distinct from
    * `subscribeCaptureTick` (delivery) to keep the two roles separate: this
    * one produces a `KeyboardCaptureSample` and runs `trackCommand`, the
-   * other only polls the last produced `CaptureAction`. Both fire within the
+   * other only polls the last produced `CaptureTickResult`. Both fire within the
    * same synchronous `runPlaybackTick` frame (`create-player.ts`), in that
    * order, so there is no cross-frame delay between sampling and delivery.
    */
@@ -142,7 +143,7 @@ function propagateDuration(
  * `CaptureSample` → `trackCommand`) and the closing phase (`endOn` →
  * `endCapture`/`endEmit`), but never touches `state`, tracks, or nodes
  * directly, and never applies a visual mutation itself: `trackCommand`'s
- * `CaptureAction` is only ever handed to the playback ticker via
+ * resolved `CaptureTickResult` is only ever handed to the playback ticker via
  * `subscribeCaptureTick` — capture is the emitter, the ticker channels
  * delivery to the renderer's single render cycle. Every `event` this
  * function emits (`endCapture`/`endEmit`) goes through the same
@@ -184,41 +185,101 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
 
   let ended = false
   const samples: CaptureSample[] = []
-  let captureState: CaptureState = capture.initCaptureState
+  const initResult = capture.initCaptureState
     ? capture.initCaptureState({ state: resolveCaptureState() })
     : {}
+  if (initResult === false) {
+    // Guard applied once, at opening — no `trackOn`/`endOn` listener is ever
+    // installed, no cycle started. Not a rejection after the fact on an
+    // already-applied commit (see `v1-capture-spec.md`).
+    return () => {}
+  }
+  let captureState: CaptureState = initResult
 
   const startedAtMs = getCurrentTimelineMs?.() ?? 0
   let keyboardElapsedMs = 0
   let unsubscribeKeyboardTick: (() => void) | null = null
   let unsubscribeCaptureTick: (() => void) | null = null
-  let pendingAction: CaptureAction | undefined
+  let pendingResult: CaptureTickResult | undefined
+  /**
+   * Accumulator for the default 1:1 pointer follow (no `trackCommand`
+   * authored, non-dnd capture only) — `movementX`/`movementY` deltas, same
+   * convention `style.x`/`y` already uses everywhere else (a transform
+   * offset relative to the node's own layout position, never a raw
+   * viewport-absolute coordinate).
+   */
+  let defaultOffset = { x: 0, y: 0 }
 
   /**
-   * Runs `trackCommand` for one produced `CaptureSample`, then stores its
-   * `action` output for the next `subscribeCaptureTick` poll — never applied
-   * here, never materialized, never a `StoryEvent`.
+   * Runs `trackCommand` for one produced `CaptureSample`, then stores the
+   * resolved `CaptureTickResult` for the next `subscribeCaptureTick` poll —
+   * never applied here, never materialized, never a `StoryEvent`. The
+   * `action` path (hand-built `CaptureAction`) is the legacy, unchanged
+   * catalog-by-name channel; otherwise `position`/`dnd` are resolved
+   * directly, `position` falling back to a 1:1 pointer follow when the
+   * author wrote no `trackCommand` at all, and `dnd` only produced when
+   * `captureState.dropIn` (the guard's output) is present.
    */
   function runTrackCommand(sample: CaptureSample): void {
     samples.push(sample)
 
-    if (!capture.trackCommand) {
-      return
-    }
-
-    const output = capture.trackCommand({ sample, samples, captureState })
-    if (!output) {
-      return
-    }
-
-    if (output.captureState !== undefined) {
+    const output = capture.trackCommand?.({ sample, samples, captureState })
+    if (output?.captureState !== undefined) {
       captureState = output.captureState
     }
-    if (output.action !== undefined) {
-      pendingAction = output.action
-    }
-    if (output.updateState !== undefined) {
+    if (output?.updateState !== undefined) {
       applyStateUpdate?.(capture.stateScope ?? 'story', storyId, output.updateState)
+    }
+
+    if (output?.action !== undefined) {
+      pendingResult = { action: output.action }
+      return
+    }
+
+    const isPointerSample = 'clientX' in sample
+    const dropIn = (captureState as { dropIn?: unknown }).dropIn
+    const isDndCapture = Array.isArray(dropIn) && isPointerSample
+
+    // `endEmit`'s data falls back to `captureState` when the author declares
+    // no `endEmit.data` (the normal case) — `clientX`/`clientY` must live
+    // here, not only in `pendingResult.dnd`, or the commit action (resolved
+    // from that same fallback, per `v1-perso-spec.md`'s flat merge) would
+    // never receive them. Updated on every dnd tick regardless of whether
+    // the author wrote their own `trackCommand`.
+    if (isDndCapture) {
+      captureState = {
+        ...captureState,
+        clientX: (sample as PointerCaptureSample).clientX,
+        clientY: (sample as PointerCaptureSample).clientY
+      }
+    }
+
+    // A dnd capture's dragged node is positioned directly by the list-dnd
+    // module (`previewAt`, `position: fixed` + `left`/`top`) — the generic
+    // x/y transform-based follow would fight it, so it never applies here.
+    const position = output?.position ?? (
+      capture.trackCommand === undefined && isPointerSample && !isDndCapture
+        ? (defaultOffset = {
+            x: defaultOffset.x + (sample as PointerCaptureSample).movementX,
+            y: defaultOffset.y + (sample as PointerCaptureSample).movementY
+          })
+        : undefined
+    )
+
+    if (position === undefined && !isDndCapture) {
+      return
+    }
+
+    pendingResult = {
+      position,
+      dnd: isDndCapture
+        ? {
+            clientX: (sample as PointerCaptureSample).clientX,
+            clientY: (sample as PointerCaptureSample).clientY,
+            candidateListIds: dropIn,
+            ghost: capture.ghost
+          }
+        : undefined
     }
   }
 
@@ -354,10 +415,10 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
   }
 
   if (subscribeCaptureTick !== undefined) {
-    unsubscribeCaptureTick = subscribeCaptureTick(() => {
-      const action = pendingAction
-      pendingAction = undefined
-      return action
+    unsubscribeCaptureTick = subscribeCaptureTick(persoId, () => {
+      const result = pendingResult
+      pendingResult = undefined
+      return result
     })
   }
 

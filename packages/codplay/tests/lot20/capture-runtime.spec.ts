@@ -97,7 +97,7 @@ describe('Lot 20 — capture-runtime', () => {
   })
 
   it('T4 — trackCommand.action est expose au poll subscribeCaptureTick, jamais applique/emis directement', () => {
-    let poll: (() => import('../../src/runtime/capture-types').CaptureAction | void) | null = null
+    let poll: (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null = null
     const trackCommand: CaptureTrackFn = ({ sample }) => ({
       action: { actionName: 'capture_draggable_move', data: { style: { x: sample.clientX } } }
     })
@@ -107,14 +107,14 @@ describe('Lot 20 — capture-runtime', () => {
       storyId: 'world',
       originEventName: 'drag:started',
       emitRuntimeEvent,
-      subscribeCaptureTick: (fn) => { poll = fn; return () => { poll = null } }
+      subscribeCaptureTick: (persoId, fn) => { expect(persoId).toBe('draggable'); poll = fn; return () => { poll = null } }
     })
     activeCleanups.push(cleanup)
 
     firePointerEvent(window, 'pointermove', { clientX: 42, clientY: 0 })
 
-    const pollFn = poll as (() => import('../../src/runtime/capture-types').CaptureAction | void) | null
-    expect(pollFn?.()).toEqual({ actionName: 'capture_draggable_move', data: { style: { x: 42 } } })
+    const pollFn = poll as (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null
+    expect(pollFn?.()).toEqual({ action: { actionName: 'capture_draggable_move', data: { style: { x: 42 } } } })
     // Polling again without a new sample returns nothing — capture never re-emits stale data.
     expect(pollFn?.()).toBeUndefined()
     expect(emittedEvents).toHaveLength(0)
@@ -453,5 +453,87 @@ describe('Lot 20 — capture-runtime', () => {
     firePointerEvent(window, 'pointerup', { clientX: 2, clientY: 2 })
 
     expect(endCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it('T21 — initCaptureState renvoyant false annule le cycle avant tout listener', () => {
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const initCaptureState: CaptureInitFn = () => false
+    const subscribeCaptureTick = vi.fn(() => () => {})
+    const cleanup = startCapture({
+      capture: { trackOn: ['pointermove'], endOn: ['pointerup'], initCaptureState },
+      persoId: 'draggable',
+      storyId: 'world',
+      originEventName: 'drag:started',
+      emitRuntimeEvent,
+      subscribeCaptureTick
+    })
+
+    expect(subscribeCaptureTick).not.toHaveBeenCalled()
+    expect(addSpy).not.toHaveBeenCalledWith('pointermove', expect.anything(), expect.anything())
+    expect(addSpy).not.toHaveBeenCalledWith('pointerup', expect.anything(), expect.anything())
+
+    // Cleanup is a safe no-op — nothing was ever installed.
+    expect(() => cleanup()).not.toThrow()
+  })
+
+  it('T22 — sans trackCommand (capture non-dnd), le suivi 1:1 du pointeur accumule movementX/Y comme x/y ailleurs (transform, jamais une coordonnee absolue)', () => {
+    let poll: (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null = null
+    const cleanup = startCapture({
+      capture: { trackOn: ['pointermove'] },
+      persoId: 'draggable',
+      storyId: 'world',
+      originEventName: 'drag:started',
+      emitRuntimeEvent,
+      subscribeCaptureTick: (_persoId, fn) => { poll = fn; return () => { poll = null } }
+    })
+    activeCleanups.push(cleanup)
+
+    firePointerEvent(window, 'pointermove', { clientX: 11, clientY: 22, movementX: 5, movementY: -3 })
+
+    const pollFn = poll as (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null
+    expect(pollFn?.()).toEqual({ position: { x: 5, y: -3 }, dnd: undefined })
+
+    firePointerEvent(window, 'pointermove', { clientX: 16, clientY: 19, movementX: 5, movementY: -3 })
+    expect(pollFn?.()).toEqual({ position: { x: 10, y: -6 }, dnd: undefined })
+  })
+
+  it('T23 — quand captureState.dropIn est un tableau, le signal dnd est produit automatiquement et le suivi generique x/y est desactive (le module positionne le node directement)', () => {
+    let poll: (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null = null
+    const initCaptureState: CaptureInitFn = () => ({ dropIn: ['list-a', 'list-b'] })
+    const cleanup = startCapture({
+      capture: { trackOn: ['pointermove'], initCaptureState, ghost: { className: 'my-ghost' } },
+      persoId: 'draggable',
+      storyId: 'world',
+      originEventName: 'drag:started',
+      emitRuntimeEvent,
+      subscribeCaptureTick: (_persoId, fn) => { poll = fn; return () => { poll = null } }
+    })
+    activeCleanups.push(cleanup)
+
+    firePointerEvent(window, 'pointermove', { clientX: 5, clientY: 6 })
+
+    const pollFn = poll as (() => import('../../src/runtime/capture-types').CaptureTickResult | void) | null
+    expect(pollFn?.()).toEqual({
+      position: undefined,
+      dnd: { clientX: 5, clientY: 6, candidateListIds: ['list-a', 'list-b'], ghost: { className: 'my-ghost' } }
+    })
+  })
+
+  it('T24 — pour une capture dnd, clientX/clientY rejoignent captureState (pas seulement le pendingResult), donc endEmit (data ?? captureState) les porte jusqu\'au commit', () => {
+    const initCaptureState: CaptureInitFn = () => ({ dropIn: ['list-a', 'list-b'] })
+    const cleanup = startCapture({
+      capture: { trackOn: ['pointermove'], endOn: ['pointerup'], initCaptureState, endEmit: { name: 'item:dropped' } },
+      persoId: 'draggable',
+      storyId: 'world',
+      originEventName: 'drag:started',
+      emitRuntimeEvent
+    })
+    activeCleanups.push(cleanup)
+
+    firePointerEvent(window, 'pointermove', { clientX: 42, clientY: 84 })
+    firePointerEvent(window, 'pointerup', { clientX: 42, clientY: 84 })
+
+    const dropped = emittedEvents.find((e) => e.name === 'item:dropped')
+    expect(dropped?.data).toEqual({ dropIn: ['list-a', 'list-b'], clientX: 42, clientY: 84 })
   })
 })

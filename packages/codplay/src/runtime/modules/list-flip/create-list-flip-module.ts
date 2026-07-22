@@ -94,7 +94,7 @@ class ListFlipModuleInstance implements ListFlipModule {
   }
 
   prepareMove(input: PrepareListFlipMoveInput): ListFlipSession | null {
-    const flipEntries = this.collectFlipEntriesForMove(input.persoId, input.move)
+    const flipEntries = this.collectFlipEntriesForMove(input.persoId, input.move, input.excludeSelfFromFlip === true)
     if (flipEntries.length === 0) {
       return null
     }
@@ -230,7 +230,7 @@ class ListFlipModuleInstance implements ListFlipModule {
     }
   }
 
-  private collectFlipEntriesForMove(persoId: string, move: MoveCommand): FlipEntry[] {
+  private collectFlipEntriesForMove(persoId: string, move: MoveCommand, excludeSelfFromFlip: boolean): FlipEntry[] {
     if (move.flip === false) {
       return []
     }
@@ -263,6 +263,10 @@ class ListFlipModuleInstance implements ListFlipModule {
       for (const childId of targetList.getChildrenSnapshot()) {
         touchedIds.add(childId)
       }
+    }
+
+    if (excludeSelfFromFlip) {
+      touchedIds.delete(persoId)
     }
 
     const entries: FlipEntry[] = []

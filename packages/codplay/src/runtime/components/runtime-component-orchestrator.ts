@@ -19,6 +19,7 @@ import { TextComponent } from "./text-component";
 import { moveModule, normalizeMoveCommand } from "../modules/move";
 import { listModule } from "../modules/list";
 import { replaceModule } from "../modules/replace";
+import { listDndModule } from "../modules/list-dnd";
 import type {
   ComponentRegisterInput,
   ModuleEmitInput,
@@ -130,6 +131,7 @@ export class RuntimeComponentOrchestrator {
     this.registerModule({ name: "move", module: moveModule });
     this.registerModule({ name: "list", module: listModule });
     this.registerModule({ name: "replace", module: replaceModule });
+    this.registerModule({ name: "list-dnd", module: listDndModule });
   }
 
   /**

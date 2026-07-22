@@ -45,7 +45,14 @@ export type CaptureInitInput = {
   state: DeepReadonly<Record<string, unknown>>
 }
 
-export type CaptureInitFn = (input: CaptureInitInput) => CaptureState
+/**
+ * `false` cancels the capture cycle before any `trackOn`/`endOn` listener is
+ * installed (`capture-runtime.ts`'s `startCapture`) — a guard applied once,
+ * at capture opening, never a rejection after the fact on an already-applied
+ * commit. Whatever makes this return `false` is entirely up to the author;
+ * codplay only reads the result.
+ */
+export type CaptureInitFn = (input: CaptureInitInput) => CaptureState | false
 
 export type CaptureTrackInput = {
   sample: CaptureSample
@@ -53,8 +60,21 @@ export type CaptureTrackInput = {
   captureState: DeepReadonly<CaptureState>
 }
 
-export type CaptureTrackOutput = {
+/**
+ * `action` is the legacy, unchanged path: a hand-built `CaptureAction`
+ * (`actionName`+`data`), resolved by `resolvePersoIdsForActionName` exactly
+ * as today (`space-bubbles-scene.ts`'s turret, `quiz-hunt/extra-story.ts`'s
+ * token). `position`/`dnd` are a separate, honest channel for a capture that
+ * has no "catalog" to speak of — a single known target (`persoId`, carried by
+ * the `subscribeCaptureTick` subscription itself, never by this data) with a
+ * direct value to apply or a payload to dispatch. Never both `action` and
+ * `position`/`dnd` meaningfully at once: `action` short-circuits the other
+ * two in `runTrackCommand`.
+ */
+export type CaptureTickResult = {
   action?: CaptureAction
+  position?: Record<string, number | string>
+  dnd?: Record<string, unknown>
   captureState?: CaptureState
   /**
    * Merged (`Object.assign`) into `state` at the scope `stateScope` resolves
@@ -66,7 +86,7 @@ export type CaptureTrackOutput = {
   updateState?: Record<string, unknown>
 }
 
-export type CaptureTrackFn = (input: CaptureTrackInput) => CaptureTrackOutput | void
+export type CaptureTrackFn = (input: CaptureTrackInput) => CaptureTickResult | void
 
 export type CaptureEndInput = {
   samples: readonly CaptureSample[]
@@ -110,4 +130,15 @@ export type CaptureDeclaration = {
   trackCommand?: CaptureTrackFn
   endEmit?: StoryEvent
   endCapture?: CaptureEndFn
+  /**
+   * Static ghost placeholder styling for a list-dnd-flavored capture (one
+   * whose `initCaptureState` returns `{ dropIn }`) — never a function, never
+   * read for anything else. Dimensions always match the dragged node's own
+   * rect regardless of this config; `className` defaults to a conventional
+   * constant when absent (see `list-dnd`'s ghost lifecycle).
+   */
+  ghost?: {
+    className?: string
+    style?: Record<string, string | number>
+  }
 }

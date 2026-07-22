@@ -342,4 +342,85 @@ describe('V1 - overlay-world seek baseline', () => {
     })
     expect(typeof translateTransition?.modifier).toBe('function')
   })
+
+  it('excludeSelfFromFlip omits the moved item from its own FLIP entries, keeping its neighbors', () => {
+    installGeometryStub()
+
+    /**
+     * Builds one fresh source-list/moving-item/neighbor-item fixture, with
+     * explicit inline-style rects (installGeometryStub reads `node.style.left/top`
+     * first) so reordering the two children swaps their positions deterministically.
+     */
+    function buildFixture(): { listNode: HTMLElement; movingNode: HTMLElement; neighborNode: HTMLElement } {
+      const listNode = document.createElement('div')
+      listNode.id = 'source-list'
+      const movingNode = document.createElement('button')
+      movingNode.id = 'moving-item'
+      movingNode.style.left = '20px'
+      movingNode.style.top = '60px'
+      movingNode.style.width = '40px'
+      movingNode.style.height = '20px'
+      const neighborNode = document.createElement('button')
+      neighborNode.id = 'neighbor-item'
+      neighborNode.style.left = '20px'
+      neighborNode.style.top = '30px'
+      neighborNode.style.width = '40px'
+      neighborNode.style.height = '20px'
+      listNode.append(neighborNode, movingNode)
+      document.body.append(listNode)
+      return { listNode, movingNode, neighborNode }
+    }
+
+    function runPrepareAndCommit(
+      fixture: { listNode: HTMLElement; movingNode: HTMLElement; neighborNode: HTMLElement },
+      excludeSelfFromFlip: boolean | undefined
+    ): TransitionRequest[] {
+      const nodeById = new Map<string, Element>([
+        ['moving-item', fixture.movingNode],
+        ['neighbor-item', fixture.neighborNode],
+        ['source-list', fixture.listNode]
+      ])
+      const listComponent = {
+        getChildrenSnapshot: () => ['neighbor-item', 'moving-item']
+      } as unknown as import('../../src/runtime/components/types').RuntimeListComponent
+
+      const listFlipModule = createListFlipModule({
+        warnOnce: () => undefined,
+        getNodeById: (id) => nodeById.get(id) ?? null,
+        getListById: (id) => (id === 'source-list' ? listComponent : null),
+        getParentListId: (id) => (id === 'moving-item' || id === 'neighbor-item' ? 'source-list' : null),
+        isMounted: () => true
+      })
+
+      const session = listFlipModule.prepareMove({
+        persoId: 'moving-item',
+        move: { parentId: 'source-list' },
+        eventId: `evt-${String(excludeSelfFromFlip)}`,
+        eventName: 'item:move',
+        eventSeq: 1,
+        excludeSelfFromFlip
+      })
+      expect(session).not.toBeNull()
+
+      // Swap the two rects (as a real reorder would move each node to the
+      // other's slot) so the FLIP capture sees a real before/after
+      // differential for both moving-item and neighbor-item.
+      fixture.movingNode.style.top = '30px'
+      fixture.neighborNode.style.top = '60px'
+
+      return session?.commit() ?? []
+    }
+
+    const fixtureWithSelf = buildFixture()
+    const transitionsWithSelf = runPrepareAndCommit(fixtureWithSelf, undefined)
+    expect(transitionsWithSelf.some((t) => t.transitionId.startsWith('flip-moving-item-'))).toBe(true)
+    expect(transitionsWithSelf.some((t) => t.transitionId.startsWith('flip-neighbor-item-'))).toBe(true)
+
+    fixtureWithSelf.listNode.remove()
+
+    const fixtureExcludingSelf = buildFixture()
+    const transitionsExcludingSelf = runPrepareAndCommit(fixtureExcludingSelf, true)
+    expect(transitionsExcludingSelf.some((t) => t.transitionId.startsWith('flip-moving-item-'))).toBe(false)
+    expect(transitionsExcludingSelf.some((t) => t.transitionId.startsWith('flip-neighbor-item-'))).toBe(true)
+  })
 })

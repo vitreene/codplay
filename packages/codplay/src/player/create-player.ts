@@ -13,7 +13,7 @@ import {
   type RuntimeTraceStatus,
 } from "../runtime/trace-store";
 import type { CreateElementOptions } from "../runtime/create-element";
-import type { CaptureAction } from "../runtime/capture-types";
+import type { CaptureTickResult } from "../runtime/capture-types";
 import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from "../runtime/types";
 import { normalizeMoveCommand } from "../runtime/modules/move";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
@@ -174,8 +174,10 @@ export class PlayerFacade implements PlayerApi {
    * to the renderer's single render cycle (`v1-capture-spec.md`). Distinct
    * from `jitTickSubscribers`, reserved for `context.live` helpers.
    */
-  private readonly captureTickSubscribers = new Set<() => CaptureAction | void>();
+  private readonly captureTickSubscribers = new Set<{ persoId: string; fn: () => CaptureTickResult | void }>();
   private readonly lastCaptureActionDataByActionName = new Map<string, string>();
+  /** Dedup key for the direct `position`/`dnd` path, keyed by `persoId` (from the subscription) — never shared with `lastCaptureActionDataByActionName` (the `action` catalog path), even though a persoId could coincidentally look like an actionName. */
+  private readonly lastCaptureTickDataByPersoId = new Map<string, string>();
   /** Style properties `applyCaptureTickActions` has created a `CaptureUpdate` handle for, per persoId — read by `releaseCaptureUpdatesForPerso` at `endOn`. */
   private readonly captureUpdatePropertiesByPersoId = new Map<string, Set<string>>();
   private readonly tweenRunner = new TweenRunner(
@@ -496,7 +498,7 @@ export class PlayerFacade implements PlayerApi {
       createElementOptions: {
         ...options.createElementOptions,
         subscribeJitTick: (listener) => this.subscribeJitTick(listener),
-        subscribeCaptureTick: (fn) => this.subscribeCaptureTick(fn),
+        subscribeCaptureTick: (persoId, fn) => this.subscribeCaptureTick(persoId, fn),
         releaseCaptureUpdates: (persoId) => this.releaseCaptureUpdatesForPerso(persoId),
         applyStateUpdate: (scope, storyId, update) => {
           const target = scope === "scene"
@@ -748,14 +750,17 @@ export class PlayerFacade implements PlayerApi {
   /**
    * Subscribes one capture's `trackCommand` emitter, polled once per playback
    * frame. The capture is the emitter — it never applies its own output; the
-   * ticker collects every subscriber's `CaptureAction` this frame and
+   * ticker collects every subscriber's `CaptureTickResult` this frame and
    * channels it to the renderer's single render cycle (see
-   * `applyCaptureTickActions`). Returns an unsubscribe function, called by
-   * the capture at `endOn`.
+   * `applyCaptureTickActions`). `persoId` travels with the subscription
+   * itself — known once, at capture start, never smuggled through the
+   * per-tick data. Returns an unsubscribe function, called by the capture at
+   * `endOn`.
    */
-  subscribeCaptureTick(fn: () => CaptureAction | void): () => void {
-    this.captureTickSubscribers.add(fn);
-    return () => { this.captureTickSubscribers.delete(fn); };
+  subscribeCaptureTick(persoId: string, fn: () => CaptureTickResult | void): () => void {
+    const entry = { persoId, fn };
+    this.captureTickSubscribers.add(entry);
+    return () => { this.captureTickSubscribers.delete(entry); };
   }
 
   /** Resolves the mutable `story.state` object for one storyId, creating it lazily if absent. */
@@ -807,58 +812,89 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Applies each numeric/string `style` value directly through
+   * `renderer.applyCaptureUpdate` for every resolved persoId — never
+   * `enqueueCommit`/`renderer.tick()`/`director`/`dispatchEvents`/a track/
+   * `emitStateSnapshot`. A capture's continuous flow must never create a new
+   * transition per frame (see `2026-07-21-capture-animatable-channel-plan.md`):
+   * this is the dedicated `CaptureUpdate` channel, not the commit/transition
+   * pipeline a normal event uses. Shared by both the `action` (catalog by
+   * name) and `position` (direct persoId) paths of `applyCaptureTickActions`.
+   */
+  private applyCaptureStyle(style: Record<string, unknown>, persoIds: readonly string[]): void {
+    for (const persoId of persoIds) {
+      const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
+      if (target === null || target === undefined) {
+        continue;
+      }
+
+      for (const [property, value] of Object.entries(style)) {
+        if (typeof value !== 'number' && typeof value !== 'string') {
+          continue;
+        }
+
+        this.renderer.applyCaptureUpdate({ target, property, value });
+
+        const properties = this.captureUpdatePropertiesByPersoId.get(persoId) ?? new Set<string>();
+        properties.add(property);
+        this.captureUpdatePropertiesByPersoId.set(persoId, properties);
+      }
+    }
+  }
+
+  /**
    * Polls every `captureTickSubscribers` emitter once, deduplicates against
-   * the last data sent for the same `actionName` (no DOM/node read — the
-   * comparison is on the emitted data itself, per `v1-capture-spec.md`
-   * discussion 2026-07-21), resolves target persos, and applies each numeric/
-   * string `style` value directly through `renderer.applyCaptureUpdate` —
-   * never `enqueueCommit`/`renderer.tick()`/`director`/`dispatchEvents`/a
-   * track/`emitStateSnapshot`. A capture's continuous flow must never create
-   * a new transition per frame (see
-   * `2026-07-21-capture-animatable-channel-plan.md`): this is the dedicated
-   * `CaptureUpdate` channel, not the commit/transition pipeline a normal
-   * event uses.
+   * the last data sent (no DOM/node read — the comparison is on the emitted
+   * data itself, per `v1-capture-spec.md` discussion 2026-07-21), and routes
+   * each `CaptureTickResult` independently: `action` is the legacy, unchanged
+   * catalog-by-name path (`resolvePersoIdsForActionName`); `position`/`dnd`
+   * resolve directly against the subscription's own `persoId` — never a
+   * catalog lookup, `draggedPersoId` injected here for `dnd`, never carried
+   * by the tick data itself. `dnd` dispatches straight to the renderer's
+   * module-event channel (`insertMode: 'persist-only'`, never materialized) —
+   * never `host.emit`/`listen`/`director`/track for this case.
    */
   private applyCaptureTickActions(): void {
     if (this.captureTickSubscribers.size === 0) {
       return;
     }
 
-    for (const subscriber of this.captureTickSubscribers) {
-      const action = subscriber();
-      if (!action) {
+    const ms = this.resolveCurrentTimelineMs();
+
+    for (const { persoId, fn } of this.captureTickSubscribers) {
+      const result = fn();
+      if (!result) {
         continue;
       }
 
-      const serializedData = JSON.stringify(action.data ?? null);
-      if (this.lastCaptureActionDataByActionName.get(action.actionName) === serializedData) {
-        continue;
-      }
-      this.lastCaptureActionDataByActionName.set(action.actionName, serializedData);
-
-      const style = (action.data as { style?: Record<string, unknown> } | undefined)?.style;
-      if (style === undefined || typeof style !== 'object' || style === null) {
-        continue;
-      }
-
-      const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
-      for (const persoId of resolvedPersoIds) {
-        const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
-        if (target === null || target === undefined) {
+      if (result.action !== undefined) {
+        const action = result.action;
+        const serializedData = JSON.stringify(action.data ?? null);
+        if (this.lastCaptureActionDataByActionName.get(action.actionName) === serializedData) {
           continue;
         }
+        this.lastCaptureActionDataByActionName.set(action.actionName, serializedData);
 
-        for (const [property, value] of Object.entries(style)) {
-          if (typeof value !== 'number' && typeof value !== 'string') {
-            continue;
-          }
-
-          this.renderer.applyCaptureUpdate({ target, property, value });
-
-          const properties = this.captureUpdatePropertiesByPersoId.get(persoId) ?? new Set<string>();
-          properties.add(property);
-          this.captureUpdatePropertiesByPersoId.set(persoId, properties);
+        const style = (action.data as { style?: Record<string, unknown> } | undefined)?.style;
+        if (style !== undefined && typeof style === 'object' && style !== null) {
+          const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
+          this.applyCaptureStyle(style, resolvedPersoIds);
         }
+        continue;
+      }
+
+      const serializedTick = JSON.stringify({ position: result.position ?? null, dnd: result.dnd ?? null });
+      if (this.lastCaptureTickDataByPersoId.get(persoId) === serializedTick) {
+        continue;
+      }
+      this.lastCaptureTickDataByPersoId.set(persoId, serializedTick);
+
+      if (result.position !== undefined) {
+        this.applyCaptureStyle(result.position, [persoId]);
+      }
+
+      if (result.dnd !== undefined) {
+        this.renderer.dispatchModuleEvent('list-dnd:preview', { ...result.dnd, draggedPersoId: persoId }, ms);
       }
     }
   }

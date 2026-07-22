@@ -1,5 +1,5 @@
 import { createListPlugin } from './list-plugin/create-list-plugin'
-import type { CaptureAction } from './capture-types'
+import type { CaptureTickResult } from './capture-types'
 import type {
   EmitRule,
   EmitRuleAction,
@@ -31,7 +31,7 @@ export type CreateElementOptions = {
    * renderer's single render cycle (`PlayerFacade.applyCaptureTickActions`).
    * See `v1-capture-spec.md` regle 5.
    */
-  subscribeCaptureTick?: (fn: () => CaptureAction | void) => () => void
+  subscribeCaptureTick?: (persoId: string, fn: () => CaptureTickResult | void) => () => void
   /** Releases whatever persistent `CaptureUpdate` handles were created for one persoId, called when its capture ends. */
   releaseCaptureUpdates?: (persoId: string) => void
   /** Merges `trackCommand`'s `updateState` into `state` at the given scope, on every sample. */
