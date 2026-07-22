@@ -1,3 +1,4 @@
+import "./quiz-series-fame-scene.css"
 import type { StrapCollection } from "codplay/player"
 import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay/player/types"
 import type { QuizQuestionAnsweredPayload, QuizQuestionResolvedPayload, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "./quiz-question-scene"
@@ -420,7 +421,7 @@ function createSeriesQuestionStory(
             <fieldset class="quiz-question-fieldset">
               <legend data-part="${prefix}:title"></legend>
               <p data-part="${prefix}:hint"></p>
-              <div data-part="${prefix}:answers"></div>
+              <div data-part="${prefix}:answers" class="quiz-question-answers"></div>
               <div data-part="${prefix}:controls"></div>
               <p data-part="${prefix}:result" aria-live="polite"></p>
             </fieldset>

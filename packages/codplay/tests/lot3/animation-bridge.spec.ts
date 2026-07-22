@@ -383,4 +383,48 @@ describe("Lot 03 - animation bridge", () => {
       loop: true,
     });
   });
+
+  it("L3-T10 applyCaptureUpdate reuses one persistent updater across many calls on the same target/property", () => {
+    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }));
+    const captureUpdaterImplementation = vi.fn(() => ({ set: vi.fn() }));
+    const adapter = createAnimationAdapter(animeImplementation, { captureUpdaterImplementation });
+
+    const target = { x: 0 };
+    for (let i = 0; i < 30; i += 1) {
+      adapter.applyCaptureUpdate({ target, property: "x", value: i });
+    }
+
+    expect(captureUpdaterImplementation).toHaveBeenCalledTimes(1);
+    expect(animeImplementation).not.toHaveBeenCalled();
+
+    const updater = captureUpdaterImplementation.mock.results[0]?.value as { set: ReturnType<typeof vi.fn> };
+    expect(updater.set).toHaveBeenCalledTimes(30);
+    expect(updater.set).toHaveBeenLastCalledWith(29);
+  });
+
+  it("L3-T11 applyCaptureUpdate keeps separate updaters per property on the same target", () => {
+    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }));
+    const captureUpdaterImplementation = vi.fn(() => ({ set: vi.fn() }));
+    const adapter = createAnimationAdapter(animeImplementation, { captureUpdaterImplementation });
+
+    const target = { x: 0, y: 0 };
+    adapter.applyCaptureUpdate({ target, property: "x", value: 1 });
+    adapter.applyCaptureUpdate({ target, property: "y", value: 2 });
+    adapter.applyCaptureUpdate({ target, property: "x", value: 3 });
+
+    expect(captureUpdaterImplementation).toHaveBeenCalledTimes(2);
+  });
+
+  it("L3-T12 releaseCaptureUpdate lets a following applyCaptureUpdate create a fresh updater", () => {
+    const animeImplementation = vi.fn(() => ({ pause: vi.fn() }));
+    const captureUpdaterImplementation = vi.fn(() => ({ set: vi.fn() }));
+    const adapter = createAnimationAdapter(animeImplementation, { captureUpdaterImplementation });
+
+    const target = { x: 0 };
+    adapter.applyCaptureUpdate({ target, property: "x", value: 1 });
+    adapter.releaseCaptureUpdate(target, "x");
+    adapter.applyCaptureUpdate({ target, property: "x", value: 2 });
+
+    expect(captureUpdaterImplementation).toHaveBeenCalledTimes(2);
+  });
 });

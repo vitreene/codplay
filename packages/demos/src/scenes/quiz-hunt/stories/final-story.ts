@@ -76,7 +76,7 @@ export function createFinalStory(
           <fieldset class="quiz-question-fieldset">
             <legend class="quiz-hunt-question-title-slot is-final" data-part="${prefix}:title"></legend>
             <p data-part="${prefix}:hint"></p>
-            <div data-part="${prefix}:answers"></div>
+            <div data-part="${prefix}:answers" class="quiz-question-answers"></div>
             <div data-part="${prefix}:controls"></div>
             <p data-part="${prefix}:result" aria-live="polite"></p>
           </fieldset>

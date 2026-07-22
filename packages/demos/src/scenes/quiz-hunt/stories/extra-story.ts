@@ -1,23 +1,26 @@
-import type { TransformFn } from "codplay/player"
 import type { SceneStoryDoc } from "codplay/player/types"
+import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay/runtime/capture-types"
 import type { GameLabels } from "../types"
 
-/** Routes the captured pointer delta onto the extra token after it reaches the footer slot. */
-const trackExtraTokenMove: TransformFn = (event) => {
-  const { dx, dy, baseX, baseY } = event.data as { dx: number; dy: number; baseX: number; baseY: number }
-  return [
-    {
-      name: "game:extra:drag:tracking:inventory",
-      cascade: true,
-      data: {
-        style: {
-          x: { to: baseX + dx, duration: 0 },
-          y: { to: baseY + dy, duration: 0 },
-          zIndex: "10"
-        }
-      }
-    }
-  ]
+type ExtraTokenCaptureState = { x: number; y: number; clientX: number; clientY: number }
+
+/** Reads the token's current offset from `state` (defaults to the origin) when a drag starts. */
+const initExtraTokenCaptureState: CaptureInitFn = ({ state }) => {
+  const gameState = state as { extraTokenX?: number; extraTokenY?: number }
+  return { x: gameState.extraTokenX ?? 0, y: gameState.extraTokenY ?? 0, clientX: 0, clientY: 0 }
+}
+
+/** Follows the pointer with no clamping — the token drags freely over the footer/grid. */
+const trackExtraTokenMove: CaptureTrackFn = ({ sample, captureState }) => {
+  const pointerSample = sample as PointerCaptureSample
+  const tokenCaptureState = captureState as ExtraTokenCaptureState
+  const x = tokenCaptureState.x + pointerSample.movementX
+  const y = tokenCaptureState.y + pointerSample.movementY
+
+  return {
+    action: { actionName: "game:extra:drag:tracking:inventory", data: { style: { x, y, zIndex: "10" } } },
+    captureState: { x, y, clientX: pointerSample.clientX, clientY: pointerSample.clientY }
+  }
 }
 
 /** Extra story: one floating clickable token, hidden by default. Purely passive. */
@@ -26,7 +29,7 @@ export function createExtraStory(labels: GameLabels): SceneStoryDoc {
     id: "game-extra-story",
     initial: undefined,
     straps: undefined,
-    listen: [{ on: "game:extra:drag:tracking", transform: [trackExtraTokenMove] }],
+    listen: [],
     persos: [
       {
         id: "game-extra-inventory-list",
@@ -51,10 +54,9 @@ export function createExtraStory(labels: GameLabels): SceneStoryDoc {
           pointerdown: {
             event: { name: "game:extra:drag:start", cascade: true },
             capture: {
-              event: { name: "game:extra:drag:tracking" },
-              endEvent: { name: "game:extra:drag:end" },
-              duration: 400,
-              snapAt: "end"
+              initCaptureState: initExtraTokenCaptureState,
+              trackCommand: trackExtraTokenMove,
+              endEmit: { name: "game:extra:drag:end", cascade: true }
             }
           }
         },
