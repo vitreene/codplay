@@ -26,6 +26,8 @@ Donner une vue stable des documents finals et de l'ordre de lecture recommande.
 9. `v1-story-spec.md`
 10. `v1-scene-spec.md`
 11. `v1-event-spec.md`
+11a. `v1-capture-spec.md` — canal capture pour events continus (pointeur, clavier) : `initCaptureState`/`trackCommand`/`endCapture`, materialisation `persist-only`
+11b. `v1-list-dnd-spec.md` — drag-and-drop positionne entre listes, cas particulier de capture : `dropIn`/`ghost`, commit resolu en action `move` ordinaire
 12. `v1-strap-helpers-spec.md`
 13. `v1-runtime-policy-spec.md`
 14. `v1-builder-spec.md`

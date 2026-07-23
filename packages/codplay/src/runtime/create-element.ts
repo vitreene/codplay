@@ -36,6 +36,8 @@ export type CreateElementOptions = {
   releaseCaptureUpdates?: (persoId: string) => void
   /** Merges `trackCommand`'s `updateState` into `state` at the given scope, on every sample. */
   applyStateUpdate?: (scope: 'scene' | 'story', storyId: string, update: Record<string, unknown>) => void
+  /** Resolves what a dnd capture's drop should commit to — see `CaptureRuntimeInput.resolveDndTarget` (`capture-runtime.ts`) for the full contract. */
+  resolveDndTarget?: (persoId: string) => { parentId: string; mode: number } | null
 }
 
 /**

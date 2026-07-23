@@ -194,7 +194,8 @@ function bindRuntimeEmitDeclarations(nodeRef: unknown, item: ItemDoc, options: C
               getSceneState: options?.getSceneState,
               getCurrentTimelineMs: options?.getCurrentTimelineMs,
               releaseCaptureUpdates: options?.releaseCaptureUpdates,
-              applyStateUpdate: options?.applyStateUpdate
+              applyStateUpdate: options?.applyStateUpdate,
+              resolveDndTarget: options?.resolveDndTarget
             }))
           }
 

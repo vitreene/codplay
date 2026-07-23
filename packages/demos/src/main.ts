@@ -9,19 +9,13 @@ import { runQuizReferenceDemo } from './codplay/quiz-reference-demo'
 import { runQuizSeriesDemo } from './codplay/quiz-series-demo'
 import { runPlayerPocDemo } from './player/player-poc-demo'
 import { runAvatarPoc1Demo } from './codplay/avatar-poc-1-demo'
-import { runAvatarMoodTransitionDemo } from './codplay/avatar-mood-transition-demo'
 import { runRiveCoachDemo } from './codplay/rive-coach-demo'
 import { runChronoDemo } from './codplay/chrono-demo'
 import { runQuizHuntDemo } from './codplay/quiz-hunt-demo'
 import { runThreejsAnimeGridDemo } from './codplay/threejs-anime-grid-demo'
 import { runMashupRiveThreeQuizDemo } from './codplay/mashup-rive-three-quiz-demo'
-import { runMoveOffDemo } from './codplay/move-off-demo'
 import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
-import { runContainerQueryPlacementDemo } from './codplay/container-query-placement-demo'
-import { runSelectionFrameDemo } from './codplay/selection-frame-demo'
-import { runSelectionFrameGridDemo } from './codplay/selection-frame-grid-demo'
-import { runZoneEditorDemo } from './codplay/zone-editor-demo'
 import { runEd2BuilderDemo } from './codplay/ed2-builder-demo'
 import { runSpaceBubblesDemo } from './codplay/space-bubbles-demo'
 
@@ -38,18 +32,12 @@ switch (demoName) {
 	case 'carousel':        void runCarouselDemo(); break
 	case 'replace-carousel': void runReplaceCarouselDemo(); break
 	case 'avatar-poc-1':    void runAvatarPoc1Demo(); break
-	case 'avatar-mood-transition': void runAvatarMoodTransitionDemo(); break
 	case 'rive-coach':      void runRiveCoachDemo(); break
 	case 'threejs-anime-grid': void runThreejsAnimeGridDemo(); break
 	case 'mashup-rive-three-quiz': void runMashupRiveThreeQuizDemo(); break
 	case 'chrono':          void runChronoDemo(); break
-	case 'move-off':        void runMoveOffDemo(); break
 	case 'overlay-world-outlet': void runOverlayWorldOutletDemo(); break
 	case 'polygon':         void runPolygonDemo(); break
-	case 'container-query-placement': void runContainerQueryPlacementDemo(); break
-	case 'selection-frame': void runSelectionFrameDemo(); break
-	case 'selection-frame-grid': void runSelectionFrameGridDemo(); break
-	case 'zone-editor':     void runZoneEditorDemo(); break
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	case 'ed2-builder':     void runEd2BuilderDemo(); break
 	case 'space-bubbles':   void runSpaceBubblesDemo(); break

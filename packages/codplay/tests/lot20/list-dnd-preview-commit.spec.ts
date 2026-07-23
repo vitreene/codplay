@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { RuntimeComponentOrchestrator } from '../../src/runtime/components'
 import type { AnimationResolvedAction } from '../../src/animation/types'
 import type { RuntimeEmitEvent, RuntimePersos } from '../../src/runtime/types'
-import { DEFAULT_GHOST_CLASS_NAME } from '../../src/runtime/modules/list-dnd'
+import { DEFAULT_GHOST_CLASS_NAME, resolveListDndCommitTarget } from '../../src/runtime/modules/list-dnd'
 
 const originalGetBoundingClientRect = globalThis.HTMLElement?.prototype.getBoundingClientRect
 
@@ -56,13 +56,13 @@ function createTwoListFixture(): RuntimePersos {
         id: 'item-1',
         type: 'tag',
         initial: { id: 'item-1', content: 'Item 1', move: { parentId: 'list-a' } },
-        actions: { 'item:dropped': { listDnd: true } }
+        actions: { 'item:dropped': {} }
       },
       'item-2': {
         id: 'item-2',
         type: 'tag',
         initial: { id: 'item-2', content: 'Item 2', move: { parentId: 'list-a' } },
-        actions: { 'item:dropped': { listDnd: true } }
+        actions: { 'item:dropped': {} }
       }
     }
   }
@@ -103,22 +103,29 @@ function dispatchPreview(orchestrator: RuntimeComponentOrchestrator, input: {
   })
 }
 
-/** Routes one `item:dropped`-style resolved action (`listDnd` marker + fused captureState fields) through the real hooks pipeline. */
+/**
+ * Routes one `item:dropped`-style resolved action through the real hooks
+ * pipeline — a plain `move` action, exactly what `capture-runtime.ts`'s
+ * `onEnd` now produces (`resolveListDndCommitTarget` reads the same
+ * `lastTargetByPersoId`/`originByPersoId` cache the live preview already
+ * populated, never a fresh hit-test from `clientX`/`clientY`).
+ */
 function routeCommit(orchestrator: RuntimeComponentOrchestrator, input: {
   eventSeq: number
   draggedPersoId: string
-  clientX: number
-  clientY: number
-  dropIn: string[]
-}): void {
+}): ReturnType<RuntimeComponentOrchestrator['routeUpdates']> {
+  const target = resolveListDndCommitTarget(input.draggedPersoId)
+  if (target === null) {
+    throw new Error(`no list-dnd commit target tracked for ${input.draggedPersoId}`)
+  }
   const resolvedAction: AnimationResolvedAction = {
     eventId: `evt-${input.eventSeq}`,
     eventName: 'item:dropped',
     listenerId: input.draggedPersoId,
     actionKey: 'item:dropped',
-    action: { listDnd: true, dropIn: input.dropIn, clientX: input.clientX, clientY: input.clientY }
+    action: { move: { parentId: target.parentId, mode: target.mode, flipMode: 'overlay-world' } }
   }
-  orchestrator.routeUpdates([{ resolvedAction, eventSeq: input.eventSeq }])
+  return orchestrator.routeUpdates([{ resolvedAction, eventSeq: input.eventSeq }])
 }
 
 afterEach(() => {
@@ -166,39 +173,39 @@ describe('Lot 20 - list-dnd module: preview/commit through the real RuntimeModul
     expect(ghost).not.toBeNull()
   })
 
-  it('commit reattaches the dragged item into the resolved list at the resolved index, and emits list-dnd:dropped', () => {
+  it('commit reattaches the dragged item into the resolved list at the resolved index via a plain move action, and animates it', () => {
     installGeometryStub()
-    const { orchestrator, emittedEvents } = createOrchestrator()
+    const { orchestrator } = createOrchestrator()
     const registry = orchestrator.getRuntimeRegistrySnapshot()
 
     dispatchPreview(orchestrator, { clientX: 250, clientY: 10, draggedPersoId: 'item-1', candidateListIds: ['list-a', 'list-b'] })
-    routeCommit(orchestrator, { eventSeq: 1, draggedPersoId: 'item-1', clientX: 250, clientY: 10, dropIn: ['list-a', 'list-b'] })
+    const result = routeCommit(orchestrator, { eventSeq: 1, draggedPersoId: 'item-1' })
 
     expect(registry.getParentListId('item-1')).toBe('list-b')
     expect(registry.getListById('list-b')?.getChildrenSnapshot()).toEqual(['item-1'])
     expect(registry.getListById('list-a')?.getChildrenSnapshot()).toEqual(['item-2'])
 
-    expect(emittedEvents).toContainEqual(
-      expect.objectContaining({ name: 'list-dnd:dropped', data: { persoId: 'item-1', listId: 'list-b', index: 0 } })
-    )
+    // moveModule/list-flip did the actual attach + FLIP — no list-dnd-specific event exists anymore.
+    expect(result.directTransitions.length).toBeGreaterThan(0)
 
-    // The ghost is removed unconditionally at commit.
+    // The ghost is removed, and the floating escape style cleared, by this module's own `beforeUpdate` cleanup.
     expect(document.body.querySelector(`.${DEFAULT_GHOST_CLASS_NAME}`)).toBeNull()
+    const itemNode = document.getElementById('item-1')
+    expect(itemNode?.style.position).toBe('')
   })
 
-  it('commit snaps the item back to its origin, emits nothing, when the drop point lands outside every candidate list', () => {
+  it('commit snaps the item back to its origin when the drop point lands outside every candidate list', () => {
     installGeometryStub()
-    const { orchestrator, emittedEvents } = createOrchestrator()
+    const { orchestrator } = createOrchestrator()
     const registry = orchestrator.getRuntimeRegistrySnapshot()
 
     dispatchPreview(orchestrator, { clientX: 500, clientY: 500, draggedPersoId: 'item-1', candidateListIds: ['list-a', 'list-b'] })
     expect(registry.getParentListId('item-1')).toBeNull()
 
-    routeCommit(orchestrator, { eventSeq: 1, draggedPersoId: 'item-1', clientX: 500, clientY: 500, dropIn: ['list-a', 'list-b'] })
+    routeCommit(orchestrator, { eventSeq: 1, draggedPersoId: 'item-1' })
 
     // Snapped back to list-a (its origin), not left detached.
     expect(registry.getParentListId('item-1')).toBe('list-a')
     expect(registry.getListById('list-a')?.getChildrenSnapshot()).toEqual(['item-1', 'item-2'])
-    expect(emittedEvents.some((event) => event.name === 'list-dnd:dropped')).toBe(false)
   })
 })

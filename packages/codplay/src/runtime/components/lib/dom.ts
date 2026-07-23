@@ -477,7 +477,8 @@ export function bindComponentEmitDeclarations(input: {
               getSceneState: input.createElementOptions?.getSceneState,
               getCurrentTimelineMs: input.createElementOptions?.getCurrentTimelineMs,
               releaseCaptureUpdates: input.createElementOptions?.releaseCaptureUpdates,
-              applyStateUpdate: input.createElementOptions?.applyStateUpdate
+              applyStateUpdate: input.createElementOptions?.applyStateUpdate,
+              resolveDndTarget: input.createElementOptions?.resolveDndTarget
             })
             cleanups?.add(cleanup)
           }

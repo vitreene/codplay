@@ -1320,6 +1320,26 @@ export class Player implements PlayerApi {
         }
       }
     }
+    // `seeking` covers the whole internal replay window (`PlayerFacade.seek`
+    // holds this status across `replayDueTimelineEventsForSeek`), regardless
+    // of `source`: a materialized action's own `RuntimeModule` hook (e.g.
+    // `list-dnd`'s `afterUpdate`) or a capture's `endEmit`/`endCapture` can
+    // re-emit a *new* event as a side effect of being replayed for
+    // reconstruction — routing that through `listen`/straps here would
+    // re-trigger reactive logic the seek is meant never to re-run
+    // (`v1-seek-spec.md`: "pendant seek, toute logique de listen / strap /
+    // emission reactive est hors champ de la relecture"), same invariant
+    // `moveModule`/`list-flip` already respect for their own animations via
+    // `isSeekReplay`.
+    if (currentStatus === PLAYER_STATUS.seeking) {
+      return {
+        ok: false,
+        error: {
+          code: 'PLAYER_SEEK_REPLAY_IN_PROGRESS',
+          message: 'scene events are not routed to listen/straps while a seek replay is in progress'
+        }
+      }
+    }
 
     this.notifyLoopSchedulers(event.name)
 

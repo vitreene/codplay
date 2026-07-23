@@ -9,18 +9,21 @@ type S6DndState = {
 };
 
 const LIST_IDS = ['list-a', 'list-b'] as const;
+const ITEM_IDS = ['item-1', 'item-2', 'item-3'] as const;
 
 // ─── straps ───────────────────────────────────────────────────────────────
 
 export const s6Straps: StrapCollection = {
-	// Déclenché par le follow-up event du module (`list-dnd:dropped`), jamais
-	// par `endEmit` lui-même — voir docs/plans/2026-07-22-dnd-list-positioned-drop-plan.md,
-	// "Guard et state" : un Strap sur l'event qui porte l'action `listDnd`
-	// tournerait avant que le module ait résolu `commit()`.
+	// Déclenché directement par l'event `endEmit` de la capture
+	// (`item:dropped:${id}`), écouté via `story.listen` — plus de module
+	// intermédiaire : `move` (avec `parentId`/`mode` déjà résolus par
+	// `list-dnd`, matérialisé dans `captureState` avant `endEmit`) est une
+	// action perso ordinaire, prise en charge entièrement par
+	// `moveModule`/`list-flip`.
 	'update-list-counts': ({ state, event }) => {
-		const data = event.data as { persoId: string; listId: string };
+		const data = event.data as { persoId: string; move: { parentId: string } };
 		const dnd = state as S6DndState;
-		const itemListById = { ...dnd.itemListById, [data.persoId]: data.listId };
+		const itemListById = { ...dnd.itemListById, [data.persoId]: data.move.parentId };
 
 		const countA = Object.values(itemListById).filter((listId) => listId === 'list-a').length;
 		const countB = Object.values(itemListById).filter((listId) => listId === 'list-b').length;
@@ -85,10 +88,11 @@ function makeItemPerso(id: string, label: string, background: string): Record<st
 			},
 		},
 		actions: {
-			// Marqueur -> `match.actionKeys: ['listDnd']`, résolu par le module
-			// `list-dnd` (attachement/repositionnement réel dans la liste cible,
-			// à l'index résolu par le hit-testing pendant le drag).
-			[`item:dropped:${id}`]: { listDnd: true },
+			// Vide à dessein : juste présent pour activer la fusion action
+			// statique + payload d'event (`mergeActionWithEventPayload`) — `move`
+			// vient entièrement de `captureState` (résolu par `list-dnd` pendant
+			// le drag, injecté avant `endEmit`), jamais déclaré ici en dur.
+			[`item:dropped:${id}`]: {},
 		},
 	};
 }
@@ -109,7 +113,10 @@ export function createS6DndListScene(): SceneDoc {
 				} satisfies S6DndState,
 				initial: { move: '@root' },
 				straps: s6Straps,
-				listen: [{ on: 'list-dnd:dropped', straps: ['update-list-counts'] }],
+				// Un event par item (`item:dropped:${id}`, jamais partagé — voir
+				// `makeItemPerso`), donc une règle par item : `story.listen` route
+				// par nom d'event, indépendamment de toute action perso.
+				listen: ITEM_IDS.map((id) => ({ on: `item:dropped:${id}`, straps: ['update-list-counts'] })),
 				eventimes: [{ name: 'sequence:end', startAt: 60000 }],
 				persos: [
 					// ── conteneur principal (grille 2×2) ────────────────────────────

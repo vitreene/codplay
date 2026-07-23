@@ -16,6 +16,7 @@ import type { CreateElementOptions } from "../runtime/create-element";
 import type { CaptureTickResult } from "../runtime/capture-types";
 import type { MoveCommand, RuntimeEmitEvent, RuntimePersos } from "../runtime/types";
 import { normalizeMoveCommand } from "../runtime/modules/move";
+import { resolveListDndCommitTarget } from "../runtime/modules/list-dnd";
 import { RUNTIME_EVENT_SOURCE } from "../core/events/constants";
 import { RUNTIME_TRACE_STATUS } from "../runtime/trace-constants";
 import { TrackManager } from "../track-manager/create-track-manager";
@@ -244,6 +245,17 @@ export class PlayerFacade implements PlayerApi {
         "init must be called before persistTrackEvent",
         "player:persist-track-event",
       );
+    }
+
+    if (this.status === PLAYER_STATUS.seeking) {
+      // `seeking` spans the whole internal replay window (set across
+      // `replayDueTimelineEventsForSeek`). A materialized action re-applied
+      // during that replay can re-emit a persist-only event as a side
+      // effect (e.g. `list-dnd`'s `afterUpdate`, or a capture's own
+      // `endCapture` events) — persisting it again here would append a
+      // duplicate track entry every time a later seek crosses this same
+      // point. A silent no-op, same shape as the lifecycle-event skip below.
+      return { ok: true };
     }
 
     const timelineEvent = this.createTimelineEvent(event);
@@ -505,7 +517,8 @@ export class PlayerFacade implements PlayerApi {
             ? this.resolveSceneStateTarget()
             : this.resolveStoryStateTarget(storyId);
           Object.assign(target, update);
-        }
+        },
+        resolveDndTarget: (persoId) => resolveListDndCommitTarget(persoId)
       },
       getCurrentTimelineMs: () => this.resolveCurrentTimelineMs(),
       getStoryState: (storyId) => this.resolveStoryStateTarget(storyId),

@@ -39,14 +39,14 @@ export type ListDndModule = {
     candidateListIds: readonly string[]
   }) => ListDndDropTarget | null
   /**
-   * Live preview during a drag: resolves the drop target, then repositions
-   * every *neighbor* affected by the dragged item landing there (via
-   * `ListComponent.repositionChild`, per `v1-list-spec.md`'s container
-   * operations) — the dragged item itself is never touched, it keeps
-   * following the pointer freely. Safe to call every frame: repositioning
-   * a neighbor already at its resolved position is a no-op for
-   * `ListComponent`. Never mutates anything beyond the live neighbor
-   * order — the real (post-drop) order changes only via `commit`.
+   * Live preview during a drag: resolves the drop target, then moves a raw
+   * DOM ghost sibling to occupy the resolved slot (never a real perso, never
+   * tracked by `ListComponent`) — the dragged item itself is never touched,
+   * it keeps following the pointer freely, and the list's real children are
+   * never reordered during preview. Safe to call every frame: an unchanged
+   * resolved target is a no-op. The real (post-drop) order only changes once
+   * the drop's `move` action is applied by `moveModule`/`list-flip` — see
+   * `getCommitTarget`.
    */
   previewAt: (input: {
     clientX: number
@@ -56,16 +56,25 @@ export type ListDndModule = {
     ghost?: ListDndGhostConfig
   }) => ListDndDropTarget | null
   /**
-   * Resolves the drop target and applies the real, final reposition of the
-   * dragged item itself (via `ListComponent.attachChild`/`repositionChild`,
-   * same container operations as `previewAt` uses for neighbors) — called
-   * once, at the end of a drag. Returns `null` (and touches nothing) when
-   * the point lands over none of the candidate lists.
+   * Resolves what a drop for `draggedPersoId` should commit to, right now —
+   * the last live-resolved target (`previewAt`'s own cache, matching
+   * exactly what the ghost last visually showed — never recomputed fresh
+   * from a hit-test at this point, which could disagree with what the user
+   * saw and resolve a different slot), falling back to the drag's recorded
+   * origin when the pointer never landed on any candidate list this drag.
+   * Read-only, no mutation. `null` only when no drag is currently tracked
+   * for `draggedPersoId` at all (called outside any active drag).
    */
-  commit: (input: {
-    clientX: number
-    clientY: number
-    draggedPersoId: string
-    candidateListIds: readonly string[]
-  }) => ListDndDropTarget | null
+  getCommitTarget: (draggedPersoId: string) => { parentId: string; mode: number } | null
+  /**
+   * Finalizes one drag once its resulting `move` action has already been
+   * applied by `moveModule`/`list-flip` (the real attach/detach + FLIP —
+   * this module never does that itself anymore) — clears the dragged
+   * node's floating styles (`previewAt`'s `position: fixed` escape), removes
+   * the ghost, and forgets every per-drag map entry for `draggedPersoId`.
+   * Returns `false` (and touches nothing) when no drag was tracked for
+   * `draggedPersoId` — signals to the caller that this `move` action is
+   * unrelated to this module and should be left alone.
+   */
+  finalizeDrop: (draggedPersoId: string) => boolean
 }

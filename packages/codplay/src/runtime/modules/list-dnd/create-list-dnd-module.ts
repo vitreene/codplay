@@ -1,5 +1,6 @@
 import { isDomElement } from '../../components/lib/dom-component-adapter'
-import { captureCombinedMatrixForNode, worldDeltaToLocalDelta } from '../list-flip/engine/dom-matrix'
+import { captureCombinedMatrixForNode, readElementTransformValue, worldDeltaToLocalDelta } from '../list-flip/engine/dom-matrix'
+import { parseCssMatrix } from '../list-flip/engine/matrix-2d'
 import type { Matrix2D } from '../list-flip/engine/types'
 import type {
   RuntimeListComponent,
@@ -13,6 +14,38 @@ import type { ListDndDropTarget, ListDndGhostConfig, ListDndModule, ListDndRegis
 
 type LocalPoint = { x: number; y: number }
 type LocalBox = { left: number; top: number; width: number; height: number }
+
+/**
+ * Reads `node`'s true layout rect, mathematically subtracting out whatever
+ * FLIP transform this module currently has running on it — a sibling still
+ * mid-transition (the common case: `pointermove` ticks fire faster than the
+ * 220ms transition duration) has a `transform` actively interpolating.
+ * Checking `node.style.transform` to detect this (an earlier version of
+ * this function did) does not work: `playFlipTransition` sets `transform`
+ * to its *final* value (`''`) as the very last step of its own synchronous
+ * block, before the transition has actually finished playing — so the
+ * inline style already reads empty while the rendered/computed transform is
+ * still interpolating away from its inverse. Reading `getComputedStyle`
+ * instead gets the real, currently-rendered matrix regardless of what the
+ * inline style says, and subtracting it out (this module only ever
+ * produces translate+scale from `transform-origin: top left`, never
+ * rotation, so the correction is a simple offset/divide, no rotation-aware
+ * math needed) gives the node's true layout rect without ever touching its
+ * `transition`/`transform` — the running animation is never interrupted.
+ */
+function measureSettledRect(node: HTMLElement): DOMRect {
+  const rect = node.getBoundingClientRect()
+  const matrix = parseCssMatrix(readElementTransformValue(node))
+  if (matrix.a === 1 && matrix.b === 0 && matrix.c === 0 && matrix.d === 1 && matrix.e === 0 && matrix.f === 0) {
+    return rect
+  }
+  return new DOMRect(
+    rect.left - matrix.e,
+    rect.top - matrix.f,
+    matrix.a !== 0 ? rect.width / matrix.a : rect.width,
+    matrix.d !== 0 ? rect.height / matrix.d : rect.height
+  )
+}
 
 let nextSyntheticEventSeq = 0
 
@@ -60,16 +93,40 @@ function toLocalBox(matrix: Matrix2D, origin: { left: number; top: number }, rec
 }
 
 /**
+ * Fraction of a child's own height added as a dead zone around its midpoint
+ * when a `currentIndex` anchor is known — without it, a pointer sitting
+ * almost exactly on a midpoint (typically right where an item was just
+ * grabbed, once its neighbors close the vacated slot) flips the resolved
+ * index back and forth on the smallest real-world jitter, each flip now
+ * playing a visible FLIP transition on the ghost's neighbors.
+ */
+const HYSTERESIS_RATIO = 0.3
+
+/**
  * Resolves the insertion index within `childBoxes` (already in the list's
  * local space) a local point lands at — before the first child whose
- * vertical midpoint is below the point, or at the end when the point is
- * past every child. The dragged item itself is never part of `childBoxes`
- * (filtered by the caller).
+ * (possibly biased) vertical midpoint is below the point, or at the end
+ * when the point is past every child. The dragged item itself is never
+ * part of `childBoxes` (filtered by the caller).
+ *
+ * `currentIndex`, when given (the index last resolved for this same list),
+ * biases every midpoint away from flipping the result: a child before
+ * `currentIndex` requires the point to go further past it to resolve a
+ * smaller index, and a child at or after `currentIndex` requires the point
+ * to go further past it to resolve a larger one — a dead zone around
+ * whichever boundary the pointer is currently sitting on, not a global
+ * shift of every boundary.
  */
-function resolveIndexFromLocalChildBoxes(localY: number, childBoxes: LocalBox[]): number {
+function resolveIndexFromLocalChildBoxes(localY: number, childBoxes: LocalBox[], currentIndex?: number): number {
   for (let index = 0; index < childBoxes.length; index += 1) {
     const midpointY = childBoxes[index].top + childBoxes[index].height / 2
-    if (localY < midpointY) {
+    const margin = childBoxes[index].height * HYSTERESIS_RATIO
+    const biasedMidpointY = currentIndex === undefined
+      ? midpointY
+      : index < currentIndex
+        ? midpointY - margin
+        : midpointY + margin
+    if (localY < biasedMidpointY) {
       return index
     }
   }
@@ -92,7 +149,7 @@ function playFlipTransition(node: unknown, fromRect: { left: number; top: number
     return
   }
 
-  const toRect = node.getBoundingClientRect()
+  const toRect = measureSettledRect(node)
   const deltaX = fromRect.left - toRect.left
   const deltaY = fromRect.top - toRect.top
   const scaleX = toRect.width === 0 ? 1 : fromRect.width / toRect.width
@@ -127,12 +184,13 @@ function playFlipTransition(node: unknown, fromRect: { left: number; top: number
 }
 
 /**
- * Resolves the perso a module hook's resolved action applies to — same
- * pattern as `replaceModule.resolvePersoId` (`runtime/modules/replace/
- * index.ts:16-23`): a capture always belongs to exactly one perso (the one
- * that owns the `emit.pointerdown` declaring it), so `listenerId` alone is
- * enough — no `targetId` concept for list-dnd (unlike `replace`, there is no
- * cross-perso targeting here).
+ * Resolves the perso a module hook's resolved action applies to via
+ * `listenerId` alone — the fallback half of the same `targetId ?? listenerId`
+ * convention `moveModule.beforeUpdate` uses for every `move` action
+ * (`runtime/modules/move/index.ts`): this module's own `beforeUpdate` now
+ * fires for *every* `move`, not only ones a `list-dnd` drag produced, so it
+ * must resolve the moved perso the identical way to correctly recognize its
+ * own drops (self-targeting, `listenerId`) alongside anything else.
  */
 function resolvePersoId(payload: RuntimeModuleHookPayload): string | null {
   const listenerId = payload.resolvedAction?.listenerId
@@ -151,10 +209,10 @@ class ListDndModuleInstance implements ListDndModule {
   private readonly ghostByPersoId = new Map<string, HTMLElement>()
   /**
    * Remembers where a dragged item came from (list + index), recorded once
-   * at the first `previewAt` detach — the only way `commit` can snap the
-   * item back to its origin when the drop point lands outside every
-   * candidate list, instead of leaving it detached from any list. Cleared
-   * whenever `commit` resolves, by success or by this fallback.
+   * at the first `previewAt` detach — `getCommitTarget`'s fallback, so a
+   * drop point landing outside every candidate list still resolves a valid
+   * `move` (back to origin) instead of leaving the item detached from any
+   * list. Cleared by `finalizeDrop`, once the drop's `move` action has run.
    */
   private readonly originByPersoId = new Map<string, { listId: string; index: number }>()
   /** Cursor-to-node-top-left offset at grab time, per dragged persoId — see `previewAt`'s initial detach. */
@@ -229,12 +287,15 @@ class ListDndModuleInstance implements ListDndModule {
         if (!isDomElement(childNode)) {
           continue
         }
-        childLocalBoxes.push(toLocalBox(listMatrix, origin, childNode.getBoundingClientRect()))
+        childLocalBoxes.push(toLocalBox(listMatrix, origin, measureSettledRect(childNode)))
       }
+
+      const lastTarget = this.lastTargetByPersoId.get(input.draggedPersoId)
+      const currentIndex = lastTarget?.listId === listId ? lastTarget.index : undefined
 
       return {
         listId,
-        index: resolveIndexFromLocalChildBoxes(localDropPoint.y, childLocalBoxes)
+        index: resolveIndexFromLocalChildBoxes(localDropPoint.y, childLocalBoxes, currentIndex)
       }
     }
 
@@ -330,7 +391,7 @@ class ListDndModuleInstance implements ListDndModule {
       }
       const node = this.registries.node.get(childId)
       if (isDomElement(node)) {
-        rects.set(childId, node.getBoundingClientRect())
+        rects.set(childId, measureSettledRect(node))
       }
     }
     return rects
@@ -360,6 +421,19 @@ class ListDndModuleInstance implements ListDndModule {
     // normal flow into a `position: fixed` floating state to remain visible
     // and keep following the pointer while neighbors reflow freely around
     // its now-vacated slot.
+    // Captured on the source list only when this tick performs the detach
+    // below — reused, not immediately played, so the source list's siblings
+    // get exactly one FLIP pair for this tick instead of two. Playing the
+    // "close the vacated slot" transition here and, a few lines below in the
+    // very same synchronous tick, a second "open a slot for the ghost"
+    // transition (the common case: the pointer hasn't left the source list
+    // yet at grab time) reads an intermediate, never-painted state as if it
+    // were real — a spurious close-then-reopen pulse on the very siblings
+    // that shouldn't visibly move at all when the ghost lands back roughly
+    // where the item was.
+    let rectsBeforeDetach: Map<string, DOMRect> | null = null
+    let detachedFromListId: string | null = null
+
     const sourceListId = this.registries.container.getParentId(input.draggedPersoId)
     if (sourceListId !== null) {
       const sourceListComponent = this.registries.container.get(sourceListId)
@@ -371,7 +445,8 @@ class ListDndModuleInstance implements ListDndModule {
 
       const draggedNode = this.registries.node.get(input.draggedPersoId)
       const rect = isDomElement(draggedNode) ? draggedNode.getBoundingClientRect() : null
-      const siblingRectsBeforeDetach = this.captureChildRects(sourceListComponent, input.draggedPersoId)
+      rectsBeforeDetach = this.captureChildRects(sourceListComponent, input.draggedPersoId)
+      detachedFromListId = sourceListId
 
       sourceListComponent?.detachChild({
         childId: input.draggedPersoId,
@@ -380,7 +455,6 @@ class ListDndModuleInstance implements ListDndModule {
       })
       this.registries.container.setParentId(input.draggedPersoId, null)
       this.registries.mounted.set(input.draggedPersoId, false)
-      this.playFlipTransitionsFor(siblingRectsBeforeDetach)
 
       if (isDomElement(draggedNode) && rect !== null) {
         draggedNode.style.position = 'fixed'
@@ -421,146 +495,112 @@ class ListDndModuleInstance implements ListDndModule {
     this.lastClientPositionByPersoId.set(input.draggedPersoId, { clientX: input.clientX, clientY: input.clientY })
 
     const target = this.resolveDropTarget(input)
-    if (target === null) {
-      return null
-    }
 
     const lastTarget = this.lastTargetByPersoId.get(input.draggedPersoId)
-    if (lastTarget !== undefined && lastTarget.listId === target.listId && lastTarget.index === target.index) {
+    if (target !== null && lastTarget !== undefined && lastTarget.listId === target.listId && lastTarget.index === target.index) {
       // Same target resolved again (a real, distinct pointer position that
       // still lands on the same slot): nothing to reposition, nothing to
-      // re-animate. `repositionChild`/`playFlipTransition` would otherwise
+      // re-animate. Re-running the FLIP capture below would otherwise
       // restart on every `pointermove`, tearing a still-running transition
       // mid-flight and reading its interpolating (not settled) position as
       // if it were final.
       return target
     }
-    this.lastTargetByPersoId.set(input.draggedPersoId, target)
 
-    const listComponent = this.registries.container.get(target.listId)
-    if (listComponent === null) {
-      return target
+    // The real children of a list are never reordered during preview — only
+    // the ghost (a raw DOM sibling, untracked by `ListComponent`) occupies
+    // the gap. The final `move` action's own `attachChild({ mode: target.index
+    // })` (applied by `moveModule`, `parentId`/`mode` read from
+    // `getCommitTarget`) places the dragged item correctly against this
+    // same, never-reordered order, since `target.index` was itself resolved
+    // by hit-testing against it. The
+    // "écart"/"resserrement" a neighbor plays is therefore driven entirely by
+    // the ghost's own insertion/removal reflowing the flex layout around
+    // it — captured here as one FLIP pair per affected list, read before and
+    // after the single DOM mutation that moves/removes the ghost.
+    const previousListComponent = lastTarget !== undefined ? this.registries.container.get(lastTarget.listId) : null
+    const isLeavingPreviousList = lastTarget !== undefined && (target === null || target.listId !== lastTarget.listId)
+    const rectsBeforeGhostLeaves = isLeavingPreviousList ? this.captureChildRects(previousListComponent, input.draggedPersoId) : null
+
+    const targetListComponent = target !== null ? this.registries.container.get(target.listId) : null
+    // On the tick that just detached the dragged item, if the ghost lands
+    // back in that very list, `rectsBeforeDetach` (captured before the
+    // detach even ran) is reused as the "before" half instead of capturing
+    // again here — nothing has painted since, so re-capturing would only
+    // read the already-closed state and pair it with the ghost's arrival,
+    // producing the spurious pulse described above.
+    const rectsBeforeGhostArrives = targetListComponent === null
+      ? null
+      : detachedFromListId === target?.listId && rectsBeforeDetach !== null
+        ? rectsBeforeDetach
+        : this.captureChildRects(targetListComponent, input.draggedPersoId)
+
+    // The detach's own close transition only still needs to play on its own
+    // when the ghost does *not* land back in the same list this tick (it
+    // moved to a different list, or off every list entirely) — otherwise
+    // it was folded into `rectsBeforeGhostArrives` above.
+    if (rectsBeforeDetach !== null && detachedFromListId !== target?.listId) {
+      this.playFlipTransitionsFor(rectsBeforeDetach)
     }
 
-    // Reposition every neighbor whose current position is at or past the
-    // resolved insertion index by one slot, opening the place the dragged
-    // item would land at — the dragged item itself is never part of
-    // `getChildrenSnapshot()` here (detached above), so no exclusion/
-    // compensation is needed in this loop.
-    const childIds = listComponent.getChildrenSnapshot()
-    const siblingRectsBeforeReposition = this.captureChildRects(listComponent, input.draggedPersoId)
-    for (let currentIndex = 0; currentIndex < childIds.length; currentIndex += 1) {
-      const desiredIndex = currentIndex >= target.index ? currentIndex + 1 : currentIndex
-      if (desiredIndex === currentIndex) {
-        continue
+    if (target === null || targetListComponent === null) {
+      this.clearGhost(input.draggedPersoId)
+    } else {
+      const ghostEl = this.ensureGhost(input.draggedPersoId, input.ghost)
+      if (ghostEl !== null) {
+        this.positionGhost(ghostEl, target)
       }
-
-      listComponent.repositionChild({
-        childId: childIds[currentIndex],
-        mode: desiredIndex,
-        ...nextSyntheticEventRef()
-      })
-    }
-    this.playFlipTransitionsFor(siblingRectsBeforeReposition)
-
-    const ghostEl = this.ensureGhost(input.draggedPersoId, input.ghost)
-    if (ghostEl !== null) {
-      this.positionGhost(ghostEl, target)
     }
 
-    return target
-  }
+    if (rectsBeforeGhostLeaves !== null) {
+      this.playFlipTransitionsFor(rectsBeforeGhostLeaves)
+    }
+    if (rectsBeforeGhostArrives !== null) {
+      this.playFlipTransitionsFor(rectsBeforeGhostArrives)
+    }
 
-  commit(input: {
-    clientX: number
-    clientY: number
-    draggedPersoId: string
-    candidateListIds: readonly string[]
-  }): ListDndDropTarget | null {
-    this.clearGhost(input.draggedPersoId)
-
-    const target = this.resolveDropTarget(input)
     if (target === null) {
-      this.snapBackToOrigin(input.draggedPersoId)
-      return null
-    }
-
-    const targetListComponent = this.registries.container.get(target.listId)
-    if (targetListComponent === null) {
-      this.originByPersoId.delete(input.draggedPersoId)
-      this.grabOffsetByPersoId.delete(input.draggedPersoId)
       this.lastTargetByPersoId.delete(input.draggedPersoId)
-      this.lastClientPositionByPersoId.delete(input.draggedPersoId)
-      return target
+    } else {
+      this.lastTargetByPersoId.set(input.draggedPersoId, target)
     }
 
-    const sourceListId = this.registries.container.getParentId(input.draggedPersoId)
-    const draggedNode = this.registries.node.get(input.draggedPersoId)
-
-    if (sourceListId !== null) {
-      const sourceListComponent = this.registries.container.get(sourceListId)
-      sourceListComponent?.detachChild({ childId: input.draggedPersoId, mode: undefined, ...nextSyntheticEventRef() })
-    }
-
-    if (draggedNode !== null && draggedNode !== undefined) {
-      const rectBeforeSettle = isDomElement(draggedNode) ? draggedNode.getBoundingClientRect() : null
-      this.clearFloatingStyle(draggedNode)
-      targetListComponent.attachChild({
-        childId: input.draggedPersoId,
-        childNode: draggedNode,
-        mode: target.index,
-        ...nextSyntheticEventRef()
-      })
-      this.registries.container.setParentId(input.draggedPersoId, target.listId)
-      this.registries.mounted.set(input.draggedPersoId, true)
-      if (rectBeforeSettle !== null) {
-        playFlipTransition(draggedNode, rectBeforeSettle)
-      }
-    }
-
-    this.originByPersoId.delete(input.draggedPersoId)
-    this.grabOffsetByPersoId.delete(input.draggedPersoId)
-    this.lastTargetByPersoId.delete(input.draggedPersoId)
     return target
   }
 
-  /**
-   * Reattaches a dragged item to the list/index it was detached from at the
-   * first `previewAt` — the drop point landed outside every candidate list,
-   * so there is no new position to commit to. Without this, the item would
-   * stay detached from every list (structurally, not just visually) once
-   * its `CaptureUpdate` style handles are released at `endOn`. A no-op when
-   * no origin was ever recorded (drag ended without a single `previewAt`
-   * call — e.g. a pointerdown/pointerup with no movement in between).
-   */
-  private snapBackToOrigin(draggedPersoId: string): void {
+  getCommitTarget(draggedPersoId: string): { parentId: string; mode: number } | null {
+    const lastTarget = this.lastTargetByPersoId.get(draggedPersoId)
+    if (lastTarget !== undefined) {
+      return { parentId: lastTarget.listId, mode: lastTarget.index }
+    }
     const origin = this.originByPersoId.get(draggedPersoId)
+    if (origin !== undefined) {
+      return { parentId: origin.listId, mode: origin.index }
+    }
+    return null
+  }
+
+  finalizeDrop(draggedPersoId: string): boolean {
+    const wasTracked =
+      this.originByPersoId.has(draggedPersoId) ||
+      this.lastTargetByPersoId.has(draggedPersoId) ||
+      this.grabOffsetByPersoId.has(draggedPersoId)
+
+    // Clears the floating escape `previewAt` applied at drag start *before*
+    // `list-flip`'s own `afterUpdate` (registered before this module's, see
+    // `runtime-component-orchestrator.ts:131-134`) captures the node's
+    // "last"/settled rect for its own FLIP — reading it while still
+    // `position: fixed` would measure the stale floating position instead
+    // of where the node truly now sits in its new list's flow. Ghost/state
+    // cleanup order doesn't carry the same constraint, done here too for
+    // one single per-drag teardown.
+    this.clearGhost(draggedPersoId)
+    this.clearFloatingStyle(this.registries.node.get(draggedPersoId))
     this.originByPersoId.delete(draggedPersoId)
     this.grabOffsetByPersoId.delete(draggedPersoId)
     this.lastTargetByPersoId.delete(draggedPersoId)
-    if (origin === undefined) {
-      return
-    }
-
-    const listComponent = this.registries.container.get(origin.listId)
-    const draggedNode = this.registries.node.get(draggedPersoId)
-    if (listComponent === null || draggedNode === null || draggedNode === undefined) {
-      return
-    }
-
-    const rectBeforeSettle = isDomElement(draggedNode) ? draggedNode.getBoundingClientRect() : null
-    this.clearFloatingStyle(draggedNode)
-    listComponent.attachChild({
-      childId: draggedPersoId,
-      childNode: draggedNode,
-      mode: origin.index,
-      ...nextSyntheticEventRef()
-    })
-    this.registries.container.setParentId(draggedPersoId, origin.listId)
-    this.registries.mounted.set(draggedPersoId, true)
-    if (rectBeforeSettle !== null) {
-      playFlipTransition(draggedNode, rectBeforeSettle)
-    }
+    this.lastClientPositionByPersoId.delete(draggedPersoId)
+    return wasTracked
   }
 
   /** Clears the inline floating-state properties `previewAt` applies to escape normal flow — a no-op for a non-DOM/non-floated node. */
@@ -584,51 +624,61 @@ export function createListDndModule(registries: ListDndRegistries): ListDndModul
 }
 
 /**
+ * The live `list-dnd` module instance, set once per player lifetime (modules
+ * are installed once, never per-seek — see `project-installmodules-seek-
+ * optimization`), read by `resolveListDndCommitTarget` below. A direct
+ * module-scope reference rather than new generic orchestrator plumbing:
+ * `create-player.ts` already imports specific runtime modules directly
+ * (`../runtime/modules/move`, `../runtime/modules/media-sync`) for this same
+ * kind of narrow, deliberate integration — not a pattern unique to this one.
+ */
+let activeListDndModule: ListDndModule | null = null
+
+/**
+ * Resolves what the drag currently tracked for `draggedPersoId` should
+ * commit to, right now — the channel `capture-runtime.ts`'s `onEnd` calls to
+ * populate `captureState.move` before its `endEmit` materializes, so the
+ * resulting action is a plain `move` (`parentId`/`mode`), handled entirely
+ * by `moveModule`/`list-flip` — this module never attaches/detaches/animates
+ * the drop itself anymore. `null` when no `list-dnd` module is installed, or
+ * no drag is currently tracked for `draggedPersoId`.
+ */
+export function resolveListDndCommitTarget(draggedPersoId: string): { parentId: string; mode: number } | null {
+  return activeListDndModule?.getCommitTarget(draggedPersoId) ?? null
+}
+
+/**
  * Real `RuntimeModule` entry point, registered via `registerModule` next to
- * `moveModule`/`listModule`/`replaceModule`. Two independent channels (see
- * `docs/plans/2026-07-22-dnd-list-positioned-drop-plan.md`, "Faits vérifiés"):
- * `events['list-dnd:preview']` (preview, transitory, dispatched directly by
- * `applyCaptureTickActions`, never materialized) and `runtime.hooks.afterUpdate`
- * (commit, a real perso action resolved through the normal, seek-safe
- * pipeline — `match.actionKeys: ['listDnd']`).
+ * `moveModule`/`listModule`/`replaceModule` (registered *after* `moveModule`
+ * — `runtime-component-orchestrator.ts:131-134` — so this module's
+ * `beforeUpdate` always runs after `moveModule`'s own, see `finalizeDrop`).
+ * Two independent channels: `events['list-dnd:preview']` (preview,
+ * transitory, dispatched directly by `applyCaptureTickActions`, never
+ * materialized) and `runtime.hooks.beforeUpdate` (drop teardown for a real,
+ * plain `move` action — resolved and applied entirely by `moveModule`/
+ * `list-flip`, this module only cleans up its own live-drag traces
+ * afterward — `match.actionKeys: ['move']`).
  */
 export const listDndModule: RuntimeModule = {
   install(host: RuntimeModuleHost): RuntimeModuleBinding {
     const module = createListDndModule(host.registries)
+    activeListDndModule = module
 
-    function afterUpdate(payload: RuntimeModuleHookPayload): void {
+    function beforeUpdate(payload: RuntimeModuleHookPayload): void {
       const action = payload.resolvedAction?.action as Record<string, unknown> | undefined
-      if (action === undefined || action.listDnd === undefined) {
+      if (action === undefined) {
         return
       }
 
-      const persoId = resolvePersoId(payload)
+      const persoId = (action.targetId as string | undefined) ?? resolvePersoId(payload)
       if (persoId === null) {
         return
       }
 
-      const clientX = action.clientX
-      const clientY = action.clientY
-      const candidateListIds = action.dropIn
-      if (typeof clientX !== 'number' || typeof clientY !== 'number' || !Array.isArray(candidateListIds)) {
-        return
-      }
-
-      const target = module.commit({ clientX, clientY, draggedPersoId: persoId, candidateListIds })
-      if (target === null) {
-        return
-      }
-
-      host.emit({
-        name: 'list-dnd:dropped',
-        payload: { persoId, listId: target.listId, index: target.index },
-        insertMode: 'persist-only',
-        ms: host.timeline.currentMs,
-        // Without this, `Player.routeSceneEvent` sees `scopeStoryId ===
-        // undefined` and never checks the story's own `listen` rules — a
-        // story-scoped strap on this event would silently never run.
-        scopeStoryId: host.helpers.getStoryId(persoId) ?? undefined
-      })
+      // A no-op (`false` return) for any `move` unrelated to a `list-dnd`
+      // drag — this hook fires for every `move` action in the scene, not
+      // only the ones this module produced.
+      module.finalizeDrop(persoId)
     }
 
     function onPreview(payload: RuntimeModuleEventPayload): void {
@@ -658,7 +708,7 @@ export const listDndModule: RuntimeModule = {
     }
 
     return {
-      runtime: { hooks: { afterUpdate }, match: { actionKeys: ['listDnd'] } },
+      runtime: { hooks: { beforeUpdate }, match: { actionKeys: ['move'] } },
       events: { 'list-dnd:preview': onPreview }
     }
   }

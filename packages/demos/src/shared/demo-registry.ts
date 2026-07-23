@@ -13,20 +13,14 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "preload-media", label: "Preload Media", href: "?demo=preload-media" },
   { id: "replace-carousel", label: "Replace Carousel", href: "?demo=replace-carousel" },
   { id: "avatar-poc-1", label: "Avatar 3D", href: "?demo=avatar-poc-1" },
-  { id: "avatar-mood-transition", label: "Avatar Mood", href: "?demo=avatar-mood-transition" },
   { id: "rive-coach", label: "Rive lip-sync", href: "?demo=rive-coach" },
   { id: "threejs-anime-grid", label: "animation 3D", href: "?demo=threejs-anime-grid" },
   { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "?demo=mashup-rive-three-quiz" },
   { id: "chrono", label: "Chronomètre", href: "?demo=chrono" },
-  { id: "move-off", label: "Détachement DOM", href: "?demo=move-off" },
   { id: "overlay-world-outlet", label: "Overlay-world outlet", href: "?demo=overlay-world-outlet" },
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
-  { id: "container-query-placement", label: "Placement cqw/cqh", href: "?demo=container-query-placement" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
   { id: "space-bubbles", label: "Space Bubbles", href: "?demo=space-bubbles" },
-  { id: "selection-frame", label: "Selection Frame", href: "?demo=selection-frame" },
-  { id: "selection-frame-grid", label: "Selection Frame grid", href: "?demo=selection-frame-grid" },
-  { id: "zone-editor", label: "Éditeur de zones", href: "?demo=zone-editor" },
 ];
 
 /**

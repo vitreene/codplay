@@ -67,6 +67,17 @@ export type CaptureRuntimeInput = {
    * `PlayerFacade` (which resolved them frame by frame) can release them.
    */
   releaseCaptureUpdates?: (persoId: string) => void
+  /**
+   * Resolves what a `dnd` capture (`captureState.dropIn` present) should
+   * commit to, right now — called once at `onEnd`, never per tick, so it
+   * reads whatever the live `list-dnd` preview already resolved (matching
+   * exactly what the ghost last visually showed), rather than recomputing a
+   * hit-test here. `capture-runtime.ts` never touches registries/nodes
+   * itself (`v1-capture-spec.md`'s boundary) — this is the one narrow,
+   * read-only value it's allowed to ask for, same shape as `getStoryState`.
+   * `null` when this isn't a dnd capture, or no drag is tracked.
+   */
+  resolveDndTarget?: (persoId: string) => { parentId: string; mode: number } | null
 }
 
 const DEFAULT_TRACK_ON = ['pointermove']
@@ -166,7 +177,8 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
     keyCode,
     triggerKeyboardEvent,
     releaseCaptureUpdates,
-    applyStateUpdate
+    applyStateUpdate,
+    resolveDndTarget
   } = input
   const isKeyboardCapture = keyCode !== undefined
   const trackOn = capture.trackOn ?? (isKeyboardCapture ? [] : DEFAULT_TRACK_ON)
@@ -342,6 +354,25 @@ export function startCapture(input: CaptureRuntimeInput): () => void {
 
     ended = true
     cleanup()
+
+    // Resolves the plain `move` a dnd capture's drop should materialize into
+    // — once, here, never per tick (see `resolveDndTarget`'s own doc). Reads
+    // the live `list-dnd` preview's own cache, so this always matches
+    // whatever the ghost last visually showed. `persoId` travels alongside
+    // `move` so a Strap listening directly to this capture's `endEmit` event
+    // (no dedicated module event needed for that) can identify which item
+    // moved without re-deriving it from the event name.
+    const dropIn = (captureState as { dropIn?: unknown }).dropIn
+    if (Array.isArray(dropIn) && resolveDndTarget !== undefined) {
+      const target = resolveDndTarget(persoId)
+      if (target !== null) {
+        captureState = {
+          ...captureState,
+          persoId,
+          move: { parentId: target.parentId, mode: target.mode, flipMode: 'overlay-world' }
+        }
+      }
+    }
 
     const endResult = capture.endCapture?.({
       samples,
