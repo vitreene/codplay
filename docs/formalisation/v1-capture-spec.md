@@ -183,6 +183,11 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
 
 - chaque occurrence d'un event declare dans `trackOn` produit un
   `CaptureSample` brut, non transforme
+- l'ecoute des events `trackOn`/`endOn` est installee au niveau de la
+  fenetre (`window`), jamais bornee au node du perso qui declare la
+  capture : un pointeur qui quitte visuellement les bornes de ce node
+  pendant le tracking continue de produire des `CaptureSample`, sans
+  interruption ni event de sortie particulier
 - la forme exacte d'un `CaptureSample` depend de la source native declaree
   dans `trackOn` ; `PointerCaptureSample`/`KeyboardCaptureSample` en sont les
   formes concretes documentees (voir Contrat canonique) — un auteur les
@@ -235,6 +240,12 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
   optionnel ; une capture peut declarer l'un, l'autre, les deux, ou aucun
 - `endEmit` est un `StoryEvent` normal : il suit le contrat `v1-event-spec.md`
   sans particularite liee a la capture
+- si `endEmit.data` est absent de la declaration, sa valeur retombe sur la
+  derniere valeur de `captureState` au moment de la fermeture : c'est la
+  maniere normale d'exposer a un `Strap` (via `listen` sur le nom
+  d'`endEmit`) le resultat accumule par `trackCommand`, sans avoir a
+  declarer `endCapture` du tout ; un `endEmit.data` fourni explicitement par
+  l'auteur n'est jamais ecrase par ce fallback
 - `endCapture` recoit le tableau complet des `CaptureSample` accumules
   (`samples`), la derniere valeur de `captureState`, le `state` courant en
   lecture seule, et `meta`
@@ -322,6 +333,31 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
 - `trackCommand` n'a pas acces a `context.api` ni a aucune primitive
   d'acces direct aux nodes : la seule sortie possible pendant le tracking est
   la `CaptureAction`, resolue exclusivement par le player
+- seules les cles `style` et `attr` de `CaptureAction.data` sont appliquees
+  en direct pendant le tracking, chacune restreinte a des valeurs `number`/
+  `string` par propriete ; toute autre cle presente dans `data` n'a aucun
+  effet visuel pendant le tracking (elle ne devient utile qu'au commit final,
+  voir plus bas)
+- `style` et `attr` s'appliquent chacun directement au node runtime, jamais a
+  travers `component.update()` : un composant ne peut jamais intercepter ni
+  reinterpreter une valeur de tracking, quelle que soit sa cle (`style` ou
+  `attr`) ; seul le commit final (`endEmit`/`endCapture` -> `Strap` ->
+  `perso.actions[eventName]`) passe par la resolution d'action normale d'un
+  composant
+- `style` transite par le canal `CaptureUpdate` dedie (implementation de
+  reference : anime.js `createAnimatable`) : jamais `enqueueCommit`/
+  `director`/une transition normale, jamais de nouvelle transition creee par
+  frame quel que soit le volume de tracking (voir
+  `2026-07-21-capture-animatable-channel-plan.md`) — adapte a des valeurs
+  simples interpolables (transforms, couleurs)
+- `attr` n'emprunte PAS ce canal : un attribut comme un `d` de path SVG n'a
+  pas de forme interpolable generique (confirme empiriquement — l'animateur
+  generique de reference l'ecrit comme une propriete CSS `d` invalide plutot
+  que l'attribut reel), et `trackCommand` recalcule de toute facon la valeur
+  complete a chaque tick, sans besoin d'interpolation entre deux valeurs.
+  `attr` est donc un `setAttribute` direct et immediat sur le node, distinct
+  du canal `CaptureUpdate` — une divergence de mecanisme assumee, pas une
+  seconde cle du meme canal
 
 6. Convention de nommage (non normative)
 
@@ -363,6 +399,31 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
   ou `listen[].transform`) ; aucune injection separee au niveau
   `PlayerInitInput` n'est necessaire pour la capture
 
+10. Extension narrow a la fermeture
+
+- une capture peut avoir besoin, une seule fois, d'une valeur que seule la
+  couche possedant l'acces au node du perso peut produire (ex: une cible de
+  drop resolue par hit-test, un offset ecran mesure par
+  `getBoundingClientRect`) — une donnee que ni `trackCommand` ni
+  `endCapture` ne peuvent calculer eux-memes, faute d'acces node (regle
+  5/7)
+- cette valeur est fournie par un canal narrow, distinct de
+  `trackCommand`/`endCapture`, appele une seule fois a la fermeture
+  (`onEnd`), avant que `endCapture`/`endEmit` lisent `captureState` —
+  jamais par tick, jamais expose a l'auteur de la capture comme un acces
+  direct au node
+- la valeur resolue est fusionnee dans `captureState` a cet instant precis,
+  avant l'appel a `endCapture` et avant la resolution du fallback
+  `endEmit.data ?? captureState` (regle 3) — le strap declenche en fin de
+  capture recoit ainsi toujours une donnee deja complete
+- exemple existant : la resolution de la cible de drop d'une capture dnd
+  (`captureState.dropIn`), qui fusionne `move` (`parentId`/`mode`/
+  `flipMode`) dans `captureState` a `onEnd`, avant toute lecture par
+  `endCapture`/`endEmit`
+- ce canal est reserve aux valeurs qu'aucun autre mecanisme de la capture ne
+  peut produire ; il ne se substitue jamais a `trackCommand`/`endCapture`
+  pour un calcul que l'auteur peut faire lui-meme
+
 ## Invariants Capture V1
 
 - le tracking d'une capture n'est jamais materialise en track ni rejoue au
@@ -397,6 +458,15 @@ type CaptureEndFn = (input: CaptureEndInput) => CaptureEndOutput | void
   direct, planifier une occurrence, ou acceder directement aux nodes runtime
 - une `CaptureAction` n'est jamais un `event` et n'est jamais materialisee ;
   seul le player la resout vers le renderer
+- l'ecoute `trackOn`/`endOn` n'est jamais bornee au node du perso qui
+  declare la capture ; elle continue de produire des `CaptureSample` meme
+  si le pointeur quitte visuellement ses bornes
+- `endEmit.data` absent retombe sur `captureState` a la fermeture : le seul
+  moyen d'exposer le resultat de `trackCommand` a un `Strap` sans declarer
+  `endCapture`
+- une valeur necessitant l'acces au node (offset ecran, hit-test) ne peut
+  etre produite que par un canal narrow resolu une seule fois a la
+  fermeture, jamais par `trackCommand`/`endCapture` eux-memes
 
 ## Exemple applique - deplacement clavier borne
 

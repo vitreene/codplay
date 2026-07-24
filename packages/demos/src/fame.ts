@@ -4,6 +4,7 @@ import { runQuizSeriesFameDemo } from './codplay/quiz-series-fame-demo'
 import { runChronoDemo } from './codplay/chrono-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
 import { runMashupRiveThreeQuizDemo } from './codplay/mashup-rive-three-quiz-demo'
+import { runStrokePathDemo } from './codplay/stroke-path-demo'
 import { FAME_REGISTRY } from './shared/demo-registry'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
@@ -14,6 +15,7 @@ switch (demoName) {
 	case 'chrono':                 void runChronoDemo(FAME_REGISTRY); break
 	case 'polygon':                void runPolygonDemo(FAME_REGISTRY); break
 	case 'mashup-rive-three-quiz': void runMashupRiveThreeQuizDemo(FAME_REGISTRY); break
+	case 'stroke-path':            void runStrokePathDemo(FAME_REGISTRY); break
 	case 'quiz':
 	default:                       void runQuizReferenceDemo(FAME_REGISTRY)
 }

@@ -21,6 +21,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
   { id: "quiz-hunt", label: "Quiz Hunt", href: "?demo=quiz-hunt" },
   { id: "space-bubbles", label: "Space Bubbles", href: "?demo=space-bubbles" },
+  { id: "stroke-path", label: "Stroke Path", href: "?demo=stroke-path" },
 ];
 
 /**
@@ -34,6 +35,7 @@ export const FAME_REGISTRY: DemoEntry[] = [
   { id: "chrono", label: "Chronomètre", href: "fame.html?demo=chrono" },
   { id: "polygon", label: "Polygon", href: "fame.html?demo=polygon" },
   { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "fame.html?demo=mashup-rive-three-quiz" },
+  { id: "stroke-path", label: "Stroke Path", href: "fame.html?demo=stroke-path" },
 ];
 
 export function buildDemoLinksMarkup(activeId: string | undefined, entries: DemoEntry[] = DEMO_REGISTRY): string {

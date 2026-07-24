@@ -4,6 +4,7 @@ import type { TimelineEvent } from "../core/events/types";
 import { TimeTicker } from "../core/time/ticker";
 import { DirectorCore } from "../director/create-director";
 import { RendererFacade } from "../renderer/create-renderer";
+import { applyAttrPatch } from "../runtime/components/lib/dom-component-adapter";
 import { createAnimeSvgService } from "../runtime/components";
 import { createMediaSyncModule } from "../runtime/modules/media-sync";
 import type { MediaSyncRuntimeComponent } from "../runtime/modules/media-sync";
@@ -831,27 +832,63 @@ export class PlayerFacade implements PlayerApi {
    * `emitStateSnapshot`. A capture's continuous flow must never create a new
    * transition per frame (see `2026-07-21-capture-animatable-channel-plan.md`):
    * this is the dedicated `CaptureUpdate` channel, not the commit/transition
-   * pipeline a normal event uses. Shared by both the `action` (catalog by
-   * name) and `position` (direct persoId) paths of `applyCaptureTickActions`.
+   * pipeline a normal event uses. `renderer.applyCaptureUpdate` forwards
+   * `property`/`value` to anime.js's `createAnimatable`
+   * (`create-default-adapter.ts`), seeded from a numeric `0` — reliable for
+   * simple animatable values (transforms, colors), NOT for a full SVG path
+   * `d` string (confirmed: anime.js writes it as an invalid CSS `d` property
+   * instead of the real attribute) — that case goes through
+   * `applyCaptureAttr` instead, a plain `setAttribute`, never anime.js.
+   * Shared by both the `action` (catalog by name) and `position` (direct
+   * persoId) paths of `applyCaptureTickActions`.
    */
-  private applyCaptureStyle(style: Record<string, unknown>, persoIds: readonly string[]): void {
+  private applyCaptureProperties(properties: Record<string, unknown>, persoIds: readonly string[]): void {
     for (const persoId of persoIds) {
       const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
       if (target === null || target === undefined) {
         continue;
       }
 
-      for (const [property, value] of Object.entries(style)) {
+      for (const [property, value] of Object.entries(properties)) {
         if (typeof value !== 'number' && typeof value !== 'string') {
           continue;
         }
 
         this.renderer.applyCaptureUpdate({ target, property, value });
 
-        const properties = this.captureUpdatePropertiesByPersoId.get(persoId) ?? new Set<string>();
-        properties.add(property);
-        this.captureUpdatePropertiesByPersoId.set(persoId, properties);
+        const appliedProperties = this.captureUpdatePropertiesByPersoId.get(persoId) ?? new Set<string>();
+        appliedProperties.add(property);
+        this.captureUpdatePropertiesByPersoId.set(persoId, appliedProperties);
       }
+    }
+  }
+
+  /**
+   * Applies each numeric/string `attr` value directly on the DOM node
+   * (`applyAttrPatch`, the same helper the normal commit/action pipeline
+   * already uses) for every resolved persoId — deliberately bypassing
+   * `renderer.applyCaptureUpdate`/anime.js entirely. Unlike `style`, an
+   * `attr` value (e.g. an SVG path `d`) has no meaningful interpolation
+   * between ticks — `trackCommand` already recomputes the full value each
+   * time, so a direct, immediate `setAttribute` is the correct (and only
+   * reliable) write, never a tweened one. No `CaptureUpdate` handle is
+   * created, so nothing is tracked in `captureUpdatePropertiesByPersoId`
+   * for these properties — there is nothing to release at `endOn`.
+   */
+  private applyCaptureAttr(attr: Record<string, unknown>, persoIds: readonly string[]): void {
+    for (const persoId of persoIds) {
+      const target = this.renderer.getRuntimeRegistry().getNodeById(persoId);
+      if (target === null || target === undefined) {
+        continue;
+      }
+
+      const patch: Record<string, unknown> = {};
+      for (const [property, value] of Object.entries(attr)) {
+        if (typeof value === 'number' || typeof value === 'string') {
+          patch[property] = value;
+        }
+      }
+      applyAttrPatch(target, patch);
     }
   }
 
@@ -888,10 +925,19 @@ export class PlayerFacade implements PlayerApi {
         }
         this.lastCaptureActionDataByActionName.set(action.actionName, serializedData);
 
-        const style = (action.data as { style?: Record<string, unknown> } | undefined)?.style;
-        if (style !== undefined && typeof style === 'object' && style !== null) {
+        const data = action.data as { style?: Record<string, unknown>; attr?: Record<string, unknown> } | undefined;
+        const style = data?.style;
+        const attr = data?.attr;
+        const hasStyle = style !== undefined && typeof style === 'object' && style !== null;
+        const hasAttr = attr !== undefined && typeof attr === 'object' && attr !== null;
+        if (hasStyle || hasAttr) {
           const resolvedPersoIds = this.resolvePersoIdsForActionName(action.actionName);
-          this.applyCaptureStyle(style, resolvedPersoIds);
+          if (hasStyle) {
+            this.applyCaptureProperties(style, resolvedPersoIds);
+          }
+          if (hasAttr) {
+            this.applyCaptureAttr(attr, resolvedPersoIds);
+          }
         }
         continue;
       }
@@ -903,7 +949,7 @@ export class PlayerFacade implements PlayerApi {
       this.lastCaptureTickDataByPersoId.set(persoId, serializedTick);
 
       if (result.position !== undefined) {
-        this.applyCaptureStyle(result.position, [persoId]);
+        this.applyCaptureProperties(result.position, [persoId]);
       }
 
       if (result.dnd !== undefined) {

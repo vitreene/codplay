@@ -1,0 +1,17 @@
+{
+  "name": "@codplay/sketch",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "codplay": "*"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

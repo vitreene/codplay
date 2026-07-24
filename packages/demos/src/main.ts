@@ -18,6 +18,7 @@ import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
 import { runEd2BuilderDemo } from './codplay/ed2-builder-demo'
 import { runSpaceBubblesDemo } from './codplay/space-bubbles-demo'
+import { runStrokePathDemo } from './codplay/stroke-path-demo'
 
 const demoName = new URL(globalThis.location.href).searchParams.get('demo')
 
@@ -41,5 +42,6 @@ switch (demoName) {
 	case 'quiz-hunt':       void runQuizHuntDemo(); break
 	case 'ed2-builder':     void runEd2BuilderDemo(); break
 	case 'space-bubbles':   void runSpaceBubblesDemo(); break
+	case 'stroke-path':     void runStrokePathDemo(); break
 	default:                void runPlayerPocDemo()
 }
