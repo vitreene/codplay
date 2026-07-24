@@ -14,6 +14,7 @@ import { runChronoDemo } from './codplay/chrono-demo'
 import { runQuizHuntDemo } from './codplay/quiz-hunt-demo'
 import { runThreejsAnimeGridDemo } from './codplay/threejs-anime-grid-demo'
 import { runMashupRiveThreeQuizDemo } from './codplay/mashup-rive-three-quiz-demo'
+import { runMashupBackAndForeDemo } from './codplay/mashup-back-and-fore-demo'
 import { runOverlayWorldOutletDemo } from './codplay/overlay-world-outlet-demo'
 import { runPolygonDemo } from './codplay/polygon-demo'
 import { runEd2BuilderDemo } from './codplay/ed2-builder-demo'
@@ -36,6 +37,7 @@ switch (demoName) {
 	case 'rive-coach':      void runRiveCoachDemo(); break
 	case 'threejs-anime-grid': void runThreejsAnimeGridDemo(); break
 	case 'mashup-rive-three-quiz': void runMashupRiveThreeQuizDemo(); break
+	case 'mashup-back-and-fore': void runMashupBackAndForeDemo(); break
 	case 'chrono':          void runChronoDemo(); break
 	case 'overlay-world-outlet': void runOverlayWorldOutletDemo(); break
 	case 'polygon':         void runPolygonDemo(); break

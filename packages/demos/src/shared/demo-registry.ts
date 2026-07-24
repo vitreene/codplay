@@ -16,6 +16,7 @@ export const DEMO_REGISTRY: DemoEntry[] = [
   { id: "rive-coach", label: "Rive lip-sync", href: "?demo=rive-coach" },
   { id: "threejs-anime-grid", label: "animation 3D", href: "?demo=threejs-anime-grid" },
   { id: "mashup-rive-three-quiz", label: "Mashup Rive/3D/Quiz", href: "?demo=mashup-rive-three-quiz" },
+  { id: "mashup-back-and-fore", label: "Mashup Back & Fore", href: "?demo=mashup-back-and-fore" },
   { id: "chrono", label: "Chronomètre", href: "?demo=chrono" },
   { id: "overlay-world-outlet", label: "Overlay-world outlet", href: "?demo=overlay-world-outlet" },
   { id: "polygon", label: "Polygon", href: "?demo=polygon" },
