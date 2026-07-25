@@ -7,7 +7,7 @@ import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
 import { findPanel, panelsForType } from '../../decor-editor/palette-panel'
 import type { PanelField } from '../../decor-editor/palette-panel'
-import { formatLiveValueForCssProperty } from '../../decor-editor/css-value-format'
+import { formatPersoValueForCssProperty } from '../../decor-editor/css-value-format'
 import type { DecorPatch, OffsetPatch } from '../../decor-editor/types'
 import type { Content, Decor, EditorScene, Item, OffsetData } from '../commands/types'
 import type { Command, Selection } from '../controller/types'
@@ -115,38 +115,31 @@ function styleFieldsForItemType(controller: DecorEditorController, itemType: Ite
 }
 
 /**
- * Décor temporaire — lecture live via `AuthorApi.getNodeSnapshot`, jamais `scene.decors`. Une
- * SEULE frontière de conversion px→cqw (`2026-07-25-cqw-px-conversion-boundary-plan.md` §5) :
- * tout est lu en px depuis le node (`style.*` ET `width`/`height`, qui sont dans `styleFieldsForItemType`
- * — la palette « Dimensions » les édite comme `style`, pas `offset`, `default-palette.ts`), fusionné
- * en un seul jeu de valeurs px, puis converti en cqw une seule fois à la fin — jamais une valeur
- * déjà convertie n'est réinjectée comme entrée d'une conversion suivante.
+ * Décor temporaire — lecture live via `AuthorApi.getPersoStates()`, jamais `scene.decors`, jamais
+ * le node/DOM (`2026-07-25-perso-state-at-t-plan.md`). Remplace l'ancienne lecture par
+ * `authorApi.getNodeSnapshot` (`utils.get` d'anime sur le node réel) : cette dernière dépendait du
+ * timing d'anime.js — deux défauts distincts constatés en direct la même session (`width`/`height`
+ * parfois lus en cqw brut mal réinterprété comme px ; `background-color` figé sur le keyframe
+ * précédent, jamais rafraîchi avant un rendez-vous explicite). `getPersoStates()` renvoie l'état du
+ * PERSO, capturé une fois par seek, dans son unité d'origine — jamais dérivé du DOM/du cache anime
+ * lié à un node.
  *
- * `width`/`height` ne doivent PAS être lus via `getNodePose` (bug constaté et corrigé en direct,
- * cette session) : `getNodePose` (`readNodePose`, `codplay/runtime/components/lib/dom.ts`) coerce
- * chaque prop en nombre nu via le mode 3-arguments d'anime `utils.get(node, prop, false)` — valide
- * uniquement pour le contrat CS (`offset-editor-bridge.ts::readActivePose`), où la pose n'existe
- * QUE dans le vocabulaire propre d'anime, toujours en px par construction du geste (§6 spec dedit).
- * Hors geste, le node peut porter n'importe quelle unité de style d'origine (`cqw` compris) — un
- * nombre nu ne dit pas laquelle. `getNodeSnapshot` (mode 2-arguments d'anime) renvoie une chaîne
- * suffixée d'unité (`"8.52px"`) pour toute grandeur de longueur, y compris `width`/`height` — même
- * garantie que `css-value-format.ts::formatLiveValueForCssProperty` exploite pour le reste du
- * style. Avant ce correctif, `width`/`height` étaient reconvertis DEUX FOIS (une fois dans
- * `patch.style` via `resolveTemporaryPatch`, une fois dans `patch.offset` via
- * `resolveTemporaryOffset`, jamais réconciliées) — la seconde conversion réutilisait une valeur qui
- * avait déjà traversé la première, d'où l'effondrement géométrique observé en direct (18 → 3.44 →
- * 0.66 → 0.024 → … cqw à chaque seek). Ce n'était pas une régression du runtime `codplay`.
+ * `getPersoStates()` renvoie une valeur BRUTE par propriété, TOUJOURS déjà dans l'unité native du
+ * perso (jamais du px, contrairement à `getNodeSnapshot`) — `formatPersoValueForCssProperty`
+ * (`css-value-format.ts`) formate sans jamais convertir physiquement (pas de `referenceWidthPx`
+ * ici, devenu inutile pour ce chemin de lecture).
  */
-function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[], referenceWidthPx: number): DecorPatch {
-  const propNames = fields.map((f) => f.path.slice('style.'.length))
-  const snapshot = authorApi.getNodeSnapshot(itemId, propNames)
-  if (!snapshot) return {}
+function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[]): DecorPatch {
+  const persoState = authorApi.getPersoStates().get(itemId)
+  if (!persoState) return {}
   const style: Record<string, string> = {}
   for (const field of fields) {
     const prop = field.path.slice('style.'.length)
-    const raw = snapshot[prop]
+    const raw = persoState[prop]
     if (raw === undefined) continue
-    style[prop] = field.kind === 'number' || field.kind === 'slider' ? formatLiveValueForCssProperty(prop, raw, referenceWidthPx) : String(raw)
+    style[prop] = field.kind === 'number' || field.kind === 'slider'
+      ? formatPersoValueForCssProperty(prop, raw)
+      : String(raw)
   }
   return Object.keys(style).length > 0 ? { style } : {}
 }
@@ -443,14 +436,10 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
       const base = alignment.kind === 'between' ? resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content) : {}
-      const { authorApi, referenceWidthPx } = machine.getSnapshot().context
-      // Fiable même pendant un geste CS actif : `LibreAdapter` écrit désormais la pose via
-      // `AuthorApi.setNodePose` (anime.js `utils.set`), plus jamais directement sur `node.style.*`
-      // — le cache d'anime.js reste cohérent en permanence (même correctif que `offset-editor-
-      // bridge.ts::readActivePose`, `2026-07-18-pose-edit-architecture-study.md` §2/§6). L'ancienne
-      // exception `!gestureActive` retombait sur le kf précédent seul pendant tout geste — le décor
-      // temporaire restait figé au lieu de suivre le geste en cours.
-      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType), referenceWidthPx) : {}
+      const { authorApi } = machine.getSnapshot().context
+      // Fiable même pendant un geste CS actif : `getPersoStates()` est capturé au dernier seek,
+      // indépendamment de tout geste CS en cours (`2026-07-25-perso-state-at-t-plan.md`).
+      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType)) : {}
       patch = mergePatch(base, liveStyle)
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)

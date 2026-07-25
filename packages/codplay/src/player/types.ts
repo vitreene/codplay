@@ -169,6 +169,11 @@ export type PlayerApi = {
   rewind: () => Promise<PlayerCommandResult>
   rebuild: (mode?: RebuildMode) => Promise<PlayerCommandResult>
   getState: () => PlayerStateSnapshot
+  /**
+   * Returns the state of every currently-animated perso, captured at the last `seek()` — in the
+   * perso's own unit, never read from the DOM (`2026-07-25-perso-state-at-t-plan.md`).
+   */
+  getPersoStates: () => ReadonlyMap<string, Record<string, unknown>>
   onTrace: (listener: PlayerTraceListener) => () => void
   onStateChange: (listener: PlayerStateListener) => () => void
 }

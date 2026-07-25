@@ -67,7 +67,9 @@ function fakeAuthorApi(): AuthorApi {
   return {
     subscribeToNode: () => () => {},
     getNodePose: () => null,
+    setNodePose: () => {},
     getNodeSnapshot: () => null,
+    getPersoStates: () => new Map(),
     subscribeToPlayerState: (cb) => {
       cb({ isPlaying: false })
       return () => {}
@@ -107,6 +109,7 @@ function fakeAuthorApiWithNodes(
       return () => set!.delete(cb)
     },
     getNodePose: () => null,
+    setNodePose: () => {},
     getNodeSnapshot: (itemId, props) => {
       const values = snapshots[itemId]
       if (!values) return null
@@ -114,6 +117,7 @@ function fakeAuthorApiWithNodes(
       for (const prop of props) if (values[prop] !== undefined) result[prop] = values[prop]!
       return result
     },
+    getPersoStates: () => new Map(Object.entries(snapshots)),
     subscribeToPlayerState: (cb) => {
       cb({ isPlaying: false })
       return () => {}
@@ -596,16 +600,24 @@ describe('decor-editor-bridge — décor temporaire entre deux kf (2026-07-17-re
     return { actor, container, offsetBridge }
   }
 
-  it('playhead entre kf1 et kf2, item sélectionné sans kf : affiche la couleur live du node (ni kf1 ni le preset), marque le décor temporaire', () => {
+  it('playhead entre kf1 et kf2, item sélectionné sans kf : affiche la couleur live du perso (ni kf1 ni le preset), marque le décor temporaire', () => {
     const { actor, container } = mount(sceneWithGapBetweenKeyframes(), { 'item-1': { 'background-color': 'oklch(0.5 0.2 100)' } })
     actor.send({ type: 'SEEK', timelineMs: 500 })
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'] })
 
     const colorInput = container.querySelectorAll<HTMLInputElement>('input[type="color"]')[0]!
-    expect(colorInput.value.toLowerCase()).not.toBe('#808080')
+    const liveColor = colorInput.value.toLowerCase()
+    expect(liveColor).not.toBe('#808080')
     const palette = container.querySelector('.dedit-palette')!
     expect(palette.classList.contains('dedit-palette--temporary')).toBe(true)
     expect(actor.getSnapshot().context.scene?.decors).not.toHaveProperty('decor-live')
+
+    // Assertion stricte : la couleur affichée n'est PAS celle de kf1 (`oklch(0.6 0.24 25)`) —
+    // sinon un patch retombé sur la cascade seule (bug régressé, la lecture live `getPersoStates`
+    // aurait disparu silencieusement) serait indiscernable d'une lecture live réussie.
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-1' })
+    const kf1Color = container.querySelectorAll<HTMLInputElement>('input[type="color"]')[0]!.value.toLowerCase()
+    expect(liveColor).not.toBe(kf1Color)
   })
 
   it('reste fiable pendant un geste CS actif — plus d\'exception isGestureActive (2026-07-18-pose-edit-architecture-study.md §8)', () => {

@@ -48,6 +48,14 @@ export type AuthorApi = {
    * `offset-editor-bridge.ts::readLiveGestureNodePose` already does for pose.
    */
   getNodeSnapshot: (persoId: string, props: readonly string[]) => Record<string, string | number> | null
+  /**
+   * Returns the state of every currently-animated perso, captured at the last `seek()` — in the
+   * perso's OWN unit as authored (e.g. `cqw`, or a bare number for properties with no unit), never
+   * read from the DOM/anime.js's cache tied to a real node (`2026-07-25-perso-state-at-t-plan.md`,
+   * `packages/codplay`). Unlike `getNodeSnapshot`, this never depends on a node being mounted, and
+   * never needs a per-perso call — a caller with a multi-item selection filters the map itself.
+   */
+  getPersoStates: () => ReadonlyMap<string, Record<string, unknown>>
   subscribeToPlayerState: (cb: (state: PlayerAuthorState) => void) => () => void
   getPlayerState: () => PlayerAuthorState
 }
@@ -65,6 +73,8 @@ export function createAuthorApi(player: PlayerApi): AuthorApi {
     setNodePose: (persoId, pose) => player.setNodePose(persoId, pose),
 
     getNodeSnapshot: (persoId, props) => player.getNodeSnapshot(persoId, props),
+
+    getPersoStates: () => player.getPersoStates(),
 
     subscribeToPlayerState: (cb) => {
       let last = toAuthorState(player.getState().status)

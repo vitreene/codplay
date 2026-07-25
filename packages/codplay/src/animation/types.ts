@@ -163,6 +163,13 @@ export type AnimationAdapter = {
   pause?: (target?: unknown) => void
   resume?: (target?: unknown) => void
   seek?: (timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>, target?: unknown) => void
+  /**
+   * Returns every currently-active transition, as the original `TransitionRequest`
+   * (`listenerId`/persoId, `property`, raw `from`/`to` — never resolved against a DOM
+   * target) — `2026-07-25-perso-state-at-t-plan.md` §4.2/§5. Used to build a perso-state
+   * mirror snapshot after a seek has positioned every active animation at `t`.
+   */
+  getActiveTransitions?: () => TransitionRequest[]
   renderFrame?: (frameNowMs: number) => void
   setRate?: (rate: number) => void
 }

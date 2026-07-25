@@ -1,5 +1,7 @@
 import type { AnimationAdapter } from "../animation/types";
-import { createDefaultAnimationAdapter } from "../animation/create-default-adapter";
+import { createDefaultAnimationAdapter, createRealAnimeImplementation } from "../animation/create-default-adapter";
+import type { AnimeImplementation } from "../animation/adapter";
+import { capturePersoStatesMirror } from "../animation/perso-state-mirror";
 import type { TimelineEvent } from "../core/events/types";
 import { TimeTicker } from "../core/time/ticker";
 import { DirectorCore } from "../director/create-director";
@@ -70,6 +72,14 @@ export type CreatePlayerOptions = {
   renderAdapters?: RenderAdapter[];
   /** Override the animation adapter entirely (for tests or custom engines). */
   animationAdapter?: AnimationAdapter;
+  /**
+   * Override the anime.js bridge used to build ephemeral perso-state mirror transitions
+   * (`getPersoStates`, `2026-07-25-perso-state-at-t-plan.md` §4.2/§5) — for tests or custom
+   * engines, symmetric to `animationAdapter`. Defaults to the same bridge the default animation
+   * adapter itself uses (`createRealAnimeImplementation`), so the mirror stays faithful to
+   * whatever engine actually renders — never a re-implementation.
+   */
+  animeImplementation?: AnimeImplementation;
   components?: Record<string, import("../runtime/components").RuntimeComponentClass>;
   /**
    * Third-party library registrations (components + renderAdapter + preload
@@ -185,6 +195,10 @@ export class PlayerFacade implements PlayerApi {
   private readonly tweenRunner = new TweenRunner(
     (persoId) => this.renderer.getRuntimeRegistry().getComponentById(persoId),
   );
+  /** `2026-07-25-perso-state-at-t-plan.md` §4.2/§5 — the anime.js bridge used ONLY to build ephemeral perso-state mirror transitions, never to render to the DOM. Set once in the constructor. */
+  private readonly animeImplementation: AnimeImplementation;
+  /** Perso state captured at the last `seek()` — merges the standard-transition mirror (§4.2) with `TweenRunner`'s own pure calculation (§4.1). Never updated during normal playback (`tick()`). */
+  private persoStatesAtLastSeek = new Map<string, Record<string, unknown>>();
   private readonly actionSequenceTriggerByKey = new Map<string, string>();
   private readonly decomposedActionSequenceTriggerEventIds = new Set<string>();
   private readonly ticker = new TimeTicker();
@@ -502,6 +516,7 @@ export class PlayerFacade implements PlayerApi {
       seekPolicy: options.runtimePolicy?.seekPolicy ?? DEFAULT_RUNTIME_POLICY.seekPolicy,
     };
     this.onTimelineEvent = options.onTimelineEvent;
+    this.animeImplementation = options.animeImplementation ?? createRealAnimeImplementation();
 
     const animationAdapter = options.animationAdapter ?? createDefaultAnimationAdapter();
     this.renderer = new RendererFacade({
@@ -1648,6 +1663,42 @@ export class PlayerFacade implements PlayerApi {
   }
 
   /**
+   * Rebuilds `persoStatesAtLastSeek` — the perso-side state for every currently-animated perso,
+   * in its own unit, never read from the DOM (`2026-07-25-perso-state-at-t-plan.md` §4/§5). Called
+   * ONLY from `seek()`, right after `renderer.syncAnimationsToTimeline` has positioned every real
+   * active animation at `this.timelineMs` — never from `runPlaybackTick`/normal playback (§4.0: no
+   * consumer needs anything fresher than "state at the last seek", confirmed via
+   * `decor-editor-bridge.ts`'s `playbackActiveChanged` suspending dedit's live preview for the
+   * whole duration of real playback).
+   *
+   * Two sources, merged (a perso can be driven by either mechanism, never both for the same
+   * property):
+   * - `capturePersoStatesMirror` (`animation/perso-state-mirror.ts`) — standard anime.js
+   *   transitions (`style`, `duration`/`ease`), via `renderer.getActiveTransitions()`.
+   * - `this.tweenRunner.getPersoStatesAtLastSeek()` — `TweenAction`, already a pure calculation
+   *   independent of anime.js/the DOM, captured directly by `TweenRunner.evaluateAt` when it runs
+   *   in `isSeek` mode (which `renderSync.seek()`, called before this method, already triggers).
+   */
+  private capturePersoStatesAtSeek(eventMsByEventId: ReadonlyMap<string, number>): void {
+    const mirrorStates = capturePersoStatesMirror(
+      this.renderer.getActiveTransitions(),
+      eventMsByEventId,
+      this.timelineMs,
+      this.animeImplementation,
+    );
+    const tweenStates = this.tweenRunner.getPersoStatesAtLastSeek();
+
+    const merged = new Map<string, Record<string, unknown>>();
+    for (const [persoId, state] of mirrorStates) {
+      merged.set(persoId, { ...state });
+    }
+    for (const [persoId, state] of tweenStates) {
+      merged.set(persoId, { ...merged.get(persoId), ...state });
+    }
+    this.persoStatesAtLastSeek = merged;
+  }
+
+  /**
    * Runs one frame tick when player is in playing state.
    */
   private runPlaybackTick(frameNowMs?: number, frameDeltaMs = 0): void {
@@ -2523,6 +2574,7 @@ export class PlayerFacade implements PlayerApi {
     this.renderer.syncAnimationsToTimeline(this.timelineMs, eventMsByEventId);
     this.renderSync.seek(this.runtimePlanner.resolveNowMs(), this.timelineMs);
     this.syncMediaTimeline(this.timelineMs);
+    this.capturePersoStatesAtSeek(eventMsByEventId);
 
     if (!this.sequenceEnded) {
       this.director.pause();
@@ -2799,6 +2851,19 @@ export class PlayerFacade implements PlayerApi {
     });
 
     return { ok: true };
+  }
+
+  /**
+   * Returns the state of every currently-animated perso, captured at the last `seek()` — never
+   * read from the DOM, never from anime.js's cache tied to a real node
+   * (`2026-07-25-perso-state-at-t-plan.md`). Each value is in the perso's OWN unit as authored
+   * (e.g. `cqw`, or a bare number for properties with no unit) — never resolved/converted here;
+   * reinterpreting it (unit, scale) is the caller's responsibility (Decor, `packages/editor`).
+   * Exposed as a whole map (not a single-`persoId` accessor) — a caller with a multi-item
+   * selection filters it itself, one capture serves every consumer.
+   */
+  getPersoStates(): ReadonlyMap<string, Record<string, unknown>> {
+    return this.persoStatesAtLastSeek;
   }
 
   /**

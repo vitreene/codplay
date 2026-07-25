@@ -169,7 +169,7 @@ function interpolatedFixtureScene(overrides: {
 }
 
 describe('buildSceneDoc — interpolated decor-state transitions between adjacent keyframes', () => {
-  it('a real transition on the segment produces an animated diff (to/duration/easing — no "from": the runtime interpolates from its own current value, StyleTransitionValue.from is optional), triggered at the source kf by default (direction:\'after\')', () => {
+  it('a real transition on the segment produces an animated diff (from/to/duration/easing — `from` explicit, computed from the PERSO\'s own cascade, never left for the runtime to guess from its current value), triggered at the source kf by default (direction:\'after\')', () => {
     const scene = interpolatedFixtureScene({
       transitionOnKfB: { kind: 'interpolated', durationMs: 300, easing: 'linear', direction: 'after' },
     })
@@ -178,7 +178,7 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
     const item = sceneDoc.stories['story-main']!.persos.find((p) => p.id === 'item-1')!
 
     expect(item.actions['item-1-kf-kf-b']).toEqual({
-      style: { 'background-color': { to: '#00ff00', duration: 300, ease: 'linear' } },
+      style: { 'background-color': { from: '#ff0000', to: '#00ff00', duration: 300, ease: 'linear' } },
     })
     expect(sceneDoc.stories['story-main']!.eventimes).toContainEqual({ name: 'item-1-kf-kf-b', startAt: 0 })
   })
@@ -208,7 +208,7 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
 
     // kf-a at 0, kf-b at 1000 — full interval duration, default easing (DEFAULT_EASING normalized).
     expect(item.actions['item-1-kf-kf-b']).toEqual({
-      style: { 'background-color': { to: '#00ff00', duration: 1000, ease: 'easeInOut' } },
+      style: { 'background-color': { from: '#ff0000', to: '#00ff00', duration: 1000, ease: 'easeInOut' } },
     })
     // direction defaults to 'after' — starts at the source kf.
     expect(sceneDoc.stories['story-main']!.eventimes).toContainEqual({ name: 'item-1-kf-kf-b', startAt: 0 })
@@ -241,9 +241,9 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
 
     expect(item.actions['item-1-kf-kf-b']).toEqual({
       style: {
-        'background-color': { to: '#00ff00', duration: 1000, ease: 'easeInOut' },
-        x: { to: '120cqw', duration: 1000, ease: 'easeInOut' },
-        y: { to: '-40cqw', duration: 1000, ease: 'easeInOut' },
+        'background-color': { from: '#ff0000', to: '#00ff00', duration: 1000, ease: 'easeInOut' },
+        x: { from: '0cqw', to: '120cqw', duration: 1000, ease: 'easeInOut' },
+        y: { from: '0cqw', to: '-40cqw', duration: 1000, ease: 'easeInOut' },
         rotate: { to: 15, duration: 1000, ease: 'easeInOut' },
         scaleX: { to: 1.2, duration: 1000, ease: 'easeInOut' },
         scaleY: { to: 0.9, duration: 1000, ease: 'easeInOut' },
@@ -280,7 +280,7 @@ describe('buildSceneDoc — interpolated decor-state transitions between adjacen
 
     expect(item.actions['item-1-kf-kf-b']).toEqual({
       style: {
-        'background-color': { to: '#00ff00', duration: 1000, ease: 'easeInOut' },
+        'background-color': { from: '#ff0000', to: '#00ff00', duration: 1000, ease: 'easeInOut' },
         'align-items': { to: 'center', duration: 1000, ease: 'easeInOut' },
         'justify-content': { to: 'center', duration: 1000, ease: 'easeInOut' },
       },

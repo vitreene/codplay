@@ -657,7 +657,8 @@ function buildKeyframeDecorActions(
     const kf = keyframes[i]!
     const prevKf = keyframes[i - 1]!
     const actionName = `${item.id}-kf-${kf.id}`
-    const diff = computeStyleDiff(resolveKeyframeCascadeStyle(item, scene, prevKf), resolveKeyframeCascadeStyle(item, scene, kf))
+    const fromStyle = resolveKeyframeCascadeStyle(item, scene, prevKf)
+    const diff = computeStyleDiff(fromStyle, resolveKeyframeCascadeStyle(item, scene, kf))
     if (Object.keys(diff).length === 0) continue
 
     const transition = kf.transitionIn ?? prevKf.transitionOut
@@ -670,8 +671,18 @@ function buildKeyframeDecorActions(
       actions[actionName] = { style: diff }
       itemEventimes.push({ name: actionName, startAt: kf.timeMs + preRollMs })
     } else {
+      // `from` explicite, calculé depuis le PERSO (cascade résolue, cqw natif) — jamais dérivé
+      // du node/d'un cache anime.js implicite. Sans ça, anime.js devine le `from` depuis l'état
+      // courant du target au moment du trigger : fiable par coïncidence pour le node réel (déjà
+      // posé au style initial statique), mais absent pour tout autre récepteur qui rejouerait la
+      // même transition sans partager ce cache (ex. un objet miroir vierge) — bug constaté en
+      // direct, `2026-07-25-perso-state-at-t-plan.md` : la couleur dérivait vers le noir/transparent
+      // près du début d'une transition, faute d'un `from` connu du perso lui-même.
       const stylePayload: Record<string, unknown> = {}
-      for (const [prop, value] of Object.entries(diff)) stylePayload[prop] = { to: value, duration: durationMs, ease }
+      for (const [prop, value] of Object.entries(diff)) {
+        const from = fromStyle[prop]
+        stylePayload[prop] = from === undefined ? { to: value, duration: durationMs, ease } : { from, to: value, duration: durationMs, ease }
+      }
       actions[actionName] = { style: stylePayload }
       const triggerMs = TransitionTiming.interpolatedTransitionTriggerMs({
         sourceKfTimeMs: prevKf.timeMs,

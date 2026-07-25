@@ -26,6 +26,9 @@ function fakeAuthorApi(pose: NodePose): AuthorApi {
   return {
     subscribeToNode: () => () => {},
     getNodePose: () => pose,
+    setNodePose: () => {},
+    getNodeSnapshot: () => null,
+    getPersoStates: () => new Map(),
     subscribeToPlayerState: (cb) => {
       cb({ isPlaying: false })
       return () => {}

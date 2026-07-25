@@ -76,6 +76,12 @@ export type PlayerApi = {
   getNodePose: (persoId: string) => NodePose | null
   getNodeSnapshot: (persoId: string, props: readonly string[]) => Record<string, string | number> | null
   setNodePose: (persoId: string, pose: Partial<NodePose>) => void
+  /**
+   * Returns the state of every currently-animated perso, captured at the last `seek()` — in the
+   * perso's own unit as authored, never read from the DOM/anime.js
+   * (`2026-07-25-perso-state-at-t-plan.md`).
+   */
+  getPersoStates: () => ReadonlyMap<string, Record<string, unknown>>
   schedule: PlayerScheduleApi
 }
 
@@ -490,6 +496,16 @@ export class Player implements PlayerApi {
    */
   getNodeSnapshot(persoId: string, props: readonly string[]): Record<string, string | number> | null {
     return readNodeSnapshot(this.player.getRuntimeRegistry().getNodeById(persoId), props)
+  }
+
+  /**
+   * Returns the state of every currently-animated perso, captured at the last `seek()` — in the
+   * perso's own unit as authored, never read from the DOM/anime.js
+   * (`2026-07-25-perso-state-at-t-plan.md`). Exposed as a whole map — a caller with a multi-item
+   * selection filters it itself.
+   */
+  getPersoStates(): ReadonlyMap<string, Record<string, unknown>> {
+    return this.player.getPersoStates()
   }
 
   /**

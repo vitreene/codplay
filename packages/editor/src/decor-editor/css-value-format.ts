@@ -91,3 +91,21 @@ export function formatLiveValueForCssProperty(cssProperty: string, liveValue: st
   if (!Number.isFinite(parsed)) return String(liveValue)
   return `${pxToCqw(parsed, containerWidthPx)}cqw`
 }
+
+/**
+ * Formate une valeur PERSO brute (`AuthorApi.getPersoStates()`, `2026-07-25-perso-state-at-t-
+ * plan.md`) en chaîne CSS finale — jamais de conversion physique px→cqw ici, contrairement à
+ * `formatLiveValueForCssProperty` : `getPersoStates()` ne lit jamais le DOM/px, elle renvoie
+ * toujours la valeur dans l'unité native du perso (déjà cqw pour un nombre, ou déjà suffixée pour
+ * une chaîne). Un nombre nu venant de cette source n'est donc JAMAIS ambigu (contrairement à
+ * `getNodeSnapshot`, où un nombre nu pouvait être du px ou un cqw mal contrôlé selon le timing
+ * d'anime.js) — il est toujours interprété comme la grandeur déjà exprimée dans l'unité de la
+ * propriété (cqw par défaut, nu pour `format:'raw'`).
+ */
+export function formatPersoValueForCssProperty(cssProperty: string, persoValue: unknown): string {
+  const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
+  if (entry.format === 'raw') return String(persoValue)
+  if (typeof persoValue === 'string') return persoValue
+  if (typeof persoValue === 'number' && Number.isFinite(persoValue)) return `${persoValue}cqw`
+  return String(persoValue)
+}

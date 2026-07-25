@@ -773,8 +773,19 @@ export function createAnimationAdapter(
     updatersByProperty.delete(property)
   }
 
+  /**
+   * Returns every currently-active transition, as the original `TransitionRequest`
+   * objects (`listenerId`/persoId, `property`, `from`/`to` BRUTS — never resolved
+   * against a DOM target) — `2026-07-25-perso-state-at-t-plan.md` §4.2/§5. Read-only,
+   * never mutates `activeAnimations` — used to build a perso-state mirror snapshot
+   * right after `seek()` above has positioned every active animation at `t`.
+   */
+  function getActiveTransitions(): TransitionRequest[] {
+    return activeAnimations.flatMap((entry) => entry.operations.filter(isTransitionRequest))
+  }
+
   const renderFrame = options.renderFrame
   const setRate = options.setRate
 
-  return { run, applyCaptureUpdate, releaseCaptureUpdate, stop, pause, resume, seek, renderFrame, setRate }
+  return { run, applyCaptureUpdate, releaseCaptureUpdate, stop, pause, resume, seek, getActiveTransitions, renderFrame, setRate }
 }

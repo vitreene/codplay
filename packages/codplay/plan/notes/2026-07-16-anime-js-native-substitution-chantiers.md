@@ -424,3 +424,13 @@ pas une hypothèse.
   (codplay ignore l'existence d'`AuthorApi`).
 - Notes non normatives déjà présentes dans la spec (besoins identifiés, jamais engagés) :
   `getCompiledScene()`, `subscribeToPlayerEvent(eventName,cb)`, `getPersoIds()`.
+
+## I. `create-player.ts` — taille excessive, sujet d'optimisation séparé (2026-07-25)
+
+Remarque de l'auteur en marge du chantier `getPersoStates`
+(`2026-07-25-perso-state-at-t-plan.md`) : `create-player.ts` dépasse 2500 lignes,
+mérite d'être découpé. Pas traité ici — noté comme sujet distinct, à rapprocher des
+chantiers de retrait/réduction d'anime.js ci-dessus (une fois anime moins central,
+plusieurs des responsabilités actuellement mélangées dans ce fichier — seek, replay,
+gestion du renderer/tween runner — deviennent probablement plus faciles à séparer en
+modules propres).

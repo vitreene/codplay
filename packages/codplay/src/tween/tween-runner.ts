@@ -81,9 +81,23 @@ export class TweenRunner implements RenderAdapter, ContinuousAnimationEngine {
 
   private activeTweens: ActiveTween[] = []
   private readonly getComponent: (persoId: string) => RuntimeComponent | null
+  /**
+   * Perso state captured at the last `seek()` pass only — `2026-07-25-perso-state-at-t-
+   * plan.md` §4.0/§4.1. `evaluateAt` already computes `output` (a pure calculation,
+   * independent of anime.js/the DOM) for every active tween; this map captures that same
+   * value, conditionally on `isSeek`, so it never grows/updates during normal playback
+   * (`tick()`) — only a `seek()` pass refreshes it. Cleared and rebuilt whole on each seek,
+   * never merged incrementally.
+   */
+  private persoStatesAtLastSeek = new Map<string, Record<string, unknown>>()
 
   constructor(getComponent: (persoId: string) => RuntimeComponent | null) {
     this.getComponent = getComponent
+  }
+
+  /** Read-only snapshot of perso state captured at the last `seek()` pass — never during `tick()`. */
+  getPersoStatesAtLastSeek(): ReadonlyMap<string, Record<string, unknown>> {
+    return this.persoStatesAtLastSeek
   }
 
   // -------------------------------------------------------------------------
@@ -187,6 +201,9 @@ export class TweenRunner implements RenderAdapter, ContinuousAnimationEngine {
 
   private evaluateAt(timelineMs: number, isSeek: boolean): void {
     const stillActive: ActiveTween[] = []
+    if (isSeek) {
+      this.persoStatesAtLastSeek = new Map()
+    }
 
     for (const tween of this.activeTweens) {
       // Tween hasn't started yet at this position
@@ -209,6 +226,9 @@ export class TweenRunner implements RenderAdapter, ContinuousAnimationEngine {
           action: output,
           isSeekReplay: isSeek,
         })
+        if (isSeek) {
+          this.persoStatesAtLastSeek.set(tween.persoId, { ...this.persoStatesAtLastSeek.get(tween.persoId), ...output })
+        }
       }
 
       if (rawProgress < 1) {

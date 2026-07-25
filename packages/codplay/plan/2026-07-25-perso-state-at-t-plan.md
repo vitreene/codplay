@@ -180,8 +180,129 @@ connaissance, propre au domaine dedit.
   l'implémentation. Le coût est jugé non significatif (§4.0/§5 : une fois par seek, jamais par
   frame de lecture normale).
 
-## 8. Statut
+## 8. Statut — implémenté et vérifié
 
-Conception posée, aucun code écrit (code de production, `packages/codplay` — pas d'esquisse).
-Reste à la responsabilité de l'auteur de valider cette conception et de décider du moment
-d'implémenter.
+Câblé de bout en bout, suite complète verte (`packages/codplay` 69/69 fichiers, 342/342 tests ;
+gates verts) :
+
+- `AnimationAdapter.getActiveTransitions()` (`animation/adapter.ts`/`types.ts`) — expose les
+  `TransitionRequest[]` actives, brutes, jamais résolues.
+- `RendererFacade.getActiveTransitions()` (`renderer/create-renderer.ts`) — délégation symétrique
+  aux autres méthodes de la façade (`syncAnimationsToTimeline`, etc.).
+- `TweenRunner.getPersoStatesAtLastSeek()` (`tween/tween-runner.ts`) — capture conditionnée à
+  `isSeek === true` dans `evaluateAt`, jamais pendant `tick()` (§4.0/§4.1).
+- `createRealAnimeImplementation()` extraite de `createDefaultAnimationAdapter`
+  (`animation/create-default-adapter.ts`) — un seul point de vérité pour le pont anime.js réel,
+  partagé par l'adapter de production ET le mécanisme miroir.
+- `capturePersoStatesMirror()` (nouveau fichier `animation/perso-state-mirror.ts`) — construit une
+  transition-miroir par transition active (même `from`/`to` bruts, `target` objet simple), les
+  exécute via un adapter éphémère dédié, lit les valeurs AVANT `stop()` (`stop()` appelle
+  `animation.revert()`, qui aurait effacé la valeur capturée — piège identifié et évité).
+- `PlayerFacade.capturePersoStatesAtSeek()`/`persoStatesAtLastSeek` (`player/create-player.ts`) —
+  fusionne les deux sources, appelée une fois dans `seek()` juste après
+  `renderer.syncAnimationsToTimeline`/`renderSync.seek()` (qui positionnent déjà tout à `t`).
+- `PlayerFacade.getPersoStates()` / `Player.getPersoStates()` / `PlayerApi.getPersoStates`
+  (`player/create-player.ts`, `player/player.ts`, `player/types.ts`) — API publique, renvoie
+  `ReadonlyMap<persoId, Record<string, unknown>>` (§5, objet complet, pas paramétré par un seul
+  `persoId`).
+
+**Tests écrits, tous avec une vraie interpolation anime.js (jamais de mock du moteur) :**
+- `tests/v1/perso-state-mirror-transition.spec.ts` — fidélité du mécanisme miroir isolé (le
+  premier incrément, node vs objet simple, même ratio de progression, unités distinctes).
+- `tests/v1/capture-perso-states-mirror.spec.ts` — `capturePersoStatesMirror` avec plusieurs
+  persos/propriétés, cas vide, non-conversion cqw confirmée.
+- `tests/v1/player-get-perso-states.spec.ts` — intégration bout-en-bout : `PlayerFacade` réel,
+  scène réelle, `seek()` réel, `getPersoStates()` confirmé identique à la valeur reçue par le node
+  réel au même instant (la preuve de fidélité demandée par l'auteur : « un test doit vérifier que
+  les deux canaux renvoient bien un état similaire »).
+
+## 9. Intégration `packages/editor` — faite
+
+`AuthorApi.getPersoStates()` (`packages/authoring/selection-frame/src/author-api.ts`) — délégation
+directe à `player.getPersoStates()`, symétrique aux autres getters (`getNodePose`/`getNodeSnapshot`).
+
+`resolveTemporaryPatch` (`packages/editor/src/app/bridges/decor-editor-bridge.ts`) réécrite pour
+lire `authorApi.getPersoStates().get(itemId)` au lieu de `authorApi.getNodeSnapshot` — `syncSelection`
+n'a plus besoin de `referenceWidthPx` pour ce chemin (retiré de la destructuration locale et de
+l'appel).
+
+**Nouvelle fonction `formatPersoValueForCssProperty`** (`decor-editor/css-value-format.ts`),
+distincte de `formatLiveValueForCssProperty` : `getPersoStates()` ne renvoie JAMAIS du px (contrairement
+à `getNodeSnapshot`, lu sur le node), donc un nombre nu qu'elle renvoie est TOUJOURS déjà en cqw —
+`formatLiveValueForCssProperty` aurait reconverti ce nombre via `pxToCqw` (son test `typeof
+liveValue === 'string'` pour détecter un cqw déjà résolu ne couvre pas le cas nombre, seulement
+chaîne suffixée) — bug qui aurait été réintroduit silencieusement si cette distinction n'avait pas
+été faite. `formatPersoValueForCssProperty` ne fait plus aucune conversion physique.
+
+**Régression de test détectée et corrigée en cours de route** : les mocks `fakeAuthorApiWithNodes`/
+`fakeAuthorApi` (`packages/editor/tests/decor-editor-bridge.spec.ts`, `offset-editor-bridge.spec.ts`)
+ne fournissaient pas `getPersoStates` — ajoutés avec `getPersoStates: () => new Map(Object.entries(snapshots))`
+(dérivé du même paramètre déjà utilisé par `getNodeSnapshot`), pas une map vide. Sans cette
+correction, deux tests existants (« affiche la couleur live... » et « reste fiable pendant un
+geste CS actif ») auraient continué de passer silencieusement malgré la disparition de la lecture
+live — leurs assertions (`not.toBe('#808080')`, égalité à soi-même) étaient trop faibles pour la
+détecter. Confirmé en re-testant délibérément avec une map vide (échec observé), puis restauré.
+Le premier test a aussi été renforcé (comparaison stricte à la couleur de kf1, pas seulement « pas
+la valeur par défaut »).
+
+**Vérifié en direct dans l'éditeur** (scénario exact des deux bugs de la session — sélection sans
+keyframe + déplacements répétés du seek) : `width`/`height` restent stables (`93.96px`, jamais de
+retour à `Ncqw` ni d'effondrement géométrique) sur 5 déplacements successifs ; la couleur progresse
+continûment sans jamais se figer sur le keyframe précédent.
+
+Suite complète verte après intégration : `packages/editor` 468/468, `packages/codplay` gates
+verts.
+
+## 10. Écart d'unité Item/Perso — résolu par construction
+
+Le §6 (écart d'unité) est traité par `formatPersoValueForCssProperty` (§9) : `getPersoStates()`
+renvoie la valeur brute, réinterprétée uniquement côté Decor selon `NUMBER_FORMAT_BY_PROPERTY` —
+jamais dupliquée côté `codplay`.
+
+## 11. Bug distinct trouvé et corrigé — dérive de couleur vers le noir près de `t=0`
+
+Signalé par l'auteur après le §9 : la couleur interpolée dérivait vers le noir en rapprochant le
+seek de `t=0` — potentiellement toute valeur interpolée, pas seulement la couleur.
+
+**Méthode de diagnostic** : l'auteur a demandé de repasser la scène de démo de test
+(`packages/editor/src/app/layout/DemoMenuRegion.tsx::createPositionColorTestScene`) sur des
+couleurs RGB simples plutôt qu'`oklch`, pour isoler la cause. Un test isolé (anime.js seul, en
+dehors de tout code du projet, `from`/`to` en `oklch` explicites) a d'abord confirmé qu'anime.js
+interpole correctement `oklch()` — la cause n'était donc PAS un défaut d'interpolation de ce
+format de couleur.
+
+**Cause réelle, confirmée en direct avec RGB** : `buildKeyframeDecorActions`
+(`packages/editor/src/builder/build-scene.ts:672-675`, AVANT correctif) ne construisait jamais de
+`from` explicite pour une transition inter-keyframes — seulement `{ to, duration, ease }`. Anime.js
+déduit alors le `from` implicite depuis l'état ACTUEL de son `target` au moment du trigger. Pour le
+node réel, cet état existe déjà (le premier keyframe est fusionné dans le style initial statique du
+perso, `buildItemPerso`, ligne 603-607) — fiable par coïncidence. Pour l'objet miroir de
+`capturePersoStatesMirror` (§4.2/§5), fraîchement créé et vide à chaque capture, cet état n'existe
+PAS — anime.js retombe sur une valeur par défaut (transparent/noir pour une couleur), d'où la
+dérive observée UNIQUEMENT via `getPersoStates()`/la palette, jamais sur le node lui-même (confirmé
+par mesure directe : le node affichait déjà la bonne couleur, seule la palette dérivait).
+
+**Correctif, à la source (`build-scene.ts`), pas seulement dans le mécanisme miroir** — décision
+explicite de l'auteur : *« les données `from` sont exclusivement des données du perso, et surtout
+pas du node »*. `resolveKeyframeCascadeStyle(item, scene, prevKf)` (l'état du perso juste AVANT la
+transition, déjà calculé ligne 660 pour construire le diff, mais jusqu'ici jamais conservé) est
+maintenant transmis comme `from` explicite dans `stylePayload[prop]`, propriété par propriété (une
+propriété absente du `prevKf` cascade — jamais posée avant, ex. `rotate` sur un premier écart —
+reste sans `from`, laissant l'ancien comportement implicite pour ce cas précis, inchangé). Corrige
+les deux chemins EN MÊME TEMPS, à la racine : le node réel n'est plus fiable "par coïncidence", et
+le miroir reçoit désormais la même donnée perso que le node.
+
+4 tests de `packages/editor/tests/builder/build-scene.spec.ts` mis à jour (valeurs `from`
+attendues, dérivées des fixtures `d-a`/`d-b` déjà existantes — jamais devinées). Suite complète
+verte après correctif : `packages/editor` 468/468, gates verts. Vérifié en direct dans les DEUX
+modes de couleur (RGB puis `oklch` restauré) : plus de dérive, palette et DOM cohérents à `t`
+proche de 0.
+
+**Défaut distinct découvert au passage, non corrigé ici** : `toHexForPicker`
+(`packages/editor/src/decor-editor/render.ts:265-270`) ne parse QUE le format `oklch(...)` via une
+regex dédiée — toute autre syntaxe de couleur CSS valide (`rgb()`, `rgba()`, hex, nom de couleur)
+échoue silencieusement et retombe sur `'#808080'` (gris par défaut) dans le picker de la palette,
+alors que le DOM affiche la bonne couleur. Révélé par le passage temporaire en RGB pour ce
+diagnostic, pas un effet du chantier `getPersoStates` — préexistant, indépendant. Pas traité dans
+ce tour (la démo a été restaurée en `oklch`, le format normal du projet) ; à consigner comme
+chantier séparé si le support d'autres formats de couleur dans la palette est souhaité.

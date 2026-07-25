@@ -1,6 +1,6 @@
 import { deriveSimpleTransitions } from '../animation/derive-simple'
 import { runAnimationBatch } from '../animation/run-batch'
-import type { AnimationAdapter, AnimationResolvedAction, CaptureUpdate, ContinuousAnimationEngine } from '../animation/types'
+import type { AnimationAdapter, AnimationResolvedAction, CaptureUpdate, ContinuousAnimationEngine, TransitionRequest } from '../animation/types'
 import type { RenderMutationTraceEntry, RenderMutationResolver, RuntimeResolvedMutation } from '../runtime/render-mutation-resolver'
 import { passThroughRenderMutationResolver } from '../runtime/render-mutation-resolver'
 import { RuntimeComponentOrchestrator } from '../runtime/components'
@@ -381,6 +381,15 @@ export class RendererFacade implements RendererApi {
    */
   syncAnimationsToTimeline(timelineMs: number, eventMsByEventId: ReadonlyMap<string, number>): void {
     this.animationAdapter.seek?.(timelineMs, eventMsByEventId)
+  }
+
+  /**
+   * Returns every currently-active transition, raw (`listenerId`/persoId, `property`, unresolved
+   * `from`/`to`) — `2026-07-25-perso-state-at-t-plan.md` §4.2/§5. Delegates to
+   * `AnimationAdapter.getActiveTransitions`, never reads the DOM itself.
+   */
+  getActiveTransitions(): TransitionRequest[] {
+    return this.animationAdapter.getActiveTransitions?.() ?? []
   }
 
   /**
