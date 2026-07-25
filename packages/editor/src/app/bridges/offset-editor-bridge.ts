@@ -1,5 +1,7 @@
 import type { AuthorApi, LibreAdapter, NodePose, TrackedSession } from '@codplay/selection-frame'
 import type { OffsetEditorBridge, OffsetValuesPx, Unsubscribe } from '../../decor-editor/types'
+import { offsetValuesPxToPatch } from '../../decor-editor/units'
+import { createDecorLiveSession } from '../../decor-editor/decor-live-session'
 
 /**
  * Pont offset — implémente `PositionEditorBridge` du spec `2026-07-07-dedit-spec.md` §6, renommé
@@ -55,6 +57,8 @@ export type OffsetEditorBridgeHandle = OffsetEditorBridge & {
    * absence of activity.
    */
   onCommit(cb: (kind: OffsetGestureKind) => void): Unsubscribe
+  // `getLiveSession()` hérité d'`OffsetEditorBridge` (`decor-editor/types.ts`) — une seule session
+  // pour toute la durée de vie de ce pont, `rebind` ne la recrée jamais.
 }
 
 /** `NodePose` (`AuthorApi.getNodePose`) → `OffsetValuesPx` — pur remappage de forme, aucune
@@ -62,7 +66,7 @@ export type OffsetEditorBridgeHandle = OffsetEditorBridge & {
  *  pose" interdit à tout module authoring de re-décoder `style`/`getComputedStyle` pour déduire
  *  une pose — seul `getNodePose` (symétrique de `utils.set` côté codplay, via `utils.get`) le
  *  fait correctement, y compris après un remplacement de nœud (rebuild). */
-function nodePoseToOffsetValuesPx(pose: NodePose): OffsetValuesPx {
+export function nodePoseToOffsetValuesPx(pose: NodePose): OffsetValuesPx {
   return {
     translate: { x: pose.x, y: pose.y },
     width: pose.width,
@@ -94,6 +98,8 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
   let wasGestureActive = false
   /** Composants manipulés depuis le dernier `rebind` (§Étape C) — vidé à chaque rebind, jamais pendant une phase en cours. */
   const manipulatedKinds = new Set<OffsetGestureKind>()
+  /** Une seule session pour toute la durée de vie du pont — jamais recréée par `rebind` (§Étape A). */
+  const liveSession = createDecorLiveSession()
 
   /**
    * Gate via `session.canAct()` (santé de la session — connexion + non-suspendue). Pose lue via
@@ -175,6 +181,10 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
     rebind(nextBinding) {
       unsubscribeSessionActivity?.()
       unsubscribeSessionActivity = null
+      // Un changement de cible (nouvelle sélection, ou perte de sélection) en plein geste ne doit
+      // jamais laisser une session `live`/`committing` accrochée à un item qui n'est plus celui visé
+      // — abandon défensif, rien à écrire pour un geste que plus personne ne peut terminer proprement.
+      if (liveSession.getSnapshot().status !== 'idle') liveSession.abort()
       binding = nextBinding
       manipulatedKinds.clear()
       if (nextBinding !== null) {
@@ -192,15 +202,22 @@ export function createOffsetEditorBridge(): OffsetEditorBridgeHandle {
       if (values === null) return
       const restricted = restrictToManipulated(values, manipulatedKinds)
       for (const cb of valueListeners) cb(restricted)
+      const widthPx = binding?.referenceWidthPx() ?? 0
+      if (widthPx > 0) liveSession.reportValues({ offset: offsetValuesPxToPatch(restricted, widthPx) })
     },
 
     commitNow(kind) {
       for (const cb of commitListeners) cb(kind)
+      liveSession.commit()
     },
 
     onCommit(cb) {
       commitListeners.add(cb)
       return () => commitListeners.delete(cb)
+    },
+
+    getLiveSession() {
+      return liveSession
     },
   }
 }

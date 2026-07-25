@@ -116,6 +116,17 @@ export type ControllerEvent =
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
   | { type: 'SEEK'; timelineMs: number }
   /**
+   * Envoyé par `scenePlayer` une fois que `telco.seek()` (asynchrone) a réellement fini d'appliquer
+   * la position au DOM — jamais au moment de la demande (`SEEK`/`'seek'`, synchrone, émis AVANT que
+   * le seek asynchrone n'ait eu lieu). `decor-editor-bridge.ts` en a besoin pour re-résoudre la
+   * palette après coup : lue au moment de `'seek'`, elle capturait systématiquement l'état
+   * D'AVANT le seek (bug constaté en direct — la couleur d'un décor temporaire restait figée sur
+   * le keyframe précédent alors que la position, lue par le CS via son propre `frame?.sync()` dans
+   * ce même `.then()`, progressait normalement). Même rendez-vous que `frame?.sync()`
+   * (`scene-player-bridge.ts`), un consommateur de plus, pas un second appel `telco.seek()`.
+   */
+  | { type: 'SEEK_APPLIED' }
+  /**
    * Envoyé par tout point d'entrée `telco` (`onPlayClick` aujourd'hui — même besoin pour un futur
    * stop/rewind/setRate direct, `2026-07-17` remarque utilisateur : « patron commun, pas besoin de
    * dupliquer le flush ») juste AVANT l'appel `telco.*`, jamais après. Une édition dedit tout juste
@@ -157,6 +168,8 @@ export type ControllerEmitted =
   | { type: 'sceneCommitted'; scene: EditorScene; selection: Selection }
   | { type: 'sceneLoaded'; scene: EditorScene }
   | { type: 'seek'; timelineMs: number }
+  /** Réponse à `SEEK_APPLIED` — `decor-editor-bridge.ts` s'y abonne pour re-résoudre la palette une fois le seek réellement appliqué au DOM (jamais au moment de la demande, cf. `SEEK_APPLIED`). */
+  | { type: 'seekApplied' }
   /** Émis en réponse à `TELCO_ACTION_REQUEST` — `decor-editor-bridge.ts` s'y abonne comme sur `'seek'` (même `flushNow`). */
   | { type: 'flushPending' }
   | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }

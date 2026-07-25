@@ -19,6 +19,14 @@ c'est le pattern à l'origine du bug de pose) ?
   possède `ctx.playheadMs`, le relaie via `onPlayheadChange` → `machine.send({type:'SEEK',...})` →
   `machine.on('seek', ...)`. `lastKnownTimelineMs` est un cache légitime d'une valeur reçue en
   direct, pas une valeur devinée. Bon exemple à ne pas confondre avec le reste de cet inventaire.
+  **Nuance qui manquait ici et a coûté un faux diagnostic (bug bouton Stop, 2026-07-25) :**
+  `onPlayheadChange` (`mount.ts`) est un canal SORTANT UNIQUEMENT — `render()` l'appelle quand
+  `ctx.playheadMs` a changé (diff `lastPlayheadMs`), jamais l'inverse ; rien ne réécrit `ctx.playheadMs`
+  en retour depuis `options.onPlayheadChange`. Toute mise à jour de la tête de lecture DOIT donc passer
+  par `ctrl.seek(ms)` (qui pose `ctx.playheadMs` localement puis laisse le diff de `render()` émettre
+  `onPlayheadChange` tout seul) — jamais appeler `options.onPlayheadChange?.(ms)` directement depuis un
+  handler, sous peine de piloter le player réel (l'event `SEEK` part bien) sans que l'affichage local
+  (chrono, curseur) ne s'actualise. C'était le bug exact du bouton Stop (`onStopClick`, `mount.ts`).
 - **Document/scène** (`controller-machine.ts`) — `RUN_COMMAND`/`RUN_TRANSACTION` sont le seul point
   d'écriture (`context.scene`), toute mutation transite par `runCommand`/`transaction`
   (`commands/facade.ts`). Émission `sceneCommitted` après chaque mutation, contient la scène ET la

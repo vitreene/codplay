@@ -3,6 +3,7 @@ import { DecorEditorController } from '../src/decor-editor/controller'
 import type { DecorEditorCatalogs, AttachItemInput } from '../src/decor-editor/controller'
 import type { PaletteConfig } from '../src/decor-editor/palette-panel'
 import type { OffsetEditorBridge, OffsetValuesPx, ResolvedDecor } from '../src/decor-editor/types'
+import { createDecorLiveSession } from '../src/decor-editor/decor-live-session'
 
 function paletteConfig(): PaletteConfig {
   return {
@@ -409,6 +410,9 @@ function stubOffsetBridge(containerWidthPx = 500): OffsetEditorBridge & {
     },
     onGestureActiveChange() {
       return () => {}
+    },
+    getLiveSession() {
+      return createDecorLiveSession()
     },
     emitValues(v) {
       for (const cb of listeners) cb(v)

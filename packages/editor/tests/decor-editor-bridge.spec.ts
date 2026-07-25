@@ -5,7 +5,8 @@ import { controllerMachine } from '../src/app/controller/controller-machine'
 import { createDecorEditorBridge, PHASE_IDLE_FLUSH_MS } from '../src/app/bridges/decor-editor-bridge'
 import type { EditorScene } from '../src/app/commands/types'
 import type { AuthorApi } from '@codplay/selection-frame'
-import type { OffsetEditorBridge, OffsetValuesPx } from '../src/decor-editor/types'
+import type { OffsetEditorBridge, OffsetPatch, OffsetValuesPx } from '../src/decor-editor/types'
+import { createDecorLiveSession } from '../src/decor-editor/decor-live-session'
 
 /**
  * `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B — invariants A2/A3 de la charte
@@ -138,6 +139,9 @@ function fakeOffsetBridge(containerWidthPx = 100): FakeOffsetBridge {
   const gestureListeners = new Set<(active: boolean) => void>()
   const commitListeners = new Set<(kind: 'move' | 'resize' | 'rotate' | 'scale') => void>()
   let gestureActive = false
+  // Vraie session, pas une fausse — exerce le même canal §2/§4 que le pont réel plutôt que d'en
+  // simuler une version parallèle (2026-07-25-decor-unified-channel-plan.md).
+  const liveSession = createDecorLiveSession()
   return {
     activate() {},
     deactivate() {},
@@ -156,8 +160,15 @@ function fakeOffsetBridge(containerWidthPx = 100): FakeOffsetBridge {
       commitListeners.add(cb)
       return () => commitListeners.delete(cb)
     },
+    getLiveSession() {
+      return liveSession
+    },
     emitValues(v) {
       for (const cb of valueListeners) cb(v)
+      // `containerWidthPx = 100` par défaut : conversion px→cqw identité (cf commentaire de
+      // `fakeOffsetBridge`), donc `v` (px) réutilisable tel quel comme `OffsetPatch` (cqw) — même
+      // forme de champs des deux côtés, seules les unités diffèrent numériquement en général.
+      liveSession.reportValues({ offset: v as OffsetPatch })
     },
     setGestureActive(active) {
       gestureActive = active
@@ -165,6 +176,7 @@ function fakeOffsetBridge(containerWidthPx = 100): FakeOffsetBridge {
     },
     emitCommit(kind) {
       for (const cb of commitListeners) cb(kind)
+      liveSession.commit()
     },
   }
 }

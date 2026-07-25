@@ -291,7 +291,13 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
     // repositionne par accident. Ce point d'écoute reste le SEUL chemin d'exécution réelle du seek
     // (scrub du sequence-editor comme Stop, §3 bis du plan) — décor-editor-bridge's flush (signal 3)
     // et `lastSeekMs` en dépendent tous les deux, jamais court-circuités.
-    void telco.seek(timelineMs + lastPreRollMs).then(() => frame?.sync())
+    void telco.seek(timelineMs + lastPreRollMs).then(() => {
+      frame?.sync()
+      // `decor-editor-bridge.ts` re-résout la palette une fois le seek réellement appliqué au DOM
+      // (`SEEK_APPLIED`/`seekApplied`, `types.ts`) — même rendez-vous que `frame?.sync()` ci-dessus,
+      // un consommateur de plus sur la fin réelle du seek, pas un second appel `telco.seek()`.
+      machine.send({ type: 'SEEK_APPLIED' })
+    })
   })
   /**
    * Abandon de phase (Échap côté pont `decorEditor`) — `scene` est le document INCHANGÉ (rien n'a

@@ -1,4 +1,5 @@
 import type { ClassNameValue } from 'codplay/runtime/perso-shared-types'
+import type { DecorLiveSession } from './decor-live-session'
 
 // ─── Orientation ────────────────────────────────────────────────────────────
 
@@ -168,4 +169,11 @@ export interface OffsetEditorBridge {
    * réelle du geste. Ne porte aucune valeur — celle-ci a déjà atteint `onValues` en continu.
    */
   onCommit(cb: (kind: 'move' | 'resize' | 'rotate' | 'scale') => void): Unsubscribe
+  /**
+   * Canal unique geste → Decor (`2026-07-25-decor-unified-channel-plan.md` §2/§4) — état
+   * `idle`/`live`/`committing` + `DecorPatch` accumulé, consulté par `decor-editor-bridge.ts` au lieu
+   * de s'abonner à `onValues`/`onCommit` ci-dessus (qui restent pour d'autres usages — voir
+   * `decor-live-session.ts`).
+   */
+  getLiveSession(): DecorLiveSession
 }

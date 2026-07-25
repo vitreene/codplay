@@ -115,10 +115,27 @@ function styleFieldsForItemType(controller: DecorEditorController, itemType: Ite
 }
 
 /**
- * Décor temporaire — lecture live via `AuthorApi.getNodeSnapshot`, jamais `scene.decors`. Ne
- * demande que les propriétés que la palette édite réellement (`styleFieldsForItemType`), convertit
- * chaque valeur résolue dans l'unité propre au `Decor` (`formatLiveValueForCssProperty` — cqw pour
- * les champs numériques, chaîne brute sinon, ex. couleur).
+ * Décor temporaire — lecture live via `AuthorApi.getNodeSnapshot`, jamais `scene.decors`. Une
+ * SEULE frontière de conversion px→cqw (`2026-07-25-cqw-px-conversion-boundary-plan.md` §5) :
+ * tout est lu en px depuis le node (`style.*` ET `width`/`height`, qui sont dans `styleFieldsForItemType`
+ * — la palette « Dimensions » les édite comme `style`, pas `offset`, `default-palette.ts`), fusionné
+ * en un seul jeu de valeurs px, puis converti en cqw une seule fois à la fin — jamais une valeur
+ * déjà convertie n'est réinjectée comme entrée d'une conversion suivante.
+ *
+ * `width`/`height` ne doivent PAS être lus via `getNodePose` (bug constaté et corrigé en direct,
+ * cette session) : `getNodePose` (`readNodePose`, `codplay/runtime/components/lib/dom.ts`) coerce
+ * chaque prop en nombre nu via le mode 3-arguments d'anime `utils.get(node, prop, false)` — valide
+ * uniquement pour le contrat CS (`offset-editor-bridge.ts::readActivePose`), où la pose n'existe
+ * QUE dans le vocabulaire propre d'anime, toujours en px par construction du geste (§6 spec dedit).
+ * Hors geste, le node peut porter n'importe quelle unité de style d'origine (`cqw` compris) — un
+ * nombre nu ne dit pas laquelle. `getNodeSnapshot` (mode 2-arguments d'anime) renvoie une chaîne
+ * suffixée d'unité (`"8.52px"`) pour toute grandeur de longueur, y compris `width`/`height` — même
+ * garantie que `css-value-format.ts::formatLiveValueForCssProperty` exploite pour le reste du
+ * style. Avant ce correctif, `width`/`height` étaient reconvertis DEUX FOIS (une fois dans
+ * `patch.style` via `resolveTemporaryPatch`, une fois dans `patch.offset` via
+ * `resolveTemporaryOffset`, jamais réconciliées) — la seconde conversion réutilisait une valeur qui
+ * avait déjà traversé la première, d'où l'effondrement géométrique observé en direct (18 → 3.44 →
+ * 0.66 → 0.024 → … cqw à chaque seek). Ce n'était pas une régression du runtime `codplay`.
  */
 function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[], referenceWidthPx: number): DecorPatch {
   const propNames = fields.map((f) => f.path.slice('style.'.length))
@@ -252,6 +269,38 @@ function patchToContentArgs(patch: DecorPatch, existing: Content | undefined, it
   }
 }
 
+/**
+ * Commandes d'écriture pour `patch` sur `target` — fork-si-partagé (spec §2.3) inclus. Commun à
+ * `onDecorChange` (édition continue via dedit — palette, CSS libre, presets) et au commit d'une
+ * `DecorLiveSession` (fin de geste CS-family — `2026-07-25-decor-unified-channel-plan.md` §4 étape
+ * 5) : un seul endroit qui sait construire ces commandes, plus deux copies qui auraient pu diverger.
+ */
+function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatch): Command[] {
+  const commands: Command[] = []
+  let writeDecorId = target.writeDecorId!
+  if (target.keyframeId && isDecorSharedByAnotherKeyframe(scene, writeDecorId, target.keyframeId)) {
+    // Fork avant d'écrire, jamais après (spec §2.3) — sinon la mutation en place a déjà atteint
+    // le keyframe voisin le temps que le fork soit décidé.
+    writeDecorId = freshDecorId()
+    commands.push({ name: 'registerDecor', args: { decorId: writeDecorId } })
+    commands.push({ name: 'assignKeyframeDecor', args: { itemId: target.itemId, keyframeId: target.keyframeId, decorId: writeDecorId } })
+  }
+  const decorArgs = patchToDecorArgs(patch, scene)
+  if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: writeDecorId, patch: decorArgs } })
+
+  const existingContent = target.contentId ? scene.contents[target.contentId] : undefined
+  const contentArgs = patchToContentArgs(patch, existingContent, target.itemType)
+  if (contentArgs) commands.push({ name: 'assignContent', args: { itemId: target.itemId, content: contentArgs } })
+
+  // `.capsule` (→ `Item.capsule`) : aucun geste de création de capsule n'existe encore dans
+  // l'app (`DemoMenuRegion` ne crée que des items texte) — rien à vérifier tant que ce cas ne
+  // se présente pas réellement. `.custom` (CSS libre) est routé depuis ce jour via
+  // `Decor.custom`/`patchToDecorArgs` — plus un gap, cf `2026-07-17-decor-keyframe-layering-plan.md`.
+  if (patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
+
+  return commands
+}
+
 /** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif (spec §4.3, `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B.4). Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
 export const PHASE_IDLE_FLUSH_MS = 4000
 
@@ -355,6 +404,15 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     offsetBridge.onCommit(() => {
       if (pendingCommands !== null) armIdleFlush()
     })
+    // La `DecorLiveSession` (§2/§3 du plan) reste alimentée (`offset-editor-bridge.ts`) mais n'est PAS
+    // consultée ici pour l'écriture : `onDecorChange`/`pendingCommands` ci-dessus est DÉJÀ l'unique
+    // écrivain de l'offset, sensible à tous les signaux de fin de phase (sélection, seek, mutation
+    // externe — pas seulement la fin du geste CS) — `onCommit` n'arme qu'un flush déjà préparé,
+    // jamais une écriture indépendante. Faire écrire la session ICI créerait un second chemin
+    // d'écriture concurrent (double fork possible sur un décor partagé) — constaté en écrivant les
+    // tests de cette étape, corrigé en ne branchant PAS ce point d'écriture. La session sert pour
+    // l'instant de lecture seule (insertion de kf, §4 du plan) ; `committing`/`notifyWritten` restent
+    // définis pour un futur producteur (zone/multi-sélection) qui n'a pas déjà de chemin d'écriture.
   }
 
   /** Différé jusqu'au premier `PLAYER_READY` (`authorApi` requis pour `subscribeToNode`, §3.2). */
@@ -392,8 +450,8 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
       // bridge.ts::readActivePose`, `2026-07-18-pose-edit-architecture-study.md` §2/§6). L'ancienne
       // exception `!gestureActive` retombait sur le kf précédent seul pendant tout geste — le décor
       // temporaire restait figé au lieu de suivre le geste en cours.
-      const live = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType), referenceWidthPx) : {}
-      patch = mergePatch(base, live)
+      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType), referenceWidthPx) : {}
+      patch = mergePatch(base, liveStyle)
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)
     } else {
@@ -429,31 +487,10 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     const entry = entries.find((e) => e.itemId === target.itemId)
     if (!entry) return
 
-    const commands: Command[] = []
-    let writeDecorId = target.writeDecorId
-    if (target.keyframeId && isDecorSharedByAnotherKeyframe(scene, target.writeDecorId, target.keyframeId)) {
-      // Fork avant d'écrire, jamais après (spec §2.3) — sinon la mutation en place a déjà atteint
-      // le keyframe voisin le temps que le fork soit décidé.
-      writeDecorId = freshDecorId()
-      commands.push({ name: 'registerDecor', args: { decorId: writeDecorId } })
-      commands.push({ name: 'assignKeyframeDecor', args: { itemId: target.itemId, keyframeId: target.keyframeId, decorId: writeDecorId } })
-    }
-    const decorArgs = patchToDecorArgs(entry.patch, scene)
-    if (decorArgs) commands.push({ name: 'setDecor', args: { decorId: writeDecorId, patch: decorArgs } })
-
-    const existingContent = target.contentId ? scene.contents[target.contentId] : undefined
-    const contentArgs = patchToContentArgs(entry.patch, existingContent, target.itemType)
-    if (contentArgs) commands.push({ name: 'assignContent', args: { itemId: target.itemId, content: contentArgs } })
-
-    // `.capsule` (→ `Item.capsule`) : aucun geste de création de capsule n'existe encore dans
-    // l'app (`DemoMenuRegion` ne crée que des items texte) — rien à vérifier tant que ce cas ne
-    // se présente pas réellement. `.custom` (CSS libre) est routé depuis ce jour via
-    // `Decor.custom`/`patchToDecorArgs` — plus un gap, cf `2026-07-17-decor-keyframe-layering-plan.md`.
-    if (entry.patch.capsule !== undefined) console.warn('[decorEditor bridge] patch.capsule non routé — aucune capsule créée par cet incrément')
-
     // Ne commet plus immédiatement — accumulé pour la fin de phase (§Étape B). `entry.patch` porte
-    // déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour (pont §Étape A) :
-    // c'est ce qui ferme le bug de patch périmé constaté en direct cette session.
+    // déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour (pont §Étape A) —
+    // seul et unique chemin d'écriture pour offset, sensible à tous les signaux de fin de phase.
+    const commands = buildDecorCommands(scene, target, entry.patch)
     if (commands.length > 0) {
       pendingCommands = commands
       armIdleFlush()
@@ -523,6 +560,20 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
   })
+  /**
+   * `'seek'` ci-dessus est émis à la DEMANDE (synchrone), avant que `telco.seek()` (asynchrone,
+   * `scene-player-bridge.ts`) n'ait réellement appliqué la position au DOM — le `syncSelection`
+   * immédiat ci-dessus capture donc systématiquement l'état D'AVANT le seek pour tout champ lu en
+   * direct sur le node (`resolveTemporaryPatch`, décor temporaire). Bug constaté en direct : la
+   * couleur d'un décor temporaire restait figée sur le keyframe précédent pendant qu'un scrub
+   * répété faisait progresser la position (celle-ci vient du CS, resynchronisé séparément via
+   * `frame?.sync()` dans ce même `.then()`). `'seekApplied'` est le rendez-vous de fin réel —
+   * un second `syncSelection` ici referme l'écart, sans nouvel appel `telco.seek()`.
+   */
+  const unsubscribeSeekApplied = machine.on('seekApplied', () => {
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene) syncSelection(scene, selection)
+  })
   // Signal 6 — play demandé : flush immédiat AVANT `telco.play()` (`PLAY_REQUEST`, `types.ts`) —
   // sans ça une édition tout juste faite peut rester en attente pendant tout le play qui suit.
   const unsubscribeFlushPending = machine.on('flushPending', () => flushNow())
@@ -561,6 +612,7 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
       cancelIdleFlush()
       document.removeEventListener('keydown', onKeyDown, { capture: true })
       unsubscribeSeek.unsubscribe()
+      unsubscribeSeekApplied.unsubscribe()
       unsubscribeFlushPending.unsubscribe()
       unsubscribePlaybackActive.unsubscribe()
       pendingCommands = null

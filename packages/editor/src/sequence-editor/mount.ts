@@ -444,10 +444,15 @@ export function mountSequenceEditor(
   btnPlay.addEventListener('click', onPlayClick)
 
   function onStopClick(): void {
-    // Stop = seek(0), pas un appel direct à telco ici — ce chemin reste le même relais central
-    // que le scrub (`SEEK` → `scene-player-bridge.ts`), pour préserver le flush décor, `lastSeekMs`
-    // et la resynchro CS qui en dépendent (§3 bis du plan).
-    options.onPlayheadChange?.(0)
+    // Stop = `ctrl.seek(0)`, jamais `options.onPlayheadChange?.(0)` en direct — ce dernier est un
+    // canal SORTANT UNIQUEMENT (voir `render()` plus bas : il émet quand `ctx.playheadMs` a changé,
+    // jamais l'inverse). L'appeler directement pilote bien le player réel (le `SEEK` part, le seek
+    // réussit) mais ne met jamais à jour `ctx.playheadMs` local, donc le chrono/curseur affichés
+    // restent figés sur leur dernière valeur (bug constaté en direct : Stop après une lecture menée à
+    // son terme laissait le chrono affiché sur l'heure de fin, alors que la tête réelle était bien
+    // revenue à 0). `ctrl.seek(0)` met à jour l'état local puis laisse le diff de `render()` émettre
+    // `onPlayheadChange`/`SEEK` tout seul — même relais que le scrub, `scene-player-bridge.ts` inchangé.
+    ctrl.seek(0)
   }
   btnStop.addEventListener('click', onStopClick)
 

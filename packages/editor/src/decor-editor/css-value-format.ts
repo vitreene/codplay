@@ -57,20 +57,37 @@ export function parseNumberFromCssValue(cssProperty: string, value: string): num
   return Number(match[0]) / scale
 }
 
+/** Unités container-query — une valeur déjà dans l'une d'elles est déjà dans l'unité finale du
+ *  décor, jamais une longueur physique à reconvertir (`container-query-units.ts`, `codplay`). */
+const CONTAINER_QUERY_UNIT_SUFFIX = /^-?[\d.]+(cqw|cqh|cqi|cqb|cqmin|cqmax)$/
+
 /**
  * Convertit une valeur RÉSOLUE (lue en direct sur le node via `AuthorApi.getNodeSnapshot`, jamais
  * saisie par l'auteur) en chaîne CSS finale pour une propriété donnée — pendant du décor temporaire
  * (`2026-07-17-resolved-state-at-time-notes.md`). Différent de `formatNumberForCssProperty` :
  * jamais de `scale` (ce facteur n'ajuste que la granularité perçue d'une SAISIE, sans rapport avec
  * une valeur déjà résolue) — seule la conversion physique px→cqw s'applique, pour les propriétés
- * qui en ont besoin (`format:'cqw'`). `getNodeSnapshot` renvoie ces longueurs suffixées ("8.52px")
- * pour toute propriété hors du vocabulaire de pose propre d'anime — jamais un nombre nu, d'où le
- * parsing ici plutôt qu'un `Number()` direct.
+ * qui en ont besoin (`format:'cqw'`).
+ *
+ * `getNodeSnapshot` NE GARANTIT PAS une longueur toujours suffixée `px` (bug constaté et corrigé en
+ * direct, cette session — `2026-07-25-cqw-px-conversion-boundary-plan.md`) : il renvoie le style
+ * CSS tel qu'actuellement posé sur le node, dans SON unité d'origine — `cqw` si aucune transition
+ * anime.js n'est active sur cette propriété à cet instant (ex. décor temporaire entre deux
+ * keyframes sans tween en cours), `px` si une transition l'a déjà résolu. Reconvertir une valeur
+ * déjà en `cqw` comme si elle était en px (l'ancien comportement, `Number.parseFloat` aveugle à
+ * l'unité) produisait un effondrement géométrique à chaque cycle de lecture (18 → 3.44 → 0.66 →
+ * … cqw à chaque seek, observé en direct). Une valeur déjà container-query passe donc telle
+ * quelle, sans nouvelle conversion — un seul point de conversion physique (px→cqw), jamais
+ * appliqué à une valeur qui a déjà traversé ce point.
  */
 export function formatLiveValueForCssProperty(cssProperty: string, liveValue: string | number, containerWidthPx: number): string {
   const entry = NUMBER_FORMAT_BY_PROPERTY[cssProperty] ?? DEFAULT_ENTRY
+  if (entry.format === 'raw') {
+    const parsed = typeof liveValue === 'number' ? liveValue : Number.parseFloat(liveValue)
+    return Number.isFinite(parsed) ? String(parsed) : String(liveValue)
+  }
+  if (typeof liveValue === 'string' && CONTAINER_QUERY_UNIT_SUFFIX.test(liveValue)) return liveValue
   const parsed = typeof liveValue === 'number' ? liveValue : Number.parseFloat(liveValue)
   if (!Number.isFinite(parsed)) return String(liveValue)
-  if (entry.format === 'raw') return String(parsed)
   return `${pxToCqw(parsed, containerWidthPx)}cqw`
 }

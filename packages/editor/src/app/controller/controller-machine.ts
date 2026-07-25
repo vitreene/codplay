@@ -93,6 +93,9 @@ export const controllerMachine = setup({
     /** Relais pur (§7 étape 5) — `playheadMs` n'est jamais stocké ici, `sequence-editor` en reste l'unique possesseur. */
     emitSeek: emit(({ event }) => ({ type: 'seek' as const, timelineMs: event.type === 'SEEK' ? event.timelineMs : 0 })),
 
+    /** Relais pur — voir `SEEK_APPLIED`/`seekApplied` (`types.ts`) : signal de fin, jamais de demande. */
+    emitSeekApplied: emit(() => ({ type: 'seekApplied' as const })),
+
     /** Réponse à `TELCO_ACTION_REQUEST` — même flush que `'seek'`, déclenché AVANT tout appel `telco.*` (voir `types.ts`). */
     emitFlushPending: emit(() => ({ type: 'flushPending' as const })),
 
@@ -155,6 +158,7 @@ export const controllerMachine = setup({
     LOAD_SCENE: {},
     SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
     SEEK: { actions: 'emitSeek' },
+    SEEK_APPLIED: { actions: 'emitSeekApplied' },
     /**
      * Émis une seule fois, juste avant `telco.play()`, jamais pour pause (`mount.ts::onPlayClick`)
      * — point d'entrée de l'état `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`
