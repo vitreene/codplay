@@ -6,7 +6,7 @@ import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-pal
 import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
 import { findPanel, panelsForType } from '../../decor-editor/palette-panel'
-import type { PanelField } from '../../decor-editor/palette-panel'
+import type { PanelField, PaletteConfig } from '../../decor-editor/palette-panel'
 import { formatPersoValueForCssProperty } from '../../decor-editor/css-value-format'
 import type { DecorPatch, OffsetPatch } from '../../decor-editor/types'
 import type { Content, Decor, EditorScene, Item, OffsetData } from '../commands/types'
@@ -21,7 +21,7 @@ import { mergePatch } from '../../decor-editor/merge'
  * aujourd'hui — `patch` porte donc, à lui seul, le décor résolu.
  */
 
-type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
+export type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
 
 /**
  * `keyframeId: null` + `isTemporary: false` = décor initial de l'item (`initialDecorId`), comme
@@ -69,7 +69,7 @@ function resolveTarget(scene: EditorScene, selection: Selection, timelineMs: num
   return { itemId: item.id, keyframeId: alignment.keyframeId, contentId: item.contentId, writeDecorId: decorId, itemType: item.type, isTemporary: false }
 }
 
-type KeyframeAlignment =
+export type KeyframeAlignment =
   | { kind: 'no-keyframes' }
   | { kind: 'before-first' }
   | { kind: 'exact'; keyframeId: string }
@@ -82,7 +82,7 @@ type KeyframeAlignment =
  * explicitement sélectionné — même résultat, `initialDecorId ≈ kf1`) ; seul `between` a besoin
  * d'une lecture live (aucun décor réel ne correspond à un instant interpolé).
  */
-function resolveKeyframeAlignment(item: Item, timelineMs: number): KeyframeAlignment {
+export function resolveKeyframeAlignment(item: Item, timelineMs: number): KeyframeAlignment {
   const sorted = [...item.keyframes].sort((a, b) => a.timeMs - b.timeMs)
   const first = sorted[0]
   if (!first) return { kind: 'no-keyframes' }
@@ -101,8 +101,7 @@ function resolveKeyframeAlignment(item: Item, timelineMs: number): KeyframeAlign
 }
 
 /** `style.<prop>` de tous les panneaux pertinents pour ce type d'item — jamais devinés (`default-palette.ts` en est la seule source, `2026-07-17-resolved-state-at-time-notes.md`). */
-function styleFieldsForItemType(controller: DecorEditorController, itemType: ItemVisualType): PanelField[] {
-  const config = controller.getPaletteConfig()
+export function styleFieldsForItemType(config: PaletteConfig, itemType: ItemVisualType): PanelField[] {
   const fields: PanelField[] = []
   for (const panelId of panelsForType(itemType, config)) {
     const panel = findPanel(config, panelId)
@@ -129,7 +128,7 @@ function styleFieldsForItemType(controller: DecorEditorController, itemType: Ite
  * (`css-value-format.ts`) formate sans jamais convertir physiquement (pas de `referenceWidthPx`
  * ici, devenu inutile pour ce chemin de lecture).
  */
-function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[]): DecorPatch {
+export function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[]): DecorPatch {
   const persoState = authorApi.getPersoStates().get(itemId)
   if (!persoState) return {}
   const style: Record<string, string> = {}
@@ -142,6 +141,48 @@ function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: Pan
       : String(raw)
   }
   return Object.keys(style).length > 0 ? { style } : {}
+}
+
+/**
+ * Pose live d'un perso — `x`/`y`/`width`/`height`/`rotate`/`scaleX`/`scaleY`, jamais couverte par
+ * la palette (aucun champ position/rotate/scale dans `default-palette.ts`), mais bien fournie par
+ * `getPersoStates()` (`2026-07-25-perso-state-at-t-plan.md`) comme n'importe quelle autre
+ * propriété du perso — la palette n'est jamais la limite de ce que « photographier » un item peut
+ * capturer. `x`/`y`/`width`/`height` sont des chaînes cqw brutes (jamais px) : un simple
+ * `Number.parseFloat` suffit, sans le facteur d'échelle de `parseNumberFromCssValue` (celui-ci
+ * n'a de sens que pour une SAISIE utilisateur, cf `css-value-format.ts` — pas une valeur perso déjà
+ * dans l'unité finale).
+ *
+ * `getPersoStates()` ne porte QUE les propriétés activement animées à cet instant (issues des
+ * transitions actives, `2026-07-25-perso-state-at-t-plan.md` §4) — un champ constant (ex. `x`,
+ * jamais transitionné si l'item ne bouge qu'en `y`) en est absent, PAS égal à 0. `base` (la
+ * cascade déjà résolue jusqu'au keyframe précédent) fournit la valeur de repli pour ces champs —
+ * jamais un défaut arbitraire (`0`/`1`) qui écraserait silencieusement l'héritage : `translate`/
+ * `scale` sont fusionnés par `mergePatch` comme des groupes ENTIERS (`STRUCTURED_GROUPS`), donc un
+ * `x: 0` inventé ici écraserait le vrai `x` hérité de `base`, pas seulement le compléter.
+ */
+function resolveTemporaryOffset(authorApi: AuthorApi, itemId: string, base: DecorPatch): DecorPatch {
+  const persoState = authorApi.getPersoStates().get(itemId)
+  if (!persoState) return {}
+  const parseCqw = (raw: unknown): number | undefined => {
+    if (raw === undefined) return undefined
+    const parsed = typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  const x = parseCqw(persoState.x) ?? base.offset?.translate?.x
+  const y = parseCqw(persoState.y) ?? base.offset?.translate?.y
+  const width = parseCqw(persoState.width) ?? base.offset?.width
+  const height = parseCqw(persoState.height) ?? base.offset?.height
+  const rotate = parseCqw(persoState.rotate) ?? base.offset?.rotate
+  const scaleX = parseCqw(persoState.scaleX) ?? base.offset?.scale?.x
+  const scaleY = parseCqw(persoState.scaleY) ?? base.offset?.scale?.y
+  const offset: OffsetPatch = {}
+  if (x !== undefined || y !== undefined) offset.translate = { x: x ?? 0, y: y ?? 0 }
+  if (width !== undefined) offset.width = width
+  if (height !== undefined) offset.height = height
+  if (rotate !== undefined) offset.rotate = rotate
+  if (scaleX !== undefined || scaleY !== undefined) offset.scale = { x: scaleX ?? 1, y: scaleY ?? 1 }
+  return Object.keys(offset).length > 0 ? { offset } : {}
 }
 
 /**
@@ -168,7 +209,7 @@ function freshDecorId(): string {
  * « Contenu »/« Auto » de la palette doit refléter la valeur RÉELLEMENT posée à l'attache,
  * pas repartir vide alors que l'item porte déjà du texte.
  */
-function resolveCurrentPatch(decor: Decor, content: Content | undefined, scene: EditorScene): DecorPatch {
+export function resolveCurrentPatch(decor: Decor, content: Content | undefined, scene: EditorScene): DecorPatch {
   const patch: DecorPatch = {}
   if (decor.style) patch.style = decor.style
   // `ClassNameValue` — deux types homonymes distincts : `string|string[]` côté document
@@ -204,7 +245,7 @@ function resolveCurrentPatch(decor: Decor, content: Content | undefined, scene: 
  * `resolveCurrentPatch` (conversion décor→patch déjà existante) et `mergePatch`
  * (`decor-editor/merge.ts`, déjà existant) — aucune nouvelle logique de fusion ici.
  */
-function resolveEffectiveKeyframePatch(
+export function resolveEffectiveKeyframePatch(
   scene: EditorScene,
   item: Item,
   keyframeId: string,
@@ -227,8 +268,58 @@ function resolveEffectiveKeyframePatch(
     .reduce((acc, patch) => mergePatch(acc, patch), {} as DecorPatch)
 }
 
+/**
+ * Diff propriété par propriété entre deux `DecorPatch` résolus — vrai si `patch` diverge de `base`
+ * sur au moins une propriété présente dans `patch`. Granularité identique à `mergePatch`
+ * (`decor-editor/merge.ts`) : clés de `style` une à une, sous-champs d'`offset` un à un,
+ * `classes`/`custom`/`zone` comme valeurs entières.
+ */
+export function patchDiffersFromBase(base: DecorPatch, patch: DecorPatch): boolean {
+  if (patch.style) {
+    for (const [k, v] of Object.entries(patch.style)) if (base.style?.[k] !== v) return true
+  }
+  if (patch.offset) {
+    for (const k of Object.keys(patch.offset) as (keyof OffsetPatch)[]) {
+      if (JSON.stringify(base.offset?.[k]) !== JSON.stringify(patch.offset[k])) return true
+    }
+  }
+  if (patch.classes !== undefined && JSON.stringify(patch.classes) !== JSON.stringify(base.classes)) return true
+  if (patch.custom !== undefined && patch.custom !== base.custom) return true
+  if (patch.zone !== undefined && patch.zone !== base.zone) return true
+  return false
+}
+
+/**
+ * Décor à consigner pour un NOUVEAU keyframe inséré à `timelineMs` sur `item` — `null` si rien à
+ * consigner (pas entre deux keyframes réels, ou état live identique à la cascade : le keyframe
+ * s'ouvre vide, comportement actuel de `adjacentDecorId` inchangé). Non-null seulement si l'état
+ * réellement affiché DIVERGE de la cascade — jamais un instantané complet systématique.
+ *
+ * « Photographier » l'item : capture TOUTE propriété du perso, pas seulement celles éditables via
+ * la palette — `liveStyle` (couleur, dimensions CSS) ET `liveOffset` (position/rotation/scale,
+ * pilotées par le CS, jamais un champ de palette) sont toutes deux des propriétés du même perso,
+ * `getPersoStates()` les fournit ensemble (`2026-07-25-perso-state-at-t-plan.md`).
+ */
+export function resolveKeyframeInsertionPatch(
+  scene: EditorScene,
+  item: Item,
+  timelineMs: number,
+  content: Content | undefined,
+  authorApi: AuthorApi,
+  paletteConfig: PaletteConfig,
+  itemType: ItemVisualType,
+): DecorPatch | null {
+  const alignment = resolveKeyframeAlignment(item, timelineMs)
+  if (alignment.kind !== 'between') return null
+  const base = resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
+  const liveStyle = resolveTemporaryPatch(authorApi, item.id, styleFieldsForItemType(paletteConfig, itemType))
+  const liveOffset = resolveTemporaryOffset(authorApi, item.id, base)
+  const patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
+  return patchDiffersFromBase(base, patch) ? patch : null
+}
+
 /** Écarts routés vers `setDecor` (`style`/`classes`/`offset`/`custom`/`zone`) — présents seulement si modifiés. */
-function patchToDecorArgs(patch: DecorPatch, scene: EditorScene): Partial<Omit<Decor, 'id'>> | null {
+export function patchToDecorArgs(patch: DecorPatch, scene: EditorScene): Partial<Omit<Decor, 'id'>> | null {
   const args: Partial<Omit<Decor, 'id'>> = {}
   let touched = false
   if (patch.style !== undefined) { args.style = patch.style; touched = true }
@@ -439,7 +530,7 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
       const { authorApi } = machine.getSnapshot().context
       // Fiable même pendant un geste CS actif : `getPersoStates()` est capturé au dernier seek,
       // indépendamment de tout geste CS en cours (`2026-07-25-perso-state-at-t-plan.md`).
-      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller, target.itemType)) : {}
+      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller.getPaletteConfig(), target.itemType)) : {}
       patch = mergePatch(base, liveStyle)
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)

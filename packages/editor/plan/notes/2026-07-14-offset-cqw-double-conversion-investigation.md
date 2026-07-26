@@ -193,4 +193,4 @@ translation vers le haut) faisait lever un `TypeError` silencieusement avalé pa
 Corrigé en parsant contre `margin-left`. Détail complet, plus la réflexion
 architecturale plus large que cette investigation a déclenchée (réduction du rôle
 d'anime.js, doublons relevés, chantiers) :
-`packages/codplay/plan/notes/2026-07-16-anime-js-native-substitution-chantiers.md`.
+`docs/projet/2026-07-16-solve-project-moteur-custom.md`.

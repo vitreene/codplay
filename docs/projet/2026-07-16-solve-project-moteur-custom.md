@@ -1,3 +1,60 @@
+# Codplay V2 — cahier des charges émergent
+
+> **Résumé des points clés (2026-07-26).** Cette discussion projet a fait converger plusieurs
+> réflexions vers ce qui ressemble au cahier des charges d'une **codplay V2**. Les points clés, avant
+> le détail (S1-S8 ci-dessous) :
+>
+> 1. **Flux unique `solve → project`** (S5, S7). À partir des events : `materialize → resolve → solve
+>    (état perso natif, à `t`, toutes interpolations FLIP comprises) → project (état → substrat) →
+>    render`. Le player **calcule un état**, les composants le **projettent**. Renversement : plus
+>    « animer des nodes via une lib », mais « résoudre un état, puis l'adapter au substrat ».
+> 2. **Projection à sens unique** (S1). `item → perso → node` ne s'inverse jamais. Toute capture lit
+>    l'**état logique** (`PersoState`), jamais le node de rendu. La transform de rendu est un artefact
+>    jetable, pas une source de description.
+> 3. **Moteur d'interpolation custom** (S2-S4, S6). Retirer anime.js : emprunter ses **algos purs**
+>    (courbes Penner, forme d'API) et **rejeter son runtime à état** (timeline, cache, son `set`).
+>    Point d'entrée = l'unité, **déjà hors anime** (`resolveContainerQueryValue`). `solve(from,to,ease,t)`
+>    devient une fonction pure ; `project` est le **seul `set`**, unifié dans `component.update`
+>    (aujourd'hui **deux `set` = deux écrivains**, redondance à supprimer).
+> 4. **Un seul écrivain, un seul état, un seul `set`** — le gain premier est **architectural** :
+>    codplay fait aujourd'hui deux fois la même chose ; la V2 retire la redondance, elle n'ajoute pas
+>    de puissance.
+> 5. **La Projection : cible de rendu déclarée** (S8). Le substrat (DOM) cesse d'être implicite. Une
+>    Projection expose des capacités abstraites — `set` / `measure` / `mount` — dont les composants
+>    dépendent. Le DOM devient *une* Projection ; canvas et multi-cibles deviennent possibles.
+>    Concept **codplay**, pas ed2. Généralise le `move backend` de `move-separation-policy` à toutes
+>    les propriétés.
+> 6. **`measure` est irréductible** : la position réelle d'un node n'est pas toujours le produit propre
+>    des matrices logiques (overflow/reflow non prédictibles). `measure` reste le recours d'exactitude
+>    au pixel — cas limite du **seek FLIP sous ancêtres mobiles**
+>    (`2026-07-26-seek-flip-ancetres-mobiles.md`).
+> 7. **Séquençable sans big-bang.** La frontière solve/project est neutre au moteur (anime la remplit
+>    via mirror aujourd'hui, custom demain). Migrer le player vers cette frontière *avec anime
+>    dessous*, puis glisser le moteur custom. Jamais un big-bang.
+> 8. **État = `f(scène, t)` — constitutif et atteignable.** L'état à `t` est accessible comme
+>    **projection de la scène**, sans reconstruction progressive (modèle three.js). Le seek devient
+>    une **évaluation** (donc **synchrone**), pas un rejeu — réversible. Tout se lit par
+>    **interrogation** : continu → évaluation (déjà : `capturePersoStatesMirror`) ; discret (`move`
+>    on/off) → **fenêtre de validité** (déjà implémenté, réversible) ; capturé (`persist`) → valeur
+>    figée relue ; interaction → écrit dans la scène (indétermination résolue). Seuls les **effets à
+>    side-effect** restent un rejeu filtré (rares, isolés). **C'est *moins* d'état, pas un store** ;
+>    faisabilité = un **inventaire** (events rejoués → fenêtre-de-validité vs effet irréductible), pas
+>    un pari. Détail : `2026-07-26-etat-fonction-de-t.md`.
+> 9. **Portabilité = conséquence de la V2, et contrainte de rédaction.** Cœur agnostique / composants
+>    sur mesure : un portage (cas concret Flutter) devient « cœur inchangé + composants réécrits + une
+>    `FlutterProjection` » — les obstacles au portage SONT les points V2 (nodes dans le player →
+>    Projection ; impératif → f(t)/déclaratif ; cqw/anime web → Projection/moteur custom). Surtout :
+>    tenir la contrainte de portage **discipline le code TS présent** (interdit à l'écriture les fuites
+>    de plateforme — les cicatrices web sont ces fuites). Chantier **typage** mûr : les `unknown`
+>    étaient de l'indétermination, les cas d'usage l'ont résolue → remontée des cas vers types, pas
+>    invention. Détail : `2026-07-26-portabilite-contrainte-redaction.md`.
+>
+> Ce document dit **quoi construire** (S1-S9 ci-dessous). Le **comment mener** le chantier (réécriture
+> franche, tests-oracle, structuration, façade multi-canaux, rien-en-dur, revue I/O) est dans
+> `2026-07-26-conduite-chantier-v2.md`. Aucun code écrit pour la V2 (seul le correctif §0 est livré).
+
+---
+
 # Réflexion — réduire la surface d'anime.js, vers un module de style natif
 
 Note de consignation, écrite après la résolution du bug cqw mixte (voir
@@ -6,6 +63,387 @@ pour cet historique-là). Cette note est distincte : elle documente la réflexio
 architecturale plus large que cette investigation a déclenchée, côté
 `packages/codplay` exclusivement. Aucun code n'a été écrit pour les chantiers
 ci-dessous — seul le correctif de la cause racine (§0) est livré.
+
+> **Cadre directeur (2026-07-26)** — les §0-§8 ci-dessous restent valides, mais une
+> discussion postérieure leur a donné une **exigence directrice** qui réoriente leur
+> raison d'être. `getPersoStates()` (`2026-07-25-perso-state-at-t-plan.md`) a matérialisé,
+> en production, le fait que codplay veut être « **solve puis project** ». Les deux sections
+> suivantes (Synthèse / Discussion) portent ce cadre ; elles priment sur toute formulation
+> antérieure qui le contredirait.
+
+---
+
+## Cadre directeur — synthèse (2026-07-26)
+
+Trois sujets liés, discutés en mode projet (aucun code écrit). Point par point, ce qu'on retient.
+
+### S1. La projection `item → perso → node` est à sens unique, par conception
+
+1. Le flux est `item (description auteur) → perso state @ t (état logique, unité native) →
+   node (rendu)`. Il ne s'inverse **jamais** : on ne relit pas le node pour reconstruire une
+   description. Détaillé en mémoire `project-item-perso-node-one-way-projection` et dans
+   `packages/editor/plan/2026-07-25-decor-unified-channel-plan.md` §C.
+2. Trois raisons irréductibles : projection surjective (plusieurs descriptions → même rendu),
+   état transitoire ≠ consigné (matrice en pleine transition = point intermédiaire, pas intention),
+   intrusion de substrat (relire le DOM ferait entrer le rendu dans le modèle).
+3. Vérif empirique faite : aucun module d'authoring ne relit un node d'item comme source. Les
+   lectures node existantes sont légitimes et ne visent pas un node d'item (hit-testing timeline,
+   `referenceWidthPx`, mesure de police auto-size).
+
+### S2. « Solve au niveau perso, project = un `set` » est le vrai fonctionnement latent de codplay
+
+1. Le canal parallèle `capturePersoStatesMirror` n'est **pas** un second moteur : il réutilise
+   `createRealAnimeImplementation()` (même anime, mêmes paramètres). Le seul commutateur est
+   `target instanceof Element` (`animation/adapter.ts:13`) : cible = objet nu → la valeur native
+   traverse sans résolution DOM ; cible = node → résolution + application.
+2. Donc la séparation **solve (interpole → état natif)** / **project (état natif → node)** existe
+   déjà, fusionnée dans un seul passage anime, révélée par un `if`. Le mirror n'a pas ajouté un
+   calcul étranger : il a dû **dupliquer** un étage latent faute qu'il soit premier.
+3. Systématiser cette séparation ferait émerger : `getPersoStates()` devient le produit normal de
+   solve (fin du canal parallèle, du couplage éditeur-dans-le-player) ; backend réellement
+   substituable (canvas/SVG sans toucher solve — généralise `move-separation-policy` à toutes les
+   propriétés) ; seek exact par construction (play et seek passent par le même project) ; la règle
+   S1 devient l'architecture, plus une discipline à défendre.
+4. Coût à mesurer, pas à supposer : une indirection perso-state par propriété par frame (écriture
+   mémoire + lecture, pas un recalcul — « project = un `set` »). Intuition : négligeable devant
+   layout/paint. **À benchmarker avant tout engagement.**
+
+### S3. La résolution d'unité est déjà hors anime — c'est la première étape qui justifie le moteur custom
+
+1. **Correction d'une erreur de la discussion** : la résolution CQW n'est **pas** dans anime.
+   `resolveContainerQueryValue` (`container-query-units.ts`) fait tout (parse, mesure conteneur,
+   calcule px) et son commentaire le dit : *« never touches anime.js's own unit handling »*. anime
+   ne fait **rien** pour le CQW ; il ne fait que l'appeler via le `if instanceof Element`.
+2. Ce fichier est **truffé de contournements d'anime**, pas d'usages : parser contre `margin-left`
+   (anime/CSS rejette les cqw négatifs sur `width`), renvoyer `"Npx"` string (anime *drop* un
+   nombre nu sur `width`). Ce sont des **cicatrices** de devoir passer par anime, pas des
+   intégrations.
+3. Conséquence : `resolveContainerQueryValue` **est déjà l'étage project** (natif cqw → px node),
+   écrit, testé, à nous. Ce qui reste couplé à anime, c'est seulement le **solve** (interpolation)
+   et le `set` final.
+4. Donc le moteur custom ne commence pas par « réécrire l'interpolation » : il commence là où anime
+   gêne déjà (l'unité), et réécrire le solve est ce qui **efface les contournements** (plus de hack
+   `margin-left`, plus de hack `"Npx"`, parce que *notre* solve accepte cqw négatifs et nombres nus).
+   La résolution d'unité n'est pas une raison parmi d'autres — c'est la preuve, déjà dans le code,
+   que codplay a une sémantique de valeur qu'anime ne porte qu'en fraude.
+
+### S4. Le découpage des deux chantiers — S2 est la spécification de S3
+
+1. Tant qu'anime est le moteur, l'étage solve natif est une **simulation d'anime** (le mirror doit
+   instancier un anime éphémère et le seeker). Correct, mais absurde en régime permanent.
+2. Un moteur custom **inverse la charge** : `solve(from, to, easing, t) → valeur native` devient le
+   calcul lui-même (pur, sans node, testable) ; project reste un `set`. Le `if instanceof Element`
+   et les contournements disparaissent.
+3. Dépendance asymétrique : systématiser solve/project **sans** virer anime = garder le mirror ou
+   deux moteurs (gain réel, coût maintenu) ; virer anime **sans** systématiser = réécrire un moteur
+   pour re-piloter le node comme avant (presque sans intérêt) ; **les deux ensemble** = le moteur
+   *produit* l'étage solve par construction, l'étage solve *justifie* le moteur. Chacun est la
+   raison d'être de l'autre.
+4. Reformulation opérationnelle : **S2 (systématiser solve/project) est le cahier des charges de
+   S3 (moteur custom).** Pas deux chantiers à coordonner — un chantier (le moteur) dont S2 est
+   l'exigence directrice. Ça ne remplace pas le séquencement §7 ci-dessous, ça lui donne son
+   critère de réussite : le module du §7.3 doit exposer la frontière solve/project comme contrat
+   neutre au moteur (anime le remplit via mirror aujourd'hui, custom demain), permettant de migrer
+   le player *avec anime encore dessous* puis de glisser le moteur custom — jamais un big-bang
+   (interdit déjà posé en §7 et dans `move-separation-policy`).
+
+### S5. Le flux cible, en une phrase
+
+À partir des **events**, on modèle un **état des perso-projetés** ; on calcule cet état **à `t`** en
+résolvant **toutes** les interpolations (FLIP compris) ; on obtient un état à **`set`** dans les
+composants, qui **adaptent la projection à leur substrat** (un node, un canvas…). **La librairie
+d'animation n'existe plus au niveau composant.**
+
+```
+   events  ──►  état perso-projeté  ──►  SOLVE @ t  ──►  état à setter  ──►  PROJECT
+   (le modèle)   (le modèle logique)    (résout TOUTES     (natif, sans      (component.update ;
+                                         les interp.,       substrat)         le composant adapte
+                                         FLIP inclus)                         node/canvas/…)
+```
+
+1. **Renversement du modèle mental** : ce n'est plus « le player anime des nodes via une lib », c'est
+   « le player calcule un état, les composants le projettent ». L'animation remonte d'un cran (dans
+   le solve, au niveau player) et **disparaît de la frontière composant**. Un composant ne connaît
+   plus anime ni aucun moteur — il reçoit un état résolu et sait seulement l'appliquer à SON substrat.
+2. **« Toutes les interpolations, FLIP compris »** est le point exigeant : le FLIP est aujourd'hui un
+   pipeline à part (`create-flip-engine.ts`, lecture DOM + matrices). Dans ce flux il devient **un
+   solve parmi d'autres** — il produit une contribution à l'état perso (delta de pose), résolue au
+   même endroit que le reste, projetée par le même `set`. C'est ce qui unifie enfin les deux
+   représentations de pose que le §5 signale comme risque (discrète côté geste / composée côté rendu).
+3. **Substrat-agnostique par construction** : le solve produit un état en unité native, sans node.
+   `project` est la seule étape qui connaît le substrat — et elle vit **dans le composant**
+   (`component.update` → `applyStyleProps` pour DOM ; un `applyToCanvas` pour un futur composant
+   canvas). C'est la généralisation de `move-separation-policy` (backend substituable) à TOUTES les
+   propriétés, pas seulement `move`.
+4. **Gain formulé par l'auteur** : le gain premier est architectural/logique — **codplay passe
+   aujourd'hui beaucoup de temps à faire deux fois la même chose** (deux `set`, deux représentations
+   de pose, un canal parallèle qui duplique le moteur). Ce flux ne rend pas codplay plus puissant en
+   surface, il **retire une redondance structurelle** : un seul écrivain, un seul état, un seul `set`.
+
+### S6. Ce qu'on emprunte / rejette d'anime (le tri pur vs à-état)
+
+Emprunter les algos d'anime pour **garder la parenté et l'API utile**, sans garder son runtime. Le
+critère de tri est net : **les fonctions sans état se copient, les mécanismes à état se rejettent**
+(ils sont contradictoires avec codplay, qui les fait déjà autrement).
+
+```
+   GARDÉ d'anime (pur, sans état — copié, pas importé) :
+   • courbes d'easing (Penner : inOutQuad, outCubic…) — fonctions mathématiques pures
+   • forme d'API {from?, to, duration, ease} + injection d'adapter — DÉJÀ tienne (TransitionRequest)
+   • l'IDÉE de préparation des données (compléter un `from` absent, normaliser) — voir nuance ci-dessous
+
+   REJETÉ d'anime (à état, contradictoire — codplay le fait déjà, mieux/différemment) :
+   • la timeline / le scheduling / la boucle RAF — codplay pilote déjà le tick (useDefaultMainLoop=false)
+   • le cache de transform composé (transformsSymbol) — remplacé par l'état perso natif (champs discrets)
+   • son `set` (utils.set) — remplacé par TON set unique (component.update → applyStyleProps)
+```
+
+- **`from` absent — l'idée oui, l'implémentation non.** anime résout un `from` manquant en **lisant la
+  valeur courante du node** : c'est exactement le rétro-flux node→valeur que S1 interdit. On récupère
+  l'intention (« compléter un `from` absent ») mais on la ré-implémente sur l'**état perso**
+  (`getPersoStates()`/mirror), jamais sur le DOM.
+- **Transformation des unités — déjà à nous** (S3), à *libérer* de ses contournements, pas à récupérer.
+- **Le `set` à revoir = deux `set` parce que deux écrivains.** Aujourd'hui : le runtime écrit via
+  `component.update` → `applyStyleProps` (`dom.ts:149`) ; l'interpolation écrit via `utils.set`
+  (`applyTransitionEndValue`, `adapter.ts:210`) — **même séquence** (`resolveFinalValue` →
+  `resolveContainerQueryValue` → set) dupliquée. Systématiser solve/project **supprime le second
+  écrivain** : l'interpolation ne fait plus que *produire une valeur d'état*, il ne reste qu'UN `set`,
+  `component.update`. « Améliorer le `set` » = le **fusionner** dans le canal runtime existant, pas
+  l'optimiser localement.
+- **Le cache `transformsSymbol` ne disparaît pas, il MIGRE.** Sa fonction réelle (un patch partiel
+  `{y}` ne casse pas `x`/`rotate`/`scale` posés ailleurs) devient : `{x, y, rotate, scale}` sont des
+  **champs distincts de l'état perso**, et `project` compose le `transform` depuis eux (cf. §5,
+  représentation canonique discrète + composition matricielle). Le retrait du `set` d'anime **exige**
+  donc l'état perso comme source de la pose composée — S2 est le préalable, encore une fois.
+
+### Axes de dérisquage (ordre de dérisquage, pas d'exécution)
+
+1. **Mesurer** le coût de l'indirection solve/project par frame (micro-bench, jetable) — seule
+   inconnue dure de S2.
+2. **Compléter l'inventaire** de ce qu'anime fait encore vraiment (base : §1, §3 ci-dessous, mémoire
+   `project-codplay-anime-js-surface-shrinking`) — frontière exacte de S3.
+3. **Écrire la frontière solve/project comme contrat** (§7.3), neutre au moteur — ce qui rend S2 et
+   S3 séquençables au lieu d'un big-bang. Cette frontière est **déjà tracée par nous**, à l'endroit
+   où `resolveContainerQueryValue` prend le relais d'anime (S3.3) : à reconnaître et expliciter, pas
+   à inventer.
+
+---
+
+## Cadre directeur — discussion (points abordés, non retenus ou nuancés)
+
+Trace des pistes considérées pendant la discussion et écartées, avec la raison — pour ne pas les
+re-proposer, et garder visible *pourquoi* le cadre ci-dessus a la forme qu'il a.
+
+- **Relire le node pour reconstruire la description (rétro-flux node→item)** — écarté sur le fond
+  (S1). Envisagé sous l'angle « à mi-transition, lire la matrice pour situer l'item » : impossible à
+  garantir vrai (surjectif, transitoire, intrusion substrat). Ce n'est pas une optimisation à faire
+  prudemment, c'est une classe d'erreur à interdire.
+- **Déduire la transform intermédiaire d'un move zone→zone par le calcul** (positions A/B + `t` +
+  accroche cible) — écarté d'abord comme *impossible* (il manque matrices-parent, easing, delay
+  stagger, translate de départ, chaînage `lastEndCoords` — tout ce que le FLIP lit sur le node ;
+  cf. `create-flip-engine.ts plan()`). Puis nuancé : les zones de l'éditeur partageant le **même
+  parent**, le repère commun supprime les matrices → la transform *devient* calculable (interpolation
+  scalaire `A+ease(t')·(B−A)+px`). **Mais** *pouvoir* ≠ *devoir* : ça reste une position de rendu en
+  unité de substrat, jetable, fausse au premier resize. Retenu à la place : un kf posé à mi-move
+  consigne l'accroche zone B (discrète, déjà commutée) + l'offset auteur stable — l'intention, que le
+  runtime re-projette. Détail complet dans `decor-unified-channel-plan.md` §C.
+- **Trajectoire matérialisée comme moyen de « capturer » la position** — reformulé, pas retenu tel
+  quel. La trajectoire déclarative (droite = 2 points, arc = courbe) n'est pas un moyen de *lire* le
+  rendu : c'est une **propriété du move** que l'auteur *crée*, et qui *rend* la position à `t` lisible
+  depuis la description (point sur la géométrie → `lerp`). Elle ne photographie rien ; elle est la
+  géométrie que solve interpole. C'est aussi le canal de placement animé qui manquait (résout le
+  « trou » du cas 3 détachement, différé). Recoupe le §6 (`spatialCurve`) ci-dessous — même concept,
+  vu ici côté auteur.
+- **Édition d'un kf à mi-move, option « détachement » (cas 3 : zone C de facto + A→C / C→B)** —
+  différée, pas retenue maintenant. Attend la trajectoire (cas 2) qui rendra l'ancrage de C trivial
+  et propre (point sur la trajectoire), plutôt que de forcer une lecture node prématurée.
+- **« CQW est dans anime, il faut l'en sortir »** — **faux, retiré.** C'est déjà sorti (S3). L'erreur
+  m'a fait rater le vrai point d'entrée du moteur custom (l'unité, déjà à nous et déjà en lutte contre
+  anime). Corrigé par l'auteur en cours de discussion.
+- **Traiter S2 (solve/project) et S3 (moteur) comme deux chantiers à faire « ensemble » au sens de
+  coordonnés** — nuancé en plus fort (S4) : ce n'est pas deux chantiers parallèles mais un seul, dont
+  S2 est la spécification. « Ensemble » = « le même », pas « en même temps ».
+
+---
+
+## S7. Le flux de données nommé — de la scène au rendu
+
+Formalisation des **7 étapes** du flux, avec leur nom. Le vocabulaire reprend l'existant normatif
+(`CompiledScene`, `event runtime`, `TrackEntry`, `seek`, `PersoState`) et n'invente un nom que là où
+le code n'en a pas encore : **`solve`** et **`project`**, précisément les deux étages que la cible
+rend premiers.
+
+| # | Étape | Entrée → Sortie | Nom | Existe ? |
+|---|---|---|---|---|
+| 1 | Compilation | `SceneDoc` → `CompiledScene` | **build** | ✅ `builder/` |
+| 2 | Émission | tick/seek/geste → `event runtime` | **emit** | ✅ `listen→transform→straps→emit` |
+| 3 | Matérialisation | `event runtime` → `TrackEntry` | **materialize** | ✅ track-manager, `eventInsertMode` |
+| 4 | Résolution d'action | `TrackEntry` @ t → `ResolvedAction` (payload/perso) | **resolve** (director) | ✅ orchestrator `routeUpdates` |
+| 5 | Résolution d'état | `ResolvedAction` + état préc. → `PersoState @ t` (natif) | **solve** | ⚠️ latent (mirror/tween), à rendre premier |
+| 6 | Projection | `PersoState @ t` → mutation substrat | **project** | ⚠️ dispersé (`component.update` + `utils.set`), à unifier |
+| 7 | Rendu | mutation → pixels | **render** (substrat) | ✅ DOM ; canvas futur |
+
+- **1 `build`** — seule étape *hors ligne du temps* ; précède toute lecture. Pure, ids résolus,
+  schedule aplati.
+- **2 `emit`** — la source d'un `event runtime` (tick, seek, geste, ou `listen→transform→straps→emit`).
+  C'est ici que temps et interaction entrent. Un event porte une **intention nommée**, pas encore un
+  effet visuel.
+- **3 `materialize`** — event/mutation → `TrackEntry` (la **mémoire** du système). `eventInsertMode`
+  se décide ici. **Frontière capitale** : après cette étape, aucun strap ni effet ne se ré-exécute —
+  tout le reste est reconstruction. `seek` rejoue les `TrackEntry`, jamais les straps.
+- **4 `resolve` (director)** — à `t`, lit `perso.actions[eventName]` → `ResolvedAction` (style,
+  contenu, move, transition) par perso. Traduction *event nommé → intention par perso*. Aujourd'hui
+  `routeUpdates` fait ça ET déborde sur 5-6 (il applique aussi) ; la cible l'en dégage.
+- **5 `solve`** — **le cœur de la cible, le nom qui manquait.** Résout **toutes** les interpolations à
+  `t` (anime, tween, **FLIP compris**) → `PersoState @ t` en **unité native**, **sans substrat**. Seul
+  endroit où le *temps continu* est résolu. Existe latent et **dupliqué** (`capturePersoStatesMirror`
+  + `TweenRunner.getPersoStatesAtLastSeek`, fusionnés dans `getPersoStates()`) ; la cible le rend
+  **premier et unique**.
+- **6 `project`** — `PersoState @ t` natif → mutation substrat : résolution d'unité
+  (`resolveContainerQueryValue`, déjà à nous), composition du transform depuis `{x,y,rotate,scale}`,
+  application. **Vit dans le composant** (`component.update`→`applyStyleProps` DOM ; `projectToCanvas`
+  demain). **Seul étage qui connaît le substrat, seul `set` de la cible.** Aujourd'hui dispersé (deux
+  écrivains) ; la cible n'en laisse qu'un.
+- **7 `render`** — l'étage substrat (paint DOM / dessin canvas). Codplay n'en pilote rien, il en
+  dépend. Seul étage hors de son contrôle.
+
+**La ligne de partage** :
+
+```
+   1 build · 2 emit · 3 materialize · 4 resolve  │  5 solve  ·  6 project  ·  7 render
+   ─────────────────────────────────────────────  │  ───────────────────────  ────────
+   LOGIQUE PUR — aucun substrat, testable sans DOM │  NATIF → SUBSTRAT          HORS
+   (ce que move-separation-policy exige « avec      │  (project vit dans          codplay
+    fixtures non DOM »)                             │   le composant)
+                                          frontière solve/project (entre 5 et 6)
+```
+
+La **frontière solve/project** (5↔6) est *la* frontière **neutre au moteur** : `solve` produit du
+natif (anime via mirror aujourd'hui, moteur custom demain — sans que 6 change) ; `project` consomme du
+natif (sans savoir qui l'a produit). C'est elle à écrire comme contrat pour séquencer le retrait
+d'anime sans big-bang — **déjà tracée** là où `resolveContainerQueryValue` prend le relais d'anime
+(S3.3).
+
+**Deux invariants traversent le flux** :
+- **Sens unique (S1)** : le flux ne remonte jamais. On ne relit pas 7 (le node) pour reconstruire 5
+  (l'état) ou 1 (la description). Toute capture éditeur lit **5** (`PersoState`), jamais 7.
+- **`seek` n'entre qu'en 3→6** : il ne ré-exécute ni 2 (straps) ni les effets — il **rejoue les
+  `TrackEntry`** (3) puis refait 4→5→6. C'est pourquoi `seek` et `play` produisent le même état : ils
+  partagent 4-5-6.
+
+---
+
+## S8. La Projection — cible de rendu déclarée (concept manquant)
+
+Deux problèmes, une seule cause : **le substrat de rendu n'est pas un concept déclaré** dans codplay
+(le DOM est implicite, câblé en dur). Les nommer ensemble : **la Projection**.
+
+### Problème A — `project` n'est pas toujours un `set` : certains solves ont besoin de *mesurer* le substrat
+
+S7 décrivait `project` comme « écrire l'état natif sur le substrat ». Faux pour une famille de modules
+qui **lisent le substrat pour *calculer* l'intention**, pas pour l'écrire :
+- **FLIP** — mesure les rects avant/après mutation pour le delta (`getBoundingClientRect` × 2).
+- **DnD** — mesure la géométrie live à chaque `pointermove` pour décider l'index de drop (hit-testing).
+- **`replace` / auto-size texte** — mesure le texte rendu pour décider découpage / taille de police.
+
+Ce **n'est pas** une violation du sens unique (S1) : ils ne relisent pas le node pour reconstruire une
+*description* d'auteur. Ils font une **lecture de mesure** (jetable, re-dérivable — comme le
+hit-testing timeline ou `referenceWidthPx`, déjà autorisés), pas une lecture de vérité. Le code le
+dit déjà : le FLIP prend `nodeRef` via une interface `MeasurableNode = { getBoundingClientRect() }`
+(`create-flip-engine.ts:26,61`) — **il ne dépend pas du DOM, il dépend d'une capacité de mesure.**
+Correction à S7 : `solve` n'est pas « pur sans substrat » mais **« sans *écriture* substrat, avec accès
+à une *mesure* substrat abstraite »**. La mesure est une **entrée** du solve, fournie par la Projection.
+
+**La mesure est irréductible, pas juste une commodité** (nuance posée par l'auteur, 2026-07-26). On
+pourrait croire que toute géométrie composée (ex. la chaîne d'ancêtres d'un FLIP) est *dérivable* du
+`PersoState` des ancêtres, donc que `measure` serait éliminable. **Faux** : la position réelle d'un
+node n'est pas toujours le produit propre des matrices logiques — overflow, repaint, resize, reflow
+produisent des effets **non prédictibles depuis l'état**. La seule façon de connaître la position
+*réelle* reste de la **mesurer**. `measure` n'est donc pas un pis-aller transitoire ; c'est le recours
+d'exactitude au pixel que l'abstraction ne peut pas fournir. Cas limite qui le démontre — seek d'un
+FLIP sous ancêtres mobiles : voir `2026-07-26-seek-flip-ancetres-mobiles.md`.
+
+### Problème B — un « composant canvas » est le mauvais niveau
+
+Aujourd'hui : le DOM est une projection **implicite et unique**, jamais déclarée. Vouloir un canvas en
+faisant un *composant* canvas (frère de `TextComponent`) est le mauvais niveau : le canvas n'est pas un
+composant, c'est une **cible dont TOUS les composants dépendent** — comme ils dépendent tous du DOM
+aujourd'hui sans le dire. Un composant canvas obligerait à résoudre par des méthodes ad hoc ce que le
+DOM fait par composants. Il manque une **déclaration** : « tout ce que je projette va sur cette cible ».
+
+### Le concept — Projection (nom provisoire ; alt. `RenderTarget` / `Surface`)
+
+> Une **Projection** est une **cible de rendu déclarée** qui fournit aux composants les **capacités de
+> substrat** dont ils ont besoin. Le DOM devient *une* Projection parmi d'autres, non plus le substrat
+> implicite.
+
+Trois capacités (au moins) :
+- **`set(el, state)`** — écrire un état résolu (l'étape 6 `project`).
+- **`measure(el) → rect`** — mesurer une géométrie (résout le problème A ; ce que FLIP/DnD/auto-size
+  demandent).
+- **`mount / unmount`** — structurer (attacher/détacher un élément de la cible).
+
+```
+   5 solve ──► PersoState @ t ──► 6 project ──► 7 render
+        │                             │
+        │ measure(el)                 │ set(el,state)
+        ▼                             ▼
+   ┌──────────────────────────────────────────────┐
+   │            PROJECTION (déclarée)              │
+   │   set · measure · mount   — capacités abstraites │
+   ├──────────────────────────────────────────────┤
+   │  DomProjection │ CanvasProjection │ …          │
+   └──────────────────────────────────────────────┘
+         ▲            ▲            ▲
+   plusieurs cibles SIMULTANÉES possibles (dom + canvas-A + canvas-B…)
+```
+
+Ce que ça résout d'un coup :
+- **A disparaît** : `set` et `measure` sont deux capacités de la MÊME Projection. FLIP appelle
+  `projection.measure(el)` sans savoir si c'est `getBoundingClientRect` DOM ou une bbox canvas.
+  « Interaction forte avec le DOM » devient « interaction forte avec la Projection », abstraite.
+- **B est résolu par construction** : un composant ne connaît que `this.projection`, jamais `document`
+  ni `getBoundingClientRect`. Changer de substrat = changer de Projection, pas réécrire les composants.
+- `resolveContainerQueryValue` (le cqw) devient `DomProjection.resolveUnit` — le cqw est une capacité
+  *DOM* ; un canvas résoudrait ses unités autrement. (Ferme aussi le `containerQueryRootNode`
+  module-level global signalé fragile en §5.5 : la résolution d'unité devient par-Projection.)
+
+### Périmètre — la Projection appartient à codplay, pas à ed2
+
+**Point cadré par l'auteur (2026-07-26).** La Projection est un concept **runtime codplay**, pas ed2.
+Corollaires :
+- **ed2 n'est PAS le lieu de sa déclaration.** La question « où la déclarer dans le document ed2
+  (capsule ? `SceneMeta` ? table `projections` ?) » était **mal posée** — hors périmètre ed2. ed2 est
+  un client parmi d'autres de codplay. Le **côté canvas appellera de tout autres éditeurs** (gérer la
+  forme projetée en canvas n'est pas le métier de l'éditeur DOM actuel). Ne pas chercher l'ancrage
+  Projection dans le modèle-document ed2.
+- Point d'entrée existant côté codplay : `mountTarget` (`player.init()`) est **déjà** une déclaration
+  de cible — unique, non nommée, impérative. La Projection la généralise en cible(s) nommée(s), mais
+  reste de **nature exécution** (une cible concrète — un `Element`/`Canvas` réel — n'existe qu'au
+  runtime, jamais dans le `CompiledScene` immuable ; au plus le document porterait un *rôle*
+  symbolique résolu à l'init, patron `rootToken`/`@root`).
+
+### Deux limites posées (ne PAS formaliser maintenant)
+
+- **FLIP / move inter-projections** : la structure abstraite `Perso` l'**autorise** (propriété
+  heureuse de l'abstraction, pas un problème à résoudre) — mais **cette complexité n'est pas
+  formalisée à ce stade**. Capacité latente, pas un chantier. (Ne pas re-proposer « interdire le move
+  cross-projection » comme décision : ni interdit ni formalisé, juste hors sujet pour l'instant.)
+- **Nature de la Projection** (mode de rendu vs cadre spatial autonome, coordonnées, unités propres) :
+  relève du **côté canvas et de ses éditeurs futurs**, pas du concept de Projection ici. Non tranché,
+  volontairement.
+
+### Lien avec l'existant — la Projection généralise le `move backend`
+
+Ce n'est pas hors-sol : `docs/formalisation/v1-move-separation-policy-state-backend-dom.md` a déjà posé
+la moitié du concept sous le nom **`move backend`** (« DOM aujourd'hui, canvas demain ; traduit un delta
+logique en mutation de support et transitions visuelles »). **La Projection est la généralisation du
+`move backend` à TOUTES les propriétés**, pas seulement `move` — exactement comme solve/project
+généralise à tout la séparation que `move-separation-policy` faisait pour `move`. Le `move backend`,
+c'est la Projection vue depuis `move`. L'architecture converge déjà vers ce concept sans l'avoir nommé
+au niveau global.
+
+---
 
 ## 0. Ce qui est déjà fait (pas un chantier, juste le point de départ)
 

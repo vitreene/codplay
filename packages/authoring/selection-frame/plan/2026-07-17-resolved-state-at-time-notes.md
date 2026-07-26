@@ -33,7 +33,7 @@ toujours l'état live.
    vocabulaire de pose fixe d'anime.js ; testé empiriquement). Retourne les valeurs telles quelles
    (chaînes unitées pour les longueurs, chaînes brutes pour les couleurs), jamais `getComputedStyle`.
    Passage obligé par `AuthorApi` (jamais anime.js directement depuis dedit) pour survivre au
-   remplacement d'anime.js (chantiers 3/6 de `2026-07-16-anime-js-native-substitution-chantiers.md`).
+   remplacement d'anime.js (chantiers 3/6 de `docs/projet/2026-07-16-solve-project-moteur-custom.md`).
 3. **Demandé, pas collecté en bloc** — `styleFieldsForItemType` (`decor-editor-bridge.ts`) dérive la
    liste des propriétés à lire directement de `PaletteConfig.panels[].fields[].path`
    (`decor-editor/default-palette.ts`), filtrée aux panneaux pertinents pour le type d'item — jamais
@@ -122,5 +122,5 @@ Une lecture VRAIMENT indépendante du node (un état de perso possédé nativeme
 adressé par `persoId` via le cache d'anime) n'existe pas pour les propriétés animées : aucun
 composant runtime ne garde de style séparé du node, et pendant un tween en cours c'est anime.js seul
 qui écrit le node à chaque frame. Cette capacité appartient au projet
-`packages/codplay/plan/notes/2026-07-16-anime-js-native-substitution-chantiers.md` (chantiers 3/6,
+`docs/projet/2026-07-16-solve-project-moteur-custom.md` (chantiers 3/6,
 qui anticipe déjà ce besoin côté éditeur en §8) — pas à ce chantier.

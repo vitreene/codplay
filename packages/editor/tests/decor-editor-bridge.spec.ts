@@ -2,11 +2,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createActor, type Actor } from 'xstate'
 import { controllerMachine } from '../src/app/controller/controller-machine'
-import { createDecorEditorBridge, PHASE_IDLE_FLUSH_MS } from '../src/app/bridges/decor-editor-bridge'
+import {
+  createDecorEditorBridge,
+  PHASE_IDLE_FLUSH_MS,
+  patchDiffersFromBase,
+  resolveKeyframeInsertionPatch,
+} from '../src/app/bridges/decor-editor-bridge'
 import type { EditorScene } from '../src/app/commands/types'
 import type { AuthorApi } from '@codplay/selection-frame'
 import type { OffsetEditorBridge, OffsetPatch, OffsetValuesPx } from '../src/decor-editor/types'
 import { createDecorLiveSession } from '../src/decor-editor/decor-live-session'
+import { DEFAULT_PALETTE } from '../src/decor-editor/default-palette'
 
 /**
  * `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B — invariants A2/A3 de la charte
@@ -740,5 +746,108 @@ describe('decor-editor-bridge — CSS libre (Decor.custom, même traitement que 
     expect(actor.getSnapshot().context.scene?.decors['decor-1']?.custom).toBe('align-items: center')
     expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('patch.custom'))
     warn.mockRestore()
+  })
+})
+
+describe('decor-editor-bridge — patchDiffersFromBase (2026-07-25-decor-unified-channel-plan.md §B.3)', () => {
+  it('aucune divergence : patch identique à base', () => {
+    expect(patchDiffersFromBase({ style: { x: '1' } }, { style: { x: '1' } })).toBe(false)
+  })
+
+  it('un champ style qui diverge', () => {
+    expect(patchDiffersFromBase({ style: { x: '1' } }, { style: { x: '2' } })).toBe(true)
+  })
+
+  it('un sous-champ offset qui diverge', () => {
+    expect(patchDiffersFromBase({ offset: { x: 1 } }, { offset: { x: 2 } })).toBe(true)
+  })
+
+  it('rien ne diverge sur classes/custom/zone', () => {
+    expect(patchDiffersFromBase(
+      { classes: 'a b', custom: 'color: red', zone: 'title' },
+      { classes: 'a b', custom: 'color: red', zone: 'title' },
+    )).toBe(false)
+  })
+
+  it('classes qui divergent', () => {
+    expect(patchDiffersFromBase({ classes: 'a' }, { classes: 'a b' })).toBe(true)
+  })
+})
+
+describe('decor-editor-bridge — resolveKeyframeInsertionPatch (2026-07-25-decor-unified-channel-plan.md §B.3)', () => {
+  it('between avec divergence : patch non-null, contient l\'état live (style, via getPersoStates)', () => {
+    const scene = sceneWithGapBetweenKeyframes()
+    const item = scene.items[0]!
+    const authorApi = fakeAuthorApiWithNodes({ 'item-1': { 'background-color': 'oklch(0.5 0.2 100)' } })
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 500, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).not.toBeNull()
+    expect(patch!.style?.['background-color']).toBe('oklch(0.5 0.2 100)')
+  })
+
+  it('between sans divergence (état live identique à la cascade du kf précédent) : null', () => {
+    const scene = sceneWithGapBetweenKeyframes()
+    const item = scene.items[0]!
+    // Même couleur que kf-1 (`oklch(0.6 0.24 25)`, cf `sceneWithGapBetweenKeyframes`) — rien n'a divergé.
+    const authorApi = fakeAuthorApiWithNodes({ 'item-1': { 'background-color': 'oklch(0.6 0.24 25)' } })
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 500, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).toBeNull()
+  })
+
+  it('exact (t = kf-1) : null sans même lire authorApi', () => {
+    const scene = sceneWithGapBetweenKeyframes()
+    const item = scene.items[0]!
+    const authorApi = fakeAuthorApiWithNodes()
+    const getPersoStates = vi.spyOn(authorApi, 'getPersoStates')
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 0, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).toBeNull()
+    expect(getPersoStates).not.toHaveBeenCalled()
+  })
+
+  it('after-last (t après kf-2) : null sans même lire authorApi', () => {
+    const scene = sceneWithGapBetweenKeyframes()
+    const item = scene.items[0]!
+    const authorApi = fakeAuthorApiWithNodes()
+    const getPersoStates = vi.spyOn(authorApi, 'getPersoStates')
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 2000, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).toBeNull()
+    expect(getPersoStates).not.toHaveBeenCalled()
+  })
+
+  it('before-first (t avant kf-1) : null sans même lire authorApi', () => {
+    const scene: EditorScene = {
+      ...sceneWithGapBetweenKeyframes(),
+      items: [{ ...sceneWithGapBetweenKeyframes().items[0]!, keyframes: [{ id: 'kf-1', timeMs: 1000, decorId: 'decor-kf1' }, { id: 'kf-2', timeMs: 2000, decorId: 'decor-kf2' }] }],
+    }
+    const item = scene.items[0]!
+    const authorApi = fakeAuthorApiWithNodes()
+    const getPersoStates = vi.spyOn(authorApi, 'getPersoStates')
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 500, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).toBeNull()
+    expect(getPersoStates).not.toHaveBeenCalled()
+  })
+
+  it('no-keyframes (item sans aucun keyframe) : null sans même lire authorApi', () => {
+    const scene: EditorScene = {
+      ...sceneWithGapBetweenKeyframes(),
+      items: [{ ...sceneWithGapBetweenKeyframes().items[0]!, keyframes: [] }],
+    }
+    const item = scene.items[0]!
+    const authorApi = fakeAuthorApiWithNodes()
+    const getPersoStates = vi.spyOn(authorApi, 'getPersoStates')
+
+    const patch = resolveKeyframeInsertionPatch(scene, item, 500, undefined, authorApi, DEFAULT_PALETTE, 'text')
+
+    expect(patch).toBeNull()
+    expect(getPersoStates).not.toHaveBeenCalled()
   })
 })
