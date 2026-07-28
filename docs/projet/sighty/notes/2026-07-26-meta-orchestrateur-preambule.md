@@ -64,5 +64,5 @@ situations en tête). Probablement un **framework**, pas une app. Ne rien engage
 titre au-delà de « garder la façade orchestrable ». Validation externe du cahier des charges V2 : comme
 le portage Flutter, ce méta-niveau *confirme* la façade multi-canaux (il en est le consommateur type)
 et la frontière « codplay joue une scène, ne pilote pas un ensemble ». Lié :
-`2026-07-26-conduite-chantier-v2.md` (§6 façade, §10 #5 telco), `2026-07-26-etat-fonction-de-t.md`
+`../../codplay-v2/notes/2026-07-26-conduite-chantier-v2.md` (§6 façade, §10 #5 telco), `../../codplay-v2/notes/2026-07-26-etat-fonction-de-t.md`
 (lecture de segment).

@@ -1,65 +1,79 @@
 # docs/projet
 
-Réflexions **projet** de `codplay` — les axes de travail (« où on veut aller, et pourquoi »)
-qui précèdent le découpage en plans, côté runtime `codplay`.
+Réflexions **projet** — les axes de travail (« où on veut aller, et pourquoi ») qui **précèdent** le
+découpage en plans. Ce ne sont pas des specs ; ce sont les axes qui les justifient.
 
-> **Note** : la plupart de ces documents forment le **cahier des charges codplay V2** (réécriture
-> conceptuelle, cœur inclus). Une page ouvre un horizon distinct **au-dessus** de codplay (le
-> méta-orchestrateur / framework) — marquée comme telle.
+**Séparation par app** :
+
+- [`codplay-v2/`](./codplay-v2/) — le moteur. La plupart de ces documents forment le **cahier des charges
+  codplay V2** (réécriture conceptuelle, cœur inclus).
+- [`sighty/`](./sighty/) — l'**orchestrateur** qui pilote des suites de scènes autonomes. Horizon distinct,
+  **au-dessus** de codplay : un client du moteur, non une de ses fonctions.
+
+- [`notes/`](./notes/) — notes **transverses** aux deux apps. Dont
+  [`2026-07-28-note-generale-projet.md`](./notes/2026-07-28-note-generale-projet.md) : **l'ampleur du
+  projet, son organisation, l'état de chaque pièce, le socle conceptuel tenu, le canal d'**export**, un
+  inventaire des **pièces à venir avec la contrainte que chacune ajoute** à l'existant — dont l'analyse des
+  deux endroits où ces contraintes s'accumulent : le **cœur de codplay** (trois coutures — adressage,
+  point de présentation, frontière du substrat — dont aucune ne demande de mécanisme neuf) et le **format
+  d'artefact** (cinq exigences, et une décision cachée : intention ou exécution dans le paquet, qui est la
+  même question que la frontière de bundle du builder). Puis les **manques repérés** —
+  paquet d'œuvre et compatibilité de versions non définis, conduite dégradée en diffusion sans politique,
+  données personnelles jamais mentionnées ; accessibilité et i18n en revanche **résolues par l'échelle**
+  (éditeurs et révision des composants), non par le moteur — l'accessibilité étant en outre une **capacité
+  de Projection** (nulle sur canvas, qui n'a pas de document), sans objet pour un spectacle public comme le
+  signage, et parfois mieux servie par un **canal équivalent** que par une animation rendue accessible.
+
+**Organisation interne** : chaque app a un dossier `notes/` pour les discussions, descriptions et
+recommandations. Les parties **spec** et **plan** ne sont pas ouvertes.
 
 **Distinction avec les autres dossiers** :
 - `docs/formalisation/` — specs normatives v1 (comportement figé, fait foi).
 - `packages/*/plan/` — plans et specs **colocalisés** avec leur package.
-- `docs/projet/` (ce dossier) — réflexions qui **précèdent** les plans : on y construit la
-  direction avant qu'elle se décline en chantiers. Ce ne sont pas des specs ; ce sont les axes
-  qui les justifient. Périmètre : `codplay`.
+- `docs/projet/` (ce dossier) — la direction, avant qu'elle se décline en chantiers.
 
-## Contenu
+## Le système d'ensemble — des échelles cloisonnées, combinables
 
-- [`2026-07-16-solve-project-moteur-custom.md`](./2026-07-16-solve-project-moteur-custom.md) —
-  **le document V2 principal** : *quoi construire*. Résumé en 9 points-clés en tête, puis synthèse
-  détaillée (S1-S9) : projection `item→perso→node` à sens unique ; solve/project ; moteur custom ;
-  Projection (cible de rendu déclarée) ; `measure` irréductible ; flux `f(t)` ; portabilité. Suivi des
-  chantiers historiques §0-§8 (surface réelle d'anime, doublons, séquencement) et de la discussion
-  (pistes écartées). *Déplacé depuis `packages/codplay/plan/notes/` le 2026-07-26.*
-- [`2026-07-26-etat-fonction-de-t.md`](./2026-07-26-etat-fonction-de-t.md) — **point constitutif V2**.
-  L'état à `t` comme projection de la scène (modèle three.js), seek = évaluation réversible et non
-  rejeu. Tout se lit par interrogation (continu → évaluation ; discret → fenêtre de validité ;
-  capturé → valeur figée ; interaction → écrit dans la scène). Irréductible : effets à side-effect.
-  C'est *moins* d'état qu'un store ; faisabilité = un inventaire, pas un pari. Inclut le comportement
-  de piste au seek-back (propriété de piste `clear-ahead`/`persist` — debug d'atelier pour l'interaction
-  d'édition, comportement conçu de l'œuvre pour l'interaction de diffusion).
-- [`2026-07-26-conduite-chantier-v2.md`](./2026-07-26-conduite-chantier-v2.md) — **comment mener** la
-  V2 (le doc principal dit *quoi*). Réécriture franche (V1 non-prod coupée à terme, pas de cohabitation
-  de runtimes) ; tests V1 = oracle anti-régression ; « moteur injecté en V1 d'abord » écarté (retour
-  d'expérience : couches parasites). Principes de structuration (dossiers dictés par le flux, injection
-  unifiée, module/service natifs, dédoublements = concepts manquants, rien-en-dur/config). Frontière
-  auteur/diffusion (l'œuvre reste pleinement interactive) ; façade multi-canaux (telco/injection/
-  authoring) ; injection de librairies tierces à préserver.
-- [`2026-07-26-portabilite-contrainte-redaction.md`](./2026-07-26-portabilite-contrainte-redaction.md)
-  — le portage (cas concret Flutter) comme conséquence de la V2 : les obstacles au portage SONT les
-  points V2 (Projection, f(t)/déclaratif, moteur custom). Surtout : la contrainte de portage
-  **discipline le code TS présent** (interdit à l'écriture les fuites de plateforme). Chantier typage
-  mûr (les `unknown` se dissipent, les cas d'usage les résolvent). Le seek V2 est synchrone (l'async
-  est une dette V1 du rejeu, que f(t) solde).
-- [`2026-07-26-unitless-resize-resolution.md`](./2026-07-26-unitless-resize-resolution.md) — détail
-  du canal unitless (revue I/O #3) : cadre unitless fixe (ex. 160×90), ratio calculé au lancement,
-  resize = le `scale` bouge (pas le ratio), valeurs unitless recalculées **hors scale** au render,
-  whitelist déclarée en config, **couverture partielle assumée** (jamais 100%, échec propre). Résolu à
-  la projection, capacité de Projection.
-- [`2026-07-26-ancrages-algorithmiques.md`](./2026-07-26-ancrages-algorithmiques.md) — recul
-  théorique : à quels modèles établis les processus V2 se rattachent. Event sourcing/CQRS (materialize/
-  seek/f(t)), scene graph + dirty-flagging (solve hiérarchique/seek-FLIP), FRP Behavior/Event (typer le
-  PersoState), retained-mode/reconciler (solve/project), interval tree + bitemporal (fenêtres de
-  validité/seek-back), LOD temporel (scrubbing). Vocabulaire à emprunter, pas des frameworks.
-- [`2026-07-26-meta-orchestrateur-preambule.md`](./2026-07-26-meta-orchestrateur-preambule.md) —
-  **horizon distinct, au-dessus de codplay** (pas la V2). Préambule : la suite logique de codplay, un
-  **framework** qui orchestre plusieurs scènes autonomes (ex. quiz-hunt appelant space-bubble comme
-  épreuve). Le méta-orchestrateur est un *client* de codplay (pilote N players via la façade
-  multi-canaux), pas une fonction du moteur. Trois niveaux distingués (widget-dans-scène / segment
-  async / orchestration multi-scènes). À détailler ultérieurement.
-- [`2026-07-26-seek-flip-ancetres-mobiles.md`](./2026-07-26-seek-flip-ancetres-mobiles.md) —
-  cas limite : seek d'un FLIP sous parents/grands-parents en mouvement. La tension abstraction
-  (fidèle au modèle) vs mesure DOM (fidèle au pixel réel : overflow/repaint/reflow non prédictibles).
-  N mesures repositionnées dans un RAF (coupe par reflow, cache par segment, debounce), lourde mais
-  acceptable en seek car non-continu. Non tranché.
+Les deux dossiers ci-dessus ne sont pas deux projets voisins : ce sont deux **échelles** d'un même
+système, sous lesquelles se rangent les outils d'auteur.
+
+| échelle | ce qu'elle connaît | outil d'auteur |
+|---|---|---|
+| **métier** | vues, promotions, chapitres, parcours, profils | des **éditeurs**, variant sur deux axes : par **domaine** (et plusieurs par domaine selon l'ambition) et par **rôle / contexte d'usage** (structure au bureau, contenu au mobile) |
+| **orchestration** (Sighty) | nodes, séquences, instances, arrangement | l'éditeur transcrit vers le `Scenario` |
+| **scène** (codplay) | persos, actions, pistes | l'éditeur de scène transcrit ses *concepts* en *persos* |
+
+**Chaque échelle est close.** Un éditeur connaît son métier ; Sighty n'apprend jamais ce qu'est une
+promotion ni un chapitre ; codplay ne connaît que des persos. Les aspects métier sont **résolus avant**
+d'être passés à l'échelle inférieure, par transcription.
+
+**C'est ce cloisonnement qui rend le système combinatoire.** Parce qu'aucune échelle ne fuit dans la
+suivante, on peut en ajouter au-dessus sans toucher à ce qui est dessous : N éditeurs sur un Sighty sur un
+codplay, dont l'**agencement** produit des solutions que personne n'a conçues comme telles.
+
+**Les invariants ne sont donc pas de l'hygiène, ils en sont la condition.** « Le sens vit un étage
+au-dessus », « un canal par responsabilité », « le défaut autonome qui s'efface » — leur liste et leur
+force obligatoire sont au §11 de `codplay-v2/notes/2026-07-26-conduite-chantier-v2.md`. Qu'un seul cède,
+qu'un éditeur commence à savoir ce qu'est un perso, et la multiplication s'arrête : chaque nouvel éditeur
+devient une modification du moteur.
+
+**Critère pratique qui en découle.** Devant une demande nouvelle, la question n'est pas « comment
+l'implémenter » mais **« à quelle échelle se résout-elle »**. La réponse est le plus souvent un éditeur de
+plus, ou un agencement différent des mêmes pièces — rarement une capacité de plus dans le moteur.
+
+**La combinatoire joue dans trois directions.** Vers le haut, les échelles et leurs **éditeurs**. Vers
+l'intérieur, les trois points d'extension de codplay : ses **composants**, ses **tiers**, ses
+**Projections**. Vers l'extérieur, les **exports** — transcript accessible, paquet SCORM, transcription
+vers un autre système — qui consomment la donnée sans passer par l'exécution, et forment eux aussi une
+famille dont le moteur ne connaît aucun membre. Beaucoup de choses sont ainsi rendues possibles que ce
+dépôt n'exercera jamais.
+
+D'où une nuance à ne pas manquer : `codplay-v2/notes/2026-07-26-conduite-chantier-v2.md` §10 #4 décide de
+**ne pas reconduire une surface non exercée** — mais cela vise les *hooks* sans consommateur, poids mort.
+Un **point d'extension** est aussi non exercé, et pourtant c'est un **contrat** : sa justesse ne peut pas
+venir de l'usage, puisque l'usage est ailleurs ; elle vient de sa forme. La règle §10 #4 ne s'y applique
+pas.
+
+**Par où entrer** : [`codplay-v2/notes/2026-07-28-carte-projet-v2.md`](./codplay-v2/notes/2026-07-28-carte-projet-v2.md)
+donne l'articulation du moteur et le classement conservé / revu / à statuer ; il rappelle qu'il s'agit
+d'une **mise à jour**, ce que le volume du corpus fait facilement oublier.

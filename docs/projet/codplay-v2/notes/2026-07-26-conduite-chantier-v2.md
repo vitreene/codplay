@@ -304,6 +304,32 @@ Projection (#3 apporte la convention unitless=resize-sensible + l'interception s
 dans la façade, #5 est hors axe. La V2 (Projection + façade + config + f(t)) **absorbe** les 5 sans
 nouveau concept — signe de complétude du cahier des charges.
 
+## 11. La matrice des intentions — invariants directeurs
+
+Les motifs qui se répètent d'un chantier à l'autre forment la **matrice des intentions** du projet. Leur
+cohérence est ce qui le rend fiable : *on s'attend à ce que tel comportement donne ce résultat.* Ils se
+lisent avec les ancrages algorithmiques (`2026-07-26-ancrages-algorithmiques.md`), qui disent à quels
+modèles établis les processus se rattachent ; la matrice, elle, dit ce que la construction doit respecter.
+
+**Force obligatoire.** Ces invariants **guident la construction**. Un endroit où l'implémentation risque
+d'en contourner un **déclenche une analyse** — jamais un contournement silencieux. Une dérogation se
+discute et s'écrit ; elle ne se constate pas après coup.
+
+1. **Codplay fournit un défaut autonome et s'efface** devant un étage supérieur quand il existe (horloge,
+   catalogue de capacités, stratégie de preload).
+2. **Déclarer, jamais inférer** — et l'absence de déclaration échoue *avant lecture*, pas en jouant.
+3. **Un canal par responsabilité** ; deux mécanismes concurrents signalent un concept manquant (§4.4).
+4. **Catalogue déclaré / consommateurs qui revendiquent / arrangement au-dessus**, à chaque étage.
+5. **L'exécutant ne décide pas, le décideur n'exécute pas.**
+6. **Le ciblage vit un étage au-dessus de qui émet** — sinon l'autonomie du composant se perd.
+7. **Un seul écrivain, un sens unique** (§4.4, S1).
+8. **Sanitiser une fois hors chemin chaud, faire confiance ensuite** (§4.7).
+
+**Corollaire de méthode** : un invariant non écrit n'est pas un invariant, c'est une habitude — et elle se
+perd au moment même où le projet est réécrit. Tout invariant qui gouverne du code appartient à cette liste,
+faute de quoi son infraction reste indétectable. Exemple d'invariant encore non écrit à ce jour : la règle
+de mesure (styles calculés pour les dimensions, `getBoundingClientRect` confiné à l'ancrage).
+
 ## Statut
 
 Principes de conduite actés. Aucun code. Questions ouvertes explicites : jusqu'où pousser la
