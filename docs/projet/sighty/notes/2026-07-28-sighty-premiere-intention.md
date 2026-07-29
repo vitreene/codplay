@@ -44,7 +44,7 @@ Sighty est le pilote.
 - **Le scénario est de la donnée sérialisable, structurée en graphe de nodes.** Un node est un état — ce
   qui est monté à cet instant — et ses sorties déclarées sont les arêtes. Les calculs (conjonction,
   temporisation, garde) n'entrent pas dans ce vocabulaire : ils sont **nommés** depuis le scénario et
-  fournis à côté, comme un strap avec sa `strapCollection`. Une glu ne peut que *choisir parmi les sorties
+  fournis à côté, comme un strap avec sa `strapCollection`. Un "strap" ne peut que *choisir parmi les sorties
   déclarées*, jamais inventer une destination — sinon le graphe ne serait plus dans la donnée.
 - **Il pilote par events**, du même genre que ceux de codplay, l'aller et le retour empruntant le même
   canal. Il tient des **adresses**, jamais des objets players. Le **telco n'est pas remplacé** : il reste
@@ -253,7 +253,7 @@ Le pilotage a deux formes, qui n'occupent pas la même place :
   à sighty. Elle est **nommée depuis le scénario**, jamais le tronc.
 
 C'est le patron du strap : une `SceneDoc` reste sérialisable parce qu'elle ne contient que le *nom* du
-strap, le code arrivant à part par `strapCollection`. Transposé : un scénario nomme une glu, la glu reçoit
+strap, le code arrivant à part par `strapCollection`. Transposé : un scénario nomme un "strap", le "strap" reçoit
 des events et rend des events, sans tenir d'objet player — même discipline qu'un strap qui ne touche pas
 au DOM.
 
@@ -529,8 +529,8 @@ Sighty** :
 
 **Ces facultés peuvent être confiées à une scène qui sait les gérer.** Une scène a une timeline, un état et
 des straps : la temporisation y est un eventime, une accumulation y est ordinaire, une garde y est le
-résultat d'un calcul dans un strap. Le calcul peut aussi vivre dans une fonction de Sighty — la glu
-impérative nommée depuis le scénario (§2). Dans les deux cas, **rien n'entre dans le vocabulaire du
+résultat d'un calcul dans un strap. Le calcul peut aussi vivre dans une fonction de Sighty — le "strap"
+impératif nommé depuis le scénario (§2). Dans les deux cas, **rien n'entre dans le vocabulaire du
 scénario** : ce sont des calculs, ils vivent là où vivent les calculs.
 
 **Mais le partage ne se fait pas par capacité — il se fait par responsabilité.** Codplay est complet sur le
@@ -650,7 +650,7 @@ les modifications à Sighty (§6.4).
 
 - **Le scénario est un graphe de nodes.** Un node est un état de la machine — ce qui est monté à cet
   instant — et ses sorties déclarées sont les arêtes.
-- **Une glu ne peut que choisir parmi les sorties déclarées d'un node**, jamais inventer une destination.
+- **Un "strap" ne peut que choisir parmi les sorties déclarées d'un node**, jamais inventer une destination.
   Sans quoi le graphe ne serait pas représentable depuis la donnée : les arêtes seraient dans le code.
 - **Le graphe est la structure d'une séquence**, pas du scénario entier. Au-dessus, une couche
   d'arrangement dit quelle séquence joue.
@@ -694,7 +694,7 @@ type Node = {
 
 type ListenRule =
   | { on: string; take: string }         // relais direct : cet event prend cette sortie
-  | { on: string; do: string }           // glu : elle calcule, puis choisit une sortie
+  | { on: string; do: string }           // "strap" : il calcule, puis choisit une sortie
 
 type InstanceDecl = {
   sceneId: string
@@ -748,8 +748,8 @@ Séquences déclarées, arrangement par défaut qui boucle, **calendrier absent 
 ```
 
 Le repli à 30 s n'est pas dans le scénario : c'est un eventime de `layout-tiers` émettant `vue:expiree` —
-la faculté confiée à une scène (§6.4). La conjonction sur les fins de membres est une glu de Sighty,
-parce qu'elle relève de la distribution :
+la faculté confiée à une scène (§6.4). La conjonction sur les fins de membres est un "strap" de Sighty,
+parce qu'il relève de la distribution :
 
 ```ts
 compteFins: ({ event, state, node }) => {
@@ -796,7 +796,7 @@ règle enfouie.
 }
 ```
 
-La garde est un calcul, donc une glu — réutilisable par les deux nodes de quiz puisqu'elle ne nomme que
+La garde est un calcul, donc un "strap" — réutilisable par les deux nodes de quiz puisqu'il ne nomme que
 des sorties, et qui **accumule les tentatives** au lieu d'écraser :
 
 ```ts
@@ -849,7 +849,7 @@ Points arbitraires, à corriger plutôt qu'à hériter :
 - **`listen` énumère ses sources une par une** — aucun caractère générique pour « tous les membres du
   node » n'a été inventé. C'est verbeux, mais la verbosité appartient à la couche **produite** par la
   transcription (§7.0), non à ce qu'un auteur écrit.
-- **La glu écrit dans l'état central via `state`**, calqué sur le `update` d'un strap. Une autre voie
+- **Le "strap" écrit dans l'état central via `state`**, calqué sur le `update` d'un strap. Une autre voie
   serait qu'elle émette et que Sighty enregistre.
 - **`amend` n'a pas de forme** : `ScenarioPatch` n'est pas esquissé, faute de savoir quelles
   modifications l'app amont émet.
@@ -861,7 +861,7 @@ Points arbitraires, à corriger plutôt qu'à hériter :
 - **Politique de survie** (§4) — non écrite.
 - **Forme du scénario** — l'esquisse du §7 est une base de raisonnement, pas une proposition arrêtée ;
   voir §7.6 pour ce qu'elle a dû choisir arbitrairement. Elle n'accueille **pas** de primitive de
-  conjonction, de temporisation ou de garde : ce sont des calculs, confiés à une scène ou à une glu (§6.4).
+  conjonction, de temporisation ou de garde : ce sont des calculs, confiés à une scène ou à un "strap" (§6.4).
 - **Politique d'arrangement** — quand l'app demande une séquence, celle en cours est-elle coupée ou
   attend-on la fin de la vue courante ? Comment le défaut reprend-il ensuite ? Responsabilité de Sighty
   (§4), politique non écrite.

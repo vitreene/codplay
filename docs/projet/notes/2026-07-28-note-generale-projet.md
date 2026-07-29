@@ -24,6 +24,72 @@ possibles pour un même domaine) ; vers l'intérieur, les trois points d'extensi
 
 Ce que cela rend possible dépasse largement ce que ce dépôt exercera : c'est l'objet même du cloisonnement.
 
+### Les deux figures
+
+Un graphe unique de toutes les parties est illisible ; deux lectures séparées valent mieux.
+
+> **Lecture des figures.** Les **MODULES** (ce qui s'exécute) sont en capitales, les `[artefacts]`
+> (ce qui se sérialise) entre crochets. Les boîtes ne portent que leur nom : toute qualification est
+> sur les **flèches**, qui disent la relation et son sens. Rien d'anecdotique n'y figure — une
+> capacité qui ne tient qu'à une hypothèse appartient à la note de cette hypothèse.
+
+**1. La chaîne d'une scène — production et sorties**
+
+```
+   ÉDITEUR DE SCÈNE
+        │
+        │ transcrit concepts → persos
+        ▼
+   [SceneDoc] ─────────────── l'intention ──────────────────┐
+        │                                                   │
+        │ compilé par                                       ▼
+        ▼                                                EXPORTS
+     BUILDER                                    transcript · paquet · transcription
+        │                                                   ▲
+        │ produit                                           │
+        ▼                                                   │
+   [CompiledScene] ─────── l'exécution fidèle ──────────────┘
+        │    │
+        │    └──── déclare ses besoins ────►  ENGINE  ◄──── s'enregistrent ──── composants
+        │ joué par                              │                               tiers
+        ▼                                       │ fournit catalogue,            modules
+   PLAYER × N  ◄────────────────────────────────┘ horloge, cache
+        │
+        │ rend par
+        ▼
+   PROJECTION ──── set · measure · mount ────► DOM · canvas · Flutter
+```
+
+L'export part **avant** l'exécution : depuis le `SceneDoc` quand on veut l'intention, depuis le
+`CompiledScene` quand on vise une exécution fidèle ailleurs. Et la flèche des besoins va **de la scène vers
+l'engine**, jamais l'inverse.
+
+**2. Le pilotage**
+
+```
+                 ÉDITEURS D'ŒUVRE
+                        │
+                        │ transcrivent concepts → scénario
+                        ▼
+                 [Scénario] ──── revendique ses besoins ────► [Catalogue de scènes]
+                        │                                              │
+                        │ exécuté par                                  │ fournit les scènes
+                        ▼                                              │
+   APP ◄─────────────► SIGHTY ◄────────────────────────────────────────┘
+    pilote · amende ►    │  ▲
+    ◄ observe            │  │ events publics
+     monte · commande    │  │
+     telco · injection   │  │
+     cycle de vie        ▼  │
+                       PLAYER × N
+```
+
+Les scènes ne se parlent jamais entre elles : tout passe par Sighty. Le `[Scénario]` et le
+`[Catalogue de scènes]` sont deux déclarations **détachées** — une scène est une ressource employable par
+plusieurs scénarios, et un scénario revendique ses besoins sans contenir le catalogue. Enfin, un player
+peut en héberger un autre (une instance jouée dans une autre) : c'est une relation entre instances, pas un
+étage de plus dans la chaîne.
+
 ## 2. L'organisation
 
 ```
@@ -82,8 +148,8 @@ Ce que le projet sait nommer aujourd'hui, et qui n'aura pas à être réinventé
   transitions émettent.
 - **La façade multi-canaux** — telco, injection, authoring, cycle de vie, observation, à droits
   différenciés.
-- **Le scénario** — graphe de nodes, séquences, arrangement ; catalogue de scènes détaché ; glu impérative
-  nommée depuis le déclaratif.
+- **Le scénario** — graphe de nodes, séquences, arrangement ; catalogue de scènes détaché ; "straps"
+  impératifs nommés depuis le déclaratif.
 - **La transcription** — chaque échelle traduit vers celle du dessous, et n'apprend jamais son vocabulaire.
 - **Les huit invariants** de la matrice, et leur force obligatoire.
 

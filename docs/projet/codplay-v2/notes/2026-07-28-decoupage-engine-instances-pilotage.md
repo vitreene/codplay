@@ -327,7 +327,7 @@ L'orchestrateur est une **machine à états**, pas une fonction du temps (dével
   au-delà d'un ensemble d'instances simultanément montées (§6) ; codplay n'a pas à prévoir de « seek
   global ».
 - **La forme du scénario ne le concerne pas.** Que le pilote lise un objet sérialisable et nomme des
-  fonctions de glu à la manière des straps est son affaire ; codplay ne voit que des events entrants et
+  "straps" à la manière de codplay est son affaire ; codplay ne voit que des events entrants et
   sortants.
 
 ## 5. Le mode hôte — une instance jouée dans une autre

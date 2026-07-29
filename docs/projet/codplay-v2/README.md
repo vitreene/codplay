@@ -103,3 +103,55 @@ et **plan** ne sont pas ouvertes.
   conditions ordinaires d'un perso, le contenu n'est jamais matérialisé. Seek continue de diffuser,
   `rate` ignoré, pas de tampon. La non-relecture se **déclare** (le pilotage `currentTime` du composant
   media combattrait un direct). Annexe : Q/R de la discussion fondatrice.
+- [`2026-07-29-noyau-solve-cadrage.md`](./notes/2026-07-29-noyau-solve-cadrage.md) — **cadrage avant
+  écriture du noyau de calcul pur** (`solve`, courbes, composition de tweens), ce que la conduite §3
+  déclare « valable » après avoir écarté la route « moteur injecté en V1 ». Six points arrêtés :
+  **bibliothèque préalable hors chantier V2**, **nouveau package dédié**, **V1 strictement intouchée**
+  (aucun point d'intégration), géométrie matricielle **écrite depuis zéro**, et `spatialCurve` + `blend`
+  **dans le contrat dès la conception**. Conséquence énoncée : la signature `solve(from,to,ease,t)→valeur`
+  esquissée par la conduite **ne tient plus** — ni une propriété, ni un tween à la fois. Frontière
+  reconnue depuis le corpus : le noyau rend une **valeur native en unité d'auteur**, la **résolution
+  d'unité ne lui appartient pas** (c'est `project`), et il n'y a **pas de pose composée à produire**
+  (propriétés CSS discrètes). Oracle de parité = valeurs d'anime figées en fixtures.
+  **Bloquant avant tout code** : forme d'une trajectoire déclarée et groupement des propriétés couplées.
+- [`2026-07-29-projection-substrat-de-rendu.md`](./notes/2026-07-29-projection-substrat-de-rendu.md) —
+  **Réserve de terme : « Projection » est retiré de cette désignation**, réservé au haut niveau pour la
+  communication publique ; ce qui reste se dit en mots ordinaires (composant qui héberge, cible de rendu,
+  substrat — mot de travail). Le terme demeure employé ailleurs dans le corpus, l'y reprendre est une
+  décision distincte. **Le sujet est une extension, pas le cœur : codplay tourne sans.** Deux usages. (1)
+  L'**espace désigné** dans une scène — usage **direct, déjà prototypé** (`threejs-anime-grid` : un `tag`
+  sert d'espace, un perso `threejs` s'y monte, mais les paramètres sont enfouis dans les fonctions
+  `build`/`simulate` et l'espace n'est qu'un `div` incident). Direction : **un composant grille paramétré
+  comme tout perso, projeté dans un composant projection**. **Pas un concept neuf** : un layout héberge
+  des persos, une projection aussi, et **`move` reste l'interface** — l'`outlet` est la face déclaration
+  du perso, rien à étendre. Les **valeurs de placement** relatives à l'environnement hôte arrivent par le
+  mécanisme existant : **un composant déclare ses capacités et un type TS auquel le perso est lié**. **Le
+  sujet se dégonfle et se range comme un élément de scène ordinaire : rien de nouveau n'est demandé au
+  moteur, seulement des composants** — le travail réel sur le prototype est du travail de composant. (2) Le **substrat de rendu** canvas — **v2.5/v3**, après certitude que
+  la V2 fonctionne parfaitement ; consigné pour n'être pas réinstruit : usage = **effets de
+  décor**, **sans gestion avancée des conflits de rendu avant une V3 au minimum**. Le DOM masque le
+  problème général : ce qu'il apporte est un **arbre retenu**, pas une API de dessin, et c'est lui qui
+  résout les conflits — mais l'usage V2 ne l'atteint pas. Pivot : **Skia n'est jamais la couche qu'une
+  Projection adresse** — Flutter *est* déjà l'arbre retenu (RenderObjects), donc **la cible
+  canvas-navigateur est le seul trou**, et le choix de bibliothèque n'engage pas le portage. Écartés
+  faute d'arbre retenu : CanvasKit, OGL/regl, three.js ; inventaire Pixi/Konva/Two.js/Fabric consigné
+  comme **besoin différé**. **Orientation : l'accès à WebGPU**, pour la complémentarité avec le DOM —
+  et l'usage tranche pour l'**accès direct au shader** plutôt que pour l'abstraction retenue, qui
+  n'aurait rien à porter. `html-to-canvas` natif **refermerait le trou** — à tester en démo (v2.5),
+  état à vérifier. Structure : **toute bibliothèque tierce est potentiellement une projection** — three.js
+  en **média** (ressource d'un seul perso, l'avatar) ou en **projection** (l'espace *est* le substrat,
+  persos = caméra/cube/lumière). Ce qui les sépare n'est pas un degré de complexité mais **le sens de la
+  possession de l'arbre** : en média la bibliothèque possède le sien, en projection codplay possède
+  l'arbre et la bibliothèque le réalise. **Deux modèles, à disposer tous les deux**, à deux échelles de
+  besoin. **Une Projection se place**, sous deux formes — **racine** (toute la scène) ou **hébergée** par
+  un perso qui porte la surface, quatrième cas du **perso hôte** : c'est le lien entre les deux modèles,
+  car une surface placée devient **adressable** (cibler une animation three.js vers elle). Placement =
+  la boîte de l'hôte, par le layout ordinaire ; « toute la surface » et « une portion » sont deux
+  dimensionnements du même hôte. **Plusieurs scènes partagent une Projection**, ce qui la range dans la
+  famille de l'engine (invariant #4), pose `measure`/`mount` en espace commun — et entre en tension avec
+  le placement hébergé (quel perso place une Projection partagée ?). **La greffe suit le modèle des bibliothèques
+  tierces** — déclaration unique par factory, interdictions normatives intégrales, besoin **extrait par le
+  Builder** donc chargé avant montage (« à la demande » ≠ « au dernier moment ») ; le composant signifie
+  son besoin mais **la maîtrise reste à l'auteur** (identification ou chargement conditionnel, non
+  départagés) ; le **DOM reste hors critère** en tant que défaut autonome (invariant #1). Réserve de nom :
+  « Projection » est destiné à la communication publique avec un autre sens.

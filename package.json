@@ -12,6 +12,7 @@
   "private": true,
   "workspaces": [
     "packages/codplay",
+    "packages/ace",
     "packages/demos",
     "packages/editor",
     "packages/authoring/*",
