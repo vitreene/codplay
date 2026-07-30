@@ -322,13 +322,13 @@ ne parse aucun format de substrat.
 *Le « quasi »* : rien n'interdit de coupler autre chose, mais l'échelle uniforme n'a alors plus de sens
 métrique. C'est une responsabilité d'auteur, pas une vérification du noyau.
 
-### 4.2 À trancher par l'œil — se décide sur le rendu, pas avant
+### 4.2 Parcours du chemin — décision issue de la démo
 
-**Le parcours du chemin : par paramètre, ou par longueur d'arc ?** L'argument structurel penche pour la
-longueur d'arc — c'est elle qui garde `temporalEase` et `spatialCurve` réellement indépendants, un Bézier
-parcouru par paramètre n'avançant pas à vitesse constante et ré-easant donc le temps par sa seule courbure.
-Mais ce ralentissement dans les virages peut être exactement l'effet recherché. **Perceptuel : à
-implémenter en options comparables et à trancher en regardant, pas à déduire.**
+**Le parcours est par longueur d'arc par défaut.** Les deux options ont été implémentées dans la démo
+ACE et comparées; la différence ne s'est pas avérée perceptuellement tranchante sur l'exemple. La longueur
+d'arc est retenue parce qu'elle maintient l'indépendance entre `temporalEase` et `spatialCurve` : une
+progression temporelle égale couvre une distance égale sur la trajectoire. Le parcours paramétrique reste
+une option de comparaison, pas le comportement par défaut.
 - **L'ordre de résolution entre `blend` et `spatialCurve`** quand les deux s'appliquent à la même
   propriété.
 
@@ -462,6 +462,5 @@ confondre avec la boîte à outils du §3bis.
 **uniforme**, et **mapping positionnel** : le noyau reçoit une paire ordonnée de valeurs, jamais des noms
 de propriétés. **Plus rien ne bloque l'écriture de la signature.**
 
-**Ouvert, par l'œil** (§4.2) : parcours par paramètre ou par longueur d'arc. Perceptuel — à implémenter en
-**options comparables** et à trancher sur le rendu. Ne bloque pas le démarrage ; exige seulement qu'on ne
-le fige pas d'emblée.
+**Arrêté, par démonstration** (§4.2) : parcours par longueur d'arc par défaut. Le parcours paramétrique
+reste disponible pour comparaison, mais ne doit pas être retenu implicitement.

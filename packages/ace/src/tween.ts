@@ -5,6 +5,7 @@ import {
   type InterpolationValue,
   type Interval,
 } from './interval'
+import { resolvePath, type Path, type Point } from './path'
 
 /** Declaration temporelle d'un intervalle ACE. */
 export type TweenInput = Readonly<{
@@ -17,6 +18,7 @@ export type TweenInput = Readonly<{
   reversed?: boolean
   alternate?: boolean
   ease?: string | EasingFunction
+  path?: Path
 }>
 
 /** Tween prepare, autonome et sans horloge. */
@@ -30,6 +32,9 @@ export type Tween = Readonly<{
   alternate: boolean
   ease: EasingFunction
   totalDuration: number
+  path: Path | null
+  fromPoint: Point | null
+  toPoint: Point | null
 }>
 
 const DEFAULT_DURATION = 1000
@@ -37,6 +42,14 @@ const DEFAULT_EASE = 'out(2)'
 
 const clamp = (value: number, min: number, max: number): number =>
   value < min ? min : value > max ? max : value
+
+const asPoint = (value: InterpolationValue): Point | null =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  typeof value[0] === 'number' &&
+  typeof value[1] === 'number'
+    ? [value[0], value[1]]
+    : null
 
 /**
  * Converts anime's loop option into the total number of iterations.
@@ -62,6 +75,11 @@ export const prepareTween = (input: TweenInput): Tween => {
     ? Infinity
     : (duration + loopDelay) * iterationCount - loopDelay
   const ease = typeof input.ease === 'function' ? input.ease : parseEase(input.ease ?? DEFAULT_EASE)
+  const fromPoint = input.path ? asPoint(input.from) : null
+  const toPoint = input.path ? asPoint(input.to) : null
+  if (input.path && (!fromPoint || !toPoint)) {
+    throw new Error('ace: une trajectoire exige deux points numeriques [x, y]')
+  }
 
   return {
     interval: prepareInterval(input.from, input.to),
@@ -73,6 +91,9 @@ export const prepareTween = (input: TweenInput): Tween => {
     alternate: input.alternate ?? false,
     ease,
     totalDuration,
+    path: input.path ?? null,
+    fromPoint,
+    toPoint,
   }
 }
 
@@ -105,4 +126,6 @@ export const resolveTweenProgress = (tween: Tween, instant: number): number => {
  * Resolves a prepared tween at a bare instant.
  */
 export const resolveTween = (tween: Tween, instant: number): InterpolationValue =>
-  resolveInterval(tween.interval, resolveTweenProgress(tween, instant))
+  tween.path && tween.fromPoint && tween.toPoint
+    ? resolvePath(tween.path, tween.fromPoint, tween.toPoint, resolveTweenProgress(tween, instant))
+    : resolveInterval(tween.interval, resolveTweenProgress(tween, instant))

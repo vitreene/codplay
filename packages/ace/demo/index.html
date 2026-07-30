@@ -11,8 +11,8 @@
         <p class="eyebrow">Temporary package demo</p>
         <h1>ACE resolves values.<br />This page renders them.</h1>
         <p class="lede">
-          Two prepared tweens share one instant: a position from <code>[0, 0]</code> to
-          <code>[500, 500]</code>, and an OKLCH color from red to blue.
+          Three prepared tweens share one instant: two ways of following a quadratic path from
+          <code>[0, 0]</code> to <code>[500, 500]</code>, and an OKLCH color from red to blue.
         </p>
       </header>
 
@@ -21,7 +21,11 @@
           <div class="stage" id="stage">
             <span class="axis axis-x">x</span>
             <span class="axis axis-y">y</span>
-            <div class="marker" id="marker" aria-label="Interpolated value"></div>
+            <svg class="path-line" viewBox="0 0 500 500" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M 0 0 Q 125 375 500 500" />
+            </svg>
+            <div class="marker marker--parameter" id="marker" aria-label="Parameter traversal"></div>
+            <div class="marker marker--arc" id="arc-marker" aria-label="Arc-length traversal"></div>
           </div>
         </div>
 
@@ -35,6 +39,10 @@
             <output id="position-output">[0, 0]</output>
           </div>
           <div>
+            <span class="label">arc length</span>
+            <output id="arc-output">[0, 0]</output>
+          </div>
+          <div>
             <span class="label">color</span>
             <output id="color-output">oklch(62.8% 0.2577 29.23)</output>
           </div>
@@ -44,10 +52,16 @@
           <span>Resolve at an instant</span>
           <input id="progress-input" type="range" min="0" max="1000" value="0" />
         </label>
+        <fieldset class="path-toggles">
+          <legend>Visible traversal</legend>
+          <label><input id="parameter-toggle" type="checkbox" /> Parameter</label>
+          <label><input id="arc-toggle" type="checkbox" checked /> Arc length</label>
+        </fieldset>
         <button class="play-toggle" id="play-toggle" type="button">Pause</button>
       </section>
 
       <footer>
+        Solid marker: parameter traversal. Ring marker: arc-length traversal.
         <code>prepareTween({ from, to, duration, ease })</code> runs once.
         <code>resolveTween(tween, instant)</code> runs on every frame.
       </footer>

@@ -1,4 +1,4 @@
-import { prepareTween, resolve, type ColorValue } from '../src/index'
+import { preparePath, prepareTween, resolve, type ColorValue } from '../src/index'
 
 import './style.css'
 
@@ -15,12 +15,23 @@ const blue: ColorValue = {
   coords: [0.452, 0.313, 264.05],
   alpha: 1,
 }
+const parameterPath = preparePath({ control: [0.5, 0.25] }, { traversal: 'parameter' })
+const arcLengthPath = preparePath({ control: [0.5, 0.25] }, { traversal: 'arc-length' })
 const positionTween = prepareTween({
   from: [0, 0],
   to: [500, 500],
   duration: durationMs,
   ease: 'inOutQuad',
   loop: true,
+  path: parameterPath,
+})
+const arcLengthTween = prepareTween({
+  from: [0, 0],
+  to: [500, 500],
+  duration: durationMs,
+  ease: 'inOutQuad',
+  loop: true,
+  path: arcLengthPath,
 })
 const colorTween = prepareTween({
   from: red,
@@ -32,11 +43,15 @@ const colorTween = prepareTween({
 
 const stage = document.querySelector<HTMLElement>('#stage')!
 const marker = document.querySelector<HTMLElement>('#marker')!
+const arcMarker = document.querySelector<HTMLElement>('#arc-marker')!
 const progressInput = document.querySelector<HTMLInputElement>('#progress-input')!
 const progressOutput = document.querySelector<HTMLOutputElement>('#progress-output')!
 const positionOutput = document.querySelector<HTMLOutputElement>('#position-output')!
+const arcOutput = document.querySelector<HTMLOutputElement>('#arc-output')!
 const colorOutput = document.querySelector<HTMLOutputElement>('#color-output')!
 const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
+const parameterToggle = document.querySelector<HTMLInputElement>('#parameter-toggle')!
+const arcToggle = document.querySelector<HTMLInputElement>('#arc-toggle')!
 
 let playing = true
 let progress = 0
@@ -49,6 +64,13 @@ const isColorValue = (value: unknown): value is ColorValue => {
   return candidate.kind === 'color' && Array.isArray(candidate.coords) && typeof candidate.alpha === 'number'
 }
 
+/** Checks the two-dimensional point returned by a path tween. */
+const isPoint = (value: unknown): value is readonly [number, number] =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  typeof value[0] === 'number' &&
+  typeof value[1] === 'number'
+
 /** Serializes the internal OKLCH value for this DOM-only temporary demo. */
 const toCssColor = (color: ColorValue): string => {
   const [lightness, chroma, hue] = color.coords
@@ -58,25 +80,33 @@ const toCssColor = (color: ColorValue): string => {
 /** Resolves both ACE tweens and displays their values. */
 const render = (): void => {
   const instant = progress * durationMs
-  const [position, color] = resolve([positionTween, colorTween], instant)
-  if (!Array.isArray(position) || !position.every((value) => typeof value === 'number')) {
+  const [position, arcPosition, color] = resolve([positionTween, arcLengthTween, colorTween], instant)
+  if (!isPoint(position) || !isPoint(arcPosition)) {
     throw new Error('ACE demo: expected a two-dimensional numeric position')
   }
   if (!isColorValue(color)) {
     throw new Error('ACE demo: expected a normalized color')
   }
 
-  const [x, y] = position
-  const markerSize = marker.offsetWidth
-  const renderedX = (x / 500) * (stage.clientWidth - markerSize)
-  const renderedY = (y / 500) * (stage.clientHeight - markerSize)
   const cssColor = toCssColor(color)
 
-  marker.style.transform = `translate(${renderedX}px, ${renderedY}px)`
+  const placeMarker = (target: HTMLElement, [x, y]: readonly [number, number]): void => {
+    const size = target.offsetWidth
+    const renderedX = (x / 500) * (stage.clientWidth - size)
+    const renderedY = (y / 500) * (stage.clientHeight - size)
+    target.style.transform = `translate(${renderedX}px, ${renderedY}px)`
+  }
+
+  marker.hidden = !parameterToggle.checked
+  arcMarker.hidden = !arcToggle.checked
+  if (!marker.hidden) placeMarker(marker, position)
+  if (!arcMarker.hidden) placeMarker(arcMarker, arcPosition)
   marker.style.backgroundColor = cssColor
+  arcMarker.style.backgroundColor = cssColor
   progressInput.value = String(Math.round(progress * 1000))
   progressOutput.value = progress.toFixed(3)
-  positionOutput.value = `[${x.toFixed(1)}, ${y.toFixed(1)}]`
+  positionOutput.value = `[${position[0].toFixed(1)}, ${position[1].toFixed(1)}]`
+  arcOutput.value = `[${arcPosition[0].toFixed(1)}, ${arcPosition[1].toFixed(1)}]`
   colorOutput.value = cssColor
 }
 
@@ -101,6 +131,9 @@ playToggle.addEventListener('click', () => {
   playToggle.textContent = playing ? 'Pause' : 'Play'
   startMs = performance.now() - progress * durationMs
 })
+
+parameterToggle.addEventListener('input', render)
+arcToggle.addEventListener('input', render)
 
 new ResizeObserver(render).observe(stage)
 render()
