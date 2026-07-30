@@ -12,7 +12,7 @@ décide que ce qui est listé ci-dessous ; le reste est explicitement laissé ou
 | point | décision |
 |---|---|
 | **Nom** | **`ace`** — *anime codplay extension*. |
-| **Statut** | **Bibliothèque préalable, hors chantier V2.** Elle se conçoit depuis le modèle V2, mais n'est pas la V2 : pas de spec V2 requise avant de l'écrire, elle se pilote par ses tests et son contrat propre. Le chantier V2 commence après, et la consomme. |
+| **Statut** | **Noyau préparatoire de CodPlay V2.** Il vit dans `packages/codplay-v2/src/ace`, se pilote par ses tests et son contrat propre, et ne touche jamais au runtime V1. |
 | **Emplacement** | **Nouveau package dédié.** Indépendance réelle, dépendances nulles, testable seul. |
 | **Rapport à la V1** | **V1 strictement intouchée.** Aucun point d'intégration, aucun site d'appel migré. La V1 garde anime jusqu'à sa mise hors service, et reste l'étalon de fiabilité intact. |
 | **Géométrie matricielle** | Le paquet porte la sienne, **écrite depuis zéro**, et **en 2D**. |

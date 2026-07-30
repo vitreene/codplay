@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { preparePath, resolvePath } from '../src/path'
-import { prepareTween, resolveTween } from '../src/tween'
+import { preparePath, resolvePath } from '../../src/ace/path'
+import { prepareTween, resolveTween } from '../../src/ace/tween'
 
 const expectPointCloseTo = (actual: readonly number[], expected: readonly number[]) => {
   expect(actual[0]).toBeCloseTo(expected[0], 10)

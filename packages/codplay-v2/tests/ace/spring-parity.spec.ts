@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { spring as aceSpring } from '../src/spring'
+import { spring as aceSpring } from '../../src/ace/spring'
 // @ts-ignore
 import { spring as animeSpring } from 'animejs'
 

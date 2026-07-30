@@ -1,6 +1,10 @@
 # Découpage de codplay — engine, instances, pilotage
 
-Axe **V2**. Le préambule méta-orchestrateur (`../../sighty/notes/2026-07-26-meta-orchestrateur-preambule.md`) posait qu'un
+> Note de cadrage déplacée depuis `docs/projet/codplay-v2/notes/` le 2026-07-30. Les décisions de
+> packages et les contrats V2 qui en découlent sont désormais formalisés dans
+> `../codplay-v2-plan.md`.
+
+Axe **V2**. Le préambule méta-orchestrateur (`../../../../docs/projet/sighty/notes/2026-07-26-meta-orchestrateur-preambule.md`) posait qu'un
 orchestrateur — nommé ici **sighty** — est un *client* de codplay, et que la seule exigence portée sur
 codplay est d'être « orchestrable proprement ». Cette page instruit cette exigence : elle découpe
 codplay en étages, dit ce qui est commun à N instances et ce qui appartient à chacune, fixe la nature
@@ -8,7 +12,7 @@ du canal de pilotage, et recense les dispositifs actuels qui ne peuvent pas êtr
 
 **Répartition à tenir** : cette page ne contient que ce qui incombe à **codplay**. Ce qui appartient à
 l'orchestrateur — la forme du scénario, les notions de *page* et de *groupe*, les politiques de portée et
-de survie — est dans `../../sighty/notes/2026-07-28-sighty-premiere-intention.md`, et n'est repris ici que comme référence.
+de survie — est dans `../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md`, et n'est repris ici que comme référence.
 Codplay ne connaît ni le mot *page* ni le mot *groupe* : il reçoit des ensembles d'instances.
 
 ## 1. Les trois étages
@@ -321,7 +325,7 @@ par `v1-action-sequence-spec.md` cesse d'être « remplacer ce qui tournait » p
 ### Ce que la nature du pilote impose ici
 
 L'orchestrateur est une **machine à états**, pas une fonction du temps (développé dans
-`../../sighty/notes/2026-07-28-sighty-premiere-intention.md`). Deux conséquences portent sur codplay, et seulement deux :
+`../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md`). Deux conséquences portent sur codplay, et seulement deux :
 
 - **Aucune demande ne traverse une transition d'état du pilote.** Il n'existe donc pas de portée de seek
   au-delà d'un ensemble d'instances simultanément montées (§6) ; codplay n'a pas à prévoir de « seek
@@ -404,7 +408,7 @@ flux), pas le contenu hors du `t` de l'hôte.
 Le telco admet des **portées** : une instance, ou un ensemble d'instances. Codplay ignore la provenance
 d'un ensemble — déclaré par un scénario (*page*) ou composé à la demande par un éditeur (*groupe*), c'est
 pour lui la même chose. Les deux notions appartiennent à l'orchestrateur et à l'atelier ; voir
-`../../sighty/notes/2026-07-28-sighty-premiere-intention.md`.
+`../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md`.
 
 **La capacité, en une phrase** : seeker **atomiquement** un ensemble d'instances vers **une cible par
 membre**, et ne présenter qu'une fois.
@@ -546,7 +550,7 @@ player appelle par son nom — **cet audit est un prérequis du catalogue**, pas
   son vocabulaire interne. C'est l'interface d'une scène réutilisable ; question symétrique de celle des
   émetteurs (quels events entrent). **Piste retenue** : le cran supérieur de `scope` (§4) *est* cette
   déclaration ; reste à en fixer le nom. Les cas d'usage
-  (`../../sighty/notes/2026-07-28-sighty-premiere-intention.md` §6.4) montrent qu'un enchaînement peut porter sur la fin
+  (`../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md` §6.4) montrent qu'un enchaînement peut porter sur la fin
   narrative comme sur la fin technique — constat d'usage, sans conclusion sur la répartition de la
   décision, que les conventions d'écoute de l'orchestrateur trancheront.
 - **Surface publique d'entrée** — versant symétrique du précédent, non traité : par quoi une scène qui joue
@@ -554,14 +558,14 @@ player appelle par son nom — **cet audit est un prérequis du catalogue**, pas
   directe** visant un élément, pour laquelle une convention existe déjà (`v1-event-spec.md` : « le cas
   `event.name === perso.id` reste la convention la plus directe pour désigner sans ambiguïté un perso
   cible »), ou une **déclaration explicite** par la scène de ce qui est réglable. Cas d'usage à l'origine :
-  `../../sighty/notes/2026-07-28-sighty-premiere-intention.md` §6.1.
+  `../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md` §6.1.
 - **Seek du parent en mode hôte** : la part de l'hôte est arrêtée (le seek rétablit son état, sans
   toucher au contenu — §6.3 du doc émetteurs). Reste la politique de sighty : ce qu'il advient de
   l'instance hébergée quand la surface disparaît (détruire, recréer, laisser). La frontière est tranchée,
   la politique reste à écrire. **Réclamée aussi par le seek d'ensemble** (§6), qui démonte un membre dont
   la cible précède son montage. Politique d'orchestrateur, hors de cette page.
 - **État central et portées** — non tranché, noté au stade de la remarque. Un état central tenu par
-  l'orchestrateur (`../../sighty/notes/2026-07-28-sighty-premiere-intention.md` §4), injecté par events et lu en seule
+  l'orchestrateur (`../../../../docs/projet/sighty/notes/2026-07-28-sighty-premiere-intention.md` §4), injecté par events et lu en seule
   lecture par les scènes, pose trois questions côté codplay :
   - *Ce qui est déjà acquis* : la lecture seule n'est pas une discipline neuve — un strap reçoit déjà son
     `state` en `DeepReadonly`. Ce qui change est la **provenance** des valeurs, pas la forme d'accès.
@@ -620,7 +624,7 @@ contenu (§5) ; telco à portées et seek atomique sur un ensemble d'instances (
 dans tous les cas — ces dispositifs sont déjà faux dès qu'un éditeur monte un second player,
 indépendamment de l'orchestrateur.
 
-Lié : `../../sighty/notes/2026-07-26-meta-orchestrateur-preambule.md` (le niveau au-dessus, dont cette page instruit
+Lié : `../../../../docs/projet/sighty/notes/2026-07-26-meta-orchestrateur-preambule.md` (le niveau au-dessus, dont cette page instruit
 l'exigence), `2026-07-26-conduite-chantier-v2.md` (§4.3 audit des modules, §4bis concurrence de canaux,
 §6 façade multi-canaux, §4.7 le builder sanitise / le player fait confiance),
 `2026-07-27-emetteurs-et-events-user-complexes.md` (§1-§5 les events qui entrent, symétrique de la

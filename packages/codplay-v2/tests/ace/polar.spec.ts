@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { preparePolarTween, resolvePolarTween } from '../src/polar'
-import { resolve } from '../src/resolve'
+import { preparePolarTween, resolvePolarTween } from '../../src/ace/polar'
+import { resolve } from '../../src/ace/resolve'
 
 const expectCoordinatesCloseTo = (actual: readonly unknown[], expected: readonly number[]) => {
   expect(actual[0]).toBeCloseTo(expected[0], 10)

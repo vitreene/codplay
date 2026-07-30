@@ -25,7 +25,7 @@ découpage en plans. Ce ne sont pas des specs ; ce sont les axes qui les justifi
   signage, et parfois mieux servie par un **canal équivalent** que par une animation rendue accessible.
 
 **Organisation interne** : chaque app a un dossier `notes/` pour les discussions, descriptions et
-recommandations. Les parties **spec** et **plan** ne sont pas ouvertes.
+recommandations. Le plan operatoire de CodPlay V2 est dans `packages/codplay-v2/plan/`.
 
 **Distinction avec les autres dossiers** :
 - `docs/formalisation/` — specs normatives v1 (comportement figé, fait foi).

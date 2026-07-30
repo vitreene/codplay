@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { animate } from 'animejs'
 
-import { prepareTween, resolveTween, resolveTweenProgress } from '../src/tween'
+import { prepareTween, resolveTween, resolveTweenProgress } from '../../src/ace/tween'
 
 describe('prepareTween', () => {
   it('prepares anime defaults without globals mutables', () => {

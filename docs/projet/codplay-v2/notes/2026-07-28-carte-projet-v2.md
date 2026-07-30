@@ -7,6 +7,10 @@ et où la question est développée.
 **Aucune duplication.** Cette page ne développe rien : elle classe et elle cite. En cas d'écart, le
 document cité fait foi.
 
+> Les decisions de packages V2 et la note engine/instance ont ete deplacees dans
+> `packages/codplay-v2/plan/`. Cette carte conserve leur classement historique ; les specifications de
+> `CompiledScene` et du runtime font foi.
+
 ## L'articulation — engine, SceneDoc, player, render
 
 Deux lignes qui se rejoignent au player, reliées en amont par une **déclaration de besoins**. C'est le

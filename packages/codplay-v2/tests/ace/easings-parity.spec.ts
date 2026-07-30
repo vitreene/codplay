@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cubicBezier as animeCubicBezier, eases, linear as animeLinear, steps as animeSteps } from 'animejs'
 
-import { cubicBezier, eases as aceEases, linear, parametricNames, parseEase, steps } from '../src/easings'
+import { cubicBezier, eases as aceEases, linear, parametricNames, parseEase, steps } from '../../src/ace/easings'
 
 /** Le catalogue d'anime est typé nom par nom ; on l'indexe librement pour le balayer. */
 const animeEases = eases as unknown as Record<string, ((t: number) => number) & ((...a: number[]) => (t: number) => number)>

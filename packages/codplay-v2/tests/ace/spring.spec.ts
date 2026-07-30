@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { spring } from '../src/spring'
+import { spring } from '../../src/ace/spring'
 
 describe('spring', () => {
   it('démarre à 0 et finit à 1', () => {

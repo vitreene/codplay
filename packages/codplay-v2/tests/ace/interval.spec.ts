@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { animate } from 'animejs'
 
-import { prepareInterval, resolveInterval, type ColorValue } from '../src/interval'
+import { prepareInterval, resolveInterval, type ColorValue } from '../../src/ace/interval'
 
 const srgb = (coords: readonly number[], alpha = 1): ColorValue => ({
   kind: 'color',

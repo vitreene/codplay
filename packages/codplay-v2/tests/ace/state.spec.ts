@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { get, set } from '../src/state'
+import { get, set } from '../../src/ace/state'
 
 describe('get', () => {
   it('lit une valeur de l etat logique', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { animate } from 'animejs'
 
-import { prepareKeyframes, resolveKeyframes } from '../src/keyframes'
+import { prepareKeyframes, resolveKeyframes } from '../../src/ace/keyframes'
 
 describe('prepareKeyframes', () => {
   it('places les frames par leurs delais et durees explicites', () => {

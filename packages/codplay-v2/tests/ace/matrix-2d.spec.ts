@@ -8,7 +8,7 @@ import {
   invertMatrix,
   multiplyMatrix,
   transformPoint,
-} from '../src/matrix-2d'
+} from '../../src/ace/matrix-2d'
 
 const expectPointCloseTo = (actual: readonly number[], expected: readonly number[]) => {
   expect(actual[0]).toBeCloseTo(expected[0], 10)

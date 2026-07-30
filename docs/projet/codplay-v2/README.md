@@ -4,8 +4,8 @@ Réflexions **projet** de `codplay` — les axes de travail (« où on veut alle
 précèdent le découpage en plans. La plupart de ces documents forment le **cahier des charges codplay V2**
 (réécriture conceptuelle, cœur inclus).
 
-**Organisation** : `notes/` accueille discussions, descriptions et recommandations. Les parties **spec**
-et **plan** ne sont pas ouvertes.
+**Organisation** : `notes/` accueille discussions, descriptions et recommandations. Le plan operatoire V2
+est dans `packages/codplay-v2/plan/`.
 
 **Distinction avec les autres dossiers** :
 - `docs/formalisation/` — specs normatives v1 (comportement figé, fait foi).
@@ -51,22 +51,11 @@ et **plan** ne sont pas ouvertes.
   pas ; le ciblage un étage au-dessus ; un seul écrivain ; sanitiser une fois puis faire confiance), à
   **force obligatoire** — un risque de contournement déclenche une analyse, jamais un contournement
   silencieux ; et un invariant non écrit n'est qu'une habitude, qui se perd à la réécriture.
-- [`2026-07-28-decoupage-engine-instances-pilotage.md`](./notes/2026-07-28-decoupage-engine-instances-pilotage.md)
-  — **axe V2** : instruit l'exigence que le préambule méta-orchestrateur pose sur codplay (« être
-  orchestrable proprement »). Trois étages (**engine** / factory de `CompiledScene` / **instance**) ;
-  l'engine porte le catalogue de capacités et les ressources partagées (horloge, cache preload, styles),
-  jamais la racine de mesure ; une **même posture revient trois fois** — horloge délégable, catalogue
-  déclaré au-dessus, stratégie de preload cédée à qui sait à l'avance : codplay fournit un défaut autonome
-  et s'efface devant l'étage supérieur. Modules **déclarés par l'engine, instanciés par chaque player**.
-  Pilotage : **events comme contrat primaire** (authoring hors protocole ; « ce qui traverse pourrait
-  traverser un worker ») ; **multi-scénario** comme capacité émergente à nommer (multi-langue) ; **portée
-  d'un event** du booléen à une échelle nommée, avec la règle d'admission d'une phase (seules les
-  transitions émettent — `onError` et `onUpdate` écartés) ; fins narrative et technique ramenées au
-  vocabulaire normatif. **Mode hôte** : une instance jouée dans une autre, même *perso hôte* que le flux
-  direct ; ordre de tick « hôte avant hébergé » ; une transition ne dédouble jamais une instance vivante.
-  **Seek à instances multiples** : seek atomique sur un ensemble, cible par membre, disponibilité par
-  portée. Recense **9 dispositifs V1 à ne pas reprendre** et les points ouverts, dont **`context.live` face
-  à `f(t)`** et son remplacement par `TweenAction`.
+- [`codplay-v2-plan.md`](../../../packages/codplay-v2/plan/codplay-v2-plan.md)
+  — plan operatoire unique : architecture, inventaire V1 a reconstruire, dependances, jalons, demos V2,
+  tests et questions ouvertes.
+- [`2026-07-28-decoupage-engine-instances-pilotage.md`](../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md)
+  — note de cadrage de l'engine, des instances et du pilotage, deplacee dans le package.
 - [`2026-07-26-portabilite-contrainte-redaction.md`](./notes/2026-07-26-portabilite-contrainte-redaction.md)
   — le portage (cas concret Flutter) comme conséquence de la V2 : les obstacles au portage SONT les
   points V2 (Projection, f(t)/déclaratif, moteur custom). Surtout : la contrainte de portage
@@ -106,7 +95,7 @@ et **plan** ne sont pas ouvertes.
 - [`2026-07-29-noyau-solve-cadrage.md`](./notes/2026-07-29-noyau-solve-cadrage.md) — **cadrage avant
   écriture du noyau de calcul pur** (`solve`, courbes, composition de tweens), ce que la conduite §3
   déclare « valable » après avoir écarté la route « moteur injecté en V1 ». Six points arrêtés :
-  **bibliothèque préalable hors chantier V2**, **nouveau package dédié**, **V1 strictement intouchée**
+  **noyau V2 préparatoire**, **V1 strictement intouchée**
   (aucun point d'intégration), géométrie matricielle **écrite depuis zéro**, et `spatialCurve` + `blend`
   **dans le contrat dès la conception**. Conséquence énoncée : la signature `solve(from,to,ease,t)→valeur`
   esquissée par la conduite **ne tient plus** — ni une propriété, ni un tween à la fois. Frontière

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyRelative, composeComplex, compose, decompose, lerp, round } from '../src/values'
+import { applyRelative, composeComplex, compose, decompose, lerp, round } from '../../src/ace/values'
 
 describe('decompose', () => {
   it('reconnaît un nombre nu, en nombre comme en chaîne', () => {

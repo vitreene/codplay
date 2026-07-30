@@ -1,4 +1,4 @@
-import { preparePath, preparePolarTween, prepareTween, resolve, type ColorValue } from '../src/index'
+import { preparePath, preparePolarTween, prepareTween, resolve, type ColorValue } from '../../../src/ace/index'
 
 import './style.css'
 

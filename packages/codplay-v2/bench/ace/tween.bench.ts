@@ -1,6 +1,6 @@
 import { bench, describe } from 'vitest'
 
-import { prepareTween, resolveTween, type Tween } from '../src/tween'
+import { prepareTween, resolveTween, type Tween } from '../../src/ace/tween'
 
 /** Creates representative prepared states without any DOM or renderer. */
 const createTweens = (count: number): Tween[] =>

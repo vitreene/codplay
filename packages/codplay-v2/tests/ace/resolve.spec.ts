@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { prepareKeyframes } from '../src/keyframes'
-import { resolve } from '../src/resolve'
-import { prepareTween } from '../src/tween'
+import { prepareKeyframes } from '../../src/ace/keyframes'
+import { resolve } from '../../src/ace/resolve'
+import { prepareTween } from '../../src/ace/tween'
 
 describe('resolve', () => {
   it('resolves tweens and keyframes in declaration order', () => {

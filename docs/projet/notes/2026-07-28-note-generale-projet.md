@@ -108,8 +108,8 @@ docs/
 packages/*/plan/            plans et specs colocalisés avec leur package (dont l'éditeur)
 ```
 
-**Convention** : `notes/` accueille discussions, descriptions et recommandations. Les parties **spec** et
-**plan** de `codplay-v2/` et `sighty/` ne sont pas ouvertes — on n'en est pas là.
+**Convention** : `notes/` accueille discussions, descriptions et recommandations. Le plan operatoire de
+CodPlay V2 est dans `packages/codplay-v2/plan/`; Sighty reste sans plan ouvert.
 
 **Frontière normative** : seul `docs/formalisation/` fait foi. Tout ce qui est dans `docs/projet/` est de
 la direction, pas de la norme — à une exception près, qui a force obligatoire : la **matrice des
@@ -121,7 +121,7 @@ déclenche une analyse et jamais un contournement silencieux.
 | pièce | état |
 |---|---|
 | **codplay V1** | implémenté, spécifié (25 documents normatifs), démos nombreuses. Non destiné à la production en l'état. |
-| **codplay V2** | cahier des charges constitué, **aucun code**. Réécriture franche décidée, sans cohabitation de runtimes ; les tests V1 servent d'oracle. |
+| **codplay V2** | cahier des charges constitué, noyau ACE et structure de package amorcés. Réécriture franche décidée, sans cohabitation de runtimes ; les tests V1 servent d'oracle. |
 | **Sighty** | première intention. Objectif, principe et esquisse posés ; ni spec ni code. |
 | **éditeur de scène** | fonctionnel, à l'échelle d'**une** scène. |
 | **éditeurs d'œuvre** | n'existent pas. Consommateurs nommés du mode auteur de Sighty. |
