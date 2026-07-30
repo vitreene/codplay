@@ -12,7 +12,8 @@
  *    aux champs d'une lettre (`{t,n,u,o,d,s}`) pour éviter les allocations, la décomposition
  *    ayant lieu à chaque image. Ici elle a lieu **à la préparation**, hors chemin chaud : la
  *    contrainte tombe, la lisibilité prime.
- * 2. **Les couleurs sont hors périmètre.** Le type est reconnu et signalé, jamais décomposé.
+ * 2. **Les couleurs sont normalisées avant ACE.** Cette décomposition les signale pour empêcher
+ *    qu'une chaîne CSS couleur soit traitée comme une chaîne composée ordinaire.
  */
 
 /** Ce qu'une valeur d'auteur peut être, une fois reconnue. */
@@ -21,7 +22,7 @@ export type ValueKind =
   | 'number'
   /** Un nombre et son unité : `'12cqw'`, `'-8.62%'`, `'1.5rem'`. */
   | 'unit'
-  /** Une couleur — reconnue mais non traitée, hors périmètre. */
+  /** Une couleur : `#fff`, `rgb()`, `rgba()`, `hsl()` ou `hsla()`. */
   | 'color'
   /** Une chaîne mêlant nombres et texte : `'blur(5px) saturate(2)'`, coordonnées, `calc()`. */
   | 'complex'

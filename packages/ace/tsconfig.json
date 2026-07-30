@@ -7,6 +7,6 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "demo/**/*.ts"],
   "exclude": ["src/vendor"]
 }

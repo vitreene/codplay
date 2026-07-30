@@ -245,8 +245,27 @@ aucun event** et ne sont pas à ce niveau de cycle : elles transforment la progr
 rien. On garde ce fonctionnement pour maintenant ; on pourrait chercher à les résoudre autrement, et ça
 peut évoluer plus tard.
 
-**Les valeurs interpolables sont les valeurs de mesure** — pas les couleurs. Et **le noyau ne classe
-rien** : il reçoit des valeurs déjà typées et normalisées, il interpole.
+**Les valeurs interpolables comprennent les valeurs de mesure, les couleurs et les valeurs composées.**
+Le chemin chaud ne classe rien : il reçoit des valeurs déjà préparées et les interpole.
+
+### Couleurs — orientation retenue pour une étape ultérieure
+
+L'auteur fournit des couleurs dans les syntaxes CSS qu'il emploie. Leur reconnaissance et leur
+normalisation se font à l'édition ou à la compilation, jamais dans le chemin chaud d'`ace`.
+La référence à étudier pour ce normaliseur est [`colorjs.io`](https://github.com/color-js/color.js) :
+elle sait reconnaître les formats CSS et préparer une interpolation dans un espace choisi, notamment
+OKLCH. `ace` ne l'importe pas au runtime : il reçoit deux couleurs internes déjà exprimées dans le même
+espace et n'interpole que leurs coordonnées et leur alpha. Cette coupure garde le lecteur de diffusion
+léger et laisse l'auteur libre d'écrire des couleurs CSS ordinaires.
+
+Le support d'espaces supplémentaires se déclare au normaliseur selon les besoins réels ; il ne doit pas
+faire entrer un espace ou un convertisseur inutile dans le lecteur.
+
+Une écriture CSS n'est pas nécessairement un espace de couleur : les noms, les hexadécimaux et `rgb()`
+désignent tous l'espace sRGB et sont normalisés vers ses coordonnées avant interpolation. À l'inverse,
+une couleur déclarée en OKLCH reste en OKLCH : aucun repli implicite vers sRGB ni correction de gamut
+ne sont prévus. Un intervalle porte deux bornes dans le même espace interne ; un passage entre espaces
+est une transformation explicite de préparation, jamais une interpolation de texte.
 
 *Où se fait la classification.* Hors chemin chaud, en amont — mais pas n'importe où : **analyser le CSS
 hors navigateur n'est à la portée de personne**, vu sa richesse et sa diversité. Deux voies, non
@@ -313,6 +332,35 @@ implémenter en options comparables et à trancher en regardant, pas à déduire
 - **L'ordre de résolution entre `blend` et `spatialCurve`** quand les deux s'appliquent à la même
   propriété.
 
+### 4.3 Capacités d'anime écartées du noyau — justification
+
+Cette section ne répète pas les exclusions déjà posées au lancement du chantier : rendu DOM, SVG,
+horloge, timeline, callbacks de bibliothèque, adaptateurs ou écriture de cible. Elle traite seulement
+des capacités d'anime qui paraissent pouvoir entrer dans un noyau pur, mais dont l'admission créerait une
+frontière moins nette que leur traitement ailleurs.
+
+**Règle commune : ACE reçoit une seule forme normalisée, pas une langue auteur.** Une forme pratique à
+écrire n'est pas pour autant une forme utile à calculer par image. Le Builder ou une boîte de préparation
+peut accueillir plusieurs écritures, puis produit les valeurs préparées que ACE résout sans interpréter.
+
+| capacité anime | décision | justification |
+|---|---|---|
+| paire courte `[from, to]` | hors ACE | C'est un raccourci d'écriture. La forme interne exige toujours deux champs explicites `from` et `to`, ce qui distingue sans heuristique une borne d'intervalle d'une propriété dont la valeur est elle-même un tableau. |
+| `from` absent | hors ACE | Anime le complète en lisant sa cible. ACE ne lit ni rendu ni état implicite. L'état logique amont fournit une borne complète avant la préparation. |
+| `from` ou `to` fonction | hors ACE au runtime | Une fonction anime reçoit une cible, un index et des voisins, donc ne représente pas une donnée préparée, sérialisable et réévaluable. Si une convenance auteur appelle une fonction, elle le fait pendant la préparation et livre ensuite des valeurs concrètes. |
+| `stagger` | préparation, pas résolution | La formule de décalage peut rester une fonction pure réutilisable. Mais elle dépend du groupe, de son ordre, de son éventuelle grille et de son origine : l'amont calcule un délai explicite par tween. ACE ne connaît ni groupe auteur ni cible. |
+| listes de keyframes | préparation temporelle | Elles ne sont pas rejetées du système. L'amont les transforme en intervalles explicites et ordonnés avec leurs bornes, durées et easings. Le résolveur d'un intervalle n'a pas à deviner leur découpage. |
+| `modifier` générique | hors ACE | Un hook arbitraire qui modifie chaque valeur masque la nature du calcul et contredit une résolution préparée et typée. Les besoins retenus ont des axes nommés : easing temporel, puis trajectoire spatiale. Tout autre besoin doit être nommé et justifié avant admission. |
+| `utils.set()` | remplacé | Chez anime, c'est une animation de durée nulle qui mute une cible et renvoie un handle. ACE conserve seulement l'opération utile : appliquer un patch immuable à l'état logique, sans animation, handle ni écriture de rendu. |
+| `get()` qui force une valeur absente à `0` | remplacé | Le défaut dépend de la propriété : `scale` illustre immédiatement que `0` n'est pas universel. ACE retourne `undefined`; les composants ou la construction de l'état portent leurs propres défauts. |
+| `replace` et son portillon de chevauchement | hors ACE | Anime déduit le propriétaire d'une valeur à partir d'une histoire d'animations, de parents et de voisins. Codplay connaît ses tweens actifs et les groupe avant ACE. Le remplacement simple relève de cet amont; la composition explicite `blend` reste un sujet distinct, différé. |
+| callbacks `onBegin`, `onLoop`, `onUpdate`, `onComplete` | hors ACE | Une résolution peut être appelée plusieurs fois au même instant et dans les deux sens : elle ne peut pas déclencher d'effet. Les franchissements de bornes en lecture avant sont des événements du Player; l'observation continue passe par son canal d'observation. |
+| defaults et globales mutables d'anime | hors ACE | Une globale rend le résultat dépendant d'un état extérieur. Les paramètres utiles sont portés explicitement par le tween préparé ou par sa préparation; aucune précision, échelle de temps ou valeur par défaut cachée ne modifie ACE pendant la lecture. |
+
+**Ce qui est différé n'est pas abandonné.** `spatialCurve` reste dans le contrat mais attend sa validation
+visuelle; `blend` attend une étape ultérieure, potentiellement post-V2. Leur absence actuelle ne justifie
+pas de faire entrer à leur place un hook générique ou la résolution de chevauchement d'anime.
+
 ## 4bis. Cadrage de l'extraction — établi par lecture directe du code
 
 Relevé dans `animejs` 4.5.0 installé. Le build est de l'ESM lisible et non minifié : extractible tel quel.
@@ -366,7 +414,7 @@ voit son `to` mis à 0 et son `from` transformé en écart, un « tween de tête
 | `animation/animation.js` — keyframes, valeurs fonctionnelles, `Timer`, cibles | 743 l. | **non** — parsing et ordonnancement |
 | `engine/`, `core/clock.js`, `timer/`, `timeline/` | — | **non** — l'horloge, qu'on pilote |
 | `svg/` | — | **hors périmètre** — autre composant |
-| `core/colors.js`, `draggable/`, `text/`, `layout/`, `scope/`, `waapi/`, `events/`, `adapters/three/` | — | **non** |
+| `draggable/`, `text/`, `layout/`, `scope/`, `waapi/`, `events/`, `adapters/three/` | — | **non** |
 
 Le noyau à extraire est de l'ordre de **1000 lignes**, dont l'essentiel est le catalogue de courbes et la
 manipulation de valeurs — pas l'interpolation.
@@ -402,8 +450,8 @@ Frontière reconnue depuis le corpus (§2).
 
 **Arrêté aussi** (§3.1) : courbes empruntées exactement à anime ; `delay`/`repeat`/`direction` dans le
 noyau, comme anime, parce qu'ils ne génèrent pas d'events et que nous pilotons le ticker — provisoire,
-peut évoluer ; valeurs interpolables = **valeurs de mesure**, pas les couleurs, et **le noyau ne classe
-pas**.
+peut évoluer ; valeurs interpolables = **mesures, couleurs et valeurs composées**, et le chemin chaud ne
+classe pas.
 
 **Arrêté, hors noyau** (§3.1) : la classification des valeurs passe par une **liste générée à la demande
 par un utilitaire d'éditeur**, consommée en donnée au Builder — compromis acceptable, limites connues.

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ACE - Intervalles</title>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="intro">
+        <p class="eyebrow">Temporary package demo</p>
+        <h1>ACE resolves values.<br />This page renders them.</h1>
+        <p class="lede">
+          Two prepared intervals share one progress value: a position from <code>[0, 0]</code> to
+          <code>[500, 500]</code>, and an OKLCH color from red to blue.
+        </p>
+      </header>
+
+      <section class="instrument" aria-label="ACE interval demonstration">
+        <div class="stage-wrap">
+          <div class="stage" id="stage">
+            <span class="axis axis-x">x</span>
+            <span class="axis axis-y">y</span>
+            <div class="marker" id="marker" aria-label="Interpolated value"></div>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div>
+            <span class="label">progress</span>
+            <output id="progress-output">0.000</output>
+          </div>
+          <div>
+            <span class="label">position</span>
+            <output id="position-output">[0, 0]</output>
+          </div>
+          <div>
+            <span class="label">color</span>
+            <output id="color-output">oklch(62.8% 0.2577 29.23)</output>
+          </div>
+        </div>
+
+        <label class="scrubber" for="progress-input">
+          <span>Resolve at an instant</span>
+          <input id="progress-input" type="range" min="0" max="1000" value="0" />
+        </label>
+        <button class="play-toggle" id="play-toggle" type="button">Pause</button>
+      </section>
+
+      <footer>
+        <code>prepareInterval(from, to)</code> runs once. <code>resolveInterval(interval, progress)</code>
+        runs on every frame.
+      </footer>
+    </main>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
