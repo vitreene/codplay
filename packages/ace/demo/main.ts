@@ -1,4 +1,4 @@
-import { preparePath, prepareTween, resolve, type ColorValue } from '../src/index'
+import { preparePath, preparePolarTween, prepareTween, resolve, type ColorValue } from '../src/index'
 
 import './style.css'
 
@@ -15,23 +15,13 @@ const blue: ColorValue = {
   coords: [0.452, 0.313, 264.05],
   alpha: 1,
 }
-const parameterPath = preparePath({ control: [0.5, 0.25] }, { traversal: 'parameter' })
-const arcLengthPath = preparePath({ control: [0.5, 0.25] }, { traversal: 'arc-length' })
 const positionTween = prepareTween({
   from: [0, 0],
   to: [500, 500],
   duration: durationMs,
   ease: 'inOutQuad',
   loop: true,
-  path: parameterPath,
-})
-const arcLengthTween = prepareTween({
-  from: [0, 0],
-  to: [500, 500],
-  duration: durationMs,
-  ease: 'inOutQuad',
-  loop: true,
-  path: arcLengthPath,
+  path: preparePath({ control: [0.5, 0.25] }),
 })
 const colorTween = prepareTween({
   from: red,
@@ -40,18 +30,33 @@ const colorTween = prepareTween({
   ease: 'inOutQuad',
   loop: true,
 })
+const polarTween = preparePolarTween({
+  from: { a: 0, d: 110 },
+  to: { a: 360, d: 110 },
+  origin: [250, 250],
+  duration: durationMs,
+  ease: 'linear',
+  loop: true,
+})
+const markerOrbitTween = preparePolarTween({
+  from: { a: 0, d: 36 },
+  to: { a: 1080, d: 36 },
+  origin: [0, 0],
+  duration: durationMs,
+  ease: 'linear',
+  loop: true,
+})
 
 const stage = document.querySelector<HTMLElement>('#stage')!
 const marker = document.querySelector<HTMLElement>('#marker')!
-const arcMarker = document.querySelector<HTMLElement>('#arc-marker')!
+const polarMarker = document.querySelector<HTMLElement>('#polar-marker')!
+const markerOrbit = document.querySelector<HTMLElement>('#marker-orbit')!
 const progressInput = document.querySelector<HTMLInputElement>('#progress-input')!
 const progressOutput = document.querySelector<HTMLOutputElement>('#progress-output')!
 const positionOutput = document.querySelector<HTMLOutputElement>('#position-output')!
-const arcOutput = document.querySelector<HTMLOutputElement>('#arc-output')!
+const polarOutput = document.querySelector<HTMLOutputElement>('#polar-output')!
 const colorOutput = document.querySelector<HTMLOutputElement>('#color-output')!
 const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
-const parameterToggle = document.querySelector<HTMLInputElement>('#parameter-toggle')!
-const arcToggle = document.querySelector<HTMLInputElement>('#arc-toggle')!
 
 let playing = true
 let progress = 0
@@ -80,8 +85,11 @@ const toCssColor = (color: ColorValue): string => {
 /** Resolves both ACE tweens and displays their values. */
 const render = (): void => {
   const instant = progress * durationMs
-  const [position, arcPosition, color] = resolve([positionTween, arcLengthTween, colorTween], instant)
-  if (!isPoint(position) || !isPoint(arcPosition)) {
+  const [position, color, polarPosition, markerOrbitOffset] = resolve(
+    [positionTween, colorTween, polarTween, markerOrbitTween],
+    instant,
+  )
+  if (!isPoint(position) || !isPoint(polarPosition) || !isPoint(markerOrbitOffset)) {
     throw new Error('ACE demo: expected a two-dimensional numeric position')
   }
   if (!isColorValue(color)) {
@@ -92,21 +100,25 @@ const render = (): void => {
 
   const placeMarker = (target: HTMLElement, [x, y]: readonly [number, number]): void => {
     const size = target.offsetWidth
-    const renderedX = (x / 500) * (stage.clientWidth - size)
-    const renderedY = (y / 500) * (stage.clientHeight - size)
+    const drawingSize = Math.min(stage.clientWidth, stage.clientHeight)
+    const offsetX = (stage.clientWidth - drawingSize) / 2
+    const offsetY = (stage.clientHeight - drawingSize) / 2
+    const renderedX = offsetX + (x / 500) * drawingSize - size / 2
+    const renderedY = offsetY + (y / 500) * drawingSize - size / 2
     target.style.transform = `translate(${renderedX}px, ${renderedY}px)`
   }
 
-  marker.hidden = !parameterToggle.checked
-  arcMarker.hidden = !arcToggle.checked
-  if (!marker.hidden) placeMarker(marker, position)
-  if (!arcMarker.hidden) placeMarker(arcMarker, arcPosition)
+  placeMarker(marker, position)
+  placeMarker(polarMarker, polarPosition)
+  placeMarker(markerOrbit, [
+    position[0] + markerOrbitOffset[0],
+    position[1] + markerOrbitOffset[1],
+  ])
   marker.style.backgroundColor = cssColor
-  arcMarker.style.backgroundColor = cssColor
   progressInput.value = String(Math.round(progress * 1000))
   progressOutput.value = progress.toFixed(3)
   positionOutput.value = `[${position[0].toFixed(1)}, ${position[1].toFixed(1)}]`
-  arcOutput.value = `[${arcPosition[0].toFixed(1)}, ${arcPosition[1].toFixed(1)}]`
+  polarOutput.value = `[${polarPosition[0].toFixed(1)}, ${polarPosition[1].toFixed(1)}]`
   colorOutput.value = cssColor
 }
 
@@ -131,9 +143,6 @@ playToggle.addEventListener('click', () => {
   playToggle.textContent = playing ? 'Pause' : 'Play'
   startMs = performance.now() - progress * durationMs
 })
-
-parameterToggle.addEventListener('input', render)
-arcToggle.addEventListener('input', render)
 
 new ResizeObserver(render).observe(stage)
 render()

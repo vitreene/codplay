@@ -267,6 +267,26 @@ une couleur déclarée en OKLCH reste en OKLCH : aucun repli implicite vers sRGB
 ne sont prévus. Un intervalle porte deux bornes dans le même espace interne ; un passage entre espaces
 est une transformation explicite de préparation, jamais une interpolation de texte.
 
+### Coordonnées polaires — forme auteur préparée
+
+`polar` est une forme de valeur qui produit un couple ordonné `x/y`; ce n'est ni une propriété isolée ni
+une `spatialCurve`. L'auteur peut écrire :
+
+```ts
+polar: {
+  from: { a: 0, d: 10 },
+  to: { a: 25, d: 20 },
+  origin: [0, 0]
+}
+```
+
+`a` reprend la signature CSS de `rotate`, `d` celle de `translate`. La préparation convertit l'angle vers
+la forme géométrique, prépare angle et distance comme deux tweens synchrones, puis ACE résout
+`x = origin.x + d × cos(a)` et `y = origin.y + d × sin(a)`. La convention visuelle suit CSS : angle nul
+vers la droite, sens positif horaire dans le repère écran. L'origine par défaut est `[0, 0]`; l'éditeur
+doit fournir le centre du perso comme origine par défaut auteur. Une origine explicite porte les mêmes
+unités que la distance; un zéro sans unité peut les adopter.
+
 *Où se fait la classification.* Hors chemin chaud, en amont — mais pas n'importe où : **analyser le CSS
 hors navigateur n'est à la portée de personne**, vu sa richesse et sa diversité. Deux voies, non
 départagées :

@@ -11,8 +11,8 @@
         <p class="eyebrow">Temporary package demo</p>
         <h1>ACE resolves values.<br />This page renders them.</h1>
         <p class="lede">
-          Three prepared tweens share one instant: two ways of following a quadratic path from
-          <code>[0, 0]</code> to <code>[500, 500]</code>, and an OKLCH color from red to blue.
+          Three prepared tweens share one instant: a quadratic path from <code>[0, 0]</code> to
+          <code>[500, 500]</code>, an OKLCH color from red to blue, and a polar orbit around a fixed origin.
         </p>
       </header>
 
@@ -21,11 +21,14 @@
           <div class="stage" id="stage">
             <span class="axis axis-x">x</span>
             <span class="axis axis-y">y</span>
-            <svg class="path-line" viewBox="0 0 500 500" preserveAspectRatio="none" aria-hidden="true">
+            <svg class="path-line" viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
               <path d="M 0 0 Q 125 375 500 500" />
+              <circle class="orbit-line" cx="250" cy="250" r="110" />
             </svg>
-            <div class="marker marker--parameter" id="marker" aria-label="Parameter traversal"></div>
-            <div class="marker marker--arc" id="arc-marker" aria-label="Arc-length traversal"></div>
+            <div class="marker" id="marker" aria-label="Arc-length path traversal"></div>
+            <div class="anchor" aria-label="Fixed polar origin"></div>
+            <div class="polar-marker" id="polar-marker" aria-label="Polar traversal"></div>
+            <div class="polar-marker" id="marker-orbit" aria-label="Orbit around the path marker"></div>
           </div>
         </div>
 
@@ -35,12 +38,12 @@
             <output id="progress-output">0.000</output>
           </div>
           <div>
-            <span class="label">position</span>
+            <span class="label">path position</span>
             <output id="position-output">[0, 0]</output>
           </div>
           <div>
-            <span class="label">arc length</span>
-            <output id="arc-output">[0, 0]</output>
+            <span class="label">polar position</span>
+            <output id="polar-output">[0, 0]</output>
           </div>
           <div>
             <span class="label">color</span>
@@ -52,16 +55,11 @@
           <span>Resolve at an instant</span>
           <input id="progress-input" type="range" min="0" max="1000" value="0" />
         </label>
-        <fieldset class="path-toggles">
-          <legend>Visible traversal</legend>
-          <label><input id="parameter-toggle" type="checkbox" /> Parameter</label>
-          <label><input id="arc-toggle" type="checkbox" checked /> Arc length</label>
-        </fieldset>
         <button class="play-toggle" id="play-toggle" type="button">Pause</button>
       </section>
 
       <footer>
-        Solid marker: parameter traversal. Ring marker: arc-length traversal.
+        Path traversal uses arc length. The orbit uses <code>polar: { a, d, origin }</code>.
         <code>prepareTween({ from, to, duration, ease })</code> runs once.
         <code>resolveTween(tween, instant)</code> runs on every frame.
       </footer>

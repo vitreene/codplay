@@ -93,6 +93,11 @@ code {
   stroke-width: 2;
 }
 
+.path-line .orbit-line {
+  stroke: #7b9f91;
+  stroke-dasharray: 2 5;
+}
+
 .axis {
   position: absolute;
   color: #658176;
@@ -121,12 +126,31 @@ code {
   will-change: transform, background-color;
 }
 
-.marker--arc {
-  width: 22px;
-  height: 22px;
-  border-color: #101817;
-  box-shadow: 0 0 0 3px #e7f5eec7, 0 8px 24px #0008;
-  opacity: 0.82;
+.anchor,
+.polar-marker {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.anchor {
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #d6e6df;
+  background: #101817;
+  transform: translate(-50%, -50%);
+}
+
+.polar-marker {
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #101817;
+  background: transparent;
+  box-shadow: 0 0 0 3px #d6e6dfc7, 0 8px 24px #0008;
+  will-change: transform;
 }
 
 .readout {
@@ -159,28 +183,6 @@ output {
   padding: 22px 18px 12px;
   color: #b5c1ba;
   font-size: 0.78rem;
-}
-
-.path-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  margin: 0 18px 16px;
-  padding: 11px 13px;
-  border: 1px solid #456057;
-  color: #c5d5cd;
-  font-size: 0.76rem;
-}
-
-.path-toggles legend {
-  padding: 0 5px;
-  color: #8ea99c;
-}
-
-.path-toggles label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
 }
 
 input[type="range"] {
