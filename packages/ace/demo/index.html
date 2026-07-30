@@ -11,7 +11,7 @@
         <p class="eyebrow">Temporary package demo</p>
         <h1>ACE resolves values.<br />This page renders them.</h1>
         <p class="lede">
-          Two prepared intervals share one progress value: a position from <code>[0, 0]</code> to
+          Two prepared tweens share one instant: a position from <code>[0, 0]</code> to
           <code>[500, 500]</code>, and an OKLCH color from red to blue.
         </p>
       </header>
@@ -48,8 +48,8 @@
       </section>
 
       <footer>
-        <code>prepareInterval(from, to)</code> runs once. <code>resolveInterval(interval, progress)</code>
-        runs on every frame.
+        <code>prepareTween({ from, to, duration, ease })</code> runs once.
+        <code>resolveTween(tween, instant)</code> runs on every frame.
       </footer>
     </main>
     <script type="module" src="/main.ts"></script>

@@ -1,8 +1,9 @@
-import { prepareInterval, resolveInterval, type ColorValue } from '../src/interval'
+import { type ColorValue } from '../src/interval'
+import { prepareTween, resolveTween } from '../src/tween'
 
 import './style.css'
 
-const positionInterval = prepareInterval([0, 0], [500, 500])
+const durationMs = 4200
 const red: ColorValue = {
   kind: 'color',
   space: 'oklch',
@@ -15,7 +16,20 @@ const blue: ColorValue = {
   coords: [0.452, 0.313, 264.05],
   alpha: 1,
 }
-const colorInterval = prepareInterval(red, blue)
+const positionTween = prepareTween({
+  from: [0, 0],
+  to: [500, 500],
+  duration: durationMs,
+  ease: 'inOutQuad',
+  loop: true,
+})
+const colorTween = prepareTween({
+  from: red,
+  to: blue,
+  duration: durationMs,
+  ease: 'inOutQuad',
+  loop: true,
+})
 
 const stage = document.querySelector<HTMLElement>('#stage')!
 const marker = document.querySelector<HTMLElement>('#marker')!
@@ -28,7 +42,6 @@ const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
 let playing = true
 let progress = 0
 let startMs = performance.now()
-const durationMs = 4200
 
 /** Checks the color value returned by the prepared ACE interval. */
 const isColorValue = (value: unknown): value is ColorValue => {
@@ -43,10 +56,11 @@ const toCssColor = (color: ColorValue): string => {
   return `oklch(${(lightness * 100).toFixed(3)}% ${chroma.toFixed(4)} ${hue.toFixed(2)} / ${color.alpha})`
 }
 
-/** Resolves both ACE intervals and displays their values. */
+/** Resolves both ACE tweens and displays their values. */
 const render = (): void => {
-  const position = resolveInterval(positionInterval, progress)
-  const color = resolveInterval(colorInterval, progress)
+  const instant = progress * durationMs
+  const position = resolveTween(positionTween, instant)
+  const color = resolveTween(colorTween, instant)
   if (!Array.isArray(position) || !position.every((value) => typeof value === 'number')) {
     throw new Error('ACE demo: expected a two-dimensional numeric position')
   }

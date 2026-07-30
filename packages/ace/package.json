@@ -8,6 +8,7 @@
     "./*": "./src/*"
   },
   "scripts": {
+    "bench": "vitest bench",
     "demo": "vite demo",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
