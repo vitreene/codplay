@@ -1,5 +1,4 @@
-import { type ColorValue } from '../src/interval'
-import { prepareTween, resolveTween } from '../src/tween'
+import { prepareTween, resolve, type ColorValue } from '../src/index'
 
 import './style.css'
 
@@ -59,8 +58,7 @@ const toCssColor = (color: ColorValue): string => {
 /** Resolves both ACE tweens and displays their values. */
 const render = (): void => {
   const instant = progress * durationMs
-  const position = resolveTween(positionTween, instant)
-  const color = resolveTween(colorTween, instant)
+  const [position, color] = resolve([positionTween, colorTween], instant)
   if (!Array.isArray(position) || !position.every((value) => typeof value === 'number')) {
     throw new Error('ACE demo: expected a two-dimensional numeric position')
   }
