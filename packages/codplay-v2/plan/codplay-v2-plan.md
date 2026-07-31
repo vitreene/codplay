@@ -34,6 +34,7 @@ contredire ce plan general. Aucun code V1 n'est importe, modifie ou reutilise da
 @codplay/codplay-v2
   src/ace                calcul pur prepare et resolu
   src/diagnostics        collecte structuree, console.log par defaut et sorties adaptables
+  src/shared             utilitaires purs communs aux domaines V2
   src/services           services nommes, contrats, validation, defaults et operations d'update
   src/scene              SceneDoc, build, validation, diagnostics et exports
   src/scene/compiled     contrat versionne et serialisable de l'artefact de lecture
@@ -67,7 +68,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 |---|---|---|
 | Chantier | Fondation V2 | Le flux `SceneDoc -> CompiledScene` est la tranche active. |
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | `compiled-scene-plan.md` | Les contrats, guards, defaults, deriveurs et codec restent a construire. |
+| Partie active | `compiled-scene-plan.md` | Le squelette des contrats est en place; guards, defaults, deriveurs et codec restent a construire. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
 | Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
 | Composants | Hors tranche active | Aucune API composant definitive ne doit etre ajoutee maintenant. |

@@ -1,4 +1,4 @@
-/** Checks whether a value is a plain record accepted by service validators. */
+/** Checks whether a value is a plain object without an array or custom prototype. */
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false

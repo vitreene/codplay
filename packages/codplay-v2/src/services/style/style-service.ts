@@ -1,6 +1,6 @@
 import type { ServiceValidationDefinition, ValidationFunction } from '../service-validation-types'
 import { reportInvalidServiceValue } from '../service-validation-report'
-import { isPlainRecord } from '../service-validation-utils'
+import { isPlainRecord } from '../../shared'
 
 /** Validates the shape shared by style service payloads. */
 export const validateStyle: ValidationFunction = (value, context) => {

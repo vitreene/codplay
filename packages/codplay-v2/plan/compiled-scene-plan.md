@@ -10,7 +10,9 @@ V2.
 
 - Audit V1 prealable effectue.
 - Diagnostics transversaux du plan general en place et testes.
-- Contrats, guards, deriveurs et codec `CompiledScene` a construire.
+- Squelette des contrats `SceneDoc` et `CompiledScene` en place, a relire.
+- Normalisation structurelle et premiers guards en place, a relire.
+- Deriveurs et codec `CompiledScene` a construire.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Blocage courant : source unique de declaration des services a fixer avant l'integration composant.
 
@@ -170,6 +172,8 @@ Le socle comporte :
 - un `GuardPipeline` qui execute une liste ordonnee de regles et transmet un contexte commun;
 - un contexte de regle qui porte le chemin de donnee, les references scene/story/perso et le
   `DiagnosticCollector` du general;
+- les chemins structurels et constantes de validation sont declares dans `src/scene/config/`, pas dans les
+  conditions du moteur;
 - des regles regroupees par domaine (`scene`, `story`, `perso`, `property`, `compiled`) plutot qu'un validateur
   monolithique;
 - une separation nette entre guard de forme, normalisation, completion par default et deriveur. Une regle ne doit
@@ -192,9 +196,9 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
-| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | A faire |
+| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Squelette en place, a relire |
 | 2. Catalogue | Descripteurs composants/groupes de proprietes/services, snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | En cours |
-| 3. Guards | `GuardPipeline` puis guards d'entree, sanitation, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Pipeline en place, regles a faire |
+| 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | A faire |
 | 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | A faire |
 | 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | A faire |

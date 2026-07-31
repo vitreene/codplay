@@ -1,5 +1,12 @@
 import type { DiagnosticCollector, DiagnosticRefs } from '../../diagnostics'
+import { isPlainRecord } from '../../shared'
 import { createCoreServiceDefinitions } from '../../services'
+import {
+  createPersoValidationPayloads,
+  joinPersoValidationPath,
+  PERSO_VALIDATION_PATHS,
+  type PersoValidationPayload,
+} from '../config/perso-validation'
 import { reportMissingValidator } from './validation-warnings'
 import type {
   ComponentValidationDefinition,
@@ -71,7 +78,7 @@ export function validatePersoWithCatalog(
     diagnostics.error(
       'AUTHOR_COMPONENT_TYPE_UNKNOWN',
       `No component definition is registered for "${perso.type}".`,
-      { refs, context: { type: perso.type, path: 'type' } },
+      { refs, context: { type: perso.type, path: joinPersoValidationPath(PERSO_VALIDATION_PATHS.type) } },
     )
     return
   }
@@ -81,15 +88,15 @@ export function validatePersoWithCatalog(
       kind: 'component',
       name: component.type,
       refs,
-      path: 'perso',
+      path: joinPersoValidationPath(PERSO_VALIDATION_PATHS.type),
       diagnostics,
     })
   }
 
-  validateComponentPayload(component.validateInitial, perso.initial, 'initial', refs, diagnostics)
-
-  for (const [actionName, action] of Object.entries(perso.actions ?? {})) {
-    validateComponentPayload(component.validateAction, action, 'action', refs, diagnostics, actionName)
+  const payloads = createPersoValidationPayloads(perso)
+  for (const payload of payloads) {
+    const validator = payload.target === 'initial' ? component.validateInitial : component.validateAction
+    validateComponentPayload(validator, payload, refs, diagnostics)
   }
 
   for (const serviceName of component.services) {
@@ -108,15 +115,14 @@ export function validatePersoWithCatalog(
         kind: 'service',
         name: serviceName,
         refs,
-        path: `services.${serviceName}`,
+        path: joinPersoValidationPath([...PERSO_VALIDATION_PATHS.services, serviceName]),
         diagnostics,
       })
       continue
     }
 
-    validateServicePayload(service, perso.initial, 'initial', refs, diagnostics)
-    for (const [actionName, action] of Object.entries(perso.actions ?? {})) {
-      validateServicePayload(service, action, 'action', refs, diagnostics, actionName)
+    for (const payload of payloads) {
+      validateServicePayload(service, payload, refs, diagnostics)
     }
   }
 }
@@ -126,17 +132,24 @@ export function validatePersoWithCatalog(
  */
 function validateComponentPayload(
   validator: ValidationFunction | undefined,
-  value: unknown,
-  target: ValidationTarget,
+  payload: PersoValidationPayload,
   refs: DiagnosticRefs,
   diagnostics: DiagnosticCollector,
-  actionName?: string,
 ): void {
   if (validator === undefined) {
     return
   }
 
-  validator(value, createValidationContext(target, `perso.${target}`, refs, diagnostics, actionName))
+  validator(
+    payload.value,
+    createValidationContext(
+      payload.target,
+      joinPersoValidationPath(payload.path),
+      refs,
+      diagnostics,
+      payload.actionName,
+    ),
+  )
 }
 
 /**
@@ -144,21 +157,17 @@ function validateComponentPayload(
  */
 function validateServicePayload(
   service: ServiceValidationDefinition,
-  payload: unknown,
-  target: ValidationTarget,
+  payload: PersoValidationPayload,
   refs: DiagnosticRefs,
   diagnostics: DiagnosticCollector,
-  actionName?: string,
 ): void {
-  if (!isPlainRecord(payload) || !(service.name in payload)) {
+  if (!isPlainRecord(payload.value) || !(service.name in payload.value)) {
     return
   }
 
-  const path = target === 'initial'
-    ? `initial.${service.name}`
-    : `actions.${actionName}.${service.name}`
-  const value = payload[service.name]
-  const context = createValidationContext(target, path, refs, diagnostics, actionName)
+  const path = joinPersoValidationPath([...payload.path, service.name])
+  const value = payload.value[service.name]
+  const context = createValidationContext(payload.target, path, refs, diagnostics, payload.actionName)
   service.validate?.(value, context)
 
   if (!isPlainRecord(value) || service.properties === undefined) {
@@ -173,7 +182,7 @@ function validateServicePayload(
         diagnostics.error(
           'AUTHOR_PROPERTY_UNKNOWN',
           `Property "${propertyName}" is not declared in service "${service.name}".`,
-          { refs, context: { path: `${path}.${propertyName}`, service: service.name } },
+          { refs, context: { path: joinPersoValidationPath([...payload.path, service.name, propertyName]), service: service.name } },
         )
       }
       continue
@@ -181,7 +190,13 @@ function validateServicePayload(
 
     property.validate?.(
       propertyValue,
-      createValidationContext(target, `${path}.${propertyName}`, refs, diagnostics, actionName),
+      createValidationContext(
+        payload.target,
+        joinPersoValidationPath([...payload.path, service.name, propertyName]),
+        refs,
+        diagnostics,
+        payload.actionName,
+      ),
     )
   }
 }
@@ -197,13 +212,4 @@ function createValidationContext(
   actionName?: string,
 ): ValidationContext {
   return { target, path, refs, diagnostics, actionName }
-}
-
-/** Checks whether one payload can expose service keys. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
 }

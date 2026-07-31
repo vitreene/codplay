@@ -1,6 +1,6 @@
 import type { ServiceValidationDefinition, ValidationFunction } from '../service-validation-types'
 import { reportInvalidServiceValue } from '../service-validation-report'
-import { isPlainRecord } from '../service-validation-utils'
+import { isPlainRecord } from '../../shared'
 
 /** Validates the string or patch form accepted by the className service. */
 export const validateClassName: ValidationFunction = (value, context) => {
