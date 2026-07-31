@@ -80,3 +80,9 @@ Avant de signaler une incoherence, verifier si la situation est une decision
 intentionnelle de normalisation ou une convention interne documentee ici. Ne pas
 requalifier automatiquement une completion canonique en correction silencieuse, ni
 exiger une immutabilite runtime profonde pour toute structure TypeScript readonly.
+
+## Valeurs couleur
+
+Le parseur couleur est une preparation ACE pure, independante du DOM. Il produit
+`ColorValue` en `srgb` pour les noms CSS, les formes hexadecimales et `rgb/rgba`.
+Il ne convertit pas vers `oklch` et ne modifie pas le renderer.

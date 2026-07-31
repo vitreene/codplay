@@ -6,6 +6,10 @@
 > CodPlay version: V2 foundation
 > Review: required before color defaults
 
+La normalisation pure des noms CSS, formes hexadecimales et `rgb/rgba` vers
+`ColorValue` sRGB est en place. Le branchement aux proprietes declarees et les
+defaults de couleur restent hors de cette tranche.
+
 Les couleurs sont traitees comme des valeurs intermediaires, distinctes des
 chaines CSS et distinctes des proprietes de transformation. Leur preparation doit
 etre faite avant l'interpolation ACE.
@@ -23,8 +27,10 @@ type ColorValue = {
 }
 ```
 
-`prepareInterval` refuse les couleurs CSS brutes. Cette frontiere est conservee :
-ACE interpole des couleurs deja normalisees et ne devient pas un parseur CSS.
+Les adapters normalisent les couleurs CSS avant la preparation d'un intervalle.
+La preparation froide peut signaler une utilisation incorrecte d'une chaine brute;
+le chemin chaud d'ACE interpole uniquement des `ColorValue` deja prepares et ne
+revalide pas la syntaxe CSS.
 
 ## Entrees a normaliser
 
@@ -37,8 +43,10 @@ les tests :
 - les variantes HSL, OKLCH et autres espaces restent des extensions explicites,
   pas des conversions silencieuses.
 
-Une couleur auteur est donc transformee en `ColorValue` avant la compilation ou la
-preparation d'un intervalle. Sa forme CSS originale n'est pas necessaire a ACE;
+Une couleur auteur est donc transformee en `ColorValue` par l'adapter ACE avant la
+preparation d'un intervalle. La sanitation de scene pourra consommer cette forme
+avant de produire l'artefact lorsqu'un contrat de propriete couleur sera fixe. Sa
+forme CSS originale n'est pas necessaire a ACE;
 la projection pourra la reconstituer selon le contrat du service de rendu.
 
 AnimeJS 4.5 reconnait directement les formes hex, RGB et HSL dans son test de

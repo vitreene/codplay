@@ -12,7 +12,7 @@ V2.
 - Diagnostics transversaux du plan general en place et testes.
 - Squelette des contrats `SceneDoc` et `CompiledScene` en place, a relire.
 - Normalisation structurelle et premiers guards en place, a relire.
-- Premier builder et deriveurs de base `CompiledScene` en place; deriveurs de proprietes et codec a construire.
+- Premier builder, deriveurs de base et codec structurel en place; perimetre gele comme fondation de flux de rendu, deriveurs de proprietes et consommation player restant a construire.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Blocage courant : source unique de declaration des services a fixer avant l'integration composant.
 
@@ -117,6 +117,13 @@ et ses tests; elle ne passe pas par un sac d'extensions generique, une seconde f
 logique defensive dispersee dans le player. L'enveloppe V1 reste stable, mais son contenu peut etre reordonne ou
 regroupe pour la lecture tant que le codec et les dependances declarees preservent le contrat.
 
+La preparation syntaxique `adapter -> ACE` n'appartient pas a `src/scene/compiled` :
+elle est testee et maintenue dans `src/ace/adapters`. La scene compilee ne fait que
+consommer les formes deja normalisees lorsqu'une sanitation de propriete sera reliee
+au contrat de service correspondant. Le codec ne parse ni couleur ni transform.
+Le chemin chaud `resolve` recoit un intervalle deja prepare et ne revalide pas les
+syntaxes auteur, les unites ou les espaces couleur.
+
 ## Catalogue de validations
 
 Le catalogue est construit au moment ou CodPlay enregistre les declarations de composants. Une declaration unique
@@ -205,10 +212,10 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Squelette en place, a relire |
 | 2. Catalogue | Descripteurs composants/groupes de proprietes/services, snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | En cours |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
-| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | En cours: premier builder et deriveurs de base en place |
-| 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | A faire |
-| 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | En cours: corpus structurel S1-S4 |
-| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | A faire au fil du player |
+| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
+| 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe en place; validation semantique et migrations restent a faire |
+| 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune parite player |
+| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Prochaine tranche; aucune demo avant ses contrats |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 
 ## Points de vigilance

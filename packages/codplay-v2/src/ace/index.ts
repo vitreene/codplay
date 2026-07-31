@@ -1,5 +1,6 @@
 export { get, set, type PersoState } from './state'
 export type { UnitValue } from './values'
+export { parseColor } from './adapters/color-adapter'
 export {
   getTransformOrder,
   materializeTransformIdentity,
@@ -14,7 +15,7 @@ export {
   type TransformIdentityValue,
   type TransformFromResolution,
   type TransformTweenInput,
-} from './transform'
+} from './adapters/transform-adapter'
 export {
   prepareInterval,
   resolveInterval,

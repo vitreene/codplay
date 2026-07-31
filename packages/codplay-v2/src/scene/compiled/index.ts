@@ -27,3 +27,8 @@ export {
   type SceneBuildSuccess,
   type SceneBuilderOptions,
 } from './scene-builder'
+export {
+  CompiledSceneCodec,
+  type CompiledSceneCodecOptions,
+  type CompiledSceneDecodeResult,
+} from './codec'

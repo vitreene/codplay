@@ -35,7 +35,7 @@ choisie par l'auteur.
 
 - `50% -> 20%` est prepare et interpole dans `%`;
 - `50px -> 20px` est prepare et interpole dans `px`;
-- `50% -> 20px` est refuse par ACE;
+- `50% -> 20px` est refuse avant le chemin chaud, lors de la preparation;
 - aucune conversion automatique `percentage -> px` n'est ajoutee a ACE;
 - une conversion eventuelle est une operation de `render`, apres resolution de la
   valeur logique;
@@ -47,9 +47,9 @@ choisie par l'auteur.
 - lorsqu'aucune borne deterministe n'est disponible, la resolution est differee a
   l'etat logique/runtime et ACE attend cette borne avant preparation.
 
-ACE n'est donc pas prevu pour melanger deux unites. Le comportement CSS, qui peut
-interpoler certaines unites heterogenes via le substrat, reste un comportement de
-projection distinct et ne devient pas une capacite ACE ou compilee.
+Le chemin chaud ACE n'est donc pas prevu pour melanger deux unites. Le comportement
+CSS, qui peut interpoler certaines unites heterogenes via le substrat, reste un
+comportement de projection distinct et ne devient pas une capacite compilee.
 
 ## Observation externe AnimeJS
 

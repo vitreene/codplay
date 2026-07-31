@@ -1,6 +1,6 @@
-import { decompose } from './values'
-import { prepareTween, type Tween, type TweenInput } from './tween'
-import type { InterpolationValue } from './interval'
+import { decompose } from '../values'
+import { prepareTween, type Tween, type TweenInput } from '../tween'
+import type { InterpolationValue } from '../interval'
 
 /** Transform channel names supported by the V2 CSS-style preparation boundary. */
 export type TransformProperty =
