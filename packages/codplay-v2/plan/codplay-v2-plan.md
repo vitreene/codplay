@@ -1,13 +1,16 @@
-# CodPlay V2 - plan unique
+# CodPlay V2 - plan general
 
 ## Statut et autorite
 
-Ce document est le plan operatoire unique de CodPlay V2. Il ordonne les elements a construire, leurs
-dependances, leurs jalons de validation et les questions qui doivent etre tranchees avant le code concerne.
+Ce document est le plan general de CodPlay V2. Il ordonne les domaines a construire, leurs dependances, leurs
+jalons de validation et les questions qui doivent etre tranchees avant le code concerne.
 
-Les specifications V1 restent la reference du comportement a conserver. Les notes de
-`docs/projet/codplay-v2/` et `plan/notes/` expliquent les decisions; elles ne constituent pas des plans
-concurrents. Aucun code V1 n'est importe, modifie ou reutilise dans le runtime V2.
+Les parties complexes disposent d'un plan detaille distinct, reference depuis ce document. Un plan de partie
+detaille l'execution d'un domaine sans redefinir l'architecture generale, les dependances ou les invariants V2.
+
+Les specifications V1 restent la reference du comportement a conserver. Les plans de partie sont colocalises
+dans `packages/codplay-v2/plan/` et les notes de `plan/notes/` expliquent les decisions; ils ne doivent pas
+contredire ce plan general. Aucun code V1 n'est importe, modifie ou reutilise dans le runtime V2.
 
 ## Invariants de construction
 
@@ -30,6 +33,8 @@ concurrents. Aucun code V1 n'est importe, modifie ou reutilise dans le runtime V
 ```text
 @codplay/codplay-v2
   src/ace                calcul pur prepare et resolu
+  src/diagnostics        collecte structuree, console.log par defaut et sorties adaptables
+  src/services           services nommes, contrats, validation, defaults et operations d'update
   src/scene              SceneDoc, build, validation, diagnostics et exports
   src/scene/compiled     contrat versionne et serialisable de l'artefact de lecture
   src/runtime/engine     catalogue, ressources partagees, horloge et ordre des instances
@@ -49,6 +54,47 @@ Un lecteur de diffusion consomme un `CompiledScene` et sa collection de fonction
 le builder. Un export d'intention consomme `SceneDoc`; un export fidele consomme `CompiledScene`; aucun
 export ne passe par engine ou player.
 
+Les composants sont declares avec un descripteur de capacite pur, construit lors de l'instanciation de CodPlay.
+Une declaration unique porte le type, les services, la capacite runtime et la validation optionnelle. CodPlay
+projette cette declaration dans le registre runtime et dans le catalogue de validation; les services ne sont pas
+redesignes dans un second registre. Le build recoit un snapshot du catalogue et `CompiledScene` l'utilise sans
+instancier de composant ni de service runtime. L'absence d'un validateur de composant est autorisee au debut et
+produit un warning detaille; les validateurs des services courants sont la premiere couverture commune.
+
+## Position actuelle
+
+| Element | Position | Consequence |
+|---|---|---|
+| Chantier | Fondation V2 | Le flux `SceneDoc -> CompiledScene` est la tranche active. |
+| Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
+| Partie active | `compiled-scene-plan.md` | Les contrats, guards, defaults, deriveurs et codec restent a construire. |
+| Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
+| Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
+| Composants | Hors tranche active | Aucune API composant definitive ne doit etre ajoutee maintenant. |
+| ACE | Existant, non modifie | Il reste consommateur de valeurs completes; la preparation amont est a construire. |
+
+Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
+phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
+sortie et la decision de promotion ou de retrait; elle ne devient pas une regle implicite de V2.
+
+## Diagnostics transversaux
+
+`DiagnosticCollector` est une brique de tout `codplay-v2`, partagee par le builder, les guards, le codec,
+l'engine, le player, les composants et les modules. Il conserve des entrees `warning` ou `error`, les deduplicate
+par code et references, et fournit un rapport structure. La politique decide au point d'appel si un cas devient
+warning ou error; en mode auteur, les warnings sont exposes. La sortie par defaut est `console.log`; une sortie
+injectable permet ensuite de diversifier vers un log structure, une console dediee ou le viewport.
+
+Le contrat est partage, mais la duree de vie est locale : un collector appartient a une compilation, une instance
+de player ou une operation determinee. La facade configure la sortie; aucun singleton global ne melange les
+diagnostics de plusieurs compilations, instances ou scenes.
+
+## Plans de parties
+
+| Partie | Plan detaille | Etat |
+|---|---|---|
+| CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours |
+
 ## Modeles algorithmiques
 
 | Domaine | Modele applique | Regle de code |
@@ -67,9 +113,10 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Domaine V1 | Element V2 a construire | Statut et dependances |
 |---|---|---|
 | Glossaire, invariants, configuration | Invariants V2 explicites, conventions et `config/` par domaine | Fondation de toutes les tranches. |
+| Diagnostics | Collecteur structure transversal, deduplication, rapport warnings/erreurs et sorties futures | `src/diagnostics`; contrat commun a toutes les couches V2. |
 | Validation et erreurs | Sanitizer du builder, diagnostics auteur et catalogue d'erreurs/warnings | Avant tout player; le player fait confiance au compile. |
 | SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
-| CompiledScene | Schema versionne, codec, artefact immutable et requirements declares | `src/scene/compiled`; base de diffusion et d'exports. |
+| CompiledScene | Schema versionne, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; base de diffusion et d'exports. |
 | Engine | Catalogue de composants, modules, services, bindings tiers; cache, styles, horloge et ordre de tick | Fournit les capacites declarees; ne lit pas `SceneDoc`. |
 | Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. |
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Les sorties rejouables sont materialisees; les straps ne sont jamais rejoues au seek. |
