@@ -44,4 +44,21 @@ describe('normalizeSceneDoc', () => {
     expect(normalized.stories.main.initial).toEqual({ move: { parentId: '@root' } })
     expect(initial).not.toBe(scene.stories.main.persos[0].initial)
   })
+
+  it('reserves the internal self-reference even when the author provided a value there', () => {
+    const scene: SceneDoc = {
+      id: 'scene-a',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'title', type: 'tag', actions: { title: { arbitrary: true } } }],
+        },
+      },
+    }
+
+    const normalized = normalizeSceneDoc(scene)
+
+    expect(normalized.stories.main.persos[0]?.actions).toEqual({ title: null })
+    expect(scene.stories.main.persos[0]?.actions).toEqual({ title: { arbitrary: true } })
+  })
 })

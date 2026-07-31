@@ -28,4 +28,9 @@ export class CompiledSceneValidationEngine {
       validatePersoWithCatalog(this.catalog, perso, diagnostics)
     }
   }
+
+  /** Returns the services declared by one registered component type. */
+  servicesFor(type: string): readonly string[] {
+    return this.catalog.components.get(type)?.services ?? []
+  }
 }

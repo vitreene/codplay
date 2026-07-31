@@ -68,7 +68,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 |---|---|---|
 | Chantier | Fondation V2 | Le flux `SceneDoc -> CompiledScene` est la tranche active. |
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | `compiled-scene-plan.md` | Le squelette des contrats est en place; guards, defaults, deriveurs et codec restent a construire. |
+| Partie active | `compiled-scene-plan.md` + `transform-properties-plan.md` + `color-values-plan.md` + `unit-values-plan.md` | Contrats, guards et premier builder/deriveurs sont en place; transforms, couleurs et unites doivent preceder les defaults complets et le codec. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
 | Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
 | Composants | Hors tranche active | Aucune API composant definitive ne doit etre ajoutee maintenant. |

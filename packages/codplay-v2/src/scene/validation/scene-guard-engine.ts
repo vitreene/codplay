@@ -1,7 +1,8 @@
 import type { DiagnosticCollector } from '../../diagnostics'
 import { isPlainRecord } from '../../shared'
 import { GuardPipeline } from './guard-pipeline'
-import { SCENE_DOC_VALIDATION_PATHS, resolveSceneValidationPath } from '../config/scene-validation'
+import { SCENE_DOC_VALIDATION_PATHS } from '../config/scene-validation'
+import { resolveSceneValidationPath } from './validation-paths'
 import type { CanonicalSceneDoc } from '../types'
 
 /** Runs the first structural guard set for one canonical scene. */

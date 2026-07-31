@@ -1,0 +1,26 @@
+/** Structural constants used by deterministic scene derivations. */
+export const SCENE_BUILD_CONFIG = {
+  rootToken: '@root',
+  schemaVersion: 'codplay.v2.scene.v1',
+  resourceTypeByExtension: {
+    '.mp4': 'video',
+    '.webm': 'video',
+    '.ogv': 'video',
+    '.mp3': 'audio',
+    '.wav': 'audio',
+    '.ogg': 'audio',
+    '.aac': 'audio',
+    '.png': 'image',
+    '.jpg': 'image',
+    '.jpeg': 'image',
+    '.webp': 'image',
+    '.gif': 'image',
+    '.svg': 'image',
+    '.avif': 'image',
+    '.woff': 'font',
+    '.woff2': 'font',
+    '.ttf': 'font',
+    '.otf': 'font',
+    '.css': 'css',
+  },
+} as const

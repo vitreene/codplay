@@ -4,9 +4,9 @@ import { createCoreServiceDefinitions } from '../../services'
 import {
   createPersoValidationPayloads,
   joinPersoValidationPath,
-  PERSO_VALIDATION_PATHS,
   type PersoValidationPayload,
-} from '../config/perso-validation'
+} from './perso-validation'
+import { PERSO_VALIDATION_PATHS } from '../config/perso-validation'
 import { reportMissingValidator } from './validation-warnings'
 import type {
   ComponentValidationDefinition,
@@ -105,7 +105,7 @@ export function validatePersoWithCatalog(
       diagnostics.error(
         'AUTHOR_SERVICE_UNKNOWN',
         `No service definition is registered for "${serviceName}".`,
-        { refs, context: { service: serviceName, path: 'services' } },
+        { refs, context: { service: serviceName, path: joinPersoValidationPath([...PERSO_VALIDATION_PATHS.services, serviceName]) } },
       )
       continue
     }

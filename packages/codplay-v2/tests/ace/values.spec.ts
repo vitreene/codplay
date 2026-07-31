@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyRelative, composeComplex, compose, decompose, lerp, round } from '../../src/ace/values'
+import { applyRelative, composeComplex, compose, decompose, lerp, round, type UnitValue } from '../../src/ace/values'
 
 describe('decompose', () => {
   it('reconnaît un nombre nu, en nombre comme en chaîne', () => {
@@ -25,6 +25,12 @@ describe('decompose', () => {
     ] as Array<[string, number, string]>) {
       expect(decompose(raw)).toMatchObject({ kind: 'unit', number, unit })
     }
+  })
+
+  it('expose une valeur numérique séparée de son unité', () => {
+    const value: UnitValue = decompose('50%')
+
+    expect(value).toEqual(expect.objectContaining({ number: 50, unit: '%' }))
   })
 
   it('reconnaît les opérateurs relatifs', () => {

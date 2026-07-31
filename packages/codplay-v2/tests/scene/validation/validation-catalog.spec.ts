@@ -89,6 +89,22 @@ describe('ValidationCatalog', () => {
     expect(diagnostics.report().errors[0].code).toBe('AUTHOR_METER_INITIAL_INVALID')
   })
 
+  it('does not validate the canonical self-reference as an authored action payload', () => {
+    const validateAction = vi.fn()
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const catalog = new ValidationCatalog()
+    catalog.registerComponent({ type: 'tag', services: [], validateAction })
+
+    validatePersoWithCatalog(catalog.snapshot(), {
+      id: 'title',
+      type: 'tag',
+      initial: {},
+      actions: { title: null },
+    }, diagnostics)
+
+    expect(validateAction).not.toHaveBeenCalled()
+  })
+
   it('warns when a declared service has no validator', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const catalog = new ValidationCatalog()
@@ -106,5 +122,15 @@ describe('ValidationCatalog', () => {
       'AUTHOR_COMPONENT_VALIDATOR_MISSING',
       'AUTHOR_SERVICE_VALIDATOR_MISSING',
     ])
+  })
+
+  it('detaches a catalog snapshot from later registrations', () => {
+    const catalog = new ValidationCatalog()
+    catalog.registerComponent({ type: 'tag', services: ['style'] })
+    const snapshot = catalog.snapshot()
+
+    catalog.registerComponent({ type: 'later', services: [] })
+
+    expect(snapshot.components.has('later')).toBe(false)
   })
 })

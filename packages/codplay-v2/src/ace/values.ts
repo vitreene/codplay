@@ -2,9 +2,9 @@
  * Décomposition et recomposition de valeurs, extrait d'anime.js 4.5.0 (MIT, © Julian Garnier).
  *
  * C'est la facilité centrale du chantier : **porter une valeur d'auteur avec son unité**,
- * sans la convertir ni la refuser. `-8.62cqw` entre, se décompose en `{ number: -8.62,
- * unit: 'cqw' }`, s'interpole, et ressort avec son unité. Aucune résolution vers un substrat
- * n'a lieu ici — c'est le travail de l'étage de projection.
+ * sans la convertir vers le substrat. `-8.62cqw` entre, se décompose en `{ number: -8.62,
+ * unit: 'cqw' }`, s'interpole avec une borne de même unité, et ressort avec son unité. Aucune
+ * résolution vers un substrat n'a lieu ici — c'est le travail de l'étage de projection.
  *
  * Divergences assumées :
  *
@@ -30,6 +30,12 @@ export type ValueKind =
 /** Opérateur relatif : la valeur se calcule à partir de la précédente. */
 export type RelativeOperator = '+' | '-' | '*'
 
+/** Numeric value kept apart from its author unit until the render boundary. */
+export type UnitValue = {
+  number: number
+  unit: string | null
+}
+
 /**
  * Une valeur d'auteur décomposée.
  *
@@ -37,12 +43,8 @@ export type RelativeOperator = '+' | '-' | '*'
  * et les fragments de texte qui les séparent, dans l'ordre, de sorte que la chaîne se
  * reconstruise en les entrelaçant.
  */
-export type DecomposedValue = {
+export type DecomposedValue = UnitValue & {
   kind: ValueKind
-  /** La part numérique, pour `number` et `unit`. */
-  number: number
-  /** L'unité, pour `unit` ; `null` sinon. */
-  unit: string | null
   /** L'opérateur relatif si la valeur en portait un (`'+=8'`) ; `null` sinon. */
   operator: RelativeOperator | null
   /** Les nombres extraits, pour `complex`. */

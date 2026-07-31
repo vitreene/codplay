@@ -12,7 +12,7 @@ V2.
 - Diagnostics transversaux du plan general en place et testes.
 - Squelette des contrats `SceneDoc` et `CompiledScene` en place, a relire.
 - Normalisation structurelle et premiers guards en place, a relire.
-- Deriveurs et codec `CompiledScene` a construire.
+- Premier builder et deriveurs de base `CompiledScene` en place; deriveurs de proprietes et codec a construire.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Blocage courant : source unique de declaration des services a fixer avant l'integration composant.
 
@@ -102,6 +102,12 @@ de propriete ou de composant afin de ne pas obliger chaque scene a les redeclare
 - La sanitation normalise les representations autorisees et retire les donnees exclues de la diffusion.
 - Les fonctions et autres valeurs non serialisables sont extraites avant la production de l'artefact.
 - Les deriveurs construisent les sections nommees de l'artefact depuis la donnee canonique.
+- Les proprietes de transformation sont la premiere verticale de defaults; leur contrat est detaille dans
+  [`transform-properties-plan.md`](./transform-properties-plan.md).
+- Les couleurs suivent une seconde frontiere de normalisation, documentee dans
+  [`color-values-plan.md`](./color-values-plan.md), avant toute interpolation ACE.
+- Les unites ne sont jamais converties pendant le build; ACE impose une unite compatible et `render` porte
+  la conversion dependante du substrat, selon [`unit-values-plan.md`](./unit-values-plan.md).
 - Le codec valide l'enveloppe et les artefacts serialises avant leur entree dans un player.
 - Le player fait confiance au resultat compile et ne recree pas ces guards sur son chemin chaud.
 
@@ -199,9 +205,9 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Squelette en place, a relire |
 | 2. Catalogue | Descripteurs composants/groupes de proprietes/services, snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | En cours |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
-| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | A faire |
+| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | En cours: premier builder et deriveurs de base en place |
 | 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | A faire |
-| 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | A faire |
+| 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | En cours: corpus structurel S1-S4 |
 | 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | A faire au fil du player |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 

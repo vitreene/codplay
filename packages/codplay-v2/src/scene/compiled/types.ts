@@ -21,6 +21,7 @@ export interface CompiledRecord {
 /** One compiled listen declaration after function extraction. */
 export type CompiledListenRule = Readonly<{
   on: string
+  transform?: readonly CompiledFunctionReference[]
   emit?: readonly CompiledRecord[]
   straps?: readonly string[]
 }>
@@ -48,6 +49,7 @@ export type CompiledStory = Readonly<{
   listen: readonly CompiledListenRule[]
   eventimes?: readonly CompiledRecord[]
   state?: CompiledRecord
+  init?: CompiledFunctionReference
 }>
 
 /** Canonical scene payload read by the player. */
@@ -60,6 +62,10 @@ export type CompiledSceneData = Readonly<{
   listen: readonly CompiledListenRule[]
   state?: CompiledRecord
   tracks: CompiledRecord
+  defaults?: CompiledRecord
+  init?: CompiledFunctionReference
+  onStart?: CompiledFunctionReference
+  onSequenceEnd?: CompiledFunctionReference
 }>
 
 /** One resource entry declared by the compiled scene. */

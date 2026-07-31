@@ -1,4 +1,20 @@
 export { get, set, type PersoState } from './state'
+export type { UnitValue } from './values'
+export {
+  getTransformOrder,
+  materializeTransformIdentity,
+  normalizeTransformProperties,
+  prepareTransformTween,
+  resolveTransformFrom,
+  type TransformAuthorProperty,
+  type TransformNormalizationIssue,
+  type TransformNormalizationResult,
+  type TransformOperation,
+  type TransformProperty,
+  type TransformIdentityValue,
+  type TransformFromResolution,
+  type TransformTweenInput,
+} from './transform'
 export {
   prepareInterval,
   resolveInterval,
