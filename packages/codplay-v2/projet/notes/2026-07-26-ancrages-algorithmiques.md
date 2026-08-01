@@ -196,9 +196,10 @@ delta). Méthode : pour chaque module, emprunter les **types + signatures + inva
 le gouverne (pas son runtime), transcrire les invariants en **tests**, refuser explicitement les
 **dettes** (§ lucidité : état mutable React, replay-depuis-0, échantillonnage FRP naïf).
 
-**Corollaire (durci 2026-07-26)** : appliquer ces modèles **suppose une réécriture totale, aucun
-ré-emprunt de code V1** (conduite §1) — les types de base changent de forme, un module V1 mutatif
-serait une « pièce rapportée ».
+**Corollaire (durci 2026-07-26)** : appliquer ces modèles suppose une réécriture totale. Les
+spécifications, contrats et tests V1 restent la référence comportementale et les oracles de V2,
+mais aucun code du runtime V1 ne doit être réemprunté dans le chemin d'exécution V2 — les types de
+base changent de forme, et un module V1 mutatif serait une « pièce rapportée ».
 
 ## EN RÉSERVE — prochaine étape possible (non écrite)
 
@@ -207,6 +208,25 @@ solve/project : le premier morceau *écrit* de la V2, au seul niveau contrat/typ
 tester concrètement si ces références aiguillent l'écriture. **Mise en réserve à la demande de l'auteur**
 (2026-07-26) — l'auteur doit d'abord réfléchir à l'ensemble ; franchir ce pas quitterait la phase
 projet pour le contrat de code. Ne pas l'écrire sans feu vert explicite.
+
+## Limite de l'ancrage ECS
+
+L'ECS est un modele de comparaison pour la separation donnees/traitements et pour
+l'organisation de systemes specialises. Il ne constitue pas une architecture cible
+pour CodPlay. Un `Perso` est une unite semantique de scene, avec une declaration,
+une timeline, une hierarchie et une projection; une entity ECS est principalement un
+identifiant auquel des composants de donnees sont attaches.
+
+La reduction `Perso -> Entity`, `style -> ECS component`, `solve -> ECS system`
+perdrait la semantique du perso, la distinction Behavior/Event, la rejouabilite de
+`f(t)` et la frontiere entre etat logique et substrat. Elle favoriserait aussi un
+etat mutable parcouru par plusieurs systemes, en tension avec la projection
+deterministe et l'unicite des ecrivains.
+
+CodPlay peut emprunter a l'ECS des idees locales — responsabilites de traitement,
+ordre par dependances, dirty flags et donnees compactes dans les boucles chaudes —
+sans introduire de registre ECS ni de runtime d'entites. Voir la note dediee
+`2026-08-01-codplay-n-est-pas-un-game-engine.md`.
 
 ## Statut
 

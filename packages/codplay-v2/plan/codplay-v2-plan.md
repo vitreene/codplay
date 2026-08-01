@@ -68,7 +68,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 |---|---|---|
 | Chantier | Fondation V2 | Le flux `SceneDoc -> CompiledScene` est la tranche active. |
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | `compiled-scene-plan.md` + note de gel du perimetre | Le socle CompiledScene est suffisant comme fondation testee; aucune demo de rendu ne doit etre construite avant le plan player/engine/composants. |
+| Partie active | `player-engine-plan.md` | Le socle CompiledScene est gele comme fondation; la tranche en cours definit la consommation player/engine avant le sink de rendu temporaire. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
 | Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
 | Composants | Hors tranche active | Aucune API composant definitive ne doit etre ajoutee maintenant. |
@@ -150,7 +150,10 @@ decisions V2 deja ecrites; aucun nouveau concept n'est ajoute pour raccourcir ce
 
 ### 2. Verticale de validite
 
-Creer dans `packages/codplay-v2/demos/` une scene qui traverse le flux entier avec :
+Creer d'abord sous `packages/codplay-v2/tests/runtime/` une verticale de test qui traverse le flux entier avec
+le sink memoire temporaire. La demo temporaire `demos/validation/player` reste maintenue en parallele comme
+banc de validation visible des progres Clock/Ticker et runtime; elle ne sera retiree qu'a l'ouverture des
+composants. Ni cette demo ni la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
 
 - un composant racine fixe;
 - un event materialise;
@@ -158,7 +161,7 @@ Creer dans `packages/codplay-v2/demos/` une scene qui traverse le flux entier av
 - un behavior continu prepare par ACE;
 - des seeks nommes avant, pendant et apres les changements.
 
-Cette verticale ne couvre pas `move`, FLIP, containers, media, persos hotes, ActionSequence, preload
+Cette verticale de test ne couvre pas `move`, FLIP, containers, media, persos hotes, ActionSequence, preload
 partage ou seek multi-instance. Ces capacites sont absentes de ses types et fixtures, sans imitation.
 
 ### 3. POC FLIP/list

@@ -215,7 +215,7 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe en place; validation semantique et migrations restent a faire |
 | 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune parite player |
-| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Prochaine tranche; aucune demo avant ses contrats |
+| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Contrat initial en cours dans [`player-engine-plan.md`](./player-engine-plan.md); sink temporaire ensuite |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 
 ## Points de vigilance

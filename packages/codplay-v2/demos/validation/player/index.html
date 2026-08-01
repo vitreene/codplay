@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CodPlay V2 Temporary Player Vertical</title>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header>
+        <p class="eyebrow">CodPlay V2 / temporary vertical</p>
+        <h1>CompiledScene to memory render</h1>
+        <p class="lede">Temporary DOM presenter only. No V2 component or production renderer is used here.</p>
+      </header>
+
+      <section class="panel" aria-label="temporary player">
+        <div id="stage" class="stage">
+          <div class="temporary-frame">
+            <div id="temporary-root" class="temporary-root">Temporary root</div>
+          </div>
+          <div class="temporary-frame accent-frame">
+            <div id="temporary-accent" class="temporary-accent">Temporary accent</div>
+          </div>
+        </div>
+        <div class="readout">
+          <span>class <output id="class-output">is-idle</output></span>
+          <span>opacity <output id="opacity-output">0</output></span>
+          <span>root color <output id="root-color-output">#f8fafc</output></span>
+          <span>accent color <output id="accent-color-output">#fb7185</output></span>
+          <span>time <output id="time-output">0</output> ms</span>
+        </div>
+        <p class="phase">phase: <output id="phase-output">paused at t=0</output></p>
+        <label class="timeline" for="seek-input">
+          <span>seek</span>
+          <input id="seek-input" type="range" min="0" max="2000" value="0" step="1" />
+        </label>
+        <button id="play-toggle" type="button">Play</button>
+      </section>
+
+      <section class="expected" aria-label="expected timeline">
+        <p class="eyebrow">Expected timeline</p>
+        <ol>
+          <li><code>t = 0</code>: paused, two items are present, root opacity is <code>0</code>.</li>
+          <li><code>t = 500 ms</code>: event <code>demo:show</code>, both items become <code>is-active</code>.</li>
+          <li><code>500-1500 ms</code>: root opacity and both background colors interpolate.</li>
+          <li><code>t >= 1500 ms</code>: root opacity <code>1</code>, root color <code>#67e8f9</code>, accent color <code>#a78bfa</code>.</li>
+        </ol>
+      </section>
+
+      <pre id="error-output" class="error" hidden></pre>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

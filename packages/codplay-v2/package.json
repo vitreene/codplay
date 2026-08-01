@@ -6,6 +6,7 @@
   "scripts": {
     "bench": "vitest bench bench/ace",
     "demo:ace": "vite demos/validation/ace",
+    "demo:player": "vite demos/validation/player",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

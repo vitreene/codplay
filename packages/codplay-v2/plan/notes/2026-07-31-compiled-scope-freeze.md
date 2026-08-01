@@ -32,10 +32,13 @@ pas encore un flux player/engine complet.
 
 ## Regle de demo
 
-Aucune demo ne doit etre construite sur ce seul perimetre pour simuler un flux de
-rendu. Une verticale de rendu ne pourra etre ouverte qu'apres definition des
-contrats player/engine/composants qui consomment effectivement `CompiledScene`.
-Les fixtures S1-S4 restent des fixtures de build et de forme, pas des demos V2.
+Aucune demo ne doit etre construite sur le seul perimetre `CompiledScene` pour
+simuler un flux de rendu. Apres la tranche `engine/player`, une verticale de test
+peut utiliser un sink de rendu temporaire en memoire, sans ouvrir les composants
+ni le renderer de production. La demo temporaire de validation peut rester visible
+pendant les travaux Clock/Ticker et runtime; elle sera retiree uniquement quand les
+composants seront ouverts. Les fixtures S1-S4 restent des fixtures de build et de
+forme, pas des demos V2.
 
 ## Suite autorisee
 
