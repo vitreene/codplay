@@ -14,8 +14,9 @@ coordinate the affected-item set and batched render measurement before projectio
 That render coordination is intentionally not implemented in this state module.
 
 `createListModuleServiceDefinition()` wraps this state for the engine module-service catalog. The
-factory is available, but delta routing and seek reconciliation are not yet wired
-through the player lifecycle.
+factory receives the initial solved scene and subsequent move deltas through the
+player lifecycle. A future list implementation can add `prepareSeek` to stage a
+replacement state before the grouped commit.
 
 It does not create components, read the DOM, perform FLIP, or assume one list
 component implementation. Renderer and component adapters consume its snapshots.

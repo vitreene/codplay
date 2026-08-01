@@ -67,9 +67,12 @@ transaction de portee et ne jamais presenter un sous-ensemble.
 ## Suite
 
 `RuntimeModuleServiceCatalog`, `RuntimeModuleServiceDefinition` et la creation/destruction des
-instances par player sont maintenant en place. Le routage des deltas, la
-reconciliation de seek et la derivation automatique de `CompiledRequirements.modules`
-restent a ouvrir. Cette tranche ne doit pas reintroduire le melange V1 entre
+instances par player sont maintenant en place. L'initialisation depuis le snapshot
+solve, le routage des deltas et la reconciliation staged de seek sont egalement en
+place. La derivation de `CompiledRequirements.modules` vient desormais des
+declarations de capacites des composants ; la validation de disponibilite reste au
+runtime engine.
+Cette tranche ne doit pas reintroduire le melange V1 entre
 declaration `install(host)` et instance runtime.
 
 Le contrat de coordination FLIP V2 est specifie dans

@@ -30,6 +30,7 @@ export type EngineSeekTarget = Readonly<{
 export type InstanceSeekParticipant = Readonly<{
   validateSeek: (timeMs: number) => void
   getSeekDiagnostics?: () => DiagnosticReport
+  abortSeek?: () => void
   prepareSeek: () => void
   commitSeek: (timeMs: number) => void
   presentSeek: () => void
@@ -171,7 +172,16 @@ export class RuntimeEngine {
       return { target, participant: instance.seekParticipant }
     })
 
-    for (const { target, participant } of participants) participant.validateSeek(target.timeMs)
+    const validated: Array<{ participant: InstanceSeekParticipant }> = []
+    try {
+      for (const { target, participant } of participants) {
+        participant.validateSeek(target.timeMs)
+        validated.push({ participant })
+      }
+    } catch (error) {
+      for (const { participant } of validated.reverse()) participant.abortSeek?.()
+      throw error
+    }
     const diagnostics = Object.fromEntries(
       participants.map(({ target, participant }) => [
         target.instanceId,

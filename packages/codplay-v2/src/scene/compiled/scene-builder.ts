@@ -233,18 +233,22 @@ function deriveRequirements(
 ): CompiledScene['requirements'] {
   const components = new Set<string>()
   const services = new Set<string>()
+  const modules = new Set<string>()
   for (const story of Object.values(scene.stories)) {
     for (const perso of story.persos) {
       components.add(perso.type)
       for (const service of validationEngine.servicesFor(perso.type)) {
         services.add(service)
       }
+      for (const moduleService of validationEngine.modulesFor(perso.type)) {
+        modules.add(moduleService)
+      }
     }
   }
   return {
     components: [...components],
     services: [...services],
-    modules: [],
+    modules: [...modules],
     resources: deriveResourceUrls(scene),
   }
 }

@@ -92,4 +92,29 @@ describe('SceneBuilder', () => {
       ])
     }
   })
+
+  it('derives ModuleService requirements from component capability declarations', () => {
+    const catalog = new ValidationCatalog()
+    catalog.registerComponent({
+      type: 'list-item',
+      services: [],
+      modules: ['list'],
+      validateInitial: () => undefined,
+      validateAction: () => undefined,
+    })
+    const builder = new SceneBuilder(catalog.snapshot(), { diagnosticOutput: vi.fn() })
+
+    const result = builder.build({
+      id: 'module-service-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'item', type: 'list-item' }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.compiledScene.requirements.modules).toEqual(['list'])
+  })
 })

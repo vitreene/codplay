@@ -1,5 +1,6 @@
 import type { CompiledScene } from '../../scene/compiled'
 import type { MoveStateDelta } from '../move'
+import type { SolvedScene } from '../player/pipeline/types'
 
 /** Context supplied when one module instance is created for a player. */
 export type RuntimeModuleServiceContext = Readonly<{
@@ -8,7 +9,15 @@ export type RuntimeModuleServiceContext = Readonly<{
 }>
 
 /** Runtime hooks available to a stateful module instance. */
+export type RuntimeModuleServiceSeekHandle = Readonly<{
+  commit: () => void
+  abort?: () => void
+}>
+
+/** Runtime hooks available to a stateful module instance. */
 export type RuntimeModuleServiceInstance = Readonly<{
+  initializeScene?: (scene: SolvedScene) => void
+  prepareSeek?: (scene: SolvedScene) => RuntimeModuleServiceSeekHandle
   onMoveDelta?: (delta: MoveStateDelta) => void
   destroy?: () => void
 }>

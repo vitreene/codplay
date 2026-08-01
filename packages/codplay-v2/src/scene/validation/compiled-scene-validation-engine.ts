@@ -33,4 +33,9 @@ export class CompiledSceneValidationEngine {
   servicesFor(type: string): readonly string[] {
     return this.catalog.components.get(type)?.services ?? []
   }
+
+  /** Returns the runtime module-service requirements declared by one component type. */
+  modulesFor(type: string): readonly string[] {
+    return this.catalog.components.get(type)?.modules ?? []
+  }
 }

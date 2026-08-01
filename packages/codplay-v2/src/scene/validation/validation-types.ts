@@ -15,6 +15,7 @@ export type {
 export type ComponentValidationDefinition = Readonly<{
   type: string
   services: readonly string[]
+  modules?: readonly string[]
   validateInitial?: ValidationFunction
   validateAction?: ValidationFunction
 }>

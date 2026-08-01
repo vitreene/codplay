@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { RuntimeEngine } from '../../../src/runtime/engine'
-import { MemoryRenderSink, RenderSync, RuntimePlayer, type RenderAdapter } from '../../../src/runtime/player'
+import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
+import {
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_ROOT,
+  MemoryRenderSink,
+  RenderSync,
+  RuntimePlayer,
+  type RenderAdapter,
+} from '../../../src/runtime/player'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -212,5 +219,54 @@ describe('RuntimePlayer', () => {
     ])
 
     expect(result.diagnostics.second?.warnings.map((entry) => entry.code)).toContain('AUTHOR_MOVE_LAST_INVALID_SAME_TICK')
+  })
+
+  it('initializes, updates, and destroys player-scoped module services', () => {
+    const events: string[] = []
+    const catalog = new RuntimeModuleServiceCatalog()
+    catalog.register({
+      id: 'probe',
+      create: () => ({
+        initializeScene: (solved) => events.push(`init:${solved.timeMs}`),
+        prepareSeek: (solved) => {
+          events.push(`prepare:${solved.timeMs}`)
+          return { commit: () => events.push('commit'), abort: () => events.push('abort') }
+        },
+        onMoveDelta: (delta) => events.push(`${delta.operation}:${delta.persoKey}`),
+        destroy: () => events.push('destroy'),
+      }),
+    })
+    const engine = new RuntimeEngine(
+      { components: [], services: [], modules: ['probe'], resources: [] },
+      { moduleServiceCatalog: catalog },
+    )
+    const moduleScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{ id: 'item', type: 'tag', initial: { move: '@root' }, actions: {
+              transfer: { move: { parentId: 'outlet' } },
+            } }],
+            listen: [],
+            eventimes: [{ name: 'transfer', startAt: 100 }],
+          },
+        },
+      },
+      requirements: { ...scene.requirements, modules: ['probe'] },
+    }
+    const player = new RuntimePlayer('module-player', engine, moduleScene, undefined, undefined, undefined, undefined, [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+      { id: 'outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+    ])
+
+    expect(player.init().ok).toBe(true)
+    expect(events).toEqual(['init:0'])
+    player.seek(100)
+    expect(events).toEqual(['init:0', 'prepare:100', 'commit'])
+    player.destroy()
+    expect(events.at(-1)).toBe('destroy')
   })
 })

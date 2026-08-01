@@ -97,6 +97,7 @@ describe('RuntimeEngine', () => {
 
     engine.registerInstance('first', () => undefined, {
       validateSeek: () => phases.push('first:validate'),
+      abortSeek: () => phases.push('first:abort'),
       prepareSeek: () => phases.push('first:prepare'),
       commitSeek: () => phases.push('first:commit'),
       presentSeek: () => phases.push('first:present'),
@@ -117,6 +118,6 @@ describe('RuntimeEngine', () => {
         { instanceId: 'second', timeMs: 2000 },
       ]),
     ).toThrow('not seekable')
-    expect(phases).toEqual(['first:validate', 'second:validate'])
+    expect(phases).toEqual(['first:validate', 'second:validate', 'first:abort'])
   })
 })

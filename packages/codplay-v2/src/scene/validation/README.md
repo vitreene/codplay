@@ -9,7 +9,7 @@ the `CompiledScene` build.
 
 ## Role
 
-- CodPlay registers component and service definitions while capabilities are declared.
+- CodPlay registers component, data-service, and ModuleService requirements while capabilities are declared.
 - The catalog produces a snapshot before compilation.
 - `CompiledSceneValidationEngine` consumes that snapshot during compilation without instantiating runtime components or services.
 - `GuardPipeline` runs named structural and capability rules in deterministic phases.
@@ -20,7 +20,7 @@ the `CompiledScene` build.
 
 ## Definitions
 
-Component definitions declare their type, required services, and optional `validateInitial` and `validateAction`
+Component definitions declare their type, required services, runtime ModuleServices, and optional `validateInitial` and `validateAction`
 functions. Service definitions declare reusable group validators and optional validators for named properties inside
 those groups. Service names are therefore the property namespaces, including namespaces owned by one component.
 

@@ -2,7 +2,12 @@ import type { DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
 import type { CompiledScene } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
-import { RuntimeEngine, type RuntimeModuleServiceInstance } from '../engine'
+import {
+  RuntimeEngine,
+  type RuntimeModuleServiceInstance,
+  type RuntimeModuleServiceSeekHandle,
+} from '../engine'
+import { diffSolvedScenes } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -57,6 +62,10 @@ export class RuntimePlayer {
   private pendingSolvedScene: SolvedScene | undefined
   private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
   private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
+  private pendingModuleSeekHandles: Array<{
+    instance: RuntimeModuleServiceInstance
+    handle: RuntimeModuleServiceSeekHandle
+  }> = []
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -119,14 +128,24 @@ export class RuntimePlayer {
       return { ok: false, diagnostics: diagnostics.report() }
     }
     this.solvedScene = this.reconstructScene(0)
+    this.initializeModuleServices(this.solvedScene)
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
       getSeekDiagnostics: () => this.pendingSeekDiagnostics,
+      abortSeek: () => this.abortPendingModuleSeek(),
       prepareSeek: () => this.renderSync.prepareSeek(),
       commitSeek: (timeMs) => {
         if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
           throw new Error('Player seek reconstruction is missing.')
+        }
+        if (this.pendingModuleSeekHandles.length > 0) {
+          const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
+          for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
+          this.notifyModuleMoveDeltas(this.solvedScene, this.pendingSolvedScene, preparedInstances)
+          this.pendingModuleSeekHandles = []
+        } else {
+          this.notifyModuleMoveDeltas(this.solvedScene, this.pendingSolvedScene)
         }
         this.solvedScene = this.pendingSolvedScene
         this.pendingSolvedScene = undefined
@@ -166,7 +185,6 @@ export class RuntimePlayer {
     const diagnostics = new DiagnosticCollector({ output: () => undefined })
     try {
       this.pendingSolvedScene = undefined
-      this.validateSeek(timeMs)
       const engineResult = this.engine.seek([{ instanceId: this.id, timeMs }])
       return { ok: true, timeMs, diagnostics: engineResult.diagnostics[this.id] ?? diagnostics.report() }
     } catch (error) {
@@ -184,6 +202,7 @@ export class RuntimePlayer {
     if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
     for (const instance of this.moduleServiceInstances.values()) instance.destroy?.()
     this.moduleServiceInstances.clear()
+    this.abortPendingModuleSeek()
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
     this.state = PLAYER_LIFECYCLE_DESTROYED
@@ -199,7 +218,9 @@ export class RuntimePlayer {
       return
     }
     this.currentTimeMs += frame.deltaMs
-    this.solvedScene = this.reconstructScene(this.currentTimeMs)
+    const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
+    this.notifyModuleMoveDeltas(this.solvedScene, nextSolvedScene)
+    this.solvedScene = nextSolvedScene
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
@@ -227,6 +248,16 @@ export class RuntimePlayer {
     }
     this.pendingSolvedScene = this.reconstructScene(timeMs)
     this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
+    this.pendingModuleSeekHandles = []
+    try {
+      for (const instance of this.moduleServiceInstances.values()) {
+        const handle = instance.prepareSeek?.(this.pendingSolvedScene)
+        if (handle !== undefined) this.pendingModuleSeekHandles.push({ instance, handle })
+      }
+    } catch (error) {
+      this.abortPendingModuleSeek()
+      throw error
+    }
   }
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
@@ -234,6 +265,31 @@ export class RuntimePlayer {
     return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)), {
       mountTargets: this.mountTargets,
     })
+  }
+
+  /** Initializes player-scoped module services from the first solved snapshot. */
+  private initializeModuleServices(solved: SolvedScene): void {
+    for (const instance of this.moduleServiceInstances.values()) instance.initializeScene?.(solved)
+  }
+
+  /** Sends generic placement deltas to player-scoped module services. */
+  private notifyModuleMoveDeltas(
+    before: SolvedScene | undefined,
+    after: SolvedScene,
+    excludedInstances: ReadonlySet<RuntimeModuleServiceInstance> = new Set(),
+  ): void {
+    if (before === undefined) return
+    for (const delta of diffSolvedScenes(before, after)) {
+      for (const instance of this.moduleServiceInstances.values()) {
+        if (!excludedInstances.has(instance)) instance.onMoveDelta?.(delta)
+      }
+    }
+  }
+
+  /** Aborts staged module-service seek state before a grouped commit can occur. */
+  private abortPendingModuleSeek(): void {
+    for (const { handle } of this.pendingModuleSeekHandles.reverse()) handle.abort?.()
+    this.pendingModuleSeekHandles = []
   }
 }
 

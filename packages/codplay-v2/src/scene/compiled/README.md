@@ -25,3 +25,7 @@ derivation remain open in V2 foundation.
 Target IDs in the runtime artifact are opaque and scene-unique. Factories outside
 CodPlay may compose story and perso IDs; CodPlay does not infer target origin from
 their spelling.
+
+Runtime ModuleService requirements are derived from component capability declarations
+at build time and stored in `CompiledRequirements.modules`. The builder does not load
+or instantiate runtime services.
