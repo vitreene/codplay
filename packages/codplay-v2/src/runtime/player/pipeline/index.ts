@@ -1,6 +1,7 @@
 export { materializeScene } from './materialize'
 export { resolveScene } from './resolve'
 export { solveScene } from './solve'
+export { MountTargetRegistry } from './mount-targets'
 export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
 export { executeListenPipeline, propagateListenEvent } from './listen'
@@ -17,12 +18,15 @@ export type {
   MaterializedPerso,
   MaterializedScene,
   ResolvedPerso,
+  ResolvedPlacement,
   ResolvedScene,
   RuntimePersoIdentity,
   SolvedPerso,
+  SolvedPlacement,
   SolvedScene,
 } from './types'
 export type { MaterializedTrack, MaterializedTrackRegistry } from './tracks'
+export type { MountTarget, MountTargetDeclaration } from './mount-targets'
 export type {
   AppendRuntimeTrackEventInput,
   AppendAnchoredEventimesInput,

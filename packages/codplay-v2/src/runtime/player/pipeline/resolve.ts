@@ -1,6 +1,14 @@
 import { parseColor, prepareTween, resolveTween, type ColorValue } from '../../../ace'
 import { isPlainRecord } from '../../../shared'
+import { SCENE_BUILD_CONFIG } from '../../../scene/config/scene-build'
 import type { CompiledRecord, CompiledValue } from '../../../scene/compiled'
+import {
+  MOUNT_PLACEMENT_INVALID,
+  MOUNT_PLACEMENT_OFF,
+  MOUNT_PLACEMENT_PARENT,
+  MOUNT_PLACEMENT_ROOT,
+  MOUNT_PLACEMENT_UNSPECIFIED,
+} from '../../config/mount-placement'
 import type { MaterializedPerso, MaterializedScene, ResolvedPerso, ResolvedScene } from './types'
 
 /** Resolves discrete patches and continuous ACE values for one materialized scene. */
@@ -13,14 +21,40 @@ export function resolveScene(materialized: MaterializedScene): ResolvedScene {
       persoId: perso.persoId,
       type: perso.type,
       state: resolvePerso(perso),
+      placement: resolvePlacement(perso),
     }
   }
   return {
+    scene: materialized.scene,
     timeMs: materialized.timeMs,
     sceneState: materialized.sceneState,
     storyStates: materialized.storyStates,
     persos,
   }
+}
+
+/** Resolves the last active authored move without resolving its target registry yet. */
+function resolvePlacement(perso: MaterializedPerso): ResolvedPerso['placement'] {
+  let placement = readPlacement(perso.initial.move)
+  for (const activeAction of perso.actions) {
+    if (Object.prototype.hasOwnProperty.call(activeAction.action, 'move')) {
+      placement = readPlacement(activeAction.action.move)
+    }
+  }
+  return placement
+}
+
+/** Converts one authored move value into a typed logical placement. */
+function readPlacement(value: CompiledValue | undefined): ResolvedPerso['placement'] {
+  if (value === undefined) return { kind: MOUNT_PLACEMENT_UNSPECIFIED }
+  if (value === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT }
+  if (value === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF }
+  if (!isPlainRecord(value)) return { kind: MOUNT_PLACEMENT_INVALID }
+  const record = value as CompiledRecord
+  if (typeof record.parentId !== 'string') return { kind: MOUNT_PLACEMENT_INVALID }
+  if (record.parentId === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT }
+  if (record.parentId === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF }
+  return { kind: MOUNT_PLACEMENT_PARENT, targetId: record.parentId }
 }
 
 /** Resolves one perso without mutating compiled or materialized input data. */

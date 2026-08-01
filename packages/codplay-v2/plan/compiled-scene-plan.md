@@ -234,6 +234,9 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
   les memes noeuds.
 - Le contrat decide explicitement si les entrees sont des IDs de persos ou de story hosts; aucun noeud de story
   synthetique ne peut etre introduit pour masquer cette decision.
+- Les IDs sont opaques et uniques dans une scene. Leur origine est portee par les declarations internes du
+  registre de cibles, pas par une convention de nommage ; une factory externe d'instanciation garantit
+  l'unicite lorsqu'une story ou un perso est cree plusieurs fois.
 
 ### Criteres de cloture
 

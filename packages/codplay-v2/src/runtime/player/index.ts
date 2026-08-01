@@ -23,9 +23,23 @@ export {
 export { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE, TRACK_EVENT_TOGGLE } from '../config/track-events'
 export { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 export {
+  MOUNT_TARGET_KIND_HOST,
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_PERSO,
+  MOUNT_TARGET_KIND_ROOT,
+} from '../config/mount-target'
+export {
+  MOUNT_PLACEMENT_INVALID,
+  MOUNT_PLACEMENT_OFF,
+  MOUNT_PLACEMENT_PARENT,
+  MOUNT_PLACEMENT_ROOT,
+  MOUNT_PLACEMENT_UNSPECIFIED,
+} from '../config/mount-placement'
+export {
   materializeScene,
   resolveScene,
   solveScene,
+  MountTargetRegistry,
   buildTrackRegistry,
   createStrapTrackId,
   resolveStoryTrackId,
@@ -42,12 +56,16 @@ export {
   type MaterializedPerso,
   type MaterializedScene,
   type ResolvedPerso,
+  type ResolvedPlacement,
   type ResolvedScene,
   type RuntimePersoIdentity,
   type SolvedPerso,
+  type SolvedPlacement,
   type SolvedScene,
   type MaterializedTrack,
   type MaterializedTrackRegistry,
+  type MountTarget,
+  type MountTargetDeclaration,
   type AppendRuntimeTrackEventInput,
   type AppendAnchoredEventimesInput,
   type AppendStrapOutputInput,

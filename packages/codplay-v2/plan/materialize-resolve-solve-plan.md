@@ -69,11 +69,17 @@ derivee du journal et ne devient pas une mutation cachee du renderer.
 ## Solve
 
 `solveScene(resolved)` etablit la sortie stable de la tranche et preserve les
-identites `storyId:persoId`. Cette premiere implementation ne pretend pas encore
-resoudre la hierarchie, les moves, les transforms d'ancetres ou les mesures.
+identites `storyId:persoId`. La premiere extension resout les placements `@root`,
+`@off` et `parentId` via le registre interne de cibles. Elle ne resout pas encore
+le graphe parent/enfant, l'ordre des descendants, les transforms d'ancetres ou les mesures.
 
 Le solve hierarchique sera une extension de cette frontiere, pas une modification
-de `materialize` ou de `resolve`.
+de `materialize` ou de `resolve`. Les IDs de cible sont opaques et uniques dans
+une scene ; leur origine (`perso`, `host`, `outlet` ou racine de story) provient
+d'un registre interne de cibles, jamais de la forme du nom. Les conventions de
+nommage auteur ne sont donc pas un discriminant. Les factories externes qui
+instancient des stories ou des persos doivent garantir l'unicite des IDs avant
+leur entree dans ce registre.
 
 ## Invariants
 

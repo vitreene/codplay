@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTrackRegistry,
   createStrapTrackId,
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_ROOT,
+  MOUNT_PLACEMENT_OFF,
+  MOUNT_PLACEMENT_PARENT,
+  MOUNT_PLACEMENT_ROOT,
   materializeScene,
   resolveScene,
   RuntimeTrackJournal,
@@ -208,6 +213,49 @@ describe('materialize -> resolve -> solve', () => {
     expect(solved.timeMs).toBe(150)
     expect(solved.persos['main:root']?.key).toBe('main:root')
     expect(solved.persos['main:root']?.state.className).toBe('is-active')
+  })
+
+  it('resolves opaque root, detached, and internal parent placements', () => {
+    const moveScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              ...scene.scene.stories.main!.persos[0]!,
+              initial: { move: '@root' },
+              actions: {
+                detach: { move: '@off' },
+                attach: { move: { parentId: 'toto' } },
+              },
+            }],
+            eventimes: [
+              { name: 'detach', startAt: 100 },
+              { name: 'attach', startAt: 200 },
+            ],
+          },
+        },
+      },
+    }
+    const mountTargets = [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+      { id: 'toto', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+    ] as const
+
+    const beforeDetach = solveScene(resolveScene(materializeScene(moveScene, 50)), { mountTargets })
+    const detached = solveScene(resolveScene(materializeScene(moveScene, 150)), { mountTargets })
+    const attached = solveScene(resolveScene(materializeScene(moveScene, 250)), { mountTargets })
+
+    expect(beforeDetach.persos['main:root']?.placement).toMatchObject({ kind: MOUNT_PLACEMENT_ROOT, mounted: true })
+    expect(detached.persos['main:root']?.placement).toMatchObject({ kind: MOUNT_PLACEMENT_OFF, mounted: false })
+    expect(attached.persos['main:root']?.placement).toMatchObject({
+      kind: MOUNT_PLACEMENT_PARENT,
+      mounted: true,
+      targetId: 'toto',
+      target: { kind: MOUNT_TARGET_KIND_OUTLET },
+    })
   })
 
   it('rejects invalid materialization times before evaluation', () => {

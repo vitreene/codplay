@@ -127,7 +127,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | Le catalogue engine declare les types; chaque player instancie ses composants. |
 | Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reprend son contrat V1 comme capacite declaree, avec ses fixtures et ses demos; aucune ne devient un patch generique de `style`. |
 | Layout et listes | Contrats de layout/outlets et de container ordonne | A stabiliser contre les cas V1 avant le POC FLIP/list. |
-| Move | Politique de conflit, etat parent/enfant, montage, ordre logique, `@root`, `@off`, detach/reattach | Classes `MovePolicy`, `MoveState`, `MoveCoordinator`; depend de composants et listes. |
+| Move | Politique de conflit, etat parent/enfant, montage, ordre logique, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre interne et premiere resolution de placement en place; graphe, politique de conflit, composants et listes restent a ouvrir; les factories externes portent l'unicite d'instanciation. |
 | FLIP et overlay-world | Snapshots avant/apres, matrices, geometrie et transitions visuelles | Backend DOM du move; depend de mesure, move et composants. |
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Depend de events/tracks/materialize/ACE; les emissions de phase restent declarees. |

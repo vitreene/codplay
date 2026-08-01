@@ -1,6 +1,7 @@
 /** Structural constants used by deterministic scene derivations. */
 export const SCENE_BUILD_CONFIG = {
   rootToken: '@root',
+  detachToken: '@off',
   schemaVersion: 'codplay.v2.scene.v1',
   resourceTypeByExtension: {
     '.mp4': 'video',

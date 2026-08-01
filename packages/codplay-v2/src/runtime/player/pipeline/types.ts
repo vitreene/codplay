@@ -1,5 +1,14 @@
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { MaterializedTrackRegistry } from './tracks'
+import type { MountTarget } from './mount-targets'
+import {
+  MOUNT_PLACEMENT_INVALID,
+  MOUNT_PLACEMENT_OFF,
+  MOUNT_PLACEMENT_PARENT,
+  MOUNT_PLACEMENT_ROOT,
+  MOUNT_PLACEMENT_UNSPECIFIED,
+  type MountPlacementKind,
+} from '../../config/mount-placement'
 
 /** Identifies one perso across one compiled scene evaluation. */
 export type RuntimePersoIdentity = Readonly<{
@@ -39,24 +48,47 @@ export type MaterializedScene = Readonly<{
   persos: Readonly<Record<string, MaterializedPerso>>
 }>
 
+/** Placement value selected from the authored initial state and active moves. */
+export type ResolvedPlacement = Readonly<
+  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED }
+  | { kind: typeof MOUNT_PLACEMENT_ROOT }
+  | { kind: typeof MOUNT_PLACEMENT_OFF }
+  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string }
+  | { kind: typeof MOUNT_PLACEMENT_INVALID }
+>
+
 /** Output of resolve before hierarchy and substrate projection. */
 export type ResolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
+  placement: ResolvedPlacement
 }>
 
 /** Scene data after discrete patches and continuous values are resolved. */
 export type ResolvedScene = Readonly<{
+  scene: CompiledScene
   timeMs: number
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, ResolvedPerso>>
 }>
 
+/** Placement after resolving an opaque target through internal declarations. */
+export type SolvedPlacement = Readonly<{
+  kind: MountPlacementKind
+  mounted: boolean
+  targetId?: string
+  target?: MountTarget
+}>
+
 /** Stable solve output consumed by a future component/projector boundary. */
-export type SolvedPerso = ResolvedPerso
+export type SolvedPerso = RuntimePersoIdentity & Readonly<{
+  state: CompiledRecord
+  placement: SolvedPlacement
+}>
 
 /** Scene data after the currently supported solve stage. */
 export type SolvedScene = Readonly<{
+  scene: CompiledScene
   timeMs: number
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
