@@ -6,6 +6,7 @@ export { RuntimeTrackJournal } from './track-journal'
 export { propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
+export { RuntimeStateStore } from './runtime-state-store'
 export {
   resolveSceneStrap,
   resolveStoryStrap,

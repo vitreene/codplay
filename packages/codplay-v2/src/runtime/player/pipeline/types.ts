@@ -34,6 +34,8 @@ export type MaterializedScene = Readonly<{
   scene: CompiledScene
   timeMs: number
   tracks: MaterializedTrackRegistry
+  sceneState: CompiledRecord
+  storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, MaterializedPerso>>
 }>
 
@@ -45,6 +47,8 @@ export type ResolvedPerso = RuntimePersoIdentity & Readonly<{
 /** Scene data after discrete patches and continuous values are resolved. */
 export type ResolvedScene = Readonly<{
   timeMs: number
+  sceneState: CompiledRecord
+  storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, ResolvedPerso>>
 }>
 
@@ -54,5 +58,7 @@ export type SolvedPerso = ResolvedPerso
 /** Scene data after the currently supported solve stage. */
 export type SolvedScene = Readonly<{
   timeMs: number
+  sceneState: CompiledRecord
+  storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, SolvedPerso>>
 }>

@@ -4,6 +4,8 @@ import type { ResolvedScene, SolvedScene } from './types'
 export function solveScene(resolved: ResolvedScene): SolvedScene {
   return {
     timeMs: resolved.timeMs,
+    sceneState: resolved.sceneState,
+    storyStates: resolved.storyStates,
     persos: resolved.persos,
   }
 }

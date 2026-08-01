@@ -13,7 +13,7 @@ import {
 } from '../config/player-lifecycle'
 import { createTemporaryRenderSnapshot, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
-import { validateStrapCollections, type StrapCollections } from './pipeline'
+import { RuntimeStateStore, validateStrapCollections, type StrapCollections } from './pipeline'
 import type { RuntimeTrackJournal } from './pipeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
@@ -33,6 +33,7 @@ export class RuntimePlayer {
   readonly renderSync: RenderSync
   readonly strapCollections: StrapCollections | undefined
   readonly trackJournal: RuntimeTrackJournal | undefined
+  readonly stateStore: RuntimeStateStore
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
@@ -54,6 +55,7 @@ export class RuntimePlayer {
     this.renderSync = renderSync
     this.strapCollections = strapCollections
     this.trackJournal = trackJournal
+    this.stateStore = new RuntimeStateStore(compiledScene)
   }
 
   /** Returns the current lifecycle state. */

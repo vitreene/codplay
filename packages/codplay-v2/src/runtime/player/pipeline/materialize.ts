@@ -1,4 +1,5 @@
 import { isPlainRecord } from '../../../shared'
+import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
@@ -20,8 +21,22 @@ export function materializeScene(scene: CompiledScene, timeMs: number, journal?:
   assertTimelineTime(timeMs)
   const persos: Record<string, MaterializedPerso> = {}
   const tracks = journal?.registry ?? buildTrackRegistry(scene)
+  const sceneState = cloneRecord(scene.scene.state)
+  if (journal !== undefined) {
+    for (const update of journal.getStateUpdates(STRAP_SCOPE_SCENE, undefined, timeMs)) {
+      applyStateUpdate(sceneState, update.update)
+    }
+  }
+  const storyStates: Record<string, CompiledRecord> = {}
 
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
+    const storyState = cloneRecord(story.state)
+    if (journal !== undefined) {
+      for (const update of journal.getStateUpdates(STRAP_SCOPE_STORY, storyId, timeMs)) {
+        applyStateUpdate(storyState, update.update)
+      }
+    }
+    storyStates[storyId] = storyState
     const trackId = resolveStoryTrackId(story)
     const track = tracks.tracks[trackId]
     if (track === undefined) throw new Error(`Materialize track is not registered: ${trackId}`)
@@ -48,7 +63,7 @@ export function materializeScene(scene: CompiledScene, timeMs: number, journal?:
     }
   }
 
-  return { scene, timeMs, tracks, persos }
+  return { scene, timeMs, tracks, sceneState, storyStates, persos }
 }
 
 /** Converts one flattened compiled event into an active action for one perso. */
@@ -155,4 +170,23 @@ function assertTimelineTime(timeMs: number): void {
   if (!Number.isFinite(timeMs) || timeMs < 0) {
     throw new Error('Materialize time must be a finite non-negative number.')
   }
+}
+
+/** Clones one optional compiled state record into a mutable evaluation copy. */
+function cloneRecord(record: CompiledRecord | undefined): Record<string, CompiledValue> {
+  if (record === undefined) return {}
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, cloneValue(value)]))
+}
+
+/** Applies one replayable shallow state patch without mutating compiled input. */
+function applyStateUpdate(state: Record<string, CompiledValue>, update: CompiledRecord | undefined): void {
+  if (update === undefined) return
+  for (const [key, value] of Object.entries(update)) state[key] = cloneValue(value)
+}
+
+/** Clones one recursive compiled value for a materialized state copy. */
+function cloneValue(value: CompiledValue): CompiledValue {
+  if (Array.isArray(value)) return value.map(cloneValue)
+  if (isPlainRecord(value)) return cloneRecord(value)
+  return value
 }

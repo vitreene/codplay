@@ -37,4 +37,15 @@ describe('planned strap helpers', () => {
     expect(() => planned.wait(-1, { event: { name: 'invalid' } })).toThrow(/non-negative/)
     expect(() => planned.repeat({ eachMs: 1, times: 1.5 }, { event: { name: 'invalid' } })).toThrow(/integer/)
   })
+
+  it('creates only bounded loops compatible with f(t)', () => {
+    const planned = createPlannedStrapHelpers()
+
+    expect(planned.loop({ eachMs: 10, times: 3 }, { event: { name: 'loop:event' } })
+      .map((occurrence) => occurrence.offsetMs)).toEqual([0, 10, 20])
+    expect(planned.loop({ eachMs: 10, durationMs: 25 }, { event: { name: 'duration:event' } })
+      .map((occurrence) => occurrence.offsetMs)).toEqual([0, 10, 20])
+    expect(() => planned.loop({ eachMs: 10 }, { event: { name: 'invalid' } })).toThrow(/exactly one/)
+    expect(() => planned.loop({ eachMs: 10, times: 2, durationMs: 20 }, { event: { name: 'invalid' } })).toThrow(/exactly one/)
+  })
 })

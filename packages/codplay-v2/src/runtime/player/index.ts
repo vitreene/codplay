@@ -32,6 +32,7 @@ export {
   propagateListenEvent,
   executeStrapsSequentially,
   createPlannedStrapHelpers,
+  RuntimeStateStore,
   resolveSceneStrap,
   resolveStoryStrap,
   validateStrapCollections,

@@ -15,7 +15,12 @@ export function resolveScene(materialized: MaterializedScene): ResolvedScene {
       state: resolvePerso(perso),
     }
   }
-  return { timeMs: materialized.timeMs, persos }
+  return {
+    timeMs: materialized.timeMs,
+    sceneState: materialized.sceneState,
+    storyStates: materialized.storyStates,
+    persos,
+  }
 }
 
 /** Resolves one perso without mutating compiled or materialized input data. */

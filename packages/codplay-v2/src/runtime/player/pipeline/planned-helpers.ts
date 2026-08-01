@@ -16,6 +16,7 @@ export type PlannedStrapHelpers = Readonly<{
   wait: (offsetMs: number, input: PlannedStepInput) => readonly PlannedStrapOccurrence[]
   delay: (offsetMs: number, input: PlannedStepInput) => readonly PlannedStrapOccurrence[]
   repeat: (options: Readonly<{ eachMs: number; times: number }>, input: PlannedStepInput) => readonly PlannedStrapOccurrence[]
+  loop: (options: Readonly<{ eachMs: number; times?: number; durationMs?: number }>, input: PlannedStepInput) => readonly PlannedStrapOccurrence[]
   stagger: (options: Readonly<{ stepMs: number; count?: number }>, input: PlannedStepInput) => readonly PlannedStrapOccurrence[]
   sequence: (steps: readonly Readonly<{ step: StrapStep; durationMs?: number; startAt?: number }>[]) => readonly PlannedStrapOccurrence[]
 }>
@@ -29,6 +30,16 @@ export function createPlannedStrapHelpers(): PlannedStrapHelpers {
       assertNonNegativeOffset(options.eachMs, 'repeat eachMs')
       assertCount(options.times)
       return Array.from({ length: options.times }, (_, index) => createAtOffset(options.eachMs * index, input, index)).flat()
+    },
+    loop: (options, input) => {
+      assertPositiveInterval(options.eachMs, 'loop eachMs')
+      const hasTimes = options.times !== undefined
+      const hasDuration = options.durationMs !== undefined
+      if (hasTimes === hasDuration) throw new Error('planned loop requires exactly one finite bound.')
+      const count = hasTimes
+        ? validateCount(options.times as number)
+        : Math.floor(validateDuration(options.durationMs as number) / options.eachMs) + 1
+      return Array.from({ length: count }, (_, index) => createAtOffset(options.eachMs * index, input, index)).flat()
     },
     stagger: (options, input) => {
       assertNonNegativeOffset(options.stepMs, 'stagger stepMs')
@@ -72,4 +83,21 @@ function assertNonNegativeOffset(value: number, label: string): void {
 /** Validates one finite non-negative occurrence count. */
 function assertCount(value: number): void {
   if (!Number.isInteger(value) || value < 0) throw new Error('planned count must be a finite non-negative integer.')
+}
+
+/** Validates one positive loop interval. */
+function assertPositiveInterval(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be finite and positive.`)
+}
+
+/** Validates and returns one finite non-negative occurrence count. */
+function validateCount(value: number): number {
+  assertCount(value)
+  return value
+}
+
+/** Validates and returns one finite non-negative loop duration. */
+function validateDuration(value: number): number {
+  if (!Number.isFinite(value) || value < 0) throw new Error('loop durationMs must be finite and non-negative.')
+  return value
 }

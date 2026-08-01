@@ -25,12 +25,19 @@ flux, sans en faire encore une orchestration runtime generale.
 
 Les sorties `events` et les occurrences planifiees qui portent un event peuvent
 maintenant etre appendees par `RuntimeTrackJournal.appendStrapOutput` sur la track
-dediee deja declaree. Les `update` restent explicitement non materialises et leur
-nombre est retourne au caller.
+dediee deja declaree. Les `update` sont materialises comme des events
+`runtime:state:update` portant leur scope `story` ou `scene`. Ils sont rejouables
+par `materialize` et ne sont jamais appliques directement par le renderer.
 
-Les helpers finis `context.planned` V2 sont `wait`, `delay`, `repeat`, `stagger` et
-`sequence`. Ils produisent uniquement des occurrences declaratives et ne lancent
-aucun scheduler.
+Les helpers finis `context.planned` V2 sont `wait`, `delay`, `repeat`, `stagger`,
+`sequence` et les `loop` bornes par `times` ou `durationMs`. Ils produisent
+uniquement des occurrences declaratives et ne lancent aucun scheduler. Ce modele
+est nomme **Plan Temporel Declaratif**; voir
+`2026-08-01-context-live-evolution.md`.
+
+`RuntimeStateStore` fournit les snapshots scene/story en lecture seule aux straps.
+Un `update` n'est applique qu'explicitement par l'orchestrateur, apres sa
+journalisation, puis peut etre remplace par une reconstruction de seek.
 
 ## Limite live obligatoire
 
@@ -47,10 +54,10 @@ future doit etre specifiquement decidee avant implementation.
 - collections scene/story sans fallback croise;
 - validation des straps declares a `RuntimePlayer.init`;
 - warnings non bloquants pour les declarations absentes.
+- snapshots scene/story geles via `RuntimeStateStore`.
 
 ## A faire
 
-- definir la materialisation des `update` sans muter implicitement l'etat;
 - definir les cas de loop bornes compatibles avec `f(t)`;
 - definir le protocole d'annulation et de generation obsolete;
 - ne jamais creer de track pendant la lecture.

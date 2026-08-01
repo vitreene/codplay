@@ -1,4 +1,9 @@
-import { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE, TRACK_EVENT_TOGGLE } from '../../config/track-events'
+import {
+  RUNTIME_STATE_UPDATE_EVENT,
+  TRACK_EVENT_ACTIVATE,
+  TRACK_EVENT_DEACTIVATE,
+  TRACK_EVENT_TOGGLE,
+} from '../../config/track-events'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../config/strap-scope'
 import { isPlainRecord } from '../../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene } from '../../../scene/compiled'
@@ -14,6 +19,8 @@ export type RuntimeTrackEvent = Readonly<{
   applyAtMs: number
   storyId?: string
   data?: CompiledRecord
+  update?: CompiledRecord
+  stateScope?: StrapScope
 }>
 
 /** Input used to append one live event without creating a track. */
@@ -24,6 +31,8 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   applyAtMs: number
   storyId?: string
   data?: CompiledRecord
+  update?: CompiledRecord
+  stateScope?: StrapScope
 }>
 
 /** Input used to anchor a portable relative eventime tree at runtime. */
@@ -65,7 +74,7 @@ export type AppendStrapOutputInput = Readonly<{
 export type StrapOutputAppendResult = Readonly<{
   trackId: string
   events: readonly RuntimeTrackEvent[]
-  ignoredUpdateCount: number
+  materializedUpdateCount: number
 }>
 
 /** Runtime journal layered over the immutable compiled track registry. */
@@ -171,20 +180,35 @@ export class RuntimeTrackJournal {
       if (!appended.ok) return appended
       events.push(appended.data)
     }
-    for (const occurrence of input.output.planned) {
-      if (occurrence.step.event === undefined) continue
-      const appended = this.appendStrapEvent(
-        occurrence.step.event,
-        trackId,
-        storyId,
-        input.anchorMs + occurrence.offsetMs,
-      )
+    for (const update of input.output.updates) {
+      const appended = this.appendStateUpdate(update, trackId, input.scope, input.storyId, input.anchorMs)
       if (!appended.ok) return appended
       events.push(appended.data)
     }
-    const ignoredUpdateCount = input.output.updates.length
-      + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined && occurrence.step.event === undefined).length
-    return { ok: true, data: { trackId, events, ignoredUpdateCount } }
+    for (const occurrence of input.output.planned) {
+      if (occurrence.step.event !== undefined) {
+        const appended = this.appendStrapEvent(
+          occurrence.step.event,
+          trackId,
+          storyId,
+          input.anchorMs + occurrence.offsetMs,
+        )
+        if (!appended.ok) return appended
+        events.push(appended.data)
+      }
+      if (occurrence.step.update !== undefined) {
+        const appended = this.appendStateUpdate(
+          occurrence.step.update,
+          trackId,
+          input.scope,
+          input.storyId,
+          input.anchorMs + occurrence.offsetMs,
+        )
+        if (!appended.ok) return appended
+        events.push(appended.data)
+      }
+    }
+    return { ok: true, data: { trackId, events, materializedUpdateCount: input.output.updates.length + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined).length } }
   }
 
   /** Applies one scene-level track control without creating a track. */
@@ -224,6 +248,17 @@ export class RuntimeTrackJournal {
   /** Returns live events scoped to one story across its active tracks. */
   getEventsForStory(storyId: string): readonly RuntimeTrackEvent[] {
     return [...this.eventsByTrack.values()].flatMap((events) => events.filter((event) => event.storyId === storyId))
+  }
+
+  /** Returns replayable state patches in deterministic timeline order. */
+  getStateUpdates(scope: StrapScope, storyId: string | undefined, timeMs: number): readonly RuntimeTrackEvent[] {
+    return [...this.eventsByTrack.values()]
+      .flatMap((events) => events)
+      .filter((event) => event.update !== undefined
+        && event.stateScope === scope
+        && event.applyAtMs <= timeMs
+        && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
+      .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
   }
 
   /** Changes the active flag of declared tracks and reports unknown ids. */
@@ -267,6 +302,25 @@ export class RuntimeTrackJournal {
       name: event.name,
       applyAtMs,
       data: event.data,
+    })
+  }
+
+  /** Appends one state patch as a replayable runtime event. */
+  private appendStateUpdate(
+    update: CompiledRecord,
+    trackId: string,
+    scope: StrapScope,
+    storyId: string | undefined,
+    applyAtMs: number,
+  ): TrackCommandResult<RuntimeTrackEvent> {
+    return this.appendLiveEvent({
+      eventId: this.createGeneratedEventId(trackId, storyId ?? scope),
+      trackId,
+      storyId: scope === STRAP_SCOPE_STORY ? storyId : undefined,
+      name: RUNTIME_STATE_UPDATE_EVENT,
+      applyAtMs,
+      update,
+      stateScope: scope,
     })
   }
 }

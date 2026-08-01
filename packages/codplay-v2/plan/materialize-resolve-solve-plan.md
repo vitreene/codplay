@@ -62,6 +62,10 @@ canonique V1.
 
 Resolve ne compose pas encore les ancetres et ne projette pas vers un substrat.
 
+Les patches d'etat portes par `runtime:state:update` sont reconstruits par
+`materialize` dans `sceneState` ou `storyStates` selon leur scope. Cette memoire est
+derivee du journal et ne devient pas une mutation cachee du renderer.
+
 ## Solve
 
 `solveScene(resolved)` etablit la sortie stable de la tranche et preserve les

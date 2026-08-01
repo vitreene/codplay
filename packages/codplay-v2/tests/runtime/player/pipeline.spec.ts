@@ -175,10 +175,11 @@ describe('materialize -> resolve -> solve', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      data: { trackId: createStrapTrackId('main', 'counter'), ignoredUpdateCount: 1 },
+      data: { trackId: createStrapTrackId('main', 'counter'), materializedUpdateCount: 1 },
     })
     expect(resolveScene(materializeScene(strapScene, 226, journal)).persos['main:root']?.state.className)
       .toMatch(/immediate.*planned|planned.*immediate/)
+    expect(materializeScene(strapScene, 226, journal).storyStates.main).toMatchObject({ count: 1 })
   })
 
   it('resolves discrete patches and ACE values without mutating compiled data', () => {
