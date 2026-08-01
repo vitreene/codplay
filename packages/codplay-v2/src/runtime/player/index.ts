@@ -5,6 +5,7 @@ export {
 } from './runtime-player'
 export {
   createTemporaryRenderSnapshot,
+  createTemporaryRenderSnapshotFromSolved,
   MemoryRenderSink,
   type TemporaryRenderSink,
   type TemporaryRenderSnapshot,
@@ -30,6 +31,7 @@ export {
   resolveStoryTrackId,
   RuntimeTrackJournal,
   propagateListenEvent,
+  executeListenPipeline,
   executeStrapsSequentially,
   createPlannedStrapHelpers,
   RuntimeStateStore,
@@ -58,6 +60,9 @@ export {
   type ListenEventOutput,
   type ListenPipelineIssue,
   type ListenPipelineResult,
+  type ListenPipelineExecutionInput,
+  type ListenPipelineExecutionResult,
+  type ListenStrapExecution,
   type PlannedStrapOccurrence,
   type StrapCollection,
   type StrapEvent,

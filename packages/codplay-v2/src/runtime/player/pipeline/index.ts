@@ -3,7 +3,7 @@ export { resolveScene } from './resolve'
 export { solveScene } from './solve'
 export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
-export { propagateListenEvent } from './listen'
+export { executeListenPipeline, propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
 export { RuntimeStateStore } from './runtime-state-store'
@@ -38,6 +38,9 @@ export type {
   ListenEventOutput,
   ListenPipelineIssue,
   ListenPipelineResult,
+  ListenPipelineExecutionInput,
+  ListenPipelineExecutionResult,
+  ListenStrapExecution,
 } from './listen'
 export type {
   PlannedStrapOccurrence,

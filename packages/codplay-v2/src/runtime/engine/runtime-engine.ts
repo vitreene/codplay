@@ -14,7 +14,26 @@ export type EngineFrame = Readonly<{
   marginMs: number
 }>
 
+/** One local seek target supplied by an external orchestrator. */
+export type EngineSeekTarget = Readonly<{
+  instanceId: string
+  timeMs: number
+}>
+
+/** Seek phases exposed by one registered runtime instance. */
+export type InstanceSeekParticipant = Readonly<{
+  validateSeek: (timeMs: number) => void
+  prepareSeek: () => void
+  commitSeek: (timeMs: number) => void
+  presentSeek: () => void
+}>
+
 type InstanceTick = (frame: EngineFrame) => void
+
+type RuntimeInstance = Readonly<{
+  onFrame: InstanceTick
+  seekParticipant?: InstanceSeekParticipant
+}>
 
 /** Shared capability and clock boundary for V2 player instances. */
 export class RuntimeEngine {
@@ -24,7 +43,7 @@ export class RuntimeEngine {
     modules: ReadonlySet<string>
     resources: ReadonlySet<string>
   }
-  private readonly instances = new Map<string, InstanceTick>()
+  private readonly instances = new Map<string, RuntimeInstance>()
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
@@ -48,11 +67,11 @@ export class RuntimeEngine {
   }
 
   /** Registers one player callback in deterministic registration order. */
-  registerInstance(id: string, onFrame: InstanceTick): void {
+  registerInstance(id: string, onFrame: InstanceTick, seekParticipant?: InstanceSeekParticipant): void {
     if (this.instances.has(id)) {
       throw new Error(`Runtime instance already registered: ${id}`)
     }
-    this.instances.set(id, onFrame)
+    this.instances.set(id, { onFrame, seekParticipant })
   }
 
   /** Removes one player callback from the engine. */
@@ -100,6 +119,32 @@ export class RuntimeEngine {
     return this.lastNowMs ?? 0
   }
 
+  /** Reconstructs a selected group and presents all local seek targets once. */
+  seek(targets: readonly EngineSeekTarget[]): void {
+    if (targets.length === 0) {
+      throw new Error('Engine seek requires at least one target.')
+    }
+
+    const participants = targets.map((target) => {
+      if (!Number.isFinite(target.timeMs) || target.timeMs < 0) {
+        throw new Error(`Engine seek time must be a finite positive number: ${target.instanceId}.`)
+      }
+      if (targets.filter((candidate) => candidate.instanceId === target.instanceId).length > 1) {
+        throw new Error(`Engine seek target is duplicated: ${target.instanceId}`)
+      }
+      const instance = this.instances.get(target.instanceId)
+      if (instance === undefined || instance.seekParticipant === undefined) {
+        throw new Error(`Engine instance cannot seek: ${target.instanceId}`)
+      }
+      return { target, participant: instance.seekParticipant }
+    })
+
+    for (const { target, participant } of participants) participant.validateSeek(target.timeMs)
+    for (const { participant } of participants) participant.prepareSeek()
+    for (const { target, participant } of participants) participant.commitSeek(target.timeMs)
+    for (const { participant } of participants) participant.presentSeek()
+  }
+
   /** Accepts one ticker payload without recomputing its measured delta. */
   private advanceTick(payload: TickPayload): void {
     if (!Number.isFinite(payload.prevMs) || !Number.isFinite(payload.nowMs) || !Number.isFinite(payload.deltaMs)) {
@@ -117,8 +162,8 @@ export class RuntimeEngine {
   /** Stores one accepted timestamp and dispatches it in registration order. */
   private dispatchFrame(frame: EngineFrame): void {
     this.lastNowMs = frame.nowMs
-    for (const onFrame of this.instances.values()) {
-      onFrame(frame)
+    for (const instance of this.instances.values()) {
+      instance.onFrame(frame)
     }
   }
 }

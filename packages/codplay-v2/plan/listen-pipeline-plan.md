@@ -16,8 +16,9 @@ la tranche asynchrone suivante.
 Runtime event
     -> exact listen filter
     -> transform references
+    -> sequential straps
     -> declared emit
-    -> emitted events + pending straps
+    -> emitted events + strap results
 ```
 
 ## Invariants
@@ -30,7 +31,9 @@ Runtime event
 - `emit` peut produire plusieurs events dans l'ordre de declaration;
 - les fonctions sont resolues depuis la collection extraite du build;
 - les erreurs de fonction sont retournees comme issues et ne font pas tomber le pipeline;
-- les straps sont annonces mais pas executes par cette tranche.
+- les straps sont executes sequentiellement et attendus;
+- `emit` est produit apres completion des straps de la regle;
+- les sorties strap sont conservees separement des emissions de la regle.
 
 ## Limite du contrat live
 
@@ -44,7 +47,7 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 
 ## Hors perimetre
 
-- materialisation automatique des sorties de straps dans le journal;
+- materialisation automatique des emissions de la regle dans le journal;
 - helpers `live` et emissions liees aux frames;
 - materialisation automatique des emissions dans le journal;
 - listen scene/story complet et cascade globale;

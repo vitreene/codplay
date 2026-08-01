@@ -11,9 +11,17 @@ import {
   PLAYER_LIFECYCLE_READY,
   type PlayerLifecycleState,
 } from '../config/player-lifecycle'
-import { createTemporaryRenderSnapshot, type TemporaryRenderSink } from './temporary-render-sink'
+import { createTemporaryRenderSnapshotFromSolved, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
-import { RuntimeStateStore, validateStrapCollections, type StrapCollections } from './pipeline'
+import {
+  materializeScene,
+  resolveScene,
+  RuntimeStateStore,
+  solveScene,
+  validateStrapCollections,
+  type SolvedScene,
+  type StrapCollections,
+} from './pipeline'
 import type { RuntimeTrackJournal } from './pipeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
@@ -37,6 +45,8 @@ export class RuntimePlayer {
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
+  private solvedScene: SolvedScene | undefined
+  private pendingSolvedScene: SolvedScene | undefined
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -86,7 +96,24 @@ export class RuntimePlayer {
     }
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
-    this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame))
+    this.solvedScene = this.reconstructScene(0)
+    this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
+      validateSeek: (timeMs) => this.validateSeek(timeMs),
+      prepareSeek: () => this.renderSync.prepareSeek(),
+      commitSeek: (timeMs) => {
+        if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
+          throw new Error('Player seek reconstruction is missing.')
+        }
+        this.solvedScene = this.pendingSolvedScene
+        this.pendingSolvedScene = undefined
+        this.currentTimeMs = timeMs
+        this.skipNextDelta = true
+      },
+      presentSeek: () => {
+        this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
+        this.presentTemporarySnapshot()
+      },
+    })
     this.state = PLAYER_LIFECYCLE_READY
     this.presentTemporarySnapshot()
     return { ok: true, diagnostics: diagnostics.report() }
@@ -111,17 +138,8 @@ export class RuntimePlayer {
 
   /** Positions logical time without replaying events or effects. */
   seek(timeMs: number): void {
-    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
-      throw new Error(`Player cannot seek from ${this.state} state.`)
-    }
-    if (!Number.isFinite(timeMs) || timeMs < 0) {
-      throw new Error('Player seek time must be a finite positive number.')
-    }
-    this.renderSync.prepareSeek()
-    this.currentTimeMs = timeMs
-    this.skipNextDelta = true
-    this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
-    this.presentTemporarySnapshot()
+    this.validateSeek(timeMs)
+    this.engine.seek([{ instanceId: this.id, timeMs }])
   }
 
   /** Detaches the player from the engine and closes its lifecycle. */
@@ -142,13 +160,15 @@ export class RuntimePlayer {
       return
     }
     this.currentTimeMs += frame.deltaMs
+    this.solvedScene = this.reconstructScene(this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
 
-  /** Presents initial compiled perso data through the temporary render probe. */
+  /** Presents the current solved perso data through the temporary render probe. */
   private presentTemporarySnapshot(): void {
-    this.renderSink?.present(createTemporaryRenderSnapshot(this.id, this.compiledScene, this.currentTimeMs, this.trackJournal))
+    if (this.solvedScene === undefined) throw new Error('Player scene has not been reconstructed.')
+    this.renderSink?.present(createTemporaryRenderSnapshotFromSolved(this.id, this.compiledScene, this.solvedScene))
   }
 
   /** Enforces one valid lifecycle transition. */
@@ -156,5 +176,21 @@ export class RuntimePlayer {
     if (!allowed.includes(this.state)) {
       throw new Error(`Player cannot perform this operation from ${this.state} state.`)
     }
+  }
+
+  /** Validates one local seek before the engine enters a group transaction. */
+  private validateSeek(timeMs: number): void {
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
+      throw new Error(`Player cannot seek from ${this.state} state.`)
+    }
+    if (!Number.isFinite(timeMs) || timeMs < 0) {
+      throw new Error('Player seek time must be a finite positive number.')
+    }
+    this.pendingSolvedScene = this.reconstructScene(timeMs)
+  }
+
+  /** Rebuilds one logical scene without replaying straps or render effects. */
+  private reconstructScene(timeMs: number): SolvedScene {
+    return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)))
   }
 }

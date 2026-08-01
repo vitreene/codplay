@@ -56,4 +56,67 @@ describe('RuntimeEngine', () => {
     engine.stop()
     expect(engine.isRunning()).toBe(false)
   })
+
+  it('seeks a selected group through validate, prepare, commit, and present phases', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const phases: string[] = []
+
+    for (const instanceId of ['first', 'second']) {
+      engine.registerInstance(
+        instanceId,
+        () => undefined,
+        {
+          validateSeek: (timeMs) => phases.push(`${instanceId}:validate:${timeMs}`),
+          prepareSeek: () => phases.push(`${instanceId}:prepare`),
+          commitSeek: (timeMs) => phases.push(`${instanceId}:commit:${timeMs}`),
+          presentSeek: () => phases.push(`${instanceId}:present`),
+        },
+      )
+    }
+
+    engine.seek([
+      { instanceId: 'first', timeMs: 3000 },
+      { instanceId: 'second', timeMs: 2000 },
+    ])
+
+    expect(phases).toEqual([
+      'first:validate:3000',
+      'second:validate:2000',
+      'first:prepare',
+      'second:prepare',
+      'first:commit:3000',
+      'second:commit:2000',
+      'first:present',
+      'second:present',
+    ])
+  })
+
+  it('does not prepare a group when one target cannot be validated', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const phases: string[] = []
+
+    engine.registerInstance('first', () => undefined, {
+      validateSeek: () => phases.push('first:validate'),
+      prepareSeek: () => phases.push('first:prepare'),
+      commitSeek: () => phases.push('first:commit'),
+      presentSeek: () => phases.push('first:present'),
+    })
+    engine.registerInstance('second', () => undefined, {
+      validateSeek: () => {
+        phases.push('second:validate')
+        throw new Error('not seekable')
+      },
+      prepareSeek: () => phases.push('second:prepare'),
+      commitSeek: () => phases.push('second:commit'),
+      presentSeek: () => phases.push('second:present'),
+    })
+
+    expect(() =>
+      engine.seek([
+        { instanceId: 'first', timeMs: 3000 },
+        { instanceId: 'second', timeMs: 2000 },
+      ]),
+    ).toThrow('not seekable')
+    expect(phases).toEqual(['first:validate', 'second:validate'])
+  })
 })

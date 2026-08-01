@@ -167,6 +167,12 @@ celui d'une série d'events, **dans** une scène. Même précaution que pour « 
 
 ### La portée d'un event — du booléen à une échelle nommée
 
+**Contrainte V2 active :** le booléen V1 `cascade` est insuffisant pour Sighty. La
+direction de travail est une visibilité nommée, avec `public` pour l'exposition à
+l'hôte/Sighty, jamais pour un envoi vers une autre scene. Le nom exact et la forme
+finale restent à arbitrer; la proposition ci-dessous donne la justification et
+l'analyse du choix.
+
 > **Termes provisoires.** `scope` et `world` désignent la forme, ils ne la nomment pas. **Proposition en
 > attente d'arbitrage** : `visibility: 'story' | 'scene' | 'public'` — voir le critère de nommage plus bas.
 
@@ -450,6 +456,44 @@ tranche que le seek V2 est **synchrone**, l'asynchronisme étant une dette V1 du
 Le seek d'ensemble en fait une *condition* : N instances ne sont atomiquement cohérentes que si leur
 reconstruction ne rend pas la main entre-temps. La décision se trouve renforcée par un second motif,
 indépendant du premier.
+
+### 6.5 Cible globale, cible locale et portee
+
+`Sighty.seek(3000)` ne porte pas, a lui seul, une semantique de cible commune. Sighty doit
+declarer deux choses distinctes :
+
+- la portee : toutes les scenes, ou un sous-ensemble explicite d'instances selectionnees ;
+- la politique de cible : temps local identique, ou position dans une ligne de temps globale.
+
+Dans le mode global ancre, une instance montee a `mountAt = 1000` recoit, pour une cible globale
+`3000`, la cible locale `2000`. Une scene hors de la portee ne change pas d'etat. CodPlay ne
+deduit pas cette relation : l'orchestrateur lui fournit une cible locale par membre, avec les
+informations necessaires au diagnostic.
+
+Le mecanisme a construire n'est donc pas une simple invalidation locale, mais un **commit atomique
+de groupe** :
+
+1. figer la portee selectionnee ;
+2. fournir une cible par instance ;
+3. preparer chaque membre ;
+4. reconstruire chaque etat par `materialize -> resolve -> solve` ;
+5. committer tous les membres ;
+6. presenter une seule fois.
+
+La premiere tranche de ce mecanisme est maintenant presente dans V2 : `RuntimeEngine.seek()` recoit
+une liste de cibles locales et coordonne les phases `validateSeek`, `prepareSeek`, `commitSeek` et
+`presentSeek`. Le `RuntimePlayer.seek()` individuel passe par cette meme frontiere. Le player
+reconstruit maintenant `materialize -> resolve -> solve` dans la phase de validation, garde le
+resultat en attente, puis ne le rend visible qu'au commit. Cette tranche ne definit pas la politique
+Sighty de conversion globale et le solve reste sans hierarchie ; elle garantit l'ordre et l'absence
+de reconstruction visible apres un echec de validation.
+
+Ce mecanisme vaut la complexite parce qu'il garantit une frontiere visible coherente entre scenes
+qui peuvent avoir des cibles locales differentes. Il ne justifie pas, a ce stade, une invalidation
+asynchrone complexe ou une course de generations : le seek V2 reste synchrone et la reconstruction
+ne doit pas rendre la main. Si des chargements ou ressources rendent un jour cette operation
+asynchrone, ils devront s'ajouter comme disponibilite/queue de portee, sans modifier la semantique
+des cibles.
 
 ## 7. Points risqués — à ne pas reprendre tels quels
 

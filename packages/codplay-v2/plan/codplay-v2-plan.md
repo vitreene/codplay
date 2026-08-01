@@ -132,7 +132,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Depend de events/tracks/materialize/ACE; les emissions de phase restent declarees. |
 | Capture et DnD | Capture live, commit `persist-only`, etat de capture, notification authoring; DnD comme commit move | Troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
-| Seek, horizon, rate | Evaluation synchrone, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | Horizon/rate/straps live demandent une decision avant leur tranche. |
+| Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine `validate -> prepare -> commit -> present` est en place; reconstruction, conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
 | Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Media-sync est conserve conceptuellement; cache et strategie remontent a l'engine. |
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique et catalogues | Audit obligatoire des modules V1 avant de figer le contrat unique. |

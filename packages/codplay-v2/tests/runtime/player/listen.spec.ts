@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { propagateListenEvent } from '../../../src/runtime/player'
+import { executeListenPipeline, propagateListenEvent } from '../../../src/runtime/player'
 import type { CompiledFunctionCollection, CompiledListenRule } from '../../../src/scene/compiled'
 
 const input = {
@@ -61,5 +61,25 @@ describe('listen -> transform -> emit', () => {
       functionRef: 'fn:missing',
     }])
     expect(propagateListenEvent(rules, { ...input, name: 'other:event' }).events).toEqual([])
+  })
+
+  it('executes straps before declared emissions', async () => {
+    const order: string[] = []
+    const result = await executeListenPipeline({
+      rules: [{ on: 'source:event', straps: ['prepare'], emit: [{ name: 'target:event' }] }],
+      event: input,
+      straps: {
+        prepare: async () => {
+          await Promise.resolve()
+          order.push('strap')
+          return { events: [{ name: 'strap:event' }] }
+        },
+      },
+    })
+
+    order.push('emit')
+    expect(result.events).toEqual([{ ...input, name: 'target:event' }])
+    expect(result.straps[0]?.result.events).toEqual([{ name: 'strap:event' }])
+    expect(order).toEqual(['strap', 'emit'])
   })
 })

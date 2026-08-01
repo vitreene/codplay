@@ -47,6 +47,32 @@ Une instance possede :
 `seek` positionne le temps logique mais ne rejoue encore aucun event et ne resout
 aucun perso. Ces comportements appartiennent aux tranches materialize/resolve/solve.
 
+## Seek de portee
+
+Le player sait seeker une cible locale. La portee et la conversion eventuelle depuis une ligne de
+temps globale appartiennent a Sighty ou a l'hote. Pour un seek de plusieurs instances, l'engine
+doit recevoir une cible par membre, reconstruire tous les membres de la portee, puis presenter une
+seule fois. Il ne doit pas recevoir une suite d'ordres locaux independants.
+
+Par exemple, si Sighty cible `3000` sur une ligne globale et qu'une scene selectionnee est montee
+a `1000`, sa cible locale est `2000`. Une scene non selectionnee reste inchangee. La politique
+« toutes les scenes a 3000 local » est possible, mais doit etre declaree explicitement par Sighty ;
+elle n'est pas une consequence du nom `seek(3000)`.
+
+Le seek V2 reste synchrone. Une future disponibilite asynchrone devra bloquer ou mettre en attente
+la portee entiere, jamais presenter un sous-ensemble reconstruit.
+
+La premiere frontiere engine est en place : `RuntimeEngine.seek()` orchestre les cibles locales par
+phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player individuel utilise
+ce chemin commun. Le player reconstruit `materialize -> resolve -> solve` pendant la validation,
+met le resultat en attente, puis le committe avant presentation. Le solve reste volontairement
+identitaire tant que la hierarchie `move` n'est pas ouverte.
+
+Cette hierarchie, les composants, les transforms et le renderer ne sont pas des manques du seek.
+Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa frontiere. Le seek
+doit reconstruire l'etat disponible et le transmettre ; il n'a pas a implementer les capacites que
+le solve ou le renderer ne supportent pas encore.
+
 ## RenderSync
 
 `RenderSync` est la frontiere temporelle entre le player V2 et des adapters de rendu
@@ -81,6 +107,11 @@ La verticale `demos/validation/player` utilise un renderer DOM volontairement
 simpliste au-dessus d'un sink memoire. Elle valide actuellement deux persos, les
 patches de classe, un tween d'opacite et l'interpolation de `backgroundColor` via
 l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
+
+- la demo est un banc de validation visible, pas une contrainte de compatibilite du runtime ;
+- si elle entre en conflit avec un contrat V2, le contrat runtime prime et la demo doit etre
+  adaptee, isolee ou retiree ;
+- toute rupture volontaire de la demo doit etre signalee dans le suivi de la tranche concernee.
 
 - aucun composant V2 ne sera ouvert;
 - aucun renderer de production ou contrat DOM ne sera defini;

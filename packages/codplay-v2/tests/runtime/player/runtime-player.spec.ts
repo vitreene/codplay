@@ -124,4 +124,22 @@ describe('RuntimePlayer', () => {
     ])
     expect(seeks).toEqual([{ nowMs: 1000, timelineMs: 500 }])
   })
+
+  it('reconstructs selected players before presenting a grouped seek', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const firstSink = new MemoryRenderSink()
+    const secondSink = new MemoryRenderSink()
+    const first = new RuntimePlayer('first', engine, scene, firstSink)
+    const second = new RuntimePlayer('second', engine, scene, secondSink)
+
+    first.init()
+    second.init()
+    engine.seek([
+      { instanceId: 'first', timeMs: 3000 },
+      { instanceId: 'second', timeMs: 2000 },
+    ])
+
+    expect(firstSink.getSnapshots().at(-1)?.timeMs).toBe(3000)
+    expect(secondSink.getSnapshots().at(-1)?.timeMs).toBe(2000)
+  })
 })

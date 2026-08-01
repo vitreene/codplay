@@ -1,8 +1,8 @@
 import type { CompiledRecord, CompiledScene } from '../../scene/compiled'
 import { evaluateTemporaryScene } from './temporary-scene-evaluator'
-import type { RuntimeTrackJournal } from './pipeline'
+import type { RuntimeTrackJournal, SolvedScene } from './pipeline'
 
-/** One initial-only snapshot emitted by the temporary render probe. */
+/** One logical snapshot emitted by the temporary render probe. */
 export type TemporaryRenderSnapshot = Readonly<{
   instanceId: string
   sceneId: string
@@ -38,12 +38,32 @@ export class MemoryRenderSink implements TemporaryRenderSink {
   }
 }
 
-/** Creates the initial-only logical render snapshot for one compiled scene. */
+/** Creates one logical render snapshot by evaluating a compiled scene. */
 export function createTemporaryRenderSnapshot(
   instanceId: string,
   scene: CompiledScene,
   timeMs: number,
   journal?: RuntimeTrackJournal,
 ): TemporaryRenderSnapshot {
-  return { instanceId, sceneId: scene.scene.id, timeMs, persos: evaluateTemporaryScene(scene, timeMs, journal) }
+  return {
+    instanceId,
+    sceneId: scene.scene.id,
+    timeMs,
+    persos: evaluateTemporaryScene(scene, timeMs, journal),
+  }
+}
+
+/** Projects one already reconstructed scene through the temporary render probe. */
+export function createTemporaryRenderSnapshotFromSolved(
+  instanceId: string,
+  scene: CompiledScene,
+  solved: SolvedScene,
+  timeMs = solved.timeMs,
+): TemporaryRenderSnapshot {
+  return {
+    instanceId,
+    sceneId: scene.scene.id,
+    timeMs,
+    persos: Object.fromEntries(Object.entries(solved.persos).map(([key, perso]) => [key, perso.state])),
+  }
 }

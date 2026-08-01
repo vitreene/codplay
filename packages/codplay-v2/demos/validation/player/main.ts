@@ -2,9 +2,8 @@ import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import {
-  executeStrapsSequentially,
+  executeListenPipeline,
   MemoryRenderSink,
-  propagateListenEvent,
   RuntimePlayer,
   RuntimeTrackJournal,
   STRAP_SCOPE_STORY,
@@ -171,12 +170,21 @@ async function start(): Promise<void> {
     storyId: 'main',
   }
   const story = build.compiledScene.scene.stories.main
-  const propagation = propagateListenEvent(story?.listen ?? [], showEvent, build.functions)
-  const strapExecution = await executeStrapsSequentially(
-    propagation.pendingStraps,
-    strapCollections.stories.main ?? {},
-    { event: { name: showEvent.name }, state: {}, meta: { storyId: 'main' }, context: {} },
-  )
+  const pipeline = await executeListenPipeline({
+    rules: story?.listen ?? [],
+    event: showEvent,
+    functions: build.functions,
+    straps: strapCollections.stories.main ?? {},
+    state: {},
+    meta: { storyId: 'main' },
+    context: {},
+  })
+  const strapExecution = pipeline.straps[0]?.result
+  if (strapExecution === undefined) {
+    errorOutput.hidden = false
+    errorOutput.textContent = pipeline.issues.map((issue) => `${issue.code}: ${issue.message}`).join('\n')
+    return
+  }
   const append = journal.appendStrapOutput({
     scope: STRAP_SCOPE_STORY,
     storyId: 'main',
