@@ -13,6 +13,10 @@ The list capability is cross-layer by contract: a future instance will also
 coordinate the affected-item set and batched render measurement before projection.
 That render coordination is intentionally not implemented in this state module.
 
+`createListModuleServiceDefinition()` wraps this state for the engine module-service catalog. The
+factory is available, but delta routing and seek reconciliation are not yet wired
+through the player lifecycle.
+
 It does not create components, read the DOM, perform FLIP, or assume one list
 component implementation. Renderer and component adapters consume its snapshots.
 

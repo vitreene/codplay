@@ -2,7 +2,7 @@ import type { DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
 import type { CompiledScene } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
-import { RuntimeEngine } from '../engine'
+import { RuntimeEngine, type RuntimeModuleServiceInstance } from '../engine'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -56,6 +56,7 @@ export class RuntimePlayer {
   private solvedScene: SolvedScene | undefined
   private pendingSolvedScene: SolvedScene | undefined
   private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
+  private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -107,6 +108,16 @@ export class RuntimePlayer {
     }
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
+    try {
+      this.moduleServiceInstances = new Map(this.engine.createModuleServiceInstances(
+        this.id,
+        this.compiledScene,
+        this.compiledScene.requirements.modules,
+      ))
+    } catch (error) {
+      diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')
+      return { ok: false, diagnostics: diagnostics.report() }
+    }
     this.solvedScene = this.reconstructScene(0)
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
@@ -171,6 +182,8 @@ export class RuntimePlayer {
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
     if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
+    for (const instance of this.moduleServiceInstances.values()) instance.destroy?.()
+    this.moduleServiceInstances.clear()
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
     this.state = PLAYER_LIFECYCLE_DESTROYED

@@ -7,6 +7,11 @@ CodPlay version: V2 foundation
 
 ## Decision
 
+Terminology decision: existing plans and V1 references keep the word `module`.
+In the V2 runtime API, `module` becomes `RuntimeModuleService`. This is an API
+rename, not a mass rewrite of the planning corpus or the compiled
+`CompiledRequirements.modules` field.
+
 V2 conserve le module V1 comme point d'extension, mais separe quatre niveaux :
 
 1. une definition de module enregistree dans le catalogue engine ;
@@ -61,10 +66,11 @@ transaction de portee et ne jamais presenter un sous-ensemble.
 
 ## Suite
 
-Le catalogue runtime doit encore recevoir le contrat `RuntimeModuleDefinition`,
-la fabrique d'instances par player et la validation des modules compiles. Cette
-tranche ne doit pas reintroduire le melange V1 entre declaration `install(host)`
-et instance runtime.
+`RuntimeModuleServiceCatalog`, `RuntimeModuleServiceDefinition` et la creation/destruction des
+instances par player sont maintenant en place. Le routage des deltas, la
+reconciliation de seek et la derivation automatique de `CompiledRequirements.modules`
+restent a ouvrir. Cette tranche ne doit pas reintroduire le melange V1 entre
+declaration `install(host)` et instance runtime.
 
 Le contrat de coordination FLIP V2 est specifie dans
 `../flip-list-coordination-plan.md`. Tant que cette tranche n'existe pas, seule la

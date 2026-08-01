@@ -53,7 +53,7 @@ export {
 } from '../config/move'
 export { diffSolvedScenes, selectEffectiveMove } from '../move'
 export type { MovePolicyResult, MoveStateDelta } from '../move'
-export { ListCapabilityState } from '../capabilities/list'
+export { createListModuleServiceDefinition, ListCapabilityState, LIST_MODULE_SERVICE_ID } from '../capabilities/list'
 export type { ListCapabilityConfig } from '../capabilities/list'
 export {
   materializeScene,

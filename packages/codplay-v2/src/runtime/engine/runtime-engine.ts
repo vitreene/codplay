@@ -1,10 +1,16 @@
 import type { DiagnosticCollector, DiagnosticReport } from '../../diagnostics'
-import type { CompiledRequirements } from '../../scene/compiled'
+import type { CompiledRequirements, CompiledScene } from '../../scene/compiled'
 import { TimeTicker, type TickPayload, type Ticker } from '../time'
 import { reportMissingCapabilities } from './capability-diagnostics'
+import { RuntimeModuleServiceCatalog, type RuntimeModuleServiceInstance } from './module-service-catalog'
 
 /** Capabilities available to every player attached to one engine. */
 export type EngineCapabilities = Readonly<CompiledRequirements>
+
+/** Optional engine registries supplied beside declared capabilities. */
+export type RuntimeEngineOptions = Readonly<{
+  moduleServiceCatalog?: RuntimeModuleServiceCatalog
+}>
 
 /** One externally supplied engine frame. */
 export type EngineFrame = Readonly<{
@@ -51,25 +57,28 @@ export class RuntimeEngine {
     resources: ReadonlySet<string>
   }
   private readonly instances = new Map<string, RuntimeInstance>()
+  private readonly moduleServiceCatalog: RuntimeModuleServiceCatalog
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
 
   /** Creates one engine without starting an internal clock. */
-  constructor(capabilities: EngineCapabilities) {
+  constructor(capabilities: EngineCapabilities, options: RuntimeEngineOptions = {}) {
     this.capabilities = {
       components: new Set(capabilities.components),
       services: new Set(capabilities.services),
       modules: new Set(capabilities.modules),
       resources: new Set(capabilities.resources),
     }
+    this.moduleServiceCatalog = options.moduleServiceCatalog ?? new RuntimeModuleServiceCatalog()
   }
 
   /** Reports compiled requirements unavailable from this engine. */
   validateRequirements(requirements: CompiledRequirements, diagnostics: DiagnosticCollector): void {
     reportMissingCapabilities('component', requirements.components, this.capabilities.components, diagnostics)
     reportMissingCapabilities('service', requirements.services, this.capabilities.services, diagnostics)
-    reportMissingCapabilities('module', requirements.modules, this.capabilities.modules, diagnostics)
+    const availableModules = new Set([...this.capabilities.modules].filter((id) => this.moduleServiceCatalog.has(id)))
+    reportMissingCapabilities('module', requirements.modules, availableModules, diagnostics)
     reportMissingCapabilities('resource', requirements.resources, this.capabilities.resources, diagnostics)
   }
 
@@ -84,6 +93,22 @@ export class RuntimeEngine {
   /** Removes one player callback from the engine. */
   unregisterInstance(id: string): void {
     this.instances.delete(id)
+  }
+
+  /** Creates player-scoped module-service instances for one compiled requirement set. */
+  createModuleServiceInstances(
+    playerId: string,
+    compiledScene: CompiledScene,
+    moduleIds: readonly string[],
+  ): ReadonlyMap<string, RuntimeModuleServiceInstance> {
+    const instances = new Map<string, RuntimeModuleServiceInstance>()
+    for (const id of moduleIds) {
+      if (!this.capabilities.modules.has(id) || !this.moduleServiceCatalog.has(id)) {
+        throw new Error(`Runtime module service capability is unavailable: ${id}`)
+      }
+      instances.set(id, this.moduleServiceCatalog.create(id, { playerId, compiledScene }))
+    }
+    return instances
   }
 
   /** Advances all registered instances from one externally supplied timestamp. */

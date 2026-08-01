@@ -8,6 +8,10 @@ import {
   type MoveOrderMode,
 } from '../../config/move'
 import type { MoveStateDelta } from '../../move'
+import type { RuntimeModuleServiceDefinition } from '../../engine'
+
+/** Runtime module identifier for the generic list capability. */
+export const LIST_MODULE_SERVICE_ID = 'list' as const
 
 /** Reorder policies owned by one list capability instance. */
 export type ListCapabilityConfig = Readonly<{
@@ -133,6 +137,20 @@ export class ListCapabilityState {
   private moveChild(containerId: string, itemId: string, index: number): void {
     this.removeChild(containerId, itemId)
     this.insertChild(containerId, itemId, index)
+  }
+}
+
+/** Creates one player-scoped runtime module around the pure list state. */
+export function createListModuleServiceDefinition(): RuntimeModuleServiceDefinition {
+  return {
+    id: LIST_MODULE_SERVICE_ID,
+    create: () => {
+      const state = new ListCapabilityState()
+      return {
+        onMoveDelta: (delta) => state.applyDelta(delta),
+        destroy: () => undefined,
+      }
+    },
   }
 }
 
