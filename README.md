@@ -1,5 +1,8 @@
 # Codplay
 
+Status: En cours
+CodPlay version: V1 reference + V2 foundation
+
 Moteur de scènes interactives basé sur une timeline et un système d'événements. Ce dépôt est organisé en monorepo npm workspaces.
 
 ---
@@ -15,6 +18,10 @@ Le cœur du système. Trois couches :
 - **Runtime** — exécute les mutations de composants image par image contre le DOM.
 
 Les straps sont les unités de comportement : fonctions pures déclenchées par des événements, retournant des effets immédiats ou des séquences planifiées.
+
+### `codplay-v2` — runtime en construction (`packages/codplay-v2`)
+
+Réécriture déclarative séparée de V1. La fondation couvre actuellement la compilation `SceneDoc -> CompiledScene`, ACE, engine/player, materialize/resolve/solve, seek groupé, move state et les premières capacités runtime. Les composants, le renderer de production, la mesure et FLIP V2 restent à ouvrir.
 
 ### `@codplay/demos` — application de démonstration (`packages/demos`)
 
@@ -105,6 +112,7 @@ Le résultat est produit dans `packages/codplay/dist/`.
 ```
 packages/
   codplay/                  librairie moteur + tests
+  codplay-v2/               fondation du runtime V2
   demos/                    application de démo
   authoring/
     capsule-automation/     helper d'authoring (pur, sans UI)

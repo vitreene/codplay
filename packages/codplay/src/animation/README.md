@@ -1,5 +1,8 @@
 # Animation Core
 
+Status: Fixe
+CodPlay version: V1 reference
+
 Phase 1 implementation target (Lot 03):
 
 - `adapter.ts`

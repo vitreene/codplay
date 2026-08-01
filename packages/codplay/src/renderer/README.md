@@ -1,5 +1,8 @@
 # Renderer
 
+Status: Fixe
+CodPlay version: V1 reference
+
 Current implementation targets:
 
 - `types.ts`

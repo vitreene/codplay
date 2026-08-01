@@ -1,5 +1,8 @@
 # Lot 01 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L1-T1` start/stop idempotent

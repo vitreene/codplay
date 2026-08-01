@@ -1,5 +1,8 @@
 # Lot 03 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L3-T1` one event -> one animation call

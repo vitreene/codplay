@@ -1,5 +1,8 @@
 # Time Core
 
+Status: Fixe
+CodPlay version: V1 reference
+
 Phase 1 implementation target:
 
 - `clock.ts`

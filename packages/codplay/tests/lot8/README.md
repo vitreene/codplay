@@ -1,5 +1,8 @@
 # Lot 08 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L8-T1` FLIP capture reads real geometry/transform inputs

@@ -21,3 +21,7 @@ parallel top-level `compiled-scene` module.
 and catalog validation, external function references, resource requirements, root
 candidates, and runtime freezing. Codec support and full property/default
 derivation remain open in V2 foundation.
+
+Target IDs in the runtime artifact are opaque and scene-unique. Factories outside
+CodPlay may compose story and perso IDs; CodPlay does not infer target origin from
+their spelling.

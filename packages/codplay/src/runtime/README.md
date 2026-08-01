@@ -1,5 +1,8 @@
 # Runtime Core
 
+Status: Fixe
+CodPlay version: V1 reference
+
 Current implementation targets:
 
 - `create-element.ts`

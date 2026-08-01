@@ -1,5 +1,8 @@
 # Runtime FLIP Engine
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the generic FLIP runtime engine.
 
 Main modules:

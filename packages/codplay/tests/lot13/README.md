@@ -1,5 +1,8 @@
 # Lot 13 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L13-T1` idempotent `init/destroy` lifecycle

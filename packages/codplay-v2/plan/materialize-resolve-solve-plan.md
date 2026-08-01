@@ -85,6 +85,10 @@ pas appliquees par le move core : elles appartiennent a une capacite/service lis
 enregistre, qui consommera les changements de parent sans etre lie a un composant
 unique.
 
+La premiere `ListCapabilityState` pure consomme maintenant ces deltas et maintient
+le parent, le montage et l'ordre logique des cibles list enregistrees. Elle reste
+hors du solve et ne produit aucun effet de rendu.
+
 Le core expose `diffSolvedScenes(before, after)` pour produire des deltas generiques
 `mount`, `unmount` et `move`, avec les cibles et placements avant/apres. Ce delta ne
 reordonne aucun enfant et ne depend d'aucun substrat ; une capacite list peut le

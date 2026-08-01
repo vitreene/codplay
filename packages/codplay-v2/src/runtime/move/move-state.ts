@@ -32,7 +32,12 @@ export function diffSolvedScenes(before: SolvedScene, after: SolvedScene): reado
     const toTargetId = afterPlacement?.targetId
 
     if (!mountedBefore && !mountedAfter) continue
-    if (mountedBefore === mountedAfter && fromTargetId === toTargetId) continue
+    if (mountedBefore === mountedAfter
+      && fromTargetId === toTargetId
+      && beforePlacement?.kind === afterPlacement?.kind
+      && beforePlacement?.mode === afterPlacement?.mode
+      && beforePlacement?.reorder === afterPlacement?.reorder
+      && beforePlacement?.source === afterPlacement?.source) continue
 
     deltas.push({
       operation: !mountedBefore

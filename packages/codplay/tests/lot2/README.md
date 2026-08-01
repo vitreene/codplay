@@ -1,5 +1,8 @@
 # Lot 02 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L2-T1` flatten nested event nodes

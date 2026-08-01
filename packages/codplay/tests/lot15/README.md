@@ -1,5 +1,8 @@
 # Lot 15 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L15-T1` adapts Eddy `persos[]` into converter-compatible records

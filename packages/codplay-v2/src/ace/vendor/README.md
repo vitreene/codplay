@@ -1,5 +1,8 @@
 # `vendor/` — code extrait d'anime.js 4.5.0
 
+Status: En cours
+CodPlay version: V2 foundation
+
 Copie **non modifiée** des modules retenus par le cadrage
 (`docs/projet/codplay-v2/notes/2026-07-29-noyau-solve-cadrage.md`, §4bis). Point de départ de
 l'extraction, pas l'état cible : ces fichiers sont destinés à être élagués et adaptés.

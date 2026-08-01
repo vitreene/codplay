@@ -1,5 +1,8 @@
 # Runtime List Plugin
 
+Status: A relire
+CodPlay version: V1 reference
+
 Deprecated status:
 
 - this folder belongs to one legacy runtime path

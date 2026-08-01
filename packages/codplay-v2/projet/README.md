@@ -1,5 +1,8 @@
 # docs/projet
 
+Status: En cours
+CodPlay version: V2 foundation
+
 Réflexions **projet** — les axes de travail (« où on veut aller, et pourquoi ») qui **précèdent** le
 découpage en plans. Ce ne sont pas des specs ; ce sont les axes qui les justifient.
 

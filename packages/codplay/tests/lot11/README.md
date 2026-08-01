@@ -1,5 +1,8 @@
 # Lot 11 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L11-T1` one active master is selected from active tracks

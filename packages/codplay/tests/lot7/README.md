@@ -1,5 +1,8 @@
 # Lot 07 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L7-T1` list diff (`added/removed/moved`)

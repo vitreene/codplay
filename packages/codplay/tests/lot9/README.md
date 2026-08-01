@@ -1,5 +1,8 @@
 # Lot 09 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L9-T1` retention drops oldest traces at capacity

@@ -33,3 +33,7 @@ list while this boundary is being fixed.
 The initial catalog imports the core service definitions for `style`, `className`,
 and `attr` from `src/services/`. The catalog owns registration and snapshotting;
 the services own their validation rules.
+
+Runtime modules and capabilities follow a separate engine catalogue boundary. A
+module requirement is validated as an engine capability and instantiated per player;
+it is not added to the authored service namespace.

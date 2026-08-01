@@ -1,5 +1,8 @@
 # Lot 16 tests
 
+Status: Fixe
+CodPlay version: V1 reference
+
 This folder contains the tests for:
 
 - `L16-T1` play schedules timeline events and applies action pipeline
