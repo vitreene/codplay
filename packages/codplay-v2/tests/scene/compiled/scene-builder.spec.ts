@@ -117,4 +117,39 @@ describe('SceneBuilder', () => {
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.compiledScene.requirements.modules).toEqual(['list'])
   })
+
+  it('derives the layout module requirement from the layout component definition', () => {
+    const catalog = new ValidationCatalog()
+    catalog.registerComponent({
+      type: 'layout',
+      services: [],
+      modules: ['layout'],
+      validateInitial: () => undefined,
+      validateAction: () => undefined,
+    })
+    const builder = new SceneBuilder(catalog.snapshot(), { diagnosticOutput: vi.fn() })
+
+    const result = builder.build({
+      id: 'layout-module-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'layout',
+            type: 'layout',
+            initial: {
+              markup: `
+                <section>
+                  <main data-part="page-layout:content"></main>
+                </section>
+              `,
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.compiledScene.requirements.modules).toEqual(['layout'])
+  })
 })
