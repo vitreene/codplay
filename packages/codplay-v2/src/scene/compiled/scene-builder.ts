@@ -25,6 +25,7 @@ import type {
   CompiledListenRule,
   CompiledPerso,
   CompiledRecord,
+  CompiledEventime,
   CompiledResource,
   CompiledScene,
   CompiledSceneData,
@@ -164,7 +165,7 @@ function compileStory(
     tracks: extractCompiledRecord(story.tracks, `${scope}.tracks`, state),
     straps: story.straps,
     listen: story.listen.map((rule, index) => compileListenRule(rule, `${scope}.listen[${index}]`, state)),
-    eventimes: story.eventimes?.map((eventime, index) => extractCompiledValue(eventime, `${scope}.eventimes[${index}]`, state) as CompiledRecord),
+    eventimes: story.eventimes?.map((eventime, index) => extractCompiledValue(eventime, `${scope}.eventimes[${index}]`, state) as CompiledEventime),
     state: extractCompiledRecord(story.state, `${scope}.state`, state),
     init: story.init === undefined ? undefined : extractFunction(story.init, `${scope}.init`, state),
   }

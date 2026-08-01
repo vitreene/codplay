@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { materializeScene, resolveScene, solveScene } from '../../../src/runtime/player'
+import {
+  buildTrackRegistry,
+  materializeScene,
+  resolveScene,
+  RuntimeTrackJournal,
+  solveScene,
+  TRACK_EVENT_ACTIVATE,
+  TRACK_EVENT_DEACTIVATE,
+} from '../../../src/runtime/player'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -9,7 +17,7 @@ const scene: CompiledScene = {
   scene: {
     id: 'pipeline-scene',
     listen: [],
-    tracks: {},
+    tracks: { main: { active: true }, disabled: { active: false } },
     stories: {
       main: {
         id: 'main',
@@ -25,10 +33,16 @@ const scene: CompiledScene = {
                 backgroundColor: { from: '#000000', to: '#ffffff', duration: 100, ease: 'linear' },
               },
             },
+            'data:show': null,
           },
         }],
         listen: [],
-        eventimes: [{ name: 'demo:show', startAt: 200 }, { name: 'demo:show', startAt: 100 }],
+        eventimes: [
+          { name: 'demo:show', startAt: 200 },
+          { name: 'demo:show', startAt: 100 },
+          { name: 'sequence:anchor', startAt: 300, events: [{ name: 'demo:show', startAt: 25 }] },
+          { name: 'data:show', startAt: 400, data: { className: { add: 'data-active' } } },
+        ],
       },
     },
   },
@@ -44,6 +58,91 @@ describe('materialize -> resolve -> solve', () => {
 
     expect(actions).toHaveLength(2)
     expect(actions?.map((action) => [action.startAt, action.elapsedMs])).toEqual([[100, 150], [200, 50]])
+    expect(actions?.[0]).toMatchObject({ trackId: 'main', trackOrder: 1 })
+
+    const nestedActions = materializeScene(scene, 325).persos['main:root']?.actions
+    expect(nestedActions?.map((action) => action.startAt)).toEqual([100, 200, 325])
+    expect(nestedActions?.[2]?.declarationPath).toEqual([2, 0])
+  })
+
+  it('consolidates the static track registry in declaration order', () => {
+    const registry = buildTrackRegistry(scene)
+
+    expect(registry.order).toEqual(['global', 'main', 'disabled'])
+    expect(registry.tracks.main).toMatchObject({ id: 'main', order: 1, active: true })
+    expect(registry.tracks.disabled).toMatchObject({ id: 'disabled', order: 2, active: false })
+  })
+
+  it('does not materialize events from an inactive track', () => {
+    const inactiveScene: CompiledScene = {
+      ...scene,
+      scene: { ...scene.scene, tracks: { main: { active: false } } },
+    }
+
+    expect(materializeScene(inactiveScene, 150).persos['main:root']?.actions).toHaveLength(0)
+  })
+
+  it('appends live events only to declared tracks and preserves event sequence', () => {
+    const journal = new RuntimeTrackJournal(scene)
+    const first = journal.appendLiveEvent({
+      eventId: 'live-a',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'data:show',
+      applyAtMs: 250,
+      data: { className: { add: 'live-a' } },
+    })
+    const second = journal.appendLiveEvent({
+      eventId: 'live-b',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'data:show',
+      applyAtMs: 250,
+      data: { className: { add: 'live-b' } },
+    })
+
+    expect(first).toMatchObject({ ok: true, data: { eventSeq: 0 } })
+    expect(second).toMatchObject({ ok: true, data: { eventSeq: 1 } })
+    expect(journal.appendLiveEvent({
+      eventId: 'unknown', trackId: 'missing', name: 'data:show', applyAtMs: 250,
+    })).toMatchObject({ ok: false, code: 'RUNTIME_TRACK_UNKNOWN' })
+
+    const liveActions = materializeScene(scene, 260, journal).persos['main:root']?.actions
+    expect(liveActions?.filter((action) => action.eventId !== undefined).map((action) => action.eventSeq)).toEqual([0, 1])
+  })
+
+  it('controls declared track activity without creating tracks', () => {
+    const journal = new RuntimeTrackJournal(scene)
+
+    expect(journal.applyControlEvent(TRACK_EVENT_DEACTIVATE, { trackIds: ['main'] })).toMatchObject({
+      ok: true,
+      data: { deactivated: ['main'] },
+    })
+    expect(journal.applyControlEvent(TRACK_EVENT_ACTIVATE, { trackIds: ['main', 'missing'] })).toMatchObject({
+      ok: true,
+      data: { activated: ['main'], ignored: ['missing'] },
+    })
+    expect(journal.registry.tracks.missing).toBeUndefined()
+  })
+
+  it('anchors relative live eventimes without changing the track registry', () => {
+    const journal = new RuntimeTrackJournal(scene)
+    const result = journal.appendAnchoredEventimes({
+      trackId: 'main',
+      storyId: 'main',
+      anchorMs: 100,
+      eventimes: [{
+        name: 'data:show',
+        startAt: 10,
+        events: [{ name: 'data:show', startAt: 20, data: { className: { add: 'anchored' } } }],
+      }],
+    })
+
+    expect(result).toMatchObject({ ok: true, data: { appendedCount: 2 } })
+    if (result.ok) expect(result.data.events.map((event) => event.applyAtMs)).toEqual([110, 130])
+    expect(journal.registry.order).toEqual(['global', 'main', 'disabled'])
+    expect(resolveScene(materializeScene(scene, 131, journal)).persos['main:root']?.state.className)
+      .toContain('anchored')
   })
 
   it('resolves discrete patches and ACE values without mutating compiled data', () => {
@@ -61,6 +160,9 @@ describe('materialize -> resolve -> solve', () => {
       className: 'is-idle',
       style: { opacity: 0, backgroundColor: '#000000' },
     })
+
+    const dataResolved = resolveScene(materializeScene(scene, 450))
+    expect(dataResolved.persos['main:root']?.state.className).toContain('data-active')
   })
 
   it('exposes a stable solve output without claiming hierarchy support', () => {

@@ -37,6 +37,14 @@ export type CompiledPerso = Readonly<{
   emit?: CompiledRecord
 }>
 
+/** One relative timeline occurrence in the compiled story journal. */
+export type CompiledEventime = Readonly<{
+  name: string
+  startAt: number
+  data?: CompiledRecord
+  events?: readonly CompiledEventime[]
+}>
+
 /** One canonical compiled story. */
 export type CompiledStory = Readonly<{
   id: string
@@ -47,7 +55,7 @@ export type CompiledStory = Readonly<{
   tracks?: CompiledRecord
   straps?: readonly string[]
   listen: readonly CompiledListenRule[]
-  eventimes?: readonly CompiledRecord[]
+  eventimes?: readonly CompiledEventime[]
   state?: CompiledRecord
   init?: CompiledFunctionReference
 }>

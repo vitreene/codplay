@@ -110,9 +110,21 @@ function isValidStory(value: unknown): value is CompiledStory {
     && (value.tracks === undefined || isCompiledRecord(value.tracks))
     && (value.straps === undefined || isStringArray(value.straps))
     && isCompiledListenArray(value.listen)
-    && (value.eventimes === undefined || Array.isArray(value.eventimes) && value.eventimes.every(isCompiledRecord))
+    && (value.eventimes === undefined || Array.isArray(value.eventimes) && value.eventimes.every(isValidEventime))
     && (value.state === undefined || isCompiledRecord(value.state))
     && isFunctionReferenceOrUndefined(value.init)
+}
+
+/** Checks one relative compiled eventime and all of its nested occurrences. */
+function isValidEventime(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ['name', 'startAt', 'data', 'events'])
+    && typeof value.name === 'string'
+    && typeof value.startAt === 'number'
+    && Number.isFinite(value.startAt)
+    && value.startAt >= 0
+    && (value.data === undefined || isCompiledRecord(value.data))
+    && (value.events === undefined || Array.isArray(value.events) && value.events.every(isValidEventime))
 }
 
 /** Checks one compiled perso payload. */

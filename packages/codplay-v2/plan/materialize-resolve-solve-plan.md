@@ -23,9 +23,10 @@ CompiledScene + timeMs
 
 ## Materialize
 
-`materializeScene(scene, timeMs)` selectionne les occurrences discretes dont
-`startAt <= timeMs` et les associe aux persos concernes. Il conserve l'ordre
-chronologique, puis l'ordre de declaration pour les occurrences au meme instant.
+`materializeScene(scene, timeMs)` construit d'abord le registre statique des tracks,
+puis selectionne les occurrences discretes actives dont `startAt <= timeMs` et les
+associe aux persos concernes. Il conserve l'ordre chronologique, l'ordre des tracks,
+puis l'ordre de declaration pour les occurrences au meme instant.
 
 Materialize :
 
@@ -34,9 +35,21 @@ Materialize :
 - ne lit pas le DOM;
 - ne rejoue pas de strap;
 - porte l'elapsed time de chaque action active vers l'etape suivante.
+- ignore les occurrences des tracks desactivees;
+- preserve les metadonnees de track et le chemin de declaration dans l'action materialisee.
 
-La premiere tranche reconnait seulement les eventimes `{ name, startAt }` et les
-actions dont la valeur est un record compile.
+La premiere tranche reconnait les declarations statiques `global`, story, `story.trackId`,
+scene et story. Elle ne permet pas encore d'ajouter une track pendant la lecture.
+Elle reconnait les eventimes `{ name, startAt, data?, events? }`.
+
+Le `RuntimeTrackJournal` porte les events live hors de `CompiledScene`. Il refuse une
+track inconnue, attribue un `eventSeq` monotone, accepte les controles scene-level
+`track:activate`, `track:deactivate` et `track:toggle` sans creer de track, et ancre
+les eventimes relatifs runtime sur une position absolue.
+Les enfants portent des temps relatifs et sont aplatis en temps absolus. Le chemin
+de declaration sert de tie-breaker stable pour les occurrences au meme instant.
+Une action `null` peut utiliser `event.data` comme payload d'action selon la regle
+canonique V1.
 
 ## Resolve
 
@@ -71,6 +84,7 @@ de `materialize` ou de `resolve`.
 ## Hors perimetre
 
 - tracks et listen complets;
+- straps et listen complets;
 - straps et emissions;
 - `live`, capture et DnD;
 - hierarchie, move, FLIP et matrices d'ancetres;

@@ -19,10 +19,15 @@ export {
   PLAYER_LIFECYCLE_PLAYING,
   PLAYER_LIFECYCLE_READY,
 } from '../config/player-lifecycle'
+export { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE, TRACK_EVENT_TOGGLE } from '../config/track-events'
 export {
   materializeScene,
   resolveScene,
   solveScene,
+  buildTrackRegistry,
+  resolveStoryTrackId,
+  RuntimeTrackJournal,
+  propagateListenEvent,
   type MaterializedAction,
   type MaterializedPerso,
   type MaterializedScene,
@@ -31,4 +36,16 @@ export {
   type RuntimePersoIdentity,
   type SolvedPerso,
   type SolvedScene,
+  type MaterializedTrack,
+  type MaterializedTrackRegistry,
+  type AppendRuntimeTrackEventInput,
+  type AppendAnchoredEventimesInput,
+  type AnchoredEventimesResult,
+  type RuntimeTrackEvent,
+  type TrackActivationResult,
+  type TrackCommandResult,
+  type ListenEventInput,
+  type ListenEventOutput,
+  type ListenPipelineIssue,
+  type ListenPipelineResult,
 } from './pipeline'

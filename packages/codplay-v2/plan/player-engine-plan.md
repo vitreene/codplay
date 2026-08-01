@@ -88,10 +88,11 @@ l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
 - le sink sera remplace lorsque `materialize/resolve/solve` complets et le contrat composant
   seront stabilises.
 
-La premiere tranche pipeline couvre `initial`, les `eventimes`, les patches
-`className`, les tweens `style` scalaires explicites et les couleurs normalisees.
-Elle ne pretend pas encore resoudre les tracks, straps, la hierarchie, les
-composants ou le renderer de production.
+La premiere tranche pipeline couvre `initial`, les eventimes, le registre statique
+des tracks, le journal live, les controles d'activation, les patches `className`,
+les tweens `style` scalaires explicites et les couleurs normalisees. Elle ne pretend
+pas encore resoudre les straps, la hierarchie, les composants ou le renderer de
+production.
 
 La verticale de validite est couverte par un test sous `tests/runtime/`. La demo
 reste un outil de validation interne et ne constitue pas encore un contrat produit.

@@ -1,4 +1,5 @@
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
+import type { MaterializedTrackRegistry } from './tracks'
 
 /** Identifies one perso across one compiled scene evaluation. */
 export type RuntimePersoIdentity = Readonly<{
@@ -13,6 +14,12 @@ export type MaterializedAction = Readonly<{
   name: string
   startAt: number
   elapsedMs: number
+  trackId: string
+  trackOrder: number
+  eventId?: string
+  eventSeq?: number
+  declarationPath: readonly number[]
+  eventData?: CompiledRecord
   action: CompiledRecord
 }>
 
@@ -26,6 +33,7 @@ export type MaterializedPerso = RuntimePersoIdentity & Readonly<{
 export type MaterializedScene = Readonly<{
   scene: CompiledScene
   timeMs: number
+  tracks: MaterializedTrackRegistry
   persos: Readonly<Record<string, MaterializedPerso>>
 }>
 

@@ -4,6 +4,7 @@ export type {
   CompiledPerso,
   CompiledPrimitive,
   CompiledRecord,
+  CompiledEventime,
   CompiledRequirements,
   CompiledResource,
   CompiledResourceManifest,
