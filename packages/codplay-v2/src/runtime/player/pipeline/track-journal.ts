@@ -1,7 +1,9 @@
 import { TRACK_EVENT_ACTIVATE, TRACK_EVENT_DEACTIVATE, TRACK_EVENT_TOGGLE } from '../../config/track-events'
+import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../config/strap-scope'
 import { isPlainRecord } from '../../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene } from '../../../scene/compiled'
-import { buildTrackRegistry, type MaterializedTrackRegistry } from './tracks'
+import { buildTrackRegistry, createStrapTrackId, type MaterializedTrackRegistry } from './tracks'
+import type { StrapEvent, StrapExecutionResult } from './strap-executor'
 
 /** One event appended to a declared runtime track. */
 export type RuntimeTrackEvent = Readonly<{
@@ -48,6 +50,22 @@ export type TrackActivationResult = Readonly<{
 export type AnchoredEventimesResult = Readonly<{
   appendedCount: number
   events: readonly RuntimeTrackEvent[]
+}>
+
+/** Input used to persist one strap's immediate and planned event outputs. */
+export type AppendStrapOutputInput = Readonly<{
+  scope: StrapScope
+  storyId?: string
+  strapName: string
+  anchorMs: number
+  output: StrapExecutionResult
+}>
+
+/** Result of persisting event-bearing strap output. */
+export type StrapOutputAppendResult = Readonly<{
+  trackId: string
+  events: readonly RuntimeTrackEvent[]
+  ignoredUpdateCount: number
 }>
 
 /** Runtime journal layered over the immutable compiled track registry. */
@@ -125,6 +143,50 @@ export class RuntimeTrackJournal {
     return { ok: true, data: { appendedCount: appended.length, events: appended } }
   }
 
+  /** Persists strap events on the already declared dedicated strap track. */
+  appendStrapOutput(input: AppendStrapOutputInput): TrackCommandResult<StrapOutputAppendResult> {
+    if (input.scope === STRAP_SCOPE_STORY && input.storyId === undefined) {
+      return { ok: false, code: 'RUNTIME_STRAP_STORY_ID_MISSING', message: 'Story strap output requires storyId.' }
+    }
+    if (!Number.isFinite(input.anchorMs) || input.anchorMs < 0) {
+      return { ok: false, code: 'RUNTIME_EVENT_ANCHOR_INVALID', message: 'Strap output anchor must be finite and non-negative.' }
+    }
+    const trackId = createStrapTrackId(
+      input.scope === STRAP_SCOPE_STORY ? input.storyId : undefined,
+      input.strapName,
+    )
+    if (!this.registry.tracks[trackId]) {
+      return { ok: false, code: 'RUNTIME_STRAP_TRACK_UNKNOWN', message: `Strap track is not declared: ${trackId}` }
+    }
+    for (const occurrence of input.output.planned) {
+      if (!Number.isFinite(occurrence.offsetMs) || occurrence.offsetMs < 0) {
+        return { ok: false, code: 'RUNTIME_STRAP_OFFSET_INVALID', message: 'Planned strap offset must be finite and non-negative.' }
+      }
+    }
+
+    const events: RuntimeTrackEvent[] = []
+    const storyId = input.storyId ?? STRAP_SCOPE_SCENE
+    for (const event of input.output.events) {
+      const appended = this.appendStrapEvent(event, trackId, storyId, input.anchorMs)
+      if (!appended.ok) return appended
+      events.push(appended.data)
+    }
+    for (const occurrence of input.output.planned) {
+      if (occurrence.step.event === undefined) continue
+      const appended = this.appendStrapEvent(
+        occurrence.step.event,
+        trackId,
+        storyId,
+        input.anchorMs + occurrence.offsetMs,
+      )
+      if (!appended.ok) return appended
+      events.push(appended.data)
+    }
+    const ignoredUpdateCount = input.output.updates.length
+      + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined && occurrence.step.event === undefined).length
+    return { ok: true, data: { trackId, events, ignoredUpdateCount } }
+  }
+
   /** Applies one scene-level track control without creating a track. */
   applyControlEvent(name: string, data: CompiledRecord | undefined): TrackCommandResult<TrackActivationResult> {
     const trackIds = readTrackIds(data)
@@ -159,6 +221,11 @@ export class RuntimeTrackJournal {
     return this.eventsByTrack.get(trackId) ?? []
   }
 
+  /** Returns live events scoped to one story across its active tracks. */
+  getEventsForStory(storyId: string): readonly RuntimeTrackEvent[] {
+    return [...this.eventsByTrack.values()].flatMap((events) => events.filter((event) => event.storyId === storyId))
+  }
+
   /** Changes the active flag of declared tracks and reports unknown ids. */
   private setTrackActivity(trackIds: readonly string[], active: boolean): TrackCommandResult<TrackActivationResult> {
     const changed: string[] = []
@@ -184,6 +251,23 @@ export class RuntimeTrackJournal {
     const index = this.nextGeneratedEventId
     this.nextGeneratedEventId += 1
     return `runtime-event:${trackId}:${storyId}:${index}`
+  }
+
+  /** Appends one strap event with a generated runtime identity. */
+  private appendStrapEvent(
+    event: StrapEvent,
+    trackId: string,
+    storyId: string,
+    applyAtMs: number,
+  ): TrackCommandResult<RuntimeTrackEvent> {
+    return this.appendLiveEvent({
+      eventId: this.createGeneratedEventId(trackId, storyId),
+      trackId,
+      storyId,
+      name: event.name,
+      applyAtMs,
+      data: event.data,
+    })
   }
 }
 

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import { MemoryRenderSink, RenderSync, RuntimePlayer, type RenderAdapter } from '../../../src/runtime/player'
-import { PLAYER_LIFECYCLE_DESTROYED } from '../../../src/runtime/player'
+import {
+  PLAYER_LIFECYCLE_DESTROYED,
+  PLAYER_LIFECYCLE_IDLE,
+  PLAYER_LIFECYCLE_PAUSED,
+  PLAYER_LIFECYCLE_PLAYING,
+} from '../../../src/runtime/player'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -25,12 +30,12 @@ describe('RuntimePlayer', () => {
     engine.advance(100)
     engine.advance(160)
 
-    expect(player.getLifecycleState()).toBe('playing')
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PLAYING)
     expect(player.getCurrentTimeMs()).toBe(60)
 
     player.pause()
     player.seek(500)
-    expect(player.getLifecycleState()).toBe('paused')
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PAUSED)
     expect(player.getCurrentTimeMs()).toBe(500)
     player.destroy()
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_DESTROYED)
@@ -53,7 +58,24 @@ describe('RuntimePlayer', () => {
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.diagnostics.errors[0]?.code).toBe('RUNTIME_COMPONENT_UNAVAILABLE')
-    expect(player.getLifecycleState()).toBe('idle')
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_IDLE)
+  })
+
+  it('warns when declared straps are missing from their owned collections', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const player = new RuntimePlayer(
+      'instance-a',
+      engine,
+      { ...scene, scene: { ...scene.scene, straps: ['missing-scene-strap'] } },
+      undefined,
+      undefined,
+      { scene: {}, stories: {} },
+    )
+
+    const result = player.init()
+
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics.warnings.map((entry) => entry.code)).toEqual(['AUTHOR_SCENE_STRAP_MISSING'])
   })
 
   it('resets the instance delta baseline after pause/resume', () => {

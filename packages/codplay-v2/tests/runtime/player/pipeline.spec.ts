@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildTrackRegistry,
+  createStrapTrackId,
   materializeScene,
   resolveScene,
   RuntimeTrackJournal,
+  STRAP_SCOPE_STORY,
   solveScene,
   TRACK_EVENT_ACTIVATE,
   TRACK_EVENT_DEACTIVATE,
@@ -143,6 +145,40 @@ describe('materialize -> resolve -> solve', () => {
     expect(journal.registry.order).toEqual(['global', 'main', 'disabled'])
     expect(resolveScene(materializeScene(scene, 131, journal)).persos['main:root']?.state.className)
       .toContain('anchored')
+  })
+
+  it('materializes strap outputs on their declared dedicated track', () => {
+    const strapScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          ...scene.scene.stories,
+          main: { ...scene.scene.stories.main!, straps: ['counter'] },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(strapScene)
+    const result = journal.appendStrapOutput({
+      scope: STRAP_SCOPE_STORY,
+      storyId: 'main',
+      strapName: 'counter',
+      anchorMs: 200,
+      output: {
+        events: [{ name: 'data:show', data: { className: { add: 'immediate' } } }],
+        updates: [{ count: 1 }],
+        planned: [{ offsetMs: 25, step: { event: { name: 'data:show', data: { className: { add: 'planned' } } } } }],
+        warnings: [],
+        issues: [],
+      },
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { trackId: createStrapTrackId('main', 'counter'), ignoredUpdateCount: 1 },
+    })
+    expect(resolveScene(materializeScene(strapScene, 226, journal)).persos['main:root']?.state.className)
+      .toMatch(/immediate.*planned|planned.*immediate/)
   })
 
   it('resolves discrete patches and ACE values without mutating compiled data', () => {

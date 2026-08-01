@@ -1,5 +1,6 @@
 import { isPlainRecord } from '../../../shared'
-import { TRACK_GLOBAL_ID } from '../../config/track'
+import { TRACK_GLOBAL_ID, TRACK_STRAP_PREFIX } from '../../config/track'
+import { STRAP_SCOPE_SCENE } from '../../config/strap-scope'
 import type { CompiledScene, CompiledStory, CompiledValue } from '../../../scene/compiled'
 
 /** Static metadata used to select events during materialization. */
@@ -25,6 +26,12 @@ export function buildTrackRegistry(scene: CompiledScene): MaterializedTrackRegis
   for (const story of Object.values(scene.scene.stories)) {
     registerTrack(story.id, undefined, tracks, order)
     if (story.trackId !== undefined) registerTrack(story.trackId, undefined, tracks, order)
+    for (const strapName of story.straps ?? []) {
+      registerTrack(createStrapTrackId(story.id, strapName), undefined, tracks, order)
+    }
+  }
+  for (const strapName of scene.scene.straps ?? []) {
+    registerTrack(createStrapTrackId(undefined, strapName), undefined, tracks, order)
   }
   for (const [trackId, declaration] of Object.entries(scene.scene.tracks)) {
     registerTrack(trackId, declaration, tracks, order)
@@ -41,6 +48,11 @@ export function buildTrackRegistry(scene: CompiledScene): MaterializedTrackRegis
 /** Resolves the default track used by events declared inside one story. */
 export function resolveStoryTrackId(story: Pick<CompiledStory, 'id' | 'trackId'>): string {
   return story.trackId ?? story.id
+}
+
+/** Resolves the dedicated track for one scene or story strap. */
+export function createStrapTrackId(storyId: string | undefined, strapName: string): string {
+  return `${TRACK_STRAP_PREFIX}-${storyId ?? STRAP_SCOPE_SCENE}-${strapName}`
 }
 
 /** Registers one track or merges a later declaration onto its metadata. */

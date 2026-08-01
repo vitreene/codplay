@@ -26,6 +26,9 @@ h1 { max-width: 650px; margin: 0; font-size: clamp(32px, 7vw, 72px); line-height
 
 .stage-marker { margin: 18px 0 0; color: #fbbf24; font-size: 15px; font-weight: 700; letter-spacing: .04em; }
 
+.flow-marker { margin: 10px 0 0; color: #a78bfa; font-size: 12px; }
+.flow-marker output { color: #e7edf4; }
+
 .lede { max-width: 620px; color: #9aa9bf; line-height: 1.6; }
 
 .panel {

@@ -1,5 +1,6 @@
 import type { CompiledRecord, CompiledScene } from '../../scene/compiled'
 import { evaluateTemporaryScene } from './temporary-scene-evaluator'
+import type { RuntimeTrackJournal } from './pipeline'
 
 /** One initial-only snapshot emitted by the temporary render probe. */
 export type TemporaryRenderSnapshot = Readonly<{
@@ -42,6 +43,7 @@ export function createTemporaryRenderSnapshot(
   instanceId: string,
   scene: CompiledScene,
   timeMs: number,
+  journal?: RuntimeTrackJournal,
 ): TemporaryRenderSnapshot {
-  return { instanceId, sceneId: scene.scene.id, timeMs, persos: evaluateTemporaryScene(scene, timeMs) }
+  return { instanceId, sceneId: scene.scene.id, timeMs, persos: evaluateTemporaryScene(scene, timeMs, journal) }
 }

@@ -1,7 +1,15 @@
 import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
 import { RuntimeEngine } from '../../../src/runtime/engine'
-import { MemoryRenderSink, RuntimePlayer } from '../../../src/runtime/player'
+import {
+  executeStrapsSequentially,
+  MemoryRenderSink,
+  propagateListenEvent,
+  RuntimePlayer,
+  RuntimeTrackJournal,
+  STRAP_SCOPE_STORY,
+  type StrapCollections,
+} from '../../../src/runtime/player'
 import type { CompiledRecord } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 
@@ -27,6 +35,8 @@ function createScene(): SceneDoc {
       main: {
         id: 'main',
         initial: { move: '@root' },
+        straps: ['demo-color'],
+        listen: [{ on: 'demo:show', straps: ['demo-color'] }],
         persos: [{
           id: 'root',
           type: 'tag',
@@ -49,6 +59,9 @@ function createScene(): SceneDoc {
               className: { add: 'is-active', remove: 'is-idle' },
               style: { backgroundColor: { from: '#fb7185', to: '#a78bfa', duration: 1000, ease: 'linear' } },
             },
+            'demo:accent': {
+              style: { backgroundColor: { from: '#a78bfa', to: '#facc15', duration: 500, ease: 'linear' } },
+            },
           },
         }],
         eventimes: [{ name: 'demo:show', startAt: 500 }],
@@ -65,6 +78,7 @@ const opacityOutput = document.querySelector<HTMLOutputElement>('#opacity-output
 const rootColorOutput = document.querySelector<HTMLOutputElement>('#root-color-output')!
 const accentColorOutput = document.querySelector<HTMLOutputElement>('#accent-color-output')!
 const phaseOutput = document.querySelector<HTMLOutputElement>('#phase-output')!
+const flowOutput = document.querySelector<HTMLOutputElement>('#flow-output')!
 const seekInput = document.querySelector<HTMLInputElement>('#seek-input')!
 const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
 const errorOutput = document.querySelector<HTMLElement>('#error-output')!
@@ -121,13 +135,15 @@ function present(sink: MemoryRenderSink): void {
   accentColorOutput.value = accentState.backgroundColor
   phaseOutput.value = snapshot.timeMs < 500
     ? 'before demo:show'
-    : snapshot.timeMs < 1500
-      ? 'demo:show / opacity tween'
-      : 'after demo:show'
+    : snapshot.timeMs < 1000
+      ? 'demo:show / listen / strap'
+      : snapshot.timeMs < 1500
+        ? 'planned demo:accent / color tween'
+        : 'after planned flow'
 }
 
 /** Boots the temporary visual flow and its externally advanced engine clock. */
-function start(): void {
+async function start(): Promise<void> {
   const build = new SceneBuilder(createCatalog().snapshot(), { createdAt: new Date().toISOString() }).build(createScene())
   if (!build.ok) {
     errorOutput.hidden = false
@@ -137,7 +153,45 @@ function start(): void {
 
   const engine = new RuntimeEngine({ components: ['tag'], services: [], modules: [], resources: [] })
   const sink = new MemoryRenderSink()
-  const player = new RuntimePlayer('temporary-player', engine, build.compiledScene, sink)
+  const strapCollections: StrapCollections = {
+    scene: {},
+    stories: {
+      main: {
+        'demo-color': ({ context }) => context.planned.wait(500, { event: { name: 'demo:accent' } }),
+      },
+    },
+  }
+  const journal = new RuntimeTrackJournal(build.compiledScene)
+  const showEvent = {
+    eventId: 'demo:show',
+    eventSeq: 0,
+    name: 'demo:show',
+    applyAtMs: 500,
+    trackId: 'main',
+    storyId: 'main',
+  }
+  const story = build.compiledScene.scene.stories.main
+  const propagation = propagateListenEvent(story?.listen ?? [], showEvent, build.functions)
+  const strapExecution = await executeStrapsSequentially(
+    propagation.pendingStraps,
+    strapCollections.stories.main ?? {},
+    { event: { name: showEvent.name }, state: {}, meta: { storyId: 'main' }, context: {} },
+  )
+  const append = journal.appendStrapOutput({
+    scope: STRAP_SCOPE_STORY,
+    storyId: 'main',
+    strapName: 'demo-color',
+    anchorMs: showEvent.applyAtMs,
+    output: strapExecution,
+  })
+  if (!append.ok) {
+    errorOutput.hidden = false
+    errorOutput.textContent = `${append.code}: ${append.message}`
+    return
+  }
+  flowOutput.value = 'demo:show -> listen -> demo-color -> planned +500ms -> track -> materialize'
+
+  const player = new RuntimePlayer('temporary-player', engine, build.compiledScene, sink, undefined, strapCollections, journal)
   const init = player.init()
   if (!init.ok) {
     errorOutput.hidden = false
@@ -176,4 +230,4 @@ function start(): void {
   requestAnimationFrame(tick)
 }
 
-start()
+void start()

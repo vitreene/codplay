@@ -28,7 +28,7 @@ export function materializeScene(scene: CompiledScene, timeMs: number, journal?:
     const events = trackIsActive(journal, trackId, track.active)
       ? [
           ...flattenEventimes(story.eventimes ?? [], trackId, track.order),
-          ...getLiveEventsForStory(journal, trackId, storyId, timeMs, track.order),
+          ...getLiveEventsForStory(journal, storyId, timeMs),
         ]
       : []
     for (const perso of story.persos) {
@@ -110,15 +110,16 @@ function flattenEventimes(
 /** Selects live events for one story and converts them to the common eventime shape. */
 function getLiveEventsForStory(
   journal: RuntimeTrackJournal | undefined,
-  trackId: string,
   storyId: string,
   timeMs: number,
-  trackOrder: number,
 ): readonly FlattenedEventime[] {
   if (journal === undefined) return []
-  return journal.getEvents(trackId)
-    .filter((event) => event.applyAtMs <= timeMs && (event.storyId === undefined || event.storyId === storyId))
-    .map((event) => toFlattenedLiveEvent(event, trackId, trackOrder))
+  return journal.getEventsForStory(storyId)
+    .filter((event) => {
+      const track = journal.registry.tracks[event.trackId]
+      return event.applyAtMs <= timeMs && track !== undefined && journal.isTrackActive(event.trackId)
+    })
+    .map((event) => toFlattenedLiveEvent(event, event.trackId, journal.registry.tracks[event.trackId]?.order ?? 0))
 }
 
 /** Converts one live journal event into the materialize event representation. */

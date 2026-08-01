@@ -10,7 +10,8 @@
       <header>
         <p class="eyebrow">CodPlay V2 / temporary vertical</p>
         <h1>CompiledScene to memory render</h1>
-        <p class="stage-marker">Current stage: RenderSync</p>
+        <p class="stage-marker">Current stage: listen -&gt; planned strap -&gt; materialize</p>
+        <p class="flow-marker">flow: <output id="flow-output">preparing pipeline</output></p>
         <p class="lede">Temporary DOM presenter only. No V2 component or production renderer is used here.</p>
       </header>
 
@@ -42,9 +43,11 @@
         <p class="eyebrow">Expected timeline</p>
         <ol>
           <li><code>t = 0</code>: paused, two items are present, root opacity is <code>0</code>.</li>
-          <li><code>t = 500 ms</code>: event <code>demo:show</code>, both items become <code>is-active</code>.</li>
-          <li><code>500-1500 ms</code>: root opacity and both background colors interpolate.</li>
-          <li><code>t >= 1500 ms</code>: root opacity <code>1</code>, root color <code>#67e8f9</code>, accent color <code>#a78bfa</code>.</li>
+          <li><code>t = 500 ms</code>: <code>demo:show</code> passes through listen and starts <code>demo-color</code>.</li>
+          <li><code>500-1000 ms</code>: root opacity and both background colors interpolate.</li>
+          <li><code>t = 1000 ms</code>: the planned strap event <code>demo:accent</code> is materialized.</li>
+          <li><code>1000-1500 ms</code>: the accent color continues through the planned color tween.</li>
+          <li><code>t >= 1500 ms</code>: root opacity <code>1</code>, root color <code>#67e8f9</code>, accent color <code>#facc15</code>.</li>
         </ol>
       </section>
 

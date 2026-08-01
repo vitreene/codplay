@@ -89,10 +89,10 @@ l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
   seront stabilises.
 
 La premiere tranche pipeline couvre `initial`, les eventimes, le registre statique
-des tracks, le journal live, les controles d'activation, les patches `className`,
-les tweens `style` scalaires explicites et les couleurs normalisees. Elle ne pretend
-pas encore resoudre les straps, la hierarchie, les composants ou le renderer de
-production.
+des tracks, le journal live, les controles d'activation, la propagation listen,
+l'execution sequentielle des straps planned, les patches `className`, les tweens
+`style` scalaires explicites et les couleurs normalisees. Elle ne pretend pas encore
+resoudre la hierarchie, les composants ou le renderer de production.
 
 La verticale de validite est couverte par un test sous `tests/runtime/`. La demo
 reste un outil de validation interne et ne constitue pas encore un contrat produit.

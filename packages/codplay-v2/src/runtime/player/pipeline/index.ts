@@ -1,9 +1,16 @@
 export { materializeScene } from './materialize'
 export { resolveScene } from './resolve'
 export { solveScene } from './solve'
-export { buildTrackRegistry, resolveStoryTrackId } from './tracks'
+export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
 export { propagateListenEvent } from './listen'
+export { executeStrapsSequentially } from './strap-executor'
+export { createPlannedStrapHelpers } from './planned-helpers'
+export {
+  resolveSceneStrap,
+  resolveStoryStrap,
+  validateStrapCollections,
+} from './strap-collections'
 export type {
   MaterializedAction,
   MaterializedPerso,
@@ -18,10 +25,12 @@ export type { MaterializedTrack, MaterializedTrackRegistry } from './tracks'
 export type {
   AppendRuntimeTrackEventInput,
   AppendAnchoredEventimesInput,
+  AppendStrapOutputInput,
   AnchoredEventimesResult,
   RuntimeTrackEvent,
   TrackActivationResult,
   TrackCommandResult,
+  StrapOutputAppendResult,
 } from './track-journal'
 export type {
   ListenEventInput,
@@ -29,3 +38,21 @@ export type {
   ListenPipelineIssue,
   ListenPipelineResult,
 } from './listen'
+export type {
+  PlannedStrapOccurrence,
+  StrapCollection,
+  StrapEvent,
+  StrapExecutionInput,
+  StrapExecutionIssue,
+  StrapExecutionResult,
+  StrapFunction,
+  StrapReturnValue,
+  StrapRuntimeOutput,
+  StrapStep,
+} from './strap-executor'
+export type {
+  StrapCollectionIssue,
+  StrapCollections,
+  StrapScope,
+} from './strap-collections'
+export type { PlannedStepContext, PlannedStepInput, PlannedStrapHelpers } from './planned-helpers'

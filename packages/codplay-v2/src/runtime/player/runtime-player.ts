@@ -13,6 +13,8 @@ import {
 } from '../config/player-lifecycle'
 import { createTemporaryRenderSnapshot, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
+import { validateStrapCollections, type StrapCollections } from './pipeline'
+import type { RuntimeTrackJournal } from './pipeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
@@ -29,6 +31,8 @@ export class RuntimePlayer {
   readonly compiledScene: CompiledScene
   readonly renderSink: TemporaryRenderSink | undefined
   readonly renderSync: RenderSync
+  readonly strapCollections: StrapCollections | undefined
+  readonly trackJournal: RuntimeTrackJournal | undefined
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
@@ -40,12 +44,16 @@ export class RuntimePlayer {
     compiledScene: CompiledScene,
     renderSink?: TemporaryRenderSink,
     renderSync: RenderSync = new RenderSync([]),
+    strapCollections?: StrapCollections,
+    trackJournal?: RuntimeTrackJournal,
   ) {
     this.id = id
     this.engine = engine
     this.compiledScene = compiledScene
     this.renderSink = renderSink
     this.renderSync = renderSync
+    this.strapCollections = strapCollections
+    this.trackJournal = trackJournal
   }
 
   /** Returns the current lifecycle state. */
@@ -66,6 +74,13 @@ export class RuntimePlayer {
         context: { state: this.state },
       })
       return { ok: false, diagnostics: diagnostics.report() }
+    }
+    for (const issue of this.strapCollections === undefined
+      ? []
+      : validateStrapCollections(this.compiledScene, this.strapCollections)) {
+      diagnostics.warning(issue.code, issue.message, {
+        context: { scope: issue.scope, storyId: issue.storyId, strapName: issue.strapName },
+      })
     }
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
@@ -131,7 +146,7 @@ export class RuntimePlayer {
 
   /** Presents initial compiled perso data through the temporary render probe. */
   private presentTemporarySnapshot(): void {
-    this.renderSink?.present(createTemporaryRenderSnapshot(this.id, this.compiledScene, this.currentTimeMs))
+    this.renderSink?.present(createTemporaryRenderSnapshot(this.id, this.compiledScene, this.currentTimeMs, this.trackJournal))
   }
 
   /** Enforces one valid lifecycle transition. */
