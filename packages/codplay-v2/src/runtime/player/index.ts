@@ -47,7 +47,12 @@ export {
   MOVE_ISSUE_COMMAND_INVALID,
   MOVE_ISSUE_CONFLICT_SAME_TICK,
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
+  MOVE_OPERATION_MOUNT,
+  MOVE_OPERATION_MOVE,
+  MOVE_OPERATION_UNMOUNT,
 } from '../config/move'
+export { diffSolvedScenes, selectEffectiveMove } from '../move'
+export type { MovePolicyResult, MoveStateDelta } from '../move'
 export {
   materializeScene,
   resolveScene,

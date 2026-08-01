@@ -111,7 +111,9 @@ renderer ne sont pas ouverts.
 La verticale `demos/validation/player` utilise un renderer DOM volontairement
 simpliste au-dessus d'un sink memoire. Elle valide actuellement deux persos, les
 patches de classe, un tween d'opacite et l'interpolation de `backgroundColor` via
-l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
+l'adapter `parseColor` avant ACE, ainsi que le flux `materialize -> resolve -> solve`
+et les deltas generiques `mount/unmount/move`. Ce dispositif reste explicitement
+temporaire :
 
 - la demo est un banc de validation visible, pas une contrainte de compatibilite du runtime ;
 - si elle entre en conflit avec un contrat V2, le contrat runtime prime et la demo doit etre
@@ -127,8 +129,9 @@ l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
 La premiere tranche pipeline couvre `initial`, les eventimes, le registre statique
 des tracks, le journal live, les controles d'activation, la propagation listen,
 l'execution sequentielle des straps planned, les patches `className`, les tweens
-`style` scalaires explicites et les couleurs normalisees. Elle ne pretend pas encore
-resoudre la hierarchie, les composants ou le renderer de production.
+`style` scalaires explicites, les couleurs normalisees, les placements et le graphe
+parent/enfant. Elle ne pretend pas encore resoudre les transforms d'ancetres, les
+composants ou le renderer de production.
 
 La verticale de validite est couverte par un test sous `tests/runtime/`. La demo
 reste un outil de validation interne et ne constitue pas encore un contrat produit.

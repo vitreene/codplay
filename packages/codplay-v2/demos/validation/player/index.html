@@ -10,7 +10,7 @@
       <header>
         <p class="eyebrow">CodPlay V2 / temporary vertical</p>
         <h1>CompiledScene to memory render</h1>
-        <p class="stage-marker">Current stage: listen -&gt; planned strap -&gt; materialize</p>
+        <p class="stage-marker">Current stage: materialize -&gt; resolve -&gt; solve -&gt; move delta</p>
         <p class="flow-marker">flow: <output id="flow-output">preparing pipeline</output></p>
         <p class="lede">Temporary DOM presenter only. No V2 component or production renderer is used here.</p>
       </header>
@@ -29,6 +29,8 @@
           <span>opacity <output id="opacity-output">0</output></span>
           <span>root color <output id="root-color-output">#f8fafc</output></span>
           <span>accent color <output id="accent-color-output">#fb7185</output></span>
+          <span>accent placement <output id="placement-output">root</output></span>
+          <span>move delta <output id="delta-output">none</output></span>
           <span>time <output id="time-output">0</output> ms</span>
         </div>
         <p class="phase">phase: <output id="phase-output">paused at t=0</output></p>
@@ -47,7 +49,8 @@
           <li><code>500-1000 ms</code>: root opacity and both background colors interpolate.</li>
           <li><code>t = 1000 ms</code>: the planned strap event <code>demo:accent</code> is materialized.</li>
           <li><code>1000-1500 ms</code>: the accent color continues through the planned color tween.</li>
-          <li><code>t >= 1500 ms</code>: root opacity <code>1</code>, root color <code>#67e8f9</code>, accent color <code>#facc15</code>.</li>
+          <li><code>t = 1500 ms</code>: the accent placement becomes <code>demo-outlet</code>.</li>
+          <li><code>t = 1800 ms</code>: the accent placement becomes <code>@off</code>.</li>
         </ol>
       </section>
 

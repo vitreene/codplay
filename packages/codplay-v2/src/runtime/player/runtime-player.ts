@@ -20,6 +20,7 @@ import {
   solveScene,
   validateStrapCollections,
   type SolvedScene,
+  type MountTargetDeclaration,
   type StrapCollections,
 } from './pipeline'
 import type { RuntimeTrackJournal } from './pipeline'
@@ -48,6 +49,7 @@ export class RuntimePlayer {
   readonly strapCollections: StrapCollections | undefined
   readonly trackJournal: RuntimeTrackJournal | undefined
   readonly stateStore: RuntimeStateStore
+  readonly mountTargets: readonly MountTargetDeclaration[]
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
@@ -64,6 +66,7 @@ export class RuntimePlayer {
     renderSync: RenderSync = new RenderSync([]),
     strapCollections?: StrapCollections,
     trackJournal?: RuntimeTrackJournal,
+    mountTargets: readonly MountTargetDeclaration[] = [],
   ) {
     this.id = id
     this.engine = engine
@@ -72,6 +75,7 @@ export class RuntimePlayer {
     this.renderSync = renderSync
     this.strapCollections = strapCollections
     this.trackJournal = trackJournal
+    this.mountTargets = mountTargets
     this.stateStore = new RuntimeStateStore(compiledScene)
   }
 
@@ -214,7 +218,9 @@ export class RuntimePlayer {
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
   private reconstructScene(timeMs: number): SolvedScene {
-    return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)))
+    return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)), {
+      mountTargets: this.mountTargets,
+    })
   }
 }
 

@@ -7,6 +7,9 @@ export const MOVE_ORDER_MODE_PREPEND = 'prepend' as const
 export const MOVE_ISSUE_COMMAND_INVALID = 'AUTHOR_MOVE_COMMAND_INVALID' as const
 export const MOVE_ISSUE_CONFLICT_SAME_TICK = 'AUTHOR_MOVE_CONFLICT_SAME_TICK' as const
 export const MOVE_ISSUE_LAST_INVALID_SAME_TICK = 'AUTHOR_MOVE_LAST_INVALID_SAME_TICK' as const
+export const MOVE_OPERATION_MOUNT = 'mount' as const
+export const MOVE_OPERATION_UNMOUNT = 'unmount' as const
+export const MOVE_OPERATION_MOVE = 'move' as const
 
 export type MoveOrderMode =
   | typeof MOVE_ORDER_MODE_AUTO
@@ -22,3 +25,8 @@ export type MovePolicyIssue = Readonly<{
     | typeof MOVE_ISSUE_LAST_INVALID_SAME_TICK
   message: string
 }>
+
+export type MoveOperation =
+  | typeof MOVE_OPERATION_MOUNT
+  | typeof MOVE_OPERATION_UNMOUNT
+  | typeof MOVE_OPERATION_MOVE

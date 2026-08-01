@@ -2,11 +2,19 @@ import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import {
+  diffSolvedScenes,
   executeListenPipeline,
   MemoryRenderSink,
+  materializeScene,
+  MOUNT_TARGET_KIND_OUTLET,
+  MOUNT_TARGET_KIND_ROOT,
+  resolveScene,
   RuntimePlayer,
   RuntimeTrackJournal,
   STRAP_SCOPE_STORY,
+  solveScene,
+  type MountTargetDeclaration,
+  type SolvedScene,
   type StrapCollections,
 } from '../../../src/runtime/player'
 import type { CompiledRecord } from '../../../src/scene/compiled'
@@ -52,7 +60,7 @@ function createScene(): SceneDoc {
         }, {
           id: 'accent',
           type: 'tag',
-          initial: { move: '@accent', className: 'is-idle', style: { backgroundColor: '#fb7185' } },
+          initial: { move: '@root', className: 'is-idle', style: { backgroundColor: '#fb7185' } },
           actions: {
             'demo:show': {
               className: { add: 'is-active', remove: 'is-idle' },
@@ -61,9 +69,15 @@ function createScene(): SceneDoc {
             'demo:accent': {
               style: { backgroundColor: { from: '#a78bfa', to: '#facc15', duration: 500, ease: 'linear' } },
             },
+            'demo:move-outlet': { move: { parentId: 'demo-outlet', mode: 'first' } },
+            'demo:move-off': { move: '@off' },
           },
         }],
-        eventimes: [{ name: 'demo:show', startAt: 500 }],
+        eventimes: [
+          { name: 'demo:show', startAt: 500 },
+          { name: 'demo:move-outlet', startAt: 1500 },
+          { name: 'demo:move-off', startAt: 1800 },
+        ],
       },
     },
   }
@@ -78,6 +92,8 @@ const rootColorOutput = document.querySelector<HTMLOutputElement>('#root-color-o
 const accentColorOutput = document.querySelector<HTMLOutputElement>('#accent-color-output')!
 const phaseOutput = document.querySelector<HTMLOutputElement>('#phase-output')!
 const flowOutput = document.querySelector<HTMLOutputElement>('#flow-output')!
+const placementOutput = document.querySelector<HTMLOutputElement>('#placement-output')!
+const deltaOutput = document.querySelector<HTMLOutputElement>('#delta-output')!
 const seekInput = document.querySelector<HTMLInputElement>('#seek-input')!
 const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
 const errorOutput = document.querySelector<HTMLElement>('#error-output')!
@@ -119,7 +135,7 @@ function presentItem(element: HTMLElement, state: ReturnType<typeof readItemStat
 }
 
 /** Presents the last temporary snapshot as a deliberately local DOM view. */
-function present(sink: MemoryRenderSink): void {
+function present(sink: MemoryRenderSink, solved: SolvedScene, previous?: SolvedScene): void {
   const snapshot = sink.getSnapshots().at(-1)
   sink.clear()
   if (snapshot === undefined) return
@@ -132,13 +148,23 @@ function present(sink: MemoryRenderSink): void {
   opacityOutput.value = rootState.opacity.toFixed(2)
   rootColorOutput.value = rootState.backgroundColor
   accentColorOutput.value = accentState.backgroundColor
+  const accentPlacement = solved.persos['main:accent']?.placement
+  placementOutput.value = accentPlacement?.target?.id ?? accentPlacement?.kind ?? 'unknown'
+  const delta = previous === undefined
+    ? undefined
+    : diffSolvedScenes(previous, solved).find((item) => item.persoKey === 'main:accent')
+  deltaOutput.value = delta === undefined
+    ? 'none'
+    : `${delta.operation}: ${delta.fromTargetId ?? 'off'} -> ${delta.toTargetId ?? 'off'}`
   phaseOutput.value = snapshot.timeMs < 500
     ? 'before demo:show'
     : snapshot.timeMs < 1000
       ? 'demo:show / listen / strap'
       : snapshot.timeMs < 1500
         ? 'planned demo:accent / color tween'
-        : 'after planned flow'
+        : snapshot.timeMs < 1800
+          ? 'move accent -> demo-outlet'
+          : 'move accent -> @off'
 }
 
 /** Boots the temporary visual flow and its externally advanced engine clock. */
@@ -197,9 +223,22 @@ async function start(): Promise<void> {
     errorOutput.textContent = `${append.code}: ${append.message}`
     return
   }
-  flowOutput.value = 'demo:show -> listen -> demo-color -> planned +500ms -> track -> materialize'
+  flowOutput.value = 'materialize -> resolve -> solve -> diffSolvedScenes'
 
-  const player = new RuntimePlayer('temporary-player', engine, build.compiledScene, sink, undefined, strapCollections, journal)
+  const mountTargets: readonly MountTargetDeclaration[] = [
+    { id: 'temporary-root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+    { id: 'demo-outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+  ]
+  const player = new RuntimePlayer(
+    'temporary-player',
+    engine,
+    build.compiledScene,
+    sink,
+    undefined,
+    strapCollections,
+    journal,
+    mountTargets,
+  )
   const init = player.init()
   if (!init.ok) {
     errorOutput.hidden = false
@@ -210,14 +249,22 @@ async function start(): Promise<void> {
   engine.start()
   let playing = false
   playToggle.textContent = 'Play'
-  present(sink)
+  let solved = solveScene(resolveScene(materializeScene(build.compiledScene, 0, journal)), { mountTargets })
+  present(sink, solved)
 
   seekInput.addEventListener('input', () => {
     playing = false
     if (player.getLifecycleState() === 'playing') player.pause()
-    player.seek(Number(seekInput.value))
+    const previous = solved
+    const targetTime = Number(seekInput.value)
+    const result = player.seek(targetTime)
+    if (!result.ok) {
+      errorOutput.hidden = false
+      errorOutput.textContent = result.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
+    }
+    solved = solveScene(resolveScene(materializeScene(build.compiledScene, targetTime, journal)), { mountTargets })
     playToggle.textContent = 'Play'
-    present(sink)
+    present(sink, solved, previous)
   })
 
   playToggle.addEventListener('click', () => {
@@ -231,7 +278,9 @@ async function start(): Promise<void> {
     if (playing) {
       const current = player.getCurrentTimeMs()
       seekInput.value = String(Math.min(2000, current))
-      present(sink)
+      const previous = solved
+      solved = solveScene(resolveScene(materializeScene(build.compiledScene, current, journal)), { mountTargets })
+      present(sink, solved, previous)
     }
     requestAnimationFrame(tick)
   }

@@ -85,6 +85,11 @@ pas appliquees par le move core : elles appartiennent a une capacite/service lis
 enregistre, qui consommera les changements de parent sans etre lie a un composant
 unique.
 
+Le core expose `diffSolvedScenes(before, after)` pour produire des deltas generiques
+`mount`, `unmount` et `move`, avec les cibles et placements avant/apres. Ce delta ne
+reordonne aucun enfant et ne depend d'aucun substrat ; une capacite list peut le
+consommer pour appliquer sa propre politique.
+
 Le solve hierarchique reste une extension de cette frontiere ; sa politique de
 placement consomme les candidats issus de `materialize` pendant `resolve`, sans
 effet externe. Les IDs de cible sont opaques et uniques dans

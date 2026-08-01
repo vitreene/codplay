@@ -47,6 +47,7 @@ function resolvePlacement(
       return {
         kind: MOUNT_PLACEMENT_ROOT,
         mounted: target !== undefined,
+        targetId: target?.id,
         target,
         mode: perso.placement.mode,
         source: perso.placement.source,
