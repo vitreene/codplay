@@ -7,6 +7,7 @@ import {
   type PersoValidationPayload,
 } from './perso-validation'
 import { PERSO_VALIDATION_PATHS } from '../config/perso-validation'
+import { VALIDATION_TARGET_INITIAL } from '../../services/service-validation-types'
 import { reportMissingValidator } from './validation-warnings'
 import type {
   ComponentValidationDefinition,
@@ -95,7 +96,7 @@ export function validatePersoWithCatalog(
 
   const payloads = createPersoValidationPayloads(perso)
   for (const payload of payloads) {
-    const validator = payload.target === 'initial' ? component.validateInitial : component.validateAction
+    const validator = payload.target === VALIDATION_TARGET_INITIAL ? component.validateInitial : component.validateAction
     validateComponentPayload(validator, payload, refs, diagnostics)
   }
 

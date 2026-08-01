@@ -1,7 +1,12 @@
 import type { DiagnosticCollector, DiagnosticRefs } from '../diagnostics'
+import {
+  VALIDATION_TARGET_ACTION,
+  VALIDATION_TARGET_INITIAL,
+  type ValidationTarget,
+} from './config/validation-targets'
 
-/** The part of a perso payload currently being validated. */
-export type ValidationTarget = 'initial' | 'action'
+export { VALIDATION_TARGET_ACTION, VALIDATION_TARGET_INITIAL }
+export type { ValidationTarget } from './config/validation-targets'
 
 /** Shared context passed to one service or component validator. */
 export type ValidationContext = Readonly<{

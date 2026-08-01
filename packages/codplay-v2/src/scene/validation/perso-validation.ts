@@ -1,4 +1,8 @@
-import type { ValidationTarget } from '../../services/service-validation-types'
+import {
+  VALIDATION_TARGET_ACTION,
+  VALIDATION_TARGET_INITIAL,
+  type ValidationTarget,
+} from '../../services/service-validation-types'
 import { PERSO_VALIDATION_PATHS } from '../config/perso-validation'
 import type { PersoValidationInput } from './validation-types'
 
@@ -20,7 +24,7 @@ export function createPersoValidationPayloads(
   perso: Pick<PersoValidationInput, 'id' | 'initial' | 'actions'>,
 ): readonly PersoValidationPayload[] {
   const payloads: PersoValidationPayload[] = [{
-    target: 'initial',
+    target: VALIDATION_TARGET_INITIAL,
     value: perso.initial,
     path: PERSO_VALIDATION_PATHS.initial,
   }]
@@ -30,7 +34,7 @@ export function createPersoValidationPayloads(
       continue
     }
     payloads.push({
-      target: 'action',
+      target: VALIDATION_TARGET_ACTION,
       value: action,
       path: [...PERSO_VALIDATION_PATHS.actions, actionName],
       actionName,

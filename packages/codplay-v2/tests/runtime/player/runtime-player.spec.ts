@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import { MemoryRenderSink, RenderSync, RuntimePlayer, type RenderAdapter } from '../../../src/runtime/player'
+import { PLAYER_LIFECYCLE_DESTROYED } from '../../../src/runtime/player'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -32,7 +33,7 @@ describe('RuntimePlayer', () => {
     expect(player.getLifecycleState()).toBe('paused')
     expect(player.getCurrentTimeMs()).toBe(500)
     player.destroy()
-    expect(player.getLifecycleState()).toBe('destroyed')
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_DESTROYED)
     expect(sink.getSnapshots()).toEqual([
       { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 0, persos: {} },
       { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 0, persos: {} },

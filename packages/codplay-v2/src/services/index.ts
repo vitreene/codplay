@@ -11,6 +11,7 @@ export function createCoreServiceDefinitions(): readonly ServiceValidationDefini
 export { ATTR_SERVICE, validateAttr } from './attr/attr-service'
 export { CLASS_NAME_SERVICE, validateClassName } from './class-name/class-name-service'
 export { STYLE_SERVICE, validateStyle } from './style/style-service'
+export { VALIDATION_TARGET_ACTION, VALIDATION_TARGET_INITIAL } from './config/validation-targets'
 export type {
   PropertyValidationDefinition,
   ServiceValidationDefinition,

@@ -1,5 +1,7 @@
 /** Severity levels emitted by the V2 diagnostic pipeline. */
-export type DiagnosticSeverity = 'warning' | 'error'
+const DIAGNOSTIC_SEVERITY_WARNING = 'warning' as const
+const DIAGNOSTIC_SEVERITY_ERROR = 'error' as const
+export type DiagnosticSeverity = typeof DIAGNOSTIC_SEVERITY_WARNING | typeof DIAGNOSTIC_SEVERITY_ERROR
 
 /** Stable references that help consumers locate one diagnostic. */
 export type DiagnosticRefs = Readonly<{
@@ -93,14 +95,14 @@ export class DiagnosticCollector {
    * Adds one warning to the report.
    */
   warning(code: string, message: string, details?: DiagnosticDetails, dedupeKey?: string): Diagnostic | null {
-    return this.add({ severity: 'warning', code, message, details, dedupeKey })
+    return this.add({ severity: DIAGNOSTIC_SEVERITY_WARNING, code, message, details, dedupeKey })
   }
 
   /**
    * Adds one error to the report.
    */
   error(code: string, message: string, details?: DiagnosticDetails, dedupeKey?: string): Diagnostic | null {
-    return this.add({ severity: 'error', code, message, details, dedupeKey })
+    return this.add({ severity: DIAGNOSTIC_SEVERITY_ERROR, code, message, details, dedupeKey })
   }
 
   /**

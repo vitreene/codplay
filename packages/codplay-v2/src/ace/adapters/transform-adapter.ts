@@ -57,10 +57,16 @@ export type TransformTweenInput = Readonly<Omit<TweenInput, 'from'> & {
   to: InterpolationValue
 }>
 
+/** Resolution status for an authored transform lower bound. */
+const TRANSFORM_FROM_RESOLVED = 'resolved' as const
+
+/** Resolution status requiring a runtime transform lower bound. */
+const TRANSFORM_FROM_DEFERRED = 'deferred' as const
+
 /** Resolution state for a transform lower bound before ACE preparation. */
 export type TransformFromResolution =
-  | Readonly<{ status: 'resolved'; value: InterpolationValue }>
-  | Readonly<{ status: 'deferred'; property: TransformProperty; to: InterpolationValue }>
+  | Readonly<{ status: typeof TRANSFORM_FROM_RESOLVED; value: InterpolationValue }>
+  | Readonly<{ status: typeof TRANSFORM_FROM_DEFERRED; property: TransformProperty; to: InterpolationValue }>
 
 const TRANSFORM_ALIASES: Readonly<Record<string, TransformProperty>> = {
   x: 'translateX',
@@ -167,7 +173,7 @@ export function materializeTransformIdentity(
 /** Prepares one scalar transform tween after completing its deterministic identity. */
 export function prepareTransformTween(input: TransformTweenInput): Tween {
   const resolution = resolveTransformFrom(input.property, input.from, input.to)
-  if (resolution.status === 'deferred') {
+  if (resolution.status === TRANSFORM_FROM_DEFERRED) {
     throw new Error(`ace: transform "${input.property}" requires a runtime from before preparation.`)
   }
   return prepareTween({ ...input, from: resolution.value })
@@ -180,17 +186,17 @@ export function resolveTransformFrom(
   to: InterpolationValue,
 ): TransformFromResolution {
   if (from !== undefined) {
-    return { status: 'resolved', value: from }
+    return { status: TRANSFORM_FROM_RESOLVED, value: from }
   }
 
   if (typeof to !== 'number' && typeof to !== 'string') {
-    return { status: 'deferred', property, to }
+    return { status: TRANSFORM_FROM_DEFERRED, property, to }
   }
   const identity = materializeTransformIdentity(property, to)
   if (identity === undefined) {
-    return { status: 'deferred', property, to }
+    return { status: TRANSFORM_FROM_DEFERRED, property, to }
   }
-  return { status: 'resolved', value: identity }
+  return { status: TRANSFORM_FROM_RESOLVED, value: identity }
 }
 
 /** Lists transform channels whose identity is a zero in the reference unit. */

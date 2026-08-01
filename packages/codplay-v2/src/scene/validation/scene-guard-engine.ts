@@ -2,6 +2,7 @@ import type { DiagnosticCollector } from '../../diagnostics'
 import { isPlainRecord } from '../../shared'
 import { GuardPipeline } from './guard-pipeline'
 import { SCENE_DOC_VALIDATION_PATHS } from '../config/scene-validation'
+import { GUARD_PHASE_SEMANTIC, GUARD_PHASE_SHAPE } from '../config/guard-phases'
 import { resolveSceneValidationPath } from './validation-paths'
 import type { CanonicalSceneDoc } from '../types'
 
@@ -15,7 +16,7 @@ export class SceneGuardEngine {
   constructor() {
     this.pipeline.register({
       id: 'scene.identity',
-      phase: 'shape',
+      phase: GUARD_PHASE_SHAPE,
       run: (scene, context) => {
         if (scene.id.trim().length === 0) {
           context.diagnostics.error('AUTHOR_SCENE_ID_INVALID', 'scene.id must not be empty.', {
@@ -27,7 +28,7 @@ export class SceneGuardEngine {
     })
     this.pipeline.register({
       id: 'scene.tracks',
-      phase: 'shape',
+      phase: GUARD_PHASE_SHAPE,
       run: (scene, context) => {
         if (!isPlainRecord(scene.tracks)) {
           context.diagnostics.error('AUTHOR_SCENE_TRACKS_INVALID', 'scene.tracks must be a plain object.', {
@@ -39,7 +40,7 @@ export class SceneGuardEngine {
     })
     this.pipeline.register({
       id: 'scene.stories',
-      phase: 'semantic',
+      phase: GUARD_PHASE_SEMANTIC,
       run: (scene, context) => {
         for (const [storyKey, story] of Object.entries(scene.stories)) {
           const storyRefs = { ...context.refs, storyId: story.id }

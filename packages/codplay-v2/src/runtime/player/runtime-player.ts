@@ -3,11 +3,18 @@ import { DiagnosticCollector } from '../../diagnostics'
 import type { CompiledScene } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
 import { RuntimeEngine } from '../engine'
+import {
+  PLAYER_LIFECYCLE_DESTROYED,
+  PLAYER_LIFECYCLE_IDLE,
+  PLAYER_LIFECYCLE_PAUSED,
+  PLAYER_LIFECYCLE_PLAYING,
+  PLAYER_LIFECYCLE_READY,
+  type PlayerLifecycleState,
+} from '../config/player-lifecycle'
 import { createTemporaryRenderSnapshot, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
 
-/** Lifecycle states owned by one V2 player instance. */
-export type PlayerLifecycleState = 'idle' | 'ready' | 'playing' | 'paused' | 'destroyed'
+export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
 /** Result returned by player initialization. */
 export type PlayerInitResult = Readonly<
@@ -22,7 +29,7 @@ export class RuntimePlayer {
   readonly compiledScene: CompiledScene
   readonly renderSink: TemporaryRenderSink | undefined
   readonly renderSync: RenderSync
-  private state: PlayerLifecycleState = 'idle'
+  private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
 
@@ -54,7 +61,7 @@ export class RuntimePlayer {
   /** Validates capabilities and attaches this player to the shared engine. */
   init(): PlayerInitResult {
     const diagnostics = new DiagnosticCollector()
-    if (this.state !== 'idle') {
+    if (this.state !== PLAYER_LIFECYCLE_IDLE) {
       diagnostics.error('RUNTIME_PLAYER_STATE_INVALID', 'Player can only be initialized from idle state.', {
         context: { state: this.state },
       })
@@ -63,31 +70,31 @@ export class RuntimePlayer {
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame))
-    this.state = 'ready'
+    this.state = PLAYER_LIFECYCLE_READY
     this.presentTemporarySnapshot()
     return { ok: true, diagnostics: diagnostics.report() }
   }
 
   /** Starts logical playback without creating a clock or rendering anything. */
   play(): void {
-    this.requireState('ready', 'paused')
-    if (this.state === 'paused') {
+    this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PAUSED)
+    if (this.state === PLAYER_LIFECYCLE_PAUSED) {
       this.skipNextDelta = true
       this.renderSync.resume()
     }
-    this.state = 'playing'
+    this.state = PLAYER_LIFECYCLE_PLAYING
   }
 
   /** Pauses logical playback at the current engine-provided time. */
   pause(): void {
-    this.requireState('playing')
+    this.requireState(PLAYER_LIFECYCLE_PLAYING)
     this.renderSync.pause()
-    this.state = 'paused'
+    this.state = PLAYER_LIFECYCLE_PAUSED
   }
 
   /** Positions logical time without replaying events or effects. */
   seek(timeMs: number): void {
-    if (this.state === 'idle' || this.state === 'destroyed') {
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
       throw new Error(`Player cannot seek from ${this.state} state.`)
     }
     if (!Number.isFinite(timeMs) || timeMs < 0) {
@@ -102,15 +109,15 @@ export class RuntimePlayer {
 
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
-    if (this.state === 'destroyed') return
+    if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
-    this.state = 'destroyed'
+    this.state = PLAYER_LIFECYCLE_DESTROYED
   }
 
   /** Applies one engine frame to the logical clock while playing. */
   private onEngineFrame(frame: EngineFrame): void {
-    if (this.state !== 'playing') return
+    if (this.state !== PLAYER_LIFECYCLE_PLAYING) return
     if (this.skipNextDelta) {
       this.skipNextDelta = false
       this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)

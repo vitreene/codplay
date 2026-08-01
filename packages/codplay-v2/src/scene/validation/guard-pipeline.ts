@@ -1,7 +1,7 @@
 import type { DiagnosticCollector, DiagnosticRefs } from '../../diagnostics'
+import { GUARD_PHASE_ORDER, type GuardPhase } from '../config/guard-phases'
 
-/** Ordered phases used by the initial guard pipeline. */
-export type GuardPhase = 'shape' | 'semantic' | 'capability'
+export type { GuardPhase } from '../config/guard-phases'
 
 /** Shared context passed to one pure guard rule. */
 export type GuardContext = Readonly<{
@@ -17,8 +17,6 @@ export type GuardRule<T> = Readonly<{
   phase: GuardPhase
   run: (value: T, context: GuardContext) => void
 }>
-
-const PHASE_ORDER: readonly GuardPhase[] = ['shape', 'semantic', 'capability']
 
 /**
  * Runs named guard rules in deterministic phase and registration order.
@@ -40,7 +38,7 @@ export class GuardPipeline<T> {
    * Runs all registered rules against one value.
    */
   run(value: T, input: Omit<GuardContext, 'phase'>): void {
-    for (const phase of PHASE_ORDER) {
+    for (const phase of GUARD_PHASE_ORDER) {
       for (const rule of this.rules) {
         if (rule.phase !== phase) continue
         rule.run(value, { ...input, phase })

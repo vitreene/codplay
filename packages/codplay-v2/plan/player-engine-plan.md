@@ -69,7 +69,7 @@ renderer ne sont pas ouverts.
 
 - composants et services runtime;
 - montage et racine DOM;
-- materialize, resolve et solve;
+- materialize, resolve et solve hierarchiques complets;
 - events, listen, straps et effets;
 - rendu, preload et media;
 - demo produit et renderer de production;
@@ -85,12 +85,13 @@ l'adapter `parseColor` avant ACE. Ce dispositif reste explicitement temporaire :
 - aucun composant V2 ne sera ouvert;
 - aucun renderer de production ou contrat DOM ne sera defini;
 - aucune capacite absente ne sera simulee pour faire fonctionner une demo;
-- le sink sera remplace lorsque `materialize/resolve/solve` et le contrat composant
+- le sink sera remplace lorsque `materialize/resolve/solve` complets et le contrat composant
   seront stabilises.
 
-L'evaluation ne couvre que `initial`, les `eventimes`, les patches `className`, les
-tweens `style` scalaires explicites et les couleurs normalisees. Elle ne pretend pas
-resoudre les autres actions, les composants ou le renderer de production.
+La premiere tranche pipeline couvre `initial`, les `eventimes`, les patches
+`className`, les tweens `style` scalaires explicites et les couleurs normalisees.
+Elle ne pretend pas encore resoudre les tracks, straps, la hierarchie, les
+composants ou le renderer de production.
 
 La verticale de validite est couverte par un test sous `tests/runtime/`. La demo
 reste un outil de validation interne et ne constitue pas encore un contrat produit.

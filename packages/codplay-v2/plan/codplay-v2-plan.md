@@ -123,7 +123,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Les sorties rejouables sont materialisees; les straps ne sont jamais rejoues au seek. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Conserver les helpers valides; trancher tout cas non evaluable par `f(t)` avant son portage. |
 | Tracks et eventimes | Journal ordonne, tracks figees, activation, append live, ancrage des eventimes, provenance | Support de materialize et de toutes les lectures a `t`. |
-| Materialize, resolve et solve | Faits -> actions -> `PersoState`; behaviors ACE, etats discrets par validite, hierarchie de solve | Coeur de `f(scene,t)`, sans lecture du node. |
+| Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, etats discrets par validite, hierarchie de solve | Premiere tranche `materialize -> resolve -> solve` en cours; coeur de `f(scene,t)`, sans lecture du node. |
 | Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | Le catalogue engine declare les types; chaque player instancie ses composants. |
 | Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reprend son contrat V1 comme capacite declaree, avec ses fixtures et ses demos; aucune ne devient un patch generique de `style`. |
 | Layout et listes | Contrats de layout/outlets et de container ordonne | A stabiliser contre les cas V1 avant le POC FLIP/list. |

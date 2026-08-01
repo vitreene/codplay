@@ -2,7 +2,9 @@
 export type Point = readonly [number, number]
 
 /** The two traversal modes that must remain visually comparable. */
-export type PathTraversal = 'parameter' | 'arc-length'
+const PATH_TRAVERSAL_PARAMETER = 'parameter' as const
+const PATH_TRAVERSAL_ARC_LENGTH = 'arc-length' as const
+export type PathTraversal = typeof PATH_TRAVERSAL_PARAMETER | typeof PATH_TRAVERSAL_ARC_LENGTH
 
 /** A normalized quadratic path with start [0, 0] and end [1, 0]. */
 export type PathInput = Readonly<{
@@ -46,11 +48,11 @@ export const preparePath = (
   input: PathInput,
   options: Readonly<{ traversal?: PathTraversal }> = {},
 ): Path => {
-  const traversal = options.traversal ?? 'arc-length'
+  const traversal = options.traversal ?? PATH_TRAVERSAL_ARC_LENGTH
   return {
     control: [...input.control] as Point,
     traversal,
-    lengths: traversal === 'arc-length' ? prepareArcLengths(input.control) : null,
+    lengths: traversal === PATH_TRAVERSAL_ARC_LENGTH ? prepareArcLengths(input.control) : null,
   }
 }
 
