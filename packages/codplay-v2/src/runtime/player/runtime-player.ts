@@ -32,6 +32,12 @@ export type PlayerInitResult = Readonly<
   | { ok: false; diagnostics: DiagnosticReport }
 >
 
+/** Result returned after one local seek and its pure reconstruction. */
+export type PlayerSeekResult = Readonly<
+  | { ok: true; timeMs: number; diagnostics: DiagnosticReport }
+  | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
+>
+
 /** One compiled-scene runtime instance without render or component behavior. */
 export class RuntimePlayer {
   readonly id: string
@@ -47,6 +53,7 @@ export class RuntimePlayer {
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
   private pendingSolvedScene: SolvedScene | undefined
+  private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -97,8 +104,10 @@ export class RuntimePlayer {
     this.engine.validateRequirements(this.compiledScene.requirements, diagnostics)
     if (diagnostics.hasErrors()) return { ok: false, diagnostics: diagnostics.report() }
     this.solvedScene = this.reconstructScene(0)
+    collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
+      getSeekDiagnostics: () => this.pendingSeekDiagnostics,
       prepareSeek: () => this.renderSync.prepareSeek(),
       commitSeek: (timeMs) => {
         if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
@@ -106,6 +115,7 @@ export class RuntimePlayer {
         }
         this.solvedScene = this.pendingSolvedScene
         this.pendingSolvedScene = undefined
+        this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
         this.skipNextDelta = true
       },
@@ -137,9 +147,21 @@ export class RuntimePlayer {
   }
 
   /** Positions logical time without replaying events or effects. */
-  seek(timeMs: number): void {
-    this.validateSeek(timeMs)
-    this.engine.seek([{ instanceId: this.id, timeMs }])
+  seek(timeMs: number): PlayerSeekResult {
+    const diagnostics = new DiagnosticCollector({ output: () => undefined })
+    try {
+      this.pendingSolvedScene = undefined
+      this.validateSeek(timeMs)
+      const engineResult = this.engine.seek([{ instanceId: this.id, timeMs }])
+      return { ok: true, timeMs, diagnostics: engineResult.diagnostics[this.id] ?? diagnostics.report() }
+    } catch (error) {
+      this.pendingSolvedScene = undefined
+      diagnostics.error(
+        'RUNTIME_SEEK_FAILED',
+        error instanceof Error ? error.message : 'Runtime seek failed.',
+      )
+      return { ok: false, timeMs, diagnostics: diagnostics.report() }
+    }
   }
 
   /** Detaches the player from the engine and closes its lifecycle. */
@@ -187,10 +209,32 @@ export class RuntimePlayer {
       throw new Error('Player seek time must be a finite positive number.')
     }
     this.pendingSolvedScene = this.reconstructScene(timeMs)
+    this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
   }
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
   private reconstructScene(timeMs: number): SolvedScene {
     return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)))
   }
+}
+
+/** Converts pure move-policy issues into the public diagnostic report. */
+function collectSolvedMoveDiagnostics(solved: SolvedScene, diagnostics: DiagnosticCollector): void {
+  for (const issue of solved.moveIssues) {
+    diagnostics.warning(issue.code, issue.message, {
+      refs: { sceneId: solved.scene.scene.id },
+    })
+  }
+}
+
+/** Builds one detached diagnostic report for a reconstructed scene. */
+function createSolvedMoveDiagnostics(solved: SolvedScene): DiagnosticReport {
+  const diagnostics = new DiagnosticCollector({ output: () => undefined })
+  collectSolvedMoveDiagnostics(solved, diagnostics)
+  return diagnostics.report()
+}
+
+/** Creates an empty diagnostic report for a player before its first seek. */
+function createEmptyDiagnosticReport(): DiagnosticReport {
+  return { all: [], warnings: [], errors: [] }
 }

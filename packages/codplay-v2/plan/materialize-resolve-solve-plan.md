@@ -71,10 +71,23 @@ derivee du journal et ne devient pas une mutation cachee du renderer.
 `solveScene(resolved)` etablit la sortie stable de la tranche et preserve les
 identites `storyId:persoId`. La premiere extension resout les placements `@root`,
 `@off` et `parentId` via le registre interne de cibles. Elle ne resout pas encore
-le graphe parent/enfant, l'ordre des descendants, les transforms d'ancetres ou les mesures.
+les transforms d'ancetres ou les mesures. Elle construit maintenant le graphe
+parent/enfant des persos, propage le detach d'un parent aux descendants, conserve
+les racines et produit les enfants par cible dans un ordre deterministe. La
+politique pure applique les conflits same-tick et les modes `first`, `last`,
+`append`, `prepend` et numeriques bornes. Les diagnostics de conflit sont
+exposes dans le rapport de seek ; la
+persistance `first/last` est conservee jusqu'au prochain mode non persistant et
+`reorderOnMove` est applique depuis la configuration du perso-container. Les
+issues sont portees dans `SolvedScene` puis exposees par le resultat structure du
+seek. Les politiques `reorderOnMove`, `reorderOnAdd` et `reorderOnRemove` ne sont
+pas appliquees par le move core : elles appartiennent a une capacite/service list
+enregistre, qui consommera les changements de parent sans etre lie a un composant
+unique.
 
-Le solve hierarchique sera une extension de cette frontiere, pas une modification
-de `materialize` ou de `resolve`. Les IDs de cible sont opaques et uniques dans
+Le solve hierarchique reste une extension de cette frontiere ; sa politique de
+placement consomme les candidats issus de `materialize` pendant `resolve`, sans
+effet externe. Les IDs de cible sont opaques et uniques dans
 une scene ; leur origine (`perso`, `host`, `outlet` ou racine de story) provient
 d'un registre interne de cibles, jamais de la forme du nom. Les conventions de
 nommage auteur ne sont donc pas un discriminant. Les factories externes qui

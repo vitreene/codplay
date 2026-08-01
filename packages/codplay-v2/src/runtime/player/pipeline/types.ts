@@ -1,6 +1,7 @@
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { MaterializedTrackRegistry } from './tracks'
 import type { MountTarget } from './mount-targets'
+import type { MoveOrderMode, MovePolicyIssue } from '../../config/move'
 import {
   MOUNT_PLACEMENT_INVALID,
   MOUNT_PLACEMENT_OFF,
@@ -8,6 +9,7 @@ import {
   MOUNT_PLACEMENT_ROOT,
   MOUNT_PLACEMENT_UNSPECIFIED,
   type MountPlacementKind,
+  type MountPlacementSource,
 } from '../../config/mount-placement'
 
 /** Identifies one perso across one compiled scene evaluation. */
@@ -50,17 +52,18 @@ export type MaterializedScene = Readonly<{
 
 /** Placement value selected from the authored initial state and active moves. */
 export type ResolvedPlacement = Readonly<
-  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED }
-  | { kind: typeof MOUNT_PLACEMENT_ROOT }
-  | { kind: typeof MOUNT_PLACEMENT_OFF }
-  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string }
-  | { kind: typeof MOUNT_PLACEMENT_INVALID }
+  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED; mode?: MoveOrderMode; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_ROOT; mode?: MoveOrderMode; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_OFF; mode?: MoveOrderMode; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string; mode?: MoveOrderMode; reorder?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_INVALID; source?: MountPlacementSource }
 >
 
 /** Output of resolve before hierarchy and substrate projection. */
 export type ResolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
   placement: ResolvedPlacement
+  moveIssues: readonly MovePolicyIssue[]
 }>
 
 /** Scene data after discrete patches and continuous values are resolved. */
@@ -78,12 +81,17 @@ export type SolvedPlacement = Readonly<{
   mounted: boolean
   targetId?: string
   target?: MountTarget
+  parentKey?: string
+  mode?: MoveOrderMode
+  reorder?: boolean
+  source?: MountPlacementSource
 }>
 
 /** Stable solve output consumed by a future component/projector boundary. */
 export type SolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
   placement: SolvedPlacement
+  moveIssues: readonly MovePolicyIssue[]
 }>
 
 /** Scene data after the currently supported solve stage. */
@@ -93,4 +101,7 @@ export type SolvedScene = Readonly<{
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, SolvedPerso>>
+  rootPersoKeys: readonly string[]
+  childrenByTarget: Readonly<Record<string, readonly string[]>>
+  moveIssues: readonly MovePolicyIssue[]
 }>

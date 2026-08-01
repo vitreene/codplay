@@ -1,5 +1,5 @@
 import { MOUNT_PLACEMENT_INVALID, MOUNT_PLACEMENT_OFF, MOUNT_PLACEMENT_PARENT, MOUNT_PLACEMENT_ROOT, MOUNT_PLACEMENT_UNSPECIFIED } from '../../config/mount-placement'
-import { MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
+import { MOUNT_TARGET_KIND_PERSO, MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
 import type { ResolvedScene, SolvedPerso, SolvedScene } from './types'
 
 /** Resolves typed placements before parent-child ordering and transform composition. */
@@ -9,18 +9,29 @@ export function solveScene(
 ): SolvedScene {
   const targets = MountTargetRegistry.fromScene(resolved.scene, options.mountTargets)
   const persos: Record<string, SolvedPerso> = {}
+  const persoByTargetId = new Map<string, string>()
+  for (const perso of Object.values(resolved.persos)) persoByTargetId.set(perso.persoId, perso.key)
   for (const perso of Object.values(resolved.persos)) {
-    persos[perso.key] = {
-      ...perso,
-      placement: resolvePlacement(perso, targets),
-    }
+    const placement = resolvePlacement(perso, targets, persoByTargetId)
+    persos[perso.key] = { ...perso, placement }
   }
+
+  validateNoPlacementCycles(persos)
+  const effectivePersos = applyEffectiveMountState(persos)
+  const childrenByTarget = buildChildrenByTarget(effectivePersos)
+  const rootPersoKeys = Object.values(effectivePersos)
+    .filter((perso) => perso.placement.kind === MOUNT_PLACEMENT_ROOT && perso.placement.mounted)
+    .map((perso) => perso.key)
+
   return {
     scene: resolved.scene,
     timeMs: resolved.timeMs,
     sceneState: resolved.sceneState,
     storyStates: resolved.storyStates,
-    persos,
+    persos: effectivePersos,
+    rootPersoKeys,
+    childrenByTarget,
+    moveIssues: Object.values(effectivePersos).flatMap((perso) => perso.moveIssues),
   }
 }
 
@@ -28,14 +39,21 @@ export function solveScene(
 function resolvePlacement(
   perso: ResolvedScene['persos'][string],
   targets: MountTargetRegistry,
+  persoByTargetId: ReadonlyMap<string, string>,
 ): SolvedPerso['placement'] {
   switch (perso.placement.kind) {
     case MOUNT_PLACEMENT_ROOT: {
       const target = targets.resolveStoryRoot(perso.storyId)
-      return { kind: MOUNT_PLACEMENT_ROOT, mounted: target !== undefined, target: target }
+      return {
+        kind: MOUNT_PLACEMENT_ROOT,
+        mounted: target !== undefined,
+        target,
+        mode: perso.placement.mode,
+        source: perso.placement.source,
+      }
     }
     case MOUNT_PLACEMENT_OFF:
-      return { kind: MOUNT_PLACEMENT_OFF, mounted: false }
+      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, source: perso.placement.source }
     case MOUNT_PLACEMENT_PARENT: {
       const target = targets.resolve(perso.placement.targetId)
       return {
@@ -43,11 +61,76 @@ function resolvePlacement(
         mounted: target !== undefined,
         targetId: perso.placement.targetId,
         target,
+        parentKey: target?.kind === MOUNT_TARGET_KIND_PERSO ? persoByTargetId.get(target.id) : undefined,
+        mode: perso.placement.mode,
+        reorder: perso.placement.reorder,
+        source: perso.placement.source,
       }
     }
     case MOUNT_PLACEMENT_INVALID:
-      return { kind: MOUNT_PLACEMENT_INVALID, mounted: false }
+      return { kind: MOUNT_PLACEMENT_INVALID, mounted: false, source: perso.placement.source }
     case MOUNT_PLACEMENT_UNSPECIFIED:
-      return { kind: MOUNT_PLACEMENT_UNSPECIFIED, mounted: false }
+      return { kind: MOUNT_PLACEMENT_UNSPECIFIED, mounted: false, source: perso.placement.source }
+  }
+}
+
+/** Builds stable child lists grouped by the opaque target ID. */
+function buildChildrenByTarget(
+  persos: Readonly<Record<string, SolvedPerso>>,
+): Readonly<Record<string, readonly string[]>> {
+  const children = new Map<string, string[]>()
+  for (const perso of Object.values(persos)) {
+    if (!perso.placement.mounted || perso.placement.targetId === undefined) continue
+    const current = children.get(perso.placement.targetId) ?? []
+    current.push(perso.key)
+    children.set(perso.placement.targetId, current)
+  }
+  return Object.fromEntries([...children.entries()].map(([targetId, keys]) => [targetId, keys]))
+}
+
+/** Propagates detached parent state to descendants without touching compiled data. */
+function applyEffectiveMountState(
+  persos: Readonly<Record<string, SolvedPerso>>,
+): Readonly<Record<string, SolvedPerso>> {
+  const mounted = new Map<string, boolean>()
+
+  const isMounted = (key: string, visiting = new Set<string>()): boolean => {
+    const cached = mounted.get(key)
+    if (cached !== undefined) return cached
+    if (visiting.has(key)) throw new Error(`Mount hierarchy cycle detected at: ${key}`)
+    visiting.add(key)
+    const perso = persos[key]
+    const result = perso !== undefined
+      && perso.placement.mounted
+      && (perso.placement.parentKey === undefined || isMounted(perso.placement.parentKey, visiting))
+    visiting.delete(key)
+    mounted.set(key, result)
+    return result
+  }
+
+  return Object.fromEntries(Object.values(persos).map((perso) => [
+    perso.key,
+    {
+      ...perso,
+      placement: { ...perso.placement, mounted: isMounted(perso.key) },
+    },
+  ]))
+}
+
+/** Rejects cycles in the mounted perso-to-perso graph before projection. */
+function validateNoPlacementCycles(persos: Readonly<Record<string, SolvedPerso>>): void {
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+
+  for (const perso of Object.values(persos)) visit(perso.key)
+
+  function visit(key: string): void {
+    if (visited.has(key)) return
+    if (visiting.has(key)) throw new Error(`Mount hierarchy cycle detected at: ${key}`)
+    visiting.add(key)
+    const parentKey = persos[key]?.placement.parentKey
+    if (parentKey !== undefined) visit(parentKey)
+    visiting.delete(key)
+    visited.add(key)
   }
 }

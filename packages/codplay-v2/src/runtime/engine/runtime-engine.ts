@@ -1,4 +1,4 @@
-import type { DiagnosticCollector } from '../../diagnostics'
+import type { DiagnosticCollector, DiagnosticReport } from '../../diagnostics'
 import type { CompiledRequirements } from '../../scene/compiled'
 import { TimeTicker, type TickPayload, type Ticker } from '../time'
 import { reportMissingCapabilities } from './capability-diagnostics'
@@ -23,9 +23,16 @@ export type EngineSeekTarget = Readonly<{
 /** Seek phases exposed by one registered runtime instance. */
 export type InstanceSeekParticipant = Readonly<{
   validateSeek: (timeMs: number) => void
+  getSeekDiagnostics?: () => DiagnosticReport
   prepareSeek: () => void
   commitSeek: (timeMs: number) => void
   presentSeek: () => void
+}>
+
+/** Reports returned for each instance after one grouped seek. */
+export type EngineSeekResult = Readonly<{
+  ok: true
+  diagnostics: Readonly<Record<string, DiagnosticReport>>
 }>
 
 type InstanceTick = (frame: EngineFrame) => void
@@ -120,7 +127,7 @@ export class RuntimeEngine {
   }
 
   /** Reconstructs a selected group and presents all local seek targets once. */
-  seek(targets: readonly EngineSeekTarget[]): void {
+  seek(targets: readonly EngineSeekTarget[]): EngineSeekResult {
     if (targets.length === 0) {
       throw new Error('Engine seek requires at least one target.')
     }
@@ -140,9 +147,16 @@ export class RuntimeEngine {
     })
 
     for (const { target, participant } of participants) participant.validateSeek(target.timeMs)
+    const diagnostics = Object.fromEntries(
+      participants.map(({ target, participant }) => [
+        target.instanceId,
+        participant.getSeekDiagnostics?.() ?? emptyDiagnosticReport(),
+      ]),
+    )
     for (const { participant } of participants) participant.prepareSeek()
     for (const { target, participant } of participants) participant.commitSeek(target.timeMs)
     for (const { participant } of participants) participant.presentSeek()
+    return { ok: true, diagnostics }
   }
 
   /** Accepts one ticker payload without recomputing its measured delta. */
@@ -166,4 +180,9 @@ export class RuntimeEngine {
       instance.onFrame(frame)
     }
   }
+}
+
+/** Provides a stable empty report for participants without diagnostic output. */
+function emptyDiagnosticReport(): DiagnosticReport {
+  return { all: [], warnings: [], errors: [] }
 }

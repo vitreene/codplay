@@ -44,8 +44,9 @@ Une instance possede :
 - un lifecycle `idle -> ready -> playing <-> paused -> destroyed`;
 - un temps logique avance par l'engine.
 
-`seek` positionne le temps logique mais ne rejoue encore aucun event et ne resout
-aucun perso. Ces comportements appartiennent aux tranches materialize/resolve/solve.
+`seek` positionne le temps logique sans rejouer les straps ni les effets et retourne
+un resultat structure avec `ok`, `timeMs` et `diagnostics`. La reconstruction des
+persos appartient aux tranches materialize/resolve/solve.
 
 ## Seek de portee
 
@@ -61,6 +62,10 @@ elle n'est pas une consequence du nom `seek(3000)`.
 
 Le seek V2 reste synchrone. Une future disponibilite asynchrone devra bloquer ou mettre en attente
 la portee entiere, jamais presenter un sous-ensemble reconstruit.
+
+`RuntimeEngine.seek()` retourne egalement un rapport par instance apres la validation du groupe et
+le commit de presentation. Sighty peut donc agreger ou router les diagnostics sans que CodPlay
+interprete sa portee ni sa timeline globale.
 
 La premiere frontiere engine est en place : `RuntimeEngine.seek()` orchestre les cibles locales par
 phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player individuel utilise

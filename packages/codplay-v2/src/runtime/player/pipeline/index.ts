@@ -27,6 +27,7 @@ export type {
 } from './types'
 export type { MaterializedTrack, MaterializedTrackRegistry } from './tracks'
 export type { MountTarget, MountTargetDeclaration } from './mount-targets'
+export type { MovePolicyIssue } from '../../config/move'
 export type {
   AppendRuntimeTrackEventInput,
   AppendAnchoredEventimesInput,

@@ -1,6 +1,7 @@
 export {
   RuntimePlayer,
   type PlayerInitResult,
+  type PlayerSeekResult,
   type PlayerLifecycleState,
 } from './runtime-player'
 export {
@@ -34,7 +35,19 @@ export {
   MOUNT_PLACEMENT_PARENT,
   MOUNT_PLACEMENT_ROOT,
   MOUNT_PLACEMENT_UNSPECIFIED,
+  MOUNT_PLACEMENT_SOURCE_INITIAL,
+  MOUNT_PLACEMENT_SOURCE_MOVE,
 } from '../config/mount-placement'
+export {
+  MOVE_ORDER_MODE_APPEND,
+  MOVE_ORDER_MODE_AUTO,
+  MOVE_ORDER_MODE_FIRST,
+  MOVE_ORDER_MODE_LAST,
+  MOVE_ORDER_MODE_PREPEND,
+  MOVE_ISSUE_COMMAND_INVALID,
+  MOVE_ISSUE_CONFLICT_SAME_TICK,
+  MOVE_ISSUE_LAST_INVALID_SAME_TICK,
+} from '../config/move'
 export {
   materializeScene,
   resolveScene,
@@ -66,6 +79,7 @@ export {
   type MaterializedTrackRegistry,
   type MountTarget,
   type MountTargetDeclaration,
+  type MovePolicyIssue,
   type AppendRuntimeTrackEventInput,
   type AppendAnchoredEventimesInput,
   type AppendStrapOutputInput,

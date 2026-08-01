@@ -8,6 +8,9 @@ import {
   MOUNT_PLACEMENT_OFF,
   MOUNT_PLACEMENT_PARENT,
   MOUNT_PLACEMENT_ROOT,
+  MOVE_ORDER_MODE_FIRST,
+  MOVE_ISSUE_CONFLICT_SAME_TICK,
+  MOVE_ISSUE_LAST_INVALID_SAME_TICK,
   materializeScene,
   resolveScene,
   RuntimeTrackJournal,
@@ -256,6 +259,145 @@ describe('materialize -> resolve -> solve', () => {
       targetId: 'toto',
       target: { kind: MOUNT_TARGET_KIND_OUTLET },
     })
+  })
+
+  it('builds parent-child links, stable child order, and inherited detached state', () => {
+    const hierarchyScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [
+              { id: 'parent', type: 'tag', initial: { move: '@root' }, actions: { detach: { move: '@off' } } },
+              { id: 'child-a', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
+              { id: 'child-b', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
+            ],
+            eventimes: [{ name: 'detach', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const options = {
+      mountTargets: [{ id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' }] as const,
+    }
+
+    const mounted = solveScene(resolveScene(materializeScene(hierarchyScene, 50)), options)
+    expect(mounted.rootPersoKeys).toEqual(['main:parent'])
+    expect(mounted.persos['main:child-a']?.placement.parentKey).toBe('main:parent')
+    expect(mounted.childrenByTarget.parent).toEqual(['main:child-a', 'main:child-b'])
+
+    const detached = solveScene(resolveScene(materializeScene(hierarchyScene, 150)), options)
+    expect(detached.persos['main:parent']?.placement.mounted).toBe(false)
+    expect(detached.persos['main:child-a']?.placement.mounted).toBe(false)
+    expect(detached.childrenByTarget.parent).toBeUndefined()
+  })
+
+  it('rejects cycles in the mounted perso graph', () => {
+    const cycleScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [
+              { id: 'first', type: 'tag', initial: { move: { parentId: 'second' } }, actions: {} },
+              { id: 'second', type: 'tag', initial: { move: { parentId: 'first' } }, actions: {} },
+            ],
+          },
+        },
+      },
+    }
+
+    expect(() => solveScene(resolveScene(materializeScene(cycleScene, 0)))).toThrow('Mount hierarchy cycle detected')
+  })
+
+  it('applies same-tick last-write-wins and ignores an invalid last move', () => {
+    const conflictScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{ id: 'item', type: 'tag', initial: { move: '@root' }, actions: {
+              toA: { move: { parentId: 'outlet-a' } },
+              toB: { move: { parentId: 'outlet-b' } },
+              invalid: { move: { parentId: 42 } },
+            } }],
+            eventimes: [
+              { name: 'toA', startAt: 100 },
+              { name: 'toB', startAt: 100 },
+            ],
+          },
+        },
+      },
+    }
+    const targets = [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+      { id: 'outlet-a', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+      { id: 'outlet-b', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+    ] as const
+
+    const lastValid = solveScene(resolveScene(materializeScene(conflictScene, 100)), { mountTargets: targets })
+    expect(lastValid.persos['main:item']?.placement.targetId).toBe('outlet-b')
+    expect(lastValid.moveIssues.map((issue) => issue.code)).toContain(MOVE_ISSUE_CONFLICT_SAME_TICK)
+
+    const invalidLastScene: CompiledScene = {
+      ...conflictScene,
+      scene: {
+        ...conflictScene.scene,
+        stories: {
+          main: {
+            ...conflictScene.scene.stories.main!,
+            eventimes: [
+              { name: 'toA', startAt: 100 },
+              { name: 'invalid', startAt: 100 },
+            ],
+          },
+        },
+      },
+    }
+    const invalidLast = solveScene(resolveScene(materializeScene(invalidLastScene, 100)), { mountTargets: targets })
+    expect(invalidLast.persos['main:item']?.placement.kind).toBe(MOUNT_PLACEMENT_ROOT)
+    expect(invalidLast.moveIssues.map((issue) => issue.code)).toContain(MOVE_ISSUE_LAST_INVALID_SAME_TICK)
+  })
+
+  it('preserves compile order while carrying list ordering metadata', () => {
+    const orderedScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [
+              { id: 'parent', type: 'tag', initial: { move: '@root' }, actions: {} },
+              { id: 'item-a', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {
+                last: { move: { parentId: 'parent', mode: 999 } },
+              } },
+              { id: 'item-b', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
+              { id: 'item-c', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {
+                first: { move: { parentId: 'parent', mode: MOVE_ORDER_MODE_FIRST } },
+              } },
+            ],
+            eventimes: [
+              { name: 'first', startAt: 10 },
+              { name: 'last', startAt: 20 },
+            ],
+          },
+        },
+      },
+    }
+    const solved = solveScene(resolveScene(materializeScene(orderedScene, 30)), {
+      mountTargets: [{ id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' }],
+    })
+
+    expect(solved.childrenByTarget.parent).toEqual(['main:item-a', 'main:item-b', 'main:item-c'])
+    expect(solved.persos['main:item-c']?.placement.mode).toBe('first')
+    expect(solved.persos['main:item-a']?.placement.mode).toBe(999)
   })
 
   it('rejects invalid materialization times before evaluation', () => {

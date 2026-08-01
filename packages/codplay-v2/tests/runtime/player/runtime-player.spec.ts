@@ -134,12 +134,83 @@ describe('RuntimePlayer', () => {
 
     first.init()
     second.init()
-    engine.seek([
+    const result = engine.seek([
       { instanceId: 'first', timeMs: 3000 },
       { instanceId: 'second', timeMs: 2000 },
     ])
 
+    expect(result.ok).toBe(true)
+    expect(Object.keys(result.diagnostics)).toEqual(['first', 'second'])
     expect(firstSink.getSnapshots().at(-1)?.timeMs).toBe(3000)
     expect(secondSink.getSnapshots().at(-1)?.timeMs).toBe(2000)
+  })
+
+  it('returns structured diagnostics from a seek reconstruction', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const seekScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: {},
+              actions: { invalid: { move: { parentId: 42 } } },
+            }],
+            listen: [],
+            eventimes: [{ name: 'invalid', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const player = new RuntimePlayer('instance-a', engine, seekScene)
+    player.init()
+
+    const result = player.seek(100)
+
+    expect(result.ok).toBe(true)
+    expect(result.diagnostics.warnings.map((entry) => entry.code)).toContain('AUTHOR_MOVE_LAST_INVALID_SAME_TICK')
+  })
+
+  it('returns a failed seek result instead of hiding lifecycle errors', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const player = new RuntimePlayer('instance-a', engine, scene)
+
+    const result = player.seek(100)
+
+    expect(result).toMatchObject({ ok: false, timeMs: 100 })
+    expect(result.diagnostics.errors[0]?.code).toBe('RUNTIME_SEEK_FAILED')
+  })
+
+  it('aggregates seek diagnostics by instance at the engine boundary', () => {
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const invalidScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{ id: 'item', type: 'tag', initial: {}, actions: { invalid: { move: { parentId: 42 } } } }],
+            listen: [],
+            eventimes: [{ name: 'invalid', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const first = new RuntimePlayer('first', engine, scene)
+    const second = new RuntimePlayer('second', engine, invalidScene)
+    first.init()
+    second.init()
+
+    const result = engine.seek([
+      { instanceId: 'first', timeMs: 100 },
+      { instanceId: 'second', timeMs: 100 },
+    ])
+
+    expect(result.diagnostics.second?.warnings.map((entry) => entry.code)).toContain('AUTHOR_MOVE_LAST_INVALID_SAME_TICK')
   })
 })
