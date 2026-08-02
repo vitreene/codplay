@@ -20,6 +20,17 @@ export type ValidationContext = Readonly<{
 /** Validates one service or component payload without runtime dependencies. */
 export type ValidationFunction = (value: unknown, context: ValidationContext) => void
 
+/** Context supplied when one service handles an attribute in authored markup. */
+export type MarkupAttributeSanitizerContext = Readonly<{
+  elementName: string
+  attributeName: string
+  value: string
+  path: string
+}>
+
+/** Service-owned compile-time policy for one authored markup attribute. */
+export type MarkupAttributeSanitizer = (context: MarkupAttributeSanitizerContext) => string | undefined
+
 /** Pure validator declaration for one property inside a named service namespace. */
 export type PropertyValidationDefinition = Readonly<{
   name: string
@@ -32,4 +43,5 @@ export type ServiceValidationDefinition = Readonly<{
   validate?: ValidationFunction
   properties?: readonly PropertyValidationDefinition[]
   allowUnknownProperties?: boolean
+  sanitizeMarkupAttribute?: MarkupAttributeSanitizer
 }>

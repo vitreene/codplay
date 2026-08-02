@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LayoutComponent } from '../../../src/runtime/components'
 import {
-  createLayoutModuleServiceDefinition,
-  materializeComponentWithLayout,
-} from '../../../src/runtime/capabilities/layout'
-import type { LayoutModuleServiceInstance } from '../../../src/runtime/capabilities/layout'
+  createMarkupModuleServiceDefinition,
+  materializeComponentWithMarkup,
+} from '../../../src/runtime/capabilities/markup'
+import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('LayoutComponent V2', () => {
@@ -27,7 +27,7 @@ describe('LayoutComponent V2', () => {
     })
 
     expect(component.render()).toContain('data-part="page-layout:content"')
-    expect(declared).toEqual([['layout', 'className', 'style', 'attr']])
+    expect(declared).toEqual([['markup', 'className', 'style', 'attr']])
   })
 
   it('projects resolved state through the component root', () => {
@@ -58,10 +58,10 @@ describe('LayoutComponent V2', () => {
   })
 
   it('registers public materialized parts and cleans them up with the component', () => {
-    const layout = createLayoutModuleServiceDefinition().create({
+    const markup = createMarkupModuleServiceDefinition().create({
       playerId: 'player',
       compiledScene: {} as CompiledScene,
-    }) as LayoutModuleServiceInstance
+    }) as MarkupModuleServiceInstance
     const component = new LayoutComponent({
       perso: {
         id: 'page-layout',
@@ -71,7 +71,7 @@ describe('LayoutComponent V2', () => {
       services: { declare: () => undefined, apply: vi.fn() },
     })
 
-    const cleanup = materializeComponentWithLayout(layout, {
+    const cleanup = materializeComponentWithMarkup(markup, {
       component,
       identity: { componentId: 'page-layout', storyId: 'main', componentType: 'layout' },
       rootNode: {},
@@ -79,8 +79,8 @@ describe('LayoutComponent V2', () => {
       publicParts: [{ partId: 'page-layout:content', nodeRef: {} }],
     })
 
-    expect(layout.resolveTarget('page-layout:content')).toBeDefined()
+    expect(markup.resolveTarget('page-layout:content')).toBeDefined()
     cleanup()
-    expect(layout.resolveTarget('page-layout:content')).toBeUndefined()
+    expect(markup.resolveTarget('page-layout:content')).toBeUndefined()
   })
 })

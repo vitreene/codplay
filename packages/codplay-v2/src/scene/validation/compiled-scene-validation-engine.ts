@@ -1,6 +1,7 @@
 import type { DiagnosticCollector } from '../../diagnostics'
 import { validatePersoWithCatalog } from './validation-catalog'
 import type { PersoValidationInput, ValidationCatalogSnapshot } from './validation-types'
+import type { MarkupAttributeSanitizer } from '../../services'
 
 /** Minimal capability set consumed by the compiled-scene validation engine. */
 export type CompiledSceneValidationInput = Readonly<{
@@ -37,5 +38,12 @@ export class CompiledSceneValidationEngine {
   /** Returns the runtime module-service requirements declared by one component type. */
   modulesFor(type: string): readonly string[] {
     return this.catalog.components.get(type)?.modules ?? []
+  }
+
+  /** Returns the declared service policies that can sanitize authored markup attributes. */
+  markupSanitizersFor(type: string): readonly MarkupAttributeSanitizer[] {
+    return this.servicesFor(type)
+      .map((name) => this.catalog.services.get(name)?.sanitizeMarkupAttribute)
+      .filter((sanitizer): sanitizer is MarkupAttributeSanitizer => sanitizer !== undefined)
   }
 }

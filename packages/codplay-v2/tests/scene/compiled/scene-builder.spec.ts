@@ -123,7 +123,7 @@ describe('SceneBuilder', () => {
     catalog.registerComponent({
       type: 'layout',
       services: [],
-      modules: ['layout'],
+      modules: ['markup'],
       validateInitial: () => undefined,
       validateAction: () => undefined,
     })
@@ -150,6 +150,10 @@ describe('SceneBuilder', () => {
     })
 
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.compiledScene.requirements.modules).toEqual(['layout'])
+    if (result.ok) {
+      expect(result.compiledScene.requirements.modules).toEqual(['markup'])
+      const layout = result.compiledScene.scene.stories.main?.persos[0]
+      expect(layout?.initial.markup).toBe('<section><main data-part="page-layout:content"></main></section>')
+    }
   })
 })

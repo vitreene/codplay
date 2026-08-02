@@ -2,15 +2,16 @@
 
 import { describe, expect, it } from 'vitest'
 import { materializeTemplateString } from '../../../src/runtime/components'
+import { sanitizeTemplateString } from '../../../src/scene/compiled'
 
 describe('template-string materializer', () => {
   it('materializes an HTML template and consumes data-part markers', () => {
-    const result = materializeTemplateString(`
+    const result = materializeTemplateString(sanitizeTemplateString(`
       <section>
         <main data-part="content"></main>
         <aside data-part="aside"></aside>
       </section>
-    `)
+    `, 'test.markup'))
 
     expect(result.rootNode).toBeInstanceOf(HTMLElement)
     expect(result.parts.map((part) => part.partId)).toEqual(['content', 'aside'])
@@ -18,11 +19,11 @@ describe('template-string materializer', () => {
   })
 
   it('rejects duplicate data-part identifiers', () => {
-    expect(() => materializeTemplateString(`
+    expect(() => sanitizeTemplateString(`
       <section>
         <main data-part="content"></main>
         <aside data-part="content"></aside>
       </section>
-    `)).toThrow('Component data-part is duplicated: content')
+    `, 'test.markup')).toThrow('test.markup: data-part is duplicated: content.')
   })
 })

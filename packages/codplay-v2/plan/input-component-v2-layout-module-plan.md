@@ -66,7 +66,7 @@ render(): string {
 Le composant declare les services necessaires par l'interface commune :
 
 ```ts
-this.services.declare(['layout', 'className', 'style', 'attr'])
+  this.services.declare(['markup', 'className', 'style', 'attr'])
 ```
 
 Le contrat V2 actuel ne comporte pas `init()`. L'etat initial est applique par

@@ -1,16 +1,16 @@
-# Layout Capability V2
+# Markup Module V2
 
 Status: En cours  
 CodPlay version: V2 foundation
 
-`LayoutCapabilityState` stores the opaque mountable-part declarations owned by
-component instances. `createLayoutModuleServiceDefinition()` exposes that state
+`MarkupCapabilityState` stores the opaque public-part declarations owned by
+component instances. `createMarkupModuleServiceDefinition()` exposes that state
 through the existing player-scoped `RuntimeModuleService` catalog.
 
-The capability does not create components, parse templates, read the DOM, or
-mount children. `registerMaterializedComponent()` is the boundary adapter for a
-future component materializer; a future renderer resolves those logical targets
-to substrate nodes.
+The module does not create components, sanitize templates, read the DOM, or mount
+children. `registerMaterializedComponent()` is the boundary adapter for a future
+component materializer; a future renderer resolves those logical targets to
+substrate nodes.
 
 Registered targets are exposed to the player through `getMountTargets()`. The
 player merges those declarations with its host targets before calling

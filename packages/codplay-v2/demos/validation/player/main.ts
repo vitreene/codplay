@@ -2,10 +2,10 @@ import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
 import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
 import {
-  createLayoutModuleServiceDefinition,
-  materializeComponentWithLayout,
-  type LayoutModuleServiceInstance,
-} from '../../../src/runtime/capabilities/layout'
+  createMarkupModuleServiceDefinition,
+  materializeComponentWithMarkup,
+  type MarkupModuleServiceInstance,
+} from '../../../src/runtime/capabilities/markup'
 import {
   BaseComponent,
   LayoutComponent,
@@ -53,8 +53,8 @@ function createCatalog(): ValidationCatalog {
   })
   catalog.registerComponent({
     type: 'layout',
-    services: ['layout', 'className', 'style', 'attr'],
-    modules: ['layout'],
+    services: ['className', 'style', 'attr'],
+    modules: ['markup'],
     validateInitial: () => undefined,
     validateAction: () => undefined,
   })
@@ -184,14 +184,14 @@ type ComponentProjection = Readonly<{
 
 /** Creates the runtime component catalog and its player projection boundary. */
 function createComponentProjection(): ComponentProjection {
-  const layoutDefinition = createLayoutModuleServiceDefinition()
+  const markupDefinition = createMarkupModuleServiceDefinition()
   const moduleCatalog = new RuntimeModuleServiceCatalog()
-  let layoutService: LayoutModuleServiceInstance | undefined
+  let markupService: MarkupModuleServiceInstance | undefined
   moduleCatalog.register({
     id: 'layout',
     create: (context) => {
-      layoutService = layoutDefinition.create(context) as LayoutModuleServiceInstance
-      return layoutService
+      markupService = markupDefinition.create(context) as MarkupModuleServiceInstance
+      return markupService
     },
   })
 
@@ -210,13 +210,15 @@ function createComponentProjection(): ComponentProjection {
   const componentRuntime = new RuntimeComponentRuntime({
     catalog: componentCatalog,
     createServices: createDemoComponentServices,
-    materialize: (component, identity) => {
-      const materialization = materializeTemplateString(component.render())
+    materialize: (component, identity, initial) => {
+      const materialization = identity.componentType === 'layout'
+        ? materializeTemplateString(component.render())
+        : { rootNode: document.createElement(String(initial.tag)), parts: [] }
       const rootNode = materialization.rootNode as HTMLElement
       persoNodes.set(identity.componentId, rootNode)
       if (identity.componentType === 'layout') {
-        if (layoutService === undefined) throw new Error('Layout module was not created before component materialization.')
-        const cleanup = materializeComponentWithLayout(layoutService, {
+        if (markupService === undefined) throw new Error('Markup module was not created before component materialization.')
+        const cleanup = materializeComponentWithMarkup(markupService, {
           component,
           identity,
           rootNode,
@@ -329,10 +331,10 @@ async function start(): Promise<void> {
   const projection = createComponentProjection()
   const compiledScene: CompiledScene = {
     ...build.compiledScene,
-    requirements: { ...build.compiledScene.requirements, modules: ['layout'] },
+    requirements: { ...build.compiledScene.requirements, modules: ['markup'] },
   }
   const engine = new RuntimeEngine(
-    { components: ['tag', 'layout'], services: [], modules: ['layout'], resources: [] },
+    { components: ['tag', 'layout'], services: [], modules: ['markup'], resources: [] },
     { moduleServiceCatalog: projection.moduleCatalog },
   )
   const sink = new MemoryRenderSink()

@@ -33,3 +33,4 @@ export {
   type CompiledSceneCodecOptions,
   type CompiledSceneDecodeResult,
 } from './codec'
+export { sanitizeTemplateString } from './template-compiler'

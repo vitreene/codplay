@@ -22,6 +22,7 @@ export type RuntimeComponentRuntimeOptions = Readonly<{
   materialize: (
     component: BaseComponent<Record<string, unknown>>,
     identity: RuntimeComponentIdentity,
+    initial: Record<string, unknown>,
   ) => RuntimeComponentHandle
 }>
 
@@ -83,7 +84,7 @@ export class RuntimeComponentRuntime {
     })
     const mounted: MountedComponent = {
       component,
-      handle: this.options.materialize(component, identity),
+      handle: this.options.materialize(component, identity, compiledPerso.initial),
     }
     this.mounted.set(perso.key, mounted)
     return mounted

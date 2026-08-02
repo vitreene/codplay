@@ -1,24 +1,24 @@
-# CodPlay V2 - contrat du module layout
+# CodPlay V2 - contrat du module markup
 
 ## Statut
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: LayoutComponent implementation authorized; runtime integration remains pending
+Review: markup module rename in progress; LayoutComponent remains the component type
 
 ## Positionnement
 
-`layout` reutilise le comportement `RuntimeModuleService`. Il n'introduit pas un
+`markup` reutilise le comportement `RuntimeModuleService`. Il n'introduit pas un
 troisieme type de runtime.
 
 ```text
 RuntimeModuleServiceCatalog
-  -> definition id: layout
+  -> definition id: markup
   -> une instance par player
-  -> etat interne par composant layout
+  -> etat interne par composant markup
 ```
 
-Le module ne cree pas de composant, ne parse pas de template et ne lit pas le DOM.
+Le module ne cree pas de composant, ne sanitize pas les templates au runtime, ne lit pas le DOM.
 Le composant ou le materializer remet au module les declarations de ses cibles
 publiques. Le module conserve la relation logique entre un composant et ses outlets ;
 un backend de projection associe ensuite ces cibles a des nodes reels. Le module ne
@@ -63,7 +63,7 @@ type ComponentMountRegistration = Readonly<{
   parts: readonly MountablePartDeclaration[]
 }>
 
-class LayoutCapabilityState {
+class MarkupCapabilityState {
   registerComponent(registration: ComponentMountRegistration): void
   unregisterComponent(componentId: string): void
   resolveTarget(targetId: string): MountablePartDeclaration | undefined
@@ -84,9 +84,9 @@ cibles ne restent jamais dans le registre apres le retrait de leur proprietaire.
 
 ## Instance module
 
-`createLayoutModuleServiceDefinition()` implemente la definition compatible avec
+`createMarkupModuleServiceDefinition()` implemente la definition compatible avec
 `RuntimeModuleServiceCatalog`. Chaque appel `create()` construit une nouvelle
-`LayoutCapabilityState` et expose les operations layout suivantes :
+`MarkupCapabilityState` et expose les operations markup suivantes :
 
 - `registerComponent()` ;
 - `unregisterComponent()` ;
@@ -95,7 +95,7 @@ cibles ne restent jamais dans le registre apres le retrait de leur proprietaire.
 - `getAllTargets()`.
 
 L'implementation se trouve dans
-`src/runtime/capabilities/layout/layout-capability.ts`. La factory d'integration
+`src/runtime/capabilities/markup/markup-capability.ts`. La factory d'integration
 qui remet une vue scopee de cet etat au composant reste a definir ; elle ne doit
 pas modifier le contrat generique du catalogue pour y ajouter des methodes layout.
 
@@ -104,15 +104,15 @@ pas modifier le contrat generique du catalogue pour y ajouter des methodes layou
 La dependance du composant passe par la facade de services :
 
 ```text
-LayoutComponent
-  -> services.declare(['layout'])
-  -> runtime associe l'instance du module layout scopee au player
+  LayoutComponent
+  -> services.declare(['markup'])
+  -> runtime associe l'instance du module markup scopee au player
 ```
 
 Le composant ne recoit pas directement un module dans son constructeur et n'appelle
 pas les operations d'enregistrement des outlets. La facade `declare()` est la meme
 frontiere de declaration que pour les services V1 ; le runtime associe cette
-declaration a l'instance `RuntimeModuleService` `layout`.
+declaration a l'instance `RuntimeModuleService` `markup`.
 
 Le composant conserve sa racine et son template. La definition runtime du type
 selectionne les parts montables ; elle peut donc etre reutilisee par `layout`,
@@ -136,7 +136,7 @@ class LayoutComponent extends BaseComponent {
 ```
 
 Le composant ne publie pas une methode normative `getOutletsSnapshot()`. La
-frontiere de publication est le binding du module `layout`. Le player recupere les
+frontiere de publication est le binding du module `markup`. Le player recupere les
 declarations publiques exposees par les instances de modules via
 `getMountTargets()` et les ajoute au registre utilise par `solveScene()`.
 
@@ -147,7 +147,7 @@ Le flux cible est :
 ```text
 Component template
   -> declarations publiques materialisees
-  -> LayoutModuleService registration
+  -> MarkupModuleService registration
   -> RuntimePlayer.getMountTargets()
   -> opaque mount target registry
   -> SolvedPerso.placement.targetId
@@ -160,7 +160,7 @@ resoudre leur cible.
 
 ## Dependance du type
 
-Le type `layout` est enregistre avec une dependance module `layout`. Cette
+Le type `layout` est enregistre avec une dependance module `markup`. Cette
 dependance est une propriete de la definition runtime du type, pas une propriete
 arbitraire du `perso`.
 
@@ -174,7 +174,7 @@ La declaration doit alimenter :
 ## Etat de la tranche
 
 Le contrat du module et l'etat pur sont implementes dans
-`src/runtime/capabilities/layout/layout-capability.ts`. La prochaine implementation
+`src/runtime/capabilities/markup/markup-capability.ts`. La prochaine implementation
 autorisee est `LayoutComponent`, avec le contrat composant suivant :
 
 - `render()` retourne un template string ;
@@ -186,7 +186,7 @@ avances. Elle ne fait pas partie de l'implementation V2 actuelle.
 
 Le branchement des cibles de modules au `RuntimePlayer` et a `solveScene()` est
 implemente. L'adaptateur `registerMaterializedComponent()` est aussi implemente ;
-`materializeComponentWithLayout()` couvre le cycle materialisation/enregistrement/
+`materializeComponentWithMarkup()` couvre le cycle materialisation/enregistrement/
 retrait logique. La production du root DOM/JSX et la selection des parts publiques
 par le materializer restent une tranche distincte. `LayoutDomBackend` applique
 desormais le parentage logique sur des nodes deja materialises, et

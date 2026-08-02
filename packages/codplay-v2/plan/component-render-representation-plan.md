@@ -23,8 +23,9 @@ converti par la `BaseComponent`. Le JSX autonome, transpile vers le runtime de v
 CodPlay sans React, est reporte a l'objectif V2.5. Une representation equivalente
 fournie par un autre frontend d'auteur sera examinee apres ce jalon.
 
-La `BaseComponent` convertit cette representation en arbre de vue interne. Le
-backend de rendu materialise ensuite l'arbre et possede les mutations du substrat.
+La compilation convertit cette representation en arbre de vue serialisable et
+assaini. Le runtime materialise ensuite cet arbre et le backend possede les
+mutations du substrat.
 
 ## De la representation au node
 
@@ -55,13 +56,13 @@ Un template string suit la meme conversion :
 
 ```text
 template(markup)
-  -> parse/sanitize
-  -> ViewTree
+  -> compiler parse/sanitize
+  -> markup compile et normalise
 ```
 
-Le parser ne doit pas deleguer la source de verite a `innerHTML`. Il produit un
-arbre inspectable, valide les balises/attributs autorises par le contrat du
-composant et conserve les marqueurs structurels internes. Un parser SVG utilise
+Le parser de compilation ne doit pas deleguer la source de verite a `innerHTML`. Il
+produit un arbre inspectable, valide les balises/attributs autorises par le contrat
+du composant et conserve les marqueurs structurels internes. Un parser SVG utilise
 le namespace SVG au lieu de traiter `polygon` comme une balise HTML ordinaire.
 
 ### Materialisation initiale
@@ -80,9 +81,9 @@ Pour un node HTML, le backend utilise `createElement`. Pour un node SVG, il
 utilise `createElementNS`. Les text nodes, fragments et sous-arbres suivent la
 meme materialisation recursive.
 
-La conversion des parts pendant cette phase enregistre les cibles internes dans
-le registre logique du composant. Elle ne construit pas une table auteur
-`id + selector`.
+La compilation des parts enregistre les cibles publiques dans l'artefact. La
+materialisation ne fait que creer les nodes a partir de cet artefact ; elle ne
+reparse pas le markup et ne construit pas une table auteur `id + selector`.
 
 ## Mise a jour du node
 
@@ -161,10 +162,10 @@ Le template peut contenir ses marqueurs structurels internes :
 </section>
 ```
 
-La conversion de `BaseComponent` :
+La conversion de compilation :
 
 - cree l'arbre de vue HTML ;
-- valide ou assainit la representation selon le contrat du composant ;
+- valide et assainit la representation selon le contrat du composant ;
 - decouvre les parts/outlets presents dans l'arbre ;
 - enregistre leurs cibles internes avec leurs IDs opaques ;
 - ne demande pas a l'auteur de fournir un tableau `id + selector`.
@@ -253,7 +254,7 @@ internes Three.js et le coeur CodPlay ne les manipule pas.
 ## Hors contrat actuel
 
 - JSX runtime V2 ;
-- template sanitizer V2 ;
+- profils complets de sanitizer SVG/CSS et politiques de ressources ;
 - `BaseComponent` executable ;
 - `ViewTree` final ;
 - backend DOM/SVG de production ;

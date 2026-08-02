@@ -14,6 +14,8 @@ export { STYLE_SERVICE, validateStyle } from './style/style-service'
 export { VALIDATION_TARGET_ACTION, VALIDATION_TARGET_INITIAL } from './config/validation-targets'
 export type {
   PropertyValidationDefinition,
+  MarkupAttributeSanitizer,
+  MarkupAttributeSanitizerContext,
   ServiceValidationDefinition,
   ValidationContext,
   ValidationFunction,

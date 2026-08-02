@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
 import {
-  createLayoutModuleServiceDefinition,
-  type LayoutModuleServiceInstance,
-} from '../../../src/runtime/capabilities/layout'
+  createMarkupModuleServiceDefinition,
+  type MarkupModuleServiceInstance,
+} from '../../../src/runtime/capabilities/markup'
 import {
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
@@ -278,12 +278,12 @@ describe('RuntimePlayer', () => {
   it('feeds mount targets exposed by a module into scene solving', () => {
     const events: string[] = []
     const catalog = new RuntimeModuleServiceCatalog()
-    const layoutDefinition = createLayoutModuleServiceDefinition()
+    const markupDefinition = createMarkupModuleServiceDefinition()
     catalog.register({
-      id: 'layout',
+      id: 'markup',
       create: (context) => {
-        const layout = layoutDefinition.create(context) as LayoutModuleServiceInstance
-        layout.registerComponent({
+        const markup = markupDefinition.create(context) as MarkupModuleServiceInstance
+        markup.registerComponent({
           componentId: 'page-layout',
           storyId: 'main',
           componentType: 'layout',
@@ -297,7 +297,7 @@ describe('RuntimePlayer', () => {
           }],
         })
         return {
-          ...layout,
+          ...markup,
           onMoveDelta: (delta) => events.push(`${delta.operation}:${delta.toTargetId}`),
         }
       },
@@ -320,10 +320,10 @@ describe('RuntimePlayer', () => {
           },
         },
       },
-      requirements: { ...scene.requirements, modules: ['layout'] },
+      requirements: { ...scene.requirements, modules: ['markup'] },
     }
     const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['layout'], resources: [] },
+      { components: [], services: [], modules: ['markup'], resources: [] },
       { moduleServiceCatalog: catalog },
     )
     const player = new RuntimePlayer('layout-player', engine, moduleScene, undefined, undefined, undefined, undefined, [

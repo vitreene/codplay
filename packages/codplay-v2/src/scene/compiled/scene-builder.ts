@@ -31,6 +31,7 @@ import type {
   CompiledSceneData,
   CompiledStory,
 } from './types'
+import { sanitizeTemplateString } from './template-compiler'
 
 /** Options controlling one deterministic scene compilation. */
 export type SceneBuilderOptions = Readonly<{
@@ -88,7 +89,7 @@ export class SceneBuilder {
 
     try {
       const extraction = createExtractionState()
-      const compiledData = compileSceneData(activeScene, extraction)
+    const compiledData = compileSceneData(activeScene, extraction, this.validationEngine)
       const compiledScene: CompiledScene = {
         schemaVersion: this.options.schemaVersion ?? SCENE_BUILD_CONFIG.schemaVersion,
         createdAt: this.options.createdAt ?? new Date().toISOString(),
@@ -129,12 +130,16 @@ function listPersoValidationInputs(scene: CanonicalSceneDoc): readonly Canonical
 }
 
 /** Compiles the scene payload while replacing every author function with a reference. */
-function compileSceneData(scene: CanonicalSceneDoc, state: ReturnType<typeof createExtractionState>): CompiledSceneData {
+function compileSceneData(
+  scene: CanonicalSceneDoc,
+  state: ReturnType<typeof createExtractionState>,
+  validationEngine: CompiledSceneValidationEngine,
+): CompiledSceneData {
   return {
     id: scene.id,
     name: scene.name,
     stories: Object.fromEntries(
-      Object.entries(scene.stories).map(([storyId, story]) => [storyId, compileStory(story, `scene.stories.${storyId}`, state)]),
+      Object.entries(scene.stories).map(([storyId, story]) => [storyId, compileStory(story, `scene.stories.${storyId}`, state, validationEngine)]),
     ),
     initial: extractCompiledRecord(scene.initial, 'scene.initial', state),
     straps: scene.straps,
@@ -155,13 +160,14 @@ function compileStory(
   story: CanonicalStoryDoc,
   scope: string,
   state: ReturnType<typeof createExtractionState>,
+  validationEngine: CompiledSceneValidationEngine,
 ): CompiledStory {
   return {
     id: story.id,
     name: story.name,
     trackId: story.trackId,
     initial: extractCompiledRecord(story.initial, `${scope}.initial`, state),
-    persos: story.persos.map((perso, index) => compilePerso(perso, `${scope}.persos[${index}]`, state)),
+    persos: story.persos.map((perso, index) => compilePerso(perso, `${scope}.persos[${index}]`, state, validationEngine)),
     tracks: extractCompiledRecord(story.tracks, `${scope}.tracks`, state),
     straps: story.straps,
     listen: story.listen.map((rule, index) => compileListenRule(rule, `${scope}.listen[${index}]`, state)),
@@ -176,12 +182,24 @@ function compilePerso(
   perso: CanonicalPersoDoc,
   scope: string,
   state: ReturnType<typeof createExtractionState>,
+  validationEngine: CompiledSceneValidationEngine,
 ): CompiledPerso {
+  const compiledInitial = extractCompiledRecord(perso.initial, `${scope}.initial`, state) ?? {}
+  const initial = typeof perso.initial.markup === 'string'
+    ? {
+        ...compiledInitial,
+        markup: sanitizeTemplateString(
+          perso.initial.markup,
+          `${scope}.initial.markup`,
+          validationEngine.markupSanitizersFor(perso.type),
+        ),
+      }
+    : compiledInitial
   return {
     id: perso.id,
     name: perso.name,
     type: perso.type,
-    initial: extractCompiledRecord(perso.initial, `${scope}.initial`, state) ?? {},
+    initial,
     actions: Object.fromEntries(
       Object.entries(perso.actions).map(([name, value]) => [name, extractCompiledValue(value, `${scope}.actions.${name}`, state)]),
     ),

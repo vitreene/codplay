@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createLayoutModuleServiceDefinition,
-  LayoutCapabilityState,
+  createMarkupModuleServiceDefinition,
+  MarkupCapabilityState,
   registerMaterializedComponent,
   unregisterMaterializedComponent,
-} from '../../../src/runtime/capabilities/layout'
-import type { LayoutModuleServiceInstance } from '../../../src/runtime/capabilities/layout'
+} from '../../../src/runtime/capabilities/markup'
+import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
 import { RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
@@ -25,9 +25,9 @@ function registration(componentId: string, componentType: string, partId: string
   }
 }
 
-describe('LayoutCapabilityState', () => {
+describe('MarkupCapabilityState', () => {
   it('registers and resolves opaque mount target identifiers without interpreting their names', () => {
-    const state = new LayoutCapabilityState()
+    const state = new MarkupCapabilityState()
     state.registerComponent(registration('layout', 'layout', 'page-layout:content'))
 
     expect(state.resolveTarget('page-layout:content')).toMatchObject({
@@ -39,11 +39,11 @@ describe('LayoutCapabilityState', () => {
 
   it('keeps registrations independent between player-scoped module instances', () => {
     const catalog = new RuntimeModuleServiceCatalog()
-    catalog.register(createLayoutModuleServiceDefinition())
+    catalog.register(createMarkupModuleServiceDefinition())
 
     const compiledScene = {} as CompiledScene
-    const first = catalog.create('layout', { playerId: 'first', compiledScene }) as LayoutModuleServiceInstance
-    const second = catalog.create('layout', { playerId: 'second', compiledScene }) as LayoutModuleServiceInstance
+    const first = catalog.create('markup', { playerId: 'first', compiledScene }) as MarkupModuleServiceInstance
+    const second = catalog.create('markup', { playerId: 'second', compiledScene }) as MarkupModuleServiceInstance
 
     first.registerComponent(registration('layout-first', 'layout', 'content'))
 
@@ -52,11 +52,11 @@ describe('LayoutCapabilityState', () => {
   })
 
   it('rejects duplicate mount target IDs and removes all targets with their component', () => {
-    const state = new LayoutCapabilityState()
+    const state = new MarkupCapabilityState()
     state.registerComponent(registration('layout-a', 'layout', 'content'))
 
     expect(() => state.registerComponent(registration('input-b', 'input', 'content'))).toThrow(
-      'Layout mount target ID is already registered: content',
+      'Markup mount target ID is already registered: content',
     )
 
     state.unregisterComponent('layout-a')
@@ -64,8 +64,8 @@ describe('LayoutCapabilityState', () => {
   })
 
   it('exposes registered targets through the player mount-target contract', () => {
-    const definition = createLayoutModuleServiceDefinition()
-    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as LayoutModuleServiceInstance
+    const definition = createMarkupModuleServiceDefinition()
+    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as MarkupModuleServiceInstance
     service.registerComponent(registration('layout', 'layout', 'content'))
 
     expect(service.getMountTargets()).toEqual([{
@@ -77,8 +77,8 @@ describe('LayoutCapabilityState', () => {
   })
 
   it('registers only public materialized parts and removes them with the component', () => {
-    const definition = createLayoutModuleServiceDefinition()
-    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as LayoutModuleServiceInstance
+    const definition = createMarkupModuleServiceDefinition()
+    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as MarkupModuleServiceInstance
 
     registerMaterializedComponent(service, {
       componentId: 'layout',

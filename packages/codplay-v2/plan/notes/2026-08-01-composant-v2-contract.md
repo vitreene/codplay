@@ -7,11 +7,11 @@ CodPlay version: V2 foundation
 Review: template-string runtime and player projection integrated; JSX remains V2.5
 
 Le module de capacite layout est defini dans
-[`2026-08-01-layout-module-service-contract.md`](./2026-08-01-layout-module-service-contract.md).
+[`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
 L'audit de la separation V1/V2 est documente dans
 [`2026-08-01-audit-v1-components-services-layout.md`](./2026-08-01-audit-v1-components-services-layout.md).
 Son etat pur et son wrapper `RuntimeModuleService` sont implementes dans
-`src/runtime/capabilities/layout/layout-capability.ts`.
+`src/runtime/capabilities/markup/markup-capability.ts`.
 Le socle composant, le catalogue runtime, `RuntimeComponentRuntime` et les
 composants `LayoutComponent`/`TagComponent` sont implementes dans
 `src/runtime/components/`. Leur backend de projection est branche au player ; la
@@ -90,7 +90,7 @@ Le `RuntimePlayer` ne connait pas les classes concretes. Il utilise un
 ```text
 SolvedScene
   -> factory du type
-  -> materialization template string
+  -> materialization du markup compile
   -> Component.update(state, timeMs)
   -> cleanup au retrait ou a la destruction du player
 ```
@@ -184,7 +184,7 @@ type LayoutUpdateInput = {
 class LayoutComponent extends BaseComponent<LayoutInitial> {
   constructor(input: ComponentInput<LayoutInitial>) {
     super(input)
-    this.services.declare(['layout', 'className', 'style', 'attr'])
+    this.services.declare(['markup', 'className', 'style', 'attr'])
   }
 
   /** Declares the layout structure with its internal mounting points. */
@@ -199,6 +199,10 @@ class LayoutComponent extends BaseComponent<LayoutInitial> {
   }
 }
 ```
+
+`markup` est une donnee source de `SceneDoc`. Le builder la parse, la sanitise et
+la normalise dans `CompiledPerso.initial.markup`. Le runtime recoit ce markup de
+confiance et le materialise sans refaire la sanitization.
 
 Le parseur du template et le module `layout` enregistrent les elements `data-part`
 en interne. Le composant ne publie pas lui-meme ces declarations. Le runtime de

@@ -5,8 +5,8 @@ import type {
 import { MOUNT_TARGET_KIND_OUTLET } from '../../config/mount-target'
 import type { MountTargetDeclaration } from '../../player/pipeline/mount-targets'
 
-/** Runtime module identifier for layout outlet registration. */
-export const LAYOUT_MODULE_SERVICE_ID = 'layout' as const
+/** Runtime module identifier for markup and public-part registration. */
+export const MARKUP_MODULE_SERVICE_ID = 'markup' as const
 
 /** One opaque mountable part declaration owned by one component instance. */
 export type MountablePartDeclaration = Readonly<{
@@ -26,8 +26,8 @@ export type ComponentMountRegistration = Readonly<{
   parts: readonly MountablePartDeclaration[]
 }>
 
-/** Runtime API exposed by one player-scoped layout module instance. */
-export type LayoutModuleServiceInstance = RuntimeModuleServiceInstance & Readonly<{
+/** Runtime API exposed by one player-scoped markup module instance. */
+export type MarkupModuleServiceInstance = RuntimeModuleServiceInstance & Readonly<{
   registerComponent: (registration: ComponentMountRegistration) => void
   unregisterComponent: (componentId: string) => void
   resolveTarget: (targetId: string) => MountablePartDeclaration | undefined
@@ -36,31 +36,31 @@ export type LayoutModuleServiceInstance = RuntimeModuleServiceInstance & Readonl
   getMountTargets: () => readonly MountTargetDeclaration[]
 }>
 
-/** Pure per-player state for layout components and their outlet targets. */
-export class LayoutCapabilityState {
+/** Pure per-player state for markup components and their public targets. */
+export class MarkupCapabilityState {
   private readonly components = new Map<string, ComponentMountRegistration>()
   private readonly targets = new Map<string, MountablePartDeclaration>()
 
   /** Registers one component and its selected opaque mountable parts. */
   registerComponent(registration: ComponentMountRegistration): void {
     if (registration.componentId.length === 0) {
-      throw new Error('Layout component ID must not be empty.')
+      throw new Error('Markup component ID must not be empty.')
     }
     if (registration.storyId.length === 0) {
-      throw new Error('Layout story ID must not be empty.')
+      throw new Error('Markup story ID must not be empty.')
     }
     if (registration.componentType.length === 0) {
-      throw new Error('Layout component type must not be empty.')
+      throw new Error('Markup component type must not be empty.')
     }
     if (this.components.has(registration.componentId)) {
-      throw new Error(`Layout component is already registered: ${registration.componentId}`)
+      throw new Error(`Markup component is already registered: ${registration.componentId}`)
     }
 
     const localTargets = new Set<string>()
     for (const part of registration.parts) {
       validateMountablePart(registration, part, localTargets)
       if (this.targets.has(part.id)) {
-        throw new Error(`Layout mount target ID is already registered: ${part.id}`)
+        throw new Error(`Markup mount target ID is already registered: ${part.id}`)
       }
     }
 
@@ -103,13 +103,13 @@ export class LayoutCapabilityState {
   }
 }
 
-/** Creates one player-scoped layout module around the pure capability state. */
-export function createLayoutModuleServiceDefinition(): RuntimeModuleServiceDefinition {
+/** Creates one player-scoped markup module around the pure capability state. */
+export function createMarkupModuleServiceDefinition(): RuntimeModuleServiceDefinition {
   return {
-    id: LAYOUT_MODULE_SERVICE_ID,
+    id: MARKUP_MODULE_SERVICE_ID,
     create: () => {
-      const state = new LayoutCapabilityState()
-      const instance: LayoutModuleServiceInstance = {
+      const state = new MarkupCapabilityState()
+      const instance: MarkupModuleServiceInstance = {
         registerComponent: (registration) => state.registerComponent(registration),
         unregisterComponent: (componentId) => state.unregisterComponent(componentId),
         resolveTarget: (targetId) => state.resolveTarget(targetId),
@@ -123,7 +123,7 @@ export function createLayoutModuleServiceDefinition(): RuntimeModuleServiceDefin
   }
 }
 
-/** Converts one layout capability target into the player placement declaration. */
+/** Converts one markup capability target into the player placement declaration. */
 function toMountTargetDeclaration(part: MountablePartDeclaration): MountTargetDeclaration {
   return {
     id: part.id,
@@ -139,18 +139,18 @@ function validateMountablePart(
   part: MountablePartDeclaration,
   localTargets: Set<string>,
 ): void {
-  if (part.id.length === 0) throw new Error('Layout mount target ID must not be empty.')
-  if (part.partId.length === 0) throw new Error('Layout part ID must not be empty.')
-  if (part.kind !== 'outlet') throw new Error(`Invalid layout mount target kind: ${part.kind}`)
+  if (part.id.length === 0) throw new Error('Markup mount target ID must not be empty.')
+  if (part.partId.length === 0) throw new Error('Markup part ID must not be empty.')
+  if (part.kind !== 'outlet') throw new Error(`Invalid markup mount target kind: ${part.kind}`)
   if (part.ownerId !== registration.componentId) {
-    throw new Error(`Layout mount target owner does not match component: ${part.id}`)
+    throw new Error(`Markup mount target owner does not match component: ${part.id}`)
   }
   if (part.storyId !== registration.storyId) {
-    throw new Error(`Layout mount target story does not match component: ${part.id}`)
+    throw new Error(`Markup mount target story does not match component: ${part.id}`)
   }
   if (part.componentType !== registration.componentType) {
-    throw new Error(`Layout mount target type does not match component: ${part.id}`)
+    throw new Error(`Markup mount target type does not match component: ${part.id}`)
   }
-  if (localTargets.has(part.id)) throw new Error(`Layout mount target ID is duplicated: ${part.id}`)
+  if (localTargets.has(part.id)) throw new Error(`Markup mount target ID is duplicated: ${part.id}`)
   localTargets.add(part.id)
 }

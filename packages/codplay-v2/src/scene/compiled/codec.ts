@@ -142,6 +142,7 @@ function isValidPerso(value: unknown): value is CompiledPerso {
     && (value.emit === undefined || isCompiledRecord(value.emit))
 }
 
+
 /** Checks one compiled listen array and its function references. */
 function isCompiledListenArray(value: unknown): value is readonly CompiledListenRule[] {
   return Array.isArray(value) && value.every((rule) => {

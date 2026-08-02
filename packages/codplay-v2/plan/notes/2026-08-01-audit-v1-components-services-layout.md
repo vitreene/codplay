@@ -275,7 +275,7 @@ Le module V2 existant porte deja le comportement requis :
 maintient une table interne indexee par composant layout :
 
 ```text
-LayoutModuleService(player)
+MarkupModuleService(player)
   -> componentId A -> root et outlets de A
   -> componentId B -> root et outlets de B
 ```
@@ -299,9 +299,9 @@ placement.
 
 Cette option exige encore de specifier :
 
-- la definition de l'instance `LayoutModuleService` ;
+- la definition de l'instance `MarkupModuleService` ;
 - l'enregistrement et le retrait d'un composant layout ;
 - la forme de la vue scopee remise au composant ;
 - la lecture des cibles par le placement ;
 - les diagnostics de collision et d'outlet absent ;
-- le lien entre la definition de composant runtime et `modules: ['layout']`.
+- le lien entre la definition de composant runtime et `modules: ['markup']`.

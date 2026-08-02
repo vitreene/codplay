@@ -13,4 +13,6 @@ export const validateStyle: ValidationFunction = (value, context) => {
 export const STYLE_SERVICE: ServiceValidationDefinition = {
   name: 'style',
   validate: validateStyle,
+  /** Preserves modern CSS syntax; URL/resource policy belongs to preload. */
+  sanitizeMarkupAttribute: ({ attributeName, value }) => attributeName === 'style' ? value : undefined,
 }

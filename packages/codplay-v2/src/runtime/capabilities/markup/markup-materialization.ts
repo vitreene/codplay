@@ -1,16 +1,16 @@
 import { materializeTemplateString } from '../../components'
 import type { MaterializedPart, BaseComponent } from '../../components'
-import type { LayoutModuleServiceInstance } from './layout-capability'
+import type { MarkupModuleServiceInstance } from './markup-capability'
 
-/** Identity required to register one materialized component with the layout module. */
+/** Identity required to register one materialized component with the markup module. */
 export type MaterializedComponentIdentity = Readonly<{
   componentId: string
   storyId: string
   componentType: string
 }>
 
-/** Input required to connect one already materialized component to layout. */
-export type LayoutMaterializationInput<Initial extends Record<string, unknown>> = Readonly<{
+/** Input required to connect one already materialized component to markup. */
+export type MarkupMaterializationInput<Initial extends Record<string, unknown>> = Readonly<{
   component: BaseComponent<Initial>
   identity: MaterializedComponentIdentity
   rootNode: unknown
@@ -21,15 +21,15 @@ export type LayoutMaterializationInput<Initial extends Record<string, unknown>> 
 /**
  * Registers the public parts selected by the materialization boundary.
  *
- * The boundary, not the component or the layout service, decides which parts are
+ * The boundary, not the component or the markup module, decides which parts are
  * public. Private component parts must not be included in `publicParts`.
  */
 export function registerMaterializedComponent(
-  layout: LayoutModuleServiceInstance,
+  markup: MarkupModuleServiceInstance,
   identity: MaterializedComponentIdentity,
   publicParts: readonly MaterializedPart[],
 ): void {
-  layout.registerComponent({
+  markup.registerComponent({
     ...identity,
     parts: publicParts.map((part) => ({
       id: part.partId,
@@ -43,23 +43,23 @@ export function registerMaterializedComponent(
 }
 
 /** Materializes one component boundary and returns its deterministic cleanup action. */
-export function materializeComponentWithLayout<Initial extends Record<string, unknown>>(
-  layout: LayoutModuleServiceInstance,
-  input: LayoutMaterializationInput<Initial>,
+export function materializeComponentWithMarkup<Initial extends Record<string, unknown>>(
+  markup: MarkupModuleServiceInstance,
+  input: MarkupMaterializationInput<Initial>,
 ): () => void {
   input.component._materialize(input.rootNode, input.parts)
-  registerMaterializedComponent(layout, input.identity, input.publicParts)
-  return () => unregisterMaterializedComponent(layout, input.identity.componentId)
+  registerMaterializedComponent(markup, input.identity, input.publicParts)
+  return () => unregisterMaterializedComponent(markup, input.identity.componentId)
 }
 
-/** Materializes a template-string component and registers all of its data-part nodes. */
-export function materializeTemplateComponentWithLayout<Initial extends Record<string, unknown>>(
-  layout: LayoutModuleServiceInstance,
+/** Materializes trusted component markup and registers all of its public parts. */
+export function materializeTemplateComponentWithMarkup<Initial extends Record<string, unknown>>(
+  markup: MarkupModuleServiceInstance,
   component: BaseComponent<Initial>,
   identity: MaterializedComponentIdentity,
 ): () => void {
   const materialization = materializeTemplateString(component.render())
-  return materializeComponentWithLayout(layout, {
+  return materializeComponentWithMarkup(markup, {
     component,
     identity,
     rootNode: materialization.rootNode,
@@ -70,8 +70,8 @@ export function materializeTemplateComponentWithLayout<Initial extends Record<st
 
 /** Removes one component registration when its materialized instance disappears. */
 export function unregisterMaterializedComponent(
-  layout: LayoutModuleServiceInstance,
+  markup: MarkupModuleServiceInstance,
   componentId: string,
 ): void {
-  layout.unregisterComponent(componentId)
+  markup.unregisterComponent(componentId)
 }

@@ -3,7 +3,7 @@ import type { ComponentInput, ComponentUpdateInput } from './component-types'
 
 /** Initial author data accepted by the layout component. */
 export type LayoutInitial = Readonly<{
-  markup: string
+  markup?: string
   className?: string
   style?: Readonly<Record<string, string | number>>
   attr?: Readonly<Record<string, string | boolean | number>>
@@ -21,12 +21,12 @@ export class LayoutComponent extends BaseComponent<LayoutInitial> {
   /** Creates one layout component and declares its required projection services. */
   constructor(input: ComponentInput<LayoutInitial>) {
     super(input)
-    this.services.declare(['layout', 'className', 'style', 'attr'])
+    this.services.declare(['markup', 'className', 'style', 'attr'])
   }
 
   /** Declares the layout root and its internal mounting parts. */
   render(): string {
-    if (this.perso.initial.markup.trim().length === 0) {
+    if (typeof this.perso.initial.markup !== 'string' || this.perso.initial.markup.trim().length === 0) {
       throw new Error(`Layout markup must not be empty: ${this.perso.id}`)
     }
     return this.perso.initial.markup
