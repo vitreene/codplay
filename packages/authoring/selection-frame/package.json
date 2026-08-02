@@ -9,7 +9,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo:flip": "vite demos/flip"
   },
   "dependencies": {
     "codplay": "*",

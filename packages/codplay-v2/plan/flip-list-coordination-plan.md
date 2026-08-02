@@ -1,76 +1,208 @@
-# CodPlay V2 - coordination list et FLIP
+# CodPlay V2 - HTML FLIP capture and pose graph
 
-## Statut
+## Status
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: required before components and renderer
+Review: implementation restarted from the approved capture and host-pose contract
 
-## Contrat V2
+Continuation note: `packages/codplay-v2/projet/notes/2026-08-02-flip-reprise.md`
 
-FLIP est une capacité du backend de rendu DOM. Il ne devient pas une dépendance
-du move core, de `ListCapabilityState` ou d'un composant list particulier.
+## Scope
 
-La capacité list reste responsable de l'état logique :
+FLIP is an HTML-only projection capability. It is not the `move` contract and it
+does not support SVG, Canvas, Three.js, or cross-host transitions.
 
-- parent et montage ;
-- ordre logique ;
-- politiques `reorderOnMove`, `reorderOnAdd`, `reorderOnRemove` ;
-- ensemble logique des éléments affectés ;
-- production des demandes de projection et de transition.
+The `move` contract may be consumed by several projection systems. An HTML
+consumer may submit a FLIP request; other projection systems calculate their own
+movement without entering this capability.
 
-Le backend DOM reste responsable de :
+The canonical HTML pose implementation remains in the host container:
+`packages/authoring/selection-frame/src/overlay-pose.ts`.
+FLIP consumes that host pose service and does not duplicate its geometry logic.
 
-- capture des rects avant ;
-- application des mutations DOM ;
-- mesure après ;
-- calcul inverse et animation ;
-- matrices d'ancêtres ;
-- `overlay-world` ;
-- reflow et nettoyage des transitions.
-
-## Frontiere
+## Boundaries
 
 ```text
-SolvedScene + MoveStateDelta
-        -> ListCapability / ListCoordinator
-        -> RenderProjectionRequest
-        -> DomFlipBackend
-        -> DOM projection and transition
+HTML consumer
+  -> FlipCaptureRequest
+  -> HTML Flip transaction
+  -> host pose/projection service
+  -> HTML nodes and overlay layer
 ```
 
-`RenderProjectionRequest` est la frontière à définir entre décision logique et
-projection. Il doit porter l'ensemble affecté, l'ordre cible, le parent source,
-le parent cible et les options de transition, sans contenir d'`HTMLElement` dans
-le contrat list.
+The consumer supplies:
 
-Un backend non DOM peut consommer la même demande avec sa propre stratégie de
-projection. FLIP n'est donc pas généralisé artificiellement ; seule la frontière
-de coordination l'est.
+- one stable ordered touched set;
+- one consumer-owned mutation;
+- the timing and mode options relevant to that mutation.
 
-## Seek
+FLIP does not know the consumer type. A list, DnD module, carousel, or another
+HTML capability may submit the same request shape. The list capability is not a
+dependency of the FLIP implementation.
 
-Le seek reconstruit l'état logique et le montage cible sans rejouer les transitions
-FLIP. Le backend de rendu :
+## Touched set
 
-- nettoie les transitions précédentes ;
-- projette directement l'état cible ;
-- établit sa baseline ;
-- ne produit aucune animation de rattrapage.
+The touched set is the unique stable ordered set of HTML items whose visual pose
+may change during one consumer mutation. It is not inferred by FLIP from a scene
+or from the DOM.
 
-## Dépendances
+The consumer must include the directly moved item and every sibling or dependent
+item that may reflow. It must not include a host container or label whose own pose
+does not change.
 
-- `MoveStateDelta` est produit par le core et ne connaît pas FLIP ;
-- `ListCapabilityState` reste pur et ne lit pas le DOM ;
-- `ListCoordinator` est une future instance de capacité, par player ;
-- `DomFlipBackend` appartient à la tranche renderer/measure ;
-- les composants consomment les snapshots et demandes de projection, mais ne
-  deviennent pas la source de vérité logique.
+FLIP calls its item-level capture/plan for every entry in that set, while sharing
+one FIRST/mutate/LAST transaction.
 
-## Hors tranche actuelle
+## Host pose contract
 
-- aucun backend DOM FLIP V2 ;
-- aucune mesure DOM ;
-- aucune matrice d'ancêtres ;
-- aucun contrat public de `RenderProjectionRequest` final ;
-- aucun composant list de production.
+The host owns the pose implementation and the coordinate context. It exposes the
+canonical operations built on `overlay-pose.ts`:
+
+- capture an `OverlayPose`;
+- resolve local fractions and world anchors;
+- create or reuse the host overlay layer;
+- calibrate a fixed overlay at attach/reattach time;
+- apply an HTML visual pose.
+
+The FLIP core stores only numeric poses and timing metadata. It never stores DOM
+nodes in a persisted capture and never calls a browser geometry API directly.
+
+One FLIP transaction has exactly one host context. The source and target must
+belong to that context. Cross-host movement is outside this contract.
+
+## Capture
+
+The runtime capture is a persist-only value produced by the existing move/consumer
+event. It is not a second event stream.
+
+```ts
+type FlipItemCapture = {
+  itemId: string
+  startAt: number
+  endAt: number
+  from: HtmlPose
+  to: HtmlPose
+  easing: string
+  path?: Path
+}
+
+type FlipCapture = {
+  captureId: string
+  hostContextId: string
+  projectionEpoch: number
+  startAt: number
+  endAt: number
+  duration: number
+  easing: string
+  entries: readonly FlipItemCapture[]
+  ancestors: readonly FlipAncestorCapture[]
+}
+```
+
+The capture is read by seek as a frozen value. It is not regenerated by replaying
+events. Captures are valid only for their host context and projection epoch. The
+HTML projection adapter exposes both values so capture and seek reject a foreign
+host or stale coordinate epoch before any projection write.
+
+## Pose graph
+
+FLIP does not run a base transition and then a visible ancestor correction. It
+resolves one hierarchical pose graph and commits once:
+
+```text
+capture + ancestor chain + time
+  -> resolvePoseGraph(t)
+  -> one final pose per touched item
+  -> one HTML projection commit
+```
+
+The ancestor chain comes from the logical move hierarchy. Resolution is ordered
+from root to leaf:
+
+- stable ancestors contribute settled poses;
+- transform-only ancestors are composed purely;
+- the highest ancestor that causes layout reflow is the measurement cut;
+- descendants below that cut use repositioned host measurements at bounded time
+  instants;
+- no ancestor is treated as stable merely because its own transition is stable
+  while a grandparent still reflows it.
+
+Pose composition preserves the captured visual AABB anchors directly. It does not
+reconstruct a layout origin by subtracting transformed bounds, because that loses
+the host transform-origin and creates a first-frame offset. FIRST and LAST anchors
+must therefore be exact before any host projection write.
+
+The resolver caches characterization by inter-boundary segment and measurements by
+item, segment, host epoch, and boundary instant. A stale correction is cancellable.
+
+## Play and seek
+
+Play and seek call the same pose resolver at a time `t`.
+`HtmlFlipRuntime.run()` only performs the shared capture and presents the start
+pose; the host/player supplies subsequent play times through the same seek entry
+point instead of FLIP owning a second clock or frame scheduler.
+
+Seek is synchronous and deterministic:
+
+1. evaluate logical state at `t`;
+2. find the active capture interval;
+3. resolve the ancestor pose graph;
+4. resolve every captured item at its exact progress;
+5. commit the resulting HTML poses once.
+
+Events and straps are not replayed. A missing capture is not replaced by an
+arbitrary baseline. An optional consumer-owned `FlipCaptureResolver` realizes the
+active persisted capture from the existing event/history boundary; the runtime
+validates its host and epoch, stores it in the capture cache, then resolves it.
+The resolver is not a second event stream and cannot return an inactive capture.
+
+Historical layout measurements are cached by host context, projection epoch,
+capture identity, ancestor identity, and exact boundary instant. The cache is
+cleared when the host projection epoch changes.
+
+During scrubbing, the fast synchronous path uses cached segment characterization.
+The expensive reflow correction is debounced only when the product accepts an
+approximated intermediate scrub pose; it is cancellable and must never overwrite a
+newer seek.
+
+## Scroll and resize
+
+Scroll and resize are host projection changes, not FLIP moves. They advance the
+host projection epoch or invalidate the affected segment. The logical progress is
+preserved; the pose graph is resolved again in the same host context.
+
+## Implementation order
+
+1. Introduce the host HTML pose adapter around the existing `overlay-pose.ts`. **Done for the standalone host demo.**
+2. Define the DOM-free `FlipCapture`, item capture, request, and pose graph types. **Done.**
+3. Port the V1 FIRST/mutate/LAST/INVERT/flush/PLAY transaction around the host
+   pose adapter, with one item-level plan per touched entry. **Done for the generic request boundary.**
+4. Implement the hierarchical ancestor resolver and its historical measurement cache. **Done for the synchronous exact foundation; segment characterization remains.**
+5. Implement local and overlay HTML application from the same resolved pose. **Done at contract level.**
+6. Implement exact seek and cold capture realization. **Done for synchronous resolver hooks.**
+7. Connect the existing move consumer boundary without importing list policy into
+   FLIP.
+8. Add the constrained validation demo only after the feature tests pass. **Done in the host package.**
+
+## Required verification
+
+- item-level FLIP invocation for every touched entry;
+- shared FIRST/mutate/LAST transaction;
+- transformed ancestors;
+- layout-reflow ancestors;
+- highest-reflow cut;
+- exact seek at start, middle, and end of a capture;
+- scrubbing cancellation;
+- scroll and resize epoch invalidation;
+- local and overlay HTML projection;
+- fixed overlay host anchoring and calibration;
+- no cross-host transition;
+- no persisted DOM handle;
+- host context and projection epoch isolation;
+- V1 runtime unchanged.
+
+The current implementation keeps historical layout realization synchronous and exact;
+it does not yet schedule a deferred approximate-scrub correction. Therefore there is
+no asynchronous correction race in this foundation. The segment characterization and
+debounced correction path remain a later host-performance layer.

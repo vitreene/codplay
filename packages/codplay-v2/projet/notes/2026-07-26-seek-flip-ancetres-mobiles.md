@@ -1,8 +1,10 @@
 # Seek d'un FLIP sous ancêtres mobiles — cas extrêmement complexe
 
-Note de réflexion (2026-07-26), volontairement isolée : c'est un **cas limite**, pas un chantier
-courant. Il stresse-teste le flux `solve/project` (`2026-07-16-solve-project-moteur-custom.md` S5-S8)
-et révèle une tension que le reste du cadre n'expose pas. Aucun code — trace de la réflexion.
+Note de réflexion (2026-07-26), dont le statut a été réévalué le 2026-08-02 : ce cas est désormais
+un **contrat de base du FLIP HTML V2**, pas seulement un cas limite. Il stresse-teste le flux
+`solve/project` (`2026-07-16-solve-project-moteur-custom.md` S5-S8) et révèle une tension que le
+reste du cadre n'expose pas. La note conserve le raisonnement ; l'implémentation de base est suivie
+dans `packages/codplay-v2/plan/flip-list-coordination-plan.md`.
 
 ## Le cas
 
@@ -132,10 +134,10 @@ scrub(progress) → t :
 
 ## Statut
 
-Cas limite identifié et cadré, **non tranché, non planifié**. Solution auteur esquissée
-(ancre-sur-stable + échantillonnage aux instants clés), jugée lourde-mais-acceptable-en-seek. À
-reprendre seulement quand le chantier solve/project sera assez avancé pour que le FLIP soit un solve
-parmi d'autres (S5) — ce cas est le test de fidélité ultime de cette bascule. Lié :
+**Contrat V2 acté, implémentation en cours**. La coupe par reflow, la composition racine→feuille,
+la mesure historique déléguée au host et le cache par capture/ancêtre/epoch/instant sont désormais
+le socle du FLIP HTML V2. Le scrubbing corrigé et les mesures repositionnées complètes restent à
+implémenter. Lié :
 `2026-07-16-solve-project-moteur-custom.md` (S5 solve hiérarchique, S8 `measure`), mémoire
 `project-item-perso-node-one-way-projection` (la mesure ≠ le rétro-flux interdit — ici la mesure
 sert la position réelle, elle ne reconstruit pas une description d'auteur).
