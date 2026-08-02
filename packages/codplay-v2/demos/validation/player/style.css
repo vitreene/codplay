@@ -40,6 +40,59 @@ h1 { max-width: 650px; margin: 0; font-size: clamp(32px, 7vw, 72px); line-height
   box-shadow: 0 24px 80px #0005;
 }
 
+.component-panel {
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid #334155;
+  border-radius: 24px;
+  background: #0f172a;
+}
+
+.component-host {
+  min-height: 250px;
+  overflow: hidden;
+  border: 1px solid #475569;
+  border-radius: 18px;
+  background: #020617;
+}
+
+.component-layout {
+  min-height: 250px;
+  padding: 16px;
+  background: linear-gradient(135deg, #111827, #1e293b);
+}
+
+.component-layout__header {
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.component-layout__content {
+  display: grid;
+  min-height: 180px;
+  margin-top: 12px;
+  place-items: center;
+  border: 1px dashed #67e8f9;
+  border-radius: 14px;
+}
+
+.component-perso {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  margin: 8px;
+  border-radius: 12px;
+  color: #082f49;
+  font-weight: 700;
+}
+
+.component-root { background: #67e8f9; }
+.component-accent { background: #c4b5fd; }
+.component-caption { margin: 12px 0 0; color: #94a3b8; font-size: 13px; }
+.component-caption code { color: #e2e8f0; }
+
 .stage {
   display: flex;
   flex-wrap: wrap;

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LayoutComponent } from '../../../src/runtime/components'
+import {
+  createLayoutModuleServiceDefinition,
+  materializeComponentWithLayout,
+} from '../../../src/runtime/capabilities/layout'
+import type { LayoutModuleServiceInstance } from '../../../src/runtime/capabilities/layout'
+import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('LayoutComponent V2', () => {
   it('declares its template and layout service without exposing outlet registration methods', () => {
@@ -49,5 +55,32 @@ describe('LayoutComponent V2', () => {
     })
 
     expect(() => component.render()).toThrow('Layout markup must not be empty: empty-layout')
+  })
+
+  it('registers public materialized parts and cleans them up with the component', () => {
+    const layout = createLayoutModuleServiceDefinition().create({
+      playerId: 'player',
+      compiledScene: {} as CompiledScene,
+    }) as LayoutModuleServiceInstance
+    const component = new LayoutComponent({
+      perso: {
+        id: 'page-layout',
+        storyId: 'main',
+        initial: { markup: '<main data-part="page-layout:content"></main>' },
+      },
+      services: { declare: () => undefined, apply: vi.fn() },
+    })
+
+    const cleanup = materializeComponentWithLayout(layout, {
+      component,
+      identity: { componentId: 'page-layout', storyId: 'main', componentType: 'layout' },
+      rootNode: {},
+      parts: [{ partId: 'page-layout:content', nodeRef: {} }],
+      publicParts: [{ partId: 'page-layout:content', nodeRef: {} }],
+    })
+
+    expect(layout.resolveTarget('page-layout:content')).toBeDefined()
+    cleanup()
+    expect(layout.resolveTarget('page-layout:content')).toBeUndefined()
   })
 })

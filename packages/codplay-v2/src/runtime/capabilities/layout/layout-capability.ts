@@ -2,6 +2,8 @@ import type {
   RuntimeModuleServiceDefinition,
   RuntimeModuleServiceInstance,
 } from '../../engine'
+import { MOUNT_TARGET_KIND_OUTLET } from '../../config/mount-target'
+import type { MountTargetDeclaration } from '../../player/pipeline/mount-targets'
 
 /** Runtime module identifier for layout outlet registration. */
 export const LAYOUT_MODULE_SERVICE_ID = 'layout' as const
@@ -31,6 +33,7 @@ export type LayoutModuleServiceInstance = RuntimeModuleServiceInstance & Readonl
   resolveTarget: (targetId: string) => MountablePartDeclaration | undefined
   getComponentParts: (componentId: string) => readonly MountablePartDeclaration[]
   getAllTargets: () => readonly MountablePartDeclaration[]
+  getMountTargets: () => readonly MountTargetDeclaration[]
 }>
 
 /** Pure per-player state for layout components and their outlet targets. */
@@ -112,10 +115,21 @@ export function createLayoutModuleServiceDefinition(): RuntimeModuleServiceDefin
         resolveTarget: (targetId) => state.resolveTarget(targetId),
         getComponentParts: (componentId) => state.getComponentParts(componentId),
         getAllTargets: () => state.getAllTargets(),
+        getMountTargets: () => state.getAllTargets().map(toMountTargetDeclaration),
         destroy: () => state.clear(),
       }
       return instance
     },
+  }
+}
+
+/** Converts one layout capability target into the player placement declaration. */
+function toMountTargetDeclaration(part: MountablePartDeclaration): MountTargetDeclaration {
+  return {
+    id: part.id,
+    kind: MOUNT_TARGET_KIND_OUTLET,
+    storyId: part.storyId,
+    ownerId: part.ownerId,
   }
 }
 

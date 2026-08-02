@@ -1,252 +1,381 @@
-# Sighty : composition de scènes et avancement événementiel
+# Sighty : vues, états et avancement
 
-Note d'annotation (2026-08-01). Elle formalise une intuition de travail : une
-scène CodPlay connaît un espace et un temps, tandis que Sighty tient des
-configurations de scènes et avance entre elles en réponse à des événements.
+Note de réflexion (2026-08-01). Elle met des mots simples sur une idée : CodPlay
+fait vivre une scène dans son espace et son temps; Sighty décide quelles scènes
+forment la vue présente et quand cette vue devient une autre.
 
-> **Statut : non normatif.** Cette note ne modifie pas l'esquisse de Sighty. Elle
-> rend explicites des distinctions nécessaires pour continuer le raisonnement et
-> identifie ce qui reste à spécifier.
+> **Statut : non normatif.** Cette note aide à choisir les concepts de Sighty.
+> Elle ne fixe ni API ni format définitif de scénario; elle emploie un modèle
+> informatique simple lorsqu'il éclaire le propos.
 
-## 1. Thèse
+## L'idée en une phrase
 
-Sighty ne doit pas être une timeline qui surplomberait les timelines CodPlay. Il
-est une **machine à états étendue et événementielle** :
-
-- un état déclaré décrit une **composition** de scènes montées simultanément ;
-- les événements reçus sélectionnent une sortie déclarée de cet état ;
-- l'avancement réalise la composition suivante ;
-- un contexte vivant fournit des valeurs à l'entrée des scènes et conserve les
-  résultats dont la suite a besoin.
-
-La formule compacte est :
+Sighty décrit des **états de parcours**. Chaque état dit quelles scènes sont
+présentes, où elles sont accueillies et ce qu'elles reçoivent à leur entrée.
+Lorsque Sighty reçoit un événement, il choisit l'état suivant parmi ceux prévus
+par le scénario.
 
 ```text
-événement + node actif + contexte -> décision -> composition suivante
+événement reçu -> état de parcours suivant -> nouvelle vue
 ```
 
-Le mot « temporel » doit être manié avec précision. Sighty ordonne un avant et
-un après **causaux**, mais ne tient pas un temps métrique. Le temps `t` demeure
-local à chaque instance CodPlay. Une scène continue à être `f(t)`; Sighty décide
-quand elle est montée, arrêtée, commandée ou remplacée.
+Un état de parcours n'est pas une scène. C'est une **vue composée d'une ou
+plusieurs scènes autonomes**.
 
-## 2. Trois plans, pas seulement deux axes
+## Les deux dimensions de Sighty
 
-L'intuition initiale distingue deux axes. Elle tient, à condition d'ajouter le
-plan de données qui les relie.
+Une scène CodPlay connaît déjà deux dimensions :
 
-| Plan | Ce que Sighty décrit ou possède | Ce qu'il ne possède pas |
+- son espace, par ses persos, son layout et son rendu ;
+- son temps, car elle produit son état à un instant `t`.
+
+Sighty travaille à une autre échelle :
+
+| Dimension | Question à laquelle Sighty répond | Exemple |
 | --- | --- | --- |
-| **Composition** | Les instances présentes, leur relation de montage, leur racine ou perso hôte, et leurs entrées à l'instanciation. | Le rendu, les coordonnées pixel et le graphe de persos interne à une scène. |
-| **Contrôle causal** | Les nodes, sorties et transitions déclenchées par des événements. | Une horloge, un eventime global ou un seek entre nodes. |
-| **Contexte** | Les données vivantes de l'œuvre : profil, score, tentatives, sélection, résultat d'interaction. | La vérité interne d'une scène ou son état visuel à `t`. |
+| **Composition** | Quelles scènes sont présentes ensemble et laquelle accueille laquelle ? | Une scène `quiz` est montée dans le perso `content` d'une scène `page-layout`. |
+| **Avancement** | Quel événement fait passer d'une vue à une autre ? | `quiz:completed` mène vers `cours-2` ou `rattrapage`. |
 
-La « spatialité » de Sighty est donc **topologique**, non géométrique :
-`quiz` est monté dans `page-layout/content`, pas à la coordonnée `(x, y)`. Le
-layout et les coordonnées restent dans la scène qui héberge.
+La composition n'est pas un placement au pixel. Sighty sait que `quiz` est dans
+`page-layout/content`; il ne décide pas de sa position ou de son apparence. Ces
+décisions restent dans `page-layout` et `quiz`.
 
-Le contexte n'est pas un troisième axe narratif. C'est un **plan de données** :
-il alimente une composition au montage et est amendé par les décisions de la
-machine.
+L'avancement n'est pas une nouvelle timeline. Sighty sait qu'une vue vient après
+une autre parce qu'un événement est arrivé. Il ne tient pas une horloge commune
+aux scènes et ne cherche pas à faire un seek à travers les vues.
 
-## 3. Quatre états à distinguer
+## Les données de parcours
 
-Le mot « état » recouvre quatre choses qu'il faut nommer séparément.
+Il faut distinguer ces deux dimensions des **données de parcours** : profil,
+langue, score, tentatives, activité choisie, réponse d'un utilisateur, etc.
 
-| Nom | Nature | Exemple |
-| --- | --- | --- |
-| **Node de scénario** | Déclaration stable, sérialisable. | `c1-quiz` décrit les instances qui doivent être présentes. |
-| **Composition active** | Réalisation runtime de ce node. | Le layout est prêt, le quiz est monté dans son hôte. |
-| **État de scène** | État CodPlay, local à une instance et évalué à son `t`. | Le quiz affiche sa question à 4 200 ms. |
-| **Contexte Sighty** | Données durables de parcours. | `{ attempts: [45, 80], profile: 'beginner' }`. |
+Sighty les conserve pendant le parcours. Une scène peut recevoir certaines de ces
+valeurs quand elle est créée :
 
-Cette distinction interdit deux raccourcis : Sighty ne lit pas l'état visuel
-d'une scène pour prendre une décision, et une scène ne lit pas directement le
-contexte vivant de Sighty pour se mettre à jour.
+```text
+quiz-1 reçoit à son entrée
+  questionSet = données de parcours.questionsChoisies
+  attempts    = données de parcours.tentatives
+  locale      = données de parcours.langue
+```
 
-## 4. Le node comme composition déclarée
+La scène reçoit alors ses valeurs de départ. Elle ne consulte pas directement les
+données vivantes de Sighty pendant qu'elle joue. Cette règle garde les scènes
+autonomes et rejouables seules.
 
-L'esquisse existante décrit déjà un node comme un état de machine et porte une
-liste `instances`. La précision à ajouter est que le node doit aussi contenir la
-**configuration de montage** et les **entrées d'instanciation** de ces instances.
+## L'état initial d'une vue
 
-La déclaration globale d'une instance conserve son identité et sa référence au
-catalogue de scènes. Le node en décrit l'emploi dans une composition donnée.
+Un état de parcours est la description de ce qui doit exister au moment où une
+vue devient active. Il répond à trois questions :
+
+1. Quelles instances de scènes faut-il créer ou conserver ?
+2. Où chacune est-elle montée : dans une racine fournie par l'application ou dans
+   le perso hôte d'une autre scène ?
+3. Quelles valeurs reçoit-elle à sa création ?
+
+Pour raisonner, on peut le représenter simplement ainsi :
+
+```text
+état de parcours = {
+  scènes présentes,
+  relations de montage,
+  valeurs de départ,
+  sorties possibles,
+}
+```
+
+Cette représentation sert uniquement à séparer les responsabilités. Elle ne dit
+pas encore comment ces informations seront écrites dans un fichier ou en code.
+
+Exemple de forme, uniquement pour lire l'intention :
+
+```text
+état de parcours "premier-quiz"
+
+  scènes présentes
+    page-layout, à la racine "main"
+    quiz-1, dans page-layout/content
+
+  valeurs données à quiz-1 à sa création
+    questions <- questionsChoisies
+    tentatives <- tentatives
+    langue <- langue
+
+  sorties possibles
+    réussite -> "cours-suivant"
+    reprise  -> "rattrapage"
+```
+
+Quand cet état devient actif, Sighty crée ou remet en place cette composition.
+Ensuite, chaque scène joue son propre déroulement. Sighty n'en réécrit pas les
+persos et ne calcule pas son temps.
+
+**Décision à retenir :** les valeurs reçues à la création sont des valeurs de
+départ. Elles ne constituent pas un lien permanent entre la scène et Sighty.
+
+## Document minimal : une vue et son avancement
+
+Voici un document minimal pour illustrer la forme d'un scénario. Il ne définit
+aucune scène : `page-layout`, `quiz` et `conclusion` sont seulement des
+références à des scènes disponibles dans un catalogue extérieur.
+
+La forme est volontairement simple et non normative. Elle montre ce que le
+document doit pouvoir exprimer, non les noms définitifs de ses champs.
 
 ```ts
-type NodeComposition = {
-  members: string[]
-  mounts: Record<string, MountTarget>
-  inputs: Record<string, Record<string, InputBinding>>
+const parcours = {
+  initial: 'premier-quiz',
+
+  etats: {
+    'premier-quiz': {
+      vue: {
+        scenes: [
+          {
+            id: 'page',
+            scene: 'page-layout',
+            mount: { root: 'main' },
+          },
+          {
+            id: 'quiz-1',
+            scene: 'quiz',
+            mount: { host: 'page/content' },
+            input: {
+              questions: { from: 'questionsChoisies' },
+              tentatives: { from: 'tentatives' },
+            },
+          },
+        ],
+      },
+
+      avance: {
+        'quiz-1:quiz:completed': {
+          decide: 'apresQuiz',
+          sorties: {
+            reussite: 'conclusion',
+            reprise: 'premier-quiz',
+          },
+        },
+      },
+    },
+
+    conclusion: {
+      vue: {
+        scenes: [
+          {
+            id: 'page',
+            scene: 'page-layout',
+            mount: { root: 'main' },
+          },
+          {
+            id: 'fin',
+            scene: 'conclusion',
+            mount: { host: 'page/content' },
+            input: {
+              score: { from: 'dernierScore' },
+            },
+          },
+        ],
+      },
+      avance: {},
+    },
+  },
 }
-
-type MountTarget =
-  | { root: string }
-  | { instance: string; host: string }
-
-type InputBinding =
-  | { value: unknown }
-  | { context: string }
-  | { event: string }
-  | { resolver: string }
 ```
 
-Cette forme est illustrative, non une API. Les deux principes sont en revanche
-structurants :
+À l'entrée dans `premier-quiz`, Sighty monte `page-layout`, puis monte `quiz-1`
+dans le perso `content` de cette page. Il fournit les questions et les tentatives
+au quiz, puis le laisse jouer seul.
 
-1. La relation de montage doit former une forêt valide : une instance a une
-   racine ou un hôte, aucun cycle n'est permis, et l'hôte doit appartenir à une
-   instance présente dans la même composition.
-2. Une entrée est résolue **au montage**. La scène reçoit un snapshot de ses
-   valeurs initiales; elle ne tient pas de référence vivante vers le contexte de
-   Sighty.
+Lorsque le quiz publie `quiz:completed`, la règle `apresQuiz` lit le résultat de
+l'événement et choisit l'une des deux sorties déjà écrites : `reussite` ou
+`reprise`. Elle peut enregistrer le score et les tentatives dans les données de
+parcours, mais elle ne peut pas inventer une troisième destination.
 
-Un changement de valeur après le montage reste possible, mais doit emprunter une
-commande ou un événement de la surface publique de la scène. Il ne devient pas
-une synchronisation implicite de state à state.
+Si elle choisit `reussite`, Sighty construit la vue `conclusion`. Si elle choisit
+`reprise`, il reconstruit la vue `premier-quiz` avec les nouvelles valeurs de
+départ. La politique exacte de conservation ou de reconstruction de `page` reste
+à décider; l'exemple montre seulement le résultat attendu.
 
-### Exemple
+## Quatre gestes différents
+
+Les expressions « modifier une vue » ou « réagir à un utilisateur » cachent des
+gestes de nature très différente. Les séparer évite de transformer tout
+changement en transition ou, au contraire, de laisser Sighty entrer dans le
+détail d'une scène.
+
+| Geste | Ce qui change | Qui agit | La vue change-t-elle ? |
+| --- | --- | --- | --- |
+| **Entrer dans une vue** | La composition initiale est montée et les valeurs de départ sont fournies. | Sighty. | Oui, elle devient active. |
+| **Passer à une autre vue** | Une nouvelle composition remplace ou complète la précédente. | Sighty, à partir d'une sortie prévue. | Oui. |
+| **Mettre à jour une scène présente** | Une donnée précise d'une scène change. | Sighty envoie un message que la scène a déclaré accepter. | Non. |
+| **Interaction utilisateur dans une scène** | La scène traite son propre geste, son état et son temps. | La scène. | Pas forcément. |
+
+### 1. Entrer dans une vue
+
+Sighty résout les valeurs de départ, crée les scènes nécessaires et les monte
+dans leurs hôtes. Une scène nouvellement créée commence avec le contrat d'entrée
+qui lui a été fourni.
+
+Exemple : entrer dans `premier-quiz` crée `page-layout` et `quiz-1`. Le quiz
+reçoit cinq questions et le nombre de tentatives déjà effectuées.
+
+### 2. Passer à une autre vue
+
+Une scène ou l'application produit un événement. L'état de parcours courant dit
+quels résultats cet événement peut entraîner. Sighty choisit alors l'une des
+sorties prévues et prépare la composition suivante.
+
+Exemple : `quiz-1` publie `quiz:completed` avec un score. Une règle de parcours
+choisit `réussite` si le score est suffisant, sinon `reprise`. Elle ne peut pas
+envoyer l'utilisateur vers une destination absente du scénario.
+
+Le passage visible entre deux vues reste joué par une scène, par exemple
+`page-layout`. Sighty demande la sortie, attend l'événement qui signale sa fin,
+puis effectue le changement. Il ne dessine jamais lui-même un fondu ou un
+glissement.
+
+### 3. Mettre à jour les données d'une scène déjà présente
+
+Ce geste ne change pas d'état de parcours. Sighty garde la même vue et transmet
+une information à une scène active.
+
+Exemple : dans une vue de signalétique, l'application demande de remplacer le
+texte et l'image de la promotion. Sighty envoie à la scène `promotion` un message
+tel que `promotion:update`. La scène décide comment afficher les nouvelles
+données, si elle doit les animer et si son temps courant continue ou non.
+
+Pour que cela reste lisible, une scène doit déclarer ce qu'elle accepte de
+recevoir après sa création. Une valeur d'entrée peut donc être dans une de ces
+deux catégories :
+
+- **valeur de départ** : elle n'est fournie qu'à la création de la scène ;
+- **valeur modifiable** : la scène accepte un message précis pour la modifier
+  pendant qu'elle est présente.
+
+La frontière est importante. Une image de fond choisie au montage peut être une
+valeur de départ; un prix de promotion peut être une valeur modifiable. Sighty
+ne suppose pas que toutes les données soient modifiables.
+
+### 4. Recevoir une interaction utilisateur
+
+Un geste qui a lieu dans une scène est d'abord traité par cette scène. Un clic
+sur une réponse de quiz, un glisser-déposer ou le réglage d'un curseur n'a pas à
+sortir vers Sighty si son effet reste local.
+
+La scène avertit Sighty seulement si le résultat concerne le parcours : réponse
+terminée, score calculé, demande de quitter, choix d'une branche, etc. Elle émet
+alors un événement public. Sighty peut l'écouter et décider de conserver une
+donnée de parcours, de mettre à jour une autre scène ou de passer à une autre
+vue.
 
 ```text
-node "c1-quiz"
-
-composition
-  page-layout  -> racine "main"
-  quiz-1       -> page-layout/content
-
-inputs de quiz-1 au montage
-  questionSet  <- context.selectedQuestions
-  attempts     <- context.attempts
-  locale       <- context.locale
+utilisateur
+  -> scène de quiz traite la réponse
+  -> la scène publie éventuellement "quiz:completed"
+  -> Sighty choisit éventuellement la suite du parcours
 ```
 
-La composition ne dit pas comment `page-layout` positionne `content`, ni comment
-`quiz-1` anime la question. Ces décisions restent intégralement dans les scènes.
+Une action utilisateur qui vient de l'application plutôt que d'une scène suit le
+chemin inverse : l'application demande à Sighty de changer de vue ou d'envoyer
+un message à une scène. La scène n'a pas besoin de connaître l'application ou
+les autres scènes.
 
-## 5. Le moteur d'avancement
+## Le moteur d'avancement, simplement
 
-Le moteur comporte deux responsabilités à séparer : décider, puis réaliser. La
-première est un réducteur déterministe; la seconde interprète un plan de cycle de
-vie nécessairement asynchrone.
+Le moteur d'avancement fait toujours la même chose :
 
-```text
-event public
-  -> routage vers le node actif
-  -> décision : sortie déclarée, patch de contexte, commandes éventuelles
-  -> plan de transition entre compositions
-  -> arrêt, montage, injection, attente de disponibilité
-  -> nouvelle composition stable
-```
+1. Il reçoit un événement de l'application ou d'une scène encore présente.
+2. Il regarde les sorties prévues par l'état de parcours actuel.
+3. Il applique, si besoin, une règle simple sur les données reçues.
+4. Il passe vers l'état choisi et met en place la nouvelle vue.
 
-La décision peut se décrire ainsi :
+Il y a deux précautions pratiques à garder en tête :
 
-```ts
-type TransitionDecision = {
-  take?: string
-  contextPatch?: Record<string, unknown>
-  commands?: SceneCommand[]
-}
+- les montages, chargements et sorties visuelles peuvent prendre du temps ;
+- un événement envoyé par une scène qui vient d'être retirée ne doit plus avoir
+  d'effet sur la vue actuelle.
 
-function decide(
-  node: Node,
-  context: Readonly<Context>,
-  event: PublicEvent,
-): TransitionDecision
-```
+Ce sont des détails de fonctionnement à résoudre plus tard. Ils n'ajoutent pas
+un nouveau concept au scénario : ils garantissent seulement que le passage d'une
+vue à la suivante reste fiable.
 
-Un handler nommé peut calculer une note, accumuler une tentative ou faire une
-conjonction de fins. Il ne peut choisir que l'un des noms de `node.out`. Le
-graphe demeure ainsi entièrement inspectable dans la donnée : aucun code ne peut
-inventer sa destination.
+## Ce qui est déjà posé, ce qui est précisé
 
-L'interpréteur transforme ensuite cette décision en opérations concrètes :
+La note Sighty existante pose déjà les points essentiels : Sighty est une machine
+à états, pas une fonction du temps; les scènes ne se parlent pas directement; le
+scénario est un graphe de situations possibles; les calculs restent hors du
+graphe; et les données de parcours sont injectées en lecture seule dans les
+scènes.
 
-- conserver, suspendre, arrêter ou détruire les instances de la composition
-  sortante, selon la politique de survie retenue ;
-- évaluer les entrées des nouvelles instances ;
-- construire et monter les nouvelles instances ;
-- attendre leurs événements de disponibilité ou la fin d'une transition jouée
-  par une scène hôte ;
-- marquer le node cible comme stable.
+La présente note précise seulement :
 
-Il ne faut pas confondre ce protocole avec les nodes auteur. `leaving` et
-`entering` sont des **phases runtime internes** d'une transition, alors qu'un node
-du scénario est une configuration stable que l'auteur peut voir et viser.
+- appeler **état de parcours** une situation du scénario, plutôt que `node` ;
+- faire apparaître, dans chaque état, la composition des scènes, leurs hôtes et
+  leurs valeurs de départ ;
+- distinguer nettement l'entrée dans une vue, le passage vers une autre, la mise
+  à jour d'une scène en place et l'interaction locale de l'utilisateur.
 
-## 6. Événements et exécutions vivantes
+## Le modèle de machine à états
 
-Sighty reçoit deux familles d'événements dans le même format :
+Le précédent exécutable le plus proche est une **machine XState qui invoque des
+acteurs selon son état actif**. Une scène CodPlay se rapproche alors d'un acteur
+indépendant : elle reçoit des messages, garde son état interne et émet des
+événements sans que l'orchestrateur entre dans son détail.
 
-- les événements publics émis par une instance de scène ;
-- les commandes et intentions reçues de l'application qui pilote Sighty.
+Dans XState, un acteur invoqué est créé quand son état parent devient actif et
+arrêté quand cet état est quitté. Il reçoit des valeurs à son entrée et peut
+renvoyer des événements. C'est la forme concrète de la vue Sighty :
 
-Le moteur doit conserver une identité d'exécution par instance montée. Un event
-provenant d'une ancienne exécution de `quiz-1`, arrêtée pendant une transition,
-ne doit jamais faire avancer le node courant. Cette identité est une déduction du
-cycle de vie asynchrone; elle ne demande pas de changer le contrat public de
-l'event, seulement son routage interne.
+| XState avec acteurs invoqués | Sighty |
+| --- | --- |
+| Un état de la machine devient actif. | Un état de parcours devient la vue présente. |
+| Cet état invoque une liste connue d'acteurs. | Cet état monte une liste connue d'instances de scènes. |
+| Chaque acteur reçoit un `input` à sa création. | Chaque scène reçoit ses valeurs de départ. |
+| Un acteur renvoie un événement au parent. | Une scène publie un événement public à Sighty. |
+| La sortie de l'état arrête ses acteurs invoqués. | Le passage de vue arrête, conserve ou remplace les scènes selon la politique retenue. |
 
-## 7. Position parmi les modèles connus
+La documentation [XState `invoke`](https://stately.ai/docs/invoke) est donc la
+référence pratique à lire. Elle montre un état qui invoque un ou plusieurs
+acteurs, leur passe des entrées, attend leur résultat ou leur erreur, et les
+arrête à la sortie de l'état. Le
+[workflow « car vitals »](https://github.com/statelyai/xstate/tree/main/examples/workflow-car-vitals)
+est un exemple exécutable où un état coordonne plusieurs acteurs connus.
 
-Le nom le plus précis est **machine à états finis étendue, événementielle**
-(*extended event-driven finite-state machine*) :
+Sighty n'est toutefois pas la transposition directe de `invoke` :
 
-- le graphe fini des nodes est le contrôle ;
-- le contexte rend l'état extensible par des données de parcours ;
-- les events déclenchent les transitions ;
-- les handlers nommés sont les calculs admis à la frontière déclaratif /
-  impératif.
+- XState tient directement des références vers ses acteurs enfants; Sighty doit
+  tenir des adresses d'instances et déléguer leur création au moteur CodPlay ;
+- XState ne connaît pas le montage visuel; Sighty ajoute la relation « cette
+  scène est hébergée par ce perso d'une autre scène » ;
+- XState arrête normalement un acteur en quittant son état; Sighty doit encore
+  décider, cas par cas, quelles scènes sont conservées ou suspendues.
 
-Le modèle est voisin d'un *statechart*, mais il ne faut pas en adopter d'emblée
-toute la sémantique. La présence de plusieurs scènes dans une composition ne
-signifie pas nécessairement qu'il existe plusieurs régions concurrentes : elles
-peuvent former un seul état de composition. Hiérarchie, historique et concurrence
-de statechart ne devront être introduits que si un cas les exige.
+Le graphe de montage est donc l'apport propre à Sighty. Il s'ajoute à ce modèle
+d'invocation, sans changer l'autonomie des scènes.
 
-Le couple `décision pure + interprète d'effets` est le bon découpage
-d'implémentation : il rend la logique de parcours testable sans player tout en
-laissant à l'interpréteur les montages, préchargements et arrêts réels.
+Les données de parcours et le choix d'une sortie correspondent au second aspect,
+plus simple, d'une machine à états avec contexte : un événement reçu et les
+données disponibles déterminent l'une des sorties déjà prévues. Cette partie ne
+permet jamais à une règle de créer une destination nouvelle; le parcours reste
+visible dans le scénario.
 
-## 8. Rapport avec le corpus actuel
+Référence interne :
+[`2026-07-28-sighty-premiere-intention.md`](./2026-07-28-sighty-premiere-intention.md).
 
-Cette annotation ne contredit pas les conclusions existantes :
+## Questions à décider plus tard
 
-- Sighty est déjà posé comme une machine à états, non une fonction du temps.
-- Un node est déjà l'état qui dit ce qui est monté, et ses sorties sont les
-  arêtes du graphe.
-- Le scénario reste sérialisable; les calculs sont nommés à côté sous forme de
-  handlers, qui ne peuvent sélectionner qu'une sortie déclarée.
-- Le contexte central est déjà vivant et injecté en lecture seule dans les
-  scènes.
-- Les scènes ne communiquent pas directement : elles émettent, le scénario
-  traduit et Sighty commande.
-
-La contribution de cette note est de rendre visible le sous-graphe de composition
-dans chaque node, de donner une sémantique de snapshot aux entrées de scène, et
-de séparer explicitement le choix d'une transition de son exécution asynchrone.
-
-Référence :
-[`2026-07-28-sighty-premiere-intention.md`](./2026-07-28-sighty-premiere-intention.md),
-en particulier §0-§1 (nature), §4 (responsabilités) et §7 (esquisse de scenario).
-
-## 9. Questions ouvertes
-
-1. **Politique de survie.** Au passage vers un node voisin, quelles instances
-   sont détruites, suspendues ou réemployées ? Cette politique conditionne le
-   calcul du plan de transition.
-2. **Surface d'entrée.** Quelles entrées une scène déclare-t-elle recevables au
-   montage et, séparément, modifiables après montage ?
-3. **Moment d'évaluation.** Une entrée peut-elle dépendre uniquement du contexte,
-   ou aussi de l'événement qui a déclenché la transition et d'un résolveur nommé ?
-4. **Atomicité.** À quel moment le patch de contexte est-il visible : avant le
-   montage, après toutes les disponibilités, ou selon une transaction à définir ?
-5. **Échec.** Que devient la composition si une scène exigée est indisponible ou
-   échoue à monter : maintien de l'état précédent, interlude, sortie d'erreur ?
-6. **Hiérarchie.** Les chapitres et séquences sont-ils de simples structures de
-   scénario, ou devront-ils devenir des états composites ?
+1. Quand une vue change, quelles scènes sont arrêtées, mises en pause ou
+   conservées ?
+2. Comment une scène décrit-elle ses valeurs de départ et les messages qu'elle
+   accepte pendant sa présence ?
+3. Si la nouvelle vue tarde à être prête, que laisse-t-on visible : la vue
+   précédente, un interlude, ou autre chose ?
+4. Une modification faite par un auteur dans l'éditeur est-elle une mise à jour
+   simple ou une reconstruction de vue ? Ce cas est distinct du parcours normal
+   d'un utilisateur.
 
 ## Statut
 
-Note de travail, non normative. Elle complète l'intention Sighty sans en modifier
-le périmètre : Sighty demeure un client de CodPlay, sans rendu propre, sans
-timeline globale et sans accès à l'état interne des scènes.
+Note de travail, non normative. Sighty reste un client de CodPlay : il ne rend
+rien lui-même, ne possède pas de timeline globale et n'entre pas dans l'état
+interne des scènes.

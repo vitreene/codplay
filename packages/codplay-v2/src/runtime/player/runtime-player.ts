@@ -18,6 +18,8 @@ import {
 } from '../config/player-lifecycle'
 import { createTemporaryRenderSnapshotFromSolved, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
+import type { LayoutProjection } from './layout-projection'
+import type { RuntimeComponentRuntime } from '../components'
 import {
   materializeScene,
   resolveScene,
@@ -44,7 +46,7 @@ export type PlayerSeekResult = Readonly<
   | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
 >
 
-/** One compiled-scene runtime instance without render or component behavior. */
+/** One compiled-scene runtime instance with an optional logical projection boundary. */
 export class RuntimePlayer {
   readonly id: string
   readonly engine: RuntimeEngine
@@ -55,6 +57,8 @@ export class RuntimePlayer {
   readonly trackJournal: RuntimeTrackJournal | undefined
   readonly stateStore: RuntimeStateStore
   readonly mountTargets: readonly MountTargetDeclaration[]
+  readonly layoutProjection: LayoutProjection | undefined
+  readonly componentRuntime: RuntimeComponentRuntime | undefined
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
@@ -77,6 +81,8 @@ export class RuntimePlayer {
     strapCollections?: StrapCollections,
     trackJournal?: RuntimeTrackJournal,
     mountTargets: readonly MountTargetDeclaration[] = [],
+    layoutProjection?: LayoutProjection,
+    componentRuntime?: RuntimeComponentRuntime,
   ) {
     this.id = id
     this.engine = engine
@@ -86,6 +92,8 @@ export class RuntimePlayer {
     this.strapCollections = strapCollections
     this.trackJournal = trackJournal
     this.mountTargets = mountTargets
+    this.layoutProjection = layoutProjection
+    this.componentRuntime = componentRuntime
     this.stateStore = new RuntimeStateStore(compiledScene)
   }
 
@@ -127,8 +135,15 @@ export class RuntimePlayer {
       diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')
       return { ok: false, diagnostics: diagnostics.report() }
     }
+    const initialSolvedScene = this.reconstructScene(0)
+    this.initializeModuleServices(initialSolvedScene)
     this.solvedScene = this.reconstructScene(0)
-    this.initializeModuleServices(this.solvedScene)
+    this.componentRuntime?.sync(this.solvedScene)
+    if (this.componentRuntime !== undefined) {
+      this.solvedScene = this.reconstructScene(0)
+      this.componentRuntime.sync(this.solvedScene)
+    }
+    this.layoutProjection?.project(this.solvedScene)
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
@@ -148,6 +163,8 @@ export class RuntimePlayer {
           this.notifyModuleMoveDeltas(this.solvedScene, this.pendingSolvedScene)
         }
         this.solvedScene = this.pendingSolvedScene
+        this.componentRuntime?.sync(this.solvedScene)
+        this.layoutProjection?.project(this.solvedScene)
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
@@ -205,6 +222,8 @@ export class RuntimePlayer {
     this.abortPendingModuleSeek()
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
+    this.layoutProjection?.destroy?.()
+    this.componentRuntime?.destroy()
     this.state = PLAYER_LIFECYCLE_DESTROYED
   }
 
@@ -221,6 +240,8 @@ export class RuntimePlayer {
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
     this.notifyModuleMoveDeltas(this.solvedScene, nextSolvedScene)
     this.solvedScene = nextSolvedScene
+    this.componentRuntime?.sync(this.solvedScene)
+    this.layoutProjection?.project(this.solvedScene)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
@@ -263,7 +284,10 @@ export class RuntimePlayer {
   /** Rebuilds one logical scene without replaying straps or render effects. */
   private reconstructScene(timeMs: number): SolvedScene {
     return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)), {
-      mountTargets: this.mountTargets,
+      mountTargets: [
+        ...this.mountTargets,
+        ...[...this.moduleServiceInstances.values()].flatMap((instance) => instance.getMountTargets?.() ?? []),
+      ],
     })
   }
 

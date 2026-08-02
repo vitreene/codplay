@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   createLayoutModuleServiceDefinition,
   LayoutCapabilityState,
+  registerMaterializedComponent,
+  unregisterMaterializedComponent,
 } from '../../../src/runtime/capabilities/layout'
 import type { LayoutModuleServiceInstance } from '../../../src/runtime/capabilities/layout'
 import { RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
@@ -59,5 +61,37 @@ describe('LayoutCapabilityState', () => {
 
     state.unregisterComponent('layout-a')
     expect(state.resolveTarget('content')).toBeUndefined()
+  })
+
+  it('exposes registered targets through the player mount-target contract', () => {
+    const definition = createLayoutModuleServiceDefinition()
+    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as LayoutModuleServiceInstance
+    service.registerComponent(registration('layout', 'layout', 'content'))
+
+    expect(service.getMountTargets()).toEqual([{
+      id: 'content',
+      kind: 'outlet',
+      storyId: 'story',
+      ownerId: 'layout',
+    }])
+  })
+
+  it('registers only public materialized parts and removes them with the component', () => {
+    const definition = createLayoutModuleServiceDefinition()
+    const service = definition.create({ playerId: 'player', compiledScene: {} as CompiledScene }) as LayoutModuleServiceInstance
+
+    registerMaterializedComponent(service, {
+      componentId: 'layout',
+      storyId: 'story',
+      componentType: 'layout',
+    }, [{ partId: 'content', nodeRef: {} }])
+
+    expect(service.resolveTarget('content')).toMatchObject({
+      ownerId: 'layout',
+      partId: 'content',
+    })
+
+    unregisterMaterializedComponent(service, 'layout')
+    expect(service.resolveTarget('content')).toBeUndefined()
   })
 })

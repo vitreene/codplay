@@ -3,16 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CodPlay V2 Temporary Player Vertical</title>
+    <title>CodPlay V2 Layout Component Vertical</title>
   </head>
   <body>
     <main class="demo-shell">
       <header>
-        <p class="eyebrow">CodPlay V2 / temporary vertical</p>
-        <h1>CompiledScene to memory render</h1>
-        <p class="stage-marker">Current stage: materialize -&gt; resolve -&gt; solve -&gt; move delta</p>
+        <p class="eyebrow">CodPlay V2 / layout component</p>
+        <h1>Template string to projected layout</h1>
+        <p class="stage-marker">Current stage: component -&gt; data-part -&gt; layout -&gt; DOM projection</p>
         <p class="flow-marker">flow: <output id="flow-output">preparing pipeline</output></p>
-        <p class="lede">Temporary DOM presenter only. No V2 component or production renderer is used here.</p>
+        <p class="lede">A template-string LayoutComponent exposes one public data-part. The player moves the logical persos into the materialized layout.</p>
       </header>
 
       <section class="panel" aria-label="temporary player">
@@ -39,6 +39,12 @@
           <input id="seek-input" type="range" min="0" max="2000" value="0" step="1" />
         </label>
         <button id="play-toggle" type="button">Play</button>
+      </section>
+
+      <section class="component-panel" aria-label="materialized layout component">
+        <p class="eyebrow">Materialized component</p>
+        <div id="component-host" class="component-host"></div>
+        <p class="component-caption">The accent moves into <code>data-part="demo-outlet"</code> at 1500 ms.</p>
       </section>
 
       <section class="expected" aria-label="expected timeline">

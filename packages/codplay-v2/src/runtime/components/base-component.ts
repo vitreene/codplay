@@ -13,7 +13,7 @@ export abstract class BaseComponent<Initial extends Record<string, unknown>> {
     this.services = input.services
   }
 
-  /** Declares the component projection with a template string or integrated JSX. */
+  /** Declares the component projection with a template string in the current V2 tranche. */
   abstract render(): string
 
   /** Applies one resolved state to the component projection. */

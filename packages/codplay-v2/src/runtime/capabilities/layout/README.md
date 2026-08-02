@@ -8,8 +8,18 @@ component instances. `createLayoutModuleServiceDefinition()` exposes that state
 through the existing player-scoped `RuntimeModuleService` catalog.
 
 The capability does not create components, parse templates, read the DOM, or
-mount children. A future component boundary registers materialized parts, and a
-future renderer resolves those logical targets to substrate nodes.
+mount children. `registerMaterializedComponent()` is the boundary adapter for a
+future component materializer; a future renderer resolves those logical targets
+to substrate nodes.
+
+Registered targets are exposed to the player through `getMountTargets()`. The
+player merges those declarations with its host targets before calling
+`solveScene()`.
+
+`materializeComponentWithLayout()` stores the component root, registers the
+public materialized parts, and returns the matching cleanup operation. The DOM
+or JSX materializer remains responsible for producing the root and selecting
+which parts are public.
 
 ## Contract
 

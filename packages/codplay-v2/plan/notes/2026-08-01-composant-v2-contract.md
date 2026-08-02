@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: LayoutComponent implementation authorized; player integration pending
+Review: template-string runtime and player projection integrated; JSX remains V2.5
 
 Le module de capacite layout est defini dans
 [`2026-08-01-layout-module-service-contract.md`](./2026-08-01-layout-module-service-contract.md).
@@ -12,8 +12,10 @@ L'audit de la separation V1/V2 est documente dans
 [`2026-08-01-audit-v1-components-services-layout.md`](./2026-08-01-audit-v1-components-services-layout.md).
 Son etat pur et son wrapper `RuntimeModuleService` sont implementes dans
 `src/runtime/capabilities/layout/layout-capability.ts`.
-Le socle composant et `LayoutComponent` sont implementes dans
-`src/runtime/components/` ; leur integration au player reste a venir.
+Le socle composant, le catalogue runtime, `RuntimeComponentRuntime` et les
+composants `LayoutComponent`/`TagComponent` sont implementes dans
+`src/runtime/components/`. Leur backend de projection est branche au player ; la
+factory de chaque type reste fournie par le catalogue.
 
 ## Contrat
 
@@ -49,7 +51,7 @@ abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly services: ComponentServices
   public node: unknown | null = null
 
-  abstract render(): string | JSX.Element
+  abstract render(): string
   abstract update(input: ComponentUpdateInput): void
 
   /** Internal materialization registry consumed by specialized components. */
@@ -57,7 +59,8 @@ abstract class BaseComponent<Initial extends Record<string, unknown>> {
 }
 ```
 
-`render()` declare la projection avec un template string ou du JSX integre.
+`render()` declare la projection avec un template string. Le runtime JSX autonome
+est reporte a l'objectif V2.5.
 
 `update()` applique l'etat resolu a la projection du composant.
 
@@ -77,6 +80,24 @@ mutations precedentes pour produire la projection a `t`.
 Le composant conserve une reference interne vers son node racine materialise. Cette
 reference sert a `update()`. Elle n'est ni l'etat logique du perso ni un handle
 public.
+
+## Instanciation runtime
+
+Le `RuntimePlayer` ne connait pas les classes concretes. Il utilise un
+`RuntimeComponentCatalog` pour resoudre `perso.type`, puis un
+`RuntimeComponentRuntime` pour le cycle suivant :
+
+```text
+SolvedScene
+  -> factory du type
+  -> materialization template string
+  -> Component.update(state, timeMs)
+  -> cleanup au retrait ou a la destruction du player
+```
+
+Le runtime composant recoit ses services et son materializer par injection. Il ne
+cree pas de DOM lui-meme et ne contient aucune branche speciale pour `layout` ou
+`input`.
 
 ## Exemple Tag
 

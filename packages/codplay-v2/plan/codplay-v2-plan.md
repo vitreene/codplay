@@ -71,7 +71,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Partie active | `player-engine-plan.md` | Le socle CompiledScene est gele comme fondation; la tranche en cours definit la consommation player/engine avant le sink de rendu temporaire. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
 | Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
-| Composants | Hors tranche active | Aucune API composant definitive ne doit etre ajoutee maintenant. |
+| Composants | Fondation layout en cours | `LayoutComponent`, `TagComponent`, factories runtime et projection template string sont couverts ; JSX et les autres types restent hors tranche. |
 | ACE | Existant, non modifie | Il reste consommateur de valeurs completes; la preparation amont est a construire. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une

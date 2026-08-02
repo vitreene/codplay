@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
 import {
+  createLayoutModuleServiceDefinition,
+  type LayoutModuleServiceInstance,
+} from '../../../src/runtime/capabilities/layout'
+import {
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
   MemoryRenderSink,
   RenderSync,
   RuntimePlayer,
   type RenderAdapter,
+  type SolvedScene,
 } from '../../../src/runtime/player'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
@@ -268,5 +273,91 @@ describe('RuntimePlayer', () => {
     expect(events).toEqual(['init:0', 'prepare:100', 'commit'])
     player.destroy()
     expect(events.at(-1)).toBe('destroy')
+  })
+
+  it('feeds mount targets exposed by a module into scene solving', () => {
+    const events: string[] = []
+    const catalog = new RuntimeModuleServiceCatalog()
+    const layoutDefinition = createLayoutModuleServiceDefinition()
+    catalog.register({
+      id: 'layout',
+      create: (context) => {
+        const layout = layoutDefinition.create(context) as LayoutModuleServiceInstance
+        layout.registerComponent({
+          componentId: 'page-layout',
+          storyId: 'main',
+          componentType: 'layout',
+          parts: [{
+            id: 'layout-content',
+            ownerId: 'page-layout',
+            storyId: 'main',
+            componentType: 'layout',
+            partId: 'content',
+            kind: 'outlet',
+          }],
+        })
+        return {
+          ...layout,
+          onMoveDelta: (delta) => events.push(`${delta.operation}:${delta.toTargetId}`),
+        }
+      },
+    })
+    const moduleScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: { move: '@root' },
+              actions: { attach: { move: { parentId: 'layout-content' } } },
+            }],
+            listen: [],
+            eventimes: [{ name: 'attach', startAt: 100 }],
+          },
+        },
+      },
+      requirements: { ...scene.requirements, modules: ['layout'] },
+    }
+    const engine = new RuntimeEngine(
+      { components: [], services: [], modules: ['layout'], resources: [] },
+      { moduleServiceCatalog: catalog },
+    )
+    const player = new RuntimePlayer('layout-player', engine, moduleScene, undefined, undefined, undefined, undefined, [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+    ])
+
+    expect(player.init().ok).toBe(true)
+    expect(player.seek(100).ok).toBe(true)
+    expect(events).toEqual(['move:layout-content'])
+  })
+
+  it('projects the initial scene, committed seeks, and destruction through the layout boundary', () => {
+    const projectedTimes: number[] = []
+    const projection = {
+      project: (solved: SolvedScene) => projectedTimes.push(solved.timeMs),
+      destroy: () => projectedTimes.push(-1),
+    }
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const player = new RuntimePlayer(
+      'projection-player',
+      engine,
+      scene,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      projection,
+    )
+
+    expect(player.init().ok).toBe(true)
+    expect(player.seek(100).ok).toBe(true)
+    player.destroy()
+
+    expect(projectedTimes).toEqual([0, 100, -1])
   })
 })

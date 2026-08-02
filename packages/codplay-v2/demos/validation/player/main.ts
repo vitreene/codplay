@@ -1,9 +1,29 @@
 import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
-import { RuntimeEngine } from '../../../src/runtime/engine'
+import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
+import {
+  createLayoutModuleServiceDefinition,
+  materializeComponentWithLayout,
+  type LayoutModuleServiceInstance,
+} from '../../../src/runtime/capabilities/layout'
+import {
+  BaseComponent,
+  LayoutComponent,
+  RuntimeComponentCatalog,
+  RuntimeComponentRuntime,
+  TagComponent,
+  materializeTemplateString,
+} from '../../../src/runtime/components'
+import type {
+  ComponentInput,
+  ComponentServices,
+  LayoutInitial,
+  TagState,
+} from '../../../src/runtime/components'
 import {
   diffSolvedScenes,
   executeListenPipeline,
+  LayoutDomBackend,
   MemoryRenderSink,
   materializeScene,
   MOUNT_TARGET_KIND_OUTLET,
@@ -17,7 +37,7 @@ import {
   type SolvedScene,
   type StrapCollections,
 } from '../../../src/runtime/player'
-import type { CompiledRecord } from '../../../src/scene/compiled'
+import type { CompiledRecord, CompiledScene } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 
 import './style.css'
@@ -31,8 +51,22 @@ function createCatalog(): ValidationCatalog {
     validateInitial: () => undefined,
     validateAction: () => undefined,
   })
+  catalog.registerComponent({
+    type: 'layout',
+    services: ['layout', 'className', 'style', 'attr'],
+    modules: ['layout'],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
+  })
   return catalog
 }
+
+const DEMO_LAYOUT_MARKUP = `
+  <section class="component-layout">
+    <header class="component-layout__header">LayoutComponent / data-part</header>
+    <main class="component-layout__content" data-part="demo-outlet"></main>
+  </section>
+`
 
 /** Creates the small compiled flow presented by the temporary DOM view. */
 function createScene(): SceneDoc {
@@ -45,9 +79,14 @@ function createScene(): SceneDoc {
         straps: ['demo-color'],
         listen: [{ on: 'demo:show', straps: ['demo-color'] }],
         persos: [{
+          id: 'demo-layout',
+          type: 'layout',
+          initial: { move: '@root', markup: DEMO_LAYOUT_MARKUP },
+          actions: {},
+        }, {
           id: 'root',
           type: 'tag',
-          initial: { move: '@root', className: 'is-idle', style: { opacity: 0, backgroundColor: '#f8fafc' } },
+          initial: { tag: 'article', move: { parentId: 'demo-outlet' }, className: 'is-idle', style: { opacity: 0, backgroundColor: '#f8fafc' } },
           actions: {
             'demo:show': {
               className: { add: 'is-active', remove: 'is-idle' },
@@ -60,7 +99,7 @@ function createScene(): SceneDoc {
         }, {
           id: 'accent',
           type: 'tag',
-          initial: { move: '@root', className: 'is-idle', style: { backgroundColor: '#fb7185' } },
+          initial: { tag: 'article', move: '@root', className: 'is-idle', style: { backgroundColor: '#fb7185' } },
           actions: {
             'demo:show': {
               className: { add: 'is-active', remove: 'is-idle' },
@@ -85,6 +124,7 @@ function createScene(): SceneDoc {
 
 const stageRoot = document.querySelector<HTMLElement>('#temporary-root')!
 const stageAccent = document.querySelector<HTMLElement>('#temporary-accent')!
+const componentHost = document.querySelector<HTMLElement>('#component-host')!
 const timeOutput = document.querySelector<HTMLOutputElement>('#time-output')!
 const classOutput = document.querySelector<HTMLOutputElement>('#class-output')!
 const opacityOutput = document.querySelector<HTMLOutputElement>('#opacity-output')!
@@ -134,8 +174,114 @@ function presentItem(element: HTMLElement, state: ReturnType<typeof readItemStat
   element.style.backgroundColor = state.backgroundColor
 }
 
+type ComponentProjection = Readonly<{
+  moduleCatalog: RuntimeModuleServiceCatalog
+  componentRuntime: RuntimeComponentRuntime
+  backend: LayoutDomBackend
+  mountTargets: readonly MountTargetDeclaration[]
+  persoNodes: ReadonlyMap<string, HTMLElement>
+}>
+
+/** Creates the runtime component catalog and its player projection boundary. */
+function createComponentProjection(): ComponentProjection {
+  const layoutDefinition = createLayoutModuleServiceDefinition()
+  const moduleCatalog = new RuntimeModuleServiceCatalog()
+  let layoutService: LayoutModuleServiceInstance | undefined
+  moduleCatalog.register({
+    id: 'layout',
+    create: (context) => {
+      layoutService = layoutDefinition.create(context) as LayoutModuleServiceInstance
+      return layoutService
+    },
+  })
+
+  const componentCatalog = new RuntimeComponentCatalog()
+  componentCatalog.register({
+    type: 'layout',
+    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
+  })
+  componentCatalog.register({
+    type: 'tag',
+    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
+  })
+
+  const persoNodes = new Map<string, HTMLElement>()
+  const targetNodes = new Map<string, unknown>([['temporary-root-host', componentHost]])
+  const componentRuntime = new RuntimeComponentRuntime({
+    catalog: componentCatalog,
+    createServices: createDemoComponentServices,
+    materialize: (component, identity) => {
+      const materialization = materializeTemplateString(component.render())
+      const rootNode = materialization.rootNode as HTMLElement
+      persoNodes.set(identity.componentId, rootNode)
+      if (identity.componentType === 'layout') {
+        if (layoutService === undefined) throw new Error('Layout module was not created before component materialization.')
+        const cleanup = materializeComponentWithLayout(layoutService, {
+          component,
+          identity,
+          rootNode,
+          parts: materialization.parts,
+          publicParts: materialization.parts,
+        })
+        for (const part of materialization.parts) targetNodes.set(part.partId, part.nodeRef)
+        return {
+          destroy: () => {
+            cleanup()
+            persoNodes.delete(identity.componentId)
+            for (const part of materialization.parts) targetNodes.delete(part.partId)
+          },
+        }
+      }
+      return {
+        destroy: () => {
+          persoNodes.delete(identity.componentId)
+        },
+      }
+    },
+  })
+  const backend = new LayoutDomBackend({
+    persoNodes,
+    targetNodes,
+  })
+
+  return {
+    moduleCatalog,
+    componentRuntime,
+    backend,
+    mountTargets: [{ id: 'demo-outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' }],
+    persoNodes,
+  }
+}
+
+/** Creates the small DOM service facade used by the validation demo components. */
+function createDemoComponentServices(): ComponentServices {
+  return {
+    declare: () => undefined,
+    apply: (node, patch) => {
+      if (!(node instanceof HTMLElement)) return
+      if (typeof patch.className === 'string') node.className = patch.className
+      const style = patch.style
+      if (typeof style === 'object' && style !== null && !Array.isArray(style)) {
+        const values = style as Record<string, unknown>
+        if (typeof values.opacity === 'number') node.style.opacity = String(values.opacity)
+        if (values.backgroundColor !== undefined) node.style.backgroundColor = colorToCss(values.backgroundColor)
+      }
+    },
+    content: {
+      apply: (node, value) => {
+        if (node instanceof HTMLElement) node.textContent = String(value)
+      },
+    },
+  }
+}
+
 /** Presents the last temporary snapshot as a deliberately local DOM view. */
-function present(sink: MemoryRenderSink, solved: SolvedScene, previous?: SolvedScene): void {
+function present(
+  sink: MemoryRenderSink,
+  solved: SolvedScene,
+  previous?: SolvedScene,
+  projection?: ComponentProjection,
+): void {
   const snapshot = sink.getSnapshots().at(-1)
   sink.clear()
   if (snapshot === undefined) return
@@ -143,6 +289,10 @@ function present(sink: MemoryRenderSink, solved: SolvedScene, previous?: SolvedS
   const accentState = readItemState(snapshot.persos['main:accent'])
   presentItem(stageRoot, rootState)
   presentItem(stageAccent, accentState)
+  const componentRoot = projection?.persoNodes.get('main:root')
+  const componentAccent = projection?.persoNodes.get('main:accent')
+  if (componentRoot !== undefined) presentItem(componentRoot, rootState)
+  if (componentAccent !== undefined) presentItem(componentAccent, accentState)
   timeOutput.value = String(Math.round(snapshot.timeMs))
   classOutput.value = rootState.className
   opacityOutput.value = rootState.opacity.toFixed(2)
@@ -176,7 +326,15 @@ async function start(): Promise<void> {
     return
   }
 
-  const engine = new RuntimeEngine({ components: ['tag'], services: [], modules: [], resources: [] })
+  const projection = createComponentProjection()
+  const compiledScene: CompiledScene = {
+    ...build.compiledScene,
+    requirements: { ...build.compiledScene.requirements, modules: ['layout'] },
+  }
+  const engine = new RuntimeEngine(
+    { components: ['tag', 'layout'], services: [], modules: ['layout'], resources: [] },
+    { moduleServiceCatalog: projection.moduleCatalog },
+  )
   const sink = new MemoryRenderSink()
   const strapCollections: StrapCollections = {
     scene: {},
@@ -186,7 +344,7 @@ async function start(): Promise<void> {
       },
     },
   }
-  const journal = new RuntimeTrackJournal(build.compiledScene)
+  const journal = new RuntimeTrackJournal(compiledScene)
   const showEvent = {
     eventId: 'demo:show',
     eventSeq: 0,
@@ -195,7 +353,7 @@ async function start(): Promise<void> {
     trackId: 'main',
     storyId: 'main',
   }
-  const story = build.compiledScene.scene.stories.main
+  const story = compiledScene.scene.stories.main
   const pipeline = await executeListenPipeline({
     rules: story?.listen ?? [],
     event: showEvent,
@@ -223,21 +381,23 @@ async function start(): Promise<void> {
     errorOutput.textContent = `${append.code}: ${append.message}`
     return
   }
-  flowOutput.value = 'materialize -> resolve -> solve -> diffSolvedScenes'
+  flowOutput.value = 'LayoutComponent.render -> data-part -> layout -> solve -> DOM projection'
 
   const mountTargets: readonly MountTargetDeclaration[] = [
     { id: 'temporary-root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
-    { id: 'demo-outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
   ]
+  const solveTargets = [...mountTargets, ...projection.mountTargets]
   const player = new RuntimePlayer(
     'temporary-player',
     engine,
-    build.compiledScene,
+    compiledScene,
     sink,
     undefined,
     strapCollections,
     journal,
     mountTargets,
+    projection.backend,
+    projection.componentRuntime,
   )
   const init = player.init()
   if (!init.ok) {
@@ -249,8 +409,8 @@ async function start(): Promise<void> {
   engine.start()
   let playing = false
   playToggle.textContent = 'Play'
-  let solved = solveScene(resolveScene(materializeScene(build.compiledScene, 0, journal)), { mountTargets })
-  present(sink, solved)
+  let solved = solveScene(resolveScene(materializeScene(compiledScene, 0, journal)), { mountTargets: solveTargets })
+  present(sink, solved, undefined, projection)
 
   seekInput.addEventListener('input', () => {
     playing = false
@@ -262,9 +422,9 @@ async function start(): Promise<void> {
       errorOutput.hidden = false
       errorOutput.textContent = result.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
     }
-    solved = solveScene(resolveScene(materializeScene(build.compiledScene, targetTime, journal)), { mountTargets })
+    solved = solveScene(resolveScene(materializeScene(compiledScene, targetTime, journal)), { mountTargets: solveTargets })
     playToggle.textContent = 'Play'
-    present(sink, solved, previous)
+    present(sink, solved, previous, projection)
   })
 
   playToggle.addEventListener('click', () => {
@@ -279,8 +439,8 @@ async function start(): Promise<void> {
       const current = player.getCurrentTimeMs()
       seekInput.value = String(Math.min(2000, current))
       const previous = solved
-      solved = solveScene(resolveScene(materializeScene(build.compiledScene, current, journal)), { mountTargets })
-      present(sink, solved, previous)
+      solved = solveScene(resolveScene(materializeScene(compiledScene, current, journal)), { mountTargets: solveTargets })
+      present(sink, solved, previous, projection)
     }
     requestAnimationFrame(tick)
   }

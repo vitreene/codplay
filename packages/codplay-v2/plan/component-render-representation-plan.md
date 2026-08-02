@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: required before component implementation
+Review: template-string materialization integrated; JSX remains V2.5
 
 ## Decision
 
@@ -18,11 +18,10 @@ projection. Le cas `avatar3d` retourne ainsi un `HTMLCanvasElement` reel et poss
 son contexte de rendu interne ; il ne decrit pas ce canvas par un `ViewTree`. Le
 contrat de ce cas est precise dans la note dediee aux composants hybrides.
 
-Les representations admises sont :
-
-- JSX autonome transpile vers le runtime de vue CodPlay, sans React ;
-- template string converti par la `BaseComponent` ;
-- representation equivalente fournie par un autre frontend d'auteur.
+Pour la fondation V2 actuelle, la representation admise est le template string
+converti par la `BaseComponent`. Le JSX autonome, transpile vers le runtime de vue
+CodPlay sans React, est reporte a l'objectif V2.5. Une representation equivalente
+fournie par un autre frontend d'auteur sera examinee apres ce jalon.
 
 La `BaseComponent` convertit cette representation en arbre de vue interne. Le
 backend de rendu materialise ensuite l'arbre et possede les mutations du substrat.
@@ -31,7 +30,7 @@ backend de rendu materialise ensuite l'arbre et possede les mutations du substra
 
 Les deux formes d'auteur convergent vers le meme format intermediaire : `ViewTree`.
 
-### JSX autonome
+### JSX autonome - objectif V2.5
 
 Le JSX V2 est transpile vers une factory CodPlay, pas vers React :
 
@@ -254,7 +253,7 @@ internes Three.js et le coeur CodPlay ne les manipule pas.
 ## Hors contrat actuel
 
 - JSX runtime V2 ;
-- template parser/sanitizer V2 ;
+- template sanitizer V2 ;
 - `BaseComponent` executable ;
 - `ViewTree` final ;
 - backend DOM/SVG de production ;

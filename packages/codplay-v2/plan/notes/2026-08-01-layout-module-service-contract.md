@@ -19,9 +19,10 @@ RuntimeModuleServiceCatalog
 ```
 
 Le module ne cree pas de composant, ne parse pas de template et ne lit pas le DOM.
-Le composant materialise son template et remet au module les identites de ses
-cibles internes. Le module conserve la relation logique entre un composant et ses
-outlets ; un backend de projection associe ensuite ces cibles a des nodes reels.
+Le composant ou le materializer remet au module les declarations de ses cibles
+publiques. Le module conserve la relation logique entre un composant et ses outlets ;
+un backend de projection associe ensuite ces cibles a des nodes reels. Le module ne
+decouvre ni les templates ni les parts prives.
 
 ## Identifiants
 
@@ -135,7 +136,9 @@ class LayoutComponent extends BaseComponent {
 ```
 
 Le composant ne publie pas une methode normative `getOutletsSnapshot()`. La
-frontiere de publication est le binding du module `layout`.
+frontiere de publication est le binding du module `layout`. Le player recupere les
+declarations publiques exposees par les instances de modules via
+`getMountTargets()` et les ajoute au registre utilise par `solveScene()`.
 
 ## Placement
 
@@ -143,9 +146,9 @@ Le flux cible est :
 
 ```text
 Component template
-  -> materialized part registry
-  -> selection des parts montables par la definition du type
+  -> declarations publiques materialisees
   -> LayoutModuleService registration
+  -> RuntimePlayer.getMountTargets()
   -> opaque mount target registry
   -> SolvedPerso.placement.targetId
   -> backend de montage
@@ -181,14 +184,19 @@ autorisee est `LayoutComponent`, avec le contrat composant suivant :
 Une fonction `init()` optionnelle est reportee a une etude V2.5 pour les usages
 avances. Elle ne fait pas partie de l'implementation V2 actuelle.
 
-Le branchement du composant au `RuntimePlayer` et au backend de montage reste une
-tranche distincte.
+Le branchement des cibles de modules au `RuntimePlayer` et a `solveScene()` est
+implemente. L'adaptateur `registerMaterializedComponent()` est aussi implemente ;
+`materializeComponentWithLayout()` couvre le cycle materialisation/enregistrement/
+retrait logique. La production du root DOM/JSX et la selection des parts publiques
+par le materializer restent une tranche distincte. `LayoutDomBackend` applique
+desormais le parentage logique sur des nodes deja materialises, et
+`RuntimePlayer` l'appelle a l'initialisation, sur frame, au seek et a la destruction.
+La factory generale de composants reste a faire.
 
 ## Hors contrat de cette tranche
 
 - creation de composants V2 ;
 - injection finale du binding dans `LayoutComponent` ;
-- adaptation d'un node materialise vers un backend DOM ;
-- mutation du parentage ;
+- factory generale de composants dans le player ;
 - FLIP et mesure ;
-- integration du module dans `RuntimePlayer`.
+- production du root DOM/JSX par le materializer composant ;
