@@ -3,6 +3,7 @@ import {
   BaseComponent,
   RuntimeComponentCatalog,
   RuntimeComponentRuntime,
+  RuntimeComponentServiceCatalog,
 } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import type { SolvedScene } from '../../../src/runtime/player'
@@ -60,8 +61,13 @@ describe('RuntimeComponentRuntime', () => {
     const catalog = new RuntimeComponentCatalog()
     const components: TestComponent[] = []
     const events: string[] = []
+    const mountablePartIds: string[][] = []
+    let receivedModuleServices: ReadonlyMap<string, unknown> | undefined
     catalog.register({
       type: 'test',
+      services: [],
+      modules: [],
+      mountableParts: ['content'],
       create: () => {
         const component = new TestComponent({
           perso: { id: 'item', storyId: 'main', initial: {} },
@@ -73,9 +79,16 @@ describe('RuntimeComponentRuntime', () => {
     })
     const runtime = new RuntimeComponentRuntime({
       catalog,
-      createServices: () => ({ declare: () => undefined, apply: () => undefined }),
-      materialize: () => ({ destroy: () => events.push('destroy') }),
+      serviceCatalog: new RuntimeComponentServiceCatalog(),
+      materialize: (_component, _identity, _initial, partIds, moduleServices) => {
+        mountablePartIds.push([...partIds])
+        receivedModuleServices = moduleServices
+        return { destroy: () => events.push('destroy') }
+      },
     })
+    const markupService = {}
+    const moduleServices = new Map([['markup', markupService]])
+    runtime.setModuleServices(moduleServices)
 
     runtime.sync(solvedScene(0))
     runtime.sync(solvedScene(100))
@@ -83,6 +96,8 @@ describe('RuntimeComponentRuntime', () => {
 
     expect(components).toHaveLength(1)
     expect(components[0]?.updates).toEqual([0, 100])
+    expect(mountablePartIds).toEqual([['content']])
+    expect(receivedModuleServices?.get('markup')).toBe(markupService)
     expect(events).toEqual(['destroy'])
   })
 })

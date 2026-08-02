@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: markup module rename in progress; LayoutComponent remains the component type
+Review: markup module rename applied; LayoutComponent remains the component type
 
 ## Positionnement
 
@@ -96,8 +96,8 @@ cibles ne restent jamais dans le registre apres le retrait de leur proprietaire.
 
 L'implementation se trouve dans
 `src/runtime/capabilities/markup/markup-capability.ts`. La factory d'integration
-qui remet une vue scopee de cet etat au composant reste a definir ; elle ne doit
-pas modifier le contrat generique du catalogue pour y ajouter des methodes layout.
+reste independante du contrat generique du module ; elle ne doit pas y ajouter
+des methodes layout.
 
 ## Frontiere composant
 
@@ -113,6 +113,11 @@ Le composant ne recoit pas directement un module dans son constructeur et n'appe
 pas les operations d'enregistrement des outlets. La facade `declare()` est la meme
 frontiere de declaration que pour les services V1 ; le runtime associe cette
 declaration a l'instance `RuntimeModuleService` `markup`.
+
+Au runtime, `RuntimePlayer` injecte les instances de modules creees pour le player
+dans `RuntimeComponentRuntime` avant la premiere materialisation. Le materializer
+recoit cette vue scopee et selectionne le service `markup` sans fermeture globale
+ni binding specifique a la demo.
 
 Le composant conserve sa racine et son template. La definition runtime du type
 selectionne les parts montables ; elle peut donc etre reutilisee par `layout`,
@@ -171,11 +176,21 @@ La declaration doit alimenter :
 - la validation de disponibilite par `RuntimeEngine` ;
 - la creation de l'instance par `RuntimeModuleServiceCatalog`.
 
+La definition runtime du composant porte aussi la liste `mountableParts`. Le
+`RuntimeComponentRuntime` la remet au materializer, qui filtre les parts
+materialisees avant l'appel a `materializeComponentWithMarkup()`. Le composant
+peut donc conserver des parts internes sans les publier au module.
+
+La meme definition porte les listes `services` et `modules`. Elle est enregistree
+dans le catalogue de validation et dans le catalogue runtime ; le player valide
+les exigences compilees, puis injecte les instances de modules dans le runtime
+composant avant sa materialisation.
+
 ## Etat de la tranche
 
-Le contrat du module et l'etat pur sont implementes dans
-`src/runtime/capabilities/markup/markup-capability.ts`. La prochaine implementation
-autorisee est `LayoutComponent`, avec le contrat composant suivant :
+Le contrat du module, l'etat pur et le raccord player sont implementes dans
+`src/runtime/capabilities/markup/markup-capability.ts`. `LayoutComponent` est
+implemente avec le contrat composant suivant :
 
 - `render()` retourne un template string ;
 - `this.node` conserve la racine materialisee ;
@@ -187,16 +202,16 @@ avances. Elle ne fait pas partie de l'implementation V2 actuelle.
 Le branchement des cibles de modules au `RuntimePlayer` et a `solveScene()` est
 implemente. L'adaptateur `registerMaterializedComponent()` est aussi implemente ;
 `materializeComponentWithMarkup()` couvre le cycle materialisation/enregistrement/
-retrait logique. La production du root DOM/JSX et la selection des parts publiques
-par le materializer restent une tranche distincte. `LayoutDomBackend` applique
+retrait logique. La production du root DOM/JSX reste une tranche distincte. La
+selection des parts montables passe par la definition runtime du type. `LayoutDomBackend` applique
 desormais le parentage logique sur des nodes deja materialises, et
 `RuntimePlayer` l'appelle a l'initialisation, sur frame, au seek et a la destruction.
-La factory generale de composants reste a faire.
+`RuntimeComponentCatalog` et `RuntimeComponentRuntime` fournissent la factory
+runtime generique et le passage de la politique `mountableParts` au materializer.
 
 ## Hors contrat de cette tranche
 
-- creation de composants V2 ;
-- injection finale du binding dans `LayoutComponent` ;
-- factory generale de composants dans le player ;
+- creation de nouveaux composants V2 hors `LayoutComponent` et `TagComponent` ;
+- injection des services de production dans les composants ;
 - FLIP et mesure ;
 - production du root DOM/JSX par le materializer composant ;

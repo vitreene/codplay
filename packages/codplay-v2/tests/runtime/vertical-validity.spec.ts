@@ -86,5 +86,9 @@ describe('temporary render validity vertical', () => {
       className: 'is-active',
       style: { opacity: 1 },
     })
+    expect(snapshots.at(-1)?.placements?.['main:root']).toMatchObject({
+      kind: 'root',
+      mounted: false,
+    })
   })
 })

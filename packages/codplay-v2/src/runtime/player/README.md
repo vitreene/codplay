@@ -16,3 +16,8 @@ deltas to capabilities such as list.
 
 The player receives an engine and a `CompiledScene`; it does not create its
 own clock or compile authoring data.
+
+`MemoryRenderSink` receives the player-produced temporary snapshots. Those
+snapshots contain resolved perso state and, when available, compact placement
+data (`kind`, `mounted`, and `targetId`) for readouts that must not rebuild the
+player pipeline themselves.

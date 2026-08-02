@@ -8,6 +8,14 @@ export type TemporaryRenderSnapshot = Readonly<{
   sceneId: string
   timeMs: number
   persos: Readonly<Record<string, CompiledRecord>>
+  placements?: Readonly<Record<string, TemporaryRenderPlacement>>
+}>
+
+/** Public placement data emitted with one solved temporary render snapshot. */
+export type TemporaryRenderPlacement = Readonly<{
+  kind: string
+  mounted: boolean
+  targetId?: string
 }>
 
 /** Minimal output boundary used before component and renderer contracts exist. */
@@ -24,6 +32,7 @@ export class MemoryRenderSink implements TemporaryRenderSink {
     this.snapshots.push({
       ...snapshot,
       persos: { ...snapshot.persos },
+      ...(snapshot.placements === undefined ? {} : { placements: { ...snapshot.placements } }),
     })
   }
 
@@ -60,10 +69,16 @@ export function createTemporaryRenderSnapshotFromSolved(
   solved: SolvedScene,
   timeMs = solved.timeMs,
 ): TemporaryRenderSnapshot {
+  const placements = Object.fromEntries(Object.entries(solved.persos).map(([key, perso]) => [key, {
+    kind: perso.placement.kind,
+    mounted: perso.placement.mounted,
+    targetId: perso.placement.target?.id,
+  }]))
   return {
     instanceId,
     sceneId: scene.scene.id,
     timeMs,
     persos: Object.fromEntries(Object.entries(solved.persos).map(([key, perso]) => [key, perso.state])),
+    ...(Object.keys(placements).length === 0 ? {} : { placements }),
   }
 }

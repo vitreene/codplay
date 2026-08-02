@@ -2,7 +2,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: service declaration boundary still to fix
+> Review: component service declaration boundary implemented; host adapters remain injectable
 
 ## Role
 
@@ -15,10 +15,10 @@ A service name is the shared namespace for:
 - defaults and property rules;
 - the runtime update operation.
 
-The service catalog consumed by `CompiledScene` must be built from the same
-declarations used by the runtime component registry. It must not duplicate a
-component's service list.
+The component definition consumed by `CompiledScene` and the runtime component
+registry carries the same service and module dependency lists. Runtime service
+implementations remain host adapters and are injected through the component
+service catalog.
 
-Core services such as `style`, `className`, and `attr` belong here. Their current
-validation implementation remains `En cours` until the single declaration
-boundary is fixed.
+Core services such as `style`, `className`, `attr`, and `content` belong here.
+Their validation declarations are shared with the V2 component definitions.

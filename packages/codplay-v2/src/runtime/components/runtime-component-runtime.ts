@@ -1,6 +1,7 @@
 import type { SolvedScene } from '../player/pipeline'
+import type { RuntimeModuleServiceInstance } from '../engine'
 import type { BaseComponent } from './base-component'
-import type { ComponentServices } from './component-types'
+import { createComponentServices, RuntimeComponentServiceCatalog } from './component-services'
 import { RuntimeComponentCatalog } from './runtime-component-catalog'
 
 /** Identity passed to component services and materializers. */
@@ -18,11 +19,13 @@ export type RuntimeComponentHandle = Readonly<{
 /** Host callbacks required to materialize and service one component instance. */
 export type RuntimeComponentRuntimeOptions = Readonly<{
   catalog: RuntimeComponentCatalog
-  createServices: (identity: RuntimeComponentIdentity) => ComponentServices
+  serviceCatalog: RuntimeComponentServiceCatalog
   materialize: (
     component: BaseComponent<Record<string, unknown>>,
     identity: RuntimeComponentIdentity,
     initial: Record<string, unknown>,
+    mountablePartIds: readonly string[],
+    moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ) => RuntimeComponentHandle
 }>
 
@@ -35,10 +38,16 @@ type MountedComponent = Readonly<{
 export class RuntimeComponentRuntime {
   private readonly mounted = new Map<string, MountedComponent>()
   private readonly options: RuntimeComponentRuntimeOptions
+  private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
   /** Creates the runtime host from its factory and materialization callbacks. */
   constructor(options: RuntimeComponentRuntimeOptions) {
     this.options = options
+  }
+
+  /** Binds the player-scoped module instances before component materialization. */
+  setModuleServices(moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>): void {
+    this.moduleServices = moduleServices
   }
 
   /** Mounts new persos, updates existing components, and removes stale instances. */
@@ -80,11 +89,17 @@ export class RuntimeComponentRuntime {
         storyId: perso.storyId,
         initial: compiledPerso.initial,
       },
-      services: this.options.createServices(identity),
+      services: createComponentServices(this.options.serviceCatalog, identity, this.moduleServices),
     })
     const mounted: MountedComponent = {
       component,
-      handle: this.options.materialize(component, identity, compiledPerso.initial),
+      handle: this.options.materialize(
+        component,
+        identity,
+        compiledPerso.initial,
+        this.options.catalog.getMountablePartIds(perso.type),
+        this.moduleServices,
+      ),
     }
     this.mounted.set(perso.key, mounted)
     return mounted

@@ -8,6 +8,7 @@ export {
   createTemporaryRenderSnapshot,
   createTemporaryRenderSnapshotFromSolved,
   MemoryRenderSink,
+  type TemporaryRenderPlacement,
   type TemporaryRenderSink,
   type TemporaryRenderSnapshot,
 } from './temporary-render-sink'

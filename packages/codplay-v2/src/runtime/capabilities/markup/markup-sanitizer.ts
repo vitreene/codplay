@@ -11,7 +11,7 @@ const ALLOWED_ATTRIBUTES = new Set([
   'tabindex', 'title', 'type', 'value',
 ])
 const URL_ATTRIBUTES = new Set(['href', 'src'])
-import type { MarkupAttributeSanitizer } from '../../services'
+import type { MarkupAttributeSanitizer } from '../../../services'
 
 type SanitizedNode =
   | { kind: 'text'; value: string }
@@ -28,7 +28,7 @@ type StackEntry = Readonly<{
 }>
 
 /** Sanitizes one authored HTML template before it enters CompiledScene. */
-export function sanitizeTemplateString(
+export function sanitizeMarkupTemplate(
   markup: string,
   sourcePath: string,
   sanitizers: readonly MarkupAttributeSanitizer[] = [],

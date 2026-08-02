@@ -2,11 +2,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { materializeTemplateString } from '../../../src/runtime/components'
-import { sanitizeTemplateString } from '../../../src/scene/compiled'
+import { sanitizeMarkupTemplate } from '../../../src/runtime/capabilities/markup'
 
 describe('template-string materializer', () => {
   it('materializes an HTML template and consumes data-part markers', () => {
-    const result = materializeTemplateString(sanitizeTemplateString(`
+    const result = materializeTemplateString(sanitizeMarkupTemplate(`
       <section>
         <main data-part="content"></main>
         <aside data-part="aside"></aside>
@@ -19,7 +19,7 @@ describe('template-string materializer', () => {
   })
 
   it('rejects duplicate data-part identifiers', () => {
-    expect(() => sanitizeTemplateString(`
+    expect(() => sanitizeMarkupTemplate(`
       <section>
         <main data-part="content"></main>
         <aside data-part="content"></aside>

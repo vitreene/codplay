@@ -4,6 +4,10 @@ export { TagComponent } from './tag-component'
 export { materializeTemplateString } from './template-materializer'
 export { RuntimeComponentCatalog } from './runtime-component-catalog'
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
+export {
+  createComponentServices,
+  RuntimeComponentServiceCatalog,
+} from './component-services'
 export type { LayoutInitial, LayoutState } from './layout-component'
 export type { TagState } from './tag-component'
 export type {
@@ -22,3 +26,9 @@ export type {
   RuntimeComponentIdentity,
   RuntimeComponentRuntimeOptions,
 } from './runtime-component-runtime'
+export type {
+  RuntimeComponentServiceContext,
+  RuntimeComponentServiceDefinition,
+  RuntimeComponentServiceFactory,
+  RuntimeComponentServiceInstance,
+} from './component-services'

@@ -31,7 +31,7 @@ import type {
   CompiledSceneData,
   CompiledStory,
 } from './types'
-import { sanitizeTemplateString } from './template-compiler'
+import { sanitizeMarkupTemplate } from '../../runtime/capabilities/markup/markup-sanitizer'
 
 /** Options controlling one deterministic scene compilation. */
 export type SceneBuilderOptions = Readonly<{
@@ -188,7 +188,7 @@ function compilePerso(
   const initial = typeof perso.initial.markup === 'string'
     ? {
         ...compiledInitial,
-        markup: sanitizeTemplateString(
+        markup: sanitizeMarkupTemplate(
           perso.initial.markup,
           `${scope}.initial.markup`,
           validationEngine.markupSanitizersFor(perso.type),

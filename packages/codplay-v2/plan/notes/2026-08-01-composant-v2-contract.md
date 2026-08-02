@@ -41,6 +41,14 @@ type ComponentServices = {
     apply(node: unknown, value: unknown): void
   }
 }
+
+type RuntimeComponentDefinition = {
+  type: string
+  services: readonly string[]
+  modules: readonly string[]
+  mountableParts?: readonly string[]
+  create: RuntimeComponentFactory
+}
 ```
 
 Un composant V2 expose deux methodes obligatoires :
@@ -95,13 +103,18 @@ SolvedScene
   -> cleanup au retrait ou a la destruction du player
 ```
 
-Le runtime composant recoit ses services et son materializer par injection. Il ne
-cree pas de DOM lui-meme et ne contient aucune branche speciale pour `layout` ou
-`input`.
+Le runtime composant recoit son catalogue de services, les instances de modules
+du player et son materializer par injection. `declare()` verifie que chaque nom
+correspond a un service disponible ou a un module player-scoped. Les modules ne
+sont pas appliques comme des proprietes ; ils servent a satisfaire la dependance
+et restent hors de l'API de mutation du node. Le runtime ne cree pas de DOM lui-
+meme et ne contient aucune branche speciale pour `layout` ou `input`.
 
 ## Exemple Tag
 
-Le composant `tag` declare une balise et applique son etat DOM.
+Le composant `tag` declare une balise et applique son etat DOM. Sa definition
+runtime partage avec le validateur les services `className`, `style`, `attr` et
+`content`.
 
 ```ts
 type TagState = {
@@ -229,9 +242,9 @@ registre interne des data-part
 
 ## Persos du layout
 
-Cet exemple definit la forme auteur attendue. Il ne constitue pas encore la demo
-V2 executable, car le runtime de composants et la materialisation DOM V2 restent a
-brancher.
+Cet exemple definit la forme auteur attendue. La verticale de validation player
+exerce maintenant le runtime de composants, la materialisation DOM et le module
+`markup` sur ce flux.
 
 Le `perso` layout porte le template. Les autres persos ciblent les outlets
 decouverts dans ce template avec `move.parentId`.

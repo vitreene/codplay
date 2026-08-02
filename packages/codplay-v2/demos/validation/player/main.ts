@@ -11,53 +11,57 @@ import {
   LayoutComponent,
   RuntimeComponentCatalog,
   RuntimeComponentRuntime,
+  RuntimeComponentServiceCatalog,
   TagComponent,
   materializeTemplateString,
 } from '../../../src/runtime/components'
 import type {
   ComponentInput,
-  ComponentServices,
   LayoutInitial,
+  RuntimeComponentDefinition,
   TagState,
 } from '../../../src/runtime/components'
 import {
-  diffSolvedScenes,
   executeListenPipeline,
   LayoutDomBackend,
   MemoryRenderSink,
-  materializeScene,
-  MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
-  resolveScene,
   RuntimePlayer,
   RuntimeTrackJournal,
   STRAP_SCOPE_STORY,
-  solveScene,
   type MountTargetDeclaration,
-  type SolvedScene,
   type StrapCollections,
+  type TemporaryRenderSnapshot,
 } from '../../../src/runtime/player'
 import type { CompiledRecord, CompiledScene } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 
 import './style.css'
 
-/** Creates the temporary catalog used only by this visual validation vertical. */
-function createCatalog(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  catalog.registerComponent({
+/** Creates the component definitions shared by validation and runtime catalogs. */
+function createComponentDefinitions(): readonly RuntimeComponentDefinition[] {
+  return [{
     type: 'tag',
-    services: [],
+    services: ['className', 'style', 'attr', 'content'],
+    modules: [],
     validateInitial: () => undefined,
     validateAction: () => undefined,
-  })
-  catalog.registerComponent({
+    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
+  }, {
     type: 'layout',
     services: ['className', 'style', 'attr'],
     modules: ['markup'],
     validateInitial: () => undefined,
     validateAction: () => undefined,
-  })
+    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
+    mountableParts: ['demo-outlet'],
+  }]
+}
+
+/** Creates the temporary validation catalog used by this visual vertical. */
+function createCatalog(): ValidationCatalog {
+  const catalog = new ValidationCatalog()
+  for (const definition of createComponentDefinitions()) catalog.registerComponent(definition)
   return catalog
 }
 
@@ -178,7 +182,6 @@ type ComponentProjection = Readonly<{
   moduleCatalog: RuntimeModuleServiceCatalog
   componentRuntime: RuntimeComponentRuntime
   backend: LayoutDomBackend
-  mountTargets: readonly MountTargetDeclaration[]
   persoNodes: ReadonlyMap<string, HTMLElement>
 }>
 
@@ -186,54 +189,49 @@ type ComponentProjection = Readonly<{
 function createComponentProjection(): ComponentProjection {
   const markupDefinition = createMarkupModuleServiceDefinition()
   const moduleCatalog = new RuntimeModuleServiceCatalog()
-  let markupService: MarkupModuleServiceInstance | undefined
   moduleCatalog.register({
-    id: 'layout',
+    id: 'markup',
     create: (context) => {
-      markupService = markupDefinition.create(context) as MarkupModuleServiceInstance
-      return markupService
+      return markupDefinition.create(context) as MarkupModuleServiceInstance
     },
   })
 
   const componentCatalog = new RuntimeComponentCatalog()
-  componentCatalog.register({
-    type: 'layout',
-    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
-  })
-  componentCatalog.register({
-    type: 'tag',
-    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
-  })
+  const serviceCatalog = createDemoComponentServiceCatalog()
+  for (const definition of createComponentDefinitions()) componentCatalog.register(definition)
 
   const persoNodes = new Map<string, HTMLElement>()
   const targetNodes = new Map<string, unknown>([['temporary-root-host', componentHost]])
   const componentRuntime = new RuntimeComponentRuntime({
     catalog: componentCatalog,
-    createServices: createDemoComponentServices,
-    materialize: (component, identity, initial) => {
+    serviceCatalog,
+    materialize: (component, identity, initial, mountablePartIds, moduleServices) => {
       const materialization = identity.componentType === 'layout'
         ? materializeTemplateString(component.render())
         : { rootNode: document.createElement(String(initial.tag)), parts: [] }
       const rootNode = materialization.rootNode as HTMLElement
       persoNodes.set(identity.componentId, rootNode)
       if (identity.componentType === 'layout') {
-        if (markupService === undefined) throw new Error('Markup module was not created before component materialization.')
+        const markupService = moduleServices.get('markup') as MarkupModuleServiceInstance | undefined
+        if (markupService === undefined) throw new Error('Markup module was not bound before component materialization.')
+        const publicParts = materialization.parts.filter((part) => mountablePartIds.includes(part.partId))
         const cleanup = materializeComponentWithMarkup(markupService, {
           component,
           identity,
           rootNode,
           parts: materialization.parts,
-          publicParts: materialization.parts,
+          publicParts,
         })
-        for (const part of materialization.parts) targetNodes.set(part.partId, part.nodeRef)
+        for (const part of publicParts) targetNodes.set(part.partId, part.nodeRef)
         return {
           destroy: () => {
             cleanup()
             persoNodes.delete(identity.componentId)
-            for (const part of materialization.parts) targetNodes.delete(part.partId)
+            for (const part of publicParts) targetNodes.delete(part.partId)
           },
         }
       }
+      component._materialize(rootNode, [])
       return {
         destroy: () => {
           persoNodes.delete(identity.componentId)
@@ -250,43 +248,65 @@ function createComponentProjection(): ComponentProjection {
     moduleCatalog,
     componentRuntime,
     backend,
-    mountTargets: [{ id: 'demo-outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' }],
     persoNodes,
   }
 }
 
-/** Creates the small DOM service facade used by the validation demo components. */
-function createDemoComponentServices(): ComponentServices {
-  return {
-    declare: () => undefined,
-    apply: (node, patch) => {
-      if (!(node instanceof HTMLElement)) return
-      if (typeof patch.className === 'string') node.className = patch.className
-      const style = patch.style
-      if (typeof style === 'object' && style !== null && !Array.isArray(style)) {
-        const values = style as Record<string, unknown>
-        if (typeof values.opacity === 'number') node.style.opacity = String(values.opacity)
-        if (values.backgroundColor !== undefined) node.style.backgroundColor = colorToCss(values.backgroundColor)
-      }
-    },
-    content: {
+/** Creates the DOM-backed service catalog used by the validation demo components. */
+function createDemoComponentServiceCatalog(): RuntimeComponentServiceCatalog {
+  const catalog = new RuntimeComponentServiceCatalog()
+  catalog.register({
+    id: 'className',
+    create: () => ({
+      apply: (node, value) => {
+        if (node instanceof HTMLElement && typeof value === 'string') node.className = value
+      },
+    }),
+  })
+  catalog.register({
+    id: 'style',
+    create: () => ({
+      apply: (node, value) => {
+        if (!(node instanceof HTMLElement) || typeof value !== 'object' || value === null || Array.isArray(value)) return
+        for (const [name, rawValue] of Object.entries(value)) {
+          const cssValue: string = name === 'backgroundColor' ? colorToCss(rawValue) : String(rawValue);
+          (node.style as unknown as Record<string, string>)[name] = cssValue
+        }
+      },
+    }),
+  })
+  catalog.register({
+    id: 'attr',
+    create: () => ({
+      apply: (node, value) => {
+        if (!(node instanceof HTMLElement) || typeof value !== 'object' || value === null || Array.isArray(value)) return
+        for (const [name, rawValue] of Object.entries(value)) {
+          if (rawValue === false || rawValue === undefined || rawValue === null) node.removeAttribute(name)
+          else node.setAttribute(name, rawValue === true ? '' : String(rawValue))
+        }
+      },
+    }),
+  })
+  catalog.register({
+    id: 'content',
+    create: () => ({
       apply: (node, value) => {
         if (node instanceof HTMLElement) node.textContent = String(value)
       },
-    },
-  }
+    }),
+  })
+  return catalog
 }
 
 /** Presents the last temporary snapshot as a deliberately local DOM view. */
 function present(
   sink: MemoryRenderSink,
-  solved: SolvedScene,
-  previous?: SolvedScene,
+  previous: TemporaryRenderSnapshot | undefined,
   projection?: ComponentProjection,
-): void {
+): TemporaryRenderSnapshot | undefined {
   const snapshot = sink.getSnapshots().at(-1)
   sink.clear()
-  if (snapshot === undefined) return
+  if (snapshot === undefined) return undefined
   const rootState = readItemState(snapshot.persos['main:root'])
   const accentState = readItemState(snapshot.persos['main:accent'])
   presentItem(stageRoot, rootState)
@@ -300,14 +320,19 @@ function present(
   opacityOutput.value = rootState.opacity.toFixed(2)
   rootColorOutput.value = rootState.backgroundColor
   accentColorOutput.value = accentState.backgroundColor
-  const accentPlacement = solved.persos['main:accent']?.placement
-  placementOutput.value = accentPlacement?.target?.id ?? accentPlacement?.kind ?? 'unknown'
-  const delta = previous === undefined
+  const accentPlacement = snapshot.placements?.['main:accent']
+  placementOutput.value = accentPlacement?.targetId ?? accentPlacement?.kind ?? 'unknown'
+  const previousPlacement = previous?.placements?.['main:accent']
+  const delta = previousPlacement === undefined || accentPlacement === undefined
     ? undefined
-    : diffSolvedScenes(previous, solved).find((item) => item.persoKey === 'main:accent')
+    : previousPlacement.mounted !== accentPlacement.mounted
+      ? previousPlacement.mounted ? 'unmount' : 'mount'
+      : previousPlacement.targetId !== accentPlacement.targetId
+        ? 'move'
+        : undefined
   deltaOutput.value = delta === undefined
     ? 'none'
-    : `${delta.operation}: ${delta.fromTargetId ?? 'off'} -> ${delta.toTargetId ?? 'off'}`
+    : `${delta}: ${previousPlacement?.targetId ?? 'off'} -> ${accentPlacement?.targetId ?? 'off'}`
   phaseOutput.value = snapshot.timeMs < 500
     ? 'before demo:show'
     : snapshot.timeMs < 1000
@@ -317,6 +342,7 @@ function present(
         : snapshot.timeMs < 1800
           ? 'move accent -> demo-outlet'
           : 'move accent -> @off'
+  return snapshot
 }
 
 /** Boots the temporary visual flow and its externally advanced engine clock. */
@@ -334,7 +360,7 @@ async function start(): Promise<void> {
     requirements: { ...build.compiledScene.requirements, modules: ['markup'] },
   }
   const engine = new RuntimeEngine(
-    { components: ['tag', 'layout'], services: [], modules: ['markup'], resources: [] },
+    { components: ['tag', 'layout'], services: ['className', 'style', 'attr', 'content'], modules: ['markup'], resources: [] },
     { moduleServiceCatalog: projection.moduleCatalog },
   )
   const sink = new MemoryRenderSink()
@@ -388,7 +414,6 @@ async function start(): Promise<void> {
   const mountTargets: readonly MountTargetDeclaration[] = [
     { id: 'temporary-root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
   ]
-  const solveTargets = [...mountTargets, ...projection.mountTargets]
   const player = new RuntimePlayer(
     'temporary-player',
     engine,
@@ -411,22 +436,18 @@ async function start(): Promise<void> {
   engine.start()
   let playing = false
   playToggle.textContent = 'Play'
-  let solved = solveScene(resolveScene(materializeScene(compiledScene, 0, journal)), { mountTargets: solveTargets })
-  present(sink, solved, undefined, projection)
+  let displayedSnapshot = present(sink, undefined, projection)
 
   seekInput.addEventListener('input', () => {
     playing = false
     if (player.getLifecycleState() === 'playing') player.pause()
-    const previous = solved
-    const targetTime = Number(seekInput.value)
-    const result = player.seek(targetTime)
+    const result = player.seek(Number(seekInput.value))
     if (!result.ok) {
       errorOutput.hidden = false
       errorOutput.textContent = result.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
     }
-    solved = solveScene(resolveScene(materializeScene(compiledScene, targetTime, journal)), { mountTargets: solveTargets })
     playToggle.textContent = 'Play'
-    present(sink, solved, previous, projection)
+    displayedSnapshot = present(sink, displayedSnapshot, projection) ?? displayedSnapshot
   })
 
   playToggle.addEventListener('click', () => {
@@ -438,11 +459,11 @@ async function start(): Promise<void> {
 
   const tick = (): void => {
     if (playing) {
-      const current = player.getCurrentTimeMs()
-      seekInput.value = String(Math.min(2000, current))
-      const previous = solved
-      solved = solveScene(resolveScene(materializeScene(compiledScene, current, journal)), { mountTargets: solveTargets })
-      present(sink, solved, previous, projection)
+      const nextSnapshot = sink.getSnapshots().at(-1)
+      if (nextSnapshot !== undefined) {
+        seekInput.value = String(Math.min(2000, nextSnapshot.timeMs))
+        displayedSnapshot = present(sink, displayedSnapshot, projection) ?? displayedSnapshot
+      }
     }
     requestAnimationFrame(tick)
   }

@@ -1,5 +1,6 @@
 import type { ComponentInput } from './component-types'
 import type { BaseComponent } from './base-component'
+import type { ValidationFunction } from '../../services'
 
 /** Factory that creates one V2 component instance from compiled author data. */
 export type RuntimeComponentFactory = (
@@ -9,7 +10,12 @@ export type RuntimeComponentFactory = (
 /** Runtime definition for one component type. */
 export type RuntimeComponentDefinition = Readonly<{
   type: string
+  services: readonly string[]
+  modules: readonly string[]
+  validateInitial?: ValidationFunction
+  validateAction?: ValidationFunction
   create: RuntimeComponentFactory
+  mountableParts?: readonly string[]
 }>
 
 /** Player-local catalog that resolves compiled component types to factories. */
@@ -34,8 +40,18 @@ export class RuntimeComponentCatalog {
     return definition.create(input)
   }
 
+  /** Returns the part IDs that one component type may publish as mount targets. */
+  getMountablePartIds(type: string): readonly string[] {
+    return this.definitions.get(type)?.mountableParts ?? []
+  }
+
   /** Reports whether one component factory is available. */
   has(type: string): boolean {
     return this.definitions.has(type)
+  }
+
+  /** Returns one immutable runtime definition for validation or diagnostics. */
+  getDefinition(type: string): RuntimeComponentDefinition | undefined {
+    return this.definitions.get(type)
   }
 }

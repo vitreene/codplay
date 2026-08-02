@@ -135,6 +135,7 @@ export class RuntimePlayer {
       diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')
       return { ok: false, diagnostics: diagnostics.report() }
     }
+    this.componentRuntime?.setModuleServices(this.moduleServiceInstances)
     const initialSolvedScene = this.reconstructScene(0)
     this.initializeModuleServices(initialSolvedScene)
     this.solvedScene = this.reconstructScene(0)
