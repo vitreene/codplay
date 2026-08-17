@@ -40,11 +40,18 @@ function projectionFor(poses: Map<string, HtmlPose>, log: string[] = []): HtmlFl
       return captured
     },
     applyLocalPose: vi.fn(),
+    finishLocalPose: vi.fn(),
+    cancelLocalPose: vi.fn(),
     beginOverlay: vi.fn(() => ({})),
     applyOverlayPose: vi.fn(),
     finishOverlay: vi.fn(),
     flush: vi.fn(),
   }
+}
+
+function captureValue(result: ReturnType<HtmlFlipRuntime['capture']>): FlipCapture {
+  if (!result.ok) throw new Error(result.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return result.value
 }
 
 function captureWithHierarchy(): FlipCapture {
@@ -75,6 +82,85 @@ function captureWithHierarchy(): FlipCapture {
         easing: 'linear',
         from: pose(110, 0, 10, 10, scale(2)),
         to: pose(220, 0, 10, 10, scale(2)),
+      },
+    ],
+  }
+}
+
+function captureWithGrandparentHierarchy(): FlipCapture {
+  return {
+    captureId: 'move-grandparent',
+    hostContextId: 'host-1',
+    projectionEpoch: 1,
+    startAt: 0,
+    endAt: 1000,
+    duration: 1000,
+    easing: 'linear',
+    ancestors: [
+      {
+        ancestorId: 'stage',
+        regime: 'composited',
+        from: pose(100, 0, 40, 40, scale(2)),
+        to: pose(200, 0, 40, 40, scale(2)),
+      },
+      {
+        ancestorId: 'container',
+        parentId: 'stage',
+        regime: 'composited',
+        from: pose(110, 0, 20, 20, scale(2)),
+        to: pose(220, 0, 20, 20, scale(2)),
+      },
+    ],
+    entries: [
+      {
+        itemId: 'item',
+        ancestorIds: ['stage', 'container'],
+        mode: 'local',
+        startAt: 0,
+        endAt: 1000,
+        duration: 1000,
+        easing: 'linear',
+        from: pose(115, 0, 10, 10, scale(2)),
+        to: pose(230, 0, 10, 10, scale(2)),
+      },
+    ],
+  }
+}
+
+function captureWithCrossContainerOverlay(): FlipCapture {
+  return {
+    captureId: 'move-cross-container',
+    hostContextId: 'host-1',
+    projectionEpoch: 1,
+    startAt: 0,
+    endAt: 1000,
+    duration: 1000,
+    easing: 'linear',
+    ancestors: [
+      {
+        ancestorId: 'container-a',
+        regime: 'composited',
+        from: pose(100, 0, 40, 40),
+        to: pose(150, 0, 40, 40),
+      },
+      {
+        ancestorId: 'container-b',
+        regime: 'composited',
+        from: pose(300, 0, 40, 40),
+        to: pose(350, 0, 40, 40),
+      },
+    ],
+    entries: [
+      {
+        itemId: 'item',
+        ancestorIds: ['container-b'],
+        mode: 'overlay-world',
+        startAt: 0,
+        endAt: 1000,
+        duration: 1000,
+        easing: 'linear',
+        from: pose(120, 0, 10, 10),
+        to: pose(320, 0, 10, 10),
       },
     ],
   }
@@ -122,6 +208,61 @@ describe('HTML FLIP V2', () => {
     expect(resolved?.pose.rect.left).toBeCloseTo(165)
     expect(resolved?.pose.rect.width).toBeCloseTo(20)
     expect(resolved?.progress).toBeCloseTo(0.5)
+  })
+
+  it('resolves an item through both a parent and grandparent FLIP ancestor', () => {
+    const capture = captureWithGrandparentHierarchy()
+    const [first] = resolveFlipPoseGraph(capture, 0)
+    const [middle] = resolveFlipPoseGraph(capture, 500)
+    const [last] = resolveFlipPoseGraph(capture, 1000)
+
+    expect(first?.pose.rect.left).toBeCloseTo(capture.entries[0]!.from.rect.left)
+    expect(middle?.pose.rect.left).toBeGreaterThan(first?.pose.rect.left ?? 0)
+    expect(last?.pose.rect.left).toBeCloseTo(capture.entries[0]!.to.rect.left)
+  })
+
+  it('resolves a cross-container overlay directly in world space', () => {
+    const capture = captureWithCrossContainerOverlay()
+    const [first] = resolveFlipPoseGraph(capture, 0)
+    const [middle] = resolveFlipPoseGraph(capture, 500)
+    const [last] = resolveFlipPoseGraph(capture, 1000)
+
+    expect(first?.pose.rect.left).toBeCloseTo(120)
+    expect(middle?.pose.rect.left).toBeCloseTo(220)
+    expect(last?.pose.rect.left).toBeCloseTo(320)
+  })
+
+  it('resolves each layout ancestor through the historical host pose', () => {
+    const capture: FlipCapture = {
+      ...captureWithGrandparentHierarchy(),
+      ancestors: captureWithGrandparentHierarchy().ancestors.map((ancestor) => ({ ...ancestor, regime: 'layout' as const })),
+    }
+    const historical = vi.fn(({ ancestorId, timeMs }: { ancestorId: string; timeMs: number }) =>
+      pose(ancestorId === 'stage' ? 100 + timeMs / 10 : 110 + timeMs / 10, 0, 20, 20),
+    )
+    const cache = new FlipHistoricalPoseCache()
+
+    resolveFlipPoseGraph(capture, 500, { captureHistoricalPose: historical }, cache)
+    resolveFlipPoseGraph(capture, 500, { captureHistoricalPose: historical }, cache)
+
+    expect(historical).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the highest layout ancestor as the historical cut before composing descendants', () => {
+    const base = captureWithGrandparentHierarchy()
+    const capture: FlipCapture = {
+      ...base,
+      ancestors: [
+        { ...base.ancestors[0]!, regime: 'layout' },
+        { ...base.ancestors[1]!, regime: 'composited' },
+      ],
+    }
+    const historical = vi.fn(({ timeMs }: { timeMs: number }) => pose(100 + timeMs / 10, 0, 40, 40, scale(2)))
+
+    const [resolved] = resolveFlipPoseGraph(capture, 500, { captureHistoricalPose: historical })
+
+    expect(Number.isFinite(resolved?.pose.rect.left)).toBe(true)
+    expect(historical).toHaveBeenCalledOnce()
   })
 
   it('preserves exact FIRST and LAST AABB anchors under a transformed ancestor', () => {
@@ -236,6 +377,60 @@ describe('HTML FLIP V2', () => {
     expect(projection.flush).toHaveBeenCalledOnce()
   })
 
+  it('finishes local ownership at the capture boundary and cancels it on retarget', () => {
+    const poses = new Map([['item', pose(0)]])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+    const first = captureValue(runtime.capture({
+      captureId: 'local-first',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      easing: 'linear',
+      entries: [{ itemId: 'item', ancestorIds: [] }],
+      mutate: () => poses.set('item', pose(100)),
+    }))
+
+    runtime.seek(first, 500)
+    const second = captureValue(runtime.capture({
+      captureId: 'local-second',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 1000,
+      duration: 1000,
+      easing: 'linear',
+      entries: [{ itemId: 'item', ancestorIds: [] }],
+      mutate: () => poses.set('item', pose(200)),
+    }))
+
+    runtime.seek(second, 1500)
+    expect(projection.cancelLocalPose).toHaveBeenCalledWith('item', 'local-first')
+
+    runtime.seek(second, 2000)
+    expect(projection.finishLocalPose).toHaveBeenCalledWith('item', 'local-second')
+  })
+
+  it('cancels local ownership when playback is stopped', () => {
+    const poses = new Map([['item', pose(0)]])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+    const capture = captureValue(runtime.capture({
+      captureId: 'local-cancel',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      entries: [{ itemId: 'item', ancestorIds: [] }],
+      mutate: () => poses.set('item', pose(100)),
+    }))
+
+    runtime.seek(capture, 500)
+    runtime.cancel()
+
+    expect(projection.cancelLocalPose).toHaveBeenCalledWith('item', 'local-cancel')
+  })
+
   it('realizes a cold seek through the consumer resolver and caches it', () => {
     const poses = new Map([['item', pose(0)]])
     const projection = projectionFor(poses)
@@ -259,6 +454,42 @@ describe('HTML FLIP V2', () => {
     expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
   })
 
+  it('resolves overlapping cached captures in one projection commit', () => {
+    const poses = new Map([
+      ['first', pose(0)],
+      ['second', pose(20)],
+    ])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+
+    captureValue(runtime.capture({
+      captureId: 'overlap-first',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      easing: 'linear',
+      entries: [{ itemId: 'first', ancestorIds: [] }],
+      mutate: () => poses.set('first', pose(100)),
+    }))
+    captureValue(runtime.capture({
+      captureId: 'overlap-second',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 100,
+      duration: 1000,
+      easing: 'linear',
+      entries: [{ itemId: 'second', ancestorIds: [] }],
+      mutate: () => poses.set('second', pose(220)),
+    }))
+
+    const result = runtime.seekCached('host-1', 1, 500)
+
+    expect(result.ok).toBe(true)
+    expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
+    expect(projection.flush).toHaveBeenCalledOnce()
+  })
+
   it('rejects a capture submitted from another host context', () => {
     const projection = projectionFor(new Map([['item', pose(0)]]))
 
@@ -271,5 +502,77 @@ describe('HTML FLIP V2', () => {
       entries: [{ itemId: 'item', ancestorIds: [] }],
       mutate: () => undefined,
     }, projection, new FlipCaptureCache())).toThrow(/crosses host contexts/)
+  })
+
+  it('returns a structured diagnostic at the runtime boundary for a bad capture', () => {
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+    const output = vi.fn()
+    const runtime = new HtmlFlipRuntime(projection, new FlipCaptureCache(), undefined, { diagnosticOutput: output })
+
+    const result = runtime.capture({
+      captureId: 'runtime-invalid',
+      hostContextId: 'host-2',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      entries: [{ itemId: 'item', ancestorIds: [] }],
+      mutate: () => undefined,
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors.map((entry) => entry.code)).toEqual(['RUNTIME_FLIP_CAPTURE_FAILED'])
+    expect(output).toHaveBeenCalledOnce()
+  })
+
+  it('returns a structured diagnostic at the runtime boundary for a bad seek', () => {
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+    const runtime = new HtmlFlipRuntime(projection)
+
+    const result = runtime.seek({
+      ...captureWithHierarchy(),
+      hostContextId: 'host-2',
+    }, 500)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.diagnostics.errors.map((entry) => entry.code)).toEqual(['RUNTIME_FLIP_SEEK_FAILED'])
+  })
+
+  it('rejects an ancestor cycle before capturing DOM poses', () => {
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+
+    expect(() => captureFlip({
+      captureId: 'cycle',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      entries: [{ itemId: 'item', ancestorIds: [] }],
+      ancestors: [
+        { ancestorId: 'parent', parentId: 'grandparent', regime: 'composited' },
+        { ancestorId: 'grandparent', parentId: 'parent', regime: 'composited' },
+      ],
+      mutate: () => undefined,
+    }, projection, new FlipCaptureCache())).toThrow(/ancestor cycle detected/)
+  })
+
+  it('rejects an item ancestor chain that skips its declared parent', () => {
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+
+    expect(() => captureFlip({
+      captureId: 'unordered-chain',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      entries: [{ itemId: 'item', ancestorIds: ['stage', 'container'] }],
+      ancestors: [
+        { ancestorId: 'stage', regime: 'composited' },
+        { ancestorId: 'container', parentId: 'other', regime: 'composited' },
+        { ancestorId: 'other', regime: 'composited' },
+      ],
+      mutate: () => undefined,
+    }, projection, new FlipCaptureCache())).toThrow(/ancestor chain is not ordered/)
   })
 })

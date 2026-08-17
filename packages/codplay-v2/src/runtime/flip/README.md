@@ -14,6 +14,20 @@ The projection adapter declares its host context and projection epoch. A cold se
 may use a consumer-owned `FlipCaptureResolver` to realize an existing capture from
 the event/history boundary; FLIP then caches that capture before resolving it.
 
+`HtmlFlipRuntime` returns structured `FlipOperationResult` diagnostics through the
+V2 `DiagnosticCollector` boundary. Pure pose/capture functions may still reject
+invalid invariants internally; the runtime converts those failures into diagnostic
+reports for the application.
+
+The FLIP runtime and its standalone HTML pose utility do not import `codplay` V1.
+The authoring `selection-frame` package remains a separate V1 application; its
+package typecheck is not a CodPlay V2 validation command.
+
+The standalone HTML pose utility derives layout origins, local dimensions, parent
+matrices, and transformed AABB values from layout offsets and computed transforms.
+It does not use `getBoundingClientRect()` as a position source or as a calibration
+source.
+
 The validation demo lives in `packages/authoring/selection-frame/demos/flip` and
 runs with `npm run demo:flip` from the repository root. It reproduces the Player
 POC scene at `packages/demos/src/scenes/player-poc-scene.ts`, including drifting

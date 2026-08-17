@@ -1,4 +1,5 @@
 import type { Path } from '../../ace'
+import type { DiagnosticOutput, DiagnosticReport } from '../../diagnostics'
 
 /** Affine matrix supplied by the host HTML pose implementation. */
 export type HtmlMatrix = Readonly<{
@@ -101,6 +102,17 @@ export type FlipCaptureResolver = (input: Readonly<{
   timeMs: number
 }>) => FlipCapture | undefined
 
+/** Result returned by a public HTML FLIP runtime operation. */
+export type FlipOperationResult<T> = Readonly<
+  | { ok: true; value: T; diagnostics: DiagnosticReport }
+  | { ok: false; diagnostics: DiagnosticReport }
+>
+
+/** Application-owned diagnostic output for the HTML FLIP boundary. */
+export type HtmlFlipRuntimeOptions = Readonly<{
+  diagnosticOutput?: DiagnosticOutput
+}>
+
 /** A pose resolved for one item at one timeline instant. */
 export type ResolvedFlipPose = Readonly<{
   itemId: string
@@ -116,12 +128,15 @@ export type HtmlFlipProjection = Readonly<{
   getProjectionEpoch: () => number
   resolveHandle: (itemId: string) => unknown
   capturePose: (handle: unknown) => HtmlPose
+  captureOverlayPose?: (handle: unknown) => HtmlPose
   captureHistoricalPose?: (input: Readonly<{
     ancestorId: string
     timeMs: number
     capture: FlipAncestorCapture
   }>) => HtmlPose
   applyLocalPose: (handle: unknown, pose: ResolvedFlipPose) => void
+  finishLocalPose: (handle: unknown, captureId: string) => void
+  cancelLocalPose: (handle: unknown, captureId: string) => void
   beginOverlay: (handle: unknown, first: HtmlPose, last: HtmlPose) => unknown
   applyOverlayPose: (overlayHandle: unknown, pose: ResolvedFlipPose) => void
   finishOverlay: (overlayHandle: unknown) => void

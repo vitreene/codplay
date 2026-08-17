@@ -53,7 +53,8 @@ export function resolveFlipPoseGraph(
   const ancestorPoses = resolveAncestors(capture, timeMs, ancestorCaptures, projection, historicalPoseCache)
 
   return capture.entries.map((entry) => {
-    const parentId = entry.ancestorIds.at(-1)
+    const usesLocalParent = entry.mode !== 'overlay-world'
+    const parentId = usesLocalParent ? entry.ancestorIds.at(-1) : undefined
     const parentCapture = parentId === undefined ? undefined : requireAncestor(ancestorCaptures, parentId)
     const parentPose = parentId === undefined ? undefined : requireAncestorPose(ancestorPoses, parentId)
     const progress = resolveItemProgress(entry, timeMs)

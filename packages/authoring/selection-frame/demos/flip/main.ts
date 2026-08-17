@@ -1,7 +1,5 @@
-import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer } from '../../src/overlay-pose'
-import { HtmlFlipRuntime } from '../../../../codplay-v2/src/runtime/flip'
-import { resolveFlipPoseGraph } from '../../../../codplay-v2/src/runtime/flip'
-import type { FlipCapture, HtmlFlipProjection, HtmlMatrix, HtmlPose, ResolvedFlipPose } from '../../../../codplay-v2/src/runtime/flip'
+import { createHtmlDomProjection, HtmlFlipRuntime } from '../../../../codplay-v2/src/runtime/flip'
+import type { FlipCapture, HtmlPose } from '../../../../codplay-v2/src/runtime/flip'
 
 import './style.css'
 
@@ -14,13 +12,8 @@ type TimelineEvent = Readonly<{
   kind: TimelineEventKind
 }>
 
-type OverlayHandle = Readonly<{
-  ghost: HTMLElement
-  source: HTMLElement
-  sourceStyle: string | null
-}>
-
 const HOST_ID = 'player-poc-flip-v2'
+const DEBUG_SEEK_TIME_MS = 7233
 const MOVE_DURATION_MS = 320
 const TIMELINE_END_MS = 10_000
 const ITEM_IDS = ['demo-item-1', 'demo-item-2', 'demo-item-3', 'demo-item-4', 'demo-item-5'] as const
@@ -79,6 +72,7 @@ function describePose(pose: HtmlPose): Record<string, unknown> {
 
 /** Mounts the Player POC visual reference on the V2 FLIP timeline runtime. */
 function mountPlayerPocDemo(container: HTMLElement): void {
+  logFlip('demo-loaded', { version: 'flip-v2-debug-7233' })
   container.innerHTML = `
     <main class="demo-shell">
       <aside>
@@ -88,6 +82,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
         <div class="demo-controls">
           <button id="poc-play" class="demo-button" type="button">Play</button>
           <button id="poc-reset" class="demo-button demo-button-secondary" type="button">Reset</button>
+          <button id="poc-debug-seek" class="demo-button demo-button-secondary" type="button">Debug 7233ms</button>
         </div>
         <label class="demo-progress-control" for="poc-seek">
           Seek
@@ -116,6 +111,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
   const seekLabel = container.querySelector<HTMLOutputElement>('#poc-seek-label')!
   const play = container.querySelector<HTMLButtonElement>('#poc-play')!
   const reset = container.querySelector<HTMLButtonElement>('#poc-reset')!
+  const debugSeek = container.querySelector<HTMLButtonElement>('#poc-debug-seek')!
   const nodes = new Map<string, HTMLElement>([
     ['demo-list', mainList],
     ['demo-stage-list', stageList],
@@ -124,8 +120,6 @@ function mountPlayerPocDemo(container: HTMLElement): void {
   let frameHandle: number | undefined
   let activeCapture: FlipCapture | undefined
   let renderedEventIndex = -1
-  const localStyleSnapshots = new Map<string, string | null>()
-  let lastDebugSeekKey = ''
 
   /** Creates one Player POC item with its authored transform. */
   function createItem(itemId: string): HTMLElement {
@@ -182,115 +176,13 @@ function mountPlayerPocDemo(container: HTMLElement): void {
     return undefined
   }
 
-  /** Applies one resolved local pose while preserving the authored item transform. */
-  function applyLocalPose(handle: unknown, resolved: ResolvedFlipPose): void {
-    const node = handle as HTMLElement
-    if (resolved.progress >= 1) {
-      restoreLocalPose(node, true)
-      return
-    }
-    snapshotLocalStyle(node)
-    restoreLocalPose(node, false)
-    const naturalRect = captureOverlayPose(node).rect
-    const scaleX = naturalRect.width === 0 ? 1 : resolved.pose.rect.width / naturalRect.width
-    const scaleY = naturalRect.height === 0 ? 1 : resolved.pose.rect.height / naturalRect.height
-    const deltaX = resolved.pose.rect.left - naturalRect.left
-    const deltaY = resolved.pose.rect.top - naturalRect.top
-    if (resolved.progress <= 0.05 || resolved.progress >= 0.95) {
-      logFlip('local-apply', {
-        itemId: resolved.itemId,
-        progress: resolved.progress,
-        naturalRect: { ...naturalRect },
-        resolvedRect: { ...resolved.pose.rect },
-        delta: { x: deltaX, y: deltaY },
-        scale: { x: scaleX, y: scaleY },
-      })
-    }
-    node.style.transition = 'none'
-    node.style.transformOrigin = 'center'
-    node.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY}) ${ITEM_TRANSFORMS[resolved.itemId] ?? ''}`
-  }
-
-  /** Saves one item's complete inline style before FLIP projection writes. */
-  function snapshotLocalStyle(node: HTMLElement): void {
-    const itemId = node.dataset.itemId
-    if (itemId !== undefined && !localStyleSnapshots.has(itemId)) {
-      localStyleSnapshots.set(itemId, node.getAttribute('style'))
-    }
-  }
-
-  /** Restores the exact inline style captured before local FLIP projection. */
-  function restoreLocalPose(node: HTMLElement, discardSnapshot: boolean): void {
-    const itemId = node.dataset.itemId
-    if (itemId === undefined) return
-    const snapshot = localStyleSnapshots.get(itemId)
-    if (snapshot === undefined) return
-    if (snapshot === null) node.removeAttribute('style')
-    else node.setAttribute('style', snapshot)
-    if (discardSnapshot) localStyleSnapshots.delete(itemId)
-  }
-
-  /** Applies one world pose to a fixed overlay clone. */
-  function applyOverlayPose(handle: OverlayHandle, resolved: ResolvedFlipPose): void {
-    const { ghost } = handle
-    const matrix = resolved.pose.matrix
-    const linearMatrix: HtmlMatrix = { ...matrix, e: 0, f: 0 }
-    const bounds = transformedBounds(linearMatrix, resolved.pose.localWidth, resolved.pose.localHeight)
-    if (resolved.progress <= 0.05 || resolved.progress >= 0.95) {
-      logFlip('overlay-apply', {
-        itemId: resolved.itemId,
-        progress: resolved.progress,
-        resolvedRect: { ...resolved.pose.rect },
-        matrix: { ...resolved.pose.matrix },
-        overlayRect: { left: resolved.pose.rect.left - bounds.left, top: resolved.pose.rect.top - bounds.top },
-      })
-    }
-    ghost.style.position = 'fixed'
-    ghost.style.left = `${resolved.pose.rect.left - bounds.left}px`
-    ghost.style.top = `${resolved.pose.rect.top - bounds.top}px`
-    ghost.style.width = `${resolved.pose.localWidth}px`
-    ghost.style.height = `${resolved.pose.localHeight}px`
-    ghost.style.margin = '0'
-    ghost.style.minWidth = '0'
-    ghost.style.minHeight = '0'
-    ghost.style.boxSizing = 'border-box'
-    ghost.style.transformOrigin = '0 0'
-    ghost.style.transform = `matrix(${linearMatrix.a}, ${linearMatrix.b}, ${linearMatrix.c}, ${linearMatrix.d}, 0, 0)`
-    ghost.style.zIndex = '20'
-  }
-
-  /** Creates the host projection used by the V2 runtime. */
-  function createProjection(): HtmlFlipProjection {
-    return {
-      getHostContextId: () => HOST_ID,
-      getProjectionEpoch: () => projectionEpoch,
-      resolveHandle: (itemId) => nodes.get(itemId),
-      capturePose: (handle) => captureOverlayPose(handle as Element) as HtmlPose,
-      applyLocalPose,
-      beginOverlay: (handle, first) => {
-        const source = handle as HTMLElement
-        const ghost = source.cloneNode(true) as HTMLElement
-        const sourceStyle = source.getAttribute('style')
-        ensureOverlayLayer(stage).appendChild(ghost)
-        source.style.visibility = 'hidden'
-        ghost.style.position = 'fixed'
-        ghost.style.margin = '0'
-        ghost.style.visibility = 'visible'
-        calibrateGhostToWorldSnapshot(ghost, first.rect)
-        return { ghost, source, sourceStyle }
-      },
-      applyOverlayPose: (handle, resolved) => applyOverlayPose(handle as OverlayHandle, resolved),
-      finishOverlay: (handle) => {
-        const overlay = handle as OverlayHandle
-        if (overlay.sourceStyle === null) overlay.source.removeAttribute('style')
-        else overlay.source.setAttribute('style', overlay.sourceStyle)
-        overlay.ghost.remove()
-      },
-      flush: () => undefined,
-    }
-  }
-
-  const projection = createProjection()
+  const projection = createHtmlDomProjection({
+    hostContextId: HOST_ID,
+    getProjectionEpoch: () => projectionEpoch,
+    root: stage,
+    resolveHandle: (itemId) => nodes.get(itemId),
+    debug: logFlip,
+  })
   const runtime = new HtmlFlipRuntime(projection)
 
   /** Captures every Player POC move from its exact before and after DOM states. */
@@ -301,7 +193,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
     for (const [index, event] of TIMELINE_EVENTS.entries()) {
       renderPlacement(index - 1)
       applyListDrift(event.timeMs)
-      const rawCapture = runtime.capture({
+      const captureResult = runtime.capture({
         captureId: `${HOST_ID}-${event.itemId}-${event.timeMs}`,
         hostContextId: HOST_ID,
         projectionEpoch,
@@ -321,9 +213,15 @@ function mountPlayerPocDemo(container: HTMLElement): void {
         ],
         mutate: () => {
           renderPlacement(index)
-          applyListDrift(event.timeMs)
+          applyListDrift(event.timeMs + MOVE_DURATION_MS)
         },
       })
+      if (!captureResult.ok) {
+        const message = captureResult.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
+        logFlip('capture-error', { captureId: `${HOST_ID}-${event.itemId}-${event.timeMs}`, message })
+        throw new Error(message)
+      }
+      const rawCapture = captureResult.value
       logFlip('capture-first-last', {
         captureId: rawCapture.captureId,
         event,
@@ -335,26 +233,8 @@ function mountPlayerPocDemo(container: HTMLElement): void {
           to: describePose(ancestor.to),
         })),
       })
-      applyListDrift(event.timeMs + MOVE_DURATION_MS)
-      const futureItems = new Map(ITEM_IDS.map((itemId) => [itemId, captureOverlayPose(nodes.get(itemId)!) as HtmlPose]))
-      const futureAncestors = new Map([
-        ['demo-stage-list', captureOverlayPose(stageList) as HtmlPose],
-        ['demo-list', captureOverlayPose(mainList) as HtmlPose],
-      ])
       applyListDrift(event.timeMs)
-      const adjustedCapture: FlipCapture = {
-        ...rawCapture,
-        entries: rawCapture.entries.map((entry) => ({ ...entry, to: futureItems.get(entry.itemId) ?? entry.to })),
-        ancestors: rawCapture.ancestors.map((ancestor) => ({ ...ancestor, to: futureAncestors.get(ancestor.ancestorId) ?? ancestor.to })),
-      }
-      captures.push(adjustedCapture)
-      logFlip('capture-future-boundary', {
-        captureId: adjustedCapture.captureId,
-        event,
-        boundaryTimeMs: event.timeMs + MOVE_DURATION_MS,
-        items: adjustedCapture.entries.map((entry) => ({ itemId: entry.itemId, pose: describePose(entry.to) })),
-        ancestors: adjustedCapture.ancestors.map((ancestor) => ({ ancestorId: ancestor.ancestorId, pose: describePose(ancestor.to) })),
-      })
+      captures.push(rawCapture)
     }
     renderPlacement(-1)
     applyListDrift(0)
@@ -369,13 +249,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
     frameHandle = undefined
     play.textContent = 'Play'
     runtime.cancel()
-    clearItemLocalPoses()
     activeCapture = undefined
-  }
-
-  /** Restores only item transforms, never the captured parent transforms. */
-  function clearItemLocalPoses(): void {
-    for (const itemId of ITEM_IDS) restoreLocalPose(nodes.get(itemId)!, true)
   }
 
   /** Resolves the timeline directly and applies one active V2 capture if needed. */
@@ -385,31 +259,16 @@ function mountPlayerPocDemo(container: HTMLElement): void {
     const eventIndex = TIMELINE_EVENTS.findLastIndex((event) => event.timeMs <= boundedTime)
     if (eventIndex !== renderedEventIndex) {
       runtime.cancel()
-      clearItemLocalPoses()
       renderPlacement(eventIndex)
       renderedEventIndex = eventIndex
     }
     applyListDrift(boundedTime)
     activeCapture = active === undefined ? undefined : captures[active.index]
     if (activeCapture !== undefined) {
-      const progress = (boundedTime - activeCapture.startAt) / activeCapture.duration
-      const debugKey = `${activeCapture.captureId}:${progress <= 0.05 ? 'start' : progress >= 0.95 ? 'end' : 'middle'}`
-      if (debugKey !== lastDebugSeekKey) {
-        lastDebugSeekKey = debugKey
-        const resolved = resolveFlipPoseGraph(activeCapture, boundedTime, projection)
-        logFlip('seek-resolved', {
-          captureId: activeCapture.captureId,
-          timeMs: boundedTime,
-          progress,
-          scroll: { x: window.scrollX, y: window.scrollY },
-          resolved: resolved.map((entry) => ({ itemId: entry.itemId, mode: entry.mode, progress: entry.progress, pose: describePose(entry.pose) })),
-        })
-      }
       runtime.seek(activeCapture, boundedTime)
     }
     else {
       runtime.cancel()
-      clearItemLocalPoses()
     }
     seek.value = String(boundedTime)
     seekLabel.value = `${Math.round(boundedTime)}ms`
@@ -454,9 +313,15 @@ function mountPlayerPocDemo(container: HTMLElement): void {
     renderedEventIndex = -2
     seekTimeline(0)
   })
+  debugSeek.addEventListener('click', () => {
+    logFlip('debug-seek-click', { timeMs: DEBUG_SEEK_TIME_MS })
+    clearPlayback()
+    seekTimeline(DEBUG_SEEK_TIME_MS)
+  })
   window.addEventListener('resize', () => {
     clearPlayback()
     projectionEpoch += 1
+    runtime.invalidateHost(HOST_ID, projectionEpoch)
     captures = buildCaptures()
     renderedEventIndex = -2
     seekTimeline(Number(seek.value))
@@ -465,24 +330,6 @@ function mountPlayerPocDemo(container: HTMLElement): void {
 
   debug.textContent = `V2 captures: ${captures.length}\nEvents: ${TIMELINE_EVENTS.map((event) => `${event.timeMs}ms ${event.itemId}:${event.kind}`).join(', ')}`
   seekTimeline(0)
-}
-
-/** Computes the transformed AABB of one local box. */
-function transformedBounds(matrix: HtmlMatrix, width: number, height: number): { left: number; top: number } {
-  const points = [
-    transformPoint(matrix, [0, 0]),
-    transformPoint(matrix, [width, 0]),
-    transformPoint(matrix, [0, height]),
-    transformPoint(matrix, [width, height]),
-  ]
-  return {
-    left: Math.min(...points.map((point) => point[0])),
-    top: Math.min(...points.map((point) => point[1])),
-  }
-}
-
-function transformPoint(matrix: HtmlMatrix, point: readonly [number, number]): readonly [number, number] {
-  return [matrix.a * point[0] + matrix.c * point[1], matrix.b * point[0] + matrix.d * point[1]]
 }
 
 const app = document.querySelector<HTMLElement>('#app')

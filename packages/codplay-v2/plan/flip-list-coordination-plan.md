@@ -17,8 +17,10 @@ The `move` contract may be consumed by several projection systems. An HTML
 consumer may submit a FLIP request; other projection systems calculate their own
 movement without entering this capability.
 
-The canonical HTML pose implementation remains in the host container:
-`packages/authoring/selection-frame/src/overlay-pose.ts`.
+The standalone V2 HTML pose implementation remains in
+`packages/codplay-v2/src/runtime/flip/html-pose.ts`. A consumer host owns the
+projection handles and overlay lifecycle; the V2 pose utility has no dependency
+on the V1 runtime.
 FLIP consumes that host pose service and does not duplicate its geometry logic.
 
 ## Boundaries

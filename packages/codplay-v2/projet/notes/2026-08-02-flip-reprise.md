@@ -16,8 +16,8 @@ Elle est portée dans :
 
 `packages/authoring/selection-frame/demos/flip`
 
-Elle utilise `HtmlFlipRuntime` V2 et conserve le host overlay V1 nécessaire à la
-projection HTML. Elle possède un Play/Pause, un seek et des logs de diagnostic.
+Elle utilise `HtmlFlipRuntime` V2 et le host HTML autonome de la tranche V2. Elle
+possède un Play/Pause, un seek et des logs de diagnostic.
 
 Cette demo est un contexte validé parmi d'autres. Elle ne devient pas l'unique
 oracle du FLIP et ne remplace pas les futures demos normatives. La première demo
@@ -65,3 +65,44 @@ elle ne doit pas être reprise sans investigation dédiée.
 - Typecheck `packages/codplay-v2` réussi.
 - Suite V2 : 47 fichiers, 281 tests réussis au moment de la consignation.
 - Build Vite de la demo Player POC réussi.
+
+## État après la reprise du 2026-08-17
+
+La reprise reste volontairement autonome : aucune intégration avec `move`, `solve`,
+la capacité `list` ou une autre couche du projet n'a été introduite.
+
+La tranche ajoutée couvre désormais :
+
+- une fixture normative avec un parent et un grand-parent FLIP simultanés ;
+- la résolution de cette hiérarchie aux bornes et au milieu ;
+- la résolution de plusieurs ancêtres `layout` par le cache historique du host ;
+- la coupe historique d'un ancêtre `layout` au-dessus d'un descendant composité ;
+- la détection des cycles et des chaînes d'ancêtres incohérentes avant capture ;
+- la fin et la cancellation de la projection locale dans le runtime, et non plus
+  seulement dans la démo host ;
+- le retarget d'une projection locale par une capture plus récente.
+- la résolution de captures chevauchantes pour des items distincts dans un seul
+  commit de projection.
+
+La suite V2 vérifiée après cette tranche compte **48 fichiers et 294 tests réussis**.
+
+Les erreurs rencontrées à la frontière `HtmlFlipRuntime` sont maintenant retournées
+dans le système V2 `DiagnosticCollector`, avec un `DiagnosticOutput` fourni par
+l'application. Les algorithmes purs conservent leurs exceptions d'invariant ; le
+runtime ne les laisse plus remonter directement à l'application.
+
+Un correctif supplémentaire sépare désormais les deux espaces de résolution : un
+item `overlay-world` qui change de conteneur est interpolé directement entre ses
+ancres FIRST/LAST en espace monde ; il ne reçoit plus la matrice du conteneur cible
+comme si sa pose FIRST lui appartenait déjà. Ce cas est couvert par une fixture
+cross-container dédiée.
+
+Le host HTML V2 convertit aussi désormais les deltas de pose monde dans le repère
+local du parent avant d'écrire un `translate(...)` CSS. Cette conversion est
+nécessaire lorsque le parent est tourné ou mis à l'échelle ; elle est couverte par
+les tests de mathématiques du host.
+
+Restent dans cette tranche autonome : la détection automatique du plus haut ancêtre
+en reflow, la caractérisation et le cache par segment inter-bornes et les mesures
+repositionnées complètes. Ces points demandent encore un contrat host précis ; ils
+ne sont pas remplacés par une approximation dans le runtime actuel.
