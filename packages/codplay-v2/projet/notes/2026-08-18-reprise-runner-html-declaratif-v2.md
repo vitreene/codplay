@@ -101,6 +101,30 @@ de captures, ni algorithme de projection.
 - Masquage réversible des descendants dans les ghosts parents lorsqu'ils possèdent
   leur propre overlay.
 
+### Tranche runner logique validée
+
+- `packages/codplay-v2/src/runtime/runner` fournit une façade HTML générique hors démo.
+- `HtmlComponentMaterializer` matérialise le template de chaque composant, appelle
+  `_materialize`, publie les parts sélectionnées par le catalogue et détache tout au
+  teardown.
+- `createDomComponentServiceCatalog` fournit les services DOM `className`, `style`,
+  `attr` et `content`, avec suppression des propriétés et attributs précédemment gérés.
+- `HtmlPlayerRunner` associe explicitement les IDs de targets root au root HTML,
+  branche `RuntimeComponentRuntime` et `LayoutDomBackend`, et expose `init`, `play`,
+  `pause`, `advance`, `seek`, `resize` et `destroy`.
+- La verticale déclarative de test couvre montage initial, outlet, transfert logique,
+  convergence `advance`/`seek`, epoch de resize et destruction.
+- La démo navigateur `demos/validation/runner` reprend cette verticale avec un
+  parentage initial fixe et les checkpoints continus `0ms`, `1200ms`, `1900ms` et
+  `2650ms`; elle vérifie les couleurs, l'opacité et les aliases `style.x/style.y`
+  sans changer `move`, sans boucle de rendu secondaire et sans parentage impératif.
+- Le contrat `style.x/style.y` est relié à la résolution ACE `translateX/translateY`
+  puis composé en `transform: translate(...)` par le service DOM du runner. Cette
+  intégration reste limitée aux deux canaux de translation nécessaires à la
+  verticale; les autres canaux transform restent soumis à leur plan dédié.
+- Cette tranche ne branche pas encore `HtmlDomProjection` ni `MoveFlipLayoutProjection`;
+  elle ne valide donc pas une transition FLIP visuelle.
+
 ## Fixtures
 
 ### Référence conservée
@@ -134,7 +158,7 @@ conservée uniquement comme description visuelle et oracle de scénario. Elle de
 
 ## Prochain chantier recommandé
 
-### 1. Contrat du runner HTML V2
+### 1. Contrat du runner HTML V2 — tranche logique réalisée
 
 Définir une façade qui reçoit une scène compilée, un root HTML, un catalogue de
 composants et les cibles de montage. Elle doit posséder l'orchestration générique,
@@ -150,7 +174,15 @@ pas la démo :
 - resize et invalidation d'epoch ;
 - destruction complète.
 
-### 2. Première verticale déclarative
+La tranche réalisée est volontairement bornée au parentage logique et au cycle de
+vie HTML. Le ticker est possédé par le runner seulement lorsqu'il construit son
+propre engine; un engine externe reste piloté par son host. Les roots sont fournis
+par `rootTargets`, sans convention implicite sur le DOM.
+
+La composition FLIP et la construction des captures restent hors tranche jusqu'à
+la résolution des contrats temporels et visuels listés dans les limites ouvertes.
+
+### 2. Première verticale déclarative — tranche logique réalisée
 
 Avant le stress-test, créer une petite scène déclarative avec :
 
@@ -161,6 +193,16 @@ Avant le stress-test, créer une petite scène déclarative avec :
 - le même résultat par Play et Seek.
 
 Cette verticale doit valider le runner, pas ajouter un cas particulier dans FLIP.
+
+La verticale existe dans `tests/runtime/runner/html-player-runner.spec.ts`. Elle
+utilise un faux DOM déterministe afin de vérifier uniquement le contrat logique;
+elle ne sert pas d'oracle pour les poses FLIP.
+
+La présentation manuelle correspondante se lance avec `npm run demo:runner` depuis
+`packages/codplay-v2`. Le build de contrôle est `npm run build:runner`. Les mêmes
+checkpoints doivent être parcourus par Seek puis par Play; les valeurs CSS
+observées doivent être identiques à chaque borne et le parent DOM ne doit pas
+changer.
 
 ### 3. Reprise de `flip-stress`
 
@@ -192,12 +234,13 @@ Lorsque le runner existe, vérifier :
 - Diagnostics détaillés des transitions invalides ou incomplètes.
 - Support HTML 3D/perspective au-delà de la pose affine 2D actuelle.
 - Runner générique de materialisation HTML/Player.
+- Runner HTML visuel avec `HtmlDomProjection` et `MoveFlipLayoutProjection`.
 - Intégration concrète de la capacité list avec `reorderOnMove/Add/Remove`.
 
 ## Vérifications au moment de la reprise
 
 - Typecheck V2 réussi.
-- Suite V2 : **51 fichiers, 306 tests réussis**.
+- Suite V2 : **53 fichiers, 312 tests réussis**.
 - Build Vite de la démo `flip` réussi.
 - Build Vite de la fixture conservée `flip-stress` réussi.
 - Aucun commit ni suppression de la fixture ne doit être effectué sans demande
@@ -214,5 +257,7 @@ Lorsque le runner existe, vérifier :
 - `packages/codplay-v2/src/runtime/flip/html-dom-projection.ts`
 - `packages/codplay-v2/src/runtime/flip/html-pose.ts`
 - `packages/codplay-v2/src/runtime/flip/README.md`
+- `packages/codplay-v2/src/runtime/runner/README.md`
+- `packages/codplay-v2/demos/validation/runner/main.ts`
 - `packages/authoring/selection-frame/demos/flip/main.ts`
 - `packages/authoring/selection-frame/demos/flip-stress/main.ts`

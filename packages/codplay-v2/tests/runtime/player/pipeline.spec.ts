@@ -211,6 +211,39 @@ describe('materialize -> resolve -> solve', () => {
     expect(dataResolved.persos['main:root']?.state.className).toContain('data-active')
   })
 
+  it('resolves x and y style channels through ACE without changing placement', () => {
+    const transformScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { move: '@root', style: { x: '0px', y: '10px' } },
+              actions: {
+                translate: {
+                  style: {
+                    x: { from: '0px', to: '100px', duration: 100, ease: 'linear' },
+                    y: { from: '10px', to: '50px', duration: 100, ease: 'linear' },
+                  },
+                },
+              },
+            }],
+            eventimes: [{ name: 'translate', startAt: 100 }],
+          },
+        },
+      },
+    }
+
+    const resolved = resolveScene(materializeScene(transformScene, 150))
+
+    expect(resolved.persos['main:root']?.placement.kind).toBe('root')
+    expect(resolved.persos['main:root']?.state.style).toMatchObject({ x: '50px', y: '30px' })
+  })
+
   it('exposes a stable solve output without claiming hierarchy support', () => {
     const solved = solveScene(resolveScene(materializeScene(scene, 150)))
 

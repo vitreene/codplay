@@ -1,4 +1,11 @@
-import { parseColor, prepareTween, resolveTween, type ColorValue } from '../../../ace'
+import {
+  parseColor,
+  prepareTransformTween,
+  prepareTween,
+  resolveTween,
+  type ColorValue,
+  type TransformProperty,
+} from '../../../ace'
 import { isPlainRecord } from '../../../shared'
 import type { CompiledRecord, CompiledValue } from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
@@ -64,6 +71,8 @@ function resolveStyleValue(
   value: CompiledValue,
   elapsedMs: number,
 ): CompiledValue {
+  const transformProperty = resolveTransformProperty(property)
+  if (transformProperty !== undefined) return resolveTransformStyleValue(transformProperty, current, value, elapsedMs)
   if (!isPlainRecord(value) || !('to' in value)) return normalizeColor(property, value) ?? value
   const to = normalizeColor(property, value.to)
   if (!isTweenValue(to)) throw new Error('Resolve only supports scalar or color style tweens.')
@@ -77,6 +86,38 @@ function resolveStyleValue(
     ease: typeof value.ease === 'string' ? value.ease : undefined,
   })
   return resolveTween(tween, elapsedMs) as CompiledValue
+}
+
+/** Resolves one scalar transform channel from the authored x/y aliases. */
+function resolveTransformStyleValue(
+  property: TransformProperty,
+  current: CompiledValue | undefined,
+  value: CompiledValue,
+  elapsedMs: number,
+): CompiledValue {
+  if (!isPlainRecord(value) || !('to' in value)) return value
+  if (!isScalar(value.to)) throw new Error(`Transform channel ${property} requires a scalar target.`)
+  const from = value.from === undefined
+    ? isScalar(current) ? current : undefined
+    : isScalar(value.from) ? value.from : undefined
+  if (value.from !== undefined && from === undefined) {
+    throw new Error(`Transform channel ${property} requires a scalar from value.`)
+  }
+  return resolveTween(prepareTransformTween({
+    property,
+    from,
+    to: value.to,
+    duration: typeof value.duration === 'number' ? value.duration : undefined,
+    delay: typeof value.delay === 'number' ? value.delay : undefined,
+    ease: typeof value.ease === 'string' ? value.ease : undefined,
+  }), elapsedMs) as CompiledValue
+}
+
+/** Maps the supported style aliases to their canonical ACE transform channels. */
+function resolveTransformProperty(property: string): TransformProperty | undefined {
+  if (property === 'x') return 'translateX'
+  if (property === 'y') return 'translateY'
+  return undefined
 }
 
 /** Normalizes initial colors before values enter ACE. */

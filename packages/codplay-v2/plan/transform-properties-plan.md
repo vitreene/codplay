@@ -112,3 +112,16 @@ la provenance plus fine (auteur ou identite) pour appliquer la hierarchie des
 defaults et produire ses diagnostics, mais cette provenance ne fait pas partie de
 l'API ACE. ACE ne prepare jamais une transition differee tant que la borne n'est
 pas fournie; il ne lit ni le DOM ni une valeur implicite du substrat.
+
+## Integration runner realisee
+
+La tranche HTML runner relie maintenant les aliases auteur `style.x` et `style.y`
+aux canaux ACE `translateX` et `translateY`. La resolution logique produit une
+valeur scalaire a chaque instant; le service DOM du runner compose ces deux canaux
+en une seule valeur `transform: translate(x, y)`. Il ajoute `px` aux nombres et
+conserve les unites auteur portees par les chaines.
+
+Cette integration ne generalise pas encore la composition aux rotations, scales,
+perspective, matrices ou aux proprietes CSS `translate`/`transform` brutes. Ces
+formes restent soumises a la tranche de contrat dediee et ne doivent pas etre
+introduites par une demo.
