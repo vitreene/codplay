@@ -144,7 +144,7 @@ export class RuntimePlayer {
       this.solvedScene = this.reconstructScene(0)
       this.componentRuntime.sync(this.solvedScene)
     }
-    this.layoutProjection?.project(this.solvedScene)
+    this.layoutProjection?.project(this.solvedScene, { phase: 'init', moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
@@ -155,17 +155,21 @@ export class RuntimePlayer {
         if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
           throw new Error('Player seek reconstruction is missing.')
         }
+        const previousSolvedScene = this.solvedScene
+        const moveDeltas = previousSolvedScene === undefined
+          ? []
+          : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
         if (this.pendingModuleSeekHandles.length > 0) {
           const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
-          this.notifyModuleMoveDeltas(this.solvedScene, this.pendingSolvedScene, preparedInstances)
+          this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, preparedInstances, moveDeltas)
           this.pendingModuleSeekHandles = []
         } else {
-          this.notifyModuleMoveDeltas(this.solvedScene, this.pendingSolvedScene)
+          this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
         }
         this.solvedScene = this.pendingSolvedScene
         this.componentRuntime?.sync(this.solvedScene)
-        this.layoutProjection?.project(this.solvedScene)
+        this.layoutProjection?.project(this.solvedScene, { phase: 'seek', previousScene: previousSolvedScene, moveDeltas })
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
@@ -239,10 +243,13 @@ export class RuntimePlayer {
     }
     this.currentTimeMs += frame.deltaMs
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
-    this.notifyModuleMoveDeltas(this.solvedScene, nextSolvedScene)
+    const previousSolvedScene = this.solvedScene
+    const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+    this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.componentRuntime?.sync(this.solvedScene)
-    this.layoutProjection?.project(this.solvedScene)
+    this.layoutProjection?.project(this.solvedScene, { phase: 'frame', previousScene: previousSolvedScene, moveDeltas })
+    this.layoutProjection?.advance?.(this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
@@ -302,9 +309,10 @@ export class RuntimePlayer {
     before: SolvedScene | undefined,
     after: SolvedScene,
     excludedInstances: ReadonlySet<RuntimeModuleServiceInstance> = new Set(),
+    deltas = before === undefined ? [] : diffSolvedScenes(before, after),
   ): void {
     if (before === undefined) return
-    for (const delta of diffSolvedScenes(before, after)) {
+    for (const delta of deltas) {
       for (const instance of this.moduleServiceInstances.values()) {
         if (!excludedInstances.has(instance)) instance.onMoveDelta?.(delta)
       }

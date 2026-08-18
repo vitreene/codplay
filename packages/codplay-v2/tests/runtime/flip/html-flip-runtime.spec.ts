@@ -39,6 +39,11 @@ function projectionFor(poses: Map<string, HtmlPose>, log: string[] = []): HtmlFl
       if (captured === undefined) throw new Error(`Missing test pose: ${itemId}`)
       return captured
     },
+    captureHistoricalPose: ({ ancestorId }) => {
+      const captured = poses.get(ancestorId)
+      if (captured === undefined) throw new Error(`Missing test historical pose: ${ancestorId}`)
+      return captured
+    },
     applyLocalPose: vi.fn(),
     finishLocalPose: vi.fn(),
     cancelLocalPose: vi.fn(),
@@ -62,7 +67,7 @@ function captureWithHierarchy(): FlipCapture {
     startAt: 0,
     endAt: 1000,
     duration: 1000,
-    easing: 'linear',
+    ease: 'linear',
     ancestors: [
       {
         ancestorId: 'container',
@@ -79,7 +84,7 @@ function captureWithHierarchy(): FlipCapture {
         startAt: 0,
         endAt: 1000,
         duration: 1000,
-        easing: 'linear',
+        ease: 'linear',
         from: pose(110, 0, 10, 10, scale(2)),
         to: pose(220, 0, 10, 10, scale(2)),
       },
@@ -95,7 +100,7 @@ function captureWithGrandparentHierarchy(): FlipCapture {
     startAt: 0,
     endAt: 1000,
     duration: 1000,
-    easing: 'linear',
+    ease: 'linear',
     ancestors: [
       {
         ancestorId: 'stage',
@@ -119,7 +124,7 @@ function captureWithGrandparentHierarchy(): FlipCapture {
         startAt: 0,
         endAt: 1000,
         duration: 1000,
-        easing: 'linear',
+        ease: 'linear',
         from: pose(115, 0, 10, 10, scale(2)),
         to: pose(230, 0, 10, 10, scale(2)),
       },
@@ -135,7 +140,7 @@ function captureWithCrossContainerOverlay(): FlipCapture {
     startAt: 0,
     endAt: 1000,
     duration: 1000,
-    easing: 'linear',
+    ease: 'linear',
     ancestors: [
       {
         ancestorId: 'container-a',
@@ -158,7 +163,7 @@ function captureWithCrossContainerOverlay(): FlipCapture {
         startAt: 0,
         endAt: 1000,
         duration: 1000,
-        easing: 'linear',
+        ease: 'linear',
         from: pose(120, 0, 10, 10),
         to: pose(320, 0, 10, 10),
       },
@@ -180,7 +185,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 100,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [
         { itemId: 'first', ancestorIds: [] },
         { itemId: 'second', ancestorIds: [] },
@@ -327,7 +332,7 @@ describe('HTML FLIP V2', () => {
       startAt: 0,
       endAt: 1000,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       ancestors: [],
       entries: [{
         itemId: 'item',
@@ -336,7 +341,7 @@ describe('HTML FLIP V2', () => {
         startAt: 0,
         endAt: 1000,
         duration: 1000,
-        easing: 'linear',
+        ease: 'linear',
         from: pose(0),
         to: pose(100),
         path: preparePath({ control: [0.5, 1] }, { traversal: 'parameter' }),
@@ -366,7 +371,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 0,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'item', ancestorIds: [] }],
       mutate: () => poses.set('item', pose(100)),
     }, projection, new FlipCaptureCache())
@@ -387,7 +392,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 0,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'item', ancestorIds: [] }],
       mutate: () => poses.set('item', pose(100)),
     }))
@@ -399,7 +404,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 1000,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'item', ancestorIds: [] }],
       mutate: () => poses.set('item', pose(200)),
     }))
@@ -440,7 +445,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 0,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'item', ancestorIds: [] }],
       mutate: () => poses.set('item', pose(100)),
     }, projection, new FlipCaptureCache())
@@ -468,7 +473,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 0,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'first', ancestorIds: [] }],
       mutate: () => poses.set('first', pose(100)),
     }))
@@ -478,7 +483,7 @@ describe('HTML FLIP V2', () => {
       projectionEpoch: 1,
       startAt: 100,
       duration: 1000,
-      easing: 'linear',
+      ease: 'linear',
       entries: [{ itemId: 'second', ancestorIds: [] }],
       mutate: () => poses.set('second', pose(220)),
     }))

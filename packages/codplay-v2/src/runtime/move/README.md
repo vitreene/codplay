@@ -5,6 +5,14 @@ CodPlay version: V2 foundation
 
 This folder owns pure placement policy and generic state deltas.
 
+The author-facing `move` shape is specified in
+[`../../plan/move-contract-plan.md`](../../plan/move-contract-plan.md). The
+author uses `target`; the runtime policy may resolve it to opaque `targetId` and
+`parentKey` values. Transition properties are part of the author contract. SVG
+`path` values are compiled into normalized prepared segments before this policy
+receives the compiled scene; this folder only carries them through placement
+state and deltas.
+
 - same-tick move conflict resolution;
 - opaque target placement selection;
 - `mount`, `unmount`, and `move` deltas between solved scenes;

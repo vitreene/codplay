@@ -90,7 +90,7 @@ function createScene(): SceneDoc {
         }, {
           id: 'root',
           type: 'tag',
-          initial: { tag: 'article', move: { parentId: 'demo-outlet' }, className: 'is-idle', style: { opacity: 0, backgroundColor: '#f8fafc' } },
+          initial: { tag: 'article', move: { target: 'demo-outlet' }, className: 'is-idle', style: { opacity: 0, backgroundColor: '#f8fafc' } },
           actions: {
             'demo:show': {
               className: { add: 'is-active', remove: 'is-idle' },
@@ -112,7 +112,7 @@ function createScene(): SceneDoc {
             'demo:accent': {
               style: { backgroundColor: { from: '#a78bfa', to: '#facc15', duration: 500, ease: 'linear' } },
             },
-            'demo:move-outlet': { move: { parentId: 'demo-outlet', mode: 'first' } },
+            'demo:move-outlet': { move: { target: 'demo-outlet', mode: 'first' } },
             'demo:move-off': { move: '@off' },
           },
         }],

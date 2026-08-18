@@ -16,7 +16,14 @@ export { evaluateTemporaryScene, type TemporaryPersoState } from './temporary-sc
 export { RenderSync } from './render-sync'
 export { LayoutDomBackend } from './layout-dom-backend'
 export type { LayoutProjectionNodes } from './layout-dom-backend'
-export type { LayoutProjection } from './layout-projection'
+export type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
+export {
+  MoveFlipLayoutProjection,
+  type MoveFlipCaptureBuilder,
+  type MoveFlipCaptureDescription,
+  type MoveFlipLayoutProjectionOptions,
+} from './flip/move-flip-layout-projection'
+export { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './flip/move-flip-transition'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,

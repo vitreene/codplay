@@ -106,3 +106,31 @@ Restent dans cette tranche autonome : la détection automatique du plus haut anc
 en reflow, la caractérisation et le cache par segment inter-bornes et les mesures
 repositionnées complètes. Ces points demandent encore un contrat host précis ; ils
 ne sont pas remplacés par une approximation dans le runtime actuel.
+
+## État après la correction overlay et le bridge `move` — 2026-08-17
+
+La projection `overlay-world` de `HtmlDomProjection` est maintenant scoped au
+`root` du host. Le ghost est placé dans un layer enfant absolu et sa pose monde
+est convertie dans le repère local de ce root. La translation CSS finale est
+portée par la matrice localisée elle-même ; elle ne soustrait pas une seconde
+fois le minimum vertical de l'AABB transformée.
+
+Cette correction est couverte par `html-dom-projection.spec.ts`, qui vérifie la
+translation d'un item tourné dont le sommet visuel est différent de son origine
+locale.
+
+Le bridge `MoveFlipLayoutProjection` est également présent entre
+`MoveStateDelta`, `LayoutProjection` et `HtmlFlipRuntime`. Il capture avant la
+projection structurelle, délègue la mutation, puis avance la capture avec le
+temps du `RuntimePlayer`. Le host conserve la responsabilité de construire les
+entries, les ancêtres et la forme FLIP de la transition.
+
+Vérifications au 2026-08-17 : typecheck V2 réussi, **51 fichiers et 303 tests
+réussis**, build Vite de la démo FLIP réussi.
+
+La syntaxe auteur de `transition.path` est une chaîne SVG `d` limitée aux
+commandes `M`, `L` et `A`. Le compilateur normalise le départ en `[0, 0]`, l'arrivée
+en `[1, 0]`, quantifie la géométrie au centième et produit des segments internes
+d'arcs et de droites avec leurs longueurs cumulées. Le runtime FLIP ne parse donc
+aucun SVG. Restent à fixer les valeurs par défaut de transition et les diagnostics
+détaillés des transitions invalides ou incomplètes.

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { isPreparedPath } from '../../../src/ace'
 import { ValidationCatalog } from '../../../src/scene/validation'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
@@ -65,6 +66,45 @@ describe('SceneBuilder', () => {
       expect(JSON.stringify(result.compiledScene)).not.toContain('=>')
       expect(result.compiledScene.scene.init).toMatchObject({ ref: expect.stringContaining('fn:') })
       expect(result.compiledScene.scene.stories.main.listen[0]?.transform).toHaveLength(1)
+    }
+  })
+
+  it('normalizes author SVG move paths into compact prepared segments', () => {
+    const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'svg-path-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'item',
+            type: 'text',
+            initial: { move: '@root' },
+            actions: {
+              move: {
+                move: {
+                  target: '@root',
+                  transition: { duration: 100, path: 'M 10 20 L 20 30 L 30 20' },
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const path = result.compiledScene.scene.stories.main?.persos[0]?.actions.move
+    const pathValue = (path as Record<string, unknown>).move && ((path as Record<string, unknown>).move as Record<string, unknown>).transition
+      ? (((path as Record<string, unknown>).move as Record<string, unknown>).transition as Record<string, unknown>).path
+      : undefined
+
+    expect(isPreparedPath(pathValue)).toBe(true)
+    if (isPreparedPath(pathValue)) {
+      expect(pathValue.kind).toBe('segments')
+      expect(pathValue.segments?.[0]?.to).toEqual([0.5, 0.5])
+      expect(pathValue.segments?.at(-1)?.to).toEqual([1, 0])
     }
   })
 

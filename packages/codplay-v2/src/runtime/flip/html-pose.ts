@@ -260,19 +260,19 @@ export function positionHtmlGhost(ghost: HTMLElement, target: { left: number; to
   ghost.style.top = `${top}px`
 }
 
-/** Creates the shared fixed overlay layer for one standalone HTML host. */
+/** Creates the overlay layer scoped to one standalone HTML host root. */
 export function ensureHtmlOverlayLayer(sceneRoot: Element): HTMLElement {
-  const existing = sceneRoot.ownerDocument.querySelector<HTMLElement>('[data-selection-frame-overlay]')
-  if (existing !== null) return existing
+  const existing = Array.from(sceneRoot.children).find((child) => child.getAttribute('data-selection-frame-overlay') !== null)
+  if (existing instanceof HTMLElement) return existing
   const layer = sceneRoot.ownerDocument.createElement('div')
   layer.setAttribute('data-selection-frame-overlay', '')
-  layer.style.position = 'fixed'
+  layer.style.position = 'absolute'
   layer.style.left = '0'
   layer.style.top = '0'
-  layer.style.width = '0'
-  layer.style.height = '0'
+  layer.style.width = '100%'
+  layer.style.height = '100%'
   layer.style.pointerEvents = 'none'
-  layer.style.zIndex = '2147483000'
-  sceneRoot.ownerDocument.body.appendChild(layer)
+  layer.style.zIndex = '20'
+  sceneRoot.appendChild(layer)
   return layer
 }

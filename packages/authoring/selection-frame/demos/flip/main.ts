@@ -13,9 +13,9 @@ type TimelineEvent = Readonly<{
 }>
 
 const HOST_ID = 'player-poc-flip-v2'
-const DEBUG_SEEK_TIME_MS = 7233
-const MOVE_DURATION_MS = 320
-const TIMELINE_END_MS = 10_000
+const DEBUG_SEEK_TIME_MS = 7700
+const MOVE_DURATION_MS = 1000
+const TIMELINE_END_MS = 15_000
 const ITEM_IDS = ['demo-item-1', 'demo-item-2', 'demo-item-3', 'demo-item-4', 'demo-item-5'] as const
 const ITEM_LABELS: Record<string, string> = {
   'demo-item-1': 'ITEM 1',
@@ -46,10 +46,10 @@ const TIMELINE_EVENTS: readonly TimelineEvent[] = [
   { timeMs: 5000, itemId: 'demo-item-5', kind: 'add' },
   { timeMs: 6200, itemId: 'demo-item-3', kind: 'to-first' },
   { timeMs: 7200, itemId: 'demo-item-1', kind: 'return-origin' },
-  { timeMs: 7600, itemId: 'demo-item-2', kind: 'return-origin' },
-  { timeMs: 8000, itemId: 'demo-item-3', kind: 'return-origin' },
-  { timeMs: 8400, itemId: 'demo-item-4', kind: 'return-origin' },
-  { timeMs: 8800, itemId: 'demo-item-5', kind: 'return-origin' },
+  { timeMs: 8600, itemId: 'demo-item-2', kind: 'return-origin' },
+  { timeMs: 10000, itemId: 'demo-item-3', kind: 'return-origin' },
+  { timeMs: 11400, itemId: 'demo-item-4', kind: 'return-origin' },
+  { timeMs: 12800, itemId: 'demo-item-5', kind: 'return-origin' },
 ]
 
 const FLIP_DEBUG = true
@@ -72,7 +72,7 @@ function describePose(pose: HtmlPose): Record<string, unknown> {
 
 /** Mounts the Player POC visual reference on the V2 FLIP timeline runtime. */
 function mountPlayerPocDemo(container: HTMLElement): void {
-  logFlip('demo-loaded', { version: 'flip-v2-debug-7233' })
+  logFlip('demo-loaded', { version: 'flip-v2-debug-7700' })
   container.innerHTML = `
     <main class="demo-shell">
       <aside>
@@ -82,7 +82,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
         <div class="demo-controls">
           <button id="poc-play" class="demo-button" type="button">Play</button>
           <button id="poc-reset" class="demo-button demo-button-secondary" type="button">Reset</button>
-          <button id="poc-debug-seek" class="demo-button demo-button-secondary" type="button">Debug 7233ms</button>
+          <button id="poc-debug-seek" class="demo-button demo-button-secondary" type="button">Debug 7700ms</button>
         </div>
         <label class="demo-progress-control" for="poc-seek">
           Seek
@@ -199,7 +199,7 @@ function mountPlayerPocDemo(container: HTMLElement): void {
         projectionEpoch,
         startAt: event.timeMs,
         duration: MOVE_DURATION_MS,
-        easing: 'out(2)',
+        ease: 'inOutQuad',
         entries: ITEM_IDS.map((itemId) => ({
           itemId,
           ancestorIds: event.kind !== 'to-first' && itemId === event.itemId

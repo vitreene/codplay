@@ -1,5 +1,5 @@
 import type { SolvedPerso, SolvedScene } from './pipeline'
-import type { LayoutProjection } from './layout-projection'
+import type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
 
 /** Nodes supplied by the component materializer to the layout projection backend. */
 export type LayoutProjectionNodes = Readonly<{
@@ -18,7 +18,13 @@ export class LayoutDomBackend implements LayoutProjection {
   }
 
   /** Projects root, outlet and perso targets while preserving each target's child order. */
-  project(scene: SolvedScene, nodes = this.defaultNodes): void {
+  project(scene: SolvedScene, context?: LayoutProjectionContext): void
+
+  /** Supports direct node maps for isolated backend tests. */
+  project(scene: SolvedScene, nodes: LayoutProjectionNodes): void
+
+  project(scene: SolvedScene, contextOrNodes?: LayoutProjectionContext | LayoutProjectionNodes): void {
+    const nodes = isLayoutProjectionNodes(contextOrNodes) ? contextOrNodes : this.defaultNodes
     if (nodes === undefined) throw new Error('Layout DOM backend nodes are not configured.')
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
@@ -48,6 +54,11 @@ export class LayoutDomBackend implements LayoutProjection {
     for (const persoKey of this.mountedPersos) detachNode(this.defaultNodes.persoNodes.get(persoKey))
     this.mountedPersos.clear()
   }
+}
+
+/** Distinguishes the isolated backend node map from a player projection context. */
+function isLayoutProjectionNodes(value: LayoutProjectionContext | LayoutProjectionNodes | undefined): value is LayoutProjectionNodes {
+  return value !== undefined && 'persoNodes' in value && 'targetNodes' in value
 }
 
 /** Resolves one solved child's logical parent to a materialized node. */

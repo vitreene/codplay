@@ -85,7 +85,7 @@ type FlipItemCapture = {
   endAt: number
   from: HtmlPose
   to: HtmlPose
-  easing: string
+  ease: string
   path?: Path
 }
 
@@ -96,7 +96,7 @@ type FlipCapture = {
   startAt: number
   endAt: number
   duration: number
-  easing: string
+  ease: string
   entries: readonly FlipItemCapture[]
   ancestors: readonly FlipAncestorCapture[]
 }

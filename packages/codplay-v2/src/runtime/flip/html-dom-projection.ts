@@ -5,6 +5,7 @@ type OverlayHandle = Readonly<{
   ghost: HTMLElement
   source: HTMLElement
   sourceStyle: string | null
+  root: Element
 }>
 
 type LocalPoseSnapshot = Readonly<{
@@ -18,6 +19,7 @@ export type HtmlDomProjectionOptions = Readonly<{
   getProjectionEpoch: () => number
   root: Element
   resolveHandle: (itemId: string) => HTMLElement | undefined
+  captureHistoricalPose?: HtmlFlipProjection['captureHistoricalPose']
   debug?: (label: string, payload: unknown) => void
 }>
 
@@ -25,6 +27,7 @@ export type HtmlDomProjectionOptions = Readonly<{
 export function createHtmlDomProjection(options: HtmlDomProjectionOptions): HtmlFlipProjection {
   const localSnapshots = new Map<string, LocalPoseSnapshot>()
   const localDebugKeys = new Set<string>()
+  const overlayDebugKeys = new Set<string>()
 
   return {
     getHostContextId: () => options.hostContextId,
@@ -32,11 +35,16 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
     resolveHandle: (itemId) => options.resolveHandle(itemId),
     capturePose: (handle) => captureHtmlPose(handle as Element),
     captureOverlayPose: (handle) => captureOverlayPose(handle as Element),
+    captureHistoricalPose: options.captureHistoricalPose ?? ((input) => {
+      const handle = options.resolveHandle(input.ancestorId)
+      if (handle === undefined) throw new Error(`FLIP historical ancestor handle is missing: ${input.ancestorId}`)
+      return captureHtmlPose(handle)
+    }),
     applyLocalPose: (handle, resolved) => applyLocalPose(handle as HTMLElement, resolved, localSnapshots, localDebugKeys, options.debug),
     finishLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
     cancelLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
     beginOverlay: (handle) => beginOverlay(handle as HTMLElement, options.root),
-    applyOverlayPose: (handle, resolved) => applyOverlayPose(handle as OverlayHandle, resolved, options.debug),
+    applyOverlayPose: (handle, resolved) => applyOverlayPose(handle as OverlayHandle, resolved, overlayDebugKeys, options.debug),
     finishOverlay: (handle) => finishOverlay(handle as OverlayHandle),
     flush: () => undefined,
   }
@@ -75,7 +83,7 @@ function applyLocalPose(
   const deltaLocal = worldDeltaToLocalDelta(naturalPose.parentMatrix, deltaWorld.x, deltaWorld.y)
 
   const debugKey = `${resolved.captureId}:${itemId}`
-  if (debug !== undefined && resolved.progress > 0.05 && resolved.progress < 0.35 && !debugKeys.has(debugKey)) {
+  if (debug !== undefined && resolved.progress > 0.05 && resolved.progress < 0.65 && !debugKeys.has(debugKey)) {
     debugKeys.add(debugKey)
     debug('local-debug-mid-transition', {
       captureId: resolved.captureId,
@@ -124,24 +132,41 @@ function beginOverlay(source: HTMLElement, root: Element): OverlayHandle {
   const sourceStyle = source.getAttribute('style')
   ensureHtmlOverlayLayer(root).appendChild(ghost)
   source.style.visibility = 'hidden'
-  ghost.style.position = 'fixed'
+  ghost.style.position = 'absolute'
   ghost.style.left = '0px'
   ghost.style.top = '0px'
   ghost.style.margin = '0'
   ghost.style.visibility = 'visible'
-  return { ghost, source, sourceStyle }
+  return { ghost, source, sourceStyle, root }
 }
 
 /** Applies one world pose through a matrix-only transform. */
-function applyOverlayPose(handle: OverlayHandle, resolved: ResolvedFlipPose, debug: HtmlDomProjectionOptions['debug']): void {
+function applyOverlayPose(
+  handle: OverlayHandle,
+  resolved: ResolvedFlipPose,
+  debugKeys: Set<string>,
+  debug: HtmlDomProjectionOptions['debug'],
+): void {
   const { ghost } = handle
-  const matrix = resolved.pose.matrix
-  const linearMatrix: HtmlMatrix = { ...matrix, e: 0, f: 0 }
-  const bounds = transformedBounds(linearMatrix, resolved.pose.localWidth, resolved.pose.localHeight)
+  const rootPose = captureOverlayPose(handle.root)
+  const localized = localizePose(rootPose, resolved.pose)
+  const debugKey = `${resolved.captureId}:${resolved.itemId}`
+  if (debug !== undefined && resolved.progress <= 0.05 && !debugKeys.has(debugKey)) {
+    debugKeys.add(debugKey)
+    debug('overlay-localized-start', {
+      itemId: resolved.itemId,
+      progress: resolved.progress,
+      rootRect: { ...rootPose.rect },
+      itemRect: { ...resolved.pose.rect },
+      origin: localized.origin,
+      matrix: localized.matrix,
+      cssTranslation: localized.origin,
+    })
+  }
   if (debug !== undefined && (resolved.progress <= 0.05 || resolved.progress >= 0.95)) {
     debug('overlay-apply', { itemId: resolved.itemId, progress: resolved.progress, resolvedRect: { ...resolved.pose.rect } })
   }
-  ghost.style.position = 'fixed'
+  ghost.style.position = 'absolute'
   ghost.style.left = '0px'
   ghost.style.top = '0px'
   ghost.style.width = `${resolved.pose.localWidth}px`
@@ -151,8 +176,57 @@ function applyOverlayPose(handle: OverlayHandle, resolved: ResolvedFlipPose, deb
   ghost.style.minHeight = '0'
   ghost.style.boxSizing = 'border-box'
   ghost.style.transformOrigin = '0 0'
-  ghost.style.transform = `matrix(${linearMatrix.a}, ${linearMatrix.b}, ${linearMatrix.c}, ${linearMatrix.d}, ${resolved.pose.rect.left - bounds.left}, ${resolved.pose.rect.top - bounds.top})`
+  ghost.style.transform = `matrix(${localized.matrix.a}, ${localized.matrix.b}, ${localized.matrix.c}, ${localized.matrix.d}, ${localized.matrix.e}, ${localized.matrix.f})`
   ghost.style.zIndex = '20'
+
+  if (debug !== undefined && resolved.progress <= 0.05 && debugKeys.has(debugKey)) {
+    const actual = captureOverlayPose(ghost)
+    debug('overlay-actual-start', {
+      itemId: resolved.itemId,
+      expected: { ...resolved.pose.rect },
+      actual: { ...actual.rect },
+    })
+  }
+}
+
+/** Converts one world pose to the coordinate system of the current overlay root. */
+export function localizePose(root: HtmlPose, pose: HtmlPose): { matrix: HtmlMatrix; origin: { x: number; y: number } } {
+  const rootBounds = transformedBounds(root.matrix, root.localWidth, root.localHeight)
+  const poseBounds = transformedBounds(pose.matrix, pose.localWidth, pose.localHeight)
+  const rootOrigin = { x: root.rect.left - rootBounds.left, y: root.rect.top - rootBounds.top }
+  const poseOrigin = { x: pose.rect.left - poseBounds.left, y: pose.rect.top - poseBounds.top }
+  const originDelta = worldDeltaToLocalDelta(root.matrix, poseOrigin.x - rootOrigin.x, poseOrigin.y - rootOrigin.y)
+  const inverse = invertLinearMatrix(root.matrix)
+  return {
+    matrix: { ...multiplyLinearMatrix(inverse, pose.matrix), e: originDelta.x, f: originDelta.y },
+    origin: originDelta,
+  }
+}
+
+/** Multiplies two linear affine matrices in the root coordinate space. */
+function multiplyLinearMatrix(left: HtmlMatrix, right: HtmlMatrix): HtmlMatrix {
+  return {
+    a: left.a * right.a + left.c * right.b,
+    b: left.b * right.a + left.d * right.b,
+    c: left.a * right.c + left.c * right.d,
+    d: left.b * right.c + left.d * right.d,
+    e: 0,
+    f: 0,
+  }
+}
+
+/** Inverts a linear matrix for one local overlay coordinate conversion. */
+function invertLinearMatrix(matrix: HtmlMatrix): HtmlMatrix {
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+  if (Math.abs(determinant) < 1e-8) throw new Error('FLIP overlay root matrix is singular.')
+  return {
+    a: matrix.d / determinant,
+    b: -matrix.b / determinant,
+    c: -matrix.c / determinant,
+    d: matrix.a / determinant,
+    e: 0,
+    f: 0,
+  }
 }
 
 /** Restores the source and removes one overlay clone. */

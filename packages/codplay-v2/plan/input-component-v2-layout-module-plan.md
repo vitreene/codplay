@@ -200,7 +200,7 @@ Les persos enfants existants conservent leur intention :
   type: 'tag',
   initial: {
     content: 'OK',
-    move: { parentId: 'quiz-question-1__answer-a__selection-icon' }
+    move: { target: 'quiz-question-1__answer-a__selection-icon' }
   }
 }
 ```

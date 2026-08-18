@@ -53,7 +53,7 @@ export type FlipCaptureRequest = Readonly<{
   projectionEpoch: number
   startAt: number
   duration: number
-  easing?: string
+  ease?: string
   entries: readonly FlipEntry[]
   ancestors?: readonly FlipAncestorEntry[]
   mutate: () => void
@@ -67,7 +67,7 @@ export type FlipItemCapture = Readonly<{
   startAt: number
   endAt: number
   duration: number
-  easing: string
+  ease: string
   from: HtmlPose
   to: HtmlPose
   path?: Path
@@ -90,7 +90,7 @@ export type FlipCapture = Readonly<{
   startAt: number
   endAt: number
   duration: number
-  easing: string
+  ease: string
   entries: readonly FlipItemCapture[]
   ancestors: readonly FlipAncestorCapture[]
 }>
@@ -129,7 +129,11 @@ export type HtmlFlipProjection = Readonly<{
   resolveHandle: (itemId: string) => unknown
   capturePose: (handle: unknown) => HtmlPose
   captureOverlayPose?: (handle: unknown) => HtmlPose
-  captureHistoricalPose?: (input: Readonly<{
+  /**
+   * Realizes one ancestor at a historical instant, captures its pose, and
+   * restores the host's current state before returning.
+   */
+  captureHistoricalPose: (input: Readonly<{
     ancestorId: string
     timeMs: number
     capture: FlipAncestorCapture

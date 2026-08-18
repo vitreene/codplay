@@ -25,9 +25,8 @@ export class FlipHistoricalPoseCache {
     capture: FlipCapture,
     ancestor: FlipAncestorCapture,
     timeMs: number,
-    resolver: HtmlFlipProjection['captureHistoricalPose'] | undefined,
+    resolver: HtmlFlipProjection['captureHistoricalPose'],
   ): HtmlPose | undefined {
-    if (resolver === undefined) return undefined
     const key = `${capture.hostContextId}:${capture.projectionEpoch}:${capture.captureId}:${ancestor.ancestorId}:${timeMs}`
     const existing = this.poses.get(key)
     if (existing !== undefined) return existing
@@ -111,10 +110,11 @@ function resolveHistoricalPose(
   projection: Pick<HtmlFlipProjection, 'captureHistoricalPose'> | undefined,
   historicalPoseCache: FlipHistoricalPoseCache | undefined,
 ): HtmlPose | undefined {
+  if (projection === undefined) return undefined
   if (historicalPoseCache !== undefined) {
-    return historicalPoseCache.resolve(capture, ancestor, timeMs, projection?.captureHistoricalPose)
+    return historicalPoseCache.resolve(capture, ancestor, timeMs, projection.captureHistoricalPose)
   }
-  return projection?.captureHistoricalPose?.({ ancestorId: ancestor.ancestorId, timeMs, capture: ancestor })
+  return projection.captureHistoricalPose({ ancestorId: ancestor.ancestorId, timeMs, capture: ancestor })
 }
 
 /** Resolves one stable or composited ancestor from its local transition. */
@@ -159,14 +159,14 @@ function resolvePathPoint(entry: Pick<FlipItemCapture, 'path' | 'from' | 'to'>, 
 }
 
 /** Resolves an item's eased progress at one absolute timeline instant. */
-function resolveItemProgress(entry: Pick<FlipItemCapture, 'duration' | 'easing' | 'startAt'>, timeMs: number): number {
-  const tween = prepareTween({ from: 0, to: 1, duration: entry.duration, ease: entry.easing })
+function resolveItemProgress(entry: Pick<FlipItemCapture, 'duration' | 'ease' | 'startAt'>, timeMs: number): number {
+  const tween = prepareTween({ from: 0, to: 1, duration: entry.duration, ease: entry.ease })
   return resolveTweenProgress(tween, timeMs - entry.startAt)
 }
 
 /** Resolves the shared transaction progress for one ancestor. */
 function resolveCaptureProgress(capture: FlipCapture, timeMs: number): number {
-  const tween = prepareTween({ from: 0, to: 1, duration: capture.duration, ease: capture.easing })
+  const tween = prepareTween({ from: 0, to: 1, duration: capture.duration, ease: capture.ease })
   return resolveTweenProgress(tween, timeMs - capture.startAt)
 }
 

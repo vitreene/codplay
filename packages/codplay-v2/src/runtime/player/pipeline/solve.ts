@@ -51,10 +51,11 @@ function resolvePlacement(
         target,
         mode: perso.placement.mode,
         source: perso.placement.source,
+        transition: perso.placement.transition,
       }
     }
     case MOUNT_PLACEMENT_OFF:
-      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, source: perso.placement.source }
+      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, source: perso.placement.source, transition: perso.placement.transition }
     case MOUNT_PLACEMENT_PARENT: {
       const target = targets.resolve(perso.placement.targetId)
       return {
@@ -66,6 +67,7 @@ function resolvePlacement(
         mode: perso.placement.mode,
         reorder: perso.placement.reorder,
         source: perso.placement.source,
+        transition: perso.placement.transition,
       }
     }
     case MOUNT_PLACEMENT_INVALID:

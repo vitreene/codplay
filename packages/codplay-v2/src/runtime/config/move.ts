@@ -1,3 +1,6 @@
+import type { CompiledValue } from '../../scene/compiled'
+import type { PathTraversal } from '../../ace'
+
 /** Stable logical ordering modes for mounted children. */
 export const MOVE_ORDER_MODE_AUTO = 'auto' as const
 export const MOVE_ORDER_MODE_FIRST = 'first' as const
@@ -18,6 +21,14 @@ export type MoveOrderMode =
   | typeof MOVE_ORDER_MODE_APPEND
   | typeof MOVE_ORDER_MODE_PREPEND
   | number
+
+/** Compiled transition data carried by a move and consumed by a projector. */
+export type MoveTransition = Readonly<{
+  duration?: number
+  ease?: CompiledValue
+  path?: CompiledValue
+  traversal?: PathTraversal
+}>
 
 export type MovePolicyIssue = Readonly<{
   code: typeof MOVE_ISSUE_COMMAND_INVALID

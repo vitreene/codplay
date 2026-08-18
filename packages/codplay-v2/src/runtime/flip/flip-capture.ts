@@ -72,7 +72,7 @@ export function captureFlip(
       startAt: request.startAt,
       endAt,
       duration: request.duration,
-      easing: request.easing ?? 'out(2)',
+      ease: request.ease ?? 'out(2)',
       from,
       to,
       path: entry.path,
@@ -94,7 +94,7 @@ export function captureFlip(
     startAt: request.startAt,
     endAt,
     duration: request.duration,
-    easing: request.easing ?? 'out(2)',
+    ease: request.ease ?? 'out(2)',
     entries,
     ancestors,
   }

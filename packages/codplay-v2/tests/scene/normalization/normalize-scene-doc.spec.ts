@@ -32,7 +32,7 @@ describe('normalizeSceneDoc', () => {
       stories: {
         main: {
           id: 'main',
-          initial: { move: { parentId: '@root' } },
+           initial: { move: { target: '@root' } },
           persos: [{ id: 'title', type: 'tag', initial: { style: { opacity: 1 } } }],
         },
       },
@@ -41,7 +41,7 @@ describe('normalizeSceneDoc', () => {
     const normalized = normalizeSceneDoc(scene)
     const initial = normalized.stories.main.persos[0].initial
 
-    expect(normalized.stories.main.initial).toEqual({ move: { parentId: '@root' } })
+    expect(normalized.stories.main.initial).toEqual({ move: { target: '@root' } })
     expect(initial).not.toBe(scene.stories.main.persos[0].initial)
   })
 

@@ -1,4 +1,6 @@
 import { isPlainRecord } from '../../shared'
+import { isPreparedPath } from '../../ace'
+import type { PathTraversal } from '../../ace'
 import { SCENE_BUILD_CONFIG } from '../../scene/config/scene-build'
 import {
   MOVE_ORDER_MODE_APPEND,
@@ -9,6 +11,7 @@ import {
   MOVE_ISSUE_COMMAND_INVALID,
   MOVE_ISSUE_CONFLICT_SAME_TICK,
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
+  type MoveTransition,
   type MoveOrderMode,
   type MovePolicyIssue,
 } from '../config/move'
@@ -20,6 +23,7 @@ import {
   MOUNT_PLACEMENT_UNSPECIFIED,
   MOUNT_PLACEMENT_SOURCE_INITIAL,
   MOUNT_PLACEMENT_SOURCE_MOVE,
+  type MountPlacementSource,
 } from '../config/mount-placement'
 import type { CompiledRecord, CompiledValue } from '../../scene/compiled'
 import type { MaterializedAction, ResolvedPlacement } from '../player/pipeline/types'
@@ -85,22 +89,61 @@ export function selectEffectiveMove(
 function readMove(value: CompiledValue | undefined, actionMove: boolean): ResolvedPlacement {
   const source = actionMove ? MOUNT_PLACEMENT_SOURCE_MOVE : MOUNT_PLACEMENT_SOURCE_INITIAL
   if (value === undefined) return { kind: MOUNT_PLACEMENT_UNSPECIFIED, source }
-  if (value === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, source }
-  if (value === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, source }
+  if (typeof value === 'string') return readTarget(value, source, undefined, undefined, undefined, actionMove)
   if (!isPlainRecord(value)) return { kind: MOUNT_PLACEMENT_INVALID, source }
 
   const record = value as CompiledRecord
+  if (typeof record.target !== 'string') return { kind: MOUNT_PLACEMENT_INVALID, source }
   const mode = actionMove ? readMoveMode(record.mode) : undefined
   if (actionMove && record.mode !== undefined && mode === undefined) return { kind: MOUNT_PLACEMENT_INVALID, source }
-  if (typeof record.parentId !== 'string') return { kind: MOUNT_PLACEMENT_INVALID, source }
-  if (record.parentId === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, source }
-  if (record.parentId === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, source }
+  const transition = readMoveTransition(record.transition)
+  if (transition === INVALID_TRANSITION) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  const target = readTarget(record.target, source, mode, record.reorder, transition, actionMove)
+  return target
+}
+
+const INVALID_TRANSITION = Symbol('invalid move transition')
+
+/** Resolves one authored target while preserving optional placement metadata. */
+function readTarget(
+  target: string,
+  source: MountPlacementSource,
+  mode?: MoveOrderMode,
+  reorder?: CompiledValue,
+  transition?: MoveTransition | typeof INVALID_TRANSITION,
+  actionMove = false,
+): ResolvedPlacement {
+  if (transition === INVALID_TRANSITION) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  const reorderValue = typeof reorder === 'boolean' ? reorder : undefined
+  if (target === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, source, transition }
+  if (target === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, source, transition }
   return {
     kind: MOUNT_PLACEMENT_PARENT,
-    targetId: record.parentId,
+    targetId: target,
     mode: mode ?? (actionMove ? MOVE_ORDER_MODE_AUTO : undefined),
-    reorder: typeof record.reorder === 'boolean' ? record.reorder : undefined,
     source,
+    reorder: reorderValue,
+    transition,
+  }
+}
+
+/** Accepts compiler-prepared transition data without parsing SVG at runtime. */
+function readMoveTransition(value: CompiledValue | undefined): MoveTransition | typeof INVALID_TRANSITION | undefined {
+  if (value === undefined) return undefined
+  if (!isPlainRecord(value)) return INVALID_TRANSITION
+  const record = value as CompiledRecord
+  if (record.duration !== undefined && (typeof record.duration !== 'number' || !Number.isFinite(record.duration) || record.duration <= 0)) {
+    return INVALID_TRANSITION
+  }
+  if (record.ease !== undefined && typeof record.ease !== 'string') return INVALID_TRANSITION
+  if (record.path !== undefined && !isPreparedPath(record.path)) return INVALID_TRANSITION
+  if (record.traversal !== undefined && record.traversal !== 'parameter' && record.traversal !== 'arc-length') return INVALID_TRANSITION
+  if (record.traversal !== undefined && record.path === undefined) return INVALID_TRANSITION
+  return {
+    duration: record.duration as number | undefined,
+    ease: record.ease,
+    path: record.path,
+    traversal: record.traversal as PathTraversal | undefined,
   }
 }
 

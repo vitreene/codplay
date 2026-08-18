@@ -36,7 +36,7 @@ function createS2ReferenceScene(): SceneDoc {
           {
             id: 'reference-title',
             type: 'text',
-            initial: { tag: 'h2', content: 'Reference Scene', move: { parentId: 'reference-list' } },
+            initial: { tag: 'h2', content: 'Reference Scene', move: { target: 'reference-list' } },
             actions: {
               'sequence:reference:start': { style: { opacity: { from: 0, to: 1, duration: 400 } } },
             },
@@ -62,10 +62,10 @@ function createS3RobustesseScene(): SceneDoc {
           {
             id: 'robust-card',
             type: 'text',
-            initial: { tag: 'div', content: 'CARD', move: { parentId: 'robust-stage' } },
+            initial: { tag: 'div', content: 'CARD', move: { target: 'robust-stage' } },
             actions: {
-              'sequence:robustesse:promote': { move: { parentId: 'robust-overlay', flipMode: 'overlay-world' } },
-              'sequence:robustesse:return': { move: { parentId: 'robust-stage', flipMode: 'overlay-world' } },
+              'sequence:robustesse:promote': { move: { target: 'robust-overlay', flipMode: 'overlay-world' } },
+              'sequence:robustesse:return': { move: { target: 'robust-stage', flipMode: 'overlay-world' } },
             },
           },
         ],
@@ -97,7 +97,7 @@ function createS4QuizReferenceScene(): SceneDoc {
         persos: [{
           id: 'quiz-media',
           type: 'media',
-          initial: { tag: 'video', src: '/assets/quiz.mp4', move: { parentId: 'quiz-layout' } },
+           initial: { tag: 'video', src: '/assets/quiz.mp4', move: { target: 'quiz-layout' } },
           actions: { 'quiz:media:start': { style: { opacity: { from: 0, to: 1, duration: 250 } } } },
         }],
         eventimes: [{ name: 'quiz:media:start', startAt: 1000 }],

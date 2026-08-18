@@ -1,7 +1,7 @@
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { MaterializedTrackRegistry } from './tracks'
 import type { MountTarget } from './mount-targets'
-import type { MoveOrderMode, MovePolicyIssue } from '../../config/move'
+import type { MoveOrderMode, MovePolicyIssue, MoveTransition } from '../../config/move'
 import {
   MOUNT_PLACEMENT_INVALID,
   MOUNT_PLACEMENT_OFF,
@@ -52,10 +52,10 @@ export type MaterializedScene = Readonly<{
 
 /** Placement value selected from the authored initial state and active moves. */
 export type ResolvedPlacement = Readonly<
-  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED; mode?: MoveOrderMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_ROOT; mode?: MoveOrderMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_OFF; mode?: MoveOrderMode; source?: MountPlacementSource }
-  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string; mode?: MoveOrderMode; reorder?: boolean; source?: MountPlacementSource }
+  | { kind: typeof MOUNT_PLACEMENT_UNSPECIFIED; mode?: MoveOrderMode; source?: MountPlacementSource; transition?: MoveTransition }
+  | { kind: typeof MOUNT_PLACEMENT_ROOT; mode?: MoveOrderMode; source?: MountPlacementSource; transition?: MoveTransition }
+  | { kind: typeof MOUNT_PLACEMENT_OFF; mode?: MoveOrderMode; source?: MountPlacementSource; transition?: MoveTransition }
+  | { kind: typeof MOUNT_PLACEMENT_PARENT; targetId: string; mode?: MoveOrderMode; reorder?: boolean; source?: MountPlacementSource; transition?: MoveTransition }
   | { kind: typeof MOUNT_PLACEMENT_INVALID; source?: MountPlacementSource }
 >
 
@@ -85,6 +85,7 @@ export type SolvedPlacement = Readonly<{
   mode?: MoveOrderMode
   reorder?: boolean
   source?: MountPlacementSource
+  transition?: MoveTransition
 }>
 
 /** Stable solve output consumed by a future component/projector boundary. */

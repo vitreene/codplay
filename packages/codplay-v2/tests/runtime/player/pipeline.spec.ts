@@ -19,6 +19,7 @@ import {
   TRACK_EVENT_ACTIVATE,
   TRACK_EVENT_DEACTIVATE,
 } from '../../../src/runtime/player'
+import { prepareSvgPath } from '../../../src/ace'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -231,7 +232,7 @@ describe('materialize -> resolve -> solve', () => {
               initial: { move: '@root' },
               actions: {
                 detach: { move: '@off' },
-                attach: { move: { parentId: 'toto' } },
+                attach: { move: { target: 'toto' } },
               },
             }],
             eventimes: [
@@ -261,6 +262,58 @@ describe('materialize -> resolve -> solve', () => {
     })
   })
 
+  it('normalizes target and preserves move transition data for projection', () => {
+    const compiledPath = prepareSvgPath('M 0 0 L 0.5 0.5 L 1 0')
+    const transitionScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              ...scene.scene.stories.main!.persos[0]!,
+              initial: { move: '@root' },
+              actions: {
+                attach: {
+                  move: {
+                    target: 'outlet-a',
+                    mode: 'append',
+                    flipMode: 'overlay-world',
+                    reorder: true,
+                    transition: {
+                      duration: 320,
+                      ease: 'easeOutCubic',
+                       path: compiledPath,
+                    },
+                  },
+                },
+              },
+            }],
+            eventimes: [{ name: 'attach', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const solved = solveScene(resolveScene(materializeScene(transitionScene, 100)), {
+      mountTargets: [
+        { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+        { id: 'outlet-a', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+      ],
+    })
+
+    expect(solved.persos['main:root']?.placement).toMatchObject({
+      targetId: 'outlet-a',
+      mode: 'append',
+      reorder: true,
+      transition: {
+        duration: 320,
+        ease: 'easeOutCubic',
+         path: expect.objectContaining({ kind: 'segments', traversal: 'arc-length' }),
+      },
+    })
+  })
+
   it('builds parent-child links, stable child order, and inherited detached state', () => {
     const hierarchyScene: CompiledScene = {
       ...scene,
@@ -271,8 +324,8 @@ describe('materialize -> resolve -> solve', () => {
             ...scene.scene.stories.main!,
             persos: [
               { id: 'parent', type: 'tag', initial: { move: '@root' }, actions: { detach: { move: '@off' } } },
-              { id: 'child-a', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
-              { id: 'child-b', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
+              { id: 'child-a', type: 'tag', initial: { move: { target: 'parent' } }, actions: {} },
+              { id: 'child-b', type: 'tag', initial: { move: { target: 'parent' } }, actions: {} },
             ],
             eventimes: [{ name: 'detach', startAt: 100 }],
           },
@@ -303,8 +356,8 @@ describe('materialize -> resolve -> solve', () => {
           main: {
             ...scene.scene.stories.main!,
             persos: [
-              { id: 'first', type: 'tag', initial: { move: { parentId: 'second' } }, actions: {} },
-              { id: 'second', type: 'tag', initial: { move: { parentId: 'first' } }, actions: {} },
+              { id: 'first', type: 'tag', initial: { move: { target: 'second' } }, actions: {} },
+              { id: 'second', type: 'tag', initial: { move: { target: 'first' } }, actions: {} },
             ],
           },
         },
@@ -323,9 +376,9 @@ describe('materialize -> resolve -> solve', () => {
           main: {
             ...scene.scene.stories.main!,
             persos: [{ id: 'item', type: 'tag', initial: { move: '@root' }, actions: {
-              toA: { move: { parentId: 'outlet-a' } },
-              toB: { move: { parentId: 'outlet-b' } },
-              invalid: { move: { parentId: 42 } },
+              toA: { move: { target: 'outlet-a' } },
+              toB: { move: { target: 'outlet-b' } },
+              invalid: { move: { target: 42 } },
             } }],
             eventimes: [
               { name: 'toA', startAt: 100 },
@@ -375,12 +428,12 @@ describe('materialize -> resolve -> solve', () => {
             ...scene.scene.stories.main!,
             persos: [
               { id: 'parent', type: 'tag', initial: { move: '@root' }, actions: {} },
-              { id: 'item-a', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {
-                last: { move: { parentId: 'parent', mode: 999 } },
+              { id: 'item-a', type: 'tag', initial: { move: { target: 'parent' } }, actions: {
+                last: { move: { target: 'parent', mode: 999 } },
               } },
-              { id: 'item-b', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {} },
-              { id: 'item-c', type: 'tag', initial: { move: { parentId: 'parent' } }, actions: {
-                first: { move: { parentId: 'parent', mode: MOVE_ORDER_MODE_FIRST } },
+              { id: 'item-b', type: 'tag', initial: { move: { target: 'parent' } }, actions: {} },
+              { id: 'item-c', type: 'tag', initial: { move: { target: 'parent' } }, actions: {
+                first: { move: { target: 'parent', mode: MOVE_ORDER_MODE_FIRST } },
               } },
             ],
             eventimes: [

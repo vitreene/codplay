@@ -28,9 +28,9 @@ const scene: CompiledScene = {
           type: 'tag',
           initial: { move: '@root' },
           actions: {
-            transfer: { move: { parentId: 'outlet-a' } },
+             transfer: { move: { target: 'outlet-a' } },
             detach: { move: '@off' },
-            attach: { move: { parentId: 'outlet-b' } },
+             attach: { move: { target: 'outlet-b' } },
           },
         }],
         listen: [],

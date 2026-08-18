@@ -21,6 +21,7 @@ import {
   finalizeFunctionCollection,
   type CompiledFunctionCollection,
 } from './function-extractor'
+import { compileMovePath } from './move-path-compiler'
 import type {
   CompiledListenRule,
   CompiledPerso,
@@ -184,7 +185,7 @@ function compilePerso(
   state: ReturnType<typeof createExtractionState>,
   validationEngine: CompiledSceneValidationEngine,
 ): CompiledPerso {
-  const compiledInitial = extractCompiledRecord(perso.initial, `${scope}.initial`, state) ?? {}
+  const compiledInitial = extractCompiledRecord(compileMovePath(perso.initial, `${scope}.initial`) as Record<string, unknown>, `${scope}.initial`, state) ?? {}
   const initial = typeof perso.initial.markup === 'string'
     ? {
         ...compiledInitial,
@@ -201,7 +202,7 @@ function compilePerso(
     type: perso.type,
     initial,
     actions: Object.fromEntries(
-      Object.entries(perso.actions).map(([name, value]) => [name, extractCompiledValue(value, `${scope}.actions.${name}`, state)]),
+      Object.entries(perso.actions).map(([name, value]) => [name, extractCompiledValue(compileMovePath(value, `${scope}.actions.${name}`), `${scope}.actions.${name}`, state)]),
     ),
     list: extractCompiledRecord(perso.list, `${scope}.list`, state),
     emit: extractCompiledRecord(perso.emit, `${scope}.emit`, state),
@@ -241,7 +242,7 @@ function hasRootPlacement(value: Record<string, unknown>): boolean {
   if (value.move === SCENE_BUILD_CONFIG.rootToken) {
     return true
   }
-  return isPlainRecord(value.move) && value.move.parentId === SCENE_BUILD_CONFIG.rootToken
+  return isPlainRecord(value.move) && value.move.target === SCENE_BUILD_CONFIG.rootToken
 }
 
 /** Derives required component, service, module, and resource capability names. */

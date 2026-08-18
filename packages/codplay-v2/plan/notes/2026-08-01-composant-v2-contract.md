@@ -219,7 +219,7 @@ confiance et le materialise sans refaire la sanitization.
 
 Le parseur du template et le module `layout` enregistrent les elements `data-part`
 en interne. Le composant ne publie pas lui-meme ces declarations. Le runtime de
-placement consomme ensuite le registre du module pour resoudre les `move.parentId`.
+placement consomme ensuite le registre du module pour resoudre les `move.target`.
 
 Une fonction `init()` optionnelle pourra etre etudiee pour les usages avances en
 V2.5. Elle ne fait pas partie du contrat V2 actuel.
@@ -254,7 +254,7 @@ const layoutPerso: PersoDoc = {
   id: 'page-layout',
   type: 'layout',
   initial: {
-    move: { parentId: '@root' },
+    move: { target: '@root' },
     markup: `
       <section class="page-shell">
         <main data-part="page-layout:content"></main>
@@ -271,7 +271,7 @@ const contentPerso: PersoDoc = {
   initial: {
     tag: 'article',
     content: 'Contenu principal',
-    move: { parentId: 'page-layout:content' },
+    move: { target: 'page-layout:content' },
   },
   actions: {},
 }
@@ -282,7 +282,7 @@ const asidePerso: PersoDoc = {
   initial: {
     tag: 'p',
     content: 'Informations secondaires',
-    move: { parentId: 'page-layout:aside' },
+    move: { target: 'page-layout:aside' },
   },
   actions: {},
 }

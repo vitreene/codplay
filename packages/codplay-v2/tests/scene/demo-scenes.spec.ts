@@ -19,7 +19,7 @@ describe('V1 demo scene corpus', () => {
   it('keeps the demo corpus representative of root, nested, transition, and resource cases', () => {
     expect(demoSceneFixtures.map(({ id }) => id)).toEqual(['s1', 's2', 's3', 's4'])
     expect(demoSceneFixtures[0]?.scene.stories['s1-canary-story']?.persos[0]?.initial?.move).toBe('@root')
-    expect(demoSceneFixtures[1]?.scene.stories['s2-reference-story']?.persos[1]?.initial?.move).toEqual({ parentId: 'reference-list' })
+    expect(demoSceneFixtures[1]?.scene.stories['s2-reference-story']?.persos[1]?.initial?.move).toEqual({ target: 'reference-list' })
     expect(demoSceneFixtures[2]?.scene.stories['s3-robustesse-story']?.persos[2]?.actions?.['sequence:robustesse:promote']).toMatchObject({
       move: { flipMode: 'overlay-world' },
     })

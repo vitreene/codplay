@@ -28,7 +28,19 @@ export {
 } from './interval'
 export { parseEase, type EasingFunction } from './easings'
 export { spring, type Spring, type SpringParams } from './spring'
-export { preparePath, resolvePath, type Path, type PathInput, type PathTraversal, type Point } from './path'
+export {
+  preparePath,
+  prepareSegmentPath,
+  resolvePath,
+  isPreparedPath,
+  type Path,
+  type PathInput,
+  type PathSegment,
+  type PathSegmentInput,
+  type PathTraversal,
+  type Point,
+} from './path'
+export { prepareSvgPath } from './svg-path'
 export {
   preparePolarTween,
   resolvePolarTween,

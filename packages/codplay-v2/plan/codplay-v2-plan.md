@@ -95,6 +95,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Partie | Plan detaille | Etat |
 |---|---|---|
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours |
+| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours, base auteur fixée |
 
 ## Modeles algorithmiques
 
@@ -119,7 +120,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
 | CompiledScene | Schema versionne, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; base de diffusion et d'exports. |
 | Engine | Catalogue de composants, modules, services, bindings tiers; cache, styles, horloge et ordre de tick | Fournit les capacites declarees; ne lit pas `SceneDoc`. |
-| Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. |
+| Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Transmet les `MoveStateDelta` a la projection ; FLIP reste un wrapper de projection optionnel. |
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Propagation, executeur, collections, snapshots d'etat, validation init, sorties event et updates rejouables en place; loop et helpers live restent a specifier. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Plan Temporel Declaratif fini pour les formes bornees; tout contrat live reste exclu et a specifier avec `f(t)`. |
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime et controles d'activation en place; straps restent a ouvrir. |

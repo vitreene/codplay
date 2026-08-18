@@ -170,7 +170,7 @@ describe('RuntimePlayer', () => {
               id: 'item',
               type: 'tag',
               initial: {},
-              actions: { invalid: { move: { parentId: 42 } } },
+               actions: { invalid: { move: { target: 42 } } },
             }],
             listen: [],
             eventimes: [{ name: 'invalid', startAt: 100 }],
@@ -206,7 +206,7 @@ describe('RuntimePlayer', () => {
         stories: {
           main: {
             id: 'main',
-            persos: [{ id: 'item', type: 'tag', initial: {}, actions: { invalid: { move: { parentId: 42 } } } }],
+             persos: [{ id: 'item', type: 'tag', initial: {}, actions: { invalid: { move: { target: 42 } } } }],
             listen: [],
             eventimes: [{ name: 'invalid', startAt: 100 }],
           },
@@ -253,7 +253,7 @@ describe('RuntimePlayer', () => {
           main: {
             id: 'main',
             persos: [{ id: 'item', type: 'tag', initial: { move: '@root' }, actions: {
-              transfer: { move: { parentId: 'outlet' } },
+               transfer: { move: { target: 'outlet' } },
             } }],
             listen: [],
             eventimes: [{ name: 'transfer', startAt: 100 }],
@@ -313,7 +313,7 @@ describe('RuntimePlayer', () => {
               id: 'item',
               type: 'tag',
               initial: { move: '@root' },
-              actions: { attach: { move: { parentId: 'layout-content' } } },
+               actions: { attach: { move: { target: 'layout-content' } } },
             }],
             listen: [],
             eventimes: [{ name: 'attach', startAt: 100 }],
