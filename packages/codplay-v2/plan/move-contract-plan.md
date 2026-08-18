@@ -167,9 +167,14 @@ consommer la même transition sans entrer dans le module FLIP.
 Les éléments suivants sont intégrés :
 
 - conservation de `transition` dans la donnée résolue d'une action `move` ;
+- conservation de `transitionStartAt` dans la donnée résolue puis dans
+  `MoveStateDelta`, afin qu'un seek puisse reconstruire la fenêtre auteur exacte ;
 - forme de `MoveStateDelta` portant une transition éventuelle ;
 - compilation du path SVG en segments normalisés quantifiés au centième ;
 - transmission de la transition au consommateur FLIP via `MoveFlipCaptureBuilder`.
+- propagation de `flipMode` de la policy vers `SolvedPlacement` et `MoveStateDelta`;
+  le builder HTML refuse encore `overlay-world` dans la tranche locale au lieu de
+  le convertir silencieusement.
 
 Les éléments suivants restent à fixer ou intégrer :
 

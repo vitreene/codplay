@@ -90,4 +90,33 @@ describe('ListCapabilityState', () => {
 
     expect(capability.getChildrenIds('list')).toEqual(['first', 'second'])
   })
+
+  it('publishes authoritative order and the siblings touched by a transfer', () => {
+    const capability = new ListCapabilityState()
+    capability.registerContainer('source')
+    capability.registerContainer('target')
+    capability.registerDetachedItem('first')
+    capability.registerDetachedItem('second')
+    capability.registerDetachedItem('third')
+    capability.applyDelta(mountDelta('first', 'source'))
+    capability.applyDelta(mountDelta('second', 'source'))
+    capability.applyDelta(mountDelta('third', 'target'))
+    capability.consumeLayoutProjectionState()
+
+    capability.applyDelta({
+      operation: MOVE_OPERATION_MOVE,
+      persoKey: 'second',
+      fromTargetId: 'source',
+      toTargetId: 'target',
+      mountedBefore: true,
+      mountedAfter: true,
+      fromPlacement: { kind: MOUNT_PLACEMENT_PARENT, mounted: true, targetId: 'source' },
+      toPlacement: { kind: MOUNT_PLACEMENT_PARENT, mounted: true, targetId: 'target' },
+    })
+
+    expect(capability.consumeLayoutProjectionState()).toEqual({
+      childrenByTarget: { source: ['first'], target: ['third', 'second'] },
+      touchedItemIds: ['second', 'first', 'third'],
+    })
+  })
 })

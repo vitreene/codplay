@@ -26,6 +26,10 @@ export class LayoutDomBackend implements LayoutProjection {
   project(scene: SolvedScene, contextOrNodes?: LayoutProjectionContext | LayoutProjectionNodes): void {
     const nodes = isLayoutProjectionNodes(contextOrNodes) ? contextOrNodes : this.defaultNodes
     if (nodes === undefined) throw new Error('Layout DOM backend nodes are not configured.')
+    if (!isLayoutProjectionNodes(contextOrNodes)) contextOrNodes?.authoredSync?.(scene)
+    const childrenByTarget = isLayoutProjectionNodes(contextOrNodes)
+      ? scene.childrenByTarget
+      : { ...scene.childrenByTarget, ...(contextOrNodes?.layoutState?.childrenByTarget ?? {}) }
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
         .filter((perso) => perso.placement.mounted)
@@ -36,7 +40,7 @@ export class LayoutDomBackend implements LayoutProjection {
       if (!nextMountedPersos.has(persoKey)) detachNode(nodes.persoNodes.get(persoKey))
     }
 
-    for (const childKeys of Object.values(scene.childrenByTarget)) {
+    for (const childKeys of Object.values(childrenByTarget)) {
       for (const childKey of childKeys) {
         const child = scene.persos[childKey]
         if (child === undefined || !child.placement.mounted) continue

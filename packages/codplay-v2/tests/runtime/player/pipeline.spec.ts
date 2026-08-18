@@ -244,6 +244,41 @@ describe('materialize -> resolve -> solve', () => {
     expect(resolved.persos['main:root']?.state.style).toMatchObject({ x: '50px', y: '30px' })
   })
 
+  it('preserves the authored move start time for FLIP seek reconstruction', () => {
+    const transitionScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { move: '@root' },
+              actions: {
+                transfer: { move: { target: 'target', transition: { duration: 100, ease: 'linear' } } },
+              },
+            }],
+            eventimes: [{ name: 'transfer', startAt: 100 }],
+          },
+        },
+      },
+    }
+
+    const solved = solveScene(resolveScene(materializeScene(transitionScene, 150)), {
+      mountTargets: [
+        { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+        { id: 'target', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
+      ],
+    })
+
+    expect(solved.persos['main:root']?.placement).toMatchObject({
+      targetId: 'target',
+      transitionStartAt: 100,
+    })
+  })
+
   it('exposes a stable solve output without claiming hierarchy support', () => {
     const solved = solveScene(resolveScene(materializeScene(scene, 150)))
 
@@ -338,6 +373,7 @@ describe('materialize -> resolve -> solve', () => {
     expect(solved.persos['main:root']?.placement).toMatchObject({
       targetId: 'outlet-a',
       mode: 'append',
+      flipMode: 'overlay-world',
       reorder: true,
       transition: {
         duration: 320,

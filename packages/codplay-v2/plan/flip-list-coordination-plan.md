@@ -8,6 +8,8 @@ Review: implementation restarted from the approved capture and host-pose contrac
 
 Continuation note: `packages/codplay-v2/projet/notes/2026-08-02-flip-reprise.md`
 
+Runner integration study: `packages/codplay-v2/plan/runner-flip-integration-study.md`.
+
 ## Scope
 
 FLIP is an HTML-only projection capability. It is not the `move` contract and it
@@ -51,7 +53,9 @@ or from the DOM.
 
 The consumer must include the directly moved item and every sibling or dependent
 item that may reflow. It must not include a host container or label whose own pose
-does not change.
+does not change. A structural ancestor whose own measured width or height changes
+is an affected item for the local host and must be projected as an entry; it must
+not be represented only as an abstract pose-graph ancestor.
 
 FLIP calls its item-level capture/plan for every entry in that set, while sharing
 one FIRST/mutate/LAST transaction.
@@ -181,11 +185,12 @@ preserved; the pose graph is resolved again in the same host context.
 3. Port the V1 FIRST/mutate/LAST/INVERT/flush/PLAY transaction around the host
    pose adapter, with one item-level plan per touched entry. **Done for the generic request boundary.**
 4. Implement the hierarchical ancestor resolver and its historical measurement cache. **Done for the synchronous exact foundation; segment characterization remains.**
-5. Implement local and overlay HTML application from the same resolved pose. **Done at contract level.**
-6. Implement exact seek and cold capture realization. **Done for synchronous resolver hooks.**
+5. Implement local and overlay HTML application from the same resolved pose. **Core contract foundation exists; runner transaction remains to be implemented.**
+6. Implement exact seek and cold capture realization. **Runtime resolver hook exists; runner historical realization remains open.**
 7. Connect the existing move consumer boundary without importing list policy into
-   FLIP.
-8. Add the constrained validation demo only after the feature tests pass. **Done in the host package.**
+   FLIP. **Partially done: `ListCapabilityState` publishes order and touched set;
+   historical list reorder realization remains open.**
+8. Add the constrained validation demo only after the feature tests pass. **Proof-of-principle demo exists; it is not normative.**
 
 ## Required verification
 

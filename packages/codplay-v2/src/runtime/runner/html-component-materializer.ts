@@ -44,6 +44,7 @@ export class HtmlComponentMaterializer {
       : requireMarkupService(moduleServices, identity.componentId)
 
     this.nodes.persoNodes.set(identity.componentId, rootNode)
+    markHtmlItem(rootNode, identity.componentId)
     try {
       const cleanupMarkup = markup === undefined
         ? undefined
@@ -108,6 +109,12 @@ function isMarkupModuleService(value: RuntimeModuleServiceInstance): value is Ma
 function detachNode(node: unknown): void {
   if (!isDetachableNode(node) || node.parentNode === null) return
   node.parentNode.removeChild(node)
+}
+
+/** Adds the stable runtime identity required by local HTML pose restoration. */
+function markHtmlItem(node: unknown, itemId: string): void {
+  if (typeof HTMLElement === 'undefined' || !(node instanceof HTMLElement)) return
+  node.dataset.itemId = itemId
 }
 
 /** Narrows a DOM-like node to the teardown operations used by this host. */

@@ -105,7 +105,7 @@ describe('MoveFlipLayoutProjection', () => {
     expect(order.filter((entry) => entry === 'apply:item')).toHaveLength(2)
   })
 
-  it('projects a seek directly without starting a FLIP capture', () => {
+  it('projects a seek directly when no transition capture is available', () => {
     const base = { project: vi.fn() }
     const flip = new HtmlFlipRuntime({
       getHostContextId: () => 'host-1',
@@ -132,5 +132,64 @@ describe('MoveFlipLayoutProjection', () => {
     wrapper.project(emptyScene(), { phase: 'seek', previousScene: emptyScene(), moveDeltas: [] })
 
     expect(base.project).toHaveBeenCalledOnce()
+  })
+
+  it('does not invent a FLIP capture during a cold seek', () => {
+    let itemLeft = 0
+    const applyLocalPose = vi.fn()
+    const projection: HtmlFlipProjection = {
+      getHostContextId: () => 'host-1',
+      getProjectionEpoch: () => 1,
+      resolveHandle: (itemId) => itemId,
+      capturePose: () => pose(itemLeft),
+      captureHistoricalPose: () => pose(itemLeft),
+      applyLocalPose,
+      finishLocalPose: vi.fn(),
+      cancelLocalPose: vi.fn(),
+      beginOverlay: vi.fn(() => ({})),
+      applyOverlayPose: vi.fn(),
+      finishOverlay: vi.fn(),
+      flush: vi.fn(),
+    }
+    const flip = new HtmlFlipRuntime(projection)
+    const base = {
+      project: vi.fn(() => { itemLeft = 100 }),
+    }
+    const wrapper = new MoveFlipLayoutProjection({
+      base,
+      flip,
+      hostContextId: 'host-1',
+      getProjectionEpoch: () => 1,
+      buildCapture: ({ deltas, preparedTransitions, nextScene }) => {
+        const transition = preparedTransitions.get(deltas[0]?.persoKey ?? '')
+        if (transition?.duration === undefined) return undefined
+        return {
+          captureId: 'seek-move',
+          hostContextId: 'host-1',
+          projectionEpoch: 1,
+          startAt: deltas[0]?.transitionStartAt ?? nextScene.timeMs,
+          duration: transition.duration,
+          ease: transition.ease,
+          entries: [{ itemId: 'item', ancestorIds: [], mode: 'local' as const }],
+        }
+      },
+    })
+    const delta: MoveStateDelta = {
+      operation: 'move',
+      persoKey: 'item',
+      mountedBefore: true,
+      mountedAfter: true,
+      transitionStartAt: 0,
+      transition: { duration: 100, ease: 'linear' },
+    }
+
+    wrapper.project({ ...emptyScene(), timeMs: 50 }, {
+      phase: 'seek',
+      previousScene: emptyScene(),
+      moveDeltas: [delta],
+    })
+
+    expect(base.project).toHaveBeenCalledOnce()
+    expect(applyLocalPose).not.toHaveBeenCalled()
   })
 })

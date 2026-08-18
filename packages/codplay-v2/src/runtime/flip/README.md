@@ -138,8 +138,10 @@ La pose contient à la fois :
 Le host local reconstruit ensuite une matrice affine complète dans le repère du
 parent. Il neutralise temporairement les propriétés CSS individuelles
 `translate`/`rotate`/`scale` et écrit une seule `matrix(...)`, avant de restaurer
-le style auteur exact. Un delta écran ne doit jamais être écrit directement
-comme un delta local lorsque le parent est tourné ou mis à l'échelle.
+le style auteur exact. Les dimensions FLIP sont écrites séparément via
+`width`/`height`; elles ne sont jamais converties en `scaleX`/`scaleY` de la
+matrice locale. Un delta écran ne doit jamais être écrit directement comme un
+delta local lorsque le parent est tourné ou mis à l'échelle.
 
 ## Mesure HTML
 
@@ -252,12 +254,16 @@ La couverture actuelle comprend :
 - ancêtres composés et ancêtres `layout` historiques ;
 - parent et grand-parent FLIP ;
 - item changeant de conteneur ;
+- conteneur dont la hauteur change pendant l'insertion, avec interpolation
+  explicite `width`/`height` sans scale FLIP indépendant ;
 - conversion monde vers repère local ;
 - cycles et chaînes d'ancêtres invalides ;
 - cancellation, retarget et captures chevauchantes ;
 - isolation host/epoch ;
 - diagnostics runtime.
 - compilation de trajectoires SVG normalisées en segments d'arcs et de droites.
+- integration DOM deterministe d'une chaine `layout -> container -> item`, avec
+  pose milieu, fin, seek-back et invalidation d'epoch.
 
 Vérifications actuelles :
 

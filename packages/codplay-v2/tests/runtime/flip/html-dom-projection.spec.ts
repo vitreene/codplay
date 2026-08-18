@@ -62,4 +62,16 @@ describe('V2 HTML DOM projection math', () => {
     expect(matrix.f).toBeCloseTo(20)
   })
 
+  it('keeps size interpolation out of the local transform matrix', () => {
+    const natural = pose(0, 0, 100, 50)
+    const target = pose(120, 80, 200, 100)
+
+    const matrix = resolveLocalProjectionMatrix(natural, target, undefined)
+
+    expect(matrix.a).toBeCloseTo(1)
+    expect(matrix.d).toBeCloseTo(1)
+    expect(matrix.e).toBeCloseTo(120)
+    expect(matrix.f).toBeCloseTo(80)
+  })
+
 })

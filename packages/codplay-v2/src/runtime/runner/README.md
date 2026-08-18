@@ -1,6 +1,6 @@
 # HTML runner V2
 
-Status: En cours  
+Status: A relire
 CodPlay version: V2 foundation
 
 ## Role
@@ -17,6 +17,8 @@ CompiledScene
   -> RuntimeComponentRuntime
   -> HtmlComponentMaterializer
   -> LayoutDomBackend
+  -> MoveFlipLayoutProjection
+  -> HtmlDomProjection
   -> DOM
 ```
 
@@ -44,6 +46,27 @@ Dans cette tranche, les services DOM projettent les canaux auteur `style.x` et
 `style.y` en une translation CSS composée. La résolution ACE fournit les valeurs
 interpolées; le runner ne lit pas la position calculée du navigateur.
 
+Un `move` explicite avec une transition positive active actuellement une capture
+FLIP locale du perso déplacé, des siblings montés des targets before/after et de
+leurs chaînes de composants ancêtres résolues.
+Les ancêtres dont la boîte change sont aussi projetés comme entries locales afin
+que leur `width`/`height` évolue avant les enfants.
+Un mover dont la chaîne de parents change entre FIRST et LAST n'utilise pas la
+chaîne de destination pour sa pose FIRST : sa pose est interpolée dans le repère
+monde, tandis que les siblings restés dans la même chaîne conservent leur repère
+local.
+Les moves compilés à durée positive sont indexés par un journal d'occurrences et
+peuvent être réalisés froidement depuis leurs scènes historiques. La présentation
+historique restaure la scène courante dans un `finally` avant la projection au
+temps demandé. Les événements live et les reorders `list` historiques restent
+hors de cette tranche. Voir `plan/runner-flip-integration-study.md`.
+
+Quand le module `list` est présent, son snapshot d'ordre et de touched set est
+consommé par le player avant la projection DOM. La réalisation froide d'un
+reorder list historique recrée des instances de modules temporaires et rejoue les
+frontières d'événements compilées depuis `t=0`, sans modifier l'état du player
+courant.
+
 ## Invariants
 
 - Les composants sont les seuls écrivains de leur état DOM.
@@ -56,10 +79,11 @@ interpolées; le runner ne lit pas la position calculée du navigateur.
 
 Cette tranche ne prétend pas fournir:
 
-- `HtmlDomProjection` ou `MoveFlipLayoutProjection`;
-- les captures FLIP et leur seek pendant une transition;
-- la détection d'ancêtres, les overlays et les mesures historiques;
-- la capacité `list` et le reorder métier;
+- les overlays et les réalisations historiques d'événements live;
+- les captures froides des événements live ou des transitions complexes ou
+  concurrentes;
+- la policy métier `list` et son reorder; le touched set générique local ne
+  remplace pas cette capacité;
 - l'exécution générique de `listen` et des straps.
 
 Ces capacités devront ouvrir leurs contrats avant l'adaptation de `flip-stress`.

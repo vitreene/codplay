@@ -15,12 +15,19 @@ export type RuntimeModuleServiceSeekHandle = Readonly<{
   abort?: () => void
 }>
 
+/** Render ordering and affected-item data published by a structural module. */
+export type RuntimeModuleLayoutProjectionState = Readonly<{
+  childrenByTarget?: Readonly<Record<string, readonly string[]>>
+  touchedItemIds?: readonly string[]
+}>
+
 /** Runtime hooks available to a stateful module instance. */
 export type RuntimeModuleServiceInstance = Readonly<{
   initializeScene?: (scene: SolvedScene) => void
   getMountTargets?: () => readonly MountTargetDeclaration[]
   prepareSeek?: (scene: SolvedScene) => RuntimeModuleServiceSeekHandle
   onMoveDelta?: (delta: MoveStateDelta) => void
+  consumeLayoutProjectionState?: () => RuntimeModuleLayoutProjectionState
   destroy?: () => void
 }>
 

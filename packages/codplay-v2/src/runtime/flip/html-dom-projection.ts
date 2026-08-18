@@ -1,4 +1,4 @@
-import { createIdentityMatrix, createScaleMatrix, invertMatrix, multiplyMatrix } from '../../ace'
+import { createIdentityMatrix, invertMatrix, multiplyMatrix } from '../../ace'
 import {
   captureHtmlPose,
   composeHtmlPose,
@@ -99,6 +99,10 @@ function applyLocalPose(
   }
   restoreLocalPose(node, snapshots.get(itemId)!.style)
 
+  // Size changes can alter the parent's auto-layout position before the matrix
+  // is solved, especially when the parent centers its children.
+  node.style.width = `${resolved.pose.localWidth}px`
+  node.style.height = `${resolved.pose.localHeight}px`
   const naturalPose = captureHtmlPose(node)
   const naturalRect = naturalPose.rect
   const parentPose = node.parentElement === null ? undefined : captureHtmlPose(node.parentElement)
@@ -127,7 +131,7 @@ function applyLocalPose(
   node.style.transform = `matrix(${targetMatrix.a}, ${targetMatrix.b}, ${targetMatrix.c}, ${targetMatrix.d}, ${targetMatrix.e}, ${targetMatrix.f})`
 }
 
-/** Resolves one complete local CSS matrix from natural and target world poses. */
+/** Resolves one local CSS matrix without using scale to interpolate item size. */
 export function resolveLocalProjectionMatrix(
   natural: HtmlPose,
   target: HtmlPose,
@@ -136,12 +140,7 @@ export function resolveLocalProjectionMatrix(
   const parentMatrix = parent === undefined ? createIdentityMatrix() : poseAffineMatrix(parent)
   const parentInverse = invertMatrix(parentMatrix)
   if (parentInverse === null) throw new Error('FLIP local parent matrix is singular.')
-  const widthScale = natural.localWidth === 0 ? 1 : target.localWidth / natural.localWidth
-  const heightScale = natural.localHeight === 0 ? 1 : target.localHeight / natural.localHeight
-  const targetMatrix = multiplyMatrix(
-    multiplyMatrix(parentInverse, poseAffineMatrix(target)),
-    createScaleMatrix(widthScale, heightScale),
-  )
+  const targetMatrix = multiplyMatrix(parentInverse, poseAffineMatrix(target))
   const layoutOffset = natural.layoutOffset ?? { x: 0, y: 0 }
   return {
     ...targetMatrix,

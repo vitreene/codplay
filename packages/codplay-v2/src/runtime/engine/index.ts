@@ -12,6 +12,7 @@ export {
   type RuntimeModuleServiceContext,
   type RuntimeModuleServiceDefinition,
   type RuntimeModuleServiceInstance,
+  type RuntimeModuleLayoutProjectionState,
   type RuntimeModuleServiceSeekHandle,
 } from './module-service-catalog'
 export type { Ticker } from '../time'

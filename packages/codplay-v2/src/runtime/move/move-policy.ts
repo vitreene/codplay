@@ -12,6 +12,7 @@ import {
   MOVE_ISSUE_CONFLICT_SAME_TICK,
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
   type MoveTransition,
+  type MoveFlipMode,
   type MoveOrderMode,
   type MovePolicyIssue,
 } from '../config/move'
@@ -56,7 +57,8 @@ export function selectEffectiveMove(
       groupOrder.push(key)
       groups.set(key, [])
     }
-    groups.get(key)?.push(readMove(action.action.move, true))
+    const candidate = readMove(action.action.move, true)
+    groups.get(key)?.push(attachTransitionStartAt(candidate, action.startAt))
   }
 
   for (const key of groupOrder) {
@@ -85,46 +87,64 @@ export function selectEffectiveMove(
   return { placement, issues }
 }
 
+/** Adds the authored event start only to placements carrying a transition. */
+function attachTransitionStartAt(placement: ResolvedPlacement, startAt: number): ResolvedPlacement {
+  if (!('transition' in placement) || placement.transition === undefined) return placement
+  return { ...placement, transitionStartAt: startAt }
+}
+
 /** Converts one authored move declaration to a typed logical placement. */
 function readMove(value: CompiledValue | undefined, actionMove: boolean): ResolvedPlacement {
   const source = actionMove ? MOUNT_PLACEMENT_SOURCE_MOVE : MOUNT_PLACEMENT_SOURCE_INITIAL
   if (value === undefined) return { kind: MOUNT_PLACEMENT_UNSPECIFIED, source }
-  if (typeof value === 'string') return readTarget(value, source, undefined, undefined, undefined, actionMove)
+  if (typeof value === 'string') return readTarget(value, source, undefined, undefined, undefined, undefined, actionMove)
   if (!isPlainRecord(value)) return { kind: MOUNT_PLACEMENT_INVALID, source }
 
   const record = value as CompiledRecord
   if (typeof record.target !== 'string') return { kind: MOUNT_PLACEMENT_INVALID, source }
   const mode = actionMove ? readMoveMode(record.mode) : undefined
   if (actionMove && record.mode !== undefined && mode === undefined) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  const flipMode = readMoveFlipMode(record.flipMode)
+  if (flipMode === INVALID_FLIP_MODE) return { kind: MOUNT_PLACEMENT_INVALID, source }
   const transition = readMoveTransition(record.transition)
   if (transition === INVALID_TRANSITION) return { kind: MOUNT_PLACEMENT_INVALID, source }
-  const target = readTarget(record.target, source, mode, record.reorder, transition, actionMove)
+  const target = readTarget(record.target, source, mode, flipMode, record.reorder, transition, actionMove)
   return target
 }
 
 const INVALID_TRANSITION = Symbol('invalid move transition')
+const INVALID_FLIP_MODE = Symbol('invalid move flip mode')
 
 /** Resolves one authored target while preserving optional placement metadata. */
 function readTarget(
   target: string,
   source: MountPlacementSource,
   mode?: MoveOrderMode,
+  flipMode?: MoveFlipMode | typeof INVALID_FLIP_MODE,
   reorder?: CompiledValue,
   transition?: MoveTransition | typeof INVALID_TRANSITION,
   actionMove = false,
 ): ResolvedPlacement {
-  if (transition === INVALID_TRANSITION) return { kind: MOUNT_PLACEMENT_INVALID, source }
+  if (transition === INVALID_TRANSITION || flipMode === INVALID_FLIP_MODE) return { kind: MOUNT_PLACEMENT_INVALID, source }
   const reorderValue = typeof reorder === 'boolean' ? reorder : undefined
-  if (target === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, source, transition }
-  if (target === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, source, transition }
+  if (target === SCENE_BUILD_CONFIG.rootToken) return { kind: MOUNT_PLACEMENT_ROOT, mode, flipMode, source, transition }
+  if (target === SCENE_BUILD_CONFIG.detachToken) return { kind: MOUNT_PLACEMENT_OFF, mode, flipMode, source, transition }
   return {
     kind: MOUNT_PLACEMENT_PARENT,
     targetId: target,
     mode: mode ?? (actionMove ? MOVE_ORDER_MODE_AUTO : undefined),
+    flipMode,
     source,
     reorder: reorderValue,
     transition,
   }
+}
+
+/** Validates the optional visual strategy without letting policy invent one. */
+function readMoveFlipMode(value: CompiledValue | undefined): MoveFlipMode | typeof INVALID_FLIP_MODE | undefined {
+  if (value === undefined) return undefined
+  if (value === 'local' || value === 'overlay-world') return value
+  return INVALID_FLIP_MODE
 }
 
 /** Accepts compiler-prepared transition data without parsing SVG at runtime. */

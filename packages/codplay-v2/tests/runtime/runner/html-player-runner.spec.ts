@@ -128,6 +128,11 @@ function componentCatalog(): RuntimeComponentCatalog {
     services: ['className', 'style', 'attr', 'content'],
     modules: [],
     create: (input) => new TagComponent(input as never),
+  }, {
+    type: 'list',
+    services: ['className', 'style', 'attr'],
+    modules: ['list'],
+    create: (input) => new TagComponent(input as never),
   }]
   for (const definition of definitions) catalog.register(definition)
   return catalog
@@ -138,6 +143,7 @@ function validationCatalog(): ValidationCatalog {
   const catalog = new ValidationCatalog()
   catalog.registerComponent({ type: 'layout', services: ['className', 'style', 'attr'], modules: ['markup'], validateInitial: () => undefined, validateAction: () => undefined })
   catalog.registerComponent({ type: 'tag', services: ['className', 'style', 'attr', 'content'], modules: [], validateInitial: () => undefined, validateAction: () => undefined })
+  catalog.registerComponent({ type: 'list', services: ['className', 'style', 'attr'], modules: ['list'], validateInitial: () => undefined, validateAction: () => undefined })
   return catalog
 }
 
@@ -205,6 +211,45 @@ function continuousCompiledScene(): CompiledScene {
     },
   }
   const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(scene)
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
+/** Declares one list transfer whose explicit first mode must reach the DOM order. */
+function listSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-list-order',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'list',
+          type: 'list',
+          initial: { move: '@root', tag: 'section' },
+          actions: {},
+        }, {
+          id: 'first',
+          type: 'tag',
+          initial: { tag: 'article', move: '@root', content: 'first' },
+          actions: {
+            transfer: { move: { target: 'list', mode: 'first', transition: { duration: 100, ease: 'linear' } } },
+          },
+        }, {
+          id: 'second',
+          type: 'tag',
+          initial: { tag: 'article', move: { target: 'list' }, content: 'second' },
+          actions: {},
+        }],
+        listen: [],
+        eventimes: [{ name: 'transfer', startAt: 100 }],
+      },
+    },
+  }
+}
+
+/** Builds the list-order runner fixture through the SceneDoc compiler boundary. */
+function listCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(listSceneDoc())
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -299,6 +344,32 @@ describe('HtmlPlayerRunner', () => {
     expect(item.style.opacity).toBe('0.5')
     expect(item.style.backgroundColor).toBe('rgba(128, 128, 128, 1)')
     runner.pause()
+    runner.destroy()
+  })
+
+  it('commits the list capability order before a first-mode FLIP transfer', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const runner = new HtmlPlayerRunner({
+      id: 'list-order-runner',
+      compiledScene: listCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      componentCatalog: componentCatalog(),
+      serviceCatalog: createDomComponentServiceCatalog(),
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const list = runner.getPersoNode('main:list') as FakeElement
+    const first = runner.getPersoNode('main:first') as FakeElement
+    const second = runner.getPersoNode('main:second') as FakeElement
+    expect(list.childNodes).toEqual([second])
+
+    runner.play(ticker())
+    runner.advance(0)
+    runner.advance(100)
+
+    expect(list.childNodes).toEqual([first, second])
     runner.destroy()
   })
 })

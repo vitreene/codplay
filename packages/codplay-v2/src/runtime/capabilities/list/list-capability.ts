@@ -8,7 +8,8 @@ import {
   type MoveOrderMode,
 } from '../../config/move'
 import type { MoveStateDelta } from '../../move'
-import type { RuntimeModuleServiceDefinition } from '../../engine'
+import type { RuntimeModuleLayoutProjectionState, RuntimeModuleServiceDefinition } from '../../engine'
+import type { SolvedScene } from '../../player/pipeline'
 
 /** Runtime module identifier for the generic list capability. */
 export const LIST_MODULE_SERVICE_ID = 'list' as const
@@ -31,6 +32,7 @@ export class ListCapabilityState {
   private readonly containers = new Map<string, ListCapabilityConfig>()
   private readonly children = new Map<string, string[]>()
   private readonly items = new Map<string, ListItemState>()
+  private readonly pendingTouchedItemIds = new Set<string>()
 
   /** Registers one logical list target and its reorder policies. */
   registerContainer(id: string, config: ListCapabilityConfig = {}): void {
@@ -43,8 +45,27 @@ export class ListCapabilityState {
     this.items.set(itemId, { mounted: false })
   }
 
+  /** Rebuilds list-owned order from one solved scene before the first projection. */
+  initializeScene(scene: SolvedScene): void {
+    for (const perso of Object.values(scene.persos)) {
+      if (perso.type === 'list') this.registerContainer(perso.persoId)
+      this.items.set(perso.key, {
+        parentId: perso.placement.targetId,
+        mounted: perso.placement.mounted,
+        mode: perso.placement.mode,
+      })
+    }
+    for (const containerId of this.containers.keys()) {
+      this.children.set(containerId, [...(scene.childrenByTarget[containerId] ?? [])])
+    }
+    this.pendingTouchedItemIds.clear()
+  }
+
   /** Applies one generic core delta without touching a renderer. */
   applyDelta(delta: MoveStateDelta): void {
+    const touched = new Set<string>([delta.persoKey])
+    addChildren(this.children.get(delta.fromTargetId ?? ''), touched)
+    addChildren(this.children.get(delta.toTargetId ?? ''), touched)
     const previous = this.items.get(delta.persoKey) ?? { mounted: delta.mountedBefore }
     const sourceConfig = delta.fromTargetId === undefined ? undefined : this.containers.get(delta.fromTargetId)
     const targetConfig = delta.toTargetId === undefined ? undefined : this.containers.get(delta.toTargetId)
@@ -59,11 +80,15 @@ export class ListCapabilityState {
 
     if (delta.operation === MOVE_OPERATION_UNMOUNT) {
       this.items.set(delta.persoKey, { mounted: false, mode: undefined })
+      addChildren(this.children.get(delta.fromTargetId ?? ''), touched)
+      this.addPendingTouched(touched)
       return
     }
 
     if (delta.toTargetId === undefined) {
       this.items.set(delta.persoKey, { mounted: delta.mountedAfter, mode })
+      addChildren(this.children.get(delta.fromTargetId ?? ''), touched)
+      this.addPendingTouched(touched)
       return
     }
 
@@ -87,6 +112,9 @@ export class ListCapabilityState {
         ? mode ?? previous.mode
         : mode,
     })
+    addChildren(this.children.get(delta.fromTargetId ?? ''), touched)
+    addChildren(this.children.get(delta.toTargetId), touched)
+    this.addPendingTouched(touched)
   }
 
   /** Returns the current logical parent of one item. */
@@ -102,6 +130,17 @@ export class ListCapabilityState {
   /** Returns an immutable child-order snapshot for one registered container. */
   getChildrenIds(containerId: string): readonly string[] {
     return [...(this.children.get(containerId) ?? [])]
+  }
+
+  /** Consumes authoritative order and touched-item data for one render commit. */
+  consumeLayoutProjectionState(): RuntimeModuleLayoutProjectionState {
+    const childrenByTarget = Object.fromEntries([...this.containers.keys()].map((containerId) => [
+      containerId,
+      [...(this.children.get(containerId) ?? [])],
+    ]))
+    const touchedItemIds = [...this.pendingTouchedItemIds]
+    this.pendingTouchedItemIds.clear()
+    return { childrenByTarget, touchedItemIds }
   }
 
   /** Removes one item from a container without changing item ownership. */
@@ -138,6 +177,11 @@ export class ListCapabilityState {
     this.removeChild(containerId, itemId)
     this.insertChild(containerId, itemId, index)
   }
+
+  /** Adds one affected group to the pending render touched set. */
+  private addPendingTouched(itemIds: ReadonlySet<string>): void {
+    for (const itemId of itemIds) this.pendingTouchedItemIds.add(itemId)
+  }
 }
 
 /** Creates one player-scoped runtime module around the pure list state. */
@@ -147,7 +191,9 @@ export function createListModuleServiceDefinition(): RuntimeModuleServiceDefinit
     create: () => {
       const state = new ListCapabilityState()
       return {
+        initializeScene: (scene) => state.initializeScene(scene),
         onMoveDelta: (delta) => state.applyDelta(delta),
+        consumeLayoutProjectionState: () => state.consumeLayoutProjectionState(),
         destroy: () => undefined,
       }
     },
@@ -157,4 +203,10 @@ export function createListModuleServiceDefinition(): RuntimeModuleServiceDefinit
 /** Clamps one numeric list index to the current insertion range. */
 function clampIndex(index: number, length: number): number {
   return Math.max(0, Math.min(Math.trunc(index), length))
+}
+
+/** Adds one existing child array to an affected-item set. */
+function addChildren(children: readonly string[] | undefined, touched: Set<string>): void {
+  if (children === undefined) return
+  for (const itemId of children) touched.add(itemId)
 }

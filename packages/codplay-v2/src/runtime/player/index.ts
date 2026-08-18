@@ -24,6 +24,7 @@ export {
   type MoveFlipLayoutProjectionOptions,
 } from './flip/move-flip-layout-projection'
 export { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './flip/move-flip-transition'
+export { MoveTransitionJournal, type MoveTransitionOccurrence } from './move-transition-journal'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,
@@ -62,6 +63,7 @@ export {
   MOVE_OPERATION_MOVE,
   MOVE_OPERATION_UNMOUNT,
 } from '../config/move'
+export type { MoveFlipMode } from '../config/move'
 export { diffSolvedScenes, selectEffectiveMove } from '../move'
 export type { MovePolicyResult, MoveStateDelta } from '../move'
 export { createListModuleServiceDefinition, ListCapabilityState, LIST_MODULE_SERVICE_ID } from '../capabilities/list'

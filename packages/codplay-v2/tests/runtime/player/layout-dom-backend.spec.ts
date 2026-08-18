@@ -110,4 +110,49 @@ describe('LayoutDomBackend', () => {
 
     expect(parent.children).toEqual([child])
   })
+
+  it('synchronizes authored state before structural writes', () => {
+    const root = node()
+    const child = node()
+    const backend = new LayoutDomBackend({
+      persoNodes: new Map([['main:child', child]]),
+      targetNodes: new Map([['root', root]]),
+    })
+    const order: string[] = []
+
+    backend.project(scene([
+      perso('main:child', { id: 'root', kind: 'root' }),
+    ], { root: ['main:child'] }), {
+      phase: 'frame',
+      moveDeltas: [],
+      authoredSync: () => order.push('authored'),
+    })
+    order.push(child.parentNode === root ? 'structural' : 'missing')
+
+    expect(order).toEqual(['authored', 'structural'])
+  })
+
+  it('uses module-owned child order for the structural commit', () => {
+    const root = node()
+    const first = node()
+    const second = node()
+    const backend = new LayoutDomBackend({
+      persoNodes: new Map([
+        ['main:first', first],
+        ['main:second', second],
+      ]),
+      targetNodes: new Map([['list', root]]),
+    })
+
+    backend.project(scene([
+      perso('main:first', { id: 'list', kind: 'root' }),
+      perso('main:second', { id: 'list', kind: 'root' }),
+    ], { list: ['main:first', 'main:second'] }), {
+      phase: 'frame',
+      moveDeltas: [],
+      layoutState: { childrenByTarget: { list: ['main:second', 'main:first'] } },
+    })
+
+    expect(root.children).toEqual([second, first])
+  })
 })

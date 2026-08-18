@@ -5,6 +5,7 @@ import {
   createMarkupModuleServiceDefinition,
   type MarkupModuleServiceInstance,
 } from '../../../src/runtime/capabilities/markup'
+import { createListModuleServiceDefinition } from '../../../src/runtime/capabilities/list'
 import {
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
@@ -359,5 +360,103 @@ describe('RuntimePlayer', () => {
     player.destroy()
 
     expect(projectedTimes).toEqual([0, 100, -1])
+  })
+
+  it('injects list-owned order and touched items into the layout projection', () => {
+    const events: Array<Readonly<{ timeMs: number; order?: readonly string[]; touched?: readonly string[] }>> = []
+    const catalog = new RuntimeModuleServiceCatalog()
+    catalog.register(createListModuleServiceDefinition())
+    const listScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [
+              { id: 'list', type: 'list', initial: { move: '@root' }, actions: {} },
+              { id: 'first', type: 'tag', initial: { move: { target: 'list' } }, actions: {
+                moveLast: { move: { target: 'list', mode: 'last' } },
+              } },
+              { id: 'second', type: 'tag', initial: { move: { target: 'list' } }, actions: {} },
+            ],
+            listen: [],
+            eventimes: [{ name: 'moveLast', startAt: 100 }],
+          },
+        },
+      },
+      requirements: { ...scene.requirements, modules: ['list'] },
+    }
+    const engine = new RuntimeEngine(
+      { components: [], services: [], modules: ['list'], resources: [] },
+      { moduleServiceCatalog: catalog },
+    )
+    const projection = {
+      project: (solved: SolvedScene, context?: { phase: string; layoutState?: { childrenByTarget?: Readonly<Record<string, readonly string[]>>; touchedItemIds?: readonly string[] } }) => {
+        events.push({
+          timeMs: solved.timeMs,
+          order: context?.layoutState?.childrenByTarget?.list,
+          touched: context?.layoutState?.touchedItemIds,
+        })
+      },
+    }
+    const player = new RuntimePlayer('list-player', engine, listScene, undefined, undefined, undefined, undefined, [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+    ], projection)
+
+    expect(player.init().ok).toBe(true)
+    expect(player.seek(100).ok).toBe(true)
+
+    expect(events[1]).toEqual({
+      timeMs: 100,
+      order: ['main:second', 'main:first'],
+      touched: ['main:first', 'main:second'],
+    })
+  })
+
+  it('replays list order for a historical projection without mutating the current module state', () => {
+    const catalog = new RuntimeModuleServiceCatalog()
+    catalog.register(createListModuleServiceDefinition())
+    const listScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [
+              { id: 'list', type: 'list', initial: { move: '@root' }, actions: {} },
+              { id: 'first', type: 'tag', initial: { move: { target: 'list' } }, actions: {
+                moveLast: { move: { target: 'list', mode: 'last' } },
+              } },
+              { id: 'second', type: 'tag', initial: { move: { target: 'list' } }, actions: {} },
+            ],
+            listen: [],
+            eventimes: [{ name: 'moveLast', startAt: 100 }],
+          },
+        },
+      },
+      requirements: { ...scene.requirements, modules: ['list'] },
+    }
+    const engine = new RuntimeEngine(
+      { components: [], services: [], modules: ['list'], resources: [] },
+      { moduleServiceCatalog: catalog },
+    )
+    const player = new RuntimePlayer('historical-list-player', engine, listScene, undefined, undefined, undefined, undefined, [
+      { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+    ])
+
+    expect(player.init().ok).toBe(true)
+    const historical = player.getHistoricalLayoutProjectionState(player.resolveSceneAt(100))
+
+    expect(historical).toEqual({
+      childrenByTarget: { list: ['main:second', 'main:first'] },
+      touchedItemIds: ['main:first', 'main:second'],
+    })
+    expect(player.getHistoricalLayoutProjectionState(player.resolveSceneAt(0))).toEqual({
+      childrenByTarget: { list: ['main:first', 'main:second'] },
+      touchedItemIds: [],
+    })
+    player.destroy()
   })
 })

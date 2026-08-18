@@ -3,11 +3,16 @@ import {
   MARKUP_MODULE_SERVICE_ID,
 } from '../capabilities/markup'
 import {
+  createListModuleServiceDefinition,
+  LIST_MODULE_SERVICE_ID,
+} from '../capabilities/list'
+import {
   RuntimeEngine,
   RuntimeModuleServiceCatalog,
   type Ticker,
 } from '../engine'
 import { TimeTicker } from '../time'
+import { createHtmlDomProjection, HtmlFlipRuntime } from '../flip'
 import {
   RuntimeComponentCatalog,
   RuntimeComponentRuntime,
@@ -15,14 +20,19 @@ import {
 } from '../components'
 import {
   LayoutDomBackend,
+  MoveFlipLayoutProjection,
   RuntimePlayer,
   type PlayerInitResult,
   type PlayerLifecycleState,
   type PlayerSeekResult,
   type MountTargetDeclaration,
+  type SolvedScene,
 } from '../player'
 import type { CompiledScene } from '../../scene/compiled'
 import { HtmlComponentMaterializer } from './html-component-materializer'
+import { createHtmlMoveCaptureBuilder, type HtmlMoveCaptureBuilderOptions } from './html-move-capture-builder'
+import type { FlipCapture } from '../flip'
+import { resolveCompiledMoveCapture } from './html-compiled-move-capture-resolver'
 
 /** One HTML root target mapped to the runner's supplied root element. */
 export type HtmlRootTarget = Readonly<{
@@ -54,6 +64,10 @@ export class HtmlPlayerRunner {
     targetNodes: new Map<string, unknown>(),
   }
   private readonly materializer: HtmlComponentMaterializer
+  private readonly componentRuntime: RuntimeComponentRuntime
+  private readonly backend: LayoutDomBackend
+  private readonly captureBuilder: ReturnType<typeof createHtmlMoveCaptureBuilder>
+  private readonly flipRuntime: HtmlFlipRuntime
   private projectionEpoch = 0
 
   /** Creates one HTML runner and wires the generic component/layout boundaries. */
@@ -61,7 +75,10 @@ export class HtmlPlayerRunner {
     this.defaultTicker = options.ticker
     this.materializer = new HtmlComponentMaterializer(this.nodes)
     const moduleCatalog = options.moduleServiceCatalog ?? new RuntimeModuleServiceCatalog()
-    if (options.engine === undefined) registerMarkupModule(moduleCatalog)
+    if (options.engine === undefined) {
+      registerMarkupModule(moduleCatalog)
+      registerListModule(moduleCatalog)
+    }
     this.engine = options.engine ?? new RuntimeEngine(
       {
         ...options.compiledScene.requirements,
@@ -87,8 +104,33 @@ export class HtmlPlayerRunner {
         moduleServices,
       ),
     })
+    this.componentRuntime = componentRuntime
     const backend = new LayoutDomBackend(this.nodes)
-    this.player = new RuntimePlayer(
+    this.backend = backend
+    const htmlProjection = createHtmlDomProjection({
+      hostContextId: options.id,
+      getProjectionEpoch: () => this.projectionEpoch,
+      root: options.root,
+      resolveHandle: (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
+    })
+    const captureBuilderOptions: HtmlMoveCaptureBuilderOptions = {
+      hostContextId: options.id,
+      getProjectionEpoch: () => this.projectionEpoch,
+    }
+    this.captureBuilder = createHtmlMoveCaptureBuilder(captureBuilderOptions)
+    let runtimePlayer: RuntimePlayer | undefined
+    this.flipRuntime = new HtmlFlipRuntime(htmlProjection, undefined, ({ timeMs }) => {
+      if (runtimePlayer === undefined) return undefined
+      return this.resolveColdCapture(runtimePlayer, timeMs)
+    })
+    const layoutProjection = new MoveFlipLayoutProjection({
+      base: backend,
+      flip: this.flipRuntime,
+      hostContextId: options.id,
+      getProjectionEpoch: () => this.projectionEpoch,
+      buildCapture: this.captureBuilder,
+    })
+    runtimePlayer = new RuntimePlayer(
       options.id,
       this.engine,
       options.compiledScene,
@@ -97,9 +139,10 @@ export class HtmlPlayerRunner {
       undefined,
       undefined,
       mountTargets,
-      backend,
+      layoutProjection,
       componentRuntime,
     )
+    this.player = runtimePlayer
   }
 
   /** Initializes the player and materializes the scene's component instances. */
@@ -134,6 +177,8 @@ export class HtmlPlayerRunner {
   /** Invalidates the host layout epoch after a viewport or scroll change. */
   resize(): void {
     this.projectionEpoch += 1
+    const result = this.flipRuntime.invalidateHost(this.player.id, this.projectionEpoch)
+    if (!result.ok) throw new Error(result.diagnostics.errors.map((entry) => entry.message).join('\n'))
   }
 
   /** Returns the current host projection epoch for future visual projections. */
@@ -168,6 +213,26 @@ export class HtmlPlayerRunner {
     this.nodes.persoNodes.clear()
     this.nodes.targetNodes.clear()
   }
+
+  /** Realizes one compiled move occurrence through a temporary historical DOM. */
+  private resolveColdCapture(player: RuntimePlayer, timeMs: number): FlipCapture | undefined {
+    return resolveCompiledMoveCapture({
+      player,
+      flipRuntime: this.flipRuntime,
+      captureBuilder: this.captureBuilder,
+      presentHistoricalScene: (scene) => this.presentHistoricalScene(scene),
+    }, timeMs)
+  }
+
+  /** Presents one historical scene without emitting logical module deltas. */
+  private presentHistoricalScene(scene: SolvedScene): void {
+    this.backend.project(scene, {
+      phase: 'historical',
+      moveDeltas: [],
+      layoutState: this.player.getHistoricalLayoutProjectionState(scene),
+      authoredSync: (authoredScene) => this.componentRuntime.sync(authoredScene),
+    })
+  }
 }
 
 /** Registers the built-in markup module exactly once in one mutable catalog. */
@@ -177,7 +242,18 @@ function registerMarkupModule(catalog: RuntimeModuleServiceCatalog): void {
   catalog.register(definition)
 }
 
+/** Registers the built-in list module when the runner owns its engine. */
+function registerListModule(catalog: RuntimeModuleServiceCatalog): void {
+  if (catalog.has(LIST_MODULE_SERVICE_ID)) return
+  catalog.register(createListModuleServiceDefinition())
+}
+
 /** Creates the browser ticker lazily so construction remains deterministic in tests. */
 function createDefaultTicker(): Ticker {
   return new TimeTicker()
+}
+
+/** Resolves a materialized HTML element without exposing non-DOM component handles to FLIP. */
+function resolveHtmlHandle(node: unknown): HTMLElement | undefined {
+  return typeof HTMLElement !== 'undefined' && node instanceof HTMLElement ? node : undefined
 }

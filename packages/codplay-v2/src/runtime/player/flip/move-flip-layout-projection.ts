@@ -13,6 +13,7 @@ export type MoveFlipCaptureBuilder = (input: Readonly<{
   nextScene: SolvedScene
   deltas: readonly MoveStateDelta[]
   preparedTransitions: ReadonlyMap<string, PreparedMoveFlipTransition>
+  touchedItemIds?: readonly string[]
 }>) => MoveFlipCaptureDescription | undefined
 
 /** Options for composing a move-aware FLIP projection around a base projection. */
@@ -35,6 +36,7 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
   private readonly getProjectionEpoch: () => number
   private readonly buildCapture: MoveFlipCaptureBuilder
   private activeUntil: number | undefined
+  private readonly captureWindows = new Map<string, Readonly<{ projectionEpoch: number; startAt: number; endAt: number }>>()
 
   /** Creates one move/FLIP boundary around an existing layout projection. */
   constructor(options: MoveFlipLayoutProjectionOptions) {
@@ -48,9 +50,7 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
   /** Captures a frame move before delegating the actual parentage mutation. */
   project(scene: SolvedScene, context: LayoutProjectionContext = { phase: 'frame', moveDeltas: [] }): void {
     if (context.phase === 'seek') {
-      this.activeUntil = undefined
-      this.flip.cancel()
-      this.base.project(scene, context)
+      this.projectSeek(scene, context)
       return
     }
 
@@ -59,18 +59,7 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
       return
     }
 
-    const preparedTransitions = new Map<string, PreparedMoveFlipTransition>()
-    for (const delta of context.moveDeltas) {
-      const transition = prepareMoveFlipTransition(delta.transition)
-      if (transition !== undefined) preparedTransitions.set(delta.persoKey, transition)
-    }
-
-    const description = this.buildCapture({
-      previousScene: context.previousScene,
-      nextScene: scene,
-      deltas: context.moveDeltas,
-      preparedTransitions,
-    })
+    const description = this.prepareCapture(scene, context)
     if (description === undefined) {
       this.activeUntil = undefined
       this.flip.cancel()
@@ -87,7 +76,12 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
       },
     })
     if (!result.ok && !delegated) this.base.project(scene, context)
-    this.activeUntil = result.ok ? result.value.endAt : undefined
+    if (!result.ok) {
+      this.activeUntil = undefined
+      return
+    }
+    this.rememberCapture(result.value.captureId, result.value.projectionEpoch, result.value.startAt, result.value.endAt)
+    this.activeUntil = result.value.endAt
   }
 
   /** Advances the active FLIP capture without creating a second clock. */
@@ -109,7 +103,48 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
   /** Releases the wrapped projection and any active FLIP ownership. */
   destroy(): void {
     this.activeUntil = undefined
+    this.captureWindows.clear()
     this.flip.cancel()
     this.base.destroy?.()
+  }
+
+  /** Reconstructs one seek state and presents only a persisted FLIP capture. */
+  private projectSeek(scene: SolvedScene, context: LayoutProjectionContext): void {
+    this.activeUntil = undefined
+    this.flip.cancel()
+    this.base.project(scene, context)
+    this.presentCached(scene.timeMs)
+  }
+
+  /** Prepares a capture description from one projection context. */
+  private prepareCapture(scene: SolvedScene, context: LayoutProjectionContext): MoveFlipCaptureDescription | undefined {
+    if (context.previousScene === undefined || context.moveDeltas.length === 0) return undefined
+    const preparedTransitions = new Map<string, PreparedMoveFlipTransition>()
+    for (const delta of context.moveDeltas) {
+      const transition = prepareMoveFlipTransition(delta.transition)
+      if (transition !== undefined) preparedTransitions.set(delta.persoKey, transition)
+    }
+    return this.buildCapture({
+      previousScene: context.previousScene,
+      nextScene: scene,
+      deltas: context.moveDeltas,
+      preparedTransitions,
+      touchedItemIds: context.layoutState?.touchedItemIds,
+    })
+  }
+
+  /** Presents a cached capture at a seek time when its interval is active. */
+  private presentCached(timeMs: number): void {
+    const result = this.flip.seekCached(this.hostContextId, this.getProjectionEpoch(), timeMs)
+    if (!result.ok) {
+      this.activeUntil = undefined
+      return
+    }
+    this.activeUntil = this.flip.getActiveEndAt(this.hostContextId, this.getProjectionEpoch(), timeMs)
+  }
+
+  /** Remembers one capture interval so a later seek can resume its projection. */
+  private rememberCapture(captureId: string, projectionEpoch: number, startAt: number, endAt: number): void {
+    this.captureWindows.set(captureId, { projectionEpoch, startAt, endAt })
   }
 }

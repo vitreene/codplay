@@ -22,6 +22,9 @@ export type MoveOrderMode =
   | typeof MOVE_ORDER_MODE_PREPEND
   | number
 
+/** Visual FLIP strategy carried by one authored move placement. */
+export type MoveFlipMode = 'local' | 'overlay-world'
+
 /** Compiled transition data carried by a move and consumed by a projector. */
 export type MoveTransition = Readonly<{
   duration?: number

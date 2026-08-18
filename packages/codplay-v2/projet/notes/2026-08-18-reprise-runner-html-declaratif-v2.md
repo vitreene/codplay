@@ -4,7 +4,9 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Reprise recommandée dans une nouvelle session.
+Reprise recommandée dans une nouvelle session avec Safari Preview MCP actif.
+
+Etude FLIP runner a relire: [`runner-flip-integration-study.md`](../../plan/runner-flip-integration-study.md).
 
 ## Décision de reprise
 
@@ -110,20 +112,62 @@ de captures, ni algorithme de projection.
 - `createDomComponentServiceCatalog` fournit les services DOM `className`, `style`,
   `attr` et `content`, avec suppression des propriétés et attributs précédemment gérés.
 - `HtmlPlayerRunner` associe explicitement les IDs de targets root au root HTML,
-  branche `RuntimeComponentRuntime` et `LayoutDomBackend`, et expose `init`, `play`,
-  `pause`, `advance`, `seek`, `resize` et `destroy`.
+  branche `RuntimeComponentRuntime`, `LayoutDomBackend` et le bridge FLIP direct,
+  et expose `init`, `play`, `pause`, `advance`, `seek`, `resize` et `destroy`.
 - La verticale déclarative de test couvre montage initial, outlet, transfert logique,
   convergence `advance`/`seek`, epoch de resize et destruction.
-- La démo navigateur `demos/validation/runner` reprend cette verticale avec un
-  parentage initial fixe et les checkpoints continus `0ms`, `1200ms`, `1900ms` et
-  `2650ms`; elle vérifie les couleurs, l'opacité et les aliases `style.x/style.y`
-  sans changer `move`, sans boucle de rendu secondaire et sans parentage impératif.
+- La démo navigateur unique `demos/validation/runner` porte maintenant la tranche
+  FLIP directe: un transfert `source-outlet -> target-outlet` à `800ms` pendant
+  `1200ms`, sans boucle de rendu secondaire ni parentage impératif.
 - Le contrat `style.x/style.y` est relié à la résolution ACE `translateX/translateY`
   puis composé en `transform: translate(...)` par le service DOM du runner. Cette
   intégration reste limitée aux deux canaux de translation nécessaires à la
   verticale; les autres canaux transform restent soumis à leur plan dédié.
-- Cette tranche ne branche pas encore `HtmlDomProjection` ni `MoveFlipLayoutProjection`;
-  elle ne valide donc pas une transition FLIP visuelle.
+- Le bridge `HtmlDomProjection` / `MoveFlipLayoutProjection` coordonne maintenant
+  la capture locale, la mutation auteur/structurelle et la projection numérique
+  pour la tranche des moves compilés à durée positive. Cette tranche possède un
+  journal d'occurrences et un resolver froid historique, mais ne constitue pas
+  encore le contrat général des événements live, des reorders `list` historiques
+  ou des captures concurrentes complexes.
+- La relecture d'architecture fixe maintenant la frontiere cible: le runner HTML
+  possede la transaction synchrone FIRST/mutation/LAST et reinjecte un
+  `HtmlMeasurementTree` numerique immutable dans le coordinateur FLIP. Le DOM ne
+  retourne jamais dans `SolvedScene`; `HtmlFlipRuntime` ne devine ni le touched set
+  ni une baseline FIRST depuis le DOM courant.
+- Première tranche d'implementation: `flipMode` est conserve jusqu'au delta de
+  move, le builder HTML derive les ancetres depuis les targets `perso` et `outlet`,
+  et `LayoutDomBackend` synchronise l'etat auteur apres FIRST et avant l'ecriture
+  structurelle. `overlay-world` reste refuse par le builder local.
+- `MoveFlipLayoutProjection.projectSeek` ne capture plus le DOM courant: il
+  projette la scene cible puis utilise uniquement `seekCached`. Un seek froid sans
+  occurrence persistée est réalisé pour les moves compilés à un instant strictement
+  positif. Les reorders list historiques reconstruisent leur snapshot de module
+  depuis `t=0`; les events live et occurrences à `0` restent hors de cette
+  réalisation.
+- `MoveTransitionJournal` indexe les transitions positives des `CompiledScene` et
+  `HtmlPlayerRunner` realise leur FIRST/LAST dans une presentation historique avant
+  de restaurer la scene courante. Cette tranche ne traite pas encore les moves
+  live ni le touched set de liste.
+- La transaction est extraite dans `html-compiled-move-capture-resolver.ts` et
+  verifiee independamment du DOM: une erreur de capture restaure aussi la scene
+  courante avant de remonter.
+- Une fixture DOM deterministe couvre maintenant une chaine
+  `target-layout -> target-container -> item`, les poses milieu/fin, le seek-back
+  et l'invalidation d'epoch sans navigateur reel.
+- La projection locale FLIP n'utilise plus `widthScale`/`heightScale` dans la
+  matrice: les dimensions intermédiaires sont écrites en `width`/`height`, puis
+  restaurées. La démo n'utilise plus de `scale()` pour distinguer ses conteneurs.
+- Les ancetres de layout sont maintenant aussi entries locales quand ils
+  appartiennent a la chaine before/after, afin d'animer leur changement de hauteur
+  ou largeur avant la projection des enfants et d'eviter le saut de repere.
+- Le builder local capture maintenant le mover et les siblings montés des targets
+  before/after. `ListCapabilityState` fournit maintenant l'ordre et le touched set
+  normatifs au player pour la projection courante. Une présentation historique
+  utilise des instances de modules temporaires et rejoue les frontières d'événements
+  compilées depuis `t=0`, sans muter l'état du player courant.
+- Lorsqu'un mover change de chaîne de parents, le builder ne lui associe plus la
+  chaîne de destination pour la pose FIRST. Sa trajectoire est résolue dans le
+  repère monde; les siblings qui gardent la même chaîne restent projetés localement.
 
 ## Fixtures
 
@@ -158,7 +202,7 @@ conservée uniquement comme description visuelle et oracle de scénario. Elle de
 
 ## Prochain chantier recommandé
 
-### 1. Contrat du runner HTML V2 — tranche logique réalisée
+### 1. Contrat du runner HTML V2 — tranche logique et FLIP directe réalisée
 
 Définir une façade qui reçoit une scène compilée, un root HTML, un catalogue de
 composants et les cibles de montage. Elle doit posséder l'orchestration générique,
@@ -179,8 +223,14 @@ vie HTML. Le ticker est possédé par le runner seulement lorsqu'il construit so
 propre engine; un engine externe reste piloté par son host. Les roots sont fournis
 par `rootTargets`, sans convention implicite sur le DOM.
 
-La composition FLIP et la construction des captures restent hors tranche jusqu'à
-la résolution des contrats temporels et visuels listés dans les limites ouvertes.
+La composition FLIP générale reste hors tranche. Le bridge direct actuel est
+explicitement une preuve de principe non normative; l'integration propre est
+specifiee dans l'etude a relire avant toute refonte.
+
+La prochaine refonte doit commencer par le contrat de transaction render, avant
+toute extension de `flip-stress`: presentation historique, lecture groupee FIRST,
+ecriture auteur et structure, lecture groupee LAST, reinjection numerique, puis
+un commit des poses temporaires.
 
 ### 2. Première verticale déclarative — tranche logique réalisée
 
@@ -203,6 +253,10 @@ La présentation manuelle correspondante se lance avec `npm run demo:runner` dep
 checkpoints doivent être parcourus par Seek puis par Play; les valeurs CSS
 observées doivent être identiques à chaque borne et le parent DOM ne doit pas
 changer.
+
+La présentation FLIP directe se lance avec `npm run demo:runner` et son build est
+`npm run build:runner`. Elle reste une fixture de preuve visuelle uniquement;
+elle ne valide pas encore l'integration FLIP complete decrite par l'etude.
 
 ### 3. Reprise de `flip-stress`
 
@@ -233,18 +287,37 @@ Lorsque le runner existe, vérifier :
 - Contrat complet des valeurs par défaut de transition.
 - Diagnostics détaillés des transitions invalides ou incomplètes.
 - Support HTML 3D/perspective au-delà de la pose affine 2D actuelle.
-- Runner générique de materialisation HTML/Player.
-- Runner HTML visuel avec `HtmlDomProjection` et `MoveFlipLayoutProjection`.
-- Intégration concrète de la capacité list avec `reorderOnMove/Add/Remove`.
+- Runner HTML FLIP complet avec overlays, événements live et cold resolver
+  multi-captures.
+- Intégration normative de la capacité list avec `reorderOnMove/Add/Remove`.
 
 ## Vérifications au moment de la reprise
 
-- Typecheck V2 réussi.
-- Suite V2 : **53 fichiers, 312 tests réussis**.
-- Build Vite de la démo `flip` réussi.
-- Build Vite de la fixture conservée `flip-stress` réussi.
+- `npm run typecheck` réussi depuis `packages/codplay-v2`.
+- `npm run build:runner` réussi depuis `packages/codplay-v2`.
+- 29 tests ciblés FLIP/runner/list réussis depuis `packages/codplay-v2`.
+- La suite V2 complète n'a pas été relancée dans cette reprise.
 - Aucun commit ni suppression de la fixture ne doit être effectué sans demande
   explicite.
+
+## Point de reprise après correction FLIP
+
+- Le scénario démo est désormais une liste `[B, C]` qui reçoit A en première
+  position à `800ms` avec une transition locale.
+- Le DOM runner commit l'ordre list normatif `[A, B, C]`.
+- Un mover qui change de chaîne de parents n'utilise plus la chaîne de destination
+  pour sa pose FIRST; sa trajectoire est interpolée dans le repère monde. Les
+  siblings qui gardent la même chaîne restent projetés localement.
+- Le cold resolver rejoue l'état des modules depuis `t=0` pour les scènes
+  historiques, afin de préserver `play(t) = seek(t)` pour les reorders list
+  compilés.
+- Vérifications réussies depuis `packages/codplay-v2`: `npm run typecheck`,
+  `npm run build:runner`, `npm run test` avec 57 fichiers et 332 tests, puis
+  `git diff --check`.
+- Aucun commit n'a été créé.
+- Prochaine action: lancer `npm run demo:runner`, inspecter le scénario dans
+  Safari Preview MCP aux checkpoints `0`, `1500` et `2200`, puis corriger uniquement
+  si l'observation navigateur contredit les invariants testés.
 
 ## Fichiers principaux
 

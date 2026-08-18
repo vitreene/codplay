@@ -155,6 +155,11 @@ export class HtmlFlipRuntime {
     }
   }
 
+  /** Returns the latest persisted capture end active at one host time. */
+  getActiveEndAt(hostContextId: string, projectionEpoch: number, timeMs: number): number | undefined {
+    return this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs).at(-1)?.endAt
+  }
+
   /** Invalidates captures and overlays when the host coordinate epoch changes. */
   invalidateHost(hostContextId: string, projectionEpoch: number): FlipOperationResult<void> {
     this.cache.invalidateEpoch(hostContextId, projectionEpoch)
