@@ -11,6 +11,10 @@ export type MoveTransitionOccurrence = Readonly<{
   declarationPath: readonly number[]
   startAt: number
   endAt: number
+  sourceTimeMs: number
+  destinationTimeMs: number
+  fromTargetId?: string
+  toTargetId?: string
   transition: MoveTransition
   flipMode?: MoveFlipMode
 }>
@@ -28,6 +32,23 @@ export class MoveTransitionJournal {
   findActive(timeMs: number): readonly MoveTransitionOccurrence[] {
     return this.occurrences
       .filter((occurrence) => timeMs >= occurrence.startAt && timeMs <= occurrence.endAt)
+  }
+
+  /** Returns active occurrences after same-tick policy keeps the last declaration. */
+  findActiveEffective(timeMs: number): readonly MoveTransitionOccurrence[] {
+    const effective = new Map<string, MoveTransitionOccurrence>()
+    for (const occurrence of this.findActive(timeMs)) {
+      effective.set(`${occurrence.persoKey}:${occurrence.startAt}`, occurrence)
+    }
+    return [...effective.values()]
+      .sort((left, right) => left.startAt - right.startAt || comparePaths(left.declarationPath, right.declarationPath))
+  }
+
+  /** Finds the stable occurrence corresponding to one solved move delta. */
+  findByMove(persoKey: string, startAt: number): MoveTransitionOccurrence | undefined {
+    return this.occurrences
+      .filter((occurrence) => occurrence.persoKey === persoKey && occurrence.startAt === startAt)
+      .at(-1)
   }
 }
 
@@ -52,6 +73,8 @@ function collectMoveTransitionOccurrences(scene: CompiledScene): readonly MoveTr
           declarationPath: event.declarationPath,
           startAt: event.startAt,
           endAt: event.startAt + transition.duration,
+          sourceTimeMs: Math.max(0, event.startAt - 0.0001),
+          destinationTimeMs: event.startAt,
           transition,
           ...(moveRecord.flipMode === 'local' || moveRecord.flipMode === 'overlay-world'
             ? { flipMode: moveRecord.flipMode }

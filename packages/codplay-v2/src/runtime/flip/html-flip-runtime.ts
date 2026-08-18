@@ -1,12 +1,14 @@
-import { captureFlip, FlipCaptureCache } from './flip-capture'
+import { captureFlip, captureMeasurementTree, FlipCaptureCache } from './flip-capture'
 import { FlipHistoricalPoseCache, resolveFlipPoseGraph } from './flip-pose-graph'
 import { DiagnosticCollector } from '../../diagnostics'
 import type {
   FlipCapture,
+  FlipCaptureMetadata,
   FlipCaptureRequest,
   FlipCaptureResolver,
   FlipOperationResult,
   HtmlFlipProjection,
+  HtmlMeasurementTree,
   HtmlFlipRuntimeOptions,
 } from './types'
 
@@ -17,6 +19,7 @@ export class HtmlFlipRuntime {
   private readonly projection: HtmlFlipProjection
   private readonly cache: FlipCaptureCache
   private readonly captureResolver: FlipCaptureResolver | undefined
+  private readonly getActiveCaptureDescriptors: HtmlFlipRuntimeOptions['getActiveCaptureDescriptors']
   private readonly diagnosticOutput: HtmlFlipRuntimeOptions['diagnosticOutput']
   private readonly historicalPoseCache = new FlipHistoricalPoseCache()
   private lastProjectionTimeMs: number | undefined
@@ -32,6 +35,7 @@ export class HtmlFlipRuntime {
     this.cache = cache
     this.captureResolver = captureResolver
     this.diagnosticOutput = options.diagnosticOutput
+    this.getActiveCaptureDescriptors = options.getActiveCaptureDescriptors
   }
 
   /** Captures one consumer mutation and stores only numeric pose data. */
@@ -72,6 +76,21 @@ export class HtmlFlipRuntime {
     const presented = this.seek(captured.value, captured.value.startAt)
     if (!presented.ok) return presented
     return captured
+  }
+
+  /** Stores one transaction result without reading or mutating the DOM again. */
+  recordMeasurementTree(
+    tree: HtmlMeasurementTree,
+    metadata: FlipCaptureMetadata,
+  ): FlipOperationResult<FlipCapture> {
+    try {
+      if (tree.hostContextId !== this.projection.getHostContextId()) throw new Error('FLIP capture crosses host contexts.')
+      if (tree.projectionEpoch !== this.projection.getProjectionEpoch()) throw new Error('FLIP capture uses a stale host projection epoch.')
+      const capture = captureMeasurementTree(tree, metadata, this.cache)
+      return { ok: true, value: capture, diagnostics: emptyDiagnostics() }
+    } catch (error) {
+      return this.failure('RUNTIME_FLIP_MEASUREMENT_FAILED', error, { captureId: metadata.captureId })
+    }
   }
 
   /** Resolves and commits every item in one capture at one timeline instant. */
@@ -136,18 +155,26 @@ export class HtmlFlipRuntime {
       }
       this.reconcileActiveProjections(timeMs)
       let captures = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
-      if (captures.length === 0 && this.captureResolver !== undefined) {
-        const capture = this.captureResolver({ hostContextId, projectionEpoch, timeMs })
-        captures = capture === undefined ? [] : [capture]
+      const knownCaptureIds = new Set(captures.map((capture) => capture.captureId))
+      const scheduled = this.getActiveCaptureDescriptors?.(timeMs)
+        .filter((descriptor) => !knownCaptureIds.has(descriptor.captureId)) ?? []
+      const shouldResolve = this.captureResolver !== undefined
+        && (scheduled.length > 0 || (this.getActiveCaptureDescriptors === undefined && captures.length === 0))
+      if (shouldResolve) {
+        const resolved = this.captureResolver({ hostContextId, projectionEpoch, timeMs, captures: scheduled })
+        const resolvedCaptures = normalizeResolvedCaptures(resolved)
+        for (const capture of resolvedCaptures) {
+          if (timeMs < capture.startAt || timeMs > capture.endAt) {
+            throw new Error(`FLIP capture resolver returned an inactive capture at ${timeMs}ms.`)
+          }
+          this.assertCaptureScope(capture)
+          this.cache.set(capture)
+        }
+        captures = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
       }
       if (captures.length === 0) {
         this.lastProjectionTimeMs = timeMs
         return { ok: true, value: undefined, diagnostics: emptyDiagnostics() }
-      }
-      for (const capture of captures) {
-        if (timeMs < capture.startAt || timeMs > capture.endAt) throw new Error(`FLIP capture resolver returned an inactive capture at ${timeMs}ms.`)
-        this.assertCaptureScope(capture)
-        this.cache.set(capture)
       }
       return this.seekCaptures(captures, timeMs)
     } catch (error) {
@@ -254,4 +281,14 @@ export class HtmlFlipRuntime {
 /** Creates an empty detached diagnostic report for one successful operation. */
 function emptyDiagnostics() {
   return new DiagnosticCollector({ output: () => undefined }).report()
+}
+
+/** Normalizes the legacy single-capture resolver result to the shared list form. */
+function normalizeResolvedCaptures(
+  resolved: FlipCapture | readonly FlipCapture[] | undefined,
+): readonly FlipCapture[] {
+  if (resolved === undefined) return []
+  return Array.isArray(resolved)
+    ? [...(resolved as readonly FlipCapture[])]
+    : [resolved as FlipCapture]
 }

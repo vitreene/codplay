@@ -1,6 +1,6 @@
 # HTML runner V2
 
-Status: A relire
+Status: En cours
 CodPlay version: V2 foundation
 
 ## Role
@@ -61,10 +61,13 @@ chaîne de destination pour sa pose FIRST : sa pose est interpolée dans le rep�
 monde, tandis que les siblings restés dans la même chaîne conservent leur repère
 local.
 Les moves compilés à durée positive sont indexés par un journal d'occurrences et
-peuvent être réalisés froidement depuis leurs scènes historiques. La présentation
-historique restaure la scène courante dans un `finally` avant la projection au
-temps demandé. Les événements live et les reorders `list` historiques restent
-hors de cette tranche. Voir `plan/runner-flip-integration-study.md`.
+peuvent être réalisés froidement depuis leurs scènes historiques. Le runner groupe
+les lectures dans `HtmlPresentationTransaction`, enregistre un
+`HtmlMeasurementTree` immutable et réutilise `seekCached()` pour Play, Seek et les
+frames suivants. Le resolver réalise toutes les occurrences actives manquantes et
+la présentation historique restaure la scène courante dans un `finally` avant la
+projection au temps demandé. Les événements live restent hors de cette tranche.
+Voir `plan/runner-flip-integration-study.md`.
 
 Quand le module `list` est présent, son snapshot d'ordre et de touched set est
 consommé par le player avant la projection DOM. La réalisation froide d'un
@@ -74,11 +77,16 @@ courant.
 
 ## Invariants
 
-- Les composants sont les seuls écrivains de leur état DOM.
+- Les composants sont les seuls écrivains de l'état DOM auteur; la projection FLIP
+  n'écrit que ses slots transitoires réservés et ses attributs de couche.
 - `LayoutDomBackend` est le seul responsable du parentage logique.
 - Les parts publiées sont enregistrées et supprimées avec le cycle de vie du composant.
 - `destroy()` détache les noeuds matérialisés et libère les services player-scoped.
 - Les éléments initialement présents dans le root fourni par le host ne sont pas supprimés par le runner.
+- Une présentation FLIP courante ou historique ne franchit pas de frontière
+  asynchrone entre les lectures FIRST/LAST et le flush de poses.
+- Une capture persistée est indexée par l'identité stable de son occurrence, pas par
+  le touched set DOM courant.
 
 ## Hors tranche
 

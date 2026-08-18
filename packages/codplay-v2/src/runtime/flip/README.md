@@ -101,6 +101,23 @@ type FlipCaptureRequest = {
 }
 ```
 
+Le runner HTML V2 utilise désormais une frontière transactionnelle dédiée pour sa
+présentation courante et son seek froid :
+
+```text
+HtmlPresentationTransaction
+  -> read FIRST groupe
+  -> presentation auteur + structure LAST
+  -> read LAST groupe
+  -> HtmlMeasurementTree immuable
+  -> HtmlFlipRuntime.recordMeasurementTree()
+  -> seek(capture, timeMs)
+```
+
+`FlipCaptureRequest` reste l'API générique de capture/mutation pour les
+consommateurs autonomes. Le chemin runner ne transmet pas de callback `mutate` au
+coordinateur FLIP et Play/Seek réutilisent le même cache numérique.
+
 Le runtime refuse les captures qui présentent :
 
 - un host ou un epoch différent ;
@@ -137,11 +154,13 @@ La pose contient à la fois :
 
 Le host local reconstruit ensuite une matrice affine complète dans le repère du
 parent. Il neutralise temporairement les propriétés CSS individuelles
-`translate`/`rotate`/`scale` et écrit une seule `matrix(...)`, avant de restaurer
-le style auteur exact. Les dimensions FLIP sont écrites séparément via
-`width`/`height`; elles ne sont jamais converties en `scaleX`/`scaleY` de la
-matrice locale. Un delta écran ne doit jamais être écrit directement comme un
-delta local lorsque le parent est tourné ou mis à l'échelle.
+`translate`/`rotate`/`scale` et expose une seule `matrix(...)` dans un slot CSS
+transitoire, sans remplacer la déclaration auteur. Les dimensions FLIP sont
+exposées séparément via `width`/`height`; elles ne sont jamais converties en
+`scaleX`/`scaleY` de la matrice locale. Retirer les slots termine ou annule la
+projection sans restaurer un snapshot de `style` potentiellement obsolète. Un
+delta écran ne doit jamais être écrit directement comme un delta local lorsque le
+parent est tourné ou mis à l'échelle.
 
 ## Mesure HTML
 
@@ -211,8 +230,10 @@ parents pour éviter les doubles rendus, puis restaurés à la fin de leur overl
 
 `MoveFlipLayoutProjection` fournit la frontière player entre un `MoveStateDelta`
 et une capture FLIP. Il capture avant la projection structurelle, délègue la
-mutation au `LayoutProjection` de base, puis avance la capture avec le temps du
-`RuntimePlayer`.
+mutation au `LayoutProjection` de base dans une `HtmlPresentationTransaction`,
+enregistre le `HtmlMeasurementTree` résultant, puis avance la capture avec le temps
+du `RuntimePlayer`. Le même chemin `seekCached()` est utilisé après un seek et pour
+les frames suivants.
 
 Le `MoveFlipCaptureBuilder` reste fourni par le host : il connaît les handles,
 les ancêtres, le mode `local` ou `overlay-world`, et la forme de transition
@@ -224,6 +245,7 @@ FLIP.
 `HtmlFlipRuntime` expose les opérations suivantes :
 
 - `capture()` : capture une mutation et met en cache le résultat ;
+- `recordMeasurementTree()` : enregistre une capture déjà mesurée par le runner ;
 - `run()` : capture et présente le début de la transition ;
 - `seek()` : résout une capture à un instant précis ;
 - `seekCached()` : résout toutes les captures actives du host à cet instant ;
@@ -259,6 +281,12 @@ La couverture actuelle comprend :
 - conversion monde vers repère local ;
 - cycles et chaînes d'ancêtres invalides ;
 - cancellation, retarget et captures chevauchantes ;
+- identité stable des occurrences compilées, resolver froid multi-captures et
+  commit unique après mesure transactionnelle ;
+- convergence Play/Seek aux bornes et au milieu, seek-back, seeks répétés et
+  invalidation d'epoch avec nouvelle réalisation froide ;
+- slots auteur/transitoires pour les poses locales et la visibilité des overlays,
+  avec conservation d'une écriture auteur concurrente ;
 - isolation host/epoch ;
 - diagnostics runtime.
 - compilation de trajectoires SVG normalisées en segments d'arcs et de droites.
@@ -268,8 +296,8 @@ La couverture actuelle comprend :
 Vérifications actuelles :
 
 - typecheck V2 réussi ;
-- 50 fichiers de test ;
-- 306 tests réussis ;
+- 58 fichiers de test ;
+- 344 tests réussis ;
 - build de la démo FLIP réussi.
 
 ## Limites actuelles

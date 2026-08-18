@@ -63,6 +63,43 @@ export type FlipCaptureRequest = Readonly<{
   mutate: () => void
 }>
 
+/** Stable schedule identity supplied when a historical capture is requested. */
+export type FlipCaptureDescriptor = Readonly<{
+  captureId: string
+  startAt: number
+  endAt: number
+}>
+
+/** DOM-free result of one synchronous HTML FIRST/LAST presentation transaction. */
+export type HtmlMeasurementTree = Readonly<{
+  hostContextId: string
+  projectionEpoch: number
+  logicalTimeMs: number
+  items: readonly Readonly<{
+    itemId: string
+    ancestorIds: readonly string[]
+    mode: HtmlFlipMode
+    first: HtmlPose
+    last: HtmlPose
+    path?: Path
+  }>[]
+  ancestors: readonly Readonly<{
+    ancestorId: string
+    parentId?: string
+    regime: FlipAncestorRegime
+    first: HtmlPose
+    last: HtmlPose
+  }>[]
+}>
+
+/** Timing and identity metadata attached to a measured transaction. */
+export type FlipCaptureMetadata = Readonly<{
+  captureId: string
+  startAt: number
+  duration: number
+  ease?: string
+}>
+
 /** One persisted item capture with no host handle or DOM reference. */
 export type FlipItemCapture = Readonly<{
   itemId: string
@@ -104,7 +141,8 @@ export type FlipCaptureResolver = (input: Readonly<{
   hostContextId: string
   projectionEpoch: number
   timeMs: number
-}>) => FlipCapture | undefined
+  captures: readonly FlipCaptureDescriptor[]
+}>) => FlipCapture | readonly FlipCapture[] | undefined
 
 /** Result returned by a public HTML FLIP runtime operation. */
 export type FlipOperationResult<T> = Readonly<
@@ -115,6 +153,7 @@ export type FlipOperationResult<T> = Readonly<
 /** Application-owned diagnostic output for the HTML FLIP boundary. */
 export type HtmlFlipRuntimeOptions = Readonly<{
   diagnosticOutput?: DiagnosticOutput
+  getActiveCaptureDescriptors?: (timeMs: number) => readonly FlipCaptureDescriptor[]
 }>
 
 /** A pose resolved for one item at one timeline instant. */

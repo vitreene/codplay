@@ -47,8 +47,38 @@ describe('MoveTransitionJournal', () => {
       eventId: 'main:item:move:0.0',
       declarationPath: [0, 0],
       endAt: 175,
+      sourceTimeMs: 74.9999,
+      destinationTimeMs: 75,
       flipMode: 'local',
     })
     expect(journal.findActive(49)).toEqual([])
+  })
+
+  it('keeps occurrence identity stable across journal reconstruction', () => {
+    const first = new MoveTransitionJournal(compiledScene()).findActive(80)
+    const second = new MoveTransitionJournal(compiledScene()).findActive(80)
+
+    expect(first.map((occurrence) => occurrence.captureId)).toEqual(second.map((occurrence) => occurrence.captureId))
+    expect(first[1]!.sourceTimeMs).toBe(74.9999)
+    expect(first[1]!.destinationTimeMs).toBe(75)
+  })
+
+  it('keeps only the last declaration for one same-tick perso move', () => {
+    const journal = new MoveTransitionJournal({
+      ...compiledScene(),
+      scene: {
+        ...compiledScene().scene,
+        stories: {
+          main: {
+            ...compiledScene().scene.stories.main!,
+            eventimes: [{ name: 'move', startAt: 50 }, { name: 'move', startAt: 50 }],
+          },
+        },
+      },
+    })
+
+    expect(journal.findActive(75)).toHaveLength(2)
+    expect(journal.findActiveEffective(75)).toHaveLength(1)
+    expect(journal.findActiveEffective(75)[0]?.declarationPath).toEqual([1])
   })
 })

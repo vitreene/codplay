@@ -1,4 +1,4 @@
-export { captureFlip, FlipCaptureCache } from './flip-capture'
+export { captureFlip, captureMeasurementTree, FlipCaptureCache } from './flip-capture'
 export { resolveFlipPoseGraph } from './flip-pose-graph'
 export { FlipHistoricalPoseCache } from './flip-pose-graph'
 export { HtmlFlipRuntime } from './html-flip-runtime'
@@ -10,6 +10,8 @@ export type {
   FlipAncestorEntry,
   FlipAncestorRegime,
   FlipCapture,
+  FlipCaptureDescriptor,
+  FlipCaptureMetadata,
   FlipCaptureRequest,
   FlipCaptureResolver,
   FlipEntry,
@@ -19,6 +21,7 @@ export type {
   HtmlFlipProjection,
   HtmlFlipRuntimeOptions,
   HtmlMatrix,
+  HtmlMeasurementTree,
   HtmlPose,
   ResolvedFlipPose,
 } from './types'

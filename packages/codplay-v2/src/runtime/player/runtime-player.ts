@@ -148,7 +148,7 @@ export class RuntimePlayer {
 
   /** Returns compiled move occurrences active at one historical time. */
   getActiveMoveTransitionOccurrences(timeMs: number): readonly MoveTransitionOccurrence[] {
-    return this.moveTransitionJournal.findActive(timeMs)
+    return this.moveTransitionJournal.findActiveEffective(timeMs)
   }
 
   /** Validates capabilities and attaches this player to the shared engine. */
@@ -197,9 +197,10 @@ export class RuntimePlayer {
           throw new Error('Player seek reconstruction is missing.')
         }
         const previousSolvedScene = this.solvedScene
-        const moveDeltas = previousSolvedScene === undefined
+        const rawMoveDeltas = previousSolvedScene === undefined
           ? []
           : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
+        const moveDeltas = this.attachTransitionOccurrences(rawMoveDeltas)
         if (this.pendingModuleSeekHandles.length > 0) {
           const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
@@ -284,7 +285,8 @@ export class RuntimePlayer {
     this.currentTimeMs += frame.deltaMs
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
     const previousSolvedScene = this.solvedScene
-    const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+    const rawMoveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+    const moveDeltas = this.attachTransitionOccurrences(rawMoveDeltas)
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.projectScene(this.solvedScene, { phase: 'frame', previousScene: previousSolvedScene, moveDeltas })
@@ -391,6 +393,20 @@ export class RuntimePlayer {
         if (!excludedInstances.has(instance)) instance.onMoveDelta?.(delta)
       }
     }
+  }
+
+  /** Carries compiled occurrence identity from the journal into projection deltas. */
+  private attachTransitionOccurrences(
+    deltas: readonly import('../move').MoveStateDelta[],
+  ): readonly import('../move').MoveStateDelta[] {
+    return deltas.map((delta) => {
+      const startAt = delta.transitionStartAt
+      if (startAt === undefined) return delta
+      const occurrence = this.moveTransitionJournal.findByMove(delta.persoKey, startAt)
+      return occurrence === undefined
+        ? delta
+        : { ...delta, transitionOccurrenceId: occurrence.captureId }
+    })
   }
 
   /** Aborts staged module-service seek state before a grouped commit can occur. */

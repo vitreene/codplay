@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveCompiledMoveCapture } from '../../../src/runtime/runner'
+import { resolveCompiledMoveCapture, resolveCompiledMoveCaptures } from '../../../src/runtime/runner'
 import type { MoveFlipCaptureBuilder, MoveTransitionOccurrence, SolvedScene } from '../../../src/runtime/player'
-import type { FlipCapture } from '../../../src/runtime/flip'
+import type { FlipCapture, HtmlMeasurementTree } from '../../../src/runtime/flip'
 
 /** Creates one solved scene with the item in one of two logical outlets. */
 function scene(timeMs: number, targetId: string): SolvedScene {
@@ -42,6 +42,8 @@ function occurrence(): MoveTransitionOccurrence {
     declarationPath: [0],
     startAt: 500,
     endAt: 600,
+    sourceTimeMs: 499.9999,
+    destinationTimeMs: 500,
     transition: { duration: 100, ease: 'linear' },
     flipMode: 'local',
   }
@@ -99,6 +101,54 @@ describe('resolveCompiledMoveCapture', () => {
     expect(result).toEqual(capture())
     expect(presented).toEqual(['source', 'target', 'target'])
     expect(flipRuntime.capture).toHaveBeenCalledOnce()
+  })
+
+  it('uses the shared measurement transaction for a cold capture', () => {
+    const active = occurrence()
+    const current = scene(900, 'target')
+    const presented: string[] = []
+    const measurementTree: HtmlMeasurementTree = {
+      hostContextId: 'host',
+      projectionEpoch: 0,
+      logicalTimeMs: 550,
+      items: [],
+      ancestors: [],
+    }
+    const recorded = vi.fn((tree: HtmlMeasurementTree, metadata: { captureId: string }) => {
+      expect(tree).toBe(measurementTree)
+      expect(metadata.captureId).toBe(active.captureId)
+      return { ok: true as const, value: capture(), diagnostics: emptyDiagnostics() }
+    })
+    const result = resolveCompiledMoveCaptures({
+      player: {
+        getActiveMoveTransitionOccurrences: () => [active],
+        resolveSceneAt: (timeMs) => timeMs < active.startAt ? scene(timeMs, 'source') : scene(timeMs, 'target'),
+        getSolvedScene: () => current,
+      },
+      flipRuntime: { recordMeasurementTree: recorded },
+      presentationTransaction: {
+        measure: vi.fn((input) => {
+          input.prepareFirst?.()
+          input.presentLast()
+          if (input.restoreAfter === true) presented.push('target')
+          return measurementTree
+        }),
+      },
+      captureBuilder: ({ deltas }) => ({
+        captureId: 'builder-capture',
+        hostContextId: 'host',
+        projectionEpoch: 0,
+        startAt: deltas[0]?.transitionStartAt ?? 0,
+        duration: 100,
+        ease: 'linear',
+        entries: [{ itemId: 'main:item', ancestorIds: [], mode: 'local' }],
+      }),
+      presentHistoricalScene: (historical) => presented.push(historical.persos['main:item']!.placement.targetId!),
+    }, 550)
+
+    expect(result).toEqual([capture()])
+    expect(presented).toEqual(['source', 'target', 'target'])
+    expect(recorded).toHaveBeenCalledOnce()
   })
 
   it('restores the current scene when the historical capture fails', () => {

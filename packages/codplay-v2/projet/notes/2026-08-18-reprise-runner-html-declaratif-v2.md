@@ -95,7 +95,8 @@ de captures, ni algorithme de projection.
 - Pose HTML affine globale avec origine monde, matrice composée, dimensions locales
   et offset de layout.
 - Projection locale par une unique `matrix(...)`, avec neutralisation temporaire
-  de `translate`, `rotate` et `scale`, puis restauration du style auteur.
+  de `translate`, `rotate` et `scale` dans des slots CSS réservés; la déclaration
+  `style` auteur n'est plus restaurée par snapshot complet.
 - Overlays scoped au `root` du host.
 - Présentation des overlays actifs avant une nouvelle capture overlay et à la borne
   LAST après mutation.
@@ -112,23 +113,24 @@ de captures, ni algorithme de projection.
 - `createDomComponentServiceCatalog` fournit les services DOM `className`, `style`,
   `attr` et `content`, avec suppression des propriétés et attributs précédemment gérés.
 - `HtmlPlayerRunner` associe explicitement les IDs de targets root au root HTML,
-  branche `RuntimeComponentRuntime`, `LayoutDomBackend` et le bridge FLIP direct,
+  branche `RuntimeComponentRuntime`, `LayoutDomBackend` et le bridge FLIP
+  transactionnel,
   et expose `init`, `play`, `pause`, `advance`, `seek`, `resize` et `destroy`.
 - La verticale déclarative de test couvre montage initial, outlet, transfert logique,
   convergence `advance`/`seek`, epoch de resize et destruction.
 - La démo navigateur unique `demos/validation/runner` porte maintenant la tranche
-  FLIP directe: un transfert `source-outlet -> target-outlet` à `800ms` pendant
-  `1200ms`, sans boucle de rendu secondaire ni parentage impératif.
+  FLIP transactionnelle: un transfert `source-outlet -> target-outlet` à `800ms`
+  pendant `1400ms`, sans boucle de rendu secondaire ni parentage impératif.
 - Le contrat `style.x/style.y` est relié à la résolution ACE `translateX/translateY`
   puis composé en `transform: translate(...)` par le service DOM du runner. Cette
   intégration reste limitée aux deux canaux de translation nécessaires à la
   verticale; les autres canaux transform restent soumis à leur plan dédié.
 - Le bridge `HtmlDomProjection` / `MoveFlipLayoutProjection` coordonne maintenant
-  la capture locale, la mutation auteur/structurelle et la projection numérique
-  pour la tranche des moves compilés à durée positive. Cette tranche possède un
-  journal d'occurrences et un resolver froid historique, mais ne constitue pas
-  encore le contrat général des événements live, des reorders `list` historiques
-  ou des captures concurrentes complexes.
+  la transaction synchrone `FIRST -> authored/structural -> LAST`, le
+  `HtmlMeasurementTree` numérique immutable et la projection numérique pour la
+  tranche des moves compilés à durée positive. Cette tranche possède un journal
+  d'occurrences stable et un resolver froid multi-captures, mais ne constitue pas
+  encore le contrat général des événements live, des overlays ou du stress-test.
 - La relecture d'architecture fixe maintenant la frontiere cible: le runner HTML
   possede la transaction synchrone FIRST/mutation/LAST et reinjecte un
   `HtmlMeasurementTree` numerique immutable dans le coordinateur FLIP. Le DOM ne
@@ -172,6 +174,19 @@ de captures, ni algorithme de projection.
   l'initialisation des modules player-scoped. Les outlets `markup` sont donc
   disponibles lorsque `list` capture son ordre initial, y compris pour une
   liste imbriquée dans un parent HTML.
+- `MoveTransitionOccurrence.captureId` est propagé jusqu'au delta de projection;
+  le builder ne dérive plus l'identité d'une capture du touched set lorsqu'une
+  occurrence compilée est connue.
+- `HtmlPresentationTransaction` groupe les lectures DOM FIRST/LAST et réutilise la
+  même primitive pour les captures courantes et historiques. `HtmlFlipRuntime` les
+  enregistre avec `recordMeasurementTree()` et résout toutes les captures actives
+  manquantes dans un seul commit.
+- `HtmlTransientStyleLayer` sépare désormais les contributions FLIP locales et de
+  visibilité des valeurs auteur: le navigateur utilise des attributs
+  `data-codplay-flip-*` et des variables CSS réservées; les doubles DOM sans feuille
+  de style utilisent un ledger inline qui conserve une écriture auteur concurrente.
+- Une régression DOM vérifie qu'une modification de `transform` et d'une autre
+  propriété auteur pendant FLIP survit à la pose suivante et à la fin de la capture.
 
 ## Fixtures
 
@@ -227,14 +242,13 @@ vie HTML. Le ticker est possédé par le runner seulement lorsqu'il construit so
 propre engine; un engine externe reste piloté par son host. Les roots sont fournis
 par `rootTargets`, sans convention implicite sur le DOM.
 
-La composition FLIP générale reste hors tranche. Le bridge direct actuel est
-explicitement une preuve de principe non normative; l'integration propre est
-specifiee dans l'etude a relire avant toute refonte.
+La composition FLIP générale reste hors tranche. La transaction render P0 est
+maintenant implémentée pour les moves compilés positifs: présentation historique,
+lecture groupée FIRST, écriture auteur et structure, lecture groupée LAST,
+réinjection numérique et commit unique des poses temporaires.
 
-La prochaine refonte doit commencer par le contrat de transaction render, avant
-toute extension de `flip-stress`: presentation historique, lecture groupee FIRST,
-ecriture auteur et structure, lecture groupee LAST, reinjection numerique, puis
-un commit des poses temporaires.
+Le prochain incrément doit traiter les ancêtres `layout`/overlays complets et les
+gates de seek froid exhaustives avant toute extension de `flip-stress`.
 
 ### 2. Première verticale déclarative — tranche logique réalisée
 
@@ -291,16 +305,16 @@ Lorsque le runner existe, vérifier :
 - Contrat complet des valeurs par défaut de transition.
 - Diagnostics détaillés des transitions invalides ou incomplètes.
 - Support HTML 3D/perspective au-delà de la pose affine 2D actuelle.
-- Runner HTML FLIP complet avec overlays, événements live et cold resolver
-  multi-captures.
+- Runner HTML FLIP complet avec overlays et événements live; le cold resolver
+  multi-captures est maintenant limité aux moves compilés positifs.
 - Intégration normative de la capacité list avec `reorderOnMove/Add/Remove`.
 
 ## Vérifications au moment de la reprise
 
 - `npm run typecheck` réussi depuis `packages/codplay-v2`.
 - `npm run build:runner` réussi depuis `packages/codplay-v2`.
-- 29 tests ciblés FLIP/runner/list réussis depuis `packages/codplay-v2`.
-- La suite V2 complète n'a pas été relancée dans cette reprise.
+- La suite V2 complète passe après la couche auteur/transitoire: 58 fichiers et
+  344 tests.
 - Aucun commit ni suppression de la fixture ne doit être effectué sans demande
   explicite.
 
@@ -315,8 +329,19 @@ Lorsque le runner existe, vérifier :
 - Le cold resolver rejoue l'état des modules depuis `t=0` pour les scènes
   historiques, afin de préserver `play(t) = seek(t)` pour les reorders list
   compilés.
+- `HtmlPresentationTransaction` est maintenant le chemin courant et historique:
+  le runner mesure un `HtmlMeasurementTree`, l'enregistre par `captureId`, puis
+  applique une seule résolution au timestamp du frame. `advance()` ne double plus
+  cette présentation au même timestamp.
+- La couche DOM auteur/transitoire est maintenant implémentée: local FLIP et
+  visibilité overlay utilisent des slots réservés, le nettoyage retire ces slots
+  sans remplacer la chaîne `style` auteur, et une écriture concurrente est couverte
+  par test.
+- Le gate P1 de réalisation froide est couvert: Play et Seek produisent les mêmes
+  poses au début, au milieu et à la fin; le seek-back et les seeks répétés réutilisent
+  la capture; `invalidateHost()` force une nouvelle réalisation dans le nouvel epoch.
 - Vérifications réussies depuis `packages/codplay-v2`: `npm run typecheck`,
-  `npm run build:runner`, `npm run test` avec 57 fichiers et 333 tests, puis
+  `npm run build:runner`, `npm run test` avec 58 fichiers et 344 tests, puis
   `git diff --check`.
 - Aucun commit n'a été créé.
 - La reprise navigateur a révélé puis corrigé un ordre DOM final `[B, C, A]`
@@ -326,6 +351,11 @@ Lorsque le runner existe, vérifier :
   à `1500ms` pendant la transition et `[A, B, C]` à `2200ms`, avec A en première
   position visuelle et sans transform résiduelle. Une régression runner couvre
   désormais cette initialisation imbriquée.
+- Après la couche auteur/transitoire, Safari confirme à `1500ms` la présence des
+  slots `data-codplay-flip-*` et de la matrice calculée, puis leur retrait à
+  `2200ms`. Une modification auteur de `transform` et de `background-color` faite
+  pendant la transition survit à la fin FLIP; la console reste sans warning ni
+  erreur.
 
 ## Fichiers principaux
 

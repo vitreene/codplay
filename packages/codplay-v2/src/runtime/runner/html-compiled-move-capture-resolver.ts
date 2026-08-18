@@ -6,7 +6,8 @@ import {
   type MoveTransitionOccurrence,
   type SolvedScene,
 } from '../player'
-import type { HtmlFlipRuntime, FlipCapture } from '../flip'
+import type { FlipCapture, FlipCaptureMetadata, HtmlFlipRuntime } from '../flip'
+import type { HtmlPresentationTransaction } from './html-presentation-transaction'
 
 /** Minimal player surface required by the compiled cold capture resolver. */
 export type HtmlHistoricalPlayer = Readonly<{
@@ -18,23 +19,51 @@ export type HtmlHistoricalPlayer = Readonly<{
 /** Dependencies required to realize one compiled move without browser history. */
 export type HtmlCompiledMoveCaptureResolverOptions = Readonly<{
   player: HtmlHistoricalPlayer
-  flipRuntime: Pick<HtmlFlipRuntime, 'capture'>
+  flipRuntime: Readonly<{
+    capture?: HtmlFlipRuntime['capture']
+    recordMeasurementTree?: HtmlFlipRuntime['recordMeasurementTree']
+  }>
   captureBuilder: MoveFlipCaptureBuilder
   presentHistoricalScene: (scene: SolvedScene) => void
+  presentationTransaction?: Pick<HtmlPresentationTransaction, 'measure'>
 }>
+
+/** Realizes every active compiled move from historical logical scenes. */
+export function resolveCompiledMoveCaptures(
+  options: HtmlCompiledMoveCaptureResolverOptions,
+  timeMs: number,
+  occurrences = options.player.getActiveMoveTransitionOccurrences(timeMs),
+): readonly FlipCapture[] {
+  const currentScene = options.player.getSolvedScene()
+  if (currentScene === undefined) return []
+  const captures: FlipCapture[] = []
+  for (const occurrence of occurrences.filter((candidate) => candidate.startAt > 0)) {
+    const capture = realizeCompiledMoveCapture(options, occurrence, timeMs, currentScene)
+    if (capture !== undefined) captures.push(capture)
+  }
+  return captures
+}
 
 /** Realizes one active compiled move from historical logical scenes. */
 export function resolveCompiledMoveCapture(
   options: HtmlCompiledMoveCaptureResolverOptions,
   timeMs: number,
 ): FlipCapture | undefined {
-  const occurrence = options.player.getActiveMoveTransitionOccurrences(timeMs)
-    .filter((candidate) => candidate.startAt > 0)
-    .at(-1)
-  if (occurrence === undefined) return undefined
+  return resolveCompiledMoveCaptures(options, timeMs).at(-1)
+}
 
-  const previousScene = options.player.resolveSceneAt(Math.max(0, occurrence.startAt - 0.0001))
-  const nextScene = options.player.resolveSceneAt(occurrence.startAt)
+/** Measures and persists one occurrence through the shared HTML transaction. */
+function realizeCompiledMoveCapture(
+  options: HtmlCompiledMoveCaptureResolverOptions,
+  occurrence: MoveTransitionOccurrence,
+  timeMs: number,
+  currentScene: SolvedScene,
+): FlipCapture | undefined {
+  const sourceTimeMs = occurrence.sourceTimeMs ?? Math.max(0, occurrence.startAt - 0.0001)
+  const destinationTimeMs = occurrence.destinationTimeMs ?? occurrence.startAt
+
+  const previousScene = options.player.resolveSceneAt(sourceTimeMs)
+  const nextScene = options.player.resolveSceneAt(destinationTimeMs)
   const delta = createHistoricalMoveDelta(
     previousScene,
     nextScene,
@@ -54,8 +83,26 @@ export function resolveCompiledMoveCapture(
   })
   if (description === undefined) return undefined
 
-  const currentScene = options.player.getSolvedScene()
-  if (currentScene === undefined) return undefined
+  if (options.presentationTransaction !== undefined && options.flipRuntime.recordMeasurementTree !== undefined) {
+    const tree = options.presentationTransaction.measure({
+      description,
+      logicalTimeMs: timeMs,
+      prepareFirst: () => options.presentHistoricalScene(previousScene),
+      presentLast: () => options.presentHistoricalScene(nextScene),
+      restoreAfter: true,
+    })
+    const metadata: FlipCaptureMetadata = {
+      captureId: occurrence.captureId,
+      startAt: occurrence.startAt,
+      duration: occurrence.transition.duration ?? description.duration,
+      ...(description.ease === undefined ? {} : { ease: description.ease }),
+    }
+    const captured = options.flipRuntime.recordMeasurementTree(tree, metadata)
+    if (!captured.ok) throw new Error(captured.diagnostics.errors.map((entry) => entry.message).join('\n'))
+    return captured.value
+  }
+
+  if (options.flipRuntime.capture === undefined) return undefined
   options.presentHistoricalScene(previousScene)
   try {
     const captured = options.flipRuntime.capture({

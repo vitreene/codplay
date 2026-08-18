@@ -12,17 +12,21 @@ and the standalone HTML FLIP runtime.
 RuntimePlayer
   -> MoveStateDelta + SolvedScene
   -> MoveFlipLayoutProjection
-      -> FLIP capture FIRST
+      -> HtmlPresentationTransaction: read FIRST
       -> base layout projection mutation
-      -> FLIP capture LAST
+      -> HtmlPresentationTransaction: read LAST
+      -> HtmlMeasurementTree / FlipCaptureCache
+      -> one FLIP pose commit
   -> HtmlFlipRuntime advancement on later frames
 ```
 
 The wrapper does not decide list order or resolve mount targets. A
 `MoveFlipCaptureBuilder` converts the solved move deltas and host handles into a
-`FlipCaptureRequest`. It is the host integration point for ancestor chains,
-`flipMode`, and prepared path values.
+capture description. It is the host integration point for ancestor chains,
+`flipMode`, prepared path values, and the stable `transitionOccurrenceId` carried
+by the player journal.
 
-Seek uses the base projection directly and cancels active FLIP ownership. FLIP is
-therefore a frame projection of a move transition, not a second logical state
-engine or clock.
+Seek uses the base projection directly, then asks `seekCached()` for the active
+occurrences; a missing compiled capture is realized by the same runner transaction
+used by a frame. FLIP is therefore a presentation capability, not a second logical
+state engine or clock.

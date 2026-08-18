@@ -1,4 +1,13 @@
-import type { HtmlFlipProjection, FlipAncestorCapture, FlipAncestorEntry, FlipCapture, FlipCaptureRequest, FlipItemCapture } from './types'
+import type {
+  HtmlFlipProjection,
+  FlipAncestorCapture,
+  FlipAncestorEntry,
+  FlipCapture,
+  FlipCaptureMetadata,
+  FlipCaptureRequest,
+  FlipItemCapture,
+  HtmlMeasurementTree,
+} from './types'
 
 /** Stores immutable HTML captures by their existing move/event identity. */
 export class FlipCaptureCache {
@@ -100,6 +109,104 @@ export function captureFlip(
   }
   cache.set(capture)
   return capture
+}
+
+/** Converts a DOM-free FIRST/LAST tree into one immutable numeric capture. */
+export function captureMeasurementTree(
+  tree: HtmlMeasurementTree,
+  metadata: FlipCaptureMetadata,
+  cache?: FlipCaptureCache,
+): FlipCapture {
+  assertMeasurementTree(tree, metadata)
+  const endAt = metadata.startAt + metadata.duration
+  const entries: readonly FlipItemCapture[] = tree.items.map((item) => Object.freeze({
+    itemId: item.itemId,
+    ancestorIds: Object.freeze([...item.ancestorIds]),
+    mode: item.mode,
+    startAt: metadata.startAt,
+    endAt,
+    duration: metadata.duration,
+    ease: metadata.ease ?? 'out(2)',
+    from: item.first,
+    to: item.last,
+    ...(item.path === undefined ? {} : { path: item.path }),
+  }))
+  const ancestors: readonly FlipAncestorCapture[] = tree.ancestors.map((ancestor) => Object.freeze({
+    ancestorId: ancestor.ancestorId,
+    ...(ancestor.parentId === undefined ? {} : { parentId: ancestor.parentId }),
+    regime: ancestor.regime,
+    from: ancestor.first,
+    to: ancestor.last,
+  }))
+  const capture: FlipCapture = Object.freeze({
+    captureId: metadata.captureId,
+    hostContextId: tree.hostContextId,
+    projectionEpoch: tree.projectionEpoch,
+    startAt: metadata.startAt,
+    endAt,
+    duration: metadata.duration,
+    ease: metadata.ease ?? 'out(2)',
+    entries: Object.freeze(entries),
+    ancestors: Object.freeze(ancestors),
+  })
+  cache?.set(capture)
+  return capture
+}
+
+/** Validates the synchronous tree before it becomes persisted FLIP data. */
+function assertMeasurementTree(tree: HtmlMeasurementTree, metadata: FlipCaptureMetadata): void {
+  if (!Number.isFinite(tree.logicalTimeMs) || tree.logicalTimeMs < 0) {
+    throw new Error('HTML measurement tree logicalTimeMs must be non-negative.')
+  }
+  if (!Number.isFinite(metadata.startAt) || metadata.startAt < 0) {
+    throw new Error('FLIP capture startAt must be non-negative.')
+  }
+  if (!Number.isFinite(metadata.duration) || metadata.duration <= 0) {
+    throw new Error('FLIP capture duration must be positive.')
+  }
+  const itemIds = new Set<string>()
+  for (const item of tree.items) {
+    if (itemIds.has(item.itemId)) throw new Error(`FLIP measurement tree contains duplicate item: ${item.itemId}`)
+    itemIds.add(item.itemId)
+  }
+  const ancestorIds = new Set<string>()
+  const ancestorsById = new Map<string, HtmlMeasurementTree['ancestors'][number]>()
+  for (const ancestor of tree.ancestors) {
+    if (ancestorIds.has(ancestor.ancestorId)) {
+      throw new Error(`FLIP measurement tree contains duplicate ancestor: ${ancestor.ancestorId}`)
+    }
+    ancestorIds.add(ancestor.ancestorId)
+    ancestorsById.set(ancestor.ancestorId, ancestor)
+    if (ancestor.parentId === ancestor.ancestorId) throw new Error(`FLIP ancestor cannot parent itself: ${ancestor.ancestorId}`)
+    if (ancestor.parentId !== undefined && !ancestorIds.has(ancestor.parentId)
+      && !tree.ancestors.some((candidate) => candidate.ancestorId === ancestor.parentId)) {
+      throw new Error(`FLIP ancestor parent is missing: ${ancestor.parentId}`)
+    }
+  }
+  for (const ancestor of tree.ancestors) {
+    const visited = new Set<string>()
+    let current: string | undefined = ancestor.ancestorId
+    while (current !== undefined) {
+      if (visited.has(current)) throw new Error(`FLIP ancestor cycle detected: ${current}`)
+      visited.add(current)
+      current = ancestorsById.get(current)?.parentId
+    }
+  }
+  for (const item of tree.items) {
+    const itemAncestors = new Set<string>()
+    for (const ancestorId of item.ancestorIds) {
+      if (!ancestorIds.has(ancestorId)) throw new Error(`FLIP item references an uncaptured ancestor: ${ancestorId}`)
+      if (itemAncestors.has(ancestorId)) throw new Error(`FLIP item contains duplicate ancestor: ${ancestorId}`)
+      itemAncestors.add(ancestorId)
+    }
+    for (let index = 1; index < item.ancestorIds.length; index += 1) {
+      const parentId = item.ancestorIds[index - 1]!
+      const ancestorId = item.ancestorIds[index]!
+      if (ancestorsById.get(ancestorId)?.parentId !== parentId) {
+        throw new Error(`FLIP item ancestor chain is not ordered: ${ancestorId}`)
+      }
+    }
+  }
 }
 
 function assertCaptureRequest(request: FlipCaptureRequest, projection: HtmlFlipProjection): void {

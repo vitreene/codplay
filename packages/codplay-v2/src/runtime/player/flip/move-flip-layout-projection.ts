@@ -1,5 +1,5 @@
 import type { MoveStateDelta } from '../../move'
-import type { FlipCaptureRequest, FlipOperationResult, HtmlFlipRuntime } from '../../flip'
+import type { FlipCapture, FlipCaptureRequest, FlipOperationResult, HtmlFlipRuntime } from '../../flip'
 import type { LayoutProjection, LayoutProjectionContext } from '../layout-projection'
 import type { SolvedScene } from '../pipeline'
 import { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './move-flip-transition'
@@ -16,6 +16,14 @@ export type MoveFlipCaptureBuilder = (input: Readonly<{
   touchedItemIds?: readonly string[]
 }>) => MoveFlipCaptureDescription | undefined
 
+/** Presents the LAST scene and returns a capture measured by one host transaction. */
+export type MoveFlipCapturePresenter = (input: Readonly<{
+  description: MoveFlipCaptureDescription
+  scene: SolvedScene
+  context: LayoutProjectionContext
+  presentNext: () => void
+}>) => FlipOperationResult<FlipCapture>
+
 /** Options for composing a move-aware FLIP projection around a base projection. */
 export type MoveFlipLayoutProjectionOptions = Readonly<{
   base: LayoutProjection
@@ -23,6 +31,7 @@ export type MoveFlipLayoutProjectionOptions = Readonly<{
   hostContextId: string
   getProjectionEpoch: () => number
   buildCapture: MoveFlipCaptureBuilder
+  presentCapture?: MoveFlipCapturePresenter
 }>
 
 /**
@@ -35,8 +44,9 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
   private readonly hostContextId: string
   private readonly getProjectionEpoch: () => number
   private readonly buildCapture: MoveFlipCaptureBuilder
+  private readonly presentCapture: MoveFlipCapturePresenter | undefined
   private activeUntil: number | undefined
-  private readonly captureWindows = new Map<string, Readonly<{ projectionEpoch: number; startAt: number; endAt: number }>>()
+  private lastPresentedTimeMs: number | undefined
 
   /** Creates one move/FLIP boundary around an existing layout projection. */
   constructor(options: MoveFlipLayoutProjectionOptions) {
@@ -45,6 +55,7 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
     this.hostContextId = options.hostContextId
     this.getProjectionEpoch = options.getProjectionEpoch
     this.buildCapture = options.buildCapture
+    this.presentCapture = options.presentCapture
   }
 
   /** Captures a frame move before delegating the actual parentage mutation. */
@@ -68,28 +79,42 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
     }
 
     let delegated = false
-    const result = this.flip.run({
-      ...description,
-      mutate: () => {
-        delegated = true
-        this.base.project(scene, context)
-      },
-    })
+    const presentNext = () => {
+      delegated = true
+      this.base.project(scene, context)
+    }
+    let result: FlipOperationResult<FlipCapture>
+    try {
+      result = this.presentCapture === undefined
+        ? this.flip.capture({ ...description, mutate: presentNext })
+        : this.presentCapture({ description, scene, context, presentNext })
+    } catch {
+      if (!delegated) this.base.project(scene, context)
+      this.activeUntil = undefined
+      return
+    }
     if (!result.ok && !delegated) this.base.project(scene, context)
     if (!result.ok) {
       this.activeUntil = undefined
       return
     }
-    this.rememberCapture(result.value.captureId, result.value.projectionEpoch, result.value.startAt, result.value.endAt)
+    const presented = this.flip.seek(result.value, scene.timeMs)
+    if (!presented.ok) {
+      this.activeUntil = undefined
+      return
+    }
     this.activeUntil = result.value.endAt
+    this.lastPresentedTimeMs = scene.timeMs
   }
 
   /** Advances the active FLIP capture without creating a second clock. */
   advance(timeMs: number): void {
     if (this.activeUntil === undefined) return
+    if (this.lastPresentedTimeMs === timeMs) return
     if (timeMs > this.activeUntil) {
       this.flip.cancel()
       this.activeUntil = undefined
+      this.lastPresentedTimeMs = timeMs
       return
     }
     const result: FlipOperationResult<void> = this.flip.seekCached(
@@ -98,12 +123,13 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
       timeMs,
     )
     if (!result.ok) this.activeUntil = undefined
+    else this.lastPresentedTimeMs = timeMs
   }
 
   /** Releases the wrapped projection and any active FLIP ownership. */
   destroy(): void {
     this.activeUntil = undefined
-    this.captureWindows.clear()
+    this.lastPresentedTimeMs = undefined
     this.flip.cancel()
     this.base.destroy?.()
   }
@@ -111,6 +137,7 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
   /** Reconstructs one seek state and presents only a persisted FLIP capture. */
   private projectSeek(scene: SolvedScene, context: LayoutProjectionContext): void {
     this.activeUntil = undefined
+    this.lastPresentedTimeMs = undefined
     this.flip.cancel()
     this.base.project(scene, context)
     this.presentCached(scene.timeMs)
@@ -141,10 +168,6 @@ export class MoveFlipLayoutProjection implements LayoutProjection {
       return
     }
     this.activeUntil = this.flip.getActiveEndAt(this.hostContextId, this.getProjectionEpoch(), timeMs)
-  }
-
-  /** Remembers one capture interval so a later seek can resume its projection. */
-  private rememberCapture(captureId: string, projectionEpoch: number, startAt: number, endAt: number): void {
-    this.captureWindows.set(captureId, { projectionEpoch, startAt, endAt })
+    this.lastPresentedTimeMs = timeMs
   }
 }

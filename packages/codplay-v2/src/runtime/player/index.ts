@@ -21,6 +21,7 @@ export {
   MoveFlipLayoutProjection,
   type MoveFlipCaptureBuilder,
   type MoveFlipCaptureDescription,
+  type MoveFlipCapturePresenter,
   type MoveFlipLayoutProjectionOptions,
 } from './flip/move-flip-layout-projection'
 export { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './flip/move-flip-transition'

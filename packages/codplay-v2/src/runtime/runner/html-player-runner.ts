@@ -32,7 +32,8 @@ import type { CompiledScene } from '../../scene/compiled'
 import { HtmlComponentMaterializer } from './html-component-materializer'
 import { createHtmlMoveCaptureBuilder, type HtmlMoveCaptureBuilderOptions } from './html-move-capture-builder'
 import type { FlipCapture } from '../flip'
-import { resolveCompiledMoveCapture } from './html-compiled-move-capture-resolver'
+import { resolveCompiledMoveCaptures } from './html-compiled-move-capture-resolver'
+import { HtmlPresentationTransaction } from './html-presentation-transaction'
 
 /** One HTML root target mapped to the runner's supplied root element. */
 export type HtmlRootTarget = Readonly<{
@@ -68,6 +69,7 @@ export class HtmlPlayerRunner {
   private readonly backend: LayoutDomBackend
   private readonly captureBuilder: ReturnType<typeof createHtmlMoveCaptureBuilder>
   private readonly flipRuntime: HtmlFlipRuntime
+  private readonly presentationTransaction: HtmlPresentationTransaction
   private projectionEpoch = 0
 
   /** Creates one HTML runner and wires the generic component/layout boundaries. */
@@ -118,17 +120,46 @@ export class HtmlPlayerRunner {
       getProjectionEpoch: () => this.projectionEpoch,
     }
     this.captureBuilder = createHtmlMoveCaptureBuilder(captureBuilderOptions)
-    let runtimePlayer: RuntimePlayer | undefined
-    this.flipRuntime = new HtmlFlipRuntime(htmlProjection, undefined, ({ timeMs }) => {
-      if (runtimePlayer === undefined) return undefined
-      return this.resolveColdCapture(runtimePlayer, timeMs)
+    const presentationTransaction = new HtmlPresentationTransaction({
+      projection: htmlProjection,
+      present: (scene) => this.presentHistoricalScene(scene),
+      restore: () => this.restoreCurrentScene(),
     })
+    this.presentationTransaction = presentationTransaction
+    let runtimePlayer: RuntimePlayer | undefined
+    this.flipRuntime = new HtmlFlipRuntime(
+      htmlProjection,
+      undefined,
+      ({ captures, timeMs }) => {
+        if (runtimePlayer === undefined) return []
+        const requestedIds = new Set(captures.map((capture) => capture.captureId))
+        const occurrences = runtimePlayer.getActiveMoveTransitionOccurrences(timeMs)
+          .filter((occurrence) => requestedIds.size === 0 || requestedIds.has(occurrence.captureId))
+        return this.resolveColdCaptures(runtimePlayer, timeMs, occurrences)
+      },
+      {
+        getActiveCaptureDescriptors: (timeMs) => runtimePlayer?.getActiveMoveTransitionOccurrences(timeMs) ?? [],
+      },
+    )
     const layoutProjection = new MoveFlipLayoutProjection({
       base: backend,
       flip: this.flipRuntime,
       hostContextId: options.id,
       getProjectionEpoch: () => this.projectionEpoch,
       buildCapture: this.captureBuilder,
+      presentCapture: ({ description, scene, presentNext }) => {
+        const tree = presentationTransaction.measure({
+          description,
+          logicalTimeMs: scene.timeMs,
+          presentLast: presentNext,
+        })
+        return this.flipRuntime.recordMeasurementTree(tree, {
+          captureId: description.captureId,
+          startAt: description.startAt,
+          duration: description.duration,
+          ...(description.ease === undefined ? {} : { ease: description.ease }),
+        })
+      },
     })
     runtimePlayer = new RuntimePlayer(
       options.id,
@@ -214,14 +245,19 @@ export class HtmlPlayerRunner {
     this.nodes.targetNodes.clear()
   }
 
-  /** Realizes one compiled move occurrence through a temporary historical DOM. */
-  private resolveColdCapture(player: RuntimePlayer, timeMs: number): FlipCapture | undefined {
-    return resolveCompiledMoveCapture({
+  /** Realizes all active compiled move occurrences through a temporary historical DOM. */
+  private resolveColdCaptures(
+    player: RuntimePlayer,
+    timeMs: number,
+    occurrences: readonly import('../player').MoveTransitionOccurrence[],
+  ): readonly FlipCapture[] {
+    return resolveCompiledMoveCaptures({
       player,
       flipRuntime: this.flipRuntime,
       captureBuilder: this.captureBuilder,
       presentHistoricalScene: (scene) => this.presentHistoricalScene(scene),
-    }, timeMs)
+      presentationTransaction: this.presentationTransaction,
+    }, timeMs, occurrences)
   }
 
   /** Presents one historical scene without emitting logical module deltas. */
@@ -232,6 +268,12 @@ export class HtmlPlayerRunner {
       layoutState: this.player.getHistoricalLayoutProjectionState(scene),
       authoredSync: (authoredScene) => this.componentRuntime.sync(authoredScene),
     })
+  }
+
+  /** Restores the current solved scene after a historical presentation transaction. */
+  private restoreCurrentScene(): void {
+    const current = this.player.getSolvedScene()
+    if (current !== undefined) this.presentHistoricalScene(current)
   }
 }
 

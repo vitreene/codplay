@@ -230,7 +230,8 @@ function start(): void {
     const list = runner.getPersoNode('main:target-list')
     seek.value = String(Math.min(TIMELINE_END_MS, currentTime))
     time.value = `${Math.round(currentTime)} ms`
-    status.textContent = `${runner.getLifecycleState()} / list: ${readListOrder(list)} / parent: ${element?.parentElement?.className ?? 'none'} / transform: ${element?.style.transform || 'none'} / touched: A+B+C / epoch: ${runner.getProjectionEpoch()}`
+    const transform = element === undefined ? 'none' : getComputedStyle(element).transform
+    status.textContent = `${runner.getLifecycleState()} / list: ${readListOrder(list)} / parent: ${element?.parentElement?.className ?? 'none'} / transform: ${transform} / touched: A+B+C / epoch: ${runner.getProjectionEpoch()}`
     if (playing && currentTime >= TIMELINE_END_MS) {
       runner.pause()
       playing = false

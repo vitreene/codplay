@@ -4,7 +4,7 @@ import { preparePath } from '../../../src/ace'
 import { captureFlip, FlipCaptureCache } from '../../../src/runtime/flip/flip-capture'
 import { FlipHistoricalPoseCache, resolveFlipPoseGraph } from '../../../src/runtime/flip/flip-pose-graph'
 import { HtmlFlipRuntime } from '../../../src/runtime/flip/html-flip-runtime'
-import type { FlipCapture, HtmlFlipProjection, HtmlMatrix, HtmlPose } from '../../../src/runtime/flip/types'
+import type { FlipCapture, FlipCaptureDescriptor, HtmlFlipProjection, HtmlMatrix, HtmlPose, ResolvedFlipPose } from '../../../src/runtime/flip/types'
 
 const identity: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
@@ -170,6 +170,36 @@ function captureWithCrossContainerOverlay(): FlipCapture {
       },
     ],
   }
+}
+
+/** Creates one positive-time capture used by the cold-seek convergence gate. */
+function captureForColdSeek(captureId = 'cold-seek-gate', projectionEpoch = 1): FlipCapture {
+  return {
+    captureId,
+    hostContextId: 'host-1',
+    projectionEpoch,
+    startAt: 100,
+    endAt: 1100,
+    duration: 1000,
+    ease: 'linear',
+    ancestors: [],
+    entries: [{
+      itemId: 'item',
+      ancestorIds: [],
+      mode: 'local',
+      startAt: 100,
+      endAt: 1100,
+      duration: 1000,
+      ease: 'linear',
+      from: pose(0),
+      to: pose(100),
+    }],
+  }
+}
+
+/** Returns the schedule descriptor corresponding to one persisted capture. */
+function descriptorFor(capture: FlipCapture): FlipCaptureDescriptor {
+  return { captureId: capture.captureId, startAt: capture.startAt, endAt: capture.endAt }
 }
 
 describe('HTML FLIP V2', () => {
@@ -458,6 +488,136 @@ describe('HTML FLIP V2', () => {
 
     expect(resolver).toHaveBeenCalledOnce()
     expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
+  })
+
+  it('converges cold seek at start, middle and end, including seek-back and repeated seek', () => {
+    const capture = captureForColdSeek()
+    const applied: ResolvedFlipPose[] = []
+    const baseProjection = projectionFor(new Map([['item', pose(0)]]))
+    const projection: HtmlFlipProjection = {
+      ...baseProjection,
+      applyLocalPose: vi.fn((_handle, resolved) => applied.push(resolved)),
+    }
+    const resolver = vi.fn(() => capture)
+    const runtime = new HtmlFlipRuntime(projection, new FlipCaptureCache(), resolver, {
+      getActiveCaptureDescriptors: (timeMs) => timeMs >= capture.startAt && timeMs <= capture.endAt
+        ? [descriptorFor(capture)]
+        : [],
+    })
+
+    expect(runtime.seekCached('host-1', 1, 0).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 100).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 600).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 1100).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 600).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 600).ok).toBe(true)
+
+    expect(resolver).toHaveBeenCalledOnce()
+    expect(applied.map((entry) => entry.progress)).toEqual([0, 0.5, 1, 0.5, 0.5])
+    expect(projection.flush).toHaveBeenCalledTimes(5)
+  })
+
+  it('uses the same resolved poses for direct play and cold seek', () => {
+    const capture = captureForColdSeek('play-seek-gate')
+    const playApplied: ResolvedFlipPose[] = []
+    const playFlush = vi.fn()
+    const playProjection: HtmlFlipProjection = {
+      ...projectionFor(new Map([['item', pose(0)]])),
+      applyLocalPose: vi.fn((_handle, resolved) => playApplied.push(resolved)),
+      flush: playFlush,
+    }
+    const playRuntime = new HtmlFlipRuntime(playProjection)
+    const seekApplied: ResolvedFlipPose[] = []
+    const seekFlush = vi.fn()
+    const seekProjection: HtmlFlipProjection = {
+      ...projectionFor(new Map([['item', pose(0)]])),
+      applyLocalPose: vi.fn((_handle, resolved) => seekApplied.push(resolved)),
+      flush: seekFlush,
+    }
+    const seekRuntime = new HtmlFlipRuntime(seekProjection, new FlipCaptureCache(), () => capture, {
+      getActiveCaptureDescriptors: () => [descriptorFor(capture)],
+    })
+
+    for (const timeMs of [100, 600, 1100]) {
+      expect(playRuntime.seek(capture, timeMs).ok).toBe(true)
+      expect(seekRuntime.seekCached('host-1', 1, timeMs).ok).toBe(true)
+    }
+
+    expect(seekApplied).toEqual(playApplied)
+    expect(seekFlush).toHaveBeenCalledTimes(playFlush.mock.calls.length)
+  })
+
+  it('invalidates the old epoch and realizes the same cold seek in the new epoch', () => {
+    let projectionEpoch = 1
+    const firstCapture = captureForColdSeek('resize-cold-seek', 1)
+    const secondCapture = captureForColdSeek('resize-cold-seek', 2)
+    const baseProjection = projectionFor(new Map([['item', pose(0)]]))
+    const projection: HtmlFlipProjection = {
+      ...baseProjection,
+      getProjectionEpoch: () => projectionEpoch,
+    }
+    const resolver = vi.fn(({ projectionEpoch: requestedEpoch }: { projectionEpoch: number }) => requestedEpoch === 1
+      ? firstCapture
+      : secondCapture)
+    const runtime = new HtmlFlipRuntime(projection, new FlipCaptureCache(), resolver, {
+      getActiveCaptureDescriptors: () => [descriptorFor(firstCapture)],
+    })
+
+    expect(runtime.seekCached('host-1', 1, 600).ok).toBe(true)
+    projectionEpoch = 2
+    expect(runtime.invalidateHost('host-1', 2).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 2, 600).ok).toBe(true)
+
+    expect(resolver).toHaveBeenCalledTimes(2)
+    expect(resolver.mock.calls.map(([input]) => input.projectionEpoch)).toEqual([1, 2])
+    expect(projection.cancelLocalPose).toHaveBeenCalledWith('item', 'resize-cold-seek')
+    expect(projection.flush).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves every missing active capture in one seek commit', () => {
+    const projection = projectionFor(new Map([
+      ['first', pose(0)],
+      ['second', pose(20)],
+    ]))
+    const capture = (captureId: string, itemId: string): FlipCapture => ({
+      captureId,
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      endAt: 1000,
+      duration: 1000,
+      ease: 'linear',
+      entries: [{
+        itemId,
+        ancestorIds: [],
+        mode: 'local',
+        startAt: 0,
+        endAt: 1000,
+        duration: 1000,
+        ease: 'linear',
+        from: pose(itemId === 'first' ? 0 : 20),
+        to: pose(itemId === 'first' ? 100 : 120),
+      }],
+      ancestors: [],
+    })
+    const first = capture('compiled:first', 'first')
+    const second = capture('compiled:second', 'second')
+    const resolver = vi.fn(({ captures }: { captures: readonly { captureId: string }[] }) => {
+      expect(captures.map((descriptor) => descriptor.captureId)).toEqual(['compiled:first', 'compiled:second'])
+      return [first, second]
+    })
+    const runtime = new HtmlFlipRuntime(projection, new FlipCaptureCache(), resolver, {
+      getActiveCaptureDescriptors: () => [
+        { captureId: first.captureId, startAt: first.startAt, endAt: first.endAt },
+        { captureId: second.captureId, startAt: second.startAt, endAt: second.endAt },
+      ],
+    })
+
+    expect(runtime.seekCached('host-1', 1, 500).ok).toBe(true)
+    expect(runtime.seekCached('host-1', 1, 500).ok).toBe(true)
+    expect(resolver).toHaveBeenCalledOnce()
+    expect(projection.applyLocalPose).toHaveBeenCalledTimes(4)
+    expect(projection.flush).toHaveBeenCalledTimes(2)
   })
 
   it('resolves overlapping cached captures in one projection commit', () => {

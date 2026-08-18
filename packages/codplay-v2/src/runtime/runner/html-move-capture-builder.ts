@@ -52,8 +52,9 @@ export function createHtmlMoveCaptureBuilder(
     const ancestorChains = collectAncestorChains(previousScene, nextScene, itemIds)
     const ancestors = collectAncestors(ancestorChains)
     const entryIds = [...new Set([...ancestors.map((ancestor) => ancestor.ancestorId), ...itemIds])]
+    const fallbackCaptureId = `${options.hostContextId}:move:${startAt}:${entryIds.join(',')}`
     return {
-      captureId: `${options.hostContextId}:move:${startAt}:${entryIds.join(',')}`,
+      captureId: resolveStableCaptureId(candidates, fallbackCaptureId),
       hostContextId: options.hostContextId,
       projectionEpoch: options.getProjectionEpoch(),
       startAt,
@@ -70,6 +71,17 @@ export function createHtmlMoveCaptureBuilder(
       ...(ancestors.length === 0 ? {} : { ancestors }),
     }
   }
+}
+
+/** Reuses the compiled occurrence identity whenever one delta owns the capture. */
+function resolveStableCaptureId(
+  candidates: readonly Readonly<{ transitionOccurrenceId?: string }>[],
+  fallback: string,
+): string {
+  const ids = [...new Set(candidates
+    .map((candidate) => candidate.transitionOccurrenceId)
+    .filter((captureId): captureId is string => captureId !== undefined))]
+  return ids.length === 1 ? ids[0]! : fallback
 }
 
 /** Keeps the list capability's touched set while retaining every direct mover. */

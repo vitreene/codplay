@@ -212,4 +212,48 @@ describe('HTML FLIP runner ancestor integration', () => {
     runtime.seekCached('ancestor-host', 2, 50)
     expect(nodes.item.style.transform).toBeUndefined()
   })
+
+  it('removes only the transient contribution when authored style changes during FLIP', () => {
+    const nodes = hierarchy()
+    vi.stubGlobal('HTMLElement', FakeElement)
+    vi.stubGlobal('Element', FakeElement)
+    const projection = createHtmlDomProjection({
+      hostContextId: 'author-style-host',
+      getProjectionEpoch: () => 1,
+      root: nodes.root as unknown as Element,
+      resolveHandle: (itemId) => ({
+        item: nodes.item,
+        target: nodes.targetLayout,
+        container: nodes.targetContainer,
+      }[itemId] as unknown as HTMLElement | undefined),
+    })
+    const runtime = new HtmlFlipRuntime(projection)
+    const capture = runtime.run({
+      captureId: 'author-style-move',
+      hostContextId: 'author-style-host',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 100,
+      ease: 'linear',
+      entries: [{ itemId: 'item', ancestorIds: [], mode: 'local' }],
+      mutate: () => {
+        nodes.item.offsetLeft = 120
+      },
+    })
+
+    expect(capture.ok).toBe(true)
+    if (!capture.ok) return
+
+    runtime.seekCached('author-style-host', 1, 50)
+    const authoredTransform = 'matrix(0.9, 0, 0, 0.9, 4, 6)'
+    nodes.item.style.transform = authoredTransform
+    nodes.item.style.backgroundColor = 'rgb(1, 2, 3)'
+
+    runtime.seekCached('author-style-host', 1, 75)
+    expect(nodes.item.style.transform).toMatch(/^matrix\(/)
+    runtime.seekCached('author-style-host', 1, 150)
+
+    expect(nodes.item.style.transform).toBe(authoredTransform)
+    expect(nodes.item.style.backgroundColor).toBe('rgb(1, 2, 3)')
+  })
 })

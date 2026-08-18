@@ -20,6 +20,8 @@ export type MoveStateDelta = Readonly<{
   toPlacement?: SolvedPlacement
   transition?: MoveTransition
   transitionStartAt?: number
+  /** Stable compiled occurrence identity used by persisted FLIP captures. */
+  transitionOccurrenceId?: string
   flipMode?: MoveFlipMode
 }>
 

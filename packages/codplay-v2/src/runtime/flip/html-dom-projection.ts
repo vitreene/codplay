@@ -6,18 +6,18 @@ import {
   ensureHtmlOverlayLayer,
   worldDeltaToLocalDelta,
 } from './html-pose'
+import { createHtmlTransientStyleLayer, type HtmlTransientStyleLayer } from './html-transient-style-layer'
 import type { HtmlFlipProjection, HtmlMatrix, HtmlPose, ResolvedFlipPose } from './types'
 
 type OverlayHandle = {
   ghost: HTMLElement
   source: HTMLElement
-  sourceStyle: string | null
   root: Element
   resolvedPose?: HtmlPose
 }
 
 type LocalPoseSnapshot = Readonly<{
-  style: string | null
+  captureId: string
 }>
 
 /** Configuration for the standalone DOM projection used by HTML FLIP. */
@@ -36,7 +36,7 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
   const localDebugKeys = new Set<string>()
   const overlayDebugKeys = new Set<string>()
   const activeOverlays = new Map<HTMLElement, OverlayHandle>()
-  const hiddenOverlayDescendants = new WeakMap<HTMLElement, string>()
+  const transientStyles = createHtmlTransientStyleLayer(options.root)
 
   return {
     getHostContextId: () => options.hostContextId,
@@ -49,20 +49,20 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
       if (handle === undefined) throw new Error(`FLIP historical ancestor handle is missing: ${input.ancestorId}`)
       return captureHtmlPose(handle)
     }),
-    applyLocalPose: (handle, resolved) => applyLocalPose(handle as HTMLElement, resolved, localSnapshots, localDebugKeys, options.debug),
-    finishLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
-    cancelLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
+    applyLocalPose: (handle, resolved) => applyLocalPose(handle as HTMLElement, resolved, localSnapshots, transientStyles, localDebugKeys, options.debug),
+    finishLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots, transientStyles),
+    cancelLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots, transientStyles),
     beginOverlay: (handle) => {
       const source = handle as HTMLElement
-      const overlay = beginOverlay(source, options.root)
+      const overlay = beginOverlay(source, options.root, transientStyles)
       activeOverlays.set(source, overlay)
       return overlay
     },
     excludeOverlayItem: (itemId) => {
-      for (const overlay of activeOverlays.values()) hideOverlayDescendant(overlay.ghost, itemId, hiddenOverlayDescendants)
+      for (const overlay of activeOverlays.values()) hideOverlayDescendant(overlay.ghost, itemId, transientStyles)
     },
     restoreOverlayItem: (itemId) => {
-      for (const overlay of activeOverlays.values()) restoreOverlayDescendant(overlay.ghost, itemId, hiddenOverlayDescendants)
+      for (const overlay of activeOverlays.values()) restoreOverlayDescendant(overlay.ghost, itemId, transientStyles)
     },
     applyOverlayPose: (handle, resolved) => {
       const overlay = handle as OverlayHandle
@@ -72,7 +72,7 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
     finishOverlay: (handle) => {
       const overlay = handle as OverlayHandle
       activeOverlays.delete(overlay.source)
-      finishOverlay(overlay)
+      finishOverlay(overlay, transientStyles)
     },
     flush: () => undefined,
   }
@@ -83,26 +83,27 @@ function applyLocalPose(
   node: HTMLElement,
   resolved: ResolvedFlipPose,
   snapshots: Map<string, LocalPoseSnapshot>,
+  transientStyles: HtmlTransientStyleLayer,
   debugKeys: Set<string>,
   debug: HtmlDomProjectionOptions['debug'],
 ): void {
   if (resolved.progress >= 1) {
-    finishLocalPose(node, resolved.captureId, snapshots)
+    finishLocalPose(node, resolved.captureId, snapshots, transientStyles)
     return
   }
 
   const itemId = resolved.itemId
-  if (!snapshots.has(itemId)) {
-    snapshots.set(itemId, {
-      style: node.getAttribute('style'),
-    })
+  const active = snapshots.get(itemId)
+  if (active !== undefined && active.captureId !== resolved.captureId) {
+    transientStyles.clearLocal(node)
+    snapshots.delete(itemId)
   }
-  restoreLocalPose(node, snapshots.get(itemId)!.style)
+  if (!snapshots.has(itemId)) snapshots.set(itemId, { captureId: resolved.captureId })
 
   // Size changes can alter the parent's auto-layout position before the matrix
   // is solved, especially when the parent centers its children.
-  node.style.width = `${resolved.pose.localWidth}px`
-  node.style.height = `${resolved.pose.localHeight}px`
+  transientStyles.clearLocal(node)
+  transientStyles.applyLocalSize(node, resolved.pose.localWidth, resolved.pose.localHeight)
   const naturalPose = captureHtmlPose(node)
   const naturalRect = naturalPose.rect
   const parentPose = node.parentElement === null ? undefined : captureHtmlPose(node.parentElement)
@@ -123,12 +124,7 @@ function applyLocalPose(
     })
   }
 
-  node.style.transition = 'none'
-  node.style.transformOrigin = '0 0'
-  node.style.translate = 'none'
-  node.style.rotate = 'none'
-  node.style.scale = 'none'
-  node.style.transform = `matrix(${targetMatrix.a}, ${targetMatrix.b}, ${targetMatrix.c}, ${targetMatrix.d}, ${targetMatrix.e}, ${targetMatrix.f})`
+  transientStyles.applyLocalTransform(node, targetMatrix)
 }
 
 /** Resolves one local CSS matrix without using scale to interpolate item size. */
@@ -161,21 +157,19 @@ function poseAffineMatrix(pose: HtmlPose): ReturnType<typeof createIdentityMatri
   }
 }
 
-/** Restores one local item to the exact authored inline style. */
-function finishLocalPose(node: HTMLElement, captureId: string, snapshots: Map<string, LocalPoseSnapshot>): void {
-  void captureId
+/** Removes only the active local projection contribution for one item. */
+function finishLocalPose(
+  node: HTMLElement,
+  captureId: string,
+  snapshots: Map<string, LocalPoseSnapshot>,
+  transientStyles: HtmlTransientStyleLayer,
+): void {
   const itemId = node.dataset.itemId
   if (itemId === undefined) return
   const snapshot = snapshots.get(itemId)
-  if (snapshot === undefined) return
-  restoreLocalPose(node, snapshot.style)
+  if (snapshot === undefined || snapshot.captureId !== captureId) return
+  transientStyles.clearLocal(node)
   snapshots.delete(itemId)
-}
-
-/** Restores an inline style snapshot without reading the rendered node. */
-function restoreLocalPose(node: HTMLElement, style: string | null): void {
-  if (style === null) node.removeAttribute('style')
-  else node.setAttribute('style', style)
 }
 
 /** Captures the ad-hoc world anchor needed only by the overlay host. */
@@ -206,36 +200,31 @@ function captureOverlayPose(node: Element, overlays: ReadonlyMap<HTMLElement, Ov
 }
 
 /** Creates one fixed overlay clone for a world-space FLIP item. */
-function beginOverlay(source: HTMLElement, root: Element): OverlayHandle {
+function beginOverlay(source: HTMLElement, root: Element, transientStyles: HtmlTransientStyleLayer): OverlayHandle {
   const ghost = source.cloneNode(true) as HTMLElement
-  const sourceStyle = source.getAttribute('style')
   ensureHtmlOverlayLayer(root).appendChild(ghost)
-  source.style.visibility = 'hidden'
+  transientStyles.applyHidden(source)
   ghost.style.position = 'absolute'
   ghost.style.left = '0px'
   ghost.style.top = '0px'
   ghost.style.margin = '0'
   ghost.style.visibility = 'visible'
-  return { ghost, source, sourceStyle, root }
+  return { ghost, source, root }
 }
 
 /** Hides one independently projected descendant in an existing ghost. */
-function hideOverlayDescendant(ghost: HTMLElement, itemId: string, hidden: WeakMap<HTMLElement, string>): void {
+function hideOverlayDescendant(ghost: HTMLElement, itemId: string, transientStyles: HtmlTransientStyleLayer): void {
   for (const element of ghost.querySelectorAll<HTMLElement>('[data-item-id], [id]')) {
     if (element.dataset.itemId !== itemId && element.id !== itemId) continue
-    if (!hidden.has(element)) hidden.set(element, element.style.visibility)
-    element.style.visibility = 'hidden'
+    transientStyles.applyHidden(element)
   }
 }
 
 /** Restores one descendant that no longer owns an independent overlay. */
-function restoreOverlayDescendant(ghost: HTMLElement, itemId: string, hidden: WeakMap<HTMLElement, string>): void {
+function restoreOverlayDescendant(ghost: HTMLElement, itemId: string, transientStyles: HtmlTransientStyleLayer): void {
   for (const element of ghost.querySelectorAll<HTMLElement>('[data-item-id], [id]')) {
     if (element.dataset.itemId !== itemId && element.id !== itemId) continue
-    const visibility = hidden.get(element)
-    if (visibility === undefined) continue
-    element.style.visibility = visibility
-    hidden.delete(element)
+    transientStyles.clearHidden(element)
   }
 }
 
@@ -304,9 +293,8 @@ export function localizePose(root: HtmlPose, pose: HtmlPose): { matrix: HtmlMatr
 }
 
 /** Restores the source and removes one overlay clone. */
-function finishOverlay(handle: OverlayHandle): void {
-  if (handle.sourceStyle === null) handle.source.removeAttribute('style')
-  else handle.source.setAttribute('style', handle.sourceStyle)
+function finishOverlay(handle: OverlayHandle, transientStyles: HtmlTransientStyleLayer): void {
+  transientStyles.clearHidden(handle.source)
   handle.ghost.remove()
 }
 

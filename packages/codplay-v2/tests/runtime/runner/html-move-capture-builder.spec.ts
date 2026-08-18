@@ -174,6 +174,18 @@ describe('createHtmlMoveCaptureBuilder', () => {
     })).toBeUndefined()
   })
 
+  it('uses the compiled occurrence identity for a persisted capture', () => {
+    const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
+    const capture = builder({
+      previousScene: scene(400),
+      nextScene: scene(500),
+      deltas: [{ ...delta({ duration: 1000 }), transitionOccurrenceId: 'compiled:move:500' }],
+      preparedTransitions: new Map([['main:item', { duration: 1000, ease: 'linear' }]]),
+    })
+
+    expect(capture?.captureId).toBe('compiled:move:500')
+  })
+
   it('includes the solved outlet owner as a stable FLIP ancestor', () => {
     const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
     const prepared: PreparedMoveFlipTransition = { duration: 1000 }
