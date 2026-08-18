@@ -19,6 +19,7 @@ export class HtmlFlipRuntime {
   private readonly captureResolver: FlipCaptureResolver | undefined
   private readonly diagnosticOutput: HtmlFlipRuntimeOptions['diagnosticOutput']
   private readonly historicalPoseCache = new FlipHistoricalPoseCache()
+  private lastProjectionTimeMs: number | undefined
 
   /** Creates one runtime around one host-owned HTML projection. */
   constructor(
@@ -36,7 +37,29 @@ export class HtmlFlipRuntime {
   /** Captures one consumer mutation and stores only numeric pose data. */
   capture(request: FlipCaptureRequest): FlipOperationResult<FlipCapture> {
     try {
-      return { ok: true, value: captureFlip(request, this.projection, this.cache), diagnostics: emptyDiagnostics() }
+      this.reconcileActiveProjections(request.startAt)
+      const active = this.cache.findActiveAll(request.hostContextId, request.projectionEpoch, request.startAt)
+        .filter((capture) => capture.endAt > request.startAt)
+        .filter((capture) => capture.entries.some((entry) => entry.mode === 'overlay-world'))
+      if (active.length > 0) {
+        const presented = this.seekCaptures(active, request.startAt)
+        if (!presented.ok) throw new Error(presented.diagnostics.errors.map((entry) => entry.message).join('\n'))
+      }
+      const captured = captureFlip({
+        ...request,
+        mutate: () => {
+          request.mutate()
+          const activeAtLast = this.cache.findActiveAll(
+            request.hostContextId,
+            request.projectionEpoch,
+            request.startAt + request.duration,
+          )
+          if (activeAtLast.length === 0) return
+          const presented = this.seekCaptures(activeAtLast, request.startAt + request.duration, false)
+          if (!presented.ok) throw new Error(presented.diagnostics.errors.map((entry) => entry.message).join('\n'))
+        },
+      }, this.projection, this.cache)
+      return { ok: true, value: captured, diagnostics: emptyDiagnostics() }
     } catch (error) {
       return this.failure('RUNTIME_FLIP_CAPTURE_FAILED', error, { captureId: request.captureId })
     }
@@ -57,7 +80,7 @@ export class HtmlFlipRuntime {
   }
 
   /** Resolves several overlapping captures and commits them with one flush. */
-  private seekCaptures(captures: readonly FlipCapture[], timeMs: number): FlipOperationResult<void> {
+  private seekCaptures(captures: readonly FlipCapture[], timeMs: number, finishCompleted = true): FlipOperationResult<void> {
     try {
       for (const capture of captures) {
         this.assertCaptureScope(capture)
@@ -70,6 +93,7 @@ export class HtmlFlipRuntime {
             const active = this.activeOverlays.get(resolved.itemId)
             if (active !== undefined && active.captureId !== capture.captureId) {
               this.projection.finishOverlay(active.handle)
+              this.projection.restoreOverlayItem?.(resolved.itemId)
               this.activeOverlays.delete(resolved.itemId)
             }
             const overlay = this.activeOverlays.get(resolved.itemId)?.handle
@@ -80,6 +104,7 @@ export class HtmlFlipRuntime {
             const activeOverlay = this.activeOverlays.get(resolved.itemId)
             if (activeOverlay !== undefined) {
               this.projection.finishOverlay(activeOverlay.handle)
+              this.projection.restoreOverlayItem?.(resolved.itemId)
               this.activeOverlays.delete(resolved.itemId)
             }
             this.cancelLocalPoseIfNeeded(resolved.itemId, capture.captureId)
@@ -89,7 +114,8 @@ export class HtmlFlipRuntime {
         }
       }
       this.projection.flush()
-      for (const capture of captures) this.finishCompletedOverlays(capture, timeMs)
+      if (finishCompleted) for (const capture of captures) this.finishCompletedOverlays(capture, timeMs)
+      this.lastProjectionTimeMs = timeMs
       return { ok: true, value: undefined, diagnostics: emptyDiagnostics() }
     } catch (error) {
       return this.failure('RUNTIME_FLIP_SEEK_FAILED', error, {
@@ -104,12 +130,20 @@ export class HtmlFlipRuntime {
     try {
       if (hostContextId !== this.projection.getHostContextId()) throw new Error('FLIP capture crosses host contexts.')
       if (projectionEpoch !== this.projection.getProjectionEpoch()) throw new Error('FLIP capture uses a stale host projection epoch.')
+      if (this.lastProjectionTimeMs !== undefined && timeMs < this.lastProjectionTimeMs) {
+        const canceled = this.cancel()
+        if (!canceled.ok) return canceled
+      }
+      this.reconcileActiveProjections(timeMs)
       let captures = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
       if (captures.length === 0 && this.captureResolver !== undefined) {
         const capture = this.captureResolver({ hostContextId, projectionEpoch, timeMs })
         captures = capture === undefined ? [] : [capture]
       }
-      if (captures.length === 0) throw new Error(`FLIP capture is missing at ${timeMs}ms for host ${hostContextId}.`)
+      if (captures.length === 0) {
+        this.lastProjectionTimeMs = timeMs
+        return { ok: true, value: undefined, diagnostics: emptyDiagnostics() }
+      }
       for (const capture of captures) {
         if (timeMs < capture.startAt || timeMs > capture.endAt) throw new Error(`FLIP capture resolver returned an inactive capture at ${timeMs}ms.`)
         this.assertCaptureScope(capture)
@@ -132,10 +166,14 @@ export class HtmlFlipRuntime {
   cancel(): FlipOperationResult<void> {
     const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
     try {
-      for (const { handle } of this.activeOverlays.values()) this.projection.finishOverlay(handle)
+      for (const [itemId, { handle }] of this.activeOverlays) {
+        this.projection.finishOverlay(handle)
+        this.projection.restoreOverlayItem?.(itemId)
+      }
       this.activeOverlays.clear()
       for (const { captureId, handle } of this.activeLocalPoses.values()) this.projection.cancelLocalPose(handle, captureId)
       this.activeLocalPoses.clear()
+      this.lastProjectionTimeMs = undefined
     } catch (error) {
       diagnostics.error('RUNTIME_FLIP_CANCEL_FAILED', error instanceof Error ? error.message : 'FLIP cancellation failed.')
       return { ok: false, diagnostics: diagnostics.report() }
@@ -146,7 +184,25 @@ export class HtmlFlipRuntime {
   private startOverlay(capture: FlipCapture, itemId: string, handle: unknown): unknown {
     const entry = capture.entries.find((candidate) => candidate.itemId === itemId)
     if (entry === undefined) throw new Error(`FLIP capture item is missing: ${itemId}`)
+    this.projection.excludeOverlayItem?.(itemId)
     return this.projection.beginOverlay(handle, entry.from, entry.to)
+  }
+
+  /** Finishes projections whose persisted captures ended before a new runtime instant. */
+  private reconcileActiveProjections(timeMs: number): void {
+    for (const [itemId, active] of this.activeOverlays) {
+      const capture = this.cache.get(active.captureId)
+      if (capture === undefined || timeMs <= capture.endAt) continue
+      this.projection.finishOverlay(active.handle)
+      this.projection.restoreOverlayItem?.(itemId)
+      this.activeOverlays.delete(itemId)
+    }
+    for (const [itemId, active] of this.activeLocalPoses) {
+      const capture = this.cache.get(active.captureId)
+      if (capture === undefined || timeMs <= capture.endAt) continue
+      this.projection.finishLocalPose(active.handle, active.captureId)
+      this.activeLocalPoses.delete(itemId)
+    }
   }
 
   /** Prevents a capture from being projected into another host or epoch. */
@@ -161,6 +217,7 @@ export class HtmlFlipRuntime {
       const active = this.activeOverlays.get(entry.itemId)
       if (active === undefined || active.captureId !== capture.captureId) continue
       this.projection.finishOverlay(active.handle)
+      this.projection.restoreOverlayItem?.(entry.itemId)
       this.activeOverlays.delete(entry.itemId)
     }
 

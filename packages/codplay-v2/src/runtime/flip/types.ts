@@ -14,8 +14,12 @@ export type HtmlMatrix = Readonly<{
 /** Numeric HTML pose captured by the host container. */
 export type HtmlPose = Readonly<{
   rect: Readonly<{ left: number; top: number; width: number; height: number }>
+  /** World-space origin of the captured local box before its linear matrix. */
+  origin: Readonly<{ x: number; y: number }>
   matrix: HtmlMatrix
   parentMatrix: HtmlMatrix
+  /** Immediate-parent layout offset, when the pose comes from a live HTML node. */
+  layoutOffset?: Readonly<{ x: number; y: number }>
   rotationMatrix: HtmlMatrix
   scaleX: number
   scaleY: number
@@ -142,6 +146,10 @@ export type HtmlFlipProjection = Readonly<{
   finishLocalPose: (handle: unknown, captureId: string) => void
   cancelLocalPose: (handle: unknown, captureId: string) => void
   beginOverlay: (handle: unknown, first: HtmlPose, last: HtmlPose) => unknown
+  /** Removes one independently projected descendant from active parent ghosts. */
+  excludeOverlayItem?: (itemId: string) => void
+  /** Restores one descendant clone after its independent overlay ends. */
+  restoreOverlayItem?: (itemId: string) => void
   applyOverlayPose: (overlayHandle: unknown, pose: ResolvedFlipPose) => void
   finishOverlay: (overlayHandle: unknown) => void
   flush: () => void

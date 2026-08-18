@@ -1,16 +1,23 @@
-import { captureHtmlPose, ensureHtmlOverlayLayer, worldDeltaToLocalDelta } from './html-pose'
+import { createIdentityMatrix, createScaleMatrix, invertMatrix, multiplyMatrix } from '../../ace'
+import {
+  captureHtmlPose,
+  composeHtmlPose,
+  deriveLocalPoseMatrix,
+  ensureHtmlOverlayLayer,
+  worldDeltaToLocalDelta,
+} from './html-pose'
 import type { HtmlFlipProjection, HtmlMatrix, HtmlPose, ResolvedFlipPose } from './types'
 
-type OverlayHandle = Readonly<{
+type OverlayHandle = {
   ghost: HTMLElement
   source: HTMLElement
   sourceStyle: string | null
   root: Element
-}>
+  resolvedPose?: HtmlPose
+}
 
 type LocalPoseSnapshot = Readonly<{
   style: string | null
-  authoredTransform: string
 }>
 
 /** Configuration for the standalone DOM projection used by HTML FLIP. */
@@ -28,13 +35,15 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
   const localSnapshots = new Map<string, LocalPoseSnapshot>()
   const localDebugKeys = new Set<string>()
   const overlayDebugKeys = new Set<string>()
+  const activeOverlays = new Map<HTMLElement, OverlayHandle>()
+  const hiddenOverlayDescendants = new WeakMap<HTMLElement, string>()
 
   return {
     getHostContextId: () => options.hostContextId,
     getProjectionEpoch: options.getProjectionEpoch,
     resolveHandle: (itemId) => options.resolveHandle(itemId),
     capturePose: (handle) => captureHtmlPose(handle as Element),
-    captureOverlayPose: (handle) => captureOverlayPose(handle as Element),
+    captureOverlayPose: (handle) => captureOverlayPose(handle as Element, activeOverlays),
     captureHistoricalPose: options.captureHistoricalPose ?? ((input) => {
       const handle = options.resolveHandle(input.ancestorId)
       if (handle === undefined) throw new Error(`FLIP historical ancestor handle is missing: ${input.ancestorId}`)
@@ -43,9 +52,28 @@ export function createHtmlDomProjection(options: HtmlDomProjectionOptions): Html
     applyLocalPose: (handle, resolved) => applyLocalPose(handle as HTMLElement, resolved, localSnapshots, localDebugKeys, options.debug),
     finishLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
     cancelLocalPose: (handle, captureId) => finishLocalPose(handle as HTMLElement, captureId, localSnapshots),
-    beginOverlay: (handle) => beginOverlay(handle as HTMLElement, options.root),
-    applyOverlayPose: (handle, resolved) => applyOverlayPose(handle as OverlayHandle, resolved, overlayDebugKeys, options.debug),
-    finishOverlay: (handle) => finishOverlay(handle as OverlayHandle),
+    beginOverlay: (handle) => {
+      const source = handle as HTMLElement
+      const overlay = beginOverlay(source, options.root)
+      activeOverlays.set(source, overlay)
+      return overlay
+    },
+    excludeOverlayItem: (itemId) => {
+      for (const overlay of activeOverlays.values()) hideOverlayDescendant(overlay.ghost, itemId, hiddenOverlayDescendants)
+    },
+    restoreOverlayItem: (itemId) => {
+      for (const overlay of activeOverlays.values()) restoreOverlayDescendant(overlay.ghost, itemId, hiddenOverlayDescendants)
+    },
+    applyOverlayPose: (handle, resolved) => {
+      const overlay = handle as OverlayHandle
+      overlay.resolvedPose = resolved.pose
+      applyOverlayPose(overlay, resolved, overlayDebugKeys, options.debug)
+    },
+    finishOverlay: (handle) => {
+      const overlay = handle as OverlayHandle
+      activeOverlays.delete(overlay.source)
+      finishOverlay(overlay)
+    },
     flush: () => undefined,
   }
 }
@@ -67,20 +95,14 @@ function applyLocalPose(
   if (!snapshots.has(itemId)) {
     snapshots.set(itemId, {
       style: node.getAttribute('style'),
-      authoredTransform: node.style.transform,
     })
   }
   restoreLocalPose(node, snapshots.get(itemId)!.style)
 
   const naturalPose = captureHtmlPose(node)
   const naturalRect = naturalPose.rect
-  const scaleX = naturalRect.width === 0 ? 1 : resolved.pose.rect.width / naturalRect.width
-  const scaleY = naturalRect.height === 0 ? 1 : resolved.pose.rect.height / naturalRect.height
-  const deltaWorld = {
-    x: resolved.pose.rect.left - naturalRect.left,
-    y: resolved.pose.rect.top - naturalRect.top,
-  }
-  const deltaLocal = worldDeltaToLocalDelta(naturalPose.parentMatrix, deltaWorld.x, deltaWorld.y)
+  const parentPose = node.parentElement === null ? undefined : captureHtmlPose(node.parentElement)
+  const targetMatrix = resolveLocalProjectionMatrix(naturalPose, resolved.pose, parentPose)
 
   const debugKey = `${resolved.captureId}:${itemId}`
   if (debug !== undefined && resolved.progress > 0.05 && resolved.progress < 0.65 && !debugKeys.has(debugKey)) {
@@ -91,15 +113,53 @@ function applyLocalPose(
       progress: resolved.progress,
       natural: { ...naturalRect },
       target: { ...resolved.pose.rect },
-      deltaWorld,
-      deltaLocal,
-      parentMatrix: { ...naturalPose.parentMatrix },
+      matrix: { ...targetMatrix },
+      layoutOffset: naturalPose.layoutOffset,
+      parentMatrix: parentPose === undefined ? createIdentityMatrix() : poseAffineMatrix(parentPose),
     })
   }
 
   node.style.transition = 'none'
-  node.style.transformOrigin = 'center'
-  node.style.transform = `translate(${deltaLocal.x}px, ${deltaLocal.y}px) scale(${scaleX}, ${scaleY}) ${snapshots.get(itemId)!.authoredTransform}`
+  node.style.transformOrigin = '0 0'
+  node.style.translate = 'none'
+  node.style.rotate = 'none'
+  node.style.scale = 'none'
+  node.style.transform = `matrix(${targetMatrix.a}, ${targetMatrix.b}, ${targetMatrix.c}, ${targetMatrix.d}, ${targetMatrix.e}, ${targetMatrix.f})`
+}
+
+/** Resolves one complete local CSS matrix from natural and target world poses. */
+export function resolveLocalProjectionMatrix(
+  natural: HtmlPose,
+  target: HtmlPose,
+  parent: HtmlPose | undefined,
+): HtmlMatrix {
+  const parentMatrix = parent === undefined ? createIdentityMatrix() : poseAffineMatrix(parent)
+  const parentInverse = invertMatrix(parentMatrix)
+  if (parentInverse === null) throw new Error('FLIP local parent matrix is singular.')
+  const widthScale = natural.localWidth === 0 ? 1 : target.localWidth / natural.localWidth
+  const heightScale = natural.localHeight === 0 ? 1 : target.localHeight / natural.localHeight
+  const targetMatrix = multiplyMatrix(
+    multiplyMatrix(parentInverse, poseAffineMatrix(target)),
+    createScaleMatrix(widthScale, heightScale),
+  )
+  const layoutOffset = natural.layoutOffset ?? { x: 0, y: 0 }
+  return {
+    ...targetMatrix,
+    e: targetMatrix.e - layoutOffset.x,
+    f: targetMatrix.f - layoutOffset.y,
+  }
+}
+
+/** Converts one numeric pose into the affine matrix of its local-box origin. */
+function poseAffineMatrix(pose: HtmlPose): ReturnType<typeof createIdentityMatrix> {
+  return {
+    a: pose.matrix.a,
+    b: pose.matrix.b,
+    c: pose.matrix.c,
+    d: pose.matrix.d,
+    e: pose.origin.x,
+    f: pose.origin.y,
+  }
 }
 
 /** Restores one local item to the exact authored inline style. */
@@ -120,10 +180,30 @@ function restoreLocalPose(node: HTMLElement, style: string | null): void {
 }
 
 /** Captures the ad-hoc world anchor needed only by the overlay host. */
-function captureOverlayPose(node: Element): HtmlPose {
+function captureWorldAnchorPose(node: Element): HtmlPose {
   const pose = captureHtmlPose(node)
   const rect = node.getBoundingClientRect()
   return { ...pose, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } }
+}
+
+/** Captures one pose while composing any active projected overlay ancestor. */
+function captureOverlayPose(node: Element, overlays: ReadonlyMap<HTMLElement, OverlayHandle>): HtmlPose {
+  const direct = node instanceof HTMLElement ? overlays.get(node) : undefined
+  if (direct?.resolvedPose !== undefined) return direct.resolvedPose
+
+  let ancestor = node.parentElement
+  while (ancestor !== null) {
+    const overlay = overlays.get(ancestor)
+    if (overlay?.resolvedPose !== undefined) {
+      const childPose = captureHtmlPose(node)
+      const parentPose = captureHtmlPose(overlay.source)
+      const local = deriveLocalPoseMatrix(parentPose, childPose)
+      return composeHtmlPose(overlay.resolvedPose, local, childPose.localWidth, childPose.localHeight)
+    }
+    ancestor = ancestor.parentElement
+  }
+
+  return captureWorldAnchorPose(node)
 }
 
 /** Creates one fixed overlay clone for a world-space FLIP item. */
@@ -140,6 +220,26 @@ function beginOverlay(source: HTMLElement, root: Element): OverlayHandle {
   return { ghost, source, sourceStyle, root }
 }
 
+/** Hides one independently projected descendant in an existing ghost. */
+function hideOverlayDescendant(ghost: HTMLElement, itemId: string, hidden: WeakMap<HTMLElement, string>): void {
+  for (const element of ghost.querySelectorAll<HTMLElement>('[data-item-id], [id]')) {
+    if (element.dataset.itemId !== itemId && element.id !== itemId) continue
+    if (!hidden.has(element)) hidden.set(element, element.style.visibility)
+    element.style.visibility = 'hidden'
+  }
+}
+
+/** Restores one descendant that no longer owns an independent overlay. */
+function restoreOverlayDescendant(ghost: HTMLElement, itemId: string, hidden: WeakMap<HTMLElement, string>): void {
+  for (const element of ghost.querySelectorAll<HTMLElement>('[data-item-id], [id]')) {
+    if (element.dataset.itemId !== itemId && element.id !== itemId) continue
+    const visibility = hidden.get(element)
+    if (visibility === undefined) continue
+    element.style.visibility = visibility
+    hidden.delete(element)
+  }
+}
+
 /** Applies one world pose through a matrix-only transform. */
 function applyOverlayPose(
   handle: OverlayHandle,
@@ -148,7 +248,7 @@ function applyOverlayPose(
   debug: HtmlDomProjectionOptions['debug'],
 ): void {
   const { ghost } = handle
-  const rootPose = captureOverlayPose(handle.root)
+  const rootPose = captureWorldAnchorPose(handle.root)
   const localized = localizePose(rootPose, resolved.pose)
   const debugKey = `${resolved.captureId}:${resolved.itemId}`
   if (debug !== undefined && resolved.progress <= 0.05 && !debugKeys.has(debugKey)) {
@@ -180,7 +280,7 @@ function applyOverlayPose(
   ghost.style.zIndex = '20'
 
   if (debug !== undefined && resolved.progress <= 0.05 && debugKeys.has(debugKey)) {
-    const actual = captureOverlayPose(ghost)
+    const actual = captureWorldAnchorPose(ghost)
     debug('overlay-actual-start', {
       itemId: resolved.itemId,
       expected: { ...resolved.pose.rect },
@@ -196,36 +296,11 @@ export function localizePose(root: HtmlPose, pose: HtmlPose): { matrix: HtmlMatr
   const rootOrigin = { x: root.rect.left - rootBounds.left, y: root.rect.top - rootBounds.top }
   const poseOrigin = { x: pose.rect.left - poseBounds.left, y: pose.rect.top - poseBounds.top }
   const originDelta = worldDeltaToLocalDelta(root.matrix, poseOrigin.x - rootOrigin.x, poseOrigin.y - rootOrigin.y)
-  const inverse = invertLinearMatrix(root.matrix)
+  const inverse = invertMatrix({ ...root.matrix, e: 0, f: 0 })
+  if (inverse === null) throw new Error('FLIP overlay root matrix is singular.')
   return {
-    matrix: { ...multiplyLinearMatrix(inverse, pose.matrix), e: originDelta.x, f: originDelta.y },
+    matrix: { ...multiplyMatrix(inverse, { ...pose.matrix, e: 0, f: 0 }), e: originDelta.x, f: originDelta.y },
     origin: originDelta,
-  }
-}
-
-/** Multiplies two linear affine matrices in the root coordinate space. */
-function multiplyLinearMatrix(left: HtmlMatrix, right: HtmlMatrix): HtmlMatrix {
-  return {
-    a: left.a * right.a + left.c * right.b,
-    b: left.b * right.a + left.d * right.b,
-    c: left.a * right.c + left.c * right.d,
-    d: left.b * right.c + left.d * right.d,
-    e: 0,
-    f: 0,
-  }
-}
-
-/** Inverts a linear matrix for one local overlay coordinate conversion. */
-function invertLinearMatrix(matrix: HtmlMatrix): HtmlMatrix {
-  const determinant = matrix.a * matrix.d - matrix.b * matrix.c
-  if (Math.abs(determinant) < 1e-8) throw new Error('FLIP overlay root matrix is singular.')
-  return {
-    a: matrix.d / determinant,
-    b: -matrix.b / determinant,
-    c: -matrix.c / determinant,
-    d: matrix.a / determinant,
-    e: 0,
-    f: 0,
   }
 }
 

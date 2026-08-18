@@ -134,3 +134,42 @@ en `[1, 0]`, quantifie la géométrie au centième et produit des segments inter
 d'arcs et de droites avec leurs longueurs cumulées. Le runtime FLIP ne parse donc
 aucun SVG. Restent à fixer les valeurs par défaut de transition et les diagnostics
 détaillés des transitions invalides ou incomplètes.
+
+## Fixtures de démonstration — 2026-08-18
+
+La démo `packages/authoring/selection-frame/demos/flip` est conservée comme
+référence Player POC validée. La fixture `demos/flip-stress` est également
+conservée avec son scénario A/B/C/D, ses transferts Q/K et ses échanges alternés,
+mais son utilisation est suspendue : elle ne doit pas servir de validation tant
+qu'elle n'est pas une simple déclaration de scène consommée par un runner V2/HTML
+partagé. L'architecture de navigation et ce runner restent à construire.
+
+La fixture stress-test impose désormais des dimensions fixes aux containers A/B/C/D
+et Q/K afin que les montages et démontages internes ne modifient pas la géométrie
+des parents pendant les captures. A/B sont visibles au FIRST ; C/D apparaissent à
+`1s`. Les quatre trajectoires de containers sont verticales pour isoler les défauts
+de parentage et de timing.
+
+La projection locale HTML a ensuite été restructurée autour d'une pose affine
+globale : origine monde, matrice composée, dimensions locales et offset de layout.
+Elle neutralise temporairement les propriétés CSS individuelles et écrit une
+unique `matrix(...)`, en réutilisant les helpers de matrice ACE. La fixture ne
+contourne donc pas les rotations ou les ordres de transform ; ces cas sont traités
+par le host core.
+
+Le runtime présente aussi les overlays actifs avant une nouvelle capture overlay.
+Le host HTML compose désormais la pose projetée d'un parent overlay avec la pose
+locale de son descendant, et retire d'un ghost les descendants qui obtiennent leur
+propre overlay. Ces descendants sont restaurés dans le ghost parent lorsque leur
+overlay atteint LAST. Cela évite qu'un item comme `Qa` soit capturé depuis B/C ou
+rendu deux fois dans le ghost de K lorsqu'il doit aller de Q vers K, tout en le
+laissant visible après son LAST pendant que Q/K poursuivent leur transition.
+
+La suite V2 compte désormais **51 fichiers et 306 tests réussis**.
+
+La fixture stress-test a aussi révélé une divergence `Play`/`Seek` aux bornes des
+captures. Le chemin de lecture continue ne doit pas résoudre à nouveau une
+ancienne capture expirée avant la capture courante : le runtime réconcilie
+désormais les projections expirées sans leur réappliquer leur pose finale. Cela
+préserve `play(t) = seek(t)` lorsque plusieurs captures successives touchent les
+mêmes items.

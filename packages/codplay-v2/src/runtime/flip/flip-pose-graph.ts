@@ -206,6 +206,7 @@ function poseFromAnchor(anchor: Point, matrix: HtmlMatrix, parentMatrix: HtmlMat
       width: bounds.width,
       height: bounds.height,
     },
+    origin: { x: anchor[0] - bounds.left, y: anchor[1] - bounds.top },
     matrix,
     parentMatrix,
     rotationMatrix: normalizeRotation(matrix),

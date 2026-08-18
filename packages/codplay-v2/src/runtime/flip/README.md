@@ -129,13 +129,17 @@ pour interpoler directement ses poses FIRST et LAST dans l'espace monde.
 La pose contient à la fois :
 
 - une ancre visuelle et ses dimensions ;
+- l'origine monde de la boîte locale ;
 - une matrice composée ;
 - la matrice du parent ;
-- les dimensions locales nécessaires à la projection.
+- les dimensions locales nécessaires à la projection ;
+- l'offset de layout immédiat lorsqu'il provient d'un node HTML vivant.
 
-Le host local convertit ensuite le delta monde dans le repère local du parent
-avant d'écrire un `translate(...)` CSS. Un delta écran ne doit jamais être écrit
-directement comme un delta local lorsque le parent est tourné ou mis à l'échelle.
+Le host local reconstruit ensuite une matrice affine complète dans le repère du
+parent. Il neutralise temporairement les propriétés CSS individuelles
+`translate`/`rotate`/`scale` et écrit une seule `matrix(...)`, avant de restaurer
+le style auteur exact. Un delta écran ne doit jamais être écrit directement
+comme un delta local lorsque le parent est tourné ou mis à l'échelle.
 
 ## Mesure HTML
 
@@ -188,11 +192,18 @@ fournit :
 - la capture historique des ancêtres `layout` ;
 - l'application, la fin et l'annulation des poses locales ;
 - la création, l'application et la fin des overlays ;
+- l'exclusion des descendants qui possèdent un overlay indépendant ;
 - un `flush` unique par commit.
 
 `HtmlDomProjection` est l'implémentation host autonome utilisée par la démo. La
 démo ne réimplémente ni la capture, ni la pose, ni la restauration, ni la
 projection.
+
+Lorsqu'un overlay parent est actif, une nouvelle capture overlay est présentée
+à son instant FIRST avant de mesurer ses descendants. Le host compose alors la
+pose locale du descendant avec la pose projetée du parent. Les descendants qui
+possèdent leur propre overlay sont temporairement masqués dans les ghosts
+parents pour éviter les doubles rendus, puis restaurés à la fin de leur overlay.
 
 ## Intégration `move`
 
@@ -252,7 +263,7 @@ Vérifications actuelles :
 
 - typecheck V2 réussi ;
 - 50 fichiers de test ;
-- 303 tests réussis ;
+- 306 tests réussis ;
 - build de la démo FLIP réussi.
 
 ## Limites actuelles

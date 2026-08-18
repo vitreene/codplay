@@ -11,6 +11,7 @@ const identity: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 function pose(left: number, top = 0, width = 10, height = 10, matrix: HtmlMatrix = identity): HtmlPose {
   return {
     rect: { left, top, width, height },
+    origin: { x: left, y: top },
     matrix,
     parentMatrix: identity,
     rotationMatrix: identity,
@@ -493,6 +494,73 @@ describe('HTML FLIP V2', () => {
     expect(result.ok).toBe(true)
     expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
     expect(projection.flush).toHaveBeenCalledOnce()
+  })
+
+  it('presents an active overlay before capturing a nested overlay mutation', () => {
+    const poses = new Map([
+      ['parent', pose(0)],
+      ['child', pose(10)],
+    ])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+
+    const parent = captureValue(runtime.capture({
+      captureId: 'overlay-parent',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      ease: 'linear',
+      entries: [{ itemId: 'parent', ancestorIds: [], mode: 'overlay-world' }],
+      mutate: () => poses.set('parent', pose(100)),
+    }))
+    runtime.seek(parent, 500)
+
+    captureValue(runtime.capture({
+      captureId: 'overlay-child',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 500,
+      duration: 500,
+      ease: 'linear',
+      entries: [{ itemId: 'child', ancestorIds: [], mode: 'overlay-world' }],
+      mutate: () => poses.set('child', pose(110)),
+    }))
+
+    expect(projection.applyOverlayPose).toHaveBeenCalledTimes(3)
+  })
+
+  it('finishes an expired capture before resolving the next play frame', () => {
+    const poses = new Map([['item', pose(0)]])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+    const first = captureValue(runtime.capture({
+      captureId: 'overlay-expired-first',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      ease: 'linear',
+      entries: [{ itemId: 'item', ancestorIds: [], mode: 'overlay-world' }],
+      mutate: () => poses.set('item', pose(100)),
+    }))
+    runtime.seek(first, 500)
+
+    captureValue(runtime.capture({
+      captureId: 'overlay-expired-next',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 1000,
+      duration: 1000,
+      ease: 'linear',
+      entries: [{ itemId: 'item', ancestorIds: [], mode: 'overlay-world' }],
+      mutate: () => poses.set('item', pose(200)),
+    }))
+
+    runtime.seekCached('host-1', 1, 1500)
+
+    expect(projection.finishOverlay).toHaveBeenCalledOnce()
+    expect(projection.applyOverlayPose).toHaveBeenCalledTimes(2)
   })
 
   it('rejects a capture submitted from another host context', () => {

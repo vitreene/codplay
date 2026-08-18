@@ -22,6 +22,7 @@
     "dev:demos": "npm run dev --workspace=packages/demos",
     "dev:editor": "npm run dev --workspace=packages/editor",
     "demo:flip": "npm run demo:flip --workspace=@codplay/selection-frame",
+    "demo:flip:stress": "npm run demo:flip-stress --workspace=@codplay/selection-frame",
     "test": "npm run test --workspace=packages/codplay",
     "test:gates": "npm run test:gates --workspace=packages/codplay",
     "build": "npm run build --workspace=packages/codplay"

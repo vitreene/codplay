@@ -1,4 +1,5 @@
 import type { HtmlMatrix, HtmlPose } from './types'
+import { invertMatrix as invertAffineMatrix, multiplyMatrix as multiplyAffineMatrix } from '../../ace'
 
 const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
@@ -240,8 +241,10 @@ export function captureHtmlPose(node: Element): HtmlPose {
 
   return {
     rect,
+    origin: { x: geometry.origin.x - scrollX, y: geometry.origin.y - scrollY },
     matrix: geometry.matrix,
     parentMatrix,
+    layoutOffset: captureLayoutOffset(node, node.parentElement),
     rotationMatrix: extractRotationMatrix(geometry.matrix),
     scaleX,
     scaleY,
@@ -249,6 +252,50 @@ export function captureHtmlPose(node: Element): HtmlPose {
     localHeight,
     frameWidth: localWidth * scaleX,
     frameHeight: localHeight * scaleY,
+  }
+}
+
+/** Converts one pose into an affine matrix whose origin is its local-box origin. */
+export function poseToAffineMatrix(pose: HtmlPose): HtmlMatrix {
+  return {
+    a: pose.matrix.a,
+    b: pose.matrix.b,
+    c: pose.matrix.c,
+    d: pose.matrix.d,
+    e: pose.origin.x,
+    f: pose.origin.y,
+  }
+}
+
+/** Derives one child affine pose in the local coordinates of a captured parent. */
+export function deriveLocalPoseMatrix(parent: HtmlPose, child: HtmlPose): HtmlMatrix {
+  const inverse = invertAffineMatrix(poseToAffineMatrix(parent))
+  if (inverse === null) throw new Error('FLIP cannot derive a child pose from a singular parent.')
+  return multiplyAffineMatrix(inverse, poseToAffineMatrix(child))
+}
+
+/** Composes one local child affine pose with a projected parent pose. */
+export function composeHtmlPose(parent: HtmlPose, local: HtmlMatrix, width: number, height: number): HtmlPose {
+  const world = multiplyAffineMatrix(poseToAffineMatrix(parent), local)
+  const matrix: HtmlMatrix = { ...world, e: 0, f: 0 }
+  const bounds = transformedBounds(matrix, width, height)
+  return {
+    rect: {
+      left: world.e + bounds.left,
+      top: world.f + bounds.top,
+      width: bounds.width,
+      height: bounds.height,
+    },
+    origin: { x: world.e, y: world.f },
+    matrix,
+    parentMatrix: parent.matrix,
+    rotationMatrix: extractRotationMatrix(matrix),
+    scaleX: Math.max(1e-6, Math.hypot(matrix.a, matrix.b)),
+    scaleY: Math.max(1e-6, Math.hypot(matrix.c, matrix.d)),
+    localWidth: width,
+    localHeight: height,
+    frameWidth: width * Math.max(1e-6, Math.hypot(matrix.a, matrix.b)),
+    frameHeight: height * Math.max(1e-6, Math.hypot(matrix.c, matrix.d)),
   }
 }
 

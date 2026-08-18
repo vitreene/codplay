@@ -12,6 +12,7 @@ const identity: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 function pose(left: number): HtmlPose {
   return {
     rect: { left, top: 0, width: 10, height: 10 },
+    origin: { x: left, y: 0 },
     matrix: identity,
     parentMatrix: identity,
     rotationMatrix: identity,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { localizePose } from '../../../src/runtime/flip/html-dom-projection'
+import { localizePose, resolveLocalProjectionMatrix } from '../../../src/runtime/flip/html-dom-projection'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/flip/types'
 
 const identity: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -10,6 +10,7 @@ function pose(left: number, top: number, width: number, height: number, matrix: 
   const scaleY = Math.hypot(matrix.c, matrix.d)
   return {
     rect: { left, top, width, height },
+    origin: { x: left, y: top },
     matrix,
     parentMatrix: identity,
     rotationMatrix: identity,
@@ -43,4 +44,22 @@ describe('V2 HTML DOM projection math', () => {
     expect(localized.matrix.f).toBeCloseTo(expectedTranslationY)
     expect(localized.matrix.f).toBeCloseTo(localized.origin.y)
   })
+
+  it('resolves one complete local matrix for translation, rotation, and scale', () => {
+    const natural = { ...pose(0, 0, 100, 50), layoutOffset: { x: 10, y: 20 } }
+    const target = {
+      ...pose(0, 0, 100, 50, { a: 0, b: 2, c: -3, d: 0, e: 0, f: 0 }),
+      origin: { x: 100, y: 40 },
+    }
+
+    const matrix = resolveLocalProjectionMatrix(natural, target, pose(0, 0, 800, 600))
+
+    expect(matrix.a).toBeCloseTo(0)
+    expect(matrix.b).toBeCloseTo(2)
+    expect(matrix.c).toBeCloseTo(-3)
+    expect(matrix.d).toBeCloseTo(0)
+    expect(matrix.e).toBeCloseTo(90)
+    expect(matrix.f).toBeCloseTo(20)
+  })
+
 })
