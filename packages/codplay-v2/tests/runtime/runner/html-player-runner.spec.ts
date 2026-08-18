@@ -122,7 +122,7 @@ function componentCatalog(): RuntimeComponentCatalog {
     services: ['className', 'style', 'attr'],
     modules: ['markup'],
     create: (input) => new LayoutComponent(input as never),
-    mountableParts: ['outlet'],
+    mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
   }, {
     type: 'tag',
     services: ['className', 'style', 'attr', 'content'],
@@ -254,6 +254,60 @@ function listCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Declares a first-mode transfer into a list nested below a markup outlet. */
+function nestedListSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-nested-list-order',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'source-layout',
+          type: 'layout',
+          initial: { move: '@root', markup: '<section><div data-part="source-outlet"></div></section>' },
+          actions: {},
+        }, {
+          id: 'target-layout',
+          type: 'layout',
+          initial: { move: '@root', markup: '<section><div data-part="target-outlet"></div></section>' },
+          actions: {},
+        }, {
+          id: 'list',
+          type: 'list',
+          initial: { tag: 'section', move: { target: 'target-outlet' } },
+          actions: {},
+        }, {
+          id: 'first',
+          type: 'tag',
+          initial: { tag: 'article', move: { target: 'source-outlet' }, content: 'first' },
+          actions: {
+            transfer: { move: { target: 'list', mode: 'first', transition: { duration: 100, ease: 'linear' } } },
+          },
+        }, {
+          id: 'second',
+          type: 'tag',
+          initial: { tag: 'article', move: { target: 'list' }, content: 'second' },
+          actions: {},
+        }, {
+          id: 'third',
+          type: 'tag',
+          initial: { tag: 'article', move: { target: 'list' }, content: 'third' },
+          actions: {},
+        }],
+        listen: [],
+        eventimes: [{ name: 'transfer', startAt: 100 }],
+      },
+    },
+  }
+}
+
+/** Builds the nested-list regression fixture through the SceneDoc compiler. */
+function nestedListCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(nestedListSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Returns the child tag names currently mounted under one fake node. */
 function childTags(node: FakeNode): readonly string[] {
   return node.childNodes.map((child) => child instanceof FakeElement ? child.getAttribute('data-part') ?? 'element' : 'fragment')
@@ -370,6 +424,33 @@ describe('HtmlPlayerRunner', () => {
     runner.advance(100)
 
     expect(list.childNodes).toEqual([first, second])
+    runner.destroy()
+  })
+
+  it('initializes list order after markup outlets are registered', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const runner = new HtmlPlayerRunner({
+      id: 'nested-list-order-runner',
+      compiledScene: nestedListCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      componentCatalog: componentCatalog(),
+      serviceCatalog: createDomComponentServiceCatalog(),
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const list = runner.getPersoNode('main:list') as FakeElement
+    const first = runner.getPersoNode('main:first') as FakeElement
+    const second = runner.getPersoNode('main:second') as FakeElement
+    const third = runner.getPersoNode('main:third') as FakeElement
+    expect(list.childNodes).toEqual([second, third])
+
+    runner.play(ticker())
+    runner.advance(0)
+    runner.advance(100)
+
+    expect(list.childNodes).toEqual([first, second, third])
     runner.destroy()
   })
 })

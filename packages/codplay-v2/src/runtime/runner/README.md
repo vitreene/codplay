@@ -37,6 +37,11 @@ outlets sont publiés par le module `markup` lorsqu'un composant expose les part
 choisies par sa définition runtime. Le runner ne déduit jamais un target depuis
 le nom d'un élément ou depuis le DOM.
 
+Lors de l'initialisation, le host matérialise d'abord les composants afin que le
+module `markup` publie les outlets, puis les modules player-scoped prennent leur
+snapshot initial. Une capacité `list` peut ainsi conserver l'ordre initial de
+ses enfants même lorsque la liste est imbriquée dans un outlet HTML.
+
 `play()` démarre le ticker uniquement lorsque le runner possède son engine.
 `advance(nowMs)` reste l'entrée déterministe pour les tests et les hosts qui
 possèdent leur horloge. `seek(t)` reconstruit l'état logique sans rejouer les

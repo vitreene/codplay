@@ -181,13 +181,10 @@ export class RuntimePlayer {
     }
     this.componentRuntime?.setModuleServices(this.moduleServiceInstances)
     const initialSolvedScene = this.reconstructScene(0)
-    this.initializeModuleServices(initialSolvedScene)
+    this.componentRuntime?.sync(initialSolvedScene)
     this.solvedScene = this.reconstructScene(0)
+    this.initializeModuleServices(this.solvedScene)
     this.componentRuntime?.sync(this.solvedScene)
-    if (this.componentRuntime !== undefined) {
-      this.solvedScene = this.reconstructScene(0)
-      this.componentRuntime.sync(this.solvedScene)
-    }
     this.layoutProjection?.project(this.solvedScene, { phase: 'init', moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {

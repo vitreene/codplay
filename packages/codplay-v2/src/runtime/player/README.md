@@ -17,6 +17,11 @@ deltas to capabilities such as list.
 The player receives an engine and a `CompiledScene`; it does not create its
 own clock or compile authoring data.
 
+When a component host is attached, initialization materializes the first scene
+before initializing player-scoped modules. This lets markup modules publish
+their outlet targets before capabilities such as list snapshot initial child
+orders, including lists nested below HTML outlets.
+
 `LayoutProjection.project()` may receive the previous solved scene and the
 `MoveStateDelta` values for the current frame. `LayoutProjection.advance()` may
 then advance a projection capability such as `MoveFlipLayoutProjection` without

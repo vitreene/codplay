@@ -168,6 +168,10 @@ de captures, ni algorithme de projection.
 - Lorsqu'un mover change de chaîne de parents, le builder ne lui associe plus la
   chaîne de destination pour la pose FIRST. Sa trajectoire est résolue dans le
   repère monde; les siblings qui gardent la même chaîne restent projetés localement.
+- `RuntimePlayer.init` matérialise maintenant la première scène avant
+  l'initialisation des modules player-scoped. Les outlets `markup` sont donc
+  disponibles lorsque `list` capture son ordre initial, y compris pour une
+  liste imbriquée dans un parent HTML.
 
 ## Fixtures
 
@@ -312,12 +316,16 @@ Lorsque le runner existe, vérifier :
   historiques, afin de préserver `play(t) = seek(t)` pour les reorders list
   compilés.
 - Vérifications réussies depuis `packages/codplay-v2`: `npm run typecheck`,
-  `npm run build:runner`, `npm run test` avec 57 fichiers et 332 tests, puis
+  `npm run build:runner`, `npm run test` avec 57 fichiers et 333 tests, puis
   `git diff --check`.
 - Aucun commit n'a été créé.
-- Prochaine action: lancer `npm run demo:runner`, inspecter le scénario dans
-  Safari Preview MCP aux checkpoints `0`, `1500` et `2200`, puis corriger uniquement
-  si l'observation navigateur contredit les invariants testés.
+- La reprise navigateur a révélé puis corrigé un ordre DOM final `[B, C, A]`
+  lorsque la liste était imbriquée dans des outlets non encore publiés au moment
+  de l'initialisation des modules.
+- Après correction, Safari Preview MCP confirme `[B, C]` à `0ms`, `[A, B, C]`
+  à `1500ms` pendant la transition et `[A, B, C]` à `2200ms`, avec A en première
+  position visuelle et sans transform résiduelle. Une régression runner couvre
+  désormais cette initialisation imbriquée.
 
 ## Fichiers principaux
 
