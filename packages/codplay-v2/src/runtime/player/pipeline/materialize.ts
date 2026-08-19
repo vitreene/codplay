@@ -1,6 +1,8 @@
 import { isPlainRecord } from '../../../shared'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
+import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
+import type { CompiledActionSequenceStep } from './action-sequence'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
 import type { MaterializedAction, MaterializedPerso, MaterializedScene } from './types'
@@ -67,10 +69,7 @@ function materializeSceneAtBoundary(
       : []
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
-      const actions = events
-        .map((event) => toActiveAction(event, perso.actions, timeMs, includeBoundary))
-        .filter((action): action is IndexedMaterializedAction => action !== null)
-        .sort(compareMaterializedActions)
+      const actions = materializePersoActions(events, perso.actions, timeMs, includeBoundary)
       persos[key] = {
         key,
         storyId,
@@ -85,33 +84,162 @@ function materializeSceneAtBoundary(
   return { scene, timeMs, tracks, sceneState, storyStates, persos }
 }
 
-/** Converts one flattened compiled event into an active action for one perso. */
-function toActiveAction(
-  flattened: FlattenedEventime,
+/** Expands one perso's event occurrences into the active action occurrences. */
+function materializePersoActions(
+  sourceEvents: readonly FlattenedEventime[],
   actions: Readonly<Record<string, CompiledValue>>,
   timeMs: number,
   includeBoundary: boolean,
+): readonly IndexedMaterializedAction[] {
+  const orderedEvents = [...sourceEvents].sort(compareFlattenedEventimes)
+  const materialized: IndexedMaterializedAction[] = []
+
+  for (let eventIndex = 0; eventIndex < orderedEvents.length; eventIndex += 1) {
+    const flattened = orderedEvents[eventIndex]
+    if (flattened.event.name === 'tween:stop') continue
+    const action = resolveActionDefinition(actions[flattened.event.name], flattened.event.data)
+    if (action === null) continue
+
+    if (isActionSequence(action)) {
+      const plannedSteps = planActionSequenceSteps(action)
+      for (let stepIndex = 0; stepIndex < plannedSteps.length; stepIndex += 1) {
+        const step = plannedSteps[stepIndex]
+        const startAt = flattened.startAt + step.offsetMs
+        const superseded = isTweenAction(step.action)
+          ? hasAnySupersedingTrigger(orderedEvents, eventIndex, flattened.event.name, timeMs, includeBoundary)
+          : hasPendingSequenceStepReplacement(
+              orderedEvents,
+              eventIndex,
+              flattened.event.name,
+              startAt,
+              timeMs,
+              includeBoundary,
+            )
+        if (superseded) continue
+        if (isTweenAction(step.action) && hasTweenStop(orderedEvents, eventIndex, startAt, timeMs, includeBoundary)) continue
+        const activeAction = createMaterializedAction(
+          flattened,
+          startAt,
+          step.action,
+          timeMs,
+          includeBoundary,
+          stepIndex,
+        )
+        if (activeAction !== null) materialized.push(activeAction)
+      }
+      continue
+    }
+
+    if (isTweenAction(action) && (
+      hasAnySupersedingTrigger(orderedEvents, eventIndex, flattened.event.name, timeMs, includeBoundary)
+      || hasTweenStop(orderedEvents, eventIndex, flattened.startAt, timeMs, includeBoundary)
+    )) continue
+    const activeAction = createMaterializedAction(
+      flattened,
+      flattened.startAt,
+      action,
+      timeMs,
+      includeBoundary,
+    )
+    if (activeAction !== null) materialized.push(activeAction)
+  }
+
+  return materialized.sort(compareMaterializedActions)
+}
+
+/** Resolves a direct action or a data-carried action declaration. */
+function resolveActionDefinition(
+  actionValue: CompiledValue | undefined,
+  eventData: CompiledRecord | undefined,
+): CompiledRecord | readonly CompiledActionSequenceStep[] | null {
+  if (isPlainRecord(actionValue) || isActionSequence(actionValue)) return actionValue
+  if ((actionValue === null || actionValue === true) && eventData !== undefined) return eventData
+  return null
+}
+
+/** Creates one active materialized action while enforcing the boundary policy. */
+function createMaterializedAction(
+  flattened: FlattenedEventime,
+  startAt: number,
+  action: CompiledRecord,
+  timeMs: number,
+  includeBoundary: boolean,
+  sequenceIndex?: number,
 ): IndexedMaterializedAction | null {
-  if (flattened.startAt > timeMs || (!includeBoundary && flattened.startAt === timeMs)) return null
-  const actionValue = actions[flattened.event.name]
-  const action = isPlainRecord(actionValue)
-    ? actionValue
-    : actionValue === null && flattened.event.data !== undefined
-      ? flattened.event.data
-      : null
-  if (action === null) return null
+  if (startAt > timeMs || (!includeBoundary && startAt === timeMs)) return null
   return {
     name: flattened.event.name,
-    startAt: flattened.startAt,
-    elapsedMs: timeMs - flattened.startAt,
+    startAt,
+    elapsedMs: timeMs - startAt,
     trackId: flattened.trackId,
     trackOrder: flattened.trackOrder,
-    eventId: flattened.eventId,
+    eventId: sequenceIndex === undefined
+      ? flattened.eventId
+      : createDerivedEventId(flattened, `${flattened.event.name}:sequence:${sequenceIndex}`),
     eventSeq: flattened.eventSeq,
-    declarationPath: flattened.declarationPath,
+    declarationPath: sequenceIndex === undefined
+      ? flattened.declarationPath
+      : [...flattened.declarationPath, sequenceIndex],
     eventData: flattened.event.data,
-    action: action as CompiledRecord,
+    action,
   }
+}
+
+/** Invalidates a sequence step that had not started before a replacement trigger. */
+function hasPendingSequenceStepReplacement(
+  orderedEvents: readonly FlattenedEventime[],
+  sourceIndex: number,
+  eventName: string,
+  stepStartAt: number,
+  timeMs: number,
+  includeBoundary: boolean,
+): boolean {
+  for (let index = sourceIndex + 1; index < orderedEvents.length; index += 1) {
+    const candidate = orderedEvents[index]
+    if (candidate.startAt > stepStartAt) break
+    if (candidate.startAt > timeMs || (!includeBoundary && candidate.startAt === timeMs)) continue
+    if (candidate.event.name === eventName) return true
+  }
+  return false
+}
+
+/** Invalidates an older tween when any later occurrence of its action key is due. */
+function hasAnySupersedingTrigger(
+  orderedEvents: readonly FlattenedEventime[],
+  sourceIndex: number,
+  eventName: string,
+  timeMs: number,
+  includeBoundary: boolean,
+): boolean {
+  for (let index = sourceIndex + 1; index < orderedEvents.length; index += 1) {
+    const candidate = orderedEvents[index]
+    if (candidate.startAt > timeMs || (!includeBoundary && candidate.startAt === timeMs)) break
+    if (candidate.event.name === eventName) return true
+  }
+  return false
+}
+
+/** Invalidates a tween step at or after a later logical tween stop event. */
+function hasTweenStop(
+  orderedEvents: readonly FlattenedEventime[],
+  sourceIndex: number,
+  tweenStartAt: number,
+  timeMs: number,
+  includeBoundary: boolean,
+): boolean {
+  for (let index = sourceIndex + 1; index < orderedEvents.length; index += 1) {
+    const candidate = orderedEvents[index]
+    if (candidate.startAt < tweenStartAt) continue
+    if (candidate.startAt > timeMs || (!includeBoundary && candidate.startAt === timeMs)) return false
+    if (candidate.event.name === 'tween:stop') return true
+  }
+  return false
+}
+
+/** Creates a stable derived event identity for one sequence step. */
+function createDerivedEventId(flattened: FlattenedEventime, suffix: string): string {
+  const source = flattened.eventId ?? `${flattened.event.name}@${flattened.startAt}:${flattened.declarationPath.join('.')}`
+  return `${source}:${suffix}`
 }
 
 /** Preserves declaration order for same-time actions while sorting chronology. */
@@ -119,6 +247,13 @@ function compareMaterializedActions(
   left: IndexedMaterializedAction,
   right: IndexedMaterializedAction,
 ): number {
+  return left.startAt - right.startAt
+    || left.trackOrder - right.trackOrder
+    || compareDeclarationPaths(left.declarationPath, right.declarationPath)
+}
+
+/** Preserves source chronology and declaration order while expanding sequences. */
+function compareFlattenedEventimes(left: FlattenedEventime, right: FlattenedEventime): number {
   return left.startAt - right.startAt
     || left.trackOrder - right.trackOrder
     || compareDeclarationPaths(left.declarationPath, right.declarationPath)

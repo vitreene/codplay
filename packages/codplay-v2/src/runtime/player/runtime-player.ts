@@ -383,7 +383,7 @@ export class RuntimePlayer {
     const materialized = includeBoundary
       ? materializeScene(this.compiledScene, timeMs, this.trackJournal)
       : materializeSceneBeforeBoundary(this.compiledScene, timeMs, this.trackJournal)
-    return solveScene(resolveScene(materialized), {
+    return solveScene(resolveScene(materialized, this.functions), {
       mountTargets: [
         ...this.mountTargets,
         ...[...this.moduleServiceInstances.values()].flatMap((instance) => instance.getMountTargets?.() ?? []),

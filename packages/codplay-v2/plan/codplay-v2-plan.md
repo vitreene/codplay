@@ -100,6 +100,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours, base auteur fixée |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire, restructuration appliquée |
 | Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | En cours, gabarit documenté |
+| ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md) | Fixe, circuit logique unique en place |
 
 ## Modeles algorithmiques
 
@@ -135,7 +136,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Move | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach et diagnostics de seek en place; l'application de `reorderOnMove/Add/Remove` appartient a une capacite/service list, pas au move core ni a un composant unique. |
 | Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Implémenté et `A relire`. Le mode local est inféré pour une target inchangée; un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
-| ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Depend de events/tracks/materialize/ACE; les emissions de phase restent declarees. |
+| ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Expansion pure dans materialize, fonctions compilées dans resolve et frontière `tween:stop` en place; renderer continu, composition additive et live restent hors tranche. |
 | Capture et DnD | Capture live, commit `persist-only`, etat de capture, notification authoring; DnD comme commit move | Troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
 | Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine et les rapports structures par instance sont en place; conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
@@ -166,8 +167,8 @@ composants. Ni cette demo ni la verticale ne doivent ouvrir le renderer de produ
 - un behavior continu prepare par ACE;
 - des seeks nommes avant, pendant et apres les changements.
 
-Cette verticale de test ne couvre pas `move`, FLIP, containers, media, persos hotes, ActionSequence, preload
-partage ou seek multi-instance. Ces capacites sont absentes de ses types et fixtures, sans imitation.
+Cette verticale de test ne couvre pas `move`, FLIP, containers, media, persos hotes, preload partagé ou seek
+multi-instance. Les capacités non ouvertes restent absentes de ses types et fixtures, sans imitation.
 
 ### 3. Validation mouvement/list
 
@@ -200,8 +201,8 @@ solve).
 
 ### 5. Tranches de capacites
 
-Poursuivre par dependances : pipeline events/straps/tracks complet et ActionSequence; capture/DnD et
-authoring; media/preload; bindings tiers; diffusion/broadcast/telco. Chaque tranche commence par le contrat
+Poursuivre par dependances : capture/DnD et authoring; media/preload; bindings tiers; diffusion/broadcast/telco.
+Chaque tranche commence par le contrat
 V1 conserve ou la decision V2 necessaire, puis sa demo et ses tests.
 
 ## Sources de reference

@@ -25,6 +25,14 @@ describe('SceneBuilder', () => {
     expect(transformed).toMatchObject({
       move: { transition: { path: { kind: 'segments', traversal: 'arc-length' } } },
     })
+
+    const sequence = compileMovePath([{
+      durationMs: 120,
+      action: { move: { target: '@root', transition: { path: 'M 0 0 L 1 1' } } },
+    }], 'sequence')
+    expect(sequence).toMatchObject([{
+      action: { move: { transition: { path: { kind: 'segments' } } } },
+    }])
   })
 
   it('builds representative demo scenes with requirements, roots, and resources', () => {

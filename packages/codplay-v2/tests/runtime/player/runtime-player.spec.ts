@@ -21,7 +21,7 @@ import {
   PLAYER_LIFECYCLE_PAUSED,
   PLAYER_LIFECYCLE_PLAYING,
 } from '../../../src/runtime/player'
-import type { CompiledScene } from '../../../src/scene/compiled'
+import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -94,6 +94,60 @@ describe('RuntimePlayer', () => {
     expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
       expect.stringContaining('done'),
     )
+    player.destroy()
+  })
+
+  it('evaluates compiled TweenAction through the same reconstruction for seek and play', () => {
+    const tweenScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { opacity: 0 } },
+              actions: { run: { duration: 1000, fn: { ref: 'fn:opacity' } } },
+            }],
+            eventimes: [{ name: 'run', startAt: 0 }],
+          },
+        },
+      },
+    }
+    const functions: CompiledFunctionCollection = {
+      'fn:opacity': (input) => {
+        const { progress } = input as { progress: number }
+        return { style: { opacity: progress } }
+      },
+    }
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const player = new RuntimePlayer(
+      'tween-instance',
+      engine,
+      tweenScene,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      functions,
+    )
+
+    expect(player.init().ok).toBe(true)
+    expect(player.seek(500).ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.style).toMatchObject({ opacity: 0.5 })
+
+    player.seek(0)
+    player.play()
+    engine.advance(100)
+    engine.advance(600)
+    expect(player.getCurrentTimeMs()).toBe(500)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.style).toMatchObject({ opacity: 0.5 })
     player.destroy()
   })
 

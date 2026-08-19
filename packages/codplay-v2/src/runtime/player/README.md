@@ -65,6 +65,19 @@ may update the presentation immediately, while a later Seek reads the same
 source, emitted events, strap events and state updates without calling any
 strap or transform again.
 
+## Temporal actions
+
+`ActionSequence` is expanded during `materialize` into direct actions owned by
+the perso that declared the key. The expansion is pure: it never appends
+continuation events or creates a second replay path. A later occurrence replaces
+the pending steps of the same key; already-applied static steps remain facts,
+while a replaced `TweenAction` is no longer evaluated at the target.
+
+`TweenAction` is resolved from the player's compiled function collection with
+`progress = ease(clamp(elapsed / duration))`. Its returned payload uses the same
+state application as a static action. `tween:stop` is intercepted as a logical
+boundary and does not become a perso patch.
+
 ## Invariants
 
 - Logical state is never reconstructed from the DOM.
@@ -76,3 +89,5 @@ strap or transform again.
 - `RuntimeTrackJournal` is the only live event history; no dispatch path creates
   an undeclared track.
 - `seek()` is materialization-only for events, transforms and straps.
+- `ActionSequence` and `TweenAction` are derived and evaluated by the same
+  `materialize -> resolve -> solve` path for Play and Seek.

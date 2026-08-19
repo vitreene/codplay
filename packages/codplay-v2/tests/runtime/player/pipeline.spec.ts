@@ -20,7 +20,7 @@ import {
   TRACK_EVENT_ACTIVATE,
   TRACK_EVENT_DEACTIVATE,
 } from '../../../src/runtime/player'
-import type { CompiledScene } from '../../../src/scene/compiled'
+import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -227,6 +227,158 @@ describe('materialize -> resolve -> solve', () => {
 
     const dataResolved = resolveScene(materializeScene(scene, 450))
     expect(dataResolved.persos['main:root']?.state.className).toContain('data-active')
+  })
+
+  it('expands ActionSequence steps as one derived timeline and invalidates them on replacement', () => {
+    const sequenceScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { opacity: 0 }, className: 'idle' },
+              actions: {
+                sequence: [
+                  {
+                    durationMs: 100,
+                    action: { style: { opacity: { from: 0, to: 1, duration: 100, ease: 'linear' } } },
+                  },
+                  { action: { className: { add: 'done' } } },
+                ],
+              },
+            }],
+            eventimes: [{ name: 'sequence', startAt: 0 }],
+          },
+        },
+      },
+    }
+
+    const halfway = materializeScene(sequenceScene, 50).persos['main:root']?.actions
+    expect(halfway?.map((action) => action.startAt)).toEqual([0])
+    expect(resolveScene(materializeScene(sequenceScene, 50)).persos['main:root']?.state).toMatchObject({
+      className: 'idle',
+      style: { opacity: 0.5 },
+    })
+
+    const completed = materializeScene(sequenceScene, 100).persos['main:root']?.actions
+    expect(completed?.map((action) => action.startAt)).toEqual([0, 100])
+    expect(resolveScene(materializeScene(sequenceScene, 100)).persos['main:root']?.state).toMatchObject({
+      className: 'idle done',
+      style: { opacity: 1 },
+    })
+
+    const replacedScene: CompiledScene = {
+      ...sequenceScene,
+      scene: {
+        ...sequenceScene.scene,
+        stories: {
+          main: {
+            ...sequenceScene.scene.stories.main!,
+            eventimes: [
+              { name: 'sequence', startAt: 0 },
+              { name: 'sequence', startAt: 50 },
+            ],
+          },
+        },
+      },
+    }
+    const replaced = materializeScene(replacedScene, 60).persos['main:root']?.actions
+    expect(replaced?.map((action) => action.startAt)).toEqual([0, 50])
+  })
+
+  it('resolves compiled TweenAction functions at the same timeline position used by seek', () => {
+    const tweenScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { opacity: 0 } },
+              actions: {
+                run: { duration: 100, fn: { ref: 'fn:opacity' } },
+              },
+            }],
+            eventimes: [{ name: 'run', startAt: 20 }],
+          },
+        },
+      },
+    }
+
+    const functions: CompiledFunctionCollection = {
+      'fn:opacity': (input) => {
+        const { progress } = input as { progress: number }
+        return { style: { opacity: progress } }
+      },
+    }
+    expect(resolveScene(materializeScene(tweenScene, 70), functions).persos['main:root']?.state.style)
+      .toMatchObject({ opacity: 0.5 })
+    expect(resolveScene(materializeScene(tweenScene, 140), functions).persos['main:root']?.state.style)
+      .toMatchObject({ opacity: 1 })
+    expect(() => resolveScene(materializeScene(tweenScene, 70))).toThrow('TweenAction function is not available')
+
+    const replacedTweenScene: CompiledScene = {
+      ...tweenScene,
+      scene: {
+        ...tweenScene.scene,
+        stories: {
+          main: {
+            ...tweenScene.scene.stories.main!,
+            eventimes: [
+              { name: 'run', startAt: 20 },
+              { name: 'run', startAt: 50 },
+            ],
+          },
+        },
+      },
+    }
+    expect(materializeScene(replacedTweenScene, 70).persos['main:root']?.actions.map((action) => action.startAt))
+      .toEqual([50])
+  })
+
+  it('stops direct and sequenced TweenAction occurrences at the logical boundary', () => {
+    const stopScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { opacity: 0 } },
+              actions: {
+                run: { duration: 100, fn: { ref: 'fn:opacity' } },
+                'tween:stop': {},
+              },
+            }],
+            eventimes: [
+              { name: 'run', startAt: 0 },
+              { name: 'tween:stop', startAt: 40 },
+            ],
+          },
+        },
+      },
+    }
+    const functions: CompiledFunctionCollection = {
+      'fn:opacity': (input) => {
+        const { progress } = input as { progress: number }
+        return { style: { opacity: progress } }
+      },
+    }
+
+    expect(materializeScene(stopScene, 30).persos['main:root']?.actions).toHaveLength(1)
+    expect(materializeScene(stopScene, 60).persos['main:root']?.actions).toHaveLength(0)
+    expect(resolveScene(materializeScene(stopScene, 30), functions).persos['main:root']?.state.style)
+      .toMatchObject({ opacity: 0.3 })
   })
 
   it('resolves x and y style channels through ACE without changing placement', () => {

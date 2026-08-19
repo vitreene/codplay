@@ -70,7 +70,6 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 
 - helpers `live` et emissions liees aux frames;
 - annulation et generation obsolete des straps asynchrones;
-- ActionSequence et tweens continus;
 - effects non rejouables;
 - composants et renderer.
 

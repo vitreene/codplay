@@ -1,5 +1,6 @@
 import {
   parseColor,
+  parseEase,
   prepareTransformTween,
   prepareTween,
   resolveTween,
@@ -7,12 +8,16 @@ import {
   type TransformProperty,
 } from '../../../ace'
 import { isPlainRecord } from '../../../shared'
-import type { CompiledRecord, CompiledValue } from '../../../scene/compiled'
+import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
+import { isTweenAction } from './action-sequence'
 import type { MaterializedPerso, MaterializedScene, ResolvedPerso, ResolvedScene } from './types'
 
 /** Resolves discrete patches and continuous ACE values for one materialized scene. */
-export function resolveScene(materialized: MaterializedScene): ResolvedScene {
+export function resolveScene(
+  materialized: MaterializedScene,
+  functions: CompiledFunctionCollection = {},
+): ResolvedScene {
   const persos: Record<string, ResolvedPerso> = {}
   for (const perso of Object.values(materialized.persos)) {
     persos[perso.key] = {
@@ -20,7 +25,7 @@ export function resolveScene(materialized: MaterializedScene): ResolvedScene {
       storyId: perso.storyId,
       persoId: perso.persoId,
       type: perso.type,
-      state: resolvePerso(perso),
+      state: resolvePerso(perso, functions),
       ...resolvePlacement(perso),
     }
   }
@@ -40,17 +45,37 @@ function resolvePlacement(perso: MaterializedPerso): Pick<ResolvedPerso, 'placem
 }
 
 /** Resolves one perso without mutating compiled or materialized input data. */
-function resolvePerso(perso: MaterializedPerso): CompiledRecord {
+function resolvePerso(perso: MaterializedPerso, functions: CompiledFunctionCollection): CompiledRecord {
   const state = cloneRecord(perso.initial)
   normalizeStyleColors(state)
   for (const activeAction of perso.actions) {
-    applyAction(state, activeAction.action, activeAction.elapsedMs)
+    applyAction(state, activeAction.action, activeAction.elapsedMs, functions)
   }
   return state
 }
 
 /** Applies the supported discrete and continuous action groups. */
-function applyAction(state: Record<string, CompiledValue>, action: CompiledRecord, elapsedMs: number): void {
+function applyAction(
+  state: Record<string, CompiledValue>,
+  action: CompiledRecord,
+  elapsedMs: number,
+  functions: CompiledFunctionCollection,
+): void {
+  if (isTweenAction(action)) {
+    const payload = resolveTweenAction(action, elapsedMs, functions)
+    if (payload === undefined) return
+    applyActionPayload(state, payload, elapsedMs)
+    return
+  }
+  applyActionPayload(state, action, elapsedMs)
+}
+
+/** Applies one ordinary action payload after any continuous function evaluation. */
+function applyActionPayload(
+  state: Record<string, CompiledValue>,
+  action: CompiledRecord,
+  elapsedMs: number,
+): void {
   if (isPlainRecord(action.className)) {
     state.className = applyClassNamePatch(state.className, action.className)
   }
@@ -62,6 +87,40 @@ function applyAction(state: Record<string, CompiledValue>, action: CompiledRecor
     currentStyle[property] = resolveStyleValue(property, currentStyle[property], value, elapsedMs)
   }
   state.style = currentStyle
+}
+
+/** Evaluates one compiled TweenAction into an ordinary action payload. */
+function resolveTweenAction(
+  action: CompiledRecord,
+  elapsedMs: number,
+  functions: CompiledFunctionCollection,
+): CompiledRecord | undefined {
+  if (!isTweenAction(action)) return undefined
+  const fn = functions[action.fn.ref]
+  if (fn === undefined) {
+    throw new Error(`TweenAction function is not available: ${action.fn.ref}`)
+  }
+  const rawProgress = clamp(elapsedMs / action.duration, 0, 1)
+  const ease = parseEase(typeof action.ease === 'string' ? action.ease : 'linear')
+  const progress = ease(rawProgress)
+  let output: unknown
+  try {
+    output = fn({ progress, data: action })
+  } catch (error) {
+    throw new Error(
+      `TweenAction function failed: ${action.fn.ref}: ${error instanceof Error ? error.message : 'unknown error'}`,
+    )
+  }
+  if (output === undefined) return undefined
+  if (!isPlainRecord(output)) {
+    throw new Error(`TweenAction function must return a record or undefined: ${action.fn.ref}`)
+  }
+  return output as CompiledRecord
+}
+
+/** Clamps one continuous progress value to the closed interval [0, 1]. */
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value))
 }
 
 /** Resolves one explicit tween or preserves one direct style value. */

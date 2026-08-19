@@ -106,7 +106,6 @@ renderer ne sont pas ouverts.
 - composants et services runtime;
 - montage et racine DOM;
 - materialize, resolve et solve hierarchiques complets;
-- ActionSequence, effets et lifecycle applicatif;
 - rendu, preload et media;
 - demo produit et renderer de production;
 - contrat DOM public.

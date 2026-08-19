@@ -12,6 +12,7 @@ export { MountTargetRegistry } from './mount-targets'
 export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
 export { RuntimeEventDispatcher } from './runtime-event-dispatcher'
+export { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 export { executeListenPipeline, propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
@@ -53,6 +54,11 @@ export type {
   RuntimeEventDispatchResult,
   RuntimeEventInput,
 } from './runtime-event-dispatcher'
+export type {
+  CompiledActionSequenceStep,
+  CompiledTweenAction,
+  PlannedActionSequenceStep,
+} from './action-sequence'
 export type {
   ListenEventInput,
   ListenEventOutput,

@@ -37,6 +37,9 @@ Materialize :
 - porte l'elapsed time de chaque action active vers l'etape suivante.
 - ignore les occurrences des tracks desactivees;
 - preserve les metadonnees de track et le chemin de declaration dans l'action materialisee.
+- derive les steps `ActionSequence` depuis leur occurrence source sans les append dans le journal;
+- invalide les steps différés remplacés par une occurrence ultérieure de la même clé;
+- traite `tween:stop` comme une frontière logique, jamais comme un patch de perso.
 
 La premiere tranche reconnait les declarations statiques `global`, story, `story.trackId`,
 scene et story. Elle ne permet pas encore d'ajouter une track pendant la lecture.
@@ -56,11 +59,13 @@ patches d'etat suivent exactement la meme selection de journal.
 
 ## Resolve
 
-`resolveScene(materialized)` produit un etat de perso resolu :
+`resolveScene(materialized, functions?)` produit un etat de perso resolu :
 
 - les patches `className` sont appliques dans l'ordre materialise;
 - les tweens `style` scalaires sont prepares et resolus par ACE;
 - les couleurs sont normalisees par l'adapter avant ACE;
+- les `TweenAction` compilées appellent leur fonction extraite avec un progrès
+  pur et leur payload retourne passe par la même application d'action;
 - les donnees compilees ne sont jamais mutilees.
 
 Resolve ne compose pas encore les ancetres et ne projette pas vers un substrat.
@@ -118,7 +123,6 @@ leur entree dans ce registre.
 
 ## Hors perimetre
 
-- ActionSequence et tweens continus;
 - annulation de straps asynchrones et generations obsoletes;
 - `live`, capture et DnD;
 - hierarchie, move, FLIP et matrices d'ancetres;
