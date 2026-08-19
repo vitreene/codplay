@@ -64,8 +64,8 @@ function createS3RobustesseScene(): SceneDoc {
             type: 'text',
             initial: { tag: 'div', content: 'CARD', move: { target: 'robust-stage' } },
             actions: {
-              'sequence:robustesse:promote': { move: { target: 'robust-overlay', flipMode: 'overlay-world' } },
-              'sequence:robustesse:return': { move: { target: 'robust-stage', flipMode: 'overlay-world' } },
+              'sequence:robustesse:promote': { move: { target: 'robust-overlay', flipMode: 'overlay-world', transition: { duration: 400 } } },
+              'sequence:robustesse:return': { move: { target: 'robust-stage', flipMode: 'overlay-world', transition: { duration: 400 } } },
             },
           },
         ],

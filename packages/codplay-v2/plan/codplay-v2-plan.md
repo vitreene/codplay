@@ -73,6 +73,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
 | Composants | Fondation layout en cours | `LayoutComponent`, `TagComponent`, factories runtime et projection template string sont couverts ; JSX et les autres types restent hors tranche. |
 | ACE | Existant, non modifie | Il reste consommateur de valeurs completes; la preparation amont est a construire. |
+| Mouvement HTML | Graphe V2 implémenté, `A relire` | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -96,6 +97,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 |---|---|---|
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours |
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours, base auteur fixée |
+| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire, restructuration appliquée |
 
 ## Modeles algorithmiques
 
@@ -106,7 +108,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Etat discret | FRP Event puis behavior en escalier | Un fait date ouvre une plage de validite interrogeable a `t`. |
 | Placement | Scene graph, tri topologique, dirty flags | Le graphe se resout parent avant enfant; les optimisations ne changent pas sa semantique. |
 | Etat applique | Reconciler | Le composant applique les deltas et reste le seul ecrivain. |
-| Seek-FLIP | Mesure irreductible | La mesure est une entree du calcul de geometrie, jamais une relecture du modele depuis le DOM. |
+| Mouvement visuel HTML | Graphe temporel par item et mesure d'endpoints isolée | Play et Seek évaluent la même frame à `t`; la mesure est une entrée versionnée et ne relit jamais le modèle depuis le DOM visible. |
 
 Ces modeles commandent les types, signatures, classes et tests. Ils ne justifient aucun framework importe.
 
@@ -120,16 +122,16 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
 | CompiledScene | Schema versionne, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; base de diffusion et d'exports. |
 | Engine | Catalogue de composants, modules, services, bindings tiers; cache, styles, horloge et ordre de tick | Fournit les capacites declarees; ne lit pas `SceneDoc`. |
-| Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Transmet les `MoveStateDelta` a la projection ; FLIP reste un wrapper de projection optionnel. |
+| Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Play et Seek résolvent le même état et la même frame absolue. |
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Propagation, executeur, collections, snapshots d'etat, validation init, sorties event et updates rejouables en place; loop et helpers live restent a specifier. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Plan Temporel Declaratif fini pour les formes bornees; tout contrat live reste exclu et a specifier avec `f(t)`. |
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime et controles d'activation en place; straps restent a ouvrir. |
 | Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick et graphe parent/enfant en place; transforms, mesures, diagnostics et politiques de liste restent a ouvrir. |
 | Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | Le catalogue engine declare les types; chaque player instancie ses composants. |
 | Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reprend son contrat V1 comme capacite declaree, avec ses fixtures et ses demos; aucune ne devient un patch generique de `style`. |
-| Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | `ListCapabilityState` pure consomme les deltas move; integration composants, services catalogues et POC FLIP/list restent a ouvrir. |
+| Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach et diagnostics de seek en place; l'application de `reorderOnMove/Add/Remove` appartient a une capacite/service list, pas au move core ni a un composant unique. |
-| FLIP et overlay-world | Snapshots avant/apres, matrices, geometrie et transitions visuelles, coordination list/backend DOM | Contrat V2 de frontiere dans `plan/flip-list-coordination-plan.md`; backend DOM depend de mesure, move et composants. |
+| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Implémenté et `A relire`. Le mode local est inféré pour une target inchangée; un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Depend de events/tracks/materialize/ACE; les emissions de phase restent declarees. |
 | Capture et DnD | Capture live, commit `persist-only`, etat de capture, notification authoring; DnD comme commit move | Troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
@@ -139,7 +141,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogues et ModuleServices player-scoped | `RuntimeModuleServiceCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place. |
 | Authoring | Construction de SceneDoc, canal authoring local, observation de PersoState et capture | Separe du player de diffusion et du protocole de pilotage. |
 | Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | Packaging fin et transport distant reportes; ne pas melanger avec authoring. |
-| Tests | Fixtures, horloge deterministe, traces, comparateurs V1/V2, assertions de paradigme et baselines DOM/geometriques | Transversal, commence avec la premiere verticale et devient complet apres le POC FLIP. |
+| Tests | Fixtures, horloge deterministe, traces, comparateurs V1/V2, assertions de paradigme et baselines DOM/geometriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
 
 ## Ordre de construction
 
@@ -165,14 +167,17 @@ composants. Ni cette demo ni la verticale ne doivent ouvrir le renderer de produ
 Cette verticale de test ne couvre pas `move`, FLIP, containers, media, persos hotes, ActionSequence, preload
 partage ou seek multi-instance. Ces capacites sont absentes de ses types et fixtures, sans imitation.
 
-### 3. POC FLIP/list
+### 3. Validation mouvement/list
 
-Reprendre semantiquement `player-poc` dans `packages/codplay-v2/demos/`. Le POC valide ensemble composants,
+La démo runner dans `packages/codplay-v2/demos/validation/` valide ensemble composants,
 containers, move, ordre parent/enfant, ordre des enfants, conflits same-tick, `@root`, `@off`,
 detach/reattach, mesures, FLIP, overlay-world et seek.
 
-Le seek reconstruit l'etat logique et le montage cible; il ne rejoue pas les animations FLIP locales. Les
-baselines V1 `player-poc` et `overlay-world-seek-baseline` deviennent les oracles du POC.
+Le seek reconstruit l'etat logique puis évalue le même graphe de mouvement et la
+même frame de présentation que Play au temps demandé. Il ne rejoue pas les
+événements et ne dépend pas des temps visités auparavant. Les baselines V1
+`player-poc` et `overlay-world-seek-baseline` restent des oracles visuels, mais
+les invariants numériques Play/Seek du plan de restructuration sont normatifs.
 
 ### 4. Cadre comparatif V2
 

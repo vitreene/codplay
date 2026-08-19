@@ -17,15 +17,6 @@ export { RenderSync } from './render-sync'
 export { LayoutDomBackend } from './layout-dom-backend'
 export type { LayoutProjectionNodes } from './layout-dom-backend'
 export type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
-export {
-  MoveFlipLayoutProjection,
-  createHtmlFlipOverlayContentState,
-  type MoveFlipCaptureBuilder,
-  type MoveFlipCaptureDescription,
-  type MoveFlipLayoutProjectionOptions,
-} from './flip/move-flip-layout-projection'
-export { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './flip/move-flip-transition'
-export { MoveTransitionJournal, type MoveTransitionOccurrence } from './move-transition-journal'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,
@@ -67,10 +58,11 @@ export {
 export type { MoveFlipMode } from '../config/move'
 export { diffSolvedScenes, selectEffectiveMove } from '../move'
 export type { MovePolicyResult, MoveStateDelta } from '../move'
-export { createListModuleServiceDefinition, ListCapabilityState, LIST_MODULE_SERVICE_ID } from '../capabilities/list'
-export type { ListCapabilityConfig } from '../capabilities/list'
+export { createListModuleServiceDefinition, LIST_MODULE_SERVICE_ID } from '../capabilities/list'
+export { StructuralTimeline, collectCompiledEventStartTimes, type StructuralSnapshot } from './structural-timeline'
 export {
   materializeScene,
+  materializeSceneBeforeBoundary,
   resolveScene,
   solveScene,
   buildSolvedGraph,

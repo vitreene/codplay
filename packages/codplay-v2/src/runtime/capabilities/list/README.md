@@ -1,41 +1,22 @@
 # List Capability V2
 
-Status: En cours  
-CodPlay version: V2 foundation
+> Status: A relire
+> CodPlay version: V2 foundation
 
-## Role
+The list module is now a capability marker. Ordered membership is part of the
+canonical `SolvedGraph` and its immutable `StructuralTimeline`; list no longer
+maintains mutable state, touched sets, capture groups or a historical replay.
 
-`ListCapabilityState` is a pure capability/service state. It consumes generic
-`mount`, `unmount`, and `move` deltas produced by the move core and maintains
-logical parent, mounted state, and child order for registered list targets.
+The structural reducer applies one complete event boundary at a time:
 
-The list capability is cross-layer by contract: its state coordinates the affected
-item set and batched render ordering before projection.
-`ListCapabilityState` now publishes authoritative child order and a consumed
-touched-item snapshot to the player projection boundary. The snapshot contains no
-DOM handle and does not perform FLIP itself.
+1. remove moved or detached items from their previous target;
+2. insert mounted items according to `first`, `last`, numeric or automatic mode;
+3. reconcile exact membership against the solved scene;
+4. freeze the complete order snapshot.
 
-`createListModuleServiceDefinition()` wraps this state for the engine module-service catalog. The
-factory receives the initial solved scene and subsequent move deltas through the
-player lifecycle. Its `prepareSeek` hook stages a replacement state from the
-historical layout snapshot before the grouped commit; it does not create a
-second projection path.
+An intra-list reorder keeps the same target and is presented as local movement by
+default. A transfer to another list changes target and is classified as reparent
+movement by the motion graph. This inference does not require `flipMode`.
 
-It does not create components, read the DOM, perform FLIP, or assume one list
-component implementation. Renderer and component adapters consume its snapshots.
-
-## Contract
-
-- list target IDs are opaque;
-- reorder policies are owned by the capability configuration;
-- explicit move modes override disabled automatic reorder policies;
-- transfer is processed as source removal followed by target insertion;
-- the capability is deterministic and replayable from move deltas.
-
-For a cold historical HTML presentation, the player creates a temporary module
-instance, initializes it from the `t=0` solved scene, and replays compiled event
-boundaries up to the requested scene before consuming the layout snapshot. The
-live player-scoped instance is not modified by this replay. The resulting
-snapshot is then committed through the same `LayoutProjection.project()` call
-used by Play; Play and Seek therefore consume one structural contract rather
-than maintaining separate list-order algorithms.
+The list capability does not read the DOM, measure geometry or perform visual
+projection.

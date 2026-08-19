@@ -251,12 +251,17 @@ export class RuntimeTrackJournal {
   }
 
   /** Returns replayable state patches in deterministic timeline order. */
-  getStateUpdates(scope: StrapScope, storyId: string | undefined, timeMs: number): readonly RuntimeTrackEvent[] {
+  getStateUpdates(
+    scope: StrapScope,
+    storyId: string | undefined,
+    timeMs: number,
+    includeBoundary = true,
+  ): readonly RuntimeTrackEvent[] {
     return [...this.eventsByTrack.values()]
       .flatMap((events) => events)
       .filter((event) => event.update !== undefined
         && event.stateScope === scope
-        && event.applyAtMs <= timeMs
+        && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
       .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
   }

@@ -362,8 +362,8 @@ describe('RuntimePlayer', () => {
     expect(projectedTimes).toEqual([0, 100, -1])
   })
 
-  it('injects list-owned order and touched items into the layout projection', () => {
-    const events: Array<Readonly<{ timeMs: number; order?: readonly string[]; touched?: readonly string[] }>> = []
+  it('resolves list order from the same structural timeline used by projection', () => {
+    const events: Array<Readonly<{ timeMs: number; order?: readonly string[] }>> = []
     const catalog = new RuntimeModuleServiceCatalog()
     catalog.register(createListModuleServiceDefinition())
     const listScene: CompiledScene = {
@@ -392,11 +392,10 @@ describe('RuntimePlayer', () => {
       { moduleServiceCatalog: catalog },
     )
     const projection = {
-      project: (solved: SolvedScene, context?: { layoutState?: { childrenByTarget?: Readonly<Record<string, readonly string[]>>; touchedItemIds?: readonly string[] } }) => {
+      project: (solved: SolvedScene) => {
         events.push({
           timeMs: solved.timeMs,
-          order: context?.layoutState?.childrenByTarget?.list,
-          touched: context?.layoutState?.touchedItemIds,
+          order: solved.graph.childrenByTarget.list,
         })
       },
     }
@@ -410,11 +409,10 @@ describe('RuntimePlayer', () => {
     expect(events[1]).toEqual({
       timeMs: 100,
       order: ['main:second', 'main:first'],
-      touched: ['main:first', 'main:second'],
     })
   })
 
-  it('replays list order for a historical projection without mutating the current module state', () => {
+  it('resolves historical list order directly from the structural timeline', () => {
     const catalog = new RuntimeModuleServiceCatalog()
     catalog.register(createListModuleServiceDefinition())
     const listScene: CompiledScene = {
@@ -447,18 +445,8 @@ describe('RuntimePlayer', () => {
     ])
 
     expect(player.init().ok).toBe(true)
-    const historical = player.getHistoricalLayoutProjectionState(player.resolveSceneAt(100))
-
-    expect(historical).toMatchObject({
-      childrenByTarget: { list: ['main:second', 'main:first'] },
-      touchedItemIds: ['main:first', 'main:second'],
-      graphRevision: player.resolveSceneAt(100).graph.revision,
-    })
-    expect(player.getHistoricalLayoutProjectionState(player.resolveSceneAt(0))).toMatchObject({
-      childrenByTarget: { list: ['main:first', 'main:second'] },
-      touchedItemIds: [],
-      graphRevision: player.resolveSceneAt(0).graph.revision,
-    })
+    expect(player.resolveSceneAt(100).graph.childrenByTarget.list).toEqual(['main:second', 'main:first'])
+    expect(player.resolveSceneAt(0).graph.childrenByTarget.list).toEqual(['main:first', 'main:second'])
     player.destroy()
   })
 })

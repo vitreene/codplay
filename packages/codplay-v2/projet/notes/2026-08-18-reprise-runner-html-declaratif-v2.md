@@ -1,5 +1,10 @@
 # Reprise V2 — runner HTML déclaratif et stress-test FLIP
 
+> Note historique remplacée le 2026-08-19 par
+> [`plan/runner-flip-integration-study.md`](../../plan/runner-flip-integration-study.md).
+> Les captures, bridges et runtimes FLIP nommés ci-dessous ont été supprimés ;
+> ils ne décrivent plus l'architecture V2 courante.
+
 ## Statut
 
 Status: En cours  

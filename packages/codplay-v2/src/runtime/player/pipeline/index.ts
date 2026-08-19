@@ -1,4 +1,4 @@
-export { materializeScene } from './materialize'
+export { materializeScene, materializeSceneBeforeBoundary } from './materialize'
 export { resolveScene } from './resolve'
 export { solveScene } from './solve'
 export {

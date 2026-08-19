@@ -26,15 +26,8 @@ export class LayoutDomBackend implements LayoutProjection {
   project(scene: SolvedScene, contextOrNodes?: LayoutProjectionContext | LayoutProjectionNodes): void {
     const nodes = isLayoutProjectionNodes(contextOrNodes) ? contextOrNodes : this.defaultNodes
     if (nodes === undefined) throw new Error('Layout DOM backend nodes are not configured.')
-    if (!isLayoutProjectionNodes(contextOrNodes)
-      && contextOrNodes?.layoutState?.graphRevision !== undefined
-      && contextOrNodes.layoutState.graphRevision !== scene.graph.revision) {
-      throw new Error('Layout projection state belongs to a different solved graph revision.')
-    }
     if (!isLayoutProjectionNodes(contextOrNodes)) contextOrNodes?.authoredSync?.(scene)
-    const childrenByTarget = isLayoutProjectionNodes(contextOrNodes)
-      ? resolvePresentationOrder(scene)
-      : resolvePresentationOrder(scene, contextOrNodes?.layoutState?.childrenByTarget)
+    const childrenByTarget = resolvePresentationOrder(scene)
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
         .filter((perso) => perso.placement.mounted)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { worldDeltaToLocalDelta } from '../../../src/runtime/flip/html-pose'
-import type { HtmlMatrix } from '../../../src/runtime/flip/types'
+import { worldDeltaToLocalDelta } from '../../../src/runtime/motion/html-pose'
+import type { HtmlMatrix } from '../../../src/runtime/motion/html-types'
 
 describe('V2 HTML pose host math', () => {
   it('keeps an identity parent delta unchanged', () => {

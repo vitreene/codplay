@@ -21,7 +21,19 @@ import type { PersoDoc, SceneDoc } from '../../../../codplay-v2/src/scene/types'
 import './style.css'
 
 type ContainerId = 'stress-a' | 'stress-b' | 'stress-c' | 'stress-d'
-type ContentId = 'qa' | 'qb' | 'qc' | 'ka' | 'kb' | 'kc'
+type ContentId =
+  | 'qa'
+  | 'qb'
+  | 'qc'
+  | 'qd'
+  | 'qe'
+  | 'qf'
+  | 'ka'
+  | 'kb'
+  | 'kc'
+  | 'kd'
+  | 'ke'
+  | 'kf'
 type OwnerId = 'q' | 'k'
 
 type ContentExchange = Readonly<{
@@ -45,7 +57,20 @@ const TIMELINE_END_MS = 10_000
 const CONTENT_EASE = 'inOutQuad'
 
 const CONTAINER_IDS: readonly ContainerId[] = ['stress-a', 'stress-b', 'stress-c', 'stress-d']
-const CONTENT_IDS: readonly ContentId[] = ['qa', 'qb', 'qc', 'ka', 'kb', 'kc']
+const CONTENT_IDS: readonly ContentId[] = [
+  'qa',
+  'qb',
+  'qc',
+  'qd',
+  'qe',
+  'qf',
+  'ka',
+  'kb',
+  'kc',
+  'kd',
+  'ke',
+  'kf',
+]
 
 const CONTENT_EXCHANGES: readonly ContentExchange[] = [
   { name: 'exchange-qa', timeMs: CONTENT_FIRST_EXCHANGE_MS, itemId: 'qa', from: 'q', to: 'k' },
@@ -54,15 +79,27 @@ const CONTENT_EXCHANGES: readonly ContentExchange[] = [
   { name: 'exchange-kb', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 3, itemId: 'kb', from: 'k', to: 'q' },
   { name: 'exchange-qc', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 4, itemId: 'qc', from: 'q', to: 'k' },
   { name: 'exchange-kc', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 5, itemId: 'kc', from: 'k', to: 'q' },
+  { name: 'exchange-qd', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 6, itemId: 'qd', from: 'q', to: 'k' },
+  { name: 'exchange-kd', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 7, itemId: 'kd', from: 'k', to: 'q' },
+  { name: 'exchange-qe', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 8, itemId: 'qe', from: 'q', to: 'k' },
+  { name: 'exchange-ke', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 9, itemId: 'ke', from: 'k', to: 'q' },
+  { name: 'exchange-qf', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 10, itemId: 'qf', from: 'q', to: 'k' },
+  { name: 'exchange-kf', timeMs: CONTENT_FIRST_EXCHANGE_MS + CONTENT_EXCHANGE_SPACING_MS * 11, itemId: 'kf', from: 'k', to: 'q' },
 ]
 
 const ITEM_LABELS: Readonly<Record<ContentId, string>> = {
   qa: 'Qa',
   qb: 'Qb',
   qc: 'Qc',
+  qd: 'Qd',
+  qe: 'Qe',
+  qf: 'Qf',
   ka: 'Ka',
   kb: 'Kb',
   kc: 'Kc',
+  kd: 'Kd',
+  ke: 'Ke',
+  kf: 'Kf',
 }
 
 /** Creates one container layout with a public outlet for a transfer parent. */
@@ -100,7 +137,6 @@ function contentPerso(exchange: ContentExchange): PersoDoc {
       [exchange.name]: {
         move: {
           target,
-          flipMode: 'overlay-world',
           transition: { duration: CONTENT_DURATION_MS, ease: CONTENT_EASE },
         },
       },
@@ -182,7 +218,6 @@ function createStressScene(): SceneDoc {
               transferQ: {
                 move: {
                   target: 'stress-b-outlet',
-                  flipMode: 'overlay-world',
                   transition: { duration: TRANSFER_DURATION_MS, ease: CONTENT_EASE },
                 },
               },
@@ -199,7 +234,6 @@ function createStressScene(): SceneDoc {
               transferK: {
                 move: {
                   target: 'stress-c-outlet',
-                  flipMode: 'overlay-world',
                   transition: { duration: TRANSFER_DURATION_MS, ease: CONTENT_EASE },
                 },
               },
@@ -326,11 +360,11 @@ function readContentOwner(runner: HtmlPlayerRunner, contentId: ContentId): strin
 
 /** Reads runner-owned overlay diagnostics without touching the projection runtime. */
 function readOverlayDiagnostics(root: HTMLElement): { ghosts: number; hidden: number } {
-  const layer = root.querySelector<HTMLElement>('[data-selection-frame-overlay]')
+  const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
   if (layer === null) return { ghosts: 0, hidden: 0 }
   return {
     ghosts: layer.children.length,
-    hidden: layer.querySelectorAll('[data-codplay-flip-hidden]').length,
+    hidden: layer.querySelectorAll('[data-codplay-motion-hidden]').length,
   }
 }
 
@@ -357,7 +391,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
       <aside>
         <p class="eyebrow">CodPlay V2 / HtmlPlayerRunner</p>
         <h1>FLIP Stress Test</h1>
-        <p class="subtitle">SceneDoc déclarative : quatre containers mobiles, deux transferts imbriqués et six échanges alternés.</p>
+        <p class="subtitle">SceneDoc déclarative : quatre containers mobiles, deux transferts imbriqués et douze échanges alternés.</p>
         <div class="demo-controls">
           <button id="stress-play" class="demo-button" type="button">Play</button>
           <button id="stress-reset" class="demo-button demo-button-secondary" type="button">Reset</button>
@@ -375,7 +409,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
         </div>
         <div id="stress-status" class="player-state">Prêt. Lancez le stress-test déclaratif.</div>
         <div id="stress-debug" class="player-state stress-status"></div>
-        <p class="stress-legend">A/B : mouvement continu dès FIRST. C/D : apparition à 1s. Q/K : transfert world de 1s à 9s. Les contenus s'échangent toutes les 0,5s de 1,2s à 3,7s.</p>
+        <p class="stress-legend">A/B : mouvement continu dès FIRST. C/D : apparition à 1s. Q/K : transfert world de 1s à 9s. Les contenus s'échangent toutes les 0,5s de 1,2s à 6,7s.</p>
         <pre id="stress-error" class="stress-error" hidden></pre>
       </aside>
       <div class="container">
@@ -454,7 +488,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
     play.textContent = 'Pause'
   }
 
-  debug.textContent = `SceneDoc: ${HOST_ID}\nRunner-owned capture and overlay lifecycle\nContainers: A/B 0→10000ms, C/D 1000→10000ms\nQ/K: 1000→9000ms\nContent: ${CONTENT_EXCHANGES.map((exchange) => `${exchange.timeMs}ms ${exchange.itemId}`).join(', ')}`
+  debug.textContent = `SceneDoc: ${HOST_ID}\nRunner-owned motion graph and overlay lifecycle\nContainers: A/B 0→10000ms, C/D 1000→10000ms\nQ/K: 1000→9000ms\nContent: ${CONTENT_EXCHANGES.map((exchange) => `${exchange.timeMs}ms ${exchange.itemId}`).join(', ')}`
   showError(error, [])
   play.addEventListener('click', togglePlay)
   reset.addEventListener('click', () => {

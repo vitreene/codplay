@@ -13,7 +13,6 @@ import type {
 import {
   HtmlPlayerRunner,
   createDomComponentServiceCatalog,
-  type HtmlPlayerRunnerOptions,
 } from '../../../src/runtime/runner'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import { ValidationCatalog } from '../../../src/scene/validation'
@@ -33,10 +32,9 @@ type DemoScenario = Readonly<{
   title: string
   description: string
   note: string
-  touched: string
-  modes: string
+  animatedItems: string
+  projections: string
   scene: SceneDoc
-  resolveFlipAncestorRegime?: HtmlPlayerRunnerOptions['resolveFlipAncestorRegime']
   listPersoId: string
   inspectedPersoIds: readonly string[]
 }>
@@ -74,25 +72,6 @@ function createListScene(): SceneDoc {
           },
           actions: {},
         }, {
-          id: 'item-a',
-          type: 'tag',
-          initial: {
-            tag: 'article',
-            move: { target: 'source-outlet' },
-            className: 'flip-item flip-item--a',
-            content: 'A / mover',
-          },
-          actions: {
-            transfer: {
-              move: {
-                target: 'target-list',
-                mode: 'first',
-                flipMode: 'local',
-                transition: { duration: MOVE_DURATION_MS, ease: 'linear' },
-              },
-            },
-          },
-        }, {
           id: 'item-b',
           type: 'tag',
           initial: {
@@ -112,6 +91,24 @@ function createListScene(): SceneDoc {
             content: 'C / sibling',
           },
           actions: {},
+        }, {
+          id: 'item-a',
+          type: 'tag',
+          initial: {
+            tag: 'article',
+            move: { target: 'target-list' },
+            className: 'flip-item flip-item--a',
+            content: 'A / mover',
+          },
+          actions: {
+            transfer: {
+              move: {
+                target: 'target-list',
+                mode: 'first',
+                transition: { duration: MOVE_DURATION_MS, ease: 'linear' },
+              },
+            },
+          },
         }],
         listen: [],
         eventimes: [{ name: 'transfer', startAt: MOVE_START_MS }],
@@ -157,14 +154,13 @@ function createNestedOverlayScene(): SceneDoc {
           type: 'layout',
           initial: {
             move: { target: 'source-outlet' },
-            markup: '<article class="nested-overlay-parent"><span class="nested-overlay-parent__label">P / parent ghost</span><div class="nested-overlay-parent__outlet" data-part="parent-outlet-a"></div><div class="nested-overlay-parent__outlet nested-overlay-parent__outlet--last" data-part="parent-outlet-b"></div></article>',
+            markup: '<article class="nested-overlay-parent"><span class="nested-overlay-parent__label">P / reparent overlay</span><div class="nested-overlay-parent__outlet" data-part="parent-outlet-a"></div><div class="nested-overlay-parent__outlet nested-overlay-parent__outlet--last" data-part="parent-outlet-b"></div></article>',
           },
           actions: {
             transfer: {
               move: {
                 target: 'overlay-target-list',
                 mode: 'first',
-                flipMode: 'overlay-world',
                 transition: { duration: MOVE_DURATION_MS, ease: 'linear' },
               },
             },
@@ -176,13 +172,12 @@ function createNestedOverlayScene(): SceneDoc {
             tag: 'div',
             move: { target: 'parent-outlet-a' },
             className: 'nested-overlay-child',
-            content: 'Q / child ghost',
+            content: 'Q / nested reparent',
           },
           actions: {
             transfer: {
               move: {
                 target: 'parent-outlet-b',
-                flipMode: 'overlay-world',
                 transition: { duration: MOVE_DURATION_MS, ease: 'linear' },
               },
             },
@@ -215,7 +210,7 @@ function createNestedOverlayScene(): SceneDoc {
   }
 }
 
-/** Creates the author validation catalog for the list FLIP scene. */
+/** Creates the author validation catalog for the movement scenes. */
 function createValidationCatalog(): ValidationCatalog {
   const catalog = new ValidationCatalog()
   catalog.registerComponent({
@@ -249,7 +244,7 @@ function buildScene(scene: SceneDoc): ReturnType<SceneBuilder['build']> {
   }).build(scene)
 }
 
-/** Creates the runtime catalog shared by the list FLIP host. */
+/** Creates the runtime catalog shared by the movement host. */
 function createComponentCatalog(): RuntimeComponentCatalog {
   const catalog = new RuntimeComponentCatalog()
   const definitions: readonly RuntimeComponentDefinition[] = [{
@@ -273,37 +268,31 @@ function createComponentCatalog(): RuntimeComponentCatalog {
   return catalog
 }
 
-/** Declares the host-owned historical layout cut for the overlay scenario. */
-const resolveNestedOverlayAncestorRegime: NonNullable<HtmlPlayerRunnerOptions['resolveFlipAncestorRegime']> = ({ ancestorId }) => (
-  ancestorId === 'main:overlay-target-layout' ? 'layout' : 'stable'
-)
-
 /** Describes the browser scenarios exposed by this validation vertical. */
 const demoScenarios: Readonly<Record<ScenarioId, DemoScenario>> = {
   list: {
     id: 'list',
     label: 'List / local FLIP',
     runnerId: 'html-runner-list-flip',
-    title: 'One reorder, three captured items',
-    description: `Item A enters the target list at ${MOVE_START_MS}ms with mode <code>first</code>. The list owns the order and touched set, so the local FLIP capture includes A, B and C.`,
-    note: `At ${MOVE_START_MS}ms the list changes from [B, C] to [A, B, C]. A cold seek reconstructs the move's before/after scenes, measures them temporarily, restores the current scene, then reuses the numeric capture.`,
-    touched: 'A+B+C',
-    modes: 'local',
+    title: 'Local reorder inside one list',
+    description: `A already belongs to the list and moves from last to first at ${MOVE_START_MS}ms. With no <code>flipMode</code>, the unchanged target selects local projection for A, B and C.`,
+    note: `The structural order changes from [B, C, A] to [A, B, C]. Play and Seek resolve the same absolute graph frame; no historical presentation is replayed.`,
+    animatedItems: 'A+B+C',
+    projections: 'local (inferred)',
     scene: createListScene(),
     listPersoId: 'main:target-list',
     inspectedPersoIds: ['main:item-a'],
   },
   'nested-overlay': {
     id: 'nested-overlay',
-    label: 'Nested overlays / layout cut',
+    label: 'Nested reparent / overlay',
     runnerId: 'html-runner-nested-overlay-flip',
-    title: 'Parent and child ghosts share one capture',
-    description: `At ${MOVE_START_MS}ms P moves into the target list and Q changes outlet inside P. Both use <code>overlay-world</code>; B and C remain local siblings below the declared <code>layout</code> cut.`,
-    note: `At the middle checkpoint the parent ghost contains a hidden Q clone while Q owns its independent ghost. At LAST the source nodes are visible again and the overlay layer is empty.`,
-    touched: 'P+Q+B+C',
-    modes: 'P/Q overlay-world · B/C local',
+    title: 'Nested reparent projections',
+    description: `At ${MOVE_START_MS}ms P changes container and Q changes outlet inside P. With no <code>flipMode</code>, both target changes infer independent reparent overlays while B and C keep local reflow segments.`,
+    note: `At the middle checkpoint P and Q each own one overlay representation; Q is hidden in P's clone. At LAST all source nodes are visible and the overlay layer is empty.`,
+    animatedItems: 'P+Q+B+C',
+    projections: 'P/Q reparent (inferred) · B/C local',
     scene: createNestedOverlayScene(),
-    resolveFlipAncestorRegime: resolveNestedOverlayAncestorRegime,
     listPersoId: 'main:overlay-target-list',
     inspectedPersoIds: ['main:overlay-parent', 'main:overlay-child'],
   },
@@ -316,7 +305,7 @@ function start(): void {
   app.innerHTML = `
     <main class="flip-shell">
       <header class="flip-header">
-      <p class="flip-eyebrow">CodPlay V2 / declarative runner + FLIP</p>
+      <p class="flip-eyebrow">CodPlay V2 / declarative movement graph</p>
       <label class="flip-scenario" for="scenario-select">
         <span>Validation scenario</span>
         <select id="scenario-select">
@@ -324,7 +313,7 @@ function start(): void {
           <option value="nested-overlay">${demoScenarios['nested-overlay'].label}</option>
         </select>
       </label>
-      <h1 id="scenario-title">One reorder, three captured items</h1>
+      <h1 id="scenario-title">Local reorder inside one list</h1>
       <p id="scenario-description"></p>
       </header>
       <section class="flip-scene" id="flip-root" aria-label="FLIP validation scene"></section>
@@ -403,9 +392,6 @@ function start(): void {
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
       componentCatalog: createComponentCatalog(),
       serviceCatalog: createDomComponentServiceCatalog(),
-      ...(currentScenario.resolveFlipAncestorRegime === undefined
-        ? {}
-        : { resolveFlipAncestorRegime: currentScenario.resolveFlipAncestorRegime }),
     })
     const init = runner.init()
     if (!init.ok) {
@@ -417,7 +403,7 @@ function start(): void {
     }
   }
 
-  /** Presents the current scene order and FLIP state in the controls. */
+  /** Presents the current scene order and movement state in the controls. */
   function present(): void {
     const activeRunner = runner
     if (activeRunner !== undefined) {
@@ -427,7 +413,7 @@ function start(): void {
       const overlay = readOverlayDiagnostics(root)
       seek.value = String(Math.min(TIMELINE_END_MS, currentTime))
       time.value = `${Math.round(currentTime)} ms`
-      status.textContent = `${activeRunner.getLifecycleState()} / list: ${readListOrder(list)} / inspected: ${readScenarioNodes(inspectedNodes)} / modes: ${currentScenario.modes} / touched: ${currentScenario.touched} / overlay: ${overlay.ghosts} ghosts, ${overlay.hidden} hidden clones / epoch: ${activeRunner.getProjectionEpoch()}`
+      status.textContent = `${activeRunner.getLifecycleState()} / list: ${readListOrder(list)} / inspected: ${readScenarioNodes(inspectedNodes)} / projection: ${currentScenario.projections} / animated: ${currentScenario.animatedItems} / overlay: ${overlay.ghosts} representations, ${overlay.hidden} hidden clones / epoch: ${activeRunner.getProjectionEpoch()}`
       if (playing && currentTime >= TIMELINE_END_MS) {
         activeRunner.pause()
         playing = false
@@ -513,11 +499,11 @@ function readListOrder(node: unknown): string {
 
 /** Reads the temporary overlay layer and its hidden clone markers. */
 function readOverlayDiagnostics(root: HTMLElement): { ghosts: number; hidden: number } {
-  const layer = root.querySelector<HTMLElement>('[data-selection-frame-overlay]')
+  const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
   if (layer === null) return { ghosts: 0, hidden: 0 }
   return {
     ghosts: layer.children.length,
-    hidden: layer.querySelectorAll('[data-codplay-flip-hidden]').length,
+    hidden: layer.querySelectorAll('[data-codplay-motion-hidden]').length,
   }
 }
 
@@ -525,7 +511,7 @@ function readOverlayDiagnostics(root: HTMLElement): { ghosts: number; hidden: nu
 function readScenarioNodes(nodes: readonly unknown[]): string {
   return nodes.map((node) => {
     if (!(node instanceof HTMLElement)) return 'none'
-    const hidden = node.hasAttribute('data-codplay-flip-hidden') ? ':hidden' : ''
+    const hidden = node.hasAttribute('data-codplay-motion-hidden') ? ':hidden' : ''
     return `${node.dataset.itemId ?? '?'}@${node.parentElement?.className ?? 'none'}${hidden}:${getComputedStyle(node).transform}`
   }).join(' | ')
 }

@@ -1,4 +1,4 @@
-import type { HtmlMatrix } from './types'
+import type { HtmlMatrix } from '../motion/html-types'
 
 type StyleSnapshot = Readonly<{
   value: string
@@ -21,33 +21,33 @@ type StyleDeclarationLike = {
 }
 
 /** The projection slots consumed by the stylesheet-backed HTML layer. */
-const LOCAL_SIZE_SLOTS = ['--codplay-flip-width', '--codplay-flip-height'] as const
-const LOCAL_TRANSFORM_SLOTS = ['--codplay-flip-transform'] as const
-const LOCAL_ATTRIBUTES = ['data-codplay-flip-size', 'data-codplay-flip-transform'] as const
-const HIDDEN_ATTRIBUTE = 'data-codplay-flip-hidden'
-const PROJECTION_STYLE_ATTRIBUTE = 'data-codplay-flip-style'
-const TRANSIENT_STYLE_SLOTS = ['--codplay-flip-width', '--codplay-flip-height', '--codplay-flip-transform'] as const
+const LOCAL_SIZE_SLOTS = ['--codplay-motion-width', '--codplay-motion-height'] as const
+const LOCAL_TRANSFORM_SLOTS = ['--codplay-motion-transform'] as const
+const LOCAL_ATTRIBUTES = ['data-codplay-motion-size', 'data-codplay-motion-transform'] as const
+const HIDDEN_ATTRIBUTE = 'data-codplay-motion-hidden'
+const PROJECTION_STYLE_ATTRIBUTE = 'data-codplay-motion-style'
+const TRANSIENT_STYLE_SLOTS = ['--codplay-motion-width', '--codplay-motion-height', '--codplay-motion-transform'] as const
 const TRANSIENT_ATTRIBUTES = [...LOCAL_ATTRIBUTES, HIDDEN_ATTRIBUTE] as const
 
 const LOCAL_SIZE_PROPERTIES = ['width', 'height'] as const
 const LOCAL_TRANSFORM_PROPERTIES = ['transition', 'transform-origin', 'translate', 'rotate', 'scale', 'transform'] as const
 
 const PROJECTION_STYLE_TEXT = `
-[data-codplay-flip-size] {
-  width: var(--codplay-flip-width) !important;
-  height: var(--codplay-flip-height) !important;
+[data-codplay-motion-size] {
+  width: var(--codplay-motion-width) !important;
+  height: var(--codplay-motion-height) !important;
 }
 
-[data-codplay-flip-transform] {
+[data-codplay-motion-transform] {
   transition: none !important;
   transform-origin: 0 0 !important;
   translate: none !important;
   rotate: none !important;
   scale: none !important;
-  transform: var(--codplay-flip-transform) !important;
+  transform: var(--codplay-motion-transform) !important;
 }
 
-[data-codplay-flip-hidden] {
+[data-codplay-motion-hidden] {
   visibility: hidden !important;
 }
 `
@@ -55,7 +55,7 @@ const PROJECTION_STYLE_TEXT = `
 const installedProjectionStyles = new WeakSet<Document>()
 
 /** Host-owned transient contribution layer for local poses and overlay visibility. */
-export type HtmlTransientStyleLayer = Readonly<{
+export type HtmlMotionStyleLayer = Readonly<{
   applyLocalSize: (node: HTMLElement, width: number, height: number) => void
   applyLocalTransform: (node: HTMLElement, matrix: HtmlMatrix) => void
   clearLocal: (node: HTMLElement) => void
@@ -66,25 +66,25 @@ export type HtmlTransientStyleLayer = Readonly<{
 }>
 
 /** Creates a projection layer without taking ownership of authored CSS declarations. */
-export function createHtmlTransientStyleLayer(root: Element): HtmlTransientStyleLayer {
+export function createHtmlMotionStyleLayer(root: Element): HtmlMotionStyleLayer {
   const stylesheetBacked = installProjectionStyles(root)
   if (stylesheetBacked) return createStylesheetLayer()
   return createInlineFallbackLayer()
 }
 
 /** Creates the stylesheet-backed layer used by real browser hosts. */
-function createStylesheetLayer(): HtmlTransientStyleLayer {
+function createStylesheetLayer(): HtmlMotionStyleLayer {
   const styleAttributePresence = new WeakMap<HTMLElement, boolean>()
   return {
     applyLocalSize: (node, width, height) => {
       rememberStyleAttributePresence(node, styleAttributePresence)
-      setStyleSlot(node, '--codplay-flip-width', `${width}px`)
-      setStyleSlot(node, '--codplay-flip-height', `${height}px`)
+      setStyleSlot(node, '--codplay-motion-width', `${width}px`)
+      setStyleSlot(node, '--codplay-motion-height', `${height}px`)
       node.setAttribute(LOCAL_ATTRIBUTES[0], '')
     },
     applyLocalTransform: (node, matrix) => {
       rememberStyleAttributePresence(node, styleAttributePresence)
-      setStyleSlot(node, '--codplay-flip-transform', matrixCssValue(matrix))
+      setStyleSlot(node, '--codplay-motion-transform', matrixCssValue(matrix))
       node.setAttribute(LOCAL_ATTRIBUTES[1], '')
     },
     clearLocal: (node) => clearStylesheetLocal(node, styleAttributePresence),
@@ -95,7 +95,7 @@ function createStylesheetLayer(): HtmlTransientStyleLayer {
 }
 
 /** Creates a deterministic inline fallback for lightweight DOM doubles. */
-function createInlineFallbackLayer(): HtmlTransientStyleLayer {
+function createInlineFallbackLayer(): HtmlMotionStyleLayer {
   const localContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   const hiddenContributions = new WeakMap<HTMLElement, InlineContributionMap>()
   return {

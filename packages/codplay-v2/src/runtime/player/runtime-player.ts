@@ -1,10 +1,9 @@
 import type { DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
-import type { CompiledEventime, CompiledScene } from '../../scene/compiled'
+import type { CompiledScene } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
-  type RuntimeModuleLayoutProjectionState,
   type RuntimeModuleServiceInstance,
   type RuntimeModuleServiceSeekHandle,
 } from '../engine'
@@ -23,17 +22,17 @@ import type { LayoutProjection } from './layout-projection'
 import type { RuntimeComponentRuntime } from '../components'
 import {
   materializeScene,
+  materializeSceneBeforeBoundary,
   resolveScene,
   RuntimeStateStore,
   solveScene,
-  resolvePresentationOrder,
   validateStrapCollections,
   type SolvedScene,
   type MountTargetDeclaration,
   type StrapCollections,
 } from './pipeline'
 import type { RuntimeTrackJournal } from './pipeline'
-import { MoveTransitionJournal, type MoveTransitionOccurrence } from './move-transition-journal'
+import { StructuralTimeline } from './structural-timeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
@@ -62,13 +61,13 @@ export class RuntimePlayer {
   readonly mountTargets: readonly MountTargetDeclaration[]
   readonly layoutProjection: LayoutProjection | undefined
   readonly componentRuntime: RuntimeComponentRuntime | undefined
-  readonly moveTransitionJournal: MoveTransitionJournal
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
   private pendingSolvedScene: SolvedScene | undefined
   private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
+  private structuralTimeline: StructuralTimeline | undefined
   private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
   private pendingModuleSeekHandles: Array<{
     instance: RuntimeModuleServiceInstance
@@ -99,7 +98,6 @@ export class RuntimePlayer {
     this.layoutProjection = layoutProjection
     this.componentRuntime = componentRuntime
     this.stateStore = new RuntimeStateStore(compiledScene)
-    this.moveTransitionJournal = new MoveTransitionJournal(compiledScene)
   }
 
   /** Returns the current lifecycle state. */
@@ -122,51 +120,9 @@ export class RuntimePlayer {
     return this.reconstructScene(timeMs)
   }
 
-  /** Replays player-scoped module deltas to derive one historical layout snapshot. */
-  getHistoricalLayoutProjectionState(scene: SolvedScene): RuntimeModuleLayoutProjectionState | undefined {
-    if (this.moduleServiceInstances.size === 0) return undefined
-    const historicalInstances = this.engine.createModuleServiceInstances(
-      `${this.id}:historical`,
-      this.compiledScene,
-      this.compiledScene.requirements.modules,
-    )
-    try {
-      const initialScene = this.reconstructScene(0)
-      this.initializeModuleServices(initialScene, historicalInstances)
-      // Consume the initial pending state just as the live projection does;
-      // otherwise a later historical snapshot would report every move since
-      // FIRST as one list reflow.
-      this.consumeLayoutProjectionState(initialScene, historicalInstances)
-      let previousScene = initialScene
-      let stateAtRequestedBoundary: RuntimeModuleLayoutProjectionState | undefined
-      for (const timeMs of collectCompiledEventStartTimes(this.compiledScene)) {
-        if (timeMs <= 0 || timeMs > scene.timeMs) continue
-        const nextScene = this.reconstructScene(timeMs)
-        const moveDeltas = diffSolvedScenes(previousScene, nextScene)
-        this.notifyModuleMoveDeltas(previousScene, nextScene, new Set(), moveDeltas, historicalInstances)
-        // Clear the event-local touched set at each compiled boundary while
-        // retaining the module's authoritative child order for the next one.
-        const boundaryState = this.consumeLayoutProjectionState(nextScene, historicalInstances)
-        if (timeMs === scene.timeMs) stateAtRequestedBoundary = boundaryState
-        previousScene = nextScene
-      }
-      return stateAtRequestedBoundary ?? this.consumeLayoutProjectionState(scene, historicalInstances)
-    } finally {
-      for (const instance of historicalInstances.values()) instance.destroy?.()
-    }
-  }
-
-  /** Returns compiled move occurrences active at one historical time. */
-  getActiveMoveTransitionOccurrences(timeMs: number): readonly MoveTransitionOccurrence[] {
-    return this.moveTransitionJournal.findActiveEffective(timeMs)
-  }
-
-  /** Returns compiled movers that start inside another capture's interval. */
-  getMoveTransitionOccurrencesStartingBetween(
-    startExclusive: number,
-    endInclusive: number,
-  ): readonly MoveTransitionOccurrence[] {
-    return this.moveTransitionJournal.findStartingBetween(startExclusive, endInclusive)
+  /** Reconstructs the exact logical state immediately before one event boundary. */
+  resolveSceneBeforeBoundary(timeMs: number): SolvedScene {
+    return this.reconstructSceneBeforeBoundary(timeMs)
   }
 
   /** Validates capabilities and attaches this player to the shared engine. */
@@ -198,10 +154,16 @@ export class RuntimePlayer {
       return { ok: false, diagnostics: diagnostics.report() }
     }
     this.componentRuntime?.setModuleServices(this.moduleServiceInstances)
-    const initialSolvedScene = this.reconstructScene(0)
+    const initialSolvedScene = this.reconstructBaseScene(0)
     this.componentRuntime?.sync(initialSolvedScene)
+    const resolvedInitialScene = this.reconstructBaseScene(0)
+    this.initializeModuleServices(resolvedInitialScene)
+    this.structuralTimeline = new StructuralTimeline(
+      this.compiledScene,
+      (timeMs) => this.reconstructBaseScene(timeMs),
+      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false),
+    )
     this.solvedScene = this.reconstructScene(0)
-    this.initializeModuleServices(this.solvedScene)
     this.componentRuntime?.sync(this.solvedScene)
     this.layoutProjection?.project(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
@@ -218,7 +180,7 @@ export class RuntimePlayer {
         const rawMoveDeltas = previousSolvedScene === undefined
           ? []
           : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
-        const moveDeltas = this.attachTransitionOccurrences(rawMoveDeltas)
+        const moveDeltas = rawMoveDeltas
         if (this.pendingModuleSeekHandles.length > 0) {
           const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
@@ -304,7 +266,7 @@ export class RuntimePlayer {
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
     const previousSolvedScene = this.solvedScene
     const rawMoveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    const moveDeltas = this.attachTransitionOccurrences(rawMoveDeltas)
+    const moveDeltas = rawMoveDeltas
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
@@ -320,7 +282,6 @@ export class RuntimePlayer {
 
   /** Projects one scene while keeping authored writes inside the render boundary. */
   private projectScene(scene: SolvedScene, context: Omit<NonNullable<Parameters<LayoutProjection['project']>[1]>, 'authoredSync'>): void {
-    const layoutState = this.consumeLayoutProjectionState(scene)
     if (this.layoutProjection === undefined) {
       this.componentRuntime?.sync(scene)
       return
@@ -328,40 +289,7 @@ export class RuntimePlayer {
     this.layoutProjection.project(scene, {
       ...context,
       authoredSync: (authoredScene) => this.componentRuntime?.sync(authoredScene),
-      ...(layoutState === undefined ? {} : { layoutState }),
     })
-  }
-
-  /** Consumes structural ordering and touched-item data from player modules. */
-  private consumeLayoutProjectionState(
-    scene: SolvedScene,
-    instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
-  ): RuntimeModuleLayoutProjectionState | undefined {
-    const states = [...instances.values()]
-      .map((instance) => instance.consumeLayoutProjectionState?.())
-      .filter((state): state is RuntimeModuleLayoutProjectionState => state !== undefined)
-    if (states.length === 0) return undefined
-    const childrenByTarget: Record<string, readonly string[]> = {}
-    const touchedItemIds = new Set<string>()
-    for (const state of states) {
-      if (state.graphRevision !== undefined && state.graphRevision !== scene.graph.revision) {
-        throw new Error(`Runtime module layout state belongs to another solved graph: ${state.graphRevision}`)
-      }
-      for (const [targetId, childKeys] of Object.entries(state.childrenByTarget ?? {})) {
-        const existing = childrenByTarget[targetId]
-        if (existing !== undefined && !sameChildOrder(existing, childKeys)) {
-          throw new Error(`Runtime module layout states disagree on target order: ${targetId}`)
-        }
-        childrenByTarget[targetId] = [...childKeys]
-      }
-      for (const itemId of state.touchedItemIds ?? []) touchedItemIds.add(itemId)
-    }
-    resolvePresentationOrder(scene, childrenByTarget)
-    return {
-      graphRevision: scene.graph.revision,
-      childrenByTarget,
-      touchedItemIds: [...touchedItemIds],
-    }
   }
 
   /** Enforces one valid lifecycle transition. */
@@ -383,13 +311,8 @@ export class RuntimePlayer {
     this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
     this.pendingModuleSeekHandles = []
     try {
-      const needsHistoricalLayoutState = [...this.moduleServiceInstances.values()]
-        .some((instance) => instance.requiresHistoricalLayoutState === true)
-      const historicalLayoutState = needsHistoricalLayoutState
-        ? this.getHistoricalLayoutProjectionState(this.pendingSolvedScene)
-        : undefined
       for (const instance of this.moduleServiceInstances.values()) {
-        const handle = instance.prepareSeek?.(this.pendingSolvedScene, historicalLayoutState)
+        const handle = instance.prepareSeek?.(this.pendingSolvedScene)
         if (handle !== undefined) this.pendingModuleSeekHandles.push({ instance, handle })
       }
     } catch (error) {
@@ -400,11 +323,31 @@ export class RuntimePlayer {
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
   private reconstructScene(timeMs: number): SolvedScene {
-    return solveScene(resolveScene(materializeScene(this.compiledScene, timeMs, this.trackJournal)), {
+    const structural = this.structuralTimeline?.resolveAt(timeMs)
+    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget)
+  }
+
+  /** Resolves the left side of one event boundary with the preceding structural order. */
+  private reconstructSceneBeforeBoundary(timeMs: number): SolvedScene {
+    const structural = this.structuralTimeline?.resolveBefore(timeMs)
+    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, false)
+  }
+
+  /** Resolves one scene without consulting the structural timeline being built. */
+  private reconstructBaseScene(
+    timeMs: number,
+    childrenByTarget?: Readonly<Record<string, readonly string[]>>,
+    includeBoundary = true,
+  ): SolvedScene {
+    const materialized = includeBoundary
+      ? materializeScene(this.compiledScene, timeMs, this.trackJournal)
+      : materializeSceneBeforeBoundary(this.compiledScene, timeMs, this.trackJournal)
+    return solveScene(resolveScene(materialized), {
       mountTargets: [
         ...this.mountTargets,
         ...[...this.moduleServiceInstances.values()].flatMap((instance) => instance.getMountTargets?.() ?? []),
       ],
+      ...(childrenByTarget === undefined ? {} : { childrenByTarget }),
     })
   }
 
@@ -432,30 +375,11 @@ export class RuntimePlayer {
     }
   }
 
-  /** Carries compiled occurrence identity from the journal into projection deltas. */
-  private attachTransitionOccurrences(
-    deltas: readonly import('../move').MoveStateDelta[],
-  ): readonly import('../move').MoveStateDelta[] {
-    return deltas.map((delta) => {
-      const startAt = delta.transitionStartAt
-      if (startAt === undefined) return delta
-      const occurrence = this.moveTransitionJournal.findByMove(delta.persoKey, startAt)
-      return occurrence === undefined
-        ? delta
-        : { ...delta, transitionOccurrenceId: occurrence.captureId }
-    })
-  }
-
   /** Aborts staged module-service seek state before a grouped commit can occur. */
   private abortPendingModuleSeek(): void {
     for (const { handle } of this.pendingModuleSeekHandles.reverse()) handle.abort?.()
     this.pendingModuleSeekHandles = []
   }
-}
-
-/** Compares two module-owned child orders without relying on object identity. */
-function sameChildOrder(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((key, index) => key === right[index])
 }
 
 /** Converts pure move-policy issues into the public diagnostic report. */
@@ -472,22 +396,6 @@ function createSolvedMoveDiagnostics(solved: SolvedScene): DiagnosticReport {
   const diagnostics = new DiagnosticCollector({ output: () => undefined })
   collectSolvedMoveDiagnostics(solved, diagnostics)
   return diagnostics.report()
-}
-
-/** Collects every compiled event boundary needed to replay historical modules. */
-function collectCompiledEventStartTimes(scene: CompiledScene): readonly number[] {
-  const times = new Set<number>()
-  for (const story of Object.values(scene.scene.stories)) collectEventTimes(story.eventimes ?? [], 0, times)
-  return [...times].sort((left, right) => left - right)
-}
-
-/** Flattens nested compiled eventimes into absolute historical boundaries. */
-function collectEventTimes(eventimes: readonly CompiledEventime[], parentStartAt: number, times: Set<number>): void {
-  for (const event of eventimes) {
-    const startAt = parentStartAt + event.startAt
-    times.add(startAt)
-    collectEventTimes(event.events ?? [], startAt, times)
-  }
 }
 
 /** Creates an empty diagnostic report for a player before its first seek. */

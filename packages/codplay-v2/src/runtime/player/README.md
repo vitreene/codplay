@@ -1,38 +1,62 @@
 # Player
 
-> Status: En cours
+> Status: A relire
 > CodPlay version: V2 foundation
 
-This folder owns one runtime instance of a compiled scene.
+## Role
 
-- materialization, resolution, and solve
-- lifecycle and mounting root
-- playback, injection, authoring, and observation channels
+`RuntimePlayer` evaluates one immutable `CompiledScene` at an absolute logical
+time. Its canonical pipeline is:
 
-The player reconstructs `materialize -> resolve -> solve` during seek without
-replaying straps or effects. A seek returns a structured result with `ok`, `timeMs`,
-and diagnostics. Solved placement exposes generic `mount`, `unmount`, and `move`
-deltas to capabilities such as list.
+```text
+CompiledScene + time
+  -> materialize
+  -> resolve
+  -> solve
+  -> SolvedScene + SolvedGraph
+```
 
-The player receives an engine and a `CompiledScene`; it does not create its
-own clock or compile authoring data.
+The player owns lifecycle, component synchronization and structural projection.
+It does not measure browser geometry and does not own an animation clock.
 
-When a component host is attached, initialization materializes the first scene
-before initializing player-scoped modules. This lets markup modules publish
-their outlet targets before capabilities such as list snapshot initial child
-orders, including lists nested below HTML outlets.
+## Structural timeline
 
-`LayoutProjection.project()` receives the solved scene and the optional previous
-scene/deltas for one commit. Play and Seek both use this same commit. The legacy
-There is no second `advance()` presentation hook: every target time enters this
-same commit boundary.
+`StructuralTimeline` builds complete immutable child-order snapshots from
+compiled event boundaries. It replaces mutable list replay and historical module
+state. Every `SolvedScene` receives the order selected by that same timeline,
+whether its caller is Play, Seek or the isolated HTML layout sampler.
 
-`SolvedScene.graph` is the canonical immutable parentage/order snapshot. It owns
-target membership, parent-first traversal and a structural revision; renderers
-and modules must validate overrides against it instead of merging independent
-child maps.
+The timeline exposes both sides of an event boundary:
 
-`MemoryRenderSink` receives the player-produced temporary snapshots. Those
-snapshots contain resolved perso state and, when available, compact placement
-data (`kind`, `mounted`, and `targetId`) for readouts that must not rebuild the
-player pipeline themselves.
+- `resolveAt(t)` includes events at `t`;
+- `resolveBefore(t)` excludes events at `t`.
+
+`materializeSceneBeforeBoundary()` implements the left-side evaluation directly;
+no numerical epsilon is used. An event at `0 ms` therefore has a real initial
+state and a distinct post-event state.
+
+## Presentation circuit
+
+Play and Seek both commit through `LayoutProjection.project(scene)`. A projection
+receives one complete solved scene and performs one authored DOM synchronization
+before any optional motion presentation. There is no `advance`-specific visual
+path, historical replay path or module-owned child-order map.
+
+`SolvedGraph` is the only source for:
+
+- logical parent by item;
+- opaque target by item;
+- complete child order by target;
+- mounted roots and structural revision.
+
+The optional `flipMode` remains placement metadata for projection consumers; it
+never changes target resolution or structural ordering.
+
+## Invariants
+
+- Logical state is never reconstructed from the DOM.
+- A target order contains every mounted child exactly once.
+- Boundary-side evaluation is explicit and scale-independent.
+- Component services are the only writers of authored DOM state.
+- Modules may observe move deltas, but cannot provide an alternative layout
+  history to Play or Seek.

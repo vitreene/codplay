@@ -16,14 +16,33 @@ type FlattenedEventime = Readonly<{
   eventSeq?: number
 }>
 
-/** Selects discrete occurrences active at one timeline position. */
+/** Selects discrete occurrences active at or before one timeline position. */
 export function materializeScene(scene: CompiledScene, timeMs: number, journal?: RuntimeTrackJournal): MaterializedScene {
+  return materializeSceneAtBoundary(scene, timeMs, true, journal)
+}
+
+/** Selects the exact left-side state before occurrences at one boundary. */
+export function materializeSceneBeforeBoundary(
+  scene: CompiledScene,
+  timeMs: number,
+  journal?: RuntimeTrackJournal,
+): MaterializedScene {
+  return materializeSceneAtBoundary(scene, timeMs, false, journal)
+}
+
+/** Materializes one inclusive or exclusive event boundary without numeric epsilon. */
+function materializeSceneAtBoundary(
+  scene: CompiledScene,
+  timeMs: number,
+  includeBoundary: boolean,
+  journal?: RuntimeTrackJournal,
+): MaterializedScene {
   assertTimelineTime(timeMs)
   const persos: Record<string, MaterializedPerso> = {}
   const tracks = journal?.registry ?? buildTrackRegistry(scene)
   const sceneState = cloneRecord(scene.scene.state)
   if (journal !== undefined) {
-    for (const update of journal.getStateUpdates(STRAP_SCOPE_SCENE, undefined, timeMs)) {
+    for (const update of journal.getStateUpdates(STRAP_SCOPE_SCENE, undefined, timeMs, includeBoundary)) {
       applyStateUpdate(sceneState, update.update)
     }
   }
@@ -32,7 +51,7 @@ export function materializeScene(scene: CompiledScene, timeMs: number, journal?:
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
     const storyState = cloneRecord(story.state)
     if (journal !== undefined) {
-      for (const update of journal.getStateUpdates(STRAP_SCOPE_STORY, storyId, timeMs)) {
+      for (const update of journal.getStateUpdates(STRAP_SCOPE_STORY, storyId, timeMs, includeBoundary)) {
         applyStateUpdate(storyState, update.update)
       }
     }
@@ -43,13 +62,13 @@ export function materializeScene(scene: CompiledScene, timeMs: number, journal?:
     const events = trackIsActive(journal, trackId, track.active)
       ? [
           ...flattenEventimes(story.eventimes ?? [], trackId, track.order),
-          ...getLiveEventsForStory(journal, storyId, timeMs),
+          ...getLiveEventsForStory(journal, storyId, timeMs, includeBoundary),
         ]
       : []
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
       const actions = events
-        .map((event) => toActiveAction(event, perso.actions, timeMs))
+        .map((event) => toActiveAction(event, perso.actions, timeMs, includeBoundary))
         .filter((action): action is IndexedMaterializedAction => action !== null)
         .sort(compareMaterializedActions)
       persos[key] = {
@@ -71,8 +90,9 @@ function toActiveAction(
   flattened: FlattenedEventime,
   actions: Readonly<Record<string, CompiledValue>>,
   timeMs: number,
+  includeBoundary: boolean,
 ): IndexedMaterializedAction | null {
-  if (flattened.startAt > timeMs) return null
+  if (flattened.startAt > timeMs || (!includeBoundary && flattened.startAt === timeMs)) return null
   const actionValue = actions[flattened.event.name]
   const action = isPlainRecord(actionValue)
     ? actionValue
@@ -127,12 +147,15 @@ function getLiveEventsForStory(
   journal: RuntimeTrackJournal | undefined,
   storyId: string,
   timeMs: number,
+  includeBoundary: boolean,
 ): readonly FlattenedEventime[] {
   if (journal === undefined) return []
   return journal.getEventsForStory(storyId)
     .filter((event) => {
       const track = journal.registry.tracks[event.trackId]
-      return event.applyAtMs <= timeMs && track !== undefined && journal.isTrackActive(event.trackId)
+      return (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
+        && track !== undefined
+        && journal.isTrackActive(event.trackId)
     })
     .map((event) => toFlattenedLiveEvent(event, event.trackId, journal.registry.tracks[event.trackId]?.order ?? 0))
 }

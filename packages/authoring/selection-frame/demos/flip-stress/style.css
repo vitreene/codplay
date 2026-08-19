@@ -28,7 +28,7 @@
   z-index: 2;
   display: flex;
   width: 190px;
-  height: 150px;
+  height: 190px;
   padding: 12px;
   box-sizing: border-box;
   flex-direction: column;
@@ -100,7 +100,7 @@
   border: 1px dashed currentColor;
   border-radius: 10px;
   background: rgb(255 255 255 / 70%);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .transfer-container h3 {
@@ -110,13 +110,15 @@
 }
 
 .transfer-items {
-  display: flex;
+  display: grid;
   min-width: 0;
-  align-items: center;
-  gap: 5px;
   flex: 1;
-  flex-direction: row;
-  overflow: visible;
+  grid-template-columns: repeat(3, 30px);
+  grid-auto-rows: 30px;
+  align-content: center;
+  justify-content: start;
+  gap: 5px;
+  overflow: hidden;
 }
 
 .transfer-items:empty::before {
@@ -153,12 +155,18 @@
   font-weight: 700;
 }
 
-.stress-qa { background: #f25f5c; }
-.stress-qb { background: #f7b267; }
-.stress-qc { background: #70c1b3; }
-.stress-ka { background: #247ba0; }
-.stress-kb { background: #7950b5; }
-.stress-kc { background: #e76f51; }
+.stress-qa { background: #6f42c1; }
+.stress-qb { background: #8748b8; }
+.stress-qc { background: #a045aa; }
+.stress-qd { background: #c14b8c; }
+.stress-qe { background: #d85c55; }
+.stress-qf { background: #e07a19; }
+.stress-ka { background: #2563eb; }
+.stress-kb { background: #277da1; }
+.stress-kc { background: #2a9d8f; }
+.stress-kd { background: #3a9d5d; }
+.stress-ke { background: #4cae4f; }
+.stress-kf { background: #5b9e35; }
 
 .stress-status {
   max-height: 19lh;

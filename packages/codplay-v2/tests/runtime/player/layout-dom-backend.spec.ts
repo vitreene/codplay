@@ -130,7 +130,7 @@ describe('LayoutDomBackend', () => {
     expect(order).toEqual(['authored', 'structural'])
   })
 
-  it('uses module-owned child order for the structural commit', () => {
+  it('uses the solved structural order for the commit', () => {
     const root = node()
     const first = node()
     const second = node()
@@ -145,9 +145,8 @@ describe('LayoutDomBackend', () => {
     backend.project(scene([
       perso('main:first', { id: 'list', kind: 'root' }),
       perso('main:second', { id: 'list', kind: 'root' }),
-    ], { list: ['main:first', 'main:second'] }), {
+    ], { list: ['main:second', 'main:first'] }), {
       moveDeltas: [],
-      layoutState: { childrenByTarget: { list: ['main:second', 'main:first'] } },
     })
 
     expect(root.children).toEqual([second, first])

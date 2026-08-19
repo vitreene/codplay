@@ -4,7 +4,6 @@ import {
   MOVE_OPERATION_UNMOUNT,
   type MoveOperation,
 } from '../config/move'
-import type { MoveTransition } from '../config/move'
 import type { MoveFlipMode } from '../config/move'
 import type { SolvedPlacement, SolvedScene } from '../player/pipeline/types'
 
@@ -18,10 +17,6 @@ export type MoveStateDelta = Readonly<{
   mountedAfter: boolean
   fromPlacement?: SolvedPlacement
   toPlacement?: SolvedPlacement
-  transition?: MoveTransition
-  transitionStartAt?: number
-  /** Stable compiled occurrence identity used by persisted FLIP captures. */
-  transitionOccurrenceId?: string
   flipMode?: MoveFlipMode
 }>
 
@@ -60,8 +55,6 @@ export function diffSolvedScenes(before: SolvedScene, after: SolvedScene): reado
       mountedAfter,
       fromPlacement: beforePlacement,
       toPlacement: afterPlacement,
-      transition: afterPlacement?.transition,
-      transitionStartAt: afterPlacement?.transitionStartAt,
       flipMode: afterPlacement?.flipMode,
     })
   }

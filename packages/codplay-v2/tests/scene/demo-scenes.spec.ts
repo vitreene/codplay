@@ -21,7 +21,7 @@ describe('V1 demo scene corpus', () => {
     expect(demoSceneFixtures[0]?.scene.stories['s1-canary-story']?.persos[0]?.initial?.move).toBe('@root')
     expect(demoSceneFixtures[1]?.scene.stories['s2-reference-story']?.persos[1]?.initial?.move).toEqual({ target: 'reference-list' })
     expect(demoSceneFixtures[2]?.scene.stories['s3-robustesse-story']?.persos[2]?.actions?.['sequence:robustesse:promote']).toMatchObject({
-      move: { flipMode: 'overlay-world' },
+      move: { target: 'robust-overlay', flipMode: 'overlay-world', transition: { duration: 400 } },
     })
     expect(demoSceneFixtures[3]?.scene.stories['s4-media-story']?.persos[0]?.initial?.src).toBe('/assets/quiz.mp4')
   })

@@ -18,9 +18,10 @@ export type SolvedGraph = Readonly<{
   rootPersoKeys: readonly string[]
 }>
 
-/** Builds and validates the single graph consumed by structural and FLIP code. */
+/** Builds and validates the single graph consumed by structure and motion. */
 export function buildSolvedGraph(
   persos: Readonly<Record<string, SolvedPerso>>,
+  orderedChildrenByTarget?: Readonly<Record<string, readonly string[]>>,
 ): SolvedGraph {
   const parentByPerso: Record<string, string | undefined> = {}
   const targetByPerso: Record<string, string | undefined> = {}
@@ -65,10 +66,11 @@ export function buildSolvedGraph(
   }
 
   validateGraphAcyclic(parentByPerso)
-  const childrenByTarget = Object.fromEntries([...children.entries()].map(([targetId, keys]) => [
+  const naturalChildrenByTarget = Object.fromEntries([...children.entries()].map(([targetId, keys]) => [
     targetId,
     Object.freeze([...keys]),
   ]))
+  const childrenByTarget = resolveOrderedChildrenByTarget(naturalChildrenByTarget, orderedChildrenByTarget)
   const orderedChildrenByParent = Object.fromEntries([...childrenByParent.entries()].map(([parentKey, keys]) => [
     parentKey,
     Object.freeze([...keys]),
@@ -82,6 +84,33 @@ export function buildSolvedGraph(
     childrenByParent: Object.freeze(orderedChildrenByParent),
     rootPersoKeys: Object.freeze([...roots]),
   })
+}
+
+/** Applies one complete structural order without allowing parentage divergence. */
+function resolveOrderedChildrenByTarget(
+  natural: Readonly<Record<string, readonly string[]>>,
+  ordered: Readonly<Record<string, readonly string[]>> | undefined,
+): Readonly<Record<string, readonly string[]>> {
+  if (ordered === undefined) return Object.freeze({ ...natural })
+  const result: Record<string, readonly string[]> = {}
+  for (const [targetId, naturalChildren] of Object.entries(natural)) {
+    const requested = ordered[targetId] ?? naturalChildren
+    const expected = new Set(naturalChildren)
+    const seen = new Set<string>()
+    for (const itemId of requested) {
+      if (!expected.has(itemId)) throw new Error(`Structural order places ${itemId} outside target: ${targetId}`)
+      if (seen.has(itemId)) throw new Error(`Structural order duplicates item: ${itemId}`)
+      seen.add(itemId)
+    }
+    if (seen.size !== expected.size) throw new Error(`Structural order is incomplete for target: ${targetId}`)
+    result[targetId] = Object.freeze([...requested])
+  }
+  for (const targetId of Object.keys(ordered)) {
+    if (!Object.prototype.hasOwnProperty.call(natural, targetId) && (ordered[targetId]?.length ?? 0) > 0) {
+      throw new Error(`Structural order references an empty target: ${targetId}`)
+    }
+  }
+  return Object.freeze(result)
 }
 
 /** Returns one logical component parent from the canonical solved graph. */

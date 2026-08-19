@@ -6,7 +6,10 @@ import { buildSolvedGraph } from './presentation-graph'
 /** Resolves typed placements before parent-child ordering and transform composition. */
 export function solveScene(
   resolved: ResolvedScene,
-  options: Readonly<{ mountTargets?: readonly MountTargetDeclaration[] }> = {},
+  options: Readonly<{
+    mountTargets?: readonly MountTargetDeclaration[]
+    childrenByTarget?: Readonly<Record<string, readonly string[]>>
+  }> = {},
 ): SolvedScene {
   const targets = MountTargetRegistry.fromScene(resolved.scene, options.mountTargets)
   const persos: Record<string, SolvedPerso> = {}
@@ -19,7 +22,7 @@ export function solveScene(
 
   validateNoPlacementCycles(persos)
   const effectivePersos = applyEffectiveMountState(persos)
-  const graph = buildSolvedGraph(effectivePersos)
+  const graph = buildSolvedGraph(effectivePersos, options.childrenByTarget)
 
   return {
     scene: resolved.scene,
@@ -49,12 +52,10 @@ function resolvePlacement(
         mode: perso.placement.mode,
         flipMode: perso.placement.flipMode,
         source: perso.placement.source,
-        transition: perso.placement.transition,
-        transitionStartAt: perso.placement.transitionStartAt,
       }
     }
     case MOUNT_PLACEMENT_OFF:
-      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, flipMode: perso.placement.flipMode, source: perso.placement.source, transition: perso.placement.transition, transitionStartAt: perso.placement.transitionStartAt }
+      return { kind: MOUNT_PLACEMENT_OFF, mounted: false, mode: perso.placement.mode, flipMode: perso.placement.flipMode, source: perso.placement.source }
     case MOUNT_PLACEMENT_PARENT: {
       const target = targets.resolve(perso.placement.targetId)
       return {
@@ -67,8 +68,6 @@ function resolvePlacement(
         flipMode: perso.placement.flipMode,
         reorder: perso.placement.reorder,
         source: perso.placement.source,
-        transition: perso.placement.transition,
-        transitionStartAt: perso.placement.transitionStartAt,
       }
     }
     case MOUNT_PLACEMENT_INVALID:

@@ -12,6 +12,7 @@ import {
   MOVE_ISSUE_CONFLICT_SAME_TICK,
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
   materializeScene,
+  materializeSceneBeforeBoundary,
   resolveScene,
   RuntimeTrackJournal,
   STRAP_SCOPE_STORY,
@@ -19,7 +20,6 @@ import {
   TRACK_EVENT_ACTIVATE,
   TRACK_EVENT_DEACTIVATE,
 } from '../../../src/runtime/player'
-import { prepareSvgPath } from '../../../src/ace'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -74,6 +74,24 @@ describe('materialize -> resolve -> solve', () => {
     const nestedActions = materializeScene(scene, 325).persos['main:root']?.actions
     expect(nestedActions?.map((action) => action.startAt)).toEqual([100, 200, 325])
     expect(nestedActions?.[2]?.declarationPath).toEqual([2, 0])
+  })
+
+  it('distinguishes the two sides of an event boundary without a numeric epsilon', () => {
+    const zeroBoundaryScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            eventimes: [{ name: 'demo:show', startAt: 0 }],
+          },
+        },
+      },
+    }
+
+    expect(materializeSceneBeforeBoundary(zeroBoundaryScene, 0).persos['main:root']?.actions).toEqual([])
+    expect(materializeScene(zeroBoundaryScene, 0).persos['main:root']?.actions).toHaveLength(1)
   })
 
   it('consolidates the static track registry in declaration order', () => {
@@ -244,7 +262,7 @@ describe('materialize -> resolve -> solve', () => {
     expect(resolved.persos['main:root']?.state.style).toMatchObject({ x: '50px', y: '30px' })
   })
 
-  it('preserves the authored move start time for FLIP seek reconstruction', () => {
+  it('keeps visual transition metadata out of the solved structural placement', () => {
     const transitionScene: CompiledScene = {
       ...scene,
       scene: {
@@ -273,10 +291,9 @@ describe('materialize -> resolve -> solve', () => {
       ],
     })
 
-    expect(solved.persos['main:root']?.placement).toMatchObject({
-      targetId: 'target',
-      transitionStartAt: 100,
-    })
+    expect(solved.persos['main:root']?.placement).toMatchObject({ targetId: 'target' })
+    expect(solved.persos['main:root']?.placement).not.toHaveProperty('transition')
+    expect(solved.persos['main:root']?.placement).not.toHaveProperty('transitionStartAt')
   })
 
   it('exposes a stable solve output without claiming hierarchy support', () => {
@@ -330,8 +347,7 @@ describe('materialize -> resolve -> solve', () => {
     })
   })
 
-  it('normalizes target and preserves move transition data for projection', () => {
-    const compiledPath = prepareSvgPath('M 0 0 L 0.5 0.5 L 1 0')
+  it('normalizes only structural movement data into the placement graph', () => {
     const transitionScene: CompiledScene = {
       ...scene,
       scene: {
@@ -352,7 +368,6 @@ describe('materialize -> resolve -> solve', () => {
                     transition: {
                       duration: 320,
                       ease: 'easeOutCubic',
-                       path: compiledPath,
                     },
                   },
                 },
@@ -375,12 +390,8 @@ describe('materialize -> resolve -> solve', () => {
       mode: 'append',
       flipMode: 'overlay-world',
       reorder: true,
-      transition: {
-        duration: 320,
-        ease: 'easeOutCubic',
-         path: expect.objectContaining({ kind: 'segments', traversal: 'arc-length' }),
-      },
     })
+    expect(solved.persos['main:root']?.placement).not.toHaveProperty('transition')
   })
 
   it('builds parent-child links, stable child order, and inherited detached state', () => {
