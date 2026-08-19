@@ -5,6 +5,10 @@ import { createPlannedStrapHelpers, type PlannedStrapHelpers } from './planned-h
 export type StrapEvent = Readonly<{
   name: string
   data?: CompiledRecord
+  eventId?: string
+  eventSeq?: number
+  applyAtMs?: number
+  cascade?: boolean
 }>
 
 /** One immediate or planned strap step. */

@@ -11,6 +11,7 @@ export {
 export { MountTargetRegistry } from './mount-targets'
 export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
+export { RuntimeEventDispatcher } from './runtime-event-dispatcher'
 export { executeListenPipeline, propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
@@ -46,6 +47,12 @@ export type {
   TrackCommandResult,
   StrapOutputAppendResult,
 } from './track-journal'
+export type {
+  RuntimeEventDispatcherOptions,
+  RuntimeEventDispatchIssue,
+  RuntimeEventDispatchResult,
+  RuntimeEventInput,
+} from './runtime-event-dispatcher'
 export type {
   ListenEventInput,
   ListenEventOutput,

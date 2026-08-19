@@ -5,6 +5,7 @@ import {
   TRACK_EVENT_TOGGLE,
 } from '../../config/track-events'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../config/strap-scope'
+import { TRACK_GLOBAL_ID } from '../../config/track'
 import { isPlainRecord } from '../../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import { buildTrackRegistry, createStrapTrackId, type MaterializedTrackRegistry } from './tracks'
@@ -21,6 +22,12 @@ export type RuntimeTrackEvent = Readonly<{
   data?: CompiledRecord
   update?: CompiledRecord
   stateScope?: StrapScope
+  /** Marks a scene-level event that must be visible while materializing every story. */
+  cascade?: boolean
+  /** Opaque event context preserved in the journal for runtime consumers. */
+  context?: Readonly<Record<string, unknown>>
+  /** Opaque runtime metadata preserved in the journal for diagnostics. */
+  meta?: Readonly<Record<string, unknown>>
 }>
 
 /** Input used to append one live event without creating a track. */
@@ -33,6 +40,9 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   data?: CompiledRecord
   update?: CompiledRecord
   stateScope?: StrapScope
+  cascade?: boolean
+  context?: Readonly<Record<string, unknown>>
+  meta?: Readonly<Record<string, unknown>>
 }>
 
 /** Input used to anchor a portable relative eventime tree at runtime. */
@@ -174,9 +184,15 @@ export class RuntimeTrackJournal {
     }
 
     const events: RuntimeTrackEvent[] = []
-    const storyId = input.storyId ?? STRAP_SCOPE_SCENE
+    const storyId = input.storyId
     for (const event of input.output.events) {
-      const appended = this.appendStrapEvent(event, trackId, storyId, input.anchorMs)
+      const appended = this.appendStrapEvent(
+        event,
+        trackId,
+        storyId,
+        input.scope === STRAP_SCOPE_SCENE,
+        input.anchorMs,
+      )
       if (!appended.ok) return appended
       events.push(appended.data)
     }
@@ -191,6 +207,7 @@ export class RuntimeTrackJournal {
           occurrence.step.event,
           trackId,
           storyId,
+          input.scope === STRAP_SCOPE_SCENE,
           input.anchorMs + occurrence.offsetMs,
         )
         if (!appended.ok) return appended
@@ -247,7 +264,11 @@ export class RuntimeTrackJournal {
 
   /** Returns live events scoped to one story across its active tracks. */
   getEventsForStory(storyId: string): readonly RuntimeTrackEvent[] {
-    return [...this.eventsByTrack.values()].flatMap((events) => events.filter((event) => event.storyId === storyId))
+    return [...this.eventsByTrack.values()].flatMap((events) => events.filter(
+      (event) => event.storyId === storyId
+        || event.cascade === true
+        || event.trackId === TRACK_GLOBAL_ID,
+    ))
   }
 
   /** Returns replayable state patches in deterministic timeline order. */
@@ -261,6 +282,7 @@ export class RuntimeTrackJournal {
       .flatMap((events) => events)
       .filter((event) => event.update !== undefined
         && event.stateScope === scope
+        && this.isTrackActive(event.trackId)
         && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
       .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
@@ -297,16 +319,18 @@ export class RuntimeTrackJournal {
   private appendStrapEvent(
     event: StrapEvent,
     trackId: string,
-    storyId: string,
+    storyId: string | undefined,
+    cascade: boolean,
     applyAtMs: number,
   ): TrackCommandResult<RuntimeTrackEvent> {
     return this.appendLiveEvent({
-      eventId: this.createGeneratedEventId(trackId, storyId),
+      eventId: this.createGeneratedEventId(trackId, storyId ?? STRAP_SCOPE_SCENE),
       trackId,
       storyId,
       name: event.name,
       applyAtMs,
       data: event.data,
+      cascade,
     })
   }
 

@@ -33,6 +33,70 @@ const scene: CompiledScene = {
 }
 
 describe('RuntimePlayer', () => {
+  it('emits through the journal and seeks the same live result without rerunning straps', async () => {
+    let strapCalls = 0
+    const liveScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            straps: ['mark'],
+            listen: [{ on: 'source:event', straps: ['mark'], emit: [{ name: 'done:event' }] }],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'idle' },
+              actions: {
+                'source:event': { className: { add: 'source' } },
+                'mark:event': { className: { add: 'marked' } },
+                'done:event': { className: { add: 'done' } },
+              },
+            }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const player = new RuntimePlayer(
+      'live-instance',
+      engine,
+      liveScene,
+      undefined,
+      undefined,
+      {
+        scene: {},
+        stories: {
+          main: {
+            mark: () => {
+              strapCalls += 1
+              return { events: [{ name: 'mark:event' }] }
+            },
+          },
+        },
+      },
+    )
+
+    expect(player.init().ok).toBe(true)
+    const emitted = await player.emit({ name: 'source:event', storyId: 'main' })
+    expect(emitted.ok).toBe(true)
+    expect(strapCalls).toBe(1)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('marked'),
+    )
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('done'),
+    )
+
+    expect(player.seek(0).ok).toBe(true)
+    expect(strapCalls).toBe(1)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('done'),
+    )
+    player.destroy()
+  })
+
   it('owns lifecycle and logical time without creating a clock', () => {
     const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
     const sink = new MemoryRenderSink()

@@ -22,8 +22,9 @@ replay, capture cache, alias, handoff or demo-specific mutation.
 ## Isolated layout sampling
 
 The runner owns a second, offscreen HTML substrate used only to measure natural
-layout. It uses the same `RuntimePlayer`, `StructuralTimeline`, component catalog
-and `LayoutDomBackend` contracts as the visible host. Its width and height are
+layout. It uses a companion `RuntimePlayer` with the same `StructuralTimeline`,
+component catalog and `LayoutDomBackend` contracts as the visible host, while
+sharing the visible player's `RuntimeTrackJournal`. Its width and height are
 copied exactly from the visible root; this matters for authored percentage-based
 positions, which must produce the same LAST geometry in both substrates.
 
@@ -77,6 +78,8 @@ trajectory and timing do not change.
 
 - The visible DOM is never used to reconstruct logical state.
 - The measurement DOM never receives transient motion styles.
+- The visible and measurement players share live event history; the measurement
+  player never executes listen rules or straps.
 - Every item owns its temporal segments independently.
 - Parent movement is composed recursively at resolution time.
 - An overlapping local reflow retargets its existing segment at the already

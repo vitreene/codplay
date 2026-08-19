@@ -24,9 +24,12 @@ import {
   type PlayerInitResult,
   type PlayerLifecycleState,
   type PlayerSeekResult,
+  type RuntimeEventDispatchResult,
+  type RuntimeEventInput,
+  type StrapCollections,
 } from '../player'
 import { compileMotionSchedule, MotionLayoutProjection } from '../motion'
-import type { CompiledScene } from '../../scene/compiled'
+import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import { HtmlComponentMaterializer } from './html-component-materializer'
 import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 import { HtmlMotionSystem } from './html-motion-system'
@@ -49,6 +52,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   engine?: RuntimeEngine
   moduleServiceCatalog?: RuntimeModuleServiceCatalog
   ticker?: Ticker
+  functions?: CompiledFunctionCollection
+  strapCollections?: StrapCollections
 }>
 
 /** Generic HTML host with one absolute-time presentation circuit. */
@@ -107,11 +112,12 @@ export class HtmlPlayerRunner {
       options.compiledScene,
       undefined,
       undefined,
-      undefined,
+      options.strapCollections,
       undefined,
       mountTargets,
       layoutProjection,
       componentRuntime,
+      options.functions,
     )
 
     const measurementRoot = createMeasurementRoot(options.root)
@@ -148,11 +154,12 @@ export class HtmlPlayerRunner {
       options.compiledScene,
       undefined,
       undefined,
-      undefined,
-      undefined,
+      options.strapCollections,
+      this.player.trackJournal,
       mountTargets,
       measurementBackend,
       measurementRuntime,
+      options.functions,
     )
     this.measurementPlayer = measurementPlayer
     const motionHost = new HtmlMotionPresentationHost(
@@ -225,6 +232,11 @@ export class HtmlPlayerRunner {
   /** Presents one logical time through the exact same motion operation as Play. */
   seek(timeMs: number): PlayerSeekResult {
     return this.player.seek(timeMs)
+  }
+
+  /** Emits one live event through the runner's shared visible/measurement journal. */
+  emit(input: Omit<RuntimeEventInput, 'applyAtMs'> & { applyAtMs?: number }): Promise<RuntimeEventDispatchResult> {
+    return this.player.emit(input)
   }
 
   /** Invalidates measured layout endpoints after a host geometry change. */

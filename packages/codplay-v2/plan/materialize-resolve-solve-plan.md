@@ -50,6 +50,9 @@ Les enfants portent des temps relatifs et sont aplatis en temps absolus. Le chem
 de declaration sert de tie-breaker stable pour les occurrences au meme instant.
 Une action `null` peut utiliser `event.data` comme payload d'action selon la regle
 canonique V1.
+Les events globaux marques `cascade` sont inclus dans la materialisation de chaque
+story; les events locaux restent limites a leur story. Les outputs de straps et les
+patches d'etat suivent exactement la meme selection de journal.
 
 ## Resolve
 
@@ -115,9 +118,8 @@ leur entree dans ce registre.
 
 ## Hors perimetre
 
-- tracks et listen complets;
-- straps et listen complets;
-- straps et emissions;
+- ActionSequence et tweens continus;
+- annulation de straps asynchrones et generations obsoletes;
 - `live`, capture et DnD;
 - hierarchie, move, FLIP et matrices d'ancetres;
 - media, preload et services runtime;

@@ -1,24 +1,32 @@
-# CodPlay V2 - tranche listen, transform et emit
+# CodPlay V2 - tranche listen, transform, straps et dispatch runtime
 
 ## Statut
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: required before async straps
+> Review: required before cancellation/obsolete generations
 
 ## Frontiere
 
-Cette tranche traite un event runtime sans lire le DOM et sans modifier le journal
-des tracks. Elle produit des sorties d'events et signale les straps a executer dans
-la tranche asynchrone suivante.
+Cette tranche distingue une primitive pure et son orchestration runtime. Les
+primitives `propagateListenEvent` et `executeListenPipeline` ne connaissent ni le
+DOM ni le journal. `RuntimeEventDispatcher` est le seul point qui transforme un
+event live en faits journalises; `RuntimePlayer.emit()` l'utilise et `seek()` ne
+fait ensuite que relire ce journal.
 
 ```text
-Runtime event
-    -> exact listen filter
+RuntimePlayer.emit(event)
+    -> append source event on a declared track
+    -> exact story rule, then scene fallback
     -> transform references
-    -> sequential straps
-    -> declared emit
-    -> emitted events + strap results
+    -> sequential awaited straps
+    -> append strap outputs on their declared tracks
+    -> append/reinject declared emits with bounded cascade
+    -> materializeScene(journal, t)
+
+RuntimePlayer.seek(t)
+    -> materializeScene(journal, t)
+    -> resolve -> solve
 ```
 
 ## Invariants
@@ -33,7 +41,20 @@ Runtime event
 - les erreurs de fonction sont retournees comme issues et ne font pas tomber le pipeline;
 - les straps sont executes sequentiellement et attendus;
 - `emit` est produit apres completion des straps de la regle;
-- les sorties strap sont conservees separement des emissions de la regle.
+- les sorties strap sont conservees separement des emissions de la regle, une
+  track dediee par strap et par scope;
+- l'event source est append une seule fois avant l'execution des regles;
+- une story utilise ses regles si le nom correspond; sinon la scene est essayee,
+  sans melanger les deux collections;
+- un event `cascade` est stocke sur la track `global` et est materialise pour
+  chaque story;
+- seuls les `emit` declares sont reinjectes: la sortie pass-through d'une regle
+  sans `emit` ne reboucle pas dans `listen`;
+- une profondeur maximale borne les cycles de declarations;
+- aucune track n'est creee pendant le dispatch;
+- les mises a jour d'etat sont journalisees avant d'etre presentees au strap et
+  le `RuntimeStateStore` est reconcilie depuis la materialisation;
+- Play et Seek consomment le meme `RuntimeTrackJournal`.
 
 ## Limite du contrat live
 
@@ -47,13 +68,21 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 
 ## Hors perimetre
 
-- materialisation automatique des emissions de la regle dans le journal;
 - helpers `live` et emissions liees aux frames;
-- materialisation automatique des emissions dans le journal;
-- listen scene/story complet et cascade globale;
+- annulation et generation obsolete des straps asynchrones;
+- ActionSequence et tweens continus;
 - effects non rejouables;
 - composants et renderer.
 
-La demo temporaire consomme maintenant cette tranche sur un flux de validation
-local. Cette orchestration reste un banc visible et ne constitue pas encore le
-pipeline runtime general des composants.
+## Implementation
+
+- `src/runtime/player/pipeline/listen.ts` porte les primitives pures;
+- `src/runtime/player/pipeline/runtime-event-dispatcher.ts` porte le routage
+  scene/story, le cascade borne et l'append journal;
+- `src/runtime/player/runtime-player.ts` expose `emit()` et reconcilie l'etat
+  depuis le journal;
+- `HtmlPlayerRunner` partage le journal entre l'hote visible et l'hote de mesure.
+
+La tranche est couverte par les tests du dispatcher, du player, du journal, de
+`listen` et des straps. La demo reste un banc visible et ne constitue pas une
+seconde implementation du pipeline.

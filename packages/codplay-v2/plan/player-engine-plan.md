@@ -48,6 +48,11 @@ Une instance possede :
 un resultat structure avec `ok`, `timeMs` et `diagnostics`. La reconstruction des
 persos appartient aux tranches materialize/resolve/solve.
 
+`RuntimePlayer.emit()` est l'entree live unique. Il append l'event et les sorties
+du dispatcher dans le `RuntimeTrackJournal`, puis reconstruit la projection
+courante. `seek` ne repasse jamais par `listen`, transform ou strap : il relit le
+meme journal par `materialize -> resolve -> solve`.
+
 ## Seek de portee
 
 Le player sait seeker une cible locale. La portee et la conversion eventuelle depuis une ligne de
@@ -101,7 +106,7 @@ renderer ne sont pas ouverts.
 - composants et services runtime;
 - montage et racine DOM;
 - materialize, resolve et solve hierarchiques complets;
-- events, listen, straps et effets;
+- ActionSequence, effets et lifecycle applicatif;
 - rendu, preload et media;
 - demo produit et renderer de production;
 - contrat DOM public.

@@ -52,6 +52,19 @@ path, historical replay path or module-owned child-order map.
 The optional `flipMode` remains placement metadata for projection consumers; it
 never changes target resolution or structural ordering.
 
+## Runtime events
+
+`RuntimePlayer.emit()` is the live entry point. It appends the source event to
+the player's declared `RuntimeTrackJournal`, selects story rules before scene
+fallback, executes transforms and awaited straps, persists strap outputs on
+their dedicated tracks, and reinjects only declared `emit` records with a
+bounded cascade depth.
+
+The visible runner and its isolated measurement host share this journal. Play
+may update the presentation immediately, while a later Seek reads the same
+source, emitted events, strap events and state updates without calling any
+strap or transform again.
+
 ## Invariants
 
 - Logical state is never reconstructed from the DOM.
@@ -60,3 +73,6 @@ never changes target resolution or structural ordering.
 - Component services are the only writers of authored DOM state.
 - Modules may observe move deltas, but cannot provide an alternative layout
   history to Play or Seek.
+- `RuntimeTrackJournal` is the only live event history; no dispatch path creates
+  an undeclared track.
+- `seek()` is materialization-only for events, transforms and straps.

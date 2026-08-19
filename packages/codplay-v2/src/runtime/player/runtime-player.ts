@@ -1,6 +1,6 @@
 import type { DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
-import type { CompiledScene } from '../../scene/compiled'
+import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
@@ -16,6 +16,7 @@ import {
   PLAYER_LIFECYCLE_READY,
   type PlayerLifecycleState,
 } from '../config/player-lifecycle'
+import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 import { createTemporaryRenderSnapshotFromSolved, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
 import type { LayoutProjection } from './layout-projection'
@@ -27,11 +28,14 @@ import {
   RuntimeStateStore,
   solveScene,
   validateStrapCollections,
+  RuntimeEventDispatcher,
   type SolvedScene,
   type MountTargetDeclaration,
+  type RuntimeEventDispatchResult,
+  type RuntimeEventInput,
   type StrapCollections,
 } from './pipeline'
-import type { RuntimeTrackJournal } from './pipeline'
+import { RuntimeTrackJournal } from './pipeline'
 import { StructuralTimeline } from './structural-timeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
@@ -56,7 +60,8 @@ export class RuntimePlayer {
   readonly renderSink: TemporaryRenderSink | undefined
   readonly renderSync: RenderSync
   readonly strapCollections: StrapCollections | undefined
-  readonly trackJournal: RuntimeTrackJournal | undefined
+  readonly trackJournal: RuntimeTrackJournal
+  readonly functions: CompiledFunctionCollection
   readonly stateStore: RuntimeStateStore
   readonly mountTargets: readonly MountTargetDeclaration[]
   readonly layoutProjection: LayoutProjection | undefined
@@ -86,6 +91,7 @@ export class RuntimePlayer {
     mountTargets: readonly MountTargetDeclaration[] = [],
     layoutProjection?: LayoutProjection,
     componentRuntime?: RuntimeComponentRuntime,
+    functions: CompiledFunctionCollection = {},
   ) {
     this.id = id
     this.engine = engine
@@ -93,7 +99,8 @@ export class RuntimePlayer {
     this.renderSink = renderSink
     this.renderSync = renderSync
     this.strapCollections = strapCollections
-    this.trackJournal = trackJournal
+    this.trackJournal = trackJournal ?? new RuntimeTrackJournal(compiledScene)
+    this.functions = functions
     this.mountTargets = mountTargets
     this.layoutProjection = layoutProjection
     this.componentRuntime = componentRuntime
@@ -164,6 +171,7 @@ export class RuntimePlayer {
       (timeMs) => this.reconstructBaseScene(timeMs, undefined, false),
     )
     this.solvedScene = this.reconstructScene(0)
+    this.synchronizeStateStore(0)
     this.componentRuntime?.sync(this.solvedScene)
     this.layoutProjection?.project(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
@@ -190,6 +198,7 @@ export class RuntimePlayer {
           this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
         }
         this.solvedScene = this.pendingSolvedScene
+        this.synchronizeStateStore(timeMs)
         this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
@@ -240,6 +249,37 @@ export class RuntimePlayer {
     }
   }
 
+  /**
+   * Appends and routes one live event through the same journal later consumed
+   * by seek, then refreshes the current projection from that journal.
+   */
+  async emit(input: Omit<RuntimeEventInput, 'applyAtMs'> & { applyAtMs?: number }): Promise<RuntimeEventDispatchResult> {
+    this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
+    this.synchronizeStateStore(this.currentTimeMs)
+    const dispatcher = new RuntimeEventDispatcher({
+      scene: this.compiledScene,
+      journal: this.trackJournal,
+      strapCollections: this.strapCollections,
+      functions: this.functions,
+      stateStore: this.stateStore,
+    })
+    const result = await dispatcher.dispatch({
+      ...input,
+      applyAtMs: input.applyAtMs ?? this.currentTimeMs,
+    })
+    this.synchronizeStateStore(this.currentTimeMs)
+    const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
+    const previousSolvedScene = this.solvedScene
+    const moveDeltas = previousSolvedScene === undefined
+      ? []
+      : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+    this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    this.solvedScene = nextSolvedScene
+    this.projectScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.presentTemporarySnapshot()
+    return result
+  }
+
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
     if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
@@ -264,6 +304,7 @@ export class RuntimePlayer {
     }
     this.currentTimeMs += frame.deltaMs
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs)
+    this.synchronizeStateStore(this.currentTimeMs)
     const previousSolvedScene = this.solvedScene
     const rawMoveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     const moveDeltas = rawMoveDeltas
@@ -349,6 +390,15 @@ export class RuntimePlayer {
       ],
       ...(childrenByTarget === undefined ? {} : { childrenByTarget }),
     })
+  }
+
+  /** Reconciles the mutable strap input snapshot from the journal projection. */
+  private synchronizeStateStore(timeMs: number): void {
+    const materialized = materializeScene(this.compiledScene, timeMs, this.trackJournal)
+    this.stateStore.replace(STRAP_SCOPE_SCENE, materialized.sceneState)
+    for (const [storyId, state] of Object.entries(materialized.storyStates)) {
+      this.stateStore.replace(STRAP_SCOPE_STORY, state, storyId)
+    }
   }
 
   /** Initializes player-scoped module services from the first solved snapshot. */

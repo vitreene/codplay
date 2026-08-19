@@ -10,8 +10,14 @@ export type ListenEventInput = Readonly<{
   name: string
   applyAtMs: number
   trackId: string
-  storyId: string
+  storyId?: string
   data?: CompiledRecord
+  /** Sends this event to scene-level rules and all story materializations. */
+  cascade?: boolean
+  /** Opaque event context preserved across the runtime pipeline. */
+  context?: Readonly<Record<string, unknown>>
+  /** Opaque runtime metadata preserved across the runtime pipeline. */
+  meta?: Readonly<Record<string, unknown>>
 }>
 
 /** Event emitted by a listen rule after transforms and declaration filtering. */
@@ -119,6 +125,7 @@ export function propagateListenEvent(
         ...input,
         name: typeof emission.name === 'string' ? emission.name : input.name,
         data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : data,
+        cascade: typeof emission.cascade === 'boolean' ? emission.cascade : input.cascade,
       })
     }
   }
@@ -151,17 +158,35 @@ export async function executeListenPipeline(
     )
     issues.push(...transformed.issues)
     const transformedEvent = transformed.events[0] ?? input.event
-    const strapResult = await executeStrapsSequentially(
-      rule.straps ?? [],
-      input.straps ?? {},
-      {
-        event: { name: transformedEvent.name, data: transformedEvent.data },
-        state: input.state ?? {},
-        meta: input.meta ?? {},
-        context: input.context,
-      },
-    )
-    straps.push({ ruleName: rule.on, strapNames: rule.straps ?? [], result: strapResult })
+    const strapNames = rule.straps ?? []
+    if (strapNames.length === 0) {
+      straps.push({
+        ruleName: rule.on,
+        strapNames: [],
+        result: { events: [], updates: [], planned: [], warnings: [], issues: [] },
+      })
+    } else {
+      for (const strapName of strapNames) {
+        const strapResult = await executeStrapsSequentially(
+          [strapName],
+          input.straps ?? {},
+          {
+            event: {
+              name: transformedEvent.name,
+              data: transformedEvent.data,
+              eventId: transformedEvent.eventId,
+              eventSeq: transformedEvent.eventSeq,
+              applyAtMs: transformedEvent.applyAtMs,
+              cascade: transformedEvent.cascade,
+            },
+            state: input.state ?? {},
+            meta: input.meta ?? {},
+            context: input.context,
+          },
+        )
+        straps.push({ ruleName: rule.on, strapNames: [strapName], result: strapResult })
+      }
+    }
 
     if (rule.emit === undefined) {
       events.push(transformedEvent)
@@ -172,6 +197,7 @@ export async function executeListenPipeline(
         ...transformedEvent,
         name: typeof emission.name === 'string' ? emission.name : transformedEvent.name,
         data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : transformedEvent.data,
+        cascade: typeof emission.cascade === 'boolean' ? emission.cascade : transformedEvent.cascade,
       })
     }
   }

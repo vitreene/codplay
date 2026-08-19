@@ -4,7 +4,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: required before journal integration
+> Review: required before cancellation/obsolete generations
 
 ## Contrat actuel
 
@@ -19,13 +19,13 @@ Le flattening recursif collecte :
 - les occurrences planifiees avec `offsetMs`;
 - les warnings auteur.
 
-Cette sortie reste d'abord en memoire et n'est pas appendee implicitement par
-l'execution du strap. La demo de validation l'append explicitement pour montrer le
-flux, sans en faire encore une orchestration runtime generale.
+Cette sortie reste d'abord en memoire dans l'execution pure du strap. Le
+`RuntimeEventDispatcher` est ensuite responsable de son append explicite dans le
+journal; l'execution du strap ne connait donc toujours pas le stockage.
 
-Les sorties `events` et les occurrences planifiees qui portent un event peuvent
-maintenant etre appendees par `RuntimeTrackJournal.appendStrapOutput` sur la track
-dediee deja declaree. Les `update` sont materialises comme des events
+Les sorties `events` et les occurrences planifiees qui portent un event sont
+appendees par `RuntimeTrackJournal.appendStrapOutput` sur la track dediee deja
+declaree, une track par strap et par scope. Les `update` sont materialises comme des events
 `runtime:state:update` portant leur scope `story` ou `scene`. Ils sont rejouables
 par `materialize` et ne sont jamais appliques directement par le renderer.
 
@@ -55,6 +55,12 @@ future doit etre specifiquement decidee avant implementation.
 - validation des straps declares a `RuntimePlayer.init`;
 - warnings non bloquants pour les declarations absentes.
 - snapshots scene/story geles via `RuntimeStateStore`.
+- `RuntimeEventDispatcher` appelle chaque strap declare dans l'ordre, attend sa
+  completion, journalise son resultat, puis seulement reinjecte les emits;
+- plusieurs straps dans une meme regle gardent chacun leur provenance et leur
+  track dediee;
+- le `RuntimePlayer` reconcilie les snapshots d'etat depuis le journal apres
+  seek et avant un nouveau dispatch.
 
 ## A faire
 
