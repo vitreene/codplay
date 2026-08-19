@@ -70,10 +70,11 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
 | Partie active | `player-engine-plan.md` | Le socle CompiledScene est gele comme fondation; la tranche en cours definit la consommation player/engine avant le sink de rendu temporaire. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | En cours, a relire avant integration composant | Le moteur et les validateurs core existent; la source unique de declaration des services reste a fixer. |
+| Validation/catalogue | En cours, a relire avant integration composant | Les declarations composant/services/modules sont projetees depuis le catalogue runtime vers le snapshot de validation; les extensions de validateurs restent a couvrir. |
 | Composants | Fondation layout en cours | `LayoutComponent`, `TagComponent`, factories runtime et projection template string sont couverts ; JSX et les autres types restent hors tranche. |
 | ACE | Existant, non modifie | Il reste consommateur de valeurs completes; la preparation amont est a construire. |
 | Mouvement HTML | Graphe V2 implémenté, `A relire` | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts. |
+| Démos standard | Base documentée, `En cours` | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -98,6 +99,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours |
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours, base auteur fixée |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire, restructuration appliquée |
+| Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | En cours, gabarit documenté |
 
 ## Modeles algorithmiques
 
@@ -169,9 +171,19 @@ partage ou seek multi-instance. Ces capacites sont absentes de ses types et fixt
 
 ### 3. Validation mouvement/list
 
-La démo runner dans `packages/codplay-v2/demos/validation/` valide ensemble composants,
-containers, move, ordre parent/enfant, ordre des enfants, conflits same-tick, `@root`, `@off`,
-detach/reattach, mesures, FLIP, overlay-world et seek.
+La démo compacte dans `packages/codplay-v2/demos/validation/runner/` valide les
+contrats local et reparent avec deux scénarios lisibles. La fixture
+`packages/authoring/selection-frame/demos/flip-stress/` en est le gabarit de
+stress et la base de reprise pour les démos standard : elle ajoute plusieurs
+conteneurs mobiles, des listes imbriquées, des trajectoires, des transitions
+chevauchées et le redimensionnement responsive.
+
+Ces démos restent des surfaces de validation, pas des implémentations
+alternatives du runtime. Elles doivent conserver une `SceneDoc` déclarative,
+le cycle de vie possédé par `HtmlPlayerRunner`, les checkpoints FIRST / boundary
+/ middle / LAST, ainsi que la comparaison Play/Seek au même temps. Les
+paramètres de stress peuvent être réduits pour une démo standard, mais le
+circuit de résolution et les points d'observation restent identiques.
 
 Le seek reconstruit l'etat logique puis évalue le même graphe de mouvement et la
 même frame de présentation que Play au temps demandé. Il ne rejoue pas les

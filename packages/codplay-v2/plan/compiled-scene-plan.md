@@ -13,8 +13,9 @@ V2.
 - Squelette des contrats `SceneDoc` et `CompiledScene` en place, a relire.
 - Normalisation structurelle et premiers guards en place, a relire.
 - Premier builder, deriveurs de base et codec structurel en place; perimetre gele comme fondation de flux de rendu, deriveurs de proprietes et consommation player restant a construire.
+- Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
-- Blocage courant : source unique de declaration des services a fixer avant l'integration composant.
+- Source unique de declaration composant/services/modules en place via la projection du catalogue runtime vers le snapshot de validation; revue des extensions de validateurs encore necessaire avant l'integration composant.
 
 ## Principes
 
@@ -102,6 +103,9 @@ de propriete ou de composant afin de ne pas obliger chaque scene a les redeclare
 - La sanitation normalise les representations autorisees et retire les donnees exclues de la diffusion.
 - Les fonctions et autres valeurs non serialisables sont extraites avant la production de l'artefact.
 - Les deriveurs construisent les sections nommees de l'artefact depuis la donnee canonique.
+- Les paths SVG auteur sont transformes une fois en objets `Path` ACE JSON-safe. `prepareSvgPath`, exporte par
+  `src/ace/index.ts`, est la primitive pure partageable par le builder et les futurs straps; le runtime ne parse
+  jamais la syntaxe SVG.
 - Les proprietes de transformation sont la premiere verticale de defaults; leur contrat est detaille dans
   [`transform-properties-plan.md`](./transform-properties-plan.md).
 - Les couleurs suivent une seconde frontiere de normalisation, documentee dans
@@ -118,9 +122,12 @@ logique defensive dispersee dans le player. L'enveloppe V1 reste stable, mais so
 regroupe pour la lecture tant que le codec et les dependances declarees preservent le contrat.
 
 La preparation syntaxique `adapter -> ACE` n'appartient pas a `src/scene/compiled` :
-elle est testee et maintenue dans `src/ace/adapters`. La scene compilee ne fait que
-consommer les formes deja normalisees lorsqu'une sanitation de propriete sera reliee
-au contrat de service correspondant. Le codec ne parse ni couleur ni transform.
+elle est testee et maintenue dans `src/ace`. Pour les paths, `prepareSvgPath` est
+la fonction publique de conversion d'une chaine SVG en `Path`; `compileMovePath`
+ne fait que l'appliquer au payload `move.transition` pendant le build. La scene
+compilee ne conserve donc pas la syntaxe auteur. Un strap futur qui produit un
+path dynamique reutilise `prepareSvgPath` avant de retourner sa mise a jour.
+Le codec ne parse ni couleur ni transform.
 Le chemin chaud `resolve` recoit un intervalle deja prepare et ne revalide pas les
 syntaxes auteur, les unites ou les espaces couleur.
 
@@ -210,7 +217,7 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Squelette en place, a relire |
-| 2. Catalogue | Descripteurs composants/groupes de proprietes/services, snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | En cours |
+| 2. Catalogue | Descripteurs composants/groupes de proprietes/services, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection en place; extensions a relire |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe en place; validation semantique et migrations restent a faire |

@@ -21,7 +21,7 @@ Les straps sont les unités de comportement : fonctions pures déclenchées par 
 
 ### `codplay-v2` — runtime en construction (`packages/codplay-v2`)
 
-Réécriture déclarative séparée de V1. La fondation couvre actuellement la compilation `SceneDoc -> CompiledScene`, ACE, engine/player, materialize/resolve/solve, seek groupé, move state et les premières capacités runtime. Les composants, le renderer de production, la mesure et FLIP V2 restent à ouvrir.
+Réécriture déclarative séparée de V1. La fondation couvre actuellement la compilation `SceneDoc -> CompiledScene`, ACE, engine/player, materialize/resolve/solve, seek groupé, les composants de base, le move state et le runner HTML V2 avec projection locale/reparent. La fixture `packages/authoring/selection-frame/demos/flip-stress` sert de surface de validation et de gabarit pour les futures démos standard. Le renderer de production et les capacités encore non spécifiées restent à ouvrir.
 
 ### `@codplay/demos` — application de démonstration (`packages/demos`)
 

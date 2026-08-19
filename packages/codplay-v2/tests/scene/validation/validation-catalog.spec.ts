@@ -4,6 +4,24 @@ import { DiagnosticCollector } from '../../../src/diagnostics'
 import { CompiledSceneValidationEngine, ValidationCatalog, validatePersoWithCatalog } from '../../../src/scene/validation'
 
 describe('ValidationCatalog', () => {
+  it('projects runtime-shaped component declarations into one validation catalog', () => {
+    const catalog = ValidationCatalog.fromComponents([{
+      type: 'tag',
+      services: ['style'],
+      modules: ['markup'],
+      validateInitial: () => undefined,
+    }])
+
+    const snapshot = catalog.snapshot()
+
+    expect(snapshot.components.get('tag')).toMatchObject({
+      type: 'tag',
+      services: ['style'],
+      modules: ['markup'],
+    })
+    expect(snapshot.services.has('style')).toBe(true)
+  })
+
   it('passes the declared service validators to the compiled validation boundary', () => {
     const output = vi.fn()
     const diagnostics = new DiagnosticCollector({ output })

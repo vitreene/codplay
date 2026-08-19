@@ -22,6 +22,21 @@ and catalog validation, external function references, resource requirements, roo
 candidates, and runtime freezing. Codec support and full property/default
 derivation remain open in V2 foundation.
 
+## Path values
+
+An authored `move.transition.path` remains an SVG `d` string in `SceneDoc`. The
+builder converts it once into the JSON-safe `Path` object defined by ACE. The
+canonical syntax transformation is `prepareSvgPath`, exported from
+`src/ace/index.ts`; it is pure, deterministic, independent of the DOM and safe
+to reuse from a future strap that produces a dynamic path. A strap must return
+the prepared object rather than making the runtime parse SVG syntax.
+
+`compileMovePath`, exported from this folder, is the higher-level payload
+transform used by `SceneBuilder`: it finds a `move.transition.path`, applies
+the shared ACE conversion and preserves the surrounding move declaration. It is
+useful to code that transforms a complete move payload, while
+`prepareSvgPath` remains the primitive for a single path value.
+
 Target IDs in the runtime artifact are opaque and scene-unique. Factories outside
 CodPlay may compose story and perso IDs; CodPlay does not infer target origin from
 their spelling.

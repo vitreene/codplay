@@ -334,36 +334,9 @@ function createStressScene(): SceneDoc {
   }
 }
 
-/** Creates the author validation catalog for the declarative stress scene. */
-function createValidationCatalog(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  catalog.registerComponent({
-    type: 'layout',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  catalog.registerComponent({
-    type: 'tag',
-    services: ['className', 'style', 'attr', 'content'],
-    modules: [],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  catalog.registerComponent({
-    type: 'list',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup', 'list'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  return catalog
-}
-
 /** Compiles the declarative stress scene through the normative SceneDoc boundary. */
-function buildScene(): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(createValidationCatalog().snapshot(), {
+function buildScene(componentCatalog: RuntimeComponentCatalog): ReturnType<SceneBuilder['build']> {
+  return new SceneBuilder(ValidationCatalog.fromComponents(componentCatalog.getAll()).snapshot(), {
     createdAt: '2026-08-18T00:00:00.000Z',
   }).build(createStressScene())
 }
@@ -375,6 +348,8 @@ function createComponentCatalog(): RuntimeComponentCatalog {
     type: 'layout',
     services: ['className', 'style', 'attr'],
     modules: ['markup'],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
     mountableParts: [
       'stress-a-outlet',
@@ -388,11 +363,15 @@ function createComponentCatalog(): RuntimeComponentCatalog {
     type: 'tag',
     services: ['className', 'style', 'attr', 'content'],
     modules: [],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
   }, {
     type: 'list',
     services: ['className', 'style', 'attr'],
     modules: ['markup', 'list'],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
     mountableParts: [
       'q-content-outlet',
@@ -506,7 +485,8 @@ function mountFlipStressDemo(container: HTMLElement): void {
   const reset = container.querySelector<HTMLButtonElement>('#stress-reset')!
   const checkpoints = [...container.querySelectorAll<HTMLButtonElement>('[data-time]')]
 
-  const build = buildScene()
+  const componentCatalog = createComponentCatalog()
+  const build = buildScene(componentCatalog)
   if (!build.ok) {
     status.textContent = 'SceneDoc build failed'
     showError(error, build.diagnostics.errors)
@@ -518,7 +498,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
     compiledScene: build.compiledScene,
     root: stage,
     rootTargets: [{ id: 'root-host', storyId: 'main' }],
-    componentCatalog: createComponentCatalog(),
+    componentCatalog,
     serviceCatalog: createDomComponentServiceCatalog(),
   })
   const init = runner.init()

@@ -24,6 +24,13 @@ export class ValidationCatalog {
   private readonly components = new Map<string, ComponentValidationDefinition>()
   private readonly services = new Map<string, ServiceValidationDefinition>()
 
+  /** Creates a validation catalog from the component capability declarations. */
+  static fromComponents(definitions: readonly ComponentValidationDefinition[]): ValidationCatalog {
+    const catalog = new ValidationCatalog()
+    for (const definition of definitions) catalog.registerComponent(definition)
+    return catalog
+  }
+
   /**
    * Creates a catalog preloaded with the common service validators.
    */

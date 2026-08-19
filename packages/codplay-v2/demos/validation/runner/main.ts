@@ -210,36 +210,12 @@ function createNestedOverlayScene(): SceneDoc {
   }
 }
 
-/** Creates the author validation catalog for the movement scenes. */
-function createValidationCatalog(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  catalog.registerComponent({
-    type: 'layout',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  catalog.registerComponent({
-    type: 'tag',
-    services: ['className', 'style', 'attr', 'content'],
-    modules: [],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  catalog.registerComponent({
-    type: 'list',
-    services: ['className', 'style', 'attr'],
-    modules: ['list'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  return catalog
-}
-
 /** Compiles one demo scene through the normative SceneDoc boundary. */
-function buildScene(scene: SceneDoc): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(createValidationCatalog().snapshot(), {
+function buildScene(
+  scene: SceneDoc,
+  componentCatalog: RuntimeComponentCatalog,
+): ReturnType<SceneBuilder['build']> {
+  return new SceneBuilder(ValidationCatalog.fromComponents(componentCatalog.getAll()).snapshot(), {
     createdAt: '2026-08-18T00:00:00.000Z',
   }).build(scene)
 }
@@ -251,17 +227,23 @@ function createComponentCatalog(): RuntimeComponentCatalog {
     type: 'layout',
     services: ['className', 'style', 'attr'],
     modules: ['markup'],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
     mountableParts: ['source-outlet', 'target-outlet', 'parent-outlet-a', 'parent-outlet-b'],
   }, {
     type: 'tag',
     services: ['className', 'style', 'attr', 'content'],
     modules: [],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
   }, {
     type: 'list',
     services: ['className', 'style', 'attr'],
     modules: ['list'],
+    validateInitial: () => undefined,
+    validateAction: () => undefined,
     create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
   }]
   for (const definition of definitions) catalog.register(definition)
@@ -378,7 +360,8 @@ function start(): void {
     status.textContent = 'loading'
     showError([])
 
-    const build = buildScene(currentScenario.scene)
+    const componentCatalog = createComponentCatalog()
+    const build = buildScene(currentScenario.scene, componentCatalog)
     if (!build.ok) {
       status.textContent = 'build failed'
       showError(build.diagnostics.errors)
@@ -390,7 +373,7 @@ function start(): void {
       compiledScene: build.compiledScene,
       root,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog: createComponentCatalog(),
+      componentCatalog,
       serviceCatalog: createDomComponentServiceCatalog(),
     })
     const init = runner.init()

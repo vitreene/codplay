@@ -40,7 +40,7 @@ export {
   type PathTraversal,
   type Point,
 } from './path'
-export { prepareSvgPath } from './svg-path'
+export { prepareSvgPath, type SvgPathOptions } from './svg-path'
 export {
   preparePolarTween,
   resolvePolarTween,

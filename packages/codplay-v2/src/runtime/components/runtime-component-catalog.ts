@@ -54,4 +54,9 @@ export class RuntimeComponentCatalog {
   getDefinition(type: string): RuntimeComponentDefinition | undefined {
     return this.definitions.get(type)
   }
+
+  /** Returns all component capability declarations in registration order. */
+  getAll(): readonly RuntimeComponentDefinition[] {
+    return [...this.definitions.values()]
+  }
 }

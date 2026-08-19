@@ -6,7 +6,8 @@ import {
   type Point,
 } from './path'
 
-type SvgPathOptions = Readonly<{
+/** Options controlling the deterministic conversion of author SVG paths. */
+export type SvgPathOptions = Readonly<{
   traversal?: PathTraversal
   precision?: number
 }>

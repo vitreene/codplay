@@ -24,11 +24,12 @@ Component definitions declare their type, required services, runtime ModuleServi
 functions. Service definitions declare reusable group validators and optional validators for named properties inside
 those groups. Service names are therefore the property namespaces, including namespaces owned by one component.
 
-The final registration API must have one source for the service declaration. Two shapes
-remain to be decided: static metadata read from the component at registration, or one
-descriptor consumed both by the runtime component and by the validation catalog. The
-current V2 implementation is `En cours`; it must not introduce a second authored service
-list while this boundary is being fixed.
+The runtime component definition is the source of the component type, service names,
+ModuleService names and component validators. `ValidationCatalog.fromComponents()`
+projects those declarations into the pure build snapshot. The builder therefore does
+not receive a second authored component/service list. `ValidationCatalog` remains
+available as a low-level catalog for core validation tests and for future non-runtime
+capability registration.
 
 The initial catalog imports the core service definitions for `style`, `className`,
 and `attr` from `src/services/`. The catalog owns registration and snapshotting;

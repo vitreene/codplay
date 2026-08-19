@@ -54,3 +54,26 @@ Parent ghosts hide descendants that have their own overlay, while the parent
 trajectory continues independently. Safari checks at `1000ms`, `1700ms`,
 `2200ms` and `2700ms` confirm that B's authored motion continues and that Q/K
 ghosts remain active while two child content transitions overlap.
+
+## Standard demo baseline
+
+`flip-stress` is also the reference scaffold for the next CodPlay V2 standard
+demos. It is not only a regression fixture. A standard demo should retain its
+following boundaries:
+
+- a declarative `SceneDoc` as the scenario source;
+- `HtmlPlayerRunner` as the only owner of materialization, measurement,
+  presentation and the clock-facing Play/Seek entry points;
+- the shared demo shell with Play, Reset, absolute-time seek, named
+  checkpoints and an observable status line;
+- a responsive root that is measured at its real content-box dimensions;
+- explicit checks at FIRST, the event boundary, a middle frame and LAST,
+  followed by the same-time Play/Seek comparison and a resize check;
+- local projection for a target-preserving reorder and overlay projection only
+  for a reparent operation.
+
+The four moving containers, twelve colored children, SVG paths and overlapping
+transitions are stress parameters. A standard demo may remove or reduce them,
+but must keep the declarative scene, the runner-owned lifecycle and the same
+observable checkpoints. The older `flip` page remains a preserved Player POC
+reference; it is not the template for new V2 demos.

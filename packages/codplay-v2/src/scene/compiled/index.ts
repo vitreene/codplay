@@ -33,3 +33,4 @@ export {
   type CompiledSceneCodecOptions,
   type CompiledSceneDecodeResult,
 } from './codec'
+export { compileMovePath } from './move-path-compiler'

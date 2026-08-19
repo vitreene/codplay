@@ -95,6 +95,13 @@ quantifiés afin que les deux extrémités restent exactement `[0, 0]` et `[1, 0
 à toute progression proche de `0` ou `1`. Cette préparation ne dépend pas du
 renderer HTML.
 
+La fonction publique `prepareSvgPath` (`src/ace/index.ts`) réalise cette
+transformation d'une chaîne auteur vers l'objet `Path` intelligible par CodPlay.
+`compileMovePath` l'emploie pour transformer une déclaration `move` complète.
+Un strap qui produit plus tard un déplacement dynamique doit réutiliser
+`prepareSvgPath` et remettre l'objet préparé au pipeline; il ne doit pas
+réintroduire une chaîne SVG dans le runtime.
+
 Exemple où aucune indication de mode n'est nécessaire :
 
 ```ts

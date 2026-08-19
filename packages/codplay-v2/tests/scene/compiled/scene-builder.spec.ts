@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { isPreparedPath } from '../../../src/ace'
+import { isPreparedPath, prepareSvgPath } from '../../../src/ace'
 import { ValidationCatalog } from '../../../src/scene/validation'
-import { SceneBuilder } from '../../../src/scene/compiled'
+import { compileMovePath, SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
 
@@ -15,6 +15,18 @@ function createCatalogForFixtures(): ValidationCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('exposes the pure path transformation for future strap payloads', () => {
+    const path = prepareSvgPath('M 0 0 L 0.5 0.8 L 1 0')
+    const transformed = compileMovePath({
+      move: { target: '@root', transition: { path: 'M 0 0 L 0.5 0.8 L 1 0' } },
+    }, 'strap.output')
+
+    expect(isPreparedPath(path)).toBe(true)
+    expect(transformed).toMatchObject({
+      move: { transition: { path: { kind: 'segments', traversal: 'arc-length' } } },
+    })
+  })
+
   it('builds representative demo scenes with requirements, roots, and resources', () => {
     const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), {
       createdAt: '2026-07-31T00:00:00.000Z',
