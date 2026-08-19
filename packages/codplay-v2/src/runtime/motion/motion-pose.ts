@@ -58,11 +58,12 @@ export function interpolateMotionPose(
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
 }
 
-/** Derives a virtual source pose so a retarget keeps its existing interpolation phase. */
+/** Derives a virtual source pose so a retarget keeps its phase and authored path. */
 export function extrapolateMotionPoseAtProgress(
   current: HtmlPose,
   destination: HtmlPose,
   progress: number,
+  path?: Parameters<typeof resolvePath>[0],
 ): HtmlPose {
   const clamped = Math.min(1 - 1e-6, Math.max(1e-6, progress))
   const inverseRemaining = 1 / (1 - clamped)
@@ -74,12 +75,17 @@ export function extrapolateMotionPoseAtProgress(
     e: 0,
     f: 0,
   }
-  const origin: Point = [
-    (current.origin.x - destination.origin.x * clamped) * inverseRemaining,
-    (current.origin.y - destination.origin.y * clamped) * inverseRemaining,
-  ]
   const width = (current.localWidth - destination.localWidth * clamped) * inverseRemaining
   const height = (current.localHeight - destination.localHeight * clamped) * inverseRemaining
+  const sourceAnchor = path === undefined
+    ? [
+        (current.origin.x - destination.origin.x * clamped) * inverseRemaining,
+        (current.origin.y - destination.origin.y * clamped) * inverseRemaining,
+      ] as Point
+    : solvePathSourceAnchor(path, current.rect.left, current.rect.top, destination.rect.left, destination.rect.top, clamped)
+  const origin = path === undefined
+    ? sourceAnchor
+    : originFromAabb(sourceAnchor, matrix, width, height)
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, current.parentMatrix, width, height)
 }
 
@@ -155,6 +161,28 @@ function poseFromAffine(affine: HtmlMatrix, parentMatrix: HtmlMatrix, width: num
 function originFromAabb(anchor: Point, matrix: HtmlMatrix, width: number, height: number): Point {
   const bounds = transformedBounds(matrix, width, height)
   return [anchor[0] - bounds.left, anchor[1] - bounds.top]
+}
+
+/** Solves the virtual source AABB required to preserve a curved path phase. */
+function solvePathSourceAnchor(
+  path: Parameters<typeof resolvePath>[0],
+  currentX: number,
+  currentY: number,
+  destinationX: number,
+  destinationY: number,
+  progress: number,
+): Point {
+  const [pathX, pathY] = resolvePath(path, [0, 0], [1, 0], progress)
+  const remaining = 1 - pathX
+  const determinant = remaining * remaining + pathY * pathY
+  if (determinant < 1e-9) return [currentX, currentY]
+
+  const rightX = currentX - pathX * destinationX + pathY * destinationY
+  const rightY = currentY - pathY * destinationX - pathX * destinationY
+  return [
+    (remaining * rightX - pathY * rightY) / determinant,
+    (pathY * rightX + remaining * rightY) / determinant,
+  ]
 }
 
 /** Computes transformed bounds for one local rectangle. */

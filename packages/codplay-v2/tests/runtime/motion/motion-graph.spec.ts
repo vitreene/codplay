@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { preparePath } from '../../../src/ace'
 import {
   buildMotionGraph,
   composeMotionPose,
@@ -88,6 +89,31 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, afterSecond, 750), 'A')).toBeCloseTo(125)
     expect(originX(resolvePresentationFrame(graph, afterSecond, 1500), 'A')).toBeCloseTo(200)
     expect(graph.tracksByItem.get('A')?.segments).toHaveLength(1)
+  })
+
+  it('retargets a curved direct path without a positional jump at a sibling boundary', () => {
+    const beforeFirst = snapshot(0, [item('A', 'root', 0), item('B', 'root', 0)])
+    const afterFirst = snapshot(0, [item('A', 'root', 100), item('B', 'root', 0)])
+    const beforeSecond = snapshot(500, [item('A', 'root', 100), item('B', 'root', 0)])
+    const afterSecond = snapshot(500, [item('A', 'root', 200), item('B', 'root', 100)])
+    const graph = buildMotionGraph([
+      boundary('curved-first', 0, beforeFirst, afterFirst, [{
+        ...intent('A', 0, 1000),
+        path: preparePath({ control: [0.5, 1] }),
+      }]),
+      boundary('curved-second', 500, beforeSecond, afterSecond, [intent('B', 500, 1000)]),
+    ])
+
+    const beforeBoundary = resolvePresentationFrame(graph, afterFirst, 499.999)
+    const atBoundary = resolvePresentationFrame(graph, afterSecond, 500)
+    const beforeRect = beforeBoundary.items.get('A')?.pose.rect
+    const boundaryRect = atBoundary.items.get('A')?.pose.rect
+    if (beforeRect === undefined || boundaryRect === undefined) throw new Error('Curved retarget test item is missing.')
+
+    expect(boundaryRect.left).toBeCloseTo(beforeRect.left, 3)
+    expect(boundaryRect.top).toBeCloseTo(beforeRect.top, 3)
+    expect(graph.tracksByItem.get('A')?.segments).toHaveLength(1)
+    expect(graph.tracksByItem.get('A')?.segments[0]?.path).toBeDefined()
   })
 
   it('returns the same absolute frame independently of evaluation history', () => {

@@ -55,6 +55,7 @@ const CONTENT_FIRST_EXCHANGE_MS = 1_200
 const CONTENT_EXCHANGE_SPACING_MS = 500
 const TIMELINE_END_MS = 10_000
 const CONTENT_EASE = 'inOutQuad'
+const CENTER_CURVE_PATH = 'M 0 0 A 0.8 0.8 0 0 0 1 0'
 
 const CONTAINER_IDS: readonly ContainerId[] = ['stress-a', 'stress-b', 'stress-c', 'stress-d']
 const CONTENT_IDS: readonly ContentId[] = [
@@ -112,13 +113,64 @@ function transferMarkup(label: string, className: string, outletId: string): str
   return `<section class="transfer-container ${className}"><h3>${label}</h3><div class="transfer-items" data-part="${outletId}" role="list"></div></section>`
 }
 
-/** Creates one continuous vertical movement declaration for a container. */
-function verticalMotion(toY: number, duration: number): Readonly<Record<string, unknown>> {
+/** Creates one responsive vertical position tween in the root's coordinate system. */
+function responsiveVerticalStyle(
+  property: 'top' | 'bottom',
+  from: string,
+  to: string,
+  duration: number,
+): Readonly<Record<string, unknown>> {
   return {
-    style: {
-      y: { from: 0, to: toY, duration, ease: 'linear' },
-    },
+    [property]: { from, to, duration, ease: 'linear' },
   }
+}
+
+/** Creates a repeatable pseudo-random source for one content identifier. */
+function createDeterministicRandom(seed: string): () => number {
+  let state = 2166136261
+  for (const character of seed) state = Math.imul(state ^ character.charCodeAt(0), 16777619)
+  return () => {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    return (state >>> 0) / 4294967296
+  }
+}
+
+/** Formats one generated SVG path coordinate with stable authoring precision. */
+function formatPathNumber(value: number): string {
+  return value.toFixed(2)
+}
+
+/** Builds a deterministic two-arc stress path for one moving content item. */
+function createRandomContentPath(itemId: ContentId): string {
+  const random = createDeterministicRandom(`flip-stress:${itemId}`)
+  const firstPoint = {
+    x: 0.24 + random() * 0.2,
+    y: -0.7 + random() * 1.4,
+  }
+  const secondPoint = {
+    x: 0.62 + random() * 0.22,
+    y: -0.7 + random() * 1.4,
+  }
+  const firstRadius = {
+    x: 0.65 + random() * 0.7,
+    y: 0.65 + random() * 0.7,
+  }
+  const secondRadius = {
+    x: 0.65 + random() * 0.7,
+    y: 0.65 + random() * 0.7,
+  }
+  const firstRotation = -45 + random() * 90
+  const secondRotation = -45 + random() * 90
+  const firstSweep = random() < 0.5 ? 0 : 1
+  const secondSweep = random() < 0.5 ? 0 : 1
+  return [
+    'M 0 0',
+    `A ${formatPathNumber(firstRadius.x)} ${formatPathNumber(firstRadius.y)} ${formatPathNumber(firstRotation)} 0 ${firstSweep} ${formatPathNumber(firstPoint.x)} ${formatPathNumber(firstPoint.y)}`,
+    `A ${formatPathNumber(secondRadius.x)} ${formatPathNumber(secondRadius.y)} ${formatPathNumber(secondRotation)} 0 ${secondSweep} ${formatPathNumber(secondPoint.x)} ${formatPathNumber(secondPoint.y)}`,
+    'A 0.9 0.9 0 0 0 1 0',
+  ].join(' ')
 }
 
 /** Creates one declarative content move between the Q and K outlets. */
@@ -133,13 +185,18 @@ function contentPerso(exchange: ContentExchange): PersoDoc {
       className: `stress-item stress-${exchange.itemId}`,
       content: ITEM_LABELS[exchange.itemId],
     },
-    actions: {
-      [exchange.name]: {
-        move: {
-          target,
-          transition: { duration: CONTENT_DURATION_MS, ease: CONTENT_EASE },
+      actions: {
+        [exchange.name]: {
+          move: {
+            target,
+            transition: {
+              duration: CONTENT_DURATION_MS,
+              ease: CONTENT_EASE,
+              path: createRandomContentPath(exchange.itemId),
+              traversal: 'arc-length',
+            },
+          },
         },
-      },
     },
   }
 }
@@ -159,9 +216,12 @@ function createStressScene(): SceneDoc {
             initial: {
               move: '@root',
               markup: containerMarkup('A', 'source haut gauche', 'stress-a-outlet', 'stress-container--a'),
-              style: { x: 0, y: 0 },
             },
-            actions: { moveA: verticalMotion(170, CONTAINER_DURATION_MS) },
+            actions: {
+              moveA: {
+                style: responsiveVerticalStyle('top', '5%', '28%', CONTAINER_DURATION_MS),
+              },
+            },
           },
           {
             id: 'stress-b',
@@ -169,9 +229,12 @@ function createStressScene(): SceneDoc {
             initial: {
               move: '@root',
               markup: containerMarkup('B', 'cible haut droite', 'stress-b-outlet', 'stress-container--b'),
-              style: { x: 0, y: 0 },
             },
-            actions: { moveB: verticalMotion(-170, CONTAINER_DURATION_MS) },
+            actions: {
+              moveB: {
+                style: responsiveVerticalStyle('top', '36%', '13%', CONTAINER_DURATION_MS),
+              },
+            },
           },
           {
             id: 'stress-c',
@@ -179,12 +242,12 @@ function createStressScene(): SceneDoc {
             initial: {
               move: '@root',
               markup: containerMarkup('C', 'source bas gauche', 'stress-c-outlet', 'stress-container--c'),
-              style: { x: 0, y: 0, visibility: 'hidden' },
+              style: { visibility: 'hidden' },
             },
             actions: {
               revealC: {
                 style: {
-                  y: { from: 0, to: -170, duration: SECONDARY_CONTAINER_DURATION_MS, ease: 'linear' },
+                  ...responsiveVerticalStyle('bottom', '5%', '28%', SECONDARY_CONTAINER_DURATION_MS),
                   visibility: 'visible',
                 },
               },
@@ -196,12 +259,17 @@ function createStressScene(): SceneDoc {
             initial: {
               move: '@root',
               markup: containerMarkup('D', 'cible bas droite', 'stress-d-outlet', 'stress-container--d'),
-              style: { x: 0, y: 0, visibility: 'hidden' },
+              style: { visibility: 'hidden' },
             },
             actions: {
               revealD: {
                 style: {
-                  y: { from: 0, to: 170, duration: SECONDARY_CONTAINER_DURATION_MS, ease: 'linear' },
+                  ...responsiveVerticalStyle(
+                    'top',
+                    'min(52%, calc(100% - var(--stress-container-size)))',
+                    'min(75%, calc(100% - var(--stress-container-size)))',
+                    SECONDARY_CONTAINER_DURATION_MS,
+                  ),
                   visibility: 'visible',
                 },
               },
@@ -218,7 +286,12 @@ function createStressScene(): SceneDoc {
               transferQ: {
                 move: {
                   target: 'stress-b-outlet',
-                  transition: { duration: TRANSFER_DURATION_MS, ease: CONTENT_EASE },
+                  transition: {
+                    duration: TRANSFER_DURATION_MS,
+                    ease: CONTENT_EASE,
+                    path: CENTER_CURVE_PATH,
+                    traversal: 'arc-length',
+                  },
                 },
               },
             },
@@ -234,7 +307,12 @@ function createStressScene(): SceneDoc {
               transferK: {
                 move: {
                   target: 'stress-c-outlet',
-                  transition: { duration: TRANSFER_DURATION_MS, ease: CONTENT_EASE },
+                  transition: {
+                    duration: TRANSFER_DURATION_MS,
+                    ease: CONTENT_EASE,
+                    path: CENTER_CURVE_PATH,
+                    traversal: 'arc-length',
+                  },
                 },
               },
             },
@@ -409,7 +487,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
         </div>
         <div id="stress-status" class="player-state">Prêt. Lancez le stress-test déclaratif.</div>
         <div id="stress-debug" class="player-state stress-status"></div>
-        <p class="stress-legend">A/B : mouvement continu dès FIRST. C/D : apparition à 1s. Q/K : transfert world de 1s à 9s. Les contenus s'échangent toutes les 0,5s de 1,2s à 6,7s.</p>
+        <p class="stress-legend">A/B : mouvement continu dès FIRST. C/D : apparition à 1s. Q/K : transfert world de 1s à 9s, courbé vers le centre. Les contenus s'échangent toutes les 0,5s de 1,2s à 6,7s sur des chemins pseudo-aléatoires reproductibles.</p>
         <pre id="stress-error" class="stress-error" hidden></pre>
       </aside>
       <div class="container">
@@ -517,19 +595,25 @@ function mountFlipStressDemo(container: HTMLElement): void {
       play.textContent = 'Play'
     })
   }
-  window.addEventListener('resize', () => {
-    const currentTime = runner.getCurrentTimeMs()
+
+  /** Rebuilds measured endpoints after the responsive root changes size. */
+  function refreshAfterResize(): void {
     try {
       runner.resize()
-      const result = runner.seek(currentTime)
-      if (!result.ok) showError(error, result.diagnostics.errors)
-      else showError(error, [])
+      showError(error, [])
     } catch (resizeError) {
       error.hidden = false
       error.textContent = resizeError instanceof Error ? resizeError.message : String(resizeError)
     }
-  })
-  window.addEventListener('beforeunload', () => runner.destroy(), { once: true })
+  }
+
+  const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(refreshAfterResize)
+  if (resizeObserver !== undefined) resizeObserver.observe(stage)
+  else window.addEventListener('resize', refreshAfterResize)
+  window.addEventListener('beforeunload', () => {
+    resizeObserver?.disconnect()
+    runner.destroy()
+  }, { once: true })
   requestAnimationFrame(present)
 }
 

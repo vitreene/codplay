@@ -90,7 +90,10 @@ Les propriétés de `transition` sont facultatives. Les conventions auteur sont 
 
 Le path accepte `M`, `L` et `A`. Le compilateur normalise son départ en `[0, 0]`,
 son arrivée en `[1, 0]`, quantifie les coordonnées au centième et prépare les
-longueurs cumulées. Cette préparation ne dépend pas du renderer HTML.
+longueurs cumulées. La résolution corrige l'écart géométrique résiduel des arcs
+quantifiés afin que les deux extrémités restent exactement `[0, 0]` et `[1, 0]`
+à toute progression proche de `0` ou `1`. Cette préparation ne dépend pas du
+renderer HTML.
 
 Exemple où aucune indication de mode n'est nécessaire :
 

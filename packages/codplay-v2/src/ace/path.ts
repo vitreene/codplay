@@ -203,6 +203,17 @@ function resolveSegmentPoint(segment: ResolvablePathSegment, from: Point, progre
   if (segment.kind === 'line') return lerpPoint(from, segment.to, progress)
   if (progress <= 0) return from
   if (progress >= 1) return segment.to
+  const point = resolveArcPoint(segment, progress)
+  const start = resolveArcPoint(segment, 0)
+  const end = resolveArcPoint(segment, 1)
+  return [
+    point[0] + (1 - progress) * (from[0] - start[0]) + progress * (segment.to[0] - end[0]),
+    point[1] + (1 - progress) * (from[1] - start[1]) + progress * (segment.to[1] - end[1]),
+  ]
+}
+
+/** Resolves one raw elliptical-arc point before endpoint correction. */
+function resolveArcPoint(segment: Extract<ResolvablePathSegment, { kind: 'arc' }>, progress: number): Point {
   const angle = segment.startAngle + segment.deltaAngle * progress
   const rotation = segment.rotation * Math.PI / 180
   const cosine = Math.cos(rotation)

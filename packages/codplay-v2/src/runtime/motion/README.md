@@ -42,11 +42,12 @@ direct duration at that boundary. A target or parent change forces projection
 mode `reparent`; otherwise the optional author hint selects `local` or
 `reparent`.
 
-When a boundary overlaps an existing local-reflow segment, the destination is
-retargeted at the exact boundary while the existing segment keeps its phase and
-end time. Its virtual source is solved so the pose remains continuous. No active
-segment is restarted from easing progress zero, cancelled globally or replaced
-by a logical endpoint.
+When a boundary overlaps an existing segment, the destination is retargeted at
+the exact boundary while the existing segment keeps its phase, authored path and
+end time. Its virtual source is solved in the same geometry used by path
+interpolation, so the pose remains continuous for both linear and curved
+trajectories. No active segment is restarted from easing progress zero,
+cancelled globally or replaced by a logical endpoint.
 
 ## Resolution
 

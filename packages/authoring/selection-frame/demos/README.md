@@ -15,21 +15,28 @@ first validated FLIP fixture and keeps its current timeline and debug controls.
 
 - four moving root containers;
 - delayed visibility of C and D;
-- fixed parent dimensions to isolate FLIP from content-driven reflow;
+- fixed parent dimensions with responsive root anchoring to isolate FLIP from content-driven reflow;
 - cross-container overlay transfers of Q and K;
-- Q/K list components with content outlets and all six children exchanged through declarative moves;
-- Q/K children are displayed as distinct horizontal color-coded pills;
+- Q/K list components with content outlets and all twelve children exchanged through declarative moves;
+- Q/K children are displayed as distinct color-coded pills in a 3×2 grid;
+- Q/K transfers follow inward center-facing arcs, while every child transfer gets a distinct deterministic pseudo-random SVG path;
 - nested content transfers in alternating order;
 - overlapping transitions with different durations;
 - runner-owned cold seek, overlay lifecycle, resize invalidation and teardown.
+
+The stress root fills its containing zone in both dimensions. Its A–D anchors
+and vertical motion use the root's responsive percentage coordinate system, and
+the stage observes its own size so width changes rebuild the measured motion
+endpoints at the current logical time.
 
 The stress entry point remains a separate Vite page, but its scene, parentage,
 capture, overlay and transport lifecycle are owned by the V2 runner. The first
 content exchange starts at `1200ms` so it overlaps the Q/K transfer without
 sharing the same capture-construction boundary; the remaining exchanges follow
-every `500ms` through `3700ms`. Each content transition lasts `1000ms`, so the
+every `500ms` through `6700ms`. Each content transition lasts `1000ms`, so the
 fixture deliberately keeps two opposite-direction item transitions active at
-the same time.
+the same time. Path generation is seeded by the content ID, so Play and Seek
+always receive the same geometry.
 
 The demo must remain a validation surface: no capture construction, DOM
 reparenting, overlay mutation or second playback clock belongs in its source.

@@ -22,6 +22,17 @@ describe('ACE normalized SVG paths', () => {
     expect(Math.abs(middle[1])).toBeGreaterThan(40)
   })
 
+  it('keeps quantized arc trajectories continuous at both endpoints', () => {
+    const path = prepareSvgPath('M 0 0 A 0.8 0.8 0 0 0 1 0')
+    const almostStart = resolvePath(path, [10, 20], [110, 70], 1e-9)
+    const almostEnd = resolvePath(path, [10, 20], [110, 70], 1 - 1e-9)
+
+    expect(almostStart[0]).toBeCloseTo(10, 5)
+    expect(almostStart[1]).toBeCloseTo(20, 5)
+    expect(almostEnd[0]).toBeCloseTo(110, 5)
+    expect(almostEnd[1]).toBeCloseTo(70, 5)
+  })
+
   it('quantizes normalized geometry to two decimal places', () => {
     const path = prepareSvgPath('M 0 0 L 0.1234 0.5678 L 1 0')
 

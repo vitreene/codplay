@@ -209,11 +209,13 @@ son `startAt`, son `endAt`, son easing et sa phase ; seul son endpoint est
 retargeté. Le graphe conserve ce retarget dans une liste de sous-frontières
 immutables afin que l'ancien endpoint reste inchangé avant la frontière.
 
-La pose source virtuelle du retarget est extrapolée à la phase courante pour
-garantir la continuité de position. Ainsi, le départ d'un autre item dans la
-même liste ne remet pas le sibling à une easing de progression zéro et ne crée
-pas de palier visuel. Un intent direct de l'item conserve sa propre ownership et
-son propre timing.
+La pose source virtuelle du retarget est extrapolée à la phase courante dans la
+même géométrie que l'interpolation : sans `path`, l'extrapolation est affine ;
+avec `path`, elle résout aussi le point de départ canonique nécessaire pour que
+le point courbe à cette phase soit exactement la pose visuelle courante. Ainsi,
+le départ d'un autre item dans la même liste ne remet pas le sibling à une
+easing de progression zéro et ne crée pas de palier visuel. Un intent direct de
+l'item conserve sa propre ownership, son chemin et son timing.
 
 Les segments restent indexés chronologiquement par item. Le plus récent segment
 actif possède la pose de l'item, sans annuler les segments d'autres items ou de
@@ -304,6 +306,7 @@ Les tests couvrent notamment :
 - propagation récursive à cinq niveaux sans pistes enfant dupliquées ;
 - overlap et retarget continu ;
 - retarget de reflow sans remise à zéro de l'easing ;
+- retarget d'une trajectoire courbe sans saut à la frontière ;
 - indépendance à l'historique d'évaluation ;
 - inférence local/reparent et override `overlay-world` ;
 - frontière exclusive à `0 ms` ;
@@ -328,7 +331,25 @@ La fixture stress contient désormais six enfants par liste (`Qa…Qf` et `Ka…
 présentés en deux rangées de trois. Les douze échanges alternés couvrent
 `1200…6700 ms` avec un espacement de `500 ms`. Avec un viewport plus haut, la
 continuité `8990→9000 ms` de Q/K reste inférieure à `0,002 px`, sans débordement
-des transferts et avec overlay vide après LAST.
+des transferts et avec overlay vide après LAST. Les transitions de Q/K utilisent
+un arc orienté vers le centre de la page ; chaque enfant utilise deux arcs
+pseudo-aléatoires générés par son identifiant, donc stables entre Play et Seek.
+Le contrôle `Ke` autour de `6200 ms` couvre aussi une frontière simultanée : son
+chemin reste continu lorsque `Qf` provoque le reflow de la liste. Les arcs
+quantifiés de Q/K restent également à moins de `0,002 px` de leur cible à
+`8999,9 ms`, avant la libération exacte des overlays à `9000 ms`.
+
+Le stage de stress remplit désormais exactement la zone de présentation
+responsive (`100%` en largeur et en hauteur). Les conteneurs A–D utilisent des
+ancres et des déplacements verticaux en pourcentage du root, tout en conservant
+leur taille de stress fixe pour préserver les deux rangées Q/K. Un
+`ResizeObserver` invalide le graphe mesuré
+après chaque changement de taille du stage, au temps logique courant ; Play et
+Seek restent donc sur le même circuit de résolution.
+Safari a vérifié les largeurs `1280`, `1000`, `700` et `400 px` : le stage
+occupe exactement la boîte de contenu de son conteneur, A–D restent dans ses
+limites aux checkpoints `FIRST`, `BOUNDARY` et `LAST`, et un redimensionnement
+à `t=5000 ms` ne produit ni saut ni erreur console.
 
 ## État de revue
 

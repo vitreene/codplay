@@ -57,7 +57,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
           true,
         )
         const phase = resolveSegmentProgress(activeSegment, boundary.timeMs)
-        const retargetedFrom = extrapolateMotionPoseAtProgress(current.pose, destinationAtBoundary, phase)
+        const retargetedFrom = extrapolateMotionPoseAtProgress(current.pose, destinationAtBoundary, phase, activeSegment.path)
         const segments = mutableTracks.get(itemId) ?? []
         const index = segments.findIndex((segment) => segment.id === activeSegment.id)
         if (index >= 0) {
