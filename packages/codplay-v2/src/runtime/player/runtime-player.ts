@@ -26,6 +26,7 @@ import {
   resolveScene,
   RuntimeStateStore,
   solveScene,
+  resolvePresentationOrder,
   validateStrapCollections,
   type SolvedScene,
   type MountTargetDeclaration,
@@ -132,15 +133,24 @@ export class RuntimePlayer {
     try {
       const initialScene = this.reconstructScene(0)
       this.initializeModuleServices(initialScene, historicalInstances)
+      // Consume the initial pending state just as the live projection does;
+      // otherwise a later historical snapshot would report every move since
+      // FIRST as one list reflow.
+      this.consumeLayoutProjectionState(initialScene, historicalInstances)
       let previousScene = initialScene
+      let stateAtRequestedBoundary: RuntimeModuleLayoutProjectionState | undefined
       for (const timeMs of collectCompiledEventStartTimes(this.compiledScene)) {
         if (timeMs <= 0 || timeMs > scene.timeMs) continue
         const nextScene = this.reconstructScene(timeMs)
         const moveDeltas = diffSolvedScenes(previousScene, nextScene)
         this.notifyModuleMoveDeltas(previousScene, nextScene, new Set(), moveDeltas, historicalInstances)
+        // Clear the event-local touched set at each compiled boundary while
+        // retaining the module's authoritative child order for the next one.
+        const boundaryState = this.consumeLayoutProjectionState(nextScene, historicalInstances)
+        if (timeMs === scene.timeMs) stateAtRequestedBoundary = boundaryState
         previousScene = nextScene
       }
-      return this.consumeLayoutProjectionState(historicalInstances)
+      return stateAtRequestedBoundary ?? this.consumeLayoutProjectionState(scene, historicalInstances)
     } finally {
       for (const instance of historicalInstances.values()) instance.destroy?.()
     }
@@ -149,6 +159,14 @@ export class RuntimePlayer {
   /** Returns compiled move occurrences active at one historical time. */
   getActiveMoveTransitionOccurrences(timeMs: number): readonly MoveTransitionOccurrence[] {
     return this.moveTransitionJournal.findActiveEffective(timeMs)
+  }
+
+  /** Returns compiled movers that start inside another capture's interval. */
+  getMoveTransitionOccurrencesStartingBetween(
+    startExclusive: number,
+    endInclusive: number,
+  ): readonly MoveTransitionOccurrence[] {
+    return this.moveTransitionJournal.findStartingBetween(startExclusive, endInclusive)
   }
 
   /** Validates capabilities and attaches this player to the shared engine. */
@@ -185,7 +203,7 @@ export class RuntimePlayer {
     this.solvedScene = this.reconstructScene(0)
     this.initializeModuleServices(this.solvedScene)
     this.componentRuntime?.sync(this.solvedScene)
-    this.layoutProjection?.project(this.solvedScene, { phase: 'init', moveDeltas: [] })
+    this.layoutProjection?.project(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
@@ -210,7 +228,7 @@ export class RuntimePlayer {
           this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
         }
         this.solvedScene = this.pendingSolvedScene
-        this.projectScene(this.solvedScene, { phase: 'seek', previousScene: previousSolvedScene, moveDeltas })
+        this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
@@ -289,8 +307,7 @@ export class RuntimePlayer {
     const moveDeltas = this.attachTransitionOccurrences(rawMoveDeltas)
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
-    this.projectScene(this.solvedScene, { phase: 'frame', previousScene: previousSolvedScene, moveDeltas })
-    this.layoutProjection?.advance?.(this.currentTimeMs)
+    this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
@@ -303,7 +320,7 @@ export class RuntimePlayer {
 
   /** Projects one scene while keeping authored writes inside the render boundary. */
   private projectScene(scene: SolvedScene, context: Omit<NonNullable<Parameters<LayoutProjection['project']>[1]>, 'authoredSync'>): void {
-    const layoutState = this.consumeLayoutProjectionState()
+    const layoutState = this.consumeLayoutProjectionState(scene)
     if (this.layoutProjection === undefined) {
       this.componentRuntime?.sync(scene)
       return
@@ -317,6 +334,7 @@ export class RuntimePlayer {
 
   /** Consumes structural ordering and touched-item data from player modules. */
   private consumeLayoutProjectionState(
+    scene: SolvedScene,
     instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
   ): RuntimeModuleLayoutProjectionState | undefined {
     const states = [...instances.values()]
@@ -326,10 +344,24 @@ export class RuntimePlayer {
     const childrenByTarget: Record<string, readonly string[]> = {}
     const touchedItemIds = new Set<string>()
     for (const state of states) {
-      Object.assign(childrenByTarget, state.childrenByTarget ?? {})
+      if (state.graphRevision !== undefined && state.graphRevision !== scene.graph.revision) {
+        throw new Error(`Runtime module layout state belongs to another solved graph: ${state.graphRevision}`)
+      }
+      for (const [targetId, childKeys] of Object.entries(state.childrenByTarget ?? {})) {
+        const existing = childrenByTarget[targetId]
+        if (existing !== undefined && !sameChildOrder(existing, childKeys)) {
+          throw new Error(`Runtime module layout states disagree on target order: ${targetId}`)
+        }
+        childrenByTarget[targetId] = [...childKeys]
+      }
       for (const itemId of state.touchedItemIds ?? []) touchedItemIds.add(itemId)
     }
-    return { childrenByTarget, touchedItemIds: [...touchedItemIds] }
+    resolvePresentationOrder(scene, childrenByTarget)
+    return {
+      graphRevision: scene.graph.revision,
+      childrenByTarget,
+      touchedItemIds: [...touchedItemIds],
+    }
   }
 
   /** Enforces one valid lifecycle transition. */
@@ -351,8 +383,13 @@ export class RuntimePlayer {
     this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
     this.pendingModuleSeekHandles = []
     try {
+      const needsHistoricalLayoutState = [...this.moduleServiceInstances.values()]
+        .some((instance) => instance.requiresHistoricalLayoutState === true)
+      const historicalLayoutState = needsHistoricalLayoutState
+        ? this.getHistoricalLayoutProjectionState(this.pendingSolvedScene)
+        : undefined
       for (const instance of this.moduleServiceInstances.values()) {
-        const handle = instance.prepareSeek?.(this.pendingSolvedScene)
+        const handle = instance.prepareSeek?.(this.pendingSolvedScene, historicalLayoutState)
         if (handle !== undefined) this.pendingModuleSeekHandles.push({ instance, handle })
       }
     } catch (error) {
@@ -414,6 +451,11 @@ export class RuntimePlayer {
     for (const { handle } of this.pendingModuleSeekHandles.reverse()) handle.abort?.()
     this.pendingModuleSeekHandles = []
   }
+}
+
+/** Compares two module-owned child orders without relying on object identity. */
+function sameChildOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((key, index) => key === right[index])
 }
 
 /** Converts pure move-policy issues into the public diagnostic report. */

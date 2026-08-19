@@ -392,7 +392,7 @@ describe('RuntimePlayer', () => {
       { moduleServiceCatalog: catalog },
     )
     const projection = {
-      project: (solved: SolvedScene, context?: { phase: string; layoutState?: { childrenByTarget?: Readonly<Record<string, readonly string[]>>; touchedItemIds?: readonly string[] } }) => {
+      project: (solved: SolvedScene, context?: { layoutState?: { childrenByTarget?: Readonly<Record<string, readonly string[]>>; touchedItemIds?: readonly string[] } }) => {
         events.push({
           timeMs: solved.timeMs,
           order: context?.layoutState?.childrenByTarget?.list,
@@ -449,13 +449,15 @@ describe('RuntimePlayer', () => {
     expect(player.init().ok).toBe(true)
     const historical = player.getHistoricalLayoutProjectionState(player.resolveSceneAt(100))
 
-    expect(historical).toEqual({
+    expect(historical).toMatchObject({
       childrenByTarget: { list: ['main:second', 'main:first'] },
       touchedItemIds: ['main:first', 'main:second'],
+      graphRevision: player.resolveSceneAt(100).graph.revision,
     })
-    expect(player.getHistoricalLayoutProjectionState(player.resolveSceneAt(0))).toEqual({
+    expect(player.getHistoricalLayoutProjectionState(player.resolveSceneAt(0))).toMatchObject({
       childrenByTarget: { list: ['main:first', 'main:second'] },
       touchedItemIds: [],
+      graphRevision: player.resolveSceneAt(0).graph.revision,
     })
     player.destroy()
   })

@@ -1,6 +1,7 @@
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { MaterializedTrackRegistry } from './tracks'
 import type { MountTarget } from './mount-targets'
+import type { SolvedGraph } from './presentation-graph'
 import type { MoveFlipMode, MoveOrderMode, MovePolicyIssue, MoveTransition } from '../../config/move'
 import {
   MOUNT_PLACEMENT_INVALID,
@@ -104,7 +105,6 @@ export type SolvedScene = Readonly<{
   sceneState: CompiledRecord
   storyStates: Readonly<Record<string, CompiledRecord>>
   persos: Readonly<Record<string, SolvedPerso>>
-  rootPersoKeys: readonly string[]
-  childrenByTarget: Readonly<Record<string, readonly string[]>>
+  graph: SolvedGraph
   moveIssues: readonly MovePolicyIssue[]
 }>

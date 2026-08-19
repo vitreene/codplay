@@ -3,624 +3,306 @@
 Status: En cours
 CodPlay version: V2 foundation
 
-## Decision
+## Decision normative
 
-Le chemin FLIP historique a ete promu vers une tranche d'integration transactionnelle
-dans `HtmlPlayerRunner`. Le bridge generique `FlipCaptureRequest.mutate` reste conserve
-pour la compatibilite du moteur FLIP isole, mais le runner n'utilise plus `run()` pour
-sa presentation courante ou son seek froid.
+Play et Seek sont deux moyens d'atteindre un temps logique. Ils ne sont pas deux
+algorithmes de presentation.
 
-La raison n'est pas seulement le seek. Le bridge actuel ne possede pas la frontiere
-de transaction necessaire entre etat logique, ecriture composant, mutation de
-parentage, lecture DOM FIRST/LAST et projection temporaire. Il fabrique parfois une
-nouvelle capture depuis le DOM courant au lieu de lire une capture persistante issue
-de l'occurrence `move` qui a produit la transition.
+Pour un même `CompiledScene` et un même temps `t`, les deux transports doivent
+produire le même `SolvedScene.graph`, le même ensemble de captures actives et le
+même commit DOM. Un seek ne prend jamais le DOM courant comme FIRST implicite.
 
-Cette etude reste la cible normative avant `flip-stress`. La tranche P0 implementee
-ci-dessous couvre l'identite d'occurrence, la transaction de mesure, le resolver
-multi-captures et la separation des contributions auteur/transitoires; les overlays
-complets et le stress declaratif restent hors de cette tranche.
+Le bridge générique `FlipCaptureRequest.mutate` reste disponible pour le moteur
+FLIP isolé. Il n'est pas un chemin de presentation du runner HTML. Le runner
+utilise toujours la transaction historique et `HtmlFlipRuntime.seekCached()`.
 
-## Contrat a respecter
+## Source de vérité de presentation
 
-Pour toute valeur temporelle `t` et un meme `CompiledScene`:
-
-```text
-Play jusqu'a t
-  == evaluation logique a t
-  + captures FLIP actives a t
-  + resolution de pose a t
-  + commit DOM a t
-
-Seek(t)
-  == evaluation logique a t
-  + memes captures FLIP actives a t
-  + meme resolution de pose a t
-  + meme commit DOM a t
-```
-
-La comparaison ne porte pas sur l'historique d'execution. Un seek ne rejoue ni
-events ni straps et ne reconstruit pas une baseline arbitraire depuis le DOM courant.
-Il peut realiser froidement une capture absente, mais cette realisation doit partir
-de l'occurrence historique et de ses bornes logiques, pas de l'etat accidentel au
-moment de l'appel.
-
-## Etat actuel du flux
-
-### Init
-
-`RuntimePlayer.init()` valide les capacites, cree les services player-scoped,
-reconstruit plusieurs fois `t=0`, synchronise les composants, puis projette le
-parentage via `LayoutDomBackend`.
-
-La repetition de reconstruction existe parce que la materialisation d'un layout
-enregistre des outlets dans `markup`, qui deviennent ensuite des mount targets.
-Cette dependance doit devenir une initialisation en deux phases explicite; elle ne
-doit pas rester une suite de reconstructions implicites.
-
-Ordre actuel:
-
-```text
-create module services
-  -> materialize/update components at t=0
-  -> register markup outlets
-  -> initialize module services from the materialized scene
-  -> sync the solved scene
-  -> LayoutDomBackend.project
-```
-
-### Frame de lecture
-
-Le chemin courant est:
-
-```text
-reconstruct next scene
-  -> diff previous/next + occurrence identity
-  -> MoveFlipLayoutProjection.project
-       -> HtmlPresentationTransaction
-             -> read all FIRST
-             -> authored sync + LayoutDomBackend.project
-             -> read all LAST
-       -> HtmlMeasurementTree -> FlipCaptureCache
-       -> HtmlFlipRuntime.seek(capture, t)
-  -> MoveFlipLayoutProjection.advance(t)
-       -> seekCached(t) only when t differs from the presentation above
-```
-
-La synchronisation auteur est maintenant appelee par `LayoutDomBackend` dans la
-mutation de capture, apres FIRST et avant l'ecriture du parentage. FIRST represente
-donc l'etat DOM precedent lorsque le move change en meme temps la couleur, la
-taille, le contenu ou une propriete de layout.
-
-La transaction est synchrone entre FIRST et LAST. `advance(t)` ne represente pas une
-seconde fois le même timestamp; il ne fait progresser la capture que lorsque le temps
-du frame suivant change.
-
-### Seek actuel apres le garde-fou
-
-Le chemin actuel est:
-
-```text
-reconstruct target scene
-  -> MoveFlipLayoutProjection.project(phase=seek)
-       -> cancel FLIP actif
-       -> authored sync + base projection
-       -> seekCached()
-```
-
-Ce chemin respecte la partie essentielle: un seek ne lance plus une capture et ne
-transforme pas le DOM courant en FIRST implicite. Le resolver realise toutes les
-occurrences compilees actives qui manquent au cache:
-
-- une capture absente n'est realisee froidement que pour les occurrences de move
-  compilees a un instant strictement positif;
-- les occurrences actives sont passees au resolver par identite stable et realisees
-  ensemble avant un seul `seekCaptures`;
-- le wrapper ne conserve plus de `captureWindows` parallele au cache canonique;
-- la projection HTML utilise des slots transitoires reserves (`data-*` + variables
-  CSS) et ne restaure plus une chaine `style` auteur obsolete; les doubles DOM sans
-  feuille de style utilisent un fallback inline qui preserve les ecritures auteur
-  detectees entre deux poses.
-
-### Destroy et invalidation
-
-Le runner invalide l'epoch mais ne reprojette pas systematiquement le temps logique
-courant. Le wrapper conserve aussi des fenetres locales qui ne sont pas le cache
-FLIP canonique. Le teardown doit annuler les transactions, detruire les overlays,
-vider les captures de projection et detacher les composants dans un ordre garanti.
-
-### Tranche implemente apres relecture
-
-La premiere tranche d'integration applique deja quatre garde-fous sans promouvoir
-le bridge direct au rang de contrat normatif:
-
-- `flipMode` est conserve de la policy de `move` jusqu'a `SolvedPlacement` et
-  `MoveStateDelta`;
-- le builder HTML derive les ancetres de la chaine `perso` / `outlet` et capture
-  leur pose numerique comme ancetres `stable`;
-- `ListCapabilityState` publie un ordre et un touched set consommes par le player;
-  le builder conserve un fallback before/after pour les moves hors list;
-- `authoredSync` est execute par `LayoutDomBackend` apres FIRST et avant la
-  mutation structurelle lorsqu'une projection FLIP est active;
-- `projectSeek` ne lance plus `flip.run()` et ne presente qu'une capture deja
-  persistante via `seekCached`.
-- la transaction historique du cold resolver est extraite dans une fonction
-  runner-scoped testable, avec restauration `finally` de la scene courante.
-- `MoveTransitionOccurrence` conserve une identite `captureId` stable, ses bornes
-  `sourceTimeMs`/`destinationTimeMs`, et `RuntimePlayer` la propage au delta de
-  projection via `transitionOccurrenceId`.
-- `HtmlPresentationTransaction` groupe les lectures FIRST/LAST et produit un
-  `HtmlMeasurementTree` DOM-free; le runner l'enregistre ensuite via
-  `recordMeasurementTree()` puis appelle `seek()` une seule fois.
-- `FlipCaptureResolver` accepte les descripteurs actifs manquants et le runtime
-  resout toutes les captures retournees dans un seul commit; `captureWindows` a ete
-  supprime du wrapper.
-
-Le journal et le resolver couvrent maintenant les occurrences de move compilees
-avec une duree positive, leur identite stable, leurs bornes source/destination et
-toutes les captures actives manquantes. Les presentations historiques reconstruisent
-aussi les snapshots des modules structurels, notamment l'ordre `list`, en rejouant les
-frontieres d'evenements compilees depuis `t=0` dans des instances temporaires.
-Les evenements live et les occurrences commencant a `0` restent sans capture
-froide plutot que de recevoir une baseline DOM accidentelle.
-
-## Donnees perdues aux frontieres
-
-| Frontiere | Donnees disponibles | Donnees necessaires mais perdues |
-|---|---|---|
-| `RuntimePlayer` -> projection | `SolvedScene`, `previousScene`, deltas endpoint et `transitionOccurrenceId` | etat DOM historique |
-| component runtime -> projection | state et `timeMs` | placement, move, ordre de mutation, ownership FLIP |
-| `LayoutDomBackend` -> projection | parentage et ordre logique | geometrie, transition, touched set, ancetres |
-| move policy -> `MoveStateDelta` | cible, operation, transition, identite d'occurrence, `flipMode` | batch de mutation multi-occurrences |
-| `HtmlFlipRuntime` -> host | capture numerique, progression et resolver multi-captures | orchestration complete des overlays et de leur calibration |
-| host DOM -> FLIP | handles et geometrie courante | scene logique et temps historique |
-
-Les donnees historiques restantes doivent encore etre restaurees au bon niveau de
-responsabilite, notamment pour les ancetres `layout`, les overlays et les captures
-froides inter-bornes.
-
-## Architecture cible
-
-```text
-CompiledScene
-  -> TransitionSchedule
-  -> RuntimePlayer logical evaluation
-  -> PresentationTransaction
-       -> component authored state
-       -> structural parentage
-       -> DOM read phase
-       -> transient projection phase
-  -> FlipCaptureJournal
-       -> current epoch FlipCapture cache
-       -> consumer-owned cold resolver
-  -> HtmlFlipRuntime
-       -> HtmlPoseProjection
-```
-
-### 1. TransitionSchedule
-
-Le player doit deriver un schedule immuable des occurrences discretes, sans
-rejouer leur execution au seek. Une occurrence `MoveTransitionOccurrence` doit
-porter au minimum:
+`SolvedScene` contient maintenant un graphe immuable construit par `solveScene`:
 
 ```ts
-type MoveTransitionOccurrence = Readonly<{
-  captureId: string
-  eventId?: string
-  eventSeq?: number
-  declarationPath: readonly number[]
-  persoKey: string
-  startAt: number
-  endAt: number
-  sourceTimeMs: number
-  destinationTimeMs: number
-  transition: MoveTransition
-  fromTargetId?: string
-  toTargetId?: string
+type SolvedGraph = Readonly<{
+  revision: string
+  parentByPerso: Readonly<Record<string, string | undefined>>
+  targetByPerso: Readonly<Record<string, string | undefined>>
+  childrenByTarget: Readonly<Record<string, readonly string[]>>
+  childrenByParent: Readonly<Record<string, readonly string[]>>
+  rootPersoKeys: readonly string[]
 }>
 ```
 
-`transitionStartAt` est une information necessaire, mais elle ne suffit pas a
-identifier une occurrence. L'identite doit resister a deux moves du meme perso au
-meme instant et a un touched set different.
+Ce graphe est le seul endroit qui décrit:
 
-Le schedule doit aussi propager `flipMode` de l'auteur vers la placement resolue,
-`SolvedPlacement`, `MoveStateDelta` et le builder de capture. Une declaration
-`overlay-world` ne doit jamais etre silencieusement convertie en `local`.
+- le parent logique d'un composant, y compris le propriétaire d'un outlet;
+- le target opaque exact de chaque perso;
+- l'ordre des enfants par target;
+- la traversal parent-first et la révision de la structure.
 
-### 2. FlipCaptureJournal
+`LayoutDomBackend`, le builder FLIP, les modules historiques et les diagnostics
+ne reconstruisent plus l'ascendance en interprétant les noms de targets. Ils
+utilisent `resolveAncestorChain`, `traverseSolvedGraph` ou
+`resolvePresentationOrder`. Un override d'un module `list` est accepté seulement
+s'il appartient à la révision courante et contient exactement les enfants du
+target concerné; un enfant ne peut donc pas apparaître temporairement dans Q
+alors que le graphe le rattache à K.
 
-Il faut separer trois responsabilites:
+## Schedule temporel
 
-```text
-FlipCaptureJournal
-  = descripteurs historiques immuables des captures
+`MoveTransitionJournal` est le schedule immuable des occurrences compilées. Une
+occurrence porte son identité stable, `startAt`, `endAt`, `sourceTimeMs`,
+`destinationTimeMs`, la transition, le `flipMode` et les targets source/destination
+quand ils sont connus.
 
-FlipCaptureCache
-  = captures numeriques realisees pour un hostContext + epoch
-
-active projection ownership
-  = overlays et poses temporaires actuellement ecrits
-```
-
-Le journal doit etre profondement immutable, serialisable et indexe par
-`captureId`. L'invalidation d'epoch supprime les poses numeriques du cache, mais
-conserve le descripteur permettant une realisation froide dans le nouvel epoch.
-
-Le journal doit avoir une politique de retention explicite. La fin d'une projection
-active ne doit pas supprimer une capture encore necessaire au seek.
-
-### 3. FlipCaptureResolver
-
-Le resolver est la responsabilite du consumer HTML/runner, pas de `HtmlFlipRuntime`.
-Il doit resoudre toutes les captures actives manquantes, pas une seule:
-
-```ts
-type FlipCaptureResolver = (input: Readonly<{
-  captures: readonly MoveTransitionOccurrence[]
-  hostContextId: string
-  projectionEpoch: number
-  timeMs: number
-}>) => readonly FlipCapture[]
-```
-
-La realisation froide suit ce flux:
+La réalisation d'une occurrence suit toujours les mêmes bornes:
 
 ```text
-occurrence historique
-  -> scene logique FIRST
-  -> presentation historique FIRST
-  -> mesures DOM FIRST
-  -> presentation historique LAST
-  -> mesures DOM LAST
-  -> restauration garantie de la presentation courante
-  -> capture numerique profondement immuable
-  -> un seul resolve/commit a t
+sourceTimeMs       -> scene FIRST logique
+destinationTimeMs  -> scene après le déplacement
+endAt              -> scene LAST logique
 ```
 
-Elle ne doit pas appeler `flip.run()` et ne doit pas utiliser le DOM courant comme
-FIRST implicite.
+La durée et la phase du parent ne sont jamais remplacées par celles d'un enfant.
+Une capture enfant peut mesurer le parent actif à son propre `startAt` puis à son
+propre `endAt`; cela ne termine ni ne recalcule la trajectoire du parent.
 
-### 4. PresentationTransaction
+## Pipeline unique Play / Seek
 
-Le runner doit posseder une transaction capable de materialiser temporairement une
-scene logique sans rejouer events ni straps:
-
-```ts
-type PresentationTransaction = Readonly<{
-  present: (scene: SolvedScene) => void
-  read: (items: readonly string[]) => ReadonlyMap<string, HtmlPose>
-  restore: () => void
-}>
-```
-
-La transaction doit:
-
-1. memoriser la scene et la presentation courantes;
-2. synchroniser l'etat auteur des composants;
-3. projeter le parentage;
-4. forcer la frontiere de lecture DOM;
-5. mesurer FIRST ou LAST;
-6. restaurer dans un `finally` la scene, les styles auteur et le parentage courants.
-
-La tranche P0 fournit `HtmlPresentationTransaction.measure()`: elle groupe les
-lectures de tous les items et ancetres, appelle le presenter LAST, relit le meme
-ensemble et restaure la presentation historique dans un `finally` lorsque le mode
-historique est active. Le `RuntimePlayer` n'est pas notifie pendant cette operation.
-
-Les services de modules et de liste doivent avoir un mode transactionnel. Une
-realisation historique ne doit pas notifier un faux move public ni modifier le
-journal logique courant.
-
-### 5. Play et Seek communs
-
-Le player doit exposer un seul orchestrateur de presentation:
+Les deux chemins appellent le même commit de `RuntimePlayer`:
 
 ```text
 evaluate(t)
-  -> resolve logical scene
-  -> identify active occurrences
-  -> obtain captures from cache or resolver
-  -> project authored state and structural state
-  -> resolve pose graph at t
-  -> one DOM commit
+  -> materialize -> resolve -> solve
+  -> SolvedScene + SolvedGraph immuables
+  -> diff des scènes et notification des modules
+  -> LayoutDomBackend.project(scene, commit)
+  -> HtmlFlipRuntime.seekCached(host, epoch, t)
+       -> cache numérique, ou resolver historique si capture absente
+       -> résolution du pose graph
+       -> un flush DOM
 ```
 
-Play peut utiliser la capture realizee pendant le frame, mais passe ensuite par le
-meme `resolve active captures at t` que Seek. Seek ne doit jamais appeler `run()`;
-il appelle uniquement `seekCached()` apres realisation eventuelle par le resolver.
+Le frame de lecture et le seek ne changent plus la phase du
+`MoveFlipLayoutProjection`. Celui-ci ne construit ni capture live ni capture de
+seek: il projette la scène puis appelle `seekCached`. La présence de
+`previousScene` et des deltas sert à l'observation et au journal, pas à choisir
+un second circuit de pose.
 
-### 6. Frontiere authored/transient DOM
+Il n'existe pas de seconde étape `advance()` ni de phase de transport dans le
+contrat de projection. Le player appelle toujours `project()` pour Play et Seek.
 
-La projection temporaire ne doit pas restaurer un snapshot complet du `style`
-qui pourrait etre obsolete. L'invariant est:
+La reconstruction de modules historiques dans
+`getHistoricalLayoutProjectionState()` est une instance temporaire déterministe
+du même évaluateur de scène. Elle ne constitue pas un transport alternatif et ne
+modifie jamais l'état des modules courants.
+
+## Transaction historique HTML
+
+`HtmlPresentationTransaction.measure()` est la frontière unique des lectures:
 
 ```text
-cancel/finish FLIP
-  -> retire seulement la contribution transitoire
-  -> conserve l'etat auteur actuellement remis par le composant
+present FIRST scene explicite
+  -> projeter les captures parentes déjà actives à la phase FIRST
+  -> READ FIRST de tous les items et ancêtres
+  -> capturer les templates FIRST des ghosts world
+  -> present LAST scene explicite à endAt
+  -> projeter les captures parentes à la phase LAST
+  -> READ LAST du même ensemble
+  -> restore de la presentation courante dans finally
 ```
 
-La solution doit etre tranchee par le host contract. Options admissibles:
+Le résultat `HtmlMeasurementTree` ne contient que des poses numériques et les
+références d'ownership source/destination. Pour un overlay parent, il contient aussi
+la table FIRST `overlayTargetByPerso` des descendants présents dans son ghost. Les
+templates DOM sont des ressources
+runtime séparées, indexées par `captureId` et `itemId`; ils ne sont jamais relus
+depuis le DOM courant.
 
-- wrapper DOM dedie portant la projection temporaire;
-- slots CSS separes pour transform auteur et transform FLIP;
-- couche de projection explicite qui ne modifie jamais le style auteur.
+Le template FIRST reste la ressource de création et de réactivation du ghost, mais
+il ne constitue pas son contenu logique permanent. Avant chaque résolution de
+pose, le runner publie un `HtmlFlipOverlayContentState` dérivé de la `SolvedScene`;
+la projection HTML reconstruit alors le subtree de chaque ghost parent depuis le
+DOM courant et remappe sa table de références. La géométrie reste celle de la
+capture parent, tandis que les descendants reflètent l'ordre et les targets du
+temps présenté. Cette synchronisation est identique en Play et en Seek et ne
+dépend pas du passage préalable par la fin des captures enfants.
 
-Une restauration aveugle de la chaine `style` n'est pas admissible. Le host HTML V2
-installe une couche de projection CSS par document: les dimensions, la matrice et
-la visibilite transitoires sont portees par des slots CSS reserves et des attributs
-`data-codplay-flip-*`. La declaration auteur `style` reste en place; retirer les
-attributs et slots suffit a retrouver l'etat auteur courant. Les DOM doubles qui ne
-peuvent pas installer la feuille utilisent un ledger inline de fallback qui
-compare la derniere valeur FLIP avant de restaurer une valeur auteur.
+Cette séparation traite le cas Q/K: quand `kc` commence à 8200 ms, la mesure
+FIRST voit Q et K à leurs phases respectives, et la réactivation d'un ghost parent
+réutilise son clone FIRST. Le passage de `kc` dans le DOM courant ne peut donc pas
+remplacer le contenu historique du ghost Q ou K.
 
-### 7. Phases de lecture/ecriture HTML
+La mesure distingue strictement l'origine affine de la boîte et son AABB
+visuelle. Si un ancien ghost direct d'un enfant reste actif au moment d'un
+reparentage, l'overlay du parent présent dans l'ascendance DOM est prioritaire;
+le direct obsolète ne peut pas fournir la cible LAST.
 
-Le host doit distinguer:
+La visibilité est ensuite réconciliée après construction complète de la forêt
+d'overlays. Tout item encore porté par un nœud `capture` ou `handoff` masque tous
+ses clones dans les ghosts parents; son propre ghost reste l'unique rendu. Cette
+étape ne réutilise pas le `sourceTargetId` d'un alias regroupé, car ce target peut
+être celui du dernier état historique et ne pas correspondre au target FIRST du
+ghost parent. La restauration filtrée par `destinationTargetId` intervient
+uniquement quand l'ownership est libéré.
+
+## Ownership FLIP
+
+Trois responsabilités restent séparées:
 
 ```text
-read FIRST: toutes les geometries necessaires
-write authored + structural mutation
-read LAST: toutes les geometries necessaires
-resolve numeric pose graph
-write toutes les poses temporaires
-flush unique
+MoveTransitionJournal  = occurrences et bornes historiques
+FlipCaptureCache       = poses numériques réalisées par host + epoch
+HtmlFlipRuntime        = ownership des overlays et poses transitoires
 ```
 
-`flush()` ne doit pas etre une fonction vide si le contrat exige une frontiere de
-layout. Les lectures `getComputedStyle`, `offset*` et `getBoundingClientRect`
-doivent etre regroupees et documentees.
+Le cache canonicalise les identités primaires et leurs aliases groupés. L'owner
+DOM est conservé tant qu'une capture équivalente reste active. Une capture
+descendante peut masquer son item dans un ghost parent, mais elle ne remplace pas
+le handle parent et ne termine pas son intervalle.
 
-### 8. Contrat precis de la frontiere runner/render
+`HtmlDomProjection` clone le subtree FIRST lors de la capture et utilise ce
+template lors d'une réactivation. `excludeOverlayItem` ne sert qu'à masquer la
+copie indépendante d'un descendant; `restoreOverlayItem` filtre la copie par la
+cible LAST. Il ne change jamais le parentage logique de la scène. Ainsi, à la fin
+d'un enfant Q→K, le clone Qa du ghost Q reste masqué tant que Q continue sa propre
+trajectoire.
 
-La frontiere ne doit pas transmettre des handles DOM au coordinateur FLIP. Elle
-doit transmettre un arbre numerique produit par une transaction synchrone du
-runner HTML:
+Lorsque l'enfant atteint son LAST avant le LAST de son parent de destination,
+`destinationParentId` ouvre un handoff de projection: l'overlay enfant conserve sa
+pose relative au parent au moment de son LAST, puis est recomposé avec la pose
+courante du ghost parent à chaque commit. La fin de l'enfant ne restaure donc pas
+son DOM ni ne le rend à un ghost FIRST; le parent termine sa propre trajectoire sans
+être interrompu. La restitution au DOM intervient lorsque le parent atteint son
+LAST. Un item groupé qui n'est pas mover direct est marqué `isDirectMover: false`
+et ne peut pas reprendre l'ownership de l'enfant pendant ce handoff.
 
-```ts
-type HtmlMeasurementTree = Readonly<{
-  hostContextId: string
-  projectionEpoch: number
-  logicalTimeMs: number
-  items: readonly Readonly<{
-    itemId: string
-    ancestorIds: readonly string[]
-    mode: HtmlFlipMode
-    first: HtmlPose
-    last: HtmlPose
-  }>[]
-  ancestors: readonly Readonly<{
-    ancestorId: string
-    parentId?: string
-    regime: FlipAncestorRegime
-    first: HtmlPose
-    last: HtmlPose
-  }>[]
-}>
-```
+La propriété d'overlay est représentée par une forêt explicite de
+`OverlayProjectionNode`, indexée par `itemId`. Chaque noeud possède soit une
+capture directe, soit un lien `parentItemId` et une pose relative de handoff. La
+résolution, la continuation et la libération parcourent ce graphe récursivement;
+elles ne contiennent aucune branche particulière pour Q/K ni pour une profondeur
+fixe. La détection de cycle est centralisée dans ce module. La régression de
+profondeur 5 vérifie que chaque descendant reste résoluble lorsque ses parents
+passent successivement en handoff.
 
-Cet arbre est la sortie de `read FIRST` + mutation + `read LAST`. Il est:
+Un sibling de reflow marqué `isDirectMover: false` possède également son propre
+ghost, mais il n'est plus interpolé comme une trajectoire monde indépendante
+lorsque son parent logique possède un overlay actif. Le noeud conserve la pose
+FIRST/LAST de sa capture, les convertit dans le repère du parent aux deux bornes,
+puis compose la pose locale courante avec la trajectoire parent courante. Le
+mover direct reste en `overlay-world`; cette distinction évite que la même liste
+soit simultanément refluée dans le monde et recomposée lors du handoff parent.
+La table `overlayParentIds` conserve toute la chaîne root-to-parent; la recherche
+part du parent immédiat et remonte jusqu'au premier ghost actif, donc un ancêtre
+d'ancêtre animé compose lui aussi le sibling sans devenir une nouvelle entry.
 
-- profondement immutable avant d'entrer dans le journal/cache;
-- indexe par l'identite logique de l'occurrence et non par le seul `startAt`;
-- complet pour tout le touched set et toute la chaine d'ancetres necessaire;
-- independant des nodes, closures, composants et valeurs de style temporaires.
+La frontière DOM conserve les références de descendants dans le template FIRST:
+`Map<itemId, HTMLElement>` pour chaque ghost, remappée vers le clone lors d'une
+réactivation. Les opérations d'ownership ne font donc pas de recherche par
+attribut dans le subtree cloné. Les attributs `data-item-id`/`id` restent des
+données de markup ou de diagnostic; `data-codplay-flip-hidden` reste seulement le
+marqueur CSS transitoire de visibilité.
 
-Le coordinateur FLIP transforme ensuite cet arbre en `FlipCapture`, l'enregistre
-dans `FlipCaptureCache`, puis appelle `seek(capture, timeMs)`. Une capture produite
-par la transaction courante et une capture realisee froidement suivent exactement
-le meme chemin numerique. `HtmlFlipRuntime` ne doit pas recevoir une callback
-`mutate` dans ce chemin cible et ne doit pas appeler le runner pour inventer FIRST.
+## Contrat des modules structurels
 
-#### Responsabilites
+Un module peut publier un ordre pour ses targets et un touched set. Le player:
 
-```text
-RuntimePlayer
-  -> determine SolvedScene, occurrence, time et touched set logique
+1. vérifie la révision de graphe;
+2. refuse deux ordres contradictoires pour un même target;
+3. vérifie qu'aucun item n'est dupliqué, omis ou placé dans un autre target;
+4. transmet un état complet et versionné au backend.
 
-HtmlPlayerRunner / RenderTransaction
-  -> presente une scene auteur
-  -> projette le parentage et l'ordre
-  -> lit FIRST et LAST dans le DOM
-  -> restaure une presentation precedente en cas d'echec
+Le backend applique ensuite le graphe canonique avec l'override validé. Il ne
+fusionne plus silencieusement une map de module arbitraire avec la scène.
 
-FlipCaptureCoordinator
-  -> associe l'arbre numerique a captureId/startAt/endAt
-  -> conserve journal et cache
-  -> resout la pose a t
+## Invariants
 
-HtmlFlipRuntime
-  -> applique local ou overlay-world
-  -> gere ownership, interruption et destruction
-  -> execute un flush de commit
-```
+- une scène résolue possède un seul graphe parentage/ordre;
+- un mounted perso possède un target résolu et n'apparaît qu'une fois;
+- un parent perso absent ou non monté est une erreur de graphe;
+- un outlet fourni par un host externe peut exister sans perso propriétaire dans
+  la scène, mais ne crée pas une ascendance fictive;
+- Play et Seek appellent le même commit et le même resolver de captures;
+- FIRST et LAST sont toujours des scènes logiques explicites;
+- les trajectoires de conteneurs sont indépendantes de celles de leurs enfants;
+- les captures numériques sont immuables et vérifiées par host/epoch;
+- un ghost réactivé provient du template FIRST de sa capture;
+- le contenu courant d'un ghost parent provient de l'état logique de la scène,
+  jamais de la seule présence de captures enfants terminées;
+- un sibling de reflow ne mélange pas une interpolation monde autonome avec la
+  trajectoire de son parent: sa pose locale est composée avec le parent actif;
+- un flush termine chaque commit de poses.
 
-Le player ne doit donc plus appeler `componentRuntime.sync(next)` avant une
-capture qui depend de l'ancien rendu. Pour une transition, la synchronisation
-du nouvel etat auteur doit etre incluse entre FIRST et LAST. Apres la resolution
-numerique, la presentation `next` reste installee et recoit les poses temporaires
-dans le meme commit. En l'absence de capture FLIP, le chemin direct
-`present(nextScene)` reste autorise.
+## Suivi d'implementation
 
-#### Transaction historique et restauration
-
-Une realisation froide ne rejoue ni events, ni straps, ni callbacks publics. Elle
-utilise le meme primitive de presentation que le chemin courant:
-
-```text
-save presentation courante
-  -> present(scene FIRST historique)
-  -> read FIRST
-  -> present(scene LAST historique)
-  -> read LAST
-  -> finally present(scene courante)
-```
-
-La restauration est obligatoire meme si une lecture, une synchronisation de
-composant ou une mutation de parentage leve une exception. La transaction doit
-restaurer l'etat auteur et la structure, mais ne doit pas restaurer aveuglement
-une chaine `style` prise avant un changement auteur concurrent. Les contributions
-FLIP doivent etre separees de l'etat auteur par le host contract: wrapper dedie,
-slots CSS distincts ou couche de projection qui ne remplace jamais le style
-auteur.
-
-#### Regle de reinjection
-
-Les valeurs `HtmlPose` mesurees ne sont pas ecrites dans `SolvedScene` et ne
-deviennent pas un nouvel etat auteur. Elles sont reinjectees dans le coordinateur
-via le resultat de transaction, puis associees a l'occurrence historique:
-
-```text
-RenderTransactionResult
-  = { measurementTree, restored: true }
-    -> FlipCaptureCoordinator.record(captureId, measurementTree)
-    -> FlipCaptureCache.set(capture)
-    -> HtmlFlipRuntime.seek(capture, logicalTimeMs)
-```
-
-Le runner conserve uniquement la presentation DOM necessaire pour mesurer et
-committer. Le journal FLIP conserve les nombres et la provenance necessaires a
-un seek futur. Aucun retour DOM -> logique n'est permis.
-
-#### Atomicite observable
-
-Entre le premier read FIRST et le commit final, la transaction ne doit franchir
-aucune frontiere asynchrone (`await`, `requestAnimationFrame`, ticker ou callback
-public). Elle peut forcer une lecture de layout au point documente par le host,
-mais elle ne doit produire aucun repaint intermediaire volontaire. L'ordre
-observable cible est donc:
-
-```text
-read all FIRST
-  -> write authored state and structural parentage
-  -> read all LAST
-  -> build immutable numeric capture
-  -> write transient poses
-  -> flush once
-```
-
-Un `flush` vide n'est pas une preuve de cette atomicite. Le test de frontiere
-doit compter les lectures et les commits, et verifier qu'un seek froid restaure
-la scene courante apres chaque tentative.
-
-## Ancetres, reflow et overlay
-
-Le touched set est fourni par le consumer, jamais devine par FLIP depuis le DOM.
-Pour une mutation de liste, il doit contenir le perso deplace, les siblings qui
-reflowent et les dependants dont la pose change.
-
-Le graphe doit etre construit root-to-leaf avec:
-
-- regime `stable` verifie comme pose settlee;
-- regime `composited` compose par matrice;
-- regime `layout` mesure historiquement;
-- detection du plus haut ancetre causant le reflow;
-- mesures repositionnees des descendants sous la coupe;
-- timing propre a chaque ancetre lorsque leurs fenetres different.
-
-`overlay-world` doit etre propage depuis l'auteur et calibre dans le repere du root
-du host. Les ghosts parents doivent masquer et restaurer les descendants qui
-possedent leur propre overlay. La destruction doit supprimer la couche overlay et
-tous les ghosts, pas seulement les projections actives visibles.
-
-## Epoch, scroll et destruction
-
-Un resize ou scroll avance l'epoch de projection, annule les poses temporaires,
-invalide les mesures numeriques et reprojette le meme `logicalTime` dans le nouvel
-espace. Les descripteurs historiques restent disponibles pour une realisation
-froide.
-
-L'ordre de destruction cible est:
-
-```text
-abort pending seeks
-  -> unregister player
-  -> stop render adapters/clock
-  -> cancel and destroy FLIP host
-  -> destroy layout projection
-  -> destroy component instances
-  -> destroy module services
-  -> clear node maps and capture journal ownership
-```
-
-Chaque etape doit etre idempotente et rollback-safe en cas d'echec d'init.
-
-## Plan de refonte
-
-### P0 - Contrats et schedule
-
-- [x] Propager `flipMode`, identite event/action, `startAt`, `endAt` et provenance.
-- [x] Remplacer l'identite derivee `host:startAt:itemIds` lorsqu'un delta provient
-  d'une occurrence compilee.
-- [x] Definir le resolver multi-captures et la retention cache par `captureId`.
-- [x] Supprimer `captureWindows` local au wrapper.
-
-### P0 - Orchestration de presentation
-
-- [x] Introduire `PresentationTransaction` entre player, composants, backend et host.
-- [x] Definir `HtmlMeasurementTree` comme resultat numerique immutable de la transaction.
-- [x] Reinjecter cet arbre dans le coordinateur par `captureId`, sans retour DOM -> logique.
-- [x] Faire passer Play et Seek par le meme resolver de captures actives.
-- [x] Interdire `flip.run()` dans le chemin seek et dans le chemin runner cible.
-- [x] Garantir un seul commit de poses par presentation FLIP.
-
-### P0 - DOM auteur/transitoire
-
-- [x] Remplacer les restaurations aveugles de style.
-- [x] Definir les slots CSS et la couche de projection host.
-- [x] Implementer la vraie phase read/write et la restauration transactionnelle.
-- [x] Garantir l'ordre synchrone `FIRST -> authored/structural writes -> LAST -> poses -> flush`.
-
-### P1 - Realisation froide directe
-
-- [x] Implementer le journal et le resolver runner-scoped pour les moves compiles.
-- Conserver les evenements live et les occurrences commencant a `0` hors de cette
-  tranche; les reorders `list` compiles passent par le replay historique du player.
-- [x] Mesurer FIRST/LAST depuis les bornes logiques, jamais depuis le DOM courant.
-- [x] Tester exhaustivement seek initial, seek-back, start/middle/end, resize et repeated seek.
-  Les scénarios sont couverts dans `tests/runtime/flip/html-flip-runtime.spec.ts`:
-  convergence Play/Seek, réutilisation du cache, invalidation d'epoch et
-  réalisation froide dans le nouvel epoch.
-
-### P1 - Ancetres et overlays
-
-- Construire le touched set et la chaine d'ancetres.
-- Implementer historical layout realization, reflow cut et mesures repositionnees.
-- Propager et tester `overlay-world`, calibration et ghosts imbriques.
-
-### P1 - List et stress
-
-- Brancher la capacite list comme producer du touched set et de l'ordre.
-- Convertir `flip-stress` en `SceneDoc` uniquement apres les gates P0/P1.
-- Supprimer son render loop, ses captures et son cleanup manuel.
+- [x] Remplacer les champs parallèles `rootPersoKeys` / `childrenByTarget` de
+  `SolvedScene` par `SolvedGraph`.
+- [x] Centraliser la traversal d'ancêtres, la traversal parent-first et la
+  validation des ordres de modules.
+- [x] Supprimer la branche `phase === 'seek'` de
+  `MoveFlipLayoutProjection`.
+- [x] Faire passer Play et Seek par `project -> seekCached`.
+- [x] Utiliser la transaction historique comme seul resolver du runner HTML.
+- [x] Porter les targets FIRST/LAST dans chaque entrée de capture.
+- [x] Porter l'ownership FIRST des descendants dans les ghosts parents et filtrer
+  leur restauration par la cible LAST.
+- [x] Maintenir un overlay enfant en handoff sur la trajectoire de son parent
+  jusqu'au LAST du parent, avec test de restitution au DOM.
+- [x] Remplacer le handoff plat par un graphe de projection récursif et couvrir
+  une chaîne de profondeur 5.
+- [x] Conserver un template FIRST par capture world pour toute réactivation.
+- [x] Conserver les références DOM des descendants dans les templates plutôt que
+  de rechercher les clones par attribut.
+- [x] Tester graph, ordre module, transaction commune, aliases et ghosts
+  imbriqués.
+- [x] Vérifier la démo Safari à 0, 1500 et 2200 ms: ordre DOM `[A, B, C, D]`,
+  A visuellement premier, ghosts Q/K stables.
+- [x] Vérifier Play autour de 2200 ms: Qa reste projeté vers K entre les frames
+  2184 et 2234, sans retour à sa pose FIRST.
+- [x] Séparer les calculs d'origine affine et d'AABB, avec régression sur parent
+  tourné/mis à l'échelle.
+- [x] Vérifier le reparentage Kabc/Qabc avec un ghost enfant direct encore actif,
+  puis valider la cible LAST à la phase absolue de fin de l'enfant.
+- [x] Vérifier Safari après correction: Ka rejoint Q à 3600ms et y reste en
+  handoff, Qa reste sur K, en Seek et en Play; console sans warning/error.
+- [x] Réconcilier la visibilité après la résolution complète de la forêt: un
+  alias groupé actif masque tous ses clones parents; vérifier le seek froid et
+  Play à environ 8500ms sans doublon Qa/Qb/Qc/Ka/Kb/Kc.
+- [x] Resynchroniser le contenu des ghosts parents depuis la scène courante et
+  vérifier Seek à `8190ms`, `8200ms` et `8210ms` avec un pas minimal de `10ms`.
+- [x] Composer les siblings de reflow avec la trajectoire du parent actif et
+  vérifier la démo entre `2000ms` et `4000ms`, ainsi que les transitions
+  suivantes, sans double interpolation monde/handoff.
+- [x] Préserver les translations DOM fractionnaires lors de l'entrée et de la
+  sortie overlay; vérifier les bornes `1000ms` et `9000ms` sans saut d'un pixel.
+- [x] Espacer les échanges de contenu de `500ms` avec une durée de `1000ms`,
+  puis vérifier en Seek et en Play que deux items de directions opposées restent
+  actifs simultanément, sans doublon ni erreur console.
+- [x] Préserver l'ownership d'un item déjà animé lorsqu'un nouvel échange
+  concurrent republie le touched set de sa liste; vérifier la continuité de
+  `qa`/`ka`, puis `qb`/`kb`, au milieu de chaque recouvrement.
+- [x] Distinguer les lectures FIRST/LAST d'un overlay concurrent: FIRST reprend
+  la pose du ghost déjà en vol, LAST résout la cible avec l'ancêtre actif.
+- [ ] Étendre la même source de vérité aux occurrences live et à la rétention
+  longue durée du journal, hors du périmètre de cette tranche.
 
 ## Gates de validation
 
-Le stress-test ne peut pas devenir normatif avant ces scenarios:
+```text
+npm run typecheck --workspace=packages/codplay-v2
+npm test --workspace=packages/codplay-v2 -- --run
+npm run build:runner                 # depuis packages/codplay-v2
+```
 
-1. Capture JSON round-trip sans DOM, handle ni closure.
-2. Identite stable d'une occurrence repetee au meme instant.
-3. Seek froid depuis un runner neuf a `start`, `middle` et `end`.
-4. Seek-back depuis apres la transition vers son milieu.
-5. Play et Seek produisent la meme pose et un seul commit.
-6. Deux captures actives et realisation froide simultanee.
-7. Modification d'un style auteur pendant FLIP sans restauration obsolete.
-8. Parent et grand-parent composites avec repere local exact.
-9. Ancetre `layout` realise historiquement et restaure sans effet de bord.
-10. Overlay local/world, ghosts imbriques et absence de doublons.
-11. Resize et scroll invalident puis reprojettent le meme temps logique.
-12. Destruction sans ghost, couche overlay, style temporaire ou listener residuel.
-13. Reorder list avec touched siblings et reflow interne.
-14. A/B/C/D et Q/K declaratifs sans logique FLIP dans la demo.
+La démo `flip-stress` reste une validation déclarative: elle ne construit pas
+de capture et ne corrige pas le runtime à coups de conditions particulières.
 
 ## References
 
-- `plan/flip-list-coordination-plan.md`
-- `plan/move-contract-plan.md`
+- `src/runtime/player/pipeline/presentation-graph.ts`
 - `src/runtime/player/runtime-player.ts`
 - `src/runtime/player/flip/move-flip-layout-projection.ts`
 - `src/runtime/flip/html-flip-runtime.ts`
 - `src/runtime/flip/html-dom-projection.ts`
-- `src/runtime/runner/html-player-runner.ts`
+- `src/runtime/runner/html-compiled-move-capture-resolver.ts`
+- `src/runtime/runner/html-presentation-transaction.ts`
 - `projet/notes/2026-08-18-reprise-runner-html-declaratif-v2.md`

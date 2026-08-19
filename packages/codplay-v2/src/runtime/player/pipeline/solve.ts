@@ -1,6 +1,7 @@
 import { MOUNT_PLACEMENT_INVALID, MOUNT_PLACEMENT_OFF, MOUNT_PLACEMENT_PARENT, MOUNT_PLACEMENT_ROOT, MOUNT_PLACEMENT_UNSPECIFIED } from '../../config/mount-placement'
 import { MOUNT_TARGET_KIND_PERSO, MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
 import type { ResolvedScene, SolvedPerso, SolvedScene } from './types'
+import { buildSolvedGraph } from './presentation-graph'
 
 /** Resolves typed placements before parent-child ordering and transform composition. */
 export function solveScene(
@@ -18,10 +19,7 @@ export function solveScene(
 
   validateNoPlacementCycles(persos)
   const effectivePersos = applyEffectiveMountState(persos)
-  const childrenByTarget = buildChildrenByTarget(effectivePersos)
-  const rootPersoKeys = Object.values(effectivePersos)
-    .filter((perso) => perso.placement.kind === MOUNT_PLACEMENT_ROOT && perso.placement.mounted)
-    .map((perso) => perso.key)
+  const graph = buildSolvedGraph(effectivePersos)
 
   return {
     scene: resolved.scene,
@@ -29,8 +27,7 @@ export function solveScene(
     sceneState: resolved.sceneState,
     storyStates: resolved.storyStates,
     persos: effectivePersos,
-    rootPersoKeys,
-    childrenByTarget,
+    graph,
     moveIssues: Object.values(effectivePersos).flatMap((perso) => perso.moveIssues),
   }
 }
@@ -79,20 +76,6 @@ function resolvePlacement(
     case MOUNT_PLACEMENT_UNSPECIFIED:
       return { kind: MOUNT_PLACEMENT_UNSPECIFIED, mounted: false, source: perso.placement.source }
   }
-}
-
-/** Builds stable child lists grouped by the opaque target ID. */
-function buildChildrenByTarget(
-  persos: Readonly<Record<string, SolvedPerso>>,
-): Readonly<Record<string, readonly string[]>> {
-  const children = new Map<string, string[]>()
-  for (const perso of Object.values(persos)) {
-    if (!perso.placement.mounted || perso.placement.targetId === undefined) continue
-    const current = children.get(perso.placement.targetId) ?? []
-    current.push(perso.key)
-    children.set(perso.placement.targetId, current)
-  }
-  return Object.fromEntries([...children.entries()].map(([targetId, keys]) => [targetId, keys]))
 }
 
 /** Propagates detached parent state to descendants without touching compiled data. */

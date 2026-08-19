@@ -12,15 +12,49 @@ import type {
 /** Stores immutable HTML captures by their existing move/event identity. */
 export class FlipCaptureCache {
   private readonly captures = new Map<string, FlipCapture>()
+  private readonly identitiesByCaptureId = new Map<string, ReadonlySet<string>>()
+  private readonly captureIdByIdentity = new Map<string, string>()
 
-  /** Stores one capture and replaces only the same capture identity. */
+  /** Stores one capture while atomically canonicalizing grouped identities. */
   set(capture: FlipCapture): void {
-    this.captures.set(capture.captureId, capture)
+    const canonicalCapture = normalizeCapture(capture)
+    const incomingIdentities = captureIdentities(canonicalCapture)
+    const conflictingCaptureIds = new Set<string>()
+    for (const identity of incomingIdentities) {
+      const existingId = this.captureIdByIdentity.get(identity)
+      if (existingId === undefined || existingId === canonicalCapture.captureId) continue
+      const existing = this.captures.get(existingId)
+      if (existing === undefined) {
+        this.captureIdByIdentity.delete(identity)
+        continue
+      }
+      conflictingCaptureIds.add(existingId)
+    }
+
+    // A grouped live capture is the canonical realization of every covered
+    // occurrence. Decide all conflicts before mutating the index so a rejected
+    // downgrade cannot leave the cache half-replaced.
+    for (const existingId of conflictingCaptureIds) {
+      const existingIdentities = this.identitiesByCaptureId.get(existingId)
+        ?? captureIdentities(this.captures.get(existingId)!)
+      if (existingIdentities.size > incomingIdentities.size) return
+    }
+
+    for (const existingId of conflictingCaptureIds) this.remove(existingId)
+    // Re-recording one primary identity refreshes that realization and its
+    // aliases as one atomic entry.
+    this.remove(canonicalCapture.captureId)
+    this.captures.set(canonicalCapture.captureId, canonicalCapture)
+    this.identitiesByCaptureId.set(canonicalCapture.captureId, incomingIdentities)
+    for (const identity of incomingIdentities) {
+      this.captureIdByIdentity.set(identity, canonicalCapture.captureId)
+    }
   }
 
   /** Reads one capture by event identity. */
   get(captureId: string): FlipCapture | undefined {
-    return this.captures.get(captureId)
+    const primaryId = this.captureIdByIdentity.get(captureId) ?? (this.captures.has(captureId) ? captureId : undefined)
+    return primaryId === undefined ? undefined : this.captures.get(primaryId)
   }
 
   /** Finds the capture active for one host and time. */
@@ -40,9 +74,43 @@ export class FlipCaptureCache {
   /** Invalidates all captures from one obsolete host projection epoch. */
   invalidateEpoch(hostContextId: string, projectionEpoch: number): void {
     for (const [captureId, capture] of this.captures) {
-      if (capture.hostContextId === hostContextId && capture.projectionEpoch !== projectionEpoch) this.captures.delete(captureId)
+      if (capture.hostContextId === hostContextId && capture.projectionEpoch !== projectionEpoch) this.remove(captureId)
     }
   }
+
+  /** Removes one primary capture and every identity pointing to it. */
+  private remove(captureId: string): void {
+    const identities = this.identitiesByCaptureId.get(captureId)
+      ?? (this.captures.has(captureId) ? captureIdentities(this.captures.get(captureId)!) : undefined)
+    if (identities !== undefined) {
+      for (const identity of identities) {
+        if (this.captureIdByIdentity.get(identity) === captureId) this.captureIdByIdentity.delete(identity)
+      }
+    }
+    this.identitiesByCaptureId.delete(captureId)
+    this.captures.delete(captureId)
+  }
+}
+
+/** Returns the primary and every covered compiled identity of one capture. */
+function captureIdentities(capture: FlipCapture): ReadonlySet<string> {
+  return new Set([capture.captureId, ...(capture.sourceCaptureIds ?? [])])
+}
+
+/** Removes duplicate aliases and the redundant primary identity. */
+function normalizeCapture(capture: FlipCapture): FlipCapture {
+  const aliases = normalizeSourceCaptureIds(capture.captureId, capture.sourceCaptureIds)
+  if (capture.sourceCaptureIds === undefined || aliases.length === capture.sourceCaptureIds.length) return capture
+  return Object.freeze({
+    ...capture,
+    sourceCaptureIds: aliases.length === 0 ? undefined : Object.freeze([...aliases]),
+  })
+}
+
+/** Returns unique aliases without the primary capture identity. */
+function normalizeSourceCaptureIds(captureId: string, sourceCaptureIds: readonly string[] | undefined): readonly string[] {
+  if (sourceCaptureIds === undefined) return []
+  return [...new Set(sourceCaptureIds)].filter((identity) => identity !== captureId)
 }
 
 /** Captures FIRST, executes one consumer mutation, then captures LAST. */
@@ -77,6 +145,15 @@ export function captureFlip(
     entries.push({
       itemId: entry.itemId,
       ancestorIds: [...entry.ancestorIds],
+      ...(entry.sourceTargetId === undefined ? {} : { sourceTargetId: entry.sourceTargetId }),
+      ...(entry.destinationTargetId === undefined ? {} : { destinationTargetId: entry.destinationTargetId }),
+      ...(entry.sourceParentId === undefined ? {} : { sourceParentId: entry.sourceParentId }),
+      ...(entry.destinationParentId === undefined ? {} : { destinationParentId: entry.destinationParentId }),
+      ...(entry.overlayParentIds === undefined ? {} : { overlayParentIds: Object.freeze([...entry.overlayParentIds]) }),
+      ...(entry.isDirectMover === undefined ? {} : { isDirectMover: entry.isDirectMover }),
+      ...(entry.overlayTargetByPerso === undefined
+        ? {}
+        : { overlayTargetByPerso: Object.freeze({ ...entry.overlayTargetByPerso }) }),
       mode: entry.mode ?? 'local',
       startAt: request.startAt,
       endAt,
@@ -119,9 +196,19 @@ export function captureMeasurementTree(
 ): FlipCapture {
   assertMeasurementTree(tree, metadata)
   const endAt = metadata.startAt + metadata.duration
+  const sourceCaptureIds = normalizeSourceCaptureIds(metadata.captureId, metadata.sourceCaptureIds)
   const entries: readonly FlipItemCapture[] = tree.items.map((item) => Object.freeze({
     itemId: item.itemId,
     ancestorIds: Object.freeze([...item.ancestorIds]),
+    ...(item.sourceTargetId === undefined ? {} : { sourceTargetId: item.sourceTargetId }),
+    ...(item.destinationTargetId === undefined ? {} : { destinationTargetId: item.destinationTargetId }),
+    ...(item.sourceParentId === undefined ? {} : { sourceParentId: item.sourceParentId }),
+    ...(item.destinationParentId === undefined ? {} : { destinationParentId: item.destinationParentId }),
+    ...(item.overlayParentIds === undefined ? {} : { overlayParentIds: Object.freeze([...item.overlayParentIds]) }),
+    ...(item.isDirectMover === undefined ? {} : { isDirectMover: item.isDirectMover }),
+    ...(item.overlayTargetByPerso === undefined
+      ? {}
+      : { overlayTargetByPerso: Object.freeze({ ...item.overlayTargetByPerso }) }),
     mode: item.mode,
     startAt: metadata.startAt,
     endAt,
@@ -140,6 +227,9 @@ export function captureMeasurementTree(
   }))
   const capture: FlipCapture = Object.freeze({
     captureId: metadata.captureId,
+    ...(sourceCaptureIds.length === 0
+      ? {}
+      : { sourceCaptureIds: Object.freeze([...sourceCaptureIds]) }),
     hostContextId: tree.hostContextId,
     projectionEpoch: tree.projectionEpoch,
     startAt: metadata.startAt,
@@ -168,6 +258,8 @@ function assertMeasurementTree(tree: HtmlMeasurementTree, metadata: FlipCaptureM
   for (const item of tree.items) {
     if (itemIds.has(item.itemId)) throw new Error(`FLIP measurement tree contains duplicate item: ${item.itemId}`)
     itemIds.add(item.itemId)
+    assertOverlayTargetByPerso(item.itemId, item.overlayTargetByPerso)
+    assertEntryParentOwnership(item.itemId, item.sourceParentId, item.destinationParentId)
   }
   const ancestorIds = new Set<string>()
   const ancestorsById = new Map<string, HtmlMeasurementTree['ancestors'][number]>()
@@ -218,6 +310,8 @@ function assertCaptureRequest(request: FlipCaptureRequest, projection: HtmlFlipP
   for (const entry of request.entries) {
     if (ids.has(entry.itemId)) throw new Error(`FLIP capture contains duplicate item: ${entry.itemId}`)
     ids.add(entry.itemId)
+    assertOverlayTargetByPerso(entry.itemId, entry.overlayTargetByPerso)
+    assertEntryParentOwnership(entry.itemId, entry.sourceParentId, entry.destinationParentId)
   }
   const ancestorIds = new Set<string>()
   const ancestorsById = new Map<string, FlipAncestorEntry>()
@@ -256,6 +350,36 @@ function assertCaptureRequest(request: FlipCaptureRequest, projection: HtmlFlipP
       visited.add(current)
       current = ancestors.get(current)?.parentId
     }
+  }
+}
+
+/** Validates the parent references consumed by the recursive overlay graph. */
+function assertEntryParentOwnership(
+  itemId: string,
+  sourceParentId: string | undefined,
+  destinationParentId: string | undefined,
+): void {
+  for (const [phase, parentId] of [
+    ['source', sourceParentId],
+    ['destination', destinationParentId],
+  ] as const) {
+    if (parentId === undefined) continue
+    if (parentId.length === 0) throw new Error(`FLIP ${phase} parent is invalid for item: ${itemId}`)
+    if (parentId === itemId) throw new Error(`FLIP ${phase} parent cannot be the item itself: ${itemId}`)
+  }
+}
+
+/** Validates the target snapshot used to reconcile nested overlay descendants. */
+function assertOverlayTargetByPerso(
+  ownerPersoKey: string,
+  targetByPerso: Readonly<Record<string, string>> | undefined,
+): void {
+  if (targetByPerso === undefined) return
+  for (const [persoKey, targetId] of Object.entries(targetByPerso)) {
+    if (persoKey.length === 0 || persoKey === ownerPersoKey) {
+      throw new Error(`FLIP overlay descendant identity is invalid: ${persoKey}`)
+    }
+    if (targetId.length === 0) throw new Error(`FLIP overlay descendant target is invalid: ${persoKey}`)
   }
 }
 

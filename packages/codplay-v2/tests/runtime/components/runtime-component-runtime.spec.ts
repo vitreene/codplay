@@ -7,6 +7,7 @@ import {
 } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import type { SolvedScene } from '../../../src/runtime/player'
+import { buildSolvedGraph } from '../../../src/runtime/player'
 
 class TestComponent extends BaseComponent<Record<string, unknown>> {
   readonly updates: number[] = []
@@ -50,8 +51,17 @@ function solvedScene(timeMs: number, includePerso = true): SolvedScene {
         moveIssues: [],
       },
     } : {},
-    rootPersoKeys: [],
-    childrenByTarget: {},
+    graph: buildSolvedGraph(includePerso ? {
+      'main:item': {
+        key: 'main:item',
+        storyId: 'main',
+        persoId: 'item',
+        type: 'test',
+        state: {},
+        placement: { kind: 'unspecified', mounted: false },
+        moveIssues: [],
+      },
+    } : {}),
     moveIssues: [],
   }
 }

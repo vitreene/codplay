@@ -39,6 +39,18 @@ export type FlipAncestorRegime = 'stable' | 'composited' | 'layout'
 export type FlipEntry = Readonly<{
   itemId: string
   ancestorIds: readonly string[]
+  /** Exact logical ownership at FIRST and LAST, kept with the numeric poses. */
+  sourceTargetId?: string
+  destinationTargetId?: string
+  /** Logical parent at FIRST and LAST, used when an item hands off to a parent ghost. */
+  sourceParentId?: string
+  destinationParentId?: string
+  /** Root-to-parent logical candidates used to compose stable overlay siblings. */
+  overlayParentIds?: readonly string[]
+  /** False when the entry is a stable sibling carried only for shared reflow. */
+  isDirectMover?: boolean
+  /** FIRST target of every perso captured inside this overlay ghost. */
+  overlayTargetByPerso?: Readonly<Record<string, string>>
   mode?: HtmlFlipMode
   path?: Path
 }>
@@ -78,6 +90,13 @@ export type HtmlMeasurementTree = Readonly<{
   items: readonly Readonly<{
     itemId: string
     ancestorIds: readonly string[]
+    sourceTargetId?: string
+    destinationTargetId?: string
+    sourceParentId?: string
+    destinationParentId?: string
+    overlayParentIds?: readonly string[]
+    isDirectMover?: boolean
+    overlayTargetByPerso?: Readonly<Record<string, string>>
     mode: HtmlFlipMode
     first: HtmlPose
     last: HtmlPose
@@ -95,15 +114,33 @@ export type HtmlMeasurementTree = Readonly<{
 /** Timing and identity metadata attached to a measured transaction. */
 export type FlipCaptureMetadata = Readonly<{
   captureId: string
+  /** Stable compiled occurrence identities covered by one grouped capture. */
+  sourceCaptureIds?: readonly string[]
   startAt: number
   duration: number
   ease?: string
+}>
+
+/** Runtime-only resources captured beside numeric FIRST/LAST data. */
+export type FlipCaptureRuntimeResources = Readonly<{
+  /** Immutable source DOM templates used to re-create a stable overlay ghost. */
+  overlayTemplates?: ReadonlyMap<string, unknown>
 }>
 
 /** One persisted item capture with no host handle or DOM reference. */
 export type FlipItemCapture = Readonly<{
   itemId: string
   ancestorIds: readonly string[]
+  sourceTargetId?: string
+  destinationTargetId?: string
+  sourceParentId?: string
+  destinationParentId?: string
+  /** Root-to-parent logical candidates used to compose stable overlay siblings. */
+  overlayParentIds?: readonly string[]
+  /** False when the entry is a stable sibling carried only for shared reflow. */
+  isDirectMover?: boolean
+  /** FIRST target of descendants cloned into this overlay entry. */
+  overlayTargetByPerso?: Readonly<Record<string, string>>
   mode: HtmlFlipMode
   startAt: number
   endAt: number
@@ -126,6 +163,8 @@ export type FlipAncestorCapture = Readonly<{
 /** Persist-only FLIP capture readable by exact seek. */
 export type FlipCapture = Readonly<{
   captureId: string
+  /** Stable compiled occurrence identities covered by one grouped capture. */
+  sourceCaptureIds?: readonly string[]
   hostContextId: string
   projectionEpoch: number
   startAt: number
@@ -156,6 +195,14 @@ export type HtmlFlipRuntimeOptions = Readonly<{
   getActiveCaptureDescriptors?: (timeMs: number) => readonly FlipCaptureDescriptor[]
 }>
 
+/** Current logical content needed to reconcile active parent ghosts. */
+export type HtmlFlipOverlayContentState = Readonly<{
+  /** Mounted descendants currently owned by each overlay item. */
+  descendantsByOverlay: Readonly<Record<string, readonly string[]>>
+  /** Current logical target of every mounted descendant. */
+  targetByItem: Readonly<Record<string, string>>
+}>
+
 /** A pose resolved for one item at one timeline instant. */
 export type ResolvedFlipPose = Readonly<{
   itemId: string
@@ -165,13 +212,16 @@ export type ResolvedFlipPose = Readonly<{
   captureId: string
 }>
 
+/** Historical read phase used to resolve an already projected overlay pose. */
+export type HtmlOverlayPosePhase = 'first' | 'last'
+
 /** Exact host operations required by the HTML FLIP runtime. */
 export type HtmlFlipProjection = Readonly<{
   getHostContextId: () => string
   getProjectionEpoch: () => number
   resolveHandle: (itemId: string) => unknown
   capturePose: (handle: unknown) => HtmlPose
-  captureOverlayPose?: (handle: unknown) => HtmlPose
+  captureOverlayPose?: (handle: unknown, options?: Readonly<{ phase?: HtmlOverlayPosePhase }>) => HtmlPose
   /**
    * Realizes one ancestor at a historical instant, captures its pose, and
    * restores the host's current state before returning.
@@ -181,15 +231,40 @@ export type HtmlFlipProjection = Readonly<{
     timeMs: number
     capture: FlipAncestorCapture
   }>) => HtmlPose
+  /**
+   * Clones one FIRST source subtree and records the requested descendant
+   * references before the historical transaction mutates it.
+   */
+  captureOverlayTemplate?: (handle: unknown, descendantItemIds?: readonly string[]) => unknown
+  /** Temporarily clears active transient poses before historical DOM realization. */
+  suspendTransientForHistorical?: () => void
   applyLocalPose: (handle: unknown, pose: ResolvedFlipPose) => void
   finishLocalPose: (handle: unknown, captureId: string) => void
   cancelLocalPose: (handle: unknown, captureId: string) => void
-  beginOverlay: (handle: unknown, first: HtmlPose, last: HtmlPose) => unknown
-  /** Removes one independently projected descendant from active parent ghosts. */
-  excludeOverlayItem?: (itemId: string) => void
+  beginOverlay: (
+    handle: unknown,
+    first: HtmlPose,
+    last: HtmlPose,
+    template?: unknown,
+    overlayTargetByPerso?: Readonly<Record<string, string>>,
+  ) => unknown
+  /** Rebuilds one active ghost subtree from the current logical DOM content. */
+  syncOverlayContent?: (
+    overlayHandle: unknown,
+    descendantItemIds: readonly string[],
+    descendantTargetByPerso: Readonly<Record<string, string>>,
+  ) => void
+  /**
+   * Removes one independently projected descendant from active parent ghosts.
+   * Omitting targetId claims the item globally for the current overlay commit;
+   * the runtime uses this form after the complete ownership graph is resolved.
+   */
+  excludeOverlayItem?: (itemId: string, targetId?: string) => void
   /** Restores one descendant clone after its independent overlay ends. */
-  restoreOverlayItem?: (itemId: string) => void
+  restoreOverlayItem?: (itemId: string, targetId?: string) => void
   applyOverlayPose: (overlayHandle: unknown, pose: ResolvedFlipPose) => void
   finishOverlay: (overlayHandle: unknown) => void
+  /** Releases host-owned overlay layers and any remaining transient resources. */
+  destroy?: () => void
   flush: () => void
 }>

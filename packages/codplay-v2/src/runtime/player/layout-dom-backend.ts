@@ -1,4 +1,4 @@
-import type { SolvedPerso, SolvedScene } from './pipeline'
+import { resolvePresentationOrder, type SolvedPerso, type SolvedScene } from './pipeline'
 import type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
 
 /** Nodes supplied by the component materializer to the layout projection backend. */
@@ -26,10 +26,15 @@ export class LayoutDomBackend implements LayoutProjection {
   project(scene: SolvedScene, contextOrNodes?: LayoutProjectionContext | LayoutProjectionNodes): void {
     const nodes = isLayoutProjectionNodes(contextOrNodes) ? contextOrNodes : this.defaultNodes
     if (nodes === undefined) throw new Error('Layout DOM backend nodes are not configured.')
+    if (!isLayoutProjectionNodes(contextOrNodes)
+      && contextOrNodes?.layoutState?.graphRevision !== undefined
+      && contextOrNodes.layoutState.graphRevision !== scene.graph.revision) {
+      throw new Error('Layout projection state belongs to a different solved graph revision.')
+    }
     if (!isLayoutProjectionNodes(contextOrNodes)) contextOrNodes?.authoredSync?.(scene)
     const childrenByTarget = isLayoutProjectionNodes(contextOrNodes)
-      ? scene.childrenByTarget
-      : { ...scene.childrenByTarget, ...(contextOrNodes?.layoutState?.childrenByTarget ?? {}) }
+      ? resolvePresentationOrder(scene)
+      : resolvePresentationOrder(scene, contextOrNodes?.layoutState?.childrenByTarget)
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
         .filter((perso) => perso.placement.mounted)

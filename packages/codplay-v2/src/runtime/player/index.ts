@@ -19,9 +19,9 @@ export type { LayoutProjectionNodes } from './layout-dom-backend'
 export type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
 export {
   MoveFlipLayoutProjection,
+  createHtmlFlipOverlayContentState,
   type MoveFlipCaptureBuilder,
   type MoveFlipCaptureDescription,
-  type MoveFlipCapturePresenter,
   type MoveFlipLayoutProjectionOptions,
 } from './flip/move-flip-layout-projection'
 export { prepareMoveFlipTransition, type PreparedMoveFlipTransition } from './flip/move-flip-transition'
@@ -73,6 +73,11 @@ export {
   materializeScene,
   resolveScene,
   solveScene,
+  buildSolvedGraph,
+  resolveAncestorChain,
+  resolveLogicalParentKey,
+  resolvePresentationOrder,
+  traverseSolvedGraph,
   MountTargetRegistry,
   buildTrackRegistry,
   createStrapTrackId,
@@ -96,6 +101,7 @@ export {
   type SolvedPerso,
   type SolvedPlacement,
   type SolvedScene,
+  type SolvedGraph,
   type MaterializedTrack,
   type MaterializedTrackRegistry,
   type MountTarget,

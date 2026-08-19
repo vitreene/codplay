@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { prepareSvgPath } from '../../../src/ace'
 import { HtmlFlipRuntime } from '../../../src/runtime/flip'
 import type { HtmlFlipProjection, HtmlMatrix, HtmlPose } from '../../../src/runtime/flip'
-import { MoveFlipLayoutProjection } from '../../../src/runtime/player'
-import type { MoveStateDelta } from '../../../src/runtime/player'
+import { MoveFlipLayoutProjection, buildSolvedGraph } from '../../../src/runtime/player'
 import type { SolvedScene } from '../../../src/runtime/player'
 
 const identity: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
+/** Creates one deterministic pose for the projection boundary test. */
 function pose(left: number): HtmlPose {
   return {
     rect: { left, top: 0, width: 10, height: 10 },
@@ -25,171 +24,79 @@ function pose(left: number): HtmlPose {
   }
 }
 
-function emptyScene(): SolvedScene {
+/** Creates the smallest valid solved presentation snapshot. */
+function scene(timeMs = 0): SolvedScene {
   return {
     scene: {} as SolvedScene['scene'],
-    timeMs: 0,
+    timeMs,
     sceneState: {},
     storyStates: {},
     persos: {},
-    rootPersoKeys: [],
-    childrenByTarget: {},
+    graph: buildSolvedGraph({}),
     moveIssues: [],
   }
 }
 
+/** Creates a host projection with no historical descriptors to resolve. */
+function projection(): HtmlFlipProjection {
+  return {
+    getHostContextId: () => 'host',
+    getProjectionEpoch: () => 0,
+    resolveHandle: () => undefined,
+    capturePose: () => pose(0),
+    captureHistoricalPose: () => pose(0),
+    applyLocalPose: vi.fn(),
+    finishLocalPose: vi.fn(),
+    cancelLocalPose: vi.fn(),
+    beginOverlay: vi.fn(() => ({})),
+    applyOverlayPose: vi.fn(),
+    finishOverlay: vi.fn(),
+    flush: vi.fn(),
+  }
+}
+
 describe('MoveFlipLayoutProjection', () => {
-  it('captures before the base projection and advances the same capture afterward', () => {
-    const path = prepareSvgPath('M 0 0 L 0.5 0.5 L 1 0')
-    let itemLeft = 0
+  it('commits the structural scene before the shared FLIP lookup', () => {
     const order: string[] = []
-    const projection: HtmlFlipProjection = {
-      getHostContextId: () => 'host-1',
-      getProjectionEpoch: () => 1,
-      resolveHandle: (itemId) => itemId,
-      capturePose: (handle) => {
-        order.push(`capture:${String(handle)}`)
-        return pose(itemLeft)
-      },
-      captureHistoricalPose: ({ ancestorId }) => pose(Number(ancestorId)),
-      applyLocalPose: (handle) => order.push(`apply:${String(handle)}`),
-      finishLocalPose: vi.fn(),
-      cancelLocalPose: vi.fn(),
-      beginOverlay: vi.fn(() => ({})),
-      applyOverlayPose: vi.fn(),
-      finishOverlay: vi.fn(),
-      flush: vi.fn(),
-    }
-    const flip = new HtmlFlipRuntime(projection)
-    const base = {
-      project: (_scene: SolvedScene): void => {
-        order.push('project')
-        itemLeft = 100
-      },
-    }
+    const base = { project: vi.fn(() => order.push('base')) }
+    const flip = new HtmlFlipRuntime(projection())
+    const seekCached = vi.spyOn(flip, 'seekCached').mockImplementation(() => {
+      order.push('flip')
+      return { ok: true, value: undefined, diagnostics: {} as never }
+    })
     const wrapper = new MoveFlipLayoutProjection({
       base,
       flip,
-      hostContextId: 'host-1',
-      getProjectionEpoch: () => 1,
-      buildCapture: ({ deltas, preparedTransitions }) => {
-        const transition = preparedTransitions.get(deltas.find((delta) => delta.transition !== undefined)?.persoKey ?? '')
-        if (transition?.duration === undefined) return undefined
-        return {
-          captureId: 'move-1',
-          hostContextId: 'host-1',
-          projectionEpoch: 1,
-          startAt: 0,
-          duration: transition.duration,
-          ease: transition.ease,
-          entries: deltas.map((delta) => ({ itemId: delta.persoKey, ancestorIds: [], mode: 'local' as const, path: transition.path })),
-        }
-      },
+      hostContextId: 'host',
+      getProjectionEpoch: () => 0,
     })
-    const delta: MoveStateDelta = {
-      operation: 'move',
-      persoKey: 'item',
-      mountedBefore: true,
-      mountedAfter: true,
-      transition: {
-        duration: 100,
-        ease: 'inOutQuad',
-        path,
-      },
-    }
 
-    wrapper.project(emptyScene(), { phase: 'frame', previousScene: emptyScene(), moveDeltas: [delta] })
-    wrapper.advance(50)
+    wrapper.project(scene(50), { moveDeltas: [] })
 
-    expect(order.slice(0, 3)).toEqual(['capture:item', 'project', 'capture:item'])
-    expect(order.filter((entry) => entry === 'apply:item')).toHaveLength(2)
+    expect(order).toEqual(['base', 'flip'])
+    expect(seekCached).toHaveBeenCalledWith('host', 0, 50)
   })
 
-  it('projects a seek directly when no transition capture is available', () => {
-    const base = { project: vi.fn() }
-    const flip = new HtmlFlipRuntime({
-      getHostContextId: () => 'host-1',
-      getProjectionEpoch: () => 1,
-      resolveHandle: () => undefined,
-      capturePose: () => pose(0),
-      captureHistoricalPose: () => pose(0),
-      applyLocalPose: vi.fn(),
-      finishLocalPose: vi.fn(),
-      cancelLocalPose: vi.fn(),
-      beginOverlay: vi.fn(() => ({})),
-      applyOverlayPose: vi.fn(),
-      finishOverlay: vi.fn(),
-      flush: vi.fn(),
-    })
+  it('uses the same cached resolver for every scene commit', () => {
+    const flip = new HtmlFlipRuntime(projection())
+    const seekCached = vi.spyOn(flip, 'seekCached').mockImplementation(() => ({
+      ok: true,
+      value: undefined,
+      diagnostics: {} as never,
+    }))
     const wrapper = new MoveFlipLayoutProjection({
-      base,
+      base: { project: vi.fn() },
       flip,
-      hostContextId: 'host-1',
-      getProjectionEpoch: () => 1,
-      buildCapture: () => undefined,
+      hostContextId: 'host',
+      getProjectionEpoch: () => 0,
     })
 
-    wrapper.project(emptyScene(), { phase: 'seek', previousScene: emptyScene(), moveDeltas: [] })
+    wrapper.project(scene(100), { moveDeltas: [] })
+    wrapper.project(scene(250), { moveDeltas: [] })
 
-    expect(base.project).toHaveBeenCalledOnce()
-  })
-
-  it('does not invent a FLIP capture during a cold seek', () => {
-    let itemLeft = 0
-    const applyLocalPose = vi.fn()
-    const projection: HtmlFlipProjection = {
-      getHostContextId: () => 'host-1',
-      getProjectionEpoch: () => 1,
-      resolveHandle: (itemId) => itemId,
-      capturePose: () => pose(itemLeft),
-      captureHistoricalPose: () => pose(itemLeft),
-      applyLocalPose,
-      finishLocalPose: vi.fn(),
-      cancelLocalPose: vi.fn(),
-      beginOverlay: vi.fn(() => ({})),
-      applyOverlayPose: vi.fn(),
-      finishOverlay: vi.fn(),
-      flush: vi.fn(),
-    }
-    const flip = new HtmlFlipRuntime(projection)
-    const base = {
-      project: vi.fn(() => { itemLeft = 100 }),
-    }
-    const wrapper = new MoveFlipLayoutProjection({
-      base,
-      flip,
-      hostContextId: 'host-1',
-      getProjectionEpoch: () => 1,
-      buildCapture: ({ deltas, preparedTransitions, nextScene }) => {
-        const transition = preparedTransitions.get(deltas[0]?.persoKey ?? '')
-        if (transition?.duration === undefined) return undefined
-        return {
-          captureId: 'seek-move',
-          hostContextId: 'host-1',
-          projectionEpoch: 1,
-          startAt: deltas[0]?.transitionStartAt ?? nextScene.timeMs,
-          duration: transition.duration,
-          ease: transition.ease,
-          entries: [{ itemId: 'item', ancestorIds: [], mode: 'local' as const }],
-        }
-      },
-    })
-    const delta: MoveStateDelta = {
-      operation: 'move',
-      persoKey: 'item',
-      mountedBefore: true,
-      mountedAfter: true,
-      transitionStartAt: 0,
-      transition: { duration: 100, ease: 'linear' },
-    }
-
-    wrapper.project({ ...emptyScene(), timeMs: 50 }, {
-      phase: 'seek',
-      previousScene: emptyScene(),
-      moveDeltas: [delta],
-    })
-
-    expect(base.project).toHaveBeenCalledOnce()
-    expect(applyLocalPose).not.toHaveBeenCalled()
+    expect(seekCached.mock.calls.map(([host, epoch, time]) => [host, epoch, time])).toEqual([
+      ['host', 0, 100],
+      ['host', 0, 250],
+    ])
   })
 })

@@ -1,5 +1,15 @@
 import { captureFlip, captureMeasurementTree, FlipCaptureCache } from './flip-capture'
-import { FlipHistoricalPoseCache, resolveFlipPoseGraph } from './flip-pose-graph'
+import {
+  FlipHistoricalPoseCache,
+  resolveFlipPoseGraph,
+} from './flip-pose-graph'
+import {
+  createOverlayCaptureNode,
+  createOverlayHandoffNode,
+  isOverlayNodeContinuing,
+  resolveOverlayProjectionPose,
+  type OverlayProjectionNode,
+} from './overlay-projection-graph'
 import { DiagnosticCollector } from '../../diagnostics'
 import type {
   FlipCapture,
@@ -10,11 +20,13 @@ import type {
   HtmlFlipProjection,
   HtmlMeasurementTree,
   HtmlFlipRuntimeOptions,
+  FlipCaptureRuntimeResources,
+  HtmlFlipOverlayContentState,
 } from './types'
 
 /** Runs HTML FLIP captures and commits one resolved pose per touched item. */
 export class HtmlFlipRuntime {
-  private readonly activeOverlays = new Map<string, { captureId: string; handle: unknown }>()
+  private readonly overlayNodes = new Map<string, OverlayProjectionNode>()
   private readonly activeLocalPoses = new Map<string, { captureId: string; handle: unknown }>()
   private readonly projection: HtmlFlipProjection
   private readonly cache: FlipCaptureCache
@@ -22,6 +34,8 @@ export class HtmlFlipRuntime {
   private readonly getActiveCaptureDescriptors: HtmlFlipRuntimeOptions['getActiveCaptureDescriptors']
   private readonly diagnosticOutput: HtmlFlipRuntimeOptions['diagnosticOutput']
   private readonly historicalPoseCache = new FlipHistoricalPoseCache()
+  private readonly overlayTemplates = new Map<string, ReadonlyMap<string, unknown>>()
+  private overlayContentState: HtmlFlipOverlayContentState | undefined
   private lastProjectionTimeMs: number | undefined
 
   /** Creates one runtime around one host-owned HTML projection. */
@@ -44,11 +58,11 @@ export class HtmlFlipRuntime {
       this.reconcileActiveProjections(request.startAt)
       const active = this.cache.findActiveAll(request.hostContextId, request.projectionEpoch, request.startAt)
         .filter((capture) => capture.endAt > request.startAt)
-        .filter((capture) => capture.entries.some((entry) => entry.mode === 'overlay-world'))
       if (active.length > 0) {
         const presented = this.seekCaptures(active, request.startAt)
         if (!presented.ok) throw new Error(presented.diagnostics.errors.map((entry) => entry.message).join('\n'))
       }
+      const overlayTemplates = this.captureOverlayTemplates(request.entries)
       const captured = captureFlip({
         ...request,
         mutate: () => {
@@ -63,6 +77,7 @@ export class HtmlFlipRuntime {
           if (!presented.ok) throw new Error(presented.diagnostics.errors.map((entry) => entry.message).join('\n'))
         },
       }, this.projection, this.cache)
+      if (overlayTemplates.size > 0) this.overlayTemplates.set(request.captureId, overlayTemplates)
       return { ok: true, value: captured, diagnostics: emptyDiagnostics() }
     } catch (error) {
       return this.failure('RUNTIME_FLIP_CAPTURE_FAILED', error, { captureId: request.captureId })
@@ -82,14 +97,41 @@ export class HtmlFlipRuntime {
   recordMeasurementTree(
     tree: HtmlMeasurementTree,
     metadata: FlipCaptureMetadata,
+    resources: FlipCaptureRuntimeResources = {},
   ): FlipOperationResult<FlipCapture> {
     try {
       if (tree.hostContextId !== this.projection.getHostContextId()) throw new Error('FLIP capture crosses host contexts.')
       if (tree.projectionEpoch !== this.projection.getProjectionEpoch()) throw new Error('FLIP capture uses a stale host projection epoch.')
       const capture = captureMeasurementTree(tree, metadata, this.cache)
+      if (resources.overlayTemplates !== undefined) {
+        this.overlayTemplates.set(metadata.captureId, new Map(resources.overlayTemplates))
+      }
       return { ok: true, value: capture, diagnostics: emptyDiagnostics() }
     } catch (error) {
       return this.failure('RUNTIME_FLIP_MEASUREMENT_FAILED', error, { captureId: metadata.captureId })
+    }
+  }
+
+  /** Stores the logical descendant ownership for the next shared projection commit. */
+  setOverlayContentState(state: HtmlFlipOverlayContentState | undefined): void {
+    this.overlayContentState = state
+  }
+
+  /** Presents active captures before a new host measurement begins. */
+  prepareCapture(
+    hostContextId: string,
+    projectionEpoch: number,
+    timeMs: number,
+  ): FlipOperationResult<void> {
+    try {
+      if (hostContextId !== this.projection.getHostContextId()) throw new Error('FLIP capture crosses host contexts.')
+      if (projectionEpoch !== this.projection.getProjectionEpoch()) throw new Error('FLIP capture uses a stale host projection epoch.')
+      this.reconcileActiveProjections(timeMs)
+      const active = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
+      if (active.length === 0) return { ok: true, value: undefined, diagnostics: emptyDiagnostics() }
+      return this.seekCaptures(active, timeMs, false)
+    } catch (error) {
+      return this.failure('RUNTIME_FLIP_PREPARE_CAPTURE_FAILED', error, { hostContextId, projectionEpoch, timeMs })
     }
   }
 
@@ -101,40 +143,63 @@ export class HtmlFlipRuntime {
   /** Resolves several overlapping captures and commits them with one flush. */
   private seekCaptures(captures: readonly FlipCapture[], timeMs: number, finishCompleted = true): FlipOperationResult<void> {
     try {
+      let needsHistoricalSuspension = false
       for (const capture of captures) {
         this.assertCaptureScope(capture)
+        needsHistoricalSuspension ||= capture.ancestors.some((ancestor) => ancestor.regime === 'layout')
+      }
+      if (needsHistoricalSuspension) this.suspendTransientProjections()
+      for (const capture of captures) {
         const poses = resolveFlipPoseGraph(capture, timeMs, this.projection, this.historicalPoseCache)
         for (const resolved of poses) {
           const handle = this.projection.resolveHandle(resolved.itemId)
           if (handle === undefined || handle === null) throw new Error(`FLIP HTML handle is missing: ${resolved.itemId}`)
+          const entry = capture.entries.find((candidate) => candidate.itemId === resolved.itemId)
+          if (entry === undefined) throw new Error(`FLIP capture item is missing: ${resolved.itemId}`)
           if (resolved.mode === 'overlay-world') {
-            this.cancelLocalPoseIfNeeded(resolved.itemId, capture.captureId)
-            const active = this.activeOverlays.get(resolved.itemId)
-            if (active !== undefined && active.captureId !== capture.captureId) {
-              this.projection.finishOverlay(active.handle)
-              this.projection.restoreOverlayItem?.(resolved.itemId)
-              this.activeOverlays.delete(resolved.itemId)
+            const existing = this.overlayNodes.get(resolved.itemId)
+            // A stable sibling may be in handoff from an earlier list capture
+            // while a newer simultaneous reflow gives it another slot. Only
+            // the same compiled capture identity may retain that node; the
+            // `isDirectMover` flag describes why the entry was measured, not
+            // an ownership veto for a later list transition.
+            if (existing !== undefined && this.sameCaptureOwnership(existing.captureId, capture)) {
+              this.overlayNodes.set(resolved.itemId, createOverlayCaptureNode({
+                itemId: resolved.itemId,
+                captureId: capture.captureId,
+                handle: existing.handle,
+                ...this.resolveCaptureParentItemId(entry),
+                destinationTargetId: entry.destinationTargetId,
+              }))
+              continue
             }
-            const overlay = this.activeOverlays.get(resolved.itemId)?.handle
-              ?? this.startOverlay(capture, resolved.itemId, handle)
-            this.activeOverlays.set(resolved.itemId, { captureId: capture.captureId, handle: overlay })
-            this.projection.applyOverlayPose(overlay, resolved)
+            if (existing?.state === 'handoff') this.releaseOverlaySubtree(resolved.itemId)
+            this.releaseOverlayNodeIfReplaced(resolved.itemId, capture)
+            const overlay = this.startOverlay(capture, resolved.itemId, handle)
+            this.overlayNodes.set(resolved.itemId, createOverlayCaptureNode({
+              itemId: resolved.itemId,
+              captureId: capture.captureId,
+              handle: overlay,
+              ...this.resolveCaptureParentItemId(entry),
+              destinationTargetId: entry.destinationTargetId,
+            }))
           } else {
-            const activeOverlay = this.activeOverlays.get(resolved.itemId)
-            if (activeOverlay !== undefined) {
-              this.projection.finishOverlay(activeOverlay.handle)
-              this.projection.restoreOverlayItem?.(resolved.itemId)
-              this.activeOverlays.delete(resolved.itemId)
-            }
-            this.cancelLocalPoseIfNeeded(resolved.itemId, capture.captureId)
+            this.releaseOverlaySubtree(resolved.itemId)
+            this.cancelLocalPoseIfNeeded(resolved.itemId, capture)
             this.activeLocalPoses.set(resolved.itemId, { captureId: capture.captureId, handle })
             this.projection.applyLocalPose(handle, resolved)
           }
         }
       }
+      this.syncOverlayContents()
+      this.reconcileOverlayVisibility()
+      this.applyOverlayProjectionNodes(timeMs)
       this.projection.flush()
-      if (finishCompleted) for (const capture of captures) this.finishCompletedOverlays(capture, timeMs)
-      this.lastProjectionTimeMs = timeMs
+      if (finishCompleted) {
+        this.reconcileOverlayNodes(timeMs, true)
+        this.finishCompletedLocalPoses(timeMs)
+        this.lastProjectionTimeMs = timeMs
+      }
       return { ok: true, value: undefined, diagnostics: emptyDiagnostics() }
     } catch (error) {
       return this.failure('RUNTIME_FLIP_SEEK_FAILED', error, {
@@ -155,7 +220,10 @@ export class HtmlFlipRuntime {
       }
       this.reconcileActiveProjections(timeMs)
       let captures = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
-      const knownCaptureIds = new Set(captures.map((capture) => capture.captureId))
+      const knownCaptureIds = new Set(captures.flatMap((capture) => [
+        capture.captureId,
+        ...(capture.sourceCaptureIds ?? []),
+      ]))
       const scheduled = this.getActiveCaptureDescriptors?.(timeMs)
         .filter((descriptor) => !knownCaptureIds.has(descriptor.captureId)) ?? []
       const shouldResolve = this.captureResolver !== undefined
@@ -182,15 +250,19 @@ export class HtmlFlipRuntime {
     }
   }
 
-  /** Returns the latest persisted capture end active at one host time. */
+  /** Returns the furthest persisted capture end active at one host time. */
   getActiveEndAt(hostContextId: string, projectionEpoch: number, timeMs: number): number | undefined {
-    return this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs).at(-1)?.endAt
+    const active = this.cache.findActiveAll(hostContextId, projectionEpoch, timeMs)
+    if (active.length === 0) return undefined
+    return Math.max(...active.map((capture) => capture.endAt))
   }
 
   /** Invalidates captures and overlays when the host coordinate epoch changes. */
   invalidateHost(hostContextId: string, projectionEpoch: number): FlipOperationResult<void> {
     this.cache.invalidateEpoch(hostContextId, projectionEpoch)
     this.historicalPoseCache.clear()
+    this.overlayTemplates.clear()
+    this.overlayContentState = undefined
     return this.cancel()
   }
 
@@ -198,11 +270,8 @@ export class HtmlFlipRuntime {
   cancel(): FlipOperationResult<void> {
     const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
     try {
-      for (const [itemId, { handle }] of this.activeOverlays) {
-        this.projection.finishOverlay(handle)
-        this.projection.restoreOverlayItem?.(itemId)
-      }
-      this.activeOverlays.clear()
+      for (const itemId of [...this.overlayNodes.keys()]) this.releaseOverlaySubtree(itemId)
+      this.overlayNodes.clear()
       for (const { captureId, handle } of this.activeLocalPoses.values()) this.projection.cancelLocalPose(handle, captureId)
       this.activeLocalPoses.clear()
       this.lastProjectionTimeMs = undefined
@@ -213,22 +282,75 @@ export class HtmlFlipRuntime {
     return { ok: true, value: undefined, diagnostics: diagnostics.report() }
   }
 
+  /** Releases every active projection and host-owned transient resource. */
+  destroy(): void {
+    this.cancel()
+    this.projection.destroy?.()
+    this.historicalPoseCache.clear()
+    this.overlayTemplates.clear()
+    this.overlayContentState = undefined
+  }
+
   private startOverlay(capture: FlipCapture, itemId: string, handle: unknown): unknown {
     const entry = capture.entries.find((candidate) => candidate.itemId === itemId)
     if (entry === undefined) throw new Error(`FLIP capture item is missing: ${itemId}`)
-    this.projection.excludeOverlayItem?.(itemId)
-    return this.projection.beginOverlay(handle, entry.from, entry.to)
+    this.projection.excludeOverlayItem?.(itemId, entry.sourceTargetId)
+    const template = this.findOverlayTemplate(capture, itemId)
+    return this.projection.beginOverlay(handle, entry.from, entry.to, template, entry.overlayTargetByPerso)
+  }
+
+  /** Links a stable reflow sibling to the active overlay of its logical parent. */
+  private resolveCaptureParentItemId(entry: FlipCapture['entries'][number]): Readonly<{ captureParentItemId?: string }> {
+    if (entry.isDirectMover !== false) return {}
+    const logicalParents = entry.overlayParentIds === undefined
+      ? [entry.destinationParentId, entry.sourceParentId]
+      : [
+          ...[...entry.overlayParentIds].reverse(),
+          entry.destinationParentId,
+          entry.sourceParentId,
+        ]
+    for (const parentId of logicalParents) {
+      if (parentId !== undefined && this.overlayNodes.has(parentId)) {
+        return { captureParentItemId: parentId }
+      }
+    }
+    return {}
+  }
+
+  /** Captures immutable FIRST subtrees before a generic mutation can reorder them. */
+  private captureOverlayTemplates(entries: readonly import('./types').FlipEntry[]): ReadonlyMap<string, unknown> {
+    if (this.projection.captureOverlayTemplate === undefined) return new Map()
+    const templates = new Map<string, unknown>()
+    const overlayItemIds = entries
+      .filter((entry) => entry.mode === 'overlay-world')
+      .map((entry) => entry.itemId)
+    for (const entry of entries) {
+      if (entry.mode !== 'overlay-world') continue
+      const handle = this.projection.resolveHandle(entry.itemId)
+      if (handle === undefined || handle === null) continue
+      const descendantItemIds = entry.overlayTargetByPerso === undefined
+        ? overlayItemIds.filter((itemId) => itemId !== entry.itemId)
+        : Object.keys(entry.overlayTargetByPerso)
+      const template = this.projection.captureOverlayTemplate(handle, descendantItemIds)
+      if (template !== undefined) templates.set(entry.itemId, template)
+    }
+    return templates
+  }
+
+  /** Resolves a capture's immutable FIRST subtree through its primary or alias ID. */
+  private findOverlayTemplate(capture: FlipCapture, itemId: string): unknown {
+    const primary = this.overlayTemplates.get(capture.captureId)?.get(itemId)
+    if (primary !== undefined) return primary
+    for (const alias of capture.sourceCaptureIds ?? []) {
+      const template = this.overlayTemplates.get(alias)?.get(itemId)
+      if (template !== undefined) return template
+    }
+    return undefined
   }
 
   /** Finishes projections whose persisted captures ended before a new runtime instant. */
   private reconcileActiveProjections(timeMs: number): void {
-    for (const [itemId, active] of this.activeOverlays) {
-      const capture = this.cache.get(active.captureId)
-      if (capture === undefined || timeMs <= capture.endAt) continue
-      this.projection.finishOverlay(active.handle)
-      this.projection.restoreOverlayItem?.(itemId)
-      this.activeOverlays.delete(itemId)
-    }
+    this.reconcileOverlayNodes(timeMs, false)
     for (const [itemId, active] of this.activeLocalPoses) {
       const capture = this.cache.get(active.captureId)
       if (capture === undefined || timeMs <= capture.endAt) continue
@@ -243,31 +365,185 @@ export class HtmlFlipRuntime {
     if (capture.projectionEpoch !== this.projection.getProjectionEpoch()) throw new Error('FLIP capture uses a stale host projection epoch.')
   }
 
-  private finishCompletedOverlays(capture: FlipCapture, timeMs: number): void {
-    for (const entry of capture.entries) {
-      if (entry.mode !== 'overlay-world' || timeMs < entry.endAt) continue
-      const active = this.activeOverlays.get(entry.itemId)
-      if (active === undefined || active.captureId !== capture.captureId) continue
-      this.projection.finishOverlay(active.handle)
-      this.projection.restoreOverlayItem?.(entry.itemId)
-      this.activeOverlays.delete(entry.itemId)
-    }
-
-    for (const entry of capture.entries) {
-      if (entry.mode !== 'local' || timeMs < entry.endAt) continue
-      const active = this.activeLocalPoses.get(entry.itemId)
-      if (active === undefined || active.captureId !== capture.captureId) continue
-      this.projection.finishLocalPose(active.handle, active.captureId)
-      this.activeLocalPoses.delete(entry.itemId)
+  /** Projects every active overlay node after recursively resolving its parent chain. */
+  private applyOverlayProjectionNodes(timeMs: number): void {
+    for (const node of this.overlayNodes.values()) {
+      const resolved = resolveOverlayProjectionPose(
+        node,
+        this.overlayNodes,
+        timeMs,
+        (captureId) => this.cache.get(captureId),
+        this.projection,
+        this.historicalPoseCache,
+      )
+      if (resolved === undefined) continue
+      this.projection.applyOverlayPose(node.handle, resolved)
     }
   }
 
+  /** Reconciles every active ghost with the logical content of the current scene. */
+  private syncOverlayContents(): void {
+    const state = this.overlayContentState
+    const sync = this.projection.syncOverlayContent
+    if (state === undefined || sync === undefined) return
+    for (const node of this.overlayNodes.values()) {
+      const descendantItemIds = state.descendantsByOverlay[node.itemId] ?? []
+      const descendantTargetByPerso: Record<string, string> = {}
+      for (const itemId of descendantItemIds) {
+        const targetId = state.targetByItem[itemId]
+        if (targetId !== undefined) descendantTargetByPerso[itemId] = targetId
+      }
+      sync(node.handle, descendantItemIds, descendantTargetByPerso)
+    }
+  }
+
+  /** Reasserts descendant ownership after the complete overlay forest is known. */
+  private reconcileOverlayVisibility(): void {
+    for (const node of this.overlayNodes.values()) {
+      const capture = this.cache.get(node.captureId)
+      const entry = capture?.entries.find((candidate) => candidate.itemId === node.itemId)
+      if (entry?.mode !== 'overlay-world') continue
+      // Visibility is a commit-wide property. Repeating the idempotent claim
+      // after every capture has been resolved prevents a cold seek from
+      // leaving a parent clone visible when its child ghost was materialized
+      // earlier or when a later handoff restored a different target. The
+      // active child ghost owns the item globally for this commit, so every
+      // parent clone is hidden; target-specific restoration is reserved for
+      // the release phase after this node no longer owns the item.
+      this.projection.excludeOverlayItem?.(node.itemId)
+    }
+  }
+
+  /** Completes direct nodes and propagates parent completion through the overlay tree. */
+  private reconcileOverlayNodes(timeMs: number, includeEndpoint: boolean): void {
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const snapshot of [...this.overlayNodes.values()]) {
+        const node = this.overlayNodes.get(snapshot.itemId)
+        if (node === undefined) continue
+        if (node.state === 'capture') {
+          const capture = this.cache.get(node.captureId)
+          const ended = capture === undefined
+            || (includeEndpoint ? timeMs >= capture.endAt : timeMs > capture.endAt)
+          if (!ended) continue
+          const entry = capture?.entries.find((candidate) => candidate.itemId === node.itemId)
+          const parent = entry?.destinationParentId === undefined
+            ? undefined
+            : this.overlayNodes.get(entry.destinationParentId)
+          const canHandoff = parent !== undefined
+            && this.isParentContinuing(parent, capture?.endAt ?? timeMs)
+          if (capture !== undefined && entry !== undefined && canHandoff && parent !== undefined) {
+            const handoff = createOverlayHandoffNode(
+              { ...node, ...(entry.destinationTargetId === undefined ? {} : { destinationTargetId: entry.destinationTargetId }) },
+              parent,
+              capture.endAt,
+              this.overlayNodes,
+              (captureId) => this.cache.get(captureId),
+              this.projection,
+              this.historicalPoseCache,
+            )
+            if (handoff !== undefined) {
+              this.overlayNodes.set(node.itemId, handoff)
+              changed = true
+              continue
+            }
+          }
+          this.releaseOverlaySubtree(node.itemId)
+          changed = true
+          continue
+        }
+
+        if (node.parentItemId === undefined) {
+          this.releaseOverlaySubtree(node.itemId)
+          changed = true
+          continue
+        }
+        const parent = this.overlayNodes.get(node.parentItemId)
+        if (parent === undefined || !this.isParentContinuing(parent, timeMs, includeEndpoint)) {
+          this.releaseOverlaySubtree(node.itemId)
+          changed = true
+        }
+      }
+    }
+  }
+
+  /** Reports whether a parent node still supplies a visible trajectory. */
+  private isParentContinuing(node: OverlayProjectionNode, timeMs: number, includeEndpoint = false): boolean {
+    return isOverlayNodeContinuing(
+      node,
+      this.overlayNodes,
+      timeMs,
+      includeEndpoint,
+      (captureId) => this.cache.get(captureId),
+    )
+  }
+
+  /** Completes local poses at their inclusive LAST boundary. */
+  private finishCompletedLocalPoses(timeMs: number): void {
+    for (const [itemId, active] of this.activeLocalPoses) {
+      const capture = this.cache.get(active.captureId)
+      if (capture === undefined || timeMs < capture.endAt) continue
+      this.projection.finishLocalPose(active.handle, active.captureId)
+      this.activeLocalPoses.delete(itemId)
+    }
+  }
+
+  /** Replaces a node only when a different capture takes its logical ownership. */
+  private releaseOverlayNodeIfReplaced(itemId: string, capture: FlipCapture): void {
+    const active = this.overlayNodes.get(itemId)
+    if (active === undefined || this.sameCaptureOwnership(active.captureId, capture)) return
+    this.releaseOverlaySubtree(itemId)
+  }
+
+  /** Releases one overlay node and restores only its destination ownership. */
+  private releaseOverlayNode(itemId: string): void {
+    const node = this.overlayNodes.get(itemId)
+    if (node === undefined) return
+    this.projection.finishOverlay(node.handle)
+    this.restoreOverlayItem(node.captureId, itemId, node.destinationTargetId)
+    this.overlayNodes.delete(itemId)
+  }
+
+  /** Releases a node and every recursive handoff descendant that depends on it. */
+  private releaseOverlaySubtree(itemId: string): void {
+    const dependents = [...this.overlayNodes.values()]
+      .filter((node) => node.state === 'handoff' && node.parentItemId === itemId)
+    for (const dependent of dependents) this.releaseOverlaySubtree(dependent.itemId)
+    this.releaseOverlayNode(itemId)
+  }
+
+  /** Restores a descendant only in ghosts whose FIRST target matches its LAST target. */
+  private restoreOverlayItem(captureId: string, itemId: string, destinationTargetId?: string): void {
+    const capture = this.cache.get(captureId)
+    const entry = capture?.entries.find((candidate) => candidate.itemId === itemId)
+    this.projection.restoreOverlayItem?.(itemId, destinationTargetId ?? entry?.destinationTargetId)
+  }
+
   /** Cancels a previous local projection when a newer capture takes ownership. */
-  private cancelLocalPoseIfNeeded(itemId: string, captureId: string): void {
+  private cancelLocalPoseIfNeeded(itemId: string, capture: FlipCapture): void {
     const active = this.activeLocalPoses.get(itemId)
-    if (active === undefined || active.captureId === captureId) return
+    if (active === undefined || this.sameCaptureOwnership(active.captureId, capture)) return
     this.projection.cancelLocalPose(active.handle, active.captureId)
     this.activeLocalPoses.delete(itemId)
+  }
+
+  /** Keeps one projection handle when a grouped capture replaces its aliases. */
+  private sameCaptureOwnership(activeCaptureId: string, capture: FlipCapture): boolean {
+    if (activeCaptureId === capture.captureId) return true
+    const activeCapture = this.cache.get(activeCaptureId)
+    if (activeCapture === undefined) return false
+    const activeIdentities = new Set([activeCapture.captureId, ...(activeCapture.sourceCaptureIds ?? [])])
+    const captureIdentities = new Set([capture.captureId, ...(capture.sourceCaptureIds ?? [])])
+    for (const identity of activeIdentities) if (captureIdentities.has(identity)) return true
+    return false
+  }
+
+  /** Clears host transient writes before a historical layout realization. */
+  private suspendTransientProjections(): void {
+    this.projection.suspendTransientForHistorical?.()
+    this.overlayNodes.clear()
+    this.activeLocalPoses.clear()
   }
 
   /** Converts one boundary exception into the shared V2 diagnostic result. */

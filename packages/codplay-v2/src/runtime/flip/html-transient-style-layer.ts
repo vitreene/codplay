@@ -26,6 +26,8 @@ const LOCAL_TRANSFORM_SLOTS = ['--codplay-flip-transform'] as const
 const LOCAL_ATTRIBUTES = ['data-codplay-flip-size', 'data-codplay-flip-transform'] as const
 const HIDDEN_ATTRIBUTE = 'data-codplay-flip-hidden'
 const PROJECTION_STYLE_ATTRIBUTE = 'data-codplay-flip-style'
+const TRANSIENT_STYLE_SLOTS = ['--codplay-flip-width', '--codplay-flip-height', '--codplay-flip-transform'] as const
+const TRANSIENT_ATTRIBUTES = [...LOCAL_ATTRIBUTES, HIDDEN_ATTRIBUTE] as const
 
 const LOCAL_SIZE_PROPERTIES = ['width', 'height'] as const
 const LOCAL_TRANSFORM_PROPERTIES = ['transition', 'transform-origin', 'translate', 'rotate', 'scale', 'transform'] as const
@@ -59,6 +61,8 @@ export type HtmlTransientStyleLayer = Readonly<{
   clearLocal: (node: HTMLElement) => void
   applyHidden: (node: HTMLElement) => void
   clearHidden: (node: HTMLElement) => void
+  /** Clones a subtree without carrying host-owned transient projection state. */
+  captureTemplate: (node: HTMLElement) => HTMLElement
 }>
 
 /** Creates a projection layer without taking ownership of authored CSS declarations. */
@@ -86,6 +90,7 @@ function createStylesheetLayer(): HtmlTransientStyleLayer {
     clearLocal: (node) => clearStylesheetLocal(node, styleAttributePresence),
     applyHidden: (node) => node.setAttribute(HIDDEN_ATTRIBUTE, ''),
     clearHidden: (node) => node.removeAttribute(HIDDEN_ATTRIBUTE),
+    captureTemplate: (node) => captureCleanTemplate(node),
   }
 }
 
@@ -112,6 +117,63 @@ function createInlineFallbackLayer(): HtmlTransientStyleLayer {
     },
     applyHidden: (node) => applyInlineContribution(node, 'visibility', 'hidden', hiddenContributions),
     clearHidden: (node) => clearInlineContributions(node, ['visibility'], hiddenContributions),
+    captureTemplate: (node) => captureInlineTemplate(node, localContributions, hiddenContributions),
+  }
+}
+
+/** Clones one subtree after removing stylesheet-backed transient attributes. */
+function captureCleanTemplate(node: HTMLElement): HTMLElement {
+  const clone = node.cloneNode(true) as HTMLElement
+  sanitizeTemplateTree(clone, () => undefined, node)
+  return clone
+}
+
+/** Clones one subtree and restores the authored inline values behind transients. */
+function captureInlineTemplate(
+  node: HTMLElement,
+  localContributions: WeakMap<HTMLElement, InlineContributionMap>,
+  hiddenContributions: WeakMap<HTMLElement, InlineContributionMap>,
+): HTMLElement {
+  const clone = node.cloneNode(true) as HTMLElement
+  sanitizeTemplateTree(clone, (source, target) => {
+    restoreTemplateContributions(source, target, localContributions)
+    restoreTemplateContributions(source, target, hiddenContributions)
+  }, node)
+  return clone
+}
+
+/** Walks a source/clone pair and removes every host-owned transient marker. */
+function sanitizeTemplateTree(
+  clone: HTMLElement,
+  restore: (source: HTMLElement, target: HTMLElement) => void,
+  source?: HTMLElement,
+): void {
+  for (const attribute of TRANSIENT_ATTRIBUTES) clone.removeAttribute(attribute)
+  for (const slot of TRANSIENT_STYLE_SLOTS) removeStyleSlot(clone, slot)
+  if (source !== undefined) restore(source, clone)
+
+  const sourceChildren = source === undefined ? [] : Array.from(source.children)
+  const cloneChildren = Array.from(clone.children)
+  for (let index = 0; index < cloneChildren.length; index += 1) {
+    const target = cloneChildren[index]
+    const original = sourceChildren[index]
+    if (!(target instanceof HTMLElement) || !(original instanceof HTMLElement)) continue
+    sanitizeTemplateTree(target, restore, original)
+  }
+}
+
+/** Restores the authored value when a live node still carries a transient slot. */
+function restoreTemplateContributions(
+  source: HTMLElement,
+  target: HTMLElement,
+  contributions: WeakMap<HTMLElement, InlineContributionMap>,
+): void {
+  const nodeContributions = contributions.get(source)
+  if (nodeContributions === undefined) return
+  for (const [property, contribution] of nodeContributions) {
+    const current = readStyleProperty(source, property)
+    const authored = sameStyleSnapshot(current, contribution.transient) ? contribution.authored : current
+    restoreStyleProperty(target, property, authored)
   }
 }
 

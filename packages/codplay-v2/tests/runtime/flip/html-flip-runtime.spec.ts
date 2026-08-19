@@ -28,6 +28,33 @@ function scale(value: number): HtmlMatrix {
   return { a: value, b: 0, c: 0, d: value, e: 0, f: 0 }
 }
 
+/** Creates a pose whose rectangle is the AABB of its explicit world origin. */
+function transformedPose(originX: number, originY: number, width: number, height: number, matrix: HtmlMatrix): HtmlPose {
+  const points = [
+    [0, 0],
+    [matrix.a * width, matrix.b * width],
+    [matrix.c * height, matrix.d * height],
+    [matrix.a * width + matrix.c * height, matrix.b * width + matrix.d * height],
+  ]
+  const left = Math.min(...points.map((point) => point[0]!))
+  const right = Math.max(...points.map((point) => point[0]!))
+  const top = Math.min(...points.map((point) => point[1]!))
+  const bottom = Math.max(...points.map((point) => point[1]!))
+  return {
+    rect: { left: originX + left, top: originY + top, width: right - left, height: bottom - top },
+    origin: { x: originX, y: originY },
+    matrix,
+    parentMatrix: identity,
+    rotationMatrix: identity,
+    scaleX: Math.hypot(matrix.a, matrix.b),
+    scaleY: Math.hypot(matrix.c, matrix.d),
+    localWidth: width,
+    localHeight: height,
+    frameWidth: width * Math.hypot(matrix.a, matrix.b),
+    frameHeight: height * Math.hypot(matrix.c, matrix.d),
+  }
+}
+
 function projectionFor(poses: Map<string, HtmlPose>, log: string[] = []): HtmlFlipProjection {
   return {
     getHostContextId: () => 'host-1',
@@ -246,6 +273,57 @@ describe('HTML FLIP V2', () => {
     expect(resolved?.progress).toBeCloseTo(0.5)
   })
 
+  it('derives and composes transformed poses from origins, not AABB corners', () => {
+    const rotation: HtmlMatrix = { a: 0, b: 1, c: -1, d: 0, e: 17, f: -9 }
+    const parentFrom = transformedPose(100, 100, 20, 20, rotation)
+    const parentTo = transformedPose(200, 100, 20, 20, rotation)
+    const childFrom = transformedPose(95, 110, 10, 10, rotation)
+    const childTo = transformedPose(195, 110, 10, 10, rotation)
+    const capture: FlipCapture = {
+      captureId: 'rotated-origin-graph',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      endAt: 1_000,
+      duration: 1_000,
+      ease: 'linear',
+      ancestors: [{
+        ancestorId: 'parent',
+        regime: 'composited',
+        from: parentFrom,
+        to: parentTo,
+      }],
+      entries: [{
+        itemId: 'child',
+        ancestorIds: ['parent'],
+        mode: 'local',
+        startAt: 0,
+        endAt: 1_000,
+        duration: 1_000,
+        ease: 'linear',
+        from: childFrom,
+        to: childTo,
+      }],
+    }
+
+    const [first] = resolveFlipPoseGraph(capture, 0)
+    const [middle] = resolveFlipPoseGraph(capture, 500)
+    const [last] = resolveFlipPoseGraph(capture, 1_000)
+
+    expect(first?.pose.rect.left).toBeCloseTo(childFrom.rect.left)
+    expect(first?.pose.rect.top).toBeCloseTo(childFrom.rect.top)
+    expect(first?.pose.origin.x).toBeCloseTo(childFrom.origin.x)
+    expect(first?.pose.origin.y).toBeCloseTo(childFrom.origin.y)
+    expect(middle?.pose.rect.left).toBeCloseTo(135)
+    expect(middle?.pose.rect.top).toBeCloseTo(110)
+    expect(middle?.pose.origin.x).toBeCloseTo(145)
+    expect(middle?.pose.origin.y).toBeCloseTo(110)
+    expect(last?.pose.rect.left).toBeCloseTo(childTo.rect.left)
+    expect(last?.pose.rect.top).toBeCloseTo(childTo.rect.top)
+    expect(last?.pose.origin.x).toBeCloseTo(childTo.origin.x)
+    expect(last?.pose.origin.y).toBeCloseTo(childTo.origin.y)
+  })
+
   it('resolves an item through both a parent and grandparent FLIP ancestor', () => {
     const capture = captureWithGrandparentHierarchy()
     const [first] = resolveFlipPoseGraph(capture, 0)
@@ -413,6 +491,31 @@ describe('HTML FLIP V2', () => {
     expect(projection.flush).toHaveBeenCalledOnce()
   })
 
+  it('suspends transient host writes for historical layout and destroys them with the host', () => {
+    const poses = new Map([
+      ['container', pose(100)],
+      ['item', pose(110)],
+    ])
+    const baseProjection = projectionFor(poses)
+    const suspendTransientForHistorical = vi.fn()
+    const destroy = vi.fn()
+    const projection: HtmlFlipProjection = {
+      ...baseProjection,
+      suspendTransientForHistorical,
+      destroy,
+    }
+    const runtime = new HtmlFlipRuntime(projection)
+    const capture: FlipCapture = {
+      ...captureWithHierarchy(),
+      ancestors: captureWithHierarchy().ancestors.map((ancestor) => ({ ...ancestor, regime: 'layout' as const })),
+    }
+
+    expect(runtime.seek(capture, 500).ok).toBe(true)
+    expect(suspendTransientForHistorical).toHaveBeenCalledOnce()
+    runtime.destroy()
+    expect(destroy).toHaveBeenCalledOnce()
+  })
+
   it('finishes local ownership at the capture boundary and cancels it on retarget', () => {
     const poses = new Map([['item', pose(0)]])
     const projection = projectionFor(poses)
@@ -488,6 +591,63 @@ describe('HTML FLIP V2', () => {
 
     expect(resolver).toHaveBeenCalledOnce()
     expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cold-realize occurrence identities already covered by a grouped capture', () => {
+    const grouped = {
+      ...captureForColdSeek('grouped-capture'),
+      sourceCaptureIds: ['compiled:first', 'compiled:second'],
+    }
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+    const cache = new FlipCaptureCache()
+    cache.set(grouped)
+    const resolver = vi.fn(() => { throw new Error('grouped capture must not be realized again') })
+    const runtime = new HtmlFlipRuntime(projection, cache, resolver, {
+      getActiveCaptureDescriptors: () => [
+        { captureId: 'compiled:first', startAt: grouped.startAt, endAt: grouped.endAt },
+        { captureId: 'compiled:second', startAt: grouped.startAt, endAt: grouped.endAt },
+      ],
+    })
+
+    expect(runtime.seekCached('host-1', 1, 500).ok).toBe(true)
+    expect(resolver).not.toHaveBeenCalled()
+  })
+
+  it('canonicalizes grouped captures over single captures from the other presentation path', () => {
+    const first = captureForColdSeek('compiled:first')
+    const second = captureForColdSeek('compiled:second')
+    const grouped = {
+      ...captureForColdSeek('grouped-capture'),
+      sourceCaptureIds: ['compiled:first', 'compiled:second'],
+    }
+    const cache = new FlipCaptureCache()
+
+    cache.set(first)
+    cache.set(second)
+    cache.set(grouped)
+
+    expect(cache.findActiveAll('host-1', 1, 500)).toEqual([grouped])
+    expect(cache.get('compiled:first')).toBe(grouped)
+    expect(cache.get('compiled:second')).toBe(grouped)
+
+    // A later cold single realization must not reintroduce a duplicate overlay.
+    cache.set(first)
+    expect(cache.findActiveAll('host-1', 1, 500)).toEqual([grouped])
+  })
+
+  it('deduplicates repeated source aliases before indexing a capture', () => {
+    const cache = new FlipCaptureCache()
+    const grouped = {
+      ...captureForColdSeek('grouped-capture'),
+      sourceCaptureIds: ['grouped-capture', 'compiled:first', 'compiled:first'],
+    }
+
+    cache.set(grouped)
+
+    const stored = cache.get('grouped-capture')
+    expect(stored?.sourceCaptureIds).toEqual(['compiled:first'])
+    expect(cache.get('compiled:first')).toBe(stored)
+    expect(cache.findActiveAll('host-1', 1, 500)).toEqual([stored])
   })
 
   it('converges cold seek at start, middle and end, including seek-back and repeated seek', () => {
@@ -626,7 +786,8 @@ describe('HTML FLIP V2', () => {
       ['second', pose(20)],
     ])
     const projection = projectionFor(poses)
-    const runtime = new HtmlFlipRuntime(projection)
+    const cache = new FlipCaptureCache()
+    const runtime = new HtmlFlipRuntime(projection, cache)
 
     captureValue(runtime.capture({
       captureId: 'overlap-first',
@@ -652,8 +813,10 @@ describe('HTML FLIP V2', () => {
     const result = runtime.seekCached('host-1', 1, 500)
 
     expect(result.ok).toBe(true)
-    expect(projection.applyLocalPose).toHaveBeenCalledTimes(2)
-    expect(projection.flush).toHaveBeenCalledOnce()
+    // The second capture re-presents the active first capture before its
+    // measurement, then the final seek applies both overlapping captures.
+    expect(projection.applyLocalPose).toHaveBeenCalledTimes(3)
+    expect(projection.flush).toHaveBeenCalledTimes(2)
   })
 
   it('presents an active overlay before capturing a nested overlay mutation', () => {
@@ -669,14 +832,13 @@ describe('HTML FLIP V2', () => {
       hostContextId: 'host-1',
       projectionEpoch: 1,
       startAt: 0,
-      duration: 1000,
+      duration: 2000,
       ease: 'linear',
       entries: [{ itemId: 'parent', ancestorIds: [], mode: 'overlay-world' }],
       mutate: () => poses.set('parent', pose(100)),
     }))
     runtime.seek(parent, 500)
-
-    captureValue(runtime.capture({
+    const child = captureValue(runtime.capture({
       captureId: 'overlay-child',
       hostContextId: 'host-1',
       projectionEpoch: 1,
@@ -687,7 +849,157 @@ describe('HTML FLIP V2', () => {
       mutate: () => poses.set('child', pose(110)),
     }))
 
-    expect(projection.applyOverlayPose).toHaveBeenCalledTimes(3)
+    runtime.seek(child, 750)
+    runtime.seekCached('host-1', 1, 1250)
+    expect(projection.finishOverlay).toHaveBeenCalledOnce()
+    // The recursive projection graph re-applies the active parent and child
+    // nodes together even when the caller seeks one child capture directly.
+    expect(projection.applyOverlayPose).toHaveBeenCalledTimes(6)
+
+    runtime.seekCached('host-1', 1, 2100)
+    expect(projection.finishOverlay).toHaveBeenCalledTimes(2)
+  })
+
+  it('rebases a stable sibling when a newer simultaneous reflow replaces its handoff', () => {
+    const poses = new Map<string, HtmlPose>([
+      ['parent', pose(0)],
+      ['sibling', pose(10)],
+    ])
+    const projection = projectionFor(poses)
+    const cache = new FlipCaptureCache()
+    const runtime = new HtmlFlipRuntime(projection, cache)
+    const parent: FlipCapture = {
+      captureId: 'parent-reflow',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      endAt: 1_000,
+      duration: 1_000,
+      ease: 'linear',
+      ancestors: [],
+      entries: [{
+        itemId: 'parent',
+        ancestorIds: [],
+        mode: 'overlay-world',
+        startAt: 0,
+        endAt: 1_000,
+        duration: 1_000,
+        ease: 'linear',
+        from: pose(0),
+        to: pose(100),
+      }],
+    }
+    const firstReflow: FlipCapture = {
+      captureId: 'first-reflow',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      endAt: 100,
+      duration: 100,
+      ease: 'linear',
+      ancestors: [],
+      entries: [{
+        itemId: 'sibling',
+        ancestorIds: [],
+        destinationParentId: 'parent',
+        isDirectMover: false,
+        mode: 'overlay-world',
+        startAt: 0,
+        endAt: 100,
+        duration: 100,
+        ease: 'linear',
+        from: pose(10),
+        to: pose(20),
+      }],
+    }
+    const secondReflow: FlipCapture = {
+      captureId: 'second-reflow',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 200,
+      endAt: 1_200,
+      duration: 1_000,
+      ease: 'linear',
+      ancestors: [],
+      entries: [{
+        itemId: 'sibling',
+        ancestorIds: [],
+        destinationParentId: 'parent',
+        isDirectMover: false,
+        mode: 'overlay-world',
+        startAt: 200,
+        endAt: 1_200,
+        duration: 1_000,
+        ease: 'linear',
+        from: pose(20),
+        to: pose(80),
+      }],
+    }
+
+    cache.set(parent)
+    cache.set(firstReflow)
+    cache.set(secondReflow)
+    expect(runtime.seek(parent, 0).ok).toBe(true)
+    expect(runtime.seek(firstReflow, 100).ok).toBe(true)
+    expect(runtime.seek(secondReflow, 300).ok).toBe(true)
+
+    const siblingApplications = (projection.applyOverlayPose as ReturnType<typeof vi.fn>).mock.calls
+      .map(([, resolved]) => resolved as ResolvedFlipPose)
+      .filter((resolved) => resolved.itemId === 'sibling')
+    expect(siblingApplications.at(-1)?.captureId).toBe('second-reflow')
+    // The sibling keeps its own reflow progress, but its world pose is
+    // composed with the parent trajectory at the same logical instant.
+    expect(siblingApplications.at(-1)?.pose.rect.left).toBeCloseTo(28)
+
+    runtime.destroy()
+  })
+
+  it('finds an active ancestor-of-parent for a stable sibling reflow', () => {
+    const poses = new Map<string, HtmlPose>([
+      ['grandparent', pose(0)],
+      ['sibling', pose(20)],
+    ])
+    const projection = projectionFor(poses)
+    const runtime = new HtmlFlipRuntime(projection)
+    const parent = captureValue(runtime.run({
+      captureId: 'grandparent-motion',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1_000,
+      ease: 'linear',
+      entries: [{ itemId: 'grandparent', ancestorIds: [], mode: 'overlay-world' }],
+      mutate: () => poses.set('grandparent', pose(100)),
+    }))
+    expect(parent.captureId).toBe('grandparent-motion')
+
+    const sibling = captureValue(runtime.capture({
+      captureId: 'nested-sibling-reflow',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 100,
+      duration: 1_000,
+      ease: 'linear',
+      entries: [{
+        itemId: 'sibling',
+        ancestorIds: [],
+        destinationParentId: 'parent',
+        overlayParentIds: ['grandparent', 'parent'],
+        isDirectMover: false,
+        mode: 'overlay-world',
+      }],
+      mutate: () => poses.set('sibling', pose(120)),
+    }))
+    runtime.seek(sibling, 600)
+
+    const siblingApplications = (projection.applyOverlayPose as ReturnType<typeof vi.fn>).mock.calls
+      .map(([, resolved]) => resolved as ResolvedFlipPose)
+      .filter((resolved) => resolved.itemId === 'sibling')
+    // The immediate parent has no overlay node; the active ancestor at x=60
+    // carries the sibling's interpolated local offset from 10 to 20.
+    expect(siblingApplications.at(-1)?.pose.rect.left).toBeCloseTo(75)
+
+    runtime.destroy()
   })
 
   it('finishes an expired capture before resolving the next play frame', () => {
@@ -807,5 +1119,24 @@ describe('HTML FLIP V2', () => {
       ],
       mutate: () => undefined,
     }, projection, new FlipCaptureCache())).toThrow(/ancestor chain is not ordered/)
+  })
+
+  it('rejects a recursive overlay parent that points back to its item', () => {
+    const projection = projectionFor(new Map([['item', pose(0)]]))
+
+    expect(() => captureFlip({
+      captureId: 'overlay-cycle',
+      hostContextId: 'host-1',
+      projectionEpoch: 1,
+      startAt: 0,
+      duration: 1000,
+      entries: [{
+        itemId: 'item',
+        ancestorIds: [],
+        mode: 'overlay-world',
+        destinationParentId: 'item',
+      }],
+      mutate: () => undefined,
+    }, projection, new FlipCaptureCache())).toThrow(/parent cannot be the item itself/)
   })
 })

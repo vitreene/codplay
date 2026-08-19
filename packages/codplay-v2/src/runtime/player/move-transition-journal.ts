@@ -44,6 +44,12 @@ export class MoveTransitionJournal {
       .sort((left, right) => left.startAt - right.startAt || comparePaths(left.declarationPath, right.declarationPath))
   }
 
+  /** Returns occurrences starting after one boundary and no later than another. */
+  findStartingBetween(startExclusive: number, endInclusive: number): readonly MoveTransitionOccurrence[] {
+    return this.occurrences.filter((occurrence) =>
+      occurrence.startAt > startExclusive && occurrence.startAt <= endInclusive)
+  }
+
   /** Finds the stable occurrence corresponding to one solved move delta. */
   findByMove(persoKey: string, startAt: number): MoveTransitionOccurrence | undefined {
     return this.occurrences

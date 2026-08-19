@@ -1,6 +1,13 @@
 export { materializeScene } from './materialize'
 export { resolveScene } from './resolve'
 export { solveScene } from './solve'
+export {
+  buildSolvedGraph,
+  resolveAncestorChain,
+  resolveLogicalParentKey,
+  resolvePresentationOrder,
+  traverseSolvedGraph,
+} from './presentation-graph'
 export { MountTargetRegistry } from './mount-targets'
 export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './tracks'
 export { RuntimeTrackJournal } from './track-journal'
@@ -25,6 +32,7 @@ export type {
   SolvedPlacement,
   SolvedScene,
 } from './types'
+export type { SolvedGraph, SolvedGraphTargetKind } from './presentation-graph'
 export type { MaterializedTrack, MaterializedTrackRegistry } from './tracks'
 export type { MountTarget, MountTargetDeclaration } from './mount-targets'
 export type { MovePolicyIssue } from '../../config/move'

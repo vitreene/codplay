@@ -12,7 +12,7 @@ import {
   type Ticker,
 } from '../engine'
 import { TimeTicker } from '../time'
-import { createHtmlDomProjection, HtmlFlipRuntime } from '../flip'
+import { captureHtmlPose, createHtmlDomProjection, HtmlFlipRuntime, type HtmlFlipProjection } from '../flip'
 import {
   RuntimeComponentCatalog,
   RuntimeComponentRuntime,
@@ -21,6 +21,7 @@ import {
 import {
   LayoutDomBackend,
   MoveFlipLayoutProjection,
+  createHtmlFlipOverlayContentState,
   RuntimePlayer,
   type PlayerInitResult,
   type PlayerLifecycleState,
@@ -30,7 +31,11 @@ import {
 } from '../player'
 import type { CompiledScene } from '../../scene/compiled'
 import { HtmlComponentMaterializer } from './html-component-materializer'
-import { createHtmlMoveCaptureBuilder, type HtmlMoveCaptureBuilderOptions } from './html-move-capture-builder'
+import {
+  createHtmlMoveCaptureBuilder,
+  type HtmlAncestorRegimeResolver,
+  type HtmlMoveCaptureBuilderOptions,
+} from './html-move-capture-builder'
 import type { FlipCapture } from '../flip'
 import { resolveCompiledMoveCaptures } from './html-compiled-move-capture-resolver'
 import { HtmlPresentationTransaction } from './html-presentation-transaction'
@@ -52,6 +57,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   engine?: RuntimeEngine
   moduleServiceCatalog?: RuntimeModuleServiceCatalog
   ticker?: Ticker
+  /** Optional host declaration for ancestor reflow/compositing regimes. */
+  resolveFlipAncestorRegime?: HtmlAncestorRegimeResolver
 }>
 
 /** Generic HTML host for materialization, logical placement and player lifecycle. */
@@ -70,6 +77,7 @@ export class HtmlPlayerRunner {
   private readonly captureBuilder: ReturnType<typeof createHtmlMoveCaptureBuilder>
   private readonly flipRuntime: HtmlFlipRuntime
   private readonly presentationTransaction: HtmlPresentationTransaction
+  private readonly htmlProjection: HtmlFlipProjection
   private projectionEpoch = 0
 
   /** Creates one HTML runner and wires the generic component/layout boundaries. */
@@ -109,15 +117,37 @@ export class HtmlPlayerRunner {
     this.componentRuntime = componentRuntime
     const backend = new LayoutDomBackend(this.nodes)
     this.backend = backend
+    let runtimePlayer: RuntimePlayer | undefined
     const htmlProjection = createHtmlDomProjection({
       hostContextId: options.id,
       getProjectionEpoch: () => this.projectionEpoch,
       root: options.root,
       resolveHandle: (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
+      captureHistoricalPose: ({ ancestorId, timeMs }) => {
+        if (runtimePlayer === undefined) throw new Error('HTML historical pose requested before the player exists.')
+        const currentScene = runtimePlayer.getSolvedScene()
+        if (currentScene === undefined) throw new Error('HTML historical pose requested before the player is initialized.')
+        const historicalScene = runtimePlayer.resolveSceneAt(timeMs)
+        try {
+          if (historicalScene.persos[ancestorId]?.placement.mounted !== true) {
+            throw new Error(`FLIP historical ancestor is not mounted: ${ancestorId}`)
+          }
+          this.presentHistoricalScene(historicalScene)
+          const handle = resolveHtmlHandle(this.nodes.persoNodes.get(ancestorId))
+          if (handle === undefined) throw new Error(`FLIP historical ancestor handle is missing: ${ancestorId}`)
+          return captureHtmlPose(handle)
+        } finally {
+          this.restoreCurrentScene()
+        }
+      },
     })
+    this.htmlProjection = htmlProjection
     const captureBuilderOptions: HtmlMoveCaptureBuilderOptions = {
       hostContextId: options.id,
       getProjectionEpoch: () => this.projectionEpoch,
+      ...(options.resolveFlipAncestorRegime === undefined
+        ? {}
+        : { resolveAncestorRegime: options.resolveFlipAncestorRegime }),
     }
     this.captureBuilder = createHtmlMoveCaptureBuilder(captureBuilderOptions)
     const presentationTransaction = new HtmlPresentationTransaction({
@@ -126,7 +156,6 @@ export class HtmlPlayerRunner {
       restore: () => this.restoreCurrentScene(),
     })
     this.presentationTransaction = presentationTransaction
-    let runtimePlayer: RuntimePlayer | undefined
     this.flipRuntime = new HtmlFlipRuntime(
       htmlProjection,
       undefined,
@@ -146,20 +175,6 @@ export class HtmlPlayerRunner {
       flip: this.flipRuntime,
       hostContextId: options.id,
       getProjectionEpoch: () => this.projectionEpoch,
-      buildCapture: this.captureBuilder,
-      presentCapture: ({ description, scene, presentNext }) => {
-        const tree = presentationTransaction.measure({
-          description,
-          logicalTimeMs: scene.timeMs,
-          presentLast: presentNext,
-        })
-        return this.flipRuntime.recordMeasurementTree(tree, {
-          captureId: description.captureId,
-          startAt: description.startAt,
-          duration: description.duration,
-          ...(description.ease === undefined ? {} : { ease: description.ease }),
-        })
-      },
     })
     runtimePlayer = new RuntimePlayer(
       options.id,
@@ -256,14 +271,35 @@ export class HtmlPlayerRunner {
       flipRuntime: this.flipRuntime,
       captureBuilder: this.captureBuilder,
       presentHistoricalScene: (scene) => this.presentHistoricalScene(scene),
+      captureFirstOverlayTemplates: (description) => {
+        const templates = new Map<string, unknown>()
+        const overlayItemIds = description.entries
+          .filter((entry) => entry.mode === 'overlay-world')
+          .map((entry) => entry.itemId)
+        for (const entry of description.entries) {
+          if (entry.mode !== 'overlay-world') continue
+          const handle = this.htmlProjection.resolveHandle(entry.itemId)
+          const descendantItemIds = entry.overlayTargetByPerso === undefined
+            ? overlayItemIds.filter((itemId) => itemId !== entry.itemId)
+            : Object.keys(entry.overlayTargetByPerso)
+          const template = handle === undefined || handle === null
+            ? undefined
+            : this.htmlProjection.captureOverlayTemplate?.(
+              handle,
+              descendantItemIds,
+            )
+          if (template !== undefined) templates.set(entry.itemId, template)
+        }
+        return templates
+      },
       presentationTransaction: this.presentationTransaction,
     }, timeMs, occurrences)
   }
 
   /** Presents one historical scene without emitting logical module deltas. */
   private presentHistoricalScene(scene: SolvedScene): void {
+    this.flipRuntime.setOverlayContentState(createHtmlFlipOverlayContentState(scene))
     this.backend.project(scene, {
-      phase: 'historical',
       moveDeltas: [],
       layoutState: this.player.getHistoricalLayoutProjectionState(scene),
       authoredSync: (authoredScene) => this.componentRuntime.sync(authoredScene),

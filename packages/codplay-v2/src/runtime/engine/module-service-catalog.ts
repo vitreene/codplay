@@ -17,15 +17,20 @@ export type RuntimeModuleServiceSeekHandle = Readonly<{
 
 /** Render ordering and affected-item data published by a structural module. */
 export type RuntimeModuleLayoutProjectionState = Readonly<{
+  /** Filled by RuntimePlayer when the complete scene graph is known. */
+  graphRevision?: string
   childrenByTarget?: Readonly<Record<string, readonly string[]>>
   touchedItemIds?: readonly string[]
 }>
 
 /** Runtime hooks available to a stateful module instance. */
 export type RuntimeModuleServiceInstance = Readonly<{
+  /** Indicates that seek staging must receive the replayed historical layout state. */
+  requiresHistoricalLayoutState?: boolean
   initializeScene?: (scene: SolvedScene) => void
   getMountTargets?: () => readonly MountTargetDeclaration[]
-  prepareSeek?: (scene: SolvedScene) => RuntimeModuleServiceSeekHandle
+  /** Stages the module state for one seek, optionally from the historical layout snapshot. */
+  prepareSeek?: (scene: SolvedScene, layoutState?: RuntimeModuleLayoutProjectionState) => RuntimeModuleServiceSeekHandle
   onMoveDelta?: (delta: MoveStateDelta) => void
   consumeLayoutProjectionState?: () => RuntimeModuleLayoutProjectionState
   destroy?: () => void

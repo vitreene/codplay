@@ -22,10 +22,15 @@ before initializing player-scoped modules. This lets markup modules publish
 their outlet targets before capabilities such as list snapshot initial child
 orders, including lists nested below HTML outlets.
 
-`LayoutProjection.project()` may receive the previous solved scene and the
-`MoveStateDelta` values for the current frame. `LayoutProjection.advance()` may
-then advance a projection capability such as `MoveFlipLayoutProjection` without
-creating a second clock.
+`LayoutProjection.project()` receives the solved scene and the optional previous
+scene/deltas for one commit. Play and Seek both use this same commit. The legacy
+There is no second `advance()` presentation hook: every target time enters this
+same commit boundary.
+
+`SolvedScene.graph` is the canonical immutable parentage/order snapshot. It owns
+target membership, parent-first traversal and a structural revision; renderers
+and modules must validate overrides against it instead of merging independent
+child maps.
 
 `MemoryRenderSink` receives the player-produced temporary snapshots. Those
 snapshots contain resolved perso state and, when available, compact placement

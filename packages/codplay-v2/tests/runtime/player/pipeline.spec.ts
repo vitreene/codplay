@@ -406,14 +406,14 @@ describe('materialize -> resolve -> solve', () => {
     }
 
     const mounted = solveScene(resolveScene(materializeScene(hierarchyScene, 50)), options)
-    expect(mounted.rootPersoKeys).toEqual(['main:parent'])
+    expect(mounted.graph.rootPersoKeys).toEqual(['main:parent'])
     expect(mounted.persos['main:child-a']?.placement.parentKey).toBe('main:parent')
-    expect(mounted.childrenByTarget.parent).toEqual(['main:child-a', 'main:child-b'])
+    expect(mounted.graph.childrenByTarget.parent).toEqual(['main:child-a', 'main:child-b'])
 
     const detached = solveScene(resolveScene(materializeScene(hierarchyScene, 150)), options)
     expect(detached.persos['main:parent']?.placement.mounted).toBe(false)
     expect(detached.persos['main:child-a']?.placement.mounted).toBe(false)
-    expect(detached.childrenByTarget.parent).toBeUndefined()
+    expect(detached.graph.childrenByTarget.parent).toBeUndefined()
   })
 
   it('rejects cycles in the mounted perso graph', () => {
@@ -517,7 +517,7 @@ describe('materialize -> resolve -> solve', () => {
       mountTargets: [{ id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' }],
     })
 
-    expect(solved.childrenByTarget.parent).toEqual(['main:item-a', 'main:item-b', 'main:item-c'])
+    expect(solved.graph.childrenByTarget.parent).toEqual(['main:item-a', 'main:item-b', 'main:item-c'])
     expect(solved.persos['main:item-c']?.placement.mode).toBe('first')
     expect(solved.persos['main:item-a']?.placement.mode).toBe(999)
   })

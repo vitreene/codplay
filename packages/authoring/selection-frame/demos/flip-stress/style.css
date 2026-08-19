@@ -40,6 +40,14 @@
   transition: visibility 120ms linear;
 }
 
+.stress-container__outlet {
+  display: grid;
+  min-height: 0;
+  align-items: end;
+  justify-items: stretch;
+  flex: 1;
+}
+
 .stress-container h2 {
   margin: 0;
   font-size: 0.85rem;
@@ -52,28 +60,28 @@
   font-size: 0.68rem;
 }
 
-#stress-a {
+.stress-container--a {
   top: 5%;
   left: 5%;
   border-color: #f25f5c;
   background: #fff0ef;
 }
 
-#stress-b {
+.stress-container--b {
   top: 36%;
   right: 5%;
   border-color: #247ba0;
   background: #e9f4fa;
 }
 
-#stress-c {
+.stress-container--c {
   bottom: 5%;
   left: 5%;
   border-color: #70c1b3;
   background: #eaf8f5;
 }
 
-#stress-d {
+.stress-container--d {
   top: 52%;
   right: 5%;
   border-color: #b388eb;
@@ -109,6 +117,13 @@
   flex: 1;
   flex-direction: row;
   overflow: visible;
+}
+
+.transfer-items:empty::before {
+  color: var(--muted);
+  content: 'empty';
+  font-size: 0.62rem;
+  opacity: 0.7;
 }
 
 .transfer-q {
@@ -157,6 +172,29 @@
   line-height: 1.45;
 }
 
+.demo-checkpoints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.demo-checkpoints .demo-button {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.7rem;
+}
+
+.stress-error {
+  margin-top: 0.45rem;
+  padding: 0.55rem;
+  border: 1px solid #d14d4d;
+  border-radius: 10px;
+  color: #9d2424;
+  background: #fff0ef;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 760px) {
   .stress-stage {
     min-height: 720px;
@@ -166,13 +204,13 @@
     width: 156px;
   }
 
-  #stress-a,
-  #stress-c {
+  .stress-container--a,
+  .stress-container--c {
     left: 2%;
   }
 
-  #stress-b,
-  #stress-d {
+  .stress-container--b,
+  .stress-container--d {
     right: 2%;
   }
 }

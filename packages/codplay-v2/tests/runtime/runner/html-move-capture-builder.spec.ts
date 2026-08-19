@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHtmlMoveCaptureBuilder } from '../../../src/runtime/runner'
+import { buildSolvedGraph } from '../../../src/runtime/player'
 import type { MoveStateDelta, PreparedMoveFlipTransition, SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 /** Creates the smallest solved scene carrying one deterministic timeline time. */
@@ -10,17 +11,14 @@ function scene(timeMs: number): SolvedScene {
     sceneState: {},
     storyStates: {},
     persos: {},
-    rootPersoKeys: [],
-    childrenByTarget: {},
+    graph: buildSolvedGraph({}),
     moveIssues: [],
   }
 }
 
 /** Creates one solved item mounted into an outlet owned by a parent component. */
 function nestedScene(timeMs: number): SolvedScene {
-  return {
-    ...scene(timeMs),
-    persos: {
+  const persos: Record<string, SolvedPerso> = {
       'main:layout': {
         key: 'main:layout',
         storyId: 'main',
@@ -49,7 +47,11 @@ function nestedScene(timeMs: number): SolvedScene {
         },
         moveIssues: [],
       },
-    },
+    }
+  return {
+    ...scene(timeMs),
+    persos,
+    graph: buildSolvedGraph(persos),
   }
 }
 
@@ -74,7 +76,12 @@ function listScene(
       'main:sibling': { ...item, key: 'main:sibling', persoId: 'sibling', placement: { ...placement, targetId: 'source', target: { ...placement.target, id: 'source' } } },
       'main:other': { ...item, key: 'main:other', persoId: 'other', placement: { ...placement, targetId: 'target', target: { ...placement.target, id: 'target' } } },
     },
-    childrenByTarget,
+    graph: { ...buildSolvedGraph({
+      ...base.persos,
+      'main:item': { ...item, placement },
+      'main:sibling': { ...item, key: 'main:sibling', persoId: 'sibling', placement: { ...placement, targetId: 'source', target: { ...placement.target, id: 'source' } } },
+      'main:other': { ...item, key: 'main:other', persoId: 'other', placement: { ...placement, targetId: 'target', target: { ...placement.target, id: 'target' } } },
+    }), childrenByTarget },
   }
 }
 
@@ -112,7 +119,7 @@ function crossParentScene(timeMs: number, parentKey: string, outletId: string): 
   return {
     ...scene(timeMs),
     persos: { [parentKey]: parent, 'main:item': item },
-    childrenByTarget: { [outletId]: ['main:item'] },
+    graph: buildSolvedGraph({ [parentKey]: parent, 'main:item': item }),
   }
 }
 
@@ -186,6 +193,32 @@ describe('createHtmlMoveCaptureBuilder', () => {
     expect(capture?.captureId).toBe('compiled:move:500')
   })
 
+  it('publishes every compiled occurrence identity covered by a grouped capture', () => {
+    const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
+    const prepared: PreparedMoveFlipTransition = { duration: 1000, ease: 'linear' }
+    const capture = builder({
+      previousScene: scene(400),
+      nextScene: scene(500),
+      deltas: [
+        { ...delta({ duration: 1000 }), transitionOccurrenceId: 'compiled:move:first' },
+        {
+          ...delta({ duration: 1000 }),
+          persoKey: 'main:second',
+          transitionOccurrenceId: 'compiled:move:second',
+        },
+      ],
+      preparedTransitions: new Map([
+        ['main:item', prepared],
+        ['main:second', prepared],
+      ]),
+    })
+
+    expect(capture?.sourceCaptureIds).toEqual([
+      'compiled:move:first',
+      'compiled:move:second',
+    ])
+  })
+
   it('includes the solved outlet owner as a stable FLIP ancestor', () => {
     const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
     const prepared: PreparedMoveFlipTransition = { duration: 1000 }
@@ -197,8 +230,13 @@ describe('createHtmlMoveCaptureBuilder', () => {
     })
 
     expect(capture?.entries).toEqual([
-      { itemId: 'main:layout', ancestorIds: [], mode: 'local' },
-      { itemId: 'main:item', ancestorIds: ['main:layout'], mode: 'local' },
+      {
+        itemId: 'main:item',
+        ancestorIds: ['main:layout'],
+        sourceTargetId: 'layout:outlet',
+        destinationTargetId: 'layout:outlet',
+        mode: 'local',
+      },
     ])
     expect(capture?.ancestors).toEqual([{ ancestorId: 'main:layout', regime: 'stable' }])
   })
@@ -213,8 +251,9 @@ describe('createHtmlMoveCaptureBuilder', () => {
       preparedTransitions: new Map([['main:item', prepared]]),
     })
 
-    expect(capture?.captureId).toBe('runner:move:500:main:layout,main:item,main:sibling,main:other')
-    expect(capture?.entries.map((entry) => entry.itemId)).toEqual(['main:layout', 'main:item', 'main:sibling', 'main:other'])
+    expect(capture?.captureId).toBe('runner:move:500:main:item,main:sibling,main:other')
+    expect(capture?.entries.map((entry) => entry.itemId)).toEqual(['main:item', 'main:sibling', 'main:other'])
+    expect(capture?.entries.every((entry) => entry.ancestorIds.includes('main:layout'))).toBe(true)
   })
 
   it('does not apply the destination ancestor chain to a cross-parent mover', () => {
@@ -240,18 +279,88 @@ describe('createHtmlMoveCaptureBuilder', () => {
       touchedItemIds: ['main:item', 'main:sibling'],
     })
 
-    expect(capture?.entries.map((entry) => entry.itemId)).toEqual(['main:layout', 'main:item', 'main:sibling'])
+    expect(capture?.entries.map((entry) => entry.itemId)).toEqual(['main:item', 'main:sibling'])
   })
 
-  it('does not convert an overlay move into a local capture', () => {
+  it('marks stable overlay-world siblings without animating container ancestors', () => {
     const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
     const prepared: PreparedMoveFlipTransition = { duration: 1000 }
 
-    expect(builder({
+    const capture = builder({
+      previousScene: listScene(0, 'source', { source: ['main:item', 'main:sibling'], target: ['main:other'] }),
+      nextScene: listScene(100, 'target', { source: ['main:sibling'], target: ['main:other', 'main:item'] }),
+      deltas: [{ ...delta({ duration: 1000 }), fromTargetId: 'source', toTargetId: 'target', flipMode: 'overlay-world' }],
+      preparedTransitions: new Map([['main:item', prepared]]),
+    })
+
+    expect(capture?.entries).toEqual([
+      {
+        itemId: 'main:item',
+        ancestorIds: [],
+        sourceTargetId: 'source',
+        destinationTargetId: 'target',
+        sourceParentId: 'main:layout',
+        destinationParentId: 'main:layout',
+        mode: 'overlay-world',
+      },
+      {
+        itemId: 'main:sibling',
+        ancestorIds: [],
+        sourceTargetId: 'source',
+        destinationTargetId: 'source',
+        sourceParentId: 'main:layout',
+        destinationParentId: 'main:layout',
+        overlayParentIds: ['main:layout'],
+        isDirectMover: false,
+        mode: 'overlay-world',
+      },
+      {
+        itemId: 'main:other',
+        ancestorIds: [],
+        sourceTargetId: 'target',
+        destinationTargetId: 'target',
+        sourceParentId: 'main:layout',
+        destinationParentId: 'main:layout',
+        overlayParentIds: ['main:layout'],
+        isDirectMover: false,
+        mode: 'overlay-world',
+      },
+    ])
+    expect(capture?.ancestors).toBeUndefined()
+  })
+
+  it('records FIRST descendant ownership for a moving overlay container', () => {
+    const builder = createHtmlMoveCaptureBuilder({ hostContextId: 'runner', getProjectionEpoch: () => 1 })
+    const capture = builder({
       previousScene: nestedScene(0),
       nextScene: nestedScene(100),
-      deltas: [{ ...delta({ duration: 1000 }), flipMode: 'overlay-world' }],
+      deltas: [{
+        ...delta({ duration: 1000 }),
+        persoKey: 'main:layout',
+        fromTargetId: 'root-host',
+        toTargetId: 'root-host',
+        flipMode: 'overlay-world',
+      }],
+      preparedTransitions: new Map([['main:layout', { duration: 1000 }]]),
+    })
+
+    expect(capture?.entries[0]?.overlayTargetByPerso).toEqual({ 'main:item': 'layout:outlet' })
+  })
+
+  it('propagates the highest declared layout cut to its descendant ancestors', () => {
+    const builder = createHtmlMoveCaptureBuilder({
+      hostContextId: 'runner',
+      getProjectionEpoch: () => 1,
+      resolveAncestorRegime: ({ ancestorId }) => ancestorId === 'main:layout' ? 'layout' : 'stable',
+    })
+    const prepared: PreparedMoveFlipTransition = { duration: 1000 }
+    const capture = builder({
+      previousScene: nestedScene(0),
+      nextScene: nestedScene(100),
+      deltas: [delta({ duration: 1000 })],
       preparedTransitions: new Map([['main:item', prepared]]),
-    })).toBeUndefined()
+    })
+
+    expect(capture?.ancestors).toEqual([{ ancestorId: 'main:layout', regime: 'layout' }])
   })
 })

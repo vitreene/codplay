@@ -173,8 +173,8 @@ Les éléments suivants sont intégrés :
 - compilation du path SVG en segments normalisés quantifiés au centième ;
 - transmission de la transition au consommateur FLIP via `MoveFlipCaptureBuilder`.
 - propagation de `flipMode` de la policy vers `SolvedPlacement` et `MoveStateDelta`;
-  le builder HTML refuse encore `overlay-world` dans la tranche locale au lieu de
-  le convertir silencieusement.
+  le builder HTML conserve `overlay-world` sur le mover sans le convertir
+  silencieusement en local.
 
 Les éléments suivants restent à fixer ou intégrer :
 

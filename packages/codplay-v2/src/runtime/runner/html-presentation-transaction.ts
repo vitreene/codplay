@@ -1,5 +1,6 @@
 import type {
   FlipCaptureRequest,
+  HtmlOverlayPosePhase,
   HtmlFlipProjection,
   HtmlMeasurementTree,
   HtmlPose,
@@ -25,6 +26,8 @@ export type HtmlPresentationMeasurementInput = Readonly<{
   description: Readonly<Pick<FlipCaptureRequest, 'hostContextId' | 'projectionEpoch' | 'entries' | 'ancestors'>>
   logicalTimeMs: number
   prepareFirst?: () => void
+  /** Runs while FIRST DOM state is still installed, before LAST writes. */
+  captureFirst?: () => void
   presentLast: () => void
   restoreAfter?: boolean
 }>
@@ -66,9 +69,10 @@ export class HtmlPresentationTransaction implements PresentationTransaction {
     let first: ReadonlyMap<string, HtmlPose> | undefined
     try {
       input.prepareFirst?.()
-      first = this.readMeasurementPoses(input.description, ids)
+      first = this.readMeasurementPoses(input.description, ids, 'first')
+      input.captureFirst?.()
       input.presentLast()
-      const last = this.readMeasurementPoses(input.description, ids)
+      const last = this.readMeasurementPoses(input.description, ids, 'last')
       return createMeasurementTree(input, first, last)
     } finally {
       if (input.restoreAfter === true) this.restore()
@@ -85,6 +89,7 @@ export class HtmlPresentationTransaction implements PresentationTransaction {
   private readMeasurementPoses(
     description: HtmlPresentationMeasurementInput['description'],
     ids: readonly string[],
+    phase: HtmlOverlayPosePhase,
   ): ReadonlyMap<string, HtmlPose> {
     const modes = new Map(description.entries.map((entry) => [entry.itemId, entry.mode]))
     const result = new Map<string, HtmlPose>()
@@ -92,7 +97,7 @@ export class HtmlPresentationTransaction implements PresentationTransaction {
       const handle = requireHandle(this.projection, itemId)
       const mode = modes.get(itemId)
       const pose = mode === 'overlay-world' && this.projection.captureOverlayPose !== undefined
-        ? this.projection.captureOverlayPose(handle)
+        ? this.projection.captureOverlayPose(handle, { phase })
         : this.projection.capturePose(handle)
       result.set(itemId, pose)
     }
@@ -129,6 +134,15 @@ function createMeasurementTree(
   const items = input.description.entries.map((entry) => Object.freeze({
     itemId: entry.itemId,
     ancestorIds: Object.freeze([...entry.ancestorIds]),
+    ...(entry.sourceTargetId === undefined ? {} : { sourceTargetId: entry.sourceTargetId }),
+    ...(entry.destinationTargetId === undefined ? {} : { destinationTargetId: entry.destinationTargetId }),
+    ...(entry.sourceParentId === undefined ? {} : { sourceParentId: entry.sourceParentId }),
+    ...(entry.destinationParentId === undefined ? {} : { destinationParentId: entry.destinationParentId }),
+    ...(entry.overlayParentIds === undefined ? {} : { overlayParentIds: Object.freeze([...entry.overlayParentIds]) }),
+    ...(entry.isDirectMover === undefined ? {} : { isDirectMover: entry.isDirectMover }),
+    ...(entry.overlayTargetByPerso === undefined
+      ? {}
+      : { overlayTargetByPerso: Object.freeze({ ...entry.overlayTargetByPerso }) }),
     mode: entry.mode ?? 'local' as const,
     first: requirePose(first, entry.itemId),
     last: requirePose(last, entry.itemId),

@@ -3,6 +3,12 @@ import { invertMatrix as invertAffineMatrix, multiplyMatrix as multiplyAffineMat
 
 const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
+type HtmlWorldGeometry = Readonly<{
+  origin: { x: number; y: number }
+  matrix: HtmlMatrix
+  layoutOffset: { x: number; y: number }
+}>
+
 /** Parses one computed rotate value to radians. */
 function parseRotateToRadians(value: string): number {
   if (!value || value === 'none') return 0
@@ -170,32 +176,68 @@ function captureOwnTransform(node: Element, localWidth: number, localHeight: num
   }
 }
 
-/** Computes one node's layout origin and composed linear matrix without DOM measurement. */
-function captureWorldGeometry(node: Element, cache = new Map<Element, { origin: { x: number; y: number }; matrix: HtmlMatrix }>()): {
-  origin: { x: number; y: number }
-  matrix: HtmlMatrix
-} {
+/** Computes one node's world affine geometry while retaining fractional DOM placement. */
+function captureWorldGeometry(node: Element, cache = new Map<Element, HtmlWorldGeometry>()): HtmlWorldGeometry {
   const existing = cache.get(node)
   if (existing !== undefined) return existing
 
   const parent = node.parentElement
-  const parentGeometry = parent === null ? { origin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX } } : captureWorldGeometry(parent, cache)
+  const parentGeometry: HtmlWorldGeometry = parent === null
+    ? { origin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX }, layoutOffset: { x: 0, y: 0 } }
+    : captureWorldGeometry(parent, cache)
   const localBox = measureLocalBox(node)
   const localWidth = localBox.width ?? 0
   const localHeight = localBox.height ?? 0
-  const layoutOffset = captureLayoutOffset(node, parent)
+  const fallbackLayoutOffset = captureLayoutOffset(node, parent)
   const ownTransform = captureOwnTransform(node, localWidth, localHeight)
-  const localOrigin = {
-    x: layoutOffset.x + ownTransform.displacement.x,
-    y: layoutOffset.y + ownTransform.displacement.y,
+  const matrix = multiplyMatrix(parentGeometry.matrix, ownTransform.matrix)
+  const fallbackLocalOrigin = {
+    x: fallbackLayoutOffset.x + ownTransform.displacement.x,
+    y: fallbackLayoutOffset.y + ownTransform.displacement.y,
   }
-  const origin = {
-    x: parentGeometry.origin.x + parentGeometry.matrix.a * localOrigin.x + parentGeometry.matrix.c * localOrigin.y,
-    y: parentGeometry.origin.y + parentGeometry.matrix.b * localOrigin.x + parentGeometry.matrix.d * localOrigin.y,
+  const fallbackOrigin = {
+    x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLocalOrigin.x + parentGeometry.matrix.c * fallbackLocalOrigin.y,
+    y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLocalOrigin.x + parentGeometry.matrix.d * fallbackLocalOrigin.y,
   }
-  const geometry = { origin, matrix: multiplyMatrix(parentGeometry.matrix, ownTransform.matrix) }
+  const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin)
+  const localOrigin = worldDeltaToLocalDelta(
+    parentGeometry.matrix,
+    origin.x - parentGeometry.origin.x,
+    origin.y - parentGeometry.origin.y,
+  )
+  const layoutOffset = {
+    x: localOrigin.x - ownTransform.displacement.x,
+    y: localOrigin.y - ownTransform.displacement.y,
+  }
+  const geometry: HtmlWorldGeometry = { origin, matrix, layoutOffset }
   cache.set(node, geometry)
   return geometry
+}
+
+/** Recovers fractional layout placement from the real DOM AABB without treating it as an affine origin. */
+function resolveMeasuredWorldOrigin(
+  node: Element,
+  matrix: HtmlMatrix,
+  localWidth: number,
+  localHeight: number,
+  fallback: { x: number; y: number },
+): { x: number; y: number } {
+  const measurableNode = node as Element & { getBoundingClientRect?: () => DOMRect }
+  if (typeof measurableNode.getBoundingClientRect !== 'function') return fallback
+  const rect = measurableNode.getBoundingClientRect()
+  const hasUsableRect = Number.isFinite(rect.left)
+    && Number.isFinite(rect.top)
+    && !(localWidth > 0 && rect.width === 0)
+    && !(localHeight > 0 && rect.height === 0)
+  if (!hasUsableRect) return fallback
+
+  const bounds = transformedBounds(matrix, localWidth, localHeight)
+  const scrollX = node.ownerDocument.defaultView?.scrollX ?? 0
+  const scrollY = node.ownerDocument.defaultView?.scrollY ?? 0
+  return {
+    x: rect.left + scrollX - bounds.left,
+    y: rect.top + scrollY - bounds.top,
+  }
 }
 
 /** Computes transformed local-box bounds from a linear matrix. */
@@ -244,7 +286,7 @@ export function captureHtmlPose(node: Element): HtmlPose {
     origin: { x: geometry.origin.x - scrollX, y: geometry.origin.y - scrollY },
     matrix: geometry.matrix,
     parentMatrix,
-    layoutOffset: captureLayoutOffset(node, node.parentElement),
+    layoutOffset: geometry.layoutOffset,
     rotationMatrix: extractRotationMatrix(geometry.matrix),
     scaleX,
     scaleY,

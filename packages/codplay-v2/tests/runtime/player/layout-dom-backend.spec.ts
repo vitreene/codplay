@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MOUNT_PLACEMENT_PARENT } from '../../../src/runtime/player'
-import { LayoutDomBackend } from '../../../src/runtime/player'
+import { LayoutDomBackend, buildSolvedGraph } from '../../../src/runtime/player'
 import type { SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 type TestNode = {
@@ -45,8 +45,7 @@ function scene(
     sceneState: {},
     storyStates: {},
     persos: Object.fromEntries(persos.map((item) => [item.key, item])),
-    rootPersoKeys: [],
-    childrenByTarget,
+    graph: { ...buildSolvedGraph(Object.fromEntries(persos.map((item) => [item.key, item]))), childrenByTarget },
     moveIssues: [],
   }
 }
@@ -123,7 +122,6 @@ describe('LayoutDomBackend', () => {
     backend.project(scene([
       perso('main:child', { id: 'root', kind: 'root' }),
     ], { root: ['main:child'] }), {
-      phase: 'frame',
       moveDeltas: [],
       authoredSync: () => order.push('authored'),
     })
@@ -148,7 +146,6 @@ describe('LayoutDomBackend', () => {
       perso('main:first', { id: 'list', kind: 'root' }),
       perso('main:second', { id: 'list', kind: 'root' }),
     ], { list: ['main:first', 'main:second'] }), {
-      phase: 'frame',
       moveDeltas: [],
       layoutState: { childrenByTarget: { list: ['main:second', 'main:first'] } },
     })

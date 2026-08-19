@@ -52,28 +52,95 @@ Dans cette tranche, les services DOM projettent les canaux auteur `style.x` et
 interpolées; le runner ne lit pas la position calculée du navigateur.
 
 Un `move` explicite avec une transition positive active actuellement une capture
-FLIP locale du perso déplacé, des siblings montés des targets before/after et de
-leurs chaînes de composants ancêtres résolues.
-Les ancêtres dont la boîte change sont aussi projetés comme entries locales afin
-que leur `width`/`height` évolue avant les enfants.
+FLIP du perso déplacé, des siblings montés des targets before/after et de leurs
+chaînes de composants ancêtres résolues. Le `flipMode` auteur est conservé : le
+mover direct d'un groupe `overlay-world` est projeté dans l'espace monde; aucun
+ancêtre n'est ajouté comme entry animée implicite. Une chaîne d'ancêtres reste
+un contexte de coordonnées pour les items locaux. Un conteneur n'acquiert
+l'ownership FLIP que par sa propre capture directe.
+Le host peut fournir `resolveFlipAncestorRegime` pour déclarer un ancêtre
+`stable`, `composited` ou `layout`; le premier ancêtre `layout` d'une chaîne ouvre
+la coupe de reflow et ses descendants sont réalisés historiquement.
 Un mover dont la chaîne de parents change entre FIRST et LAST n'utilise pas la
 chaîne de destination pour sa pose FIRST : sa pose est interpolée dans le repère
 monde, tandis que les siblings restés dans la même chaîne conservent leur repère
 local.
-Les moves compilés à durée positive sont indexés par un journal d'occurrences et
-peuvent être réalisés froidement depuis leurs scènes historiques. Le runner groupe
-les lectures dans `HtmlPresentationTransaction`, enregistre un
-`HtmlMeasurementTree` immutable et réutilise `seekCached()` pour Play, Seek et les
-frames suivants. Le resolver réalise toutes les occurrences actives manquantes et
+Les moves compilés à durée positive sont indexés par un journal d'occurrences. Le
+runner réalise toute capture manquante depuis les scènes historiques explicites,
+dans `HtmlPresentationTransaction`, enregistre un `HtmlMeasurementTree` immutable
+et réutilise `seekCached()` pour Play, Seek et les frames suivants. Il n'existe pas
+de capture live parallèle dans le runner. La cache canonicalise les identités
+primaires et aliases:
+une capture groupée remplace les captures unitaires correspondantes et le runtime
+conserve le même ownership de ghost pendant ce remplacement.
 la présentation historique restaure la scène courante dans un `finally` avant la
-projection au temps demandé. Les événements live restent hors de cette tranche.
+projection au temps demandé. Les templates FIRST des overlays world sont stockés
+à côté de la capture numérique et réutilisés lors d'une réactivation. Les ancêtres `layout` déclenchent une suspension
+temporaire des poses transitoires avant leur présentation historique, puis sont
+réinjectés dans le même commit. Les événements live restent hors de cette tranche.
+À chaque commit, `HtmlFlipOverlayContentState` reconstruit toutefois le contenu
+courant des ghosts parents depuis la scène présentée; le template FIRST ne sert
+pas de snapshot permanent de leur liste.
+Les entries world conservent aussi la table `overlayTargetByPerso` des descendants
+présents dans leur template FIRST: une transition enfant masque et restaure un
+clone parent uniquement selon ses targets source/LAST, jamais par `itemId` global.
+Après résolution d'un commit, l'ownership actif est toutefois réaffirmé pour
+chaque item encore porté par un ghost `capture` ou `handoff`: tous ses clones
+parents sont masqués, sans dépendre du target historique de l'alias regroupé.
+Le filtrage source/LAST reste la règle de restauration au moment de la libération.
 Voir `plan/runner-flip-integration-study.md`.
 
 Quand le module `list` est présent, son snapshot d'ordre et de touched set est
-consommé par le player avant la projection DOM. La réalisation froide d'un
-reorder list historique recrée des instances de modules temporaires et rejoue les
-frontières d'événements compilées depuis `t=0`, sans modifier l'état du player
-courant.
+consommé par le player avant la projection DOM. L'ordre est vérifié contre la
+révision et le graphe de la scène; un module ne peut pas fusionner silencieusement
+un item dans un autre target. La réalisation historique d'un reorder recrée des
+instances temporaires et rejoue les frontières d'événements compilées depuis
+`t=0`, sans modifier l'état du player courant.
+
+Le touched set reste event-local, mais il peut contenir un item dont une autre
+occurrence de move est encore active. Le resolver de captures retire alors cet
+item du nouveau groupe, sauf si c'est le mover direct de l'occurrence courante.
+L'ancien capture conserve ainsi son ownership et sa trajectoire; le nouveau
+capture ne mesure que son mover et les siblings réellement disponibles pour le
+reflow. Cette règle évite qu'un échange concurrent remplace FIRST d'un item par
+son état logique courant et interrompe son animation à mi-parcours.
+
+Les captures concurrentes sont présentées parent avant enfant. Une capture
+descendante peut utiliser la pose courante de son parent pour mesurer ses bornes,
+mais elle ne remplace ni n'annule sa trajectoire. La fenêtre active du wrapper
+reste ouverte jusqu'à la fin de la capture la plus longue restante.
+Pour une nouvelle capture, les lectures FIRST et LAST présentent les captures
+déjà actives aux phases absolues respectives de la capture : `startAt` pour
+FIRST, puis `startAt + duration` pour LAST, de part et d'autre de la mutation
+structurelle. La durée de l'enfant doit donc faire avancer la pose du parent
+pendant la lecture de sa cible LAST, sans modifier l'ownership de ce parent.
+Lorsqu'un ancien overlay direct de l'enfant reste actif pendant ce reparentage,
+la mesure consulte d'abord l'overlay du parent trouvé dans l'ascendance DOM
+courante ; l'ancien direct n'est qu'un repli sans parent animé. Cela évite que
+la cible LAST de Kabc soit capturée sur la trajectoire FIRST de K.
+
+Les siblings de reflow portent `isDirectMover: false`. Quand leur parent logique
+possède déjà un ghost actif, leur propre ghost reste visible et animé, mais ses
+poses FIRST/LAST sont converties dans le repère de ce parent puis recomposées
+avec la pose parent courante. Ils ne suivent donc pas une interpolation monde
+indépendante avant un second déplacement au handoff; la même règle s'applique à
+chaque niveau de la hiérarchie. La chaîne `overlayParentIds` est parcourue du
+parent immédiat vers la racine pour accrocher aussi un sibling à un ancêtre actif
+lorsque son parent direct n'est pas lui-même animé.
+
+Si un enfant `overlay-world` atteint son LAST avant son parent de destination, son
+ghost passe en handoff: sa pose locale relative au parent est figée à son LAST puis
+recomposée avec la trajectoire courante du parent à chaque commit. Le DOM auteur
+n'est restauré qu'au LAST du parent. Les siblings ajoutés au groupe pour le reflow
+portent `isDirectMover: false` et ne peuvent donc pas voler ce handoff. Cette règle
+est récursive: chaque niveau conserve son propre noeud de projection et peut
+s'accrocher au handoff de son parent, sans limite codée à deux niveaux.
+
+Les templates FIRST des ghosts conservent aussi une table de références vers les
+descendants connus. Lorsqu'un template est rematérialisé, ces références sont
+remappées vers le clone correspondant; le runner ne dépend donc pas d'une recherche
+par attribut dans un subtree où les identifiants peuvent être répétés. Les
+marqueurs CSS transitoires restent confinés à la projection HTML.
 
 ## Invariants
 
@@ -85,16 +152,21 @@ courant.
 - Les éléments initialement présents dans le root fourni par le host ne sont pas supprimés par le runner.
 - Une présentation FLIP courante ou historique ne franchit pas de frontière
   asynchrone entre les lectures FIRST/LAST et le flush de poses.
-- Une capture persistée est indexée par l'identité stable de son occurrence, pas par
-  le touched set DOM courant.
+- Une capture persistée est indexée par son identité primaire et, lorsqu'elle est
+  groupée, par les identités stables de toutes les occurrences couvertes; elle ne
+  dépend pas du touched set DOM courant.
+- Chaque conteneur possède une trajectoire propre; une capture enfant ne peut pas
+  interrompre, terminer ou recalculer la trajectoire de son parent.
+- Une HtmlPose.rect est une AABB dérivée ; toute dérivation ou composition de
+  repère utilise HtmlPose.origin et la matrice linéaire.
 
 ## Hors tranche
 
 Cette tranche ne prétend pas fournir:
 
-- les overlays et les réalisations historiques d'événements live;
-- les captures froides des événements live ou des transitions complexes ou
-  concurrentes;
+- les réalisations historiques d'événements live;
+- les transitions complexes qui ne sont pas représentées par des occurrences
+  compilées;
 - la policy métier `list` et son reorder; le touched set générique local ne
   remplace pas cette capacité;
 - l'exécution générique de `listen` et des straps.

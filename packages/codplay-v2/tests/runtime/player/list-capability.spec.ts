@@ -7,8 +7,9 @@ import {
   MOVE_OPERATION_MOVE,
   MOVE_OPERATION_UNMOUNT,
   MOVE_ORDER_MODE_FIRST,
+  buildSolvedGraph,
 } from '../../../src/runtime/player'
-import type { MoveStateDelta } from '../../../src/runtime/player'
+import type { MoveStateDelta, SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 function mountDelta(itemId: string, targetId: string, mode?: 'first' | number): MoveStateDelta {
   return {
@@ -22,6 +23,52 @@ function mountDelta(itemId: string, targetId: string, mode?: 'first' | number): 
 }
 
 describe('ListCapabilityState', () => {
+  it('registers outlets owned by list components as list targets', () => {
+    const list: SolvedPerso = {
+      key: 'main:list',
+      storyId: 'main',
+      persoId: 'list',
+      type: 'list',
+      state: {},
+      placement: {
+        kind: MOUNT_PLACEMENT_PARENT,
+        mounted: true,
+        targetId: 'root-host',
+        target: { id: 'root-host', kind: 'root', storyId: 'main' },
+      },
+      moveIssues: [],
+    }
+    const item: SolvedPerso = {
+      key: 'main:item',
+      storyId: 'main',
+      persoId: 'item',
+      type: 'tag',
+      state: {},
+      placement: {
+        kind: MOUNT_PLACEMENT_PARENT,
+        mounted: true,
+        targetId: 'list-outlet',
+        target: { id: 'list-outlet', kind: 'outlet', storyId: 'main', ownerId: 'main:list' },
+        parentKey: 'main:list',
+      },
+      moveIssues: [],
+    }
+    const scene: SolvedScene = {
+      scene: {} as SolvedScene['scene'],
+      timeMs: 0,
+      sceneState: {},
+      storyStates: {},
+      persos: { 'main:list': list, 'main:item': item },
+      graph: buildSolvedGraph({ 'main:list': list, 'main:item': item }),
+      moveIssues: [],
+    }
+    const capability = new ListCapabilityState()
+
+    capability.initializeScene(scene)
+
+    expect(capability.getChildrenIds('list-outlet')).toEqual(['main:item'])
+  })
+
   it('consumes generic mount, move, and unmount deltas', () => {
     const capability = new ListCapabilityState()
     capability.registerContainer('list-a')

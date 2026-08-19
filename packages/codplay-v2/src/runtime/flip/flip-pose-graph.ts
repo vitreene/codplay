@@ -16,6 +16,9 @@ type LocalPose = Readonly<{
   height: number
 }>
 
+/** Relative pose retained when a child overlay hands off to a moving parent ghost. */
+export type RelativeFlipPose = LocalPose
+
 /** Caches host historical measurements for one capture, ancestor, epoch and instant. */
 export class FlipHistoricalPoseCache {
   private readonly poses = new Map<string, HtmlPose>()
@@ -144,14 +147,27 @@ function resolveLocalPose(
 
 /** Composes one local pose into the resolved parent world pose. */
 function composeLocalPose(local: LocalPose, parent: HtmlPose | undefined, worldAnchor?: Point): HtmlPose {
-  const parentMatrix = parent?.matrix ?? identityMatrix()
-  const worldMatrix = multiply(parentMatrix, local.matrix)
-  const parentAnchor: Point = parent === undefined ? [0, 0] : [parent.rect.left, parent.rect.top]
-  const composedAnchor = add(parentAnchor, transformLinearPoint(parentMatrix, local.origin))
-  return poseFromAnchor(worldAnchor ?? composedAnchor, worldMatrix, parentMatrix, local.width, local.height)
+  const parentMatrix = parent === undefined ? identityMatrix() : linearMatrix(parent.matrix)
+  const worldMatrix = multiply(parentMatrix, linearMatrix(local.matrix))
+  const parentOrigin: Point = parent === undefined ? [0, 0] : [parent.origin.x, parent.origin.y]
+  const composedOrigin = add(parentOrigin, transformLinearPoint(parentMatrix, local.origin))
+  const resolvedOrigin = worldAnchor === undefined
+    ? composedOrigin
+    : originFromAabbAnchor(worldAnchor, worldMatrix, local.width, local.height)
+  return poseFromOrigin(resolvedOrigin, worldMatrix, parentMatrix, local.width, local.height)
 }
 
-/** Resolves the optional normalized trajectory point for one item. */
+/** Computes one child pose in the coordinate system of a parent pose. */
+export function deriveRelativeFlipPose(parent: HtmlPose, child: HtmlPose): RelativeFlipPose {
+  return deriveLocalPose(parent, child)
+}
+
+/** Rebuilds a world pose from a stored relative pose and the current parent pose. */
+export function composeRelativeFlipPose(relative: RelativeFlipPose, parent: HtmlPose): HtmlPose {
+  return composeLocalPose(relative, parent)
+}
+
+/** Resolves a trajectory point in visual AABB space before converting it to an origin. */
 function resolvePathPoint(entry: Pick<FlipItemCapture, 'path' | 'from' | 'to'>, progress: number): Point | undefined {
   return entry.path === undefined
     ? undefined
@@ -173,8 +189,8 @@ function resolveCaptureProgress(capture: FlipCapture, timeMs: number): number {
 /** Converts a world pose to a root-local pose. */
 function decomposeRootPose(pose: HtmlPose): LocalPose {
   return {
-    origin: [pose.rect.left, pose.rect.top],
-    matrix: pose.matrix,
+    origin: [pose.origin.x, pose.origin.y],
+    matrix: linearMatrix(pose.matrix),
     width: pose.localWidth,
     height: pose.localHeight,
   }
@@ -182,31 +198,32 @@ function decomposeRootPose(pose: HtmlPose): LocalPose {
 
 /** Converts a child world pose into coordinates relative to one captured parent. */
 function deriveLocalPose(parent: HtmlPose, child: HtmlPose): LocalPose {
-  const inverseParent = invertMatrix(parent.matrix)
+  const parentMatrix = linearMatrix(parent.matrix)
+  const childMatrix = linearMatrix(child.matrix)
+  const inverseParent = invertMatrix(parentMatrix)
   if (inverseParent === null) throw new Error('FLIP cannot resolve a singular ancestor matrix.')
-  const parentAnchor: Point = [parent.rect.left, parent.rect.top]
-  const childAnchor: Point = [child.rect.left, child.rect.top]
+  const worldDelta: Point = [child.origin.x - parent.origin.x, child.origin.y - parent.origin.y]
   return {
-    origin: inverseLinearPoint(parent.matrix, [childAnchor[0] - parentAnchor[0], childAnchor[1] - parentAnchor[1]]),
-    matrix: multiply(inverseParent, child.matrix),
+    origin: inverseLinearPoint(parentMatrix, worldDelta),
+    matrix: multiply(inverseParent, childMatrix),
     width: child.localWidth,
     height: child.localHeight,
   }
 }
 
-/** Rebuilds an HTML pose from a visual AABB anchor and a composed matrix. */
-function poseFromAnchor(anchor: Point, matrix: HtmlMatrix, parentMatrix: HtmlMatrix, width: number, height: number): HtmlPose {
+/** Rebuilds an HTML pose from the world origin of its local box. */
+function poseFromOrigin(origin: Point, matrix: HtmlMatrix, parentMatrix: HtmlMatrix, width: number, height: number): HtmlPose {
   const bounds = transformedBounds(matrix, width, height)
   const scaleX = Math.max(1e-6, Math.hypot(matrix.a, matrix.b))
   const scaleY = Math.max(1e-6, Math.hypot(matrix.c, matrix.d))
   return {
     rect: {
-      left: anchor[0],
-      top: anchor[1],
+      left: origin[0] + bounds.left,
+      top: origin[1] + bounds.top,
       width: bounds.width,
       height: bounds.height,
     },
-    origin: { x: anchor[0] - bounds.left, y: anchor[1] - bounds.top },
+    origin: { x: origin[0], y: origin[1] },
     matrix,
     parentMatrix,
     rotationMatrix: normalizeRotation(matrix),
@@ -217,6 +234,12 @@ function poseFromAnchor(anchor: Point, matrix: HtmlMatrix, parentMatrix: HtmlMat
     frameWidth: width * scaleX,
     frameHeight: height * scaleY,
   }
+}
+
+/** Converts a visual AABB top-left into the corresponding local-box origin. */
+function originFromAabbAnchor(anchor: Point, matrix: HtmlMatrix, width: number, height: number): Point {
+  const bounds = transformedBounds(matrix, width, height)
+  return [anchor[0] - bounds.left, anchor[1] - bounds.top]
 }
 
 /** Interpolates all local pose components. */
@@ -250,6 +273,11 @@ function transformPoint(matrix: HtmlMatrix, point: Point): Point {
 
 function transformLinearPoint(matrix: HtmlMatrix, point: Point): Point {
   return [matrix.a * point[0] + matrix.c * point[1], matrix.b * point[0] + matrix.d * point[1]]
+}
+
+/** Removes a matrix translation so pose composition uses the explicit origin field. */
+function linearMatrix(matrix: HtmlMatrix): HtmlMatrix {
+  return { a: matrix.a, b: matrix.b, c: matrix.c, d: matrix.d, e: 0, f: 0 }
 }
 
 function inverseLinearPoint(matrix: HtmlMatrix, point: Point): Point {

@@ -8,7 +8,11 @@ import {
   type MoveOrderMode,
 } from '../../config/move'
 import type { MoveStateDelta } from '../../move'
-import type { RuntimeModuleLayoutProjectionState, RuntimeModuleServiceDefinition } from '../../engine'
+import type {
+  RuntimeModuleLayoutProjectionState,
+  RuntimeModuleServiceDefinition,
+  RuntimeModuleServiceSeekHandle,
+} from '../../engine'
 import type { SolvedScene } from '../../player/pipeline'
 
 /** Runtime module identifier for the generic list capability. */
@@ -47,8 +51,30 @@ export class ListCapabilityState {
 
   /** Rebuilds list-owned order from one solved scene before the first projection. */
   initializeScene(scene: SolvedScene): void {
+    const listOwnerIds = new Set<string>()
     for (const perso of Object.values(scene.persos)) {
-      if (perso.type === 'list') this.registerContainer(perso.persoId)
+      if (perso.type !== 'list') continue
+      listOwnerIds.add(perso.key)
+      // A list may be addressed directly by its perso ID, as in the compact
+      // list fixtures, so retain that target alongside owned outlets.
+      if (!this.containers.has(perso.persoId)) this.registerContainer(perso.persoId)
+      this.items.set(perso.key, {
+        parentId: perso.placement.targetId,
+        mounted: perso.placement.mounted,
+        mode: perso.placement.mode,
+      })
+    }
+    for (const perso of Object.values(scene.persos)) {
+      const target = perso.placement.target
+      if (target?.kind === 'outlet'
+        && target.ownerId !== undefined
+        && perso.placement.targetId !== undefined
+        && listOwnerIds.has(target.ownerId)) {
+        if (!this.containers.has(perso.placement.targetId)) this.registerContainer(perso.placement.targetId)
+      }
+    }
+    for (const perso of Object.values(scene.persos)) {
+      if (perso.type === 'list') continue
       this.items.set(perso.key, {
         parentId: perso.placement.targetId,
         mounted: perso.placement.mounted,
@@ -56,7 +82,7 @@ export class ListCapabilityState {
       })
     }
     for (const containerId of this.containers.keys()) {
-      this.children.set(containerId, [...(scene.childrenByTarget[containerId] ?? [])])
+      this.children.set(containerId, [...(scene.graph.childrenByTarget[containerId] ?? [])])
     }
     this.pendingTouchedItemIds.clear()
   }
@@ -143,6 +169,22 @@ export class ListCapabilityState {
     return { childrenByTarget, touchedItemIds }
   }
 
+  /** Creates a seek-staged state while preserving registered list policies. */
+  createSeekState(
+    scene: SolvedScene,
+    layoutState?: RuntimeModuleLayoutProjectionState,
+  ): ListCapabilityState {
+    const staged = new ListCapabilityState()
+    for (const [containerId, config] of this.containers) staged.registerContainer(containerId, config)
+    staged.initializeScene(scene)
+    for (const [targetId, childIds] of Object.entries(layoutState?.childrenByTarget ?? {})) {
+      if (!staged.containers.has(targetId)) continue
+      staged.children.set(targetId, [...childIds])
+    }
+    for (const itemId of layoutState?.touchedItemIds ?? []) staged.pendingTouchedItemIds.add(itemId)
+    return staged
+  }
+
   /** Removes one item from a container without changing item ownership. */
   private removeChild(containerId: string, itemId: string): void {
     const children = this.children.get(containerId)
@@ -189,10 +231,17 @@ export function createListModuleServiceDefinition(): RuntimeModuleServiceDefinit
   return {
     id: LIST_MODULE_SERVICE_ID,
     create: () => {
-      const state = new ListCapabilityState()
+      let state = new ListCapabilityState()
       return {
+        requiresHistoricalLayoutState: true,
         initializeScene: (scene) => state.initializeScene(scene),
         onMoveDelta: (delta) => state.applyDelta(delta),
+        prepareSeek: (scene, layoutState): RuntimeModuleServiceSeekHandle => {
+          const staged = state.createSeekState(scene, layoutState)
+          return {
+            commit: () => { state = staged },
+          }
+        },
         consumeLayoutProjectionState: () => state.consumeLayoutProjectionState(),
         destroy: () => undefined,
       }

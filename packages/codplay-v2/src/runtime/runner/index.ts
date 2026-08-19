@@ -1,6 +1,7 @@
 export { createDomComponentServiceCatalog } from './dom-component-services'
 export {
   createHtmlMoveCaptureBuilder,
+  type HtmlAncestorRegimeResolver,
   type HtmlMoveCaptureBuilderOptions,
 } from './html-move-capture-builder'
 export {

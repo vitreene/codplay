@@ -23,7 +23,7 @@ function pose(left: number): HtmlPose {
 }
 
 /** Creates a host projection that records all synchronous read and write calls. */
-function projection(events: string[], left: { value: number }): HtmlFlipProjection {
+function projection(events: string[], left: { value: number }, overlayPhases?: string[]): HtmlFlipProjection {
   return {
     getHostContextId: () => 'host',
     getProjectionEpoch: () => 2,
@@ -32,6 +32,12 @@ function projection(events: string[], left: { value: number }): HtmlFlipProjecti
       events.push(`read:${String(handle)}`)
       return pose(left.value)
     },
+    ...(overlayPhases === undefined ? {} : {
+      captureOverlayPose: (_handle: unknown, options?: Readonly<{ phase?: 'first' | 'last' }>) => {
+        overlayPhases.push(options?.phase ?? 'missing')
+        return pose(left.value)
+      },
+    }),
     captureHistoricalPose: () => pose(left.value),
     applyLocalPose: (handle) => events.push(`apply:${String(handle)}`),
     finishLocalPose: vi.fn(),
@@ -82,6 +88,28 @@ describe('HtmlPresentationTransaction', () => {
     expect(tree.items[0]?.last.rect.left).toBe(90)
     expect(tree.ancestors[0]?.first.rect.left).toBe(10)
     expect(tree.ancestors[0]?.last.rect.left).toBe(90)
+  })
+
+  it('labels overlay reads so concurrent FIRST uses the current ghost pose', () => {
+    const phases: string[] = []
+    const transaction = new HtmlPresentationTransaction({
+      projection: projection([], { value: 10 }, phases),
+      present: () => undefined,
+      restore: () => undefined,
+    })
+
+    transaction.measure({
+      description: {
+        hostContextId: 'host',
+        projectionEpoch: 2,
+        entries: [{ itemId: 'item', ancestorIds: [], mode: 'overlay-world' }],
+        ancestors: [],
+      },
+      logicalTimeMs: 150,
+      presentLast: () => undefined,
+    })
+
+    expect(phases).toEqual(['first', 'last'])
   })
 
   it('records a measurement tree and resolves one pose with one flush', () => {

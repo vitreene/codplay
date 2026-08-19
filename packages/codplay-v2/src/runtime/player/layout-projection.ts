@@ -3,13 +3,14 @@ import type { MoveStateDelta } from '../move'
 
 /** Structural render state supplied by a capability such as list. */
 export type LayoutProjectionState = Readonly<{
+  /** Graph revision of the scene for which this state was consumed. */
+  graphRevision?: string
   childrenByTarget?: Readonly<Record<string, readonly string[]>>
   touchedItemIds?: readonly string[]
 }>
 
 /** Phase and placement changes associated with one layout projection. */
 export type LayoutProjectionContext = Readonly<{
-  phase: 'init' | 'frame' | 'seek' | 'historical'
   previousScene?: SolvedScene
   moveDeltas: readonly MoveStateDelta[]
   /** Synchronizes authored component state immediately before structural writes. */
@@ -21,6 +22,5 @@ export type LayoutProjectionContext = Readonly<{
 /** Projection boundary called by RuntimePlayer after each solved scene. */
 export type LayoutProjection = Readonly<{
   project: (scene: SolvedScene, context?: LayoutProjectionContext) => void
-  advance?: (timeMs: number) => void
   destroy?: () => void
 }>

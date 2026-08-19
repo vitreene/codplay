@@ -2,22 +2,36 @@ import {
   MOVE_OPERATION_MOVE,
   type MoveFlipCaptureBuilder,
 } from '../player'
-import { MOUNT_TARGET_KIND_OUTLET, MOUNT_TARGET_KIND_PERSO } from '../config/mount-target'
-import type { SolvedScene } from '../player/pipeline'
+import type { FlipAncestorRegime, HtmlFlipMode } from '../flip'
+import { resolveAncestorChain, type SolvedScene } from '../player/pipeline'
+
+/** Host declaration used to classify one logical ancestor for FLIP. */
+export type HtmlAncestorRegimeResolver = (input: Readonly<{
+  ancestorId: string
+  parentId?: string
+  ancestorChain: readonly string[]
+  previousScene: SolvedScene
+  nextScene: SolvedScene
+  touchedItemIds: readonly string[]
+}>) => FlipAncestorRegime
 
 /** Options for the direct-item FLIP capture builder used by the HTML runner. */
 export type HtmlMoveCaptureBuilderOptions = Readonly<{
   hostContextId: string
   getProjectionEpoch: () => number
+  /** Declares which ancestor regime the HTML host must resolve historically. */
+  resolveAncestorRegime?: HtmlAncestorRegimeResolver
 }>
 
 /**
- * Creates a minimal capture builder for direct mounted-item moves.
+ * Creates the HTML capture builder for direct mounted-item moves.
  *
- * This tranche captures the logical parent chain as stable ancestors and projects
- * geometry-changing ancestors as local entries so width/height can interpolate.
- * Overlay mode remains outside the local runner tranche and is never converted to
- * local. A delta without an explicit positive duration remains logical-only.
+ * The consumer-owned touched set is retained, the mover keeps its authored mode,
+ * and ancestor chains remain geometric context rather than implicit animated
+ * entries. A direct overlay-world mover projects independently; stable
+ * reflow siblings keep their own overlay handles but the projection graph may
+ * compose their local reflow with an active parent trajectory. A delta without
+ * an explicit positive duration remains logical-only.
  */
 export function createHtmlMoveCaptureBuilder(
   options: HtmlMoveCaptureBuilderOptions,
@@ -36,9 +50,8 @@ export function createHtmlMoveCaptureBuilder(
     const firstTransition = preparedTransitions.get(candidates[0]!.persoKey)
     if (firstTransition?.duration === undefined || firstTransition.duration <= 0) return undefined
     if (candidates.some((delta) => !sameTransition(firstTransition, preparedTransitions.get(delta.persoKey)))) return undefined
-    const mode = candidates[0]!.flipMode ?? 'local'
-    if (candidates.some((delta) => (delta.flipMode ?? 'local') !== mode)) return undefined
-    if (mode !== 'local') return undefined
+    const directMode = candidates[0]!.flipMode ?? 'local'
+    if (candidates.some((delta) => (delta.flipMode ?? 'local') !== directMode)) return undefined
 
     const itemIds = touchedItemIds === undefined
       ? collectTouchedItemIds(previousScene, nextScene, candidates)
@@ -49,28 +62,108 @@ export function createHtmlMoveCaptureBuilder(
       itemId,
       resolveSharedAncestorChain(previousScene, nextScene, itemId),
     ]))
-    const ancestorChains = collectAncestorChains(previousScene, nextScene, itemIds)
-    const ancestors = collectAncestors(ancestorChains)
-    const entryIds = [...new Set([...ancestors.map((ancestor) => ancestor.ancestorId), ...itemIds])]
+    const itemModes = new Map(itemIds.map((itemId) => [
+      itemId,
+      directMode === 'overlay-world' || directDeltas.has(itemId) ? directMode : 'local' as const,
+    ]))
+    const ancestorChains = collectAncestorChains(previousScene, nextScene, itemIds, itemModes)
+    const ancestors = collectAncestors({
+      chains: ancestorChains,
+      previousScene,
+      nextScene,
+      touchedItemIds: itemIds,
+      resolveRegime: options.resolveAncestorRegime,
+    })
+    // Ancestors describe the coordinate tree used to resolve local entries;
+    // they are not animated by a descendant capture. A container can only gain
+    // projection ownership from its own direct move capture.
+    const entryIds = [...new Set(itemIds)]
     const fallbackCaptureId = `${options.hostContextId}:move:${startAt}:${entryIds.join(',')}`
+    const captureId = resolveStableCaptureId(candidates, fallbackCaptureId)
+    const sourceCaptureIds = [...new Set(candidates
+      .map((candidate) => candidate.transitionOccurrenceId)
+      .filter((captureId): captureId is string => captureId !== undefined))]
     return {
-      captureId: resolveStableCaptureId(candidates, fallbackCaptureId),
+      captureId,
       hostContextId: options.hostContextId,
       projectionEpoch: options.getProjectionEpoch(),
       startAt,
       duration: firstTransition.duration,
       ...(firstTransition.ease === undefined ? {} : { ease: firstTransition.ease }),
-      entries: entryIds.map((itemId) => ({
-        itemId,
-        ancestorIds: itemAncestorChains.get(itemId) ?? ancestorChains.get(itemId) ?? [],
-        mode: 'local' as const,
-        ...(directDeltas.get(itemId) === undefined || firstTransition.path === undefined
-          ? {}
-          : { path: firstTransition.path }),
-      })),
+      ...(sourceCaptureIds.length > 1 ? { sourceCaptureIds } : {}),
+      entries: entryIds.map((itemId) => {
+        const mode = itemModes.get(itemId) ?? 'local'
+        const overlayTargetByPerso = mode === 'overlay-world'
+          ? resolveOverlayTargetByPerso(previousScene, itemId)
+          : undefined
+        const overlayParentIds = mode === 'overlay-world' && !directDeltas.has(itemId)
+          ? itemAncestorChains.get(itemId)
+          : undefined
+        return {
+          itemId,
+          ancestorIds: mode === 'overlay-world'
+            ? []
+            : itemAncestorChains.get(itemId) ?? ancestorChains.get(itemId) ?? [],
+          ...resolveEntryOwnership(previousScene, nextScene, itemId, mode === 'overlay-world'),
+          ...(overlayTargetByPerso === undefined ? {} : { overlayTargetByPerso }),
+          ...(overlayParentIds === undefined || overlayParentIds.length === 0 ? {} : { overlayParentIds }),
+          ...(directDeltas.has(itemId) ? {} : { isDirectMover: false }),
+          mode,
+          ...(directDeltas.get(itemId) === undefined || firstTransition.path === undefined
+            ? {}
+            : { path: firstTransition.path }),
+        }
+      }),
       ...(ancestors.length === 0 ? {} : { ancestors }),
     }
   }
+}
+
+/** Carries the exact source and destination targets with every measured item. */
+function resolveEntryOwnership(
+  previousScene: SolvedScene,
+  nextScene: SolvedScene,
+  itemId: string,
+  includeParentOwnership: boolean,
+): Readonly<{
+  sourceTargetId?: string
+  destinationTargetId?: string
+  sourceParentId?: string
+  destinationParentId?: string
+}> {
+  const sourceTargetId = previousScene.graph.targetByPerso[itemId]
+  const destinationTargetId = nextScene.graph.targetByPerso[itemId]
+  const sourceParentId = previousScene.graph.parentByPerso[itemId]
+  const destinationParentId = nextScene.graph.parentByPerso[itemId]
+  const hasParentChange = sourceParentId !== destinationParentId
+  const preserveParentOwnership = includeParentOwnership || hasParentChange
+  return {
+    ...(sourceTargetId === undefined ? {} : { sourceTargetId }),
+    ...(destinationTargetId === undefined ? {} : { destinationTargetId }),
+    ...(!preserveParentOwnership || sourceParentId === undefined ? {} : { sourceParentId }),
+    ...(!preserveParentOwnership || destinationParentId === undefined ? {} : { destinationParentId }),
+  }
+}
+
+/** Records the FIRST logical target of every descendant cloned into one overlay. */
+function resolveOverlayTargetByPerso(
+  scene: SolvedScene,
+  overlayPersoKey: string,
+): Readonly<Record<string, string>> | undefined {
+  const targetByPerso: Record<string, string> = {}
+  const pending = [...(scene.graph.childrenByParent[overlayPersoKey] ?? [])]
+  const visited = new Set<string>()
+
+  while (pending.length > 0) {
+    const persoKey = pending.shift()!
+    if (visited.has(persoKey)) continue
+    visited.add(persoKey)
+    const targetId = scene.graph.targetByPerso[persoKey]
+    if (targetId !== undefined) targetByPerso[persoKey] = targetId
+    pending.push(...(scene.graph.childrenByParent[persoKey] ?? []))
+  }
+
+  return Object.keys(targetByPerso).length === 0 ? undefined : Object.freeze(targetByPerso)
 }
 
 /** Reuses the compiled occurrence identity whenever one delta owns the capture. */
@@ -103,9 +196,14 @@ function collectAncestorChains(
   previousScene: SolvedScene,
   nextScene: SolvedScene,
   itemIds: readonly string[],
+  itemModes: ReadonlyMap<string, HtmlFlipMode>,
 ): ReadonlyMap<string, readonly string[]> {
   const chains = new Map<string, readonly string[]>()
   for (const itemId of itemIds) {
+    // A world overlay has no local parent coordinate system. Its source and
+    // destination chains are deliberately omitted; local siblings still add
+    // their own chains to the shared capture.
+    if (itemModes.get(itemId) === 'overlay-world') continue
     const nextChain = resolveAncestorChain(nextScene, itemId)
     const previousChain = resolveAncestorChain(previousScene, itemId)
     for (const ancestorId of nextChain) {
@@ -128,10 +226,10 @@ function collectTouchedItemIds(
   const targetIds = unique(candidates.flatMap((candidate) => [candidate.fromTargetId, candidate.toTargetId]))
   for (const targetId of targetIds) {
     if (targetId === undefined) continue
-    for (const itemId of previousScene.childrenByTarget[targetId] ?? []) {
+    for (const itemId of previousScene.graph.childrenByTarget[targetId] ?? []) {
       if (isMountedInBoth(previousScene, nextScene, itemId)) touched.add(itemId)
     }
-    for (const itemId of nextScene.childrenByTarget[targetId] ?? []) {
+    for (const itemId of nextScene.graph.childrenByTarget[targetId] ?? []) {
       if (isMountedInBoth(previousScene, nextScene, itemId)) touched.add(itemId)
     }
   }
@@ -160,21 +258,6 @@ function sameTransition(
 }
 
 /** Resolves one mounted item's component-parent chain from the solved scene. */
-function resolveAncestorChain(scene: SolvedScene, persoKey: string): readonly string[] {
-  const reversed: string[] = []
-  const visited = new Set<string>()
-  let current = resolveLogicalParentKey(scene, persoKey)
-  while (current !== undefined) {
-    if (visited.has(current)) throw new Error(`HTML FLIP ancestor cycle detected: ${current}`)
-    visited.add(current)
-    const ancestor = scene.persos[current]
-    if (ancestor === undefined || !ancestor.placement.mounted) break
-    reversed.push(current)
-    current = resolveLogicalParentKey(scene, current)
-  }
-  return reversed.reverse()
-}
-
 /** Keeps a local ancestor chain only when FIRST and LAST share the same parents. */
 function resolveSharedAncestorChain(
   previousScene: SolvedScene,
@@ -190,28 +273,47 @@ function resolveSharedAncestorChain(
   return nextChain
 }
 
-/** Resolves the next logical component parent through a perso or markup outlet target. */
-function resolveLogicalParentKey(scene: SolvedScene, persoKey: string): string | undefined {
-  const placement = scene.persos[persoKey]?.placement
-  const target = placement?.target
-  if (target?.kind === MOUNT_TARGET_KIND_PERSO) return placement.parentKey
-  if (target?.kind === MOUNT_TARGET_KIND_OUTLET) return target.ownerId
-  return undefined
-}
-
 /** Builds one stable root-to-leaf ancestor set shared by all capture entries. */
 function collectAncestors(
-  chains: ReadonlyMap<string, readonly string[]>,
-): readonly Readonly<{ ancestorId: string; parentId?: string; regime: 'stable' }>[] {
-  const entries = new Map<string, Readonly<{ ancestorId: string; parentId?: string; regime: 'stable' }>>()
-  for (const [ancestorId, chain] of chains) {
+  input: Readonly<{
+    chains: ReadonlyMap<string, readonly string[]>
+    previousScene: SolvedScene
+    nextScene: SolvedScene
+    touchedItemIds: readonly string[]
+    resolveRegime?: HtmlAncestorRegimeResolver
+  }>,
+): readonly Readonly<{ ancestorId: string; parentId?: string; regime: FlipAncestorRegime }>[] {
+  const entries = new Map<string, { ancestorId: string; parentId?: string; regime: FlipAncestorRegime; chain: readonly string[] }>()
+  for (const [ancestorId, chain] of input.chains) {
     const parentId = chain.at(-1)
     const current = entries.get(ancestorId)
     if (current !== undefined) {
       if (current.parentId !== parentId) throw new Error(`HTML FLIP ancestor has conflicting parents: ${ancestorId}`)
       continue
     }
-    entries.set(ancestorId, { ancestorId, ...(parentId === undefined ? {} : { parentId }), regime: 'stable' })
+    const regime = input.resolveRegime?.({
+      ancestorId,
+      ...(parentId === undefined ? {} : { parentId }),
+      ancestorChain: chain,
+      previousScene: input.previousScene,
+      nextScene: input.nextScene,
+      touchedItemIds: input.touchedItemIds,
+    }) ?? 'stable'
+    entries.set(ancestorId, { ancestorId, ...(parentId === undefined ? {} : { parentId }), regime, chain })
   }
-  return [...entries.values()]
+
+  // The first layout ancestor in a root-to-leaf chain is the reflow cut. Every
+  // captured ancestor below that cut must be resolved against the historical
+  // host pose as well; otherwise a stable child can reintroduce the old layout
+  // frame while its grandparent is being realized.
+  for (const entry of entries.values()) {
+    const cutIndex = entry.chain.findIndex((ancestorId) => entries.get(ancestorId)?.regime === 'layout')
+    if (cutIndex < 0) continue
+    for (const descendantId of entry.chain.slice(cutIndex)) {
+      const descendant = entries.get(descendantId)
+      if (descendant !== undefined) descendant.regime = 'layout'
+    }
+  }
+
+  return [...entries.values()].map(({ chain: _chain, ...entry }) => entry)
 }

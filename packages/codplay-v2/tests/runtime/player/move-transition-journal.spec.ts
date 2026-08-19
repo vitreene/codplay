@@ -63,6 +63,14 @@ describe('MoveTransitionJournal', () => {
     expect(first[1]!.destinationTimeMs).toBe(75)
   })
 
+  it('finds movers that start inside an enclosing capture interval', () => {
+    const journal = new MoveTransitionJournal(compiledScene())
+
+    expect(journal.findStartingBetween(50, 100).map((occurrence) => occurrence.startAt)).toEqual([75])
+    expect(journal.findStartingBetween(50, 75).map((occurrence) => occurrence.startAt)).toEqual([75])
+    expect(journal.findStartingBetween(75, 100)).toEqual([])
+  })
+
   it('keeps only the last declaration for one same-tick perso move', () => {
     const journal = new MoveTransitionJournal({
       ...compiledScene(),
