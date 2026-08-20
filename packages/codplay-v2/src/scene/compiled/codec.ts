@@ -12,13 +12,13 @@ import type {
   CompiledValue,
 } from './types'
 
-/** Result returned when decoding one external compiled-scene payload. */
+/** Result returned when decoding one serialized compiled-scene payload. */
 export type CompiledSceneDecodeResult = Readonly<
   | { ok: true; value: CompiledScene; diagnostics: DiagnosticReport }
   | { ok: false; diagnostics: DiagnosticReport }
 >
 
-/** Options controlling diagnostics and the accepted compiled schema version. */
+/** Options controlling diagnostics for the internal V2 artifact boundary. */
 export type CompiledSceneCodecOptions = Readonly<{
   diagnosticOutput?: DiagnosticOutput
   schemaVersion?: string
@@ -28,7 +28,7 @@ export type CompiledSceneCodecOptions = Readonly<{
 export class CompiledSceneCodec {
   private readonly options: CompiledSceneCodecOptions
 
-  /** Creates one codec for a known compiled-scene schema version. */
+  /** Creates one codec for the internal V2 artifact boundary. */
   constructor(options: CompiledSceneCodecOptions = {}) {
     this.options = options
   }

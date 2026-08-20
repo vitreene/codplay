@@ -8,14 +8,16 @@ jalons de validation et les questions qui doivent etre tranchees avant le code c
 Les parties complexes disposent d'un plan detaille distinct, reference depuis ce document. Un plan de partie
 detaille l'execution d'un domaine sans redefinir l'architecture generale, les dependances ou les invariants V2.
 
-Les specifications V1 restent la reference du comportement a conserver. Les plans de partie sont colocalises
-dans `packages/codplay-v2/plan/` et les notes de `plan/notes/` expliquent les decisions; ils ne doivent pas
-contredire ce plan general. Aucun code V1 n'est importe, modifie ou reutilise dans le runtime V2.
+Les contrats V2 sont l'autorité active du chantier. Les plans de partie sont
+colocalisés dans `packages/codplay-v2/plan/` et les notes de `plan/notes/`
+expliquent les décisions; ils ne doivent pas contredire ce plan général. Les
+démos existantes sont un corpus non normatif, destiné à une adaptation
+ultérieure, et ne constituent pas une dépendance du runtime V2.
 
 ## Invariants de construction
 
-- V2 est une reecriture distincte : V1 fournit contrats, demos et tests-oracles, jamais un chemin de
-  compatibilite runtime.
+- V2 est une base autonome : aucune compatibilité avec une ancienne implémentation
+  n'est construite dans le runtime.
 - Aucun jalon ne cree de mini-DSL, de sous-format `CompiledScene`, de fallback ou de branche speciale de
   demo. Une capacite absente est explicitement hors de la tranche.
 - Le flux V2 reste : `SceneDoc -> build -> CompiledScene -> materialize -> resolve -> solve -> composant`.
@@ -42,14 +44,15 @@ contredire ce plan general. Aucun code V1 n'est importe, modifie ou reutilise da
   src/runtime/player     une instance, materialize, resolve et solve
 ```
 
-`CompiledScene` conserve son enveloppe V1 : `schemaVersion`, `createdAt`, `scene`, `resources` et
-`rootNodeIds`. Toute extension doit correspondre a une capacite V2 specifiee; aucune ne sert seulement a
-faire fonctionner une demo.
+`CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
+`resources`, `rootNodeIds` et `requirements`. Toute extension doit correspondre
+à une capacité V2 spécifiée; aucune ne sert seulement à faire fonctionner une
+demo.
 
 Une scene auteur peut contenir des fonctions. Avant diffusion, le build les extrait systematiquement dans
 une collection externe et les remplace par des references nommees dans la donnee compilee. L'extraction
-preserve l'ordre semantique de chaque position. Le mecanisme V1 `extractSceneFunctions` est la reference
-initiale, a generaliser a toutes les positions de fonctions.
+préserve l'ordre sémantique de chaque position. L'extraction est une étape V2
+explicite, à généraliser à toutes les positions de fonctions.
 
 Un lecteur de diffusion consomme un `CompiledScene` et sa collection de fonctions, mais pas `SceneDoc` ni
 le builder. Un export d'intention consomme `SceneDoc`; un export fidele consomme `CompiledScene`; aucun
@@ -118,13 +121,13 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 
 ## Elements a construire
 
-| Domaine V1 | Element V2 a construire | Statut et dependances |
+| Domaine | Element V2 a construire | Statut et dependances |
 |---|---|---|
 | Glossaire, invariants, configuration | Invariants V2 explicites, conventions et `config/` par domaine | Fondation de toutes les tranches. |
 | Diagnostics | Collecteur structure transversal, deduplication, rapport warnings/erreurs et sorties futures | `src/diagnostics`; contrat commun a toutes les couches V2. |
 | Validation et erreurs | Sanitizer du builder, diagnostics auteur et catalogue d'erreurs/warnings | Avant tout player; le player fait confiance au compile. |
 | SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
-| CompiledScene | Schema versionne, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; base de diffusion et d'exports. |
+| CompiledScene | Enveloppe, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; artefact de lecture interne. |
 | Engine | Catalogue de composants, modules, services, bindings tiers; cache, styles, horloge et ordre de tick | Fournit les capacites declarees; ne lit pas `SceneDoc`. |
 | Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Play et Seek résolvent le même état et la même frame absolue. |
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, selection story/scene, straps sequentiels, outputs sur tracks declarees, cascade borne et relecture journalisee; annulation et helpers live restent a specifier. |
@@ -132,7 +135,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime, controles d'activation et tracks dediees aux outputs de straps en place; generation obsolete reste a ouvrir. |
 | Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick et graphe parent/enfant en place; transforms, mesures, diagnostics et politiques de liste restent a ouvrir. |
 | Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | Le catalogue engine declare les types; chaque player instancie ses composants. |
-| Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reprend son contrat V1 comme capacite declaree, avec ses fixtures et ses demos; aucune ne devient un patch generique de `style`. |
+| Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reçoit son contrat V2 comme capacité déclarée, avec ses fixtures et ses démos; aucune ne devient un patch générique de `style`. |
 | Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach et diagnostics de seek en place; l'application de `reorderOnMove/Add/Remove` appartient a une capacite/service list, pas au move core ni a un composant unique. |
 | Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Contrat fixe sur les moves compilés; le mode local est inféré pour une target inchangée et un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
@@ -145,15 +148,16 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogues et ModuleServices player-scoped | `RuntimeModuleServiceCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place. |
 | Authoring | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Canal local separe du player de diffusion; semantique des poses d'atelier a fixer avant implementation. |
 | Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | Packaging fin et transport distant reportes; ne pas melanger avec authoring. |
-| Tests | Fixtures, horloge deterministe, traces, comparateurs V1/V2, assertions de paradigme et baselines DOM/geometriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
+| Tests | Fixtures, horloge déterministe, traces, assertions de paradigme et baselines DOM/géométriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
 
 ## Ordre de construction
 
 ### 1. Fondation de contrats
 
 Ecrire et tester les invariants, config, validation, `CompiledScene`, extraction des fonctions, catalogue
-engine et contrats player/composant. Les interfaces exactes doivent suivre les specifications V1 et les
-decisions V2 deja ecrites; aucun nouveau concept n'est ajoute pour raccourcir cette phase.
+engine et contrats player/composant. Les interfaces exactes sont définies par
+les contrats V2 et les décisions déjà écrites; aucun nouveau concept n'est
+ajouté pour raccourcir cette phase.
 
 ### 2. Verticale de validite
 
@@ -189,28 +193,26 @@ circuit de résolution et les points d'observation restent identiques.
 
 Le seek reconstruit l'etat logique puis évalue le même graphe de mouvement et la
 même frame de présentation que Play au temps demandé. Il ne rejoue pas les
-événements et ne dépend pas des temps visités auparavant. Les baselines V1
-`player-poc` et `overlay-world-seek-baseline` restent des oracles visuels, mais
-les invariants numériques Play/Seek du plan de restructuration sont normatifs.
+événements et ne dépend pas des temps visités auparavant. Les baselines visuelles
+existantes `player-poc` et `overlay-world-seek-baseline` restent un corpus à
+adapter, mais les invariants numériques Play/Seek du plan de restructuration
+sont normatifs.
 
-### 4. Cadre comparatif V2
+### 4. Cadre de validation V2
 
-Au debut de la revue systematique des demos V1, construire le cadre de tests V2 : fixtures communes,
-horloge deterministe, traces d'etat a instants nommes, comparateurs V1/V2, baselines DOM/geometriques et
-assertions propres a V2 (writer unique, absence de rejeu de strap, dependances interdites et ordre de
-solve).
+Lors de l'adaptation progressive des démos existantes, construire le cadre de
+tests V2 : fixtures communes, horloge déterministe, traces d'état à instants
+nommés, baselines DOM/géométriques et assertions propres à V2 (writer unique,
+absence de rejeu de strap, dépendances interdites et ordre de solve).
 
 ### 5. Tranches de capacites
 
 Poursuivre par dependances : capture/DnD et authoring; media/preload; bindings tiers; diffusion/broadcast/telco.
-Chaque tranche commence par le contrat
-V1 conserve ou la decision V2 necessaire, puis sa demo et ses tests.
+Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
 
-## Sources de reference
+## Sources de reference V2
 
-- `docs/formalisation/v1-index.md` et les specifications V1 qu'il indexe.
 - `docs/projet/codplay-v2/notes/2026-07-26-conduite-chantier-v2.md`.
 - `docs/projet/codplay-v2/notes/2026-07-26-ancrages-algorithmiques.md`.
 - `docs/projet/codplay-v2/notes/2026-07-26-etat-fonction-de-t.md`.
 - `plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md`.
-- `docs/formalisation/v1-move-separation-policy-state-backend-dom.md`.

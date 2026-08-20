@@ -3,34 +3,34 @@
 ## Perimetre et autorite
 
 Ce document detaille la tranche `SceneDoc -> build -> CompiledScene`. Il applique le plan general
-`./codplay-v2-plan.md` et ne redefinit ni son flux ni ses invariants. Aucun code V1 n'est importe dans le runtime
-V2.
+`./codplay-v2-plan.md` et ne redefinit ni son flux ni ses invariants. La tranche
+reste autonome et ne dépend d'aucune ancienne implémentation.
 
 ## Etat
 
 - Revue priorité 0 effectuée le 2026-08-20 : la frontière structurelle actuelle
   est relue et gelée pour les tranches qui la consomment.
-- Audit V1 prealable effectue.
 - Diagnostics transversaux du plan general en place et testes.
 - Squelette des contrats `SceneDoc` et `CompiledScene` relu sur la tranche initiale.
 - Normalisation structurelle et premiers guards relus sur la tranche initiale.
 - Premier builder, deriveurs de base et codec structurel en place; la tranche
   structurelle est gelée comme fondation de flux de rendu. Les deriveurs de
-  proprietes, migrations et extensions de validation restent a construire.
+  proprietes et extensions de validation restent a construire.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Source unique de declaration composant/services/modules en place via la projection du catalogue runtime vers le snapshot de validation; revue des extensions de validateurs encore necessaire avant l'integration composant.
 
 ## Principes
 
-`CompiledScene` doit d'abord reproduire au minimum le contrat et les garanties V1. Aller plus loin est autorise
-lorsque la resolution est deterministe, serialisable, independante de l'engine, du player, du DOM, de l'horloge
-et des ressources effectivement chargees. Une resolution supplementaire ne doit pas changer la semantique auteur;
-elle doit livrer au player une decision deja etablie ou un manifeste exploitable.
+`CompiledScene` porte un contrat V2 explicite et peut s'étendre lorsque la
+résolution est déterministe, sérialisable, indépendante de l'engine, du player,
+du DOM, de l'horloge et des ressources effectivement chargées. Une résolution
+supplémentaire ne doit pas changer la sémantique auteur; elle doit livrer au
+player une décision déjà établie ou un manifeste exploitable.
 
 La tranche est conduite en deux temps complementaires :
 
-1. Avant le code, examiner le builder, le schema V1, le codec, les exports et les besoins du player pour classer
+1. Avant le code, examiner le builder, le schéma, le codec, les exports et les besoins du player pour classer
    chaque donnee en preservee, normalisee, derivee ou extraite. Chaque capacite resolue en amont doit avoir une
    raison et un test de contrat.
 2. Pendant la construction du player, reevaluer chaque capacite au moment ou elle est introduite. Elle passe par
@@ -43,7 +43,7 @@ La tranche est conduite en deux temps complementaires :
 Le parcours d'un `Perso` doit produire une matrice de proprietes par type de perso. Pour chaque propriete, le
 contrat indique sa presence dans `initial`, sa presence dans une action, son mode temporel, sa serialisabilite,
 sa participation a l'interpolation et sa valeur par defaut eventuelle. Le mode temporel remplace la distinction
-V1 statique/dynamique qui servait surtout a reconstruire le runtime lors d'un seek.
+ancienne statique/dynamique qui servait surtout a reconstruire le runtime lors d'un seek.
 
 - Une propriete est **constante** si sa valeur ne depend pas de `t`, **discrete** si elle change par faits ou
   fenetres de validite, **continue** si elle est une fonction preparee `f(t)`, ou **live/effet** si elle depend
@@ -119,10 +119,10 @@ de propriete ou de composant afin de ne pas obliger chaque scene a les redeclare
 - Le codec valide l'enveloppe et les artefacts serialises avant leur entree dans un player.
 - Le player fait confiance au resultat compile et ne recree pas ces guards sur son chemin chaud.
 
-`src/scene/compiled` est organise par responsabilites nommees : contrat et sections versionnees, guards/sanitation,
+`src/scene/compiled` est organise par responsabilites nommees : contrat et sections typees, guards/sanitation,
 deriveurs, codec et finalisation immutable. Une nouvelle regle ajoute une section typee ou un deriveur de domaine
 et ses tests; elle ne passe pas par un sac d'extensions generique, une seconde forme de `CompiledScene` ou une
-logique defensive dispersee dans le player. L'enveloppe V1 reste stable, mais son contenu peut etre reordonne ou
+logique defensive dispersee dans le player. L'enveloppe V2 reste stable, mais son contenu peut etre reordonne ou
 regroupe pour la lecture tant que le codec et les dependances declarees preservent le contrat.
 
 La preparation syntaxique `adapter -> ACE` n'appartient pas a `src/scene/compiled` :
@@ -186,7 +186,7 @@ composants peuvent manquer temporairement et produisent alors les warnings prevu
 
 ## Socle minimal des guards
 
-Le but initial n'est pas de recenser toutes les regles V1. Il est de poser une architecture dans laquelle une regle
+Le but initial n'est pas de recenser toutes les règles historiques. Il est de poser une architecture dans laquelle une regle
 se comprend, se teste et s'ajoute sans modifier le pipeline ni disperser des conditions dans le builder.
 
 Le socle comporte :
@@ -220,12 +220,12 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
-| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Tranche initiale relue; matrice complète encore ouverte |
+| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Diagnostics generaux | Tranche initiale relue; matrice complète encore ouverte |
 | 2. Catalogue | Descripteurs composants/groupes de proprietes/services, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection initiale relue; extensions de validateurs encore ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
-| 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe et immutabilite structurelles relues; validation semantique et migrations restent a faire |
-| 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune parite player |
+| 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe et immutabilite structurelles relues; validation semantique reste a faire |
+| 6. Fixtures et couverture | Fixtures représentatives et tests du contrat V2, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune couverture player |
 | 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Frontière Engine/Player relue dans [`player-engine-plan.md`](./player-engine-plan.md); capacités supplémentaires restent à ouvrir |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 
@@ -256,22 +256,3 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 - `@off` et les placements non racine retirent le noeud du point de montage.
 - Plusieurs racines conservent leur ordre compile et leur ordre resolu.
 - Un seul composant de player effectue le montage page-level; les facades deleguent.
-
-## Audit V1
-
-Etat : audit prealable effectue; la tranche initiale du code V2 `CompiledScene`
-est en place et relue. Les extensions restent suivies dans les étapes ci-dessus.
-
-| Sujet | Constat V1 | Exigence V2 a clore |
-|---|---|---|
-| Entree canonique | `normalizeSceneDef` normalise en mutating le document auteur (`scene-normalization.ts`) | Produire une donnee canonique sans modifier `SceneDoc`. |
-| Guards | `BuilderValidator` couvre surtout les identites, tracks, doublons `listen` et une reference de story desactivee | Completer les guards de formes, valeurs, references, tokens et coherence avant tout deriveur. |
-| Serialisabilite | `CompiledScene.scene` est encore type comme `SceneDef`, qui porte `init`, `onStart`, `onSequenceEnd` et des fonctions de transforms | Separer le modele auteur du modele compile et extraire toutes les valeurs non serialisables au build. |
-| Extraction | `extractSceneFunctions` intervient dans `broadcast`, apres le builder, et ne traite que les transforms de `listen` | Faire de l'extraction une etape de compilation generique, ordonnee et testee. |
-| Immutabilite | Le cloner isole les objets mais ne rend pas l'artefact immutable | Finaliser un artefact immutable et verifier l'absence de mutation observable. |
-| Ressources | Le manifeste V1 deduit le type par extension et ignore silencieusement les URLs non reconnues | Decider les requirements declares et les diagnostics pour chaque ressource non resolue. |
-| Temps et events | Tracks et eventimes sont surtout preserves dans la donnee V1; aucune resolution generale n'est encore formalisee | Examiner chaque structure pour distinguer preservation, projection deterministe et etat runtime. |
-| Proprietes | `initial` et `actions` melangent baseline, canaux animes et formes dynamiques; `actions[id] = null` est normative mais sa normalisation n'est pas portee par le builder V1 observe | Definir une matrice par type avec modes constant/discret/continu/live, defaults et regle de completion des `from` absents. |
-| Precondition ACE | `prepareTween` exige deja `from` et `to`; le cadrage ACE exclut toute lecture implicite de cible | Definir la hierarchie des defaults, `SceneDoc.defaults` eventuel, et la difference warning preventif/erreur bloquante. |
-| Racines | `rootNodeIds` couvre les placements initiaux, pas les transitions `move: '@root'` | Implementer le manifeste de candidats et la reconciliation a `t`, sans second mecanisme d'auteur. |
-| Codec | Le contrat V1 decrit JSON, mais le chemin de codec/validation d'un artefact importe n'est pas encore une frontiere V2 | Definir le codec versionne et ses guards avant l'entree dans le player. |

@@ -158,7 +158,7 @@ function readMoveTransition(value: CompiledValue | undefined): MoveTransition | 
   }
 }
 
-/** Accepts the finite ordering modes defined by the V1 move contract. */
+/** Accepts the finite ordering modes defined by the CodPlay move contract. */
 function readMoveMode(value: CompiledValue | undefined): MoveOrderMode | undefined {
   if (value === undefined) return undefined
   if (typeof value === 'number' && Number.isFinite(value)) return value

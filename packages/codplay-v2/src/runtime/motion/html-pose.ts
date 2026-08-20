@@ -28,7 +28,7 @@ function parseScaleFactors(value: string): { sx: number; sy: number } {
   return { sx, sy }
 }
 
-/** Multiplies two affine matrices without depending on V1 utilities. */
+/** Multiplies two affine matrices without depending on unrelated runtime utilities. */
 function multiplyMatrix(left: HtmlMatrix, right: HtmlMatrix): HtmlMatrix {
   return {
     a: left.a * right.a + left.c * right.b,

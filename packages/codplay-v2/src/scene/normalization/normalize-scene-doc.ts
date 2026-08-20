@@ -76,7 +76,7 @@ export function normalizeSceneDoc(scene: SceneDoc): CanonicalSceneDoc {
   }
 }
 
-/** Normalizes an optional string list while preserving the V1 empty-list convention. */
+/** Normalizes an optional string list while preserving the canonical empty-list convention. */
 function normalizeStringArray(value: readonly string[] | undefined): readonly string[] | undefined {
   return value === undefined || value.length === 0 ? undefined : [...value]
 }

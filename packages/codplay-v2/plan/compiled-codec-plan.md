@@ -4,7 +4,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: enveloppe structurelle validée le 2026-08-20; validation sémantique et migrations restent ouvertes
+> Review: enveloppe structurelle validée le 2026-08-20; validation sémantique reste ouverte
 
 ## Role
 
@@ -34,7 +34,7 @@ build, pas une valeur a supprimer silencieusement par `JSON.stringify`.
 `decode` accepte un texte JSON et retourne soit un artefact valide, soit un rapport
 de diagnostics bloquants. Il valide :
 
-- `schemaVersion` contre la version supportee;
+- `schemaVersion` et les champs de l'enveloppe;
 - `createdAt` et les champs de l'enveloppe;
 - `scene`, stories, persos, actions, listen et eventimes;
 - les `CompiledFunctionReference` et l'absence de fonctions reelles;
@@ -50,10 +50,8 @@ Le decode ne valide pas que les composants, services, modules ou ressources sont
 disponibles. Cette verification appartient a l'engine et au chargement, pas au
 codec structurel.
 
-## Version et extensions
+## Extensions
 
-Le decoder ne devine pas une version et ne convertit pas une ancienne enveloppe.
-Une version inconnue est bloquante et doit etre traitee par un codec dedie.
 Les champs inconnus de l'enveloppe sont rejetes; les records de donnees internes
 restent ouverts selon leur contrat de service.
 

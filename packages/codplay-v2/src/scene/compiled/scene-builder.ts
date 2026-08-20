@@ -58,7 +58,7 @@ export type SceneBuildFailure = Readonly<{
 /** Result returned by the V2 SceneDoc to CompiledScene boundary. */
 export type SceneBuildResult = SceneBuildSuccess | SceneBuildFailure
 
-/** Builds a serializable, validated, V1-minimal CompiledScene from one SceneDoc. */
+/** Builds a serializable, validated V2 CompiledScene from one SceneDoc. */
 export class SceneBuilder {
   private readonly guardEngine = new SceneGuardEngine()
   private readonly validationEngine: CompiledSceneValidationEngine
