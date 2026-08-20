@@ -8,9 +8,9 @@ CodPlay instance is initialized. It contains component definitions, service
 definitions and player-scoped module definitions.
 
 The same definitions provide runtime factories and the pure validation snapshot.
-Each service declaration also lists the materializer IDs it supports; the
-component factory receives only the services declared by its component type and
-the selected materializer destination.
+Each service declaration in `src/services/<service>/` also lists the materializer
+IDs it supports; the component factory receives only the services declared by its
+component type and the selected materializer destination.
 
 Core definitions may be overridden and foreign definitions may be added before
 the catalog is locked. After the lock, the engine, player, component runtime and

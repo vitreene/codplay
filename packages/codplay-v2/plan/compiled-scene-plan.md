@@ -230,8 +230,8 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
-| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; couverture des contrats de services encore ouverte |
-| 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; extensions de validateurs encore ouvertes |
+| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; formes core des services couvertes |
+| 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; validations métier et propriétés spécialisées restent ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe, invariants sémantiques internes et immutabilite en place; migrations de schema hors tranche |

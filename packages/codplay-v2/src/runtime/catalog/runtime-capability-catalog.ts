@@ -11,9 +11,7 @@ import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from '../engine/module-service-types'
-
-/** Identifier of the current HTML materializer. */
-export const HTML_MATERIALIZER_ID = 'html' as const
+export { HTML_MATERIALIZER_ID } from '../materializer/materializer-ids'
 
 /** Origin of one capability definition in a CodPlay instance. */
 export type RuntimeCapabilityOrigin = 'core' | 'foreign'

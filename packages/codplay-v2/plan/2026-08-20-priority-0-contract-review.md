@@ -61,6 +61,6 @@ npm run typecheck --workspace=@codplay/codplay-v2
 npm run build:runner --workspace=@codplay/codplay-v2
 ```
 
-Vérification effectuée le 2026-08-20 : 53 fichiers de tests et 313 tests V2
+Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 323 tests V2
 passent, le typecheck V2 passe, le build de la démo runner passe et
 `git diff --check` est propre.
