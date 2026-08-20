@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe
 > CodPlay version: V2 foundation
-> Review: required before components
+> Review: tranche structurelle validée le 2026-08-20; transforms, mesures et capacités supplémentaires restent ouvertes
 
 ## Frontiere
 
@@ -102,9 +102,10 @@ Le core expose `diffSolvedScenes(before, after)` pour produire des deltas generi
 reordonne aucun enfant et ne depend d'aucun substrat ; une capacite list peut le
 consommer pour appliquer sa propre politique.
 
-Le solve hierarchique reste une extension de cette frontiere ; sa politique de
+Le solve hiérarchique structurel appartient à cette frontière ; sa politique de
 placement consomme les candidats issus de `materialize` pendant `resolve`, sans
-effet externe. Les IDs de cible sont opaques et uniques dans
+effet externe. Les transforms d'ancêtres et les mesures restent dans les
+tranches de mouvement et de projection. Les IDs de cible sont opaques et uniques dans
 une scene ; leur origine (`perso`, `host`, `outlet` ou racine de story) provient
 d'un registre interne de cibles, jamais de la forme du nom. Les conventions de
 nommage auteur ne sont donc pas un discriminant. Les factories externes qui
@@ -125,12 +126,13 @@ leur entree dans ce registre.
 
 - annulation de straps asynchrones et generations obsoletes;
 - `live`, capture et DnD;
-- hierarchie, move, FLIP et matrices d'ancetres;
+- FLIP visuel, matrices dépendantes du substrat et mesures DOM;
 - media, preload et services runtime;
 - composants et renderer de production.
 
 ## Validation
 
-La tranche est couverte par `tests/runtime/player/pipeline.spec.ts` et reste exercee
-par la demo temporaire `demos/validation/player`. La demo est un banc visible, pas
-la definition du contrat final.
+La tranche est couverte par `tests/runtime/player/pipeline.spec.ts`,
+`move-state.spec.ts` et `presentation-graph.spec.ts`, puis reste exercée par la
+demo temporaire `demos/validation/player`. La demo est un banc visible, pas la
+definition du contrat final.

@@ -1,7 +1,8 @@
 # HTML Runner V2
 
-> Status: A relire
+> Status: Fixe
 > CodPlay version: V2 foundation
+> Review: runner HTML et présentation locale/reparent validés le 2026-08-20; renderer de production hors périmètre
 
 ## Role
 

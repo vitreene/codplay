@@ -4,7 +4,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: required before player import
+> Review: enveloppe structurelle validée le 2026-08-20; validation sémantique et migrations restent ouvertes
 
 ## Role
 

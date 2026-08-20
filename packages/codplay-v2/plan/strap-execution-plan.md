@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe
 > CodPlay version: V2 foundation
-> Review: required before cancellation/obsolete generations
+> Review: exécution planned bornée validée le 2026-08-20; annulation, générations obsolètes et live restent des extensions
 
 ## Contrat actuel
 

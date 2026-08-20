@@ -66,15 +66,15 @@ produit un warning detaille; les validateurs des services courants sont la premi
 
 | Element | Position | Consequence |
 |---|---|---|
-| Chantier | Fondation V2 | Le flux `SceneDoc -> CompiledScene` est la tranche active. |
+| Chantier | Fondation V2 relue | Le flux `SceneDoc -> CompiledScene` et la première verticale runtime sont gelés sur leur périmètre actuel. |
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | `player-engine-plan.md` | Le socle CompiledScene est gele comme fondation; la tranche en cours definit la consommation player/engine avant le sink de rendu temporaire. |
+| Partie active | Composants et renderer V2 | La frontière Engine/Player, le solve structurel et le runner de validation sont relus; la prochaine tranche ouvre les composants et le renderer de production. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | En cours, a relire avant integration composant | Les declarations composant/services/modules sont projetees depuis le catalogue runtime vers le snapshot de validation; les extensions de validateurs restent a couvrir. |
-| Composants | Fondation layout en cours | `LayoutComponent`, `TagComponent`, factories runtime et projection template string sont couverts ; JSX et les autres types restent hors tranche. |
+| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont projetees depuis le catalogue runtime vers le snapshot de validation; les validateurs de propriétés et de familles restent à couvrir. |
+| Composants | Contrat de base fixe, implémentation en cours | `LayoutComponent`, `TagComponent`, factories runtime et projection template string sont couverts ; JSX et les autres types restent hors tranche. |
 | ACE | Existant, non modifie | Il reste consommateur de valeurs completes; la preparation amont est a construire. |
-| Mouvement HTML | Graphe V2 implémenté, `A relire` | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts. |
-| Démos standard | Base documentée, `En cours` | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
+| Mouvement HTML | Contrat fixe, extensions en cours | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts; les backends de production et capacités non compilées restent ouverts. |
+| Démos standard | Gabarit fixe, extension en cours | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -96,10 +96,11 @@ diagnostics de plusieurs compilations, instances ou scenes.
 
 | Partie | Plan detaille | Etat |
 |---|---|---|
-| CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours |
-| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | En cours, base auteur fixée |
-| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | A relire, restructuration appliquée |
-| Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | En cours, gabarit documenté |
+| Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
+| CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
+| Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
+| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fixe sur les moves compilés |
+| Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md) | Fixe, circuit logique unique en place |
 
 ## Modeles algorithmiques
@@ -134,15 +135,15 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reprend son contrat V1 comme capacite declaree, avec ses fixtures et ses demos; aucune ne devient un patch generique de `style`. |
 | Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach et diagnostics de seek en place; l'application de `reorderOnMove/Add/Remove` appartient a une capacite/service list, pas au move core ni a un composant unique. |
-| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Implémenté et `A relire`. Le mode local est inféré pour une target inchangée; un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
+| Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Contrat fixe sur les moves compilés; le mode local est inféré pour une target inchangée et un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Expansion pure dans materialize, fonctions compilées dans resolve et frontière `tween:stop` en place; renderer continu, composition additive et live restent hors tranche. |
-| Capture et DnD | Capture live, commit `persist-only`, etat de capture, notification authoring; DnD comme commit move | Troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
+| Capture et DnD | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Contrat V2 propose, `A relire` : troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
 | Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine et les rapports structures par instance sont en place; conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
 | Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Media-sync est conserve conceptuellement; cache et strategie remontent a l'engine. |
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogues et ModuleServices player-scoped | `RuntimeModuleServiceCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place. |
-| Authoring | Construction de SceneDoc, canal authoring local, observation de PersoState et capture | Separe du player de diffusion et du protocole de pilotage. |
+| Authoring | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Canal local separe du player de diffusion; semantique des poses d'atelier a fixer avant implementation. |
 | Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | Packaging fin et transport distant reportes; ne pas melanger avec authoring. |
 | Tests | Fixtures, horloge deterministe, traces, comparateurs V1/V2, assertions de paradigme et baselines DOM/geometriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
 

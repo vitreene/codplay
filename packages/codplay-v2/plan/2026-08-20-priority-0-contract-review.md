@@ -1,0 +1,67 @@
+# Revue priorité 0 — contrats V2
+
+> Status: Fixe
+> CodPlay version: V2 foundation
+> Date de revue: 2026-08-20
+
+## Objet
+
+Cette revue fige les contrats V2 déjà implémentés et testés. Elle ne clôt pas
+CodPlay V2 et n'ouvre aucune compatibilité avec un autre runtime.
+
+Le gel porte uniquement sur les tranches délimitées ci-dessous. Une capacité
+explicitement ouverte reste hors contrat tant qu'une spécification et une
+verticale de test ne l'ont pas ouverte.
+
+## Contrats gelés
+
+| Domaine | Contrat gelé | Preuve actuelle |
+|---|---|---|
+| CompiledScene | enveloppe versionnée, données compilées distinctes de l'auteur, références de fonctions externes, requirements, racines candidates et codec JSON structurel | tests `tests/scene/compiled/` |
+| Validation | catalogue projeté depuis les déclarations runtime, guards ordonnés, diagnostics structurés et sanitation structurelle | tests `tests/scene/validation/` |
+| Engine / Player | player alimenté par un `CompiledScene`, lifecycle, horloge injectée, seek local et seek groupé par phases `validate → prepare → commit → present` | tests `tests/runtime/engine/` et `tests/runtime/player/runtime-player.spec.ts` |
+| Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
+| Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline` |
+| Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
+| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, projection locale/reparent, overlays hiérarchiques, resize et destruction | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
+
+## Limites volontairement ouvertes
+
+Ces limites ne sont pas des ambiguïtés du contrat gelé : elles constituent les
+prochaines tranches V2.
+
+- validation sémantique complète, migrations de schema et matrice complète des
+  propriétés/defaults du `CompiledScene` ;
+- renderer de production et backend DOM/SVG final ;
+- familles de composants supplémentaires et JSX V2.5 ;
+- politiques complètes de la capacité `list` (`reorderOnMove/Add/Remove`) ;
+- annulation et générations obsolètes des straps asynchrones ;
+- contrat `live`, renderer continu et composition additive des tweens ;
+- capture, DnD et canal authoring ;
+- media, preload et bindings tiers ;
+- `Replace`, diffusion et broadcast.
+
+## Règle de statut après revue
+
+- `Fixe` signifie que le contrat de la tranche est stable ; cela n'implique pas
+  que toutes les extensions soient implémentées.
+- `En cours` signifie qu'une extension de contrat ou une capacité nécessaire
+  reste à construire.
+- `A relire` ne doit pas rester sur une décision déjà utilisée par une tranche
+  active et validée. Il peut rester sur une décision future dont l'implémentation
+  n'est pas engagée et qui doit être relue avant son ouverture.
+
+## Validation de la revue
+
+La revue est considérée comme vérifiée lorsque les commandes V2 suivantes
+restent vertes :
+
+```text
+npm run test --workspace=@codplay/codplay-v2
+npm run typecheck --workspace=@codplay/codplay-v2
+npm run build:runner --workspace=@codplay/codplay-v2
+```
+
+Vérification effectuée le 2026-08-20 : 53 fichiers de tests et 313 tests V2
+passent, le typecheck V2 passe, le build de la démo runner passe et
+`git diff --check` est propre.

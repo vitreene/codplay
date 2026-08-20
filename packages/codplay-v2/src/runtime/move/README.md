@@ -1,7 +1,8 @@
 # Move State
 
-Status: En cours  
+Status: Fixe
 CodPlay version: V2 foundation
+Review: placement pure et deltas structurels validés le 2026-08-20; les politiques de liste restent hors de ce module
 
 This folder owns pure placement policy and generic state deltas.
 

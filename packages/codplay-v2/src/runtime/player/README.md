@@ -1,7 +1,8 @@
 # Player
 
-> Status: A relire
+> Status: Fixe
 > CodPlay version: V2 foundation
+> Review: contrat Engine/Player et seek groupé validés le 2026-08-20; renderer de production et capacités supplémentaires restent ouverts
 
 ## Role
 

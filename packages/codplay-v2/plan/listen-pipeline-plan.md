@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe
 > CodPlay version: V2 foundation
-> Review: required before cancellation/obsolete generations
+> Review: pipeline borné validé le 2026-08-20; annulation, live et effets restent des extensions
 
 ## Frontiere
 

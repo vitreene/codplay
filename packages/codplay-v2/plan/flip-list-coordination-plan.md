@@ -1,7 +1,8 @@
 # Coordination mouvement / listes V2
 
-> Status: A relire
+> Status: Fixe
 > CodPlay version: V2 foundation
+> Review: validé le 2026-08-20 pour la coordination structurelle et le mouvement compilé
 
 Ce document conserve uniquement le contrat de coordination résolu. La
 description capture-centrique précédente est remplacée par

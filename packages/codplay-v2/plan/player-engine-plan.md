@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe
 > CodPlay version: V2 foundation
-> Review: required before render vertical
+> Review: frontière Engine/Player et seek groupé validés le 2026-08-20; le renderer de production reste une tranche suivante
 
 ## Frontiere
 
@@ -14,7 +14,7 @@ Cette tranche pose uniquement la frontiere de consommation de `CompiledScene`.
 Engine capabilities + external time or TimeTicker
                  -> Player instance
                 -> lifecycle and logical time
-                -> future materialize/resolve/solve
+                -> materialize -> resolve -> solve
 ```
 
 Le player ne recoit pas `SceneDoc`, ne compile rien et ne cree pas de clock. Il ne
@@ -75,8 +75,9 @@ interprete sa portee ni sa timeline globale.
 La premiere frontiere engine est en place : `RuntimeEngine.seek()` orchestre les cibles locales par
 phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player individuel utilise
 ce chemin commun. Le player reconstruit `materialize -> resolve -> solve` pendant la validation,
-met le resultat en attente, puis le committe avant presentation. Le solve reste volontairement
-identitaire tant que la hierarchie `move` n'est pas ouverte.
+met le resultat en attente, puis le committe avant presentation. Le solve structurel et le graphe
+parent/enfant sont ouverts pour les moves compilés; les transforms d'ancêtres, les mesures et la
+projection de production restent des capacités de leurs tranches respectives.
 
 Cette hierarchie, les composants, les transforms et le renderer ne sont pas des manques du seek.
 Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa frontiere. Le seek
@@ -98,14 +99,14 @@ Ses invariants sont :
 - une erreur d'adapter n'interrompt pas les autres adapters.
 
 `RuntimePlayer` pilote cette frontiere sur play, pause, reprise, seek, frame et
-destruction. Les adapters restent optionnels tant que les contrats composants et
-renderer ne sont pas ouverts.
+destruction. Les adapters de rendu de production restent optionnels tant que le
+contrat de projection correspondant n'est pas ouvert.
 
 ## Hors perimetre
 
 - composants et services runtime;
 - montage et racine DOM;
-- materialize, resolve et solve hierarchiques complets;
+- familles de composants et services complets;
 - rendu, preload et media;
 - demo produit et renderer de production;
 - contrat DOM public.
@@ -124,18 +125,18 @@ temporaire :
   adaptee, isolee ou retiree ;
 - toute rupture volontaire de la demo doit etre signalee dans le suivi de la tranche concernee.
 
-- aucun composant V2 ne sera ouvert;
+- aucune famille supplémentaire de composants ne sera ouverte dans cette verticale;
 - aucun renderer de production ou contrat DOM ne sera defini;
 - aucune capacite absente ne sera simulee pour faire fonctionner une demo;
 - le sink sera remplace lorsque `materialize/resolve/solve` complets et le contrat composant
   seront stabilises.
 
-La premiere tranche pipeline couvre `initial`, les eventimes, le registre statique
+La tranche runtime actuelle couvre `initial`, les eventimes, le registre statique
 des tracks, le journal live, les controles d'activation, la propagation listen,
 l'execution sequentielle des straps planned, les patches `className`, les tweens
 `style` scalaires explicites, les couleurs normalisees, les placements et le graphe
-parent/enfant. Elle ne pretend pas encore resoudre les transforms d'ancetres, les
-composants ou le renderer de production.
+parent/enfant. Elle ne pretend pas encore couvrir toutes les familles de composants,
+les transforms d'ancetres dependantes du substrat ni le renderer de production.
 
 La verticale de validite est couverte par un test sous `tests/runtime/`. La demo
 reste un outil de validation interne et ne constitue pas encore un contrat produit.

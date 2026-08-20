@@ -2,7 +2,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
-> Review: required before component integration
+> Review: contrat initial validé le 2026-08-20; validateurs de propriétés et de familles restent à ajouter
 
 The validation catalog is the pure bridge between declared CodPlay capabilities and
 the `CompiledScene` build.

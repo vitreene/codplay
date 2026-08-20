@@ -2,6 +2,7 @@
 
 > Status: En cours
 > CodPlay version: V2 foundation
+> Review: tranche structurelle validée le 2026-08-20; dérivation complète des propriétés et migrations restent ouvertes
 
 This folder owns the versioned, serializable `CompiledScene` contract.
 
@@ -19,8 +20,9 @@ parallel top-level `compiled-scene` module.
 
 `SceneBuilder` currently covers the first build slice: active stories, structural
 and catalog validation, external function references, resource requirements, root
-candidates, and runtime freezing. Codec support and full property/default
-derivation remain open in V2 foundation.
+candidates, and runtime freezing. The structural codec boundary is fixed; semantic
+import validation, migrations and full property/default derivation remain open in
+V2 foundation.
 
 ## Path values
 

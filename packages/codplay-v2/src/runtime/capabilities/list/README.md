@@ -1,7 +1,8 @@
 # List Capability V2
 
-> Status: A relire
+> Status: Fixe
 > CodPlay version: V2 foundation
+> Review: contrat de membership et d'ordre structurel validé le 2026-08-20; politiques de reorder restent une extension
 
 The list module is now a capability marker. Ordered membership is part of the
 canonical `SolvedGraph` and its immutable `StructuralTimeline`; list no longer

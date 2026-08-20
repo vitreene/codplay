@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: A relire
+Status: Fixe
 CodPlay version: V2 foundation
-Review: contrat auteur et inférence du régime visuel implémentés
+Review: validé le 2026-08-20 pour les moves compilés; les capacités live restent hors contrat
 
 ## Rôle
 

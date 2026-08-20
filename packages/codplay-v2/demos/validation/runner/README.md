@@ -1,7 +1,8 @@
 # HTML runner validation demo
 
-Status: A relire
+Status: Fixe
 CodPlay version: V2 foundation
+Review: gabarit de validation validé le 2026-08-20; cette démo ne constitue pas le renderer de production
 
 ## Rôle
 

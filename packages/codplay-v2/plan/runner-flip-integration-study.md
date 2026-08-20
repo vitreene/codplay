@@ -1,8 +1,9 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: A relire
+> Status: Fixe
 > CodPlay version: V2 foundation
 > Implementation: appliquée le 2026-08-19
+> Review: contrat validé le 2026-08-20 pour les moves compilés et le seek froid
 
 ## Objet unique
 
@@ -354,7 +355,7 @@ limites aux checkpoints `FIRST`, `BOUNDARY` et `LAST`, et un redimensionnement
 ## État de revue
 
 L'architecture et son application sont complètes pour la verticale compilée du
-runner. Le statut reste `A relire` jusqu'à validation explicite du contrat public
-et de la démo. Les événements live non présents dans le calendrier compilé
+runner. La revue du 2026-08-20 valide le contrat public de cette tranche et de
+la démo. Les événements live non présents dans le calendrier compilé
 devront produire les mêmes `MotionBoundary`; ils ne doivent pas introduire un
-second moteur.
+second moteur et restent hors du statut `Fixe` de cette tranche.

@@ -8,11 +8,15 @@ V2.
 
 ## Etat
 
+- Revue priorité 0 effectuée le 2026-08-20 : la frontière structurelle actuelle
+  est relue et gelée pour les tranches qui la consomment.
 - Audit V1 prealable effectue.
 - Diagnostics transversaux du plan general en place et testes.
-- Squelette des contrats `SceneDoc` et `CompiledScene` en place, a relire.
-- Normalisation structurelle et premiers guards en place, a relire.
-- Premier builder, deriveurs de base et codec structurel en place; perimetre gele comme fondation de flux de rendu, deriveurs de proprietes et consommation player restant a construire.
+- Squelette des contrats `SceneDoc` et `CompiledScene` relu sur la tranche initiale.
+- Normalisation structurelle et premiers guards relus sur la tranche initiale.
+- Premier builder, deriveurs de base et codec structurel en place; la tranche
+  structurelle est gelée comme fondation de flux de rendu. Les deriveurs de
+  proprietes, migrations et extensions de validation restent a construire.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Source unique de declaration composant/services/modules en place via la projection du catalogue runtime vers le snapshot de validation; revue des extensions de validateurs encore necessaire avant l'integration composant.
@@ -216,13 +220,13 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
-| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Squelette en place, a relire |
-| 2. Catalogue | Descripteurs composants/groupes de proprietes/services, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection en place; extensions a relire |
+| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Audit V1 + diagnostics generaux | Tranche initiale relue; matrice complète encore ouverte |
+| 2. Catalogue | Descripteurs composants/groupes de proprietes/services, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection initiale relue; extensions de validateurs encore ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
-| 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe en place; validation semantique et migrations restent a faire |
+| 5. Codec | Encode/decode versionne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe et immutabilite structurelles relues; validation semantique et migrations restent a faire |
 | 6. Parite V1 | Fixtures et tests du contrat minimal V1, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune parite player |
-| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Contrat initial en cours dans [`player-engine-plan.md`](./player-engine-plan.md); sink temporaire ensuite |
+| 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Frontière Engine/Player relue dans [`player-engine-plan.md`](./player-engine-plan.md); capacités supplémentaires restent à ouvrir |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 
 ## Points de vigilance
@@ -255,7 +259,8 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 ## Audit V1
 
-Etat : audit prealable effectue; aucun code V2 `CompiledScene` n'est encore ecrit.
+Etat : audit prealable effectue; la tranche initiale du code V2 `CompiledScene`
+est en place et relue. Les extensions restent suivies dans les étapes ci-dessus.
 
 | Sujet | Constat V1 | Exigence V2 a clore |
 |---|---|---|
