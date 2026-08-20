@@ -30,6 +30,21 @@ jamais le graphe et aucun module ne maintient un ordre historique alternatif.
 `StructuralTimeline` réduit les frontières compilées en snapshots complets et
 immutables `childrenByTarget`. Tous les consommateurs interrogent cette timeline.
 
+### Persistance des materialisations auteur
+
+Les elements et ressources crees pour un perso sont persistants pendant toute la
+duree de la sequence/player, qu'ils soient actuellement montes ou detaches.
+`mount`, `unmount`, reparentage et reorder sont des operations de structure et ne
+detruisent jamais une materialisation auteur.
+
+Play et Seek reutilisent les memes instances de composants et les memes elements.
+Un seek ne detruit, ne recree et ne recharge donc pas les elements media ; il
+reconcilie uniquement l'etat cible, le parentage et l'ordre.
+
+La destruction des materialisations auteur intervient uniquement lors du teardown
+final du player/sequence. Les clones d'overlay et le DOM de mesure ne relevent pas
+de cette persistance : ce sont des ressources techniques transitoires.
+
 ### Côtés d'une frontière
 
 La frontière temporelle est un type sémantique, pas un epsilon :

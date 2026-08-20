@@ -18,6 +18,10 @@ description capture-centrique précédente est remplacée par
 - Le changement reste local dans une même target et devient reparent entre deux
   targets.
 - Play et Seek résolvent le même `MotionGraph` à un temps absolu.
+- `mount`, `unmount`, reparentage et reorder ne détruisent pas les materialisations
+  auteur ; les mêmes éléments sont conservés et réutilisés au seek.
+- Seules les représentations techniques transitoires, comme les clones d'overlay,
+  sont créées et détruites au cours d'une présentation.
 
 ## Modes
 

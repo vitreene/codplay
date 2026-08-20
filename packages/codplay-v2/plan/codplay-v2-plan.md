@@ -24,6 +24,11 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
 - Le builder sanitise une fois; le player ne porte pas de garde defensive sur son chemin chaud.
 - L'etat logique ne se reconstruit jamais depuis le DOM. Un composant est l'unique ecrivain de l'etat qui
   lui est remis.
+- Les materialisations auteur sont persistantes pendant toute la sequence/player :
+  `mount`, `unmount`, detach, reparentage, reorder et seek ne detruisent ni ne
+  recreent les elements deja materialises. Leur destruction intervient uniquement
+  au teardown final ; les overlays FLIP et le DOM de mesure sont des ressources
+  techniques transitoires distinctes.
 - Les roles metier sont des classes petites et testables; les dossiers suivent les frontieres du flux.
 - Tout nouveau code est TypeScript strict. Les API publiques, classes, methodes publiques et variables de
   domaine importantes ont un JSDoc. Les constantes auteur ou produit sont documentees dans `config/`.

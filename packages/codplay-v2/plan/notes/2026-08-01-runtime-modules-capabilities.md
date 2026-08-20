@@ -30,9 +30,12 @@ logique, un ensemble d'elements affectes, une mesure groupee et une materialisat
 visuelle. Elle ne doit donc pas etre reduite a un service stateless ordinaire,
 mais elle ne doit pas non plus imposer un renderer au move core.
 
-`ListCapabilityState` est l'etat pur de la premiere capacite list V2. Il consomme
-les deltas generiques `mount`, `unmount` et `move` du move core et porte les
-politiques `reorderOnMove`, `reorderOnAdd` et `reorderOnRemove`.
+La forme cible de `ListCapabilityState` est identifiee pour la capacite list V2 :
+elle devra consommer les deltas generiques `mount`, `unmount` et `move` du move
+core et porter les politiques `reorderOnMove`, `reorderOnAdd` et
+`reorderOnRemove`. L'implementation actuelle reste volontairement limitée au
+module marqueur ; l'ordre structurel est porté par `SolvedGraph` et
+`StructuralTimeline`.
 
 Le futur module list devra :
 

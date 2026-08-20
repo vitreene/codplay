@@ -23,7 +23,7 @@ verticale de test ne l'ont pas ouverte.
 | Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
 | Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline` |
 | Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
-| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize et destruction | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
+| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
 
 ## Limites volontairement ouvertes
 
@@ -61,6 +61,6 @@ npm run typecheck --workspace=@codplay/codplay-v2
 npm run build:runner --workspace=@codplay/codplay-v2
 ```
 
-Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 323 tests V2
+Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 324 tests V2
 passent, le typecheck V2 passe, le build de la démo runner passe et
 `git diff --check` est propre.

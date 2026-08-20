@@ -67,7 +67,7 @@ function solvedScene(timeMs: number, includePerso = true): SolvedScene {
 }
 
 describe('RuntimeComponentRuntime', () => {
-  it('creates, updates and destroys factory instances from solved scenes', () => {
+  it('keeps component instances through scene snapshots and destroys them at final teardown', () => {
     const catalog = new RuntimeCapabilityCatalog()
     const components: TestComponent[] = []
     const events: string[] = []
@@ -110,6 +110,9 @@ describe('RuntimeComponentRuntime', () => {
     expect(components[0]?.updates).toEqual([0, 100])
     expect(mountablePartIds).toEqual([['content']])
     expect(receivedModuleServices?.get('markup')).toBe(markupService)
+    expect(events).toEqual([])
+
+    runtime.destroy()
     expect(events).toEqual(['destroy'])
   })
 })

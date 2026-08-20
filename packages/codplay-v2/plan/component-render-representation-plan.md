@@ -25,8 +25,10 @@ méthode `render()` et recoit les etats resolus; il cible uniquement le
 
 Le `Materializer` est l'interface de rendu vers un substrat. Une implementation
 DOM, Canvas ou Three.js recoit le resultat de `render()` et les mises a jour du
-composant, cree ou met a jour ses ressources, publie ses handles et assure leur
-destruction. Le composant ne connait pas l'implementation choisie.
+composant, cree ou met a jour ses ressources et conserve les references necessaires
+vers le substrat. Le cycle de vie runtime declenche ensuite leur retrait ; le
+materializer execute le nettoyage prevu par ce cycle. Le composant ne connait pas
+l'implementation choisie.
 
 `HtmlComponentMaterializer` est l'implementation HTML actuelle de cette frontiere.
 Elle expose à la fois la materialisation d'un composant et la materialisation
@@ -53,7 +55,7 @@ Le template string est recu par le materializer HTML :
 BaseComponent.render()
   -> HtmlComponentMaterializer
   -> lecture, assainissement et normalisation
-  -> creation du DOM et des handles internes
+  -> creation du DOM et conservation des references vers les nœuds internes
 ```
 
 La politique de lecture et d'assainissement appartient au materializer et a ses
@@ -70,12 +72,56 @@ template string + mount target
   -> materializer.readAndSanitize(template)
   -> materializer.createResources()
   -> materializer.attach()
-  -> handles internes du composant
+  -> references internes vers les nœuds désignés
 ```
 
 Les appels DOM, Canvas ou Three.js sont internes a l'implementation du materializer.
 Le composant ne connait ni `createElement`, ni `createElementNS`, ni la structure
 des ressources produites.
+
+Le materializer ne preclasse pas les proprietes SVG. Une propriete SVG generique
+est partagee uniquement lorsqu'un service existant la couvre ; une propriete ou
+une operation specialisee est introduite avec le composant qui en a besoin, son
+service, sa validation et sa destination de materialisation. Aucun inventaire
+global des proprietes SVG n'est donc requis pour ouvrir l'interface materializer.
+
+Un resultat comportant plusieurs noeuds forme un fragment : le materializer
+conserve les noeuds reels dans leur ordre et ne genere aucun element enveloppe.
+Le fragment n'est pas une cible de service. Les services s'appliquent uniquement
+aux noeuds reels designes par le composant. Pour `list`, l'appartenance et l'ordre
+sont traites par la structure resolue. Pour `layout`, les parts/outlets designes
+sont les seules cibles dynamiques ; les autres noeuds du template restent
+statiques et ne recoivent pas de mise a jour.
+
+## Persistance des materialisations auteur
+
+La materialisation d'un perso est persistante pendant toute la duree de vie de
+la sequence/player. Une fois ses elements et ses ressources materialises, leur
+identite est conservee qu'ils soient montes ou non dans le DOM.
+
+- un `unmount`, un detach ou un changement de target modifie uniquement le
+  parentage et l'ordre structurels ; il ne detruit pas la materialisation auteur ;
+- un seek conserve les memes instances de composant et les memes elements ; il
+  applique l'etat cible, le parentage et l'ordre sans rerendre ni recreer les
+  elements deja materialises ;
+- le `RuntimeComponentHandle.destroy()` n'est appele qu'au teardown final de la
+  sequence/player, jamais pour rendre un perso absent ou non monte a un instant
+  donne ;
+- la destruction finale libere les ressources auteur, y compris les ressources
+  media, et retire les references et les elements conserves ;
+- les clones d'overlay FLIP et le DOM de mesure sont des ressources techniques
+  temporaires distinctes des materialisations auteur.
+
+Cette persistance est notamment requise pour les composants media : un seek ou un
+detachement ne doit pas recreer l'element ni recharger sa source.
+
+Cette regle reprend la decision V1 documentee dans
+[`2026-06-25-image-node-per-src-plan.md`](../../../docs/plans/2026-06-25-image-node-per-src-plan.md) :
+les nodes media sont conservees, detachees et rattachees selon l'etat cible ; la
+source n'est assignee qu'a la creation de la node correspondante. Les tests V1
+[`seek-media-src.spec.ts`](../../codplay/tests/v1/seek-media-src.spec.ts) et
+[`seek-no-detach.spec.ts`](../../codplay/tests/v1/seek-no-detach.spec.ts) couvrent
+respectivement la conservation par source et l'absence de churn DOM au seek.
 
 ## Mise a jour du rendu
 
@@ -112,13 +158,20 @@ Le composant ne connait pas les APIs natives du substrat (`style.setProperty`,
 `classList`, `setAttribute`, etc.). Ces operations appartiennent au materializer
 et a ses services de substrat.
 
+Dans la tranche HTML, ces references sont des references vers les nœuds DOM reels.
+La racine sert au parentage et a l'ordre ; les parts/outlets publies servent aux
+cibles de placement ; une presentation FLIP reçoit l'`HTMLElement` reel de la
+cible qu'elle anime. Ce ne sont ni une structure de rendu abstraite ni une API
+publique du composant. La destruction n'est pas une reference supplementaire :
+elle relève du cycle de vie du runtime et du nettoyage du materializer.
+
 ## Reparenting et FLIP
 
 Le composant ne decide pas d'un changement de parent logique. `MoveStateDelta` et
 la capacite list produisent une demande de placement. Le materializer DOM peut
 alors :
 
-1. obtenir les handles concernes ;
+1. retrouver les nœuds reels concernes ;
 2. appliquer le reparenting et l'ordre ;
 3. mettre a jour les ressources materialisees ;
 4. mesurer le nouvel emplacement ;
@@ -152,7 +205,7 @@ Le materializer HTML :
 
 - lit, valide et assainit le template selon le contrat du composant ;
 - decouvre les parts/outlets presents dans le template ;
-- enregistre leurs handles internes avec leurs IDs opaques ;
+- enregistre les references vers ces nœuds avec leurs IDs opaques ;
 - ne demande pas a l'auteur de fournir un tableau `id + selector`.
 
 Le selector n'est donc pas un contrat auteur separe. Si le materializer DOM utilise
@@ -175,7 +228,7 @@ composant et ne reconstruit pas l'etat logique depuis le substrat.
 Les services `style`, `className` et `attr` restent les operations d'application
 standard du composant.
 
-Le handle de materialisation reste une cible d'application :
+La reference de materialisation reste une cible d'application :
 
 `PersoState(t) -> Component.update(state, t) -> Materializer -> substrat`
 
@@ -189,7 +242,8 @@ materialisation peut publier des parts/outlets internes, mais le composant ne
 decide pas la politique de parentage.
 
 La capacite list calcule l'ensemble affecte. Le materializer DOM fournit les
-handles que FLIP mesure et anime ensuite selon `flip-list-coordination-plan.md`.
+nœuds HTML reels que FLIP mesure et anime ensuite selon
+`flip-list-coordination-plan.md`.
 
 ## Seek
 
@@ -229,9 +283,12 @@ Le `RuntimePlayer` synchronise les composants une fois avant l'appel au
 materializer. Le `HtmlComponentMaterializer` :
 
 - appelle `component.render()` et materialise son résultat ;
-- conserve une racine par composant dans le registre interne des persos ;
+- conserve le noeud reel unique ou les noeuds reels du fragment dans le registre
+  interne des persos ;
+- n'ajoute aucun element d'enveloppement pour representer un fragment ;
 - publie uniquement les parts autorisées par la définition runtime du composant ;
-- détruit la racine et désenregistre ses parts lors du retrait.
+- detache les noeuds reels lors d'un retrait structurel et conserve leurs
+  references jusqu'au teardown final.
 
 La même instance applique aussi le parentage et l'ordre produits par `SolvedScene`.
 Elle ne reconstruit ni l'état du composant ni la structure depuis le DOM. Pour la

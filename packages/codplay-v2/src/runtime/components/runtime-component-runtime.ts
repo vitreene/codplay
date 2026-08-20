@@ -6,7 +6,7 @@ import type { RuntimeMaterializer } from '../materializer'
 
 export type { RuntimeComponentIdentity } from '../catalog'
 
-/** Cleanup returned after one component has been materialized. */
+/** Final cleanup returned after one component has been materialized. */
 export type RuntimeComponentHandle = Readonly<{
   destroy: () => void
 }>
@@ -38,16 +38,11 @@ export class RuntimeComponentRuntime {
     this.moduleServices = moduleServices
   }
 
-  /** Mounts new persos, updates existing components, and removes stale instances. */
+  /**
+   * Synchronizes the logical scene without destroying persistent component instances.
+   * Structural unmounting is handled by the materializer; final cleanup is handled by destroy().
+   */
   sync(scene: SolvedScene): void {
-    const activeKeys = new Set(Object.keys(scene.persos))
-
-    for (const [key, mounted] of this.mounted) {
-      if (activeKeys.has(key)) continue
-      mounted.handle.destroy()
-      this.mounted.delete(key)
-    }
-
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
       mounted.component.update({ state: perso.state, timeMs: scene.timeMs })

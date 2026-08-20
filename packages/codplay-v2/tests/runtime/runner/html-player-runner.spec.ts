@@ -186,6 +186,39 @@ function continuousCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Declares one perso that is detached and reattached without being recreated. */
+function persistentDetachSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-persistent-detach',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'item',
+          type: 'tag',
+          initial: { tag: 'article', move: '@root', content: 'persistent' },
+          actions: {
+            detach: { move: '@off' },
+            attach: { move: '@root' },
+          },
+        }],
+        listen: [],
+        eventimes: [
+          { name: 'detach', startAt: 100 },
+          { name: 'attach', startAt: 200 },
+        ],
+      },
+    },
+  }
+}
+
+/** Builds the persistent-detach runner fixture through the SceneDoc compiler boundary. */
+function persistentDetachCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(persistentDetachSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Declares one list transfer whose explicit first mode must reach the DOM order. */
 function listSceneDoc(): SceneDoc {
   return {
@@ -289,6 +322,33 @@ afterEach(() => {
 })
 
 describe('HtmlPlayerRunner', () => {
+  it('preserves a detached perso node and component across seek until final destroy', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const runner = new HtmlPlayerRunner({
+      id: 'persistent-detach-runner',
+      compiledScene: persistentDetachCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const item = runner.getPersoNode('main:item') as FakeElement
+    expect(item.parentNode).toBe(root)
+
+    expect(runner.seek(150).ok).toBe(true)
+    expect(item.parentNode).toBeNull()
+    expect(runner.getPersoNode('main:item')).toBe(item)
+
+    expect(runner.seek(250).ok).toBe(true)
+    expect(item.parentNode).toBe(root)
+    expect(runner.getPersoNode('main:item')).toBe(item)
+
+    runner.destroy()
+    expect(runner.getPersoNode('main:item')).toBeUndefined()
+  })
+
   it('materializes, moves, seeks and destroys a declarative HTML scene', () => {
     installFakeDom()
     const root = new FakeElement()

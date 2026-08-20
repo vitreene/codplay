@@ -14,9 +14,12 @@ Sources principales :
 
 - `packages/codplay/src/runtime/components/lib/base-component.ts` ;
 - `packages/codplay/src/runtime/components/lib/component-services.ts` ;
+- `packages/codplay/src/runtime/components/polygon-component.ts` ;
+- `packages/codplay/src/runtime/components/lib/anime-svg-service.ts` ;
 - `packages/codplay/src/runtime/components/layout-component.ts` ;
 - `packages/codplay/src/runtime/components/runtime-component-orchestrator.ts` ;
 - `packages/codplay/src/runtime/components/types.ts` ;
+- `packages/codplay/tests/v1/polygon-component.spec.ts` ;
 - `packages/codplay/tests/v1/layout-runtime.spec.ts` ;
 - `packages/codplay/tests/v1/seek-layout-outlet.spec.ts` ;
 - `packages/codplay/tests/v1/component-service-operations.spec.ts`.
@@ -71,6 +74,23 @@ la capacite requise par le composant ou une factory d'instance.
 
 Le registre refuse un second service de meme nom et permet un override global. Il
 n'existe pas de deux implementations independantes d'un meme nom dans ce registre.
+
+## Exemple de composant SVG V1
+
+`PolygonComponent` fournit un exemple de composant SVG specialise :
+
+- le composant possede une racine `svg` et des cibles internes distinctes (`path`
+  pour la forme, `text` pour le contenu) ;
+- `className`, `style` et `attr` s'appliquent a la racine SVG ;
+- la geometrie de la forme est une propriete du composant, appliquee au `path` ;
+- le contenu est applique au nœud `text` et non a l'ensemble de l'arbre ;
+- le morph SVG cible explicitement le `path` via le service specialise `animeSvg`.
+
+Cet exemple confirme qu'un service ne doit pas propager automatiquement une
+propriete a tous les nœuds d'un groupe. Il montre aussi la limite a ne pas
+transposer telle quelle en V2 : `PolygonComponent` construit directement ses
+nœuds avec `createElementNS`. En V2, le composant conserve le même ciblage
+sémantique, mais son `render()` fournit la représentation au materializer.
 
 ## Parts V1
 

@@ -94,7 +94,10 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     }
   }
 
-  /** Materializes solved parentage and child order on the same HTML node registry. */
+  /**
+   * Materializes solved parentage and child order without destroying detached author nodes.
+   * Component cleanup only occurs through the final RuntimeComponentHandle.destroy().
+   */
   materializeScene(scene: SolvedScene, _context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
     const childrenByTarget = resolvePresentationOrder(scene)
     const nextMountedPersos = new Set(
