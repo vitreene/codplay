@@ -41,11 +41,11 @@ after(t)  = événements dont startAt <= t
 
 `materializeSceneBeforeBoundary()` rend cette distinction valide même à `0 ms`.
 
-### Modes de projection
+### Modes de présentation
 
 Les modes ont des usages distincts :
 
-| Situation | Mode effectif | Projection HTML |
+| Situation | Mode effectif | Présentation HTML |
 |---|---|---|
 | réordonnancement dans la même target/list | `local` | nœud source réel |
 | changement de target ou de parent logique | `reparent` | overlay indépendant |
@@ -53,7 +53,7 @@ Les modes ont des usages distincts :
 
 `flipMode` est facultatif. L'absence de mode choisit `local` si la target reste
 identique et `reparent` si elle change. Un `local` explicite ne peut pas dégrader
-un vrai reparentage en projection locale.
+un vrai reparentage en présentation locale.
 
 L'overlay est le procédé de présentation du mode reparent. Ce n'est ni un second
 graphe ni un second algorithme temporel.
@@ -117,7 +117,7 @@ type ScheduledMotionIntent = {
   startAt: number
   duration: number
   ease: string
-  projectionMode: 'local' | 'reparent'
+  presentationMode: 'local' | 'reparent'
   path?: Path
 }
 ```
@@ -134,7 +134,7 @@ Fichiers :
 
 Un root HTML hors écran est matérialisé avec les mêmes composants, services,
 targets et règles structurelles que le root visible. Pour chaque frontière `t`,
-il projette successivement les scènes pures `before(t)` et `after(t)`.
+il matérialise successivement les scènes pures `before(t)` et `after(t)`.
 
 Un `LayoutSnapshot` contient, par `itemId` :
 
@@ -173,7 +173,7 @@ type MotionSegment = {
   endAt: number
   duration: number
   ease: string
-  projectionMode: 'local' | 'reparent'
+  presentationMode: 'local' | 'reparent'
   from: MotionAttachment
   to: MotionAttachment
   direct: boolean
@@ -234,7 +234,7 @@ récursivement avant leurs descendants.
 `MotionMaterializer` appelle ce même resolver après chaque materialisation
 structurelle. Play et Seek ne sélectionnent aucune stratégie différente.
 
-### 8. Projection locale
+### 8. Présentation locale
 
 Le host local écrit uniquement des slots CSS réservés sur les sources réelles.
 
@@ -250,7 +250,7 @@ Pour une frame complète :
 Cette transaction évite de calculer un sibling contre un layout seulement
 partiellement mis à jour.
 
-### 9. Projection reparent par overlay
+### 9. Présentation reparent par overlay
 
 Le host reparent indexe les ressources par `itemId`, jamais par capture. Il masque
 la source, clone son contenu auteur courant, applique la pose résolue dans la

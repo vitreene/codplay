@@ -11,7 +11,7 @@ import type {
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
 } from '../components'
-import { materializeTemplateString } from '../components'
+import { materializeTemplateString } from './html-template-materializer'
 import { HTML_MATERIALIZER_ID } from '../catalog'
 import type {
   RuntimeMaterializer,

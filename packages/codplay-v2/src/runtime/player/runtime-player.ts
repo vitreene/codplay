@@ -17,7 +17,6 @@ import {
   type PlayerLifecycleState,
 } from '../config/player-lifecycle'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
-import { createTemporaryRenderSnapshotFromSolved, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
@@ -52,12 +51,11 @@ export type PlayerSeekResult = Readonly<
   | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
 >
 
-/** One compiled-scene runtime instance with an optional materializer boundary. */
+/** One compiled-scene runtime instance with one optional materializer boundary. */
 export class RuntimePlayer {
   readonly id: string
   readonly engine: RuntimeEngine
   readonly compiledScene: CompiledScene
-  readonly renderSink: TemporaryRenderSink | undefined
   readonly renderSync: RenderSync
   readonly strapCollections: StrapCollections | undefined
   readonly trackJournal: RuntimeTrackJournal
@@ -84,7 +82,6 @@ export class RuntimePlayer {
     id: string,
     engine: RuntimeEngine,
     compiledScene: CompiledScene,
-    renderSink?: TemporaryRenderSink,
     renderSync: RenderSync = new RenderSync([]),
     strapCollections?: StrapCollections,
     trackJournal?: RuntimeTrackJournal,
@@ -96,7 +93,6 @@ export class RuntimePlayer {
     this.id = id
     this.engine = engine
     this.compiledScene = compiledScene
-    this.renderSink = renderSink
     this.renderSync = renderSync
     this.strapCollections = strapCollections
     this.trackJournal = trackJournal ?? new RuntimeTrackJournal(compiledScene)
@@ -206,11 +202,9 @@ export class RuntimePlayer {
       },
       presentSeek: () => {
         this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
-        this.presentTemporarySnapshot()
       },
     })
     this.state = PLAYER_LIFECYCLE_READY
-    this.presentTemporarySnapshot()
     return { ok: true, diagnostics: diagnostics.report() }
   }
 
@@ -252,7 +246,6 @@ export class RuntimePlayer {
   refresh(): void {
     if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
     this.materializeScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
-    this.presentTemporarySnapshot()
   }
 
   /**
@@ -282,7 +275,6 @@ export class RuntimePlayer {
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
-    this.presentTemporarySnapshot()
     return result
   }
 
@@ -305,7 +297,6 @@ export class RuntimePlayer {
     if (this.skipNextDelta) {
       this.skipNextDelta = false
       this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
-      this.presentTemporarySnapshot()
       return
     }
     this.currentTimeMs += frame.deltaMs
@@ -318,13 +309,6 @@ export class RuntimePlayer {
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
-    this.presentTemporarySnapshot()
-  }
-
-  /** Presents the current solved perso data through the temporary render probe. */
-  private presentTemporarySnapshot(): void {
-    if (this.solvedScene === undefined) throw new Error('Player scene has not been reconstructed.')
-    this.renderSink?.present(createTemporaryRenderSnapshotFromSolved(this.id, this.compiledScene, this.solvedScene))
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
@@ -392,7 +376,7 @@ export class RuntimePlayer {
     })
   }
 
-  /** Reconciles the mutable strap input snapshot from the journal projection. */
+  /** Reconciles the mutable strap input snapshot from the journal state. */
   private synchronizeStateStore(timeMs: number): void {
     const materialized = materializeScene(this.compiledScene, timeMs, this.trackJournal)
     this.stateStore.replace(STRAP_SCOPE_SCENE, materialized.sceneState)

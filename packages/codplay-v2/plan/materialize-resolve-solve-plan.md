@@ -105,7 +105,7 @@ consommer pour appliquer sa propre politique.
 Le solve hiérarchique structurel appartient à cette frontière ; sa politique de
 placement consomme les candidats issus de `materialize` pendant `resolve`, sans
 effet externe. Les transforms d'ancêtres et les mesures restent dans les
-tranches de mouvement et de projection. Les IDs de cible sont opaques et uniques dans
+tranches de mouvement et de materialisation. Les IDs de cible sont opaques et uniques dans
 une scene ; leur origine (`perso`, `host`, `outlet` ou racine de story) provient
 d'un registre interne de cibles, jamais de la forme du nom. Les conventions de
 nommage auteur ne sont donc pas un discriminant. Les factories externes qui

@@ -2,6 +2,15 @@ import type { ServiceValidationDefinition, ValidationFunction } from '../service
 import { reportInvalidServiceValue } from '../service-validation-report'
 import { isPlainRecord } from '../../shared'
 
+/** Delta form accepted by the className service. */
+export type ClassNamePatch = Readonly<{
+  add?: string
+  remove?: string
+}>
+
+/** Complete className value accepted by the service. */
+export type ClassNameValue = string | ClassNamePatch
+
 /** Validates the string or patch form accepted by the className service. */
 export const validateClassName: ValidationFunction = (value, context) => {
   if (typeof value === 'string') {

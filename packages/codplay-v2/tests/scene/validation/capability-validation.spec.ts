@@ -68,6 +68,18 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(output).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the core service contracts attached to their service declarations', () => {
+    const runtimeCatalog = catalog()
+
+    expect(runtimeCatalog.getService('style')).toMatchObject({
+      name: 'style',
+      allowUnknownProperties: true,
+    })
+    expect(runtimeCatalog.getService('className')?.name).toBe('className')
+    expect(runtimeCatalog.getService('attr')?.name).toBe('attr')
+    expect(runtimeCatalog.getService('content')?.name).toBe('content')
+  })
+
   it('reports invalid common service payloads with paths and references', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const runtimeCatalog = catalog()
@@ -92,6 +104,25 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(diagnostics.report().errors[0]).toMatchObject({
       details: { refs: { persoId: 'title' }, context: { path: 'initial.style' } },
     })
+  })
+
+  it('validates content through the content service at the compiled boundary', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
+      id: 'title',
+      type: 'tag',
+      initial: { tag: 'p', content: 42 },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toEqual([
+      expect.objectContaining({
+        code: 'AUTHOR_CONTENT_INVALID',
+        details: { refs: { persoId: 'title' }, context: { path: 'initial.content' } },
+      }),
+    ])
   })
 
   it('allows component-specific validation to be added without changing the catalog pipeline', () => {

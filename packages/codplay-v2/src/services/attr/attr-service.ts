@@ -2,6 +2,9 @@ import type { ServiceValidationDefinition, ValidationFunction } from '../service
 import { reportInvalidServiceValue } from '../service-validation-report'
 import { isPlainRecord } from '../../shared'
 
+/** Attribute map accepted by the attr service. */
+export type AttrValue = Readonly<Record<string, unknown>>
+
 /** Validates the plain attribute map accepted by the attr service. */
 export const validateAttr: ValidationFunction = (value, context) => {
   if (!isPlainRecord(value)) {

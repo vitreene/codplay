@@ -3,11 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { SceneBuilder } from '../../src/scene/compiled'
 import { RuntimeEngine } from '../../src/runtime/engine'
 import { createCoreRuntimeCatalog } from '../../src/runtime/catalog'
-import { MemoryRenderSink, RuntimePlayer } from '../../src/runtime/player'
+import { RuntimePlayer } from '../../src/runtime/player'
+import type { RuntimeMaterializer } from '../../src/runtime/materializer'
+import type { SolvedScene } from '../../src/runtime/player'
 import type { RuntimeCapabilityCatalog } from '../../src/runtime/catalog'
 import type { SceneDoc } from '../../src/scene/types'
 
-/** Creates the smallest catalog required by the temporary render vertical. */
+/** Creates the smallest catalog required by the runtime validation vertical. */
 function createCatalog(): RuntimeCapabilityCatalog {
   return createCoreRuntimeCatalog()
 }
@@ -15,7 +17,7 @@ function createCatalog(): RuntimeCapabilityCatalog {
 /** Creates one scene that exercises root placement, eventime, class, and tween state. */
 function createVerticalScene(): SceneDoc {
   return {
-    id: 'temporary-validity-scene',
+    id: 'runtime-validity-scene',
     stories: {
       main: {
         id: 'main',
@@ -41,8 +43,8 @@ function createVerticalScene(): SceneDoc {
   }
 }
 
-describe('temporary render validity vertical', () => {
-  it('runs the compiled scene through engine, player, and memory sink', () => {
+describe('runtime validity vertical', () => {
+  it('runs the compiled scene through engine, player, and one materializer boundary', () => {
     const catalog = createCatalog()
     const builder = new SceneBuilder(catalog.validationSnapshot(), {
       createdAt: '2026-07-31T00:00:00.000Z',
@@ -55,8 +57,23 @@ describe('temporary render validity vertical', () => {
 
     expect(build.compiledScene.rootNodeIds).toEqual(['root'])
     const engine = new RuntimeEngine(catalog)
-    const sink = new MemoryRenderSink()
-    const player = new RuntimePlayer('vertical-instance', engine, build.compiledScene, sink)
+    const snapshots: SolvedScene[] = []
+    const materializer: RuntimeMaterializer = {
+      id: 'test',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: (scene) => snapshots.push(scene),
+    }
+    const player = new RuntimePlayer(
+      'vertical-instance',
+      engine,
+      build.compiledScene,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      materializer,
+    )
 
     expect(player.init().ok).toBe(true)
     player.seek(0)
@@ -64,24 +81,27 @@ describe('temporary render validity vertical', () => {
     player.seek(150)
     player.seek(200)
 
-    const snapshots = sink.getSnapshots()
-    expect(snapshots.at(-4)?.persos['main:root']).toMatchObject({
+    const initial = snapshots.find((snapshot) => snapshot.timeMs === 0)
+    const atStart = snapshots.find((snapshot) => snapshot.timeMs === 100)
+    const atMiddle = snapshots.find((snapshot) => snapshot.timeMs === 150)
+    const atEnd = snapshots.find((snapshot) => snapshot.timeMs === 200)
+    expect(initial?.persos['main:root']?.state).toMatchObject({
       className: 'is-idle',
       style: { opacity: 0 },
     })
-    expect(snapshots.at(-3)?.persos['main:root']).toMatchObject({
+    expect(atStart?.persos['main:root']?.state).toMatchObject({
       className: 'is-active',
       style: { opacity: 0 },
     })
-    expect(snapshots.at(-2)?.persos['main:root']).toMatchObject({
+    expect(atMiddle?.persos['main:root']?.state).toMatchObject({
       className: 'is-active',
       style: { opacity: 0.5 },
     })
-    expect(snapshots.at(-1)?.persos['main:root']).toMatchObject({
+    expect(atEnd?.persos['main:root']?.state).toMatchObject({
       className: 'is-active',
       style: { opacity: 1 },
     })
-    expect(snapshots.at(-1)?.placements?.['main:root']).toMatchObject({
+    expect(atEnd?.persos['main:root']?.placement).toMatchObject({
       kind: 'root',
       mounted: false,
     })

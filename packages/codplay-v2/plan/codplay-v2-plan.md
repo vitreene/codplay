@@ -75,7 +75,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
 | Partie active | Unification runtime V2 | Le catalogue unique, la validation dérivée, les services séparés et le `RuntimeMaterializer` HTML sont en place; les substrats SVG/Canvas/Three.js et les familles de composants supplémentaires restent hors tranche. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les validateurs de propriétés portées par les services et de familles restent à couvrir. |
+| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les formes core de `style`, `className`, `attr` et `content` sont portées par leurs services; les services métier fermés et les familles restent à couvrir. |
 | Composants | Contrat de base fixe, implémentation en cours | `LayoutComponent`, `TagComponent`, factories runtime et materialisation template string sont couverts par le `RuntimeMaterializer` unifié ; JSX et les autres types restent hors tranche. |
 | ACE | Contrat de valeurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
 | Mouvement HTML | Contrat fixe, extensions en cours | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts par le materializer HTML ; les materializers de production et capacités non compilées restent ouverts. |
@@ -165,9 +165,9 @@ ajouté pour raccourcir cette phase.
 ### 2. Verticale de validite
 
 Creer d'abord sous `packages/codplay-v2/tests/runtime/` une verticale de test qui traverse le flux entier avec
-le sink memoire temporaire. La demo temporaire `demos/validation/player` reste maintenue en parallele comme
-banc de validation visible des progres Clock/Ticker et runtime; elle ne sera retiree qu'a l'ouverture des
-composants. Ni cette demo ni la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
+un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML. La demo existante
+`demos/validation/player` reste un banc visible du runtime, sans sortie ou catalogue parallele. Ni cette demo ni
+la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
 
 - un composant racine fixe;
 - un event materialise;

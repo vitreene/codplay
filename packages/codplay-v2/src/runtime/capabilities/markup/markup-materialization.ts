@@ -1,4 +1,3 @@
-import { materializeTemplateString } from '../../components'
 import type { MaterializedPart, BaseComponent } from '../../components'
 import type { MarkupModuleServiceInstance } from './markup-capability'
 
@@ -50,22 +49,6 @@ export function materializeComponentWithMarkup<Initial extends Record<string, un
   input.component._materialize(input.rootNode, input.parts)
   registerMaterializedComponent(markup, input.identity, input.publicParts)
   return () => unregisterMaterializedComponent(markup, input.identity.componentId)
-}
-
-/** Materializes trusted component markup and registers all of its public parts. */
-export function materializeTemplateComponentWithMarkup<Initial extends Record<string, unknown>>(
-  markup: MarkupModuleServiceInstance,
-  component: BaseComponent<Initial>,
-  identity: MaterializedComponentIdentity,
-): () => void {
-  const materialization = materializeTemplateString(component.render())
-  return materializeComponentWithMarkup(markup, {
-    component,
-    identity,
-    rootNode: materialization.rootNode,
-    parts: materialization.parts,
-    publicParts: materialization.parts,
-  })
 }
 
 /** Removes one component registration when its materialized instance disappears. */

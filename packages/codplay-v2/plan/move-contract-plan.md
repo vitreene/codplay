@@ -10,7 +10,7 @@ Review: validé le 2026-08-20 pour les moves compilés; les capacités live rest
 
 `move` décrit une destination structurelle et, facultativement, la transition
 visuelle qui y conduit. La structure résolue ne dépend jamais du mode de
-projection HTML.
+présentation HTML.
 
 ```ts
 type Move = string | MoveObject
@@ -55,7 +55,7 @@ MoveObject.target
 ```
 
 `targetId` et `parentKey` restent internes. La policy ne connaît ni le DOM ni la
-projection visuelle.
+présentation visuelle.
 
 ## `flipMode` facultatif
 
@@ -145,4 +145,4 @@ géométrie et aucun cache de captures ne constitue un second historique.
 - FIRST est l'état exact avant l'événement et LAST sa conséquence immédiate ;
 - Play et Seek évaluent le même graphe absolu au même temps ;
 - une target invalide produit un diagnostic sans placement implicite ;
-- la policy de placement ne connaît ni le DOM ni la projection.
+- la policy de placement ne connaît ni le DOM ni la materialisation.

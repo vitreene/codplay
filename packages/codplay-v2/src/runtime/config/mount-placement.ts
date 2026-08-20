@@ -1,4 +1,4 @@
-/** Stable placement states produced before hierarchy and substrate projection. */
+/** Stable placement states produced before hierarchy and substrate materialization. */
 export const MOUNT_PLACEMENT_UNSPECIFIED = 'unspecified' as const
 export const MOUNT_PLACEMENT_ROOT = 'root' as const
 export const MOUNT_PLACEMENT_OFF = 'off' as const

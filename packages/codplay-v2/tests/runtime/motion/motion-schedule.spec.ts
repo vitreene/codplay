@@ -14,7 +14,7 @@ describe('compileMotionSchedule', () => {
       declarationPath: [0, 0],
       duration: 100,
       ease: 'out(2)',
-      projectionMode: 'local',
+      presentationMode: 'local',
     })
     expect(Object.isFrozen(schedule)).toBe(true)
   })
@@ -38,7 +38,7 @@ describe('compileMotionSchedule', () => {
     expect(schedule[0]?.declarationPath).toEqual([1])
   })
 
-  it('maps the optional overlay author mode to a reparent projection hint', () => {
+  it('maps the optional overlay author mode to a reparent presentation hint', () => {
     const base = compiledScene()
     const story = base.scene.stories.main!
     const schedule = compileMotionSchedule({
@@ -59,7 +59,7 @@ describe('compileMotionSchedule', () => {
       },
     })
 
-    expect(schedule.every((intent) => intent.projectionMode === 'reparent')).toBe(true)
+    expect(schedule.every((intent) => intent.presentationMode === 'reparent')).toBe(true)
   })
 })
 

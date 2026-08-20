@@ -1,8 +1,8 @@
 import type { Path } from '../../ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
 
-/** Host projection selected after one structural movement is classified. */
-export type MotionProjectionMode = 'local' | 'reparent'
+/** Host presentation selected after one structural movement is classified. */
+export type MotionPresentationMode = 'local' | 'reparent'
 
 /** One pose expressed in the affine coordinate system of an attachment parent. */
 export type RelativeMotionPose = Readonly<{
@@ -21,7 +21,7 @@ export type LayoutItemSnapshot = Readonly<{
   rootPose: HtmlPose
 }>
 
-/** Complete layout state measured without transient movement projections. */
+/** Complete layout state measured without transient movement presentations. */
 export type LayoutSnapshot = Readonly<{
   timeMs: number
   revision: string
@@ -35,7 +35,7 @@ export type MotionIntent = Readonly<{
   startAt: number
   duration: number
   ease: string
-  projectionMode: MotionProjectionMode
+  presentationMode: MotionPresentationMode
   path?: Path
 }>
 
@@ -72,7 +72,7 @@ export type MotionSegment = Readonly<{
   endAt: number
   duration: number
   ease: string
-  projectionMode: MotionProjectionMode
+  presentationMode: MotionPresentationMode
   path?: Path
   direct: boolean
   from: MotionAttachment
@@ -98,7 +98,7 @@ export type ItemPresentation = Readonly<{
   itemId: string
   parentItemId?: string
   pose: HtmlPose
-  representation: 'source' | MotionProjectionMode
+  representation: 'source' | MotionPresentationMode
   activeSegmentId?: string
   progress: number
 }>

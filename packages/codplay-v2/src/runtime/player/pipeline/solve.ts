@@ -106,7 +106,7 @@ function applyEffectiveMountState(
   ]))
 }
 
-/** Rejects cycles in the mounted perso-to-perso graph before projection. */
+/** Rejects cycles in the mounted perso-to-perso graph before materialization. */
 function validateNoPlacementCycles(persos: Readonly<Record<string, SolvedPerso>>): void {
   const visiting = new Set<string>()
   const visited = new Set<string>()

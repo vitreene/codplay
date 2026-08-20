@@ -47,7 +47,7 @@ Une couleur auteur est donc transformee en `ColorValue` par l'adapter ACE avant 
 preparation d'un intervalle. La sanitation de scene pourra consommer cette forme
 avant de produire l'artefact lorsqu'un contrat de propriete couleur sera fixe. Sa
 forme CSS originale n'est pas necessaire a ACE;
-la projection pourra la reconstituer selon le contrat du service de rendu.
+la materialisation pourra la reconstituer selon le contrat du service de rendu.
 
 AnimeJS 4.5 reconnait directement les formes hex, RGB et HSL dans son test de
 couleur, mais ne traite pas les noms CSS comme une couleur normalisee dans cette

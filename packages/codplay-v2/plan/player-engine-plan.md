@@ -49,9 +49,9 @@ un resultat structure avec `ok`, `timeMs` et `diagnostics`. La reconstruction de
 persos appartient aux tranches materialize/resolve/solve.
 
 `RuntimePlayer.emit()` est l'entree live unique. Il append l'event et les sorties
-du dispatcher dans le `RuntimeTrackJournal`, puis reconstruit la projection
-courante. `seek` ne repasse jamais par `listen`, transform ou strap : il relit le
-meme journal par `materialize -> resolve -> solve`.
+du dispatcher dans le `RuntimeTrackJournal`, puis reconstruit l'etat courant.
+`seek` ne repasse jamais par `listen`, transform ou strap : il relit le meme journal
+par `materialize -> resolve -> solve`.
 
 ## Seek de portee
 
@@ -77,7 +77,7 @@ phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player
 ce chemin commun. Le player reconstruit `materialize -> resolve -> solve` pendant la validation,
 met le resultat en attente, puis le committe avant presentation. Le solve structurel et le graphe
 parent/enfant sont ouverts pour les moves compilés; les transforms d'ancêtres, les mesures et la
-projection de production restent des capacités de leurs tranches respectives.
+materializer de production reste une capacité de sa tranche respective.
 
 Cette hierarchie, les composants, les transforms et le renderer ne sont pas des manques du seek.
 Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa frontiere. Le seek
@@ -99,8 +99,8 @@ Ses invariants sont :
 - une erreur d'adapter n'interrompt pas les autres adapters.
 
 `RuntimePlayer` pilote cette frontiere sur play, pause, reprise, seek, frame et
-destruction. Les adapters de rendu de production restent optionnels tant que le
-contrat de projection correspondant n'est pas ouvert.
+destruction. Le `RuntimeMaterializer` reste optionnel pour les usages purement
+logiques ; un materializer de production ne peut être ajouté qu'avec son contrat.
 
 ## Hors perimetre
 
@@ -111,14 +111,14 @@ contrat de projection correspondant n'est pas ouvert.
 - demo produit et renderer de production;
 - contrat DOM public.
 
-## Verticale temporaire actuelle
+## Verticale de validation actuelle
 
-La verticale `demos/validation/player` utilise un renderer DOM volontairement
-simpliste au-dessus d'un sink memoire. Elle valide actuellement deux persos, les
-patches de classe, un tween d'opacite et l'interpolation de `backgroundColor` via
-l'adapter `parseColor` avant ACE, ainsi que le flux `materialize -> resolve -> solve`
-et les deltas generiques `mount/unmount/move`. Ce dispositif reste explicitement
-temporaire :
+La verticale `tests/runtime/vertical-validity.spec.ts` traverse le flux avec un
+`RuntimeMaterializer` de test. Elle valide actuellement un perso, les patches de
+classe, un tween d'opacite et le flux `materialize -> resolve -> solve` ainsi que
+les deltas generiques `mount/unmount/move` lorsque les tests concernés les ouvrent.
+La demo `demos/validation/player` reste un banc visible et ne possède pas de circuit
+runtime distinct :
 
 - la demo est un banc de validation visible, pas une contrainte de compatibilite du runtime ;
 - si elle entre en conflit avec un contrat V2, le contrat runtime prime et la demo doit etre
@@ -128,8 +128,8 @@ temporaire :
 - aucune famille supplémentaire de composants ne sera ouverte dans cette verticale;
 - aucun renderer de production ou contrat DOM ne sera defini;
 - aucune capacite absente ne sera simulee pour faire fonctionner une demo;
-- le sink sera remplace lorsque `materialize/resolve/solve` complets et le contrat composant
-  seront stabilises.
+- les observations de rendu passent par l'interface `RuntimeMaterializer`, jamais par un sink
+  concurrent du player.
 
 La tranche runtime actuelle couvre `initial`, les eventimes, le registre statique
 des tracks, le journal live, les controles d'activation, la propagation listen,

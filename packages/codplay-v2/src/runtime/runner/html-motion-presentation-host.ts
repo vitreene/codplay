@@ -92,7 +92,7 @@ export class HtmlMotionPresentationHost {
     this.localSources.set(itemId, source)
   }
 
-  /** Projects one local item in the coordinate system of its currently rendered parent. */
+  /** Presents one local item in the coordinate system of its currently rendered parent. */
   private applyLocal(itemId: string, frame: PresentationFrame, rootPose: HtmlPose): void {
     const source = this.localSources.get(itemId)
     const item = frame.items.get(itemId)
@@ -100,7 +100,7 @@ export class HtmlMotionPresentationHost {
     const worldPose = composeMotionPose(rootPose, decomposeRootMotionPose(item.pose))
     const naturalPose = captureHtmlPose(source)
     const parentPose = source.parentElement === null ? undefined : captureHtmlPose(source.parentElement)
-    this.transientStyles.applyLocalTransform(source, resolveLocalProjectionMatrix(naturalPose, worldPose, parentPose))
+    this.transientStyles.applyLocalTransform(source, resolveLocalPresentationMatrix(naturalPose, worldPose, parentPose))
   }
 
   /** Rebuilds one ghost from current declarative component content. */
@@ -121,7 +121,7 @@ export class HtmlMotionPresentationHost {
     this.resources.set(itemId, { source, ghost })
   }
 
-  /** Hides an independently projected item inside every active ancestor clone. */
+  /** Hides an independently presented item inside every active ancestor clone. */
   private hideIndependentDescendantClones(activeItemIds: ReadonlySet<string>): void {
     for (const descendantId of activeItemIds) {
       const descendantSource = this.resolveHandle(descendantId)
@@ -135,7 +135,7 @@ export class HtmlMotionPresentationHost {
     }
   }
 
-  /** Restores one source and removes its projection resource. */
+  /** Restores one source and removes its presentation resource. */
   private release(resource: OverlayResource): void {
     this.transientStyles.clearHidden(resource.source)
     removeElement(resource.ghost)
@@ -159,7 +159,7 @@ function applyGhostPose(ghost: HTMLElement, root: HtmlPose, pose: HtmlPose): voi
 }
 
 /** Resolves a live-node CSS matrix from one root-resolved graph pose. */
-function resolveLocalProjectionMatrix(natural: HtmlPose, target: HtmlPose, parent: HtmlPose | undefined): HtmlMatrix {
+function resolveLocalPresentationMatrix(natural: HtmlPose, target: HtmlPose, parent: HtmlPose | undefined): HtmlMatrix {
   const parentMatrix = parent === undefined
     ? { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
     : poseAffineMatrix(parent)

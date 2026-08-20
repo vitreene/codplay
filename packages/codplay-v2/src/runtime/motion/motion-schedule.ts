@@ -2,7 +2,7 @@ import { isPreparedPath, type Path } from '../../ace'
 import { isPlainRecord } from '../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../scene/compiled'
 import type { MoveFlipMode } from '../config/move'
-import type { MotionProjectionMode } from './types'
+import type { MotionPresentationMode } from './types'
 
 /** One immutable direct movement scheduled by the compiled scene. */
 export type ScheduledMotionIntent = Readonly<{
@@ -13,7 +13,7 @@ export type ScheduledMotionIntent = Readonly<{
   startAt: number
   duration: number
   ease: string
-  projectionMode: MotionProjectionMode
+  presentationMode: MotionPresentationMode
   path?: Path
 }>
 
@@ -36,7 +36,7 @@ export function compileMotionSchedule(scene: CompiledScene): readonly ScheduledM
           startAt: event.startAt,
           duration: transition.duration,
           ease: transition.ease,
-          projectionMode: resolveProjectionMode(transition.flipMode),
+          presentationMode: resolvePresentationMode(transition.flipMode),
           ...(transition.path === undefined ? {} : { path: transition.path }),
         })
         // One item has one structural command at a boundary: the last declaration wins.
@@ -98,8 +98,8 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   })
 }
 
-/** Maps the public projection choice to the graph's structural terminology. */
-function resolveProjectionMode(mode: MoveFlipMode | undefined): MotionProjectionMode {
+/** Maps the public presentation choice to the graph's structural terminology. */
+function resolvePresentationMode(mode: MoveFlipMode | undefined): MotionPresentationMode {
   return mode === 'overlay-world' ? 'reparent' : 'local'
 }
 

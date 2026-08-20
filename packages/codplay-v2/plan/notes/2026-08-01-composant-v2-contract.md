@@ -117,10 +117,10 @@ runtime partage avec le validateur les services `className`, `style`, `attr` et
 ```ts
 type TagState = {
   tag: string
-  content?: string | number
-  className?: string
-  style?: Record<string, string | number>
-  attr?: Record<string, string | boolean | number>
+  content?: string | HTMLElement
+  className?: string | { add?: string; remove?: string }
+  style?: Record<string, unknown>
+  attr?: Record<string, unknown>
 }
 
 type ComponentUpdateInput = {
@@ -173,15 +173,15 @@ outlets. Ils ne sont pas necessaires pour la racine d'un composant `tag`.
 ```ts
 type LayoutInitial = {
   markup: string
-  className?: string
-  style?: Record<string, string | number>
-  attr?: Record<string, string | boolean | number>
+  className?: string | { add?: string; remove?: string }
+  style?: Record<string, unknown>
+  attr?: Record<string, unknown>
 }
 
 type LayoutState = {
-  className?: string
-  style?: Record<string, string | number>
-  attr?: Record<string, string | boolean | number>
+  className?: string | { add?: string; remove?: string }
+  style?: Record<string, unknown>
+  attr?: Record<string, unknown>
 }
 
 type LayoutUpdateInput = {

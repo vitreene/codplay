@@ -22,10 +22,10 @@ export type MoveOrderMode =
   | typeof MOVE_ORDER_MODE_PREPEND
   | number
 
-/** HTML projection strategy for one authored movement transition. */
+/** HTML presentation strategy for one authored movement transition. */
 export type MoveFlipMode = 'local' | 'overlay-world'
 
-/** Compiled transition data carried by a move and consumed by a projector. */
+/** Compiled transition data carried by a move and consumed by the motion materializer. */
 export type MoveTransition = Readonly<{
   duration?: number
   ease?: CompiledValue

@@ -124,7 +124,7 @@ function composeTransformChannels(channels: ReadonlyMap<TransformProperty, strin
     .join(' ')
 }
 
-/** Maps one author property to a scalar transform channel projected by HTML. */
+/** Maps one author property to a scalar transform channel materialized by HTML. */
 function resolveTransformProperty(property: string): TransformProperty | undefined {
   const canonical = canonicalTransformProperty(property)
   return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined

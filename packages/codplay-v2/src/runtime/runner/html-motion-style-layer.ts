@@ -20,7 +20,7 @@ type StyleDeclarationLike = {
   removeProperty?: (property: string) => string
 }
 
-/** The projection slots consumed by the stylesheet-backed HTML layer. */
+/** The transient presentation slots consumed by the stylesheet-backed HTML layer. */
 const LOCAL_SIZE_SLOTS = ['--codplay-motion-width', '--codplay-motion-height'] as const
 const LOCAL_TRANSFORM_SLOTS = ['--codplay-motion-transform'] as const
 const LOCAL_ATTRIBUTES = ['data-codplay-motion-size', 'data-codplay-motion-transform'] as const
@@ -52,7 +52,7 @@ const PROJECTION_STYLE_TEXT = `
 }
 `
 
-const installedProjectionStyles = new WeakSet<Document>()
+const installedPresentationStyles = new WeakSet<Document>()
 
 /** Host-owned transient contribution layer for local poses and overlay visibility. */
 export type HtmlMotionStyleLayer = Readonly<{
@@ -61,13 +61,13 @@ export type HtmlMotionStyleLayer = Readonly<{
   clearLocal: (node: HTMLElement) => void
   applyHidden: (node: HTMLElement) => void
   clearHidden: (node: HTMLElement) => void
-  /** Clones a subtree without carrying host-owned transient projection state. */
+  /** Clones a subtree without carrying host-owned transient presentation state. */
   captureTemplate: (node: HTMLElement) => HTMLElement
 }>
 
-/** Creates a projection layer without taking ownership of authored CSS declarations. */
+/** Creates a transient presentation layer without taking ownership of authored CSS declarations. */
 export function createHtmlMotionStyleLayer(root: Element): HtmlMotionStyleLayer {
-  const stylesheetBacked = installProjectionStyles(root)
+  const stylesheetBacked = installPresentationStyles(root)
   if (stylesheetBacked) return createStylesheetLayer()
   return createInlineFallbackLayer()
 }
@@ -178,17 +178,17 @@ function restoreTemplateContributions(
 }
 
 /** Installs the host stylesheet once per document, or selects the test fallback. */
-function installProjectionStyles(root: Element): boolean {
+function installPresentationStyles(root: Element): boolean {
   const document = (root as Element & { ownerDocument?: Document }).ownerDocument
   if (document === undefined) return false
-  if (installedProjectionStyles.has(document)) return true
+  if (installedPresentationStyles.has(document)) return true
 
   const documentWithQueries = document as Document & {
     querySelector?: (selectors: string) => Element | null
   }
   const existing = documentWithQueries.querySelector?.(`style[${PROJECTION_STYLE_ATTRIBUTE}]`)
   if (existing !== null && existing !== undefined) {
-    installedProjectionStyles.add(document)
+    installedPresentationStyles.add(document)
     return true
   }
 
@@ -202,7 +202,7 @@ function installProjectionStyles(root: Element): boolean {
   const parent = document.head ?? document.documentElement ?? root
   if (typeof parent.appendChild !== 'function') return false
   parent.appendChild(style)
-  installedProjectionStyles.add(document)
+  installedPresentationStyles.add(document)
   return true
 }
 
@@ -338,7 +338,7 @@ function cssPropertyToJavaScript(property: string): string {
   return property.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
 }
 
-/** Serializes one affine matrix into the CSS transform function used by the projection. */
+/** Serializes one affine matrix into the CSS transform function used by the presentation. */
 function matrixCssValue(matrix: HtmlMatrix): string {
   return `matrix(${matrix.a}, ${matrix.b}, ${matrix.c}, ${matrix.d}, ${matrix.e}, ${matrix.f})`
 }

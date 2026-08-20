@@ -83,7 +83,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         endAt: boundary.timeMs + timing.duration,
         duration: timing.duration,
         ease: timing.ease,
-        projectionMode: isReparented(before, after) ? 'reparent' : (directIntent?.projectionMode ?? 'local'),
+        presentationMode: isReparented(before, after) ? 'reparent' : (directIntent?.presentationMode ?? 'local'),
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
         direct: directIntent !== undefined,
         from,
@@ -167,7 +167,7 @@ function resolveMotionItem(
     itemId,
     ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
     pose: interpolateMotionPose(from, to, progress, segment.path),
-    representation: progress < 1 ? segment.projectionMode : 'source',
+    representation: progress < 1 ? segment.presentationMode : 'source',
     activeSegmentId: segment.id,
     progress,
   }
@@ -237,7 +237,7 @@ function layoutAttachmentChanged(before: LayoutItemSnapshot, after: LayoutItemSn
     || !sameRelativeMotionPose(before.localPose, after.localPose)
 }
 
-/** Classifies a parent/target change as a reparent projection regardless of author defaults. */
+/** Classifies a parent/target change as a reparent presentation regardless of author defaults. */
 function isReparented(before: LayoutItemSnapshot, after: LayoutItemSnapshot): boolean {
   return before.parentItemId !== after.parentItemId || before.targetId !== after.targetId
 }
@@ -292,7 +292,7 @@ function freezeMotionGraph(tracks: ReadonlyMap<string, readonly MotionSegment[]>
       endAt: segment.endAt,
       duration: segment.duration,
       ease: segment.ease,
-      projectionMode: segment.projectionMode,
+      presentationMode: segment.presentationMode,
       direct: segment.direct,
       from: segment.from,
       to: segment.to,

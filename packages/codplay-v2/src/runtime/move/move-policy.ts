@@ -131,7 +131,7 @@ function readTarget(
   }
 }
 
-/** Validates the explicit HTML projection strategy without inventing one. */
+/** Validates the explicit HTML presentation strategy without inventing one. */
 function readMoveFlipMode(value: CompiledValue | undefined): MoveFlipMode | typeof INVALID_FLIP_MODE | undefined {
   if (value === undefined) return undefined
   if (value === 'local' || value === 'overlay-world') return value

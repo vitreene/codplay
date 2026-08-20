@@ -70,7 +70,7 @@ export class HtmlMotionSystem {
         startAt: intent.startAt,
         duration: intent.duration,
         ease: intent.ease,
-        projectionMode: intent.projectionMode,
+        presentationMode: intent.presentationMode,
         ...(intent.path === undefined ? {} : { path: intent.path }),
       }))
       boundaries.push(Object.freeze({

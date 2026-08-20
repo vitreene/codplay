@@ -190,7 +190,7 @@ function resolveParentFromPerso(perso: SolvedPerso): string | undefined {
   return undefined
 }
 
-/** Rejects cycles in the complete parent map before any host projection runs. */
+/** Rejects cycles in the complete parent map before any host presentation runs. */
 function validateGraphAcyclic(parentByPerso: Readonly<Record<string, string | undefined>>): void {
   const visited = new Set<string>()
   for (const key of Object.keys(parentByPerso)) {

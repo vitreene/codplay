@@ -89,7 +89,7 @@ export type SolvedPlacement = Readonly<{
   source?: MountPlacementSource
 }>
 
-/** Stable solve output consumed by a future component/projector boundary. */
+/** Stable solve output consumed by the component and materializer boundary. */
 export type SolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
   placement: SolvedPlacement

@@ -160,7 +160,7 @@ function validateUniqueNames(
   }
 }
 
-/** Validates resource uniqueness and the resource requirement projection. */
+/** Validates resource uniqueness and the derived resource requirements. */
 function validateResources(scene: CompiledScene, diagnostics: DiagnosticCollector): void {
   const resourceUrls = new Set<string>()
   for (const resource of scene.resources.entries) {

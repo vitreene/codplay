@@ -10,7 +10,6 @@ import { createListModuleServiceDefinition } from '../../../src/runtime/capabili
 import {
   MOUNT_TARGET_KIND_OUTLET,
   MOUNT_TARGET_KIND_ROOT,
-  MemoryRenderSink,
   RenderSync,
   RuntimePlayer,
   type RenderAdapter,
@@ -64,7 +63,6 @@ describe('RuntimePlayer', () => {
       'live-instance',
       engine,
       liveScene,
-      undefined,
       undefined,
       {
         scene: {},
@@ -132,7 +130,6 @@ describe('RuntimePlayer', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       [],
       undefined,
       undefined,
@@ -154,8 +151,7 @@ describe('RuntimePlayer', () => {
 
   it('owns lifecycle and logical time without creating a clock', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
-    const sink = new MemoryRenderSink()
-    const player = new RuntimePlayer('instance-a', engine, scene, sink)
+    const player = new RuntimePlayer('instance-a', engine, scene)
 
     expect(player.init().ok).toBe(true)
     player.play()
@@ -171,12 +167,6 @@ describe('RuntimePlayer', () => {
     expect(player.getCurrentTimeMs()).toBe(500)
     player.destroy()
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_DESTROYED)
-    expect(sink.getSnapshots()).toEqual([
-      { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 0, persos: {} },
-      { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 0, persos: {} },
-      { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 60, persos: {} },
-      { instanceId: 'instance-a', sceneId: 'scene-a', timeMs: 500, persos: {} },
-    ])
   })
 
   it('does not initialize when the engine lacks a compiled requirement', () => {
@@ -199,7 +189,6 @@ describe('RuntimePlayer', () => {
       'instance-a',
       engine,
       { ...scene, scene: { ...scene.scene, straps: ['missing-scene-strap'] } },
-      undefined,
       undefined,
       { scene: {}, stories: {} },
     )
@@ -235,7 +224,7 @@ describe('RuntimePlayer', () => {
       tick: ({ nowMs, deltaMs, timelineMs }) => ticks.push({ nowMs, deltaMs, timelineMs }),
       seek: ({ nowMs, timelineMs }) => seeks.push({ nowMs, timelineMs }),
     }
-    const player = new RuntimePlayer('instance-a', engine, scene, undefined, new RenderSync([adapter]))
+    const player = new RuntimePlayer('instance-a', engine, scene, new RenderSync([adapter]))
 
     player.init()
     player.play()
@@ -259,10 +248,20 @@ describe('RuntimePlayer', () => {
 
   it('reconstructs selected players before presenting a grouped seek', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
-    const firstSink = new MemoryRenderSink()
-    const secondSink = new MemoryRenderSink()
-    const first = new RuntimePlayer('first', engine, scene, firstSink)
-    const second = new RuntimePlayer('second', engine, scene, secondSink)
+    const firstTimes: number[] = []
+    const secondTimes: number[] = []
+    const first = new RuntimePlayer('first', engine, scene, undefined, undefined, undefined, [], {
+      id: 'test:first',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: (solved) => firstTimes.push(solved.timeMs),
+    })
+    const second = new RuntimePlayer('second', engine, scene, undefined, undefined, undefined, [], {
+      id: 'test:second',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: (solved) => secondTimes.push(solved.timeMs),
+    })
 
     first.init()
     second.init()
@@ -273,8 +272,8 @@ describe('RuntimePlayer', () => {
 
     expect(result.ok).toBe(true)
     expect(Object.keys(result.diagnostics)).toEqual(['first', 'second'])
-    expect(firstSink.getSnapshots().at(-1)?.timeMs).toBe(3000)
-    expect(secondSink.getSnapshots().at(-1)?.timeMs).toBe(2000)
+    expect(firstTimes.at(-1)).toBe(3000)
+    expect(secondTimes.at(-1)).toBe(2000)
   })
 
   it('returns structured diagnostics from a seek reconstruction', () => {
@@ -379,7 +378,7 @@ describe('RuntimePlayer', () => {
       },
       requirements: { ...scene.requirements, modules: ['probe'] },
     }
-    const player = new RuntimePlayer('module-player', engine, moduleScene, undefined, undefined, undefined, undefined, [
+    const player = new RuntimePlayer('module-player', engine, moduleScene, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
       { id: 'outlet', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main' },
     ])
@@ -440,7 +439,7 @@ describe('RuntimePlayer', () => {
       requirements: { ...scene.requirements, modules: ['markup'] },
     }
     const engine = new RuntimeEngine(catalog)
-    const player = new RuntimePlayer('layout-player', engine, moduleScene, undefined, undefined, undefined, undefined, [
+    const player = new RuntimePlayer('layout-player', engine, moduleScene, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
     ])
 
@@ -449,21 +448,20 @@ describe('RuntimePlayer', () => {
     expect(events).toEqual(['move:layout-content'])
   })
 
-  it('projects the initial scene, committed seeks, and destruction through the layout boundary', () => {
-    const projectedTimes: number[] = []
+  it('materializes the initial scene, committed seeks, and destruction through one boundary', () => {
+    const materializedTimes: number[] = []
     const materializer = {
       id: 'test',
       context: {},
       materializeComponent: () => ({ destroy: () => undefined }),
-      materializeScene: (solved: SolvedScene) => projectedTimes.push(solved.timeMs),
-      destroy: () => projectedTimes.push(-1),
+      materializeScene: (solved: SolvedScene) => materializedTimes.push(solved.timeMs),
+      destroy: () => materializedTimes.push(-1),
     }
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer(
-      'projection-player',
+      'materializer-player',
       engine,
       scene,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -475,10 +473,10 @@ describe('RuntimePlayer', () => {
     expect(player.seek(100).ok).toBe(true)
     player.destroy()
 
-    expect(projectedTimes).toEqual([0, 100, -1])
+    expect(materializedTimes).toEqual([0, 100, -1])
   })
 
-  it('resolves list order from the same structural timeline used by projection', () => {
+  it('resolves list order from the same structural timeline used by materialization', () => {
     const events: Array<Readonly<{ timeMs: number; order?: readonly string[] }>> = []
     const catalog = new RuntimeCapabilityCatalog()
     catalog.registerModule(createListModuleServiceDefinition())
@@ -515,7 +513,7 @@ describe('RuntimePlayer', () => {
         })
       },
     }
-    const player = new RuntimePlayer('list-player', engine, listScene, undefined, undefined, undefined, undefined, [
+    const player = new RuntimePlayer('list-player', engine, listScene, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
     ], materializer)
 
@@ -553,7 +551,7 @@ describe('RuntimePlayer', () => {
       requirements: { ...scene.requirements, modules: ['list'] },
     }
     const engine = new RuntimeEngine(catalog)
-    const player = new RuntimePlayer('historical-list-player', engine, listScene, undefined, undefined, undefined, undefined, [
+    const player = new RuntimePlayer('historical-list-player', engine, listScene, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
     ])
 

@@ -95,7 +95,7 @@ function parseMarkup(markup: string, fragment: FakeFragment): void {
   }
 }
 
-/** Installs the minimal DOM globals required by template-materializer. */
+/** Installs the minimal DOM globals required by the HTML template materializer. */
 function installFakeDom(): void {
   vi.stubGlobal('Element', FakeElement)
   vi.stubGlobal('DocumentFragment', FakeFragment)

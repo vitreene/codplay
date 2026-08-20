@@ -2,6 +2,9 @@ import type { ServiceValidationDefinition, ValidationFunction } from '../service
 import { reportInvalidServiceValue } from '../service-validation-report'
 import { isPlainRecord } from '../../shared'
 
+/** Open CSS declaration map accepted by the style service. */
+export type StyleValue = Readonly<Record<string, unknown>>
+
 /** Validates the shape shared by style service payloads. */
 export const validateStyle: ValidationFunction = (value, context) => {
   if (!isPlainRecord(value)) {
@@ -13,6 +16,9 @@ export const validateStyle: ValidationFunction = (value, context) => {
 export const STYLE_SERVICE: ServiceValidationDefinition = {
   name: 'style',
   validate: validateStyle,
+  // Ordinary CSS properties remain open. The HTML adapter additionally consumes
+  // the V2 transform channels without turning them into a global property matrix.
+  allowUnknownProperties: true,
   /** Preserves modern CSS syntax; URL/resource policy belongs to preload. */
   sanitizeMarkupAttribute: ({ attributeName, value }) => attributeName === 'style' ? value : undefined,
 }

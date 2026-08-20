@@ -5,15 +5,8 @@ export {
   type PlayerLifecycleState,
 } from './runtime-player'
 export {
-  createTemporaryRenderSnapshot,
-  createTemporaryRenderSnapshotFromSolved,
-  MemoryRenderSink,
-  type TemporaryRenderPlacement,
-  type TemporaryRenderSink,
-  type TemporaryRenderSnapshot,
-} from './temporary-render-sink'
-export { evaluateTemporaryScene, type TemporaryPersoState } from './temporary-scene-evaluator'
-export { RenderSync } from './render-sync'
+  RenderSync,
+} from './render-sync'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,

@@ -5,11 +5,10 @@
 
 ## Role
 
-`content-service.ts` currently declares only the validation boundary used by the
-runtime capability catalog. `html-content-service.ts` contains the current minimal HTML
-materializer adapter, which writes textual content to a node.
+`content-service.ts` owns the default content value contract. A serializable
+scene carries a string. At runtime, the HTML materializer also accepts a direct
+`HTMLElement` and mounts it as the node content.
 
-This is not the complete content contract. Rich content semantics and the
-corresponding materializer behavior remain to be specified and implemented in
-this service folder; the current adapter must not be treated as that final
-design.
+This service does not define rich HTML-string semantics: a string is assigned as
+`textContent`, not parsed as markup. A component that needs richer content owns
+that behavior through its own declared service or component implementation.

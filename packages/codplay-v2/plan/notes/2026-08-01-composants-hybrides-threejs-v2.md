@@ -105,7 +105,7 @@ class Avatar3DComponent extends BaseComponent {
     `
   }
 
-  /** Initializes the private Three.js projection on the materialized canvas. */
+  /** Initializes the private Three.js materialization on the materialized canvas. */
   init(): void {
     this.canvas = this.node as HTMLCanvasElement
     this.renderer = new WebGLRenderer({ canvas: this.canvas })

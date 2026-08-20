@@ -15,9 +15,10 @@ reste autonome et ne dépend d'aucune ancienne implémentation.
 - Normalisation structurelle et premiers guards relus sur la tranche initiale.
 - Premier builder, deriveurs de base et codec structurel en place; la tranche
   structurelle est gelée comme fondation de flux de rendu. La validation
-  sémantique interne du codec est maintenant en place; les deriveurs de
-  proprietes et extensions de validation portées par les services restent à
-  construire.
+  sémantique interne du codec est maintenant en place; les formes core des
+  services et leur exposition au moteur de validation sont également en place.
+  Les services métier fermés et les validations de propriétés spécialisées
+  restent à ajouter avec leurs composants.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Source unique de declaration composant/services/modules en place via `RuntimeCapabilityCatalog.validationSnapshot()`; revue des extensions de validateurs encore necessaire avant l'integration composant.
@@ -157,7 +158,7 @@ obligatoires au debut. Leur absence produit un warning auteur detaille avec le t
 Un service declare sans validateur produit le meme type de warning. Un service absent du catalogue ou un type de
 composant inconnu reste une erreur de capacite, car le player ne saurait pas l'executer.
 
-Les validateurs communs sont fournis avant les validateurs de composants : `style`, `className` et `attr`. Ils
+Les validateurs communs sont fournis avant les validateurs de composants : `style`, `className`, `attr` et `content`. Ils
 valident les formes de leurs payloads sans connaitre le DOM. Un helper commun structure les warnings de validateur
 manquant et garantit des references coherentes dans le rapport.
 

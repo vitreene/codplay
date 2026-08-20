@@ -23,7 +23,7 @@ description capture-centrique précédente est remplacée par
 
 `flipMode` est facultatif :
 
-- absent ou `local` dans la même target : projection locale ;
+- absent ou `local` dans la même target : présentation locale ;
 - target/parent différent : reparent forcé par overlay ;
 - `overlay-world` : reparent explicite même dans une target inchangée.
 

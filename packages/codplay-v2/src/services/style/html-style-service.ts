@@ -30,6 +30,13 @@ export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext):
 
       managedProperties.clear()
       for (const [property, rawValue] of Object.entries(value)) {
+        if (rawValue === null || rawValue === undefined) {
+          if (!removeHtmlTransformStyleProperty(transformState, node, property)) {
+            setHtmlStyleProperty(node, property, '')
+          }
+          managedProperties.add(property)
+          continue
+        }
         if (!applyHtmlTransformStyleProperty(transformState, node, property, rawValue, context)) {
           setHtmlStyleProperty(node, property, cssValue(rawValue))
         }

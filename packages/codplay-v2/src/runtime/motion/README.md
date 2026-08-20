@@ -39,7 +39,7 @@ whose local attachment is unchanged does not duplicate its ancestor's segment;
 it follows through recursive composition.
 
 Direct intent timing applies to its item. Other reflow items use the longest
-direct duration at that boundary. A target or parent change forces projection
+direct duration at that boundary. A target or parent change forces presentation
 mode `reparent`; otherwise the optional author hint selects `local` or
 `reparent`.
 
@@ -63,7 +63,7 @@ Resolution is pure and recursive:
 The same graph and current natural layout always produce the same frame. Calling
 the resolver for earlier times has no effect on later calls.
 
-## Projection inference
+## Presentation inference
 
 - same target: `local` by default;
 - different target or logical parent: `reparent`;

@@ -1,13 +1,14 @@
 import { BaseComponent } from './base-component'
 import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { AttrValue, ClassNameValue, ContentValue, StyleValue } from '../../services'
 
-/** Initial and resolved state projected by one tag component. */
+/** Initial and resolved state applied by one tag component. */
 export type TagState = Readonly<{
   tag: string
-  content?: string | number
-  className?: string
-  style?: Readonly<Record<string, string | number>>
-  attr?: Readonly<Record<string, string | boolean | number>>
+  content?: ContentValue
+  className?: ClassNameValue
+  style?: StyleValue
+  attr?: AttrValue
 }>
 
 /** V2 template-string component for a plain HTML tag. */
@@ -31,7 +32,7 @@ export class TagComponent extends BaseComponent<TagState> {
       className: input.state.className,
       style: input.state.style,
       attr: input.state.attr,
-      content: input.state.content === undefined ? undefined : String(input.state.content),
+      content: input.state.content,
     })
   }
 }

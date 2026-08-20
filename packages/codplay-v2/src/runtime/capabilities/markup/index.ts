@@ -8,7 +8,6 @@ export {
 } from './markup-capability'
 export {
   materializeComponentWithMarkup,
-  materializeTemplateComponentWithMarkup,
   registerMaterializedComponent,
   unregisterMaterializedComponent,
 } from './markup-materialization'

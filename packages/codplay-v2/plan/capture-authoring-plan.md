@@ -19,7 +19,7 @@ Ces trois points ne peuvent pas etre portes tels quels en V2 :
 
 - la capture est un troisieme producteur de `PersoState`, au meme niveau que
   l'evaluation temporelle, pas une variante d'animation ;
-- le DnD est un adaptateur de projection HTML qui conclut par un event `move`,
+- le DnD est un adaptateur de materialisation HTML qui conclut par un event `move`,
   pas une logique de placement parallele ;
 - l'authoring est un canal distinct, qui observe et demande des transactions,
   sans relire le DOM pour reconstruire l'etat logique.
@@ -40,7 +40,7 @@ CompiledScene + RuntimeTrackJournal + RuntimeCaptureStore + t
 
 `RuntimeCaptureStore` porte les sessions ouvertes et leur `captureState`. Une
 session contient son identite, son perso hote, son instant d'ouverture, ses
-echantillons et sa derniere projection live. Le store n'est pas le journal :
+echantillons et sa derniere presentation live. Le store n'est pas le journal :
 les echantillons et les mises a jour live ne sont jamais rejoues au seek.
 
 Le contrat V2 conserve les invariants V1 :
@@ -86,7 +86,7 @@ Cette distinction est une propriete du journal et du materializer, pas un
 special-case de capture. Toute future capacite qui produit un fait deja rendu
 live pourra reutiliser le meme mode.
 
-### 4. DnD : adaptateur de projection HTML
+### 4. DnD : adaptateur de materialisation HTML
 
 Le coeur ne connait ni `HTMLElement`, ni `getBoundingClientRect`, ni ghost.
 L'adaptateur HTML :
@@ -94,7 +94,7 @@ L'adaptateur HTML :
 1. ouvre une session capture avec `dropIn` ;
 2. mesure les enfants montes des listes candidates ;
 3. resout localement la liste et l'index avec hysteresis ;
-4. projette un ghost hors du registre des persos ;
+4. présente un ghost hors du registre des persos ;
 5. ferme la capture avec un `move` standard portant `parentId`, `index`, le
    mode `reparent` et le `flipMode` choisi ;
 6. detruit le ghost sans modifier l'ordre logique pendant la preview.
@@ -110,7 +110,7 @@ et des diagnostics, et demandera des operations explicites au player ou au
 builder. Il ne reconstruira jamais un `PersoState` depuis une pose DOM.
 
 L'ancienne operation `setNodePose` est le point encore ouvert : elle peut etre
-soit une projection temporaire d'atelier, soit une operation persistante de
+soit une présentation temporaire d'atelier, soit une operation persistante de
 scene. Ces deux semantiques ne doivent pas partager la meme methode, car la
 premiere ne doit pas polluer le journal et la seconde doit produire un fait
 rejouable.
@@ -131,7 +131,7 @@ rejouable.
 Pour `setNodePose`/les poses manipulees dans l'atelier, choisir explicitement
 entre :
 
-- **projection temporaire** : visible dans l'instance authoring, absente du
+- **présentation temporaire** : visible dans l'instance authoring, absente du
   journal et discardee au seek/reload ;
 - **commit de scene** : transforme la pose en operation authoring persistante,
   distincte du journal de lecture et rejouable apres recompilation.

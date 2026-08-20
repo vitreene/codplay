@@ -4,7 +4,7 @@
  * C'est la facilité centrale du chantier : **porter une valeur d'auteur avec son unité**,
  * sans la convertir vers le substrat. `-8.62cqw` entre, se décompose en `{ number: -8.62,
  * unit: 'cqw' }`, s'interpole avec une borne de même unité, et ressort avec son unité. Aucune
- * résolution vers un substrat n'a lieu ici — c'est le travail de l'étage de projection.
+ * résolution vers un substrat n'a lieu ici — c'est le travail du materializer.
  *
  * Divergences assumées :
  *

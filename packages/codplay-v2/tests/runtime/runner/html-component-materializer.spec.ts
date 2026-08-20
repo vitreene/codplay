@@ -1,3 +1,5 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from 'vitest'
 import { createHtmlAttrService } from '../../../src/services/attr/html-attr-service'
 import { createHtmlClassNameService } from '../../../src/services/class-name/html-class-name-service'
@@ -7,11 +9,13 @@ import type { RuntimeComponentServiceInstance } from '../../../src/runtime/catal
 
 type TestElement = {
   className: string
+  namespaceURI?: string
   style: Record<string, string> & { setProperty: (property: string, value: string) => void }
   textContent: string | null
   attributes: Map<string, string>
   setAttribute: (name: string, value: string) => void
   removeAttribute: (name: string) => void
+  getAttribute: (name: string) => string | null
 }
 
 /** Creates the small element double consumed by the HTML materializer services. */
@@ -25,6 +29,7 @@ function element(): TestElement {
     attributes,
     setAttribute: (name, value) => attributes.set(name, value),
     removeAttribute: (name) => attributes.delete(name),
+    getAttribute: (name) => attributes.get(name) ?? null,
   }
 }
 
@@ -54,6 +59,33 @@ describe('HTML component materializer services', () => {
     expect(node.style.color).toBe('rgba(255, 0, 0, 1)')
     expect(node.attributes).toEqual(new Map([['role', 'button']]))
     expect(node.textContent).toBe('Hello')
+  })
+
+  it('applies the V1 class delta form and the SVG class attribute form', () => {
+    const className = createHtmlClassNameService()
+    const node = element()
+
+    className.apply(node, { add: 'active selected' })
+    className.apply(node, { add: 'focused', remove: 'selected' })
+    expect(node.className).toBe('active focused')
+
+    const svg = { ...element(), namespaceURI: 'http://www.w3.org/2000/svg' }
+    className.apply(svg, { add: 'icon' })
+    expect(svg.attributes.get('class')).toBe('icon')
+  })
+
+  it('mounts an HTMLElement content value and replaces it with text content', () => {
+    const content = createHtmlContentService()
+    const node = document.createElement('div')
+    const child = document.createElement('span')
+    child.textContent = 'child'
+
+    content.apply(node, child)
+    expect(node.firstElementChild).toBe(child)
+
+    content.apply(node, 'text')
+    expect(node.textContent).toBe('text')
+    expect(node.firstElementChild).toBeNull()
   })
 
   it('removes previously managed style and attribute values', () => {
@@ -135,5 +167,14 @@ describe('HTML component materializer services', () => {
     style.apply(node, { x: 20, perspective: 10, translate: '5 6' })
     expect(node.style.transform).toBe('perspective(30px) translateX(60px)')
     expect(node.style.translate).toBe('15px 18px')
+  })
+
+  it('writes kebab-case CSS declarations through setProperty', () => {
+    const catalog = createHtmlServices()
+    const node = element()
+
+    catalog.get('style')?.apply(node, { 'background-color': 'red' })
+
+    expect(node.style['background-color']).toBe('red')
   })
 })

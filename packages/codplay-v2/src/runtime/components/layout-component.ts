@@ -1,19 +1,20 @@
 import { BaseComponent } from './base-component'
 import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 
 /** Initial author data accepted by the layout component. */
 export type LayoutInitial = Readonly<{
   markup?: string
-  className?: string
-  style?: Readonly<Record<string, string | number>>
-  attr?: Readonly<Record<string, string | boolean | number>>
+  className?: ClassNameValue
+  style?: StyleValue
+  attr?: AttrValue
 }>
 
-/** Resolved state projected by one layout update. */
+/** Resolved state applied by one layout update. */
 export type LayoutState = Readonly<{
-  className?: string
-  style?: Readonly<Record<string, string | number>>
-  attr?: Readonly<Record<string, string | boolean | number>>
+  className?: ClassNameValue
+  style?: StyleValue
+  attr?: AttrValue
 }>
 
 /** V2 layout component with no author-facing initialization hook. */

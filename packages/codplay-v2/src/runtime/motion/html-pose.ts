@@ -254,7 +254,7 @@ function transformedBounds(matrix: HtmlMatrix, width: number, height: number): {
   return { left, top, width: right - left, height: bottom - top }
 }
 
-/** Extracts the rotation-only matrix used by the overlay projection. */
+/** Extracts the rotation-only matrix used by the overlay presentation. */
 function extractRotationMatrix(matrix: HtmlMatrix): HtmlMatrix {
   const scaleX = Math.max(1e-8, Math.hypot(matrix.a, matrix.b))
   const scaleY = Math.max(1e-8, Math.hypot(matrix.c, matrix.d))

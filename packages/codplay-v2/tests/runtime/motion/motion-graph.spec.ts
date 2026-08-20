@@ -145,7 +145,7 @@ describe('motion graph', () => {
     expect(secondGraph.revision).not.toBe(firstGraph.revision)
   })
 
-  it('keeps same-target reflow local and honors an explicit overlay projection', () => {
+  it('keeps same-target reflow local and honors an explicit overlay presentation', () => {
     const before = snapshot(0, [item('A', 'list', 0), item('B', 'list', 20)])
     const after = snapshot(0, [item('A', 'list', 20), item('B', 'list', 0)])
     const localGraph = buildMotionGraph([
@@ -154,7 +154,7 @@ describe('motion graph', () => {
     const overlayGraph = buildMotionGraph([
       boundary('forced-overlay', 0, before, after, [{
         ...intent('A', 0, 1000),
-        projectionMode: 'reparent',
+        presentationMode: 'reparent',
       }]),
     ])
 
@@ -203,7 +203,7 @@ function relativePose(x: number, y: number): RelativeMotionPose {
 
 /** Creates one direct intent using a linear easing for exact assertions. */
 function intent(itemId: string, startAt: number, duration: number): MotionIntent {
-  return Object.freeze({ id: `${itemId}:${startAt}`, itemId, startAt, duration, ease: 'linear', projectionMode: 'local' })
+  return Object.freeze({ id: `${itemId}:${startAt}`, itemId, startAt, duration, ease: 'linear', presentationMode: 'local' })
 }
 
 /** Creates one immutable synthetic event boundary. */

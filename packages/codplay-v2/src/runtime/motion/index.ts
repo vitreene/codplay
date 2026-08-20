@@ -18,7 +18,7 @@ export type {
   MotionBoundary,
   MotionGraph,
   MotionIntent,
-  MotionProjectionMode,
+  MotionPresentationMode,
   MotionSegment,
   PresentationFrame,
   RelativeMotionPose,

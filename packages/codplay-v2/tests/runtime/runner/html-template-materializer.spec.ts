@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
-import { materializeTemplateString } from '../../../src/runtime/components'
+import { materializeTemplateString } from '../../../src/runtime/runner/html-template-materializer'
 import { sanitizeMarkupTemplate } from '../../../src/runtime/capabilities/markup'
 
-describe('template-string materializer', () => {
+describe('HTML template materializer', () => {
   it('materializes an HTML template and consumes data-part markers', () => {
     const result = materializeTemplateString(sanitizeMarkupTemplate(`
       <section>

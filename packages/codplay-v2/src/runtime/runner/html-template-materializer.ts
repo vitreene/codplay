@@ -1,13 +1,13 @@
-import type { MaterializedPart } from './component-types'
+import type { MaterializedPart } from '../components/component-types'
 
-/** Result of materializing compiler-sanitized HTML markup. */
-export type TemplateMaterialization = Readonly<{
+/** Result of materializing trusted HTML markup returned by a component. */
+export type HtmlTemplateMaterialization = Readonly<{
   rootNode: Node
   parts: readonly MaterializedPart[]
 }>
 
-/** Materializes trusted compiled markup without performing sanitization. */
-export function materializeTemplateString(markup: string): TemplateMaterialization {
+/** Materializes trusted compiled HTML and consumes its internal part markers. */
+export function materializeTemplateString(markup: string): HtmlTemplateMaterialization {
   if (typeof globalThis.document === 'undefined') {
     throw new Error('Template materialization requires a DOM environment.')
   }
@@ -30,7 +30,7 @@ function wrapTemplateChildren(childNodes: readonly ChildNode[]): HTMLElement {
   return wrapper
 }
 
-/** Collects trusted data-part markers without validating the compiled artifact again. */
+/** Collects trusted data-part markers and removes them from the rendered DOM. */
 function collectMaterializedParts(rootNode: Node): readonly MaterializedPart[] {
   const elements: Element[] = []
   if (rootNode instanceof Element && rootNode.hasAttribute('data-part')) elements.push(rootNode)
