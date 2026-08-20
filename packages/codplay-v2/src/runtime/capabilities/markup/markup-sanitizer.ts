@@ -190,7 +190,7 @@ function elementSelfClosing(token: string): boolean {
   return /\/\s*>$/.test(token)
 }
 
-/** Decodes the small entity set needed before text/attribute values enter ViewTree. */
+/** Decodes the small entity set needed before text/attribute values enter the template tree. */
 function decodeEntities(value: string): string {
   return value
     .replace(/&amp;/g, '&')

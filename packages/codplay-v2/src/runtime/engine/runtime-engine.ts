@@ -2,14 +2,12 @@ import type { DiagnosticCollector, DiagnosticReport } from '../../diagnostics'
 import type { CompiledRequirements, CompiledScene } from '../../scene/compiled'
 import { TimeTicker, type TickPayload, type Ticker } from '../time'
 import { reportMissingCapabilities } from './capability-diagnostics'
-import { RuntimeModuleServiceCatalog, type RuntimeModuleServiceInstance } from './module-service-catalog'
+import { RuntimeCapabilityCatalog } from '../catalog'
+import type { RuntimeModuleServiceInstance } from './module-service-types'
 
-/** Capabilities available to every player attached to one engine. */
-export type EngineCapabilities = Readonly<CompiledRequirements>
-
-/** Optional engine registries supplied beside declared capabilities. */
+/** Optional engine resources supplied beside the unified capability catalog. */
 export type RuntimeEngineOptions = Readonly<{
-  moduleServiceCatalog?: RuntimeModuleServiceCatalog
+  resources?: readonly string[]
 }>
 
 /** One externally supplied engine frame. */
@@ -51,36 +49,25 @@ type RuntimeInstance = Readonly<{
 
 /** Shared capability and clock boundary for V2 player instances. */
 export class RuntimeEngine {
-  private readonly capabilities: {
-    components: ReadonlySet<string>
-    services: ReadonlySet<string>
-    modules: ReadonlySet<string>
-    resources: ReadonlySet<string>
-  }
+  private readonly catalog: RuntimeCapabilityCatalog
+  private readonly resources: ReadonlySet<string>
   private readonly instances = new Map<string, RuntimeInstance>()
-  private readonly moduleServiceCatalog: RuntimeModuleServiceCatalog
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
 
-  /** Creates one engine without starting an internal clock. */
-  constructor(capabilities: EngineCapabilities, options: RuntimeEngineOptions = {}) {
-    this.capabilities = {
-      components: new Set(capabilities.components),
-      services: new Set(capabilities.services),
-      modules: new Set(capabilities.modules),
-      resources: new Set(capabilities.resources),
-    }
-    this.moduleServiceCatalog = options.moduleServiceCatalog ?? new RuntimeModuleServiceCatalog()
+  /** Creates one engine around the CodPlay-owned capability catalog. */
+  constructor(catalog: RuntimeCapabilityCatalog, options: RuntimeEngineOptions = {}) {
+    this.catalog = catalog
+    this.resources = new Set(options.resources ?? [])
   }
 
   /** Reports compiled requirements unavailable from this engine. */
   validateRequirements(requirements: CompiledRequirements, diagnostics: DiagnosticCollector): void {
-    reportMissingCapabilities('component', requirements.components, this.capabilities.components, diagnostics)
-    reportMissingCapabilities('service', requirements.services, this.capabilities.services, diagnostics)
-    const availableModules = new Set([...this.capabilities.modules].filter((id) => this.moduleServiceCatalog.has(id)))
-    reportMissingCapabilities('module', requirements.modules, availableModules, diagnostics)
-    reportMissingCapabilities('resource', requirements.resources, this.capabilities.resources, diagnostics)
+    reportMissingCapabilities('component', requirements.components, new Set(this.catalog.getComponents().map((definition) => definition.type)), diagnostics)
+    reportMissingCapabilities('service', requirements.services, new Set(this.catalog.getServices().map((definition) => definition.name)), diagnostics)
+    reportMissingCapabilities('module', requirements.modules, new Set(this.catalog.getModules().map((definition) => definition.id)), diagnostics)
+    reportMissingCapabilities('resource', requirements.resources, this.resources, diagnostics)
   }
 
   /** Registers one player callback in deterministic registration order. */
@@ -104,10 +91,9 @@ export class RuntimeEngine {
   ): ReadonlyMap<string, RuntimeModuleServiceInstance> {
     const instances = new Map<string, RuntimeModuleServiceInstance>()
     for (const id of moduleIds) {
-      if (!this.capabilities.modules.has(id) || !this.moduleServiceCatalog.has(id)) {
-        throw new Error(`Runtime module service capability is unavailable: ${id}`)
-      }
-      instances.set(id, this.moduleServiceCatalog.create(id, { playerId, compiledScene }))
+      const definition = this.catalog.getModule(id)
+      if (definition === undefined) throw new Error(`Runtime module service capability is unavailable: ${id}`)
+      instances.set(id, definition.create({ playerId, compiledScene }))
     }
     return instances
   }

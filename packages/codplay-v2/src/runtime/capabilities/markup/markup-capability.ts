@@ -1,7 +1,5 @@
-import type {
-  RuntimeModuleServiceDefinition,
-  RuntimeModuleServiceInstance,
-} from '../../engine'
+import type { RuntimeModuleServiceDefinition } from '../../catalog'
+import type { RuntimeModuleServiceInstance } from '../../engine/module-service-types'
 import { MOUNT_TARGET_KIND_OUTLET } from '../../config/mount-target'
 import type { MountTargetDeclaration } from '../../player/pipeline/mount-targets'
 

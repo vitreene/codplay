@@ -5,11 +5,12 @@ CodPlay version: V2 foundation
 
 `MarkupCapabilityState` stores the opaque public-part declarations owned by
 component instances. `createMarkupModuleServiceDefinition()` exposes that state
-through the existing player-scoped `RuntimeModuleService` catalog.
+through the `RuntimeCapabilityCatalog`, which creates one player-scoped module
+instance.
 
 The module does not create components, sanitize templates, read the DOM, or mount
-children. `registerMaterializedComponent()` is the boundary adapter for a future
-component materializer; a future renderer resolves those logical targets to
+children. `registerMaterializedComponent()` is the boundary adapter for the
+component materializer; the HTML materializer resolves those logical targets to
 substrate nodes.
 
 Registered targets are exposed to the player through `getMountTargets()`. The

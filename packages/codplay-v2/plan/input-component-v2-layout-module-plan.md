@@ -63,10 +63,15 @@ render(): string {
 }
 ```
 
-Le composant declare les services necessaires par l'interface commune :
+La definition runtime du composant declare les services necessaires dans le
+catalogue unifie :
 
 ```ts
-  this.services.declare(['markup', 'className', 'style', 'attr'])
+  {
+    type: 'input',
+    services: ['className', 'style', 'attr'],
+    modules: ['markup'],
+  }
 ```
 
 Le contrat V2 actuel ne comporte pas `init()`. L'etat initial est applique par

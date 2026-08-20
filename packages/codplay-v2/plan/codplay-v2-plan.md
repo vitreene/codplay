@@ -40,7 +40,9 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
   src/services           services nommes, contrats, validation, defaults et operations d'update
   src/scene              SceneDoc, build, validation, diagnostics et exports
   src/scene/compiled     contrat versionne et serialisable de l'artefact de lecture
-  src/runtime/engine     catalogue, ressources partagees, horloge et ordre des instances
+  src/runtime/catalog    catalogue runtime unifie des composants, services et modules
+  src/runtime/engine     ressources partagees, horloge et ordre des instances
+  src/runtime/materializer interface de materialisation par substrat
   src/runtime/player     une instance, materialize, resolve et solve
 ```
 
@@ -59,9 +61,9 @@ le builder. Un export d'intention consomme `SceneDoc`; un export fidele consomme
 export ne passe par engine ou player.
 
 Les composants sont declares avec un descripteur de capacite pur, construit lors de l'instanciation de CodPlay.
-Une declaration unique porte le type, les services, la capacite runtime et la validation optionnelle. CodPlay
-projette cette declaration dans le registre runtime et dans le catalogue de validation; les services ne sont pas
-redesignes dans un second registre. Le build recoit un snapshot du catalogue et `CompiledScene` l'utilise sans
+Une declaration unique porte le type, les services, la capacite runtime et la validation optionnelle dans le
+`RuntimeCapabilityCatalog`; les services ne sont pas redesignes dans un second registre. Le build recoit le
+snapshot de validation produit par ce catalogue et `CompiledScene` l'utilise sans
 instancier de composant ni de service runtime. L'absence d'un validateur de composant est autorisee au debut et
 produit un warning detaille; les validateurs des services courants sont la premiere couverture commune.
 
@@ -71,12 +73,12 @@ produit un warning detaille; les validateurs des services courants sont la premi
 |---|---|---|
 | Chantier | Fondation V2 relue | Le flux `SceneDoc -> CompiledScene` et la première verticale runtime sont gelés sur leur périmètre actuel. |
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
-| Partie active | Composants et renderer V2 | La frontière Engine/Player, le solve structurel et le runner de validation sont relus; la prochaine tranche ouvre les composants et le renderer de production. |
+| Partie active | Unification runtime V2 | Le catalogue unique, la validation dérivée, les services séparés et le `RuntimeMaterializer` HTML sont en place; les substrats SVG/Canvas/Three.js et les familles de composants supplémentaires restent hors tranche. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont projetees depuis le catalogue runtime vers le snapshot de validation; les validateurs de propriétés portées par les services et de familles restent à couvrir. |
-| Composants | Contrat de base fixe, implémentation en cours | `LayoutComponent`, `TagComponent`, factories runtime et materialisation template string sont couverts ; JSX et les autres types restent hors tranche. |
+| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les validateurs de propriétés portées par les services et de familles restent à couvrir. |
+| Composants | Contrat de base fixe, implémentation en cours | `LayoutComponent`, `TagComponent`, factories runtime et materialisation template string sont couverts par le `RuntimeMaterializer` unifié ; JSX et les autres types restent hors tranche. |
 | ACE | Contrat de valeurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
-| Mouvement HTML | Contrat fixe, extensions en cours | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts; les materializers de production et capacités non compilées restent ouverts. |
+| Mouvement HTML | Contrat fixe, extensions en cours | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts par le materializer HTML ; les materializers de production et capacités non compilées restent ouverts. |
 | Démos standard | Gabarit fixe, extension en cours | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
@@ -103,6 +105,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fixe sur les moves compilés |
+| Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md) | Fixe, circuit logique unique en place |
 
@@ -128,13 +131,13 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Validation et erreurs | Sanitizer du builder, diagnostics auteur et catalogue d'erreurs/warnings | Avant tout player; le player fait confiance au compile. |
 | SceneDoc, builder et exports | Build, validation, normalisation, derivation des ressources/besoins, extraction des fonctions, exports | `src/scene`; ne depend pas d'engine ou player. |
 | CompiledScene | Enveloppe, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; artefact de lecture interne. |
-| Engine | Catalogue de composants, modules, services, bindings tiers; cache, styles, horloge et ordre de tick | Fournit les capacites declarees; ne lit pas `SceneDoc`. |
+| Engine | `RuntimeCapabilityCatalog` unifie des composants, services, modules et bindings tiers; cache, styles, horloge et ordre de tick | Le catalogue est compose a l'initialisation puis verrouille avant l'execution. L'engine consomme cette source unique et ne lit pas `SceneDoc`. |
 | Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Play et Seek résolvent le même état et la même frame absolue. |
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, selection story/scene, straps sequentiels, outputs sur tracks declarees, cascade borne et relecture journalisee; annulation et helpers live restent a specifier. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Plan Temporel Declaratif fini pour les formes bornees; tout contrat live reste exclu et a specifier avec `f(t)`. |
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime, controles d'activation et tracks dediees aux outputs de straps en place; generation obsolete reste a ouvrir. |
 | Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick, transforms scalaires et graphe parent/enfant en place; mesures, diagnostics et politiques de liste restent a ouvrir. |
-| Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | Le catalogue engine declare les types; chaque player instancie ses composants. |
+| Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | `RuntimeCapabilityCatalog` declare les types et leurs services; le `RuntimeMaterializer` matérialise les composants et leur structure, chaque player instancie ses composants. |
 | Familles de composants | Tag/text/image/layout/list/media, quiz-question, positioning et composants de domaine des demos | Chaque famille reçoit son contrat V2 comme capacité déclarée, avec ses fixtures et ses démos; aucune ne devient un patch générique de `style`. |
 | Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach et diagnostics de seek en place; l'application de `reorderOnMove/Add/Remove` appartient a une capacite/service list, pas au move core ni a un composant unique. |
@@ -145,7 +148,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine et les rapports structures par instance sont en place; conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
 | Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Media-sync est conserve conceptuellement; cache et strategie remontent a l'engine. |
-| Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogues et ModuleServices player-scoped | `RuntimeModuleServiceCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place. |
+| Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogue unifie et ModuleServices player-scoped | `RuntimeCapabilityCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place; aucun catalogue local de runner ou de demo. |
 | Authoring | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Canal local separe du player de diffusion; semantique des poses d'atelier a fixer avant implementation. |
 | Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | Packaging fin et transport distant reportes; ne pas melanger avec authoring. |
 | Tests | Fixtures, horloge déterministe, traces, assertions de paradigme et baselines DOM/géométriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |

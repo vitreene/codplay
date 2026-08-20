@@ -62,7 +62,7 @@ export class MountTargetRegistry {
     return roots[0]
   }
 
-  /** Returns all declarations in registration order for diagnostics and projection. */
+  /** Returns all declarations in registration order for diagnostics and materialization. */
   getAll(): readonly MountTarget[] {
     return [...this.targets.values()]
   }

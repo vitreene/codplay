@@ -7,14 +7,14 @@ export {
   GUARD_PHASE_SHAPE,
 } from '../config/guard-phases'
 export { SceneGuardEngine } from './scene-guard-engine'
-export { ValidationCatalog, validatePersoWithCatalog } from './validation-catalog'
+export { validatePersoWithCapabilities } from './validate-perso-with-capabilities'
 export { reportMissingValidator } from './validation-warnings'
 export type {
   ComponentValidationDefinition,
   PersoValidationInput,
   PropertyValidationDefinition,
   ServiceValidationDefinition,
-  ValidationCatalogSnapshot,
+  CapabilityValidationSnapshot,
   ValidationContext,
   ValidationFunction,
   ValidationTarget,

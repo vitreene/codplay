@@ -1,21 +1,8 @@
-import {
-  BaseComponent,
-  LayoutComponent,
-  RuntimeComponentCatalog,
-  TagComponent,
-} from '../../../../codplay-v2/src/runtime/components'
-import type {
-  ComponentInput,
-  LayoutInitial,
-  RuntimeComponentDefinition,
-  TagState,
-} from '../../../../codplay-v2/src/runtime/components'
-import {
-  HtmlPlayerRunner,
-  createDomComponentServiceCatalog,
-} from '../../../../codplay-v2/src/runtime/runner'
+import { LayoutComponent } from '../../../../codplay-v2/src/runtime/components'
+import { createCoreRuntimeCatalog } from '../../../../codplay-v2/src/runtime/catalog'
+import type { RuntimeCapabilityCatalog } from '../../../../codplay-v2/src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../../codplay-v2/src/runtime/runner'
 import { SceneBuilder } from '../../../../codplay-v2/src/scene/compiled'
-import { ValidationCatalog } from '../../../../codplay-v2/src/scene/validation'
 import type { PersoDoc, SceneDoc } from '../../../../codplay-v2/src/scene/types'
 
 import './style.css'
@@ -335,22 +322,19 @@ function createStressScene(): SceneDoc {
 }
 
 /** Compiles the declarative stress scene through the normative SceneDoc boundary. */
-function buildScene(componentCatalog: RuntimeComponentCatalog): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(ValidationCatalog.fromComponents(componentCatalog.getAll()).snapshot(), {
+function buildScene(catalog: RuntimeCapabilityCatalog): ReturnType<SceneBuilder['build']> {
+  return new SceneBuilder(catalog.validationSnapshot(), {
     createdAt: '2026-08-18T00:00:00.000Z',
   }).build(createStressScene())
 }
 
-/** Creates the HTML component catalog and publishes every declared outlet. */
-function createComponentCatalog(): RuntimeComponentCatalog {
-  const catalog = new RuntimeComponentCatalog()
-  const definitions: readonly RuntimeComponentDefinition[] = [{
-    type: 'layout',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
+/** Creates the CodPlay runtime catalog and configures the stress scene's outlets. */
+function createRuntimeCatalog(): RuntimeCapabilityCatalog {
+  const catalog = createCoreRuntimeCatalog()
+  const layout = catalog.getComponent('layout')
+  if (layout === undefined) throw new Error('Core layout component is not registered.')
+  catalog.overrideComponent({
+    ...layout,
     mountableParts: [
       'stress-a-outlet',
       'stress-b-outlet',
@@ -359,26 +343,15 @@ function createComponentCatalog(): RuntimeComponentCatalog {
       'q-content-outlet',
       'k-content-outlet',
     ],
-  }, {
-    type: 'tag',
-    services: ['className', 'style', 'attr', 'content'],
-    modules: [],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
-  }, {
-    type: 'list',
-    services: ['className', 'style', 'attr'],
+  })
+  const list = catalog.getComponent('list')
+  if (list === undefined) throw new Error('Core list component is not registered.')
+  catalog.overrideComponent({
+    ...list,
     modules: ['markup', 'list'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
-    mountableParts: [
-      'q-content-outlet',
-      'k-content-outlet',
-    ],
-  }]
-  for (const definition of definitions) catalog.register(definition)
+    create: (input) => new LayoutComponent(input as never),
+    mountableParts: ['q-content-outlet', 'k-content-outlet'],
+  })
   return catalog
 }
 
@@ -485,8 +458,8 @@ function mountFlipStressDemo(container: HTMLElement): void {
   const reset = container.querySelector<HTMLButtonElement>('#stress-reset')!
   const checkpoints = [...container.querySelectorAll<HTMLButtonElement>('[data-time]')]
 
-  const componentCatalog = createComponentCatalog()
-  const build = buildScene(componentCatalog)
+    const catalog = createRuntimeCatalog()
+  const build = buildScene(catalog)
   if (!build.ok) {
     status.textContent = 'SceneDoc build failed'
     showError(error, build.diagnostics.errors)
@@ -498,8 +471,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
     compiledScene: build.compiledScene,
     root: stage,
     rootTargets: [{ id: 'root-host', storyId: 'main' }],
-    componentCatalog,
-    serviceCatalog: createDomComponentServiceCatalog(),
+    catalog,
   })
   const init = runner.init()
   if (!init.ok) {
@@ -521,7 +493,7 @@ function mountFlipStressDemo(container: HTMLElement): void {
     const contentOwners = CONTENT_IDS
       .map((id) => `${id}:${readContentOwner(runner, id)}`)
       .join(' ')
-    status.textContent = `${runner.getLifecycleState()} / t=${Math.round(timeMs)}ms / containers ${containerParents} / Q=${readParentId(readElement(runner, 'transfer-q'))} K=${readParentId(readElement(runner, 'transfer-k'))} / Q-list ${readOutletOrder(runner, 'q-content-outlet')} / K-list ${readOutletOrder(runner, 'k-content-outlet')} / owners ${contentOwners} / declared active ${readDeclaredTransitions(timeMs)} / ghosts ${overlay.ghosts}, hidden ${overlay.hidden} / epoch ${runner.getProjectionEpoch()}`
+    status.textContent = `${runner.getLifecycleState()} / t=${Math.round(timeMs)}ms / containers ${containerParents} / Q=${readParentId(readElement(runner, 'transfer-q'))} K=${readParentId(readElement(runner, 'transfer-k'))} / Q-list ${readOutletOrder(runner, 'q-content-outlet')} / K-list ${readOutletOrder(runner, 'k-content-outlet')} / owners ${contentOwners} / declared active ${readDeclaredTransitions(timeMs)} / ghosts ${overlay.ghosts}, hidden ${overlay.hidden} / epoch ${runner.getMaterializationEpoch()}`
     seek.value = String(Math.min(TIMELINE_END_MS, timeMs))
     seekLabel.value = `${Math.round(timeMs)}ms`
     if (playing && timeMs >= TIMELINE_END_MS) {

@@ -17,7 +17,8 @@ CompiledScene + time
   -> SolvedScene + SolvedGraph
 ```
 
-The player owns lifecycle, component synchronization and structural projection.
+The player owns lifecycle, component synchronization and the structural
+materializer boundary.
 It does not measure browser geometry and does not own an animation clock.
 
 ## Structural timeline
@@ -38,9 +39,11 @@ state and a distinct post-event state.
 
 ## Presentation circuit
 
-Play and Seek both commit through `LayoutProjection.project(scene)`. A projection
-receives one complete solved scene and performs one authored DOM synchronization
-before any optional motion presentation. There is no `advance`-specific visual
+Play and Seek both commit through `RuntimeMaterializer.materializeScene(scene)`. The
+player synchronizes each component once, then gives the complete solved scene to
+the materializer for the structural commit and any optional motion presentation.
+There is no
+`advance`-specific visual
 path, historical replay path or module-owned child-order map.
 
 `SolvedGraph` is the only source for:
@@ -50,7 +53,7 @@ path, historical replay path or module-owned child-order map.
 - complete child order by target;
 - mounted roots and structural revision.
 
-The optional `flipMode` remains placement metadata for projection consumers; it
+The optional `flipMode` remains placement metadata for presentation consumers; it
 never changes target resolution or structural ordering.
 
 ## Runtime events

@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: materializer HTML existant; interface a aligner sur le contrat composant
+Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-20
 
 ## Contrat auteur
 
@@ -29,8 +29,10 @@ composant, cree ou met a jour ses ressources, publie ses handles et assure leur
 destruction. Le composant ne connait pas l'implementation choisie.
 
 `HtmlComponentMaterializer` est l'implementation HTML actuelle de cette frontiere.
-La gestion de la structure, des parts et des mises a jour sera alignee sur cette
-interface lors de la specification de la tranche, sans modifier le contrat auteur.
+Elle expose à la fois la materialisation d'un composant et la materialisation
+structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
+local parallèle n'est utilisé. Les services sont choisis par la definition du composant dans
+`RuntimeCapabilityCatalog`; le materializer ne construit pas de catalogue local.
 
 ## Du template au substrat
 
@@ -207,25 +209,72 @@ La regle de writer unique est appliquee par couche : le materializer ecrit l'hot
 le composant ecrit sa scene Three.js privee. Le coeur CodPlay ne decompose ni ne
 manipule les objets internes Three.js.
 
-## Dialogue Materializer / FLIP a specifier
+## Dialogue Materializer / FLIP — contrat HTML runner
 
-Le composant ne dialogue pas directement avec FLIP. Le materializer expose son
-resultat et son etat resolu a la coordination FLIP. Le contrat restant a examiner porte sur les handles
-et operations que FLIP peut demander au materializer :
+Le dialogue est maintenant fixe pour la verticale HTML. Il ne passe pas par un
+échange direct entre le composant et FLIP :
 
-- obtenir les ressources materialisees d'un item ;
-- mesurer l'etat avant et apres une frontiere ;
-- deplacer ou representer temporairement un item ;
-- appliquer puis retirer une presentation transitoire ;
-- garantir le meme resultat au seek sans animation.
+```text
+SolvedScene
+  -> RuntimeComponentRuntime.sync()
+  -> RuntimeMaterializer HTML
+       -> racines, parts, parentage et ordre des racines
+  -> HtmlMotionPresentationHost
+       -> présentation locale ou représentation overlay
+```
 
-La propriete de ces operations entre le `RuntimePlayer`, le materializer et le
-host FLIP n'est pas encore fixee. Elle fera l'objet d'une decision dediee.
+### Responsabilités
+
+Le `RuntimePlayer` synchronise les composants une fois avant l'appel au
+materializer. Le `HtmlComponentMaterializer` :
+
+- appelle `component.render()` et materialise son résultat ;
+- conserve une racine par composant dans le registre interne des persos ;
+- publie uniquement les parts autorisées par la définition runtime du composant ;
+- détruit la racine et désenregistre ses parts lors du retrait.
+
+La même instance applique aussi le parentage et l'ordre produits par `SolvedScene`.
+Elle ne reconstruit ni l'état du composant ni la structure depuis le DOM. Pour la
+présentation motion, `MotionMaterializer` décore cette interface et délègue la
+materialisation HTML avant d'appeler le résolveur de frame ; il ne constitue pas
+un second circuit de composants ou de structure.
+
+Le `HtmlMotionPresentationHost` reçoit seulement un résolveur
+`itemId -> HTMLElement` et une `PresentationFrame`. Il :
+
+- écrit les dimensions et matrices transitoires sur la racine réelle en mode local ;
+- clone la materialisation courante dans l'overlay en mode reparent ;
+- masque la source pendant la représentation overlay ;
+- retire les contributions transitoires et détruit les clones lorsque la frame ne
+  les demande plus.
+
+FLIP ne demande donc pas au composant de se rerendre et n'appelle aucun service
+auteur. Les services du composant ont déjà appliqué l'état courant avant la mesure
+ou la création d'un clone. La couche transitoire conserve les propriétés auteur et
+les restaure à sa destruction.
+
+### Ordre d'une frame
+
+Pour Play, Seek et `resize()`, l'ordre est le même :
+
+1. résoudre l'état logique à `t` ;
+2. synchroniser les composants et leurs services ;
+3. appliquer le parentage et l'ordre structurels ;
+4. mesurer ou réutiliser la géométrie isolée ;
+5. résoudre la `PresentationFrame` à `t` ;
+6. committer la présentation locale ou overlay.
+
+Au seek, l'étape de présentation transitoire est committée directement à `t` sans
+animation ni rejeu d'une transition passée. À `LAST`, les slots et ressources
+transitoires sont retirés ; la materialisation auteur reste la seule représentation.
+
+Ce contrat est limité au materializer HTML et aux moves compilés. Il ne fixe pas
+encore une interface générique pour SVG, Canvas ou Three.js, ni le runtime JSX.
 
 ## Hors contrat actuel
 
 - JSX runtime V2 ;
 - profils complets de sanitizer SVG/CSS et politiques de ressources ;
 - `BaseComponent` executable ;
-- interface Materializer et implementations de production ;
+- implementations de production pour SVG, Canvas ou Three.js ;
 - contrat final de parts/outlets publies par le materializer.

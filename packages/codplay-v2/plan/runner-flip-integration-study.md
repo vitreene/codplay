@@ -231,7 +231,7 @@ Le layout courant apporte les mouvements auteur continus et le reflow naturel au
 temps `t`; le graphe apporte les segments structurels. Les parents sont résolus
 récursivement avant leurs descendants.
 
-`MotionLayoutProjection` appelle ce même resolver après chaque projection
+`MotionMaterializer` appelle ce même resolver après chaque materialisation
 structurelle. Play et Seek ne sélectionnent aucune stratégie différente.
 
 ### 8. Projection locale

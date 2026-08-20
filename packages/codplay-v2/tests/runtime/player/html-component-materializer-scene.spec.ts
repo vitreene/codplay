@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOUNT_PLACEMENT_PARENT } from '../../../src/runtime/player'
-import { LayoutDomBackend, buildSolvedGraph } from '../../../src/runtime/player'
+import { buildSolvedGraph } from '../../../src/runtime/player'
+import { HtmlComponentMaterializer } from '../../../src/runtime/runner'
 import type { SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 type TestNode = {
@@ -50,13 +51,12 @@ function scene(
   }
 }
 
-describe('LayoutDomBackend', () => {
+describe('HtmlComponentMaterializer scene materialization', () => {
   it('mounts, reorders and detaches nodes for outlet targets', () => {
     const root = node()
     const outlet = node()
     const first = node()
     const second = node()
-    const backend = new LayoutDomBackend()
     const outletTarget = { id: 'outlet', kind: 'outlet' as const }
     const rootTarget = { id: 'root', kind: 'root' as const }
     const nodes = {
@@ -69,24 +69,25 @@ describe('LayoutDomBackend', () => {
         ['outlet', outlet],
       ]),
     }
+    const materializer = new HtmlComponentMaterializer(nodes)
 
-    backend.project(scene([
+    materializer.materializeScene(scene([
       perso('main:first', outletTarget),
       perso('main:second', outletTarget),
-    ], { outlet: ['main:first', 'main:second'] }), nodes)
+    ], { outlet: ['main:first', 'main:second'] }))
     expect(outlet.children).toEqual([first, second])
 
-    backend.project(scene([
+    materializer.materializeScene(scene([
       perso('main:first', rootTarget),
       perso('main:second', outletTarget),
-    ], { root: ['main:first'], outlet: ['main:second'] }), nodes)
+    ], { root: ['main:first'], outlet: ['main:second'] }))
     expect(root.children).toEqual([first])
     expect(outlet.children).toEqual([second])
 
-    backend.project(scene([
+    materializer.materializeScene(scene([
       perso('main:first', rootTarget),
       perso('main:second', outletTarget, undefined, false),
-    ], { root: ['main:first'] }), nodes)
+    ], { root: ['main:first'] }))
     expect(second.parentNode).toBeNull()
   })
 
@@ -94,12 +95,7 @@ describe('LayoutDomBackend', () => {
     const parent = node()
     const child = node()
     const parentTarget = { id: 'parent', kind: 'perso' as const }
-    const backend = new LayoutDomBackend()
-
-    backend.project(scene([
-      perso('main:parent', { id: 'root', kind: 'root' }),
-      perso('main:child', parentTarget, 'main:parent'),
-    ], { root: ['main:parent'], parent: ['main:child'] }), {
+    const materializer = new HtmlComponentMaterializer({
       persoNodes: new Map([
         ['main:parent', parent],
         ['main:child', child],
@@ -107,34 +103,19 @@ describe('LayoutDomBackend', () => {
       targetNodes: new Map([['root', node()]]),
     })
 
+    materializer.materializeScene(scene([
+      perso('main:parent', { id: 'root', kind: 'root' }),
+      perso('main:child', parentTarget, 'main:parent'),
+    ], { root: ['main:parent'], parent: ['main:child'] }))
+
     expect(parent.children).toEqual([child])
-  })
-
-  it('synchronizes authored state before structural writes', () => {
-    const root = node()
-    const child = node()
-    const backend = new LayoutDomBackend({
-      persoNodes: new Map([['main:child', child]]),
-      targetNodes: new Map([['root', root]]),
-    })
-    const order: string[] = []
-
-    backend.project(scene([
-      perso('main:child', { id: 'root', kind: 'root' }),
-    ], { root: ['main:child'] }), {
-      moveDeltas: [],
-      authoredSync: () => order.push('authored'),
-    })
-    order.push(child.parentNode === root ? 'structural' : 'missing')
-
-    expect(order).toEqual(['authored', 'structural'])
   })
 
   it('uses the solved structural order for the commit', () => {
     const root = node()
     const first = node()
     const second = node()
-    const backend = new LayoutDomBackend({
+    const materializer = new HtmlComponentMaterializer({
       persoNodes: new Map([
         ['main:first', first],
         ['main:second', second],
@@ -142,7 +123,7 @@ describe('LayoutDomBackend', () => {
       targetNodes: new Map([['list', root]]),
     })
 
-    backend.project(scene([
+    materializer.materializeScene(scene([
       perso('main:first', { id: 'list', kind: 'root' }),
       perso('main:second', { id: 'list', kind: 'root' }),
     ], { list: ['main:second', 'main:first'] }), {

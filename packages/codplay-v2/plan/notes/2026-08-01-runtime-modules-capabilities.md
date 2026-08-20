@@ -14,7 +14,7 @@ rename, not a mass rewrite of the planning corpus or the compiled
 
 V2 conserve le module V1 comme point d'extension, mais separe quatre niveaux :
 
-1. une definition de module enregistree dans le catalogue engine ;
+1. une definition de module enregistree dans le `RuntimeCapabilityCatalog` compose a l'initialisation ;
 2. une instance de module creee par player ;
 3. un etat pur et testable porte par cette instance ;
 4. une interface `Materializer` ou un adaptateur de materialisation eventuel.
@@ -66,7 +66,7 @@ transaction de portee et ne jamais presenter un sous-ensemble.
 
 ## Suite
 
-`RuntimeModuleServiceCatalog`, `RuntimeModuleServiceDefinition` et la creation/destruction des
+`RuntimeCapabilityCatalog`, `RuntimeModuleServiceDefinition` et la creation/destruction des
 instances par player sont maintenant en place. L'initialisation depuis le snapshot
 solve, le routage des deltas et la reconciliation staged de seek sont egalement en
 place. La derivation de `CompiledRequirements.modules` vient desormais des

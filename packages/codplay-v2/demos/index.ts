@@ -1,8 +1,7 @@
 /**
  * Entry point for isolated CodPlay V2 demonstrations.
  *
- * The temporary player validation vertical is allowed to use its memory sink and
- * local DOM presenter. Production component and FLIP/list demos remain gated by
- * their runtime contracts.
+ * The V2 validation verticals use their declared runtime contracts. The player
+ * and FLIP/list demos share HtmlPlayerRunner and its HTML materializer.
  */
 export {}

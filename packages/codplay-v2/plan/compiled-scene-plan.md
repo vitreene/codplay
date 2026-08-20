@@ -20,7 +20,7 @@ reste autonome et ne dépend d'aucune ancienne implémentation.
   construire.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
-- Source unique de declaration composant/services/modules en place via la projection du catalogue runtime vers le snapshot de validation; revue des extensions de validateurs encore necessaire avant l'integration composant.
+- Source unique de declaration composant/services/modules en place via `RuntimeCapabilityCatalog.validationSnapshot()`; revue des extensions de validateurs encore necessaire avant l'integration composant.
 
 ## Principes
 
@@ -45,8 +45,8 @@ La tranche est conduite en deux temps complementaires :
 La surface de proprietes traitables d'un `Perso` depend de son type de composant.
 La definition du composant declare la liste de services qu'elle utilise; chaque
 service porte ensuite le contrat des proprietes recevables, leur validation, leurs
-defaults eventuels et leur mode temporel. Le catalogue de validation projette cette
-declaration vers le build. Il n'existe pas de matrice globale independante des
+defaults eventuels et leur mode temporel. `RuntimeCapabilityCatalog.validationSnapshot()`
+expose cette declaration au build. Il n'existe pas de matrice globale independante des
 types de composants et des services.
 
 Pour chaque propriete declaree par un service, le contrat indique sa presence dans
@@ -147,11 +147,10 @@ syntaxes auteur, les unites ou les espaces couleur.
 
 ## Catalogue de validations
 
-Le catalogue est construit au moment ou CodPlay enregistre les declarations de composants. Une declaration unique
-porte le type, les services et la definition de validation optionnelle; l'enregistrement la projette vers le
-registre runtime et le catalogue pur. Il ne contient ni classe instanciee, ni node, ni service runtime vivant. La
-facade transmet un snapshot du catalogue au build, qui le consulte pour valider un `Perso`, ses actions et les
-services declares.
+Le `RuntimeCapabilityCatalog` est construit au moment ou CodPlay enregistre les declarations de composants. Une
+declaration unique porte le type, les services, les modules et la definition de validation optionnelle. Son
+`validationSnapshot()` fournit la vue pure du build. Cette vue ne contient ni classe instanciee, ni node, ni
+service runtime vivant ; le builder l'utilise pour valider un `Perso`, ses actions et les services declares.
 
 Un descripteur de composant peut fournir `validateInitial` et `validateAction`, mais ces fonctions ne sont pas
 obligatoires au debut. Leur absence produit un warning auteur detaille avec le type, le perso et le chemin concernes.
@@ -231,7 +230,7 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; couverture des contrats de services encore ouverte |
-| 2. Catalogue | Descripteurs composants, services et proprietes recevables, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection initiale relue; extensions de validateurs encore ouvertes |
+| 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; extensions de validateurs encore ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe, invariants sémantiques internes et immutabilite en place; migrations de schema hors tranche |

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createDomComponentServiceCatalog } from '../../../src/runtime/runner'
+import { createHtmlAttrService } from '../../../src/services/attr/html-attr-service'
+import { createHtmlClassNameService } from '../../../src/services/class-name/html-class-name-service'
+import { createHtmlContentService } from '../../../src/services/content/html-content-service'
+import { createHtmlStyleService } from '../../../src/services/style/html-style-service'
+import type { RuntimeComponentServiceInstance } from '../../../src/runtime/catalog'
 
 type TestElement = {
   className: string
@@ -10,7 +14,7 @@ type TestElement = {
   removeAttribute: (name: string) => void
 }
 
-/** Creates the small element double consumed by the DOM services. */
+/** Creates the small element double consumed by the HTML materializer services. */
 function element(): TestElement {
   const style = { setProperty: (property: string, value: string) => { style[property] = value } } as TestElement['style']
   const attributes = new Map<string, string>()
@@ -24,10 +28,20 @@ function element(): TestElement {
   }
 }
 
-describe('DOM component services', () => {
+/** Creates the standard HTML service adapters for one materializer context. */
+function createHtmlServices(context: { numericLengthScale: number } = { numericLengthScale: 1 }): ReadonlyMap<string, RuntimeComponentServiceInstance> {
+  return new Map([
+    ['className', createHtmlClassNameService()],
+    ['style', createHtmlStyleService(context)],
+    ['attr', createHtmlAttrService()],
+    ['content', createHtmlContentService()],
+  ])
+}
+
+describe('HTML component materializer services', () => {
   it('reconciles class, style, attributes and content values', () => {
-    const catalog = createDomComponentServiceCatalog()
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices()
+    const services = catalog
     const node = element()
 
     services.get('className')?.apply(node, 'active')
@@ -43,8 +57,8 @@ describe('DOM component services', () => {
   })
 
   it('removes previously managed style and attribute values', () => {
-    const catalog = createDomComponentServiceCatalog()
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices()
+    const services = catalog
     const node = element()
     const style = services.get('style')!
     const attr = services.get('attr')!
@@ -60,8 +74,8 @@ describe('DOM component services', () => {
   })
 
   it('composes x and y aliases into one CSS translation', () => {
-    const catalog = createDomComponentServiceCatalog()
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices()
+    const services = catalog
     const node = element()
     const style = services.get('style')!
 
@@ -76,8 +90,8 @@ describe('DOM component services', () => {
   })
 
   it('keeps canonical transform channels ordered and preserves authored units', () => {
-    const catalog = createDomComponentServiceCatalog()
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices()
+    const services = catalog
     const node = element()
     const style = services.get('style')!
 
@@ -93,8 +107,8 @@ describe('DOM component services', () => {
   })
 
   it('keeps a raw transform sequence separate from scalar channels', () => {
-    const catalog = createDomComponentServiceCatalog()
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices()
+    const services = catalog
     const node = element()
     const style = services.get('style')!
     const raw = 'translate(10px 20px) rotate(20deg) matrix(1, 0, 0, 1, 4, 5)'
@@ -108,8 +122,8 @@ describe('DOM component services', () => {
 
   it('applies the runtime length scale only at the HTML boundary', () => {
     const context = { numericLengthScale: 2 }
-    const catalog = createDomComponentServiceCatalog(context)
-    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const catalog = createHtmlServices(context)
+    const services = catalog
     const node = element()
     const style = services.get('style')!
 

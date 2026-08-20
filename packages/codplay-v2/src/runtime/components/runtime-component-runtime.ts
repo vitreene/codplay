@@ -1,15 +1,10 @@
 import type { SolvedScene } from '../player/pipeline'
 import type { RuntimeModuleServiceInstance } from '../engine'
 import type { BaseComponent } from './base-component'
-import { createComponentServices, RuntimeComponentServiceCatalog } from './component-services'
-import { RuntimeComponentCatalog } from './runtime-component-catalog'
+import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
+import type { RuntimeMaterializer } from '../materializer'
 
-/** Identity passed to component services and materializers. */
-export type RuntimeComponentIdentity = Readonly<{
-  componentId: string
-  storyId: string
-  componentType: string
-}>
+export type { RuntimeComponentIdentity } from '../catalog'
 
 /** Cleanup returned after one component has been materialized. */
 export type RuntimeComponentHandle = Readonly<{
@@ -18,15 +13,8 @@ export type RuntimeComponentHandle = Readonly<{
 
 /** Host callbacks required to materialize and service one component instance. */
 export type RuntimeComponentRuntimeOptions = Readonly<{
-  catalog: RuntimeComponentCatalog
-  serviceCatalog: RuntimeComponentServiceCatalog
-  materialize: (
-    component: BaseComponent<Record<string, unknown>>,
-    identity: RuntimeComponentIdentity,
-    initial: Record<string, unknown>,
-    mountablePartIds: readonly string[],
-    moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
-  ) => RuntimeComponentHandle
+  catalog: RuntimeCapabilityCatalog
+  materializer: RuntimeMaterializer
 }>
 
 type MountedComponent = Readonly<{
@@ -83,17 +71,22 @@ export class RuntimeComponentRuntime {
       storyId: perso.storyId,
       componentType: perso.type,
     }
-    const component = this.options.catalog.create(perso.type, {
-      perso: {
-        id: perso.persoId,
-        storyId: perso.storyId,
-        initial: compiledPerso.initial,
+    const component = this.options.catalog.createComponent(
+      perso.type,
+      {
+        perso: {
+          id: perso.persoId,
+          storyId: perso.storyId,
+          initial: compiledPerso.initial,
+        },
       },
-      services: createComponentServices(this.options.serviceCatalog, identity, this.moduleServices),
-    })
+      identity,
+      this.options.materializer,
+      this.moduleServices,
+    )
     const mounted: MountedComponent = {
       component,
-      handle: this.options.materialize(
+      handle: this.options.materializer.materializeComponent(
         component,
         identity,
         compiledPerso.initial,

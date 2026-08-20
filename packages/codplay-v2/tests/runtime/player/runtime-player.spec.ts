@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
+import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { RuntimeEngine } from '../../../src/runtime/engine'
 import {
   createMarkupModuleServiceDefinition,
   type MarkupModuleServiceInstance,
@@ -58,7 +59,7 @@ describe('RuntimePlayer', () => {
         },
       },
     }
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer(
       'live-instance',
       engine,
@@ -123,7 +124,7 @@ describe('RuntimePlayer', () => {
         return { style: { opacity: progress } }
       },
     }
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer(
       'tween-instance',
       engine,
@@ -152,7 +153,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('owns lifecycle and logical time without creating a clock', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const sink = new MemoryRenderSink()
     const player = new RuntimePlayer('instance-a', engine, scene, sink)
 
@@ -179,7 +180,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('does not initialize when the engine lacks a compiled requirement', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer('instance-a', engine, {
       ...scene,
       requirements: { ...scene.requirements, components: ['tag'] },
@@ -193,7 +194,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('warns when declared straps are missing from their owned collections', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer(
       'instance-a',
       engine,
@@ -210,7 +211,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('resets the instance delta baseline after pause/resume', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer('instance-a', engine, scene)
 
     player.init()
@@ -227,7 +228,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('routes play, pause, resume, and seek baselines through RenderSync', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const ticks: Array<{ nowMs: number; deltaMs: number; timelineMs: number }> = []
     const seeks: Array<{ nowMs: number; timelineMs: number }> = []
     const adapter: RenderAdapter = {
@@ -257,7 +258,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('reconstructs selected players before presenting a grouped seek', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const firstSink = new MemoryRenderSink()
     const secondSink = new MemoryRenderSink()
     const first = new RuntimePlayer('first', engine, scene, firstSink)
@@ -277,7 +278,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('returns structured diagnostics from a seek reconstruction', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const seekScene: CompiledScene = {
       ...scene,
       scene: {
@@ -307,7 +308,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('returns a failed seek result instead of hiding lifecycle errors', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer('instance-a', engine, scene)
 
     const result = player.seek(100)
@@ -317,7 +318,7 @@ describe('RuntimePlayer', () => {
   })
 
   it('aggregates seek diagnostics by instance at the engine boundary', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const invalidScene: CompiledScene = {
       ...scene,
       scene: {
@@ -347,8 +348,8 @@ describe('RuntimePlayer', () => {
 
   it('initializes, updates, and destroys player-scoped module services', () => {
     const events: string[] = []
-    const catalog = new RuntimeModuleServiceCatalog()
-    catalog.register({
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerModule({
       id: 'probe',
       create: () => ({
         initializeScene: (solved) => events.push(`init:${solved.timeMs}`),
@@ -360,10 +361,7 @@ describe('RuntimePlayer', () => {
         destroy: () => events.push('destroy'),
       }),
     })
-    const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['probe'], resources: [] },
-      { moduleServiceCatalog: catalog },
-    )
+    const engine = new RuntimeEngine(catalog)
     const moduleScene: CompiledScene = {
       ...scene,
       scene: {
@@ -396,9 +394,9 @@ describe('RuntimePlayer', () => {
 
   it('feeds mount targets exposed by a module into scene solving', () => {
     const events: string[] = []
-    const catalog = new RuntimeModuleServiceCatalog()
+    const catalog = new RuntimeCapabilityCatalog()
     const markupDefinition = createMarkupModuleServiceDefinition()
-    catalog.register({
+    catalog.registerModule({
       id: 'markup',
       create: (context) => {
         const markup = markupDefinition.create(context) as MarkupModuleServiceInstance
@@ -441,10 +439,7 @@ describe('RuntimePlayer', () => {
       },
       requirements: { ...scene.requirements, modules: ['markup'] },
     }
-    const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['markup'], resources: [] },
-      { moduleServiceCatalog: catalog },
-    )
+    const engine = new RuntimeEngine(catalog)
     const player = new RuntimePlayer('layout-player', engine, moduleScene, undefined, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
     ])
@@ -456,11 +451,14 @@ describe('RuntimePlayer', () => {
 
   it('projects the initial scene, committed seeks, and destruction through the layout boundary', () => {
     const projectedTimes: number[] = []
-    const projection = {
-      project: (solved: SolvedScene) => projectedTimes.push(solved.timeMs),
+    const materializer = {
+      id: 'test',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: (solved: SolvedScene) => projectedTimes.push(solved.timeMs),
       destroy: () => projectedTimes.push(-1),
     }
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer(
       'projection-player',
       engine,
@@ -470,7 +468,7 @@ describe('RuntimePlayer', () => {
       undefined,
       undefined,
       [],
-      projection,
+      materializer,
     )
 
     expect(player.init().ok).toBe(true)
@@ -482,8 +480,8 @@ describe('RuntimePlayer', () => {
 
   it('resolves list order from the same structural timeline used by projection', () => {
     const events: Array<Readonly<{ timeMs: number; order?: readonly string[] }>> = []
-    const catalog = new RuntimeModuleServiceCatalog()
-    catalog.register(createListModuleServiceDefinition())
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerModule(createListModuleServiceDefinition())
     const listScene: CompiledScene = {
       ...scene,
       scene: {
@@ -505,12 +503,12 @@ describe('RuntimePlayer', () => {
       },
       requirements: { ...scene.requirements, modules: ['list'] },
     }
-    const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['list'], resources: [] },
-      { moduleServiceCatalog: catalog },
-    )
-    const projection = {
-      project: (solved: SolvedScene) => {
+    const engine = new RuntimeEngine(catalog)
+    const materializer = {
+      id: 'test',
+      context: {},
+      materializeComponent: () => ({ destroy: () => undefined }),
+      materializeScene: (solved: SolvedScene) => {
         events.push({
           timeMs: solved.timeMs,
           order: solved.graph.childrenByTarget.list,
@@ -519,7 +517,7 @@ describe('RuntimePlayer', () => {
     }
     const player = new RuntimePlayer('list-player', engine, listScene, undefined, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
-    ], projection)
+    ], materializer)
 
     expect(player.init().ok).toBe(true)
     expect(player.seek(100).ok).toBe(true)
@@ -531,8 +529,8 @@ describe('RuntimePlayer', () => {
   })
 
   it('resolves historical list order directly from the structural timeline', () => {
-    const catalog = new RuntimeModuleServiceCatalog()
-    catalog.register(createListModuleServiceDefinition())
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerModule(createListModuleServiceDefinition())
     const listScene: CompiledScene = {
       ...scene,
       scene: {
@@ -554,10 +552,7 @@ describe('RuntimePlayer', () => {
       },
       requirements: { ...scene.requirements, modules: ['list'] },
     }
-    const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['list'], resources: [] },
-      { moduleServiceCatalog: catalog },
-    )
+    const engine = new RuntimeEngine(catalog)
     const player = new RuntimePlayer('historical-list-player', engine, listScene, undefined, undefined, undefined, undefined, [
       { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
     ])

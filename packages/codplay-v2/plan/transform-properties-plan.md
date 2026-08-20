@@ -31,7 +31,7 @@ en canaux lorsqu'elles sont lues depuis une transform inline. Une matrix n'est p
 decomposee en canaux : elle reste une operation distincte en fin de composition.
 
 Ces observations ne signifient pas que V2 reutilise le runtime AnimeJS, son code ou
-ses decisions de projection. Elles servent uniquement a comparer les formes et les
+ses decisions de materialisation. Elles servent uniquement a comparer les formes et les
 cas limites avant de definir un contrat V2 independant.
 
 ## Frontieres
@@ -40,7 +40,7 @@ Le travail est separe en trois etages :
 
 1. entree auteur : aliases et formes acceptees;
 2. contrat interne V2 : canaux, unites, valeurs et ordre;
-3. projection : composition vers le substrat du composant.
+3. materializer : composition vers le substrat du composant.
 
 Les formes auteur sont séparées par la frontière qui les reçoit :
 
@@ -138,7 +138,7 @@ canaux scalaires. Les matrices et l'ordre internes à cette chaîne restent donc
 de l'auteur. Les propriétés CSS individuelles restent des déclarations séparées.
 Les unités portées par les chaînes sont conservées; les valeurs numériques des
 longueurs reçoivent `px` à la frontière HTML, après application du
-`numericLengthScale` fourni par `HtmlMaterializerRuntimeContext`.
+`numericLengthScale` transmis au runner par `HtmlPlayerRunner.resize()`.
 
-`HtmlPlayerRunner.resize()` réapplique la frame logique courante après la mise à
-jour de ce contexte. Il ne recompile ni ne rejoue la timeline.
+`HtmlPlayerRunner.resize(scale)` réapplique la frame logique courante après la
+mise à jour du facteur. Il ne recompile ni ne rejoue la timeline.

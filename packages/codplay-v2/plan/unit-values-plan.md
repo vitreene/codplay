@@ -49,15 +49,39 @@ choisie par l'auteur.
 
 À la frontière HTML, les valeurs numériques qui représentent des longueurs sont
 converties en `px`. Cette conversion ne concerne ni les unités déjà portées par une
-chaîne ni les longueurs présentes dans une chaîne `transform` brute. Le
-`HtmlMaterializerRuntimeContext.numericLengthScale`, neutre à `1` par défaut,
-multiplie les valeurs numériques juste avant leur écriture CSS. Le contexte peut
-être changé lors d'un resize, puis la frame courante est réappliquée sans compiler
-à nouveau la scène ni rejouer les événements.
+chaîne ni les longueurs présentes dans une chaîne `transform` brute. Le facteur
+numérique, neutre à `1` par défaut, multiplie les valeurs numériques
+juste avant leur écriture CSS. L'hôte le transmet avec `runner.resize(scale)`,
+puis la frame courante est réappliquée sans compiler à nouveau la scène ni rejouer
+les événements.
 
 Le chemin chaud ACE n'est donc pas prevu pour melanger deux unites. Le comportement
 CSS, qui peut interpoler certaines unites heterogenes via le substrat, reste un
-comportement de projection distinct et ne devient pas une capacite compilee.
+comportement de materialisation distinct et ne devient pas une capacite compilee.
+
+### Utilisation au resize
+
+Le calcul du zoom appartient à l'hôte qui connaît sa fenêtre ou son conteneur. Il
+passe le facteur au runner, qui le transmet à son materializer HTML et réapplique
+la frame courante :
+
+```ts
+const designWidth = 1440
+// runner est construit avec le compiledScene, la racine et le catalog unifié.
+
+function applyViewportZoom(): void {
+  runner.resize(window.innerWidth / designWidth)
+}
+
+window.addEventListener('resize', applyViewportZoom)
+applyViewportZoom()
+```
+
+Le facteur est donc une donnée runtime du materializer, pas une donnée de scène.
+Avec un facteur `0.5`, `x: 40` reste `40` dans l'état logique puis devient `20px` à
+l'écriture HTML. Une valeur déjà munie d'une unité, par exemple `x: '40px'`, et
+une chaîne `style.transform` brute restent inchangées. L'hôte retire son écouteur
+de resize lorsqu'il détruit le runner.
 
 ## Observation externe AnimeJS
 

@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { DiagnosticCollector } from '../../../src/diagnostics'
+import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import type { TickPayload, Ticker } from '../../../src/runtime/time'
 
 describe('RuntimeEngine', () => {
   it('reports unavailable compiled capabilities', () => {
-    const engine = new RuntimeEngine({ components: ['tag'], services: [], modules: [], resources: [] })
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerComponent({ type: 'tag', services: [], modules: [], create: () => { throw new Error('not used') } })
+    const engine = new RuntimeEngine(catalog)
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
 
     engine.validateRequirements({ components: ['tag', 'media'], services: ['style'], modules: [], resources: [] }, diagnostics)
@@ -18,7 +21,7 @@ describe('RuntimeEngine', () => {
   })
 
   it('advances registered instances in registration order from external time', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const frames: string[] = []
 
     engine.registerInstance('first', (frame) => frames.push(`first:${frame.deltaMs}`))
@@ -43,7 +46,7 @@ describe('RuntimeEngine', () => {
       },
       isRunning: () => running,
     }
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const frames: Array<{ deltaMs: number; marginMs: number }> = []
     engine.registerInstance('player', (frame) => frames.push({ deltaMs: frame.deltaMs, marginMs: frame.marginMs }))
 
@@ -58,7 +61,7 @@ describe('RuntimeEngine', () => {
   })
 
   it('seeks a selected group through validate, prepare, commit, and present phases', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const phases: string[] = []
 
     for (const instanceId of ['first', 'second']) {
@@ -92,7 +95,7 @@ describe('RuntimeEngine', () => {
   })
 
   it('does not prepare a group when one target cannot be validated', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const phases: string[] = []
 
     engine.registerInstance('first', () => undefined, {

@@ -18,10 +18,9 @@ export type LayoutState = Readonly<{
 
 /** V2 layout component with no author-facing initialization hook. */
 export class LayoutComponent extends BaseComponent<LayoutInitial> {
-  /** Creates one layout component and declares its required projection services. */
+  /** Creates one layout component with services bound by its runtime definition. */
   constructor(input: ComponentInput<LayoutInitial>) {
     super(input)
-    this.services.declare(['markup', 'className', 'style', 'attr'])
   }
 
   /** Declares the layout root and its internal mounting parts. */

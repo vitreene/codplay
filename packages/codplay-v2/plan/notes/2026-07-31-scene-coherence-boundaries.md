@@ -40,7 +40,8 @@ cosmetique.
 
 ## Snapshot du catalogue
 
-Le snapshot de `ValidationCatalog` a le niveau d'immutabilite suivant :
+Le snapshot produit par `RuntimeCapabilityCatalog.validationSnapshot()` a le niveau
+d'immutabilite suivant :
 
 - les `Map` sont copiees au moment du snapshot;
 - une registration ulterieure ne modifie pas le snapshot deja remis au builder;
@@ -71,8 +72,8 @@ type `asset` ou `media` depuis le type du perso.
   helpers dans `validation/`.
 - Les guards actuels recoivent une donnee canonique; la validation d'une forme brute
   hors du contrat TypeScript releve d'une future frontiere codec/import.
-- Le catalogue de validation est capability-only : il ne porte ni composant
-  instancie, ni node, ni service runtime.
+- Le snapshot de validation issu de `RuntimeCapabilityCatalog` est capability-only :
+  il ne porte ni composant instancie, ni node, ni service runtime.
 
 ## Regle d'audit
 

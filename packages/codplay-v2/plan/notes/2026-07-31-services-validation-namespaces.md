@@ -33,13 +33,14 @@ par defaut et n'est pas retenu comme nom provisoire.
 ## Validation et compilation
 
 Une declaration de composant doit etre la source unique de son type, de ses services, de sa capacite runtime et de
-sa definition de validation optionnelle. La forme exacte reste a trancher : metadonnees statiques lues sur le
-composant lors de l'enregistrement, ou descripteur unique consomme par le runtime et le catalogue de validation.
-Dans les deux cas, aucune seconde liste `services` ne doit etre redigee pour la validation.
+sa definition de validation optionnelle. La forme retenue est un descripteur unique
+consomme par le runtime et `RuntimeCapabilityCatalog.validationSnapshot()`. Aucune
+seconde liste `services` ne doit etre redigee pour la validation.
 
-Les appels runtime de declaration de services ne sont pas une seconde source de verite : ils consomment la
-declaration deja enregistree. Le catalogue de validation est snapshotte et remis au moteur de validation de
-`CompiledScene`; aucune classe runtime ni aucun service instancie n'est transmis au build.
+Les composants ne declarent pas leurs services par un appel runtime. La definition
+enregistree est la seule source de verite. Son snapshot est remis au moteur de
+validation de `CompiledScene`; aucune classe runtime ni aucun service instancie n'est
+transmis au build.
 
 Les validateurs core des services communs sont obligatoires. Un validateur de composant peut rester absent dans la
 premiere tranche; cette absence produit un warning auteur detaille. Un type de composant ou un service necessaire

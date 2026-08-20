@@ -1,21 +1,7 @@
-import {
-  BaseComponent,
-  LayoutComponent,
-  RuntimeComponentCatalog,
-  TagComponent,
-} from '../../../src/runtime/components'
-import type {
-  ComponentInput,
-  LayoutInitial,
-  RuntimeComponentDefinition,
-  TagState,
-} from '../../../src/runtime/components'
-import {
-  HtmlPlayerRunner,
-  createDomComponentServiceCatalog,
-} from '../../../src/runtime/runner'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../src/runtime/runner'
 import { SceneBuilder } from '../../../src/scene/compiled'
-import { ValidationCatalog } from '../../../src/scene/validation'
 import type { SceneDoc } from '../../../src/scene/types'
 
 import './style.css'
@@ -33,7 +19,7 @@ type DemoScenario = Readonly<{
   description: string
   note: string
   animatedItems: string
-  projections: string
+  presentation: string
   scene: SceneDoc
   listPersoId: string
   inspectedPersoIds: readonly string[]
@@ -213,40 +199,22 @@ function createNestedOverlayScene(): SceneDoc {
 /** Compiles one demo scene through the normative SceneDoc boundary. */
 function buildScene(
   scene: SceneDoc,
-  componentCatalog: RuntimeComponentCatalog,
+  catalog: RuntimeCapabilityCatalog,
 ): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(ValidationCatalog.fromComponents(componentCatalog.getAll()).snapshot(), {
+  return new SceneBuilder(catalog.validationSnapshot(), {
     createdAt: '2026-08-18T00:00:00.000Z',
   }).build(scene)
 }
 
-/** Creates the runtime catalog shared by the movement host. */
-function createComponentCatalog(): RuntimeComponentCatalog {
-  const catalog = new RuntimeComponentCatalog()
-  const definitions: readonly RuntimeComponentDefinition[] = [{
-    type: 'layout',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new LayoutComponent(input as ComponentInput<LayoutInitial>) as unknown as BaseComponent<Record<string, unknown>>,
+/** Creates the CodPlay runtime catalog shared by the movement host. */
+function createRuntimeCatalog(): RuntimeCapabilityCatalog {
+  const catalog = createCoreRuntimeCatalog()
+  const layout = catalog.getComponent('layout')
+  if (layout === undefined) throw new Error('Core layout component is not registered.')
+  catalog.overrideComponent({
+    ...layout,
     mountableParts: ['source-outlet', 'target-outlet', 'parent-outlet-a', 'parent-outlet-b'],
-  }, {
-    type: 'tag',
-    services: ['className', 'style', 'attr', 'content'],
-    modules: [],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
-  }, {
-    type: 'list',
-    services: ['className', 'style', 'attr'],
-    modules: ['list'],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-    create: (input) => new TagComponent(input as ComponentInput<TagState>) as unknown as BaseComponent<Record<string, unknown>>,
-  }]
-  for (const definition of definitions) catalog.register(definition)
+  })
   return catalog
 }
 
@@ -260,7 +228,7 @@ const demoScenarios: Readonly<Record<ScenarioId, DemoScenario>> = {
     description: `A already belongs to the list and moves from last to first at ${MOVE_START_MS}ms. With no <code>flipMode</code>, the unchanged target selects local projection for A, B and C.`,
     note: `The structural order changes from [B, C, A] to [A, B, C]. Play and Seek resolve the same absolute graph frame; no historical presentation is replayed.`,
     animatedItems: 'A+B+C',
-    projections: 'local (inferred)',
+    presentation: 'local (inferred)',
     scene: createListScene(),
     listPersoId: 'main:target-list',
     inspectedPersoIds: ['main:item-a'],
@@ -273,7 +241,7 @@ const demoScenarios: Readonly<Record<ScenarioId, DemoScenario>> = {
     description: `At ${MOVE_START_MS}ms P changes container and Q changes outlet inside P. With no <code>flipMode</code>, both target changes infer independent reparent overlays while B and C keep local reflow segments.`,
     note: `At the middle checkpoint P and Q each own one overlay representation; Q is hidden in P's clone. At LAST all source nodes are visible and the overlay layer is empty.`,
     animatedItems: 'P+Q+B+C',
-    projections: 'P/Q reparent (inferred) · B/C local',
+    presentation: 'P/Q reparent (inferred) · B/C local',
     scene: createNestedOverlayScene(),
     listPersoId: 'main:overlay-target-list',
     inspectedPersoIds: ['main:overlay-parent', 'main:overlay-child'],
@@ -360,8 +328,8 @@ function start(): void {
     status.textContent = 'loading'
     showError([])
 
-    const componentCatalog = createComponentCatalog()
-    const build = buildScene(currentScenario.scene, componentCatalog)
+    const catalog = createRuntimeCatalog()
+    const build = buildScene(currentScenario.scene, catalog)
     if (!build.ok) {
       status.textContent = 'build failed'
       showError(build.diagnostics.errors)
@@ -373,8 +341,7 @@ function start(): void {
       compiledScene: build.compiledScene,
       root,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog,
-      serviceCatalog: createDomComponentServiceCatalog(),
+      catalog,
     })
     const init = runner.init()
     if (!init.ok) {
@@ -396,7 +363,7 @@ function start(): void {
       const overlay = readOverlayDiagnostics(root)
       seek.value = String(Math.min(TIMELINE_END_MS, currentTime))
       time.value = `${Math.round(currentTime)} ms`
-      status.textContent = `${activeRunner.getLifecycleState()} / list: ${readListOrder(list)} / inspected: ${readScenarioNodes(inspectedNodes)} / projection: ${currentScenario.projections} / animated: ${currentScenario.animatedItems} / overlay: ${overlay.ghosts} representations, ${overlay.hidden} hidden clones / epoch: ${activeRunner.getProjectionEpoch()}`
+      status.textContent = `${activeRunner.getLifecycleState()} / list: ${readListOrder(list)} / inspected: ${readScenarioNodes(inspectedNodes)} / presentation: ${currentScenario.presentation} / animated: ${currentScenario.animatedItems} / overlay: ${overlay.ghosts} representations, ${overlay.hidden} hidden clones / epoch: ${activeRunner.getMaterializationEpoch()}`
       if (playing && currentTime >= TIMELINE_END_MS) {
         activeRunner.pause()
         playing = false

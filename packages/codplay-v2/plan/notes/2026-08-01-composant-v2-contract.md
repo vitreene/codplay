@@ -35,11 +35,7 @@ type MaterializedPart = {
 }
 
 type ComponentServices = {
-  declare(names: readonly string[]): void
   apply(node: unknown, patch: Record<string, unknown>): void
-  content?: {
-    apply(node: unknown, value: unknown): void
-  }
 }
 
 type RuntimeComponentDefinition = {
@@ -93,7 +89,7 @@ public.
 ## Instanciation runtime
 
 Le `RuntimePlayer` ne connait pas les classes concretes. Il utilise un
-`RuntimeComponentCatalog` pour resoudre `perso.type`, puis un
+`RuntimeCapabilityCatalog` pour resoudre `perso.type`, puis un
 `RuntimeComponentRuntime` pour le cycle suivant :
 
 ```text
@@ -104,12 +100,13 @@ SolvedScene
   -> cleanup au retrait ou a la destruction du player
 ```
 
-Le runtime composant recoit son catalogue de services, les instances de modules
-du player et son materializer par injection. `declare()` verifie que chaque nom
-correspond a un service disponible ou a un module player-scoped. Les modules ne
-sont pas appliques comme des proprietes ; ils servent a satisfaire la dependance
-et restent hors de l'API de mutation du node. Le runtime ne cree pas de DOM lui-
-meme et ne contient aucune branche speciale pour `layout` ou `input`.
+Le runtime composant recoit une facade `ComponentServices` deja construite par le
+`RuntimeCapabilityCatalog`, ainsi que les instances de modules du player et son
+materializer. La liste des services et modules est portée uniquement par la
+definition runtime du type. Les modules ne sont pas appliques comme des proprietes ;
+ils servent a satisfaire la dependance et restent hors de l'API de mutation du node.
+Le runtime ne cree pas de DOM lui-meme et ne contient aucune branche speciale pour
+`layout` ou `input`.
 
 ## Exemple Tag
 
@@ -134,7 +131,6 @@ type ComponentUpdateInput = {
 class TagComponent extends BaseComponent<TagState> {
   constructor(input: ComponentInput<TagState>) {
     super(input)
-    this.services.declare(['className', 'style', 'attr', 'content'])
   }
 
   /** Declares the tag root with a template string. */
@@ -156,9 +152,7 @@ class TagComponent extends BaseComponent<TagState> {
       attr: state.attr,
     })
 
-    if (state.content !== undefined) {
-      this.services.content?.apply(this.node, String(state.content))
-    }
+    this.services.apply(this.node, { content: state.content })
   }
 }
 ```
@@ -198,7 +192,6 @@ type LayoutUpdateInput = {
 class LayoutComponent extends BaseComponent<LayoutInitial> {
   constructor(input: ComponentInput<LayoutInitial>) {
     super(input)
-    this.services.declare(['markup', 'className', 'style', 'attr'])
   }
 
   /** Declares the layout structure with its internal mounting points. */

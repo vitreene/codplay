@@ -6,7 +6,8 @@ import {
   unregisterMaterializedComponent,
 } from '../../../src/runtime/capabilities/markup'
 import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
-import { RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
+import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { RuntimeEngine } from '../../../src/runtime/engine'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 function registration(componentId: string, componentType: string, partId: string) {
@@ -38,12 +39,13 @@ describe('MarkupCapabilityState', () => {
   })
 
   it('keeps registrations independent between player-scoped module instances', () => {
-    const catalog = new RuntimeModuleServiceCatalog()
-    catalog.register(createMarkupModuleServiceDefinition())
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerModule(createMarkupModuleServiceDefinition())
 
     const compiledScene = {} as CompiledScene
-    const first = catalog.create('markup', { playerId: 'first', compiledScene }) as MarkupModuleServiceInstance
-    const second = catalog.create('markup', { playerId: 'second', compiledScene }) as MarkupModuleServiceInstance
+    const engine = new RuntimeEngine(catalog)
+    const first = engine.createModuleServiceInstances('first', compiledScene, ['markup']).get('markup') as MarkupModuleServiceInstance
+    const second = engine.createModuleServiceInstances('second', compiledScene, ['markup']).get('markup') as MarkupModuleServiceInstance
 
     first.registerComponent(registration('layout-first', 'layout', 'content'))
 

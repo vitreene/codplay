@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   BaseComponent,
-  RuntimeComponentCatalog,
   RuntimeComponentRuntime,
-  RuntimeComponentServiceCatalog,
 } from '../../../src/runtime/components'
+import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
+import type { RuntimeMaterializer } from '../../../src/runtime/materializer'
 import type { SolvedScene } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
 
@@ -68,12 +68,12 @@ function solvedScene(timeMs: number, includePerso = true): SolvedScene {
 
 describe('RuntimeComponentRuntime', () => {
   it('creates, updates and destroys factory instances from solved scenes', () => {
-    const catalog = new RuntimeComponentCatalog()
+    const catalog = new RuntimeCapabilityCatalog()
     const components: TestComponent[] = []
     const events: string[] = []
     const mountablePartIds: string[][] = []
     let receivedModuleServices: ReadonlyMap<string, unknown> | undefined
-    catalog.register({
+    catalog.registerComponent({
       type: 'test',
       services: [],
       modules: [],
@@ -81,21 +81,23 @@ describe('RuntimeComponentRuntime', () => {
       create: () => {
         const component = new TestComponent({
           perso: { id: 'item', storyId: 'main', initial: {} },
-          services: { declare: () => undefined, apply: () => undefined },
+          services: { apply: () => undefined },
         })
         components.push(component)
         return component
       },
     })
-    const runtime = new RuntimeComponentRuntime({
-      catalog,
-      serviceCatalog: new RuntimeComponentServiceCatalog(),
-      materialize: (_component, _identity, _initial, partIds, moduleServices) => {
+    const materializer: RuntimeMaterializer = {
+      id: 'test',
+      context: {},
+      materializeComponent: (_component, _identity, _initial, partIds, moduleServices) => {
         mountablePartIds.push([...partIds])
         receivedModuleServices = moduleServices
         return { destroy: () => events.push('destroy') }
       },
-    })
+      materializeScene: () => undefined,
+    }
+    const runtime = new RuntimeComponentRuntime({ catalog, materializer })
     const markupService = {}
     const moduleServices = new Map([['markup', markupService]])
     runtime.setModuleServices(moduleServices)

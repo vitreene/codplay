@@ -16,9 +16,11 @@ A service name is the shared namespace for:
 - the runtime update operation.
 
 The component definition consumed by `CompiledScene` and the runtime component
-registry carries the same service and module dependency lists. Runtime service
-implementations remain host adapters and are injected through the component
-service catalog.
+registry carries the same service and module dependency lists. Each service has
+its own folder. Its pure declaration and its materializer adapters remain together,
+while `RuntimeCapabilityCatalog` assembles the selected adapter at CodPlay
+initialization. The materializer consumes the resulting instance; it does not
+register services inline.
 
 Core services such as `style`, `className`, `attr`, and `content` belong here.
 Their validation declarations are shared with the V2 component definitions.

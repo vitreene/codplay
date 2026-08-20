@@ -12,10 +12,9 @@ export type TagState = Readonly<{
 
 /** V2 template-string component for a plain HTML tag. */
 export class TagComponent extends BaseComponent<TagState> {
-  /** Creates one tag component and declares its projection services. */
+  /** Creates one tag component with services already bound by its runtime definition. */
   constructor(input: ComponentInput<TagState>) {
     super(input)
-    this.services.declare(['className', 'style', 'attr', 'content'])
   }
 
   /** Returns the authored tag template. */
@@ -32,9 +31,7 @@ export class TagComponent extends BaseComponent<TagState> {
       className: input.state.className,
       style: input.state.style,
       attr: input.state.attr,
+      content: input.state.content === undefined ? undefined : String(input.state.content),
     })
-    if (input.state.content !== undefined) {
-      this.services.content?.apply(this.node, String(input.state.content))
-    }
   }
 }

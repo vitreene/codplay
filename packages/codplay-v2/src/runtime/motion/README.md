@@ -2,7 +2,7 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: graphe de mouvement et résolution Play/Seek validés le 2026-08-20; projection de production hors périmètre
+> Review: graphe de mouvement et résolution Play/Seek validés le 2026-08-20; materializer de production hors périmètre
 
 ## Contract
 

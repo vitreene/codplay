@@ -1,6 +1,5 @@
 import type { DiagnosticCollector, DiagnosticRefs } from '../../diagnostics'
 import { isPlainRecord } from '../../shared'
-import { createCoreServiceDefinitions } from '../../services'
 import {
   createPersoValidationPayloads,
   joinPersoValidationPath,
@@ -10,72 +9,19 @@ import { PERSO_VALIDATION_PATHS } from '../config/perso-validation'
 import { VALIDATION_TARGET_INITIAL } from '../../services/service-validation-types'
 import { reportMissingValidator } from './validation-warnings'
 import type {
-  ComponentValidationDefinition,
+  CapabilityValidationSnapshot,
   PersoValidationInput,
   ServiceValidationDefinition,
-  ValidationCatalogSnapshot,
   ValidationContext,
   ValidationFunction,
   ValidationTarget,
 } from './validation-types'
 
-/** Mutable registration catalog built while CodPlay capabilities are declared. */
-export class ValidationCatalog {
-  private readonly components = new Map<string, ComponentValidationDefinition>()
-  private readonly services = new Map<string, ServiceValidationDefinition>()
-
-  /** Creates a validation catalog from the component capability declarations. */
-  static fromComponents(definitions: readonly ComponentValidationDefinition[]): ValidationCatalog {
-    const catalog = new ValidationCatalog()
-    for (const definition of definitions) catalog.registerComponent(definition)
-    return catalog
-  }
-
-  /**
-   * Creates a catalog preloaded with the common service validators.
-   */
-  constructor() {
-    for (const definition of createCoreServiceDefinitions()) {
-      this.registerService(definition)
-    }
-  }
-
-  /**
-   * Registers one component validation declaration before compilation starts.
-   */
-  registerComponent(definition: ComponentValidationDefinition): void {
-    if (this.components.has(definition.type)) {
-      throw new Error(`Validation component already registered: ${definition.type}`)
-    }
-    this.components.set(definition.type, definition)
-  }
-
-  /**
-   * Registers one reusable service validation declaration.
-   */
-  registerService(definition: ServiceValidationDefinition): void {
-    if (this.services.has(definition.name)) {
-      throw new Error(`Validation service already registered: ${definition.name}`)
-    }
-    this.services.set(definition.name, definition)
-  }
-
-  /**
-   * Freezes the registration boundary consumed by the build pipeline.
-   */
-  snapshot(): ValidationCatalogSnapshot {
-    return {
-      components: new Map(this.components),
-      services: new Map(this.services),
-    }
-  }
-}
-
 /**
  * Validates one perso through component and declared service definitions.
  */
-export function validatePersoWithCatalog(
-  catalog: ValidationCatalogSnapshot,
+export function validatePersoWithCapabilities(
+  catalog: CapabilityValidationSnapshot,
   perso: PersoValidationInput,
   diagnostics: DiagnosticCollector,
 ): void {

@@ -3,27 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CodPlay V2 Layout Component Vertical</title>
+    <title>CodPlay V2 Layout Component Validation</title>
   </head>
   <body>
     <main class="demo-shell">
       <header>
         <p class="eyebrow">CodPlay V2 / layout component</p>
         <h1>Template string to projected layout</h1>
-        <p class="stage-marker">Current stage: component -&gt; data-part -&gt; layout -&gt; DOM projection</p>
+        <p class="stage-marker">Current stage: component -&gt; data-part -&gt; HTML materializer</p>
         <p class="flow-marker">flow: <output id="flow-output">preparing pipeline</output></p>
-        <p class="lede">A template-string LayoutComponent exposes one public data-part. The player moves the logical persos into the materialized layout.</p>
+        <p class="lede">A template-string LayoutComponent exposes one public data-part. The HTML player runner mounts the logical persos into the materialized layout.</p>
       </header>
 
-      <section class="panel" aria-label="temporary player">
-        <div id="stage" class="stage">
-          <div class="temporary-frame">
-            <div id="temporary-root" class="temporary-root">Temporary root</div>
-          </div>
-          <div class="temporary-frame accent-frame">
-            <div id="temporary-accent" class="temporary-accent">Temporary accent</div>
-          </div>
-        </div>
+      <section class="panel" aria-label="player validation">
         <div class="readout">
           <span>class <output id="class-output">is-idle</output></span>
           <span>opacity <output id="opacity-output">0</output></span>

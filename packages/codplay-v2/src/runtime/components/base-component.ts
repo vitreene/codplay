@@ -13,13 +13,13 @@ export abstract class BaseComponent<Initial extends Record<string, unknown>> {
     this.services = input.services
   }
 
-  /** Declares the component projection with a template string in the current V2 tranche. */
+  /** Declares the component render result with a template string in the current V2 tranche. */
   abstract render(): string
 
-  /** Applies one resolved state to the component projection. */
+  /** Applies one resolved state through the component's materializer services. */
   abstract update(input: ComponentUpdateInput): void
 
-  /** Stores one backend-materialized root and its internal template parts. */
+  /** Stores one materialized root and its internal template parts. */
   _materialize(rootNode: unknown, parts: readonly MaterializedPart[]): void {
     this.node = rootNode
     this.parts = parts.map((part) => ({ ...part }))

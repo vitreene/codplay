@@ -1,4 +1,4 @@
-import type { RuntimeModuleServiceDefinition } from '../../engine'
+import type { RuntimeModuleServiceDefinition } from '../../catalog'
 
 /** Runtime module identifier for components declaring the generic list capability. */
 export const LIST_MODULE_SERVICE_ID = 'list' as const

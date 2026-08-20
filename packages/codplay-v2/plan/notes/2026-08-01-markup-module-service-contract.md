@@ -12,7 +12,7 @@ Review: markup module rename applied; LayoutComponent remains the component type
 troisieme type de runtime.
 
 ```text
-RuntimeModuleServiceCatalog
+RuntimeCapabilityCatalog
   -> definition id: markup
   -> une instance par player
   -> etat interne par composant markup
@@ -85,7 +85,7 @@ cibles ne restent jamais dans le registre apres le retrait de leur proprietaire.
 ## Instance module
 
 `createMarkupModuleServiceDefinition()` implemente la definition compatible avec
-`RuntimeModuleServiceCatalog`. Chaque appel `create()` construit une nouvelle
+`RuntimeCapabilityCatalog`. Chaque appel `create()` construit une nouvelle
 `MarkupCapabilityState` et expose les operations markup suivantes :
 
 - `registerComponent()` ;
@@ -101,18 +101,19 @@ des methodes layout.
 
 ## Frontiere composant
 
-La dependance du composant passe par la facade de services :
+La dependance du composant est portée par la definition du composant dans le
+catalogue unifie :
 
 ```text
-  LayoutComponent
-  -> services.declare(['markup'])
+  LayoutComponent definition
+  -> modules: ['markup']
   -> runtime associe l'instance du module markup scopee au player
 ```
 
 Le composant ne recoit pas directement un module dans son constructeur et n'appelle
-pas les operations d'enregistrement des outlets. La facade `declare()` est la meme
-frontiere de declaration que pour les services V1 ; le runtime associe cette
-declaration a l'instance `RuntimeModuleService` `markup`.
+pas les operations d'enregistrement des outlets. La definition runtime est la
+source unique de la dependance ; le runtime associe cette declaration a l'instance
+`RuntimeModuleService` `markup`.
 
 Au runtime, `RuntimePlayer` injecte les instances de modules creees pour le player
 dans `RuntimeComponentRuntime` avant la premiere materialisation. Le materializer
@@ -174,7 +175,7 @@ La declaration doit alimenter :
 - le validateur de composant ;
 - `CompiledRequirements.modules` ;
 - la validation de disponibilite par `RuntimeEngine` ;
-- la creation de l'instance par `RuntimeModuleServiceCatalog`.
+- la creation de l'instance par `RuntimeCapabilityCatalog`.
 
 La definition runtime du composant porte aussi la liste `mountableParts`. Le
 `RuntimeComponentRuntime` la remet au materializer, qui filtre les parts
@@ -182,7 +183,8 @@ materialisees avant l'appel a `materializeComponentWithMarkup()`. Le composant
 peut donc conserver des parts internes sans les publier au module.
 
 La meme definition porte les listes `services` et `modules`. Elle est enregistree
-dans le catalogue de validation et dans le catalogue runtime ; le player valide
+dans `RuntimeCapabilityCatalog`; `validationSnapshot()` et le player la consomment
+pour valider
 les exigences compilees, puis injecte les instances de modules dans le runtime
 composant avant sa materialisation.
 
@@ -207,7 +209,7 @@ selection des parts montables passe par la definition runtime du type. Le materi
 DOM actuel applique
 desormais le parentage logique sur des nodes deja materialises, et
 `RuntimePlayer` l'appelle a l'initialisation, sur frame, au seek et a la destruction.
-`RuntimeComponentCatalog` et `RuntimeComponentRuntime` fournissent la factory
+`RuntimeCapabilityCatalog` et `RuntimeComponentRuntime` fournissent la factory
 runtime generique et le passage de la politique `mountableParts` au materializer.
 
 ## Hors contrat de cette tranche

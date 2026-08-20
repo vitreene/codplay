@@ -2,20 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { SceneBuilder } from '../../src/scene/compiled'
 import { RuntimeEngine } from '../../src/runtime/engine'
+import { createCoreRuntimeCatalog } from '../../src/runtime/catalog'
 import { MemoryRenderSink, RuntimePlayer } from '../../src/runtime/player'
-import { ValidationCatalog } from '../../src/scene/validation'
+import type { RuntimeCapabilityCatalog } from '../../src/runtime/catalog'
 import type { SceneDoc } from '../../src/scene/types'
 
 /** Creates the smallest catalog required by the temporary render vertical. */
-function createCatalog(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  catalog.registerComponent({
-    type: 'tag',
-    services: [],
-    validateInitial: () => undefined,
-    validateAction: () => undefined,
-  })
-  return catalog
+function createCatalog(): RuntimeCapabilityCatalog {
+  return createCoreRuntimeCatalog()
 }
 
 /** Creates one scene that exercises root placement, eventime, class, and tween state. */
@@ -49,7 +43,8 @@ function createVerticalScene(): SceneDoc {
 
 describe('temporary render validity vertical', () => {
   it('runs the compiled scene through engine, player, and memory sink', () => {
-    const builder = new SceneBuilder(createCatalog().snapshot(), {
+    const catalog = createCatalog()
+    const builder = new SceneBuilder(catalog.validationSnapshot(), {
       createdAt: '2026-07-31T00:00:00.000Z',
       diagnosticOutput: vi.fn(),
     })
@@ -59,7 +54,7 @@ describe('temporary render validity vertical', () => {
     if (!build.ok) return
 
     expect(build.compiledScene.rootNodeIds).toEqual(['root'])
-    const engine = new RuntimeEngine({ components: ['tag'], services: [], modules: [], resources: [] })
+    const engine = new RuntimeEngine(catalog)
     const sink = new MemoryRenderSink()
     const player = new RuntimePlayer('vertical-instance', engine, build.compiledScene, sink)
 

@@ -28,8 +28,8 @@ export type PersoValidationInput = Readonly<{
   actions?: Readonly<Record<string, unknown>>
 }>
 
-/** Immutable catalog view passed from CodPlay construction to compilation. */
-export type ValidationCatalogSnapshot = Readonly<{
+/** Immutable validation view passed from CodPlay construction to compilation. */
+export type CapabilityValidationSnapshot = Readonly<{
   components: ReadonlyMap<string, ComponentValidationDefinition>
   services: ReadonlyMap<string, ServiceValidationDefinition>
 }>

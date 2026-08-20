@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { DiagnosticCollector } from '../../../src/diagnostics'
-import { RuntimeEngine, RuntimeModuleServiceCatalog } from '../../../src/runtime/engine'
+import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { RuntimeEngine } from '../../../src/runtime/engine'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 const scene: CompiledScene = {
@@ -13,21 +14,18 @@ const scene: CompiledScene = {
   requirements: { components: [], services: [], modules: [], resources: [] },
 }
 
-describe('RuntimeModuleServiceCatalog', () => {
+describe('RuntimeCapabilityCatalog modules', () => {
   it('creates one independent module-service instance per player', () => {
-    const catalog = new RuntimeModuleServiceCatalog()
+    const catalog = new RuntimeCapabilityCatalog()
     const contexts: string[] = []
-    catalog.register({
+    catalog.registerModule({
       id: 'list',
       create: ({ playerId }) => {
         contexts.push(playerId)
         return { destroy: () => undefined }
       },
     })
-    const engine = new RuntimeEngine(
-      { components: [], services: [], modules: ['list'], resources: [] },
-      { moduleServiceCatalog: catalog },
-    )
+    const engine = new RuntimeEngine(catalog)
 
     const first = engine.createModuleServiceInstances('first', scene, ['list'])
     const second = engine.createModuleServiceInstances('second', scene, ['list'])
@@ -37,7 +35,7 @@ describe('RuntimeModuleServiceCatalog', () => {
   })
 
   it('reports a declared module unavailable when its definition is not registered', () => {
-    const engine = new RuntimeEngine({ components: [], services: [], modules: ['list'], resources: [] })
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const diagnostics = new DiagnosticCollector({ output: () => undefined })
 
     engine.validateRequirements({ components: [], services: [], modules: ['list'], resources: [] }, diagnostics)
@@ -46,10 +44,10 @@ describe('RuntimeModuleServiceCatalog', () => {
   })
 
   it('rejects duplicate module definitions', () => {
-    const catalog = new RuntimeModuleServiceCatalog()
+    const catalog = new RuntimeCapabilityCatalog()
     const definition = { id: 'list', create: () => ({}) }
-    catalog.register(definition)
+    catalog.registerModule(definition)
 
-    expect(() => catalog.register(definition)).toThrow('Runtime module service already registered: list')
+    expect(() => catalog.registerModule(definition)).toThrow('Runtime module already registered: list')
   })
 })

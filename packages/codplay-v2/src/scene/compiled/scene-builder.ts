@@ -12,7 +12,7 @@ import type {
 } from '../types'
 import { CompiledSceneValidationEngine } from '../validation/compiled-scene-validation-engine'
 import { SceneGuardEngine } from '../validation/scene-guard-engine'
-import type { ValidationCatalogSnapshot } from '../validation/validation-types'
+import type { CapabilityValidationSnapshot } from '../validation/validation-types'
 import {
   createExtractionState,
   extractCompiledRecord,
@@ -66,7 +66,7 @@ export class SceneBuilder {
   private readonly options: SceneBuilderOptions
 
   /** Creates a builder from the immutable capability catalog used for validation. */
-  constructor(catalog: ValidationCatalogSnapshot, options: SceneBuilderOptions = {}) {
+  constructor(catalog: CapabilityValidationSnapshot, options: SceneBuilderOptions = {}) {
     this.validationEngine = new CompiledSceneValidationEngine(catalog)
     this.options = options
   }

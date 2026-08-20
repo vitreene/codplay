@@ -19,7 +19,7 @@ import {
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 import { createTemporaryRenderSnapshotFromSolved, type TemporaryRenderSink } from './temporary-render-sink'
 import { RenderSync } from './render-sync'
-import type { LayoutProjection } from './layout-projection'
+import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
 import {
   materializeScene,
@@ -52,7 +52,7 @@ export type PlayerSeekResult = Readonly<
   | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
 >
 
-/** One compiled-scene runtime instance with an optional logical projection boundary. */
+/** One compiled-scene runtime instance with an optional materializer boundary. */
 export class RuntimePlayer {
   readonly id: string
   readonly engine: RuntimeEngine
@@ -64,7 +64,7 @@ export class RuntimePlayer {
   readonly functions: CompiledFunctionCollection
   readonly stateStore: RuntimeStateStore
   readonly mountTargets: readonly MountTargetDeclaration[]
-  readonly layoutProjection: LayoutProjection | undefined
+  readonly materializer: RuntimeMaterializer | undefined
   readonly componentRuntime: RuntimeComponentRuntime | undefined
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
@@ -89,7 +89,7 @@ export class RuntimePlayer {
     strapCollections?: StrapCollections,
     trackJournal?: RuntimeTrackJournal,
     mountTargets: readonly MountTargetDeclaration[] = [],
-    layoutProjection?: LayoutProjection,
+    materializer?: RuntimeMaterializer,
     componentRuntime?: RuntimeComponentRuntime,
     functions: CompiledFunctionCollection = {},
   ) {
@@ -102,7 +102,7 @@ export class RuntimePlayer {
     this.trackJournal = trackJournal ?? new RuntimeTrackJournal(compiledScene)
     this.functions = functions
     this.mountTargets = mountTargets
-    this.layoutProjection = layoutProjection
+    this.materializer = materializer
     this.componentRuntime = componentRuntime
     this.stateStore = new RuntimeStateStore(compiledScene)
   }
@@ -172,8 +172,7 @@ export class RuntimePlayer {
     )
     this.solvedScene = this.reconstructScene(0)
     this.synchronizeStateStore(0)
-    this.componentRuntime?.sync(this.solvedScene)
-    this.layoutProjection?.project(this.solvedScene, { moveDeltas: [] })
+    this.materializeScene(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
@@ -199,7 +198,7 @@ export class RuntimePlayer {
         }
         this.solvedScene = this.pendingSolvedScene
         this.synchronizeStateStore(timeMs)
-        this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
+        this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
@@ -252,13 +251,13 @@ export class RuntimePlayer {
   /** Reapplies the current solved scene after a materializer-context change. */
   refresh(): void {
     if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
-    this.projectScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
+    this.materializeScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
     this.presentTemporarySnapshot()
   }
 
   /**
    * Appends and routes one live event through the same journal later consumed
-   * by seek, then refreshes the current projection from that journal.
+   * by seek, then refreshes the current materialization from that journal.
    */
   async emit(input: Omit<RuntimeEventInput, 'applyAtMs'> & { applyAtMs?: number }): Promise<RuntimeEventDispatchResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
@@ -282,7 +281,7 @@ export class RuntimePlayer {
       : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
-    this.projectScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.presentTemporarySnapshot()
     return result
   }
@@ -295,7 +294,7 @@ export class RuntimePlayer {
     this.abortPendingModuleSeek()
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
-    this.layoutProjection?.destroy?.()
+    this.materializer?.destroy?.()
     this.componentRuntime?.destroy()
     this.state = PLAYER_LIFECYCLE_DESTROYED
   }
@@ -317,7 +316,7 @@ export class RuntimePlayer {
     const moveDeltas = rawMoveDeltas
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
-    this.projectScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
     this.presentTemporarySnapshot()
   }
@@ -328,16 +327,10 @@ export class RuntimePlayer {
     this.renderSink?.present(createTemporaryRenderSnapshotFromSolved(this.id, this.compiledScene, this.solvedScene))
   }
 
-  /** Projects one scene while keeping authored writes inside the render boundary. */
-  private projectScene(scene: SolvedScene, context: Omit<NonNullable<Parameters<LayoutProjection['project']>[1]>, 'authoredSync'>): void {
-    if (this.layoutProjection === undefined) {
-      this.componentRuntime?.sync(scene)
-      return
-    }
-    this.layoutProjection.project(scene, {
-      ...context,
-      authoredSync: (authoredScene) => this.componentRuntime?.sync(authoredScene),
-    })
+  /** Materializes one scene while keeping authored writes inside the render boundary. */
+  private materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
+    this.componentRuntime?.sync(scene)
+    this.materializer?.materializeScene(scene, context)
   }
 
   /** Enforces one valid lifecycle transition. */

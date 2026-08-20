@@ -1,24 +1,9 @@
-import {
-  createMarkupModuleServiceDefinition,
-  MARKUP_MODULE_SERVICE_ID,
-} from '../capabilities/markup'
-import {
-  createListModuleServiceDefinition,
-  LIST_MODULE_SERVICE_ID,
-} from '../capabilities/list'
-import {
-  RuntimeEngine,
-  RuntimeModuleServiceCatalog,
-  type Ticker,
-} from '../engine'
+import { RuntimeEngine, type Ticker } from '../engine'
 import { TimeTicker } from '../time'
+import { RuntimeComponentRuntime } from '../components'
+import { RuntimeCapabilityCatalog } from '../catalog'
+import type { RuntimeMaterializer } from '../materializer'
 import {
-  RuntimeComponentCatalog,
-  RuntimeComponentRuntime,
-  RuntimeComponentServiceCatalog,
-} from '../components'
-import {
-  LayoutDomBackend,
   RuntimePlayer,
   type MountTargetDeclaration,
   type PlayerInitResult,
@@ -28,9 +13,12 @@ import {
   type RuntimeEventInput,
   type StrapCollections,
 } from '../player'
-import { compileMotionSchedule, MotionLayoutProjection } from '../motion'
+import { compileMotionSchedule, MotionMaterializer } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
-import { HtmlComponentMaterializer } from './html-component-materializer'
+import {
+  HtmlComponentMaterializer,
+  type HtmlMaterializerRuntimeContext,
+} from './html-component-materializer'
 import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 import { HtmlMotionSystem } from './html-motion-system'
 import { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
@@ -47,10 +35,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   compiledScene: CompiledScene
   root: HTMLElement
   rootTargets: readonly HtmlRootTarget[]
-  componentCatalog: RuntimeComponentCatalog
-  serviceCatalog: RuntimeComponentServiceCatalog
+  catalog: RuntimeCapabilityCatalog
   engine?: RuntimeEngine
-  moduleServiceCatalog?: RuntimeModuleServiceCatalog
   ticker?: Ticker
   functions?: CompiledFunctionCollection
   strapCollections?: StrapCollections
@@ -73,21 +59,15 @@ export class HtmlPlayerRunner {
     targetNodes: Map<string, unknown>
   } | undefined
   private readonly motionSystem: HtmlMotionSystem | undefined
-  private projectionEpoch = 0
+  private readonly materializerContext: HtmlMaterializerRuntimeContext
+  private materializationEpoch = 0
 
   /** Creates visible and isolated-measurement hosts from the same compiled scene. */
   constructor(options: HtmlPlayerRunnerOptions) {
     this.defaultTicker = options.ticker
-    const moduleCatalog = options.moduleServiceCatalog ?? new RuntimeModuleServiceCatalog()
-    registerMarkupModule(moduleCatalog)
-    registerListModule(moduleCatalog)
-    this.engine = options.engine ?? new RuntimeEngine(
-      {
-        ...options.compiledScene.requirements,
-        modules: [...new Set(options.compiledScene.requirements.modules)],
-      },
-      { moduleServiceCatalog: moduleCatalog },
-    )
+    this.materializerContext = { numericLengthScale: 1 }
+    options.catalog.lock()
+    this.engine = options.engine ?? new RuntimeEngine(options.catalog)
     this.ownsEngine = options.engine === undefined
     const mountTargets: readonly MountTargetDeclaration[] = options.rootTargets.map((target) => ({
       id: target.id,
@@ -96,16 +76,12 @@ export class HtmlPlayerRunner {
     }))
     for (const target of options.rootTargets) this.nodes.targetNodes.set(target.id, options.root)
 
-    const componentRuntime = createComponentRuntime(
-      options.componentCatalog,
-      options.serviceCatalog,
-      this.nodes,
-    )
-    const backend = new LayoutDomBackend(this.nodes)
-    const layoutProjection = new MotionLayoutProjection(
-      backend,
+    const componentMaterializer = new HtmlComponentMaterializer(this.nodes, this.materializerContext)
+    const materializer = new MotionMaterializer(
+      componentMaterializer,
       (timeMs) => this.motionSystem?.present(timeMs),
     )
+    const componentRuntime = createComponentRuntime(options.catalog, materializer)
     this.player = new RuntimePlayer(
       options.id,
       this.engine,
@@ -115,7 +91,7 @@ export class HtmlPlayerRunner {
       options.strapCollections,
       undefined,
       mountTargets,
-      layoutProjection,
+      materializer,
       componentRuntime,
       options.functions,
     )
@@ -135,19 +111,12 @@ export class HtmlPlayerRunner {
     }
     this.measurementNodes = measurementNodes
     for (const target of options.rootTargets) measurementNodes.targetNodes.set(target.id, measurementRoot)
-    const measurementRuntime = createComponentRuntime(
-      options.componentCatalog,
-      options.serviceCatalog,
+    const measurementMaterializer = new HtmlComponentMaterializer(
       measurementNodes,
+      this.materializerContext,
     )
-    const measurementBackend = new LayoutDomBackend(measurementNodes)
-    const measurementEngine = new RuntimeEngine(
-      {
-        ...options.compiledScene.requirements,
-        modules: [...new Set(options.compiledScene.requirements.modules)],
-      },
-      { moduleServiceCatalog: moduleCatalog },
-    )
+    const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer)
+    const measurementEngine = new RuntimeEngine(options.catalog)
     const measurementPlayer = new RuntimePlayer(
       `${options.id}:measurement`,
       measurementEngine,
@@ -157,7 +126,7 @@ export class HtmlPlayerRunner {
       options.strapCollections,
       this.player.trackJournal,
       mountTargets,
-      measurementBackend,
+      measurementMaterializer,
       measurementRuntime,
       options.functions,
     )
@@ -166,12 +135,12 @@ export class HtmlPlayerRunner {
       options.root,
       (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
     )
-    /** Projects and captures one pure solved state in the isolated measurement host. */
+    /** Materializes and captures one pure solved state in the isolated measurement host. */
     const measure = (scene: ReturnType<RuntimePlayer['resolveSceneAt']>) => {
       syncMeasurementRoot(options.root, measurementRoot)
-      measurementBackend.project(scene, {
+      measurementRuntime.sync(scene)
+      measurementMaterializer.materializeScene(scene, {
         moveDeltas: [],
-        authoredSync: (authoredScene) => measurementRuntime.sync(authoredScene),
       })
       return captureHtmlLayoutSnapshot(measurementRoot, measurementNodes.persoNodes, scene)
     }
@@ -239,17 +208,18 @@ export class HtmlPlayerRunner {
     return this.player.emit(input)
   }
 
-  /** Invalidates measured layout endpoints after a host geometry change. */
-  resize(): void {
-    this.projectionEpoch += 1
+  /** Updates the HTML length scale and invalidates measured layout endpoints. */
+  resize(numericLengthScale?: number): void {
+    if (numericLengthScale !== undefined) this.materializerContext.numericLengthScale = numericLengthScale
+    this.materializationEpoch += 1
     this.motionSystem?.invalidate()
     if (this.player.getSolvedScene() !== undefined) this.player.refresh()
     else this.motionSystem?.present(this.player.getCurrentTimeMs())
   }
 
-  /** Returns the current host projection epoch for diagnostics. */
-  getProjectionEpoch(): number {
-    return this.projectionEpoch
+  /** Returns the current host materialization epoch for diagnostics. */
+  getMaterializationEpoch(): number {
+    return this.materializationEpoch
   }
 
   /** Returns the current player lifecycle state. */
@@ -288,21 +258,12 @@ export class HtmlPlayerRunner {
 
 /** Creates one component runtime around an isolated node registry. */
 function createComponentRuntime(
-  componentCatalog: RuntimeComponentCatalog,
-  serviceCatalog: RuntimeComponentServiceCatalog,
-  nodes: { persoNodes: Map<string, unknown>; targetNodes: Map<string, unknown> },
+  catalog: RuntimeCapabilityCatalog,
+  materializer: RuntimeMaterializer,
 ): RuntimeComponentRuntime {
-  const materializer = new HtmlComponentMaterializer(nodes)
   return new RuntimeComponentRuntime({
-    catalog: componentCatalog,
-    serviceCatalog,
-    materialize: (component, identity, initial, mountablePartIds, moduleServices) => materializer.materialize(
-      component,
-      identity,
-      initial,
-      mountablePartIds,
-      moduleServices,
-    ),
+    catalog,
+    materializer,
   })
 }
 
@@ -337,16 +298,6 @@ function removeMeasurementRoot(root: HTMLElement | undefined): void {
   if (root === undefined) return
   if (typeof root.remove === 'function') root.remove()
   else root.parentElement?.removeChild(root)
-}
-
-/** Registers the built-in markup module exactly once. */
-function registerMarkupModule(catalog: RuntimeModuleServiceCatalog): void {
-  if (!catalog.has(MARKUP_MODULE_SERVICE_ID)) catalog.register(createMarkupModuleServiceDefinition())
-}
-
-/** Registers the built-in list capability marker exactly once. */
-function registerListModule(catalog: RuntimeModuleServiceCatalog): void {
-  if (!catalog.has(LIST_MODULE_SERVICE_ID)) catalog.register(createListModuleServiceDefinition())
 }
 
 /** Creates the browser ticker lazily. */

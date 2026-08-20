@@ -6,15 +6,16 @@
 
 ## Role
 
-`HtmlPlayerRunner` binds a compiled scene, a `RuntimePlayer`, component services
-and one HTML root. Its presentation pipeline is unique:
+`HtmlPlayerRunner` binds a compiled scene, a `RuntimePlayer`, one
+`RuntimeCapabilityCatalog` composed during CodPlay initialization and one HTML
+root. Its presentation pipeline is unique:
 
 ```text
 SolvedScene(t)
   -> authored component sync
-  -> structural DOM projection
+  -> HTML layout materialization
   -> resolvePresentationFrame(t)
-  -> atomic HTML motion commit
+  -> atomic HTML motion presentation
 ```
 
 Play and Seek invoke this exact operation. The runner contains no historical DOM
@@ -24,7 +25,7 @@ replay, capture cache, alias, handoff or demo-specific mutation.
 
 The runner owns a second, offscreen HTML substrate used only to measure natural
 layout. It uses a companion `RuntimePlayer` with the same `StructuralTimeline`,
-component catalog and `LayoutDomBackend` contracts as the visible host, while
+capability catalog and the same HTML `RuntimeMaterializer` contract as the visible host, while
 sharing the visible player's `RuntimeTrackJournal`. Its width and height are
 copied exactly from the visible root; this matters for authored percentage-based
 positions, which must produce the same LAST geometry in both substrates.
@@ -44,7 +45,7 @@ Both modes consume the same resolved item pose.
 
 ### Local
 
-Local projection applies reserved size and transform slots to the real source
+Local presentation applies reserved size and transform slots to the real source
 node in its current parent. It is inferred when target identity is unchanged and
 is the default for an intra-list reorder.
 
@@ -54,7 +55,7 @@ layout.
 
 ### Reparent
 
-Reparent projection masks the source and creates an item-indexed representation
+Reparent presentation masks the source and creates an item-indexed representation
 inside the root overlay. It is forced whenever target or logical parent changes,
 including a transfer from one list to another. Authoring `flipMode:
 'overlay-world'` can also request it explicitly.
@@ -75,16 +76,46 @@ trajectory and timing do not change.
 - `destroy()` removes local transient slots, overlay representations, measurement
   DOM, components and owned clock resources.
 
-## Materializer context
+## Contexte du materializer
 
-The HTML service catalog accepts a `HtmlMaterializerRuntimeContext`. Its
-`numericLengthScale` is applied only to unitless numeric lengths at the HTML
-boundary, for example `x: 40` becomes `40px` at scale `1` and `80px` at scale `2`.
-Authored units and raw `style.transform` strings are preserved.
+`HtmlPlayerRunner` reçoit le `RuntimeCapabilityCatalog` déjà composé lors de
+l'initialisation de CodPlay. Les composants, leurs services, leurs modules et
+leurs validateurs sont déclarés dans ce catalogue unique. Le runner crée les
+instances du `RuntimeMaterializer` HTML nécessaires aux substrats visible et
+isolé, mais aucun materializer n'enregistre de service ou de module.
 
-The host may update the same context object when its scale changes, then call
-`resize()`. The runner reapplies the current solved frame; it does not rebuild the
-compiled scene or replay the timeline.
+Le facteur passé à `resize()`
+s'applique uniquement aux longueurs numériques sans unité à la frontière HTML.
+Par exemple, `x: 40` devient `40px` avec un facteur `1` et `80px` avec un facteur
+`2`. Les unités auteur et les chaînes brutes `style.transform` sont conservées.
+
+Le runner réapplique la frame résolue courante lorsque le facteur change ; il ne
+reconstruit pas la scène compilée et ne rejoue pas la timeline.
+
+### Exemple au resize
+
+L'hôte possède la formule du zoom. CodPlay reçoit uniquement le facteur obtenu :
+
+```ts
+const designWidth = 1440
+
+const runner = new HtmlPlayerRunner({
+  // ...compiledScene, root, rootTargets et catalog
+})
+
+function applyViewportZoom(): void {
+  runner.resize(window.innerWidth / designWidth)
+}
+
+window.addEventListener('resize', applyViewportZoom)
+applyViewportZoom()
+```
+
+Dans cet exemple, une valeur auteur comme `x: 40` est écrite en `40px` avec un
+facteur `1` et en `20px` lorsque la fenêtre produit un facteur `0.5`. Une valeur
+qui porte déjà une unité, comme `x: '40px'`, ainsi qu'une chaîne brute
+`style.transform`, ne sont pas redimensionnées. Le listener de resize appartient
+à l'hôte et doit être retiré par celui-ci lors de la destruction du runner.
 
 ## Invariants
 

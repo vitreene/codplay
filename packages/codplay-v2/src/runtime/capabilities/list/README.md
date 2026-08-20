@@ -20,4 +20,4 @@ default. A transfer to another list changes target and is classified as reparent
 movement by the motion graph. This inference does not require `flipMode`.
 
 The list capability does not read the DOM, measure geometry or perform visual
-projection.
+materialization.

@@ -1,18 +1,37 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { DiagnosticCollector } from '../../../src/diagnostics'
-import { CompiledSceneValidationEngine, ValidationCatalog, validatePersoWithCatalog } from '../../../src/scene/validation'
+import { CompiledSceneValidationEngine, validatePersoWithCapabilities } from '../../../src/scene/validation'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import type { RuntimeCapabilityCatalog, RuntimeComponentDefinition } from '../../../src/runtime/catalog'
+import { TagComponent } from '../../../src/runtime/components'
 
-describe('ValidationCatalog', () => {
+function componentDefinition(
+  type: string,
+  services: readonly string[],
+  validateInitial?: RuntimeComponentDefinition['validateInitial'],
+  validateAction?: RuntimeComponentDefinition['validateAction'],
+): RuntimeComponentDefinition {
+  return {
+    type,
+    services,
+    modules: [],
+    validateInitial,
+    validateAction,
+    create: (input) => new TagComponent(input as never),
+  }
+}
+
+function catalog(): RuntimeCapabilityCatalog {
+  return createCoreRuntimeCatalog()
+}
+
+describe('RuntimeCapabilityCatalog validation snapshot', () => {
   it('projects runtime-shaped component declarations into one validation catalog', () => {
-    const catalog = ValidationCatalog.fromComponents([{
-      type: 'tag',
-      services: ['style'],
-      modules: ['markup'],
-      validateInitial: () => undefined,
-    }])
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent({ ...componentDefinition('tag', ['style'], () => undefined), modules: ['markup'] })
 
-    const snapshot = catalog.snapshot()
+    const snapshot = runtimeCatalog.validationSnapshot()
 
     expect(snapshot.components.get('tag')).toMatchObject({
       type: 'tag',
@@ -25,14 +44,10 @@ describe('ValidationCatalog', () => {
   it('passes the declared service validators to the compiled validation boundary', () => {
     const output = vi.fn()
     const diagnostics = new DiagnosticCollector({ output })
-    const catalog = new ValidationCatalog()
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent(componentDefinition('tag', ['style', 'className', 'attr']))
 
-    catalog.registerComponent({
-      type: 'tag',
-      services: ['style', 'className', 'attr'],
-    })
-
-    const engine = new CompiledSceneValidationEngine(catalog.snapshot())
+    const engine = new CompiledSceneValidationEngine(runtimeCatalog.validationSnapshot())
     engine.validate({ persos: [{
       id: 'title',
       type: 'tag',
@@ -55,10 +70,10 @@ describe('ValidationCatalog', () => {
 
   it('reports invalid common service payloads with paths and references', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
-    const catalog = new ValidationCatalog()
-    catalog.registerComponent({ type: 'tag', services: ['style', 'className', 'attr'] })
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent(componentDefinition('tag', ['style', 'className', 'attr']))
 
-    validatePersoWithCatalog(catalog.snapshot(), {
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'title',
       type: 'tag',
       initial: {
@@ -81,22 +96,18 @@ describe('ValidationCatalog', () => {
 
   it('allows component-specific validation to be added without changing the catalog pipeline', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
-    const catalog = new ValidationCatalog()
+    const runtimeCatalog = catalog()
 
-    catalog.registerComponent({
-      type: 'meter',
-      services: [],
-      validateInitial: (value, context) => {
+    runtimeCatalog.registerComponent(componentDefinition('meter', [], (value, context) => {
         if (typeof value !== 'object' || value === null || !('max' in value)) {
           context.diagnostics.error('AUTHOR_METER_INITIAL_INVALID', 'meter.max is required.', {
             refs: context.refs,
             context: { path: context.path },
           })
         }
-      },
-    })
+      }))
 
-    validatePersoWithCatalog(catalog.snapshot(), {
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'meter-1',
       type: 'meter',
       initial: { value: 0 },
@@ -110,10 +121,10 @@ describe('ValidationCatalog', () => {
   it('does not validate the canonical self-reference as an authored action payload', () => {
     const validateAction = vi.fn()
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
-    const catalog = new ValidationCatalog()
-    catalog.registerComponent({ type: 'tag', services: [], validateAction })
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent(componentDefinition('tag', [], undefined, validateAction))
 
-    validatePersoWithCatalog(catalog.snapshot(), {
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'title',
       type: 'tag',
       initial: {},
@@ -125,11 +136,11 @@ describe('ValidationCatalog', () => {
 
   it('warns when a declared service has no validator', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
-    const catalog = new ValidationCatalog()
-    catalog.registerService({ name: 'custom' })
-    catalog.registerComponent({ type: 'custom', services: ['custom'] })
+    const runtimeCatalog = catalog()
+    runtimeCatalog.registerService({ name: 'custom', materializers: ['test'], create: () => ({ apply: () => undefined }) })
+    runtimeCatalog.registerComponent(componentDefinition('custom', ['custom']))
 
-    validatePersoWithCatalog(catalog.snapshot(), {
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
       id: 'custom-1',
       type: 'custom',
       initial: { custom: { value: 1 } },
@@ -143,11 +154,11 @@ describe('ValidationCatalog', () => {
   })
 
   it('detaches a catalog snapshot from later registrations', () => {
-    const catalog = new ValidationCatalog()
-    catalog.registerComponent({ type: 'tag', services: ['style'] })
-    const snapshot = catalog.snapshot()
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent(componentDefinition('tag', ['style']))
+    const snapshot = runtimeCatalog.validationSnapshot()
 
-    catalog.registerComponent({ type: 'later', services: [] })
+    runtimeCatalog.registerComponent(componentDefinition('later', []))
 
     expect(snapshot.components.has('later')).toBe(false)
   })

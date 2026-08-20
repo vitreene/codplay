@@ -1,6 +1,6 @@
 import type { DiagnosticCollector } from '../../diagnostics'
-import { validatePersoWithCatalog } from './validation-catalog'
-import type { PersoValidationInput, ValidationCatalogSnapshot } from './validation-types'
+import { validatePersoWithCapabilities } from './validate-perso-with-capabilities'
+import type { PersoValidationInput, CapabilityValidationSnapshot } from './validation-types'
 import type { MarkupAttributeSanitizer } from '../../services'
 
 /** Minimal capability set consumed by the compiled-scene validation engine. */
@@ -12,12 +12,12 @@ export type CompiledSceneValidationInput = Readonly<{
  * Consumes a validation catalog snapshot while guarding compiled-scene inputs.
  */
 export class CompiledSceneValidationEngine {
-  private readonly catalog: ValidationCatalogSnapshot
+  private readonly catalog: CapabilityValidationSnapshot
 
   /**
    * Creates one validation engine from the capabilities declared by CodPlay.
    */
-  constructor(catalog: ValidationCatalogSnapshot) {
+  constructor(catalog: CapabilityValidationSnapshot) {
     this.catalog = catalog
   }
 
@@ -26,7 +26,7 @@ export class CompiledSceneValidationEngine {
    */
   validate(input: CompiledSceneValidationInput, diagnostics: DiagnosticCollector): void {
     for (const perso of input.persos) {
-      validatePersoWithCatalog(this.catalog, perso, diagnostics)
+      validatePersoWithCapabilities(this.catalog, perso, diagnostics)
     }
   }
 

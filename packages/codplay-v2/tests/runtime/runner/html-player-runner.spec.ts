@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LayoutComponent, RuntimeComponentCatalog, TagComponent } from '../../../src/runtime/components'
-import type { RuntimeComponentDefinition } from '../../../src/runtime/components'
-import { createDomComponentServiceCatalog, HtmlPlayerRunner } from '../../../src/runtime/runner'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../src/runtime/runner'
 import type { CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
-import { ValidationCatalog } from '../../../src/scene/validation'
 import type { SceneDoc } from '../../../src/scene/types'
 import type { Ticker } from '../../../src/runtime/engine'
 
@@ -115,36 +114,8 @@ function ticker(): Ticker {
 }
 
 /** Creates runtime component definitions for the first HTML runner vertical. */
-function componentCatalog(): RuntimeComponentCatalog {
-  const catalog = new RuntimeComponentCatalog()
-  const definitions: readonly RuntimeComponentDefinition[] = [{
-    type: 'layout',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
-    create: (input) => new LayoutComponent(input as never),
-    mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
-  }, {
-    type: 'tag',
-    services: ['className', 'style', 'attr', 'content'],
-    modules: [],
-    create: (input) => new TagComponent(input as never),
-  }, {
-    type: 'list',
-    services: ['className', 'style', 'attr'],
-    modules: ['list'],
-    create: (input) => new TagComponent(input as never),
-  }]
-  for (const definition of definitions) catalog.register(definition)
-  return catalog
-}
-
-/** Creates the validation catalog matching the HTML runtime component catalog. */
-function validationCatalog(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  catalog.registerComponent({ type: 'layout', services: ['className', 'style', 'attr'], modules: ['markup'], validateInitial: () => undefined, validateAction: () => undefined })
-  catalog.registerComponent({ type: 'tag', services: ['className', 'style', 'attr', 'content'], modules: [], validateInitial: () => undefined, validateAction: () => undefined })
-  catalog.registerComponent({ type: 'list', services: ['className', 'style', 'attr'], modules: ['list'], validateInitial: () => undefined, validateAction: () => undefined })
-  return catalog
+function runtimeCatalog(): RuntimeCapabilityCatalog {
+  return createCoreRuntimeCatalog()
 }
 
 /** Declares one scene with a logical root-to-outlet move. */
@@ -174,7 +145,7 @@ function sceneDoc(): SceneDoc {
 
 /** Builds the declared scene through the normative SceneDoc compiler boundary. */
 function compiledScene(): CompiledScene {
-  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(sceneDoc())
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(sceneDoc())
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -210,7 +181,7 @@ function continuousCompiledScene(): CompiledScene {
       },
     },
   }
-  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(scene)
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(scene)
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -249,7 +220,7 @@ function listSceneDoc(): SceneDoc {
 
 /** Builds the list-order runner fixture through the SceneDoc compiler boundary. */
 function listCompiledScene(): CompiledScene {
-  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(listSceneDoc())
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(listSceneDoc())
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -303,7 +274,7 @@ function nestedListSceneDoc(): SceneDoc {
 
 /** Builds the nested-list regression fixture through the SceneDoc compiler. */
 function nestedListCompiledScene(): CompiledScene {
-  const build = new SceneBuilder(validationCatalog().snapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(nestedListSceneDoc())
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(nestedListSceneDoc())
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -326,8 +297,7 @@ describe('HtmlPlayerRunner', () => {
       compiledScene: compiledScene(),
       root: root as unknown as HTMLElement,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog: componentCatalog(),
-      serviceCatalog: createDomComponentServiceCatalog(),
+      catalog: runtimeCatalog(),
       ticker: ticker(),
     })
 
@@ -355,7 +325,7 @@ describe('HtmlPlayerRunner', () => {
     expect(childTags(root)).toHaveLength(1)
 
     runner.resize()
-    expect(runner.getProjectionEpoch()).toBe(1)
+    expect(runner.getMaterializationEpoch()).toBe(1)
     runner.destroy()
     expect(root.childNodes).toEqual([])
     expect(runner.getPersoNode('main:item')).toBeUndefined()
@@ -365,14 +335,12 @@ describe('HtmlPlayerRunner', () => {
   it('presents continuous color, opacity and translation without changing parentage', () => {
     installFakeDom()
     const root = new FakeElement()
-    const materializerContext = { numericLengthScale: 1 }
     const runner = new HtmlPlayerRunner({
       id: 'continuous-runner',
       compiledScene: continuousCompiledScene(),
       root: root as unknown as HTMLElement,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog: componentCatalog(),
-      serviceCatalog: createDomComponentServiceCatalog(materializerContext),
+      catalog: runtimeCatalog(),
     })
 
     expect(runner.init().ok).toBe(true)
@@ -399,8 +367,7 @@ describe('HtmlPlayerRunner', () => {
     expect(item.style.opacity).toBe('0.5')
     expect(item.style.backgroundColor).toBe('rgba(128, 128, 128, 1)')
 
-    materializerContext.numericLengthScale = 2
-    runner.resize()
+    runner.resize(2)
     expect(item.style.transform).toBe('translate(100px, 40px)')
 
     runner.pause()
@@ -415,8 +382,7 @@ describe('HtmlPlayerRunner', () => {
       compiledScene: listCompiledScene(),
       root: root as unknown as HTMLElement,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog: componentCatalog(),
-      serviceCatalog: createDomComponentServiceCatalog(),
+      catalog: runtimeCatalog(),
     })
 
     expect(runner.init().ok).toBe(true)
@@ -441,8 +407,7 @@ describe('HtmlPlayerRunner', () => {
       compiledScene: nestedListCompiledScene(),
       root: root as unknown as HTMLElement,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
-      componentCatalog: componentCatalog(),
-      serviceCatalog: createDomComponentServiceCatalog(),
+      catalog: runtimeCatalog(),
     })
 
     expect(runner.init().ok).toBe(true)

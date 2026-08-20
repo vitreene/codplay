@@ -51,7 +51,7 @@ export class HtmlMotionSystem {
     this.dirty = true
   }
 
-  /** Releases all HTML projection resources. */
+  /** Releases all HTML materialization resources. */
   destroy(): void {
     this.host.destroy()
     this.initialized = false

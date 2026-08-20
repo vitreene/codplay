@@ -1,15 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { isPreparedPath, prepareSvgPath } from '../../../src/ace'
-import { ValidationCatalog } from '../../../src/scene/validation'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import { TagComponent } from '../../../src/runtime/components'
 import { compileMovePath, SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
 
-function createCatalogForFixtures(): ValidationCatalog {
-  const catalog = new ValidationCatalog()
-  for (const type of ['text', 'list', 'layout', 'media']) {
-    catalog.registerComponent({ type, services: ['style', 'className', 'attr'], validateInitial: () => undefined, validateAction: () => undefined })
+function createCatalogForFixtures(): RuntimeCapabilityCatalog {
+  const catalog = createCoreRuntimeCatalog()
+  for (const type of ['text', 'media']) {
+    catalog.registerComponent({
+      type,
+      services: ['style', 'className', 'attr'],
+      modules: [],
+      validateInitial: () => undefined,
+      validateAction: () => undefined,
+      create: (input) => new TagComponent(input as never),
+    })
   }
   return catalog
 }
@@ -36,7 +45,7 @@ describe('SceneBuilder', () => {
   })
 
   it('builds representative demo scenes with requirements, roots, and resources', () => {
-    const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), {
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), {
       createdAt: '2026-07-31T00:00:00.000Z',
       diagnosticOutput: vi.fn(),
     })
@@ -76,7 +85,7 @@ describe('SceneBuilder', () => {
         },
       },
     }
-    const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
 
     const result = builder.build(scene)
 
@@ -90,7 +99,7 @@ describe('SceneBuilder', () => {
   })
 
   it('normalizes author SVG move paths into compact prepared segments', () => {
-    const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
     const result = builder.build({
       id: 'svg-path-scene',
       stories: {
@@ -129,7 +138,7 @@ describe('SceneBuilder', () => {
   })
 
   it('derives resource types from configured URL extensions rather than perso type', () => {
-    const builder = new SceneBuilder(createCatalogForFixtures().snapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
     const result = builder.build({
       id: 'resource-scene',
       stories: {
@@ -154,15 +163,16 @@ describe('SceneBuilder', () => {
   })
 
   it('derives ModuleService requirements from component capability declarations', () => {
-    const catalog = new ValidationCatalog()
+    const catalog = createCoreRuntimeCatalog()
     catalog.registerComponent({
       type: 'list-item',
       services: [],
       modules: ['list'],
       validateInitial: () => undefined,
       validateAction: () => undefined,
+      create: (input) => new TagComponent(input as never),
     })
-    const builder = new SceneBuilder(catalog.snapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(catalog.validationSnapshot(), { diagnosticOutput: vi.fn() })
 
     const result = builder.build({
       id: 'module-service-scene',
@@ -179,15 +189,16 @@ describe('SceneBuilder', () => {
   })
 
   it('derives the layout module requirement from the layout component definition', () => {
-    const catalog = new ValidationCatalog()
-    catalog.registerComponent({
+    const catalog = createCoreRuntimeCatalog()
+    catalog.overrideComponent({
       type: 'layout',
       services: [],
       modules: ['markup'],
       validateInitial: () => undefined,
       validateAction: () => undefined,
+      create: (input) => new TagComponent(input as never),
     })
-    const builder = new SceneBuilder(catalog.snapshot(), { diagnosticOutput: vi.fn() })
+    const builder = new SceneBuilder(catalog.validationSnapshot(), { diagnosticOutput: vi.fn() })
 
     const result = builder.build({
       id: 'layout-module-scene',

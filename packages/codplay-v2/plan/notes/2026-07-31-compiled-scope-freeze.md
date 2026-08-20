@@ -10,7 +10,7 @@ pas encore un flux player/engine complet.
 
 - contrats `SceneDoc`, canonique et `CompiledScene`;
 - normalisation structurelle et auto-reference interne;
-- guards et catalogue de validation core;
+- guards et snapshot de validation core issu de `RuntimeCapabilityCatalog`;
 - builder initial : stories actives, fonctions externes, requirements, ressources
   V1 et candidats de racine;
 - adapters ACE transform/couleur et valeurs unitisees;

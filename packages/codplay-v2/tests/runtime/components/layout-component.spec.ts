@@ -8,8 +8,7 @@ import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilit
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('LayoutComponent V2', () => {
-  it('declares its template and layout service without exposing outlet registration methods', () => {
-    const declared: string[][] = []
+  it('declares its template without exposing service registration methods', () => {
     const component = new LayoutComponent({
       perso: {
         id: 'page-layout',
@@ -19,15 +18,11 @@ describe('LayoutComponent V2', () => {
         },
       },
       services: {
-        declare(names) {
-          declared.push([...names])
-        },
         apply: vi.fn(),
       },
     })
 
     expect(component.render()).toContain('data-part="page-layout:content"')
-    expect(declared).toEqual([['markup', 'className', 'style', 'attr']])
   })
 
   it('projects resolved state through the component root', () => {
@@ -38,7 +33,7 @@ describe('LayoutComponent V2', () => {
         storyId: 'main',
         initial: { markup: '<section></section>' },
       },
-      services: { declare: () => undefined, apply },
+      services: { apply },
     })
     const root = {}
     component._materialize(root, [])
@@ -51,7 +46,7 @@ describe('LayoutComponent V2', () => {
   it('rejects an empty layout template before materialization', () => {
     const component = new LayoutComponent({
       perso: { id: 'empty-layout', storyId: 'main', initial: { markup: '  ' } },
-      services: { declare: () => undefined, apply: () => undefined },
+      services: { apply: () => undefined },
     })
 
     expect(() => component.render()).toThrow('Layout markup must not be empty: empty-layout')
@@ -68,7 +63,7 @@ describe('LayoutComponent V2', () => {
         storyId: 'main',
         initial: { markup: '<main data-part="page-layout:content"></main>' },
       },
-      services: { declare: () => undefined, apply: vi.fn() },
+      services: { apply: vi.fn() },
     })
 
     const cleanup = materializeComponentWithMarkup(markup, {

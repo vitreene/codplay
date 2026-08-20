@@ -20,11 +20,7 @@ export type ComponentUpdateInput<State extends Record<string, unknown> = Record<
   timeMs: number
 }>
 
-/** Minimal runtime-facing service facade available to one component. */
+/** Runtime-facing facade bound to the services declared by one component type. */
 export type ComponentServices = Readonly<{
-  declare(names: readonly string[]): void
   apply(node: unknown, patch: Record<string, unknown>): void
-  content?: Readonly<{
-    apply(node: unknown, value: unknown): void
-  }>
 }>

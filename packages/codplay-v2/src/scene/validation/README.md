@@ -1,16 +1,17 @@
-# Validation Catalog
+# Validation
 
 > Status: En cours
 > CodPlay version: V2 foundation
 > Review: contrat initial validé le 2026-08-20; validateurs de propriétés et de familles restent à ajouter
 
-The validation catalog is the pure bridge between declared CodPlay capabilities and
-the `CompiledScene` build.
+Validation is the pure bridge between the declarations in
+`RuntimeCapabilityCatalog` and the `CompiledScene` build. It does not own a second
+mutable registration catalog.
 
 ## Role
 
-- CodPlay registers component, data-service, and ModuleService requirements while capabilities are declared.
-- The catalog produces a snapshot before compilation.
+- CodPlay registers component, data-service, and ModuleService requirements in one runtime catalog.
+- `RuntimeCapabilityCatalog.validationSnapshot()` produces the pure snapshot before compilation.
 - `CompiledSceneValidationEngine` consumes that snapshot during compilation without instantiating runtime components or services.
 - `GuardPipeline` runs named structural and capability rules in deterministic phases.
 - A component validator is optional during the initial V2 rollout.
@@ -25,16 +26,9 @@ functions. Service definitions declare reusable group validators and optional va
 those groups. Service names are therefore the property namespaces, including namespaces owned by one component.
 
 The runtime component definition is the source of the component type, service names,
-ModuleService names and component validators. `ValidationCatalog.fromComponents()`
-projects those declarations into the pure build snapshot. The builder therefore does
-not receive a second authored component/service list. `ValidationCatalog` remains
-available as a low-level catalog for core validation tests and for future non-runtime
-capability registration.
+ModuleService names and component validators. The runtime service definition is the
+source of its validation rules and materializer destinations. The builder therefore
+does not receive a second authored component/service list.
 
-The initial catalog imports the core service definitions for `style`, `className`,
-and `attr` from `src/services/`. The catalog owns registration and snapshotting;
-the services own their validation rules.
-
-Runtime modules and capabilities follow a separate engine catalogue boundary. A
-module requirement is validated as an engine capability and instantiated per player;
-it is not added to the authored service namespace.
+Runtime modules are validated as engine capabilities and instantiated per player;
+they are not added to the authored service namespace.

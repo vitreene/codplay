@@ -14,9 +14,6 @@ export {
 } from './temporary-render-sink'
 export { evaluateTemporaryScene, type TemporaryPersoState } from './temporary-scene-evaluator'
 export { RenderSync } from './render-sync'
-export { LayoutDomBackend } from './layout-dom-backend'
-export type { LayoutProjectionNodes } from './layout-dom-backend'
-export type { LayoutProjection, LayoutProjectionContext } from './layout-projection'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
 export {
   PLAYER_LIFECYCLE_DESTROYED,

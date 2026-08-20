@@ -60,7 +60,7 @@ export type ResolvedPlacement = Readonly<
   | { kind: typeof MOUNT_PLACEMENT_INVALID; source?: MountPlacementSource }
 >
 
-/** Output of resolve before hierarchy and substrate projection. */
+/** Output of resolve before hierarchy and substrate materialization. */
 export type ResolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
   placement: ResolvedPlacement

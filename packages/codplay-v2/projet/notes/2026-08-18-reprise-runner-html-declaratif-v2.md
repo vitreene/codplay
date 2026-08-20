@@ -4,10 +4,14 @@
 > [`plan/runner-flip-integration-study.md`](../../plan/runner-flip-integration-study.md).
 > Les captures, bridges et runtimes FLIP nommés ci-dessous ont été supprimés ;
 > ils ne décrivent plus l'architecture V2 courante.
+> Depuis le 2026-08-20, le catalogue runtime de composants, services et modules
+> est également unifié par `RuntimeCapabilityCatalog`; les passages de cette note
+> qui mentionnent des catalogues de démo ou des materializers concurrents ne sont
+> pas des contrats actuels.
 
 ## Statut
 
-Status: En cours  
+Status: Remplacée
 CodPlay version: V2 foundation  
 Reprise recommandée dans une nouvelle session avec Safari Preview MCP actif.
 
@@ -115,8 +119,14 @@ de captures, ni algorithme de projection.
 - `HtmlComponentMaterializer` matérialise le template de chaque composant, appelle
   `_materialize`, publie les parts sélectionnées par le catalogue et détache tout au
   teardown.
-- `createDomComponentServiceCatalog` fournit les services DOM `className`, `style`,
-  `attr` et `content`, avec suppression des propriétés et attributs précédemment gérés.
+- Les déclarations des services HTML vivent dans `src/services/<service>` ; leurs
+  adaptateurs HTML y sont séparés par service. `HtmlComponentMaterializer` ne fait
+  qu'assembler `className`, `style`, `attr` et `content`, avec suppression des
+  propriétés et attributs précédemment gérés. Les démos ne construisent pas de
+  catalogue de services concurrent.
+- Le transform HTML est isolé dans `src/services/style/html-transform-service.ts`.
+  `content` reste une tranche minimale en cours d'enrichissement et ne constitue
+  pas encore le contrat complet du service.
 - `HtmlPlayerRunner` associe explicitement les IDs de targets root au root HTML,
   branche `RuntimeComponentRuntime`, `LayoutDomBackend` et le bridge FLIP
   transactionnel,
@@ -127,7 +137,7 @@ de captures, ni algorithme de projection.
   FLIP transactionnelle: un transfert `source-outlet -> target-outlet` à `800ms`
   pendant `1400ms`, sans boucle de rendu secondaire ni parentage impératif.
 - Le contrat `style.x/style.y` est relié à la résolution ACE `translateX/translateY`
-  puis composé en `transform: translate(...)` par le service DOM du runner. Cette
+  puis composé en `transform: translate(...)` par le service HTML du materializer. Cette
   intégration reste limitée aux deux canaux de translation nécessaires à la
   verticale; les autres canaux transform restent soumis à leur plan dédié.
 - Le bridge `HtmlDomProjection` / `MoveFlipLayoutProjection` coordonne maintenant
