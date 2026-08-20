@@ -7,4 +7,7 @@ export { HtmlComponentMaterializer, type HtmlComponentMaterializerNodes } from '
 export { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
 export { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 export { HtmlMotionSystem } from './html-motion-system'
-export { createDomComponentServiceCatalog } from './dom-component-services'
+export {
+  createDomComponentServiceCatalog,
+  type HtmlMaterializerRuntimeContext,
+} from './dom-component-services'

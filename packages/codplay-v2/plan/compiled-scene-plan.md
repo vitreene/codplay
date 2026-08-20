@@ -14,8 +14,10 @@ reste autonome et ne dépend d'aucune ancienne implémentation.
 - Squelette des contrats `SceneDoc` et `CompiledScene` relu sur la tranche initiale.
 - Normalisation structurelle et premiers guards relus sur la tranche initiale.
 - Premier builder, deriveurs de base et codec structurel en place; la tranche
-  structurelle est gelée comme fondation de flux de rendu. Les deriveurs de
-  proprietes et extensions de validation restent a construire.
+  structurelle est gelée comme fondation de flux de rendu. La validation
+  sémantique interne du codec est maintenant en place; les deriveurs de
+  proprietes et extensions de validation portées par les services restent à
+  construire.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
 - Source unique de declaration composant/services/modules en place via la projection du catalogue runtime vers le snapshot de validation; revue des extensions de validateurs encore necessaire avant l'integration composant.
@@ -40,10 +42,18 @@ La tranche est conduite en deux temps complementaires :
 
 ## Analyse des proprietes
 
-Le parcours d'un `Perso` doit produire une matrice de proprietes par type de perso. Pour chaque propriete, le
-contrat indique sa presence dans `initial`, sa presence dans une action, son mode temporel, sa serialisabilite,
-sa participation a l'interpolation et sa valeur par defaut eventuelle. Le mode temporel remplace la distinction
-ancienne statique/dynamique qui servait surtout a reconstruire le runtime lors d'un seek.
+La surface de proprietes traitables d'un `Perso` depend de son type de composant.
+La definition du composant declare la liste de services qu'elle utilise; chaque
+service porte ensuite le contrat des proprietes recevables, leur validation, leurs
+defaults eventuels et leur mode temporel. Le catalogue de validation projette cette
+declaration vers le build. Il n'existe pas de matrice globale independante des
+types de composants et des services.
+
+Pour chaque propriete declaree par un service, le contrat indique sa presence dans
+`initial`, sa presence dans une action, son mode temporel, sa serialisabilite, sa
+participation a l'interpolation et sa valeur par defaut eventuelle. Le mode temporel
+remplace la distinction ancienne statique/dynamique qui servait surtout a
+reconstruire le runtime lors d'un seek.
 
 - Une propriete est **constante** si sa valeur ne depend pas de `t`, **discrete** si elle change par faits ou
   fenetres de validite, **continue** si elle est une fonction preparee `f(t)`, ou **live/effet** si elle depend
@@ -220,11 +230,11 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
-| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes | Diagnostics generaux | Tranche initiale relue; matrice complète encore ouverte |
-| 2. Catalogue | Descripteurs composants/groupes de proprietes/services, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection initiale relue; extensions de validateurs encore ouvertes |
+| 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; couverture des contrats de services encore ouverte |
+| 2. Catalogue | Descripteurs composants, services et proprietes recevables, projection du catalogue runtime vers le snapshot transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Projection initiale relue; extensions de validateurs encore ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
-| 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe et immutabilite structurelles relues; validation semantique reste a faire |
+| 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe, invariants sémantiques internes et immutabilite en place; migrations de schema hors tranche |
 | 6. Fixtures et couverture | Fixtures représentatives et tests du contrat V2, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune couverture player |
 | 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Frontière Engine/Player relue dans [`player-engine-plan.md`](./player-engine-plan.md); capacités supplémentaires restent à ouvrir |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |

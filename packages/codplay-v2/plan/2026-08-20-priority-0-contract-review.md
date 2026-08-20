@@ -23,16 +23,15 @@ verticale de test ne l'ont pas ouverte.
 | Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
 | Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline` |
 | Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
-| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, projection locale/reparent, overlays hiérarchiques, resize et destruction | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
+| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize et destruction | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
 
 ## Limites volontairement ouvertes
 
 Ces limites ne sont pas des ambiguïtés du contrat gelé : elles constituent les
 prochaines tranches V2.
 
-- validation sémantique complète, migrations de schema et matrice complète des
-  propriétés/defaults du `CompiledScene` ;
-- renderer de production et backend DOM/SVG final ;
+- migrations de schema et extensions de validation portées par les services ;
+- renderer de production et materializer DOM/SVG final ;
 - familles de composants supplémentaires et JSX V2.5 ;
 - politiques complètes de la capacité `list` (`reorderOnMove/Add/Remove`) ;
 - annulation et générations obsolètes des straps asynchrones ;

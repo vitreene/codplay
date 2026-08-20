@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe pour la tranche ACE scalaires et materializer HTML
 > CodPlay version: V2 foundation
-> Review: required before transform defaults
+> Review: tranche ACE/HTML validée le 2026-08-20; les séquences CSS brutes sont conservées par le materializer sans décomposition
 
 Cette partie est prioritaire sur la couverture complete des autres proprietes des
 scenes S1-S4. Elle precede le catalogue des defaults par propriete, car un default
@@ -42,14 +42,19 @@ Le travail est separe en trois etages :
 2. contrat interne V2 : canaux, unites, valeurs et ordre;
 3. projection : composition vers le substrat du composant.
 
-Les proprietes CSS directes `translate`, `rotate` et `scale`, la chaine auteur
-`transform: ...` et `matrix(...)` ne doivent pas etre melangees implicitement avec
-les canaux internes. Chaque forme devra etre acceptee, normalisee en sequence, ou
-refusee avec un diagnostic explicite.
+Les formes auteur sont séparées par la frontière qui les reçoit :
 
-L'astuce d'editeur consistant a poser une matrix pour conserver une transform
-originelle est hors runtime V2. Elle ne doit pas devenir une source de valeurs ni un
-fallback de compilation.
+- les canaux scalaires (`x`, `translateX`, `rotate`, `scale`, etc.) sont normalisés
+  puis composés dans l'ordre canonique V2 ;
+- les propriétés CSS individuelles comme `translate` restent des déclarations
+  séparées du materializer HTML ; elles ne sont pas décomposées en canaux ACE ;
+- `transform: ...` est une séquence auteur opaque. Elle est conservée dans son
+  ordre, y compris un `matrix(...)` placé au milieu ; elle peut être ajoutée après
+  la séquence des canaux scalaires lorsque les deux formes coexistent.
+
+La matrix utilisée par une présentation transitoire est un slot interne du
+materializer. Elle ne remplace pas l'état auteur et ne devient ni une valeur
+compilée ni une source de lecture du composant.
 
 ## Invariants a fixer
 
@@ -66,7 +71,11 @@ fallback de compilation.
 - ACE recoit une representation interne complete et un `from` deterministe; il ne
   lit ni DOM, ni style calcule, ni transform precedente du substrat.
 - Une composition partielle ne doit pas effacer les autres canaux deja resolus.
-- L'ordre de composition est une donnee du contrat, pas un detail du renderer.
+- L'ordre de composition est une donnee du contrat, pas un detail du materializer.
+- Un `transform` brut n'est jamais parsé ou réordonné par le materializer.
+- Une valeur numérique de longueur n'est convertie en `px` qu'à la frontière HTML.
+- Le facteur d'échelle de cette conversion appartient au contexte runtime du
+  materializer, jamais à `CompiledScene` ou à l'état logique.
 
 ## Familles AnimeJS observees pour le style CSS
 
@@ -98,9 +107,11 @@ etapes de preparation supplementaires; ce ne sont pas des defaults de propriete.
    normalise les noms et l'ordre; elle ne parse pas les valeurs ni les unites.
 4. Declarer les defaults d'identite et la resolution de `from`, y compris la
    materialisation d'une identite dans l'unite deja portee par l'intervalle.
-5. Tester les aliases, les ordres differents, les compositions partielles, les
-   matrices explicites et les formes refusees.
-6. Relier seulement ensuite cette representation aux services et composants.
+5. Tester les aliases, l'absence de faux axes implicites, les ordres différents,
+   les compositions partielles et la coexistence avec une séquence brute contenant
+   une matrix.
+6. Relier cette représentation aux services du materializer et au contexte runtime
+   de conversion HTML.
 
 Le catalogue des autres defaults reste hors de cette partie tant que cette frontiere
 n'est pas relue.
@@ -115,13 +126,19 @@ pas fournie; il ne lit ni le DOM ni une valeur implicite du substrat.
 
 ## Integration runner realisee
 
-La tranche HTML runner relie maintenant les aliases auteur `style.x` et `style.y`
-aux canaux ACE `translateX` et `translateY`. La resolution logique produit une
-valeur scalaire a chaque instant; le service DOM du runner compose ces deux canaux
-en une seule valeur `transform: translate(x, y)`. Il ajoute `px` aux nombres et
-conserve les unites auteur portees par les chaines.
+La tranche HTML runner relie les aliases auteur `style.x`, `style.y` et `style.z`,
+ainsi que les canaux transform scalaires canoniques, à la préparation ACE. La
+résolution logique produit une valeur scalaire à chaque instant; le service DOM
+compose les canaux dans l'ordre contractuel. Il conserve `translate(x, y)` lorsque
+les deux axes sont présents, mais produit `translateX(...)` ou `translateY(...)`
+lorsqu'un seul axe est déclaré : aucun axe nul n'est inventé.
 
-Cette integration ne generalise pas encore la composition aux rotations, scales,
-perspective, matrices ou aux proprietes CSS `translate`/`transform` brutes. Ces
-formes restent soumises a la tranche de contrat dediee et ne doivent pas etre
-introduites par une demo.
+La chaîne `style.transform` est gardée séparément et ajoutée sans parsing après les
+canaux scalaires. Les matrices et l'ordre internes à cette chaîne restent donc ceux
+de l'auteur. Les propriétés CSS individuelles restent des déclarations séparées.
+Les unités portées par les chaînes sont conservées; les valeurs numériques des
+longueurs reçoivent `px` à la frontière HTML, après application du
+`numericLengthScale` fourni par `HtmlMaterializerRuntimeContext`.
+
+`HtmlPlayerRunner.resize()` réapplique la frame logique courante après la mise à
+jour de ce contexte. Il ne recompile ni ne rejoue la timeline.

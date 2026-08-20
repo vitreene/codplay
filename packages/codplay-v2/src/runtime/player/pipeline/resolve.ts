@@ -1,8 +1,10 @@
 import {
+  isScalarTransformProperty,
   parseColor,
   parseEase,
   prepareTransformTween,
   prepareTween,
+  resolveTransformProperty as canonicalTransformProperty,
   resolveTween,
   type ColorValue,
   type TransformProperty,
@@ -174,9 +176,8 @@ function resolveTransformStyleValue(
 
 /** Maps the supported style aliases to their canonical ACE transform channels. */
 function resolveTransformProperty(property: string): TransformProperty | undefined {
-  if (property === 'x') return 'translateX'
-  if (property === 'y') return 'translateY'
-  return undefined
+  const canonical = canonicalTransformProperty(property)
+  return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
 }
 
 /** Normalizes initial colors before values enter ACE. */

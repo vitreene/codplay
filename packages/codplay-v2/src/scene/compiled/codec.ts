@@ -11,6 +11,7 @@ import type {
   CompiledStory,
   CompiledValue,
 } from './types'
+import { validateCompiledSceneSemantics } from './semantic-validator'
 
 /** Result returned when decoding one serialized compiled-scene payload. */
 export type CompiledSceneDecodeResult = Readonly<
@@ -39,6 +40,11 @@ export class CompiledSceneCodec {
     if (!isValidCompiledScene(scene, schemaVersion)) {
       throw new Error('CompiledScene cannot be encoded because its structure is invalid.')
     }
+    const diagnostics = new DiagnosticCollector({ output: this.options.diagnosticOutput })
+    validateCompiledSceneSemantics(scene, diagnostics)
+    if (diagnostics.hasErrors()) {
+      throw new Error('CompiledScene cannot be encoded because its semantics are invalid.')
+    }
     return JSON.stringify(scene)
   }
 
@@ -56,6 +62,11 @@ export class CompiledSceneCodec {
     const schemaVersion = this.options.schemaVersion ?? SCENE_BUILD_CONFIG.schemaVersion
     if (!isValidCompiledScene(value, schemaVersion)) {
       diagnostics.error('COMPILED_SCENE_INVALID', 'CompiledScene envelope is invalid.')
+      return { ok: false, diagnostics: diagnostics.report() }
+    }
+
+    validateCompiledSceneSemantics(value, diagnostics)
+    if (diagnostics.hasErrors()) {
       return { ok: false, diagnostics: diagnostics.report() }
     }
 

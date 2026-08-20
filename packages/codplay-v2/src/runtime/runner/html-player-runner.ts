@@ -243,7 +243,8 @@ export class HtmlPlayerRunner {
   resize(): void {
     this.projectionEpoch += 1
     this.motionSystem?.invalidate()
-    this.motionSystem?.present(this.player.getCurrentTimeMs())
+    if (this.player.getSolvedScene() !== undefined) this.player.refresh()
+    else this.motionSystem?.present(this.player.getCurrentTimeMs())
   }
 
   /** Returns the current host projection epoch for diagnostics. */

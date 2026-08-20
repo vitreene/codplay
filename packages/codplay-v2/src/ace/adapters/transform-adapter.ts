@@ -98,6 +98,17 @@ const TRANSFORM_ORDER: readonly TransformProperty[] = Object.freeze([
 
 const TRANSFORM_PROPERTIES = new Set<string>(TRANSFORM_ORDER)
 
+/** Returns the canonical transform channel targeted by one authored property. */
+export function resolveTransformProperty(property: string): TransformProperty | undefined {
+  const canonical = TRANSFORM_ALIASES[property] ?? property
+  return TRANSFORM_PROPERTIES.has(canonical) ? canonical as TransformProperty : undefined
+}
+
+/** Indicates whether one transform channel is handled by the scalar ACE boundary. */
+export function isScalarTransformProperty(property: TransformProperty): boolean {
+  return property !== 'rotate3d' && property !== 'matrix' && property !== 'matrix3d'
+}
+
 /** Normalizes supported transform aliases and returns operations in canonical order. */
 export function normalizeTransformProperties(
   authored: Readonly<Record<string, unknown>>,
@@ -106,8 +117,8 @@ export function normalizeTransformProperties(
   const issues: TransformNormalizationIssue[] = []
 
   for (const [authoredProperty, value] of Object.entries(authored)) {
-    const property = TRANSFORM_ALIASES[authoredProperty] ?? authoredProperty
-    if (!TRANSFORM_PROPERTIES.has(property)) {
+    const property = resolveTransformProperty(authoredProperty)
+    if (property === undefined) {
       issues.push({
         code: 'TRANSFORM_PROPERTY_UNSUPPORTED',
         property: authoredProperty,

@@ -192,13 +192,13 @@ function continuousCompiledScene(): CompiledScene {
           initial: {
             tag: 'article',
             move: '@root',
-            style: { x: '0px', y: '0px', opacity: 0, backgroundColor: '#000000' },
+            style: { x: 0, y: 0, opacity: 0, backgroundColor: '#000000' },
           },
           actions: {
             animate: {
               style: {
-                x: { from: '0px', to: '100px', duration: 1000, ease: 'linear' },
-                y: { from: '0px', to: '40px', duration: 1000, ease: 'linear' },
+                x: { from: 0, to: 100, duration: 1000, ease: 'linear' },
+                y: { from: 0, to: 40, duration: 1000, ease: 'linear' },
                 opacity: { from: 0, to: 1, duration: 1000, ease: 'linear' },
                 backgroundColor: { from: '#000000', to: '#ffffff', duration: 1000, ease: 'linear' },
               },
@@ -365,13 +365,14 @@ describe('HtmlPlayerRunner', () => {
   it('presents continuous color, opacity and translation without changing parentage', () => {
     installFakeDom()
     const root = new FakeElement()
+    const materializerContext = { numericLengthScale: 1 }
     const runner = new HtmlPlayerRunner({
       id: 'continuous-runner',
       compiledScene: continuousCompiledScene(),
       root: root as unknown as HTMLElement,
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
       componentCatalog: componentCatalog(),
-      serviceCatalog: createDomComponentServiceCatalog(),
+      serviceCatalog: createDomComponentServiceCatalog(materializerContext),
     })
 
     expect(runner.init().ok).toBe(true)
@@ -397,6 +398,11 @@ describe('HtmlPlayerRunner', () => {
     expect(item.style.transform).toBe('translate(50px, 20px)')
     expect(item.style.opacity).toBe('0.5')
     expect(item.style.backgroundColor).toBe('rgba(128, 128, 128, 1)')
+
+    materializerContext.numericLengthScale = 2
+    runner.resize()
+    expect(item.style.transform).toBe('translate(100px, 40px)')
+
     runner.pause()
     runner.destroy()
   })

@@ -2,19 +2,19 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe pour la conservation des unités
 > CodPlay version: V2 foundation
-> Review: required before unit defaults
+> Review: tranche ACE/resolve/materializer HTML validée le 2026-08-20
 
 ## Frontiere
 
 La compilation ne convertit pas les unites. Elle conserve une valeur auteur dans
 son unite semantique et transmet une forme preparee a ACE. La conversion vers une
-unite de rendu, si elle est necessaire, appartient a `render`, car elle peut
-dependre du substrat, du viewport, du parent ou du contexte de projection.
+unite de rendu appartient au materializer, car elle peut dependre du substrat, du
+viewport, du parent ou du contexte runtime de materialization.
 
-Le compile ne lit donc ni le DOM, ni les styles calcules, ni les dimensions du
-viewport pour transformer `cqw`, `%`, `px` ou une autre unite.
+Le compile et le composant ne lisent donc ni le DOM, ni les styles calcules, ni les
+dimensions du viewport pour transformer `cqw`, `%`, `px` ou une autre unite.
 
 ## Representation ACE
 
@@ -37,8 +37,8 @@ choisie par l'auteur.
 - `50px -> 20px` est prepare et interpole dans `px`;
 - `50% -> 20px` est refuse avant le chemin chaud, lors de la preparation;
 - aucune conversion automatique `percentage -> px` n'est ajoutee a ACE;
-- une conversion eventuelle est une operation de `render`, apres resolution de la
-  valeur logique;
+- une conversion eventuelle est une operation du materializer, apres resolution de
+  la valeur logique;
 - une valeur relative comme `+=8px` est resolue contre une base de meme unite, sans
   lire une valeur externe.
 - un default d'identite comme `0` peut etre materialise dans l'unite explicite de
@@ -46,6 +46,14 @@ choisie par l'auteur.
   conversion d'unite de rendu.
 - lorsqu'aucune borne deterministe n'est disponible, la resolution est differee a
   l'etat logique/runtime et ACE attend cette borne avant preparation.
+
+À la frontière HTML, les valeurs numériques qui représentent des longueurs sont
+converties en `px`. Cette conversion ne concerne ni les unités déjà portées par une
+chaîne ni les longueurs présentes dans une chaîne `transform` brute. Le
+`HtmlMaterializerRuntimeContext.numericLengthScale`, neutre à `1` par défaut,
+multiplie les valeurs numériques juste avant leur écriture CSS. Le contexte peut
+être changé lors d'un resize, puis la frame courante est réappliquée sans compiler
+à nouveau la scène ni rejouer les événements.
 
 Le chemin chaud ACE n'est donc pas prevu pour melanger deux unites. Le comportement
 CSS, qui peut interpoler certaines unites heterogenes via le substrat, reste un
@@ -67,4 +75,4 @@ Le contrat doit couvrir :
 - refus des unites incompatibles;
 - valeurs relatives avec unite;
 - absence de conversion pendant le build;
-- conversion eventuelle testee separement dans `render`.
+- conversion eventuelle testee separement dans le materializer.

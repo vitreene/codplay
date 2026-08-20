@@ -1,7 +1,21 @@
+import {
+  getTransformOrder,
+  isScalarTransformProperty,
+  resolveTransformProperty as canonicalTransformProperty,
+  type TransformProperty,
+} from '../../ace'
 import { RuntimeComponentServiceCatalog } from '../components'
 
+/** Runtime values supplied by the HTML materializer and kept outside logical state. */
+export type HtmlMaterializerRuntimeContext = {
+  /** Scale applied to unitless numeric CSS lengths at the HTML boundary. */
+  numericLengthScale: number
+}
+
 /** Creates the standard DOM services used by the HTML runner. */
-export function createDomComponentServiceCatalog(): RuntimeComponentServiceCatalog {
+export function createDomComponentServiceCatalog(
+  context: HtmlMaterializerRuntimeContext = { numericLengthScale: 1 },
+): RuntimeComponentServiceCatalog {
   const catalog = new RuntimeComponentServiceCatalog()
   catalog.register({
     id: 'className',
@@ -16,25 +30,39 @@ export function createDomComponentServiceCatalog(): RuntimeComponentServiceCatal
     id: 'style',
     create: () => {
       const managedProperties = new Set<string>()
-      const transformChannels = new Map<'translateX' | 'translateY', string>()
+      const transformChannels = new Map<TransformProperty, string>()
+      let rawTransform: string | undefined
       return {
         apply: (node, value) => {
           if (!isElementNode(node) || !isRecord(value)) return
-          const hadTransformChannels = transformChannels.size > 0
+          const hadTransformOutput = transformChannels.size > 0 || rawTransform !== undefined
           for (const property of managedProperties) {
             if (property in value) continue
+            if (property === 'transform') {
+              rawTransform = undefined
+              continue
+            }
             const transformProperty = resolveTransformProperty(property)
             if (transformProperty === undefined) setStyleProperty(node, property, '')
             else transformChannels.delete(transformProperty)
           }
           managedProperties.clear()
           for (const [property, rawValue] of Object.entries(value)) {
-            const transformProperty = resolveTransformProperty(property)
-            if (transformProperty === undefined) setStyleProperty(node, property, cssValue(rawValue))
-            else transformChannels.set(transformProperty, transformCssValue(rawValue))
+            if (property === 'transform') {
+              rawTransform = rawTransformValue(rawValue)
+            } else {
+              const transformProperty = resolveTransformProperty(property)
+              if (transformProperty === undefined) {
+                setStyleProperty(node, property, cssStyleValue(property, rawValue, context))
+              } else {
+                transformChannels.set(transformProperty, transformCssValue(transformProperty, rawValue, context))
+              }
+            }
             managedProperties.add(property)
           }
-          if (hadTransformChannels || transformChannels.size > 0) setTransformChannels(node, transformChannels)
+          if (hadTransformOutput || transformChannels.size > 0 || rawTransform !== undefined) {
+            setTransformChannels(node, transformChannels, rawTransform)
+          }
         },
       }
     },
@@ -76,30 +104,99 @@ function setStyleProperty(node: ElementNode, property: string, value: string): v
   else node.style[property] = value
 }
 
-/** Applies the resolved transform channels as one CSS translation. */
+/** Applies scalar channels followed by the untouched author transform sequence. */
 function setTransformChannels(
   node: ElementNode,
-  channels: ReadonlyMap<'translateX' | 'translateY', string>,
+  channels: ReadonlyMap<TransformProperty, string>,
+  rawTransform: string | undefined,
 ): void {
-  if (channels.size === 0) {
+  if (channels.size === 0 && rawTransform === undefined) {
     setStyleProperty(node, 'transform', '')
     return
   }
-  const x = channels.get('translateX') ?? '0px'
-  const y = channels.get('translateY') ?? '0px'
-  setStyleProperty(node, 'transform', `translate(${x}, ${y})`)
+  const channelTransform = composeTransformChannels(channels)
+  const value = [channelTransform, rawTransform]
+    .filter((part): part is string => part !== undefined && part.length > 0)
+    .join(' ')
+  setStyleProperty(node, 'transform', value)
 }
 
-/** Maps the author aliases to the transform channels currently projected by HTML. */
-function resolveTransformProperty(property: string): 'translateX' | 'translateY' | undefined {
-  if (property === 'x' || property === 'translateX') return 'translateX'
-  if (property === 'y' || property === 'translateY') return 'translateY'
-  return undefined
+/** Composes only the explicitly supplied scalar channels in the fixed V2 order. */
+function composeTransformChannels(channels: ReadonlyMap<TransformProperty, string>): string | undefined {
+  if (channels.size === 0) return undefined
+  const hasTranslateX = channels.has('translateX')
+  const hasTranslateY = channels.has('translateY')
+  const translation = hasTranslateX && hasTranslateY
+    ? `translate(${channels.get('translateX')}, ${channels.get('translateY')})`
+    : undefined
+
+  return getTransformOrder()
+    .flatMap((property) => {
+      if (property === 'translateX') {
+        if (translation !== undefined) return [translation]
+        const channel = channels.get(property)
+        return channel === undefined ? [] : [`translateX(${channel})`]
+      }
+      if (property === 'translateY') {
+        if (translation !== undefined) return []
+        const channel = channels.get(property)
+        return channel === undefined ? [] : [`translateY(${channel})`]
+      }
+      const channel = channels.get(property)
+      return channel === undefined ? [] : [`${property}(${channel})`]
+    })
+    .join(' ')
 }
 
-/** Converts one authored transform scalar to a CSS translation component. */
-function transformCssValue(value: unknown): string {
-  return typeof value === 'number' ? `${value}px` : String(value)
+/** Maps one author property to a scalar transform channel projected by HTML. */
+function resolveTransformProperty(property: string): TransformProperty | undefined {
+  const canonical = canonicalTransformProperty(property)
+  return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
+}
+
+/** Converts one authored transform scalar to its CSS channel representation. */
+function transformCssValue(
+  property: TransformProperty,
+  value: unknown,
+  context: HtmlMaterializerRuntimeContext,
+): string {
+  if (typeof value !== 'number' || !isLengthTransformProperty(property)) return String(value)
+  return `${scaleNumericLength(value, context)}px`
+}
+
+/** Identifies transform channels whose numeric author values represent lengths. */
+function isLengthTransformProperty(property: TransformProperty): boolean {
+  return property === 'perspective'
+    || property === 'translateX'
+    || property === 'translateY'
+    || property === 'translateZ'
+}
+
+/** Converts one authored style value at the HTML materialization boundary. */
+function cssStyleValue(property: string, value: unknown, context: HtmlMaterializerRuntimeContext): string {
+  if (property !== 'translate') return cssValue(value)
+  if (typeof value === 'number') return `${scaleNumericLength(value, context)}px`
+  if (typeof value !== 'string') return String(value)
+  return scaleUnitlessTranslateTokens(value, context)
+}
+
+/** Preserves complex translate expressions and scales only a plain numeric shorthand. */
+function scaleUnitlessTranslateTokens(value: string, context: HtmlMaterializerRuntimeContext): string {
+  const tokens = value.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0 || tokens.length > 3) return value
+  if (!tokens.every((token) => /^[-+]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(token))) return value
+  return tokens.map((token) => `${scaleNumericLength(Number(token), context)}px`).join(' ')
+}
+
+/** Returns one finite runtime scale, falling back to the neutral scale. */
+function scaleNumericLength(value: number, context: HtmlMaterializerRuntimeContext): number {
+  const scale = Number.isFinite(context.numericLengthScale) ? context.numericLengthScale : 1
+  return value * scale
+}
+
+/** Preserves a raw author transform without attempting to parse or reorder it. */
+function rawTransformValue(value: unknown): string | undefined {
+  return value === null || value === undefined ? undefined : String(value)
 }
 
 /** Converts normalized ACE color values and scalar values to CSS text. */

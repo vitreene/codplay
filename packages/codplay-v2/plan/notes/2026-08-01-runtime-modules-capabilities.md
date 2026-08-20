@@ -17,7 +17,7 @@ V2 conserve le module V1 comme point d'extension, mais separe quatre niveaux :
 1. une definition de module enregistree dans le catalogue engine ;
 2. une instance de module creee par player ;
 3. un etat pur et testable porte par cette instance ;
-4. un backend ou un adapter de projection eventuel.
+4. une interface `Materializer` ou un adaptateur de materialisation eventuel.
 
 Le module n'est donc ni un composant unique, ni un singleton de module. Une capacite
 peut etre fournie par plusieurs implementations et instanciee une fois par player.
@@ -26,7 +26,7 @@ peut etre fournie par plusieurs implementations et instanciee une fois par playe
 
 `list` garde un statut de **capacite cross-layer** : sa particularite est
 contractuelle, pas une exception codee dans l'engine. Elle coordonne un etat
-logique, un ensemble d'elements affectes, une mesure groupee et une projection
+logique, un ensemble d'elements affectes, une mesure groupee et une materialisation
 visuelle. Elle ne doit donc pas etre reduite a un service stateless ordinaire,
 mais elle ne doit pas non plus imposer un renderer au move core.
 
@@ -44,7 +44,7 @@ Le futur module list devra :
 - coordonner une phase `beforeUpdate`/mesure sur cet ensemble ;
 - preparer un nouvel etat avant un seek groupe ;
 - committer son etat avec le player ;
-- exposer un snapshot a un composant ou un backend, sans devenir leur source DOM.
+- exposer un snapshot a un composant ou un materializer, sans devenir leur source DOM.
 
 ## Frontieres
 

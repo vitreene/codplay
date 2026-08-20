@@ -1,145 +1,129 @@
-# CodPlay V2 - representation de rendu des composants
+# CodPlay V2 - materializer des composants
 
 ## Statut
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: template-string materialization integrated; JSX remains V2.5
+Review: materializer HTML existant; interface a aligner sur le contrat composant
 
-## Decision
+## Contrat auteur
 
-Un composant V2 est ecrit par un auteur et possede une methode `render()`.
-Pour un composant dont la structure est decrite par un arbre de vue, cette methode
-retourne une representation de vue, pas un `Node` et pas une liste externe
-d'outlets.
+Le contrat de `BaseComponent.render()` est deja fixe dans
+[`2026-08-01-composant-v2-contract.md`](./notes/2026-08-01-composant-v2-contract.md).
+Ce plan ne le redéfinit pas et n'ouvre aucune décision sur le rôle de `render()`.
 
-Un composant hybride specialise peut constituer directement le node support de sa
-projection. Le cas `avatar3d` retourne ainsi un `HTMLCanvasElement` reel et possede
-son contexte de rendu interne ; il ne decrit pas ce canvas par un `ViewTree`. Le
-contrat de ce cas est precise dans la note dediee aux composants hybrides.
+Le présent plan traite uniquement de la frontière située après le composant : la
+prise en charge de son résultat par le `Materializer`. Le composant auteur ne
+parse pas son résultat, ne crée pas les ressources du substrat et ne porte pas la
+décomposition technique de celles-ci.
 
-Pour la fondation V2 actuelle, la representation admise est le template string
-converti par la `BaseComponent`. Le JSX autonome, transpile vers le runtime de vue
-CodPlay sans React, est reporte a l'objectif V2.5. Une representation equivalente
-fournie par un autre frontend d'auteur sera examinee apres ce jalon.
+## Frontiere Materializer
 
-La compilation convertit cette representation en arbre de vue serialisable et
-assaini. Le runtime materialise ensuite cet arbre et le backend possede les
-mutations du substrat.
+`BaseComponent` est la couche auteur en entree du rendu. Il expose une
+méthode `render()` et recoit les etats resolus; il cible uniquement le
+`Materializer`, jamais le DOM, Canvas ou Three.js directement.
 
-## De la representation au node
+Le `Materializer` est l'interface de rendu vers un substrat. Une implementation
+DOM, Canvas ou Three.js recoit le resultat de `render()` et les mises a jour du
+composant, cree ou met a jour ses ressources, publie ses handles et assure leur
+destruction. Le composant ne connait pas l'implementation choisie.
 
-Les deux formes d'auteur convergent vers le meme format intermediaire : `ViewTree`.
+`HtmlComponentMaterializer` est l'implementation HTML actuelle de cette frontiere.
+La gestion de la structure, des parts et des mises a jour sera alignee sur cette
+interface lors de la specification de la tranche, sans modifier le contrat auteur.
 
-### JSX autonome - objectif V2.5
+## Du template au substrat
 
-Le JSX V2 est transpile vers une factory CodPlay, pas vers React :
+La fondation V2 suit cette chaine, sans redefinir le contrat de `render()` :
 
 ```text
-<polygon points={points} />
-  -> jsxCreateElement('polygon', { points }, [])
-  -> ViewNode {
-       kind: 'element',
-       namespace: 'svg',
-       type: 'polygon',
-       props: { points },
-       children: []
-     }
+BaseComponent.render() -> template string -> Materializer HTML -> DOM
 ```
 
-La factory ne cree pas encore de `SVGElement`. Elle cree une representation
-serialisable ou comparable par le backend.
+Le composant fournit son resultat au materializer. Il ne le parse pas, ne le compare
+pas avec une version precedente et ne cree pas les nodes.
 
 ### Template string
 
-Un template string suit la meme conversion :
+Le template string est recu par le materializer HTML :
 
 ```text
-template(markup)
-  -> compiler parse/sanitize
-  -> markup compile et normalise
+BaseComponent.render()
+  -> HtmlComponentMaterializer
+  -> lecture, assainissement et normalisation
+  -> creation du DOM et des handles internes
 ```
 
-Le parser de compilation ne doit pas deleguer la source de verite a `innerHTML`. Il
-produit un arbre inspectable, valide les balises/attributs autorises par le contrat
-du composant et conserve les marqueurs structurels internes. Un parser SVG utilise
-le namespace SVG au lieu de traiter `polygon` comme une balise HTML ordinaire.
+La politique de lecture et d'assainissement appartient au materializer et a ses
+services. Elle valide les balises et attributs autorises, conserve les marqueurs
+structurels internes et traite le namespace SVG correctement lorsqu'une
+implementation SVG sera ouverte.
 
 ### Materialisation initiale
 
-Le `RenderBackend` recoit le `ViewTree` et un mount target logique :
+Le `Materializer` recoit le template, la cible de montage et les services necessaires :
 
 ```text
-ViewNode(kind=element, namespace=svg, type=polygon)
-  -> backend.createElementNS(SVG_NAMESPACE, 'polygon')
-  -> backend.applyAttributes(points, fill, stroke)
-  -> backend.attach(parentNode)
-  -> registry[viewKey] = SVGElement
+template string + mount target
+  -> materializer.readAndSanitize(template)
+  -> materializer.createResources()
+  -> materializer.attach()
+  -> handles internes du composant
 ```
 
-Pour un node HTML, le backend utilise `createElement`. Pour un node SVG, il
-utilise `createElementNS`. Les text nodes, fragments et sous-arbres suivent la
-meme materialisation recursive.
+Les appels DOM, Canvas ou Three.js sont internes a l'implementation du materializer.
+Le composant ne connait ni `createElement`, ni `createElementNS`, ni la structure
+des ressources produites.
 
-La compilation des parts enregistre les cibles publiques dans l'artefact. La
-materialisation ne fait que creer les nodes a partir de cet artefact ; elle ne
-reparse pas le markup et ne construit pas une table auteur `id + selector`.
+## Mise a jour du rendu
 
-## Mise a jour du node
-
-Lorsque `SolvedPerso.state` change, le composant produit un nouveau `ViewTree`.
-Le backend reconcilie l'ancien arbre avec le nouveau :
+Lorsque `SolvedPerso.state` change, le runtime appelle le composant puis transmet
+son resultat au materializer :
 
 ```text
-old ViewTree + new ViewTree
-  -> comparaison type/namespace/key
-  -> reutilisation du node compatible
-  -> creation des nodes ajoutes
-  -> suppression des nodes retires
-  -> patch des props/attributs/textes
-  -> reconciliation de l'ordre des enfants
+SolvedPerso.state
+  -> Component.update(state, time)
+  -> services et materializer
+  -> substrat mis a jour
 ```
 
-Les regles minimales sont :
+La fondation V2 ne fixe pas de reconciliation generique de markup dynamique.
+Le materializer conserve les ressources qu'il a creees et applique les mises a
+jour autorisees par le contrat du composant. Les regles de remplacement, de
+destruction et de remise en ordre sont propres au materializer concerne.
 
-- meme `viewKey`, type et namespace : node reutilise ;
-- type ou namespace different : node remplace ;
-- prop absente dans le nouvel arbre : attribut/propriete retire ;
-- enfant present dans les deux arbres : reconciliation recursive ;
-- changement d'ordre logique : `insertBefore` ou operation equivalente du backend ;
-- node retire : detach et liberation de son entree de registre.
+Le composant ne reconstruit jamais son etat logique a partir du substrat.
 
-Le backend conserve une table `viewKey -> node` par instance de composant. Cette
-table est un cache de projection, jamais la source de verite de l'etat.
+## Application des proprietes
 
-## Mutation des proprietes
-
-Le composant peut muter directement son node racine pendant `update()`. Les
-services fournissent les operations de projection adaptees au substrat :
+Pendant `update()`, le composant fournit l'etat resolu aux services du
+materializer. Ces services fournissent les operations d'application adaptees au
+substrat :
 
 ```text
-style value      -> DomStyleBackend.apply(node, value)
-className value  -> DomClassBackend.apply(node, value)
-attr value       -> DomAttributeBackend.apply(node, value)
+style value      -> materializer.style.apply(node, value)
+className value  -> materializer.className.apply(node, value)
+attr value       -> materializer.attr.apply(node, value)
 ```
 
-Le composant ne connait pas `style.setProperty`, `classList` ou
-`setAttribute`. Ces operations appartiennent aux adapters du substrat.
+Le composant ne connait pas les APIs natives du substrat (`style.setProperty`,
+`classList`, `setAttribute`, etc.). Ces operations appartiennent au materializer
+et a ses services de substrat.
 
 ## Reparenting et FLIP
 
-La reconciliation interne d'un composant ne decide pas seule d'un changement de
-parent logique. `MoveStateDelta` et la capacite list produisent une demande de
-projection. Le backend DOM peut alors :
+Le composant ne decide pas d'un changement de parent logique. `MoveStateDelta` et
+la capacite list produisent une demande de placement. Le materializer DOM peut
+alors :
 
-1. capturer les nodes concernes ;
+1. obtenir les handles concernes ;
 2. appliquer le reparenting et l'ordre ;
-3. reconcilier les `ViewTree` ;
+3. mettre a jour les ressources materialisees ;
 4. mesurer le nouvel emplacement ;
 5. appliquer FLIP.
 
-Au seek, les memes operations de creation/reconciliation sont effectuees sans
-capture FLIP ni animation.
+Au seek, les memes operations de materialisation sont effectuees sans capture
+FLIP ni animation.
 
 ## Exemple layout
 
@@ -149,7 +133,7 @@ HTML necessaire :
 ```ts
 class LayoutComponent extends BaseComponent {
   render() {
-    return this.template(this.state.markup)
+    return this.perso.initial.markup
   }
 }
 ```
@@ -162,100 +146,86 @@ Le template peut contenir ses marqueurs structurels internes :
 </section>
 ```
 
-La conversion de compilation :
+Le materializer HTML :
 
-- cree l'arbre de vue HTML ;
-- valide et assainit la representation selon le contrat du composant ;
-- decouvre les parts/outlets presents dans l'arbre ;
-- enregistre leurs cibles internes avec leurs IDs opaques ;
+- lit, valide et assainit le template selon le contrat du composant ;
+- decouvre les parts/outlets presents dans le template ;
+- enregistre leurs handles internes avec leurs IDs opaques ;
 - ne demande pas a l'auteur de fournir un tableau `id + selector`.
 
-Le selector n'est donc pas un contrat auteur separe. Si le backend DOM utilise un
-selector interne pendant la conversion, il reste une detail d'implementation de
-la representation et de la base de composant.
+Le selector n'est donc pas un contrat auteur separe. Si le materializer DOM utilise
+un selector interne, il reste un detail d'implementation du materializer.
 
-## Exemple SVG polygon
-
-Un composant SVG peut declarer sa representation en JSX autonome :
-
-```tsx
-class SvgPolygonComponent extends BaseComponent {
-  render() {
-    return (
-      <polygon
-        points={this.state.points}
-        fill={this.state.fill}
-        stroke={this.state.stroke}
-      />
-    )
-  }
-}
-```
-
-La definition du composant porte le namespace SVG necessaire a la conversion.
-Le JSX ne depend pas de React et ne fabrique pas directement un `SVGElement`.
-La `BaseComponent` produit un arbre de vue SVG ; le backend SVG/DOM cree ou
-reutilise ensuite le node `<polygon>` et applique ses attributs.
-
-## Mutation du node
+## Chaine de rendu et de mutation
 
 La chaine de mutation est :
 
 ```text
 SolvedPerso.state
-  -> Component.render()
-  -> BaseComponent conversion
-  -> ViewTree
-  -> RenderBackend
-  -> node DOM/SVG/canvas
+  -> Component.update(state, time)
+  -> Materializer
+  -> substrat DOM/SVG/Canvas/Three.js
 ```
 
-Le composant peut appliquer les changements a son propre node par les services ou
-par l'API de son substrat. Il ne decide pas le parentage des nodes, ne mute pas les
-nodes d'un autre composant et ne reconstruit pas l'etat logique depuis le DOM.
-Les services `style`, `className` et `attr` restent les operations de projection
+Le composant peut declarer ou demander les changements d'etat prevus par ses
+services. Il ne decide pas le parentage, ne mute pas les ressources d'un autre
+composant et ne reconstruit pas l'etat logique depuis le substrat.
+Les services `style`, `className` et `attr` restent les operations d'application
 standard du composant.
 
-Le node reste une cible de projection :
+Le handle de materialisation reste une cible d'application :
 
-```text
-PersoState(t) -> Component.update(node, state, t) -> node
-```
+`PersoState(t) -> Component.update(state, t) -> Materializer -> substrat`
 
-La projection ne doit pas lire le node pour reconstruire `PersoState(t)` ni
-dependre d'une accumulation de mutations precedentes.
+La materialisation ne doit pas lire le substrat pour reconstruire `PersoState(t)`
+ni dependre d'une accumulation de mutations precedentes.
 
 ## Move et FLIP
 
 `move` cible une cible logique opaque produite par le registre interne. La
-representation du composant peut produire des parts/outlets internes, mais le
-composant ne decide pas la politique de parentage.
+materialisation peut publier des parts/outlets internes, mais le composant ne
+decide pas la politique de parentage.
 
-La capacite list calcule l'ensemble affecte. Le backend DOM FLIP mesure et anime
-ensuite cet ensemble selon `flip-list-coordination-plan.md`.
+La capacite list calcule l'ensemble affecte. Le materializer DOM fournit les
+handles que FLIP mesure et anime ensuite selon `flip-list-coordination-plan.md`.
 
 ## Seek
 
-Au seek, la representation est convertie directement vers l'etat cible. Le backend
-nettoie ses transitions et projette l'arbre sans rejouer une animation FLIP.
+Au seek, le resultat de `render()` est materialise directement vers l'etat cible. Le materializer
+nettoie ses transitions et materialise l'etat cible sans rejouer une animation FLIP.
 
 ## Composant hybride et substrat interne
 
 Le cas d'un composant specialise comme `avatar3d` est precise dans
 [`2026-08-01-composants-hybrides-threejs-v2.md`](./notes/2026-08-01-composants-hybrides-threejs-v2.md).
-Son `ViewTree` decrit l'hote DOM, par exemple un `canvas`. Le backend DOM materialise
-et monte cet hote ; le composant possede ensuite directement son substrat interne,
-par exemple `WebGLRenderer`, `THREE.Scene` et `THREE.Camera`.
+Son rendu auteur fournit l'hote DOM, par exemple un template contenant un `canvas`.
+Le materializer DOM materialise et monte cet hote ; le composant possede ensuite
+directement son substrat interne, par exemple `WebGLRenderer`, `THREE.Scene` et
+`THREE.Camera`.
 
-La regle de writer unique est appliquee par couche : le backend ecrit l'hote DOM,
-le composant ecrit sa scene Three.js privee. Le `ViewTree` ne decrit pas les objets
-internes Three.js et le coeur CodPlay ne les manipule pas.
+La regle de writer unique est appliquee par couche : le materializer ecrit l'hote DOM,
+le composant ecrit sa scene Three.js privee. Le coeur CodPlay ne decompose ni ne
+manipule les objets internes Three.js.
+
+## Dialogue Materializer / FLIP a specifier
+
+Le composant ne dialogue pas directement avec FLIP. Le materializer expose son
+resultat et son etat resolu a la coordination FLIP. Le contrat restant a examiner porte sur les handles
+et operations que FLIP peut demander au materializer :
+
+- obtenir les ressources materialisees d'un item ;
+- mesurer l'etat avant et apres une frontiere ;
+- deplacer ou representer temporairement un item ;
+- appliquer puis retirer une presentation transitoire ;
+- garantir le meme resultat au seek sans animation.
+
+La propriete de ces operations entre le `RuntimePlayer`, le materializer et le
+host FLIP n'est pas encore fixee. Elle fera l'objet d'une decision dediee.
 
 ## Hors contrat actuel
 
 - JSX runtime V2 ;
 - profils complets de sanitizer SVG/CSS et politiques de ressources ;
 - `BaseComponent` executable ;
-- `ViewTree` final ;
-- backend DOM/SVG de production ;
-- contrat final de parts/outlets decouverts pendant conversion.
+- interface Materializer et implementations de production ;
+- contrat final de parts/outlets publies par le materializer.

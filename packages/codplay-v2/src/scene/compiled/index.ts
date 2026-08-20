@@ -34,3 +34,4 @@ export {
   type CompiledSceneDecodeResult,
 } from './codec'
 export { compileMovePath } from './move-path-compiler'
+export { validateCompiledSceneSemantics } from './semantic-validator'

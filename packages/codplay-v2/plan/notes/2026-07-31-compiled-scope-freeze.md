@@ -26,7 +26,7 @@ pas encore un flux player/engine complet.
 - defaults complets et matrice des proprietes;
 - conversion des unites dans `render`;
 - resolution des `from` runtime depuis l'etat logique;
-- codec semantique complet, migrations et politique d'extensions;
+- migrations de schema et politique d'extensions du codec;
 - parite player V1/V2, traces temporelles et baselines DOM/geometriques;
 - move, layout, FLIP, media runtime, capture et DnD.
 

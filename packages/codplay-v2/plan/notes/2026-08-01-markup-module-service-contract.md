@@ -21,7 +21,7 @@ RuntimeModuleServiceCatalog
 Le module ne cree pas de composant, ne sanitize pas les templates au runtime, ne lit pas le DOM.
 Le composant ou le materializer remet au module les declarations de ses cibles
 publiques. Le module conserve la relation logique entre un composant et ses outlets ;
-un backend de projection associe ensuite ces cibles a des nodes reels. Le module ne
+le materializer associe ensuite ces cibles a des ressources reelles. Le module ne
 decouvre ni les templates ni les parts prives.
 
 ## Identifiants
@@ -156,11 +156,11 @@ Component template
   -> RuntimePlayer.getMountTargets()
   -> opaque mount target registry
   -> SolvedPerso.placement.targetId
-  -> backend de montage
+  -> materializer de montage
 ```
 
 Le module ne decide pas l'ordre des enfants, ne fait pas de FLIP et ne mute pas le
-DOM. Il fournit la declaration logique qui permet au placement et au backend de
+DOM. Il fournit la declaration logique qui permet au placement et au materializer de
 resoudre leur cible.
 
 ## Dependance du type
@@ -203,7 +203,8 @@ Le branchement des cibles de modules au `RuntimePlayer` et a `solveScene()` est
 implemente. L'adaptateur `registerMaterializedComponent()` est aussi implemente ;
 `materializeComponentWithMarkup()` couvre le cycle materialisation/enregistrement/
 retrait logique. La production du root DOM/JSX reste une tranche distincte. La
-selection des parts montables passe par la definition runtime du type. `LayoutDomBackend` applique
+selection des parts montables passe par la definition runtime du type. Le materializer
+DOM actuel applique
 desormais le parentage logique sur des nodes deja materialises, et
 `RuntimePlayer` l'appelle a l'initialisation, sur frame, au seek et a la destruction.
 `RuntimeComponentCatalog` et `RuntimeComponentRuntime` fournissent la factory

@@ -249,6 +249,13 @@ export class RuntimePlayer {
     }
   }
 
+  /** Reapplies the current solved scene after a materializer-context change. */
+  refresh(): void {
+    if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
+    this.projectScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
+    this.presentTemporarySnapshot()
+  }
+
   /**
    * Appends and routes one live event through the same journal later consumed
    * by seek, then refreshes the current projection from that journal.

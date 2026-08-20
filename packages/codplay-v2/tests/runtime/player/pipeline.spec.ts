@@ -414,6 +414,41 @@ describe('materialize -> resolve -> solve', () => {
     expect(resolved.persos['main:root']?.state.style).toMatchObject({ x: '50px', y: '30px' })
   })
 
+  it('resolves canonical transform channels with their authored units', () => {
+    const transformScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { translateX: '10%', rotate: '0deg' } },
+              actions: {
+                transform: {
+                  style: {
+                    translateX: { to: '50%', duration: 100, ease: 'linear' },
+                    rotate: { to: '20deg', duration: 100, ease: 'linear' },
+                  },
+                },
+              },
+            }],
+            eventimes: [{ name: 'transform', startAt: 100 }],
+          },
+        },
+      },
+    }
+
+    const resolved = resolveScene(materializeScene(transformScene, 150))
+
+    expect(resolved.persos['main:root']?.state.style).toMatchObject({
+      translateX: '30%',
+      rotate: '10deg',
+    })
+  })
+
   it('keeps visual transition metadata out of the solved structural placement', () => {
     const transitionScene: CompiledScene = {
       ...scene,

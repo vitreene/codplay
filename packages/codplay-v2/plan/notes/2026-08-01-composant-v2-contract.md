@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: template-string runtime and player projection integrated; JSX remains V2.5
+Review: template-string runtime et materializer HTML integres; JSX reste V2.5
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -14,7 +14,7 @@ Son etat pur et son wrapper `RuntimeModuleService` sont implementes dans
 `src/runtime/capabilities/markup/markup-capability.ts`.
 Le socle composant, le catalogue runtime, `RuntimeComponentRuntime` et les
 composants `LayoutComponent`/`TagComponent` sont implementes dans
-`src/runtime/components/`. Leur backend de projection est branche au player ; la
+`src/runtime/components/`. Leur materializer HTML est branche au player ; la
 factory de chaque type reste fournie par le catalogue.
 
 ## Contrat
@@ -67,23 +67,24 @@ abstract class BaseComponent<Initial extends Record<string, unknown>> {
 }
 ```
 
-`render()` declare la projection avec un template string. Le runtime JSX autonome
+`render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
 
-`update()` applique l'etat resolu a la projection du composant.
+`update()` applique l'etat resolu a la materialisation du composant.
 
 `update()` peut muter directement `this.node`, qui est le node racine possede par
-l'instance du composant. Les mutations restent limitees a cette projection.
+l'instance du composant. Les mutations restent limitees a la materialisation de
+cette instance.
 
 Cette mutation ne change pas la nature de `f(t)` :
 
 ```text
-PersoState(t) -> update(this.node, PersoState(t), t) -> projection
+PersoState(t) -> update(this.node, PersoState(t), t) -> materialisation
 ```
 
-`this.node` est une cible de projection et jamais une source d'etat. `update()` ne
-doit pas lire le node pour reconstruire l'etat, ni dependre d'une accumulation de
-mutations precedentes pour produire la projection a `t`.
+`this.node` est une cible de materialisation et jamais une source d'etat. `update()`
+ne doit pas lire le node pour reconstruire l'etat, ni dependre d'une accumulation
+de mutations precedentes pour produire la materialisation a `t`.
 
 Le composant conserve une reference interne vers son node racine materialise. Cette
 reference sert a `update()`. Elle n'est ni l'etat logique du perso ni un handle

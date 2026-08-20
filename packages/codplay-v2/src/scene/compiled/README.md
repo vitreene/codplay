@@ -20,9 +20,10 @@ parallel top-level `compiled-scene` module.
 
 `SceneBuilder` currently covers the first build slice: active stories, structural
 and catalog validation, external function references, resource requirements, root
-candidates, and runtime freezing. The structural codec boundary is fixed; semantic
-import validation and full property/default derivation remain open in
-V2 foundation.
+candidates, semantic coherence of the compiled artifact, and runtime freezing.
+The codec does not consult runtime capabilities or derive a global property matrix;
+service-owned property coverage remains attached to the component declarations that
+consume it.
 
 ## Path values
 

@@ -2,9 +2,9 @@
 
 ## Statut
 
-> Status: En cours
+> Status: Fixe pour la tranche d'import interne
 > CodPlay version: V2 foundation
-> Review: enveloppe structurelle validée le 2026-08-20; validation sémantique reste ouverte
+> Review: enveloppe et invariants sémantiques validés le 2026-08-20; migrations de schema hors tranche
 
 ## Role
 
@@ -29,6 +29,9 @@ aucune valeur CSS. Les valeurs compilees doivent deja etre JSON-compatibles.
 Une fonction presente par erreur dans l'artefact est une violation de contrat de
 build, pas une valeur a supprimer silencieusement par `JSON.stringify`.
 
+`encode` applique les mêmes invariants sémantiques internes que `decode` avant de
+produire le texte. Il ne rend donc pas sérialisable un artefact incohérent.
+
 ## Decode
 
 `decode` accepte un texte JSON et retourne soit un artefact valide, soit un rapport
@@ -41,6 +44,12 @@ de diagnostics bloquants. Il valide :
 - le manifeste de ressources et ses policies;
 - `rootNodeIds`;
 - `requirements` et ses tableaux de capacites.
+
+Après la validation de forme, il vérifie aussi les invariants internes de
+l'artefact : identités et unicité des `persos`, correspondance des clés de
+stories, auto-référence `actions[perso.id] = null`, racines connues, unicité des
+requirements et cohérence des requirements de composants et de ressources. Ces
+contrôles ne consultent aucun catalogue runtime.
 
 Les valeurs recursives autorisees sont les primitives JSON, les tableaux, les
 records et les references de fonctions de forme `{ ref: string }`. Une valeur

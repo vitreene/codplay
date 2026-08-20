@@ -75,6 +75,17 @@ trajectory and timing do not change.
 - `destroy()` removes local transient slots, overlay representations, measurement
   DOM, components and owned clock resources.
 
+## Materializer context
+
+The HTML service catalog accepts a `HtmlMaterializerRuntimeContext`. Its
+`numericLengthScale` is applied only to unitless numeric lengths at the HTML
+boundary, for example `x: 40` becomes `40px` at scale `1` and `80px` at scale `2`.
+Authored units and raw `style.transform` strings are preserved.
+
+The host may update the same context object when its scale changes, then call
+`resize()`. The runner reapplies the current solved frame; it does not rebuild the
+compiled scene or replay the timeline.
+
 ## Invariants
 
 - The visible DOM is never used to reconstruct logical state.

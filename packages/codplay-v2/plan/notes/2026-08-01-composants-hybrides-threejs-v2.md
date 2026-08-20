@@ -12,7 +12,7 @@ Cette note ne traite que de l'extension necessaire a `avatar3d`.
 
 ## Decision de conception
 
-Un composant V2 peut etre specialise pour une projection qui possede un substrat
+Un composant V2 peut etre specialise pour une materialisation qui possede un substrat
 interne propre. Le cas `avatar3d` est hybride :
 
 - son hote externe est un node DOM, ici un `canvas` ;
@@ -21,14 +21,14 @@ interne propre. Le cas `avatar3d` est hybride :
 - aucun composant generique DOM ne doit connaitre cette scene interne.
 
 Le composant declare son canvas dans son template. Apres materialisation, il recupere
-ce node dans son cycle de vie et possede directement sa projection Three.js. Les
+ce node dans son cycle de vie et possede directement sa materialisation Three.js. Les
 meshes, les bones, les morphs, la camera et les materiaux restent des ressources
 internes du composant.
 
 ```text
 Component.render()
     -> template string contenant le canvas
-    -> backend materialise et monte le template
+    -> Materializer materialise et monte le template
     -> composant recupere le canvas materialise
     -> composant initialise Three.js
     -> composant applique les etats resolus aux objets Three.js
@@ -36,16 +36,16 @@ Component.render()
 
 ## Propriete des couches
 
-Le backend DOM possede le parentage de la projection externe :
+Le Materializer DOM possede le parentage de la materialisation externe :
 
 - montage, detachement et parentage ;
 - coordination du cycle de vie du node retourne.
 
 Le composant avatar possede la configuration de son canvas, car ce canvas est le
-support direct de sa projection particuliere. La creation et le parentage du node
-restent assures par le chemin de template et le backend.
+support direct de sa materialisation particuliere. La creation et le parentage du node
+restent assures par le chemin de template et le Materializer.
 
-Le composant `avatar3d` possede sa projection interne :
+Le composant `avatar3d` possede sa materialisation interne :
 
 - `WebGLRenderer` ;
 - `THREE.Scene` ;
@@ -54,19 +54,19 @@ Le composant `avatar3d` possede sa projection interne :
 - runtime avatar, morphs, bones et animations.
 
 La regle de writer unique reste vraie par couche. Le composant est l'unique writer
-de son canvas et de sa scene Three.js interne ; le backend est l'unique writer du
+de son canvas et de sa scene Three.js interne ; le Materializer est l'unique writer du
 parentage DOM. Le coeur CodPlay ne recoit ni le contexte WebGL ni les objets
 Three.js.
 
 L'acces direct du composant n'est pas un handle public. Il s'agit d'un acces prive
-aux ressources que le composant a creees pour sa projection.
+aux ressources que le composant a creees pour sa materialisation.
 
 ## Cycle de vie
 
 Le cycle V2 attendu est le suivant :
 
 1. `render()` retourne un template string qui contient le canvas.
-2. Le backend parse, materialise et monte le template.
+2. Le Materializer parse, materialise et monte le template.
 3. Le composant recupere le canvas materialise et initialise Three.js dessus.
 4. Le player remet au composant un etat resolu et le temps CodPlay.
 5. Le composant applique directement cet etat a ses objets Three.js.
@@ -158,4 +158,4 @@ l'API Three.js est l'implementation interne du composant specialise.
 - interface V2 finale du cycle `render/init/update` ;
 - injection de l'hote materialise vers le composant ;
 - adaptation runtime des `PersoState` vers le type `Avatar3DState` ;
-- backend DOM et backend Three.js de production.
+- Materializer DOM et Materializer Three.js de production.

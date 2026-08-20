@@ -3,9 +3,11 @@ export type { UnitValue } from './values'
 export { parseColor } from './adapters/color-adapter'
 export {
   getTransformOrder,
+  isScalarTransformProperty,
   materializeTransformIdentity,
   normalizeTransformProperties,
   prepareTransformTween,
+  resolveTransformProperty,
   resolveTransformFrom,
   type TransformAuthorProperty,
   type TransformNormalizationIssue,

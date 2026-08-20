@@ -33,6 +33,7 @@ import type {
   CompiledStory,
 } from './types'
 import { sanitizeMarkupTemplate } from '../../runtime/capabilities/markup/markup-sanitizer'
+import { validateCompiledSceneSemantics } from './semantic-validator'
 
 /** Options controlling one deterministic scene compilation. */
 export type SceneBuilderOptions = Readonly<{
@@ -98,6 +99,10 @@ export class SceneBuilder {
         resources: { entries: deriveResources(activeScene) },
         rootNodeIds: deriveRootNodeIds(activeScene),
         requirements: deriveRequirements(activeScene, this.validationEngine),
+      }
+      validateCompiledSceneSemantics(compiledScene, diagnostics)
+      if (diagnostics.hasErrors()) {
+        return { ok: false, diagnostics: diagnostics.report() }
       }
       freezeValue(compiledScene)
       return {

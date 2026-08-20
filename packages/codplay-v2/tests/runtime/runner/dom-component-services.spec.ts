@@ -69,6 +69,57 @@ describe('DOM component services', () => {
     expect(node.style.transform).toBe('translate(25%, 40px)')
 
     style.apply(node, { x: 10 })
-    expect(node.style.transform).toBe('translate(10px, 0px)')
+    expect(node.style.transform).toBe('translateX(10px)')
+
+    style.apply(node, { y: 20 })
+    expect(node.style.transform).toBe('translateY(20px)')
+  })
+
+  it('keeps canonical transform channels ordered and preserves authored units', () => {
+    const catalog = createDomComponentServiceCatalog()
+    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const node = element()
+    const style = services.get('style')!
+
+    style.apply(node, {
+      scale: 2,
+      rotate: '20deg',
+      translateZ: '3cqw',
+      translateX: '10%',
+      translateY: '4px',
+    })
+
+    expect(node.style.transform).toBe('translate(10%, 4px) translateZ(3cqw) rotate(20deg) scale(2)')
+  })
+
+  it('keeps a raw transform sequence separate from scalar channels', () => {
+    const catalog = createDomComponentServiceCatalog()
+    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const node = element()
+    const style = services.get('style')!
+    const raw = 'translate(10px 20px) rotate(20deg) matrix(1, 0, 0, 1, 4, 5)'
+
+    style.apply(node, { x: 6, transform: raw })
+    expect(node.style.transform).toBe(`translateX(6px) ${raw}`)
+
+    style.apply(node, { transform: raw })
+    expect(node.style.transform).toBe(raw)
+  })
+
+  it('applies the runtime length scale only at the HTML boundary', () => {
+    const context = { numericLengthScale: 2 }
+    const catalog = createDomComponentServiceCatalog(context)
+    const services = catalog.createInstances({ componentId: 'item', storyId: 'main', componentType: 'tag' })
+    const node = element()
+    const style = services.get('style')!
+
+    style.apply(node, { x: 20, perspective: 10, translate: '5 6' })
+    expect(node.style.transform).toBe('perspective(20px) translateX(40px)')
+    expect(node.style.translate).toBe('10px 12px')
+
+    context.numericLengthScale = 3
+    style.apply(node, { x: 20, perspective: 10, translate: '5 6' })
+    expect(node.style.transform).toBe('perspective(30px) translateX(60px)')
+    expect(node.style.translate).toBe('15px 18px')
   })
 })

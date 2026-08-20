@@ -31,4 +31,82 @@ describe('CompiledSceneCodec', () => {
     expect(codec.decode('{')).toMatchObject({ ok: false })
     expect(codec.decode(JSON.stringify({ ...artifact, schemaVersion: 'other' }))).toMatchObject({ ok: false })
   })
+
+  it('rejects semantically inconsistent roots, self-actions, and requirements', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const invalid = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: {},
+              actions: { item: { invalid: true } },
+            }],
+            listen: [],
+          },
+        },
+      },
+      rootNodeIds: ['missing'],
+      requirements: { components: [], services: [], modules: [], resources: [] },
+    }
+
+    const decoded = codec.decode(JSON.stringify(invalid))
+
+    expect(decoded.ok).toBe(false)
+    if (!decoded.ok) {
+      expect(decoded.diagnostics.errors.map((diagnostic) => diagnostic.code)).toEqual(expect.arrayContaining([
+        'COMPILED_PERSO_SELF_ACTION_INVALID',
+        'COMPILED_ROOT_ID_UNKNOWN',
+        'COMPILED_REQUIREMENTS_COMPONENTS_INCONSISTENT',
+      ]))
+    }
+  })
+
+  it('rejects duplicate perso ids and inconsistent resource requirements', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const invalid = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [
+              { id: 'item', type: 'tag', initial: {}, actions: { item: null } },
+              { id: 'item', type: 'tag', initial: {}, actions: { item: null } },
+            ],
+            listen: [],
+          },
+        },
+      },
+      resources: {
+        entries: [{
+          url: '/asset.png',
+          type: 'image',
+          policy: { cache: 'default' },
+        }],
+      },
+      requirements: {
+        components: ['tag'],
+        services: [],
+        modules: [],
+        resources: [],
+      },
+    }
+
+    const decoded = codec.decode(JSON.stringify(invalid))
+
+    expect(decoded.ok).toBe(false)
+    if (!decoded.ok) {
+      expect(decoded.diagnostics.errors.map((diagnostic) => diagnostic.code)).toEqual(expect.arrayContaining([
+        'COMPILED_PERSO_ID_DUPLICATE',
+        'COMPILED_REQUIREMENTS_RESOURCES_INCONSISTENT',
+      ]))
+    }
+  })
 })
