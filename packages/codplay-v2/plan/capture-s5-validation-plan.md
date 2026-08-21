@@ -2,8 +2,9 @@
 
 ## Statut
 
-`En cours` — ce document organise une validation d’intégration. Il ne définit
-pas le contrat core de capture et ne peut pas le modifier.
+`Fini` — la fixture S5, l’adaptateur HTML, la telco de validation et les tests
+d’intégration sont terminés. Ce document organise la validation d’intégration ;
+il ne définit pas le contrat core de capture et ne peut pas le modifier.
 
 Le contrat de capture source-agnostique est suivi dans
 [`capture-authoring-plan.md`](./capture-authoring-plan.md). La présente tranche
@@ -119,7 +120,8 @@ démonstration et marquée `temp`. Elle ne devient pas le contrat telco V2.
 de validation qui reprend le comportement de contrôle V1 sans importer la
 façade V1 ni créer de pont `PlayerApi`. Dans la page courante, la zone telco
 est rendue après la scène et le relevé d'état est le dernier panneau. La
-vérification navigateur du glissement complet reste requise.
+La vérification manuelle de la démo courante couvre le glissement complet ;
+l’automatisation Safari reste indisponible dans l’environnement.
 
 ### 5. Tester le chemin réel
 
@@ -220,6 +222,6 @@ ou de commit direct ajouté pour compenser une lacune du core.
 - [x] telco V2 et remote unique : play, pause, seek continu, dernière valeur au
   relâchement et rewind ;
 - [x] typecheck, build de la page et `57` fichiers Vitest / `351` tests ;
-- [ ] gestes pointer et seek exécutés dans Safari : la page est chargée et son
-  DOM initial est lisible, mais l'automatisation JavaScript Safari est désactivée
-  par les réglages système de l'environnement.
+- [x] gestes pointer et seek vérifiés manuellement sur la démo courante ;
+  l'automatisation JavaScript Safari reste indisponible par les réglages système
+  de l'environnement.

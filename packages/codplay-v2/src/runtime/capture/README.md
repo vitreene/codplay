@@ -1,6 +1,6 @@
 # Capture runtime
 
-> Statut : En cours
+> Statut : Fini
 > Version CodPlay : V2 foundation
 
 Cette API porte le cycle source-agnostique d’une capture continue :

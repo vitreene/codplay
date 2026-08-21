@@ -215,5 +215,5 @@ la fixture S5 peut être branchée sans ajouter de sémantique au mécanisme cor
   teardown final ;
 - [x] tests core source-agnostiques et tests compilés : `57` fichiers, `351`
   tests passants au 2026-08-21 ;
-- [ ] validation S5 HTML/telco, suivie exclusivement dans
+- [x] validation S5 HTML/telco, suivie exclusivement dans
   [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md).

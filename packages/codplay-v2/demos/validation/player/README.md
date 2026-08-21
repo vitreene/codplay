@@ -1,6 +1,6 @@
 # Démo de validation capture V2
 
-> Status: En cours
+> Status: Fini
 > CodPlay version: V2 foundation
 
 Cette entrée unique de validation reprend le scénario `S5 Drag & Capture` de
