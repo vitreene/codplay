@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-20
+Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-21
 
 ## Contrat auteur
 
@@ -87,6 +87,9 @@ global des proprietes SVG n'est donc requis pour ouvrir l'interface materializer
 
 Un resultat comportant plusieurs noeuds forme un fragment : le materializer
 conserve les noeuds reels dans leur ordre et ne genere aucun element enveloppe.
+Dans la verticale HTML, une materialisation porte donc soit un noeud reel, soit
+la collection ordonnee des noeuds reels du fragment ; cette collection reste
+persistante et est parcourue pour le montage, le detach et la capture des cibles.
 Le fragment n'est pas une cible de service. Les services s'appliquent uniquement
 aux noeuds reels designes par le composant. Pour `list`, l'appartenance et l'ordre
 sont traites par la structure resolue. Pour `layout`, les parts/outlets designes
@@ -344,6 +347,4 @@ encore une interface générique pour SVG, Canvas ou Three.js, ni le runtime JSX
 
 - JSX runtime V2 ;
 - profils complets de sanitizer SVG/CSS et politiques de ressources ;
-- `BaseComponent` executable ;
 - implementations de production pour SVG, Canvas ou Three.js ;
-- contrat final de parts/outlets publies par le materializer.

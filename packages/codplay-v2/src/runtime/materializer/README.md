@@ -17,3 +17,8 @@ through a demo-only route.
 
 The current HTML implementation is in `runtime/runner` and the HTML service
 adapters are kept beside their service declarations under `src/services`.
+
+For HTML template strings, one root remains one real node. Multiple roots remain
+an ordered fragment of real nodes; the materializer never creates a wrapper
+element. Structural mount, detach, seek persistence and HTML capture operate on
+those retained roots. A fragment itself is not a service target.

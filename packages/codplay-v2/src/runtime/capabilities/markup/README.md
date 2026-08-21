@@ -17,7 +17,8 @@ Registered targets are exposed to the player through `getMountTargets()`. The
 player merges those declarations with its host targets before calling
 `solveScene()`.
 
-`materializeComponentWithMarkup()` stores the component root, registers the
+`materializeComponentWithMarkup()` stores the component root or ordered fragment
+roots, registers the
 public materialized parts, and returns the matching cleanup operation. The DOM
 or JSX materializer remains responsible for producing the root and all detected
 parts. The runtime component definition selects which detected part IDs may be

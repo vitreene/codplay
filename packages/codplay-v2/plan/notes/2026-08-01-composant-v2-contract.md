@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: template-string runtime et materializer HTML integres; JSX reste V2.5
+Review: template-string runtime et materializer HTML integres; fragments HTML verifies le 2026-08-21; JSX reste V2.5
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -66,6 +66,13 @@ abstract class BaseComponent<Initial extends Record<string, unknown>> {
 
 `render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
+
+Pour la materialisation HTML, un template a une racine reelle lorsque le rendu
+produit un seul noeud. Lorsqu'il en produit plusieurs, le materializer conserve
+la collection ordonnee de ces noeuds reels comme un fragment : il ne cree aucun
+element d'enveloppement. Cette collection est la reference de materialisation
+du composant ; elle n'est pas une cible de service. Les services ne recoivent
+que les noeuds reels designes par le composant.
 
 Le composant reçoit également les actions compilées lorsqu'elles font partie de
 ses données auteur. Ce n'est pas un second circuit d'état : `SolvedPerso.state`

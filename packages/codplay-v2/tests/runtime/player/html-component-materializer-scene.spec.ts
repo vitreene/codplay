@@ -132,4 +132,32 @@ describe('HtmlComponentMaterializer scene materialization', () => {
 
     expect(root.children).toEqual([second, first])
   })
+
+  it('mounts and detaches every real root of a fragment without an envelope node', () => {
+    const root = node()
+    const first = node()
+    const second = node()
+    const materializer = new HtmlComponentMaterializer({
+      persoNodes: new Map([
+        ['main:fragment', [first, second]],
+      ]),
+      targetNodes: new Map([['root', root]]),
+    })
+
+    materializer.materializeScene(scene([
+      perso('main:fragment', { id: 'root', kind: 'root' }),
+    ], { root: ['main:fragment'] }))
+
+    expect(root.children).toEqual([first, second])
+    expect(first.parentNode).toBe(root)
+    expect(second.parentNode).toBe(root)
+
+    materializer.materializeScene(scene([
+      perso('main:fragment', { id: 'root', kind: 'root' }, undefined, false),
+    ], { root: [] }))
+
+    expect(root.children).toEqual([])
+    expect(first.parentNode).toBeNull()
+    expect(second.parentNode).toBeNull()
+  })
 })

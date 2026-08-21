@@ -11,7 +11,7 @@ import type {
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
 } from '../components'
-import { materializeTemplateString } from './html-template-materializer'
+import { materializeTemplateString, type HtmlMaterializedRoot } from './html-template-materializer'
 import { HTML_MATERIALIZER_ID } from '../catalog'
 import type {
   RuntimeMaterializer,
@@ -107,7 +107,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     )
 
     for (const persoKey of this.mountedPersos) {
-      if (!nextMountedPersos.has(persoKey)) detachStructuredNode(this.nodes.persoNodes.get(persoKey))
+      if (!nextMountedPersos.has(persoKey)) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     }
 
     for (const childKeys of Object.values(childrenByTarget)) {
@@ -115,7 +115,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
         const child = scene.persos[childKey]
         if (child === undefined || !child.placement.mounted) continue
         const parent = resolveParentNode(child, this.nodes)
-        if (parent !== undefined) appendStructuredNode(parent, this.nodes.persoNodes.get(childKey))
+        if (parent !== undefined) appendStructuredRoot(parent, this.nodes.persoNodes.get(childKey))
       }
     }
 
@@ -124,7 +124,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
 
   /** Detaches all currently materialized roots from their structural parents. */
   destroy(): void {
-    for (const persoKey of this.mountedPersos) detachStructuredNode(this.nodes.persoNodes.get(persoKey))
+    for (const persoKey of this.mountedPersos) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     this.mountedPersos.clear()
   }
 }
@@ -156,9 +156,11 @@ function isMarkupModuleService(value: RuntimeModuleServiceInstance): value is Ma
 }
 
 /** Detaches one materialized root from its current DOM parent. */
-function detachMaterializedRoot(node: unknown): void {
-  if (!isDetachableNode(node) || node.parentNode === null) return
-  node.parentNode.removeChild(node)
+function detachMaterializedRoot(root: HtmlMaterializedRoot): void {
+  for (const node of materializedRootNodes(root)) {
+    if (!isDetachableNode(node) || node.parentNode === null) continue
+    node.parentNode.removeChild(node)
+  }
 }
 
 /** Resolves one solved child's logical parent to a materialized node. */
@@ -172,6 +174,16 @@ function resolveParentNode(perso: SolvedPerso, nodes: HtmlComponentMaterializerN
 }
 
 /** Appends one materialized node through a DOM-like or plain-object parent. */
+function appendStructuredRoot(parent: unknown, root: unknown): void {
+  for (const child of materializedRootNodes(root)) appendStructuredNode(parent, child)
+}
+
+/** Detaches every real root of one persistent component materialization. */
+function detachStructuredRoot(root: unknown): void {
+  for (const node of materializedRootNodes(root)) detachStructuredNode(node)
+}
+
+/** Appends one real node without introducing a wrapper for a fragment. */
 function appendStructuredNode(parent: unknown, child: unknown): void {
   if (parent === undefined || child === undefined || parent === child) return
   if (isAppendable(parent)) {
@@ -201,6 +213,12 @@ function detachStructuredNode(node: unknown): void {
   node.parentNode = null
 }
 
+/** Returns the persistent real roots represented by one component materialization. */
+function materializedRootNodes(root: unknown): readonly unknown[] {
+  if (root === undefined || root === null) return []
+  return Array.isArray(root) ? root : [root]
+}
+
 /** Checks the minimal append contract supported by a real DOM parent. */
 function isAppendable(value: unknown): value is { appendChild: (child: unknown) => void } {
   return isObjectNode(value) && typeof value.appendChild === 'function'
@@ -222,9 +240,11 @@ function isObjectNode(value: unknown): value is {
 }
 
 /** Adds the stable runtime identity required by local HTML pose restoration. */
-function markHtmlItem(node: unknown, itemId: string): void {
-  if (typeof HTMLElement === 'undefined' || !(node instanceof HTMLElement)) return
-  node.dataset.itemId = itemId
+function markHtmlItem(root: HtmlMaterializedRoot, itemId: string): void {
+  if (typeof HTMLElement === 'undefined') return
+  for (const node of materializedRootNodes(root)) {
+    if (node instanceof HTMLElement) node.dataset.itemId = itemId
+  }
 }
 
 /** Narrows a DOM-like node to the teardown operations used by this host. */

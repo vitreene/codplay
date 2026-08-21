@@ -1,8 +1,11 @@
 import type { MaterializedPart } from '../components/component-types'
 
+/** One retained HTML root, or the ordered roots of a rendered fragment. */
+export type HtmlMaterializedRoot = Node | readonly Node[]
+
 /** Result of materializing trusted HTML markup returned by a component. */
 export type HtmlTemplateMaterialization = Readonly<{
-  rootNode: Node
+  rootNode: HtmlMaterializedRoot
   parts: readonly MaterializedPart[]
 }>
 
@@ -19,23 +22,19 @@ export function materializeTemplateString(markup: string): HtmlTemplateMateriali
   })
   if (childNodes.length === 0) throw new Error('Compiled template produced no nodes.')
 
-  const rootNode = childNodes.length === 1 ? childNodes[0] : wrapTemplateChildren(childNodes)
+  const rootNode: HtmlMaterializedRoot = childNodes.length === 1 ? childNodes[0]! : childNodes
   return { rootNode, parts: collectMaterializedParts(rootNode) }
 }
 
-/** Wraps multiple compiled roots without changing their order. */
-function wrapTemplateChildren(childNodes: readonly ChildNode[]): HTMLElement {
-  const wrapper = globalThis.document.createElement('div')
-  for (const childNode of childNodes) wrapper.appendChild(childNode)
-  return wrapper
-}
-
 /** Collects trusted data-part markers and removes them from the rendered DOM. */
-function collectMaterializedParts(rootNode: Node): readonly MaterializedPart[] {
+function collectMaterializedParts(rootNode: HtmlMaterializedRoot): readonly MaterializedPart[] {
+  const roots = Array.isArray(rootNode) ? rootNode : [rootNode]
   const elements: Element[] = []
-  if (rootNode instanceof Element && rootNode.hasAttribute('data-part')) elements.push(rootNode)
-  if (rootNode instanceof Element || rootNode instanceof DocumentFragment) {
-    elements.push(...Array.from(rootNode.querySelectorAll('[data-part]')))
+  for (const root of roots) {
+    if (root instanceof Element && root.hasAttribute('data-part')) elements.push(root)
+    if (root instanceof Element || root instanceof DocumentFragment) {
+      elements.push(...Array.from(root.querySelectorAll('[data-part]')))
+    }
   }
   return elements.map((element) => {
     const partId = element.getAttribute('data-part') ?? ''

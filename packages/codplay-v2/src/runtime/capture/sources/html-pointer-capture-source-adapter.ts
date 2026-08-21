@@ -257,13 +257,21 @@ function resolvePersoKey(
   const visited = new Set<unknown>()
   while (current !== null && current !== undefined && !visited.has(current)) {
     visited.add(current)
-    for (const [persoKey, node] of nodes.persoNodes) {
-      if (node === current) return persoKey
+    for (const [persoKey, root] of nodes.persoNodes) {
+      for (const node of materializedRootNodes(root)) {
+        if (node === current) return persoKey
+      }
     }
     if (!isParentNode(current)) break
     current = current.parentNode
   }
   return undefined
+}
+
+/** Expands one persistent HTML root or fragment roots for event hit resolution. */
+function materializedRootNodes(root: unknown): readonly unknown[] {
+  if (root === undefined || root === null) return []
+  return Array.isArray(root) ? root : [root]
 }
 
 /** Narrows one event target to the parent relationship needed by the adapter. */

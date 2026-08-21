@@ -8,6 +8,10 @@ Ce module contient les composants auteur instanciés par le
 un composant spécialisé peut posséder des ressources internes qui ne sont pas
 des persos et ne sont pas publiées comme outlets.
 
+Dans la tranche HTML, `BaseComponent` reçoit après `render()` soit un nœud réel,
+soit la collection ordonnée des nœuds réels d'un fragment. Le fragment n'est
+jamais enveloppé automatiquement et ne constitue pas une cible de service.
+
 ## Media
 
 `MediaComponent` reprend la règle V1 pour les sources à effet de bord :
