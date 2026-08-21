@@ -8,6 +8,7 @@ import type {
   SceneDoc,
   StoryDoc,
 } from '../types'
+import type { AuthorEmitDeclaration } from '../capture'
 import { isPlainRecord } from '../../shared'
 
 /** Normalizes one authoring record without mutating the source payload. */
@@ -40,7 +41,9 @@ function normalizePerso(perso: PersoDoc): CanonicalPersoDoc {
     initial: normalizeOptionalRecord(perso.initial) ?? {},
     actions,
     list: normalizeOptionalRecord(perso.list),
-    emit: normalizeOptionalRecord(perso.emit),
+    emit: perso.emit === undefined
+      ? undefined
+      : cloneAuthorValue(perso.emit) as AuthorEmitDeclaration,
   }
 }
 

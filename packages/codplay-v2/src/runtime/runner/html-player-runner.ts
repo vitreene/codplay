@@ -4,6 +4,7 @@ import { RuntimeComponentRuntime } from '../components'
 import { RuntimeCapabilityCatalog } from '../catalog'
 import type { RuntimeMaterializer } from '../materializer'
 import {
+  PLAYER_LIFECYCLE_PLAYING,
   RuntimePlayer,
   type MountTargetDeclaration,
   type PlayerInitResult,
@@ -13,6 +14,7 @@ import {
   type RuntimeEventInput,
   type StrapCollections,
 } from '../player'
+import { HtmlPointerCaptureSourceAdapter } from '../capture'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import {
@@ -36,10 +38,18 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   root: HTMLElement
   rootTargets: readonly HtmlRootTarget[]
   catalog: RuntimeCapabilityCatalog
+  /** Resources already made available to both visible and measurement engines. */
+  resources?: readonly string[]
   engine?: RuntimeEngine
   ticker?: Ticker
   functions?: CompiledFunctionCollection
   strapCollections?: StrapCollections
+  /** Event target used by the classic HTML pointer capture source. */
+  captureEventTarget?: EventTarget
+  /** Mirrors the V1 authoring behavior: block scene input unless playing. */
+  enableInteractionLock?: boolean
+  /** Receives source-adapter failures instead of hiding them in native listeners. */
+  onCaptureError?: (error: unknown) => void
 }>
 
 /** Generic HTML host with one absolute-time presentation circuit. */
@@ -59,15 +69,24 @@ export class HtmlPlayerRunner {
     targetNodes: Map<string, unknown>
   } | undefined
   private readonly motionSystem: HtmlMotionSystem | undefined
+  private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
+  private readonly interactionLockEnabled: boolean
+  private readonly interactionRoot: HTMLElement
+  private readonly initialPointerEvents: string
+  private readonly initialInert: boolean
   private materializationEpoch = 0
 
   /** Creates visible and isolated-measurement hosts from the same compiled scene. */
   constructor(options: HtmlPlayerRunnerOptions) {
     this.defaultTicker = options.ticker
+    this.interactionRoot = options.root
+    this.interactionLockEnabled = options.enableInteractionLock === true
+    this.initialPointerEvents = options.root.style.pointerEvents
+    this.initialInert = options.root.hasAttribute('inert')
     this.materializerContext = { numericLengthScale: 1 }
     options.catalog.lock()
-    this.engine = options.engine ?? new RuntimeEngine(options.catalog)
+    this.engine = options.engine ?? new RuntimeEngine(options.catalog, { resources: options.resources })
     this.ownsEngine = options.engine === undefined
     const mountTargets: readonly MountTargetDeclaration[] = options.rootTargets.map((target) => ({
       id: target.id,
@@ -94,6 +113,13 @@ export class HtmlPlayerRunner {
       componentRuntime,
       options.functions,
     )
+    this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
+      player: this.player,
+      compiledScene: options.compiledScene,
+      nodes: this.nodes,
+      eventTarget: options.captureEventTarget ?? resolveCaptureEventTarget(options.root),
+      onError: options.onCaptureError,
+    })
 
     const measurementRoot = createMeasurementRoot(options.root)
     this.measurementRoot = measurementRoot
@@ -115,7 +141,7 @@ export class HtmlPlayerRunner {
       this.materializerContext,
     )
     const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer)
-    const measurementEngine = new RuntimeEngine(options.catalog)
+    const measurementEngine = new RuntimeEngine(options.catalog, { resources: options.resources })
     const measurementPlayer = new RuntimePlayer(
       `${options.id}:measurement`,
       measurementEngine,
@@ -154,7 +180,11 @@ export class HtmlPlayerRunner {
   init(): PlayerInitResult {
     const visible = this.player.init()
     if (!visible.ok) return visible
-    if (this.measurementPlayer === undefined || this.motionSystem === undefined) return visible
+    if (this.measurementPlayer === undefined || this.motionSystem === undefined) {
+      this.syncInteractionLock()
+      this.captureSourceAdapter.attach()
+      return visible
+    }
     const measurement = this.measurementPlayer.init()
     if (!measurement.ok) {
       this.player.destroy()
@@ -163,6 +193,8 @@ export class HtmlPlayerRunner {
     try {
       this.motionSystem.initialize()
       this.motionSystem.present(this.player.getCurrentTimeMs())
+      this.syncInteractionLock()
+      this.captureSourceAdapter.attach()
       return visible
     } catch (error) {
       this.motionSystem.destroy()
@@ -183,12 +215,14 @@ export class HtmlPlayerRunner {
   play(ticker: Ticker = this.defaultTicker ?? createDefaultTicker()): void {
     this.player.play()
     if (this.ownsEngine) this.engine.start(ticker)
+    this.syncInteractionLock()
   }
 
   /** Pauses playback and stops the runner-owned ticker. */
   pause(): void {
     this.player.pause()
     if (this.ownsEngine) this.engine.stop()
+    this.syncInteractionLock()
   }
 
   /** Advances the shared engine at one deterministic external timestamp. */
@@ -198,7 +232,9 @@ export class HtmlPlayerRunner {
 
   /** Presents one logical time through the exact same motion operation as Play. */
   seek(timeMs: number): PlayerSeekResult {
-    return this.player.seek(timeMs)
+    const result = this.player.seek(timeMs)
+    this.syncInteractionLock()
+    return result
   }
 
   /** Emits one live event through the runner's shared visible/measurement journal. */
@@ -243,6 +279,7 @@ export class HtmlPlayerRunner {
   /** Releases visual, measurement, component, and clock resources. */
   destroy(): void {
     if (this.ownsEngine) this.engine.stop()
+    this.captureSourceAdapter.destroy()
     this.motionSystem?.destroy()
     this.measurementPlayer?.destroy()
     this.player.destroy()
@@ -251,6 +288,24 @@ export class HtmlPlayerRunner {
     this.measurementNodes?.targetNodes.clear()
     this.nodes.persoNodes.clear()
     this.nodes.targetNodes.clear()
+    this.restoreInteractionLock()
+  }
+
+  /** Applies the V1-compatible scene interaction gate at the runner boundary. */
+  private syncInteractionLock(): void {
+    if (!this.interactionLockEnabled) return
+    const isPlaying = this.player.getLifecycleState() === PLAYER_LIFECYCLE_PLAYING
+    this.interactionRoot.style.pointerEvents = isPlaying ? this.initialPointerEvents : 'none'
+    if (this.initialInert || !isPlaying) this.interactionRoot.setAttribute('inert', '')
+    else this.interactionRoot.removeAttribute('inert')
+  }
+
+  /** Restores the host state that existed before the runner took ownership. */
+  private restoreInteractionLock(): void {
+    if (!this.interactionLockEnabled) return
+    this.interactionRoot.style.pointerEvents = this.initialPointerEvents
+    if (this.initialInert) this.interactionRoot.setAttribute('inert', '')
+    else this.interactionRoot.removeAttribute('inert')
   }
 }
 
@@ -306,4 +361,11 @@ function createDefaultTicker(): Ticker {
 /** Resolves one materialized HTML element without exposing component handles. */
 function resolveHtmlHandle(node: unknown): HTMLElement | undefined {
   return typeof HTMLElement !== 'undefined' && node instanceof HTMLElement ? node : undefined
+}
+
+/** Resolves the browser window that owns the visible HTML root. */
+function resolveCaptureEventTarget(root: HTMLElement): EventTarget | undefined {
+  const ownerDocument = (root as { ownerDocument?: { defaultView?: EventTarget | null } }).ownerDocument
+  return ownerDocument?.defaultView
+    ?? (typeof globalThis.window === 'undefined' ? undefined : globalThis.window)
 }

@@ -20,7 +20,11 @@ parallel top-level `compiled-scene` module.
 
 `SceneBuilder` currently covers the first build slice: active stories, structural
 and catalog validation, external function references, resource requirements, root
-candidates, semantic coherence of the compiled artifact, and runtime freezing.
+candidates, the derived action-target index, semantic coherence of the compiled
+artifact, and runtime freezing.
+Perso `emit/capture` declarations are part of this boundary: their event payloads
+are compiled recursively and their lifecycle functions become references in the
+external function collection.
 The codec does not consult runtime capabilities or derive a global property matrix;
 service-owned property coverage remains attached to the component declarations that
 consume it.

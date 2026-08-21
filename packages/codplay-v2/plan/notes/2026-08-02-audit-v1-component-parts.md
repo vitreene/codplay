@@ -157,6 +157,25 @@ Le service/module de montage doit donc etre generique pour tout composant qui
 declare des outlets, tandis que chaque composant reste proprietaire de ses parts
 internes et de son substrat.
 
+## Tranche media V2
+
+La première tranche runtime `media` reprend le modèle V1 sans transformer sa
+part interne en outlet :
+
+- `MediaComponent.render()` fournit uniquement le wrapper auteur ;
+- le composant conserve `mediaBySrc` et crée paresseusement une node vidéo par
+  source rencontrée ;
+- une node inactive est détachée, jamais détruite ni réutilisée avec un autre
+  `src` ;
+- le changement de source est un choix de node active, pas une réassignation de
+  source ;
+- `RuntimeComponentRuntime` transmet les actions compilées afin que la
+  résolution `src` reste déterministe ;
+- le test runner V2 couvre le detach/reattach, le seek et le swap de source.
+
+Cette tranche ne prétend pas implémenter `media-sync`, le preload partagé ou les
+opérations de lecture V1. Ces éléments restent des points distincts du plan.
+
 ## Verification des autres composants
 
 La verification des composants V1 donne la repartition suivante :

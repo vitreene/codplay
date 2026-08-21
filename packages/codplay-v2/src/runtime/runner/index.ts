@@ -11,3 +11,10 @@ export {
 export { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
 export { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 export { HtmlMotionSystem } from './html-motion-system'
+export {
+  HtmlPointerCaptureSourceAdapter,
+} from '../capture'
+export type {
+  HtmlPointerCaptureSourceAdapterOptions,
+  HtmlPointerCaptureSourceNodes,
+} from '../capture'

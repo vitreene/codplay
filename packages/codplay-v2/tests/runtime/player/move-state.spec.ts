@@ -45,6 +45,7 @@ const scene: CompiledScene = {
   resources: { entries: [] },
   rootNodeIds: ['item'],
   requirements: { components: [], services: [], modules: [], resources: [] },
+  actionTargetIndex: {},
 }
 
 const mountTargets = [

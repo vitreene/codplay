@@ -12,7 +12,8 @@ import {
 import { isPlainRecord } from '../../../shared'
 import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
-import { isTweenAction } from './action-sequence'
+import { isActionSequence, isTweenAction } from './action-sequence'
+import { resolveActionDefinition } from './action-resolution'
 import type { MaterializedPerso, MaterializedScene, ResolvedPerso, ResolvedScene } from './types'
 
 /** Resolves discrete patches and continuous ACE values for one materialized scene. */
@@ -38,6 +39,23 @@ export function resolveScene(
     storyStates: materialized.storyStates,
     persos,
   }
+}
+
+/** Resolves one capture action against a current perso state without journaling it. */
+export function resolveLiveCaptureActionState(
+  baseState: CompiledRecord,
+  actionValue: CompiledValue | undefined,
+  eventData: CompiledRecord | undefined,
+  functions: CompiledFunctionCollection = {},
+): CompiledRecord | undefined {
+  const action = resolveActionDefinition(actionValue, eventData)
+  if (action === null) return undefined
+  if (isActionSequence(action)) {
+    throw new Error('Live capture actions cannot target an ActionSequence.')
+  }
+  const state = cloneRecord(baseState)
+  applyAction(state, action, 0, functions)
+  return state
 }
 
 /** Resolves the last active authored move without resolving its target registry yet. */
@@ -78,6 +96,8 @@ function applyActionPayload(
   action: CompiledRecord,
   elapsedMs: number,
 ): void {
+  // Source is reconstructible logical state; MediaComponent owns the side-effectful node cache.
+  if (typeof action.src === 'string') state.src = action.src
   if (isPlainRecord(action.className)) {
     state.className = applyClassNamePatch(state.className, action.className)
   }

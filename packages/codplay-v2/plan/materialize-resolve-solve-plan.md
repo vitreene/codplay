@@ -53,6 +53,10 @@ Les enfants portent des temps relatifs et sont aplatis en temps absolus. Le chem
 de declaration sert de tie-breaker stable pour les occurrences au meme instant.
 Une action `null` peut utiliser `event.data` comme payload d'action selon la regle
 canonique V1.
+La table `perso.actions` est entièrement déclarée dans `CompiledScene` : le
+runtime ne crée pas d'action. Un event ou une capture sélectionne une clé
+existante et peut seulement lui fournir un payload dynamique selon la policy de
+fusion prévue.
 Les events globaux marques `cascade` sont inclus dans la materialisation de chaque
 story; les events locaux restent limites a leur story. Les outputs de straps et les
 patches d'etat suivent exactement la meme selection de journal.

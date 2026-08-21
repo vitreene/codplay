@@ -49,6 +49,17 @@ export class RuntimeComponentRuntime {
     }
   }
 
+  /** Applies one transient live state through the same component update path. */
+  updateLive(
+    persoKey: string,
+    state: Record<string, unknown>,
+    timeMs: number,
+  ): void {
+    const mounted = this.mounted.get(persoKey)
+    if (mounted === undefined) throw new Error(`Runtime component is not mounted: ${persoKey}`)
+    mounted.component.update({ state, timeMs })
+  }
+
   /** Destroys all materialized component instances. */
   destroy(): void {
     for (const mounted of this.mounted.values()) mounted.handle.destroy()
@@ -73,6 +84,7 @@ export class RuntimeComponentRuntime {
           id: perso.persoId,
           storyId: perso.storyId,
           initial: compiledPerso.initial,
+          actions: compiledPerso.actions,
         },
       },
       identity,

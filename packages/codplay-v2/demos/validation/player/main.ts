@@ -1,254 +1,148 @@
-import { SceneBuilder } from '../../../src/scene/compiled'
+import { createRuntimeTelco } from '../../../src/runtime/telco'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
-import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { HtmlPlayerRunner } from '../../../src/runtime/runner'
-import type { StrapCollections } from '../../../src/runtime/player'
-import type { CompiledRecord } from '../../../src/scene/compiled'
+import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
+import { createTelcoRemote } from '../../shared/telco-remote'
+import { createDragCaptureScene, dragStraps } from './drag-scene'
 
 import './style.css'
 
-/** Creates the CodPlay runtime catalog and configures this demo's declared outlet. */
-function createRuntimeCatalog(): RuntimeCapabilityCatalog {
-  const catalog = createCoreRuntimeCatalog()
-  const layout = catalog.getComponent('layout')
-  if (layout === undefined) throw new Error('Core layout component is not registered.')
-  catalog.overrideComponent({ ...layout, mountableParts: ['demo-outlet'] })
-  return catalog
+const TIMELINE_END_MS = 6000
+
+/** Creates the complete validation page around the single player demo entry. */
+function renderPage(): void {
+  const app = document.querySelector<HTMLElement>('#app')
+  if (app === null) throw new Error('Expected #app root element.')
+  app.innerHTML = `
+    <main class="drag-shell">
+      <header class="drag-header">
+        <p class="eyebrow">CodPlay V2 / capture continue</p>
+        <h1>Drag &amp; Capture</h1>
+        <p class="lede">
+          La démo reprend le scénario de drag classique de V1. La source HTML
+          ouvre une capture pointer, applique l'action live du composant, puis
+          remet la fin dans le circuit normal des événements.
+        </p>
+      </header>
+      <section class="stage-panel" aria-label="scène interactive">
+        <div id="scene-stage" class="drag-stage"></div>
+      </section>
+      <section class="panel" aria-label="télécommande CodPlay">
+        <div id="telco-slot"></div>
+        <p class="remote-help">Lire la séquence avant de déplacer le bouton, puis utiliser le seek pour vérifier la relecture de la fin de capture.</p>
+      </section>
+      <section class="readout-panel" aria-label="état runtime">
+        <dl class="readout">
+          <div><dt>état</dt><dd><output id="status-output">—</output></dd></div>
+          <div><dt>temps</dt><dd><output id="time-output">0 ms</output></dd></div>
+          <div><dt>position materialisée</dt><dd><output id="position-output">—</output></dd></div>
+          <div><dt>nœud</dt><dd><output id="node-output">—</output></dd></div>
+        </dl>
+        <p id="error-output" class="error" hidden></p>
+      </section>
+    </main>
+  `
 }
 
-const DEMO_LAYOUT_MARKUP = `
-  <section class="component-layout">
-    <header class="component-layout__header">LayoutComponent / data-part</header>
-    <main class="component-layout__content" data-part="demo-outlet"></main>
-  </section>
-`
-
-/** Creates the small compiled flow presented by the HTML materializer. */
-function createScene(): SceneDoc {
-  return {
-    id: 'validation-player-demo',
-    stories: {
-      main: {
-        id: 'main',
-        initial: { move: '@root' },
-        straps: ['demo-color'],
-        listen: [{ on: 'demo:show', straps: ['demo-color'] }],
-        persos: [{
-          id: 'demo-layout',
-          type: 'layout',
-          initial: { move: '@root', markup: DEMO_LAYOUT_MARKUP },
-          actions: {},
-        }, {
-          id: 'root',
-          type: 'tag',
-          initial: { tag: 'article', move: { target: 'demo-outlet' }, className: 'is-idle', style: { opacity: 0, backgroundColor: '#f8fafc' } },
-          actions: {
-            'demo:show': {
-              className: { add: 'is-active', remove: 'is-idle' },
-              style: {
-                opacity: { from: 0, to: 1, duration: 1000, ease: 'linear' },
-                backgroundColor: { from: '#f8fafc', to: '#67e8f9', duration: 1000, ease: 'linear' },
-              },
-            },
-          },
-        }, {
-          id: 'accent',
-          type: 'tag',
-          initial: { tag: 'article', move: '@root', className: 'is-idle', style: { backgroundColor: '#fb7185' } },
-          actions: {
-            'demo:show': {
-              className: { add: 'is-active', remove: 'is-idle' },
-              style: { backgroundColor: { from: '#fb7185', to: '#a78bfa', duration: 1000, ease: 'linear' } },
-            },
-            'demo:accent': {
-              style: { backgroundColor: { from: '#a78bfa', to: '#facc15', duration: 500, ease: 'linear' } },
-            },
-            'demo:move-outlet': { move: { target: 'demo-outlet', mode: 'first' } },
-            'demo:move-off': { move: '@off' },
-          },
-        }],
-        eventimes: [
-          { name: 'demo:show', startAt: 500 },
-          { name: 'demo:move-outlet', startAt: 1500 },
-          { name: 'demo:move-off', startAt: 1800 },
-        ],
-      },
-    },
-  }
+/** Reads one required output node from the validation page. */
+function output(id: string): HTMLOutputElement {
+  const element = document.querySelector<HTMLOutputElement>(`#${id}`)
+  if (element === null) throw new Error(`Missing demo output: ${id}`)
+  return element
 }
 
-const componentHost = document.querySelector<HTMLElement>('#component-host')!
-const timeOutput = document.querySelector<HTMLOutputElement>('#time-output')!
-const classOutput = document.querySelector<HTMLOutputElement>('#class-output')!
-const opacityOutput = document.querySelector<HTMLOutputElement>('#opacity-output')!
-const rootColorOutput = document.querySelector<HTMLOutputElement>('#root-color-output')!
-const accentColorOutput = document.querySelector<HTMLOutputElement>('#accent-color-output')!
-const phaseOutput = document.querySelector<HTMLOutputElement>('#phase-output')!
-const flowOutput = document.querySelector<HTMLOutputElement>('#flow-output')!
-const placementOutput = document.querySelector<HTMLOutputElement>('#placement-output')!
-const deltaOutput = document.querySelector<HTMLOutputElement>('#delta-output')!
-const seekInput = document.querySelector<HTMLInputElement>('#seek-input')!
-const playToggle = document.querySelector<HTMLButtonElement>('#play-toggle')!
-const errorOutput = document.querySelector<HTMLElement>('#error-output')!
-
-/** Reads one scalar/color state from the solved component state. */
-function readItemState(snapshot: CompiledRecord | undefined): { className: string; opacity: number; backgroundColor: string } {
-  const rawStyle = snapshot?.style
-  const style = typeof rawStyle === 'object' && rawStyle !== null && !Array.isArray(rawStyle)
-    ? rawStyle as Record<string, unknown>
-    : null
-  const opacity = style !== null && typeof style.opacity === 'number'
-    ? style.opacity
-    : 1
-  return {
-    className: typeof snapshot?.className === 'string' ? snapshot.className : '',
-    opacity,
-    backgroundColor: colorToCss(style?.backgroundColor),
-  }
+/** Converts one failed build or runtime result into the visible error panel. */
+function showError(message: string): void {
+  const error = document.querySelector<HTMLElement>('#error-output')
+  if (error === null) return
+  error.hidden = false
+  error.textContent = message
 }
 
-/** Converts a normalized sRGB color into a DOM-compatible CSS color. */
-function colorToCss(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return 'transparent'
-  const candidate = value as { kind?: unknown; space?: unknown; coords?: unknown; alpha?: unknown }
-  if (candidate.kind !== 'color' || candidate.space !== 'srgb' || !Array.isArray(candidate.coords)) return 'transparent'
-  if (candidate.coords.length < 3 || !candidate.coords.every((coordinate) => typeof coordinate === 'number')) return 'transparent'
-  if (typeof candidate.alpha !== 'number') return 'transparent'
-  const [red, green, blue] = candidate.coords as number[]
-  const alpha = candidate.alpha === 1 ? '1' : candidate.alpha.toFixed(3)
-  return `rgba(${Math.round(red * 255)}, ${Math.round(green * 255)}, ${Math.round(blue * 255)}, ${alpha})`
+/** Returns one human-readable diagnostic report. */
+function diagnosticsMessage(report: Readonly<{ errors: readonly Readonly<{ code: string; message: string }>[] }>): string {
+  return report.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
 }
 
-type DisplayedValidationState = Readonly<{
-  timeMs: number
-  rootState: ReturnType<typeof readItemState>
-  accentState: ReturnType<typeof readItemState>
-  placement?: Readonly<{
-    kind: string
-    mounted: boolean
-    targetId?: string
-  }>
-}>
-
-/** Reads the current solved state after the HTML materializer has committed it. */
-function present(
-  runner: HtmlPlayerRunner,
-  previous: DisplayedValidationState | undefined,
-): DisplayedValidationState | undefined {
-  const solved = runner.player.getSolvedScene()
-  if (solved === undefined) return previous
-  const rootState = readItemState(solved.persos['main:root']?.state)
-  const accentState = readItemState(solved.persos['main:accent']?.state)
-  const accentPlacement = solved.persos['main:accent']?.placement
-  const placement = accentPlacement === undefined
-    ? undefined
-    : {
-      kind: accentPlacement.kind,
-      mounted: accentPlacement.mounted,
-      ...(accentPlacement.targetId === undefined ? {} : { targetId: accentPlacement.targetId }),
-    }
-  timeOutput.value = String(Math.round(solved.timeMs))
-  classOutput.value = rootState.className
-  opacityOutput.value = rootState.opacity.toFixed(2)
-  rootColorOutput.value = rootState.backgroundColor
-  accentColorOutput.value = accentState.backgroundColor
-  placementOutput.value = placement?.targetId ?? placement?.kind ?? 'unknown'
-  const previousPlacement = previous?.placement
-  const delta = previousPlacement === undefined || placement === undefined
-    ? undefined
-    : previousPlacement.mounted !== placement.mounted
-      ? previousPlacement.mounted ? 'unmount' : 'mount'
-      : previousPlacement.targetId !== placement.targetId
-        ? 'move'
-        : undefined
-  deltaOutput.value = delta === undefined
-    ? 'none'
-    : `${delta}: ${previousPlacement?.targetId ?? 'off'} -> ${accentPlacement?.targetId ?? 'off'}`
-  phaseOutput.value = solved.timeMs < 500
-    ? 'before demo:show'
-    : solved.timeMs < 1000
-      ? 'demo:show / listen / strap'
-      : solved.timeMs < 1500
-        ? 'planned demo:accent / color tween'
-        : solved.timeMs < 1800
-          ? 'move accent -> demo-outlet'
-          : 'move accent -> @off'
-  return { timeMs: solved.timeMs, rootState, accentState, placement }
-}
-
-/** Boots the validation flow through the HTML player runner. */
+/** Starts the V2 drag capture scene through the shared catalog and runner. */
 function start(): void {
-  const catalog = createRuntimeCatalog()
-  const build = new SceneBuilder(catalog.validationSnapshot(), { createdAt: new Date().toISOString() }).build(createScene())
+  renderPage()
+
+  const stage = document.querySelector<HTMLElement>('#scene-stage')
+  const telcoSlot = document.querySelector<HTMLElement>('#telco-slot')
+  if (stage === null || telcoSlot === null) throw new Error('Drag demo host nodes are incomplete.')
+
+  const catalog = createCoreRuntimeCatalog()
+  const scene: SceneDoc = createDragCaptureScene()
+  const build = new SceneBuilder(catalog.validationSnapshot(), {
+    createdAt: new Date().toISOString(),
+  }).build(scene)
   if (!build.ok) {
-    errorOutput.hidden = false
-    errorOutput.textContent = build.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
+    showError(diagnosticsMessage(build.diagnostics))
     return
   }
 
-  const strapCollections: StrapCollections = {
-    scene: {},
-    stories: {
-      main: {
-        'demo-color': ({ context }) => context.planned.wait(500, { event: { name: 'demo:accent' } }),
-      },
-    },
-  }
   const runner = new HtmlPlayerRunner({
-    id: 'validation-player',
+    id: 'drag-capture-demo',
     compiledScene: build.compiledScene,
-    root: componentHost,
+    root: stage,
     rootTargets: [{ id: 'root-host', storyId: 'main' }],
     catalog,
-    strapCollections,
     functions: build.functions,
+    strapCollections: { scene: {}, stories: { main: dragStraps } },
+    enableInteractionLock: true,
+    onCaptureError: (error) => {
+      const message = error instanceof Error ? error.message : 'Erreur de capture HTML.'
+      showError(message)
+    },
   })
-  flowOutput.value = 'LayoutComponent.render -> data-part -> HtmlComponentMaterializer -> DOM'
-
   const init = runner.init()
   if (!init.ok) {
-    errorOutput.hidden = false
-    errorOutput.textContent = init.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
+    showError(diagnosticsMessage(init.diagnostics))
     runner.destroy()
     return
   }
 
-  let playing = false
-  playToggle.textContent = 'Play'
-  let displayedSnapshot = present(runner, undefined)
+  const telco = createRuntimeTelco({ target: runner, durationMs: TIMELINE_END_MS })
+  const remote = createTelcoRemote({ telco, durationMs: TIMELINE_END_MS, onError: showError })
+  telcoSlot.appendChild(remote.element)
 
-  seekInput.addEventListener('input', () => {
-    playing = false
-    if (runner.getLifecycleState() === 'playing') runner.pause()
-    const result = runner.seek(Number(seekInput.value))
-    if (!result.ok) {
-      errorOutput.hidden = false
-      errorOutput.textContent = result.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join('\n')
-    }
-    playToggle.textContent = 'Play'
-    displayedSnapshot = present(runner, displayedSnapshot) ?? displayedSnapshot
-  })
-
-  playToggle.addEventListener('click', () => {
-    playing = !playing
-    if (playing) runner.play()
-    else runner.pause()
-    playToggle.textContent = playing ? 'Pause' : 'Play'
-  })
-
-  const tick = (): void => {
-    if (playing) {
-      const nextSnapshot = present(runner, displayedSnapshot)
-      if (nextSnapshot !== undefined) {
-        seekInput.value = String(Math.min(2000, nextSnapshot.timeMs))
-        displayedSnapshot = nextSnapshot
-      }
-    }
-    requestAnimationFrame(tick)
+  const statusOutput = output('status-output')
+  const timeOutput = output('time-output')
+  const positionOutput = output('position-output')
+  const nodeOutput = output('node-output')
+  const draggableNode = runner.getPersoNode('main:draggable')
+  if (!(draggableNode instanceof HTMLElement)) {
+    showError('Le composant draggable n’a pas produit un nœud HTML.')
+    remote.destroy()
+    telco.destroy()
+    runner.destroy()
+    return
   }
-  requestAnimationFrame(tick)
+
+  /** Refreshes the diagnostics readout from the same telco snapshot as the remote. */
+  const present = (): void => {
+    const state = telco.getState()
+    statusOutput.value = state.status
+    timeOutput.value = `${Math.round(state.timelineMs)} ms`
+    positionOutput.value = draggableNode.style.transform || '—'
+    nodeOutput.value = draggableNode.isConnected ? 'monté' : 'détaché'
+  }
+
+  const stopOnChange = telco.onChange(present)
+  const stopOnProgress = telco.onProgress(present)
+  present()
+
+  /** Releases the validation-only observers and the persistent runtime resources. */
+  const cleanup = (): void => {
+    stopOnChange()
+    stopOnProgress()
+    remote.destroy()
+    telco.destroy()
+    runner.destroy()
+  }
+  globalThis.addEventListener('beforeunload', cleanup, { once: true })
 }
 
 void start()

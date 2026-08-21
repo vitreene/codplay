@@ -60,6 +60,7 @@ const scene: CompiledScene = {
   resources: { entries: [] },
   rootNodeIds: ['main:root'],
   requirements: { components: [], services: [], modules: [], resources: [] },
+  actionTargetIndex: {},
 }
 
 describe('materialize -> resolve -> solve', () => {

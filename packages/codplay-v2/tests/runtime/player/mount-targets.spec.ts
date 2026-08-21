@@ -26,6 +26,7 @@ const scene: CompiledScene = {
   resources: { entries: [] },
   rootNodeIds: ['panel'],
   requirements: { components: [], services: [], modules: [], resources: [] },
+  actionTargetIndex: {},
 }
 
 describe('MountTargetRegistry', () => {

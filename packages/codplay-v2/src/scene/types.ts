@@ -1,3 +1,5 @@
+import type { AuthorEmitDeclaration } from './capture/authoring-types'
+
 /** Function value allowed in authoring data before compilation extracts it. */
 export type AuthorFunction = (...args: readonly unknown[]) => unknown
 
@@ -20,7 +22,7 @@ export type PersoDoc = Readonly<{
   initial?: AuthorRecord
   actions?: Readonly<Record<string, unknown>>
   list?: AuthorRecord
-  emit?: AuthorRecord
+  emit?: AuthorEmitDeclaration
 }>
 
 /** One authoring story document with optional authoring conveniences. */

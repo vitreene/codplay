@@ -21,9 +21,11 @@ import {
   finalizeFunctionCollection,
   type CompiledFunctionCollection,
 } from './function-extractor'
+import { compileEmitDeclaration } from './capture-compiler'
 import { compileMovePath } from './move-path-compiler'
 import type {
   CompiledListenRule,
+  CompiledActionTargetIndex,
   CompiledPerso,
   CompiledRecord,
   CompiledEventime,
@@ -99,6 +101,7 @@ export class SceneBuilder {
         resources: { entries: deriveResources(activeScene) },
         rootNodeIds: deriveRootNodeIds(activeScene),
         requirements: deriveRequirements(activeScene, this.validationEngine),
+        actionTargetIndex: deriveActionTargetIndex(compiledData),
       }
       validateCompiledSceneSemantics(compiledScene, diagnostics)
       if (diagnostics.hasErrors()) {
@@ -120,6 +123,20 @@ export class SceneBuilder {
       return { ok: false, diagnostics: diagnostics.report() }
     }
   }
+}
+
+/** Derives the immutable action-to-perso target index from compiled declarations. */
+function deriveActionTargetIndex(scene: CompiledSceneData): CompiledActionTargetIndex {
+  const index: Record<string, Array<{ storyId: string; persoId: string }>> = {}
+  for (const story of Object.values(scene.stories)) {
+    for (const perso of story.persos) {
+      for (const actionName of Object.keys(perso.actions)) {
+        const targets = index[actionName] ?? (index[actionName] = [])
+        targets.push({ storyId: story.id, persoId: perso.id })
+      }
+    }
+  }
+  return index
 }
 
 /** Removes disabled stories before validation payload derivation and compilation. */
@@ -210,7 +227,7 @@ function compilePerso(
       Object.entries(perso.actions).map(([name, value]) => [name, extractCompiledValue(compileMovePath(value, `${scope}.actions.${name}`), `${scope}.actions.${name}`, state)]),
     ),
     list: extractCompiledRecord(perso.list, `${scope}.list`, state),
-    emit: extractCompiledRecord(perso.emit, `${scope}.emit`, state),
+    emit: compileEmitDeclaration(perso.emit, `${scope}.emit`, state),
   }
 }
 

@@ -21,6 +21,7 @@ describe('CompiledScene contracts', () => {
         modules: [],
         resources: [],
       },
+      actionTargetIndex: {},
     } satisfies CompiledScene
 
     expect(artifact.scene.tracks).toEqual({})

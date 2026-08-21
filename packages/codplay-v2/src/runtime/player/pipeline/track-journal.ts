@@ -6,6 +6,7 @@ import {
 } from '../../config/track-events'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../config/strap-scope'
 import { TRACK_GLOBAL_ID } from '../../config/track'
+import type { RuntimeEventInsertMode } from '../../config/event-insertion'
 import { isPlainRecord } from '../../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import { buildTrackRegistry, createStrapTrackId, type MaterializedTrackRegistry } from './tracks'
@@ -28,6 +29,8 @@ export type RuntimeTrackEvent = Readonly<{
   context?: Readonly<Record<string, unknown>>
   /** Opaque runtime metadata preserved in the journal for diagnostics. */
   meta?: Readonly<Record<string, unknown>>
+  /** Controls whether the fact enters the current presentation at insertion. */
+  mode?: RuntimeEventInsertMode
 }>
 
 /** Input used to append one live event without creating a track. */
@@ -43,6 +46,7 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   cascade?: boolean
   context?: Readonly<Record<string, unknown>>
   meta?: Readonly<Record<string, unknown>>
+  mode?: RuntimeEventInsertMode
 }>
 
 /** Input used to anchor a portable relative eventime tree at runtime. */
@@ -78,6 +82,7 @@ export type AppendStrapOutputInput = Readonly<{
   strapName: string
   anchorMs: number
   output: StrapExecutionResult
+  mode?: RuntimeEventInsertMode
 }>
 
 /** Result of persisting event-bearing strap output. */
@@ -117,8 +122,8 @@ export class RuntimeTrackJournal {
     if (this.eventIds.has(input.eventId)) {
       return { ok: false, code: 'RUNTIME_EVENT_DUPLICATE', message: `Event is already appended: ${input.eventId}` }
     }
-    if (!Number.isFinite(input.applyAtMs) || input.applyAtMs < 0) {
-      return { ok: false, code: 'RUNTIME_EVENT_TIME_INVALID', message: 'Runtime event time must be finite and non-negative.' }
+    if (!Number.isFinite(input.applyAtMs)) {
+      return { ok: false, code: 'RUNTIME_EVENT_TIME_INVALID', message: 'Runtime event time must be finite.' }
     }
 
     const event: RuntimeTrackEvent = {
@@ -141,8 +146,8 @@ export class RuntimeTrackJournal {
     if (!this.registry.tracks[input.trackId]) {
       return { ok: false, code: 'RUNTIME_TRACK_UNKNOWN', message: `Track is not declared: ${input.trackId}` }
     }
-    if (!Number.isFinite(input.anchorMs) || input.anchorMs < 0) {
-      return { ok: false, code: 'RUNTIME_EVENT_ANCHOR_INVALID', message: 'Eventime anchor must be finite and non-negative.' }
+    if (!Number.isFinite(input.anchorMs)) {
+      return { ok: false, code: 'RUNTIME_EVENT_ANCHOR_INVALID', message: 'Eventime anchor must be finite.' }
     }
 
     const flattened = flattenAnchoredEventimes(input.eventimes, input.anchorMs)
@@ -167,8 +172,8 @@ export class RuntimeTrackJournal {
     if (input.scope === STRAP_SCOPE_STORY && input.storyId === undefined) {
       return { ok: false, code: 'RUNTIME_STRAP_STORY_ID_MISSING', message: 'Story strap output requires storyId.' }
     }
-    if (!Number.isFinite(input.anchorMs) || input.anchorMs < 0) {
-      return { ok: false, code: 'RUNTIME_EVENT_ANCHOR_INVALID', message: 'Strap output anchor must be finite and non-negative.' }
+    if (!Number.isFinite(input.anchorMs)) {
+      return { ok: false, code: 'RUNTIME_EVENT_ANCHOR_INVALID', message: 'Strap output anchor must be finite.' }
     }
     const trackId = createStrapTrackId(
       input.scope === STRAP_SCOPE_STORY ? input.storyId : undefined,
@@ -192,12 +197,13 @@ export class RuntimeTrackJournal {
         storyId,
         input.scope === STRAP_SCOPE_SCENE,
         input.anchorMs,
+        input.mode,
       )
       if (!appended.ok) return appended
       events.push(appended.data)
     }
     for (const update of input.output.updates) {
-      const appended = this.appendStateUpdate(update, trackId, input.scope, input.storyId, input.anchorMs)
+      const appended = this.appendStateUpdate(update, trackId, input.scope, input.storyId, input.anchorMs, input.mode)
       if (!appended.ok) return appended
       events.push(appended.data)
     }
@@ -209,6 +215,7 @@ export class RuntimeTrackJournal {
           storyId,
           input.scope === STRAP_SCOPE_SCENE,
           input.anchorMs + occurrence.offsetMs,
+          input.mode,
         )
         if (!appended.ok) return appended
         events.push(appended.data)
@@ -220,6 +227,7 @@ export class RuntimeTrackJournal {
           input.scope,
           input.storyId,
           input.anchorMs + occurrence.offsetMs,
+          input.mode,
         )
         if (!appended.ok) return appended
         events.push(appended.data)
@@ -277,11 +285,13 @@ export class RuntimeTrackJournal {
     storyId: string | undefined,
     timeMs: number,
     includeBoundary = true,
+    includePersistOnly = true,
   ): readonly RuntimeTrackEvent[] {
     return [...this.eventsByTrack.values()]
       .flatMap((events) => events)
       .filter((event) => event.update !== undefined
         && event.stateScope === scope
+        && (includePersistOnly || event.mode !== 'persist-only')
         && this.isTrackActive(event.trackId)
         && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
@@ -322,6 +332,7 @@ export class RuntimeTrackJournal {
     storyId: string | undefined,
     cascade: boolean,
     applyAtMs: number,
+    mode?: RuntimeEventInsertMode,
   ): TrackCommandResult<RuntimeTrackEvent> {
     return this.appendLiveEvent({
       eventId: this.createGeneratedEventId(trackId, storyId ?? STRAP_SCOPE_SCENE),
@@ -331,6 +342,7 @@ export class RuntimeTrackJournal {
       applyAtMs,
       data: event.data,
       cascade,
+      mode,
     })
   }
 
@@ -341,6 +353,7 @@ export class RuntimeTrackJournal {
     scope: StrapScope,
     storyId: string | undefined,
     applyAtMs: number,
+    mode?: RuntimeEventInsertMode,
   ): TrackCommandResult<RuntimeTrackEvent> {
     return this.appendLiveEvent({
       eventId: this.createGeneratedEventId(trackId, storyId ?? scope),
@@ -350,6 +363,7 @@ export class RuntimeTrackJournal {
       applyAtMs,
       update,
       stateScope: scope,
+      mode,
     })
   }
 }

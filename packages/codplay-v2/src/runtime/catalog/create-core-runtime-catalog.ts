@@ -1,4 +1,5 @@
 import { LayoutComponent } from '../components/layout-component'
+import { MediaComponent, validateMediaAction, validateMediaInitial } from '../components/media-component'
 import { TagComponent } from '../components/tag-component'
 import {
   RuntimeCapabilityCatalog,
@@ -26,6 +27,7 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
 
   catalog.registerComponent(coreTagDefinition, 'core')
   catalog.registerComponent(coreLayoutDefinition, 'core')
+  catalog.registerComponent(coreMediaDefinition, 'core')
   catalog.registerComponent(coreListDefinition, 'core')
   return catalog
 }
@@ -49,6 +51,16 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
   validateAction: () => undefined,
   create: (input) => new LayoutComponent(input as never),
   mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
+}
+
+/** Creates the built-in media component declaration. */
+const coreMediaDefinition: RuntimeComponentDefinition = {
+  type: 'media',
+  services: ['className', 'style', 'attr'],
+  modules: [],
+  validateInitial: validateMediaInitial,
+  validateAction: validateMediaAction,
+  create: (input) => new MediaComponent(input as never),
 }
 
 /** Creates the current list host declaration without a demo-only path. */

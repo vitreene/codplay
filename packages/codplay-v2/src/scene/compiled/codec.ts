@@ -77,7 +77,7 @@ export class CompiledSceneCodec {
 
 /** Checks the complete serializable compiled-scene boundary. */
 function isValidCompiledScene(value: unknown, schemaVersion: string): value is CompiledScene {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'createdAt', 'scene', 'resources', 'rootNodeIds', 'requirements'])) {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['schemaVersion', 'createdAt', 'scene', 'resources', 'rootNodeIds', 'requirements', 'actionTargetIndex'])) {
     return false
   }
   return value.schemaVersion === schemaVersion
@@ -86,6 +86,21 @@ function isValidCompiledScene(value: unknown, schemaVersion: string): value is C
     && isValidResources(value.resources)
     && isStringArray(value.rootNodeIds)
     && isValidRequirements(value.requirements)
+    && isValidActionTargetIndex(value.actionTargetIndex)
+}
+
+/** Checks the compiled lookup from action names to perso identities. */
+function isValidActionTargetIndex(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false
+  return Object.entries(value).every(([actionName, targets]) => {
+    if (actionName.length === 0 || !Array.isArray(targets)) return false
+    return targets.every((target) => {
+      return isPlainRecord(target)
+        && hasOnlyKeys(target, ['storyId', 'persoId'])
+        && typeof target.storyId === 'string'
+        && typeof target.persoId === 'string'
+    })
+  })
 }
 
 /** Checks the complete compiled scene payload. */
@@ -150,7 +165,52 @@ function isValidPerso(value: unknown): value is CompiledPerso {
     && isCompiledRecord(value.actions)
     && Object.values(value.actions).every(isCompiledValue)
     && (value.list === undefined || isCompiledRecord(value.list))
-    && (value.emit === undefined || isCompiledRecord(value.emit))
+    && (value.emit === undefined || isCompiledEmitDeclaration(value.emit))
+}
+
+/** Checks one compiled emit declaration and its nested capture references. */
+function isCompiledEmitDeclaration(value: unknown): boolean {
+  return isPlainRecord(value) && Object.values(value).every((entry) => {
+    if (Array.isArray(entry)) return entry.every(isCompiledEmitRule)
+    return isCompiledEmitRule(entry)
+  })
+}
+
+/** Checks one compiled event-plus-capture rule. */
+function isCompiledEmitRule(value: unknown): boolean {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['event', 'capture'])) return false
+  return isCompiledCaptureEvent(value.event)
+    && (value.capture === undefined || isCompiledCaptureDeclaration(value.capture))
+}
+
+/** Checks one compiled event carried by a capture declaration. */
+function isCompiledCaptureEvent(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ['name', 'data', 'cascade', 'mode'])
+    && typeof value.name === 'string'
+    && (value.data === undefined || isCompiledRecord(value.data))
+    && (value.cascade === undefined || typeof value.cascade === 'boolean')
+    && (value.mode === undefined || value.mode === 'apply-now' || value.mode === 'persist-only')
+}
+
+/** Checks one compiled capture declaration without resolving its function refs. */
+function isCompiledCaptureDeclaration(value: unknown): boolean {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, [
+    'trackOn',
+    'endOn',
+    'stateScope',
+    'initCaptureStateRef',
+    'trackCommandRef',
+    'endEmit',
+    'endCaptureRef',
+  ])) return false
+  return (value.trackOn === undefined || isStringArray(value.trackOn))
+    && (value.endOn === undefined || isStringArray(value.endOn))
+    && (value.stateScope === undefined || value.stateScope === 'scene' || value.stateScope === 'story')
+    && isFunctionReferenceOrUndefined(value.initCaptureStateRef)
+    && isFunctionReferenceOrUndefined(value.trackCommandRef)
+    && (value.endEmit === undefined || isCompiledCaptureEvent(value.endEmit))
+    && isFunctionReferenceOrUndefined(value.endCaptureRef)
 }
 
 

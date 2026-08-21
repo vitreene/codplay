@@ -1,59 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CodPlay V2 Layout Component Validation</title>
+    <title>CodPlay V2 — Drag &amp; Capture</title>
   </head>
   <body>
-    <main class="demo-shell">
-      <header>
-        <p class="eyebrow">CodPlay V2 / layout component</p>
-        <h1>Template string to projected layout</h1>
-        <p class="stage-marker">Current stage: component -&gt; data-part -&gt; HTML materializer</p>
-        <p class="flow-marker">flow: <output id="flow-output">preparing pipeline</output></p>
-        <p class="lede">A template-string LayoutComponent exposes one public data-part. The HTML player runner mounts the logical persos into the materialized layout.</p>
-      </header>
-
-      <section class="panel" aria-label="player validation">
-        <div class="readout">
-          <span>class <output id="class-output">is-idle</output></span>
-          <span>opacity <output id="opacity-output">0</output></span>
-          <span>root color <output id="root-color-output">#f8fafc</output></span>
-          <span>accent color <output id="accent-color-output">#fb7185</output></span>
-          <span>accent placement <output id="placement-output">root</output></span>
-          <span>move delta <output id="delta-output">none</output></span>
-          <span>time <output id="time-output">0</output> ms</span>
-        </div>
-        <p class="phase">phase: <output id="phase-output">paused at t=0</output></p>
-        <label class="timeline" for="seek-input">
-          <span>seek</span>
-          <input id="seek-input" type="range" min="0" max="2000" value="0" step="1" />
-        </label>
-        <button id="play-toggle" type="button">Play</button>
-      </section>
-
-      <section class="component-panel" aria-label="materialized layout component">
-        <p class="eyebrow">Materialized component</p>
-        <div id="component-host" class="component-host"></div>
-        <p class="component-caption">The accent moves into <code>data-part="demo-outlet"</code> at 1500 ms.</p>
-      </section>
-
-      <section class="expected" aria-label="expected timeline">
-        <p class="eyebrow">Expected timeline</p>
-        <ol>
-          <li><code>t = 0</code>: paused, two items are present, root opacity is <code>0</code>.</li>
-          <li><code>t = 500 ms</code>: <code>demo:show</code> passes through listen and starts <code>demo-color</code>.</li>
-          <li><code>500-1000 ms</code>: root opacity and both background colors interpolate.</li>
-          <li><code>t = 1000 ms</code>: the planned strap event <code>demo:accent</code> is materialized.</li>
-          <li><code>1000-1500 ms</code>: the accent color continues through the planned color tween.</li>
-          <li><code>t = 1500 ms</code>: the accent placement becomes <code>demo-outlet</code>.</li>
-          <li><code>t = 1800 ms</code>: the accent placement becomes <code>@off</code>.</li>
-        </ol>
-      </section>
-
-      <pre id="error-output" class="error" hidden></pre>
-    </main>
+    <main id="app"></main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

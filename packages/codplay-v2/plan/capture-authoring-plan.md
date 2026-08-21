@@ -1,141 +1,219 @@
-# Capture, DnD et authoring V2
+# Capture continue V2 — plan core
 
 ## Statut
 
-`A relire` — contrat V2 proposé, implementation non engagee.
+`Fini` — ce document porte uniquement le mécanisme core de capture
+continue, indépendant de sa source et de sa materialisation. Il doit être
+validé avant toute modification de `src/`.
 
-Ce plan couvre la capture continue, le drag-and-drop entre listes et le canal
-d'authoring. Il ne cree pas un second moteur de lecture : ces capacites doivent
-rester branchees sur le flux `materialize -> resolve -> solve -> project`.
+La validation d’une fixture HTML et de la telco est décrite séparément dans
+[`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md). Elle ne
+fait pas partie du contrat core.
 
-## Probleme structurel a resoudre
+## Autorité et périmètre
 
-La V1 possede les bons comportements observables, mais sa capture est branchee
-sur le canal d'animation et contourne le parcours normal des transitions. Le
-DnD ajoute ensuite un hit-test DOM et un ghost autour de cette capture. Enfin,
-l'AuthorApi V1 expose directement des poses de nodes et des caches anime.js.
+Le contrat actif est défini par les specs V2 déjà établies. La spec V1
+[`v1-capture-spec.md`](../../../docs/formalisation/v1-capture-spec.md) est la
+référence comportementale du portage lorsqu’une décision V2 ne la modifie pas.
 
-Ces trois points ne peuvent pas etre portes tels quels en V2 :
+Ce plan couvre :
 
-- la capture est un troisieme producteur de `PersoState`, au meme niveau que
-  l'evaluation temporelle, pas une variante d'animation ;
-- le DnD est un adaptateur de materialisation HTML qui conclut par un event `move`,
-  pas une logique de placement parallele ;
-- l'authoring est un canal distinct, qui observe et demande des transactions,
-  sans relire le DOM pour reconstruire l'etat logique.
+- le cycle source-agnostique `begin -> track -> end/cancel` ;
+- l’état éphémère de capture et les samples ;
+- les `CaptureAction` live et leur résolution vers des actions compilées ;
+- `endEmit`, `endCapture`, leur routage et leur matérialisation ;
+- l’ancrage temporel des sorties persistantes ;
+- le passage par le dispatcher, le journal et la frontière composant/materializer ;
+- le seek, l’annulation et le diagnostic de relecture.
+
+Ce plan ne définit pas :
+
+- un adaptateur DOM, SVG, Canvas, Three.js ou autre source concrète ;
+- une telco ou un remote de validation ;
+- le DnD, une liste, un ghost, un hit-test ou un placement ;
+- une scène de démonstration ;
+- `setNodePose` ou l’intégration de l’éditeur.
+
+## Contrat core à porter
+
+### Session et état
+
+- Une capture est ouverte par une entrée discrète et possède une session
+  identifiée, son hôte, son scope de lecture et son instant d’ouverture.
+- `initCaptureState` est appelée une fois à l’ouverture ; sans elle,
+  `captureState` commence à `{}`.
+- `captureState` est propre à la session. Il n’est ni le state applicatif, ni
+  une entrée du journal, ni une valeur rejouée au seek.
+- `trackCommand` reçoit le sample courant, le cumul brut et le dernier
+  `captureState`.
+- `trackCommand` peut retourner une `CaptureAction`, un remplacement de
+  `captureState` et une mise à jour partielle `updateState` du scope lu par la
+  capture. `updateState` n’entre pas dans le journal et n’est pas rejouée au
+  seek ; le résultat seek-safe passe par une sortie de fin et un strap. Aucun
+  de ces résultats ne devient un événement par sample.
+
+### Actions live
+
+- Une `CaptureAction` sélectionne une action déjà déclarée dans
+  `CompiledPerso.actions` par `actionName`.
+- Elle ne crée jamais d’action au runtime et n’est jamais ajoutée au journal.
+- Les cibles sont préparées lors de la compilation ou de l’initialisation du
+  player à partir de l’index compilé ; aucune recherche de cible n’est faite
+  pendant le tracking.
+- L’application live suit la frontière commune
+  `component.update() -> services -> materializer`.
+- Elle ne connaît pas le substrat final et n’écrit jamais directement dans un
+  node ou une API DOM.
+- Une absence d’action sur un sample retire l’action live précédente au lieu
+  de la laisser active implicitement.
+
+### Sorties de fin
+
+`initCaptureState`, `trackCommand`, `endEmit` et `endCapture` sont quatre
+mécanismes distincts du cycle de capture : chacun est indépendant et
+optionnel.
+
+- `endEmit` est un `StoryEvent` normal. Il passe par le dispatcher standard et
+  sa donnée contient toujours `captureState` sous la clé réservée, en
+  conservant les données explicites de l’auteur.
+- `endCapture` reçoit les samples bruts, le dernier `captureState`, le state en
+  lecture seule et les métadonnées. Il peut retourner des `StoryEvent` ou ne
+  rien retourner.
+- `endCapture` ne modifie jamais directement le state. Toute écriture passe
+  par un strap déclenché par un événement normal.
+- Tout événement retourné par `endCapture` est `persist-only` par son
+  positionnement ; aucun marqueur supplémentaire n’est nécessaire.
+- L’insertion `persist-only` est une frontière atomique : l’événement est
+  ajouté au journal, mais la tête de lecture à l’instant de `endCapture` ne le
+  voit pas. Il ne participe ni à la matérialisation courante, ni à la
+  résolution, ni au solve, ni à l’application de cette fermeture. Une
+  reconstruction ultérieure peut ensuite le prendre en compte selon son
+  `applyAtMs`.
+- `endEmit` suit la politique d’insertion d’un événement normal, avec
+  `apply-now` par défaut.
+- Les sorties de fin passent toutes par le dispatcher normal. Le runtime ne
+  crée pas de circuit de capture concurrent.
+
+### Ancrage et relecture
+
+- La session conserve son instant d’ouverture.
+- La durée d’une sortie `endCapture` est résolue selon `duration`/
+  `durationMode` du contrat, notamment la durée réelle en mode `capture`.
+- Une capture ouverte et fermée dans le même tick conserve une durée effective
+  minimale de `1 ms`, contrainte par le moteur de transitions qui refuse une
+  durée nulle ; l’ancrage reste `now - duréeRésolue`.
+- L’événement `endCapture` est ancré à `now - duréeRésolue` ; les transitions
+  concernées reçoivent la durée résolue lorsqu’elles n’en déclarent pas.
+- Cet ancrage n’est pas ramené artificiellement à zéro : le journal accepte un
+  `applyAtMs` runtime fini négatif, tandis que le temps de lecture reste dans
+  son domaine non négatif. Cela conserve la sémantique V1 de `now - durée`.
+- Le tracking live n’est jamais rejoué au seek.
+- Un seek annule les sessions live ouvertes, sans détruire les éléments
+  materialisés persistants ; la destruction intervient au teardown final du
+  player.
+- Si aucune sortie persistante n’est produite, le mode auteur émet un warning
+  non bloquant indiquant que la relecture peut différer. Cette absence reste
+  un choix valide pour les usages sans relecture seek.
 
 ## Architecture cible
 
 ```text
-CompiledScene + RuntimeTrackJournal + RuntimeCaptureStore + t
-        |                 |                  |
-        +------ materialize / resolve / solve --------+
-                                                     |
-                                             one SolvedScene
-                                                     |
-                                         project / components
+source continue
+      -> façade RuntimePlayer de capture
+      -> session éphémère
+      -> trackCommand
+      -> CaptureAction -> actionTargetIndex compilé
+      -> Component.update() -> services -> materializer
+
+endCapture / endEmit
+      -> RuntimeEventDispatcher
+      -> journal / materialize / resolve / solve
 ```
 
-### 1. Capture : source d'etat live ephemere
+Le core ne connaît ni l’origine native du sample ni le substrat de
+materialisation. Ces responsabilités appartiennent aux adaptateurs et aux
+plans de validation spécifiques.
 
-`RuntimeCaptureStore` porte les sessions ouvertes et leur `captureState`. Une
-session contient son identite, son perso hote, son instant d'ouverture, ses
-echantillons et sa derniere presentation live. Le store n'est pas le journal :
-les echantillons et les mises a jour live ne sont jamais rejoues au seek.
+## Ordre d’implémentation core
 
-Le contrat V2 conserve les invariants V1 :
+### 1. Contrats auteur, compilés et runtime
 
-- `initCaptureState` est appele une fois a l'ouverture ;
-- `trackCommand` ne produit ni `StoryEvent`, ni strap, ni acces a un node ;
-- une `CaptureAction` est resolue par le player dans le meme `PersoState` que
-  le reste de la scene ;
-- `endEmit` passe par le dispatcher d'events normal ;
-- les sorties `endCapture` sont inserees en `persist-only`, puis deviennent
-  des faits ordinaires de la reconstruction ulterieure ;
-- un seek ferme/annule les sessions live, car une capture reelle n'est pas un
-  fait historique a rejouer.
+- aligner les types auteur, `CompiledScene` et runtime sur les formes de la
+  spec : state scope, actions, sorties de fin, durée et métadonnées ;
+- conserver les fonctions comme références compilées conformément au contrat
+  V2 des fonctions extraites ;
+- compiler les événements de fin avec leur déclaration complète.
 
-Le player doit donc exposer une facade capture source-agnostique (`begin`,
-`track`, `end`, `cancel`) et reconstruire sa presentation par le meme appel
-`reconstructScene(t)` que Play et Seek. Aucun listener DOM n'appartient au
-coeur.
+### 2. Session source-agnostique
 
-### 2. Compilation : fonctions hors artefact
+- reconstruire l’ouverture, l’initialisation, le tracking, la fin et
+  l’annulation autour d’une session unique ;
+- conserver instant d’ouverture, samples, state scope et `captureState` ;
+- distinguer dans le résultat les sorties `endCapture`, `endEmit` et leurs
+  politiques de placement ;
+- produire le warning uniquement lorsqu’aucune sortie persistante n’existe.
 
-Les declarations de capture restent authoring-friendly, mais leur compilation
-produit exclusivement des references dans `CompiledScene` :
+### 3. Player et application live
 
-- `initCaptureStateRef` ;
-- `trackCommandRef` ;
-- `endCaptureRef` ;
-- les `StoryEvent` declares, eux aussi compiles recursivement.
+- exposer la façade core sans listener de source ;
+- résoudre une fois les cibles des actions compilées ;
+- transmettre l’état live par la frontière composant/services/materializer ;
+- éliminer les applications répétées ou concurrentes ;
+- faire disparaître l’action live précédente lorsqu’un sample ne la remplace
+  pas.
 
-Les fonctions reelles vivent dans `CompiledFunctionCollection`, comme les
-straps et transforms deja implementes. Le runtime ne resout jamais une
-fonction depuis le DOM ou depuis un nom arbitraire.
+### 4. Dispatcher, journal et seek
 
-### 3. Journal : distinguer application live et persistance
+- faire transiter les deux sorties par le dispatcher normal ;
+- ancrer les événements `endCapture` au temps résolu ;
+- conserver `persist-only` pour les reconstructions futures sans double
+  application immédiate ;
+- annuler une session ouverte au seek et au destroy ;
+- préserver le cycle de vie persistant des composants materialisés.
 
-Le journal doit porter explicitement le mode d'insertion d'un fait :
+### 5. Vérification core
 
-- `apply-now` : le fait entre dans la reconstruction courante ;
-- `persist-only` : le fait est conserve pour les evaluations futures, mais ne
-  redevient pas une cause de double application au moment de sa production.
+Les tests core doivent utiliser une source abstraite et un materializer de test,
+sans DOM ni scène de démonstration. Ils vérifient :
 
-Cette distinction est une propriete du journal et du materializer, pas un
-special-case de capture. Toute future capacite qui produit un fait deja rendu
-live pourra reutiliser le meme mode.
+- initialisation unique et state scope ;
+- samples absents du journal ;
+- actions compilées et absence de recherche live ;
+- retrait d’une action live ;
+- séparation et optionalité de `endEmit`/`endCapture` ;
+- `data.captureState` systématique sur `endEmit` ;
+- persist-only implicite des sorties `endCapture` ;
+- durée et ancrage ;
+- warning en l’absence de sortie persistante ;
+- annulation au seek et destruction uniquement au teardown.
 
-### 4. DnD : adaptateur de materialisation HTML
+## Hors périmètre et plans liés
 
-Le coeur ne connait ni `HTMLElement`, ni `getBoundingClientRect`, ni ghost.
-L'adaptateur HTML :
+- validation S5 HTML, adaptateur pointer et telco :
+  [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md) ;
+- façade DnD auteur : après validation d’une capture classique ;
+- materializers spécifiques : plans des materializers concernés ;
+- authoring éditeur et `setNodePose` : plan de l’éditeur.
 
-1. ouvre une session capture avec `dropIn` ;
-2. mesure les enfants montes des listes candidates ;
-3. resout localement la liste et l'index avec hysteresis ;
-4. présente un ghost hors du registre des persos ;
-5. ferme la capture avec un `move` standard portant `parentId`, `index`, le
-   mode `reparent` et le `flipMode` choisi ;
-6. detruit le ghost sans modifier l'ordre logique pendant la preview.
+## Critère de sortie du core
 
-Le commit DnD est donc un event/action `move` normal. Le resolver de placement,
-le journal, le solve et le graphe de mouvement ne possedent aucune branche DnD.
+Le core est prêt lorsque ses contrats et tests source-agnostiques sont cohérents
+avec les specs, que le player ne contient aucun chemin de démonstration, et que
+la fixture S5 peut être branchée sans ajouter de sémantique au mécanisme core.
 
-### 5. Authoring : canal local et types V2
+## Suivi d’implémentation
 
-Le canal authoring ne doit pas reutiliser `PlayerApi` V1. Il recevra des
-snapshots immuables de `SolvedScene`/`PersoState`, des notifications de montage
-et des diagnostics, et demandera des operations explicites au player ou au
-builder. Il ne reconstruira jamais un `PersoState` depuis une pose DOM.
-
-L'ancienne operation `setNodePose` est le point encore ouvert : elle peut etre
-soit une présentation temporaire d'atelier, soit une operation persistante de
-scene. Ces deux semantiques ne doivent pas partager la meme methode, car la
-premiere ne doit pas polluer le journal et la seconde doit produire un fait
-rejouable.
-
-## Tranche d'implementation apres relecture
-
-1. figer le type compile de capture et le resultat `RuntimeCaptureStore` ;
-2. ajouter le mode d'insertion du journal et les tests `persist-only` ;
-3. integrer la facade capture au `RuntimePlayer` et partager son resultat avec
-   le runner de mesure ;
-4. ajouter l'adaptateur HTML DnD sans logique DnD dans le coeur ;
-5. definir puis implementer le canal authoring V2 ;
-6. couvrir chaque operation par des tests froids Play/Seek et une fixture
-   HTML, puis mettre a jour les README de modules.
-
-## Decision requise avant le code authoring
-
-Pour `setNodePose`/les poses manipulees dans l'atelier, choisir explicitement
-entre :
-
-- **présentation temporaire** : visible dans l'instance authoring, absente du
-  journal et discardee au seek/reload ;
-- **commit de scene** : transforme la pose en operation authoring persistante,
-  distincte du journal de lecture et rejouable apres recompilation.
-
-Le noyau capture/DnD peut etre implemente independamment de cette decision. Le
-canal authoring, lui, ne doit pas etre code avant que cette frontiere soit
-fixee.
+- [x] contrats auteur, compilés et runtime alignés sur les sorties de capture,
+  `updateState`, les scopes et les durées ;
+- [x] session unique avec séparation `endCapture`/`endEmit`, ancrage temporel,
+  propagation de durée et warning de relecture ;
+- [x] façade player source-agnostique, index compilé des cibles d’action,
+  retrait d’une action live et maintien des mises à jour live hors journal ;
+- [x] frontière `persist-only` maintenue pendant toute la fermeture, y compris
+  lorsque `endEmit` est présent ;
+- [x] annulation au seek/destroy et conservation des composants jusqu’au
+  teardown final ;
+- [x] tests core source-agnostiques et tests compilés : `57` fichiers, `351`
+  tests passants au 2026-08-21 ;
+- [ ] validation S5 HTML/telco, suivie exclusivement dans
+  [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md).

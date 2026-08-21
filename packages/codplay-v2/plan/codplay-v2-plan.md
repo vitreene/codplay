@@ -52,7 +52,8 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
 ```
 
 `CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
-`resources`, `rootNodeIds` et `requirements`. Toute extension doit correspondre
+`resources`, `rootNodeIds`, `requirements` et, lorsque nécessaire, les index
+dérivés du contrat compilé comme `actionTargetIndex`. Toute extension doit correspondre
 à une capacité V2 spécifiée; aucune ne sert seulement à faire fonctionner une
 demo.
 
@@ -149,13 +150,14 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Contrat fixe sur les moves compilés; le mode local est inféré pour une target inchangée et un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
 | Replace | Module de remplacement et clones transitoires | A reprendre apres audit du contrat module/service et du flux de move. |
 | ActionSequence et TweenAction | Actions continues, chainage, phases et interruption | Expansion pure dans materialize, fonctions compilées dans resolve et frontière `tween:stop` en place; renderer continu, composition additive et live restent hors tranche. |
-| Capture et DnD | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Contrat V2 propose, `A relire` : troisieme producteur de `PersoState`; DnD depend de capture, move, listes et mesure. |
+| Capture continue core | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Plan V2 `Fini` : contrat source-agnostique, session, sorties de fin, application live, journal et seek ; aucune source HTML ni démo dans ce périmètre. |
+| Validation capture S5 | [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md) | Plan V2 `En cours` : fixture HTML classique, adaptateur pointer, telco et tests d’intégration ; aucune nouvelle sémantique core. |
 | Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine et les rapports structures par instance sont en place; conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
-| Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Media-sync est conserve conceptuellement; cache et strategie remontent a l'engine. |
+| Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | `MediaComponent` V2 reprend le cache `node-per-src` V1 et sa persistance; media-sync, cache partage et strategie de preload restent a ouvrir. |
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogue unifie et ModuleServices player-scoped | `RuntimeCapabilityCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place; aucun catalogue local de runner ou de demo. |
-| Authoring | [`capture-authoring-plan.md`](./capture-authoring-plan.md) | Canal local separe du player de diffusion; semantique des poses d'atelier a fixer avant implementation. |
-| Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | Packaging fin et transport distant reportes; ne pas melanger avec authoring. |
+| Authoring éditeur | [`2026-07-12-app-controller-definition.md`](../../editor/plan/app/2026-07-12-app-controller-definition.md) | Le canal d'intentions existe déjà côté éditeur. `setDecor(decorId, patch)` couvre la position ; lors de la reprise V2 dans l'éditeur, `setNodePose` sera examiné comme usage de ce canal et du flux Builder -> CompiledScene -> materializer, sans passer par capture/DnD ni ajouter de patch concurrent au player. |
+| Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | La façade telco locale de validation (transport + observation) est en place; packaging, transport distant et `rate` restent reportés; ne pas mélanger avec authoring. |
 | Tests | Fixtures, horloge déterministe, traces, assertions de paradigme et baselines DOM/géométriques | Transversal; le mouvement couvre les frontières exactes, recouvrements, profondeurs imbriquées et l'indépendance de l'historique d'évaluation. |
 
 ## Ordre de construction
@@ -173,6 +175,11 @@ Creer d'abord sous `packages/codplay-v2/tests/runtime/` une verticale de test qu
 un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML. La demo existante
 `demos/validation/player` reste un banc visible du runtime, sans sortie ou catalogue parallele. Ni cette demo ni
 la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
+
+La démo courante est unique et remplace la précédente lorsqu'une nouvelle
+tranche doit être présentée, sauf demande explicite de conservation. La démo
+FLIP de `demos/validation/runner` est consignée ; elle reste séparée de la démo
+courante et ne doit pas être dupliquée sous une autre entrée.
 
 - un composant racine fixe;
 - un event materialise;
@@ -215,7 +222,7 @@ absence de rejeu de strap, dépendances interdites et ordre de solve).
 
 ### 5. Tranches de capacites
 
-Poursuivre par dependances : capture/DnD et authoring; media/preload; bindings tiers; diffusion/broadcast/telco.
+Poursuivre par dependances : capture/DnD; intégration authoring V2 dans l'éditeur via le canal d'intentions existant; media/preload; bindings tiers; diffusion/broadcast/telco.
 Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
 
 ## Sources de reference V2

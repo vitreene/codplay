@@ -15,6 +15,7 @@ export function validateCompiledSceneSemantics(
   }
 
   validateRootNodeIds(scene, persoIds, diagnostics)
+  validateActionTargetIndex(scene, diagnostics)
   validateRequirements(scene, componentTypes, diagnostics)
   validateResources(scene, diagnostics)
 }
@@ -27,6 +28,64 @@ function validateSceneIdentity(scene: CompiledScene, diagnostics: DiagnosticColl
 
   if (Number.isNaN(Date.parse(scene.createdAt))) {
     diagnostics.error('COMPILED_SCENE_CREATED_AT_INVALID', 'CompiledScene createdAt must be a valid date string.')
+  }
+}
+
+/** Validates that the compiled action-target index exactly reflects compiled actions. */
+function validateActionTargetIndex(scene: CompiledScene, diagnostics: DiagnosticCollector): void {
+  const index = scene.actionTargetIndex
+  if (index === undefined) {
+    diagnostics.error(
+      'COMPILED_ACTION_TARGET_INDEX_MISSING',
+      'CompiledScene actionTargetIndex is required.',
+      { context: { sceneId: scene.scene.id } },
+    )
+    return
+  }
+
+  const expected: Record<string, string[]> = {}
+  for (const story of Object.values(scene.scene.stories)) {
+    for (const perso of story.persos) {
+      for (const actionName of Object.keys(perso.actions)) {
+        const targets = expected[actionName] ?? (expected[actionName] = [])
+        targets.push(`${story.id}\u0000${perso.id}`)
+      }
+    }
+  }
+
+  const actualNames = Object.keys(index)
+  if (!sameSet(new Set(actualNames), new Set(Object.keys(expected)))) {
+    diagnostics.error(
+      'COMPILED_ACTION_TARGET_INDEX_INCONSISTENT',
+      'CompiledScene actionTargetIndex must contain exactly the action names declared by compiled persos.',
+      { context: { sceneId: scene.scene.id } },
+    )
+    return
+  }
+
+  for (const [actionName, targets] of Object.entries(index)) {
+    const actual = new Set<string>()
+    for (const target of targets) {
+      const story = scene.scene.stories[target.storyId]
+      const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
+      if (story === undefined || perso === undefined || !(actionName in perso.actions)) {
+        diagnostics.error(
+          'COMPILED_ACTION_TARGET_INDEX_INVALID',
+          `CompiledScene actionTargetIndex references a target without the action: ${actionName}.`,
+          { context: { sceneId: scene.scene.id, actionName, storyId: target.storyId, persoId: target.persoId } },
+        )
+        continue
+      }
+      actual.add(`${target.storyId}\u0000${target.persoId}`)
+    }
+
+    if (!sameSet(actual, new Set(expected[actionName]))) {
+      diagnostics.error(
+        'COMPILED_ACTION_TARGET_INDEX_INCONSISTENT',
+        `CompiledScene actionTargetIndex targets do not match the compiled action: ${actionName}.`,
+        { context: { sceneId: scene.scene.id, actionName } },
+      )
+    }
   }
 }
 

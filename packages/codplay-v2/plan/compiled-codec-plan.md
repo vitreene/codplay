@@ -43,7 +43,9 @@ de diagnostics bloquants. Il valide :
 - les `CompiledFunctionReference` et l'absence de fonctions reelles;
 - le manifeste de ressources et ses policies;
 - `rootNodeIds`;
-- `requirements` et ses tableaux de capacites.
+- `requirements` et ses tableaux de capacites;
+- `actionTargetIndex`, quand il est present, et sa correspondance avec les
+  actions compilées.
 
 Après la validation de forme, il vérifie aussi les invariants internes de
 l'artefact : identités et unicité des `persos`, correspondance des clés de

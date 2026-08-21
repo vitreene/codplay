@@ -5,6 +5,44 @@ export {
   type PlayerLifecycleState,
 } from './runtime-player'
 export {
+  RuntimeCaptureSession,
+  openRuntimeCaptureSession,
+  resolveCompiledCaptureDeclaration,
+} from '../capture'
+export type {
+  RuntimeCaptureAction,
+  RuntimeCaptureBeginInput,
+  RuntimeCaptureBeginResult,
+  RuntimeCaptureDeclaration,
+  RuntimeCaptureEndDurationMode,
+  RuntimeCaptureEndEvent,
+  RuntimeCaptureEndEventSource,
+  RuntimeCaptureEndFunction,
+  RuntimeCaptureEndInput,
+  RuntimeCaptureEndOutput,
+  RuntimeCaptureEndResult,
+  RuntimeCapturePlayerEndResult,
+  RuntimeCaptureEvent,
+  RuntimeCaptureFailure,
+  RuntimeCaptureInitFunction,
+  RuntimeCaptureInitInput,
+  RuntimeCaptureOpenResult,
+  RuntimeCaptureSample,
+  RuntimeCaptureState,
+  RuntimeCaptureStatus,
+  RuntimeCaptureTrackFunction,
+  RuntimeCaptureTrackInput,
+  RuntimeCaptureTrackOutput,
+  RuntimeCaptureTrackResult,
+  RuntimeCaptureWarning,
+  RuntimeCompiledCaptureBeginInput,
+} from '../capture'
+export {
+  EVENT_INSERT_MODE_APPLY_NOW,
+  EVENT_INSERT_MODE_PERSIST_ONLY,
+} from '../config/event-insertion'
+export type { RuntimeEventInsertMode } from '../config/event-insertion'
+export {
   RenderSync,
 } from './render-sync'
 export type { RenderAdapter, RenderSeekInfo, RenderTickInfo } from './render-adapter-types'
@@ -80,6 +118,7 @@ export {
   type MaterializedAction,
   type MaterializedPerso,
   type MaterializedScene,
+  type MaterializeOptions,
   type ResolvedPerso,
   type ResolvedPlacement,
   type ResolvedScene,

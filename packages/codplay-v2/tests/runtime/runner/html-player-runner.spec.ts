@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { HtmlPlayerRunner } from '../../../src/runtime/runner'
-import type { CompiledScene } from '../../../src/scene/compiled'
+import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import type { Ticker } from '../../../src/runtime/engine'
+import { createDragCaptureScene, dragStraps } from '../../../demos/validation/player/drag-scene'
 
 class FakeNode {
   parentNode: FakeNode | null = null
@@ -41,9 +42,31 @@ class FakeNode {
 }
 
 class FakeElement extends FakeNode {
+  readonly tagName: string
   className = ''
   readonly attributes = new Map<string, string>()
+  readonly setAttributeCalls: Array<Readonly<{ name: string; value: string }>> = []
+  private sourceValue = ''
+  sourceAssignments = 0
   readonly style = Object.assign({ setProperty: (property: string, value: string) => { this.style[property] = value } }, {}) as Record<string, string> & { setProperty: (property: string, value: string) => void }
+
+  /** Creates one fake HTML element with the requested tag name. */
+  constructor(tagName = 'element') {
+    super()
+    this.tagName = tagName.toUpperCase()
+  }
+
+  /** Mirrors the side-effectful media source property used by the V1 model. */
+  get src(): string {
+    return this.sourceValue
+  }
+
+  /** Counts source assignments so seek tests can detect a reload-inducing write. */
+  set src(value: string) {
+    this.sourceAssignments += 1
+    this.sourceValue = value
+    this.attributes.set('src', value)
+  }
 
   /** Reads one fake HTML attribute. */
   hasAttribute(name: string): boolean {
@@ -57,6 +80,7 @@ class FakeElement extends FakeNode {
 
   /** Stores one fake HTML attribute value. */
   setAttribute(name: string, value: string): void {
+    this.setAttributeCalls.push({ name, value })
     this.attributes.set(name, value)
   }
 
@@ -73,9 +97,36 @@ class FakeFragment extends FakeNode {
 class FakeTemplate extends FakeElement {
   readonly content = new FakeFragment()
 
+  /** Creates the template element used by the restricted parser. */
+  constructor() {
+    super('template')
+  }
+
   /** Parses the restricted templates used by the runner vertical. */
   set innerHTML(markup: string) {
     parseMarkup(markup, this.content)
+  }
+}
+
+class FakeEventTarget {
+  private readonly listeners = new Map<string, Set<(event: Event) => void>>()
+
+  /** Registers one source listener for runner capture tests. */
+  addEventListener(type: string, listener: (event: Event) => void): void {
+    const listeners = this.listeners.get(type) ?? new Set<(event: Event) => void>()
+    listeners.add(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  /** Removes one source listener for runner capture tests. */
+  removeEventListener(type: string, listener: (event: Event) => void): void {
+    this.listeners.get(type)?.delete(listener)
+  }
+
+  /** Dispatches one synthetic browser event to the registered listeners. */
+  dispatch(type: string, target: unknown, fields: Record<string, unknown> = {}): void {
+    const event = { type, target, ...fields } as unknown as Event
+    for (const listener of [...this.listeners.get(type) ?? []]) listener(event)
   }
 }
 
@@ -88,7 +139,7 @@ function parseMarkup(markup: string, fragment: FakeFragment): void {
       stack.pop()
       continue
     }
-    const element = new FakeElement()
+    const element = new FakeElement(token[1])
     for (const attribute of token[2].matchAll(/([A-Za-z-]+)="([^"]*)"/g)) element.setAttribute(attribute[1], attribute[2])
     stack.at(-1)!.appendChild(element)
     if (!token[0].endsWith('/>')) stack.push(element)
@@ -100,7 +151,7 @@ function installFakeDom(): void {
   vi.stubGlobal('Element', FakeElement)
   vi.stubGlobal('DocumentFragment', FakeFragment)
   vi.stubGlobal('document', {
-    createElement: (tag: string) => tag === 'template' ? new FakeTemplate() : new FakeElement(),
+    createElement: (tag: string) => tag === 'template' ? new FakeTemplate() : new FakeElement(tag),
   })
 }
 
@@ -186,6 +237,49 @@ function continuousCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Builds one classic pointer capture scene for the HTML runner vertical. */
+function pointerCaptureCompiledScene(): Readonly<{
+  compiledScene: CompiledScene
+  functions: CompiledFunctionCollection
+}> {
+  const trackCommand = ({ sample }: { sample: Readonly<Record<string, unknown>> }) => ({
+    action: {
+      actionName: 'drag',
+      data: { style: { x: typeof sample.clientX === 'number' ? sample.clientX : 0 } },
+    },
+  })
+  const scene: SceneDoc = {
+    id: 'html-runner-pointer-capture',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'item',
+          type: 'tag',
+          initial: { tag: 'article', move: '@root', style: { x: 0 } },
+          actions: { drag: {} },
+          emit: {
+            pointerdown: {
+              event: { name: 'drag:start' },
+              capture: {
+                trackOn: ['pointermove'],
+                endOn: ['pointerup'],
+                trackCommand,
+              },
+            },
+          },
+        }],
+        listen: [],
+      },
+    },
+  }
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), {
+    createdAt: '2026-08-21T00:00:00.000Z',
+  }).build(scene)
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return { compiledScene: build.compiledScene, functions: build.functions }
+}
+
 /** Declares one perso that is detached and reattached without being recreated. */
 function persistentDetachSceneDoc(): SceneDoc {
   return {
@@ -215,6 +309,66 @@ function persistentDetachSceneDoc(): SceneDoc {
 /** Builds the persistent-detach runner fixture through the SceneDoc compiler boundary. */
 function persistentDetachCompiledScene(): CompiledScene {
   const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(persistentDetachSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
+/** Declares a video perso whose source and node must survive structural seeks. */
+function persistentMediaSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-persistent-media',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'media',
+          type: 'media',
+          initial: { src: '/assets/persistent.mp4', controls: true, move: '@root' },
+          actions: {
+            detach: { move: '@off' },
+            attach: { move: '@root' },
+          },
+        }],
+        listen: [],
+        eventimes: [
+          { name: 'detach', startAt: 100 },
+          { name: 'attach', startAt: 200 },
+        ],
+      },
+    },
+  }
+}
+
+/** Builds the persistent media fixture through the SceneDoc compiler boundary. */
+function persistentMediaCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(persistentMediaSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
+/** Declares one source replacement to exercise the V1 node-per-src rule. */
+function mediaSourceSwapSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-media-source-swap',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'media',
+          type: 'media',
+          initial: { src: '/assets/source-a.mp4', move: '@root' },
+          actions: { swap: { src: '/assets/source-b.mp4' } },
+        }],
+        listen: [],
+        eventimes: [{ name: 'swap', startAt: 100 }],
+      },
+    },
+  }
+}
+
+/** Builds the media source-switch fixture through the SceneDoc compiler boundary. */
+function mediaSourceSwapCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(mediaSourceSwapSceneDoc())
   if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
   return build.compiledScene
 }
@@ -349,6 +503,75 @@ describe('HtmlPlayerRunner', () => {
     expect(runner.getPersoNode('main:item')).toBeUndefined()
   })
 
+  it('preserves the video node and source across detach, seek and final teardown', () => {
+    installFakeDom()
+    const root = new FakeElement('main')
+    const catalog = runtimeCatalog()
+    const runner = new HtmlPlayerRunner({
+      id: 'persistent-media-runner',
+      compiledScene: persistentMediaCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog,
+      resources: ['/assets/persistent.mp4'],
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const mediaRoot = runner.getPersoNode('main:media') as FakeElement
+    const video = mediaRoot.childNodes[0] as FakeElement
+    const initialSourceWrites = video.sourceAssignments
+    expect(mediaRoot.parentNode).toBe(root)
+    expect(video.tagName).toBe('VIDEO')
+    expect(video.getAttribute('src')).toBe('/assets/persistent.mp4')
+
+    expect(runner.seek(150).ok).toBe(true)
+    expect(mediaRoot.parentNode).toBeNull()
+    expect(runner.getPersoNode('main:media')).toBe(mediaRoot)
+    expect(video.parentNode).toBe(mediaRoot)
+    expect(video.sourceAssignments).toBe(initialSourceWrites)
+
+    expect(runner.seek(250).ok).toBe(true)
+    expect(mediaRoot.parentNode).toBe(root)
+    expect(runner.getPersoNode('main:media')).toBe(mediaRoot)
+    expect(video.sourceAssignments).toBe(initialSourceWrites)
+
+    runner.destroy()
+    expect(runner.getPersoNode('main:media')).toBeUndefined()
+    expect(root.childNodes).toEqual([])
+  })
+
+  it('uses one persistent video node per source when a media source changes', () => {
+    installFakeDom()
+    const root = new FakeElement('main')
+    const runner = new HtmlPlayerRunner({
+      id: 'media-source-swap-runner',
+      compiledScene: mediaSourceSwapCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      resources: ['/assets/source-a.mp4', '/assets/source-b.mp4'],
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const mediaRoot = runner.getPersoNode('main:media') as FakeElement
+    const sourceA = mediaRoot.childNodes[0] as FakeElement
+    expect(sourceA.src).toBe('/assets/source-a.mp4')
+    expect(sourceA.sourceAssignments).toBe(1)
+
+    expect(runner.seek(150).ok).toBe(true)
+    const sourceB = mediaRoot.childNodes[0] as FakeElement
+    expect(sourceB).not.toBe(sourceA)
+    expect(sourceB.src).toBe('/assets/source-b.mp4')
+    expect(sourceB.sourceAssignments).toBe(1)
+    expect(sourceA.parentNode).toBeNull()
+
+    expect(runner.seek(0).ok).toBe(true)
+    expect(mediaRoot.childNodes[0]).toBe(sourceA)
+    expect(sourceA.sourceAssignments).toBe(1)
+    expect(sourceB.sourceAssignments).toBe(1)
+    runner.destroy()
+  })
+
   it('materializes, moves, seeks and destroys a declarative HTML scene', () => {
     installFakeDom()
     const root = new FakeElement()
@@ -431,6 +654,136 @@ describe('HtmlPlayerRunner', () => {
     expect(item.style.transform).toBe('translate(100px, 40px)')
 
     runner.pause()
+    runner.destroy()
+  })
+
+  it('routes a classic pointer capture through the runner and component update path', async () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const source = new FakeEventTarget()
+    const built = pointerCaptureCompiledScene()
+    const runner = new HtmlPlayerRunner({
+      id: 'pointer-capture-runner',
+      compiledScene: built.compiledScene,
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      functions: built.functions,
+      captureEventTarget: source as unknown as EventTarget,
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const item = runner.getPersoNode('main:item') as FakeElement
+    expect(item.style.transform).toBe('translateX(0px)')
+
+    source.dispatch('pointerdown', item)
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    source.dispatch('pointermove', item, {
+      clientX: 48,
+      clientY: 20,
+      movementX: 8,
+      movementY: 4,
+    })
+    expect(item.style.transform).toBe('translateX(48px)')
+
+    source.dispatch('pointerup', item)
+    await Promise.resolve()
+    runner.destroy()
+  })
+
+  it('locks the scene until play and restores the host interaction state on destroy', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const built = pointerCaptureCompiledScene()
+    const runner = new HtmlPlayerRunner({
+      id: 'locked-pointer-capture-runner',
+      compiledScene: built.compiledScene,
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      functions: built.functions,
+      enableInteractionLock: true,
+    })
+
+    expect(runner.init().ok).toBe(true)
+    expect(root.style.pointerEvents).toBe('none')
+    expect(root.hasAttribute('inert')).toBe(true)
+
+    runner.play(ticker())
+    expect(root.style.pointerEvents).toBeUndefined()
+    expect(root.hasAttribute('inert')).toBe(false)
+
+    runner.pause()
+    expect(root.style.pointerEvents).toBe('none')
+    expect(root.hasAttribute('inert')).toBe(true)
+
+    runner.destroy()
+    expect(root.style.pointerEvents).toBeUndefined()
+    expect(root.hasAttribute('inert')).toBe(false)
+  })
+
+  it('runs the V2 drag fixture through live update, persist-only close, seek and a second capture', async () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const source = new FakeEventTarget()
+    const captureErrors: unknown[] = []
+    const catalog = runtimeCatalog()
+    const build = new SceneBuilder(catalog.validationSnapshot(), {
+      createdAt: '2026-08-21T00:00:00.000Z',
+    }).build(createDragCaptureScene())
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const runner = new HtmlPlayerRunner({
+      id: 'drag-fixture-runner',
+      compiledScene: build.compiledScene,
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog,
+      functions: build.functions,
+      strapCollections: { scene: {}, stories: { main: dragStraps } },
+      captureEventTarget: source as unknown as EventTarget,
+      onCaptureError: (error) => captureErrors.push(error),
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const item = runner.getPersoNode('main:draggable') as FakeElement
+    expect(item.style.transform).toBe('translate(80px, 72px)')
+    runner.play(ticker())
+
+    source.dispatch('pointerdown', item, { pointerId: 1 })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    source.dispatch('pointermove', item, {
+      pointerId: 1,
+      clientX: 104,
+      clientY: 60,
+      movementX: 24,
+      movementY: -12,
+    })
+    expect(item.style.transform).toBe('translate(104px, 60px)')
+
+    source.dispatch('pointerup', item, { pointerId: 1 })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(captureErrors).toEqual([])
+    expect(item.style.transform).toBe('translate(104px, 60px)')
+
+    runner.pause()
+    expect(runner.seek(0).ok).toBe(true)
+    expect(runner.player.resolveSceneAt(0).storyStates.main).toEqual({ draggableX: 104, draggableY: 60 })
+    expect(item.style.transform).toBe('translate(104px, 60px)')
+
+    source.dispatch('pointerdown', item, { pointerId: 2 })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    source.dispatch('pointermove', item, {
+      pointerId: 2,
+      clientX: 114,
+      clientY: 60,
+      movementX: 10,
+      movementY: 0,
+    })
+    expect(item.style.transform).toBe('translate(114px, 60px)')
+    source.dispatch('pointerup', item, { pointerId: 2 })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
     runner.destroy()
   })
 

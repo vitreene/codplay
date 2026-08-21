@@ -31,6 +31,10 @@ du DOM, de l'horloge et des ressources effectivement chargées. Une résolution
 supplémentaire ne doit pas changer la sémantique auteur; elle doit livrer au
 player une décision déjà établie ou un manifeste exploitable.
 
+La table fixe `CompiledPerso.actions` permet de dériver `actionTargetIndex` à la
+compilation. Cet index ne crée aucune action et ne remplace pas les déclarations
+des persos : il évite seulement une recherche de cibles pendant une capture live.
+
 La tranche est conduite en deux temps complementaires :
 
 1. Avant le code, examiner le builder, le schéma, le codec, les exports et les besoins du player pour classer
@@ -233,7 +237,7 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; formes core des services couvertes |
 | 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; validations métier et propriétés spécialisées restent ouvertes |
 | 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
-| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes et candidats `rootNodeIds` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
+| 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes, candidats `rootNodeIds` et `actionTargetIndex` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe, invariants sémantiques internes et immutabilite en place; migrations de schema hors tranche |
 | 6. Fixtures et couverture | Fixtures représentatives et tests du contrat V2, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune couverture player |
 | 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Frontière Engine/Player relue dans [`player-engine-plan.md`](./player-engine-plan.md); capacités supplémentaires restent à ouvrir |

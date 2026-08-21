@@ -95,5 +95,6 @@ function compiledScene(): CompiledScene {
     resources: { entries: [] },
     rootNodeIds: [],
     requirements: { components: [], services: [], modules: [], resources: [] },
+    actionTargetIndex: {},
   }
 }

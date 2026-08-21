@@ -25,6 +25,7 @@ type ComponentInput<Initial extends Record<string, unknown> = Record<string, unk
     id: string
     storyId: string
     initial: Initial
+    actions?: Readonly<Record<string, unknown>>
   }
   services: ComponentServices
 }
@@ -65,6 +66,12 @@ abstract class BaseComponent<Initial extends Record<string, unknown>> {
 
 `render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
+
+Le composant reçoit également les actions compilées lorsqu'elles font partie de
+ses données auteur. Ce n'est pas un second circuit d'état : `SolvedPerso.state`
+reste la seule entrée de `update()`. Cette donnée complète permet notamment à un
+composant media de connaître les sources statiques à mettre en cache, comme en
+V1.
 
 `update()` applique l'etat resolu a la materialisation du composant.
 

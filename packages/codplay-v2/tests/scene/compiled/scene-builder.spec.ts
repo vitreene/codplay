@@ -10,7 +10,7 @@ import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
 
 function createCatalogForFixtures(): RuntimeCapabilityCatalog {
   const catalog = createCoreRuntimeCatalog()
-  for (const type of ['text', 'media']) {
+  for (const type of ['text']) {
     catalog.registerComponent({
       type,
       services: ['style', 'className', 'attr'],
@@ -68,6 +68,15 @@ describe('SceneBuilder', () => {
         expect.objectContaining({ url: '/assets/quiz.mp4', type: 'video' }),
       ])
       expect(s4.compiledScene.requirements.components).toEqual(['layout', 'media'])
+    }
+
+    const s2 = builder.build(demoSceneFixtures[1]!.scene)
+    expect(s2.ok).toBe(true)
+    if (s2.ok) {
+      expect(s2.compiledScene.actionTargetIndex?.['sequence:reference:start']).toEqual([
+        { storyId: 's2-reference-story', persoId: 'reference-list' },
+        { storyId: 's2-reference-story', persoId: 'reference-title' },
+      ])
     }
   })
 
@@ -226,5 +235,62 @@ describe('SceneBuilder', () => {
       const layout = result.compiledScene.scene.stories.main?.persos[0]
       expect(layout?.initial.markup).toBe('<section><main data-part="page-layout:content"></main></section>')
     }
+  })
+
+  it('extracts capture functions and nested end events from perso emit declarations', () => {
+    const initCaptureState = ({ state }: { state: Readonly<Record<string, unknown>> }) => ({
+      value: state.value,
+    })
+    const trackCommand = () => ({ action: { actionName: 'drag' } })
+    const endCapture = () => ({ events: [{ name: 'drag:stored', mode: 'persist-only' as const }] })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+
+    const result = builder.build({
+      id: 'capture-compiled-scene',
+      stories: {
+        main: {
+          id: 'main',
+          state: { value: 1 },
+          persos: [{
+            id: 'item',
+            type: 'text',
+            initial: {},
+            emit: {
+              pointerdown: {
+                event: { name: 'drag:start' },
+                capture: {
+                  trackOn: ['pointermove'],
+                  endOn: ['pointerup'],
+                  initCaptureState,
+                  trackCommand,
+                  endEmit: { name: 'drag:end', data: { source: 'author' } },
+                  endCapture,
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const capture = result.compiledScene.scene.stories.main?.persos[0]?.emit?.pointerdown
+    expect(capture).toMatchObject({
+      event: { name: 'drag:start' },
+      capture: {
+        trackOn: ['pointermove'],
+        endOn: ['pointerup'],
+        endEmit: { name: 'drag:end', data: { source: 'author' } },
+      },
+    })
+    if (capture === undefined || !('event' in capture)) return
+    const compiledCapture = capture?.capture
+    expect(compiledCapture?.initCaptureStateRef).toBeDefined()
+    expect(compiledCapture?.trackCommandRef).toBeDefined()
+    expect(compiledCapture?.endCaptureRef).toBeDefined()
+    expect(result.functions[compiledCapture!.initCaptureStateRef!.ref]).toBe(initCaptureState)
+    expect(result.functions[compiledCapture!.trackCommandRef!.ref]).toBe(trackCommand)
+    expect(result.functions[compiledCapture!.endCaptureRef!.ref]).toBe(endCapture)
   })
 })

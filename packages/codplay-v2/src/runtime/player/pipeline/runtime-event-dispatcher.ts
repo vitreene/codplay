@@ -5,6 +5,7 @@ import type {
   CompiledScene,
 } from '../../../scene/compiled'
 import { TRACK_GLOBAL_ID } from '../../config/track'
+import { EVENT_INSERT_MODE_PERSIST_ONLY, type RuntimeEventInsertMode } from '../../config/event-insertion'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import {
   TRACK_EVENT_ACTIVATE,
@@ -32,6 +33,8 @@ export type RuntimeEventInput = Readonly<{
   context?: Readonly<Record<string, unknown>>
   /** Opaque metadata retained with each journal event. */
   meta?: Readonly<Record<string, unknown>>
+  /** Controls whether the event enters the current presentation at insertion. */
+  mode?: RuntimeEventInsertMode
 }>
 
 /** One non-fatal diagnostic produced while dispatching a live event. */
@@ -61,6 +64,8 @@ export type RuntimeEventDispatcherOptions = Readonly<{
   functions?: CompiledFunctionCollection
   stateStore?: RuntimeStateStore
   maxCascadeDepth?: number
+  /** Supplies identities across dispatcher instances sharing one journal. */
+  eventIdFactory?: () => string
 }>
 
 type DispatchScope = 'scene' | 'story'
@@ -96,6 +101,7 @@ export class RuntimeEventDispatcher {
   private readonly functions: CompiledFunctionCollection
   private readonly stateStore: RuntimeStateStore | undefined
   private readonly maxCascadeDepth: number
+  private readonly eventIdFactory: (() => string) | undefined
   private nextGeneratedEventId = 0
 
   /** Creates one dispatcher bound to one player journal and compiled scene. */
@@ -106,6 +112,7 @@ export class RuntimeEventDispatcher {
     this.functions = options.functions ?? {}
     this.stateStore = options.stateStore
     this.maxCascadeDepth = options.maxCascadeDepth ?? 32
+    this.eventIdFactory = options.eventIdFactory
   }
 
   /** Dispatches one live event and recursively routes only declared emissions. */
@@ -156,6 +163,7 @@ export class RuntimeEventDispatcher {
       cascade: target.cascade,
       context: input.context,
       meta: input.meta,
+      mode: input.mode,
     })
     if (!appended.ok) {
       accumulator.ok = false
@@ -234,6 +242,7 @@ export class RuntimeEventDispatcher {
         strapName,
         anchorMs: input.applyAtMs,
         output: strapExecution.result,
+        mode: input.mode,
       })
       if (!appendedOutput.ok) {
         accumulator.ok = false
@@ -248,7 +257,11 @@ export class RuntimeEventDispatcher {
         continue
       }
       accumulator.events.push(...appendedOutput.data.events)
-      this.applyImmediateStateUpdates(appendedOutput.data.events, input.applyAtMs)
+      this.applyImmediateStateUpdates(
+        appendedOutput.data.events,
+        input.applyAtMs,
+        input.mode !== EVENT_INSERT_MODE_PERSIST_ONLY,
+      )
     }
 
     await this.routeDeclaredEmissions(selection, execution.events, input, depth, accumulator)
@@ -336,6 +349,7 @@ export class RuntimeEventDispatcher {
           cascade,
           context: output.context ?? input.context,
           meta: output.meta ?? input.meta,
+          mode: input.mode,
         }, depth + 1, accumulator)
       }
     }
@@ -351,8 +365,12 @@ export class RuntimeEventDispatcher {
   }
 
   /** Applies only updates effective at the current dispatch boundary. */
-  private applyImmediateStateUpdates(events: readonly RuntimeTrackEvent[], anchorMs: number): void {
-    if (this.stateStore === undefined) return
+  private applyImmediateStateUpdates(
+    events: readonly RuntimeTrackEvent[],
+    anchorMs: number,
+    applyNow: boolean,
+  ): void {
+    if (this.stateStore === undefined || !applyNow) return
     for (const event of events) {
       if (event.update === undefined || event.applyAtMs > anchorMs || event.stateScope === undefined) continue
       this.stateStore.applyUpdate(event.stateScope, event.update, event.storyId)
@@ -366,6 +384,7 @@ export class RuntimeEventDispatcher {
 
   /** Allocates a process-local id when an external event has no identity. */
   private createGeneratedEventId(): string {
+    if (this.eventIdFactory !== undefined) return this.eventIdFactory()
     const index = this.nextGeneratedEventId
     this.nextGeneratedEventId += 1
     return `runtime-dispatch:${this.scene.scene.id}:${index}`

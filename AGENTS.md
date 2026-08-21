@@ -18,6 +18,22 @@
 - CodPlay core capabilities are approaching v1. Adding to or modifying `packages/codplay` core requires explicit user authorization and must always be the consequence of an agreed plan. No opportunistic or speculative core patches.
 - Additional instructions may be added later and should be followed.
 
+## Hard implementation gates
+
+- Treat the established V2 specifications and accepted decisions as authoritative. Do not replace them with an interpretation inferred from partial code, a failing demo, or a familiar framework pattern.
+- When porting a V1 capability to V2, preserve the documented V1 behavior unless an explicit V2 decision changes it. Port the semantics across the V2 boundaries; do not recreate a parallel V1 circuit.
+- Before editing code, identify the applicable specification, the accepted plan item, the invariants to preserve, and the acceptance path that will prove the change.
+- Do not edit code while the relevant plan is marked `A relire`. Every code change must map to an accepted plan item.
+- If the implementation and the specification diverge, stop and report the divergence. Do not hide it with a fallback, a compatibility bridge, a direct final-state patch, or a demo-only shortcut.
+- Do not implement a plan item whose plan or decision is marked `A relire`. A plan is not a contract until it has been validated.
+- Do not invent missing contracts, APIs, services, event phases, runtime actions, or data paths. Mark the gap and ask for clarification when the specification does not decide it.
+- Demos are validation fixtures. They must exercise the real runtime path and must not introduce duplicate catalogs, duplicate remotes, alternate event circuits, or behavior that exists only to make the demo appear functional.
+- Any unavoidable temporary bridge must be explicitly named or documented as `temp`, have a stated scope and removal condition, and must not be presented as a V2 contract.
+- A passing isolated unit test, typecheck, or build does not validate an integration. For browser-facing behavior, test the actual event, player, materializer, seek, replay, and lifecycle boundaries involved.
+- A demo is valid only after the real runtime path has been tested.
+- `README.md` files document usage. They are not the authority for internal contracts. Stable contracts belong in the applicable specifications; plans track implementation work and validation status.
+- Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
+
 ## Documentation and implementation tracking
 
 - Keep plans and implementation tracking up to date until the corresponding work is complete.

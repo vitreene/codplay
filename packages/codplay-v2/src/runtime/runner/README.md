@@ -76,6 +76,35 @@ trajectory and timing do not change.
 - `destroy()` removes local transient slots, overlay representations, measurement
   DOM, components and owned clock resources.
 
+## Capture HTML classique
+
+Le runner branche `HtmlPointerCaptureSourceAdapter` après l'initialisation du
+player visible. Pour chaque `perso.emit.pointerdown.capture`, l'adaptateur :
+
+1. émet l'événement de début avec `RuntimePlayer.emit()` ;
+2. ouvre la capture avec `beginCompiledCapture()` une fois la promesse de
+   l'événement de début terminée ;
+3. transmet les `pointermove` à `trackCapture()` ;
+4. ferme sur l'événement déclaré dans `endOn` (par défaut `pointerup`) avec
+   `endCapture()`.
+
+Le suivi et la fin sont écoutés sur la cible d'événements globale, en phase de
+capture, afin de rester actifs lorsque le pointeur quitte le perso. L'adaptateur
+ne demande pas de pointer capture natif au navigateur : le routage global est le
+seul circuit de suivi, comme dans le modèle V1. Le `pointerId` d'ouverture est
+conservé. Seuls les événements déclarés dans `endOn` ferment la session ;
+`pointercancel` et `lostpointercapture` n'ont aucun effet particulier s'ils ne
+sont pas déclarés. La destruction du runner annule les sessions encore
+ouvertes. Le runner peut recevoir cette cible
+explicitement avec `captureEventTarget`; dans un navigateur, la fenêtre du
+document de la racine HTML est utilisée par défaut. Cette tranche ne comporte
+aucune façade DnD ni traitement de liste.
+
+Avec `enableInteractionLock: true`, le runner reprend le verrou d'interaction
+utilisé par la validation V1 : la racine HTML est non interactive tant que le
+player n'est pas en `playing`, puis retrouve son état initial à la destruction.
+La telco doit donc être montée en dehors de cette racine.
+
 ## Contexte du materializer
 
 `HtmlPlayerRunner` reçoit le `RuntimeCapabilityCatalog` déjà composé lors de
@@ -83,6 +112,17 @@ l'initialisation de CodPlay. Les composants, leurs services, leurs modules et
 leurs validateurs sont déclarés dans ce catalogue unique. Le runner crée les
 instances du `RuntimeMaterializer` HTML nécessaires aux substrats visible et
 isolé, mais aucun materializer n'enregistre de service ou de module.
+
+Les ressources déclarées par la scène peuvent être fournies au runner avec
+`resources`. La même liste est donnée à l'engine visible et à l'engine de mesure,
+afin qu'une scène media soit validée par les deux players :
+
+```ts
+const runner = new HtmlPlayerRunner({
+  // ...compiledScene, root, rootTargets et catalog
+  resources: compiledScene.requirements.resources,
+})
+```
 
 Le facteur passé à `resize()`
 s'applique uniquement aux longueurs numériques sans unité à la frontière HTML.

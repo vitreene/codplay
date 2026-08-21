@@ -2,7 +2,7 @@ import { isPlainRecord } from '../../../shared'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
-import type { CompiledActionSequenceStep } from './action-sequence'
+import { resolveActionDefinition } from './action-resolution'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
 import type { MaterializedAction, MaterializedPerso, MaterializedScene } from './types'
@@ -18,9 +18,19 @@ type FlattenedEventime = Readonly<{
   eventSeq?: number
 }>
 
+/** Selects whether persisted-only facts participate in one evaluation. */
+export type MaterializeOptions = Readonly<{
+  includePersistOnly?: boolean
+}>
+
 /** Selects discrete occurrences active at or before one timeline position. */
-export function materializeScene(scene: CompiledScene, timeMs: number, journal?: RuntimeTrackJournal): MaterializedScene {
-  return materializeSceneAtBoundary(scene, timeMs, true, journal)
+export function materializeScene(
+  scene: CompiledScene,
+  timeMs: number,
+  journal?: RuntimeTrackJournal,
+  options: MaterializeOptions = {},
+): MaterializedScene {
+  return materializeSceneAtBoundary(scene, timeMs, true, journal, options)
 }
 
 /** Selects the exact left-side state before occurrences at one boundary. */
@@ -28,8 +38,9 @@ export function materializeSceneBeforeBoundary(
   scene: CompiledScene,
   timeMs: number,
   journal?: RuntimeTrackJournal,
+  options: MaterializeOptions = {},
 ): MaterializedScene {
-  return materializeSceneAtBoundary(scene, timeMs, false, journal)
+  return materializeSceneAtBoundary(scene, timeMs, false, journal, options)
 }
 
 /** Materializes one inclusive or exclusive event boundary without numeric epsilon. */
@@ -38,13 +49,20 @@ function materializeSceneAtBoundary(
   timeMs: number,
   includeBoundary: boolean,
   journal?: RuntimeTrackJournal,
+  options: MaterializeOptions = {},
 ): MaterializedScene {
   assertTimelineTime(timeMs)
   const persos: Record<string, MaterializedPerso> = {}
   const tracks = journal?.registry ?? buildTrackRegistry(scene)
   const sceneState = cloneRecord(scene.scene.state)
   if (journal !== undefined) {
-    for (const update of journal.getStateUpdates(STRAP_SCOPE_SCENE, undefined, timeMs, includeBoundary)) {
+    for (const update of journal.getStateUpdates(
+      STRAP_SCOPE_SCENE,
+      undefined,
+      timeMs,
+      includeBoundary,
+      options.includePersistOnly !== false,
+    )) {
       applyStateUpdate(sceneState, update.update)
     }
   }
@@ -53,7 +71,13 @@ function materializeSceneAtBoundary(
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
     const storyState = cloneRecord(story.state)
     if (journal !== undefined) {
-      for (const update of journal.getStateUpdates(STRAP_SCOPE_STORY, storyId, timeMs, includeBoundary)) {
+      for (const update of journal.getStateUpdates(
+        STRAP_SCOPE_STORY,
+        storyId,
+        timeMs,
+        includeBoundary,
+        options.includePersistOnly !== false,
+      )) {
         applyStateUpdate(storyState, update.update)
       }
     }
@@ -64,7 +88,13 @@ function materializeSceneAtBoundary(
     const events = trackIsActive(journal, trackId, track.active)
       ? [
           ...flattenEventimes(story.eventimes ?? [], trackId, track.order),
-          ...getLiveEventsForStory(journal, storyId, timeMs, includeBoundary),
+          ...getLiveEventsForStory(
+            journal,
+            storyId,
+            timeMs,
+            includeBoundary,
+            options.includePersistOnly !== false,
+          ),
         ]
       : []
     for (const perso of story.persos) {
@@ -145,16 +175,6 @@ function materializePersoActions(
   }
 
   return materialized.sort(compareMaterializedActions)
-}
-
-/** Resolves a direct action or a data-carried action declaration. */
-function resolveActionDefinition(
-  actionValue: CompiledValue | undefined,
-  eventData: CompiledRecord | undefined,
-): CompiledRecord | readonly CompiledActionSequenceStep[] | null {
-  if (isPlainRecord(actionValue) || isActionSequence(actionValue)) return actionValue
-  if ((actionValue === null || actionValue === true) && eventData !== undefined) return eventData
-  return null
 }
 
 /** Creates one active materialized action while enforcing the boundary policy. */
@@ -283,12 +303,14 @@ function getLiveEventsForStory(
   storyId: string,
   timeMs: number,
   includeBoundary: boolean,
+  includePersistOnly: boolean,
 ): readonly FlattenedEventime[] {
   if (journal === undefined) return []
   return journal.getEventsForStory(storyId)
     .filter((event) => {
       const track = journal.registry.tracks[event.trackId]
       return (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
+        && (includePersistOnly || event.mode !== 'persist-only')
         && track !== undefined
         && journal.isTrackActive(event.trackId)
     })

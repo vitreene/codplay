@@ -12,6 +12,7 @@ const scene: CompiledScene = {
   resources: { entries: [] },
   rootNodeIds: [],
   requirements: { components: [], services: [], modules: [], resources: [] },
+  actionTargetIndex: {},
 }
 
 describe('RuntimeCapabilityCatalog modules', () => {

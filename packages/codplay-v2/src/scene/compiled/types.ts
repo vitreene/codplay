@@ -6,6 +6,34 @@ export type CompiledFunctionReference = Readonly<{
   ref: string
 }>
 
+/** Serializable event declaration produced by a capture conclusion. */
+export type CompiledCaptureEvent = Readonly<{
+  name: string
+  data?: CompiledRecord
+  cascade?: boolean
+  mode?: 'apply-now' | 'persist-only'
+}>
+
+/** Serializable capture declaration with functions held as external references. */
+export type CompiledCaptureDeclaration = Readonly<{
+  trackOn?: readonly string[]
+  endOn?: readonly string[]
+  stateScope?: 'scene' | 'story'
+  initCaptureStateRef?: CompiledFunctionReference
+  trackCommandRef?: CompiledFunctionReference
+  endEmit?: CompiledCaptureEvent
+  endCaptureRef?: CompiledFunctionReference
+}>
+
+/** Serializable emit rule containing the optional capture declaration. */
+export type CompiledEmitRule = Readonly<{
+  event: CompiledCaptureEvent
+  capture?: CompiledCaptureDeclaration
+}>
+
+/** Emit declarations indexed by the source trigger understood by an adapter. */
+export type CompiledEmitDeclaration = Readonly<Record<string, CompiledEmitRule | readonly CompiledEmitRule[]>>
+
 /** Recursive serializable value used by compiled scene sections. */
 export type CompiledValue =
   | CompiledPrimitive
@@ -34,7 +62,7 @@ export type CompiledPerso = Readonly<{
   initial: CompiledRecord
   actions: Readonly<Record<string, CompiledValue>>
   list?: CompiledRecord
-  emit?: CompiledRecord
+  emit?: CompiledEmitDeclaration
 }>
 
 /** One relative timeline occurrence in the compiled story journal. */
@@ -101,6 +129,15 @@ export type CompiledRequirements = Readonly<{
   resources: readonly string[]
 }>
 
+/** One target identity indexed from an already compiled action declaration. */
+export type CompiledActionTarget = Readonly<{
+  storyId: string
+  persoId: string
+}>
+
+/** Derived lookup from an action name to its compiled perso targets. */
+export type CompiledActionTargetIndex = Readonly<Record<string, readonly CompiledActionTarget[]>>
+
 /** Versioned, serializable, immutable-at-runtime playback artifact. */
 export type CompiledScene = Readonly<{
   schemaVersion: string
@@ -109,4 +146,6 @@ export type CompiledScene = Readonly<{
   resources: CompiledResourceManifest
   rootNodeIds: readonly string[]
   requirements: CompiledRequirements
+  /** Derived index emitted from the fixed action declarations by SceneBuilder. */
+  actionTargetIndex: CompiledActionTargetIndex
 }>

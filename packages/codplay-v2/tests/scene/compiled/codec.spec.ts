@@ -10,6 +10,7 @@ const artifact: CompiledScene = {
   resources: { entries: [] },
   rootNodeIds: [],
   requirements: { components: [], services: [], modules: [], resources: [] },
+  actionTargetIndex: {},
 }
 
 describe('CompiledSceneCodec', () => {

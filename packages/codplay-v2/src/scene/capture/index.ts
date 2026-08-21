@@ -1,0 +1,17 @@
+export type {
+  AuthorCaptureAction,
+  AuthorCaptureDeclaration,
+  AuthorCaptureEndFunction,
+  AuthorCaptureEndInput,
+  AuthorCaptureEndOutput,
+  AuthorCaptureEvent,
+  AuthorCaptureInitFunction,
+  AuthorCaptureInitInput,
+  AuthorCaptureTrackFunction,
+  AuthorCaptureTrackInput,
+  AuthorCaptureTrackOutput,
+  AuthorEmitDeclaration,
+  AuthorEmitRule,
+  CaptureEndDurationMode,
+  CaptureEventMode,
+} from './authoring-types'

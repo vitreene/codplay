@@ -1,5 +1,6 @@
 export { materializeScene, materializeSceneBeforeBoundary } from './materialize'
-export { resolveScene } from './resolve'
+export type { MaterializeOptions } from './materialize'
+export { resolveLiveCaptureActionState, resolveScene } from './resolve'
 export { solveScene } from './solve'
 export {
   buildSolvedGraph,
@@ -13,6 +14,7 @@ export { buildTrackRegistry, createStrapTrackId, resolveStoryTrackId } from './t
 export { RuntimeTrackJournal } from './track-journal'
 export { RuntimeEventDispatcher } from './runtime-event-dispatcher'
 export { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
+export { resolveActionDefinition } from './action-resolution'
 export { executeListenPipeline, propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
@@ -59,6 +61,7 @@ export type {
   CompiledTweenAction,
   PlannedActionSequenceStep,
 } from './action-sequence'
+export type { RuntimeActionDefinition } from './action-resolution'
 export type {
   ListenEventInput,
   ListenEventOutput,

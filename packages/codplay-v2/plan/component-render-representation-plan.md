@@ -263,6 +263,18 @@ La regle de writer unique est appliquee par couche : le materializer ecrit l'hot
 le composant ecrit sa scene Three.js privee. Le coeur CodPlay ne decompose ni ne
 manipule les objets internes Three.js.
 
+### Media et ressources internes V1
+
+Le composant `media` suit la même séparation qu'un composant spécialisé V1 : sa
+racine wrapper est fournie par `render()` et montée par le Materializer, tandis
+que les nodes vidéo internes restent privées au composant. Le composant conserve
+une node par `src`, assigne la source à sa création puis ne fait que détacher ou
+rattacher la node active. Ces nodes ne sont ni des persos ni des outlets de
+montage.
+
+La tranche V2 actuelle vérifie cette persistance et le changement de source. Elle
+n'ouvre pas encore `media-sync`, le preload partagé ou le pilotage de lecture.
+
 ## Dialogue Materializer / FLIP — contrat HTML runner
 
 Le dialogue est maintenant fixe pour la verticale HTML. Il ne passe pas par un

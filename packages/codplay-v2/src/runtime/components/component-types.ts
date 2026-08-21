@@ -4,6 +4,8 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
     id: string
     storyId: string
     initial: Initial
+    /** Complete compiled actions are author data required by source-backed components. */
+    actions?: Readonly<Record<string, unknown>>
   }>
   services: ComponentServices
 }>

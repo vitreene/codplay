@@ -64,10 +64,28 @@ fallback, executes transforms and awaited straps, persists strap outputs on
 their dedicated tracks, and reinjects only declared `emit` records with a
 bounded cascade depth.
 
+The player supplies one event-identity allocator to every dispatcher instance;
+successive live events therefore cannot collide when a capture start and its
+end are dispatched through separate calls.
+
 The visible runner and its isolated measurement host share this journal. Play
 may update the presentation immediately, while a later Seek reads the same
 source, emitted events, strap events and state updates without calling any
 strap or transform again.
+
+The player capture facade (`beginCapture`, `trackCapture`, `endCapture`,
+`cancelCapture`) is source-agnostic. Samples are not events. `endEmit` follows
+the ordinary event circuit and carries `data.captureState` through
+`listen -> strap -> state`; events returned by `endCapture` use that same
+dispatcher circuit with an implicit `persist-only` placement and the resolved
+`now - duration` anchor. A persist-only fact is journaled but remains outside
+the current playback head for the complete close transaction; a later
+reconstruction can include it.
+`beginCompiledCapture()` resolves the capture function references produced by
+the scene builder. The builder also emits the derived `actionTargetIndex` from
+the fixed compiled action table. The player prepares direct target references
+once at construction; a live `actionName` only reads that index and later frame
+synchronization reapplies the stored targets through `Component.update()`.
 
 ## Temporal actions
 

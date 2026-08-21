@@ -37,7 +37,8 @@ prochaines tranches V2.
 - annulation et générations obsolètes des straps asynchrones ;
 - contrat `live`, renderer continu et composition additive des tweens ;
 - capture, DnD et canal authoring ;
-- media, preload et bindings tiers ;
+- media-sync, preload partagé et bindings tiers ; le composant V2 `media` et sa
+  persistance `node-per-src` constituent désormais une tranche ouverte séparée ;
 - `Replace`, diffusion et broadcast.
 
 ## Règle de statut après revue
@@ -61,6 +62,6 @@ npm run typecheck --workspace=@codplay/codplay-v2
 npm run build:runner --workspace=@codplay/codplay-v2
 ```
 
-Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 324 tests V2
-passent, le typecheck V2 passe, le build de la démo runner passe et
+Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 326 tests V2
+passent, le typecheck V2 passe, les builds des démos player et runner passent et
 `git diff --check` est propre.
