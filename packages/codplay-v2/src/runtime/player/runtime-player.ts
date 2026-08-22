@@ -11,8 +11,9 @@ import {
   RuntimeEngine,
   type RuntimeModuleServiceInstance,
   type RuntimeModuleServiceSeekHandle,
+  type RuntimeStructuralOrder,
 } from '../engine'
-import { diffSolvedScenes } from '../move'
+import { diffSolvedScenes, type MoveStateDelta } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -35,6 +36,7 @@ import {
   type RuntimeCaptureFailure,
   type RuntimeCapturePlayerEndResult,
   type RuntimeCaptureSample,
+  type RuntimeCaptureState,
   type RuntimeCaptureTrackResult,
   type RuntimeCompiledCaptureBeginInput,
 } from '../capture'
@@ -55,7 +57,7 @@ import {
   type StrapCollections,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
-import { StructuralTimeline } from './structural-timeline'
+import { applyStructuralDeltas, StructuralTimeline } from './structural-timeline'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
 
@@ -129,6 +131,8 @@ export class RuntimePlayer {
   private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
   private includePersistOnlyInCurrent = true
   private structuralTimeline: StructuralTimeline | undefined
+  private structuralTimelineRevision = -1
+  private structuralTimelineIncludesPersistOnly = true
   private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
   private pendingModuleSeekHandles: Array<{
     instance: RuntimeModuleServiceInstance
@@ -188,13 +192,18 @@ export class RuntimePlayer {
   }
 
   /** Reconstructs one solved scene for a historical host presentation. */
-  resolveSceneAt(timeMs: number): SolvedScene {
-    return this.reconstructScene(timeMs)
+  resolveSceneAt(timeMs: number, includePersistOnly = true): SolvedScene {
+    return this.reconstructScene(timeMs, includePersistOnly)
   }
 
   /** Reconstructs the exact logical state immediately before one event boundary. */
-  resolveSceneBeforeBoundary(timeMs: number): SolvedScene {
-    return this.reconstructSceneBeforeBoundary(timeMs)
+  resolveSceneBeforeBoundary(timeMs: number, includePersistOnly = true): SolvedScene {
+    return this.reconstructSceneBeforeBoundary(timeMs, includePersistOnly)
+  }
+
+  /** Returns whether the current presentation head includes persisted-only facts. */
+  includesPersistOnlyInCurrent(): boolean {
+    return this.includePersistOnlyInCurrent
   }
 
   /** Validates capabilities and attaches this player to the shared engine. */
@@ -230,11 +239,7 @@ export class RuntimePlayer {
     this.componentRuntime?.sync(initialSolvedScene)
     const resolvedInitialScene = this.reconstructBaseScene(0)
     this.initializeModuleServices(resolvedInitialScene)
-    this.structuralTimeline = new StructuralTimeline(
-      this.compiledScene,
-      (timeMs) => this.reconstructBaseScene(timeMs),
-      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false),
-    )
+    this.rebuildStructuralTimeline()
     this.solvedScene = this.reconstructScene(0)
     this.synchronizeStateStore(0)
     this.materializeScene(this.solvedScene, { moveDeltas: [] })
@@ -249,10 +254,9 @@ export class RuntimePlayer {
           throw new Error('Player seek reconstruction is missing.')
         }
         const previousSolvedScene = this.solvedScene
-        const rawMoveDeltas = previousSolvedScene === undefined
+        const moveDeltas = previousSolvedScene === undefined
           ? []
           : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
-        const moveDeltas = rawMoveDeltas
         if (this.pendingModuleSeekHandles.length > 0) {
           const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
@@ -345,8 +349,11 @@ export class RuntimePlayer {
       ...input,
       applyAtMs: input.applyAtMs ?? this.currentTimeMs,
     })
-    this.includePersistOnlyInCurrent = includePersistOnlyOverride
-      ?? input.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
+    if (includePersistOnlyOverride !== undefined) {
+      this.includePersistOnlyInCurrent = includePersistOnlyOverride
+    } else if (input.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
+      this.includePersistOnlyInCurrent = false
+    }
     this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
     // A persist-only event is recorded for later reconstruction, but it is
     // deliberately outside the current playback head. In particular, do not
@@ -465,6 +472,7 @@ export class RuntimePlayer {
   async endCapture(
     captureId: string,
     meta: Readonly<Record<string, unknown>> = {},
+    captureStateOverride?: RuntimeCaptureState,
   ): Promise<RuntimeCapturePlayerEndResult | RuntimeCaptureFailure> {
     const entry = this.captureSessions.get(captureId)
     if (entry === undefined) {
@@ -477,7 +485,7 @@ export class RuntimePlayer {
     const state = entry.stateScope === 'scene'
       ? this.stateStore.snapshot(STRAP_SCOPE_SCENE)
       : this.stateStore.snapshot(STRAP_SCOPE_STORY, entry.storyId)
-    const ended = entry.session.end(state, meta, this.currentTimeMs)
+    const ended = entry.session.end(state, meta, this.currentTimeMs, captureStateOverride)
     this.activeCaptureActions.delete(captureId)
     if (!ended.ok) {
       this.captureSessions.delete(captureId)
@@ -568,12 +576,10 @@ export class RuntimePlayer {
       return
     }
     this.currentTimeMs += frame.deltaMs
-    this.includePersistOnlyInCurrent = true
-    const nextSolvedScene = this.reconstructScene(this.currentTimeMs, true)
-    this.synchronizeStateStore(this.currentTimeMs, true)
+    const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+    this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
     const previousSolvedScene = this.solvedScene
-    const rawMoveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    const moveDeltas = rawMoveDeltas
+    const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
@@ -651,14 +657,39 @@ export class RuntimePlayer {
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
   private reconstructScene(timeMs: number, includePersistOnly = true): SolvedScene {
+    this.ensureStructuralTimeline(includePersistOnly)
     const structural = this.structuralTimeline?.resolveAt(timeMs)
     return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, true, includePersistOnly)
   }
 
   /** Resolves the left side of one event boundary with the preceding structural order. */
-  private reconstructSceneBeforeBoundary(timeMs: number): SolvedScene {
+  private reconstructSceneBeforeBoundary(timeMs: number, includePersistOnly = true): SolvedScene {
+    this.ensureStructuralTimeline(includePersistOnly)
     const structural = this.structuralTimeline?.resolveBefore(timeMs)
-    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, false, true)
+    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, false, includePersistOnly)
+  }
+
+  /** Rebuilds the canonical structural timeline from compiled and runtime facts. */
+  private rebuildStructuralTimeline(includePersistOnly = true): void {
+    for (const instance of this.moduleServiceInstances.values()) instance.resetStructuralOrder?.()
+    this.structuralTimeline = new StructuralTimeline(
+      this.compiledScene,
+      (timeMs) => this.reconstructBaseScene(timeMs, undefined, true, includePersistOnly),
+      (timeMs) => this.reconstructBaseScene(timeMs, undefined, false, includePersistOnly),
+      (previousOrder, scene, deltas) => this.resolveStructuralOrder(previousOrder, scene, deltas),
+      this.trackJournal.getEventTimes(),
+    )
+    this.structuralTimelineRevision = this.trackJournal.getRevision()
+    this.structuralTimelineIncludesPersistOnly = includePersistOnly
+  }
+
+  /** Rebuilds runtime structural boundaries lazily after a journal append. */
+  private ensureStructuralTimeline(includePersistOnly = true): void {
+    if (this.structuralTimeline === undefined
+      || this.structuralTimelineRevision !== this.trackJournal.getRevision()
+      || this.structuralTimelineIncludesPersistOnly !== includePersistOnly) {
+      this.rebuildStructuralTimeline(includePersistOnly)
+    }
   }
 
   /** Resolves one scene without consulting the structural timeline being built. */
@@ -721,6 +752,23 @@ export class RuntimePlayer {
     instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
   ): void {
     for (const instance of instances.values()) instance.initializeScene?.(solved)
+  }
+
+  /** Composes structural policies while preserving one canonical order timeline. */
+  private resolveStructuralOrder(
+    previousOrder: RuntimeStructuralOrder,
+    scene: SolvedScene,
+    deltas: readonly MoveStateDelta[],
+  ): RuntimeStructuralOrder {
+    let order = previousOrder
+    let resolvedByModule = false
+    for (const instance of this.moduleServiceInstances.values()) {
+      const resolve = instance.resolveStructuralOrder
+      if (resolve === undefined) continue
+      order = resolve(order, scene, deltas)
+      resolvedByModule = true
+    }
+    return resolvedByModule ? order : applyStructuralDeltas(order, scene, deltas)
   }
 
   /** Sends generic placement deltas to player-scoped module services. */

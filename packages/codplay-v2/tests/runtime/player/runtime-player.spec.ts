@@ -561,4 +561,94 @@ describe('RuntimePlayer', () => {
     expect(player.resolveSceneAt(0).graph.childrenByTarget.list).toEqual(['main:first', 'main:second'])
     player.destroy()
   })
+
+  it('ports the V1 automatic reorder policies while keeping explicit modes effective', () => {
+    const catalog = new RuntimeCapabilityCatalog()
+    catalog.registerModule(createListModuleServiceDefinition())
+    const listScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [
+              {
+                id: 'list',
+                type: 'list',
+                initial: {
+                  move: '@root',
+                  config: { reorderOnMove: false, reorderOnAdd: false, reorderOnRemove: false },
+                },
+                actions: {},
+              },
+              {
+                id: 'first',
+                type: 'tag',
+                initial: { move: { target: 'list' } },
+                actions: {
+                  moveAuto: { move: { target: 'list' } },
+                },
+              },
+              {
+                id: 'second',
+                type: 'tag',
+                initial: { move: { target: 'list' } },
+                actions: {
+                  moveSecondFirst: { move: { target: 'list', mode: 'first' } },
+                },
+              },
+              {
+                id: 'third',
+                type: 'tag',
+                initial: { move: { target: 'list' } },
+                actions: {
+                  moveFirst: { move: { target: 'list', mode: 'first' } },
+                },
+              },
+            ],
+            listen: [],
+            eventimes: [
+              { name: 'moveAuto', startAt: 100 },
+              { name: 'moveFirst', startAt: 200 },
+              { name: 'moveSecondFirst', startAt: 300 },
+            ],
+          },
+        },
+      },
+      requirements: { ...scene.requirements, modules: ['list'] },
+    }
+    const player = new RuntimePlayer(
+      'list-policy-player',
+      new RuntimeEngine(catalog),
+      listScene,
+      undefined,
+      undefined,
+      undefined,
+      [{ id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' }],
+    )
+
+    expect(player.init().ok).toBe(true)
+    expect(player.resolveSceneAt(0).graph.childrenByTarget.list).toEqual([
+      'main:first',
+      'main:second',
+      'main:third',
+    ])
+    expect(player.resolveSceneAt(100).graph.childrenByTarget.list).toEqual([
+      'main:first',
+      'main:second',
+      'main:third',
+    ])
+    expect(player.resolveSceneAt(200).graph.childrenByTarget.list).toEqual([
+      'main:third',
+      'main:first',
+      'main:second',
+    ])
+    expect(player.resolveSceneAt(300).graph.childrenByTarget.list).toEqual([
+      'main:third',
+      'main:second',
+      'main:first',
+    ])
+    player.destroy()
+  })
 })

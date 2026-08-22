@@ -1,5 +1,9 @@
 export { buildMotionGraph, resolvePresentationFrame } from './motion-graph'
-export { compileMotionSchedule, type ScheduledMotionIntent } from './motion-schedule'
+export {
+  compileMotionSchedule,
+  type MotionScheduleOptions,
+  type ScheduledMotionIntent,
+} from './motion-schedule'
 export { MotionMaterializer } from './motion-materializer'
 export {
   composeMotionPose,

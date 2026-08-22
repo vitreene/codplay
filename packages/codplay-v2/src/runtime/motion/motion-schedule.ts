@@ -2,6 +2,7 @@ import { isPreparedPath, type Path } from '../../ace'
 import { isPlainRecord } from '../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../scene/compiled'
 import type { MoveFlipMode } from '../config/move'
+import type { RuntimeTrackEvent, RuntimeTrackJournal } from '../player/pipeline/track-journal'
 import type { MotionPresentationMode } from './types'
 
 /** One immutable direct movement scheduled by the compiled scene. */
@@ -17,8 +18,17 @@ export type ScheduledMotionIntent = Readonly<{
   path?: Path
 }>
 
+/** Selects which journaled facts participate in one motion schedule. */
+export type MotionScheduleOptions = Readonly<{
+  includePersistOnly?: boolean
+}>
+
 /** Compiles the complete direct-motion schedule without executing author code. */
-export function compileMotionSchedule(scene: CompiledScene): readonly ScheduledMotionIntent[] {
+export function compileMotionSchedule(
+  scene: CompiledScene,
+  journal?: RuntimeTrackJournal,
+  options: MotionScheduleOptions = {},
+): readonly ScheduledMotionIntent[] {
   const effective = new Map<string, ScheduledMotionIntent>()
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
     for (const perso of story.persos) {
@@ -28,19 +38,39 @@ export function compileMotionSchedule(scene: CompiledScene): readonly ScheduledM
         if (transition === undefined) continue
         const itemId = `${storyId}:${perso.id}`
         const eventId = `${itemId}:${event.name}:${event.declarationPath.join('.')}`
-        const intent: ScheduledMotionIntent = Object.freeze({
+        const intent = createMotionIntent({
           id: `motion:${eventId}:${event.startAt}`,
           eventId,
           itemId,
-          declarationPath: Object.freeze([...event.declarationPath]),
+          declarationPath: event.declarationPath,
           startAt: event.startAt,
-          duration: transition.duration,
-          ease: transition.ease,
-          presentationMode: resolvePresentationMode(transition.flipMode),
-          ...(transition.path === undefined ? {} : { path: transition.path }),
+          transition,
         })
         // One item has one structural command at a boundary: the last declaration wins.
         effective.set(`${itemId}:${event.startAt}`, intent)
+      }
+    }
+  }
+  if (journal !== undefined) {
+    for (const event of journalEvents(journal, options.includePersistOnly !== false)) {
+      const targets = scene.actionTargetIndex[event.name] ?? []
+      for (const target of targets) {
+        if (!event.cascade && event.storyId !== target.storyId) continue
+        const story = scene.scene.stories[target.storyId]
+        const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
+        const action = resolveAction(perso?.actions[event.name], event.data)
+        const transition = readTransition(action?.move)
+        if (transition === undefined) continue
+        const itemId = `${target.storyId}:${target.persoId}`
+        const declarationPath = Object.freeze([Number.MAX_SAFE_INTEGER, event.eventSeq])
+        effective.set(`${itemId}:${event.applyAtMs}`, createMotionIntent({
+          id: `motion:${event.eventId}`,
+          eventId: event.eventId,
+          itemId,
+          declarationPath,
+          startAt: event.applyAtMs,
+          transition,
+        }))
       }
     }
   }
@@ -66,9 +96,47 @@ function flattenEventimes(
 
 /** Selects one action record, including the null-action event-data form. */
 function resolveAction(value: CompiledValue | undefined, eventData: CompiledRecord | undefined): CompiledRecord | undefined {
-  if (isPlainRecord(value)) return value
-  if (value === null && eventData !== undefined) return eventData
+  if (isPlainRecord(value)) return eventData === undefined ? value : { ...value, ...eventData }
+  if ((value === null || value === true) && eventData !== undefined) return eventData
   return undefined
+}
+
+/** Creates one normalized motion intent from compiled or journaled action data. */
+function createMotionIntent(input: Readonly<{
+  id: string
+  eventId: string
+  itemId: string
+  declarationPath: readonly number[]
+  startAt: number
+  transition: Readonly<{
+    duration: number
+    ease: string
+    flipMode?: MoveFlipMode
+    path?: Path
+  }>
+}>): ScheduledMotionIntent {
+  return Object.freeze({
+    id: input.id,
+    eventId: input.eventId,
+    itemId: input.itemId,
+    declarationPath: Object.freeze([...input.declarationPath]),
+    startAt: input.startAt,
+    duration: input.transition.duration,
+    ease: input.transition.ease,
+    presentationMode: resolvePresentationMode(input.transition.flipMode),
+    ...(input.transition.path === undefined ? {} : { path: input.transition.path }),
+  })
+}
+
+/** Selects journaled events that can participate in the compiled action index. */
+function journalEvents(
+  journal: RuntimeTrackJournal,
+  includePersistOnly: boolean,
+): readonly RuntimeTrackEvent[] {
+  return journal.getAllEvents()
+    .filter((event) => includePersistOnly || event.mode !== 'persist-only')
+    .filter((event) => journal.isTrackActive(event.trackId))
+    .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
 }
 
 /** Reads one valid compiler-prepared movement transition. */

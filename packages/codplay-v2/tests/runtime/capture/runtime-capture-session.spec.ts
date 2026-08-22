@@ -46,7 +46,7 @@ describe('runtime capture session', () => {
       mode: 'apply-now',
     })
     expect(ended.endCaptureEvents).toEqual([])
-    expect(ended.warnings).toHaveLength(1)
+    expect(ended.warnings).toEqual([])
   })
 
   it('does not require endEmit or endCapture and warns only about replayability', () => {

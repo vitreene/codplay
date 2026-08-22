@@ -45,7 +45,8 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         : resolveMotionItem(graph, boundary.before, before.parentItemId, boundary.timeMs)?.pose
       const from = createAttachment(before, current.pose, sourceParentPose)
       const to = createStaticAttachment(after)
-      const activeSegment = directIntent === undefined && !isReparented(before, after)
+      const activeSegment = directIntent === undefined
+        && !isReparented(before, after)
         ? findContinuingSegment(graph.tracksByItem.get(itemId), boundary.timeMs)
         : undefined
       if (activeSegment !== undefined) {

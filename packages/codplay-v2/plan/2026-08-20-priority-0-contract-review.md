@@ -21,7 +21,7 @@ verticale de test ne l'ont pas ouverte.
 | Validation | catalogue projeté depuis les déclarations runtime, guards ordonnés, diagnostics structurés et sanitation structurelle | tests `tests/scene/validation/` |
 | Engine / Player | player alimenté par un `CompiledScene`, lifecycle, horloge injectée, seek local et seek groupé par phases `validate → prepare → commit → present` | tests `tests/runtime/engine/` et `tests/runtime/player/runtime-player.spec.ts` |
 | Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
-| Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline` |
+| Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre, politiques V1 `reorderOnMove/Add/Remove` et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline`, `runtime-player` |
 | Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
 | Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
 
@@ -33,7 +33,6 @@ prochaines tranches V2.
 - migrations de schema et extensions de validation portées par les services ;
 - renderer de production et materializer DOM/SVG final ;
 - familles de composants supplémentaires et JSX V2.5 ;
-- politiques complètes de la capacité `list` (`reorderOnMove/Add/Remove`) ;
 - annulation et générations obsolètes des straps asynchrones ;
 - contrat `live`, renderer continu et composition additive des tweens ;
 - capture, DnD et canal authoring ;
@@ -62,6 +61,6 @@ npm run typecheck --workspace=@codplay/codplay-v2
 npm run build:runner --workspace=@codplay/codplay-v2
 ```
 
-Vérification effectuée le 2026-08-20 : 52 fichiers de tests et 326 tests V2
-passent, le typecheck V2 passe, les builds des démos player et runner passent et
+Vérification actualisée le 2026-08-22 : 59 fichiers de tests et 364 tests V2
+passent, le typecheck V2 passe, le build de la démo runner passe et
 `git diff --check` est propre.

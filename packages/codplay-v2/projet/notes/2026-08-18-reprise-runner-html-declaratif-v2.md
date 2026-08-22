@@ -347,6 +347,9 @@ Lorsque le runner existe, vérifier :
 - Runner HTML FLIP complet pour les événements live; le cold resolver
   multi-captures est maintenant limité aux moves compilés positifs.
 - Intégration normative de la capacité list avec `reorderOnMove/Add/Remove`.
+  Réalisée le 21 août 2026 : la capacité fournit la politique à la timeline
+  structurelle, le composant `list` est distinct de `TagComponent`, et les
+  transitions restent portées par `move.transition`.
 
 ## Vérifications au moment de la reprise
 

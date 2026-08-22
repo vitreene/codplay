@@ -60,8 +60,8 @@ describe('RuntimePlayer capture facade', () => {
     const ended = await player.endCapture('drag-1')
     expect(ended.ok).toBe(true)
     if (!ended.ok) return
-    expect(ended.events[0]?.data).toEqual({ captureState: { value: 7 } })
-    expect(ended.warnings).toHaveLength(1)
+    expect(ended.events[0]?.data).toEqual({ value: 7, captureState: { value: 7 } })
+    expect(ended.warnings).toEqual([])
     expect(player.resolveSceneAt(0).storyStates.main).toEqual({ value: 7 })
     player.destroy()
   })
@@ -124,6 +124,43 @@ describe('RuntimePlayer capture facade', () => {
     })
     expect(player.getSolvedScene()?.storyStates.main).toEqual({ value: 0 })
     expect(player.resolveSceneAt(0).storyStates.main).toEqual({ value: 11 })
+    player.destroy()
+  })
+
+  it('does not reintroduce persist-only output on the next playback frame', async () => {
+    const player = createPlayer('capture:stored:frame')
+    expect(player.init().ok).toBe(true)
+
+    expect(player.beginCapture({
+      captureId: 'drag-persist-frame',
+      storyId: 'main',
+      declaration: {
+        trackCommand: ({ sample }) => ({
+          captureState: { value: typeof sample.value === 'number' ? sample.value : 0 },
+        }),
+        endCapture: ({ captureState }) => ({
+          events: [{ name: 'capture:stored:frame', data: { captureState } }],
+        }),
+      },
+    }).ok).toBe(true)
+    player.trackCapture('drag-persist-frame', { value: 17 })
+
+    const ended = await player.endCapture('drag-persist-frame')
+    expect(ended.ok).toBe(true)
+    expect(player.getSolvedScene()?.storyStates.main).toEqual({ value: 0 })
+    expect(player.includesPersistOnlyInCurrent()).toBe(false)
+
+    const startEvent = await player.emit({ name: 'capture:next-start', storyId: 'main' })
+    expect(startEvent.ok).toBe(true)
+    expect(player.includesPersistOnlyInCurrent()).toBe(false)
+
+    player.play()
+    player.engine.advance(0)
+    player.engine.advance(16)
+    expect(player.getSolvedScene()?.storyStates.main).toEqual({ value: 0 })
+
+    expect(player.seek(0).ok).toBe(true)
+    expect(player.getSolvedScene()?.storyStates.main).toEqual({ value: 17 })
     player.destroy()
   })
 

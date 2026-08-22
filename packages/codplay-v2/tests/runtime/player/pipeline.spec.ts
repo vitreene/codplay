@@ -143,15 +143,18 @@ describe('materialize -> resolve -> solve', () => {
 
   it('controls declared track activity without creating tracks', () => {
     const journal = new RuntimeTrackJournal(scene)
+    const initialRevision = journal.getRevision()
 
     expect(journal.applyControlEvent(TRACK_EVENT_DEACTIVATE, { trackIds: ['main'] })).toMatchObject({
       ok: true,
       data: { deactivated: ['main'] },
     })
+    expect(journal.getRevision()).toBe(initialRevision + 1)
     expect(journal.applyControlEvent(TRACK_EVENT_ACTIVATE, { trackIds: ['main', 'missing'] })).toMatchObject({
       ok: true,
       data: { activated: ['main'], ignored: ['missing'] },
     })
+    expect(journal.getRevision()).toBe(initialRevision + 2)
     expect(journal.registry.tracks.missing).toBeUndefined()
   })
 

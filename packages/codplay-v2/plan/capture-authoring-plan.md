@@ -213,7 +213,7 @@ la fixture S5 peut être branchée sans ajouter de sémantique au mécanisme cor
   lorsque `endEmit` est présent ;
 - [x] annulation au seek/destroy et conservation des composants jusqu’au
   teardown final ;
-- [x] tests core source-agnostiques et tests compilés : `57` fichiers, `351`
-  tests passants au 2026-08-21 ;
+- [x] tests core source-agnostiques et tests compilés inclus dans la suite V2 :
+  `59` fichiers, `365` tests passants au 2026-08-22 ;
 - [x] validation S5 HTML/telco, suivie exclusivement dans
   [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md).

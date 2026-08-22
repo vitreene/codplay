@@ -36,7 +36,24 @@ It has no DOM handles, no transport state and no mutable animation ownership.
 At each boundary the planner compares complete local attachments. It creates a
 segment for every item whose parent, target or local layout pose changed. A child
 whose local attachment is unchanged does not duplicate its ancestor's segment;
-it follows through recursive composition.
+it follows through recursive composition. The `before` snapshot is the source
+layout supplied for that boundary; no capture-specific marker or second motion
+algorithm is used.
+
+The runner may compile two schedules from the same journal: the current
+presentation schedule excludes `persist-only` facts, while a reconstruction
+schedule includes them. Both schedules are converted to the same
+`MotionBoundary` and resolved by the same graph. Consequently, a live
+`endEmit` uses the current visible FIRST layout, whereas a seek uses the
+persisted logical source-to-target boundary without retaining a live-capture
+branch in the graph.
+
+The HTML runner invalidates this schedule with the monotonic revision of its
+shared `RuntimeTrackJournal` and the current `includePersistOnly` flag. It
+therefore compiles the schedule at initialization or after a journal change,
+not on every presentation frame. A standalone `HtmlMotionSystem` may omit the
+revision callback; that compatibility path keeps the signature comparison but
+is not the runner's production path.
 
 Direct intent timing applies to its item. Other reflow items use the longest
 direct duration at that boundary. A target or parent change forces presentation

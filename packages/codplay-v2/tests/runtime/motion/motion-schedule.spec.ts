@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compileMotionSchedule } from '../../../src/runtime/motion'
+import { RuntimeTrackJournal } from '../../../src/runtime/player/pipeline'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 describe('compileMotionSchedule', () => {
@@ -60,6 +61,56 @@ describe('compileMotionSchedule', () => {
     })
 
     expect(schedule.every((intent) => intent.presentationMode === 'reparent')).toBe(true)
+  })
+
+  it('can exclude persist-only runtime moves from the current playback schedule', () => {
+    const base = compiledScene()
+    const runtimeScene: CompiledScene = {
+      ...base,
+      scene: {
+        ...base.scene,
+        stories: {
+          main: {
+            ...base.scene.stories.main!,
+            persos: [{
+              ...base.scene.stories.main!.persos[0]!,
+              actions: {
+                ...base.scene.stories.main!.persos[0]!.actions,
+                'runtime-move': {},
+              },
+            }],
+          },
+        },
+      },
+      actionTargetIndex: {
+        'runtime-move': [{ storyId: 'main', persoId: 'item' }],
+      },
+    }
+    const journal = new RuntimeTrackJournal(runtimeScene)
+    journal.appendLiveEvent({
+      eventId: 'persist-move',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'runtime-move',
+      applyAtMs: 100,
+      data: { move: { target: 'target', transition: { duration: 100 } } },
+      mode: 'persist-only',
+    })
+    journal.appendLiveEvent({
+      eventId: 'live-move',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'runtime-move',
+      applyAtMs: 200,
+      data: { move: { target: 'target', transition: { duration: 100 } } },
+    })
+
+    const replay = compileMotionSchedule(runtimeScene, journal)
+    const current = compileMotionSchedule(runtimeScene, journal, { includePersistOnly: false })
+
+    expect(replay.map((intent) => intent.eventId)).toContain('persist-move')
+    expect(current.map((intent) => intent.eventId)).not.toContain('persist-move')
+    expect(current.map((intent) => intent.eventId)).toContain('live-move')
   })
 })
 

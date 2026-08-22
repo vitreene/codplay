@@ -12,7 +12,8 @@ description capture-centrique précédente est remplacée par
 
 - `SolvedGraph` porte la membership et l'ordre complet par target.
 - `StructuralTimeline` porte cet ordre à chaque frontière compilée.
-- La capacité list est un marqueur et ne conserve aucun reducer live parallèle.
+- La capacité list fournit les politiques V1 `reorderOnMove/Add/Remove` au calcul
+  structurel, sans conserver de reducer d'ordre concurrent.
 - Le sampler HTML compare les layouts complets avant/après l'événement.
 - Tous les items dont l'attachement local change reçoivent un segment propre.
 - Le changement reste local dans une même target et devient reparent entre deux

@@ -2,15 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { MOUNT_PLACEMENT_PARENT } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
 import { HtmlComponentMaterializer } from '../../../src/runtime/runner'
+import { HTML_TRANSIENT_NODE_ATTRIBUTE } from '../../../src/runtime/runner/html-transient-node'
 import type { SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 type TestNode = {
   children: unknown[]
   parentNode: TestNode | null
+  getAttribute: (name: string) => string | null
+  setAttribute: (name: string, value: string) => void
+  removeAttribute: (name: string) => void
 }
 
 function node(): TestNode {
-  return { children: [], parentNode: null }
+  const attributes = new Map<string, string>()
+  return {
+    children: [],
+    parentNode: null,
+    getAttribute: (name) => attributes.get(name) ?? null,
+    setAttribute: (name, value) => attributes.set(name, value),
+    removeAttribute: (name) => attributes.delete(name),
+  }
 }
 
 function perso(
@@ -131,6 +142,57 @@ describe('HtmlComponentMaterializer scene materialization', () => {
     })
 
     expect(root.children).toEqual([second, first])
+  })
+
+  it('preserves transient preview roots across repeated frame materialization', () => {
+    const root = node()
+    const body = node()
+    const first = node()
+    const dragged = node()
+    const third = node()
+    const ghost = node()
+    root.children = [first, ghost, third]
+    first.parentNode = root
+    ghost.parentNode = root
+    third.parentNode = root
+    body.children = [dragged]
+    dragged.parentNode = body
+    dragged.setAttribute(HTML_TRANSIENT_NODE_ATTRIBUTE, '')
+    ghost.setAttribute(HTML_TRANSIENT_NODE_ATTRIBUTE, '')
+
+    const materializer = new HtmlComponentMaterializer({
+      persoNodes: new Map([
+        ['main:first', first],
+        ['main:dragged', dragged],
+        ['main:third', third],
+      ]),
+      targetNodes: new Map([['root', root]]),
+    })
+    const activeScene = scene([
+      perso('main:first', { id: 'root', kind: 'root' }),
+      perso('main:dragged', { id: 'root', kind: 'root' }),
+      perso('main:third', { id: 'root', kind: 'root' }),
+    ], { root: ['main:first', 'main:dragged', 'main:third'] })
+
+    materializer.materializeScene(activeScene)
+    materializer.materializeScene(activeScene)
+
+    expect(root.children).toEqual([first, ghost, third])
+    expect(dragged.parentNode).toBe(body)
+
+    dragged.removeAttribute(HTML_TRANSIENT_NODE_ATTRIBUTE)
+    ghost.removeAttribute(HTML_TRANSIENT_NODE_ATTRIBUTE)
+    root.children = [first, third]
+    first.parentNode = root
+    third.parentNode = root
+    ghost.parentNode = null
+    body.children = []
+    dragged.parentNode = null
+
+    materializer.materializeScene(activeScene)
+
+    expect(root.children).toEqual([first, dragged, third])
+    expect(dragged.parentNode).toBe(root)
   })
 
   it('mounts and detaches every real root of a fragment without an envelope node', () => {

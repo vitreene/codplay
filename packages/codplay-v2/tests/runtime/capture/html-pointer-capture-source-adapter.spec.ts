@@ -96,6 +96,58 @@ function compiledScene(): CompiledScene {
 }
 
 describe('HtmlPointerCaptureSourceAdapter', () => {
+  it('replays pointer moves received while the capture start event is pending', async () => {
+    const eventTarget = new TestEventTarget()
+    const node = new TestNode()
+    const onCaptureTrack = vi.fn()
+    let releaseStart: ((value: Readonly<{ ok: true }>) => void) | undefined
+    const startEvent = new Promise<Readonly<{ ok: true }>>((resolve) => {
+      releaseStart = resolve
+    })
+    const player = {
+      getCurrentTimeMs: () => 0,
+      emit: vi.fn(() => startEvent),
+      beginCompiledCapture: vi.fn(() => ({ ok: true, captureId: 'capture', captureState: { opened: true } })),
+      trackCapture: vi.fn((_captureId: string, sample: Readonly<{ clientY: number }>) => ({
+        ok: true,
+        captureState: { opened: true, latestY: sample.clientY },
+        sampleCount: 1,
+      })),
+      endCapture: vi.fn(async () => ({ ok: true })),
+    } as unknown as RuntimePlayer
+    const adapter = new HtmlPointerCaptureSourceAdapter({
+      player,
+      compiledScene: compiledScene(),
+      nodes: { persoNodes: new Map([['main:item', node]]) },
+      eventTarget,
+      onCaptureTrack,
+    })
+
+    adapter.attach()
+    eventTarget.dispatchEvent(pointerEvent('pointerdown', node))
+    eventTarget.dispatchEvent(pointerEvent('pointermove', node, {
+      clientX: 20,
+      clientY: 30,
+      movementX: 0,
+      movementY: 10,
+    }))
+    eventTarget.dispatchEvent(pointerEvent('pointermove', node, {
+      clientX: 20,
+      clientY: 110,
+      movementX: 0,
+      movementY: 80,
+    }))
+    eventTarget.dispatchEvent(pointerEvent('pointerup', node))
+
+    expect(player.trackCapture).not.toHaveBeenCalled()
+    releaseStart?.({ ok: true })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(player.trackCapture).toHaveBeenCalledTimes(2)
+    expect(onCaptureTrack.mock.calls.map(([input]) => input.sample.clientY)).toEqual([30, 110])
+    expect(player.endCapture).toHaveBeenCalledTimes(1)
+  })
+
   it('routes a classic pointer capture through the RuntimePlayer facade', async () => {
     const eventTarget = new TestEventTarget()
     const node = new TestNode()
@@ -150,6 +202,62 @@ describe('HtmlPointerCaptureSourceAdapter', () => {
     expect(player.endCapture).toHaveBeenCalledWith(expect.any(String), {
       source: 'html-pointer',
       eventType: 'pointerup',
+    }, {})
+  })
+
+  it('observes samples and resolves the final capture state once at pointerup', async () => {
+    const eventTarget = new TestEventTarget()
+    const node = new TestNode()
+    const onCaptureTrack = vi.fn()
+    const resolveEndCaptureState = vi.fn(({ captureState }: Readonly<{ captureState: Readonly<Record<string, unknown>> }>) => ({
+      ...captureState,
+      resolved: true,
+    }))
+    const onCaptureClose = vi.fn()
+    const player = {
+      getCurrentTimeMs: () => 0,
+      emit: vi.fn(async () => ({ ok: true, events: [], straps: [], issues: [] })),
+      beginCompiledCapture: vi.fn(() => ({ ok: true, captureId: 'capture', captureState: { opened: true } })),
+      trackCapture: vi.fn(() => ({ ok: true, captureState: { opened: true, latest: 1 }, sampleCount: 1 })),
+      endCapture: vi.fn(async () => ({ ok: true })),
+    } as unknown as RuntimePlayer
+    const adapter = new HtmlPointerCaptureSourceAdapter({
+      player,
+      compiledScene: compiledScene(),
+      nodes: { persoNodes: new Map([['main:item', node]]) },
+      eventTarget,
+      onCaptureTrack,
+      resolveEndCaptureState,
+      onCaptureClose,
+    })
+
+    adapter.attach()
+    eventTarget.dispatchEvent(pointerEvent('pointerdown', node))
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    eventTarget.dispatchEvent(pointerEvent('pointermove', node, {
+      clientX: 40,
+      clientY: 25,
+      movementX: 4,
+      movementY: -2,
+    }))
+    eventTarget.dispatchEvent(pointerEvent('pointerup', node))
+    await Promise.resolve()
+
+    expect(onCaptureTrack).toHaveBeenCalledWith(expect.objectContaining({
+      captureId: 'main:item:pointer:0',
+      persoKey: 'main:item',
+      captureState: { opened: true, latest: 1 },
+    }))
+    expect(resolveEndCaptureState).toHaveBeenCalledTimes(1)
+    expect(player.endCapture).toHaveBeenCalledWith(
+      'main:item:pointer:0',
+      { source: 'html-pointer', eventType: 'pointerup' },
+      { opened: true, latest: 1, resolved: true },
+    )
+    expect(onCaptureClose).toHaveBeenCalledWith({
+      captureId: 'main:item:pointer:0',
+      persoKey: 'main:item',
+      completed: true,
     })
   })
 

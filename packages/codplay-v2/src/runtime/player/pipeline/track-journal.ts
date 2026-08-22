@@ -100,6 +100,7 @@ export class RuntimeTrackJournal {
   private readonly eventIds = new Set<string>()
   private nextEventSeq = 0
   private nextGeneratedEventId = 0
+  private revision = 0
 
   /** Creates a mutable live journal from one immutable compiled scene. */
   constructor(scene: CompiledScene) {
@@ -136,6 +137,7 @@ export class RuntimeTrackJournal {
     events.push(event)
     events.sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
     this.eventsByTrack.set(input.trackId, events)
+    this.revision += 1
     return { ok: true, data: event }
   }
 
@@ -260,6 +262,7 @@ export class RuntimeTrackJournal {
           activated.push(trackId)
         }
       }
+      if (activated.length > 0 || deactivated.length > 0) this.revision += 1
       return { ok: true, data: { activated, deactivated, ignored } }
     }
     return { ok: false, code: 'RUNTIME_TRACK_CONTROL_UNKNOWN', message: `Unknown track control: ${name}` }
@@ -270,13 +273,28 @@ export class RuntimeTrackJournal {
     return this.eventsByTrack.get(trackId) ?? []
   }
 
-  /** Returns live events scoped to one story across its active tracks. */
+  /** Returns live events visible to one story; callers apply track activity. */
   getEventsForStory(storyId: string): readonly RuntimeTrackEvent[] {
-    return [...this.eventsByTrack.values()].flatMap((events) => events.filter(
+    return this.getAllEvents().filter(
       (event) => event.storyId === storyId
         || event.cascade === true
         || event.trackId === TRACK_GLOBAL_ID,
-    ))
+    )
+  }
+
+  /** Returns every runtime event exactly once in journal storage order. */
+  getAllEvents(): readonly RuntimeTrackEvent[] {
+    return [...this.eventsByTrack.values()].flatMap((events) => events)
+  }
+
+  /** Returns the monotonic revision used by structural and motion consumers. */
+  getRevision(): number {
+    return this.revision
+  }
+
+  /** Returns every runtime event boundary in deterministic chronological order. */
+  getEventTimes(): readonly number[] {
+    return [...new Set(this.getAllEvents().map((event) => event.applyAtMs))].sort((left, right) => left - right)
   }
 
   /** Returns replayable state patches in deterministic timeline order. */
@@ -287,8 +305,7 @@ export class RuntimeTrackJournal {
     includeBoundary = true,
     includePersistOnly = true,
   ): readonly RuntimeTrackEvent[] {
-    return [...this.eventsByTrack.values()]
-      .flatMap((events) => events)
+    return this.getAllEvents()
       .filter((event) => event.update !== undefined
         && event.stateScope === scope
         && (includePersistOnly || event.mode !== 'persist-only')
@@ -310,6 +327,7 @@ export class RuntimeTrackJournal {
       this.activeTrackIds.set(trackId, active)
       changed.push(trackId)
     }
+    if (changed.length > 0) this.revision += 1
     return {
       ok: true,
       data: active

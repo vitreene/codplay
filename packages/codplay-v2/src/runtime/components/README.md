@@ -12,6 +12,15 @@ Dans la tranche HTML, `BaseComponent` reçoit après `render()` soit un nœud r�
 soit la collection ordonnée des nœuds réels d'un fragment. Le fragment n'est
 jamais enveloppé automatiquement et ne constitue pas une cible de service.
 
+## List
+
+`ListComponent` est le composant auteur de type `list`. Il possède uniquement sa
+racine et ses services `className`, `style` et `attr`. Il ne manipule pas ses
+enfants et ne lit pas le DOM pour reconstruire l'ordre : la capacité runtime
+`list` porte la politique V1 et la timeline structurelle fournit l'ordre complet
+au materializer. Les éléments enfants restent les materialisations persistantes
+des persos concernés.
+
 ## Media
 
 `MediaComponent` reprend la règle V1 pour les sources à effet de bord :

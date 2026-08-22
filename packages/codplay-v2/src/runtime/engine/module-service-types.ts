@@ -15,10 +15,23 @@ export type RuntimeModuleServiceSeekHandle = Readonly<{
   abort?: () => void
 }>
 
+/** Complete structural order returned by one runtime capability policy. */
+export type RuntimeStructuralOrder = Readonly<Record<string, readonly string[]>>
+
+/** Resolves one structural boundary without reading or mutating a materializer. */
+export type RuntimeStructuralOrderResolver = (
+  previousOrder: RuntimeStructuralOrder,
+  scene: SolvedScene,
+  deltas: readonly MoveStateDelta[],
+) => RuntimeStructuralOrder
+
 /** Hooks exposed by one player-scoped module instance. */
 export type RuntimeModuleServiceInstance = Readonly<{
   initializeScene?: (scene: SolvedScene) => void
   getMountTargets?: () => readonly MountTargetDeclaration[]
+  /** Resets policy history before the canonical structural timeline is rebuilt. */
+  resetStructuralOrder?: () => void
+  resolveStructuralOrder?: RuntimeStructuralOrderResolver
   prepareSeek?: (scene: SolvedScene) => RuntimeModuleServiceSeekHandle
   onMoveDelta?: (delta: MoveStateDelta) => void
   destroy?: () => void

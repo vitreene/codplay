@@ -97,11 +97,12 @@ pas appliquees par le move core : elles appartiennent a une capacite/service lis
 enregistre, qui consommera les changements de parent sans etre lie a un composant
 unique.
 
-La capacite `list` actuelle est un marqueur de module. L'appartenance et l'ordre
-structurel sont portes par `SolvedGraph` et `StructuralTimeline`, sans reducer
-list concurrent. La mise en oeuvre des politiques `reorderOnMove`,
-`reorderOnAdd` et `reorderOnRemove` reste une extension de la capacite list ; elle
-n'est pas presente dans cette tranche.
+La capacite `list` fournit les politiques `reorderOnMove`, `reorderOnAdd` et
+`reorderOnRemove` au calcul des frontières. L'appartenance et l'ordre structurel
+restent portes par `SolvedGraph` et `StructuralTimeline`, sans reducer list
+concurrent. Le composant `list` possède sa racine auteur ; le materializer
+projette ensuite l'ordre complet sur les nodes persistants. Les paramètres de
+transition restent ceux du `move.transition` consommé par le circuit FLIP.
 
 Le core expose `diffSolvedScenes(before, after)` pour produire des deltas generiques
 `mount`, `unmount` et `move`, avec les cibles et placements avant/apres. Ce delta ne

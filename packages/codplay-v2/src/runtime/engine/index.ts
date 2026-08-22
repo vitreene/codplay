@@ -10,5 +10,7 @@ export type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
   RuntimeModuleServiceSeekHandle,
+  RuntimeStructuralOrder,
+  RuntimeStructuralOrderResolver,
 } from './module-service-types'
 export type { Ticker } from '../time'

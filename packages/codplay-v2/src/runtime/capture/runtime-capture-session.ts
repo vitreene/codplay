@@ -135,6 +135,7 @@ export class RuntimeCaptureSession {
     state: RuntimeCaptureState,
     meta: Readonly<Record<string, unknown>> = {},
     endedAtMs = this.startedAtMs,
+    captureStateOverride?: RuntimeCaptureState,
   ): RuntimeCaptureEndResult | RuntimeCaptureFailure {
     if (this.status !== 'active') {
       return this.failure('RUNTIME_CAPTURE_CLOSED', 'Capture session is no longer active.')
@@ -144,7 +145,7 @@ export class RuntimeCaptureSession {
     }
     this.status = 'ended'
     const snapshotState = freezeRecord(cloneRecord(state))
-    const snapshotCaptureState = this.getCaptureState()
+    const snapshotCaptureState = freezeRecord(cloneRecord(captureStateOverride ?? this.captureState))
     const snapshotSamples = this.getSamples()
     let endCaptureEvents: readonly RuntimeCaptureEvent[] = []
     let duration: number | undefined
@@ -199,7 +200,7 @@ export class RuntimeCaptureSession {
       endedAtMs,
       resolvedDurationMs,
       endCaptureApplyAtMs: normalizedEndCaptureEvents.length === 0 ? undefined : endCaptureApplyAtMs,
-      warnings: normalizedEndCaptureEvents.length > 0 || endEmitEvent?.mode === EVENT_INSERT_MODE_PERSIST_ONLY
+      warnings: normalizedEndCaptureEvents.length > 0 || endEmitEvent !== undefined
         ? []
         : [{
             code: 'CAPTURE_REPLAY_NOT_IDENTICAL',
@@ -246,8 +247,12 @@ function normalizeEndEmitEvent(
   captureState: RuntimeCaptureState,
   applyAtMs: number,
 ): RuntimeCaptureEndEvent {
-  const data: Record<string, CompiledValue> = event.data === undefined ? {} : { ...cloneRecord(event.data) }
-  if (!('captureState' in data)) data.captureState = cloneRecord(captureState)
+  // Keep the V1 shallow-action payload usable when `endEmit.data` is absent,
+  // while always exposing the reserved V2 snapshot for straps and consumers.
+  const data: Record<string, CompiledValue> = event.data === undefined
+    ? cloneRecord(captureState)
+    : { ...cloneRecord(event.data) }
+  data.captureState = cloneRecord(captureState)
   return {
     ...event,
     data,

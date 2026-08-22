@@ -6,7 +6,7 @@ import type { CompiledFunctionCollection, CompiledScene } from '../../../src/sce
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import type { Ticker } from '../../../src/runtime/engine'
-import { createDragCaptureScene, dragStraps } from '../../../demos/validation/player/drag-scene'
+import { createDragCaptureScene, s6Straps } from '../../../demos/validation/player/drag-scene'
 
 class FakeNode {
   parentNode: FakeNode | null = null
@@ -722,7 +722,7 @@ describe('HtmlPlayerRunner', () => {
     expect(root.hasAttribute('inert')).toBe(false)
   })
 
-  it('runs the V2 drag fixture through live update, persist-only close, seek and a second capture', async () => {
+  it('runs the V2 S6 capture fixture through end-state resolution, list commit and seek', async () => {
     installFakeDom()
     const root = new FakeElement()
     const source = new FakeEventTarget()
@@ -741,14 +741,27 @@ describe('HtmlPlayerRunner', () => {
       rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       functions: build.functions,
-      strapCollections: { scene: {}, stories: { main: dragStraps } },
+      strapCollections: { scene: {}, stories: { main: s6Straps } },
       captureEventTarget: source as unknown as EventTarget,
+      resolveEndCaptureState: ({ captureState }) => ({
+        ...captureState,
+        persoId: 'item-1',
+        move: {
+          target: 'list-b',
+          mode: 0,
+          flipMode: 'overlay-world',
+          transition: { duration: 420, ease: 'out(2)' },
+        },
+      }),
       onCaptureError: (error) => captureErrors.push(error),
     })
 
     expect(runner.init().ok).toBe(true)
-    const item = runner.getPersoNode('main:draggable') as FakeElement
-    expect(item.style.transform).toBe('translate(80px, 72px)')
+    const item = runner.getPersoNode('main:item-1') as FakeElement
+    const listA = runner.getPersoNode('main:list-a') as FakeElement
+    const listB = runner.getPersoNode('main:list-b') as FakeElement
+    expect(listA.childNodes).toContain(item)
+    expect(listB.childNodes).not.toContain(item)
     runner.play(ticker())
 
     source.dispatch('pointerdown', item, { pointerId: 1 })
@@ -760,30 +773,19 @@ describe('HtmlPlayerRunner', () => {
       movementX: 24,
       movementY: -12,
     })
-    expect(item.style.transform).toBe('translate(104px, 60px)')
 
     source.dispatch('pointerup', item, { pointerId: 1 })
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
     expect(captureErrors).toEqual([])
-    expect(item.style.transform).toBe('translate(104px, 60px)')
+    expect(listB.childNodes).toContain(item)
+    expect(listA.childNodes).not.toContain(item)
+    expect(runner.player.resolveSceneAt(0).storyStates.main.itemListById).toMatchObject({
+      'item-1': 'list-b',
+    })
 
     runner.pause()
     expect(runner.seek(0).ok).toBe(true)
-    expect(runner.player.resolveSceneAt(0).storyStates.main).toEqual({ draggableX: 104, draggableY: 60 })
-    expect(item.style.transform).toBe('translate(104px, 60px)')
-
-    source.dispatch('pointerdown', item, { pointerId: 2 })
-    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
-    source.dispatch('pointermove', item, {
-      pointerId: 2,
-      clientX: 114,
-      clientY: 60,
-      movementX: 10,
-      movementY: 0,
-    })
-    expect(item.style.transform).toBe('translate(114px, 60px)')
-    source.dispatch('pointerup', item, { pointerId: 2 })
-    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(listB.childNodes).toContain(item)
     runner.destroy()
   })
 

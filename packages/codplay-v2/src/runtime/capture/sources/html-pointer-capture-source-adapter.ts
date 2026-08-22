@@ -4,7 +4,7 @@ import type {
   CompiledScene,
 } from '../../../scene/compiled'
 import type { RuntimePlayer } from '../../player'
-import type { RuntimeCaptureSample } from '../capture-types'
+import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture-types'
 
 const DEFAULT_TRACK_EVENT = 'pointermove'
 const DEFAULT_END_EVENT = 'pointerup'
@@ -22,6 +22,26 @@ export type HtmlPointerCaptureSourceAdapterOptions = Readonly<{
   nodes: HtmlPointerCaptureSourceNodes
   eventTarget?: EventTarget
   onError?: (error: unknown) => void
+  /** Observes one completed live sample without creating an event or journal entry. */
+  onCaptureTrack?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    sample: RuntimeCaptureSample
+    captureState: RuntimeCaptureState
+  }>) => void
+  /** Enriches the final capture state once at the native end boundary. */
+  resolveEndCaptureState?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    captureState: RuntimeCaptureState
+    event: Event
+  }>) => RuntimeCaptureState | undefined
+  /** Releases source/materializer preview resources after one capture closes. */
+  onCaptureClose?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    completed: boolean
+  }>) => void
 }>
 
 type CaptureRule = Readonly<{
@@ -32,12 +52,27 @@ type CaptureRule = Readonly<{
 
 type ActiveCapture = Readonly<{
   captureId: string
+  persoKey: string
   storyId: string
   declaration: CompiledCaptureDeclaration
   trackOn: ReadonlySet<string>
   endOn: ReadonlySet<string>
   pointerId?: number
+  captureState: RuntimeCaptureState
 }>
+
+type PendingCaptureStart = {
+  captureId: string
+  persoKey: string
+  storyId: string
+  rule: CompiledEmitRule
+  declaration: CompiledCaptureDeclaration
+  pointerId?: number
+  trackOn: ReadonlySet<string>
+  endOn: ReadonlySet<string>
+  queuedEvents: Event[]
+  ended: boolean
+}
 
 /**
  * Binds classic pointer capture declarations to the source-agnostic player
@@ -50,9 +85,12 @@ export class HtmlPointerCaptureSourceAdapter {
   private readonly nodes: HtmlPointerCaptureSourceNodes
   private readonly eventTarget: EventTarget | undefined
   private readonly onError: ((error: unknown) => void) | undefined
+  private readonly onCaptureTrack: HtmlPointerCaptureSourceAdapterOptions['onCaptureTrack']
+  private readonly resolveEndCaptureState: HtmlPointerCaptureSourceAdapterOptions['resolveEndCaptureState']
+  private readonly onCaptureClose: HtmlPointerCaptureSourceAdapterOptions['onCaptureClose']
   private readonly captureRules = new Map<string, readonly CaptureRule[]>()
   private readonly activeCaptures = new Map<string, ActiveCapture>()
-  private readonly pendingCaptureStarts = new Set<string>()
+  private readonly pendingCaptureStarts = new Map<string, PendingCaptureStart>()
   private readonly listeners = new Map<string, (event: Event) => void>()
   private destroyed = false
   private nextCaptureId = 0
@@ -64,6 +102,9 @@ export class HtmlPointerCaptureSourceAdapter {
     this.nodes = options.nodes
     this.eventTarget = options.eventTarget
     this.onError = options.onError
+    this.onCaptureTrack = options.onCaptureTrack
+    this.resolveEndCaptureState = options.resolveEndCaptureState
+    this.onCaptureClose = options.onCaptureClose
     this.indexCaptureRules()
   }
 
@@ -105,6 +146,12 @@ export class HtmlPointerCaptureSourceAdapter {
         }
       } catch (error) {
         this.reportError(error)
+      } finally {
+        this.onCaptureClose?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          completed: false,
+        })
       }
     }
   }
@@ -126,6 +173,8 @@ export class HtmlPointerCaptureSourceAdapter {
   private handleSourceEvent(event: Event): void {
     const existingCaptures = [...this.activeCaptures.values()]
     for (const capture of existingCaptures) this.routeActiveCapture(capture, event)
+    const pendingCaptures = [...this.pendingCaptureStarts.values()]
+    for (const capture of pendingCaptures) this.routePendingCapture(capture, event)
     if (event.type === 'pointerdown') this.openCaptures(event)
   }
 
@@ -134,14 +183,27 @@ export class HtmlPointerCaptureSourceAdapter {
     const persoKey = resolvePersoKey(this.nodes, event.target)
     if (persoKey === undefined) return
     const rules = this.captureRules.get(persoKey) ?? []
+    if (rules.length === 0) return
     const storyId = rules[0]?.storyId
     if (storyId === undefined) return
     const pointerId = readPointerId(event)
     for (const { rule, declaration } of rules) {
       const captureId = `${persoKey}:pointer:${this.nextCaptureId++}`
-      this.pendingCaptureStarts.add(captureId)
+      this.pendingCaptureStarts.set(captureId, {
+        captureId,
+        persoKey,
+        storyId,
+        rule,
+        declaration,
+        ...(pointerId === undefined ? {} : { pointerId }),
+        trackOn: pointerEventNames(declaration.trackOn, DEFAULT_TRACK_EVENT),
+        endOn: pointerEventNames(declaration.endOn, DEFAULT_END_EVENT),
+        queuedEvents: [],
+        ended: false,
+      })
       void this.openCaptureAfterStart({
         captureId,
+        persoKey,
         storyId,
         rule,
         declaration,
@@ -153,6 +215,7 @@ export class HtmlPointerCaptureSourceAdapter {
   /** Completes one capture opening only after its ordinary start event settles. */
   private async openCaptureAfterStart(input: Readonly<{
     captureId: string
+    persoKey: string
     storyId: string
     rule: CompiledEmitRule
     declaration: CompiledCaptureDeclaration
@@ -160,7 +223,8 @@ export class HtmlPointerCaptureSourceAdapter {
   }>): Promise<void> {
     try {
       await this.emitStartEvent(input.rule, input.storyId)
-      if (this.destroyed || !this.pendingCaptureStarts.has(input.captureId)) return
+      const pending = this.pendingCaptureStarts.get(input.captureId)
+      if (this.destroyed || pending === undefined) return
       const opened = this.player.beginCompiledCapture({
         captureId: input.captureId,
         storyId: input.storyId,
@@ -170,18 +234,40 @@ export class HtmlPointerCaptureSourceAdapter {
         this.reportError(new Error(opened.message))
         return
       }
+      this.pendingCaptureStarts.delete(input.captureId)
       this.activeCaptures.set(input.captureId, {
         captureId: input.captureId,
+        persoKey: input.persoKey,
         storyId: input.storyId,
         declaration: input.declaration,
         trackOn: pointerEventNames(input.declaration.trackOn, DEFAULT_TRACK_EVENT),
         endOn: pointerEventNames(input.declaration.endOn, DEFAULT_END_EVENT),
         ...(input.pointerId === undefined ? {} : { pointerId: input.pointerId }),
+        captureState: opened.captureState,
       })
+
+      for (const event of pending.queuedEvents) {
+        const capture = this.activeCaptures.get(input.captureId)
+        if (capture === undefined) break
+        this.routeActiveCapture(capture, event)
+      }
     } catch (error) {
       this.reportError(error)
     } finally {
       this.pendingCaptureStarts.delete(input.captureId)
+    }
+  }
+
+  /** Queues native tracking and end events until the ordinary start event opens the capture. */
+  private routePendingCapture(capture: PendingCaptureStart, event: Event): void {
+    if (capture.ended || !matchesPointer(capture.pointerId, readPointerId(event))) return
+    if (capture.endOn.has(event.type)) {
+      capture.queuedEvents.push(event)
+      capture.ended = true
+      return
+    }
+    if (capture.trackOn.has(event.type)) {
+      capture.queuedEvents.push(event)
     }
   }
 
@@ -209,12 +295,42 @@ export class HtmlPointerCaptureSourceAdapter {
     if (!matchesPointer(capture.pointerId, eventPointerId)) return
     if (capture.endOn.has(event.type)) {
       this.activeCaptures.delete(capture.captureId)
+      let captureState = capture.captureState
+      try {
+        captureState = this.resolveEndCaptureState?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          captureState,
+          event,
+        }) ?? captureState
+      } catch (error) {
+        this.player.cancelCapture(capture.captureId)
+        this.reportError(error)
+        this.onCaptureClose?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          completed: false,
+        })
+        return
+      }
       void this.player.endCapture(capture.captureId, {
         source: 'html-pointer',
         eventType: event.type,
-      }).then((result) => {
+      }, captureState).then((result) => {
         if (!result.ok) this.reportError(new Error(result.message))
-      }).catch((error: unknown) => this.reportError(error))
+        this.onCaptureClose?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          completed: result.ok,
+        })
+      }).catch((error: unknown) => {
+        this.reportError(error)
+        this.onCaptureClose?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          completed: false,
+        })
+      })
       return
     }
     if (!capture.trackOn.has(event.type)) return
@@ -226,6 +342,19 @@ export class HtmlPointerCaptureSourceAdapter {
     }
     const tracked = this.player.trackCapture(capture.captureId, sample)
     if (!tracked.ok) this.reportError(new Error(tracked.message))
+    else {
+      this.activeCaptures.set(capture.captureId, { ...capture, captureState: tracked.captureState })
+      try {
+        this.onCaptureTrack?.({
+          captureId: capture.captureId,
+          persoKey: capture.persoKey,
+          sample,
+          captureState: tracked.captureState,
+        })
+      } catch (error) {
+        this.reportError(error)
+      }
+    }
   }
 
   /** Sends source failures to the host without throwing from a native listener. */

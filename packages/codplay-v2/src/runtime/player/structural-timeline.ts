@@ -9,6 +9,7 @@ import {
 } from '../config/move'
 import { diffSolvedScenes, type MoveStateDelta } from '../move'
 import type { SolvedScene } from './pipeline'
+import type { RuntimeStructuralOrder } from '../engine'
 
 /** One immutable child-order snapshot opened by a compiled event boundary. */
 export type StructuralSnapshot = Readonly<{
@@ -27,8 +28,20 @@ export class StructuralTimeline {
     compiledScene: CompiledScene,
     resolveBaseSceneAt: (timeMs: number) => SolvedScene,
     resolveBaseSceneBefore: (timeMs: number) => SolvedScene,
+    resolveStructuralOrder?: (
+      previousOrder: RuntimeStructuralOrder,
+      scene: SolvedScene,
+      deltas: readonly MoveStateDelta[],
+    ) => RuntimeStructuralOrder,
+    runtimeEventTimes: readonly number[] = [],
   ) {
-    const built = buildStructuralSnapshots(compiledScene, resolveBaseSceneAt, resolveBaseSceneBefore)
+    const built = buildStructuralSnapshots(
+      compiledScene,
+      resolveBaseSceneAt,
+      resolveBaseSceneBefore,
+      resolveStructuralOrder,
+      runtimeEventTimes,
+    )
     this.initial = built.initial
     this.snapshots = built.snapshots
   }
@@ -71,29 +84,49 @@ function buildStructuralSnapshots(
   compiledScene: CompiledScene,
   resolveBaseSceneAt: (timeMs: number) => SolvedScene,
   resolveBaseSceneBefore: (timeMs: number) => SolvedScene,
+  resolveStructuralOrder?: (
+    previousOrder: RuntimeStructuralOrder,
+    scene: SolvedScene,
+    deltas: readonly MoveStateDelta[],
+  ) => RuntimeStructuralOrder,
+  runtimeEventTimes: readonly number[] = [],
 ): Readonly<{ initial: StructuralSnapshot; snapshots: readonly StructuralSnapshot[] }> {
   let previousScene = resolveBaseSceneBefore(0)
   let order = cloneOrder(previousScene.graph.childrenByTarget)
   const initial = createSnapshot(0, order)
   const snapshots: StructuralSnapshot[] = []
-  const startTimes = collectCompiledEventStartTimes(compiledScene)
+  const startTimes = collectStructuralEventStartTimes(compiledScene, runtimeEventTimes)
   if (startTimes[0] !== 0) snapshots.push(initial)
 
   for (const timeMs of startTimes) {
     const nextScene = resolveBaseSceneAt(timeMs)
     const deltas = diffSolvedScenes(previousScene, nextScene)
-    order = applyStructuralDeltas(order, nextScene, deltas)
+    order = resolveStructuralOrder === undefined
+      ? applyStructuralDeltas(order, nextScene, deltas)
+      : resolveStructuralOrder(order, nextScene, deltas)
     snapshots.push(createSnapshot(timeMs, order))
     previousScene = nextScene
   }
   return Object.freeze({ initial, snapshots: Object.freeze(snapshots) })
 }
 
-/** Applies one complete event boundary to the previous immutable child order. */
-function applyStructuralDeltas(
+/** Combines immutable compiled and journaled runtime boundaries once per rebuild. */
+function collectStructuralEventStartTimes(
+  compiledScene: CompiledScene,
+  runtimeEventTimes: readonly number[],
+): readonly number[] {
+  return [...new Set([
+    ...collectCompiledEventStartTimes(compiledScene),
+    ...runtimeEventTimes.filter((timeMs) => Number.isFinite(timeMs) && timeMs >= 0),
+  ])].sort((left, right) => left - right)
+}
+
+/** Applies one complete event boundary through the default structural policy. */
+export function applyStructuralDeltas(
   previousOrder: Readonly<Record<string, readonly string[]>>,
   nextScene: SolvedScene,
   deltas: readonly MoveStateDelta[],
+  policy?: StructuralOrderPolicy,
 ): Readonly<Record<string, readonly string[]>> {
   const order = new Map<string, string[]>(Object.entries(previousOrder).map(([targetId, itemIds]) => [targetId, [...itemIds]]))
 
@@ -102,7 +135,27 @@ function applyStructuralDeltas(
     const toTargetId = delta.toTargetId
     const sameTarget = fromTargetId !== undefined && fromTargetId === toTargetId
     const previousIndex = fromTargetId === undefined ? -1 : (order.get(fromTargetId) ?? []).indexOf(delta.persoKey)
-    const shouldReorder = delta.toPlacement?.reorder !== false
+    const targetOperation = delta.operation === 'mount' || !sameTarget ? 'add' : 'move'
+    const shouldReorder = policy?.shouldReorder(
+      targetOperation,
+      toTargetId,
+      delta.toPlacement?.mode,
+      delta.toPlacement?.reorder,
+    ) ?? delta.toPlacement?.reorder !== false
+    const shouldReorderOnRemove = fromTargetId === undefined || sameTarget
+      ? shouldReorder
+      : policy?.shouldReorder(
+        'remove',
+        fromTargetId,
+        delta.toPlacement?.mode,
+        delta.toPlacement?.reorder,
+      ) ?? true
+
+    policy?.onDelta?.(delta, {
+      sameTarget,
+      targetReordered: shouldReorder,
+      sourceReordered: shouldReorderOnRemove,
+    })
 
     if (fromTargetId !== undefined && (!sameTarget || shouldReorder)) removeItem(order, fromTargetId, delta.persoKey)
     if (!delta.mountedAfter || toTargetId === undefined) continue
@@ -111,17 +164,53 @@ function applyStructuralDeltas(
       insertAt(order, toTargetId, delta.persoKey, previousIndex)
       continue
     }
-    insertByMode(order, toTargetId, delta.persoKey, delta.toPlacement?.mode)
+    insertByMode(order, toTargetId, delta.persoKey, shouldReorder ? delta.toPlacement?.mode : undefined)
   }
 
   reconcileMembership(order, nextScene)
-  for (const delta of deltas) {
-    if (delta.fromTargetId !== undefined && delta.fromTargetId !== delta.toTargetId) {
-      reapplyPersistentEdges(order, nextScene, delta.fromTargetId)
+  if (policy?.resolveTargetOrder === undefined) {
+    for (const delta of deltas) {
+      if (delta.fromTargetId !== undefined
+        && (delta.operation === 'unmount' || delta.fromTargetId !== delta.toTargetId)
+        && (policy?.shouldReorder(
+          'remove',
+          delta.fromTargetId,
+          delta.toPlacement?.mode,
+          delta.toPlacement?.reorder,
+        ) ?? true)) {
+        reapplyPersistentEdges(order, nextScene, delta.fromTargetId)
+      }
+    }
+  } else {
+    for (const [targetId, itemIds] of order) {
+      order.set(targetId, [...policy.resolveTargetOrder(targetId, itemIds, nextScene)])
     }
   }
   return freezeOrder(order)
 }
+
+/** Policy used by one capability to decide whether an order may change. */
+export type StructuralOrderPolicy = Readonly<{
+  shouldReorder: (
+    operation: 'add' | 'move' | 'remove',
+    targetId: string | undefined,
+    mode: MoveOrderMode | undefined,
+    reorder: boolean | undefined,
+  ) => boolean
+  onDelta?: (delta: MoveStateDelta, context: StructuralOrderDeltaContext) => void
+  resolveTargetOrder?: (
+    targetId: string,
+    itemIds: readonly string[],
+    scene: SolvedScene,
+  ) => readonly string[]
+}>
+
+/** Structural facts exposed to a capability while one boundary is reduced. */
+export type StructuralOrderDeltaContext = Readonly<{
+  sameTarget: boolean
+  targetReordered: boolean
+  sourceReordered: boolean
+}>
 
 /** Reconciles reducer output with the exact solved target membership. */
 function reconcileMembership(order: Map<string, string[]>, scene: SolvedScene): void {

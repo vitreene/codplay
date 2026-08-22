@@ -18,6 +18,7 @@ import type {
   RuntimeMaterializerSceneContext,
 } from '../materializer'
 import type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
+import { isHtmlTransientNode } from './html-transient-node'
 
 export type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
 
@@ -110,13 +111,23 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
       if (!nextMountedPersos.has(persoKey)) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     }
 
+    const desiredRootsByParent = new Map<unknown, unknown[]>()
     for (const childKeys of Object.values(childrenByTarget)) {
       for (const childKey of childKeys) {
         const child = scene.persos[childKey]
         if (child === undefined || !child.placement.mounted) continue
         const parent = resolveParentNode(child, this.nodes)
-        if (parent !== undefined) appendStructuredRoot(parent, this.nodes.persoNodes.get(childKey))
+        if (parent === undefined) continue
+        const desiredRoots = desiredRootsByParent.get(parent) ?? []
+        for (const root of materializedRootNodes(this.nodes.persoNodes.get(childKey))) {
+          if (!isHtmlTransientNode(root)) desiredRoots.push(root)
+        }
+        desiredRootsByParent.set(parent, desiredRoots)
       }
+    }
+
+    for (const [parent, desiredRoots] of desiredRootsByParent) {
+      reconcileStructuredRoots(parent, desiredRoots)
     }
 
     this.mountedPersos = nextMountedPersos
@@ -173,9 +184,9 @@ function resolveParentNode(perso: SolvedPerso, nodes: HtmlComponentMaterializerN
   return nodes.targetNodes.get(placement.target.id)
 }
 
-/** Appends one materialized node through a DOM-like or plain-object parent. */
-function appendStructuredRoot(parent: unknown, root: unknown): void {
-  for (const child of materializedRootNodes(root)) appendStructuredNode(parent, child)
+/** Reconciles author roots while preserving nodes owned by a transient preview. */
+function reconcileStructuredRoots(parent: unknown, desiredRoots: readonly unknown[]): void {
+  for (const child of desiredRoots) reconcileStructuredNode(parent, child, desiredRoots)
 }
 
 /** Detaches every real root of one persistent component materialization. */
@@ -183,18 +194,47 @@ function detachStructuredRoot(root: unknown): void {
   for (const node of materializedRootNodes(root)) detachStructuredNode(node)
 }
 
-/** Appends one real node without introducing a wrapper for a fragment. */
-function appendStructuredNode(parent: unknown, child: unknown): void {
+/** Places one real node without introducing a wrapper for a fragment. */
+function reconcileStructuredNode(
+  parent: unknown,
+  child: unknown,
+  desiredRoots: readonly unknown[],
+): void {
   if (parent === undefined || child === undefined || parent === child) return
+  if (isHtmlTransientNode(child)) return
   if (isAppendable(parent)) {
-    parent.appendChild(child)
+    const managedChildren = Array.from(parent.children ?? []).filter((node) => !isHtmlTransientNode(node))
+    const desiredIndex = desiredRoots.indexOf(child)
+    const currentIndex = managedChildren.indexOf(child)
+    const childNode = isObjectNode(child) ? child : undefined
+    if (childNode?.parentNode === parent && desiredIndex >= 0 && currentIndex === desiredIndex) return
+
+    const reference = desiredRoots
+      .slice(desiredIndex + 1)
+      .find((node) => node !== child
+        && isObjectNode(node)
+        && node.parentNode === parent
+        && !isHtmlTransientNode(node))
+    if (reference !== undefined && isInsertable(parent)) parent.insertBefore(child, reference)
+    else parent.appendChild(child)
     return
   }
   if (!isObjectNode(parent) || !isObjectNode(child)) return
 
-  detachStructuredNode(child)
   const children = Array.isArray(parent.children) ? parent.children : []
-  parent.children = [...children, child]
+  const managedChildren = children.filter((node) => !isHtmlTransientNode(node))
+  const desiredIndex = desiredRoots.indexOf(child)
+  if (child.parentNode === parent && desiredIndex >= 0 && managedChildren.indexOf(child) === desiredIndex) return
+
+  detachStructuredNode(child)
+  const referenceIndex = desiredRoots
+    .slice(desiredIndex + 1)
+    .map((node) => children.indexOf(node))
+    .find((index) => index >= 0)
+  const nextChildren = [...children]
+  if (referenceIndex === undefined) nextChildren.push(child)
+  else nextChildren.splice(referenceIndex, 0, child)
+  parent.children = nextChildren
   child.parentNode = parent
 }
 
@@ -220,8 +260,19 @@ function materializedRootNodes(root: unknown): readonly unknown[] {
 }
 
 /** Checks the minimal append contract supported by a real DOM parent. */
-function isAppendable(value: unknown): value is { appendChild: (child: unknown) => void } {
+function isAppendable(value: unknown): value is {
+  parentNode?: unknown | null
+  children?: unknown[]
+  appendChild: (child: unknown) => void
+} {
   return isObjectNode(value) && typeof value.appendChild === 'function'
+}
+
+/** Checks the optional insertion contract used to preserve an existing sibling. */
+function isInsertable(value: unknown): value is {
+  insertBefore: (child: unknown, reference: unknown) => void
+} {
+  return isObjectNode(value) && typeof value.insertBefore === 'function'
 }
 
 /** Checks the minimal remove contract supported by a real DOM parent. */
@@ -234,6 +285,7 @@ function isObjectNode(value: unknown): value is {
   parentNode?: unknown | null
   children?: unknown[]
   appendChild?: (child: unknown) => void
+  insertBefore?: (child: unknown, reference: unknown) => void
   removeChild?: (child: unknown) => void
 } {
   return typeof value === 'object' && value !== null

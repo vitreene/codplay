@@ -125,8 +125,10 @@ h1 {
 }
 
 .drag-stage {
+  display: grid;
+  place-items: center;
   position: relative;
-  min-height: 360px;
+  min-height: 440px;
   overflow: hidden;
   border-radius: 14px;
   background:
@@ -145,13 +147,68 @@ h1 {
   pointer-events: none;
 }
 
-.drag-stage .drag-target {
+.s6-shell {
+  position: relative;
   z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 28px;
+  width: min(760px, calc(100% - 32px));
+  padding: 24px;
+  border-radius: 16px;
+  background: #f1f5f9;
+  box-shadow: 0 18px 40px rgba(34, 49, 72, 0.12);
+}
+
+.s6-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 2px dashed #94a3b8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.s6-list::before {
+  margin-bottom: 4px;
+  color: #64748b;
+  content: attr(data-list-id);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.s6-dnd-item {
+  position: relative;
+  z-index: 2;
+  min-height: 42px;
+  box-sizing: border-box;
   white-space: nowrap;
 }
 
-.drag-stage .drag-target:active {
+.s6-dnd-item:active {
   cursor: grabbing;
+}
+
+.s6-count {
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.s6-count::before {
+  content: 'items: ';
+  font-weight: 400;
+}
+
+.codplay-dnd-ghost {
+  box-sizing: border-box;
+  min-height: 42px;
+  color: #475569;
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .readout {
@@ -201,5 +258,11 @@ dd {
 
   .readout {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .s6-shell {
+    grid-template-columns: 1fr;
+    width: min(460px, calc(100% - 16px));
+    padding: 16px;
   }
 }

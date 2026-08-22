@@ -1,4 +1,5 @@
 import { LayoutComponent } from '../components/layout-component'
+import { ListComponent } from '../components/list-component'
 import { MediaComponent, validateMediaAction, validateMediaInitial } from '../components/media-component'
 import { TagComponent } from '../components/tag-component'
 import {
@@ -63,12 +64,12 @@ const coreMediaDefinition: RuntimeComponentDefinition = {
   create: (input) => new MediaComponent(input as never),
 }
 
-/** Creates the current list host declaration without a demo-only path. */
+/** Creates the V2 list host declaration backed by the list capability. */
 const coreListDefinition: RuntimeComponentDefinition = {
   type: 'list',
   services: ['className', 'style', 'attr'],
   modules: ['list'],
   validateInitial: () => undefined,
   validateAction: () => undefined,
-  create: (input) => new TagComponent(input as never),
+  create: (input) => new ListComponent(input as never),
 }

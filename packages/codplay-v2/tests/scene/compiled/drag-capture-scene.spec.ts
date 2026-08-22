@@ -5,7 +5,7 @@ import { RuntimeEngine } from '../../../src/runtime/engine'
 import { RuntimePlayer } from '../../../src/runtime/player'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { CompiledEmitRule } from '../../../src/scene/compiled'
-import { createDragCaptureScene, dragStraps } from '../../../demos/validation/player/drag-scene'
+import { createDragCaptureScene, s6Straps } from '../../../demos/validation/player/drag-scene'
 
 describe('V2 drag capture demo scene', () => {
   it('compiles capture functions and routes the end state through the normal event path', async () => {
@@ -21,7 +21,7 @@ describe('V2 drag capture demo scene', () => {
       new RuntimeEngine(catalog, { resources: build.compiledScene.requirements.resources }),
       build.compiledScene,
       undefined,
-      { scene: {}, stories: { main: dragStraps } },
+      { scene: {}, stories: { main: s6Straps } },
       undefined,
       [{ id: 'root-host', kind: 'root', storyId: 'main' }],
       undefined,
@@ -30,7 +30,10 @@ describe('V2 drag capture demo scene', () => {
     )
     expect(player.init().ok).toBe(true)
 
-    const pointerRule = build.compiledScene.scene.stories.main.persos[0]!.emit!.pointerdown!
+    const item = build.compiledScene.scene.stories.main.persos.find((perso) => perso.id === 'item-1')
+    expect(item?.emit?.pointerdown).toBeDefined()
+    if (item?.emit?.pointerdown === undefined) return
+    const pointerRule = item.emit.pointerdown
     const pointerRules: readonly CompiledEmitRule[] = Array.isArray(pointerRule)
       ? pointerRule as readonly CompiledEmitRule[]
       : [pointerRule as CompiledEmitRule]
@@ -48,22 +51,67 @@ describe('V2 drag capture demo scene', () => {
       movementY: -12,
       clientX: 104,
       clientY: 60,
-    })).toMatchObject({ ok: true, captureState: { x: 104, y: 60 } })
+    })).toMatchObject({ ok: true, captureState: { dropIn: ['list-a', 'list-b'] } })
 
-    const ended = await player.endCapture('drag-1')
-    expect(ended.ok).toBe(true)
-    if (!ended.ok) return
-    expect(ended.events[0]?.data).toMatchObject({
-      captureState: { x: 104, y: 60 },
-      style: {
-        x: { from: 80, to: 104 },
-        y: { from: 72, to: 60 },
+    const ended = await player.endCapture('drag-1', {}, {
+      dropIn: ['list-a', 'list-b'],
+      persoId: 'item-1',
+      move: {
+        target: 'list-b',
+        mode: 0,
+        flipMode: 'overlay-world',
+        transition: { duration: 420, ease: 'out(2)' },
       },
     })
-    expect(player.resolveSceneAt(0).storyStates.main).toEqual({ draggableX: 104, draggableY: 60 })
-    expect(player.resolveSceneAt(0).persos['main:draggable']?.state.style).toMatchObject({ x: 104, y: 60 })
+    expect(ended.ok).toBe(true)
+    if (!ended.ok) return
+    expect(ended.endCaptureEvents).toHaveLength(1)
+    expect(ended.endCaptureEvents[0]).toMatchObject({
+      name: 'item:persisted:item-1',
+      source: 'endCapture',
+      mode: 'persist-only',
+      data: {
+        persoId: 'item-1',
+        move: {
+          target: 'list-b',
+          mode: 0,
+          flipMode: 'overlay-world',
+        },
+      },
+    })
+    expect(ended.endEmitEvent).toMatchObject({
+      name: 'item:dropped:item-1',
+      source: 'endEmit',
+      mode: 'apply-now',
+      data: {
+        persoId: 'item-1',
+        move: {
+          target: 'list-b',
+          mode: 0,
+          flipMode: 'overlay-world',
+        },
+        captureState: {
+          persoId: 'item-1',
+          move: { target: 'list-b' },
+        },
+      },
+    })
+    expect(ended.endCaptureEvents[0]?.applyAtMs).toBeLessThan(ended.endEmitEvent!.applyAtMs)
+    expect(player.trackJournal.getEventsForStory('main').filter((event) => event.mode === 'persist-only')).toHaveLength(1)
+    expect(player.resolveSceneAt(0).storyStates.main.itemListById).toEqual({
+      'item-1': 'list-b',
+      'item-2': 'list-a',
+      'item-3': 'list-a',
+    })
+    expect(player.resolveSceneAt(0).persos['main:item-1']?.placement.targetId).toBe('list-b')
     expect(player.trackJournal.getStateUpdates('story', 'main', 0)).toContainEqual(expect.objectContaining({
-      update: { draggableX: 104, draggableY: 60 },
+      update: {
+        itemListById: {
+          'item-1': 'list-b',
+          'item-2': 'list-a',
+          'item-3': 'list-a',
+        },
+      },
     }))
     player.destroy()
   })

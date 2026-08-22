@@ -15,6 +15,7 @@ import {
   type StrapCollections,
 } from '../player'
 import { HtmlPointerCaptureSourceAdapter } from '../capture'
+import type { RuntimeCaptureState } from '../capture'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import {
@@ -50,6 +51,26 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   enableInteractionLock?: boolean
   /** Receives source-adapter failures instead of hiding them in native listeners. */
   onCaptureError?: (error: unknown) => void
+  /** Observes one completed HTML capture sample for a materializer-specific preview. */
+  onCaptureTrack?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    sample: Readonly<Record<string, unknown>>
+    captureState: RuntimeCaptureState
+  }>) => void
+  /** Resolves one materializer-dependent value once when a pointer capture ends. */
+  resolveEndCaptureState?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    captureState: RuntimeCaptureState
+    event: Event
+  }>) => RuntimeCaptureState | undefined
+  /** Releases materializer-specific preview resources after one capture closes. */
+  onCaptureClose?: (input: Readonly<{
+    captureId: string
+    persoKey: string
+    completed: boolean
+  }>) => void
 }>
 
 /** Generic HTML host with one absolute-time presentation circuit. */
@@ -119,6 +140,13 @@ export class HtmlPlayerRunner {
       nodes: this.nodes,
       eventTarget: options.captureEventTarget ?? resolveCaptureEventTarget(options.root),
       onError: options.onCaptureError,
+      onCaptureTrack: options.onCaptureTrack,
+      resolveEndCaptureState: (input) => {
+        const captureState = options.resolveEndCaptureState?.(input)
+        this.captureLiveFirstLayout(this.player.getCurrentTimeMs())
+        return captureState
+      },
+      onCaptureClose: options.onCaptureClose,
     })
 
     const measurementRoot = createMeasurementRoot(options.root)
@@ -170,9 +198,19 @@ export class HtmlPlayerRunner {
     }
     this.motionSystem = new HtmlMotionSystem({
       host: motionHost,
-      intents: compileMotionSchedule(options.compiledScene),
-      measureAt: (timeMs) => measure(measurementPlayer.resolveSceneAt(timeMs)),
-      measureBefore: (timeMs) => measure(measurementPlayer.resolveSceneBeforeBoundary(timeMs)),
+      getIntents: () => compileMotionSchedule(
+        options.compiledScene,
+        this.player.trackJournal,
+        { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
+      ),
+      getScheduleRevision: () => this.player.trackJournal.getRevision(),
+      includePersistOnly: () => this.player.includesPersistOnlyInCurrent(),
+      measureAt: (timeMs) => measure(
+        measurementPlayer.resolveSceneAt(timeMs, this.player.includesPersistOnlyInCurrent()),
+      ),
+      measureBefore: (timeMs) => measure(
+        measurementPlayer.resolveSceneBeforeBoundary(timeMs, this.player.includesPersistOnlyInCurrent()),
+      ),
     })
   }
 
@@ -232,6 +270,9 @@ export class HtmlPlayerRunner {
 
   /** Presents one logical time through the exact same motion operation as Play. */
   seek(timeMs: number): PlayerSeekResult {
+    // The live release handoff belongs only to the current capture close. A
+    // seek must rebuild the replayable persist-only source-to-target motion.
+    this.motionSystem?.clearLiveFirstLayouts()
     const result = this.player.seek(timeMs)
     this.syncInteractionLock()
     return result
@@ -274,6 +315,19 @@ export class HtmlPlayerRunner {
   /** Resolves one runner target node by its opaque target ID. */
   getTargetNode(targetId: string): unknown | undefined {
     return this.nodes.targetNodes.get(targetId)
+  }
+
+  /** Captures the visible FIRST layout before a materializer-specific end commit. */
+  private captureLiveFirstLayout(timeMs: number): void {
+    if (this.motionSystem === undefined) return
+    // The persist-only event is deliberately outside the current playback
+    // head. The solved scene is therefore the exact logical state from which
+    // the live endEmit move starts, including a previous drop at the same
+    // logical time. Reconstructing a generic "before boundary" here would
+    // incorrectly include the earlier persist-only event and label the live
+    // node with its destination instead of its source.
+    const before = this.player.getSolvedScene() ?? this.player.resolveSceneBeforeBoundary(timeMs)
+    this.motionSystem.setLiveFirstLayout(captureHtmlLayoutSnapshot(this.interactionRoot, this.nodes.persoNodes, before))
   }
 
   /** Releases visual, measurement, component, and clock resources. */

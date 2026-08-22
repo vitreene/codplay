@@ -2,7 +2,7 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: runner HTML et présentation locale/reparent validés le 2026-08-20; renderer de production hors périmètre
+> Review: runner HTML et présentation locale/reparent validés le 2026-08-22; renderer de production hors périmètre
 
 ## Role
 
@@ -19,7 +19,14 @@ SolvedScene(t)
 ```
 
 Play and Seek invoke this exact operation. The runner contains no historical DOM
-replay, capture cache, alias, handoff or demo-specific mutation.
+replay or capture cache. A live capture may retain one presentation-only FIRST
+snapshot for its current `endEmit` handoff; it is cleared before a seek and is
+not a second replay circuit.
+
+The motion schedule is sourced from the visible player's shared journal. The
+runner passes its revision as the invalidation token, so schedule compilation
+is limited to initialization and actual journal or presentation-mode changes;
+the frame loop only resolves the already-built graph.
 
 ## Isolated layout sampling
 
@@ -91,18 +98,41 @@ player visible. Pour chaque `perso.emit.pointerdown.capture`, l'adaptateur :
 Le suivi et la fin sont écoutés sur la cible d'événements globale, en phase de
 capture, afin de rester actifs lorsque le pointeur quitte le perso. L'adaptateur
 ne demande pas de pointer capture natif au navigateur : le routage global est le
-seul circuit de suivi, comme dans le modèle V1. Le `pointerId` d'ouverture est
-conservé. Seuls les événements déclarés dans `endOn` ferment la session ;
-`pointercancel` et `lostpointercapture` n'ont aucun effet particulier s'ils ne
-sont pas déclarés. La destruction du runner annule les sessions encore
-ouvertes. Le runner peut recevoir cette cible
-explicitement avec `captureEventTarget`; dans un navigateur, la fenêtre du
-document de la racine HTML est utilisée par défaut. Cette tranche ne comporte
-aucune façade DnD ni traitement de liste.
+seul circuit de suivi. Le `pointerId` d'ouverture est conservé. Seuls les
+événements déclarés dans `endOn` ferment la session ; `pointercancel` et
+`lostpointercapture` n'ont aucun effet particulier s'ils ne sont pas déclarés.
+La destruction du runner annule les sessions encore ouvertes. Le runner peut
+recevoir cette cible explicitement avec `captureEventTarget`; dans un navigateur,
+la fenêtre du document de la racine HTML est utilisée par défaut.
 
-Avec `enableInteractionLock: true`, le runner reprend le verrou d'interaction
-utilisé par la validation V1 : la racine HTML est non interactive tant que le
-player n'est pas en `playing`, puis retrouve son état initial à la destruction.
+Le runner n'embarque pas la sémantique `list` ou DnD. Une démo peut brancher
+`HtmlListDndPreview` via les hooks de capture ci-dessus : cette classe reste une
+couche HTML de preview (hit-test et ghost) et ne modifie ni le journal ni l'ordre
+logique. L'hôte peut lui fournir l'ordre des enfants résolu par `list` via
+`resolveListItemNodes`; à défaut, la preview utilise les racines DOM directes
+marquées par le materializer. Le perso saisi est toujours exclu de cet ordre
+transitoire. Le commit passe par `RuntimePlayer`, l'action `move` et la capacité
+`list`. Pendant la preview, le perso saisi conserve son point de prise en pose
+fixe ; le ghost est le seul élément ajouté au flux. Les voisins sont animés par
+un FLIP HTML transitoire à chaque changement de slot. Au `pointerup`, le runner
+photographie la pose visible avant le commit du `move` pour fournir le FIRST de
+la remise live `endEmit` ; cette photographie n'est ni un état logique ni une
+entrée du journal. Si la capture déclare aussi `endCapture`, celui-ci porte la
+trajectoire rejouable source logique → cible à la frontière `end - durée`.
+Cette trajectoire est mesurée depuis le player isolé. Le snapshot de fin live
+est effacé avant un seek : la remise au relâchement n'est donc pas rejouée.
+
+La preview HTML réserve l'attribut `data-codplay-transient` aux nodes qu'elle
+possède temporairement. Le node auteur flottant et le ghost le portent pendant
+le geste. `HtmlComponentMaterializer` exclut ces nodes de la reconciliation
+structurelle et compare d'abord l'ordre des seuls nodes auteurs avant d'appeler
+`appendChild` ou `insertBefore`. Ainsi, chaque frame de lecture peut repasser
+par le materializer sans réattacher le node flottant ni déplacer le ghost. La
+preview retire ensuite le marqueur à la fermeture ; la frame suivante remonte
+alors l'ordre logique normal.
+
+Avec `enableInteractionLock: true`, le runner verrouille la racine HTML tant que
+le player n'est pas en `playing`, puis retrouve son état initial à la destruction.
 La telco doit donc être montée en dehors de cette racine.
 
 ## Contexte du materializer

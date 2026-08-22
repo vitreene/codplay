@@ -1,36 +1,42 @@
-# Démo de validation capture V2
+# Démo de validation capture / list DnD V2
 
-> Status: Fini
+> Status: En cours
 > CodPlay version: V2 foundation
 
-Cette entrée unique de validation reprend le scénario `S5 Drag & Capture` de
-V1 avec le circuit V2 :
+Cette entrée unique de validation remplace la démo capture précédente par
+une scène S6 déclarée directement avec les contrats V2 :
 
 ```text
 pointerdown -> beginCapture
-pointermove  -> trackCapture -> action capture_draggable_move -> Component.update()
-pointerup    -> endCapture -> événement drag:dropped -> journal / state
+pointermove  -> trackCapture -> preview HTML transitoire
+pointerup    -> résolution finale du captureState -> endEmit
+             -> action move ordinaire -> list / StructuralTimeline / FLIP
 ```
 
 La lecture, le seek et le retour au début passent par la telco V2 locale et son
-remote de contrôle. Aucun bouton de démo séparé ne pilote directement le
-runner, et aucun circuit `list-dnd` n'est porté dans cette validation.
-La zone de telco est placée sous la scène ; le relevé d'état est le dernier
-panneau de la page. Le layout reste responsive.
+remote de contrôle. La zone de telco est placée sous la scène ; le relevé d'état
+affiche l'ordre des deux listes. Le layout reste responsive.
 
 Le remote partagé est une façade de validation temporaire (`temp`) ; il
 consomme uniquement `RuntimeTelco`. Il ne constitue pas une seconde façade
-Player et n'importe pas le remote V1.
+Player. Aucun module, type ou runtime d'une autre version n'est importé par
+cette démo.
 
 Pour tester :
 
 1. lancer la démo ;
 2. cliquer sur `Lire` : le verrou d'interaction de la scène s'ouvre alors ;
-3. déplacer le bouton dans la scène ;
-4. mettre en pause ou utiliser le seek pour observer la relecture de
-   `drag:dropped`.
+3. déplacer un item de la liste A vers la liste B ;
+4. mettre en pause ou utiliser le seek pour observer la reconstruction de
+   l'ordre et des compteurs.
 
-Le `rate` et le transport distant restent hors de cette tranche V2.
+Le `rate` et le transport distant restent hors de cette tranche V2. La façade
+DnD auteur dédiée reste reportée : cette démo valide d'abord une capture
+classique.
+
+Le typecheck, les tests Vitest et le build Vite sont suivis par le plan
+d'intégration. La validation manuelle dans un navigateur reste à effectuer
+avant de passer cette entrée à `Fini`.
 
 Lancer depuis la racine :
 

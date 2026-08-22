@@ -8,8 +8,8 @@ il ne définit pas le contrat core de capture et ne peut pas le modifier.
 
 Le contrat de capture source-agnostique est suivi dans
 [`capture-authoring-plan.md`](./capture-authoring-plan.md). La présente tranche
-utilise le scénario S5 V1 comme fixture de validation, puis raccorde cette
-capture à une source HTML et à la telco de validation.
+a utilisé le scénario S5 comme fixture de validation, puis a raccordé cette
+capture à une source HTML et à la telco de validation V2.
 
 ## Périmètre
 
@@ -28,20 +28,21 @@ Elle ne crée :
 - aucune nouvelle entrée de démo ;
 - aucun comportement propre au DOM dans le core capture.
 
-La démo courante remplace la précédente dans
-`demos/validation/player`. Les fichiers actuels sont un état de travail à
-auditer, pas une référence fonctionnelle.
+Cette validation S5 est close. L'entrée active de
+`demos/validation/player` peut porter une tranche différente ; son état et ses
+critères sont suivis par le plan correspondant, actuellement
+[`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md).
 
 ## Références obligatoires
 
 - contrat normatif : [`v1-capture-spec.md`](../../../docs/formalisation/v1-capture-spec.md) ;
 - fixture V1 : `packages/demos/src/scenes/s5-drag-scene.ts` ;
 - plan core V2 : [`capture-authoring-plan.md`](./capture-authoring-plan.md) ;
-- telco V1 et son modèle de progression, à reprendre sans réinvention ;
+- telco de validation V2 et son modèle de progression stabilisé ;
 - flux V2 réel : `RuntimeEventDispatcher -> journal -> materialize -> resolve -> solve -> component -> materializer`.
 
-La fixture V1 est portée mécaniquement sur les frontières V2. Les décisions
-V2 déjà établies peuvent modifier une frontière d’implémentation, mais pas la
+La fixture de validation est portée sur les frontières V2. Les décisions V2
+déjà établies peuvent modifier une frontière d’implémentation, mais pas la
 sémantique de capture sans spec explicite.
 
 ## Ordre de reprise
@@ -88,7 +89,7 @@ L’adaptateur est une source de capture, pas un moteur DnD. Il doit :
 - transmettre les samples natifs sans recalculer les deltas ;
 - continuer à recevoir le pointeur lorsqu’il quitte le perso ;
 - ne pas installer de pointer capture natif : la cible globale porte le suivi,
-  conformément au circuit V1 ;
+  conformément au circuit global de suivi retenu pour cette source ;
 - écouter les événements `trackOn` et `endOn` déclarés ; `pointercancel` et
   `lostpointercapture` n'ont aucun effet particulier lorsqu'ils ne sont pas
   déclarés dans `endOn` ;
@@ -185,7 +186,8 @@ V2 `RuntimePlayer -> dispatcher -> component -> materializer`.
   déclaration fournit déjà d'autres données ;
 - les sorties et les straps passent par le dispatcher V2 unique, dont l'entrée
   est asynchrone ; l'adaptateur ouvre donc la session après la résolution de
-  l'événement de début ;
+  l'événement de début, en mettant en file les événements `trackOn` et `endOn`
+  reçus pendant cette attente puis en les rejouant dans leur ordre natif ;
 - cette tranche HTML ne porte que la source pointeur. Les sources clavier,
   Canvas, Three.js et autres restent source-agnostiques dans le core et hors
   de S5.
@@ -212,16 +214,18 @@ que le seek et la seconde capture sont corrects, que la telco est utilisable par
 glissement, et que le code ne contient aucun chemin de démonstration concurrent
 ou de commit direct ajouté pour compenser une lacune du core.
 
-## État de vérification — 2026-08-21
+## État de vérification — 2026-08-22
 
 - [x] verticale runner HTML : capture live, fermeture persist-only, seek et
   seconde capture ;
 - [x] adaptateur pointer : `pointerId`, sortie du perso, fin par `endOn`,
-  annulation au teardown ;
+  annulation au teardown et conservation des `pointermove` reçus avant la fin
+  asynchrone de l'événement de début ;
 - [x] verrou d'interaction de la scène raccordé à la lecture ;
 - [x] telco V2 et remote unique : play, pause, seek continu, dernière valeur au
   relâchement et rewind ;
-- [x] typecheck, build de la page et `57` fichiers Vitest / `351` tests ;
-- [x] gestes pointer et seek vérifiés manuellement sur la démo courante ;
+- [x] typecheck, build de la page et `59` fichiers Vitest / `366` tests ;
+- [x] gestes pointer et seek vérifiés manuellement lors de la clôture S5 ;
   l'automatisation JavaScript Safari reste indisponible par les réglages système
-  de l'environnement.
+  de l'environnement. La validation navigateur de l'entrée active est suivie
+  dans le plan de la tranche correspondante.

@@ -12,6 +12,14 @@ export { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
 export { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 export { HtmlMotionSystem } from './html-motion-system'
 export {
+  HtmlListDndPreview,
+} from './html-list-dnd-preview'
+export type {
+  HtmlListDndNodeResolver,
+  HtmlListDndListItemResolver,
+  HtmlListDndPreviewOptions,
+} from './html-list-dnd-preview'
+export {
   HtmlPointerCaptureSourceAdapter,
 } from '../capture'
 export type {

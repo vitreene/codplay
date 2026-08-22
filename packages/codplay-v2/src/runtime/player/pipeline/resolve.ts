@@ -98,6 +98,7 @@ function applyActionPayload(
 ): void {
   // Source is reconstructible logical state; MediaComponent owns the side-effectful node cache.
   if (typeof action.src === 'string') state.src = action.src
+  if (action.content !== undefined) state.content = action.content
   if (isPlainRecord(action.className)) {
     state.className = applyClassNamePatch(state.className, action.className)
   }
