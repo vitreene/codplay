@@ -1,7 +1,11 @@
 # Démo de validation capture / list DnD V2
 
-> Status: En cours
+> Status: En cours — consignée pour publication ultérieure
 > CodPlay version: V2 foundation
+
+Cette démo est conservée comme fixture de validation V2. Elle n'est pas
+encore publiée dans la galerie ou le site de démonstration public.
+La validation du seek reste ouverte avant le passage à `Fini`.
 
 Cette entrée unique de validation remplace la démo capture précédente par
 une scène S6 déclarée directement avec les contrats V2 :
@@ -35,8 +39,8 @@ DnD auteur dédiée reste reportée : cette démo valide d'abord une capture
 classique.
 
 Le typecheck, les tests Vitest et le build Vite sont suivis par le plan
-d'intégration. La validation manuelle dans un navigateur reste à effectuer
-avant de passer cette entrée à `Fini`.
+d'intégration. Toute publication ultérieure doit reprendre cette entrée unique
+et son circuit V2, sans créer une variante parallèle.
 
 Lancer depuis la racine :
 

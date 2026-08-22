@@ -154,6 +154,45 @@ const runner = new HtmlPlayerRunner({
 })
 ```
 
+### Preload externe et diffusion autonome
+
+Le preload n'est pas une étape implicite de `init()`. L'hôte choisit le ou les
+manifestes et appelle directement la capacité partagée :
+
+```ts
+const preload = createRuntimePreload({ cache: sharedPreloadCache })
+
+await preload.load({
+  manifest: [currentScene.resources, nextScene.resources],
+  options: { mode: 'broadcast' },
+})
+```
+
+Sighty et l'éditeur utilisent ce même appel pour leurs manifestes. Ils ne
+créent pas de loader parallèle. Après un preload direct, l'hôte transmet les
+URLs rendues disponibles à l'engine avant `player.init()` :
+
+```ts
+engine.registerResources(currentScene.resources.entries.map((entry) => entry.url))
+player.init()
+```
+
+La diffusion autonome dispose de la façade `run()` du runner. Elle enchaîne
+explicitement `preload.load()`, `init()` puis `play()` et accepte elle aussi un
+manifeste ou un tableau de manifestes :
+
+```ts
+const result = await runner.run({
+  preload,
+  manifest: currentScene.resources,
+})
+```
+
+`RuntimePlayer.init()` et `HtmlPlayerRunner.init()` restent synchrones et ne
+déclenchent jamais le preload. Si l'engine est piloté par un hôte externe,
+`run()` met le player en lecture mais laisse à cet hôte l'avancement de ses
+frames.
+
 Le facteur passé à `resize()`
 s'applique uniquement aux longueurs numériques sans unité à la frontière HTML.
 Par exemple, `x: 40` devient `40px` avec un facteur `1` et `80px` avec un facteur

@@ -87,7 +87,6 @@ function makeItemPerso(id: string, label: string, background: string): PersoDoc 
         borderRadius: '8px',
         fontWeight: '600',
         cursor: 'grab',
-        userSelect: 'none',
         touchAction: 'none',
       },
     },

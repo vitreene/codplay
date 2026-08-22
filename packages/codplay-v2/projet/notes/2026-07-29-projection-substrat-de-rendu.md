@@ -255,8 +255,10 @@ employé aussi par une autre scène : qui le place ? Non tranché.
 three.js s'enregistre déjà par le binding tiers ordinaire, et c'est tout.
 
 Le modèle des bibliothèques tierces (`v1-third-party-runtime-spec.md`) s'applique **intégralement et sans
-amendement** — déclaration unique par factory, interdictions normatives, preload déclaré dans le binding,
-besoin extrait par le Builder. Inutile de le recopier ici. Ne restent que les points qu'il ne couvre pas :
+amendement** — déclaration unique par factory, interdictions normatives et besoin extrait par le Builder.
+Une stratégie de type tierce peut être enregistrée auprès de la capacité `RuntimePreload`, mais le
+chargement du manifeste reste externalisé et ne devient pas une étape du binding ou du materializer.
+Inutile de le recopier ici. Ne restent que les points qu'il ne couvre pas :
 
 - **La nature de la contribution.** Un binding tiers fournit des `components` ; un binding de substrat
   fournit l'implémentation de `set`, `measure`, `mount`. Autre nature, pas une entrée de plus dans le même

@@ -114,7 +114,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md) | Fixe, circuit logique unique en place |
-| Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | En cours : core capture et circuit runtime testés ; validation navigateur restante |
+| Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | En cours : core, circuit runtime et placement navigateur validés ; seek telco restant |
 
 ## Modeles algorithmiques
 
@@ -155,7 +155,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Validation capture S5 | [`capture-s5-validation-plan.md`](./capture-s5-validation-plan.md) | Plan V2 `Fini` : fixture HTML classique, adaptateur pointer, telco et tests d’intégration ; aucune nouvelle sémantique core. |
 | Seek, horizon, rate | Evaluation synchrone, cibles locales par membre, portee multi-instance et commit de presentation unique, diagnostics par instance, segments, fenetres, policies seek-back, rate et lecture arriere eventuelle | La frontiere engine et les rapports structures par instance sont en place; conversion globale Sighty, horizon/rate et straps live demandent encore leur tranche. |
 | Effets et lifecycle | Effets irreductibles filtres au seek; `scene:end` distinct de `sequence:end`, cleanup technique | Depend du pipeline event et des medias. |
-| Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | `MediaComponent` V2 reprend le cache `node-per-src` V1 et sa persistance; media-sync, cache partage et strategie de preload restent a ouvrir. |
+| Media et preload | Media sync, master, correction de derive, cache partage, preload par capacite | Le preload externalisé V2 accepte un ou plusieurs manifestes, partage un cache référencé et fournit les stratégies natives/tiers ainsi que la façade autonome `run`; `MediaComponent` conserve `node-per-src`; media-sync reste à ouvrir. |
 | Tiers, modules et services | Binding tiers, preload, adapter hub, dispatcher generique, catalogue unifie et ModuleServices player-scoped | `RuntimeCapabilityCatalog`, derivation des requirements depuis les composants, initialisation solve, routage des deltas, seek reconciliation et cycle de vie en place; aucun catalogue local de runner ou de demo. |
 | Authoring éditeur | [`2026-07-12-app-controller-definition.md`](../../editor/plan/app/2026-07-12-app-controller-definition.md) | Le canal d'intentions existe déjà côté éditeur. `setDecor(decorId, patch)` couvre la position ; lors de la reprise V2 dans l'éditeur, `setNodePose` sera examiné comme usage de ce canal et du flux Builder -> CompiledScene -> materializer, sans passer par capture/DnD ni ajouter de patch concurrent au player. |
 | Diffusion, broadcast et telco | Lecteur autonome de CompiledScene, facade de diffusion et telco locale serialisable | La façade telco locale de validation (transport + observation) est en place; packaging, transport distant et `rate` restent reportés; ne pas mélanger avec authoring. |
@@ -223,7 +223,7 @@ absence de rejeu de strap, dépendances interdites et ordre de solve).
 
 ### 5. Tranches de capacites
 
-Poursuivre par dependances : capture/DnD; intégration authoring V2 dans l'éditeur via le canal d'intentions existant; media/preload; bindings tiers; diffusion/broadcast/telco.
+Poursuivre par dependances : capture/DnD; intégration authoring V2 dans l'éditeur via le canal d'intentions existant; media-sync; bindings tiers; diffusion/broadcast/telco. Le preload externalisé constitue la fondation déjà posée de la tranche média, sans être une étape imposée au player.
 Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
 
 ## Sources de reference V2

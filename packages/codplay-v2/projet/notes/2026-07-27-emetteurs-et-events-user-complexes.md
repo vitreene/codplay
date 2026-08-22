@@ -82,7 +82,7 @@ met à disposition un dispositif de captation. Il n'a pas de présence visuelle,
 Ce qu'il porte :
 
 - **la ressource et son cycle de vie** — s'initialise avec la scène, se démonte avec elle ; le
-  `preload` est de l'infrastructure codplay, conforme à la doctrine existante ;
+  `RuntimePreload` est une capacité CodPlay réutilisable, appelée par l'hôte ;
 - **le vocabulaire déclaré** — la liste finie des intentions que cette capacité peut produire.
   La capacité devient auto-descriptive : on lit ce qu'elle sait dire sans ouvrir de fonction ;
 - **la mutualisation** — deux persos qui répondent au swipe n'instancient pas deux

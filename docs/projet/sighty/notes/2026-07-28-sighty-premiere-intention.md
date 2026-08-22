@@ -308,9 +308,11 @@ maximale où le seek signifie quelque chose.
 - **La distribution entre instances** — elle ne se confie pas à une scène. Codplay et Sighty sont tous deux
   complets sur le traitement d'un état et leurs possibilités se croisent ; le partage se fait par
   **responsabilité**, non par capacité.
-- **Les stratégies de preload**, quand il est employé — il est le seul à connaître la suite du graphe. Même
-  situation pour un éditeur ; le preload de codplay ne sert que la **diffusion autonome** (§6.3 quinquies).
-  C'est la stratégie qui remonte, non la ressource : le cache reste au niveau de l'engine.
+- **Le choix du preload**, quand il est employé — Sighty connaît la suite du graphe et l'éditeur connaît
+  son contexte ; chacun choisit donc les manifestes et le moment de l'appel. La capacité `RuntimePreload`
+  de CodPlay reste réutilisable dans ces environnements, avec un cache partagé ; ils ne créent pas de
+  stratégie ou de loader concurrent. La diffusion autonome dispose en plus de la façade `run` qui enchaîne
+  `preload`, `init` et `play` (§6.3 quinquies).
 - **L'arrangement** — « diffuse cette séquence, ou ce scénario ». Le **calendrier** (toutes les heures, deux
   fois par jour, toutes les minutes) appartient à l'**app de diffusion**, qui demande à Sighty de lancer une
   séquence : la gestion du temps de calendrier n'est pas organique à Sighty, qui ne consulte aucune horloge
@@ -504,14 +506,11 @@ intervalle, et **cette séquence est gérée par Sighty**.
 - *La durée d'un interlude est inconnue.* Il ne se termine pas, il est **interrompu** quand le suivant
   devient disponible — patron de la boucle d'attente déjà rencontré après une fin narrative, arrêtée par
   un event. Mécanisme existant.
-- *Les stratégies de preload lui reviennent.* Sighty est le seul à savoir ce qui vient après, puisqu'il
-  tient le graphe — quand il est employé, il s'occupe donc aussi du préchargement. Même situation pour un
-  **éditeur**, qui sait avant codplay ce qui est disponible ; `../../codplay-v2/notes/2026-07-26-conduite-chantier-v2.md` §10 #2
-  le notait déjà (« l'éditeur préchargé de son côté »). **Le preload de codplay ne sert que la diffusion
-  autonome**, quand rien n'existe au-dessus.
-- *C'est la stratégie qui monte, pas la ressource.* Le **cache** reste au niveau de l'engine, partagé
-  entre instances et compté par références (`../../codplay-v2/notes/2026-07-28-decoupage…` §2) — bien commun. Ce qui remonte est
-  la décision de *quoi* et *quand*.
+*Le choix du manifeste lui revient.* Sighty est le seul à savoir ce qui vient après, puisqu'il tient le
+graphe ; l'éditeur connaît de même son contexte. Ils appellent tous deux la capacité `RuntimePreload` de
+CodPlay avec le ou les manifestes choisis, puis enregistrent les URLs disponibles dans leur engine avant
+d'initialiser un player. Le cache et les stratégies ne sont pas dupliqués. La diffusion autonome dispose
+en plus de `run`, qui enchaîne explicitement `preload`, `init` et `play`.
 
 ### 6.4 Ce que ces cas font apparaître
 

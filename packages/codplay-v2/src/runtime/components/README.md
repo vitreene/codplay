@@ -33,5 +33,7 @@ des persos concernés.
 - un seek ou un detach du perso ne détruit pas cette materialisation ;
 - le handle runtime final retire le wrapper et permet la libération du composant.
 
-La tranche actuelle ne branche pas encore `media-sync`, le preload partagé ni la
-lecture pilotée par le temps CodPlay. Ces points restent une extension distincte.
+La capacité `preload` est distincte du composant : elle prépare les manifestes
+pour l'hôte et ne se déclenche pas depuis `render()`, `init()` ou un changement
+de source. La synchronisation média et la lecture pilotée par le temps CodPlay
+restent des extensions distinctes de cette capacité de préparation.

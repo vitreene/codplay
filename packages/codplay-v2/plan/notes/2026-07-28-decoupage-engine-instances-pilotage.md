@@ -38,16 +38,15 @@ catalogue — ce sont des objets vivants, comptés, dont l'engine est le propri�
 requiert (librairie chargée, modèle décodé, contexte GPU) est instancié **paresseusement à la première
 demande**. Une instance qui n'emploie pas une capacité n'en paie jamais le prix.
 
-**Le cache de preload est un bien commun de l'engine — la stratégie ne l'est pas.** La ressource
+**Le cache de preload est un bien commun de l'engine — la décision de chargement ne l'est pas.** La ressource
 préchargée est partagée entre instances et comptée par références ; la décision de *quoi* précharger et
-*quand* revient à qui sait à l'avance : un orchestrateur, qui tient la suite du graphe, ou un éditeur, qui
-sait avant codplay ce qui est disponible (`2026-07-26-conduite-chantier-v2.md` §10 #2 le notait déjà pour
-l'éditeur). **Le preload de codplay ne sert que la diffusion autonome**, quand rien n'existe au-dessus.
+*quand* revient à l'appelant qui connaît le contexte : diffusion autonome, orchestrateur Sighty ou éditeur.
+CodPlay fournit la capacité `RuntimePreload` réutilisable ; seule sa façade `run` enchaîne automatiquement
+le preload avec `init` et `play` pour la diffusion autonome.
 
-**Une même posture, trois fois** : l'horloge délégable, le catalogue déclaré au-dessus, la stratégie de
-preload cédée. À chaque fois, codplay fournit un **défaut autonome** et s'efface devant un étage supérieur
-quand il existe. Ce n'est pas trois décisions séparées mais une seule figure, qui gagnerait à être écrite
-comme telle plutôt que redécouverte canal par canal.
+Le choix du manifeste et du moment de l'appel reste externe. Le service de preload
+est partagé par ces contextes ; Sighty, l'éditeur et la diffusion ne doivent pas
+dupliquer son cache ou ses stratégies.
 
 **Contrainte d'ordre** : l'horloge de l'engine ordonne les ticks des instances. Pour des instances
 imbriquées, l'ordre est **hôte avant hébergé** (§5). Ce n'est pas une optimisation mais une condition

@@ -50,7 +50,7 @@ type RuntimeInstance = Readonly<{
 /** Shared capability and clock boundary for V2 player instances. */
 export class RuntimeEngine {
   private readonly catalog: RuntimeCapabilityCatalog
-  private readonly resources: ReadonlySet<string>
+  private readonly resources = new Set<string>()
   private readonly instances = new Map<string, RuntimeInstance>()
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
@@ -59,7 +59,12 @@ export class RuntimeEngine {
   /** Creates one engine around the CodPlay-owned capability catalog. */
   constructor(catalog: RuntimeCapabilityCatalog, options: RuntimeEngineOptions = {}) {
     this.catalog = catalog
-    this.resources = new Set(options.resources ?? [])
+    this.registerResources(options.resources ?? [])
+  }
+
+  /** Marks resources as available after an external preload operation completes. */
+  registerResources(resources: readonly string[]): void {
+    for (const resource of resources) this.resources.add(resource)
   }
 
   /** Reports compiled requirements unavailable from this engine. */

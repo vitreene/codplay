@@ -10,6 +10,12 @@ This folder owns the engine boundary for capabilities shared by player instances
 - clock ownership
 - instance ordering and shared services
 
+The engine does not own the preload decision. The external `RuntimePreload`
+service receives manifests from diffusion, Sighty, or the editor. Once that
+service has prepared a manifest, its caller registers the available URLs with
+`registerResources()` before initializing a player. This keeps requirement
+validation synchronous without adding a preload branch to player initialization.
+
 Components, data services and runtime modules are registered in the same catalog.
 Each component declaration names the services and modules it accepts; the catalog
 creates only those service instances for the selected materializer. Core definitions

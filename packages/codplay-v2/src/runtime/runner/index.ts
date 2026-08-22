@@ -1,6 +1,8 @@
 export {
   HtmlPlayerRunner,
   type HtmlPlayerRunnerOptions,
+  type HtmlPlayerRunOptions,
+  type HtmlPlayerRunResult,
   type HtmlRootTarget,
 } from './html-player-runner'
 export {

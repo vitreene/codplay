@@ -187,6 +187,8 @@ h1 {
   min-height: 42px;
   box-sizing: border-box;
   white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .s6-dnd-item:active {
@@ -209,6 +211,8 @@ h1 {
   min-height: 42px;
   color: #475569;
   background: rgba(148, 163, 184, 0.12);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .readout {

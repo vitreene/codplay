@@ -25,12 +25,34 @@ import {
 import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 import { HtmlMotionSystem } from './html-motion-system'
 import { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
+import type {
+  RuntimePreloadApi,
+  RuntimePreloadManifestInput,
+  RuntimePreloadOptions,
+  RuntimePreloadFailure,
+  RuntimePreloadSuccess,
+} from '../preload'
+import { mergeRuntimePreloadManifests } from '../preload'
 
 /** One HTML root target mapped to the runner's supplied root element. */
 export type HtmlRootTarget = Readonly<{
   id: string
   storyId: string
 }>
+
+/** Options for the standalone diffusion sequence `preload -> init -> play`. */
+export type HtmlPlayerRunOptions = Readonly<{
+  preload: RuntimePreloadApi
+  manifest?: RuntimePreloadManifestInput
+  preloadOptions?: RuntimePreloadOptions
+  ticker?: Ticker
+}>
+
+/** Result of one standalone diffusion run. */
+export type HtmlPlayerRunResult =
+  | Readonly<{ ok: true; phase: 'run'; preload: RuntimePreloadSuccess; init: Extract<PlayerInitResult, { ok: true }> }>
+  | Readonly<{ ok: false; phase: 'preload'; preload: RuntimePreloadFailure }>
+  | Readonly<{ ok: false; phase: 'init'; preload: RuntimePreloadSuccess; init: Extract<PlayerInitResult, { ok: false }> }>
 
 /** Construction contract for the logical HTML player and motion graph. */
 export type HtmlPlayerRunnerOptions = Readonly<{
@@ -84,6 +106,7 @@ export class HtmlPlayerRunner {
     targetNodes: new Map<string, unknown>(),
   }
   private readonly measurementPlayer: RuntimePlayer | undefined
+  private readonly measurementEngine: RuntimeEngine | undefined
   private readonly measurementRoot: HTMLElement | undefined
   private readonly measurementNodes: {
     persoNodes: Map<string, unknown>
@@ -154,6 +177,7 @@ export class HtmlPlayerRunner {
     if (measurementRoot === undefined) {
       this.measurementNodes = undefined
       this.measurementPlayer = undefined
+      this.measurementEngine = undefined
       this.motionSystem = undefined
       return
     }
@@ -170,6 +194,7 @@ export class HtmlPlayerRunner {
     )
     const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer)
     const measurementEngine = new RuntimeEngine(options.catalog, { resources: options.resources })
+    this.measurementEngine = measurementEngine
     const measurementPlayer = new RuntimePlayer(
       `${options.id}:measurement`,
       measurementEngine,
@@ -247,6 +272,24 @@ export class HtmlPlayerRunner {
         },
       }
     }
+  }
+
+  /** Preloads the supplied manifest, initializes the runner, and starts playback. */
+  async run(options: HtmlPlayerRunOptions): Promise<HtmlPlayerRunResult> {
+    const manifest = options.manifest ?? this.player.compiledScene.resources
+    const preload = await options.preload.load({
+      manifest,
+      options: options.preloadOptions,
+    })
+    if (!preload.ok) return { ok: false, phase: 'preload', preload }
+
+    const resourceUrls = mergeRuntimePreloadManifests(manifest).entries.map((entry) => entry.url)
+    this.engine.registerResources(resourceUrls)
+    this.measurementEngine?.registerResources(resourceUrls)
+    const init = this.init()
+    if (!init.ok) return { ok: false, phase: 'init', preload, init }
+    this.play(options.ticker)
+    return { ok: true, phase: 'run', preload, init }
   }
 
   /** Starts playback and, for an owned engine, its frame ticker. */
