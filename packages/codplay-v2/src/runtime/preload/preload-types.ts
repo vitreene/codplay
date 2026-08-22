@@ -16,6 +16,15 @@ export type RuntimePreloadOptions = Readonly<{
   container?: Element | null
 }>
 
+/** Metadata discovered while preparing one resource for runtime use. */
+export type RuntimePreloadResourceMetadata = Readonly<{
+  type?: string
+  durationMs?: number
+}>
+
+/** Metadata indexed by the stable resource URL used by compiled scenes. */
+export type RuntimePreloadMetadata = Readonly<Record<string, RuntimePreloadResourceMetadata>>
+
 /** Warning emitted for an unavailable resource in broadcast mode. */
 export type RuntimePreloadWarning = Readonly<{
   code: 'RUNTIME_PRELOAD_RESOURCE_UNAVAILABLE'
@@ -29,6 +38,7 @@ export type RuntimePreloadSuccess = Readonly<{
   data: Readonly<{
     loaded: readonly string[]
     skipped: readonly string[]
+    metadata: RuntimePreloadMetadata
     warnings?: readonly RuntimePreloadWarning[]
   }>
 }>
@@ -57,13 +67,17 @@ export type RuntimePreloadState = Readonly<{
 export type RuntimePreloadStrategy = (
   url: string,
   signal: AbortSignal,
-) => Promise<void>
+) => Promise<RuntimePreloadResourceMetadata | void>
+
+/** Result returned by one native or foreign preload strategy. */
+export type RuntimePreloadLoadResult = RuntimePreloadResourceMetadata | void
 
 /** One entry owned by the shared preload cache. */
 export type RuntimePreloadCacheEntry = Readonly<{
   url: string
   status: 'loading' | 'ready' | 'error'
-  promise: Promise<void>
+  promise: Promise<RuntimePreloadLoadResult | undefined>
+  metadata?: RuntimePreloadResourceMetadata
   error?: string
 }>
 
@@ -71,8 +85,8 @@ export type RuntimePreloadCacheEntry = Readonly<{
 export interface RuntimePreloadCacheApi {
   get(url: string): RuntimePreloadCacheEntry | undefined
   claim(url: string, owner: symbol): RuntimePreloadCacheEntry | undefined
-  start(url: string, owner: symbol, promise: Promise<void>, controller: AbortController): RuntimePreloadCacheEntry
-  markReady(url: string, entry: RuntimePreloadCacheEntry): void
+  start(url: string, owner: symbol, promise: Promise<RuntimePreloadLoadResult | undefined>, controller: AbortController): RuntimePreloadCacheEntry
+  markReady(url: string, entry: RuntimePreloadCacheEntry, metadata?: RuntimePreloadResourceMetadata): void
   markError(url: string, entry: RuntimePreloadCacheEntry, error: string): void
   release(owner: symbol, urls: readonly string[]): void
 }

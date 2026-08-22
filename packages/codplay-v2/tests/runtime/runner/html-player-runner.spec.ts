@@ -44,6 +44,12 @@ class FakeNode {
 class FakeElement extends FakeNode {
   readonly tagName: string
   className = ''
+  currentTime = 0
+  duration = Number.NaN
+  paused = true
+  playbackRate = 1
+  volume = 1
+  muted = false
   readonly attributes = new Map<string, string>()
   readonly setAttributeCalls: Array<Readonly<{ name: string; value: string }>> = []
   private sourceValue = ''
@@ -54,6 +60,16 @@ class FakeElement extends FakeNode {
   constructor(tagName = 'element') {
     super()
     this.tagName = tagName.toUpperCase()
+  }
+
+  /** Starts one fake native media node without creating a second clock. */
+  play(): void {
+    this.paused = false
+  }
+
+  /** Pauses one fake native media node. */
+  pause(): void {
+    this.paused = true
   }
 
   /** Mirrors the side-effectful media source property used by the V1 model. */
@@ -373,6 +389,32 @@ function mediaSourceSwapCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Declares one audio perso whose native tag and duration come from preload metadata. */
+function audioMediaSceneDoc(): SceneDoc {
+  return {
+    id: 'html-runner-audio-media',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'audio',
+          type: 'media',
+          initial: { src: '/assets/audio.mp3', move: '@root' },
+          actions: { audio: null },
+        }],
+        listen: [],
+      },
+    },
+  }
+}
+
+/** Builds the audio metadata fixture through the SceneDoc compiler boundary. */
+function audioMediaCompiledScene(): CompiledScene {
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), { createdAt: '2026-08-18T00:00:00.000Z' }).build(audioMediaSceneDoc())
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Declares one list transfer whose explicit first mode must reach the DOM order. */
 function listSceneDoc(): SceneDoc {
   return {
@@ -569,6 +611,30 @@ describe('HtmlPlayerRunner', () => {
     expect(mediaRoot.childNodes[0]).toBe(sourceA)
     expect(sourceA.sourceAssignments).toBe(1)
     expect(sourceB.sourceAssignments).toBe(1)
+    runner.destroy()
+  })
+
+  it('uses preload metadata for the native media tag and forwards the player rate', () => {
+    installFakeDom()
+    const root = new FakeElement('main')
+    const source = '/assets/audio.mp3'
+    const runner = new HtmlPlayerRunner({
+      id: 'audio-media-runner',
+      compiledScene: audioMediaCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      resources: [source],
+      resourceMetadata: { [source]: { type: 'audio', durationMs: 4_250 } },
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const mediaRoot = runner.getPersoNode('main:audio') as FakeElement
+    const audio = mediaRoot.childNodes[0] as FakeElement
+
+    expect(audio.tagName).toBe('AUDIO')
+    runner.setRate(1.5)
+    expect(audio.playbackRate).toBe(1.5)
     runner.destroy()
   })
 

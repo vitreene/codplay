@@ -1,3 +1,5 @@
+import type { RuntimePreloadResourceMetadata } from '../preload'
+
 /** Authoring data and services supplied to one V2 component instance. */
 export type ComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   perso: Readonly<{
@@ -8,6 +10,8 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
     actions?: Readonly<Record<string, unknown>>
   }>
   services: ComponentServices
+  /** Metadata prepared by the external preload boundary for source-backed components. */
+  resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
 }>
 
 /** One internal part discovered while materializing a component template. */

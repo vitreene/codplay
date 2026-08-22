@@ -6,7 +6,7 @@ export { TagComponent } from './tag-component'
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
 export type { LayoutInitial, LayoutState } from './layout-component'
 export type { ListInitial, ListState } from './list-component'
-export type { MediaInitial, MediaState } from './media-component'
+export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media-component'
 export type { TagState } from './tag-component'
 export { validateMediaAction, validateMediaInitial } from './media-component'
 export type {

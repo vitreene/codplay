@@ -37,6 +37,25 @@ describe('RuntimePreload', () => {
     expect(result).toMatchObject({ ok: true, data: { loaded: ['/slow', '/fast'], skipped: [] } })
   })
 
+  it('returns metadata produced by the resource strategy', async () => {
+    const preload = createRuntimePreload({
+      strategies: {
+        fixture: async () => ({ type: 'video', durationMs: 4_250 }),
+      },
+    })
+
+    const result = await preload.load({ manifest: manifest('/movie.fixture') })
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        metadata: {
+          '/movie.fixture': { type: 'video', durationMs: 4_250 },
+        },
+      },
+    })
+  })
+
   it('shares one in-flight strategy and reports the second consumer as loaded', async () => {
     const cache = createRuntimePreloadCache()
     const load = vi.fn(async () => undefined)

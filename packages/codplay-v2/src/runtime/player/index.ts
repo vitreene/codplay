@@ -87,6 +87,14 @@ export type { MoveFlipMode } from '../config/move'
 export { diffSolvedScenes, selectEffectiveMove } from '../move'
 export type { MovePolicyResult, MoveStateDelta } from '../move'
 export { createListModuleServiceDefinition, LIST_MODULE_SERVICE_ID } from '../capabilities/list'
+export {
+  createMediaSyncModuleService,
+  createMediaSyncModuleServiceDefinition,
+  MEDIA_SYNC_MODULE_SERVICE_ID,
+} from '../capabilities/media-sync'
+export type {
+  MediaSyncRuntimeComponent,
+} from '../capabilities/media-sync'
 export { StructuralTimeline, collectCompiledEventStartTimes, type StructuralSnapshot } from './structural-timeline'
 export {
   materializeScene,

@@ -26,10 +26,16 @@ des persos concernés.
 `MediaComponent` reprend la règle V1 pour les sources à effet de bord :
 
 - `render()` fournit le wrapper auteur ;
-- une node vidéo est créée à la première rencontre de chaque `src` ;
+- une node `<audio>` ou `<video>` est créée pour chaque `src` statique déclaré
+  par `initial.src` ou par une action ;
 - `mediaBySrc` conserve chaque node pendant toute la vie du composant ;
 - un changement de source détache l'ancienne node et rattache la node ciblée ;
 - `src` n'est jamais réassigné sur une node déjà créée ;
+- la nature audio/vidéo et la durée connue viennent des métadonnées du preload
+  externe ; l'absence de durée ne permet pas au runtime d'inventer une durée ;
+- la fenêtre `broadcast.startAt/endAt`, le rate natif et les transitions de
+  lecture sont appliqués par la capacité `media-sync` via la surface du
+  composant ;
 - un seek ou un detach du perso ne détruit pas cette materialisation ;
 - le handle runtime final retire le wrapper et permet la libération du composant.
 

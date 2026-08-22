@@ -63,6 +63,8 @@ export type ResolvedPlacement = Readonly<
 /** Output of resolve before hierarchy and substrate materialization. */
 export type ResolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
+  /** Active action occurrences retained for player-scoped capabilities. */
+  actions: readonly MaterializedAction[]
   placement: ResolvedPlacement
   moveIssues: readonly MovePolicyIssue[]
 }>
@@ -92,6 +94,8 @@ export type SolvedPlacement = Readonly<{
 /** Stable solve output consumed by the component and materializer boundary. */
 export type SolvedPerso = RuntimePersoIdentity & Readonly<{
   state: CompiledRecord
+  /** Active action occurrences retained for player-scoped capabilities. */
+  actions?: readonly MaterializedAction[]
   placement: SolvedPlacement
   moveIssues: readonly MovePolicyIssue[]
 }>

@@ -107,6 +107,17 @@ describe('Runtime telco', () => {
     telco.destroy()
   })
 
+  it('allows seeking from the initialized ready state', async () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+
+    expect((await telco.seek(320)).ok).toBe(true)
+    expect(target.calls).toEqual(['seek:320'])
+    expect(target.status).toBe(PLAYER_LIFECYCLE_READY)
+    expect(telco.getState().timelineMs).toBe(320)
+    telco.destroy()
+  })
+
   it('clamps the sequence end and stops the target at the telco duration', async () => {
     const target = new FakeTransportTarget()
     const scheduler = new FakeScheduler()

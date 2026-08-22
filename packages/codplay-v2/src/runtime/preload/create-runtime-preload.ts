@@ -11,9 +11,11 @@ import {
 import type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
+  RuntimePreloadLoadResult,
   RuntimePreloadManifestInput,
   RuntimePreloadOptions,
   RuntimePreloadResource,
+  RuntimePreloadResourceMetadata,
   RuntimePreloadResult,
   RuntimePreloadState,
   RuntimePreloadStrategy,
@@ -57,7 +59,7 @@ export function createRuntimePreload(options: Readonly<{
     timeoutMs: number,
     signal: AbortSignal,
     container: Element | null | undefined,
-  ): Promise<void> {
+  ): Promise<RuntimePreloadLoadResult | undefined> {
     const builtin = entry.type === 'image'
       ? loadRuntimeImage(entry.url, signal)
       : entry.type === 'audio'
@@ -69,7 +71,12 @@ export function createRuntimePreload(options: Readonly<{
             : entry.type === 'css'
               ? loadRuntimeCss(entry.url, signal, container)
               : undefined
-    if (builtin !== undefined) return withRuntimePreloadTimeout(builtin, timeoutMs)
+    if (builtin !== undefined) {
+      return withRuntimePreloadTimeout(
+        builtin as Promise<RuntimePreloadLoadResult | undefined>,
+        timeoutMs,
+      )
+    }
     const strategy = strategies.get(entry.type)
     if (strategy === undefined) {
       return Promise.reject(new Error(`No preload strategy registered for resource type "${entry.type}"`))
@@ -108,24 +115,27 @@ export function createRuntimePreload(options: Readonly<{
     state.totalCount = manifest.entries.length
     const outcomes: Array<'loaded' | 'skipped' | undefined> = new Array(manifest.entries.length)
     const warnings: RuntimePreloadWarning[] = []
+    const metadata: Record<string, RuntimePreloadResourceMetadata> = {}
 
     if (manifest.entries.length === 0) {
       state.status = 'ready'
       currentOperation = undefined
-      return { ok: true, data: { loaded: [], skipped: [] } }
+      return { ok: true, data: { loaded: [], skipped: [], metadata: {} } }
     }
 
     const results = await Promise.allSettled(manifest.entries.map(async (entry, index) => {
       let cached = cache.claim(entry.url, owner)
       if (cached?.status === 'ready') {
         outcomes[index] = 'skipped'
+        if (cached.metadata !== undefined) metadata[entry.url] = cached.metadata
         state.loadedCount += 1
         return
       }
       if (cached?.status === 'loading') {
         pendingUrls.add(entry.url)
         try {
-          await cached.promise
+          const loadedMetadata = await cached.promise
+          if (loadedMetadata !== undefined) metadata[entry.url] = loadedMetadata
           outcomes[index] = 'loaded'
           state.loadedCount += 1
           return
@@ -147,8 +157,9 @@ export function createRuntimePreload(options: Readonly<{
       const cacheEntry = cache.start(entry.url, owner, promise, entryController)
       pendingUrls.add(entry.url)
       try {
-        await promise
-        cache.markReady(entry.url, cacheEntry)
+        const loadedMetadata = await promise
+        cache.markReady(entry.url, cacheEntry, loadedMetadata ?? undefined)
+        if (loadedMetadata !== undefined) metadata[entry.url] = loadedMetadata
         pendingUrls.delete(entry.url)
         outcomes[index] = 'loaded'
         state.loadedCount += 1
@@ -204,7 +215,7 @@ export function createRuntimePreload(options: Readonly<{
       .map((entry) => entry.url)
     return {
       ok: true,
-      data: { loaded, skipped, warnings: warnings.length > 0 ? warnings : undefined },
+      data: { loaded, skipped, metadata, warnings: warnings.length > 0 ? warnings : undefined },
     }
   }
 

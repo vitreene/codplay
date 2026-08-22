@@ -25,5 +25,17 @@ Les stratégies natives couvrent `image`, `audio`, `video`, `font` et `css`.
 Les composants et bibliothèques tierces enregistrent leurs stratégies avec
 `registerStrategy`; ils n'ajoutent pas de loader concurrent.
 
+Le résultat de `load()` expose `data.metadata`, indexé par URL. Les stratégies
+`audio` et `video` y transmettent leur type et, lorsqu'elle est connue au signal
+`canplaythrough`, leur durée en millisecondes. Cette métadonnée est consommée
+par `MediaComponent` et `media-sync` ; elle ne remplace pas le manifeste et ne
+déclenche aucun chargement implicite.
+
+```ts
+if (result.ok) {
+  runner.setResourceMetadata(result.data.metadata)
+}
+```
+
 Le cache est partageable et compte les propriétaires. `release()` ne supprime
 une entrée que lorsqu'aucune instance `RuntimePreload` ne la détient encore.

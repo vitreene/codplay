@@ -8,6 +8,7 @@ import {
 } from './runtime-capability-catalog'
 import { createMarkupModuleServiceDefinition } from '../capabilities/markup'
 import { createListModuleServiceDefinition } from '../capabilities/list'
+import { createMediaSyncModuleServiceDefinition } from '../capabilities/media-sync'
 import {
   HTML_ATTR_SERVICE,
   HTML_CLASS_NAME_SERVICE,
@@ -25,6 +26,7 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
 
   catalog.registerModule({ ...createMarkupModuleServiceDefinition(), origin: 'core' }, 'core')
   catalog.registerModule({ ...createListModuleServiceDefinition(), origin: 'core' }, 'core')
+  catalog.registerModule({ ...createMediaSyncModuleServiceDefinition(), origin: 'core' }, 'core')
 
   catalog.registerComponent(coreTagDefinition, 'core')
   catalog.registerComponent(coreLayoutDefinition, 'core')
@@ -58,7 +60,7 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
 const coreMediaDefinition: RuntimeComponentDefinition = {
   type: 'media',
   services: ['className', 'style', 'attr'],
-  modules: [],
+  modules: ['media-sync'],
   validateInitial: validateMediaInitial,
   validateAction: validateMediaAction,
   create: (input) => new MediaComponent(input as never),

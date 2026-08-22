@@ -1,3 +1,5 @@
+import type { RuntimePreloadResourceMetadata } from './preload-types'
+
 /** Resolves one portable AbortError in browser and non-browser test hosts. */
 function createAbortError(): Error {
   if (typeof DOMException !== 'undefined') return new DOMException('Aborted', 'AbortError')
@@ -24,8 +26,8 @@ export function withRuntimePreloadTimeout<T>(promise: Promise<T>, timeoutMs: num
 }
 
 /** Loads one image into the browser cache. */
-export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<RuntimePreloadResourceMetadata> {
+  return new Promise<RuntimePreloadResourceMetadata>((resolve, reject) => {
     if (signal.aborted) {
       reject(createAbortError())
       return
@@ -43,7 +45,7 @@ export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<void
     signal.addEventListener('abort', onAbort, { once: true })
     image.onload = (): void => {
       cleanup()
-      resolve()
+      resolve({ type: 'image' })
     }
     image.onerror = (): void => {
       cleanup()
@@ -54,8 +56,8 @@ export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<void
 }
 
 /** Loads one audio resource until the browser reports it can play through. */
-export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<RuntimePreloadResourceMetadata> {
+  return new Promise<RuntimePreloadResourceMetadata>((resolve, reject) => {
     if (signal.aborted) {
       reject(createAbortError())
       return
@@ -73,7 +75,8 @@ export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<void
     }
     const onReady = (): void => {
       cleanup()
-      resolve()
+      const durationMs = Number.isFinite(audio.duration) ? Math.max(0, audio.duration * 1000) : undefined
+      resolve({ type: 'audio', ...(durationMs === undefined ? {} : { durationMs }) })
     }
     const onError = (): void => {
       cleanup()
@@ -93,8 +96,8 @@ export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<void
 }
 
 /** Loads one video resource through a temporary, non-visible media node. */
-export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<RuntimePreloadResourceMetadata> {
+  return new Promise<RuntimePreloadResourceMetadata>((resolve, reject) => {
     if (signal.aborted) {
       reject(createAbortError())
       return
@@ -120,7 +123,8 @@ export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<void
     }
     const onReady = (): void => {
       cleanup()
-      resolve()
+      const durationMs = Number.isFinite(video.duration) ? Math.max(0, video.duration * 1000) : undefined
+      resolve({ type: 'video', ...(durationMs === undefined ? {} : { durationMs }) })
     }
     const onError = (): void => {
       cleanup()

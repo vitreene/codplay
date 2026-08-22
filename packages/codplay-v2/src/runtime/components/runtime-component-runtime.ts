@@ -3,6 +3,7 @@ import type { RuntimeModuleServiceInstance } from '../engine'
 import type { BaseComponent } from './base-component'
 import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
 import type { RuntimeMaterializer } from '../materializer'
+import type { RuntimePreloadResourceMetadata } from '../preload'
 
 export type { RuntimeComponentIdentity } from '../catalog'
 
@@ -15,6 +16,7 @@ export type RuntimeComponentHandle = Readonly<{
 export type RuntimeComponentRuntimeOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
   materializer: RuntimeMaterializer
+  resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
 }>
 
 type MountedComponent = Readonly<{
@@ -36,6 +38,11 @@ export class RuntimeComponentRuntime {
   /** Binds the player-scoped module instances before component materialization. */
   setModuleServices(moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>): void {
     this.moduleServices = moduleServices
+  }
+
+  /** Returns one player-local component for a capability that operates on its materialized node. */
+  getComponentById(componentId: string): BaseComponent<Record<string, unknown>> | undefined {
+    return this.mounted.get(componentId)?.component
   }
 
   /**
@@ -86,6 +93,7 @@ export class RuntimeComponentRuntime {
           initial: compiledPerso.initial,
           actions: compiledPerso.actions,
         },
+        resourceMetadata: this.options.resourceMetadata,
       },
       identity,
       this.options.materializer,

@@ -1,4 +1,9 @@
-import type { RuntimePreloadCacheApi, RuntimePreloadCacheEntry } from './preload-types'
+import type {
+  RuntimePreloadCacheApi,
+  RuntimePreloadCacheEntry,
+  RuntimePreloadLoadResult,
+  RuntimePreloadResourceMetadata,
+} from './preload-types'
 
 type CacheRecord = {
   entry: RuntimePreloadCacheEntry
@@ -32,7 +37,7 @@ export class RuntimePreloadCache implements RuntimePreloadCacheApi {
   start(
     url: string,
     owner: symbol,
-    promise: Promise<void>,
+    promise: Promise<RuntimePreloadLoadResult | undefined>,
     controller: AbortController,
   ): RuntimePreloadCacheEntry {
     const entry: RuntimePreloadCacheEntry = { url, status: 'loading', promise }
@@ -41,10 +46,10 @@ export class RuntimePreloadCache implements RuntimePreloadCacheApi {
   }
 
   /** Marks one still-current entry as ready. */
-  markReady(url: string, entry: RuntimePreloadCacheEntry): void {
+  markReady(url: string, entry: RuntimePreloadCacheEntry, metadata?: RuntimePreloadResourceMetadata): void {
     const record = this.entries.get(url)
     if (record?.entry !== entry) return
-    record.entry = { url, status: 'ready', promise: Promise.resolve() }
+    record.entry = { url, status: 'ready', promise: Promise.resolve(metadata), metadata }
   }
 
   /** Marks one still-current entry as failed. */

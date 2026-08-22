@@ -125,6 +125,7 @@ export class RuntimePlayer {
   readonly componentRuntime: RuntimeComponentRuntime | undefined
   private state: PlayerLifecycleState = PLAYER_LIFECYCLE_IDLE
   private currentTimeMs = 0
+  private rate = 1
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
   private pendingSolvedScene: SolvedScene | undefined
@@ -229,6 +230,7 @@ export class RuntimePlayer {
         this.id,
         this.compiledScene,
         this.compiledScene.requirements.modules,
+        { getComponentById: (runtimeItemId) => this.componentRuntime?.getComponentById(runtimeItemId) },
       ))
     } catch (error) {
       diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')
@@ -239,6 +241,7 @@ export class RuntimePlayer {
     this.componentRuntime?.sync(initialSolvedScene)
     const resolvedInitialScene = this.reconstructBaseScene(0)
     this.initializeModuleServices(resolvedInitialScene)
+    this.notifyModuleRateChange(this.rate)
     this.rebuildStructuralTimeline()
     this.solvedScene = this.reconstructScene(0)
     this.synchronizeStateStore(0)
@@ -290,6 +293,7 @@ export class RuntimePlayer {
       this.renderSync.resume()
     }
     this.state = PLAYER_LIFECYCLE_PLAYING
+    this.notifyModulePlaybackState('playing')
   }
 
   /** Pauses logical playback at the current engine-provided time. */
@@ -297,6 +301,23 @@ export class RuntimePlayer {
     this.requireState(PLAYER_LIFECYCLE_PLAYING)
     this.renderSync.pause()
     this.state = PLAYER_LIFECYCLE_PAUSED
+    this.notifyModulePlaybackState('paused')
+  }
+
+  /** Changes the player rate without changing the current absolute timeline position. */
+  setRate(rate: number): void {
+    this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PAUSED, PLAYER_LIFECYCLE_PLAYING)
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error('Player rate must be a finite positive number.')
+    }
+    this.rate = rate
+    this.renderSync.rateChange(rate)
+    this.notifyModuleRateChange(rate)
+  }
+
+  /** Returns the currently configured player rate. */
+  getRate(): number {
+    return this.rate
   }
 
   /** Positions logical time without replaying events or effects. */
@@ -572,10 +593,11 @@ export class RuntimePlayer {
     if (this.state !== PLAYER_LIFECYCLE_PLAYING) return
     if (this.skipNextDelta) {
       this.skipNextDelta = false
-      this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
+      this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
       return
     }
-    this.currentTimeMs += frame.deltaMs
+    this.currentTimeMs += frame.deltaMs * this.rate
+    this.currentTimeMs = this.resolveModuleTimeline(this.currentTimeMs)
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
     this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
     const previousSolvedScene = this.solvedScene
@@ -583,12 +605,13 @@ export class RuntimePlayer {
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
-    this.renderSync.tick(frame.nowMs, this.currentTimeMs, 1)
+    this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
   private materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
     this.componentRuntime?.sync(scene)
+    this.notifyModuleScenePresented(scene)
     this.applyLiveCaptureActions(scene)
     this.materializer?.materializeScene(scene, context)
   }
@@ -641,6 +664,9 @@ export class RuntimePlayer {
       throw new Error('Player seek time must be a finite positive number.')
     }
     this.cancelActiveCaptures()
+    for (const instance of this.moduleServiceInstances.values()) {
+      instance.beforeSeek?.(this.currentTimeMs)
+    }
     this.pendingSolvedScene = this.reconstructScene(timeMs)
     this.pendingSeekDiagnostics = createSolvedMoveDiagnostics(this.pendingSolvedScene)
     this.pendingModuleSeekHandles = []
@@ -752,6 +778,36 @@ export class RuntimePlayer {
     instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
   ): void {
     for (const instance of instances.values()) instance.initializeScene?.(solved)
+  }
+
+  /** Notifies player-scoped capabilities after one solved scene reaches components. */
+  private notifyModuleScenePresented(scene: SolvedScene): void {
+    const playbackState = this.state === PLAYER_LIFECYCLE_PLAYING ? 'playing' : 'paused'
+    for (const instance of this.moduleServiceInstances.values()) {
+      instance.onScenePresented?.(scene, playbackState)
+    }
+  }
+
+  /** Notifies player-scoped capabilities when the player changes playback state. */
+  private notifyModulePlaybackState(state: 'playing' | 'paused'): void {
+    for (const instance of this.moduleServiceInstances.values()) {
+      instance.onPlaybackStateChange?.(state, this.currentTimeMs)
+    }
+  }
+
+  /** Notifies player-scoped capabilities that own native clocks of one rate change. */
+  private notifyModuleRateChange(rate: number): void {
+    for (const instance of this.moduleServiceInstances.values()) instance.onRateChange?.(rate)
+  }
+
+  /** Lets one player-scoped capability provide the active logical clock. */
+  private resolveModuleTimeline(fallbackTimeMs: number): number {
+    let timeMs = fallbackTimeMs
+    for (const instance of this.moduleServiceInstances.values()) {
+      const resolved = instance.resolveTimelineMs?.(timeMs)
+      if (resolved !== undefined && Number.isFinite(resolved) && resolved >= 0) timeMs = resolved
+    }
+    return timeMs
   }
 
   /** Composes structural policies while preserving one canonical order timeline. */

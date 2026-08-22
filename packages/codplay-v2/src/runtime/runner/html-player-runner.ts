@@ -28,6 +28,7 @@ import { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
 import type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
+  RuntimePreloadMetadata,
   RuntimePreloadOptions,
   RuntimePreloadFailure,
   RuntimePreloadSuccess,
@@ -63,6 +64,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
   /** Resources already made available to both visible and measurement engines. */
   resources?: readonly string[]
+  /** Metadata already obtained from the external preload boundary. */
+  resourceMetadata?: RuntimePreloadMetadata
   engine?: RuntimeEngine
   ticker?: Ticker
   functions?: CompiledFunctionCollection
@@ -120,6 +123,7 @@ export class HtmlPlayerRunner {
   private readonly initialPointerEvents: string
   private readonly initialInert: boolean
   private materializationEpoch = 0
+  private readonly resourceMetadata = new Map<string, RuntimePreloadMetadata[string]>()
 
   /** Creates visible and isolated-measurement hosts from the same compiled scene. */
   constructor(options: HtmlPlayerRunnerOptions) {
@@ -129,6 +133,9 @@ export class HtmlPlayerRunner {
     this.initialPointerEvents = options.root.style.pointerEvents
     this.initialInert = options.root.hasAttribute('inert')
     this.materializerContext = { numericLengthScale: 1 }
+    for (const [url, metadata] of Object.entries(options.resourceMetadata ?? {})) {
+      this.resourceMetadata.set(url, metadata)
+    }
     options.catalog.lock()
     this.engine = options.engine ?? new RuntimeEngine(options.catalog, { resources: options.resources })
     this.ownsEngine = options.engine === undefined
@@ -144,7 +151,7 @@ export class HtmlPlayerRunner {
       componentMaterializer,
       (timeMs) => this.motionSystem?.present(timeMs),
     )
-    const componentRuntime = createComponentRuntime(options.catalog, materializer)
+    const componentRuntime = createComponentRuntime(options.catalog, materializer, this.resourceMetadata)
     this.player = new RuntimePlayer(
       options.id,
       this.engine,
@@ -192,7 +199,7 @@ export class HtmlPlayerRunner {
       measurementNodes,
       this.materializerContext,
     )
-    const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer)
+    const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer, this.resourceMetadata)
     const measurementEngine = new RuntimeEngine(options.catalog, { resources: options.resources })
     this.measurementEngine = measurementEngine
     const measurementPlayer = new RuntimePlayer(
@@ -283,6 +290,8 @@ export class HtmlPlayerRunner {
     })
     if (!preload.ok) return { ok: false, phase: 'preload', preload }
 
+    this.setResourceMetadata(preload.data.metadata)
+
     const resourceUrls = mergeRuntimePreloadManifests(manifest).entries.map((entry) => entry.url)
     this.engine.registerResources(resourceUrls)
     this.measurementEngine?.registerResources(resourceUrls)
@@ -297,6 +306,18 @@ export class HtmlPlayerRunner {
     this.player.play()
     if (this.ownsEngine) this.engine.start(ticker)
     this.syncInteractionLock()
+  }
+
+  /** Sets preload metadata explicitly before or after player initialization. */
+  setResourceMetadata(metadata: RuntimePreloadMetadata): void {
+    this.resourceMetadata.clear()
+    for (const [url, entry] of Object.entries(metadata)) this.resourceMetadata.set(url, entry)
+    if (this.player.getSolvedScene() !== undefined) this.player.refresh()
+  }
+
+  /** Changes the logical player rate and forwards it to native media clocks. */
+  setRate(rate: number): void {
+    this.player.setRate(rate)
   }
 
   /** Pauses playback and stops the runner-owned ticker. */
@@ -410,10 +431,12 @@ export class HtmlPlayerRunner {
 function createComponentRuntime(
   catalog: RuntimeCapabilityCatalog,
   materializer: RuntimeMaterializer,
+  resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
 ): RuntimeComponentRuntime {
   return new RuntimeComponentRuntime({
     catalog,
     materializer,
+    resourceMetadata,
   })
 }
 

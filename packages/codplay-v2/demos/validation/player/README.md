@@ -1,49 +1,47 @@
-# Démo de validation capture / list DnD V2
+# Démo de validation preload-media V2
 
-> Status: En cours — consignée pour publication ultérieure
+> Status: En cours — validation locale
 > CodPlay version: V2 foundation
 
-Cette démo est conservée comme fixture de validation V2. Elle n'est pas
-encore publiée dans la galerie ou le site de démonstration public.
-La validation du seek reste ouverte avant le passage à `Fini`.
-
-Cette entrée unique de validation remplace la démo capture précédente par
-une scène S6 déclarée directement avec les contrats V2 :
+Cette entrée unique de validation présente l'adaptation V2 de la démo
+`preload-media`. Elle vérifie le chemin réel :
 
 ```text
-pointerdown -> beginCapture
-pointermove  -> trackCapture -> preview HTML transitoire
-pointerup    -> résolution finale du captureState -> endEmit
-             -> action move ordinaire -> list / StructuralTimeline / FLIP
+manifeste explicite -> preload externe -> runner.init() -> telco.play()
+                                      -> media-sync / master
 ```
 
-La lecture, le seek et le retour au début passent par la telco V2 locale et son
-remote de contrôle. La zone de telco est placée sous la scène ; le relevé d'état
-affiche l'ordre des deux listes. Le layout reste responsive.
+La scène démarre après le preload. Elle présente un media audio marqué
+`initial.master: true`, une vidéo, deux images et la feuille de style de la
+scène. La scène se termine à `6890 ms`, à la fin de la fenêtre de diffusion de
+la vidéo (`1000 ms` de départ + `5890 ms`). La telco est la façade locale `RuntimeTelco` utilisée par les autres
+validations V2 ; elle permet de lire, pauser, revenir au début et seek en
+continu.
 
-Le remote partagé est une façade de validation temporaire (`temp`) ; il
-consomme uniquement `RuntimeTelco`. Il ne constitue pas une seconde façade
-Player. Aucun module, type ou runtime d'une autre version n'est importé par
-cette démo.
+Les éléments de la scène ciblent l'`outlet` public du layout V2. La démo ne
+invente pas de cibles `cell-*` qui ne seraient pas déclarées par le composant.
 
-Pour tester :
+La démo ne possède aucun catalogue, composant ou runtime parallèle. Elle ne
+importe pas de code d'exécution V1 : les fichiers médias réutilisés sont
+uniquement des assets de démonstration.
 
-1. lancer la démo ;
-2. cliquer sur `Lire` : le verrou d'interaction de la scène s'ouvre alors ;
-3. déplacer un item de la liste A vers la liste B ;
-4. mettre en pause ou utiliser le seek pour observer la reconstruction de
-   l'ordre et des compteurs.
-
-Le `rate` et le transport distant restent hors de cette tranche V2. La façade
-DnD auteur dédiée reste reportée : cette démo valide d'abord une capture
-classique.
-
-Le typecheck, les tests Vitest et le build Vite sont suivis par le plan
-d'intégration. Toute publication ultérieure doit reprendre cette entrée unique
-et son circuit V2, sans créer une variante parallèle.
+## Vérification
 
 Lancer depuis la racine :
 
 ```text
 npm run demo:player --workspace=@codplay/codplay-v2
 ```
+
+Le build de scène est refusé avant le preload si le contrat V2 est invalide.
+Le résultat attendu est un preload terminé, puis une lecture lancée par le
+bouton `Lire`, où le media `master` fournit l'horloge quand sa clock native est
+disponible ; sinon le ticker CodPlay prend le relais.
+
+La vérification couvre aussi le seek arrière après la fin native du master :
+les broadcasts actifs sont rejoués et le master revient à la position demandée
+sans recharger sa source.
+
+Anomalie connue à traiter : sur Safari, la vidéo peut rester noire alors que le
+transport et les contrôles natifs indiquent la lecture. La cause reste ouverte ;
+la validation visuelle de cette démo n'est donc pas clôturée.

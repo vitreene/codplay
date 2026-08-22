@@ -29,6 +29,7 @@ export function resolveScene(
       persoId: perso.persoId,
       type: perso.type,
       state: resolvePerso(perso, functions),
+      actions: perso.actions,
       ...resolvePlacement(perso),
     }
   }

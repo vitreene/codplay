@@ -116,7 +116,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     const canRewind = initialized && (status === 'ready' || status === 'paused' || status === 'playing')
     const canSeek = initialized
       && !sequenceEnded
-      && (status === 'paused' || status === 'playing')
+      && (status === 'ready' || status === 'paused' || status === 'playing')
     const { displayMs, maxMs } = resolveDisplayedMs(state)
 
     setIfChanged(playButton.disabled, inFlight || (!canPlay && !canPause), (value) => { playButton.disabled = value })

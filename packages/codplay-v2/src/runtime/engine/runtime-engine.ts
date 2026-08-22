@@ -3,7 +3,10 @@ import type { CompiledRequirements, CompiledScene } from '../../scene/compiled'
 import { TimeTicker, type TickPayload, type Ticker } from '../time'
 import { reportMissingCapabilities } from './capability-diagnostics'
 import { RuntimeCapabilityCatalog } from '../catalog'
-import type { RuntimeModuleServiceInstance } from './module-service-types'
+import type {
+  RuntimeModuleServiceContext,
+  RuntimeModuleServiceInstance,
+} from './module-service-types'
 
 /** Optional engine resources supplied beside the unified capability catalog. */
 export type RuntimeEngineOptions = Readonly<{
@@ -93,12 +96,13 @@ export class RuntimeEngine {
     playerId: string,
     compiledScene: CompiledScene,
     moduleIds: readonly string[],
+    context: Pick<RuntimeModuleServiceContext, 'getComponentById'> = {},
   ): ReadonlyMap<string, RuntimeModuleServiceInstance> {
     const instances = new Map<string, RuntimeModuleServiceInstance>()
     for (const id of moduleIds) {
       const definition = this.catalog.getModule(id)
       if (definition === undefined) throw new Error(`Runtime module service capability is unavailable: ${id}`)
-      instances.set(id, definition.create({ playerId, compiledScene }))
+      instances.set(id, definition.create({ playerId, compiledScene, ...context }))
     }
     return instances
   }
