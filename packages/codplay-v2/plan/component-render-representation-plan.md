@@ -315,8 +315,11 @@ Le `HtmlMotionPresentationHost` reçoit seulement un résolveur
 `itemId -> HTMLElement` et une `PresentationFrame`. Il :
 
 - écrit les dimensions et matrices transitoires sur la racine réelle en mode local ;
-- clone la materialisation courante dans l'overlay en mode reparent ;
+- crée ou réutilise une représentation de la materialisation courante dans
+  l'overlay en mode reparent ;
 - masque la source pendant la représentation overlay ;
+- synchronise une représentation existante sans créer de nœuds lorsque sa
+  structure reste identique ;
 - retire les contributions transitoires et détruit les clones lorsque la frame ne
   les demande plus.
 

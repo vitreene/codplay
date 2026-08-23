@@ -32,6 +32,7 @@ export class MotionMaterializer implements RuntimeMaterializer {
   /** Commits authored structure and resolves motion at the same absolute time. */
   materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
     this.base.materializeScene(scene, context)
+    if (context.phase === 'geometry-capture') return
     this.presentMotion(scene.timeMs)
   }
 

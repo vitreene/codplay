@@ -1,9 +1,8 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: Fixe
+> Status: En cours — refonte de la capture géométrique
 > CodPlay version: V2 foundation
-> Implementation: appliquée le 2026-08-19
-> Review: contrat validé le 2026-08-20 pour les moves compilés et le seek froid
+> Review: le contrat du graphe reste conservé ; la mesure par DOM dupliqué est retirée
 
 ## Objet unique
 
@@ -42,8 +41,9 @@ Un seek ne detruit, ne recree et ne recharge donc pas les elements media ; il
 reconcilie uniquement l'etat cible, le parentage et l'ordre.
 
 La destruction des materialisations auteur intervient uniquement lors du teardown
-final du player/sequence. Les clones d'overlay et le DOM de mesure ne relevent pas
-de cette persistance : ce sont des ressources techniques transitoires.
+final du player/sequence. Les clones d'overlay sont des ressources techniques
+transitoires. Aucune materialisation auteur, aucun composant et aucun media ne
+doit être créé dans un second arbre pour mesurer FLIP.
 
 ### Côtés d'une frontière
 
@@ -90,8 +90,8 @@ CompiledScene ---------->| StructuralTimeline   |
        +-> compileMotionSchedule    |
                     |               |
                     v               v
-             event boundaries -> isolated HTML layout sampler
-                                      | before / after snapshots
+             event boundaries -> position capture on visible author nodes
+                                      | before / after data snapshots
                                       v
                                 buildMotionGraph
                                       |
@@ -140,16 +140,24 @@ type ScheduledMotionIntent = {
 Le player logique ne connaît ni ce calendrier, ni les overlays, ni leurs
 ressources HTML.
 
-### 3. Mesure isolée
+### 3. Capture géométrique sur les materialisations auteur
 
 Fichiers :
 
 - `src/runtime/runner/html-layout-snapshot.ts` ;
 - `src/runtime/runner/html-player-runner.ts`.
 
-Un root HTML hors écran est matérialisé avec les mêmes composants, services,
-targets et règles structurelles que le root visible. Pour chaque frontière `t`,
-il matérialise successivement les scènes pures `before(t)` et `after(t)`.
+La capture géométrique lit les nodes auteur persistants du root visible. Elle ne
+crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
+`RuntimeComponentMaterializer` auxiliaire. Pour chaque frontière `t`, une phase
+de capture présente successivement les états purs `before(t)` et `after(t)` sur
+les mêmes materialisations, puis ne conserve que leurs données géométriques.
+
+Cette phase est une transaction interne au runner : elle suspend les effets de
+lecture, retire d'abord les contributions transitoires de la présentation
+précédente, puis ne déclenche ni `play()`, ni rechargement de source, ni
+destruction de composant. Elle restaure ensuite l'état courant du player avant
+toute lecture ou seek visible.
 
 Un `LayoutSnapshot` contient, par `itemId` :
 
@@ -159,13 +167,31 @@ Un `LayoutSnapshot` contient, par `itemId` :
 - pose affine relative au root ;
 - dimensions locales.
 
-Le root isolé reprend exactement la largeur et la hauteur du root visible avant
-chaque mesure. Conserver seulement une `min-height` laisserait son `height: 100%`
-lié au viewport ; les descendants positionnés en pourcentage auraient alors des
-coordonnées FIRST/LAST différentes de celles du root visible.
+Le snapshot ne contient aucune référence DOM. Il contient uniquement les poses
+et relations nécessaires au graphe. La sélection d'une frontière comprend les
+items déplacés, les enfants des targets source et cible susceptibles de reflow,
+les ancêtres nécessaires à la composition et les descendants nécessaires lorsqu'un
+parent les entraîne. Les branches sans rapport ne sont pas capturées.
 
-Le DOM isolé est un substrat de mesure. Il ne fournit ni identité ni structure.
-Le DOM visible n'est jamais déplacé temporairement pour lire FIRST ou LAST.
+La géométrie du navigateur reste nécessaire : une simple position logique ne
+remplace pas les dimensions, matrices, transforms hérités, flex/grid, contenus
+intrinsèques ou pourcentages calculés par le materializer HTML.
+
+La capture peut lire le DOM visible pendant cette phase explicite ; le DOM reste
+une source de géométrie uniquement. `SolvedGraph` reste l'unique source de
+structure, parentage, target et ordre.
+
+### 3 bis. Activation conditionnelle
+
+Le runner compile d'abord le calendrier des transitions `move`. S'il ne contient
+aucune transition, il n'instancie ni système motion, ni capture géométrique, ni
+overlay FLIP. Un `move` purement structurel sans transition ne demande pas de
+graphe motion.
+
+Un move ajouté par un événement runtime active le même circuit avant sa mutation :
+la position FIRST est capturée au point pré-commit, puis la position LAST après
+la mutation. Il ne peut pas être découvert après coup sans perdre la source du
+mouvement.
 
 ### 4. Graphe temporel par item
 
@@ -175,7 +201,7 @@ Fichiers :
 - `src/runtime/motion/motion-graph.ts` ;
 - `src/runtime/motion/motion-pose.ts`.
 
-`buildMotionGraph()` compare les deux layouts complets de chaque frontière. Il
+`buildMotionGraph()` compare les deux snapshots sélectionnés de chaque frontière. Il
 crée un segment lorsque l'attachement local d'un item change : parent, target,
 origine, matrice ou dimensions.
 
@@ -243,8 +269,12 @@ ses ancêtres.
 dépend pas des temps précédemment visités.
 
 Le layout courant apporte les mouvements auteur continus et le reflow naturel au
-temps `t`; le graphe apporte les segments structurels. Les parents sont résolus
-récursivement avant leurs descendants.
+temps `t`; il est capturé sur les nodes visibles uniquement lorsqu'une
+présentation motion active en a besoin. Avant cette capture, les slots locaux et
+les ressources overlay de la frame précédente sont retirés afin que le layout
+lu soit naturel. Le graphe apporte les segments structurels à partir des
+snapshots déjà capturés. Les parents sont résolus récursivement avant leurs
+descendants.
 
 `MotionMaterializer` appelle ce même resolver après chaque materialisation
 structurelle. Play et Seek ne sélectionnent aucune stratégie différente.
@@ -292,7 +322,9 @@ La restructuration supprime les concepts suivants :
 - ownership/handoff mutable de ghosts ;
 - `resolveFlipAncestorRegime` et coupes host ;
 - touched sets utilisés comme contrats temporels ;
-- chemins distincts de résolution Play et Seek.
+- chemins distincts de résolution Play et Seek ;
+- second `measurementPlayer`, `measurementEngine` et `measurementRoot` ;
+- matérialisations auteur auxiliaires destinées à produire des snapshots.
 
 Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dans
 `src/runtime/motion/html-pose.ts` et `html-types.ts`.
@@ -311,12 +343,14 @@ Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dan
 9. Une target identique choisit local par défaut.
 10. Play et Seek appellent le même résolveur absolu et le même commit.
 11. Une pose affine utilise origine et matrice ; `rect` n'est qu'une AABB dérivée.
-12. Le DOM visible n'est jamais une source de structure ni un host de mesure
-    historique.
+12. Le DOM visible n'est jamais une source de structure ; il peut seulement être
+    lu pendant une phase explicite de capture géométrique.
+13. Un graphe motion ne contient aucune référence DOM ni materialisation auteur.
+14. Sans transition `move`, aucune capture géométrique FLIP n'est initialisée.
 
 ## Validation appliquée
 
-Les tests couvrent notamment :
+Les tests à conserver et à rejouer après la refonte couvrent notamment :
 
 - parent source et parent cible animés indépendamment ;
 - propagation récursive à cinq niveaux sans pistes enfant dupliquées ;
@@ -359,18 +393,126 @@ Le stage de stress remplit désormais exactement la zone de présentation
 responsive (`100%` en largeur et en hauteur). Les conteneurs A–D utilisent des
 ancres et des déplacements verticaux en pourcentage du root, tout en conservant
 leur taille de stress fixe pour préserver les deux rangées Q/K. Un
-`ResizeObserver` invalide le graphe mesuré
-après chaque changement de taille du stage, au temps logique courant ; Play et
-Seek restent donc sur le même circuit de résolution.
-Safari a vérifié les largeurs `1280`, `1000`, `700` et `400 px` : le stage
-occupe exactement la boîte de contenu de son conteneur, A–D restent dans ses
-limites aux checkpoints `FIRST`, `BOUNDARY` et `LAST`, et un redimensionnement
-à `t=5000 ms` ne produit ni saut ni erreur console.
+`ResizeObserver` invalide le graphe mesuré après chaque changement de taille du
+stage, au temps logique courant ; avant cette invalidation, le runner retire les
+slots motion et les ghosts afin de ne jamais capturer une ancienne frame comme
+une nouvelle géométrie.
+Safari a vérifié un redimensionnement au milieu de la scène (`t=5000 ms`) entre
+les viewports `900×656`, `850×578` et `1024×786` : les 13 représentations
+actives restent présentes, aucune racine de mesure n'est créée, et les
+checkpoints `BOUNDARY` et `LAST` restent navigables.
 
 ## État de revue
 
-L'architecture et son application sont complètes pour la verticale compilée du
-runner. La revue du 2026-08-20 valide le contrat public de cette tranche et de
-la démo. Les événements live non présents dans le calendrier compilé
-devront produire les mêmes `MotionBoundary`; ils ne doivent pas introduire un
-second moteur et restent hors du statut `Fixe` de cette tranche.
+Le graphe, ses frontières et son résolveur restent le contrat conservé. La
+mesure par second arbre DOM est proscrite et doit être remplacée par la capture
+géométrique transactionnelle décrite ci-dessus. Les tests de Play, Seek, resize,
+reparent et événements runtime devront être rejoués avant de repasser ce module
+à `Fixe`.
+
+## Repasse de cohérence et optimisation — 2026-08-23
+
+### Représentation `reparent`
+
+Le clonage d'un sous-arbre dans l'overlay n'est pas une capture géométrique. Il
+sert à maintenir simultanément deux contraintes : le materializer conserve le
+nœud auteur dans son parent logique, tandis que la présentation animée peut
+être rendue dans un autre repère. Supprimer systématiquement ce clone
+imposerait soit de déplacer temporairement le nœud auteur, soit de créer un
+placeholder structurel pour chaque racine de composant. Ces deux options
+perturberaient la persistance des materialisations, les fragments multi-racines
+et les composants média.
+
+L'optimisation recevable est donc la réutilisation d'une représentation overlay
+existante par `itemId`, et non la suppression générale du clone. Le host conserve
+désormais le clone entre les frames, synchronise ses attributs et ses nœuds texte
+quand la structure reste identique, et ne recrée le sous-arbre qu'à l'entrée du
+mode ou après une invalidation structurelle. La révision logique fournie par le
+runner évite de parcourir le template quand l'état auteur n'a pas changé.
+
+### Séparation capture naturelle / commit de frame
+
+La préparation de capture naturelle reste nécessaire avant une lecture de
+géométrie : les tailles, transforms et masques de la frame précédente ne doivent
+pas contaminer la nouvelle capture. Le host ne détruit toutefois plus les
+ressources overlay persistantes à cette étape ; elles sont hors flux et peuvent
+être réutilisées par le commit suivant.
+
+La séparation est maintenant :
+
+1. une préparation explicite de capture naturelle, appelée avant les captures
+   FIRST/LAST et après un resize ;
+2. un commit normal qui conserve et réconcilie les ressources locales et overlay
+   déjà actives ;
+3. un nettoyage complet réservé à la destruction ou à une libération de mode.
+
+Cette séparation préserve le nettoyage complet lors d'un changement de mode ou
+d'une destruction et évite toute création DOM dans la boucle de présentation
+normale.
+
+Le ghost n'écrit pas les longhands `translate`, `rotate` et `scale` lorsqu'ils
+sont à leur valeur CSS neutre. Ils ne sont neutralisés par `none` que si la
+valeur auteur est non neutre et risquerait de se composer avec la matrice de
+présentation. La propriété `transition` n'est pas modifiée par ce nettoyage.
+
+### Preview DnD
+
+`HtmlListDndPreview` n'est pas une seconde capture géométrique : il intervient
+pendant le geste, avant le commit logique du `move`, pour résoudre le hit-test,
+placer le ghost et animer les voisins. Il ne doit donc pas être remplacé par
+`HtmlMotionSystem`, qui résout une scène déjà committée à un temps absolu.
+
+Les optimisations sans changement de contrat sont : limiter les mesures aux
+listes candidates et au slot dont la cible a changé, conserver les rectangles
+jusqu'à l'invalidation par déplacement du ghost ou resize, et réutiliser le
+ghost déjà créé. Les primitives de rectangle stabilisé et de transition FLIP
+sont maintenant isolées dans `html-transient-flip.ts`, afin d'être partagées
+par les previews HTML sans dupliquer leur algorithme. La décision de cible et le
+cycle de capture restent dans la capacité `list`/preview.
+
+### Correction de régression — ordre et masques overlay
+
+La réutilisation a d'abord laissé deux états transitoires vivre au-delà de la
+frame qui les avait produits : les sources masquées pouvaient contaminer la
+capture naturelle, et un descendant rendu séparément pouvait rester masqué
+dans le ghost de son ancien parent. La boucle de commit recréait aussi
+implicitement l'ordre DOM en recréant les ghosts.
+
+Le contrat corrigé est explicite :
+
+- `prepareNaturalCapture()` retire les masques des sources overlay et les
+  masques de descendants suivis avant toute lecture de géométrie ;
+- `commit()` réordonne les ghosts existants selon `orderParentFirst` par
+  déplacement DOM, sans création de nœud ;
+- les masques de descendants indépendants sont enregistrés pour la frame
+  courante, puis retirés avant d'appliquer le nouvel ensemble ;
+- un ghost stable reste donc réutilisable sans conserver une relation
+  parent/enfant obsolète.
+
+Le test de régression couvre l'ajout tardif du parent, le réordonnancement
+parent puis enfant et le retrait du masque après disparition de l'enfant
+indépendant. Safari a été vérifié sur les passages `1930 ms`, `7200 ms`,
+`9000 ms`, puis retour à `7200 ms`.
+
+### Rebuild des frontières
+
+`init()`, `resize()` et la fermeture d'une capture reconstruisent plusieurs fois
+les frontières parce que deux vues sémantiques doivent rester distinctes :
+
+- `replayMotionBoundaries` inclut les faits `persist-only` pour le seek ;
+- `presentationMotionBoundaries` décrit la tête de lecture courante et peut
+  inclure la remise live `endEmit`.
+
+Ces tableaux ne doivent pas être fusionnés. En revanche, la compilation du
+schedule, la capture des frontières et l'affectation au système de mouvement
+peuvent être regroupées dans une orchestration commune, avec un paramètre
+explicite pour la vue demandée. La capture live FIRST reste un chemin distinct,
+car elle provient de la pose visible avant le commit et non de
+`resolveSceneBeforeBoundary()`.
+
+### Documentation historique
+
+`projet/notes/2026-08-02-flip-reprise.md` est une archive et ne doit plus être
+lu comme un contrat : il conserve des noms supprimés tels que `HtmlFlipRuntime`
+et `FlipCapture`. Le contrat courant est celui du présent plan et des README de
+`runner`, `motion` et `player`.

@@ -63,6 +63,8 @@ export type HtmlMotionStyleLayer = Readonly<{
   clearHidden: (node: HTMLElement) => void
   /** Clones a subtree without carrying host-owned transient presentation state. */
   captureTemplate: (node: HTMLElement) => HTMLElement
+  /** Synchronizes an existing template without creating DOM nodes when its structure is stable. */
+  syncTemplate: (source: HTMLElement, target: HTMLElement) => boolean
 }>
 
 /** Creates a transient presentation layer without taking ownership of authored CSS declarations. */
@@ -91,6 +93,7 @@ function createStylesheetLayer(): HtmlMotionStyleLayer {
     applyHidden: (node) => node.setAttribute(HIDDEN_ATTRIBUTE, ''),
     clearHidden: (node) => node.removeAttribute(HIDDEN_ATTRIBUTE),
     captureTemplate: (node) => captureCleanTemplate(node),
+    syncTemplate: (source, target) => syncCleanTemplate(source, target, () => undefined),
   }
 }
 
@@ -118,6 +121,11 @@ function createInlineFallbackLayer(): HtmlMotionStyleLayer {
     applyHidden: (node) => applyInlineContribution(node, 'visibility', 'hidden', hiddenContributions),
     clearHidden: (node) => clearInlineContributions(node, ['visibility'], hiddenContributions),
     captureTemplate: (node) => captureInlineTemplate(node, localContributions, hiddenContributions),
+    syncTemplate: (source, target) => syncCleanTemplate(source, target, (sourceNode, targetNode) => {
+      if (!(sourceNode instanceof HTMLElement) || !(targetNode instanceof HTMLElement)) return
+      restoreTemplateContributions(sourceNode, targetNode, localContributions)
+      restoreTemplateContributions(sourceNode, targetNode, hiddenContributions)
+    }),
   }
 }
 
@@ -140,6 +148,64 @@ function captureInlineTemplate(
     restoreTemplateContributions(source, target, hiddenContributions)
   }, node)
   return clone
+}
+
+/** Synchronizes one existing source/template pair without creating stable child nodes. */
+function syncCleanTemplate(
+  source: HTMLElement,
+  target: HTMLElement,
+  restore: (source: Element, target: Element) => void,
+): boolean {
+  return syncTemplateTree(source, target, restore)
+}
+
+/** Synchronizes attributes and text for a structurally identical element subtree. */
+function syncTemplateTree(
+  source: Element,
+  target: Element,
+  restore: (source: Element, target: Element) => void,
+): boolean {
+  if (source.tagName !== target.tagName || source.namespaceURI !== target.namespaceURI) return false
+
+  const sourceAttributes = new Map(Array.from(source.attributes).map((attribute) => [attribute.name, attribute.value]))
+  for (const attribute of Array.from(target.attributes)) {
+    if (isTransientAttribute(attribute.name)) {
+      target.removeAttribute(attribute.name)
+      continue
+    }
+    if (!sourceAttributes.has(attribute.name)) target.removeAttribute(attribute.name)
+  }
+  for (const [name, value] of sourceAttributes) {
+    if (isTransientAttribute(name)) continue
+    if (target.getAttribute(name) !== value) target.setAttribute(name, value)
+  }
+  for (const slot of TRANSIENT_STYLE_SLOTS) removeStyleSlot(target as HTMLElement, slot)
+  restore(source, target)
+
+  const sourceChildren = Array.from(source.childNodes)
+  const targetChildren = Array.from(target.childNodes)
+  if (sourceChildren.length !== targetChildren.length) return false
+  for (let index = 0; index < sourceChildren.length; index += 1) {
+    const sourceChild = sourceChildren[index]
+    const targetChild = targetChildren[index]
+    if (sourceChild.nodeType !== targetChild.nodeType) return false
+    if (isElementNode(sourceChild) && isElementNode(targetChild)) {
+      if (!syncTemplateTree(sourceChild, targetChild, restore)) return false
+      continue
+    }
+    if (sourceChild.nodeValue !== targetChild.nodeValue) targetChild.nodeValue = sourceChild.nodeValue
+  }
+  return true
+}
+
+/** Tests whether one attribute is owned by the transient motion layer. */
+function isTransientAttribute(name: string): boolean {
+  return (TRANSIENT_ATTRIBUTES as readonly string[]).includes(name)
+}
+
+/** Narrows one node to an element without relying on a specific browser class. */
+function isElementNode(value: Node): value is Element {
+  return value.nodeType === 1
 }
 
 /** Walks a source/clone pair and removes every host-owned transient marker. */

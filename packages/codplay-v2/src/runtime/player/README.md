@@ -26,7 +26,8 @@ It does not measure browser geometry and does not own an animation clock.
 `StructuralTimeline` builds complete immutable child-order snapshots from
 compiled event boundaries. It replaces mutable list replay and historical module
 state. Every `SolvedScene` receives the order selected by that same timeline,
-whether its caller is Play, Seek or the isolated HTML layout sampler.
+whether its caller is Play, Seek or the runner's explicit visible-node geometry
+capture phase.
 
 The timeline exposes both sides of an event boundary:
 
@@ -68,10 +69,11 @@ The player supplies one event-identity allocator to every dispatcher instance;
 successive live events therefore cannot collide when a capture start and its
 end are dispatched through separate calls.
 
-The visible runner and its isolated measurement host share this journal. Play
-may update the presentation immediately, while a later Seek reads the same
-source, emitted events, strap events and state updates without calling any
-strap or transform again.
+The visible runner owns this journal. Play may update the presentation
+immediately, while a later Seek reads the same source, emitted events, strap
+events and state updates without calling any strap or transform again. The
+runner's geometry-capture phase uses the same persistent component host and does
+not create a second player or playback circuit.
 
 The player capture facade (`beginCapture`, `trackCapture`, `endCapture`,
 `cancelCapture`) is source-agnostic. Samples are not events. `endEmit` follows

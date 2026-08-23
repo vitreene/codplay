@@ -207,6 +207,21 @@ export class RuntimePlayer {
     return this.includePersistOnlyInCurrent
   }
 
+  /**
+   * Presents one solved scene on the persistent component host for runner-owned
+   * geometry capture, without advancing state, modules, media or live actions.
+   */
+  presentSceneForGeometryCapture(scene: SolvedScene): void {
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
+      throw new Error('Geometry capture requires an initialized runtime player.')
+    }
+    this.componentRuntime?.sync(scene)
+    this.materializer?.materializeScene(scene, {
+      moveDeltas: [],
+      phase: 'geometry-capture',
+    })
+  }
+
   /** Validates capabilities and attaches this player to the shared engine. */
   init(): PlayerInitResult {
     const diagnostics = new DiagnosticCollector()

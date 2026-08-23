@@ -5,9 +5,10 @@ import type { HtmlMotionPresentationHost } from '../../../src/runtime/runner/htm
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 import type {
   LayoutSnapshot,
+  MotionBoundary,
+  MotionIntent,
   PresentationFrame,
   RelativeMotionPose,
-  ScheduledMotionIntent,
 } from '../../../src/runtime/motion'
 
 const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -23,38 +24,32 @@ describe('HtmlMotionSystem live capture handoff', () => {
       commit: (frame: PresentationFrame): void => {
         frames.push(frame)
       },
+      prepareNaturalCapture: (): void => undefined,
       destroy: (): void => undefined,
     }
-    const replayIntents: readonly ScheduledMotionIntent[] = [
-      createIntent('persist-only', 0),
-      createIntent('end-emit', 100),
-    ]
-    const liveIntents: readonly ScheduledMotionIntent[] = [createIntent('end-emit', 100)]
-    let includePersistOnly = true
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      intents: replayIntents,
-      getIntents: () => includePersistOnly ? replayIntents : liveIntents,
-      includePersistOnly: () => includePersistOnly,
-      measureBefore: (timeMs) => timeMs === 0 ? source : targetAtRelease,
-      measureAt: (timeMs) => timeMs === 0 ? target : targetAtRelease,
+      captureCurrent: () => targetAtRelease,
     })
 
+    const replayBoundaries = [
+      createBoundary(0, source, target, 'persist-only'),
+      createBoundary(100, targetAtRelease, targetAtRelease, 'end-emit'),
+    ]
+    const liveBoundaries = [
+      createBoundary(100, liveRelease, targetAtRelease, 'end-emit'),
+    ]
     system.initialize()
-    includePersistOnly = false
-    system.setLiveFirstLayout(liveRelease)
+    system.setBoundaries(liveBoundaries)
     system.present(100)
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(60)
 
-    includePersistOnly = true
-    system.clearLiveFirstLayouts()
+    system.setBoundaries(replayBoundaries)
     system.present(100)
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(100)
   })
 
   it('replaces the live source when two captures close at one logical time', () => {
-    const source = createSnapshot(0, 'list-a', 0)
-    const target = createSnapshot(0, 'list-b', 100)
     const targetAtRelease = createSnapshot(100, 'list-b', 100)
     const firstLiveRelease = createSnapshot(100, 'list-a', 20)
     const secondLiveRelease = createSnapshot(100, 'list-a', 80)
@@ -63,22 +58,17 @@ describe('HtmlMotionSystem live capture handoff', () => {
       commit: (frame: PresentationFrame): void => {
         frames.push(frame)
       },
+      prepareNaturalCapture: (): void => undefined,
       destroy: (): void => undefined,
     }
-    let includePersistOnly = false
-    const liveIntents = [createIntent('end-emit', 100)]
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      intents: liveIntents,
-      getIntents: () => liveIntents,
-      includePersistOnly: () => includePersistOnly,
-      measureBefore: (timeMs) => timeMs === 0 ? source : targetAtRelease,
-      measureAt: (timeMs) => timeMs === 0 ? target : targetAtRelease,
+      captureCurrent: () => targetAtRelease,
     })
 
+    system.setBoundaries([createBoundary(100, firstLiveRelease, targetAtRelease, 'end-emit')])
     system.initialize()
-    system.setLiveFirstLayout(firstLiveRelease)
-    system.setLiveFirstLayout(secondLiveRelease)
+    system.setBoundaries([createBoundary(100, secondLiveRelease, targetAtRelease, 'end-emit')])
     system.present(100)
 
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(80)
@@ -94,23 +84,19 @@ describe('HtmlMotionSystem live capture handoff', () => {
       commit: (frame: PresentationFrame): void => {
         frames.push(frame)
       },
+      prepareNaturalCapture: (): void => undefined,
       destroy: (): void => undefined,
     }
-    const intents: readonly ScheduledMotionIntent[] = [
-      createIntent('end-emit-1', 100),
-      createIntent('end-emit-2', 200),
-    ]
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      intents,
-      includePersistOnly: () => false,
-      measureBefore: (timeMs) => timeMs === 100 ? source : secondSource,
-      measureAt: (timeMs) => timeMs === 100 ? firstTarget : secondTarget,
+      captureCurrent: () => secondTarget,
     })
 
+    system.setBoundaries([
+      createBoundary(100, source, firstTarget, 'end-emit-1'),
+      createBoundary(200, secondSource, secondTarget, 'end-emit-2'),
+    ])
     system.initialize()
-    system.setLiveFirstLayout(source)
-    system.setLiveFirstLayout(secondSource)
     system.present(200)
 
     const item = frames.at(-1)?.items.get('item')
@@ -121,52 +107,85 @@ describe('HtmlMotionSystem live capture handoff', () => {
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(180)
   })
 
-  it('does not rebuild a dynamic schedule while its revision is unchanged', () => {
+  it('uses only the captured boundary data and current active layout', () => {
     const frames: PresentationFrame[] = []
     const host = {
       commit: (frame: PresentationFrame): void => {
         frames.push(frame)
       },
+      prepareNaturalCapture: (): void => undefined,
       destroy: (): void => undefined,
     }
-    const intents: readonly ScheduledMotionIntent[] = []
-    let revision = 0
-    let getIntentsCalls = 0
+    const source = createSnapshot(0, 'list-a', 0)
+    const target = createSnapshot(0, 'list-b', 100)
+    let captureCalls = 0
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      intents,
-      getIntents: () => {
-        getIntentsCalls += 1
-        return intents
+      boundaries: [createBoundary(0, source, target, 'move')],
+      captureCurrent: () => {
+        captureCalls += 1
+        return target
       },
-      getScheduleRevision: () => revision,
-      measureBefore: () => createSnapshot(0, 'list-a', 0),
-      measureAt: () => createSnapshot(0, 'list-a', 0),
     })
 
     system.initialize()
-    const callsAfterInitialize = getIntentsCalls
     system.present(0)
-    system.present(16)
-    expect(getIntentsCalls).toBe(callsAfterInitialize)
+    system.present(0)
+    expect(captureCalls).toBe(2)
+    expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(0)
+  })
 
-    revision += 1
-    system.present(32)
-    expect(getIntentsCalls).toBe(callsAfterInitialize + 1)
+  it('clears the previous presentation before capturing natural geometry', () => {
+    const order: string[] = []
+    const host = {
+      commit: (): void => {
+        order.push('commit')
+      },
+      prepareNaturalCapture: (): void => {
+        order.push('clear')
+      },
+      destroy: (): void => undefined,
+    }
+    const system = new HtmlMotionSystem({
+      host: host as unknown as HtmlMotionPresentationHost,
+      captureCurrent: () => {
+        order.push('capture')
+        return createSnapshot(0, 'list-a', 0)
+      },
+    })
+
+    system.initialize()
+    system.present(0)
+
+    expect(order).toEqual(['clear', 'capture', 'commit'])
   })
 })
 
-/** Creates one scheduled movement intent for a capture boundary. */
-function createIntent(id: string, startAt: number): ScheduledMotionIntent {
+/** Creates one direct movement intent for a captured boundary. */
+function createIntent(id: string, startAt: number): MotionIntent {
   return {
     id,
-    eventId: id,
     itemId: 'item',
-    declarationPath: [Number.MAX_SAFE_INTEGER, startAt],
     startAt,
     duration: 100,
     ease: 'linear',
     presentationMode: 'reparent',
+  }
+}
+
+/** Creates one one-item before/after motion boundary. */
+function createBoundary(
+  timeMs: number,
+  before: LayoutSnapshot,
+  after: LayoutSnapshot,
+  intentId: string,
+): MotionBoundary {
+  return {
+    id: `boundary:${intentId}:${timeMs}`,
+    timeMs,
+    before,
+    after,
+    intents: [createIntent(intentId, timeMs)],
   }
 }
 

@@ -1,10 +1,13 @@
-# FLIP V2 — état de reprise
+# FLIP V2 — état de reprise (archive historique)
+
+> Cette note est conservée pour contexte historique uniquement. Elle a été
+> remplacée par [`plan/runner-flip-integration-study.md`](../../plan/runner-flip-integration-study.md)
+> et ne décrit pas l'architecture V2 courante. Les noms de runtime, caches,
+> captures et bridges mentionnés ici sont non contractuels.
 
 ## Statut
 
-FLIP HTML V2 est **En cours**. Le socle est exploitable et une première demo de
-validation est approuvée, mais la capacité n'est pas terminée pour les contextes
-normatifs complexes.
+**Archive historique — remplacée.**
 
 ## Référence validée
 

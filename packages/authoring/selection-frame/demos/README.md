@@ -26,8 +26,8 @@ first validated FLIP fixture and keeps its current timeline and debug controls.
 
 The stress root fills its containing zone in both dimensions. Its A–D anchors
 and vertical motion use the root's responsive percentage coordinate system, and
-the stage observes its own size so width changes rebuild the measured motion
-endpoints at the current logical time.
+the stage observes its own size so width changes recapture the motion endpoints
+at the current logical time.
 
 The stress entry point remains a separate Vite page, but its scene, parentage,
 capture, overlay and transport lifecycle are owned by the V2 runner. The first
@@ -62,7 +62,7 @@ demos. It is not only a regression fixture. A standard demo should retain its
 following boundaries:
 
 - a declarative `SceneDoc` as the scenario source;
-- `HtmlPlayerRunner` as the only owner of materialization, measurement,
+- `HtmlPlayerRunner` as the only owner of materialization and position capture,
   presentation and the clock-facing Play/Seek entry points;
 - the shared demo shell with Play, Reset, absolute-time seek, named
   checkpoints and an observable status line;

@@ -7,12 +7,18 @@ import { createHtmlMotionStyleLayer, type HtmlMotionStyleLayer } from './html-mo
 type OverlayResource = {
   source: HTMLElement
   ghost: HTMLElement
+  revision?: string
+  neutralizedTransformProperties: Set<GhostTransformProperty>
 }
+
+type OverlayRevisionResolver = (itemId: string) => string | undefined
+type GhostTransformProperty = 'translate' | 'rotate' | 'scale'
 
 /** Commits one complete motion frame without owning temporal state. */
 export class HtmlMotionPresentationHost {
   private readonly resources = new Map<string, OverlayResource>()
   private readonly localSources = new Map<string, HTMLElement>()
+  private readonly hiddenDescendantClones = new Set<HTMLElement>()
   private readonly root: Element
   private readonly resolveHandle: (itemId: string) => HTMLElement | undefined
   private readonly transientStyles: HtmlMotionStyleLayer
@@ -24,8 +30,24 @@ export class HtmlMotionPresentationHost {
     this.transientStyles = createHtmlMotionStyleLayer(root)
   }
 
+  /** Removes the host-owned presentation so the visible nodes expose natural geometry. */
+  prepareNaturalCapture(): void {
+    this.clearHiddenDescendantClones()
+    for (const resource of this.resources.values()) this.transientStyles.clearHidden(resource.source)
+    for (const source of this.localSources.values()) this.transientStyles.clearLocal(source)
+    this.localSources.clear()
+  }
+
+  /** Releases every transient presentation resource, including overlay DOM. */
+  clearTransientPresentation(): void {
+    this.prepareNaturalCapture()
+    for (const resource of this.resources.values()) this.release(resource)
+    this.resources.clear()
+    removeElement(findOverlayLayer(this.root))
+  }
+
   /** Applies exactly the source/overlay representation declared by one frame. */
-  commit(frame: PresentationFrame): void {
+  commit(frame: PresentationFrame, resolveRevision?: OverlayRevisionResolver): void {
     if (!isMeasurableElement(this.root)) return
     const directOverlayItemIds = new Set([...frame.items.values()]
       .filter((item) => item.representation === 'reparent')
@@ -55,11 +77,23 @@ export class HtmlMotionPresentationHost {
     for (const itemId of orderedLocalItemIds) this.prepareLocal(itemId, frame)
     for (const itemId of orderedLocalItemIds) this.applyLocal(itemId, frame, rootPose)
 
-    for (const itemId of orderParentFirst(frame, activeItemIds)) this.refreshOverlay(itemId)
+    const orderedActiveItemIds = orderParentFirst(frame, activeItemIds)
+    for (const itemId of orderedActiveItemIds) {
+      this.ensureOverlay(itemId, resolveRevision?.(itemId))
+    }
+    const overlayLayer = this.resources.size === 0 ? undefined : ensureHtmlOverlayLayer(this.root)
+    if (overlayLayer !== undefined) {
+      for (const itemId of orderedActiveItemIds) {
+        const resource = this.resources.get(itemId)
+        if (resource !== undefined) overlayLayer.appendChild(resource.ghost)
+      }
+    }
+    this.clearHiddenDescendantClones()
     this.hideIndependentDescendantClones(activeItemIds)
 
-    const overlayLayer = activeItemIds.size === 0 ? undefined : findOverlayLayer(this.root)
-    const overlayPose = overlayLayer === undefined ? rootPose : captureHtmlPose(overlayLayer)
+    if (activeItemIds.size === 0) removeElement(findOverlayLayer(this.root))
+    const presentationOverlayLayer = activeItemIds.size === 0 ? undefined : overlayLayer ?? findOverlayLayer(this.root)
+    const overlayPose = presentationOverlayLayer === undefined ? rootPose : captureHtmlPose(presentationOverlayLayer)
     for (const itemId of activeItemIds) {
       const item = frame.items.get(itemId)
       const resource = this.resources.get(itemId)
@@ -71,12 +105,7 @@ export class HtmlMotionPresentationHost {
 
   /** Releases every overlay resource and restores all materialized sources. */
   destroy(): void {
-    for (const source of this.localSources.values()) this.transientStyles.clearLocal(source)
-    this.localSources.clear()
-    for (const resource of this.resources.values()) this.release(resource)
-    this.resources.clear()
-    const layer = findOverlayLayer(this.root)
-    removeElement(layer)
+    this.clearTransientPresentation()
   }
 
   /** Applies every layout-affecting local size before any local transform is solved. */
@@ -103,22 +132,67 @@ export class HtmlMotionPresentationHost {
     this.transientStyles.applyLocalTransform(source, resolveLocalPresentationMatrix(naturalPose, worldPose, parentPose))
   }
 
-  /** Rebuilds one ghost from current declarative component content. */
-  private refreshOverlay(itemId: string): void {
+  /** Reuses or creates one ghost for the current author materialization. */
+  private ensureOverlay(itemId: string, revision: string | undefined): void {
     const source = this.resolveHandle(itemId)
     if (source === undefined) return
     const previous = this.resources.get(itemId)
-    if (previous !== undefined) removeElement(previous.ghost)
+    if (previous !== undefined && previous.source === source) {
+      const unchanged = revision === undefined || previous.revision === revision
+      const synchronized = unchanged || this.transientStyles.syncTemplate(source, previous.ghost)
+      if (synchronized) {
+        previous.revision = revision
+        this.configureOverlayGhost(previous.ghost, itemId)
+        this.synchronizeGhostTransformProperties(previous)
+        this.transientStyles.applyHidden(source)
+        return
+      }
+      this.release(previous)
+    } else if (previous !== undefined) {
+      this.release(previous)
+    }
+
+    const overlayLayer = ensureHtmlOverlayLayer(this.root)
     const ghost = this.transientStyles.captureTemplate(source)
+    this.configureOverlayGhost(ghost, itemId)
+    overlayLayer.appendChild(ghost)
+    this.transientStyles.applyHidden(source)
+    const resource: OverlayResource = {
+      source,
+      ghost,
+      revision,
+      neutralizedTransformProperties: new Set(),
+    }
+    this.resources.set(itemId, resource)
+    this.synchronizeGhostTransformProperties(resource)
+  }
+
+  /** Restores the fixed overlay properties after an in-place template sync. */
+  private configureOverlayGhost(ghost: HTMLElement, itemId: string): void {
     ghost.setAttribute('data-codplay-motion-item', itemId)
     ghost.style.position = 'absolute'
     ghost.style.left = '0px'
     ghost.style.top = '0px'
     ghost.style.margin = '0'
     ghost.style.pointerEvents = 'none'
-    ensureHtmlOverlayLayer(this.root).appendChild(ghost)
-    this.transientStyles.applyHidden(source)
-    this.resources.set(itemId, { source, ghost })
+  }
+
+  /** Neutralizes only non-default author transform longhands that would compose with the pose matrix. */
+  private synchronizeGhostTransformProperties(resource: OverlayResource): void {
+    const computed = resource.source.ownerDocument.defaultView?.getComputedStyle(resource.source)
+    if (computed === undefined) return
+    for (const property of ['translate', 'rotate', 'scale'] as const) {
+      const value = computed[property]
+      if (isDefaultTransformPropertyValue(property, value)) {
+        if (resource.neutralizedTransformProperties.has(property)) {
+          resource.ghost.style.removeProperty(property)
+          resource.neutralizedTransformProperties.delete(property)
+        }
+        continue
+      }
+      resource.ghost.style.setProperty(property, 'none')
+      resource.neutralizedTransformProperties.add(property)
+    }
   }
 
   /** Hides an independently presented item inside every active ancestor clone. */
@@ -130,9 +204,18 @@ export class HtmlMotionPresentationHost {
         if (ancestorId === descendantId) continue
         const path = findElementPath(ancestor.source, descendantSource)
         const clone = path === undefined ? undefined : resolveElementPath(ancestor.ghost, path)
-        if (clone !== undefined) this.transientStyles.applyHidden(clone)
+        if (clone !== undefined) {
+          this.transientStyles.applyHidden(clone)
+          this.hiddenDescendantClones.add(clone)
+        }
       }
     }
+  }
+
+  /** Clears only descendant-clone markers created by the previous presentation frame. */
+  private clearHiddenDescendantClones(): void {
+    for (const clone of this.hiddenDescendantClones) this.transientStyles.clearHidden(clone)
+    this.hiddenDescendantClones.clear()
   }
 
   /** Restores one source and removes its presentation resource. */
@@ -151,11 +234,21 @@ function applyGhostPose(ghost: HTMLElement, root: HtmlPose, pose: HtmlPose): voi
   ghost.style.minHeight = '0'
   ghost.style.boxSizing = 'border-box'
   ghost.style.transformOrigin = '0 0'
-  ghost.style.translate = 'none'
-  ghost.style.rotate = 'none'
-  ghost.style.scale = 'none'
   ghost.style.transform = `matrix(${localized.a}, ${localized.b}, ${localized.c}, ${localized.d}, ${localized.e}, ${localized.f})`
   ghost.style.zIndex = '20'
+}
+
+/** Reports whether one author transform longhand is at its neutral CSS value. */
+function isDefaultTransformPropertyValue(property: GhostTransformProperty, value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '' || normalized === 'none') return true
+  if (property === 'rotate') return /^0(?:deg|grad|rad|turn)?$/.test(normalized)
+  if (property === 'scale') {
+    const factors = normalized.split(/\s+/)
+    return factors.length <= 3 && factors.every((factor) => factor === '1')
+  }
+  const translations = normalized.split(/\s+/)
+  return translations.length <= 3 && translations.every((part) => /^0(?:[a-z%]+)?$/.test(part))
 }
 
 /** Resolves a live-node CSS matrix from one root-resolved graph pose. */
@@ -220,7 +313,9 @@ function resolveElementPath(root: HTMLElement, path: readonly number[]): HTMLEle
 
 /** Finds the single overlay layer owned by this host. */
 function findOverlayLayer(root: Element): HTMLElement | undefined {
-  const layer = Array.from(root.children).find((child) => child.hasAttribute('data-codplay-motion-overlay'))
+  const children = (root as Element & { children?: HTMLCollection }).children
+  if (children === undefined) return undefined
+  const layer = Array.from(children).find((child) => child.hasAttribute('data-codplay-motion-overlay'))
   return layer instanceof HTMLElement ? layer : undefined
 }
 

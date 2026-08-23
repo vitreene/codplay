@@ -17,6 +17,7 @@ import {
 import { HtmlPointerCaptureSourceAdapter } from '../capture'
 import type { RuntimeCaptureState } from '../capture'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
+import type { LayoutSnapshot, MotionBoundary } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import {
   HtmlComponentMaterializer,
@@ -24,7 +25,11 @@ import {
 } from './html-component-materializer'
 import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 import { HtmlMotionSystem } from './html-motion-system'
-import { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
+import {
+  captureCurrentHtmlMotionLayout,
+  captureHtmlLiveMotionBoundary,
+  captureHtmlMotionBoundaries,
+} from './html-motion-capture'
 import type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
@@ -62,7 +67,7 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   root: HTMLElement
   rootTargets: readonly HtmlRootTarget[]
   catalog: RuntimeCapabilityCatalog
-  /** Resources already made available to both visible and measurement engines. */
+  /** Resources already made available to the visible engine. */
   resources?: readonly string[]
   /** Metadata already obtained from the external preload boundary. */
   resourceMetadata?: RuntimePreloadMetadata
@@ -108,14 +113,10 @@ export class HtmlPlayerRunner {
     persoNodes: new Map<string, unknown>(),
     targetNodes: new Map<string, unknown>(),
   }
-  private readonly measurementPlayer: RuntimePlayer | undefined
-  private readonly measurementEngine: RuntimeEngine | undefined
-  private readonly measurementRoot: HTMLElement | undefined
-  private readonly measurementNodes: {
-    persoNodes: Map<string, unknown>
-    targetNodes: Map<string, unknown>
-  } | undefined
-  private readonly motionSystem: HtmlMotionSystem | undefined
+  private motionSystem: HtmlMotionSystem | undefined = undefined
+  private replayMotionBoundaries: readonly MotionBoundary[] = []
+  private presentationMotionBoundaries: readonly MotionBoundary[] = []
+  private readonly liveFirstLayouts = new Map<string, { timeMs: number; snapshot: LayoutSnapshot }>()
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
   private readonly interactionLockEnabled: boolean
@@ -125,7 +126,7 @@ export class HtmlPlayerRunner {
   private materializationEpoch = 0
   private readonly resourceMetadata = new Map<string, RuntimePreloadMetadata[string]>()
 
-  /** Creates visible and isolated-measurement hosts from the same compiled scene. */
+  /** Creates one visible author host and one optional motion presentation host. */
   constructor(options: HtmlPlayerRunnerOptions) {
     this.defaultTicker = options.ticker
     this.interactionRoot = options.root
@@ -173,94 +174,49 @@ export class HtmlPlayerRunner {
       onCaptureTrack: options.onCaptureTrack,
       resolveEndCaptureState: (input) => {
         const captureState = options.resolveEndCaptureState?.(input)
-        this.captureLiveFirstLayout(this.player.getCurrentTimeMs())
+        this.captureLiveFirstLayout(input.captureId, this.player.getCurrentTimeMs())
         return captureState
       },
-      onCaptureClose: options.onCaptureClose,
+      onCaptureClose: (input) => {
+        this.completeLiveCaptureMotion(input.captureId, input.completed)
+        options.onCaptureClose?.(input)
+      },
     })
 
-    const measurementRoot = createMeasurementRoot(options.root)
-    this.measurementRoot = measurementRoot
-    if (measurementRoot === undefined) {
-      this.measurementNodes = undefined
-      this.measurementPlayer = undefined
-      this.measurementEngine = undefined
+    const compiledIntents = compileMotionSchedule(options.compiledScene)
+    if (compiledIntents.length === 0) {
       this.motionSystem = undefined
       return
     }
-
-    const measurementNodes = {
-      persoNodes: new Map<string, unknown>(),
-      targetNodes: new Map<string, unknown>(),
-    }
-    this.measurementNodes = measurementNodes
-    for (const target of options.rootTargets) measurementNodes.targetNodes.set(target.id, measurementRoot)
-    const measurementMaterializer = new HtmlComponentMaterializer(
-      measurementNodes,
-      this.materializerContext,
-    )
-    const measurementRuntime = createComponentRuntime(options.catalog, measurementMaterializer, this.resourceMetadata)
-    const measurementEngine = new RuntimeEngine(options.catalog, { resources: options.resources })
-    this.measurementEngine = measurementEngine
-    const measurementPlayer = new RuntimePlayer(
-      `${options.id}:measurement`,
-      measurementEngine,
-      options.compiledScene,
-      undefined,
-      options.strapCollections,
-      this.player.trackJournal,
-      mountTargets,
-      measurementMaterializer,
-      measurementRuntime,
-      options.functions,
-    )
-    this.measurementPlayer = measurementPlayer
-    const motionHost = new HtmlMotionPresentationHost(
-      options.root,
-      (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
-    )
-    /** Materializes and captures one pure solved state in the isolated measurement host. */
-    const measure = (scene: ReturnType<RuntimePlayer['resolveSceneAt']>) => {
-      syncMeasurementRoot(options.root, measurementRoot)
-      measurementRuntime.sync(scene)
-      measurementMaterializer.materializeScene(scene, {
-        moveDeltas: [],
-      })
-      return captureHtmlLayoutSnapshot(measurementRoot, measurementNodes.persoNodes, scene)
-    }
-    this.motionSystem = new HtmlMotionSystem({
-      host: motionHost,
-      getIntents: () => compileMotionSchedule(
-        options.compiledScene,
-        this.player.trackJournal,
-        { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
-      ),
-      getScheduleRevision: () => this.player.trackJournal.getRevision(),
-      includePersistOnly: () => this.player.includesPersistOnlyInCurrent(),
-      measureAt: (timeMs) => measure(
-        measurementPlayer.resolveSceneAt(timeMs, this.player.includesPersistOnlyInCurrent()),
-      ),
-      measureBefore: (timeMs) => measure(
-        measurementPlayer.resolveSceneBeforeBoundary(timeMs, this.player.includesPersistOnlyInCurrent()),
-      ),
-    })
+    this.motionSystem = this.createMotionSystem()
   }
 
-  /** Initializes the visible player, isolated measurer, and immutable motion graph. */
+  /** Initializes the visible player and captures motion boundaries when required. */
   init(): PlayerInitResult {
     const visible = this.player.init()
     if (!visible.ok) return visible
-    if (this.measurementPlayer === undefined || this.motionSystem === undefined) {
+    if (this.motionSystem === undefined) {
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
       return visible
     }
-    const measurement = this.measurementPlayer.init()
-    if (!measurement.ok) {
-      this.player.destroy()
-      return measurement
-    }
     try {
+      this.motionSystem.prepareGeometryCapture()
+      const intents = compileMotionSchedule(
+        this.player.compiledScene,
+        this.player.trackJournal,
+        { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
+      )
+      const boundaries = captureHtmlMotionBoundaries({
+        player: this.player,
+        root: this.interactionRoot,
+        nodes: this.nodes.persoNodes,
+        intents,
+        includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+      })
+      this.replayMotionBoundaries = boundaries
+      this.presentationMotionBoundaries = boundaries
+      this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
       this.motionSystem.initialize()
       this.motionSystem.present(this.player.getCurrentTimeMs())
       this.syncInteractionLock()
@@ -268,7 +224,6 @@ export class HtmlPlayerRunner {
       return visible
     } catch (error) {
       this.motionSystem.destroy()
-      this.measurementPlayer.destroy()
       this.player.destroy()
       return {
         ok: false,
@@ -294,7 +249,6 @@ export class HtmlPlayerRunner {
 
     const resourceUrls = mergeRuntimePreloadManifests(manifest).entries.map((entry) => entry.url)
     this.engine.registerResources(resourceUrls)
-    this.measurementEngine?.registerResources(resourceUrls)
     const init = this.init()
     if (!init.ok) return { ok: false, phase: 'init', preload, init }
     this.play(options.ticker)
@@ -336,22 +290,58 @@ export class HtmlPlayerRunner {
   seek(timeMs: number): PlayerSeekResult {
     // The live release handoff belongs only to the current capture close. A
     // seek must rebuild the replayable persist-only source-to-target motion.
-    this.motionSystem?.clearLiveFirstLayouts()
+    this.liveFirstLayouts.clear()
+    if (this.motionSystem !== undefined) {
+      this.presentationMotionBoundaries = this.replayMotionBoundaries
+      this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
+    }
     const result = this.player.seek(timeMs)
     this.syncInteractionLock()
     return result
   }
 
-  /** Emits one live event through the runner's shared visible/measurement journal. */
+  /** Emits one live event through the visible player's shared journal. */
   emit(input: Omit<RuntimeEventInput, 'applyAtMs'> & { applyAtMs?: number }): Promise<RuntimeEventDispatchResult> {
     return this.player.emit(input)
   }
 
-  /** Updates the HTML length scale and invalidates measured layout endpoints. */
+  /** Updates the HTML length scale and recaptures motion endpoints if needed. */
   resize(numericLengthScale?: number): void {
     if (numericLengthScale !== undefined) this.materializerContext.numericLengthScale = numericLengthScale
     this.materializationEpoch += 1
-    this.motionSystem?.invalidate()
+    if (this.motionSystem !== undefined && this.player.getSolvedScene() !== undefined) {
+      this.motionSystem.prepareGeometryCapture()
+      try {
+        const replayIntents = compileMotionSchedule(
+          this.player.compiledScene,
+          this.player.trackJournal,
+          { includePersistOnly: true },
+        )
+        this.replayMotionBoundaries = captureHtmlMotionBoundaries({
+          player: this.player,
+          root: this.interactionRoot,
+          nodes: this.nodes.persoNodes,
+          intents: replayIntents,
+          includePersistOnly: true,
+        })
+        const presentationIntents = compileMotionSchedule(
+          this.player.compiledScene,
+          this.player.trackJournal,
+          { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
+        )
+        this.presentationMotionBoundaries = captureHtmlMotionBoundaries({
+          player: this.player,
+          root: this.interactionRoot,
+          nodes: this.nodes.persoNodes,
+          intents: presentationIntents,
+          includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+        })
+        this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
+      } finally {
+        this.player.refresh()
+      }
+      return
+    }
     if (this.player.getSolvedScene() !== undefined) this.player.refresh()
     else this.motionSystem?.present(this.player.getCurrentTimeMs())
   }
@@ -381,9 +371,8 @@ export class HtmlPlayerRunner {
     return this.nodes.targetNodes.get(targetId)
   }
 
-  /** Captures the visible FIRST layout before a materializer-specific end commit. */
-  private captureLiveFirstLayout(timeMs: number): void {
-    if (this.motionSystem === undefined) return
+  /** Captures the visible FIRST layout before one capture close is committed. */
+  private captureLiveFirstLayout(captureId: string, timeMs: number): void {
     // The persist-only event is deliberately outside the current playback
     // head. The solved scene is therefore the exact logical state from which
     // the live endEmit move starts, including a previous drop at the same
@@ -391,19 +380,123 @@ export class HtmlPlayerRunner {
     // incorrectly include the earlier persist-only event and label the live
     // node with its destination instead of its source.
     const before = this.player.getSolvedScene() ?? this.player.resolveSceneBeforeBoundary(timeMs)
-    this.motionSystem.setLiveFirstLayout(captureHtmlLayoutSnapshot(this.interactionRoot, this.nodes.persoNodes, before))
+    const snapshot = captureCurrentHtmlMotionLayout(
+      this.interactionRoot,
+      this.nodes.persoNodes,
+      before,
+      new Set(Object.keys(before.persos)),
+    )
+    this.liveFirstLayouts.set(captureId, { timeMs, snapshot })
   }
 
-  /** Releases visual, measurement, component, and clock resources. */
+  /** Completes the same graph boundary after the normal capture event circuit. */
+  private completeLiveCaptureMotion(captureId: string, completed: boolean): void {
+    const first = this.liveFirstLayouts.get(captureId)
+    this.liveFirstLayouts.delete(captureId)
+    if (!completed || first === undefined) return
+
+    const replayIntents = compileMotionSchedule(
+      this.player.compiledScene,
+      this.player.trackJournal,
+      { includePersistOnly: true },
+    )
+    const currentIntents = compileMotionSchedule(
+      this.player.compiledScene,
+      this.player.trackJournal,
+      { includePersistOnly: false },
+    )
+    this.motionSystem?.prepareGeometryCapture()
+    const knownIntentIds = new Set(this.replayMotionBoundaries
+      .flatMap((boundary) => boundary.intents.map((intent) => intent.id)))
+    const liveIntents = currentIntents.filter((intent) => (
+      intent.startAt === first.timeMs && !knownIntentIds.has(intent.id)
+    ))
+
+    this.replayMotionBoundaries = captureHtmlMotionBoundaries({
+      player: this.player,
+      root: this.interactionRoot,
+      nodes: this.nodes.persoNodes,
+      intents: replayIntents,
+      includePersistOnly: true,
+    })
+    let presentationBoundaries = captureHtmlMotionBoundaries({
+      player: this.player,
+      root: this.interactionRoot,
+      nodes: this.nodes.persoNodes,
+      intents: currentIntents,
+      includePersistOnly: false,
+    })
+    if (liveIntents.length > 0) {
+      const liveBoundaries = captureHtmlLiveMotionBoundary({
+        player: this.player,
+        root: this.interactionRoot,
+        nodes: this.nodes.persoNodes,
+        first: first.snapshot,
+        intents: liveIntents,
+      })
+      const liveIntentIds = new Set(liveIntents.map((intent) => intent.id))
+      presentationBoundaries = [
+        ...presentationBoundaries.filter((boundary) => !boundary.intents.some((intent) => liveIntentIds.has(intent.id))),
+        ...liveBoundaries,
+      ]
+    }
+    this.presentationMotionBoundaries = Object.freeze(presentationBoundaries)
+    const motionSystem = this.motionSystem ?? this.createMotionSystem()
+    this.motionSystem = motionSystem
+    motionSystem.setBoundaries(this.presentationMotionBoundaries)
+    motionSystem.initialize()
+    motionSystem.present(this.player.getCurrentTimeMs())
+  }
+
+  /** Captures only the active visible item closure for one motion frame. */
+  private captureCurrentMotionLayout(timeMs: number, itemIds: ReadonlySet<string>) {
+    const scene = this.player.getSolvedScene()
+    if (scene === undefined) {
+      return {
+        timeMs,
+        revision: `${timeMs}:unavailable`,
+        items: new Map(),
+      }
+    }
+    return captureCurrentHtmlMotionLayout(this.interactionRoot, this.nodes.persoNodes, scene, itemIds)
+  }
+
+  /** Creates the one optional HTML motion presenter for this visible root. */
+  private createMotionSystem(): HtmlMotionSystem {
+    const motionHost = new HtmlMotionPresentationHost(
+      this.interactionRoot,
+      (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
+    )
+    return new HtmlMotionSystem({
+      host: motionHost,
+      captureCurrent: (timeMs, itemIds) => this.captureCurrentMotionLayout(timeMs, itemIds),
+      resolveSourceRevision: (itemId) => this.resolveMotionSourceRevision(itemId),
+    })
+  }
+
+  /** Resolves one logical author revision used to reuse an overlay template. */
+  private resolveMotionSourceRevision(itemId: string): string | undefined {
+    const scene = this.player.getSolvedScene()
+    const perso = scene?.persos[itemId]
+    if (scene === undefined || perso === undefined) return undefined
+    return [
+      scene.graph.revision,
+      serializeMotionRevision(perso.state),
+      serializeMotionRevision({
+        mounted: perso.placement.mounted,
+        targetId: perso.placement.targetId,
+        parentKey: perso.placement.parentKey,
+      }),
+    ].join(':')
+  }
+
+  /** Releases visual, component, and clock resources. */
   destroy(): void {
     if (this.ownsEngine) this.engine.stop()
     this.captureSourceAdapter.destroy()
     this.motionSystem?.destroy()
-    this.measurementPlayer?.destroy()
+    this.liveFirstLayouts.clear()
     this.player.destroy()
-    removeMeasurementRoot(this.measurementRoot)
-    this.measurementNodes?.persoNodes.clear()
-    this.measurementNodes?.targetNodes.clear()
     this.nodes.persoNodes.clear()
     this.nodes.targetNodes.clear()
     this.restoreInteractionLock()
@@ -427,7 +520,7 @@ export class HtmlPlayerRunner {
   }
 }
 
-/** Creates one component runtime around an isolated node registry. */
+/** Creates one component runtime around the visible node registry. */
 function createComponentRuntime(
   catalog: RuntimeCapabilityCatalog,
   materializer: RuntimeMaterializer,
@@ -438,39 +531,6 @@ function createComponentRuntime(
     materializer,
     resourceMetadata,
   })
-}
-
-/** Creates an offscreen root with the visible host's layout constraints. */
-function createMeasurementRoot(root: HTMLElement): HTMLElement | undefined {
-  if (typeof HTMLElement === 'undefined' || !(root instanceof HTMLElement)) return undefined
-  const document = root.ownerDocument
-  const parent = document.body ?? document.documentElement
-  if (parent === null) return undefined
-  const measurementRoot = root.cloneNode(false) as HTMLElement
-  measurementRoot.setAttribute('data-codplay-measurement-root', '')
-  measurementRoot.setAttribute('aria-hidden', 'true')
-  measurementRoot.style.position = 'fixed'
-  measurementRoot.style.left = '-200vw'
-  measurementRoot.style.top = '0'
-  measurementRoot.style.visibility = 'hidden'
-  measurementRoot.style.pointerEvents = 'none'
-  parent.appendChild(measurementRoot)
-  syncMeasurementRoot(root, measurementRoot)
-  return measurementRoot
-}
-
-/** Synchronizes only host constraints; scene content is owned by the measurement player. */
-function syncMeasurementRoot(visibleRoot: HTMLElement, measurementRoot: HTMLElement): void {
-  const rect = visibleRoot.getBoundingClientRect()
-  if (rect.width > 0) measurementRoot.style.width = `${rect.width}px`
-  if (rect.height > 0) measurementRoot.style.height = `${rect.height}px`
-}
-
-/** Removes the isolated measurement tree. */
-function removeMeasurementRoot(root: HTMLElement | undefined): void {
-  if (root === undefined) return
-  if (typeof root.remove === 'function') root.remove()
-  else root.parentElement?.removeChild(root)
 }
 
 /** Creates the browser ticker lazily. */
@@ -488,4 +548,13 @@ function resolveCaptureEventTarget(root: HTMLElement): EventTarget | undefined {
   const ownerDocument = (root as { ownerDocument?: { defaultView?: EventTarget | null } }).ownerDocument
   return ownerDocument?.defaultView
     ?? (typeof globalThis.window === 'undefined' ? undefined : globalThis.window)
+}
+
+/** Serializes one compiled value defensively for presentation-resource reuse. */
+function serializeMotionRevision(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }

@@ -1,4 +1,8 @@
-export { buildMotionGraph, resolvePresentationFrame } from './motion-graph'
+export {
+  buildMotionGraph,
+  collectMotionPresentationItemIds,
+  resolvePresentationFrame,
+} from './motion-graph'
 export {
   compileMotionSchedule,
   type MotionScheduleOptions,

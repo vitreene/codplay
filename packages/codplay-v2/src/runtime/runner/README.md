@@ -1,8 +1,8 @@
 # HTML Runner V2
 
-> Status: Fixe
+> Status: En cours
 > CodPlay version: V2 foundation
-> Review: runner HTML et présentation locale/reparent validés le 2026-08-22; renderer de production hors périmètre
+> Review: capture géométrique sans DOM dupliqué en validation; renderer de production hors périmètre
 
 ## Role
 
@@ -18,33 +18,65 @@ SolvedScene(t)
   -> atomic HTML motion presentation
 ```
 
-Play and Seek invoke this exact operation. The runner contains no historical DOM
-replay or capture cache. A live capture may retain one presentation-only FIRST
-snapshot for its current `endEmit` handoff; it is cleared before a seek and is
-not a second replay circuit.
+Play and Seek invoke this exact operation. The runner retains only immutable
+geometry boundaries and, during an open live capture, the presentation-only
+FIRST snapshot needed by its current `endEmit` handoff. It never retains a
+historical DOM tree or a second replay circuit. Seek selects the replayable
+boundaries again; the live release pose is not replayed.
 
-The motion schedule is sourced from the visible player's shared journal. The
-runner passes its revision as the invalidation token, so schedule compilation
-is limited to initialization and actual journal or presentation-mode changes;
-the frame loop only resolves the already-built graph.
+The motion schedule is compiled from the visible player's shared journal at
+initialization, after a completed live capture, and after a resize. The frame
+loop captures only the current natural geometry of the active item closure and
+resolves the already-built graph; it does not rediscover actions or rebuild the
+schedule on every frame.
 
-## Isolated layout sampling
+## Position capture for motion
 
-The runner owns a second, offscreen HTML substrate used only to measure natural
-layout. It uses a companion `RuntimePlayer` with the same `StructuralTimeline`,
-capability catalog and the same HTML `RuntimeMaterializer` contract as the visible host, while
-sharing the visible player's `RuntimeTrackJournal`. Its width and height are
-copied exactly from the visible root; this matters for authored percentage-based
-positions, which must produce the same LAST geometry in both substrates.
+The runner never creates a second HTML tree, player, engine or materializer for
+FLIP. When a transition `move` exists, an explicit position-capture phase reads
+the persistent author nodes of the visible root and stores immutable geometry
+snapshots. The phase first removes the runner-owned local transforms, size slots,
+masks from the previous presentation. Existing overlay resources are retained
+outside normal layout and reused; they are not a measurement tree. The phase
+then uses the same materializations for `before` and `after`, without playing
+media, reloading sources or destroying components. This reset is synchronous:
+no browser frame is rendered between the natural-geometry read and the new
+motion commit.
 
-For each compiled movement boundary at `t` it measures:
+The reset also removes source masks left by the previous overlay frame. During
+the commit, existing ghosts are moved into the parent-first order required by
+the resolved frame; `appendChild` here reorders an existing node and does not
+create one. Independent descendant masks are tracked per frame and cleared
+before the next set is applied, so a reused ancestor ghost cannot retain a
+stale hidden child.
+
+The overlay does not emit neutral `translate`, `rotate` or `scale` declarations.
+Those longhands are neutralized with `none` only when the author source has a
+non-default value that would compose with the presentation matrix. This rule
+does not modify the `transition` declaration.
+
+This invariant concerns geometry capture. A `reparent` presentation may still
+own a transient overlay representation because the author node must remain in
+its logical materializer parent. The overlay is not a measurement tree and is
+not a second component materialization. Reusing an unchanged representation
+between frames is the normal path. The runner supplies a logical revision; the
+host synchronizes an existing template in place when its structure is stable and
+only creates a replacement after a structural invalidation.
+
+For each compiled movement boundary at `t` it captures:
 
 - FIRST: `resolveSceneBeforeBoundary(t)`, excluding the event;
 - LAST: `resolveSceneAt(t)`, including the event.
 
 LAST is therefore the immediate consequence of the event, never the global scene
-at the end of the animation duration. The isolated DOM supplies geometry only;
-it never supplies identity, order or parentage.
+at the end of the animation duration. The snapshots supply geometry only;
+`SolvedGraph` supplies identity, order, target and parentage. The capture is
+limited to the moved items, affected siblings and the ancestor/descendant
+closure required to compose their poses.
+
+If the compiled scene has no transition `move`, the runner does not initialize a
+motion system, capture positions or create an overlay. A runtime move must be
+captured before its structural commit through the same pre-commit boundary.
 
 ## Local and reparent presentation
 
@@ -75,13 +107,14 @@ trajectory and timing do not change.
 
 ## Lifecycle
 
-- `init()` initializes visible and measurement component hosts, then builds the
-  immutable motion graph.
+- `init()` initializes the visible component host, captures motion boundaries only
+  when transitions exist, then builds the immutable motion graph.
 - `play()` and `seek(t)` present the graph at absolute logical time.
-- `resize()` invalidates measured endpoints and rebuilds the graph before the
-  current frame is recommitted.
-- `destroy()` removes local transient slots, overlay representations, measurement
-  DOM, components and owned clock resources.
+- `resize()` prepares natural geometry, invalidates captured geometry, rebuilds
+  the graph, then recommits the current frame without recreating stable overlay
+  nodes.
+- `destroy()` removes local transient slots, overlay representations, components
+  and owned clock resources.
 
 ## Capture HTML classique
 
@@ -119,8 +152,9 @@ photographie la pose visible avant le commit du `move` pour fournir le FIRST de
 la remise live `endEmit` ; cette photographie n'est ni un état logique ni une
 entrée du journal. Si la capture déclare aussi `endCapture`, celui-ci porte la
 trajectoire rejouable source logique → cible à la frontière `end - durée`.
-Cette trajectoire est mesurée depuis le player isolé. Le snapshot de fin live
-est effacé avant un seek : la remise au relâchement n'est donc pas rejouée.
+Cette trajectoire est capturée sur les nodes visibles au point pré-commit. Le
+snapshot de fin live est effacé avant un seek : la remise au relâchement n'est
+donc pas rejouée.
 
 La preview HTML réserve l'attribut `data-codplay-transient` aux nodes qu'elle
 possède temporairement. Le node auteur flottant et le ghost le portent pendant
@@ -139,13 +173,12 @@ La telco doit donc être montée en dehors de cette racine.
 
 `HtmlPlayerRunner` reçoit le `RuntimeCapabilityCatalog` déjà composé lors de
 l'initialisation de CodPlay. Les composants, leurs services, leurs modules et
-leurs validateurs sont déclarés dans ce catalogue unique. Le runner crée les
-instances du `RuntimeMaterializer` HTML nécessaires aux substrats visible et
-isolé, mais aucun materializer n'enregistre de service ou de module.
+leurs validateurs sont déclarés dans ce catalogue unique. Le runner crée une
+seule instance du `RuntimeMaterializer` HTML pour le substrat visible, mais
+aucun materializer n'enregistre de service ou de module.
 
 Les ressources déclarées par la scène peuvent être fournies au runner avec
-`resources`. La même liste est donnée à l'engine visible et à l'engine de mesure,
-afin qu'une scène media soit validée par les deux players :
+`resources`. Elles sont enregistrées dans l'engine unique du player visible :
 
 ```ts
 const runner = new HtmlPlayerRunner({
@@ -229,9 +262,8 @@ qui porte déjà une unité, comme `x: '40px'`, ainsi qu'une chaîne brute
 ## Invariants
 
 - The visible DOM is never used to reconstruct logical state.
-- The measurement DOM never receives transient motion styles.
-- The visible and measurement players share live event history; the measurement
-  player never executes listen rules or straps.
+- No second DOM, player, engine or materializer is created for motion capture.
+- Geometry snapshots contain data only and never retain DOM references.
 - Every item owns its temporal segments independently.
 - Parent movement is composed recursively at resolution time.
 - An overlapping local reflow retargets its existing segment at the already

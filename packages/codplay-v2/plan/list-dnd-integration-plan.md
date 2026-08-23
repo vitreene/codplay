@@ -123,6 +123,11 @@ rectangles `FIRST` des voisins avant la mutation du ghost, mesure leur état
 mesurée dans sa pose stabilisée avant d'être éventuellement relancée ; un même
 slot ne redémarre donc pas l'animation à chaque `pointermove`.
 
+Les primitives HTML de rectangle stabilisé, de capture de rectangles et de
+transition FLIP sont partagées dans `html-transient-flip.ts`. Cette mutualisation
+ne mélange pas le cycle live de la preview avec le graphe de lecture : elle évite
+seulement de dupliquer le traitement géométrique élémentaire.
+
 L'événement de fin peut porter un dernier échantillon pointer. La preview le
 traite une seule fois avant de produire le `move`, de sorte que `target` et
 `mode` correspondent au point réel du drop, même si aucun `pointermove` n'a été

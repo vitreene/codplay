@@ -14,7 +14,8 @@ description capture-centrique précédente est remplacée par
 - `StructuralTimeline` porte cet ordre à chaque frontière compilée.
 - La capacité list fournit les politiques V1 `reorderOnMove/Add/Remove` au calcul
   structurel, sans conserver de reducer d'ordre concurrent.
-- Le sampler HTML compare les layouts complets avant/après l'événement.
+- Le runner HTML capture les géométries nécessaires avant/après l'événement sur
+  les materialisations auteur visibles.
 - Tous les items dont l'attachement local change reçoivent un segment propre.
 - Le changement reste local dans une même target et devient reparent entre deux
   targets.

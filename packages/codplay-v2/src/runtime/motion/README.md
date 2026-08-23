@@ -21,8 +21,9 @@ It has no DOM handles, no transport state and no mutable animation ownership.
 
 ## Data model
 
-- `LayoutSnapshot`: complete measured item map with target, logical parent,
-  parent-relative pose and root-relative pose.
+- `LayoutSnapshot`: selected measured item map with target, logical parent,
+  parent-relative pose and root-relative pose. The runner adds only the
+  ancestor and target-child closure required by the boundary.
 - `MotionBoundary`: exact before/after layouts caused by one event time and its
   direct movement intents.
 - `ItemMotionTrack`: chronological segments owned by one item.
@@ -33,7 +34,7 @@ It has no DOM handles, no transport state and no mutable animation ownership.
 
 ## Planning
 
-At each boundary the planner compares complete local attachments. It creates a
+At each boundary the planner compares the selected local attachments. It creates a
 segment for every item whose parent, target or local layout pose changed. A child
 whose local attachment is unchanged does not duplicate its ancestor's segment;
 it follows through recursive composition. The `before` snapshot is the source
@@ -48,12 +49,12 @@ schedule includes them. Both schedules are converted to the same
 persisted logical source-to-target boundary without retaining a live-capture
 branch in the graph.
 
-The HTML runner invalidates this schedule with the monotonic revision of its
-shared `RuntimeTrackJournal` and the current `includePersistOnly` flag. It
-therefore compiles the schedule at initialization or after a journal change,
-not on every presentation frame. A standalone `HtmlMotionSystem` may omit the
-revision callback; that compatibility path keeps the signature comparison but
-is not the runner's production path.
+The HTML runner compiles the schedule when the visible journal is initialized,
+after a completed live capture, and after a resize. `HtmlMotionSystem` receives
+only the resulting immutable `MotionBoundary[]`; it does not inspect the
+journal, discover actions or maintain a compatibility sampler. During a frame,
+it asks the runner for the current natural geometry of the active item closure
+and resolves the same graph.
 
 Direct intent timing applies to its item. Other reflow items use the longest
 direct duration at that boundary. A target or parent change forces presentation
@@ -79,6 +80,12 @@ Resolution is pure and recursive:
 
 The same graph and current natural layout always produce the same frame. Calling
 the resolver for earlier times has no effect on later calls.
+
+The HTML runner clears its previous local presentation before capturing the
+current natural layout. Stable overlay resources remain outside normal layout
+and are reused; they are released only when inactive or destroyed. A resize
+therefore recaptures against the resized author nodes rather than against a
+previous animation transform, without recreating stable overlay DOM.
 
 ## Presentation inference
 

@@ -4,6 +4,12 @@ import type { CompiledRecord, CompiledValue } from '../../scene/compiled'
 import { captureHtmlPose, worldDeltaToLocalDelta } from '../motion/html-pose'
 import type { HtmlMatrix } from '../motion/html-types'
 import {
+  captureHtmlTransientRects,
+  measureHtmlSettledRect,
+  playHtmlTransientFlip,
+  type HtmlTransientRect,
+} from './html-transient-flip'
+import {
   clearHtmlTransientNode,
   markHtmlTransientNode,
 } from './html-transient-node'
@@ -35,13 +41,6 @@ type ResolvedDropTarget = DropTarget & Readonly<{
   children: readonly HTMLElement[]
 }>
 
-type RectSnapshot = Readonly<{
-  left: number
-  top: number
-  width: number
-  height: number
-}>
-
 type LocalBox = Readonly<{
   left: number
   top: number
@@ -57,7 +56,7 @@ type ActivePreview = {
   ghost?: HTMLElement
   sourceList?: HTMLElement
   sourceIndex?: number
-  sourceRectsBeforeFloat?: ReadonlyMap<HTMLElement, RectSnapshot>
+  sourceRectsBeforeFloat?: ReadonlyMap<HTMLElement, HtmlTransientRect>
   flipCleanups?: Map<HTMLElement, () => void>
   lastClientX?: number
   lastClientY?: number
@@ -301,7 +300,7 @@ export class HtmlListDndPreview {
       const childBoxes = children.map((child) => toLocalBox(
         pose.matrix,
         pose.origin,
-        measureSettledRect(child),
+        measureHtmlSettledRect(child),
       ))
       return {
         listId,
@@ -340,11 +339,11 @@ export class HtmlListDndPreview {
     list: HTMLElement,
     excludedPersoKey: string,
     excludedGhost?: HTMLElement,
-  ): ReadonlyMap<HTMLElement, RectSnapshot> {
+  ): ReadonlyMap<HTMLElement, HtmlTransientRect> {
     const children = listId === undefined
       ? readDirectItemElements(list, excludedPersoKey, excludedGhost)
       : this.readListItemElements(storyId, listId, list, excludedPersoKey, excludedGhost)
-    return captureRectMap(children)
+    return captureHtmlTransientRects(children)
   }
 
   /** Reads one list's canonical children, excluding transient preview nodes. */
@@ -379,7 +378,7 @@ export class HtmlListDndPreview {
     const targetList = target === undefined
       ? undefined
       : asElement(this.resolveListNode(persoKey.slice(0, persoKey.indexOf(':')), target.listId))
-    const beforeByList = new Map<HTMLElement, ReadonlyMap<HTMLElement, RectSnapshot>>()
+    const beforeByList = new Map<HTMLElement, ReadonlyMap<HTMLElement, HtmlTransientRect>>()
 
     if (preview.targetResolved !== true && preview.sourceRectsBeforeFloat !== undefined && preview.sourceList !== undefined) {
       beforeByList.set(preview.sourceList, preview.sourceRectsBeforeFloat)
@@ -396,7 +395,7 @@ export class HtmlListDndPreview {
       )
     }
     if (targetList !== undefined && !beforeByList.has(targetList) && target !== undefined) {
-      beforeByList.set(targetList, captureRectMap(target.children))
+      beforeByList.set(targetList, captureHtmlTransientRects(target.children))
     }
 
     if (target === undefined) this.clearGhost(preview)
@@ -411,13 +410,13 @@ export class HtmlListDndPreview {
   /** Plays transient HTML FLIP transitions without changing logical ordering. */
   private playFlipTransitions(
     preview: ActivePreview,
-    rectsBefore: ReadonlyMap<HTMLElement, RectSnapshot>,
+    rectsBefore: ReadonlyMap<HTMLElement, HtmlTransientRect>,
     duration: number,
   ): void {
     const cleanups = preview.flipCleanups ?? new Map<HTMLElement, () => void>()
     preview.flipCleanups = cleanups
     for (const [node, rectBefore] of rectsBefore) {
-      playFlipTransition(node, rectBefore, duration, cleanups)
+      playHtmlTransientFlip(node, rectBefore, duration, cleanups)
     }
   }
 
@@ -482,71 +481,6 @@ function createGhost(
   return ghost
 }
 
-/** Captures one settled rectangle map in the already resolved child order. */
-function captureRectMap(children: readonly HTMLElement[]): ReadonlyMap<HTMLElement, RectSnapshot> {
-  return new Map(children.map((node) => [
-    node,
-    measureSettledRect(node),
-  ]))
-}
-
-/** Reads one settled rectangle while ignoring a preview FLIP transform in flight. */
-function measureSettledRect(node: HTMLElement): RectSnapshot {
-  const rect = node.getBoundingClientRect()
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-  const matrix = parseCssMatrix(computed?.transform ?? node.style.transform)
-  if (isIdentityMatrix(matrix)) return copyRect(rect)
-  return {
-    left: rect.left - matrix.e,
-    top: rect.top - matrix.f,
-    width: Math.abs(matrix.a) > 1e-8 ? rect.width / Math.abs(matrix.a) : rect.width,
-    height: Math.abs(matrix.d) > 1e-8 ? rect.height / Math.abs(matrix.d) : rect.height,
-  }
-}
-
-/** Plays one transient sibling FLIP transition and restores author inline styles. */
-function playFlipTransition(
-  node: HTMLElement,
-  fromRect: RectSnapshot,
-  duration: number,
-  cleanups: Map<HTMLElement, () => void>,
-): void {
-  const toRect = measureSettledRect(node)
-  const previousCleanup = cleanups.get(node)
-  previousCleanup?.()
-
-  const deltaX = fromRect.left - toRect.left
-  const deltaY = fromRect.top - toRect.top
-  const scaleX = toRect.width === 0 ? 1 : fromRect.width / toRect.width
-  const scaleY = toRect.height === 0 ? 1 : fromRect.height / toRect.height
-  if (deltaX === 0 && deltaY === 0 && scaleX === 1 && scaleY === 1) return
-
-  const previousTransition = node.style.transition
-  const previousTransform = node.style.transform
-  const previousTransformOrigin = node.style.transformOrigin
-  let cleanup: (() => void) | undefined
-  const onTransitionEnd = (event: Event): void => {
-    if ((event as TransitionEvent).propertyName !== 'transform') return
-    cleanup?.()
-  }
-  cleanup = (): void => {
-    node.removeEventListener('transitionend', onTransitionEnd)
-    node.style.transition = previousTransition
-    node.style.transform = previousTransform
-    node.style.transformOrigin = previousTransformOrigin
-    if (cleanups.get(node) === cleanup) cleanups.delete(node)
-  }
-  cleanups.set(node, cleanup)
-
-  node.style.transition = 'none'
-  node.style.transformOrigin = 'top left'
-  node.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`
-  void node.getBoundingClientRect()
-  node.style.transition = `transform ${duration}ms ease`
-  node.style.transform = previousTransform
-  node.addEventListener('transitionend', onTransitionEnd)
-}
-
 /** Reads the authored live transition duration used by the list preview. */
 function readTransitionDuration(captureState: RuntimeCaptureState): number {
   const move = isPlainRecord(captureState.move) ? captureState.move as CompiledRecord : undefined
@@ -573,34 +507,8 @@ function readPointerSample(event: Event | undefined): RuntimeCaptureSample | und
   }
 }
 
-/** Parses the 2D transform forms emitted by browsers for preview-owned FLIP. */
-function parseCssMatrix(value: string | undefined): { a: number; b: number; c: number; d: number; e: number; f: number } {
-  if (value === undefined || value === '' || value === 'none') return identityMatrix()
-  const match = value.match(/^matrix\(([^)]+)\)$/)
-  if (match === null) return identityMatrix()
-  const values = match[1].split(',').map((part) => Number(part.trim()))
-  return values.length === 6 && values.every((part) => Number.isFinite(part))
-    ? { a: values[0]!, b: values[1]!, c: values[2]!, d: values[3]!, e: values[4]!, f: values[5]! }
-    : identityMatrix()
-}
-
-/** Creates one identity affine matrix for the preview geometry helpers. */
-function identityMatrix(): { a: number; b: number; c: number; d: number; e: number; f: number } {
-  return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
-}
-
-/** Tests whether one affine matrix contributes no visual transform. */
-function isIdentityMatrix(matrix: ReturnType<typeof identityMatrix>): boolean {
-  return matrix.a === 1 && matrix.b === 0 && matrix.c === 0 && matrix.d === 1 && matrix.e === 0 && matrix.f === 0
-}
-
-/** Copies the measurable fields needed by a transient FLIP pair. */
-function copyRect(rect: DOMRect): RectSnapshot {
-  return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
-}
-
 /** Converts one viewport rectangle into the list's local coordinate system. */
-function toLocalBox(matrix: HtmlMatrix, origin: Readonly<{ x: number; y: number }>, rect: RectSnapshot): LocalBox {
+function toLocalBox(matrix: HtmlMatrix, origin: Readonly<{ x: number; y: number }>, rect: HtmlTransientRect): LocalBox {
   const topLeft = worldDeltaToLocalDelta(matrix, rect.left - origin.x, rect.top - origin.y)
   const bottomRight = worldDeltaToLocalDelta(
     matrix,

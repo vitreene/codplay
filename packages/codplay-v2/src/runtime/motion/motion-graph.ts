@@ -132,6 +132,18 @@ export function resolvePresentationFrame(
   }
 }
 
+/** Returns the item identities whose motion segment is active at one time. */
+export function collectMotionPresentationItemIds(
+  graph: MotionGraph,
+  timeMs: number,
+): ReadonlySet<string> {
+  const itemIds = new Set<string>()
+  for (const [itemId, track] of graph.tracksByItem) {
+    if (findActiveSegment(track, timeMs) !== undefined) itemIds.add(itemId)
+  }
+  return itemIds
+}
+
 /** Resolves one item against active segments and recursively moving attachments. */
 function resolveMotionItem(
   graph: MotionGraph,

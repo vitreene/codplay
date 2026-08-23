@@ -44,7 +44,8 @@ La tranche list implementee :
 - consommer les deltas de placement via une politique structurelle pure ;
 - laisser `SolvedGraph` et `StructuralTimeline` produire l'ordre complet ;
 - laisser le materializer projeter cet ordre sur les materialisations auteur ;
-- laisser le sampler FLIP lire les layouts avant/apres et le motion graph projeter
+- laisser le runner capturer explicitement les layouts avant/apres sur les
+  materialisations visibles et le motion graph projeter
   la transition ;
 - ne jamais devenir une source DOM, un cache historique ou un second circuit de
   relecture.
