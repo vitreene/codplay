@@ -126,6 +126,63 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     ])
   })
 
+  it('validates the initial contract owned by each built-in component', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+    const snapshot = runtimeCatalog.validationSnapshot()
+
+    validatePersoWithCapabilities(snapshot, {
+      id: 'invalid-tag',
+      type: 'tag',
+      initial: { tag: 'not valid' },
+      actions: {},
+    }, diagnostics)
+    validatePersoWithCapabilities(snapshot, {
+      id: 'invalid-layout',
+      type: 'layout',
+      initial: {},
+      actions: {},
+    }, diagnostics)
+    validatePersoWithCapabilities(snapshot, {
+      id: 'invalid-list',
+      type: 'list',
+      initial: { config: { reorderOnMove: 'yes' } },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors.map((entry) => entry.code)).toEqual([
+      'AUTHOR_TAG_NAME_INVALID',
+      'AUTHOR_LAYOUT_MARKUP_INVALID',
+      'AUTHOR_LIST_CONFIG_INVALID',
+    ])
+    expect(diagnostics.report().errors.map((entry) => entry.details?.context?.path)).toEqual([
+      'initial.tag',
+      'initial.markup',
+      'initial.config.reorderOnMove',
+    ])
+  })
+
+  it('keeps the normative defaults for tag and list roots', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+    const snapshot = runtimeCatalog.validationSnapshot()
+
+    validatePersoWithCapabilities(snapshot, {
+      id: 'default-tag',
+      type: 'tag',
+      initial: {},
+      actions: {},
+    }, diagnostics)
+    validatePersoWithCapabilities(snapshot, {
+      id: 'default-list',
+      type: 'list',
+      initial: { tag: '  ' },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toEqual([])
+  })
+
   it('allows component-specific validation to be added without changing the catalog pipeline', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const runtimeCatalog = catalog()

@@ -1,6 +1,6 @@
 # HTML Runner V2
 
-> Status: En cours
+> Status: Fini — tranche HTML motion V2
 > CodPlay version: V2 foundation
 > Review: capture géométrique sans DOM dupliqué en validation; renderer de production hors périmètre
 

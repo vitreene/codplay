@@ -1,6 +1,6 @@
 # Motion Graph V2
 
-> Status: En cours
+> Status: Fini — graphe motion V2 foundation
 > CodPlay version: V2 foundation
 > Review: frontières move/action, résolution Play/Seek et absence de lecture géométrique par frame validées le 2026-08-23
 

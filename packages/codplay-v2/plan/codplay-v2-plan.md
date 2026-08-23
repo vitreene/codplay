@@ -81,10 +81,10 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
 | Partie active | Unification runtime V2 | Le catalogue unique, la validation dérivée, les services séparés et le `RuntimeMaterializer` HTML sont en place; les substrats SVG/Canvas/Three.js et les familles de composants supplémentaires restent hors tranche. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les formes core de `style`, `className`, `attr` et `content` sont portées par leurs services; les services métier fermés et les familles restent à couvrir. |
+| Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les formes core de `style`, `className`, `attr` et `content` ainsi que les contrats initiaux de `tag`, `layout`, `list` et `media` sont couverts; les services métier fermés et les familles restent à couvrir. |
 | Composants | Contrat de base fixe, tranche HTML implémentée | `BaseComponent`, `LayoutComponent`, `TagComponent`, factories runtime, parts/outlets et materialisation template string — y compris les fragments sans enveloppe — sont couverts par le `RuntimeMaterializer` unifié ; JSX et les autres types restent hors tranche. |
 | ACE | Contrat de valeurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
-| Mouvement HTML | Contrat fixe, extensions en cours | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire et circuit Play/Seek unique sont couverts par le materializer HTML ; les materializers de production et capacités non compilées restent ouverts. |
+| Mouvement HTML | Tranche HTML fixe et clôturée | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire, circuit Play/Seek unique et optimisation sans lecture DOM par frame sont couverts ; les materializers SVG/Canvas/Three.js et capacités non compilées restent hors tranche. |
 | Démos standard | Gabarit fixe, extension en cours | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
@@ -110,10 +110,10 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
-| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fixe sur les moves compilés |
+| Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fini pour la tranche HTML V2; autres materializers reportés |
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
 | Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
-| ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md) | Fixe, circuit logique unique en place |
+| ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md), [`notes/2026-08-23-v1-behavior-inventory.md`](./notes/2026-08-23-v1-behavior-inventory.md) | Fixe, circuit logique unique en place; inventaire V1 des candidats Behavior consigné |
 | Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Fini pour la tranche de validation : capture continue, placement list, lecture et seek validés ; démo consignée |
 
 ## Modeles algorithmiques

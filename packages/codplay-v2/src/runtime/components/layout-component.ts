@@ -1,10 +1,12 @@
 import { BaseComponent } from './base-component'
+import { isComponentRecord, reportInvalidComponentValue } from './component-validation'
 import type { ComponentInput, ComponentUpdateInput } from './component-types'
 import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
+import type { ValidationFunction } from '../../services'
 
 /** Initial author data accepted by the layout component. */
 export type LayoutInitial = Readonly<{
-  markup?: string
+  markup: string
   className?: ClassNameValue
   style?: StyleValue
   attr?: AttrValue
@@ -16,6 +18,18 @@ export type LayoutState = Readonly<{
   style?: StyleValue
   attr?: AttrValue
 }>
+
+/** Validates the layout template required before HTML materialization. */
+export const validateLayoutInitial: ValidationFunction = (value, context) => {
+  if (!isComponentRecord(value) || typeof value.markup !== 'string' || value.markup.trim().length === 0) {
+    reportInvalidComponentValue(
+      context,
+      'AUTHOR_LAYOUT_MARKUP_INVALID',
+      'layout.markup must be a non-empty string.',
+      'markup',
+    )
+  }
+}
 
 /** V2 layout component with no author-facing initialization hook. */
 export class LayoutComponent extends BaseComponent<LayoutInitial> {

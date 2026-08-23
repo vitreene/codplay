@@ -19,9 +19,10 @@ artifact.
 parallel top-level `compiled-scene` module.
 
 `SceneBuilder` currently covers the first build slice: active stories, structural
-and catalog validation, external function references, resource requirements, root
-candidates, the derived action-target index, semantic coherence of the compiled
-artifact, and runtime freezing.
+and catalog validation (including the initial contracts of the built-in `tag`,
+`layout`, `list`, and `media` components), external function references, resource
+requirements, root candidates, the derived action-target index, semantic coherence
+of the compiled artifact, and runtime freezing.
 Perso `emit/capture` declarations are part of this boundary: their event payloads
 are compiled recursively and their lifecycle functions become references in the
 external function collection.

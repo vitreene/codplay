@@ -1,7 +1,7 @@
-import { LayoutComponent } from '../components/layout-component'
-import { ListComponent } from '../components/list-component'
+import { LayoutComponent, validateLayoutInitial } from '../components/layout-component'
+import { ListComponent, validateListInitial } from '../components/list-component'
 import { MediaComponent, validateMediaAction, validateMediaInitial } from '../components/media-component'
-import { TagComponent } from '../components/tag-component'
+import { TagComponent, validateTagInitial } from '../components/tag-component'
 import {
   RuntimeCapabilityCatalog,
   type RuntimeComponentDefinition,
@@ -40,8 +40,7 @@ const coreTagDefinition: RuntimeComponentDefinition = {
   type: 'tag',
   services: ['className', 'style', 'attr', 'content'],
   modules: [],
-  validateInitial: () => undefined,
-  validateAction: () => undefined,
+  validateInitial: validateTagInitial,
   create: (input) => new TagComponent(input as never),
 }
 
@@ -50,8 +49,7 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
   type: 'layout',
   services: ['className', 'style', 'attr'],
   modules: ['markup'],
-  validateInitial: () => undefined,
-  validateAction: () => undefined,
+  validateInitial: validateLayoutInitial,
   create: (input) => new LayoutComponent(input as never),
   mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
 }
@@ -71,7 +69,6 @@ const coreListDefinition: RuntimeComponentDefinition = {
   type: 'list',
   services: ['className', 'style', 'attr'],
   modules: ['list'],
-  validateInitial: () => undefined,
-  validateAction: () => undefined,
+  validateInitial: validateListInitial,
   create: (input) => new ListComponent(input as never),
 }

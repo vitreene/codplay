@@ -14,7 +14,9 @@ mutable registration catalog.
 - `RuntimeCapabilityCatalog.validationSnapshot()` produces the pure snapshot before compilation.
 - `CompiledSceneValidationEngine` consumes that snapshot during compilation without instantiating runtime components or services.
 - `GuardPipeline` runs named structural and capability rules in deterministic phases.
-- A component validator is optional during the initial V2 rollout.
+- A component validator remains optional for foreign and not-yet-opened types.
+- The built-in `tag`, `layout`, `list`, and `media` component boundaries are
+  validated from their catalog definitions.
 - Missing component or service validators produce detailed author warnings.
 - Unknown component types and unknown required services are errors because the player cannot execute them.
 - The core `style`, `className`, `attr`, and `content` service validators are always present in the initial catalog.

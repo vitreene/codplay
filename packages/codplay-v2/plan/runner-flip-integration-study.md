@@ -1,6 +1,6 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: En cours — frontières action/move et graphe hiérarchique intégrés ; optimisation de production à relire
+> Status: Fini — tranche HTML motion V2
 > CodPlay version: V2 foundation
 > Review: le contrat du graphe reste conservé ; la mesure par DOM dupliqué est retirée
 
@@ -462,11 +462,11 @@ restent présentes, aucune racine de mesure n'est créée, et les checkpoints
 
 ## État de revue
 
-Le graphe, ses frontières et son résolveur restent le contrat conservé. La
-mesure par second arbre DOM est proscrite ; la capture géométrique
-transactionnelle décrite ci-dessus est le seul chemin HTML. Le module reste
-`En cours` tant que la relecture de production et l'intégration des autres
-materializers n'ont pas été explicitement validées.
+Le graphe, ses frontières et son résolveur sont le contrat de la tranche HTML
+clôturée. La mesure par second arbre DOM est proscrite ; la capture géométrique
+transactionnelle décrite ci-dessus est le seul chemin HTML. Les materializers
+SVG, Canvas et Three.js relèvent de tranches ultérieures et ne conditionnent pas
+la clôture de ce runner.
 
 ### Contrôle de cette passe — 2026-08-23
 
@@ -483,8 +483,8 @@ endpoint effectif ; le graphe conserve ensuite le délai et la durée. Les
 ancêtres restent dans la fermeture de données et leurs propres segments sont
 composés récursivement, sans piste FLIP ajoutée par simple propagation.
 
-La suite V2 passe à 63 fichiers et 407 tests. `typecheck`, la suite complète et
-`git diff --check` sont verts.
+La suite V2 passe à 63 fichiers et 408 tests. `typecheck`, la suite complète,
+le build du runner HTML et `git diff --check` sont verts.
 
 ### Correction de régression — reflow alterné des listes — 2026-08-23
 

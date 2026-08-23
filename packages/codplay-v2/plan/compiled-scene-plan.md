@@ -17,11 +17,13 @@ reste autonome et ne dépend d'aucune ancienne implémentation.
   structurelle est gelée comme fondation de flux de rendu. La validation
   sémantique interne du codec est maintenant en place; les formes core des
   services et leur exposition au moteur de validation sont également en place.
-  Les services métier fermés et les validations de propriétés spécialisées
-  restent à ajouter avec leurs composants.
+  Les contrats initiaux des composants core présents (`tag`, `layout`, `list`,
+  `media`) sont maintenant validés par leurs définitions de composant. Les
+  services métier fermés, les propriétés spécialisées et les familles
+  supplémentaires restent à ajouter avec leurs composants.
 - Preparation des paths SVG auteur en objets `Path` ACE en place, exportee comme primitive reutilisable et couverte par test.
 - Mode actuel : implementation V2 incrementale, pas de prototype autonome.
-- Source unique de declaration composant/services/modules en place via `RuntimeCapabilityCatalog.validationSnapshot()`; revue des extensions de validateurs encore necessaire avant l'integration composant.
+- Source unique de declaration composant/services/modules en place via `RuntimeCapabilityCatalog.validationSnapshot()`; les validateurs des composants core présents sont branchés sur cette source, tandis que les extensions foreign et métier restent hors de cette tranche.
 
 ## Principes
 
@@ -182,6 +184,21 @@ Une propriete inconnue n'est pas automatiquement rejetee : le service declare s'
 diagnostic depend de cette decision. `style` peut rester ouvert pour les proprietes de rendu transposables, tandis
 qu'un service metier peut etre ferme.
 
+Les définitions des composants core présents complètent cette validation sans
+créer de namespace parallèle :
+
+- `tag` valide le nom de balise lorsqu'il est fourni ; son absence conserve le
+  défaut contractuel `div` ;
+- `layout` exige un `markup` non vide avant la sanitation et la materialisation ;
+- `list` valide son nom de balise optionnel et les trois options booléennes de
+  `config` (`reorderOnMove`, `reorderOnAdd`, `reorderOnRemove`) ;
+- `media` porte déjà la validation de sa source, de sa balise et de ses options
+  de synchronisation.
+
+Ces règles restent des validateurs de payload auteur : elles ne lisent pas le
+DOM, n'instancient pas le composant et ne remplacent pas la validation runtime
+des capacités nécessaires au player.
+
 Cette organisation encourage les composants a exposer des donnees par capacites semantiques (`layout: {...}`,
 `media: {...}`) plutot qu'a laisser fuir une collection de methodes internes au niveau du perso. Elle ne force pas
 la forme interne de la classe : elle fixe seulement la surface de donnees que le builder et les services peuvent
@@ -235,11 +252,11 @@ proprietes supplementaires sont ajoutees avec les verticales qui les consomment.
 | Etape | Livrable | Dependance | Etat |
 |---|---|---|---|
 | 1. Contrats | Types separes `SceneDoc`, donnee canonique, sections `CompiledScene`, requirements et registre de proprietes par services | Diagnostics generaux | Tranche initiale relue; formes core des services couvertes |
-| 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; validations métier et propriétés spécialisées restent ouvertes |
-| 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle en place, regles a completer |
+| 2. Catalogue | Descripteurs composants, services et proprietes recevables, `RuntimeCapabilityCatalog.validationSnapshot()` transmis au build, helper de warnings manquants et validators communs | Contrats + diagnostics | Snapshot initial relu; validateurs des composants core présents ajoutés; validations métier et propriétés spécialisées restent ouvertes |
+| 3. Guards | `GuardPipeline`, normalisation structurelle, guards d'entree, defaults auteur et refus des valeurs non admises | Contrats + catalogue | Socle structurel en place; refus des payloads propres aux composants core présents couvert par leurs validateurs |
 | 4. Deriveurs | Extraction des fonctions, stories actives, ressources, requirements, modes temporels de proprietes, candidats `rootNodeIds` et `actionTargetIndex` | Contrats + guards | Deriveurs de base en place; perimetre gele avant le player |
 | 5. Codec | Encode/decode interne, validation d'import et finalisation immutable | Contrats + deriveurs | Enveloppe, invariants sémantiques internes et immutabilite en place; migrations de schema hors tranche |
-| 6. Fixtures et couverture | Fixtures représentatives et tests du contrat V2, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4; aucune couverture player |
+| 6. Fixtures et couverture | Fixtures représentatives et tests du contrat V2, sans reintroduire les fonctions dans l'artefact | Etapes 1 a 5 | Corpus structurel S1-S4 et couverture des validateurs core; aucune nouvelle couverture player |
 | 7. Revue player | Pour chaque capacite player, decision compile ou runtime et test associe | Artefact V2 | Frontière Engine/Player relue dans [`player-engine-plan.md`](./player-engine-plan.md); capacités supplémentaires restent à ouvrir |
 | 8. Documentation | Spec `CompiledScene`, invariants et suivi final; retrait des seuls points temporaires resolus | Implementation complete | A faire en cloture |
 
