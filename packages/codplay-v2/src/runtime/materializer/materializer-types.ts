@@ -28,5 +28,7 @@ export type RuntimeMaterializer = Readonly<{
     moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ) => RuntimeComponentHandle
   materializeScene: (scene: SolvedScene, context?: RuntimeMaterializerSceneContext) => void
+  /** Marks structure dirty after an external transient presentation releases nodes. */
+  invalidateStructure?: () => void
   destroy?: () => void
 }>

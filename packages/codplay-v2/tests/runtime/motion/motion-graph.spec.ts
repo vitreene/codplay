@@ -61,7 +61,23 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, afterTransfer, 1500), 'C')).toBeCloseTo(220)
   })
 
-  it('propagates one ancestor trajectory recursively through five levels without child tracks', () => {
+  it('holds an action pose during its delay and resolves it from the same graph', () => {
+    const before = snapshot(0, [item('A', 'root', 0)])
+    const after = snapshot(0, [item('A', 'root', 100)])
+    const graph = buildMotionGraph([
+      boundary('delayed-action', 0, before, after, [{
+        ...intent('A', 0, 1000),
+        delay: 200,
+      }]),
+    ])
+
+    expect(originX(resolvePresentationFrame(graph, after, 100), 'A')).toBeCloseTo(0)
+    expect(originX(resolvePresentationFrame(graph, after, 700), 'A')).toBeCloseTo(50)
+    expect(originX(resolvePresentationFrame(graph, after, 1200), 'A')).toBeCloseTo(100)
+    expect(graph.tracksByItem.get('A')?.segments[0]?.endAt).toBe(1200)
+  })
+
+  it('keeps unchanged descendants out of the presentation frame', () => {
     const before = snapshot(0, nestedDefinitions(0))
     const after = snapshot(0, nestedDefinitions(100))
     const graph = buildMotionGraph([
@@ -71,7 +87,47 @@ describe('motion graph', () => {
 
     expect([...graph.tracksByItem.keys()]).toEqual(['P1'])
     expect(originX(frame, 'P1')).toBeCloseTo(50)
-    expect(originX(frame, 'P5')).toBeCloseTo(90)
+    expect(frame.items.has('P5')).toBe(false)
+  })
+
+  it('keeps an independently animated context ancestor out of the FLIP tracks', () => {
+    const before = snapshot(100, [
+      item('C', 'root', 0),
+      item('D', 'root', 300),
+      item('M', 'C:content', 10, 'C'),
+    ])
+    const after = snapshot(100, [
+      item('C', 'root', 100),
+      item('D', 'root', 300),
+      item('M', 'D:content', 10, 'D'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('move-child', 100, before, after, [intent('M', 100, 1000)]),
+    ])
+
+    expect([...graph.tracksByItem.keys()]).toEqual(['M'])
+    const frame = resolvePresentationFrame(graph, after, 500)
+    expect(frame.items.has('C')).toBe(false)
+    expect(frame.items.get('M')?.representation).toBe('reparent')
+  })
+
+  it('prepares only the affected branch for frame resolution', () => {
+    const before = snapshot(0, [
+      item('A', 'root', 0),
+      item('A-child', 'A:content', 10, 'A'),
+      item('unrelated', 'other', 500),
+    ])
+    const after = snapshot(0, [
+      item('A', 'root', 100),
+      item('A-child', 'A:content', 10, 'A'),
+      item('unrelated', 'other', 500),
+    ])
+    const graph = buildMotionGraph([
+      boundary('branch', 0, before, after, [intent('A', 0, 1000)]),
+    ])
+
+    expect(graph.presentationItemIds).toEqual(['A'])
+    expect(resolvePresentationFrame(graph, after, 500).items.has('unrelated')).toBe(false)
   })
 
   it('retargets from the already resolved pose when a second boundary overlaps the first', () => {
@@ -202,8 +258,8 @@ function relativePose(x: number, y: number): RelativeMotionPose {
 }
 
 /** Creates one direct intent using a linear easing for exact assertions. */
-function intent(itemId: string, startAt: number, duration: number): MotionIntent {
-  return Object.freeze({ id: `${itemId}:${startAt}`, itemId, startAt, duration, ease: 'linear', presentationMode: 'local' })
+function intent(itemId: string, startAt: number, duration: number, delay = 0): MotionIntent {
+  return Object.freeze({ id: `${itemId}:${startAt}`, itemId, startAt, duration, delay, ease: 'linear', presentationMode: 'local' })
 }
 
 /** Creates one immutable synthetic event boundary. */

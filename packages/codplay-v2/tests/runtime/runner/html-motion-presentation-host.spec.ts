@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { HtmlMotionPresentationHost } from '../../../src/runtime/runner'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
+import { createMotionRootPose } from '../../../src/runtime/motion'
 import type { ItemPresentation, PresentationFrame } from '../../../src/runtime/motion'
 
 const IDENTITY: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -23,10 +24,13 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     expect(firstGhost).not.toBeNull()
 
     host.prepareNaturalCapture()
+    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
     host.commit(frame, () => 'revision-1')
     const secondGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
 
     expect(secondGhost).toBe(firstGhost)
+    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
     expect(root.querySelectorAll('[data-codplay-motion-item="item"]')).toHaveLength(1)
     host.destroy()
     root.remove()
@@ -54,6 +58,32 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     root.remove()
   })
 
+  it('reapplies host-owned dimensions after synchronizing a stable template', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    source.textContent = 'before'
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const frame = createReparentFrame(createPose(0))
+    host.commit(frame, () => 'revision-1')
+    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+
+    expect(ghost?.style.width).toBe('20px')
+    expect(ghost?.style.height).toBe('20px')
+
+    source.textContent = 'after'
+    host.prepareNaturalCapture()
+    host.commit(frame, () => 'revision-2')
+
+    expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')).toBe(ghost)
+    expect(ghost?.style.width).toBe('20px')
+    expect(ghost?.style.height).toBe('20px')
+    host.destroy()
+    root.remove()
+  })
+
   it('does not write neutral transform longhands to an overlay ghost', () => {
     const root = document.createElement('main')
     const source = document.createElement('article')
@@ -67,6 +97,23 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     expect(ghost?.style.getPropertyValue('translate')).toBe('')
     expect(ghost?.style.getPropertyValue('rotate')).toBe('')
     expect(ghost?.style.getPropertyValue('scale')).toBe('')
+    host.destroy()
+    root.remove()
+  })
+
+  it('gates authored CSS transitions during a logical seek', () => {
+    const root = document.createElement('main')
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => undefined)
+    host.prepareSeek()
+
+    expect(root.hasAttribute('data-codplay-motion-seek')).toBe(true)
+    expect([...document.querySelectorAll('style')]
+      .some((style) => style.textContent?.includes('[data-codplay-motion-seek] *'))).toBe(true)
+
+    host.completeSeek()
+    expect(root.hasAttribute('data-codplay-motion-seek')).toBe(false)
     host.destroy()
     root.remove()
   })
@@ -149,6 +196,102 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     host.destroy()
     root.remove()
   })
+
+  it('reapplies descendant masking after a natural-capture pass with the same active set', () => {
+    const root = document.createElement('main')
+    const parent = document.createElement('section')
+    parent.dataset.itemId = 'parent'
+    const child = document.createElement('article')
+    child.dataset.itemId = 'child'
+    child.textContent = 'child'
+    parent.appendChild(child)
+    root.appendChild(parent)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['parent', parent],
+      ['child', child],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    const frame = createFrame([
+      createItem('child', 'parent'),
+      createItem('parent'),
+    ])
+
+    host.commit(frame)
+    const parentGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
+    expect(parentGhost?.querySelector('[data-item-id="child"]')
+      ?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+
+    host.prepareNaturalCapture()
+    host.commit(frame)
+
+    expect(parentGhost?.querySelector('[data-item-id="child"]')
+      ?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    host.destroy()
+    root.remove()
+  })
+
+  it('keeps a local descendant inside its reparented ancestor ghost', () => {
+    const root = document.createElement('main')
+    const parent = document.createElement('section')
+    const child = document.createElement('article')
+    parent.appendChild(child)
+    root.appendChild(parent)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['parent', parent],
+      ['child', child],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    host.commit(createFrame([
+      createItem('parent'),
+      { ...createItem('child', 'parent'), representation: 'local' },
+    ]))
+
+    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    const parentGhost = layer?.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
+    expect(layer?.querySelectorAll(':scope > [data-codplay-motion-item]')).toHaveLength(1)
+    expect(parentGhost?.querySelector('[data-codplay-motion-transform]')).not.toBeNull()
+    expect(child.hasAttribute('data-codplay-motion-transform')).toBe(false)
+
+    host.destroy()
+    root.remove()
+  })
+
+  it('uses the parent-relative local pose before writing a local pose', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const pose = createPose(40)
+    host.commit(
+      createFrame([{ ...createItem('item'), representation: 'local', pose }]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout',
+        rootPose: createMotionRootPose(),
+        items: new Map([[
+          'item',
+          {
+            itemId: 'item',
+            targetId: 'root',
+            localPose: { origin: [40, 0], matrix: IDENTITY, width: 20, height: 20 },
+            rootPose: pose,
+          },
+        ]]),
+      },
+    )
+
+    expect(source.style.getPropertyValue('--codplay-motion-transform'))
+      .toBe('matrix(1, 0, 0, 1, 0, 0)')
+    host.destroy()
+    root.remove()
+  })
 })
 
 /** Creates the smallest reparent frame accepted by the HTML presentation host. */
@@ -197,7 +340,6 @@ function createPose(x: number): HtmlPose {
     origin: { x, y: 0 },
     matrix: IDENTITY,
     parentMatrix: IDENTITY,
-    layoutOffset: { x: 0, y: 0 },
     rotationMatrix: IDENTITY,
     scaleX: 1,
     scaleY: 1,

@@ -1,11 +1,11 @@
 export {
   buildMotionGraph,
-  collectMotionPresentationItemIds,
   resolvePresentationFrame,
 } from './motion-graph'
 export {
   compileMotionSchedule,
   type MotionScheduleOptions,
+  type MotionScheduleTransition,
   type ScheduledMotionIntent,
 } from './motion-schedule'
 export { MotionMaterializer } from './motion-materializer'
@@ -17,6 +17,12 @@ export {
   interpolateMotionPose,
   sameRelativeMotionPose,
 } from './motion-pose'
+export {
+  buildNaturalLayoutTimeline,
+  resolveNaturalLayout,
+  type NaturalLayoutEntry,
+  type NaturalLayoutTimeline,
+} from './motion-layout'
 export type {
   ItemMotionTrack,
   ItemPresentation,

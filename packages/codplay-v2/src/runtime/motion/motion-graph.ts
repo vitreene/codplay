@@ -26,13 +26,18 @@ import type { HtmlPose } from './html-types'
 /** Builds one complete immutable motion graph from chronological layout boundaries. */
 export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionGraph {
   const mutableTracks = new Map<string, MotionSegment[]>()
-  let graph = freezeMotionGraph(mutableTracks)
+  const presentationItemIds = new Set<string>()
+  let graph = freezeMotionGraph(mutableTracks, presentationItemIds)
 
   for (const boundary of [...boundaries].sort((left, right) => left.timeMs - right.timeMs)) {
     const transition = selectBoundaryTransition(boundary.intents)
     if (transition === undefined) continue
-    const itemIds = new Set([...boundary.before.items.keys(), ...boundary.after.items.keys()])
-    for (const itemId of itemIds) {
+    const scope = resolveBoundaryMotionScope(boundary)
+    for (const itemId of scope.itemIds) {
+      // Ancestors are part of the boundary data so their own motion can be
+      // composed into the owner pose. They do not receive a second FLIP
+      // segment merely because a descendant boundary needs their context.
+      if (!scope.segmentItemIds.has(itemId)) continue
       const before = boundary.before.items.get(itemId)
       const after = boundary.after.items.get(itemId)
       if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
@@ -62,6 +67,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         const segments = mutableTracks.get(itemId) ?? []
         const index = segments.findIndex((segment) => segment.id === activeSegment.id)
         if (index >= 0) {
+          presentationItemIds.add(itemId)
           segments[index] = Object.freeze({
             ...activeSegment,
             retargets: Object.freeze([
@@ -81,10 +87,16 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         id: `${boundary.id}:${itemId}`,
         itemId,
         startAt: boundary.timeMs,
-        endAt: boundary.timeMs + timing.duration,
+        endAt: boundary.timeMs + (timing.delay ?? 0) + timing.duration,
         duration: timing.duration,
+        delay: timing.delay ?? 0,
         ease: timing.ease,
+        tween: prepareTween({ from: 0, to: 1, duration: timing.duration, delay: timing.delay, ease: timing.ease }),
         presentationMode: isReparented(before, after) ? 'reparent' : (directIntent?.presentationMode ?? 'local'),
+        // A compiled HTML style transition is materialized on the source node
+        // by the style service. It is nevertheless kept in the graph so that
+        // descendants can compose against its current pose.
+        materializerOwned: directIntent?.targetReflow === false,
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
         direct: directIntent !== undefined,
         from,
@@ -94,11 +106,63 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
       const segments = mutableTracks.get(itemId) ?? []
       segments.push(segment)
       mutableTracks.set(itemId, segments)
+      presentationItemIds.add(itemId)
     }
-    graph = freezeMotionGraph(mutableTracks)
+    graph = freezeMotionGraph(mutableTracks, presentationItemIds)
   }
 
-  return graph
+  return freezeMotionGraph(mutableTracks, presentationItemIds)
+}
+
+/**
+ * Selects the complete dependency scope and the items that may own a segment
+ * at one structural boundary.
+ *
+ * The dependency scope is the direct movers, the source/target reflow items and
+ * every ancestor up to the root. The second set is deliberately narrower:
+ * being an ancestor is enough to be retained as preparation data, but not enough
+ * to receive a FLIP trajectory. A parent with its own direct intent remains a
+ * segment owner and is then composed into the requested child pose.
+ */
+function resolveBoundaryMotionScope(boundary: MotionBoundary): Readonly<{
+  itemIds: ReadonlySet<string>
+  segmentItemIds: ReadonlySet<string>
+}> {
+  const segmentItemIds = new Set(boundary.intents.map((intent) => intent.itemId))
+  const targetIds = new Set<string>()
+  for (const intent of boundary.intents) {
+    if (intent.targetReflow === false) continue
+    const before = boundary.before.items.get(intent.itemId)
+    const after = boundary.after.items.get(intent.itemId)
+    if (before !== undefined) targetIds.add(before.targetId)
+    if (after !== undefined) targetIds.add(after.targetId)
+  }
+  for (const item of boundary.before.items.values()) {
+    if (targetIds.has(item.targetId) && !boundary.intents.some((intent) => intent.itemId === item.itemId && intent.targetReflow === false)) {
+      segmentItemIds.add(item.itemId)
+    }
+  }
+  for (const item of boundary.after.items.values()) {
+    if (targetIds.has(item.targetId) && !boundary.intents.some((intent) => intent.itemId === item.itemId && intent.targetReflow === false)) {
+      segmentItemIds.add(item.itemId)
+    }
+  }
+
+  const itemIds = new Set(segmentItemIds)
+  addAncestorClosure(boundary.before, itemIds)
+  addAncestorClosure(boundary.after, itemIds)
+  return Object.freeze({ itemIds, segmentItemIds })
+}
+
+/** Closes one boundary scope over parent relations without reading a materializer. */
+function addAncestorClosure(snapshot: LayoutSnapshot, itemIds: Set<string>): void {
+  for (const itemId of [...itemIds]) {
+    let parentItemId = snapshot.items.get(itemId)?.parentItemId
+    while (parentItemId !== undefined && !itemIds.has(parentItemId)) {
+      itemIds.add(parentItemId)
+      parentItemId = snapshot.items.get(parentItemId)?.parentItemId
+    }
+  }
 }
 
 /** Resolves a complete root-relative presentation frame at one absolute time. */
@@ -108,8 +172,30 @@ export function resolvePresentationFrame(
   timeMs: number,
 ): PresentationFrame {
   const items = new Map<string, ItemPresentation>()
+  const poses = new Map<string, HtmlPose>()
   const visiting = new Set<string>()
-  for (const itemId of layout.items.keys()) resolve(itemId)
+  // The graph lists only sovereign trajectory owners. Parent poses needed to
+  // compose one owner are retained in this private cache, never emitted as
+  // presentation entries merely because they are ancestors.
+  for (const itemId of graph.presentationItemIds) {
+    const base = layout.items.get(itemId)
+    const pose = resolvePose(itemId)
+    if (base === undefined || pose === undefined) continue
+    const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
+    const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
+    items.set(itemId, {
+      itemId,
+      ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
+      pose,
+      representation: segment === undefined
+        ? 'source'
+        : segment.materializerOwned
+          ? 'source'
+          : (progress < 1 ? segment.presentationMode : 'source'),
+      ...(segment === undefined ? {} : { activeSegmentId: segment.id }),
+      progress,
+    })
+  }
   return Object.freeze({
     timeMs,
     graphRevision: graph.revision,
@@ -117,14 +203,16 @@ export function resolvePresentationFrame(
     items,
   })
 
-  function resolve(itemId: string): ItemPresentation | undefined {
-    const existing = items.get(itemId)
+  function resolvePose(itemId: string): HtmlPose | undefined {
+    const existing = poses.get(itemId)
     if (existing !== undefined) return existing
     if (visiting.has(itemId)) throw new Error(`Motion graph cycle detected: ${itemId}`)
     visiting.add(itemId)
     try {
-      const resolved = resolveMotionItem(graph, layout, itemId, timeMs, resolve)
-      if (resolved !== undefined) items.set(itemId, resolved)
+      const resolved = resolveMotionPose(graph, layout, itemId, timeMs, (parentItemId) => (
+        parentItemId === undefined ? createMotionRootPose() : resolvePose(parentItemId)
+      ))
+      if (resolved !== undefined) poses.set(itemId, resolved)
       return resolved
     } finally {
       visiting.delete(itemId)
@@ -132,19 +220,7 @@ export function resolvePresentationFrame(
   }
 }
 
-/** Returns the item identities whose motion segment is active at one time. */
-export function collectMotionPresentationItemIds(
-  graph: MotionGraph,
-  timeMs: number,
-): ReadonlySet<string> {
-  const itemIds = new Set<string>()
-  for (const [itemId, track] of graph.tracksByItem) {
-    if (findActiveSegment(track, timeMs) !== undefined) itemIds.add(itemId)
-  }
-  return itemIds
-}
-
-/** Resolves one item against active segments and recursively moving attachments. */
+/** Resolves one item presentation for graph construction and retargeting. */
 function resolveMotionItem(
   graph: MotionGraph,
   layout: LayoutSnapshot,
@@ -159,31 +235,50 @@ function resolveMotionItem(
     return resolveKnown?.(parentItemId)?.pose
       ?? resolveMotionItem(graph, layout, parentItemId, timeMs, resolveKnown)?.pose
   }
+  const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent)
+  if (pose === undefined) return undefined
+  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
+  const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
+  return {
+    itemId,
+    ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
+    pose,
+    representation: segment === undefined
+      ? 'source'
+      : segment.materializerOwned
+        ? 'source'
+        : (progress < 1 ? segment.presentationMode : 'source'),
+    ...(segment === undefined ? {} : { activeSegmentId: segment.id }),
+    progress,
+  }
+}
+
+/** Resolves one item's current pose while retaining parent poses only privately. */
+function resolveMotionPose(
+  graph: MotionGraph,
+  layout: LayoutSnapshot,
+  itemId: string,
+  timeMs: number,
+  resolveParent: (parentItemId: string | undefined) => HtmlPose | undefined,
+): HtmlPose | undefined {
+  const base = layout.items.get(itemId)
+  if (base === undefined) return undefined
   const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
   if (segment === undefined) {
     const parent = resolveParent(base.parentItemId)
-    if (parent === undefined) return undefined
-    return {
-      itemId,
-      ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
-      pose: composeMotionPose(parent, base.localPose),
-      representation: 'source',
-      progress: 1,
-    }
+    return parent === undefined ? undefined : composeMotionPose(parent, base.localPose)
   }
 
   const retarget = resolveSegmentRetarget(segment, timeMs)
   const from = resolveAttachment(retarget?.from ?? segment.from, layout, itemId, resolveParent, false)
-  const to = resolveAttachment(retarget?.to ?? segment.to, layout, itemId, resolveParent, true)
-  const progress = resolveSegmentProgress(segment, timeMs)
-  return {
+  const to = resolveAttachment(
+    retarget?.to ?? segment.to,
+    layout,
     itemId,
-    ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
-    pose: interpolateMotionPose(from, to, progress, segment.path),
-    representation: progress < 1 ? segment.presentationMode : 'source',
-    activeSegmentId: segment.id,
-    progress,
-  }
+    resolveParent,
+    !segment.materializerOwned,
+  )
+  return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path)
 }
 
 /** Resolves one parent pose from a boundary layout while retaining prior motion segments. */
@@ -257,42 +352,58 @@ function isReparented(before: LayoutItemSnapshot, after: LayoutItemSnapshot): bo
 
 /** Uses an item's own timing, or the longest direct timing for shared reflow. */
 function selectBoundaryTransition(intents: readonly MotionIntent[]): MotionIntent | undefined {
-  return [...intents].sort((left, right) => left.duration - right.duration).at(-1)
+  let longest: MotionIntent | undefined
+  for (const intent of intents) {
+    const endAt = intent.startAt + (intent.delay ?? 0) + intent.duration
+    const longestEndAt = longest === undefined
+      ? Number.NEGATIVE_INFINITY
+      : longest.startAt + (longest.delay ?? 0) + longest.duration
+    if (longest === undefined || endAt > longestEndAt) longest = intent
+  }
+  return longest
 }
 
 /** Finds the latest segment owning one item at the requested time. */
 function findActiveSegment(track: ItemMotionTrack | undefined, timeMs: number): MotionSegment | undefined {
   if (track === undefined) return undefined
-  return [...track.segments]
-    .reverse()
-    .find((segment) => timeMs >= segment.startAt && timeMs <= segment.endAt)
+  for (let index = track.segments.length - 1; index >= 0; index -= 1) {
+    const segment = track.segments[index]!
+    if (timeMs >= segment.startAt && timeMs <= segment.endAt) return segment
+  }
+  return undefined
 }
 
 /** Selects an active segment that still has a future destination to retarget. */
 function findContinuingSegment(track: ItemMotionTrack | undefined, timeMs: number): MotionSegment | undefined {
   if (track === undefined) return undefined
-  return [...track.segments]
-    .reverse()
-    .find((segment) => timeMs >= segment.startAt && timeMs < segment.endAt)
+  for (let index = track.segments.length - 1; index >= 0; index -= 1) {
+    const segment = track.segments[index]!
+    if (timeMs >= segment.startAt && timeMs < segment.endAt) return segment
+  }
+  return undefined
 }
 
 /** Selects the latest endpoint pair whose exact retarget boundary has been crossed. */
 function resolveSegmentRetarget(segment: MotionSegment, timeMs: number): MotionRetarget | undefined {
-  return [...(segment.retargets ?? [])]
-    .reverse()
-    .find((retarget) => retarget.at <= timeMs)
+  const retargets = segment.retargets
+  if (retargets === undefined) return undefined
+  for (let index = retargets.length - 1; index >= 0; index -= 1) {
+    const retarget = retargets[index]!
+    if (retarget.at <= timeMs) return retarget
+  }
+  return undefined
 }
 
 /** Resolves one segment's eased progress from absolute logical time. */
 function resolveSegmentProgress(segment: MotionSegment, timeMs: number): number {
-  return resolveTweenProgress(
-    prepareTween({ from: 0, to: 1, duration: segment.duration, ease: segment.ease }),
-    timeMs - segment.startAt,
-  )
+  return resolveTweenProgress(segment.tween, timeMs - segment.startAt)
 }
 
 /** Freezes mutable planner tracks into the public graph contract. */
-function freezeMotionGraph(tracks: ReadonlyMap<string, readonly MotionSegment[]>): MotionGraph {
+function freezeMotionGraph(
+  tracks: ReadonlyMap<string, readonly MotionSegment[]>,
+  presentationItemIds: ReadonlySet<string>,
+): MotionGraph {
   const tracksByItem = new Map<string, ItemMotionTrack>()
   for (const [itemId, segments] of tracks) {
     tracksByItem.set(itemId, Object.freeze({ itemId, segments: Object.freeze([...segments]) }))
@@ -304,14 +415,20 @@ function freezeMotionGraph(tracks: ReadonlyMap<string, readonly MotionSegment[]>
       startAt: segment.startAt,
       endAt: segment.endAt,
       duration: segment.duration,
+      delay: segment.delay,
       ease: segment.ease,
       presentationMode: segment.presentationMode,
       direct: segment.direct,
       from: segment.from,
       to: segment.to,
       retargets: segment.retargets,
+      materializerOwned: segment.materializerOwned,
       path: segment.path,
     })),
   ]))
-  return Object.freeze({ revision, tracksByItem })
+  return Object.freeze({
+    revision,
+    tracksByItem,
+    presentationItemIds: Object.freeze([...presentationItemIds]),
+  })
 }

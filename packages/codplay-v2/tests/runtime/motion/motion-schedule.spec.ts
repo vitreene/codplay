@@ -20,6 +20,43 @@ describe('compileMotionSchedule', () => {
     expect(Object.isFrozen(schedule)).toBe(true)
   })
 
+  it('accepts one action-owned pose transition through the materializer resolver', () => {
+    const base = compiledScene()
+    const schedule = compileMotionSchedule({
+      ...base,
+      scene: {
+        ...base.scene,
+        stories: {
+          main: {
+            ...base.scene.stories.main!,
+            persos: [{
+              ...base.scene.stories.main!.persos[0]!,
+              actions: { style: { style: { top: { from: '0px', to: '100px', duration: 250, delay: 40, ease: 'linear' } } } },
+            }],
+            eventimes: [{ name: 'style', startAt: 50 }],
+          },
+        },
+      },
+    },
+      undefined,
+      {
+        resolveActionTransition: (action) => action?.style === undefined
+          ? undefined
+          : { duration: 250, delay: 40, ease: 'linear' },
+      },
+    )
+
+    expect(schedule).toHaveLength(1)
+    expect(schedule[0]).toMatchObject({
+      startAt: 50,
+      duration: 250,
+      delay: 40,
+      endAt: 340,
+      ease: 'linear',
+      presentationMode: 'local',
+    })
+  })
+
   it('keeps only the last command for one item at one event boundary', () => {
     const base = compiledScene()
     const schedule = compileMotionSchedule({

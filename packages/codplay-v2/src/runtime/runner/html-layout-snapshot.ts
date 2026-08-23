@@ -1,4 +1,4 @@
-import { captureHtmlPose } from '../motion/html-pose'
+import { captureHtmlPose, createHtmlPoseCaptureContext } from '../motion/html-pose'
 import {
   composeMotionPose,
   createMotionRootPose,
@@ -22,14 +22,15 @@ export function captureHtmlLayoutSnapshot(
   selection?: ReadonlySet<string>,
 ): LayoutSnapshot {
   if (!isMeasurableElement(root)) return emptySnapshot(scene)
-  const hostRootPose = captureHtmlPose(root)
+  const captureContext = createHtmlPoseCaptureContext()
+  const hostRootPose = captureHtmlPose(root, captureContext)
   const rootCoordinatePose = createMotionRootPose()
   const selectedItemIds = resolveSelection(scene, selection)
   const measured = new Map<string, ReturnType<typeof captureHtmlPose>>()
   for (const perso of Object.values(scene.persos)) {
     if (!perso.placement.mounted || !selectedItemIds.has(perso.key)) continue
     const node = nodes.get(perso.key)
-    if (isMeasurableElement(node)) measured.set(perso.key, captureHtmlPose(node))
+    if (isMeasurableElement(node)) measured.set(perso.key, captureHtmlPose(node, captureContext))
   }
 
   const items = new Map<string, LayoutItemSnapshot>()
@@ -43,7 +44,7 @@ export function captureHtmlLayoutSnapshot(
     item.localPose.width,
     item.localPose.height,
   ]))}`
-  return Object.freeze({ timeMs: scene.timeMs, revision, items })
+  return Object.freeze({ timeMs: scene.timeMs, revision, rootPose: hostRootPose, items })
 
   /** Captures parents before children so every local relation uses one snapshot. */
   function visit(itemId: string): void {
@@ -91,7 +92,12 @@ function resolveSelection(scene: SolvedScene, selection: ReadonlySet<string> | u
 
 /** Returns an empty snapshot for hosts without browser geometry, such as structural tests. */
 function emptySnapshot(scene: SolvedScene): LayoutSnapshot {
-  return Object.freeze({ timeMs: scene.timeMs, revision: `${scene.graph.revision}:${scene.timeMs}:unmeasured`, items: new Map() })
+  return Object.freeze({
+    timeMs: scene.timeMs,
+    revision: `${scene.graph.revision}:${scene.timeMs}:unmeasured`,
+    rootPose: createMotionRootPose(),
+    items: new Map(),
+  })
 }
 
 /** Narrows values to browser elements with a usable document coordinate context. */

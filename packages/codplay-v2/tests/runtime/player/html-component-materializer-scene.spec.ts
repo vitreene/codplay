@@ -189,6 +189,7 @@ describe('HtmlComponentMaterializer scene materialization', () => {
     body.children = []
     dragged.parentNode = null
 
+    materializer.invalidateStructure()
     materializer.materializeScene(activeScene)
 
     expect(root.children).toEqual([first, dragged, third])

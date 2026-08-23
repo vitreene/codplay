@@ -25,15 +25,20 @@ historical DOM tree or a second replay circuit. Seek selects the replayable
 boundaries again; the live release pose is not replayed.
 
 The motion schedule is compiled from the visible player's shared journal at
-initialization, after a completed live capture, and after a resize. The frame
-loop captures only the current natural geometry of the active item closure and
-resolves the already-built graph; it does not rediscover actions or rebuild the
-schedule on every frame.
+initialization, after a completed live capture, and after a resize. It includes
+compiled `move.transition` declarations and HTML action transitions that affect
+the geometric pose. Natural geometry is captured only at the corresponding
+boundaries or after an explicit structural invalidation. The frame loop resolves
+the cached graph and the materializer-owned presentation state; its frame output
+contains only items with a trajectory. Parent poses needed to compose those
+items remain private calculation context. It does not read the DOM, recapture the
+active closure or rebuild the schedule on every frame.
 
 ## Position capture for motion
 
 The runner never creates a second HTML tree, player, engine or materializer for
-FLIP. When a transition `move` exists, an explicit position-capture phase reads
+FLIP. When the schedule contains a `move` or an action-owned pose transition, an
+explicit position-capture phase reads
 the persistent author nodes of the visible root and stores immutable geometry
 snapshots. The phase first removes the runner-owned local transforms, size slots,
 masks from the previous presentation. Existing overlay resources are retained
@@ -42,6 +47,12 @@ then uses the same materializations for `before` and `after`, without playing
 media, reloading sources or destroying components. This reset is synchronous:
 no browser frame is rendered between the natural-geometry read and the new
 motion commit.
+
+For a structural `move`, the capture includes all current children of its source
+and destination targets. A child that also has a later direct move is retained
+when it participates in this reflow, so its natural position can be animated
+from the current list state. A direct mover captured only as an ancestor
+dependency is not allowed to overwrite its own natural motion track.
 
 The reset also removes source masks left by the previous overlay frame. During
 the commit, existing ghosts are moved into the parent-first order required by
@@ -63,20 +74,33 @@ between frames is the normal path. The runner supplies a logical revision; the
 host synchronizes an existing template in place when its structure is stable and
 only creates a replacement after a structural invalidation.
 
-For each compiled movement boundary at `t` it captures:
+For active overlay items, the current logical revision includes the resolved
+author state so content and authored attributes remain synchronized. This
+revision is logical data; it is not obtained from the DOM and it is not part of
+pose resolution. A template revision may trigger an in-place synchronization,
+but that synchronization does not recreate the representation or recapture its
+geometry. Transform-longhand neutralization is measured only when a
+representation is created; a reused representation reapplies the recorded
+decision without a computed-style read.
 
-- FIRST: `resolveSceneBeforeBoundary(t)`, excluding the event;
-- LAST: `resolveSceneAt(t)`, including the event.
+For each compiled movement boundary it captures:
 
-LAST is therefore the immediate consequence of the event, never the global scene
-at the end of the animation duration. The snapshots supply geometry only;
+- for a `move`: FIRST with `resolveSceneBeforeBoundary(startAt)`, then LAST
+  with `resolveSceneAt(startAt)` after the structural event;
+- for an action-owned pose transition: FIRST at `startAt`, then LAST at
+  `startAt + delay + duration`.
+
+The `move` LAST is therefore the immediate consequence of its event. The action
+LAST is the measured endpoint of that action, not a scene-wide future state. The
+snapshots supply geometry only;
 `SolvedGraph` supplies identity, order, target and parentage. The capture is
 limited to the moved items, affected siblings and the ancestor/descendant
 closure required to compose their poses.
 
-If the compiled scene has no transition `move`, the runner does not initialize a
-motion system, capture positions or create an overlay. A runtime move must be
-captured before its structural commit through the same pre-commit boundary.
+If the compiled scene has no transition `move` and no materializer-owned pose
+transition, the runner does not initialize a motion system, capture positions or
+create an overlay. A runtime move must be captured before its structural commit
+through the same pre-commit boundary.
 
 ## Local and reparent presentation
 
@@ -92,6 +116,11 @@ All active local sizes are written first, then matrices are solved parent-first.
 This prevents one item from calculating against a partially updated sibling
 layout.
 
+Within one presentation frame, siblings reuse the inverse matrix of their
+resolved parent. A local transform is written to its source only when its
+resolved affine matrix or source node changes; unchanged local poses produce no
+new CSS write.
+
 ### Reparent
 
 Reparent presentation masks the source and creates an item-indexed representation
@@ -102,13 +131,20 @@ including a transfer from one list to another. Authoring `flipMode:
 Overlay poses are localized against the measured overlay layer itself, including
 root borders and transforms. An independently moving descendant is hidden in an
 ancestor clone. If a local segment is nested under an active overlay ancestor,
-the host promotes only its representation to overlay so it remains visible; its
-trajectory and timing do not change.
+  the host applies its reserved size/transform slots to the matching descendant
+  inside that ancestor's ghost. It remains a local FLIP and does not receive an
+  independent overlay resource. Only a descendant with its own `reparent`
+  representation gets an independent ghost and is masked in the ancestor clone.
+
+The host computes the inverse affine matrix of the root once per committed
+presentation frame and reuses it for all active overlay items. Stable ghost
+dimensions are written only when their resolved size changes; the pose matrix
+remains the only per-frame overlay write.
 
 ## Lifecycle
 
 - `init()` initializes the visible component host, captures motion boundaries only
-  when transitions exist, then builds the immutable motion graph.
+  when a move or pose transition exists, then builds the immutable motion graph.
 - `play()` and `seek(t)` present the graph at absolute logical time.
 - `resize()` prepares natural geometry, invalidates captured geometry, rebuilds
   the graph, then recommits the current frame without recreating stable overlay
@@ -164,6 +200,11 @@ structurelle et compare d'abord l'ordre des seuls nodes auteurs avant d'appeler
 par le materializer sans réattacher le node flottant ni déplacer le ghost. La
 preview retire ensuite le marqueur à la fermeture ; la frame suivante remonte
 alors l'ordre logique normal.
+
+Pour chaque résolution de cible, la preview capture une seule fois les rectangles
+stabilisés des enfants de la liste candidate. Le FLIP des voisins réutilise cette
+capture après l'insertion du ghost ; il ne relit pas une seconde fois les mêmes
+enfants dans le même cycle.
 
 Avec `enableInteractionLock: true`, le runner verrouille la racine HTML tant que
 le player n'est pas en `playing`, puis retrouve son état initial à la destruction.

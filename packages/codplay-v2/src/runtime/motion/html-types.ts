@@ -15,7 +15,6 @@ export type HtmlPose = Readonly<{
   origin: Readonly<{ x: number; y: number }>
   matrix: HtmlMatrix
   parentMatrix: HtmlMatrix
-  layoutOffset?: Readonly<{ x: number; y: number }>
   rotationMatrix: HtmlMatrix
   scaleX: number
   scaleY: number

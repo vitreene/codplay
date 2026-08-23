@@ -1,4 +1,4 @@
-import type { Path } from '../../ace'
+import type { Path, Tween } from '../../ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
 
 /** Host presentation selected after one structural movement is classified. */
@@ -26,6 +26,8 @@ export type LayoutSnapshot = Readonly<{
   timeMs: number
   revision: string
   items: ReadonlyMap<string, LayoutItemSnapshot>
+  /** Root pose captured with the same transaction, when the host exposes one. */
+  rootPose?: HtmlPose
 }>
 
 /** One direct movement intent declared at a structural boundary. */
@@ -34,9 +36,12 @@ export type MotionIntent = Readonly<{
   itemId: string
   startAt: number
   duration: number
+  delay?: number
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
+  /** Whether this intent changes the target layout and may reflow its siblings. */
+  targetReflow?: boolean
 }>
 
 /** The before/after layout pair caused directly by one event boundary. */
@@ -71,12 +76,21 @@ export type MotionSegment = Readonly<{
   startAt: number
   endAt: number
   duration: number
+  delay: number
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
   direct: boolean
   from: MotionAttachment
   to: MotionAttachment
+  /** ACE easing prepared once when the graph is built, never during RAF. */
+  tween: Tween
+  /**
+   * The component/materializer already writes this pose into its source node.
+   * The graph still exposes it for descendant composition, but the HTML host
+   * must not apply a second local presentation transform to the same item.
+   */
+  materializerOwned: boolean
   retargets?: readonly MotionRetarget[]
   boundaryId: string
 }>
@@ -91,6 +105,8 @@ export type ItemMotionTrack = Readonly<{
 export type MotionGraph = Readonly<{
   revision: string
   tracksByItem: ReadonlyMap<string, ItemMotionTrack>
+  /** Prepared sovereign trajectory owners; unrelated layout items are never visited per frame. */
+  presentationItemIds: readonly string[]
 }>
 
 /** One fully resolved item representation at one logical time. */
@@ -108,5 +124,6 @@ export type PresentationFrame = Readonly<{
   timeMs: number
   graphRevision: string
   layoutRevision: string
+  /** Only items with a trajectory requiring a materializer presentation. */
   items: ReadonlyMap<string, ItemPresentation>
 }>

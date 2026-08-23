@@ -36,6 +36,11 @@ export class MotionMaterializer implements RuntimeMaterializer {
     this.presentMotion(scene.timeMs)
   }
 
+  /** Forwards an external transient-structure invalidation to the base host. */
+  invalidateStructure(): void {
+    this.base.invalidateStructure?.()
+  }
+
   /** Releases the underlying materialization. */
   destroy(): void {
     this.base.destroy?.()

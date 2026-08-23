@@ -27,6 +27,8 @@ type MountedComponent = Readonly<{
 /** Synchronizes compiled solved persos with a player-local component host. */
 export class RuntimeComponentRuntime {
   private readonly mounted = new Map<string, MountedComponent>()
+  private readonly stateRevisions = new Map<string, number>()
+  private readonly lastStates = new Map<string, Readonly<Record<string, unknown>>>()
   private readonly options: RuntimeComponentRuntimeOptions
   private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
@@ -45,6 +47,11 @@ export class RuntimeComponentRuntime {
     return this.mounted.get(componentId)?.component
   }
 
+  /** Returns the logical materialization revision last delivered to one component. */
+  getStateRevision(componentId: string): number | undefined {
+    return this.stateRevisions.get(componentId)
+  }
+
   /**
    * Synchronizes the logical scene without destroying persistent component instances.
    * Structural unmounting is handled by the materializer; final cleanup is handled by destroy().
@@ -53,6 +60,7 @@ export class RuntimeComponentRuntime {
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
       mounted.component.update({ state: perso.state, timeMs: scene.timeMs })
+      this.recordStateRevision(perso.key, perso.state)
     }
   }
 
@@ -65,12 +73,15 @@ export class RuntimeComponentRuntime {
     const mounted = this.mounted.get(persoKey)
     if (mounted === undefined) throw new Error(`Runtime component is not mounted: ${persoKey}`)
     mounted.component.update({ state, timeMs })
+    this.recordStateRevision(persoKey, state)
   }
 
   /** Destroys all materialized component instances. */
   destroy(): void {
     for (const mounted of this.mounted.values()) mounted.handle.destroy()
     this.mounted.clear()
+    this.stateRevisions.clear()
+    this.lastStates.clear()
   }
 
   /** Creates one component instance from its compiled scene declaration. */
@@ -112,4 +123,29 @@ export class RuntimeComponentRuntime {
     this.mounted.set(perso.key, mounted)
     return mounted
   }
+
+  /** Advances the overlay template revision only when resolved state changed. */
+  private recordStateRevision(componentId: string, state: Readonly<Record<string, unknown>>): void {
+    const previous = this.lastStates.get(componentId)
+    if (previous !== undefined && sameRuntimeValue(previous, state)) return
+    this.lastStates.set(componentId, state)
+    this.stateRevisions.set(componentId, (this.stateRevisions.get(componentId) ?? 0) + 1)
+  }
+}
+
+/** Compares compiled component state without serializing it on every frame. */
+function sameRuntimeValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((value, index) => sameRuntimeValue(value, right[index]))
+  }
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  const rightKeys = Object.keys(rightRecord)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(rightRecord, key)
+    && sameRuntimeValue(leftRecord[key], rightRecord[key]))
 }

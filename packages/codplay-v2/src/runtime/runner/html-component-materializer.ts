@@ -34,6 +34,8 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   readonly context: HtmlMaterializerRuntimeContext
   private readonly nodes: HtmlComponentMaterializerNodes
   private mountedPersos = new Set<string>()
+  private lastStructuralRevision: string | undefined
+  private structureDirty = true
 
   /** Creates one HTML materializer attached to the host-owned node registries. */
   constructor(
@@ -100,6 +102,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
    * Component cleanup only occurs through the final RuntimeComponentHandle.destroy().
    */
   materializeScene(scene: SolvedScene, _context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
+    if (!this.structureDirty && this.lastStructuralRevision === scene.graph.revision) return
     const childrenByTarget = resolvePresentationOrder(scene)
     const nextMountedPersos = new Set(
       Object.values(scene.persos)
@@ -131,12 +134,21 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     }
 
     this.mountedPersos = nextMountedPersos
+    this.lastStructuralRevision = scene.graph.revision
+    this.structureDirty = false
+  }
+
+  /** Invalidates the structural fast path after an external transient DOM move. */
+  invalidateStructure(): void {
+    this.structureDirty = true
   }
 
   /** Detaches all currently materialized roots from their structural parents. */
   destroy(): void {
     for (const persoKey of this.mountedPersos) detachStructuredRoot(this.nodes.persoNodes.get(persoKey))
     this.mountedPersos.clear()
+    this.lastStructuralRevision = undefined
+    this.structureDirty = true
   }
 }
 

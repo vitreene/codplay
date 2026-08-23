@@ -259,7 +259,7 @@ export class RuntimePlayer {
     this.notifyModuleRateChange(this.rate)
     this.rebuildStructuralTimeline()
     this.solvedScene = this.reconstructScene(0)
-    this.synchronizeStateStore(0)
+    this.synchronizeStateStoreFromScene(this.solvedScene)
     this.materializeScene(this.solvedScene, { moveDeltas: [] })
     collectSolvedMoveDiagnostics(this.solvedScene, diagnostics)
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
@@ -285,7 +285,7 @@ export class RuntimePlayer {
         }
         this.solvedScene = this.pendingSolvedScene
         this.includePersistOnlyInCurrent = true
-        this.synchronizeStateStore(timeMs, true)
+        this.synchronizeStateStoreFromScene(this.solvedScene)
         this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
         this.pendingSolvedScene = undefined
         this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
@@ -614,7 +614,7 @@ export class RuntimePlayer {
     this.currentTimeMs += frame.deltaMs * this.rate
     this.currentTimeMs = this.resolveModuleTimeline(this.currentTimeMs)
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
-    this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
+    this.synchronizeStateStoreFromScene(nextSolvedScene)
     const previousSolvedScene = this.solvedScene
     const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
     this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
@@ -753,14 +753,19 @@ export class RuntimePlayer {
     })
   }
 
-  /** Reconciles the mutable strap input snapshot from the journal state. */
-  private synchronizeStateStore(timeMs: number, includePersistOnly = true): void {
-    const materialized = materializeScene(this.compiledScene, timeMs, this.trackJournal, { includePersistOnly })
-    this.stateStore.replace(STRAP_SCOPE_SCENE, materialized.sceneState)
-    for (const [storyId, state] of Object.entries(materialized.storyStates)) {
+  /** Reconciles the mutable strap input snapshot from one solved evaluation. */
+  private synchronizeStateStoreFromScene(scene: Pick<SolvedScene, 'sceneState' | 'storyStates'>): void {
+    this.stateStore.replace(STRAP_SCOPE_SCENE, scene.sceneState)
+    for (const [storyId, state] of Object.entries(scene.storyStates)) {
       this.stateStore.replace(STRAP_SCOPE_STORY, state, storyId)
     }
     this.reapplyLiveCaptureStateUpdates()
+  }
+
+  /** Reconciles the mutable strap input snapshot from the journal state. */
+  private synchronizeStateStore(timeMs: number, includePersistOnly = true): void {
+    const materialized = materializeScene(this.compiledScene, timeMs, this.trackJournal, { includePersistOnly })
+    this.synchronizeStateStoreFromScene(materialized)
   }
 
   /** Reapplies non-journaled capture state so active straps see its live value. */

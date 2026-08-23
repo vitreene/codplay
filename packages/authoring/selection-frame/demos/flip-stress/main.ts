@@ -129,34 +129,18 @@ function formatPathNumber(value: number): string {
   return value.toFixed(2)
 }
 
-/** Builds a deterministic two-arc stress path for one moving content item. */
-function createRandomContentPath(itemId: ContentId): string {
+/** Builds a deterministic smooth two-lobed path for one moving content item. */
+function createSmoothContentPath(itemId: ContentId): string {
   const random = createDeterministicRandom(`flip-stress:${itemId}`)
-  const firstPoint = {
-    x: 0.24 + random() * 0.2,
-    y: -0.7 + random() * 1.4,
-  }
-  const secondPoint = {
-    x: 0.62 + random() * 0.22,
-    y: -0.7 + random() * 1.4,
-  }
-  const firstRadius = {
-    x: 0.65 + random() * 0.7,
-    y: 0.65 + random() * 0.7,
-  }
-  const secondRadius = {
-    x: 0.65 + random() * 0.7,
-    y: 0.65 + random() * 0.7,
-  }
-  const firstRotation = -45 + random() * 90
-  const secondRotation = -45 + random() * 90
+  const radiusX = 0.5 + random() * 0.24
+  const radiusY = 0.32 + random() * 0.4
+  const rotation = -18 + random() * 36
   const firstSweep = random() < 0.5 ? 0 : 1
-  const secondSweep = random() < 0.5 ? 0 : 1
+  const secondSweep = firstSweep === 1 ? 0 : 1
   return [
     'M 0 0',
-    `A ${formatPathNumber(firstRadius.x)} ${formatPathNumber(firstRadius.y)} ${formatPathNumber(firstRotation)} 0 ${firstSweep} ${formatPathNumber(firstPoint.x)} ${formatPathNumber(firstPoint.y)}`,
-    `A ${formatPathNumber(secondRadius.x)} ${formatPathNumber(secondRadius.y)} ${formatPathNumber(secondRotation)} 0 ${secondSweep} ${formatPathNumber(secondPoint.x)} ${formatPathNumber(secondPoint.y)}`,
-    'A 0.9 0.9 0 0 0 1 0',
+    `A ${formatPathNumber(radiusX)} ${formatPathNumber(radiusY)} ${formatPathNumber(rotation)} 0 ${firstSweep} 0.5 0`,
+    `A ${formatPathNumber(radiusX)} ${formatPathNumber(radiusY)} ${formatPathNumber(rotation)} 0 ${secondSweep} 1 0`,
   ].join(' ')
 }
 
@@ -179,7 +163,7 @@ function contentPerso(exchange: ContentExchange): PersoDoc {
             transition: {
               duration: CONTENT_DURATION_MS,
               ease: CONTENT_EASE,
-              path: createRandomContentPath(exchange.itemId),
+              path: createSmoothContentPath(exchange.itemId),
               traversal: 'arc-length',
             },
           },

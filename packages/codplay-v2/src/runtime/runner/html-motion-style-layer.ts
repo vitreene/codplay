@@ -50,6 +50,11 @@ const PROJECTION_STYLE_TEXT = `
 [data-codplay-motion-hidden] {
   visibility: hidden !important;
 }
+
+[data-codplay-motion-seek] * {
+  transition: none !important;
+  animation: none !important;
+}
 `
 
 const installedPresentationStyles = new WeakSet<Document>()

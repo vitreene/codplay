@@ -29,6 +29,7 @@ import {
   captureCurrentHtmlMotionLayout,
   captureHtmlLiveMotionBoundary,
   captureHtmlMotionBoundaries,
+  resolveHtmlMotionActionTransition,
 } from './html-motion-capture'
 import type {
   RuntimePreloadApi,
@@ -150,7 +151,7 @@ export class HtmlPlayerRunner {
     const componentMaterializer = new HtmlComponentMaterializer(this.nodes, this.materializerContext)
     const materializer = new MotionMaterializer(
       componentMaterializer,
-      (timeMs) => this.motionSystem?.present(timeMs),
+      (timeMs) => this.presentMotion(timeMs),
     )
     const componentRuntime = createComponentRuntime(options.catalog, materializer, this.resourceMetadata)
     this.player = new RuntimePlayer(
@@ -180,10 +181,16 @@ export class HtmlPlayerRunner {
       onCaptureClose: (input) => {
         this.completeLiveCaptureMotion(input.captureId, input.completed)
         options.onCaptureClose?.(input)
+        // A materializer-specific capture preview may have moved author roots
+        // after the last solved graph revision. Reconcile once at the next
+        // scene boundary, without reopening structural work on every frame.
+        materializer.invalidateStructure?.()
       },
     })
 
-    const compiledIntents = compileMotionSchedule(options.compiledScene)
+    const compiledIntents = compileMotionSchedule(options.compiledScene, undefined, {
+      resolveActionTransition: resolveHtmlMotionActionTransition,
+    })
     if (compiledIntents.length === 0) {
       this.motionSystem = undefined
       return
@@ -205,7 +212,10 @@ export class HtmlPlayerRunner {
       const intents = compileMotionSchedule(
         this.player.compiledScene,
         this.player.trackJournal,
-        { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
+        {
+          includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+          resolveActionTransition: resolveHtmlMotionActionTransition,
+        },
       )
       const boundaries = captureHtmlMotionBoundaries({
         player: this.player,
@@ -218,7 +228,7 @@ export class HtmlPlayerRunner {
       this.presentationMotionBoundaries = boundaries
       this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
       this.motionSystem.initialize()
-      this.motionSystem.present(this.player.getCurrentTimeMs())
+      this.presentMotion(this.player.getCurrentTimeMs())
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
       return visible
@@ -291,13 +301,18 @@ export class HtmlPlayerRunner {
     // The live release handoff belongs only to the current capture close. A
     // seek must rebuild the replayable persist-only source-to-target motion.
     this.liveFirstLayouts.clear()
-    if (this.motionSystem !== undefined) {
-      this.presentationMotionBoundaries = this.replayMotionBoundaries
-      this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
+    this.motionSystem?.prepareSeek()
+    try {
+      if (this.motionSystem !== undefined) {
+        this.presentationMotionBoundaries = this.replayMotionBoundaries
+        this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
+      }
+      const result = this.player.seek(timeMs)
+      this.syncInteractionLock()
+      return result
+    } finally {
+      this.motionSystem?.completeSeek()
     }
-    const result = this.player.seek(timeMs)
-    this.syncInteractionLock()
-    return result
   }
 
   /** Emits one live event through the visible player's shared journal. */
@@ -315,7 +330,10 @@ export class HtmlPlayerRunner {
         const replayIntents = compileMotionSchedule(
           this.player.compiledScene,
           this.player.trackJournal,
-          { includePersistOnly: true },
+          {
+            includePersistOnly: true,
+            resolveActionTransition: resolveHtmlMotionActionTransition,
+          },
         )
         this.replayMotionBoundaries = captureHtmlMotionBoundaries({
           player: this.player,
@@ -327,7 +345,10 @@ export class HtmlPlayerRunner {
         const presentationIntents = compileMotionSchedule(
           this.player.compiledScene,
           this.player.trackJournal,
-          { includePersistOnly: this.player.includesPersistOnlyInCurrent() },
+          {
+            includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+            resolveActionTransition: resolveHtmlMotionActionTransition,
+          },
         )
         this.presentationMotionBoundaries = captureHtmlMotionBoundaries({
           player: this.player,
@@ -343,7 +364,7 @@ export class HtmlPlayerRunner {
       return
     }
     if (this.player.getSolvedScene() !== undefined) this.player.refresh()
-    else this.motionSystem?.present(this.player.getCurrentTimeMs())
+    else this.presentMotion(this.player.getCurrentTimeMs())
   }
 
   /** Returns the current host materialization epoch for diagnostics. */
@@ -398,12 +419,18 @@ export class HtmlPlayerRunner {
     const replayIntents = compileMotionSchedule(
       this.player.compiledScene,
       this.player.trackJournal,
-      { includePersistOnly: true },
+      {
+        includePersistOnly: true,
+        resolveActionTransition: resolveHtmlMotionActionTransition,
+      },
     )
     const currentIntents = compileMotionSchedule(
       this.player.compiledScene,
       this.player.trackJournal,
-      { includePersistOnly: false },
+      {
+        includePersistOnly: false,
+        resolveActionTransition: resolveHtmlMotionActionTransition,
+      },
     )
     this.motionSystem?.prepareGeometryCapture()
     const knownIntentIds = new Set(this.replayMotionBoundaries
@@ -445,20 +472,13 @@ export class HtmlPlayerRunner {
     this.motionSystem = motionSystem
     motionSystem.setBoundaries(this.presentationMotionBoundaries)
     motionSystem.initialize()
-    motionSystem.present(this.player.getCurrentTimeMs())
+    this.presentMotion(this.player.getCurrentTimeMs())
   }
 
-  /** Captures only the active visible item closure for one motion frame. */
-  private captureCurrentMotionLayout(timeMs: number, itemIds: ReadonlySet<string>) {
-    const scene = this.player.getSolvedScene()
-    if (scene === undefined) {
-      return {
-        timeMs,
-        revision: `${timeMs}:unavailable`,
-        items: new Map(),
-      }
-    }
-    return captureCurrentHtmlMotionLayout(this.interactionRoot, this.nodes.persoNodes, scene, itemIds)
+  private presentMotion(timeMs: number): void {
+    const motionSystem = this.motionSystem
+    if (motionSystem === undefined) return
+    motionSystem.present(timeMs)
   }
 
   /** Creates the one optional HTML motion presenter for this visible root. */
@@ -469,7 +489,6 @@ export class HtmlPlayerRunner {
     )
     return new HtmlMotionSystem({
       host: motionHost,
-      captureCurrent: (timeMs, itemIds) => this.captureCurrentMotionLayout(timeMs, itemIds),
       resolveSourceRevision: (itemId) => this.resolveMotionSourceRevision(itemId),
     })
   }
@@ -479,14 +498,13 @@ export class HtmlPlayerRunner {
     const scene = this.player.getSolvedScene()
     const perso = scene?.persos[itemId]
     if (scene === undefined || perso === undefined) return undefined
+    const stateRevision = this.player.componentRuntime?.getStateRevision(itemId) ?? 0
     return [
       scene.graph.revision,
-      serializeMotionRevision(perso.state),
-      serializeMotionRevision({
-        mounted: perso.placement.mounted,
-        targetId: perso.placement.targetId,
-        parentKey: perso.placement.parentKey,
-      }),
+      stateRevision,
+      perso.placement.mounted ? 'mounted' : 'detached',
+      perso.placement.targetId ?? '',
+      perso.placement.parentKey ?? '',
     ].join(':')
   }
 
@@ -548,13 +566,4 @@ function resolveCaptureEventTarget(root: HTMLElement): EventTarget | undefined {
   const ownerDocument = (root as { ownerDocument?: { defaultView?: EventTarget | null } }).ownerDocument
   return ownerDocument?.defaultView
     ?? (typeof globalThis.window === 'undefined' ? undefined : globalThis.window)
-}
-
-/** Serializes one compiled value defensively for presentation-resource reuse. */
-function serializeMotionRevision(value: unknown): string {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
 }

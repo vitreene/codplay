@@ -34,6 +34,14 @@ export function isServiceRecord(value: unknown): value is Record<string, unknown
 
 /** Writes one CSS declaration through the browser style declaration contract. */
 export function setHtmlStyleProperty(node: HtmlElementNode, property: string, value: string): void {
+  const style = node.style as Record<string, string>
+  const getPropertyValue = (node.style as unknown as {
+    getPropertyValue?: (property: string) => string
+  }).getPropertyValue
+  const current = property.startsWith('--') || property.includes('-')
+    ? getPropertyValue?.call(node.style, property)
+    : style[property]
+  if (current === value) return
   if (property.startsWith('--') || property.includes('-')) node.style.setProperty(property, value)
-  else node.style[property] = value
+  else style[property] = value
 }

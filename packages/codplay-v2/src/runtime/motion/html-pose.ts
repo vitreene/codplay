@@ -1,3 +1,4 @@
+import { multiplyMatrix } from '../../ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
 
 const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
@@ -5,8 +6,27 @@ const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 type HtmlWorldGeometry = Readonly<{
   origin: { x: number; y: number }
   matrix: HtmlMatrix
-  layoutOffset: { x: number; y: number }
 }>
+
+type HtmlLocalBox = Readonly<{ width: number | null; height: number | null }>
+
+/** Shared read context for one explicit HTML geometry transaction. */
+export type HtmlPoseCaptureContext = Readonly<{
+  geometries: Map<Element, HtmlWorldGeometry>
+  poses: Map<Element, HtmlPose>
+  localBoxes: Map<Element, HtmlLocalBox>
+  computedStyles: Map<Element, CSSStyleDeclaration | undefined>
+}>
+
+/** Creates one cache shared by all poses captured in one boundary transaction. */
+export function createHtmlPoseCaptureContext(): HtmlPoseCaptureContext {
+  return {
+    geometries: new Map(),
+    poses: new Map(),
+    localBoxes: new Map(),
+    computedStyles: new Map(),
+  }
+}
 
 /** Parses one computed rotate value to radians. */
 function parseRotateToRadians(value: string): number {
@@ -26,18 +46,6 @@ function parseScaleFactors(value: string): { sx: number; sy: number } {
   const sx = Number.isFinite(parts[0]) ? parts[0]! : 1
   const sy = Number.isFinite(parts[1]) ? parts[1]! : sx
   return { sx, sy }
-}
-
-/** Multiplies two affine matrices without depending on unrelated runtime utilities. */
-function multiplyMatrix(left: HtmlMatrix, right: HtmlMatrix): HtmlMatrix {
-  return {
-    a: left.a * right.a + left.c * right.b,
-    b: left.b * right.a + left.d * right.b,
-    c: left.a * right.c + left.c * right.d,
-    d: left.b * right.c + left.d * right.d,
-    e: left.a * right.e + left.c * right.f + left.e,
-    f: left.b * right.e + left.d * right.f + left.f,
-  }
 }
 
 /** Converts a viewport delta into the local coordinate system of a parent. */
@@ -79,8 +87,7 @@ function parseCssMatrix(transform: string): HtmlMatrix {
 }
 
 /** Reads the own matrix including individual CSS rotate and scale properties. */
-function captureNodeOwnMatrix(node: Element): HtmlMatrix {
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
+function captureNodeOwnMatrix(computed: CSSStyleDeclaration | undefined): HtmlMatrix {
   if (computed === undefined) return { ...IDENTITY_MATRIX }
   const transform = parseCssMatrix(computed.transform && computed.transform.length > 0 ? computed.transform : 'none')
   const { sx, sy } = parseScaleFactors(computed.scale)
@@ -93,21 +100,24 @@ function captureNodeOwnMatrix(node: Element): HtmlMatrix {
 }
 
 /** Measures local box dimensions without deriving them from the transformed AABB. */
-function measureLocalBox(node: Element): { width: number | null; height: number | null } {
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
+function measureLocalBox(node: Element, context: HtmlPoseCaptureContext): HtmlLocalBox {
+  const cached = context.localBoxes.get(node)
+  if (cached !== undefined) return cached
+  const computed = readComputedStyle(node, context)
   const computedWidth = Number.parseFloat(computed?.width ?? '')
   const computedHeight = Number.parseFloat(computed?.height ?? '')
   const width = Number.isFinite(computedWidth) && computedWidth > 0 ? computedWidth : null
   const height = Number.isFinite(computedHeight) && computedHeight > 0 ? computedHeight : null
 
-  if (node instanceof HTMLElement) {
-    return {
+  const box = node instanceof HTMLElement
+    ? {
       width: width ?? (node.offsetWidth > 0 ? node.offsetWidth : null) ?? (node.clientWidth > 0 ? node.clientWidth : null),
       height: height ?? (node.offsetHeight > 0 ? node.offsetHeight : null) ?? (node.clientHeight > 0 ? node.clientHeight : null),
     }
-  }
+    : { width, height }
 
-  return { width, height }
+  context.localBoxes.set(node, box)
+  return box
 }
 
 /** Reads one CSS length used by an individual transform property. */
@@ -151,12 +161,15 @@ function captureOffsetToOffsetParent(node: HTMLElement, target: HTMLElement | nu
 }
 
 /** Captures the linear matrix and visual displacement of one node in parent space. */
-function captureOwnTransform(node: Element, localWidth: number, localHeight: number): {
+function captureOwnTransform(
+  computed: CSSStyleDeclaration | undefined,
+  localWidth: number,
+  localHeight: number,
+): {
   matrix: HtmlMatrix
   displacement: { x: number; y: number }
 } {
-  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
-  const matrix = captureNodeOwnMatrix(node)
+  const matrix = captureNodeOwnMatrix(computed)
   const linearMatrix: HtmlMatrix = { ...matrix, e: 0, f: 0 }
   const translate = computed?.translate ?? 'none'
   const translateParts = translate === 'none' ? [] : translate.split(/\s+/).filter(Boolean)
@@ -176,19 +189,19 @@ function captureOwnTransform(node: Element, localWidth: number, localHeight: num
 }
 
 /** Computes one node's world affine geometry while retaining fractional DOM placement. */
-function captureWorldGeometry(node: Element, cache = new Map<Element, HtmlWorldGeometry>()): HtmlWorldGeometry {
-  const existing = cache.get(node)
+function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): HtmlWorldGeometry {
+  const existing = context.geometries.get(node)
   if (existing !== undefined) return existing
 
   const parent = node.parentElement
   const parentGeometry: HtmlWorldGeometry = parent === null
-    ? { origin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX }, layoutOffset: { x: 0, y: 0 } }
-    : captureWorldGeometry(parent, cache)
-  const localBox = measureLocalBox(node)
+    ? { origin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX } }
+    : captureWorldGeometry(parent, context)
+  const localBox = measureLocalBox(node, context)
   const localWidth = localBox.width ?? 0
   const localHeight = localBox.height ?? 0
   const fallbackLayoutOffset = captureLayoutOffset(node, parent)
-  const ownTransform = captureOwnTransform(node, localWidth, localHeight)
+  const ownTransform = captureOwnTransform(readComputedStyle(node, context), localWidth, localHeight)
   const matrix = multiplyMatrix(parentGeometry.matrix, ownTransform.matrix)
   const fallbackLocalOrigin = {
     x: fallbackLayoutOffset.x + ownTransform.displacement.x,
@@ -199,17 +212,8 @@ function captureWorldGeometry(node: Element, cache = new Map<Element, HtmlWorldG
     y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLocalOrigin.x + parentGeometry.matrix.d * fallbackLocalOrigin.y,
   }
   const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin)
-  const localOrigin = worldDeltaToLocalDelta(
-    parentGeometry.matrix,
-    origin.x - parentGeometry.origin.x,
-    origin.y - parentGeometry.origin.y,
-  )
-  const layoutOffset = {
-    x: localOrigin.x - ownTransform.displacement.x,
-    y: localOrigin.y - ownTransform.displacement.y,
-  }
-  const geometry: HtmlWorldGeometry = { origin, matrix, layoutOffset }
-  cache.set(node, geometry)
+  const geometry: HtmlWorldGeometry = { origin, matrix }
+  context.geometries.set(node, geometry)
   return geometry
 }
 
@@ -262,12 +266,16 @@ function extractRotationMatrix(matrix: HtmlMatrix): HtmlMatrix {
 }
 
 /** Captures a numeric pose for one HTML target without retaining the DOM handle. */
-export function captureHtmlPose(node: Element): HtmlPose {
-  const geometry = captureWorldGeometry(node)
-  const parentMatrix = node.parentElement === null ? { ...IDENTITY_MATRIX } : captureWorldGeometry(node.parentElement).matrix
+export function captureHtmlPose(node: Element, context = createHtmlPoseCaptureContext()): HtmlPose {
+  const existing = context.poses.get(node)
+  if (existing !== undefined) return existing
+  const geometry = captureWorldGeometry(node, context)
+  const parentMatrix = node.parentElement === null
+    ? { ...IDENTITY_MATRIX }
+    : captureWorldGeometry(node.parentElement, context).matrix
   const scaleX = Math.max(1e-6, Math.hypot(geometry.matrix.a, geometry.matrix.b))
   const scaleY = Math.max(1e-6, Math.hypot(geometry.matrix.c, geometry.matrix.d))
-  const localBox = measureLocalBox(node)
+  const localBox = measureLocalBox(node, context)
   const localWidth = localBox.width ?? 0
   const localHeight = localBox.height ?? 0
   const bounds = transformedBounds(geometry.matrix, localWidth, localHeight)
@@ -280,12 +288,11 @@ export function captureHtmlPose(node: Element): HtmlPose {
     height: bounds.height,
   }
 
-  return {
+  const pose = {
     rect,
     origin: { x: geometry.origin.x - scrollX, y: geometry.origin.y - scrollY },
     matrix: geometry.matrix,
     parentMatrix,
-    layoutOffset: geometry.layoutOffset,
     rotationMatrix: extractRotationMatrix(geometry.matrix),
     scaleX,
     scaleY,
@@ -294,6 +301,16 @@ export function captureHtmlPose(node: Element): HtmlPose {
     frameWidth: localWidth * scaleX,
     frameHeight: localHeight * scaleY,
   }
+  context.poses.set(node, pose)
+  return pose
+}
+
+/** Reads one computed style at most once during an explicit geometry transaction. */
+function readComputedStyle(node: Element, context: HtmlPoseCaptureContext): CSSStyleDeclaration | undefined {
+  if (context.computedStyles.has(node)) return context.computedStyles.get(node)
+  const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
+  context.computedStyles.set(node, computed)
+  return computed
 }
 
 /** Creates the overlay layer scoped to one motion presentation root. */

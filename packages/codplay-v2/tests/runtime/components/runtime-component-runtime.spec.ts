@@ -108,6 +108,7 @@ describe('RuntimeComponentRuntime', () => {
 
     expect(components).toHaveLength(1)
     expect(components[0]?.updates).toEqual([0, 100])
+    expect(runtime.getStateRevision('main:item')).toBe(1)
     expect(mountablePartIds).toEqual([['content']])
     expect(receivedModuleServices?.get('markup')).toBe(markupService)
     expect(events).toEqual([])

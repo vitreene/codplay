@@ -29,7 +29,6 @@ describe('HtmlMotionSystem live capture handoff', () => {
     }
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      captureCurrent: () => targetAtRelease,
     })
 
     const replayBoundaries = [
@@ -63,7 +62,6 @@ describe('HtmlMotionSystem live capture handoff', () => {
     }
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      captureCurrent: () => targetAtRelease,
     })
 
     system.setBoundaries([createBoundary(100, firstLiveRelease, targetAtRelease, 'end-emit')])
@@ -89,7 +87,6 @@ describe('HtmlMotionSystem live capture handoff', () => {
     }
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      captureCurrent: () => secondTarget,
     })
 
     system.setBoundaries([
@@ -107,7 +104,7 @@ describe('HtmlMotionSystem live capture handoff', () => {
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(180)
   })
 
-  it('uses only the captured boundary data and current active layout', () => {
+  it('uses only the captured boundary data and does not recapture during presentation', () => {
     const frames: PresentationFrame[] = []
     const host = {
       commit: (frame: PresentationFrame): void => {
@@ -118,24 +115,38 @@ describe('HtmlMotionSystem live capture handoff', () => {
     }
     const source = createSnapshot(0, 'list-a', 0)
     const target = createSnapshot(0, 'list-b', 100)
-    let captureCalls = 0
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
       boundaries: [createBoundary(0, source, target, 'move')],
-      captureCurrent: () => {
-        captureCalls += 1
-        return target
-      },
     })
 
     system.initialize()
     system.present(0)
     system.present(0)
-    expect(captureCalls).toBe(2)
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(0)
   })
 
-  it('clears the previous presentation before capturing natural geometry', () => {
+  it('accepts an explicit current natural layout for an active presentation', () => {
+    const frames: PresentationFrame[] = []
+    const host = {
+      commit: (frame: PresentationFrame): void => {
+        frames.push(frame)
+      },
+      prepareNaturalCapture: (): void => undefined,
+      destroy: (): void => undefined,
+    }
+    const system = new HtmlMotionSystem({
+      host: host as unknown as HtmlMotionPresentationHost,
+      boundaries: [createBoundary(0, createSnapshot(0, 'list-a', 0), createSnapshot(0, 'list-b', 100), 'move')],
+    })
+
+    system.initialize()
+    system.present(50, createSnapshot(50, 'list-b', 200))
+
+    expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(100)
+  })
+
+  it('does not prepare a natural DOM capture at every frame', () => {
     const order: string[] = []
     const host = {
       commit: (): void => {
@@ -148,16 +159,13 @@ describe('HtmlMotionSystem live capture handoff', () => {
     }
     const system = new HtmlMotionSystem({
       host: host as unknown as HtmlMotionPresentationHost,
-      captureCurrent: () => {
-        order.push('capture')
-        return createSnapshot(0, 'list-a', 0)
-      },
+      boundaries: [createBoundary(0, createSnapshot(0, 'list-a', 0), createSnapshot(0, 'list-a', 0), 'move')],
     })
 
     system.initialize()
     system.present(0)
 
-    expect(order).toEqual(['clear', 'capture', 'commit'])
+    expect(order).toEqual(['commit'])
   })
 })
 

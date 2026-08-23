@@ -5,7 +5,6 @@ import { captureHtmlPose, worldDeltaToLocalDelta } from '../motion/html-pose'
 import type { HtmlMatrix } from '../motion/html-types'
 import {
   captureHtmlTransientRects,
-  measureHtmlSettledRect,
   playHtmlTransientFlip,
   type HtmlTransientRect,
 } from './html-transient-flip'
@@ -39,6 +38,7 @@ type DropTarget = Readonly<{
 
 type ResolvedDropTarget = DropTarget & Readonly<{
   children: readonly HTMLElement[]
+  childrenRects: ReadonlyMap<HTMLElement, HtmlTransientRect>
 }>
 
 type LocalBox = Readonly<{
@@ -297,11 +297,8 @@ export class HtmlListDndPreview {
       ) continue
 
       const children = this.readListItemElements(storyId, listId, list, persoKey)
-      const childBoxes = children.map((child) => toLocalBox(
-        pose.matrix,
-        pose.origin,
-        measureHtmlSettledRect(child),
-      ))
+      const childrenRects = captureHtmlTransientRects(children)
+      const childBoxes = children.map((child) => toLocalBox(pose.matrix, pose.origin, childrenRects.get(child)!))
       return {
         listId,
         index: resolveInsertionIndex(
@@ -310,6 +307,7 @@ export class HtmlListDndPreview {
           currentTarget?.listId === listId ? currentTarget.index : undefined,
         ),
         children,
+        childrenRects,
       }
     }
     return undefined
@@ -395,7 +393,7 @@ export class HtmlListDndPreview {
       )
     }
     if (targetList !== undefined && !beforeByList.has(targetList) && target !== undefined) {
-      beforeByList.set(targetList, captureHtmlTransientRects(target.children))
+      beforeByList.set(targetList, target.childrenRects)
     }
 
     if (target === undefined) this.clearGhost(preview)

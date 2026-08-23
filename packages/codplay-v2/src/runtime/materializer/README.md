@@ -10,6 +10,10 @@ This folder defines the single runtime materializer boundary. The
   services;
 - `materializeScene()` applies the solved parentage and order to the same
   materialization host.
+- `invalidateStructure()` is an optional boundary for a materializer-specific
+  transient presentation that has released or moved author roots. It marks the
+  next scene commit for one structural reconciliation; it is not a second
+  materialization path.
 
 The component and scene operations therefore use one substrate interface. They
 must not be implemented through separate component and structural catalogs or
