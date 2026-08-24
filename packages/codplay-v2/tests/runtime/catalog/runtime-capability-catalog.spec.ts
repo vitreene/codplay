@@ -28,6 +28,7 @@ function componentDefinition(services: readonly string[] = ['probe']) {
     type: 'probe',
     services,
     modules: [],
+    validateInitial: () => undefined,
     create: (input: ConstructorParameters<typeof ProbeComponent>[0]) => new ProbeComponent(input),
   }
 }

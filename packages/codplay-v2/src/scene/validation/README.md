@@ -19,23 +19,29 @@ that is extracted into `CompiledScene`. They are the only place for deterministi
 component defaults and author-to-runtime normalization; component classes do not
 repeat those guards on the player hot path.
 
+Service declarations may publish the same kind of pure `sanitize` function for
+their namespace. The builder applies the component sanitizer first, then the
+sanitizers of the services required by that component. For example, the `style`
+service turns its declared color properties into ACE `ColorValue` records,
+including OKLCH, before the compiled scene is frozen.
+
 ## Role
 
 - CodPlay registers component, data-service, and ModuleService requirements in one runtime catalog.
 - `RuntimeCapabilityCatalog.validationSnapshot()` produces the pure snapshot before compilation.
 - `CompiledSceneValidationEngine` consumes that snapshot during compilation without instantiating runtime components or services.
 - `GuardPipeline` runs named structural and capability rules in deterministic phases.
-- A component validator remains optional for foreign and not-yet-opened types.
+- Every registered component, core or foreign, declares a validator for its initial data profile.
 - The built-in `tag`, `layout`, `list`, and `media` component boundaries are
   validated from their catalog definitions.
-- Missing component or service validators produce detailed author warnings.
+- A missing component validator is rejected at catalog registration; a service without a validator still produces the existing detailed warning until that service contract is completed.
 - Unknown component types and unknown required services are errors because the player cannot execute them.
 - The core `style`, `className`, `attr`, and `content` service validators are always present in the initial catalog.
 
 ## Definitions
 
-Component definitions declare their type, required services, runtime ModuleServices, and optional `validateInitial` and `validateAction`
-functions. Service definitions declare reusable group validators and optional validators for named properties inside
+Component definitions declare their type, required services, runtime ModuleServices, and their `validateInitial` function;
+`validateAction` is added when the component owns action-specific fields. Service definitions declare reusable group validators and optional validators for named properties inside
 those groups. Service names are therefore the property namespaces, including namespaces owned by one component.
 
 The core declarations currently use the following policy: `style` and `attr`

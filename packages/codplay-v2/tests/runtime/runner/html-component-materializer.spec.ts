@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
+import { parseColor } from '../../../src/ace'
 import { createHtmlAttrService } from '../../../src/services/attr/html-attr-service'
 import { createHtmlClassNameService } from '../../../src/services/class-name/html-class-name-service'
 import { createHtmlContentService } from '../../../src/services/content/html-content-service'
@@ -59,6 +60,15 @@ describe('HTML component materializer services', () => {
     expect(node.style.color).toBe('rgba(255, 0, 0, 1)')
     expect(node.attributes).toEqual(new Map([['role', 'button']]))
     expect(node.textContent).toBe('Hello')
+  })
+
+  it('materializes a normalized OKLCH color at the HTML boundary', () => {
+    const style = createHtmlStyleService({ numericLengthScale: 1 })
+    const node = element()
+
+    style.apply(node, { color: parseColor('oklch(60% 0.2 30 / 50%)') })
+
+    expect(node.style.color).toBe('oklch(0.6 0.2 30 / 0.5)')
   })
 
   it('applies the V1 class delta form and the SVG class attribute form', () => {

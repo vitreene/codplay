@@ -1,4 +1,5 @@
 import type { ColorValue } from '../interval'
+import { NAMED_COLORS } from './named-colors'
 
 /** Parses supported CSS color author values into the ACE color intermediate form. */
 export function parseColor(value: string): ColorValue {
@@ -23,6 +24,11 @@ export function parseColor(value: string): ColorValue {
   const functionMatch = /^(rgba?|RGBA?)\((.*)\)$/.exec(normalized)
   if (functionMatch !== null) {
     return parseRgbColor(functionMatch[2])
+  }
+
+  const oklchMatch = /^oklch\((.*)\)$/.exec(normalized)
+  if (oklchMatch !== null) {
+    return parseOklchColor(oklchMatch[1])
   }
 
   throw new Error(`ace: unsupported color value "${value}".`)
@@ -75,23 +81,114 @@ function parseRgbColor(body: string): ColorValue {
   return createSrgbValue(rgb, alphaPart === undefined ? 1 : parseAlpha(alphaPart))
 }
 
+/** Parses the CSS OKLCH function into the V2 OKLCH intermediate form. */
+function parseOklchColor(body: string): ColorValue {
+  const [channelsPart, alphaPart] = splitAlpha(body)
+  const channelParts = channelsPart.trim().split(/\s+/).filter(Boolean)
+  if (channelParts.length !== 3) {
+    throw new Error(`ace: invalid oklch color "${body}".`)
+  }
+
+  return {
+    kind: 'color',
+    space: 'oklch',
+    coords: [
+      parseOklchLightness(channelParts[0]),
+      parseOklchChroma(channelParts[1]),
+      parseOklchHue(channelParts[2]),
+    ],
+    alpha: alphaPart === undefined ? 1 : parseAlpha(alphaPart),
+  }
+}
+
+/** Parses OKLCH lightness as a clamped number or percentage. */
+function parseOklchLightness(value: string): number {
+  const normalized = value.trim()
+  if (normalized.endsWith('%')) {
+    const rawPercentage = normalized.slice(0, -1).trim()
+    if (!CSS_NUMBER_PATTERN.test(rawPercentage)) {
+      throw new Error(`ace: invalid oklch lightness "${value}".`)
+    }
+    const percentage = Number(rawPercentage)
+    if (!Number.isFinite(percentage)) throw new Error(`ace: invalid oklch lightness "${value}".`)
+    return clamp(percentage / 100, 0, 1)
+  }
+  if (!CSS_NUMBER_PATTERN.test(normalized)) {
+    throw new Error(`ace: invalid oklch lightness "${value}".`)
+  }
+  const lightness = Number(normalized)
+  if (!Number.isFinite(lightness)) throw new Error(`ace: invalid oklch lightness "${value}".`)
+  return clamp(lightness, 0, 1)
+}
+
+/** Parses OKLCH chroma, preserving values outside the displayable gamut. */
+function parseOklchChroma(value: string): number {
+  const normalized = value.trim()
+  if (normalized.endsWith('%')) {
+    const rawPercentage = normalized.slice(0, -1).trim()
+    if (!CSS_NUMBER_PATTERN.test(rawPercentage)) {
+      throw new Error(`ace: invalid oklch chroma "${value}".`)
+    }
+    const percentage = Number(rawPercentage)
+    if (!Number.isFinite(percentage)) throw new Error(`ace: invalid oklch chroma "${value}".`)
+    return Math.max(0, percentage / 100 * 0.4)
+  }
+  if (!CSS_NUMBER_PATTERN.test(normalized)) {
+    throw new Error(`ace: invalid oklch chroma "${value}".`)
+  }
+  const chroma = Number(normalized)
+  if (!Number.isFinite(chroma)) throw new Error(`ace: invalid oklch chroma "${value}".`)
+  return Math.max(0, chroma)
+}
+
+/** Parses an OKLCH hue angle and stores it as normalized degrees. */
+function parseOklchHue(value: string): number {
+  const normalized = value.trim()
+  const angleMatch = CSS_ANGLE_PATTERN.exec(normalized)
+  if (angleMatch !== null) {
+    const numericValue = Number(angleMatch[1])
+    if (!Number.isFinite(numericValue)) throw new Error(`ace: invalid oklch hue "${value}".`)
+    const unit = angleMatch[2].toLowerCase()
+    const degrees = unit === 'grad'
+      ? numericValue * 0.9
+      : unit === 'rad'
+        ? numericValue * 180 / Math.PI
+        : unit === 'turn'
+          ? numericValue * 360
+          : numericValue
+    if (!Number.isFinite(degrees)) throw new Error(`ace: invalid oklch hue "${value}".`)
+    return normalizeHue(degrees)
+  }
+  if (!CSS_NUMBER_PATTERN.test(normalized)) {
+    throw new Error(`ace: invalid oklch hue "${value}".`)
+  }
+  const hue = Number(normalized)
+  if (!Number.isFinite(hue)) throw new Error(`ace: invalid oklch hue "${value}".`)
+  return normalizeHue(hue)
+}
+
 /** Separates an optional slash alpha component from a modern rgb body. */
 function splitAlpha(body: string): readonly [string, string | undefined] {
   const slashIndex = body.indexOf('/')
   if (slashIndex < 0) return [body, undefined]
-  return [body.slice(0, slashIndex), body.slice(slashIndex + 1).trim()]
+  const alpha = body.slice(slashIndex + 1).trim()
+  if (body.indexOf('/', slashIndex + 1) >= 0 || alpha.length === 0) {
+    throw new Error(`ace: invalid color alpha "${alpha}".`)
+  }
+  return [body.slice(0, slashIndex), alpha]
 }
 
 /** Parses one rgb channel as a clamped number or percentage. */
 function parseRgbChannel(value: string): number {
   const normalized = value.trim()
   if (normalized.endsWith('%')) {
-    const percentage = Number.parseFloat(normalized.slice(0, -1))
-    if (!Number.isFinite(percentage)) throw new Error(`ace: invalid rgb channel "${value}".`)
+    const rawPercentage = normalized.slice(0, -1).trim()
+    if (!CSS_NUMBER_PATTERN.test(rawPercentage)) throw new Error(`ace: invalid rgb channel "${value}".`)
+    const percentage = Number(rawPercentage)
     return clamp(percentage, 0, 100) / 100 * 255
   }
-  const channel = Number.parseFloat(normalized)
-  if (!Number.isFinite(channel)) throw new Error(`ace: invalid rgb channel "${value}".`)
+  if (!CSS_NUMBER_PATTERN.test(normalized)) throw new Error(`ace: invalid rgb channel "${value}".`)
+  const channel = Number(normalized)
   return clamp(channel, 0, 255)
 }
 
@@ -99,12 +196,13 @@ function parseRgbChannel(value: string): number {
 function parseAlpha(value: string): number {
   const normalized = value.trim()
   if (normalized.endsWith('%')) {
-    const percentage = Number.parseFloat(normalized.slice(0, -1))
-    if (!Number.isFinite(percentage)) throw new Error(`ace: invalid color alpha "${value}".`)
+    const rawPercentage = normalized.slice(0, -1).trim()
+    if (!CSS_NUMBER_PATTERN.test(rawPercentage)) throw new Error(`ace: invalid color alpha "${value}".`)
+    const percentage = Number(rawPercentage)
     return clamp(percentage, 0, 100) / 100
   }
-  const alpha = Number.parseFloat(normalized)
-  if (!Number.isFinite(alpha)) throw new Error(`ace: invalid color alpha "${value}".`)
+  if (!CSS_NUMBER_PATTERN.test(normalized)) throw new Error(`ace: invalid color alpha "${value}".`)
+  const alpha = Number(normalized)
   return clamp(alpha, 0, 1)
 }
 
@@ -113,43 +211,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-/** Explicit CSS named color table used without browser resolution. */
-const NAMED_COLORS: Readonly<Record<string, readonly [number, number, number]>> = {
-  aliceblue: [240, 248, 255], antiquewhite: [250, 235, 215], aqua: [0, 255, 255], aquamarine: [127, 255, 212],
-  azure: [240, 255, 255], beige: [245, 245, 220], bisque: [255, 228, 196], black: [0, 0, 0],
-  blanchedalmond: [255, 235, 205], blue: [0, 0, 255], blueviolet: [138, 43, 226], brown: [165, 42, 42],
-  burlywood: [222, 184, 135], cadetblue: [95, 158, 160], chartreuse: [127, 255, 0], chocolate: [210, 105, 30],
-  coral: [255, 127, 80], cornflowerblue: [100, 149, 237], cornsilk: [255, 248, 220], crimson: [220, 20, 60],
-  cyan: [0, 255, 255], darkblue: [0, 0, 139], darkcyan: [0, 139, 139], darkgoldenrod: [184, 134, 11],
-  darkgray: [169, 169, 169], darkgrey: [169, 169, 169], darkgreen: [0, 100, 0], darkkhaki: [189, 183, 107],
-  darkmagenta: [139, 0, 139], darkolivegreen: [85, 107, 47], darkorange: [255, 140, 0], darkorchid: [153, 50, 204],
-  darkred: [139, 0, 0], darksalmon: [233, 150, 122], darkseagreen: [143, 188, 143], darkslateblue: [72, 61, 139],
-  darkslategray: [47, 79, 79], darkslategrey: [47, 79, 79], darkturquoise: [0, 206, 209], darkviolet: [148, 0, 211],
-  deeppink: [255, 20, 147], deepskyblue: [0, 191, 255], dimgray: [105, 105, 105], dimgrey: [105, 105, 105],
-  dodgerblue: [30, 144, 255], firebrick: [178, 34, 34], floralwhite: [255, 250, 240], forestgreen: [34, 139, 34],
-  fuchsia: [255, 0, 255], gainsboro: [220, 220, 220], ghostwhite: [248, 248, 255], gold: [255, 215, 0],
-  goldenrod: [218, 165, 32], gray: [128, 128, 128], grey: [128, 128, 128], green: [0, 128, 0],
-  greenyellow: [173, 255, 47], honeydew: [240, 255, 240], hotpink: [255, 105, 180], indianred: [205, 92, 92],
-  indigo: [75, 0, 130], ivory: [255, 255, 240], khaki: [240, 230, 140], lavender: [230, 230, 250],
-  lavenderblush: [255, 240, 245], lawngreen: [124, 252, 0], lemonchiffon: [255, 250, 205], lightblue: [173, 216, 230],
-  lightcoral: [240, 128, 128], lightcyan: [224, 255, 255], lightgoldenrodyellow: [250, 250, 210], lightgray: [211, 211, 211],
-  lightgrey: [211, 211, 211], lightgreen: [144, 238, 144], lightpink: [255, 182, 193], lightsalmon: [255, 160, 122],
-  lightseagreen: [32, 178, 170], lightskyblue: [135, 206, 250], lightslategray: [119, 136, 153], lightslategrey: [119, 136, 153],
-  lightsteelblue: [176, 196, 222], lightyellow: [255, 255, 224], lime: [0, 255, 0], limegreen: [50, 205, 50],
-  linen: [250, 240, 230], magenta: [255, 0, 255], maroon: [128, 0, 0], mediumaquamarine: [102, 205, 170],
-  mediumblue: [0, 0, 205], mediumorchid: [186, 85, 211], mediumpurple: [147, 112, 219], mediumseagreen: [60, 179, 113],
-  mediumslateblue: [123, 104, 238], mediumspringgreen: [0, 250, 154], mediumturquoise: [72, 209, 204], mediumvioletred: [199, 21, 133],
-  midnightblue: [25, 25, 112], mintcream: [245, 255, 250], mistyrose: [255, 228, 225], moccasin: [255, 228, 181],
-  navajowhite: [255, 222, 173], navy: [0, 0, 128], oldlace: [253, 245, 230], olive: [128, 128, 0],
-  olivedrab: [107, 142, 35], orange: [255, 165, 0], orangered: [255, 69, 0], orchid: [218, 112, 214],
-  palegoldenrod: [238, 232, 170], palegreen: [152, 251, 152], paleturquoise: [175, 238, 238], palevioletred: [219, 112, 147],
-  papayawhip: [255, 239, 213], peachpuff: [255, 218, 185], peru: [205, 133, 63], pink: [255, 192, 203],
-  plum: [221, 160, 221], powderblue: [176, 224, 230], purple: [128, 0, 128], rebeccapurple: [102, 51, 153],
-  red: [255, 0, 0], rosybrown: [188, 143, 143], royalblue: [65, 105, 225], saddlebrown: [139, 69, 19],
-  salmon: [250, 128, 114], sandybrown: [244, 164, 96], seagreen: [46, 139, 87], seashell: [255, 245, 238],
-  sienna: [160, 82, 45], silver: [192, 192, 192], skyblue: [135, 206, 235], slateblue: [106, 90, 205],
-  slategray: [112, 128, 144], slategrey: [112, 128, 144], snow: [255, 250, 250], springgreen: [0, 255, 127],
-  steelblue: [70, 130, 180], tan: [210, 180, 140], teal: [0, 128, 128], thistle: [216, 191, 216],
-  tomato: [255, 99, 71], turquoise: [64, 224, 208], violet: [238, 130, 238], wheat: [245, 222, 179],
-  white: [255, 255, 255], whitesmoke: [245, 245, 245], yellow: [255, 255, 0], yellowgreen: [154, 205, 50],
+/** Wraps one hue angle into the canonical [0, 360) degree range. */
+function normalizeHue(value: number): number {
+  const wrapped = value % 360
+  return wrapped === 0 ? 0 : wrapped < 0 ? wrapped + 360 : wrapped
 }
+
+/** Matches one complete CSS numeric token, without accepting trailing text. */
+const CSS_NUMBER_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
+
+/** Matches one CSS hue angle with an optional non-degree unit. */
+const CSS_ANGLE_PATTERN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(deg|grad|rad|turn)$/i

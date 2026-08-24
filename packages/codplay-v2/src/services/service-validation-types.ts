@@ -20,6 +20,9 @@ export type ValidationContext = Readonly<{
 /** Validates one service or component payload without runtime dependencies. */
 export type ValidationFunction = (value: unknown, context: ValidationContext) => void
 
+/** Normalizes one validated service payload before it enters CompiledScene. */
+export type ServiceSanitizer = (value: unknown) => unknown
+
 /** Context supplied when one service handles an attribute in authored markup. */
 export type MarkupAttributeSanitizerContext = Readonly<{
   elementName: string
@@ -41,6 +44,7 @@ export type PropertyValidationDefinition = Readonly<{
 export type ServiceValidationDefinition = Readonly<{
   name: string
   validate?: ValidationFunction
+  sanitize?: ServiceSanitizer
   properties?: readonly PropertyValidationDefinition[]
   allowUnknownProperties?: boolean
   sanitizeMarkupAttribute?: MarkupAttributeSanitizer

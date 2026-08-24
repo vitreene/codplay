@@ -4,7 +4,7 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: pipeline borné validé le 2026-08-20; annulation, live et effets restent des extensions
+> Review: pipeline borné validé le 2026-08-20; l'invalidation des résultats asynchrones est reportée à V3, live et effets restent des extensions
 
 ## Frontiere
 
@@ -66,10 +66,10 @@ les compteurs d'occurrences relevent d'un etat mis a jour par events.
 La tranche actuelle ne definit donc ni `context.live`, ni `onUpdate`, ni helper live.
 La forme future devra etre specifiee en V2 avant toute implementation.
 
-## Hors perimetre
+## Hors perimetre V2
 
 - helpers `live` et emissions liees aux frames;
-- annulation et generation obsolete des straps asynchrones;
+- invalidation et generation obsolete des resultats de straps asynchrones; ce protocole relève de V3;
 - effects non rejouables;
 - composants et renderer.
 

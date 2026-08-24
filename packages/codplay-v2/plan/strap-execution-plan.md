@@ -4,7 +4,7 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: exécution planned bornée validée le 2026-08-20; annulation, générations obsolètes et live restent des extensions
+> Review: exécution planned bornée validée le 2026-08-20; l'invalidation des résultats asynchrones est reportée à V3 et live reste une extension
 
 ## Contrat actuel
 
@@ -39,6 +39,11 @@ est nomme **Plan Temporel Declaratif**; voir
 Un `update` n'est applique qu'explicitement par l'orchestrateur, apres sa
 journalisation, puis peut etre remplace par une reconstruction de seek.
 
+Un strap asynchrone peut être attendu puis produire des events ou des updates par
+son résultat. V2 ne définit pas encore l'invalidation d'un résultat arrivé après
+une opération plus récente : ce protocole de génération et d'annulation relève
+de V3.
+
 ## Limite live obligatoire
 
 Le contrat `live` V1 n'est pas porte. La V2 a fait evoluer ce contrat pour rester
@@ -62,8 +67,12 @@ future doit etre specifiquement decidee avant implementation.
 - le `RuntimePlayer` reconcilie les snapshots d'etat depuis le journal apres
   seek et avant un nouveau dispatch.
 
-## A faire
+## Limites V2
 
 - definir les cas de loop bornes compatibles avec `f(t)`;
-- definir le protocole d'annulation et de generation obsolete;
 - ne jamais creer de track pendant la lecture.
+
+## V3
+
+- définir le protocole d'invalidation et de génération obsolète des résultats de
+  straps asynchrones;

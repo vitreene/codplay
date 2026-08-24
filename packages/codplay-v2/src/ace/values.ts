@@ -59,8 +59,8 @@ const UNIT_PATTERN = /^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)([a-z]+|%)$/i
 /** Nombres en notation décimale ou exponentielle, pour découper une valeur complexe. */
 const NUMBER_PATTERN = /[-+]?\d*\.?\d+(?:e[-+]?\d+)?/g
 
-/** Formes de couleur reconnues : `#rgb`, `#rrggbb`, `rgb()`, `rgba()`, `hsl()`, `hsla()`. */
-const COLOR_PATTERN = /^(#|rgb|hsl)/i
+/** Formes de couleur reconnues par la décomposition : sRGB, HSL et OKLCH. */
+const COLOR_PATTERN = /^(#|rgb|hsl|oklch)/i
 
 const emptyDecomposed = (): DecomposedValue => ({
   kind: 'number',

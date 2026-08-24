@@ -1,4 +1,5 @@
 import type { DiagnosticCollector } from '../../diagnostics'
+import { isPlainRecord } from '../../shared'
 import { validatePersoWithCapabilities } from './validate-perso-with-capabilities'
 import type {
   PersoValidationInput,
@@ -46,12 +47,12 @@ export class CompiledSceneValidationEngine {
 
   /** Sanitizes one validated initial component profile before compilation. */
   sanitizeInitial(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
-    return this.sanitize(type, 'sanitizeInitial', value)
+    return this.sanitizeServices(type, this.sanitize(type, 'sanitizeInitial', value))
   }
 
   /** Sanitizes one validated action patch before compilation. */
   sanitizeAction(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
-    return this.sanitize(type, 'sanitizeAction', value)
+    return this.sanitizeServices(type, this.sanitize(type, 'sanitizeAction', value))
   }
 
   /** Returns the declared service policies that can sanitize authored markup attributes. */
@@ -69,5 +70,22 @@ export class CompiledSceneValidationEngine {
   ): Readonly<Record<string, unknown>> {
     const sanitizer: ComponentSanitizer | undefined = this.catalog.components.get(type)?.[key]
     return sanitizer === undefined ? value : sanitizer(value)
+  }
+
+  /** Applies the declared service normalizers after component-owned normalization. */
+  private sanitizeServices(
+    type: string,
+    value: Readonly<Record<string, unknown>>,
+  ): Readonly<Record<string, unknown>> {
+    let sanitized = value
+    for (const serviceName of this.servicesFor(type)) {
+      const sanitizer = this.catalog.services.get(serviceName)?.sanitize
+      if (sanitizer === undefined || !isPlainRecord(sanitized) || !(serviceName in sanitized)) continue
+      const nextValue = sanitizer(sanitized[serviceName])
+      if (nextValue !== sanitized[serviceName]) {
+        sanitized = { ...sanitized, [serviceName]: nextValue }
+      }
+    }
+    return sanitized
   }
 }

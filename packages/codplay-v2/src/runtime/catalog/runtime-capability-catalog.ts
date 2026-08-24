@@ -62,7 +62,8 @@ export type RuntimeComponentDefinition = Readonly<{
   type: string
   services: readonly string[]
   modules: readonly string[]
-  validateInitial?: ValidationFunction
+  /** Validates the complete author-facing initial profile before compilation. */
+  validateInitial: ValidationFunction
   validateAction?: ValidationFunction
   /** Sanitizes the initial profile once before it enters CompiledScene. */
   sanitizeInitial?: ComponentSanitizer
@@ -94,6 +95,7 @@ export class RuntimeCapabilityCatalog {
   /** Registers one component definition before the instance is locked. */
   registerComponent(definition: RuntimeComponentDefinition, origin: RuntimeCapabilityOrigin = 'foreign'): void {
     this.assertOpen()
+    assertComponentValidator(definition)
     if (this.components.has(definition.type)) {
       throw new Error(`Runtime component already registered: ${definition.type}`)
     }
@@ -103,6 +105,7 @@ export class RuntimeCapabilityCatalog {
   /** Replaces one existing component definition before the instance is locked. */
   overrideComponent(definition: RuntimeComponentDefinition, origin: RuntimeCapabilityOrigin = 'foreign'): void {
     this.assertOpen()
+    assertComponentValidator(definition)
     if (!this.components.has(definition.type)) {
       throw new Error(`Runtime component is not registered: ${definition.type}`)
     }
@@ -293,10 +296,17 @@ export class RuntimeCapabilityCatalog {
   }
 }
 
+/** Rejects a component declaration that cannot validate its initial profile. */
+function assertComponentValidator(definition: RuntimeComponentDefinition): void {
+  if (typeof definition.validateInitial !== 'function') {
+    throw new Error(`Runtime component "${definition.type}" must declare validateInitial.`)
+  }
+}
+
 /** Removes runtime factories and materializer destinations from validation snapshots. */
 function toValidationDefinition(definition: RuntimeComponentServiceDefinition): ServiceValidationDefinition {
-  const { name, validate, properties, allowUnknownProperties, sanitizeMarkupAttribute } = definition
-  return { name, validate, properties, allowUnknownProperties, sanitizeMarkupAttribute }
+  const { name, validate, sanitize, properties, allowUnknownProperties, sanitizeMarkupAttribute } = definition
+  return { name, validate, sanitize, properties, allowUnknownProperties, sanitizeMarkupAttribute }
 }
 
 export type { ComponentSanitizer, PropertyValidationDefinition, ServiceValidationDefinition, ValidationFunction }

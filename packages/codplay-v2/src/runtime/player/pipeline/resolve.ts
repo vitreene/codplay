@@ -1,6 +1,5 @@
 import {
   isScalarTransformProperty,
-  parseColor,
   parseEase,
   prepareTransformTween,
   prepareTween,
@@ -68,7 +67,6 @@ function resolvePlacement(perso: MaterializedPerso): Pick<ResolvedPerso, 'placem
 /** Resolves one perso without mutating compiled or materialized input data. */
 function resolvePerso(perso: MaterializedPerso, functions: CompiledFunctionCollection): CompiledRecord {
   const state = cloneRecord(perso.initial)
-  normalizeStyleColors(state)
   for (const activeAction of perso.actions) {
     applyAction(state, activeAction.action, activeAction.elapsedMs, functions)
   }
@@ -168,10 +166,10 @@ function resolveStyleValue(
 ): CompiledValue {
   const transformProperty = resolveTransformProperty(property)
   if (transformProperty !== undefined) return resolveTransformStyleValue(transformProperty, current, value, elapsedMs)
-  if (!isPlainRecord(value) || !('to' in value)) return normalizeColor(property, value) ?? value
-  const to = normalizeColor(property, value.to)
+  if (!isPlainRecord(value) || !('to' in value)) return value
+  const to = value.to
   if (!isTweenValue(to)) throw new Error('Resolve only supports scalar or color style tweens.')
-  const from = normalizeColor(property, value.from ?? current)
+  const from = value.from ?? current
   if (!isTweenValue(from)) throw new Error('Resolve requires an explicit or materialized tween from.')
   const tween = prepareTween({
     from,
@@ -212,27 +210,6 @@ function resolveTransformStyleValue(
 function resolveTransformProperty(property: string): TransformProperty | undefined {
   const canonical = canonicalTransformProperty(property)
   return canonical !== undefined && isScalarTransformProperty(canonical) ? canonical : undefined
-}
-
-/** Normalizes initial colors before values enter ACE. */
-function normalizeStyleColors(state: Record<string, CompiledValue>): void {
-  if (!isPlainRecord(state.style)) return
-  const style = state.style as Record<string, CompiledValue>
-  for (const [property, value] of Object.entries(style)) {
-    const normalized = normalizeColor(property, value)
-    if (normalized !== undefined) style[property] = normalized
-  }
-}
-
-/** Normalizes the color properties supported by this first resolve slice. */
-function normalizeColor(property: string, value: CompiledValue | undefined): CompiledValue | undefined {
-  if (!isColorProperty(property) || typeof value !== 'string') return value
-  return parseColor(value)
-}
-
-/** Identifies the supported style color properties. */
-function isColorProperty(property: string): boolean {
-  return property === 'color' || property === 'backgroundColor' || property === 'borderColor'
 }
 
 /** Checks scalar and normalized color values accepted by ACE. */

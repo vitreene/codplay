@@ -37,16 +37,6 @@ export function validatePersoWithCapabilities(
     return
   }
 
-  if (component.validateInitial === undefined && component.validateAction === undefined) {
-    reportMissingValidator({
-      kind: 'component',
-      name: component.type,
-      refs,
-      path: joinPersoValidationPath(PERSO_VALIDATION_PATHS.type),
-      diagnostics,
-    })
-  }
-
   const payloads = createPersoValidationPayloads(perso)
   for (const payload of payloads) {
     const validator = payload.target === VALIDATION_TARGET_INITIAL ? component.validateInitial : component.validateAction

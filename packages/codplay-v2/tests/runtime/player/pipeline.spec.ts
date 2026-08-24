@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { parseColor } from '../../../src/ace'
 import {
   buildTrackRegistry,
   createStrapTrackId,
@@ -22,6 +23,9 @@ import {
 } from '../../../src/runtime/player'
 import type { CompiledFunctionCollection, CompiledScene } from '../../../src/scene/compiled'
 
+const black = parseColor('#000000')
+const white = parseColor('#ffffff')
+
 const scene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
   createdAt: '2026-08-01T00:00:00.000Z',
@@ -35,13 +39,13 @@ const scene: CompiledScene = {
         persos: [{
           id: 'root',
           type: 'tag',
-          initial: { className: 'is-idle', style: { opacity: 0, backgroundColor: '#000000' } },
+          initial: { className: 'is-idle', style: { opacity: 0, backgroundColor: black } },
           actions: {
             'demo:show': {
               className: { add: 'is-active', remove: 'is-idle' },
               style: {
                 opacity: { from: 0, to: 1, duration: 100, ease: 'linear' },
-                backgroundColor: { from: '#000000', to: '#ffffff', duration: 100, ease: 'linear' },
+                backgroundColor: { from: black, to: white, duration: 100, ease: 'linear' },
               },
             },
             'data:show': null,
@@ -226,7 +230,7 @@ describe('materialize -> resolve -> solve', () => {
     })
     expect(scene.scene.stories.main.persos[0]?.initial).toEqual({
       className: 'is-idle',
-      style: { opacity: 0, backgroundColor: '#000000' },
+      style: { opacity: 0, backgroundColor: black },
     })
 
     const dataResolved = resolveScene(materializeScene(scene, 450))

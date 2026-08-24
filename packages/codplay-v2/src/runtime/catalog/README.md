@@ -42,6 +42,8 @@ pour chaque instance montée et ne transmet jamais la classe concrète au module
 - des définitions externes peuvent être ajoutées avant ce verrouillage ;
 - après verrouillage, engine, player, composants et materializers utilisent le
   même catalogue ;
+- chaque composant core ou externe doit déclarer son profil d'entrée et son
+  validateur avant d'être enregistré ;
 - la factory actuelle ne définit que la famille HTML/SVG ;
 - le contrat Canvas, Three.js ou Rive devra être spécifié avant d'ajouter un
   nouveau support ;

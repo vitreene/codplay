@@ -28,17 +28,18 @@ verticale de test ne l'ont pas ouverte.
 ## Limites volontairement ouvertes
 
 Ces limites ne sont pas des ambiguïtés du contrat gelé : elles constituent les
-prochaines tranches V2.
+des tranches ultérieures de V2 ou de V3 selon le statut indiqué ci-dessous.
 
 - migrations de schema et extensions de validation portées par les services ;
 - renderer de production et materializer DOM/SVG final ;
 - familles de composants supplémentaires et JSX V2.5 ;
-- annulation et générations obsolètes des straps asynchrones ;
+- invalidation et générations obsolètes des straps asynchrones, reportées à V3 ;
 - contrat `live`, renderer continu et composition additive des tweens ;
 - canal authoring ; la capture continue et la capacité list/DnD sont clôturées
   pour la tranche de validation V2 ;
-- bindings tiers ; la tranche V2 `media-sync`/preload est implémentée et le
-  composant V2 `media` conserve sa persistance `node-per-src` ;
+- aucune intégration tierce générale : le catalogue accepte des déclarations
+  `foreign` et le preload accepte des stratégies enregistrées, mais aucune
+  capacité externe concrète supplémentaire n'est définie ;
 - `Replace`, diffusion et broadcast.
 
 ## Règle de statut après revue

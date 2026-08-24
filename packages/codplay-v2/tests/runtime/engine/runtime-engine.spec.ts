@@ -8,7 +8,13 @@ import type { TickPayload, Ticker } from '../../../src/runtime/time'
 describe('RuntimeEngine', () => {
   it('reports unavailable compiled capabilities', () => {
     const catalog = new RuntimeCapabilityCatalog()
-    catalog.registerComponent({ type: 'tag', services: [], modules: [], create: () => { throw new Error('not used') } })
+    catalog.registerComponent({
+      type: 'tag',
+      services: [],
+      modules: [],
+      validateInitial: () => undefined,
+      create: () => { throw new Error('not used') },
+    })
     const engine = new RuntimeEngine(catalog)
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
 

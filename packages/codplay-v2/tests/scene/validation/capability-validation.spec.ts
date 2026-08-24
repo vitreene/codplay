@@ -9,7 +9,7 @@ import { TagComponent } from '../../../src/runtime/components'
 function componentDefinition(
   type: string,
   services: readonly string[],
-  validateInitial?: RuntimeComponentDefinition['validateInitial'],
+  validateInitial: RuntimeComponentDefinition['validateInitial'] = () => undefined,
   validateAction?: RuntimeComponentDefinition['validateAction'],
 ): RuntimeComponentDefinition {
   return {
@@ -60,12 +60,8 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     }] }, diagnostics)
 
     expect(diagnostics.report().errors).toEqual([])
-    expect(diagnostics.report().warnings).toHaveLength(1)
-    expect(diagnostics.report().warnings[0]).toMatchObject({
-      code: 'AUTHOR_COMPONENT_VALIDATOR_MISSING',
-      details: { refs: { persoId: 'title' } },
-    })
-    expect(output).toHaveBeenCalledTimes(1)
+    expect(diagnostics.report().warnings).toHaveLength(0)
+    expect(output).not.toHaveBeenCalled()
   })
 
   it('keeps the core service contracts attached to their service declarations', () => {
@@ -79,6 +75,38 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(runtimeCatalog.getService('className')).toMatchObject({ name: 'className', materializers: ['html', 'svg'] })
     expect(runtimeCatalog.getService('attr')).toMatchObject({ name: 'attr', materializers: ['html', 'svg'] })
     expect(runtimeCatalog.getService('content')).toMatchObject({ name: 'content', materializers: ['html', 'svg'] })
+  })
+
+  it('validates only the declared style color properties with the V2 color contract', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
+      id: 'title',
+      type: 'tag',
+      initial: { style: { color: 'hsl(0, 100%, 50%)', transform: 'rotate(20deg)' } },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toHaveLength(1)
+    expect(diagnostics.report().errors[0]).toMatchObject({
+      code: 'AUTHOR_STYLE_COLOR_INVALID',
+      details: { refs: { persoId: 'title' }, context: { path: 'initial.style.color' } },
+    })
+  })
+
+  it('accepts OKLCH as a declared style color', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
+      id: 'oklch-title',
+      type: 'tag',
+      initial: { style: { color: 'oklch(60% 0.2 30)' } },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toEqual([])
   })
 
   it('reports invalid common service payloads with paths and references', () => {
@@ -231,10 +259,7 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
       actions: {},
     }, diagnostics)
 
-    expect(diagnostics.report().warnings.map((entry) => entry.code)).toEqual([
-      'AUTHOR_COMPONENT_VALIDATOR_MISSING',
-      'AUTHOR_SERVICE_VALIDATOR_MISSING',
-    ])
+    expect(diagnostics.report().warnings.map((entry) => entry.code)).toEqual(['AUTHOR_SERVICE_VALIDATOR_MISSING'])
   })
 
   it('detaches a catalog snapshot from later registrations', () => {

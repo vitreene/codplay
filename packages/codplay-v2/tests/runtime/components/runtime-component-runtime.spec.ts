@@ -89,6 +89,7 @@ describe('RuntimeComponentRuntime', () => {
       type: 'test',
       services: [],
       modules: [],
+      validateInitial: () => undefined,
       mountableParts: ['content'],
       surfaces: () => ({ media: surface }),
       create: () => {

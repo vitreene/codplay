@@ -135,7 +135,8 @@ leur entree dans ce registre.
 
 ## Hors perimetre
 
-- annulation de straps asynchrones et generations obsoletes;
+- invalidation de straps asynchrones et generations obsoletes; ce protocole est
+  reporte a V3 et ne fait pas partie de la reconstruction V2;
 - `live`, capture et DnD;
 - FLIP visuel, matrices dépendantes du substrat et mesures DOM;
 - media, preload et services runtime;

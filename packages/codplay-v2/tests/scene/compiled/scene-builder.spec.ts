@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { isPreparedPath, prepareSvgPath } from '../../../src/ace'
+import { isPreparedPath, parseColor, prepareSvgPath } from '../../../src/ace'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { TagComponent } from '../../../src/runtime/components'
@@ -24,6 +24,54 @@ function createCatalogForFixtures(): RuntimeCapabilityCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('normalizes declared style colors before extracting CompiledScene', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'color-service-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'tag',
+            type: 'tag',
+            initial: {
+              style: {
+                color: 'rebeccapurple',
+                backgroundColor: 'rgb(0 255 0 / 50%)',
+                borderColor: 'oklch(60% 0.2 30)',
+                transform: 'translate(10px 20px)',
+              },
+            },
+            actions: {
+              paint: {
+                style: {
+                  color: { from: '#000', to: '#fff', duration: 100 },
+                  transform: 'rotate(20deg)',
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const perso = result.compiledScene.scene.stories.main?.persos[0]
+    expect(perso?.initial.style).toMatchObject({
+      color: parseColor('rebeccapurple'),
+      backgroundColor: parseColor('rgb(0 255 0 / 50%)'),
+      borderColor: parseColor('oklch(60% 0.2 30)'),
+      transform: 'translate(10px 20px)',
+    })
+    expect(perso?.actions.paint).toMatchObject({
+      style: {
+        color: { from: parseColor('#000'), to: parseColor('#fff'), duration: 100 },
+        transform: 'rotate(20deg)',
+      },
+    })
+  })
+
   it('sanitizes core component profiles before they enter CompiledScene', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
     const result = builder.build({
