@@ -105,6 +105,27 @@ describe('HTML component materializer services', () => {
     expect(node.attributes).toEqual(new Map([['role', 'link']]))
   })
 
+  it('keeps managed style and attribute state isolated per materialized node', () => {
+    const catalog = createHtmlServices()
+    const first = element()
+    const second = element()
+    const style = catalog.get('style')!
+    const attr = catalog.get('attr')!
+
+    style.apply(first, { opacity: 1 })
+    style.apply(second, { color: 'red' })
+    attr.apply(first, { role: 'button' })
+    attr.apply(second, { title: 'second' })
+    style.apply(first, { opacity: 0.5 })
+    attr.apply(second, { title: 'updated' })
+
+    expect(first.style.opacity).toBe('0.5')
+    expect(first.style.color).toBeUndefined()
+    expect(first.attributes).toEqual(new Map([['role', 'button']]))
+    expect(second.style.color).toBe('red')
+    expect(second.attributes).toEqual(new Map([['title', 'updated']]))
+  })
+
   it('composes x and y aliases into one CSS translation', () => {
     const catalog = createHtmlServices()
     const services = catalog

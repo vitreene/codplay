@@ -31,7 +31,7 @@ export type HtmlComponentMaterializerNodes = Readonly<{
 
 /** Materializes V2 components and exposes their selected outlet parts. */
 export class HtmlComponentMaterializer implements RuntimeMaterializer {
-  readonly id = HTML_MATERIALIZER_ID
+  readonly id: string
   readonly context: HtmlMaterializerRuntimeContext
   private readonly nodes: HtmlComponentMaterializerNodes
   private mountedPersos = new Set<string>()
@@ -42,9 +42,11 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   constructor(
     nodes: HtmlComponentMaterializerNodes,
     context: HtmlMaterializerRuntimeContext = { numericLengthScale: 1 },
+    materializerId: string = HTML_MATERIALIZER_ID,
   ) {
     this.nodes = nodes
     this.context = context
+    this.id = materializerId
   }
 
   /** Creates one DOM component instance and its deterministic cleanup action. */
@@ -57,7 +59,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   ): RuntimeComponentHandle {
     void initial
     if (!(component instanceof BaseHTMLComponent)) {
-      throw new Error(`HTML materializer received a non-HTML component: ${identity.componentType}`)
+      throw new Error(`${this.id.toUpperCase()} materializer received a non-markup component: ${identity.componentType}`)
     }
     const materialization = materializeTemplateString(component.render())
     const rootNode = materialization.rootNode
@@ -309,10 +311,18 @@ function isObjectNode(value: unknown): value is {
 
 /** Adds the stable runtime identity required by local HTML pose restoration. */
 function markHtmlItem(root: HtmlMaterializedRoot, itemId: string): void {
-  if (typeof HTMLElement === 'undefined') return
   for (const node of materializedRootNodes(root)) {
-    if (node instanceof HTMLElement) node.dataset.itemId = itemId
+    if (isAttributeNode(node)) node.setAttribute('data-item-id', itemId)
   }
+}
+
+/** Narrows one retained DOM root to the identity attribute surface. */
+function isAttributeNode(value: unknown): value is {
+  setAttribute: (name: string, value: string) => void
+} {
+  return typeof value === 'object' && value !== null
+    && 'setAttribute' in value
+    && typeof (value as { setAttribute?: unknown }).setAttribute === 'function'
 }
 
 /** Narrows a DOM-like node to the teardown operations used by this host. */

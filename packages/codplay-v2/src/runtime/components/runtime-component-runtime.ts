@@ -68,7 +68,11 @@ export class RuntimeComponentRuntime {
   sync(scene: SolvedScene): void {
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
-      mounted.component.update({ state: perso.state, timeMs: scene.timeMs })
+      mounted.component.update({
+        state: perso.state,
+        timeMs: scene.timeMs,
+        activeActions: perso.actions,
+      })
       this.recordStateRevision(perso.key, perso.state)
     }
   }
@@ -126,7 +130,7 @@ export class RuntimeComponentRuntime {
         component,
         identity,
         compiledPerso.initial,
-        this.options.catalog.getMountablePartIds(perso.type),
+        this.options.catalog.getMountablePartIds(perso.type, identity),
         this.moduleServices,
       ),
     }

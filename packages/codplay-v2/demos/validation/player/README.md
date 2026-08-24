@@ -11,6 +11,11 @@ manifeste explicite -> preload externe -> runner.init() -> telco.play()
                                       -> media-sync / master
 ```
 
+La même entrée expose aussi la présentation des composants core V2 avec le
+paramètre `?demo=components`. Elle ne crée pas de script ou de runner
+supplémentaire : `demo:player` reste le point d'entrée unique de cette
+verticale de validation.
+
 La scène démarre après le preload. Elle présente un media audio marqué
 `initial.master: true`, une vidéo, deux images et la feuille de style de la
 scène. La scène se termine à `6890 ms`, à la fin de la fenêtre de diffusion de

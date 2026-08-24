@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="title desc">
+  <title id="title">CodPlay V2 component illustration</title>
+  <desc id="desc">A coral sun floating over blue geometric layers.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#14213d"/>
+      <stop offset="1" stop-color="#315c87"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" x2="1">
+      <stop offset="0" stop-color="#71d1c4"/>
+      <stop offset="1" stop-color="#9ce4d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" rx="32" fill="url(#background)"/>
+  <circle cx="470" cy="126" r="76" fill="#f6a67a"/>
+  <circle cx="470" cy="126" r="96" fill="#f6a67a" opacity=".15"/>
+  <path d="M0 286 120 228l98 42 100-84 120 62 96-40 106 58v154H0Z" fill="#1f4169"/>
+  <path d="M0 330 112 274l104 42 94-66 104 46 116-70 110 68v126H0Z" fill="url(#wave)" opacity=".88"/>
+  <path d="M74 356h182M112 326h118M408 330h116" stroke="#d9fff7" stroke-linecap="round" stroke-width="10" opacity=".7"/>
+</svg>

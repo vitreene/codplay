@@ -15,11 +15,19 @@ import type { ServiceRuntimeInstance } from '../service-runtime-types'
 
 /** Creates the component-scoped HTML adapter for the style service. */
 export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext): ServiceRuntimeInstance {
-  const managedProperties = new Set<string>()
-  const transformState = createHtmlTransformStyleState()
+  const stateByNode = new WeakMap<object, {
+    managedProperties: Set<string>
+    transformState: ReturnType<typeof createHtmlTransformStyleState>
+  }>()
   return {
     apply: (node, value) => {
       if (!isHtmlElementNode(node) || !isServiceRecord(value)) return
+      const nodeKey = node as object
+      const state = stateByNode.get(nodeKey) ?? {
+        managedProperties: new Set<string>(),
+        transformState: createHtmlTransformStyleState(),
+      }
+      const { managedProperties, transformState } = state
       const hadTransformOutput = hasHtmlTransformStyleOutput(transformState)
 
       for (const property of managedProperties) {
@@ -46,6 +54,7 @@ export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext):
       if (hadTransformOutput || hasHtmlTransformStyleOutput(transformState)) {
         commitHtmlTransformStyle(node, transformState)
       }
+      stateByNode.set(nodeKey, state)
     },
   }
 }

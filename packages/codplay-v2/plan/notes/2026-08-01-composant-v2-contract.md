@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Fixe pour la fondation composant et la tranche HTML V2
+Status: Fixe pour la fondation composant et la tranche DOM HTML/SVG V2
 CodPlay version: V2 foundation  
-Review: separation BaseComponent/BaseHTMLComponent et migration du runtime validees le 2026-08-24; JSX et les substrats non HTML restent hors tranche
+Review: separation BaseComponent/BaseHTMLComponent et migration du runtime validees le 2026-08-24; JSX, Canvas et Three.js restent hors tranche
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -244,7 +244,7 @@ class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
 la normalise dans `CompiledPerso.initial.markup`. Le runtime recoit ce markup de
 confiance et le materialise sans refaire la sanitization.
 
-Le parseur du template et le module `layout` enregistrent les elements `data-part`
+Le parseur du template et le module `markup` de la capacite layout enregistrent les elements `data-part`
 en interne. Le composant ne publie pas lui-meme ces declarations. Le runtime de
 placement consomme ensuite le registre du module pour resoudre les `move.target`.
 
@@ -252,7 +252,7 @@ Une fonction `init()` optionnelle pourra etre etudiee pour les usages avances en
 V2.5. Elle ne fait pas partie du contrat V2 actuel.
 
 La decouverte des parts et leur enregistrement sont des operations internes de la
-materialisation et du module `layout`. Elles ne font pas partie des methodes du
+materialisation et du module `markup`. Elles ne font pas partie des methodes du
 composant auteur.
 
 Dans cet exemple :

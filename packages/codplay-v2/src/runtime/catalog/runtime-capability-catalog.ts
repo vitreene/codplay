@@ -24,7 +24,7 @@ import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from '../engine/module-service-types'
-export { HTML_MATERIALIZER_ID } from '../materializer/materializer-ids'
+export { HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID } from '../materializer/materializer-ids'
 
 /** Origin of one capability definition in a CodPlay instance. */
 export type RuntimeCapabilityOrigin = 'core' | 'foreign'
@@ -65,6 +65,8 @@ export type RuntimeComponentDefinition = Readonly<{
   /** Publishes typed substrate-neutral operations for a mounted instance. */
   surfaces?: RuntimeComponentSurfaceProvider
   mountableParts?: readonly string[]
+  /** Resolves dynamic public part IDs for component instances whose targets must be unique. */
+  mountablePartResolver?: (identity: RuntimeComponentIdentity) => readonly string[]
   origin?: RuntimeCapabilityOrigin
 }>
 
@@ -175,8 +177,12 @@ export class RuntimeCapabilityCatalog {
   }
 
   /** Returns the parts a component type is allowed to publish as mount targets. */
-  getMountablePartIds(type: string): readonly string[] {
-    return this.components.get(type)?.mountableParts ?? []
+  getMountablePartIds(type: string, identity?: RuntimeComponentIdentity): readonly string[] {
+    const definition = this.components.get(type)
+    if (definition === undefined) return []
+    return identity === undefined
+      ? definition.mountableParts ?? []
+      : definition.mountablePartResolver?.(identity) ?? definition.mountableParts ?? []
   }
 
   /** Reports whether one service namespace is available. */

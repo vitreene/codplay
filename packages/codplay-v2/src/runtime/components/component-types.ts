@@ -29,6 +29,17 @@ export type MaterializedPart = Readonly<{
 export type ComponentUpdateInput<State extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   state: State
   timeMs: number
+  /** Active authored occurrences available to components with deterministic temporal behavior. */
+  activeActions?: readonly ComponentActionOccurrence[]
+}>
+
+/** Minimal occurrence metadata needed by a component-specific time projection. */
+export type ComponentActionOccurrence = Readonly<{
+  name: string
+  startAt: number
+  elapsedMs: number
+  action: Record<string, unknown>
+  eventId?: string
 }>
 
 /** Services that project HTML/SVG properties onto materialized nodes. */

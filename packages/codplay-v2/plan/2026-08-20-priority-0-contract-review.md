@@ -91,8 +91,9 @@ extensions correspondantes :
 | Surface typée entre modules runtime et composants | Fixée le 2026-08-24 : registre de surfaces déclaré par le catalogue, résolveur typé dans le contexte module, aucune classe exposée | nouvelles surfaces à ajouter à la map de contrats |
 
 Les marqueurs `Review: required` restants concernent uniquement des extensions non
-engagées : renderer continu, defaults de couleur, `InputComponent`, composants
-hybrides, et contrat `Behavior/live`. Ils ne bloquent pas la tranche HTML relue.
+engagées : renderer continu, defaults de couleur, composants hybrides, et contrat
+`Behavior/live`. La tranche `img`/`input`/`polygon` et le materializer SVG DOM
+sont maintenant ouverts par le plan de portage dédié.
 
 ## Restructuration des frontières — direction validée le 2026-08-24
 

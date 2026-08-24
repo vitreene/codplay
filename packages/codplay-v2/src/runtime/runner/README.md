@@ -1,8 +1,13 @@
-# HTML Runner V2
+# DOM Runner V2
 
-> Status: Fini — tranche HTML motion V2
+> Status: Fini — tranche HTML motion et materializer SVG DOM V2
 > CodPlay version: V2 foundation
 > Review: capture géométrique sans DOM dupliqué en validation; renderer de production hors périmètre
+
+`HtmlComponentMaterializer` and `SvgComponentMaterializer` share the same DOM
+component and structural materialization circuit. The SVG entry point selects
+the `svg` materializer binding and rejects non-SVG roots; it does not create a
+second player or structural history.
 
 ## Role
 

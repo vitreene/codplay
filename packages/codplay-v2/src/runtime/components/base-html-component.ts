@@ -30,4 +30,9 @@ export abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
   protected getPartsSnapshot(): readonly MaterializedPart[] {
     return this.parts.map((part) => ({ ...part }))
   }
+
+  /** Resolves one private materialized part without exposing the part registry publicly. */
+  protected getPart(partId: string): unknown {
+    return this.parts.find((part) => part.partId === partId)?.nodeRef
+  }
 }

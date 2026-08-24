@@ -1,4 +1,17 @@
-import { LayoutComponent, validateLayoutInitial } from '../components/layout-component'
+import {
+  ImageComponent,
+  InputComponent,
+  LayoutComponent,
+  PolygonComponent,
+  validateImageAction,
+  validateImageInitial,
+  validateInputAction,
+  validateInputInitial,
+  validateLayoutInitial,
+  validatePolygonAction,
+  validatePolygonInitial,
+} from '../components'
+import { correctionIconPartId, selectionIconPartId } from '../components/input'
 import { ListComponent, validateListInitial } from '../components/list-component'
 import { MediaComponent, validateMediaAction, validateMediaInitial } from '../components/media-component'
 import { TagComponent, validateTagInitial } from '../components/tag-component'
@@ -29,9 +42,12 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
   catalog.registerModule({ ...createMediaSyncModuleServiceDefinition(), origin: 'core' }, 'core')
 
   catalog.registerComponent(coreTagDefinition, 'core')
+  catalog.registerComponent(coreImageDefinition, 'core')
+  catalog.registerComponent(coreInputDefinition, 'core')
   catalog.registerComponent(coreLayoutDefinition, 'core')
   catalog.registerComponent(coreMediaDefinition, 'core')
   catalog.registerComponent(coreListDefinition, 'core')
+  catalog.registerComponent(corePolygonDefinition, 'core')
   return catalog
 }
 
@@ -42,6 +58,36 @@ const coreTagDefinition: RuntimeComponentDefinition = {
   modules: [],
   validateInitial: validateTagInitial,
   create: (input) => new TagComponent(input as never),
+}
+
+/** Creates the core V2 image declaration under the V1-compatible `img` type. */
+const coreImageDefinition: RuntimeComponentDefinition = {
+  type: 'img',
+  services: ['className', 'style', 'attr'],
+  modules: [],
+  validateInitial: validateImageInitial,
+  validateAction: validateImageAction,
+  create: (input) => new ImageComponent(input as never),
+}
+
+/** Creates the core V2 quiz input declaration and publishes only icon slots. */
+const coreInputDefinition: RuntimeComponentDefinition = {
+  type: 'input',
+  services: ['className', 'style', 'attr', 'content'],
+  modules: ['markup'],
+  validateInitial: validateInputInitial,
+  validateAction: validateInputAction,
+  create: (input) => new InputComponent(input as never),
+  mountablePartResolver: (identity) => [
+    selectionIconPartId(identity.storyId, resolvePersoId(identity)),
+    correctionIconPartId(identity.storyId, resolvePersoId(identity)),
+  ],
+}
+
+/** Resolves the perso-local portion of the runtime component identity. */
+function resolvePersoId(identity: { storyId: string; componentId: string }): string {
+  const prefix = `${identity.storyId}:`
+  return identity.componentId.startsWith(prefix) ? identity.componentId.slice(prefix.length) : identity.componentId
 }
 
 /** Creates the built-in layout component declaration. */
@@ -72,4 +118,14 @@ const coreListDefinition: RuntimeComponentDefinition = {
   modules: ['list'],
   validateInitial: validateListInitial,
   create: (input) => new ListComponent(input as never),
+}
+
+/** Creates the core V2 polygon declaration projected through the SVG materializer. */
+const corePolygonDefinition: RuntimeComponentDefinition = {
+  type: 'polygon',
+  services: ['className', 'style', 'attr', 'content'],
+  modules: [],
+  validateInitial: validatePolygonInitial,
+  validateAction: validatePolygonAction,
+  create: (input) => new PolygonComponent(input as never),
 }

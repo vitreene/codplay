@@ -74,11 +74,11 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(runtimeCatalog.getService('style')).toMatchObject({
       name: 'style',
       allowUnknownProperties: true,
-      materializers: ['html'],
+      materializers: ['html', 'svg'],
     })
-    expect(runtimeCatalog.getService('className')).toMatchObject({ name: 'className', materializers: ['html'] })
-    expect(runtimeCatalog.getService('attr')).toMatchObject({ name: 'attr', materializers: ['html'] })
-    expect(runtimeCatalog.getService('content')).toMatchObject({ name: 'content', materializers: ['html'] })
+    expect(runtimeCatalog.getService('className')).toMatchObject({ name: 'className', materializers: ['html', 'svg'] })
+    expect(runtimeCatalog.getService('attr')).toMatchObject({ name: 'attr', materializers: ['html', 'svg'] })
+    expect(runtimeCatalog.getService('content')).toMatchObject({ name: 'content', materializers: ['html', 'svg'] })
   })
 
   it('reports invalid common service payloads with paths and references', () => {

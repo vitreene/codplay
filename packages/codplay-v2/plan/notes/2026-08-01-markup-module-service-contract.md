@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Fixe pour la tranche layout HTML V2
+Status: Fixe pour les tranches layout HTML et input V2
 CodPlay version: V2 foundation  
-Review: markup module rename and BaseHTMLComponent boundary validated le 2026-08-24; Input et les autres familles restent hors tranche
+Review: markup module rename, BaseHTMLComponent boundary et Input parts valides le 2026-08-24
 
 ## Positionnement
 
@@ -214,7 +214,8 @@ runtime generique et le passage de la politique `mountableParts` au materializer
 
 ## Hors contrat de cette tranche
 
-- creation de nouveaux composants V2 hors `LayoutComponent` et `TagComponent` ;
+- creation de nouveaux composants V2 hors `LayoutComponent`, `TagComponent` et
+  des composants de la tranche image/input/polygon ;
 - injection des services de production dans les composants ;
 - FLIP et mesure ;
 - production du root DOM/JSX par le materializer composant ;

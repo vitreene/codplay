@@ -1,4 +1,4 @@
-import { HTML_MATERIALIZER_ID } from '../materializer'
+import { HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID } from '../materializer'
 import type { ServiceRuntimeContext, ServiceRuntimeDefinition } from '../../services/service-runtime-types'
 import { ATTR_SERVICE } from '../../services/attr/attr-service'
 import { createHtmlAttrService } from '../../services/attr/html-attr-service'
@@ -13,34 +13,34 @@ import type { HtmlMaterializerRuntimeContext } from '../../services/html-materia
 /** Declares the core attr service and its HTML materializer adapter. */
 export const HTML_ATTR_SERVICE: ServiceRuntimeDefinition = {
   ...ATTR_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
+  materializers: [HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID],
   create: () => createHtmlAttrService(),
 }
 
 /** Declares the core className service and its HTML materializer adapter. */
 export const HTML_CLASS_NAME_SERVICE: ServiceRuntimeDefinition = {
   ...CLASS_NAME_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
+  materializers: [HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID],
   create: () => createHtmlClassNameService(),
 }
 
 /** Declares the core content service and its HTML materializer adapter. */
 export const HTML_CONTENT_SERVICE: ServiceRuntimeDefinition = {
   ...CONTENT_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
+  materializers: [HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID],
   create: () => createHtmlContentService(),
 }
 
 /** Declares the core style service and its HTML materializer adapter. */
 export const HTML_STYLE_SERVICE: ServiceRuntimeDefinition = {
   ...STYLE_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
+  materializers: [HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID],
   create: (context) => createHtmlStyleService(readHtmlMaterializerContext(context)),
 }
 
 /** Validates and narrows the context supplied to the HTML style adapter. */
 function readHtmlMaterializerContext(context: ServiceRuntimeContext): HtmlMaterializerRuntimeContext {
-  if (context.materializerId !== HTML_MATERIALIZER_ID) {
+  if (context.materializerId !== HTML_MATERIALIZER_ID && context.materializerId !== SVG_MATERIALIZER_ID) {
     throw new Error(`Style service received an unexpected materializer: ${context.materializerId}`)
   }
   if (!isHtmlMaterializerRuntimeContext(context.materializerContext)) {

@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Fixe pour la tranche HTML V2
+Status: Fixe pour les tranches HTML et SVG DOM V2
 CodPlay version: V2 foundation  
-Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-24
+Review: interface RuntimeMaterializer unifiée, tranche HTML et materializer SVG relus le 2026-08-24
 
 ## Contrat auteur
 
@@ -31,7 +31,9 @@ vers le substrat. Le cycle de vie runtime declenche ensuite leur retrait ; le
 materializer execute le nettoyage prevu par ce cycle. Le composant ne connait pas
 l'implementation choisie.
 
-`HtmlComponentMaterializer` est l'implementation HTML actuelle de cette frontiere.
+`HtmlComponentMaterializer` et `SvgComponentMaterializer` sont les
+implementations DOM actuelles de cette frontiere. Le materializer SVG reutilise
+le circuit structurel commun et impose une racine SVG reelle.
 Elle expose à la fois la materialisation d'un composant et la materialisation
 structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
 local parallèle n'est utilisé. Les services sont choisis par la definition du composant dans
@@ -67,8 +69,7 @@ BaseHTMLComponent.render()
 
 La politique de lecture et d'assainissement appartient au materializer et a ses
 services. Elle valide les balises et attributs autorises, conserve les marqueurs
-structurels internes et traite le namespace SVG correctement lorsqu'une
-implementation SVG sera ouverte.
+structurels internes et traite le namespace SVG dans la materialisation SVG.
 
 ### Materialisation initiale
 
@@ -350,11 +351,12 @@ Au seek, l'étape de présentation transitoire est committée directement à `t`
 animation ni rejeu d'une transition passée. À `LAST`, les slots et ressources
 transitoires sont retirés ; la materialisation auteur reste la seule représentation.
 
-Ce contrat est limité au materializer HTML et aux moves compilés. Il ne fixe pas
-encore une interface générique pour SVG, Canvas ou Three.js, ni le runtime JSX.
+Ce contrat est limité aux materializers DOM HTML/SVG et aux moves HTML compiles.
+Il ne fixe pas encore une interface générique pour Canvas ou Three.js, ni le
+runtime JSX.
 
 ## Hors contrat actuel
 
 - JSX runtime V2 ;
 - profils complets de sanitizer SVG/CSS et politiques de ressources ;
-- implementations de production pour SVG, Canvas ou Three.js ;
+- implementations de production pour Canvas ou Three.js ;

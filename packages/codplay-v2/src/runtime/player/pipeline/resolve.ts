@@ -9,7 +9,7 @@ import {
   type ColorValue,
   type TransformProperty,
 } from '../../../ace'
-import { cloneRecord, isPlainRecord } from '../../../shared'
+import { cloneRecord, cloneValue, isPlainRecord } from '../../../shared'
 import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
 import { isActionSequence, isTweenAction } from './action-sequence'
@@ -97,9 +97,21 @@ function applyActionPayload(
   action: CompiledRecord,
   elapsedMs: number,
 ): void {
-  // Source is reconstructible logical state; MediaComponent owns the side-effectful node cache.
-  if (typeof action.src === 'string') state.src = action.src
-  if (action.content !== undefined) state.content = action.content
+  // Source is reconstructible logical state; media components own side-effectful node caches.
+  // Component-specific fields are copied as well so core components do not need a parallel
+  // action-resolution circuit. Style and className retain their dedicated patch semantics.
+  for (const [property, value] of Object.entries(action)) {
+    if (property === 'className' || property === 'style') continue
+    if (property === 'attr' || property === 'move') {
+      state[property] = cloneValue(value)
+      continue
+    }
+    if (isPlainRecord(value) && isPlainRecord(state[property])) {
+      state[property] = { ...(state[property] as CompiledRecord), ...cloneRecord(value) }
+      continue
+    }
+    state[property] = cloneValue(value)
+  }
   if (isPlainRecord(action.className)) {
     state.className = applyClassNamePatch(state.className, action.className)
   }

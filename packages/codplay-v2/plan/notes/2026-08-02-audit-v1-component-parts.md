@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Référentiel historique — tranche HTML V2 relue
+Status: Référentiel historique — tranche DOM HTML/SVG V2 relue
 CodPlay version: V2 foundation  
-Review: conclusions intégrées au contrat des parts HTML V2 le 2026-08-24; Input et les substrats non HTML restent hors tranche
+Review: conclusions intégrées au contrat des parts DOM HTML/SVG le 2026-08-24; Canvas/Three.js restent hors tranche
 
 ## Perimetre
 

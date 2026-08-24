@@ -1,6 +1,6 @@
 # Materializer
 
-> Status: En cours
+> Status: Fixe — HTML/SVG DOM tranche
 > CodPlay version: V2 foundation
 
 This folder defines the single runtime materializer boundary. The
@@ -19,8 +19,9 @@ The component and scene operations therefore use one substrate interface. They
 must not be implemented through separate component and structural catalogs or
 through a demo-only route.
 
-The current HTML implementation is in `runtime/runner` and the HTML service
-adapters are kept beside their service declarations under `src/services`.
+The current HTML and SVG DOM implementations are in `runtime/runner` and the
+shared HTML/SVG service adapters are kept beside their service declarations
+under `src/services`.
 
 `BaseComponent` is substrate-neutral. The HTML implementation consumes
 `BaseHTMLComponent`; other materializers must define their own projection

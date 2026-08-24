@@ -2,15 +2,16 @@
 
 ## Statut
 
-Status: Reporte - contrat generique du module uniquement  
+Status: Integre dans la tranche image/input/polygon/SVG
 CodPlay version: V2 foundation  
-Review: required before implementation
+Review: contrat valide le 2026-08-24 ; implementation detail in [components-image-input-polygon-svg-plan.md](./components-image-input-polygon-svg-plan.md)
 
 ## Perimetre reporte
 
-La reecriture de `InputComponent` n'est pas une tranche actuelle. Ce document
-conserve uniquement les exigences generiques que le module `layout` devra pouvoir
-supporter plus tard pour un composant autre que `layout`.
+La reecriture de `InputComponent` est maintenant integree dans la tranche
+[`components-image-input-polygon-svg-plan.md`](./components-image-input-polygon-svg-plan.md).
+Ce document conserve les invariants de parts et de placement qui expliquent
+pourquoi `input` depend de la capacite layout/parts `markup`.
 
 ## Objectif futur
 
@@ -55,8 +56,8 @@ render(): string {
     <label>
       <input data-part="control" />
       <span data-part="label"></span>
-      <span data-part="selection-icon" aria-hidden="true"></span>
-      <span data-part="correction-icon" aria-hidden="true"></span>
+      <span data-part="{component-id}__selection-icon-slot" aria-hidden="true"></span>
+      <span data-part="{component-id}__correction-icon-slot" aria-hidden="true"></span>
       <span data-part="hint"></span>
     </label>
   `
@@ -90,8 +91,8 @@ outlets :
 
 ```text
 input mountable parts:
-  selection-icon
-  correction-icon
+  {component-id}__selection-icon-slot
+  {component-id}__correction-icon-slot
 ```
 
 Les parts `control`, `label` et `hint` restent internes. Cette declaration est une
@@ -100,8 +101,8 @@ une methode appelee par le composant.
 
 ## Modification du module layout
 
-Le module garde son identifiant `layout` et son comportement
-`RuntimeModuleService`. Son etat doit etre generalise : il ne doit plus parler
+Le module conserve l'identifiant runtime `markup`, qui est l'implementation V2
+fixee de la capacite layout/parts. Son etat est general : il ne parle pas
 uniquement de composants `layout`, mais de proprietaires de parts montables.
 
 Les types deviennent conceptuellement :
@@ -146,7 +147,7 @@ Component.render()
   -> node racine + registre de parts
   -> definition runtime du type
   -> selection des parts montables
-  -> facade service `layout`
+  -> facade service `markup` de la capacite layout
   -> instance module layout du player
 ```
 
@@ -188,8 +189,9 @@ La definition du type devra porter :
 - `type: 'input'` ;
 - la factory `InputComponent` ;
 - les services `className`, `style`, `attr` ;
-- la dependance module `layout` ;
-- la table interne des parts montables `selection-icon` et `correction-icon` ;
+  - la dependance module `markup` de la capacite layout ;
+  - le resolver d'IDs uniques des parts montables `selection-icon` et
+    `correction-icon` ;
 - le validateur des formes `InputInitial` et `InputState`.
 
 Cette declaration derive `layout` dans `CompiledRequirements.modules` comme pour
@@ -226,14 +228,14 @@ interpretes par le module.
 - update repetable depuis deux `PersoState(t)` identiques ;
 - seek/reconstruction sans dependance a l'etat precedent du composant.
 
-## Ordre d'implementation futur
+## Etat de l'implementation
 
-1. Generaliser les types et l'etat pur du module `layout`.
-2. Ajouter la selection generique des parts montables dans la definition d'un composant.
-3. Construire le materializer V2 qui conserve `node` et les parts.
-4. Reprendre `InputComponent` dans une tranche ulterieure.
-5. Ajouter la verticale de test input/layout dans cette tranche ulterieure.
-6. Reprendre une demo quiz comme preuve de bout en bout.
+1. Le materializer selectionne les parts selon la definition runtime et le
+   resolver d'IDs d'instance.
+2. `InputComponent` porte les cinq parts et ne publie que les deux slots icons.
+3. Les tests couvrent materialisation, collisions, resolution et retrait.
+4. La preuve de scene quiz complete reste une validation demo ulterieure ; elle
+   ne modifie pas le contrat de cette tranche.
 
 ## Hors perimetre
 
