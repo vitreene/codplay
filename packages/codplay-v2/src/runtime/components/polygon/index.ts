@@ -1,28 +1,35 @@
+export { PolygonComponent } from './polygon-component'
 export {
-  PolygonComponent,
+  sanitizePolygonAction,
+  sanitizePolygonInitial,
   validatePolygonAction,
   validatePolygonInitial,
-} from './polygon-component'
+} from './polygon-validation'
 export type {
   PolygonAction,
+  PolygonCompiledMorphOptions,
+  PolygonData,
+  PolygonGeometryState,
   PolygonInitial,
+  PolygonMorphInput,
   PolygonMorphOptions,
   PolygonMorphState,
+  PolygonPoint,
+  PolygonShapeInput,
+  PolygonShapeState,
   PolygonState,
 } from './polygon-types'
 export {
   clampProgress,
   createPolygonVertices,
   interpolatePointSets,
-  normalizePolygonShapeState,
   resolveMorphPathString,
   resolveMorphPointsString,
+  resolvePolygonGeometryState,
   resolvePolygonPathString,
   resolvePolygonPointsString,
   resampleClosedPolyline,
+  samePolygonShape,
   toPolygonPathString,
   toPolygonPointsString,
-  type NormalizedPolygonShapeState,
-  type PolygonPoint,
-  type PolygonShapeState,
 } from './polygon-geometry'

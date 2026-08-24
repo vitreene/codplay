@@ -1,20 +1,30 @@
 import {
   ImageComponent,
   InputComponent,
+  ListComponent,
   LayoutComponent,
+  MediaComponent,
   PolygonComponent,
+  sanitizeInputAction,
+  sanitizeInputInitial,
+  sanitizeListInitial,
+  sanitizePolygonAction,
+  sanitizePolygonInitial,
+  sanitizeTagInitial,
   validateImageAction,
   validateImageInitial,
   validateInputAction,
   validateInputInitial,
   validateLayoutInitial,
+  validateListInitial,
+  validateMediaAction,
+  validateMediaInitial,
   validatePolygonAction,
   validatePolygonInitial,
+  TagComponent,
+  validateTagInitial,
 } from '../components'
 import { correctionIconPartId, selectionIconPartId } from '../components/input'
-import { ListComponent, validateListInitial } from '../components/list-component'
-import { MediaComponent, validateMediaAction, validateMediaInitial } from '../components/media-component'
-import { TagComponent, validateTagInitial } from '../components/tag-component'
 import {
   RuntimeCapabilityCatalog,
   type RuntimeComponentDefinition,
@@ -57,6 +67,7 @@ const coreTagDefinition: RuntimeComponentDefinition = {
   services: ['className', 'style', 'attr', 'content'],
   modules: [],
   validateInitial: validateTagInitial,
+  sanitizeInitial: sanitizeTagInitial,
   create: (input) => new TagComponent(input as never),
 }
 
@@ -77,6 +88,8 @@ const coreInputDefinition: RuntimeComponentDefinition = {
   modules: ['markup'],
   validateInitial: validateInputInitial,
   validateAction: validateInputAction,
+  sanitizeInitial: sanitizeInputInitial,
+  sanitizeAction: sanitizeInputAction,
   create: (input) => new InputComponent(input as never),
   mountablePartResolver: (identity) => [
     selectionIconPartId(identity.storyId, resolvePersoId(identity)),
@@ -117,6 +130,7 @@ const coreListDefinition: RuntimeComponentDefinition = {
   services: ['className', 'style', 'attr'],
   modules: ['list'],
   validateInitial: validateListInitial,
+  sanitizeInitial: sanitizeListInitial,
   create: (input) => new ListComponent(input as never),
 }
 
@@ -127,5 +141,7 @@ const corePolygonDefinition: RuntimeComponentDefinition = {
   modules: [],
   validateInitial: validatePolygonInitial,
   validateAction: validatePolygonAction,
+  sanitizeInitial: sanitizePolygonInitial,
+  sanitizeAction: sanitizePolygonAction,
   create: (input) => new PolygonComponent(input as never),
 }

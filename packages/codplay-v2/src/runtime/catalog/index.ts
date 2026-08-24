@@ -15,6 +15,7 @@ export type {
   RuntimeComponentServiceFactory,
   RuntimeComponentServiceInstance,
   RuntimeModuleServiceDefinition,
+  ComponentSanitizer,
   PropertyValidationDefinition,
   ServiceValidationDefinition,
   ValidationFunction,

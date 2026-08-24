@@ -7,8 +7,8 @@ export function createHtmlContentService(): ServiceRuntimeInstance {
   return {
     apply: (node, value) => {
       if (!isHtmlElementNode(node)) return
-      if (typeof value === 'string') {
-        node.textContent = value
+      if (typeof value === 'string' || typeof value === 'number') {
+        node.textContent = String(value)
         return
       }
       if (!isContentElement(value) || (value as unknown) === node) return

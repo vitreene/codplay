@@ -1,6 +1,10 @@
 import type { DiagnosticCollector } from '../../diagnostics'
 import { validatePersoWithCapabilities } from './validate-perso-with-capabilities'
-import type { PersoValidationInput, CapabilityValidationSnapshot } from './validation-types'
+import type {
+  PersoValidationInput,
+  CapabilityValidationSnapshot,
+  ComponentSanitizer,
+} from './validation-types'
 import type { MarkupAttributeSanitizer } from '../../services'
 
 /** Minimal capability set consumed by the compiled-scene validation engine. */
@@ -40,10 +44,30 @@ export class CompiledSceneValidationEngine {
     return this.catalog.components.get(type)?.modules ?? []
   }
 
+  /** Sanitizes one validated initial component profile before compilation. */
+  sanitizeInitial(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+    return this.sanitize(type, 'sanitizeInitial', value)
+  }
+
+  /** Sanitizes one validated action patch before compilation. */
+  sanitizeAction(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+    return this.sanitize(type, 'sanitizeAction', value)
+  }
+
   /** Returns the declared service policies that can sanitize authored markup attributes. */
   markupSanitizersFor(type: string): readonly MarkupAttributeSanitizer[] {
     return this.servicesFor(type)
       .map((name) => this.catalog.services.get(name)?.sanitizeMarkupAttribute)
       .filter((sanitizer): sanitizer is MarkupAttributeSanitizer => sanitizer !== undefined)
+  }
+
+  /** Applies a component sanitizer when the registered type provides one. */
+  private sanitize(
+    type: string,
+    key: 'sanitizeInitial' | 'sanitizeAction',
+    value: Readonly<Record<string, unknown>>,
+  ): Readonly<Record<string, unknown>> {
+    const sanitizer: ComponentSanitizer | undefined = this.catalog.components.get(type)?.[key]
+    return sanitizer === undefined ? value : sanitizer(value)
   }
 }

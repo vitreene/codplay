@@ -24,6 +24,59 @@ function createCatalogForFixtures(): RuntimeCapabilityCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('sanitizes core component profiles before they enter CompiledScene', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'component-profile-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [
+            { id: 'tag', type: 'tag', initial: { content: 42 }, actions: {} },
+            { id: 'list', type: 'list', initial: { tag: '  ' }, actions: {} },
+            {
+              id: 'polygon',
+              type: 'polygon',
+              initial: { move: '@root', sides: 4 },
+              actions: { morph: { morph: {} } },
+            },
+            { id: 'input', type: 'input', initial: { label: 12 }, actions: {} },
+          ],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const persos = result.compiledScene.scene.stories.main?.persos ?? []
+    const tag = persos.find((perso) => perso.id === 'tag')!
+    const list = persos.find((perso) => perso.id === 'list')!
+    const polygon = persos.find((perso) => perso.id === 'polygon')!
+    const input = persos.find((perso) => perso.id === 'input')!
+    expect(tag.initial.tag).toBe('div')
+    expect(tag.initial.content).toBe(42)
+    expect(list.initial.tag).toBe('section')
+    expect(polygon.initial).toMatchObject({
+      sides: 4,
+      inner: null,
+      outer: 40,
+      rotationDeg: -90,
+      inflexion: [0, 0, 0, 0],
+    })
+    expect(polygon.actions.morph).toMatchObject({
+      morph: { duration: 700, delayMs: 0, ease: 'linear', sampleCount: 96 },
+    })
+    expect(input.initial).toMatchObject({
+      inputType: 'text',
+      label: '12',
+      hint: '',
+      selectedAnswerIds: [],
+      correctAnswerIds: [],
+      disableAnswers: false,
+      showCorrection: false,
+    })
+  })
+
   it('exposes the pure path transformation for future strap payloads', () => {
     const path = prepareSvgPath('M 0 0 L 0.5 0.8 L 1 0')
     const transformed = compileMovePath({

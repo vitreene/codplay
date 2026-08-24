@@ -12,6 +12,7 @@ export { reportMissingValidator } from './validation-warnings'
 export { sanitizeMarkupTemplate } from './markup-sanitizer'
 export type {
   ComponentValidationDefinition,
+  ComponentSanitizer,
   PersoValidationInput,
   PropertyValidationDefinition,
   ServiceValidationDefinition,

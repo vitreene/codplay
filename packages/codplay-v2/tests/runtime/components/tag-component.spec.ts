@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { TagComponent } from '../../../src/runtime/components'
-import type { TagState } from '../../../src/runtime/components'
+import { sanitizeTagInitial, TagComponent } from '../../../src/runtime/components'
+import type { TagInitial } from '../../../src/runtime/components'
 
 describe('TagComponent V2', () => {
   it('uses the contract default when the author omits the root tag', () => {
@@ -9,7 +9,7 @@ describe('TagComponent V2', () => {
       perso: {
         id: 'default-tag',
         storyId: 'main',
-        initial: {} as TagState,
+        initial: sanitizeTagInitial({}) as TagInitial,
       },
       services: { apply: vi.fn() },
     })

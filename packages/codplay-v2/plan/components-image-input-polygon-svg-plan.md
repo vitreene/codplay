@@ -36,6 +36,30 @@ n'ouvre pas Canvas, Three.js, Rive ou Flutter.
   projeter le root et plusieurs parts sans partager par erreur l'etat de
   reconciliation entre ces nodes.
 
+## Organisation des profils core
+
+Chaque composant core suit la meme frontiere de donnees :
+
+```text
+<component>/
+  <component>-types.ts       # profil *Initial du perso et etat compile
+  <component>-validation.ts  # validation SceneDoc + sanitation pure
+  <component>-component.ts   # projection runtime
+  index.ts                   # surface publique du dossier
+```
+
+`BaseComponentData` declare les champs communs `content`, `className`, `style`
+et `attr`. Les profils `*Initial` des composants sont les types des
+`perso.initial` recus par leurs classes et constituent la reference humaine de
+la donnee acceptee. Les validateurs restent a la frontiere dynamique de
+`SceneDoc`; les sanitation callbacks publies dans `RuntimeCapabilityCatalog`
+completent les defaults et normalisent les formes une seule fois dans le
+builder, avant `CompiledScene`.
+
+La classe runtime ne revalide pas les donnees auteur. Ses gardes restantes sont
+des gardes de substrat ou d'effet externe (node DOM, horloge native, ressource
+preload), pas des controles de profil.
+
 ## Composant `img`
 
 Le type auteur reste `img`, conformement au contrat V1. Sa forme V2 est :
@@ -129,10 +153,12 @@ contenant :
 - un `<path data-part="path">` pour la geometrie ;
 - un `<text data-part="content">` pour le contenu.
 
-La geometrie V1 (`sides`, `inner`, `outer`, `rotationDeg`, `inflexion`) et les
-algorithmes de normalisation, resampling, interpolation et serialisation du
-path sont portes dans un dossier Polygon V2 dedie et testes par parite de
-resultat.
+La geometrie V1 (`sides`, `inner`, `outer`, `rotationDeg`, `inflexion`) est
+decrite dans `polygon-types.ts`. `polygon-validation.ts` valide et complete le
+profil au build ; `polygon-geometry.ts` ne recoit ensuite que des nombres
+compiles et porte les derives geometriques, le resampling, l'interpolation et
+la serialisation du path. Il ne contient plus de fallback auteur ni de garde de
+valeur `unknown`.
 
 Le morph est un comportement specialise du composant, pas un nouveau Behavior
 global ni un appel direct a Anime.js. L'occurrence d'action active et son

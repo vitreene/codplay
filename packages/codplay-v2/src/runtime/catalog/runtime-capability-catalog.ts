@@ -1,4 +1,7 @@
-import type { CapabilityValidationSnapshot } from '../../scene/validation/validation-types'
+import type {
+  CapabilityValidationSnapshot,
+  ComponentSanitizer,
+} from '../../scene/validation/validation-types'
 import type {
   PropertyValidationDefinition,
   ServiceValidationDefinition,
@@ -61,6 +64,10 @@ export type RuntimeComponentDefinition = Readonly<{
   modules: readonly string[]
   validateInitial?: ValidationFunction
   validateAction?: ValidationFunction
+  /** Sanitizes the initial profile once before it enters CompiledScene. */
+  sanitizeInitial?: ComponentSanitizer
+  /** Sanitizes one action patch once before it enters CompiledScene. */
+  sanitizeAction?: ComponentSanitizer
   create: RuntimeComponentFactory
   /** Publishes typed substrate-neutral operations for a mounted instance. */
   surfaces?: RuntimeComponentSurfaceProvider
@@ -219,6 +226,8 @@ export class RuntimeCapabilityCatalog {
         modules: [...definition.modules],
         validateInitial: definition.validateInitial,
         validateAction: definition.validateAction,
+        sanitizeInitial: definition.sanitizeInitial,
+        sanitizeAction: definition.sanitizeAction,
       }])),
       services: new Map([...this.services.entries()].map(([name, definition]) => [name, toValidationDefinition(definition)])),
     }
@@ -290,4 +299,4 @@ function toValidationDefinition(definition: RuntimeComponentServiceDefinition): 
   return { name, validate, properties, allowUnknownProperties, sanitizeMarkupAttribute }
 }
 
-export type { PropertyValidationDefinition, ServiceValidationDefinition, ValidationFunction }
+export type { ComponentSanitizer, PropertyValidationDefinition, ServiceValidationDefinition, ValidationFunction }

@@ -207,12 +207,13 @@ function compilePerso(
   state: ReturnType<typeof createExtractionState>,
   validationEngine: CompiledSceneValidationEngine,
 ): CompiledPerso {
-  const compiledInitial = extractCompiledRecord(compileMovePath(perso.initial, `${scope}.initial`) as Record<string, unknown>, `${scope}.initial`, state) ?? {}
-  const initial = typeof perso.initial.markup === 'string'
+  const sanitizedInitial = validationEngine.sanitizeInitial(perso.type, perso.initial)
+  const compiledInitial = extractCompiledRecord(compileMovePath(sanitizedInitial, `${scope}.initial`) as Record<string, unknown>, `${scope}.initial`, state) ?? {}
+  const initial = typeof sanitizedInitial.markup === 'string'
     ? {
         ...compiledInitial,
         markup: sanitizeMarkupTemplate(
-          perso.initial.markup,
+          sanitizedInitial.markup,
           `${scope}.initial.markup`,
           validationEngine.markupSanitizersFor(perso.type),
         ),
@@ -224,7 +225,12 @@ function compilePerso(
     type: perso.type,
     initial,
     actions: Object.fromEntries(
-      Object.entries(perso.actions).map(([name, value]) => [name, extractCompiledValue(compileMovePath(value, `${scope}.actions.${name}`), `${scope}.actions.${name}`, state)]),
+      Object.entries(perso.actions).map(([name, value]) => {
+        const sanitizedValue = isPlainRecord(value)
+          ? validationEngine.sanitizeAction(perso.type, value)
+          : value
+        return [name, extractCompiledValue(compileMovePath(sanitizedValue, `${scope}.actions.${name}`), `${scope}.actions.${name}`, state)]
+      }),
     ),
     list: extractCompiledRecord(perso.list, `${scope}.list`, state),
     emit: compileEmitDeclaration(perso.emit, `${scope}.emit`, state),

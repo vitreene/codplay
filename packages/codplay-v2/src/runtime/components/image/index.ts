@@ -1,6 +1,5 @@
 export {
   ImageComponent,
-  validateImageAction,
-  validateImageInitial,
 } from './image-component'
-export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image-component'
+export { validateImageAction, validateImageInitial } from './image-validation'
+export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image-types'

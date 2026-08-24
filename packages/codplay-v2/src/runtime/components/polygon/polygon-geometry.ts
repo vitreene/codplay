@@ -1,48 +1,33 @@
-/** Authored polygon shape values before normalization. */
-export type PolygonShapeState = Readonly<{
-  sides?: unknown
-  inner?: unknown
-  outer?: unknown
-  rotationDeg?: unknown
-  inflexion?: unknown
-}>
+import type {
+  PolygonGeometryState,
+  PolygonPoint,
+  PolygonShapeState,
+} from './polygon-types'
 
-/** Safe polygon values used by the geometry algorithms. */
-export type NormalizedPolygonShapeState = Readonly<{
-  sides: number
-  inner: number | null
-  outer: number
-  rotationDeg: number
-  inflexion: readonly number[]
-}>
-
-/** One cartesian polygon point. */
-export type PolygonPoint = Readonly<{ x: number; y: number }>
-
-/** Clamps one morph progress into the closed [0, 1] interval. */
+/** Clamps one temporal morph progress into the closed [0, 1] interval. */
 export function clampProgress(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
-/** Normalizes authored polygon values into a safe geometric state. */
-export function normalizePolygonShapeState(input: PolygonShapeState): NormalizedPolygonShapeState {
-  const sidesRaw = finiteNumber(input.sides) ?? 3
-  const sides = Math.max(3, Math.round(sidesRaw))
-  const outer = Math.max(1, finiteNumber(input.outer) ?? 40)
-  const innerRaw = input.inner === null ? null : finiteNumber(input.inner)
-  const inner = innerRaw === null ? null : Math.max(0, Math.min(outer, innerRaw ?? 0))
-  const rotationDeg = finiteNumber(input.rotationDeg) ?? -90
-  const segmentCount = inner !== null && inner > 0 && inner < outer ? sides * 2 : sides
-  const scalarInflexion = finiteNumber(input.inflexion) ?? 0
-  const inflexionValues = Array.isArray(input.inflexion) ? input.inflexion : undefined
-  const inflexion = inflexionValues !== undefined
-    ? Array.from({ length: segmentCount }, (_, index) => finiteNumber(inflexionValues[index]) ?? 0)
-    : Array.from({ length: segmentCount }, () => scalarInflexion)
-  return { sides, inner, outer, rotationDeg, inflexion }
+/** Expands one compiled shape into the exact geometric segment representation. */
+export function resolvePolygonGeometryState(input: PolygonShapeState): PolygonGeometryState {
+  const isStar = input.inner !== null && input.inner > 0 && input.inner < input.outer
+  const segmentCount = isStar ? input.sides * 2 : input.sides
+  const inflexionValue = input.inflexion
+  const inflexion = typeof inflexionValue === 'number'
+    ? Array.from({ length: segmentCount }, () => inflexionValue)
+    : Array.from({ length: segmentCount }, (_, index) => inflexionValue[index] ?? 0)
+  return {
+    sides: input.sides,
+    inner: input.inner,
+    outer: input.outer,
+    rotationDeg: input.rotationDeg,
+    inflexion,
+  }
 }
 
 /** Builds the explicit vertices of one regular polygon or star. */
-export function createPolygonVertices(input: NormalizedPolygonShapeState): readonly PolygonPoint[] {
+export function createPolygonVertices(input: PolygonGeometryState): readonly PolygonPoint[] {
   const { sides, inner, outer, rotationDeg } = input
   const isStar = inner !== null && inner > 0 && inner < outer
   const stepCount = isStar ? sides * 2 : sides
@@ -117,21 +102,20 @@ export function toPolygonPointsString(points: readonly PolygonPoint[]): string {
   return points.map((point) => `${point.x.toFixed(3)},${point.y.toFixed(3)}`).join(' ')
 }
 
-/** Resolves one static polygon points string. */
+/** Resolves one static polygon points string from a compiled shape state. */
 export function resolvePolygonPointsString(input: PolygonShapeState): string {
-  return toPolygonPointsString(createPolygonVertices(normalizePolygonShapeState(input)))
+  return toPolygonPointsString(createPolygonVertices(resolvePolygonGeometryState(input)))
 }
 
-/** Resolves one morph-interpolated points string using V1's fixed sampling. */
+/** Resolves one morph-interpolated points string using the compiled sample count. */
 export function resolveMorphPointsString(input: {
   from: PolygonShapeState
   to: PolygonShapeState
   progress: number
-  sampleCount?: number
+  sampleCount: number
 }): string {
-  const sampleCount = Math.max(8, Math.round(finiteNumber(input.sampleCount) ?? 96))
-  const from = resampleClosedPolyline(createPolygonVertices(normalizePolygonShapeState(input.from)), sampleCount)
-  const to = resampleClosedPolyline(createPolygonVertices(normalizePolygonShapeState(input.to)), sampleCount)
+  const from = resampleClosedPolyline(createPolygonVertices(resolvePolygonGeometryState(input.from)), input.sampleCount)
+  const to = resampleClosedPolyline(createPolygonVertices(resolvePolygonGeometryState(input.to)), input.sampleCount)
   return toPolygonPointsString(interpolatePointSets(from, to, input.progress))
 }
 
@@ -158,29 +142,41 @@ export function toPolygonPathString(vertices: readonly PolygonPoint[], inflexion
   return commands.join(' ')
 }
 
-/** Resolves one static polygon path string. */
+/** Resolves one static SVG path string from a compiled shape state. */
 export function resolvePolygonPathString(input: PolygonShapeState): string {
-  const state = normalizePolygonShapeState(input)
+  const state = resolvePolygonGeometryState(input)
   return toPolygonPathString(createPolygonVertices(state), state.inflexion)
 }
 
-/** Resolves one morph-interpolated path string with straight sampled segments. */
+/** Resolves one morph-interpolated SVG path string from compiled shape states. */
 export function resolveMorphPathString(input: {
   from: PolygonShapeState
   to: PolygonShapeState
   progress: number
-  sampleCount?: number
+  sampleCount: number
 }): string {
-  const sampleCount = Math.max(8, Math.round(finiteNumber(input.sampleCount) ?? 96))
-  const from = resampleClosedPolyline(createPolygonVertices(normalizePolygonShapeState(input.from)), sampleCount)
-  const to = resampleClosedPolyline(createPolygonVertices(normalizePolygonShapeState(input.to)), sampleCount)
-  return toPolygonPathString(
-    interpolatePointSets(from, to, input.progress),
-    Array.from({ length: sampleCount }, () => 0),
-  )
+  const from = resampleClosedPolyline(createPolygonVertices(resolvePolygonGeometryState(input.from)), input.sampleCount)
+  const to = resampleClosedPolyline(createPolygonVertices(resolvePolygonGeometryState(input.to)), input.sampleCount)
+  const interpolated = interpolatePointSets(from, to, input.progress)
+  return toPolygonPathString(interpolated, Array.from({ length: interpolated.length }, () => 0))
 }
 
-/** Converts only finite numeric authored values. */
-function finiteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
+/** Compares two compiled polygon shapes without serializing their values. */
+export function samePolygonShape(left: PolygonShapeState, right: PolygonShapeState): boolean {
+  return sameValue(left.sides, right.sides)
+    && sameValue(left.inner, right.inner)
+    && sameValue(left.outer, right.outer)
+    && sameValue(left.rotationDeg, right.rotationDeg)
+    && sameValue(left.inflexion, right.inflexion)
+}
+
+/** Compares scalar and list values used by the compiled shape profile. */
+function sameValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameValue(value, right[index]))
+  }
+  return false
 }

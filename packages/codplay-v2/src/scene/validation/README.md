@@ -13,6 +13,12 @@ pure `MarkupAttributeSanitizer` policies declared by services and writes the
 sanitized template into `CompiledScene`; the runtime markup capability only owns
 player-scoped parts and materialization registration.
 
+Component declarations may also publish `sanitizeInitial` and `sanitizeAction`.
+Those pure functions receive the validated perso profile and return the form
+that is extracted into `CompiledScene`. They are the only place for deterministic
+component defaults and author-to-runtime normalization; component classes do not
+repeat those guards on the player hot path.
+
 ## Role
 
 - CodPlay registers component, data-service, and ModuleService requirements in one runtime catalog.

@@ -11,6 +11,11 @@ export type {
   ValidationTarget,
 } from '../../services/service-validation-types'
 
+/** Pure component-data transformation executed while building CompiledScene. */
+export type ComponentSanitizer = (
+  value: Readonly<Record<string, unknown>>,
+) => Readonly<Record<string, unknown>>
+
 /** Pure validation declaration attached to one registered component type. */
 export type ComponentValidationDefinition = Readonly<{
   type: string
@@ -18,6 +23,8 @@ export type ComponentValidationDefinition = Readonly<{
   modules?: readonly string[]
   validateInitial?: ValidationFunction
   validateAction?: ValidationFunction
+  sanitizeInitial?: ComponentSanitizer
+  sanitizeAction?: ComponentSanitizer
 }>
 
 /** Minimal author payload consumed by the validation catalog. */

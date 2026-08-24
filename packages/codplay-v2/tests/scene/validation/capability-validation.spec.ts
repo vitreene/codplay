@@ -107,7 +107,7 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     })
   })
 
-  it('validates content through the content service at the compiled boundary', () => {
+  it('accepts string and numeric content through the content service at the compiled boundary', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const runtimeCatalog = catalog()
 
@@ -118,12 +118,7 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
       actions: {},
     }, diagnostics)
 
-    expect(diagnostics.report().errors).toEqual([
-      expect.objectContaining({
-        code: 'AUTHOR_CONTENT_INVALID',
-        details: { refs: { persoId: 'title' }, context: { path: 'initial.content' } },
-      }),
-    ])
+    expect(diagnostics.report().errors).toEqual([])
   })
 
   it('validates the initial contract owned by each built-in component', () => {

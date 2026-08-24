@@ -1,4 +1,5 @@
 export { BaseComponent } from './base-component'
+export type { BaseComponentData, BaseComponentVisualData } from './base-component'
 export { BaseHTMLComponent } from './base-html-component'
 export {
   ImageComponent,
@@ -8,26 +9,29 @@ export {
 export {
   InputComponent,
   INPUT_STANDARD_ACTIONS,
+  sanitizeInputAction,
+  sanitizeInputInitial,
   resolveInputStandardActions,
   resolveInputState,
   validateInputAction,
   validateInputInitial,
 } from './input'
-export { LayoutComponent } from './layout-component'
-export { ListComponent } from './list-component'
-export { MediaComponent } from './media-component'
+export { LayoutComponent, validateLayoutInitial } from './layout'
+export { ListComponent, sanitizeListInitial, validateListInitial } from './list'
+export { MediaComponent, validateMediaAction, validateMediaInitial } from './media'
 export {
   PolygonComponent,
+} from './polygon'
+export {
+  sanitizePolygonAction,
+  sanitizePolygonInitial,
   validatePolygonAction,
   validatePolygonInitial,
 } from './polygon'
-export { TagComponent } from './tag-component'
-export { validateLayoutInitial } from './layout-component'
-export { validateListInitial } from './list-component'
-export { validateTagInitial } from './tag-component'
+export { TagComponent, sanitizeTagInitial, validateTagInitial } from './tag'
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
-export type { LayoutInitial, LayoutState } from './layout-component'
-export type { ListInitial, ListState } from './list-component'
+export type { LayoutInitial, LayoutState } from './layout'
+export type { ListConfig, ListInitial, ListState } from './list'
 export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image'
 export type {
   InputAction,
@@ -38,12 +42,19 @@ export type {
   InputState,
   ResolvedInputState,
 } from './input'
-export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media-component'
+export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media'
 export type {
   PolygonAction,
+  PolygonCompiledMorphOptions,
+  PolygonData,
+  PolygonGeometryState,
   PolygonInitial,
+  PolygonMorphInput,
   PolygonMorphOptions,
   PolygonMorphState,
+  PolygonPoint,
+  PolygonShapeInput,
+  PolygonShapeState,
   PolygonState,
 } from './polygon'
 export type {
@@ -53,22 +64,21 @@ export type {
   RuntimeComponentSurfaceProvider,
   RuntimeComponentSurfaceResolver,
 } from './component-surface-types'
-export type { TagState } from './tag-component'
-export { validateMediaAction, validateMediaInitial } from './media-component'
+export type { TagInitial, TagState } from './tag'
 export {
   clampProgress,
   createPolygonVertices,
   interpolatePointSets,
-  normalizePolygonShapeState,
   resolveMorphPathString,
   resolveMorphPointsString,
+  resolvePolygonGeometryState,
   resolvePolygonPathString,
   resolvePolygonPointsString,
   resampleClosedPolyline,
+  samePolygonShape,
   toPolygonPathString,
   toPolygonPointsString,
 } from './polygon'
-export type { NormalizedPolygonShapeState, PolygonPoint, PolygonShapeState } from './polygon'
 export type {
   ComponentInput,
   ComponentActionOccurrence,

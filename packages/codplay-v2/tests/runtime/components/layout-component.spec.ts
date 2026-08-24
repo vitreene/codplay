@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LayoutComponent } from '../../../src/runtime/components'
+import { DiagnosticCollector } from '../../../src/diagnostics'
+import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
+import { validatePersoWithCapabilities } from '../../../src/scene/validation'
 import {
   createMarkupModuleServiceDefinition,
   materializeComponentWithMarkup,
@@ -43,13 +46,19 @@ describe('LayoutComponent V2', () => {
     expect(apply).toHaveBeenCalledWith(root, { className: 'active' })
   })
 
-  it('rejects an empty layout template before materialization', () => {
-    const component = new LayoutComponent({
-      perso: { id: 'empty-layout', storyId: 'main', initial: { markup: '  ' } },
-      services: { apply: () => undefined },
-    })
+  it('rejects an empty layout profile before the component is materialized', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
 
-    expect(() => component.render()).toThrow('Layout markup must not be empty: empty-layout')
+    validatePersoWithCapabilities(createCoreRuntimeCatalog().validationSnapshot(), {
+      id: 'empty-layout',
+      type: 'layout',
+      initial: { markup: '  ' },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors.map((entry) => entry.code)).toEqual([
+      'AUTHOR_LAYOUT_MARKUP_INVALID',
+    ])
   })
 
   it('registers public materialized parts and cleans them up with the component', () => {

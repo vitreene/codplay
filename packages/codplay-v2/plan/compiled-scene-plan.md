@@ -215,6 +215,13 @@ CodPlay, parcourt les payloads et appelle les validateurs de composants et de se
 Les validateurs core `style`, `className` et `attr` sont obligatoires dans le catalogue initial; les validateurs de
 composants peuvent manquer temporairement et produisent alors les warnings prevus.
 
+Un composant peut en plus declarer deux fonctions de sanitation pures dans le catalogue :
+`sanitizeInitial` pour le profil d'entree du perso et `sanitizeAction` pour les actions partielles. La validation
+reste responsable des diagnostics ; la sanitation applique uniquement les defaults et completions prevus par le
+contrat du composant. Lors de la compilation, le builder execute `sanitizeInitial` avant l'extraction des chemins
+et `sanitizeAction` avant la compilation d'une action. Le composant runtime recoit ainsi un profil compile complet,
+et n'a pas a revalider les donnees auteur ni a reconstruire ses defaults.
+
 ## Socle minimal des guards
 
 Le but initial n'est pas de recenser toutes les règles historiques. Il est de poser une architecture dans laquelle une regle

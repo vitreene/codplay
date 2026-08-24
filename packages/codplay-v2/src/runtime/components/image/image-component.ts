@@ -1,50 +1,8 @@
-import { isPlainRecord } from '../../../shared'
-import type { ValidationFunction } from '../../../services'
-import { reportInvalidComponentValue, isComponentRecord } from '../component-validation'
-import type { AttrValue, ClassNameValue, StyleValue } from '../../../services'
 import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
 import { BaseHTMLComponent } from '../base-html-component'
-
-/** Properties targeted at the persistent native image node. */
-export type ImagePartState = Readonly<{
-  className?: ClassNameValue
-  style?: StyleValue
-  attr?: AttrValue
-}>
-
-/** Initial author state accepted by the V2 `img` component. */
-export type ImageInitial = Readonly<{
-  src?: string
-  alt?: string
-  img?: ImagePartState
-  className?: ClassNameValue
-  style?: StyleValue
-  attr?: AttrValue
-}>
-
-/** Resolved state applied by one image update. */
-export type ImageState = Readonly<ImageInitial>
-
-/** Action payload accepted by one image perso. */
-export type ImageAction = ImageState
+import type { ImageInitial, ImageState } from './image-types'
 
 const IMAGE_BASE_CLASS = 'cp-img-inner'
-
-/** Validates one image initial payload, including the deliberate fitMode removal. */
-export const validateImageInitial: ValidationFunction = (value, context) => {
-  if (!isComponentRecord(value)) {
-    reportInvalidComponentValue(context, 'AUTHOR_IMAGE_INITIAL_INVALID', 'img initial state must be a plain object.')
-    return
-  }
-
-  validateImageFields(value, context, 'initial')
-}
-
-/** Validates one image action payload without accepting the retired fitMode field. */
-export const validateImageAction: ValidationFunction = (value, context) => {
-  if (!isPlainRecord(value)) return
-  validateImageFields(value, context, 'action')
-}
 
 /** V2 image component preserving one materialized `<img>` node per source. */
 export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
@@ -73,7 +31,7 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
       attr: input.state.attr,
     })
 
-    if (typeof input.state.src === 'string') this.setActiveSource(input.state.src)
+    if (input.state.src !== undefined) this.setActiveSource(input.state.src)
     const active = this.activeSource === null ? undefined : this.imageBySource.get(this.activeSource)
     if (active !== undefined) this.applyImageState(active, input.state)
   }
@@ -92,7 +50,7 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
 
   /** Applies non-source state to one persistent image node. */
   private applyImageState(node: unknown, state: ImageInitial | ImageState): void {
-    if (typeof state.alt === 'string') setImageAlt(node, state.alt)
+    if (state.alt !== undefined) setImageAlt(node, state.alt)
     if (state.img !== undefined) {
       this.services.apply(node, {
         className: state.img.className,
@@ -116,31 +74,6 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
       wrapper.appendChild(image)
     }
     this.activeSource = source
-  }
-}
-
-/** Validates image-specific fields independently from shared service validators. */
-function validateImageFields(
-  value: Record<string, unknown>,
-  context: Parameters<ValidationFunction>[1],
-  scope: 'initial' | 'action',
-): void {
-  if ('fitMode' in value) {
-    reportInvalidComponentValue(
-      context,
-      'AUTHOR_IMAGE_FIT_MODE_REMOVED',
-      'img.fitMode is not part of the V2 contract; use img.style.objectFit.',
-      'fitMode',
-    )
-  }
-  if (value.src !== undefined && typeof value.src !== 'string') {
-    reportInvalidComponentValue(context, 'AUTHOR_IMAGE_SRC_INVALID', `img ${scope} src must be a string.`, 'src')
-  }
-  if (value.alt !== undefined && typeof value.alt !== 'string') {
-    reportInvalidComponentValue(context, 'AUTHOR_IMAGE_ALT_INVALID', `img ${scope} alt must be a string.`, 'alt')
-  }
-  if (value.img !== undefined && !isPlainRecord(value.img)) {
-    reportInvalidComponentValue(context, 'AUTHOR_IMAGE_PART_INVALID', 'img.img must be a plain object.', 'img')
   }
 }
 

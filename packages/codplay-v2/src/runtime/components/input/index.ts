@@ -1,13 +1,16 @@
 export {
   InputComponent,
-  INPUT_STANDARD_ACTIONS,
-  resolveInputStandardActions,
-  resolveInputState,
   correctionIconPartId,
   selectionIconPartId,
-  validateInputAction,
-  validateInputInitial,
 } from './input-component'
+export {
+  INPUT_STANDARD_ACTIONS,
+  isSelectedInput,
+  resolveCorrectionLabel,
+  resolveInputStandardActions,
+  resolveInputState,
+} from './input-state'
+export { sanitizeInputAction, sanitizeInputInitial, validateInputAction, validateInputInitial } from './input-validation'
 export {
   resolveCorrectionState,
   resolveInputControlStateClasses,
@@ -21,5 +24,5 @@ export type {
   InputPartDefinition,
   InputState,
   ResolvedInputState,
-} from './input-component'
+} from './input-types'
 export type { InputVisualState } from './input-visual-state'

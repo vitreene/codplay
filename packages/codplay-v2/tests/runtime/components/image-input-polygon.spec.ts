@@ -9,8 +9,13 @@ import { HtmlComponentMaterializer, SvgComponentMaterializer } from '../../../sr
 import { correctionIconPartId, selectionIconPartId } from '../../../src/runtime/components/input'
 import {
   resolvePolygonPathString,
+  sanitizeInputInitial,
+  sanitizePolygonAction,
+  sanitizePolygonInitial,
   validateImageInitial,
   type ComponentActionOccurrence,
+  type InputState,
+  type PolygonState,
 } from '../../../src/runtime/components'
 import type { CompiledScene } from '../../../src/scene/compiled'
 import { SceneBuilder } from '../../../src/scene/compiled'
@@ -93,7 +98,7 @@ describe('V2 core image, input and polygon components', () => {
     const markup = createMarkup()
     const modules = new Map([['markup', markup]])
     const identity = { componentId: 'quiz:answer-a', storyId: 'quiz', componentType: 'input' }
-    const initial = {
+    const initial = sanitizeInputInitial({
       inputType: 'radio',
       id: 'answer-a-control',
       name: 'answer',
@@ -104,7 +109,7 @@ describe('V2 core image, input and polygon components', () => {
       selectionIcon: { content: '✓' },
       correctionIcon: { correctContent: '+', incorrectContent: '-' },
       visualState: 'selected' as const,
-    }
+    }) as InputState
     const component = catalog.createComponent(
       'input',
       { perso: { id: 'answer-a', storyId: 'quiz', initial, actions: {} } },
@@ -140,11 +145,19 @@ describe('V2 core image, input and polygon components', () => {
     const nodes = createNodeMaps()
     const materializer = new SvgComponentMaterializer(nodes)
     const identity = { componentId: 'shape:polygon', storyId: 'shape', componentType: 'polygon' }
-    const initial = { sides: 3, outer: 40, content: 'triangle' }
-    const target = { sides: 7, inner: 18, outer: 40, rotationDeg: 12, content: 'heptagram' }
+    const initial = sanitizePolygonInitial({ sides: 3, outer: 40, content: 'triangle' }) as PolygonState
+    const targetAction = sanitizePolygonAction({
+      sides: 7,
+      inner: 18,
+      outer: 40,
+      rotationDeg: 12,
+      content: 'heptagram',
+    })
+    const morphOptions = sanitizePolygonAction({ morph: { duration: 1000 } }).morph as PolygonState['morph']
+    const target = { ...initial, ...targetAction } as PolygonState
     const component = catalog.createComponent(
       'polygon',
-      { perso: { id: 'polygon', storyId: 'shape', initial, actions: { morph: { morph: { duration: 1000 }, ...target } } } },
+      { perso: { id: 'polygon', storyId: 'shape', initial, actions: { morph: { morph: morphOptions, ...targetAction } } } },
       identity,
       materializer,
       new Map(),
@@ -163,9 +176,9 @@ describe('V2 core image, input and polygon components', () => {
       startAt: 0,
       elapsedMs: 0,
       eventId: 'morph-1',
-      action: { morph: { duration: 1000 }, ...target },
+      action: { morph: morphOptions, ...targetAction },
     }
-    const targetState = { ...initial, ...target, morph: { duration: 1000 } }
+    const targetState = { ...target, morph: morphOptions } as PolygonState
     component.update({ state: targetState, timeMs: 0, activeActions: [occurrence] })
     const startPath = path.getAttribute('d')
     component.update({ state: targetState, timeMs: 500, activeActions: [{ ...occurrence, elapsedMs: 500 }] })
