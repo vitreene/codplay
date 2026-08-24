@@ -1,9 +1,35 @@
-# Media component V2
+# Composant media V2
 
-> Status: Fini
-> CodPlay version: V2 foundation
+> Statut : Fini
+> Version CodPlay : V2 foundation
 
-`media-types.ts` is the perso profile, `media-validation.ts` owns authored
-source and broadcast diagnostics, and `media-component.ts` owns persistent
-native nodes and runtime playback operations. Media metadata and clocks remain
-runtime concerns rather than compile-time data defaults.
+## Rôle
+
+Le composant `media` affiche et pilote une vidéo ou un son. Il conserve les
+nœuds natifs nécessaires aux différentes sources déclarées par le `perso`.
+
+## Fonctionnement
+
+Le profil `MediaInitial` décrit la source, la balise éventuelle, les contrôles
+et le rôle de source temporelle. `media-validation.ts` vérifie le profil et les
+actions de diffusion. Les métadonnées de durée viennent du preload ; elles ne
+sont pas inventées par le composant.
+
+## Organisation interne
+
+- `media-types.ts` décrit les profils et l'état média ;
+- `media-validation.ts` porte les diagnostics de source et de diffusion ;
+- `media-component.ts` conserve les nœuds, le temps natif, la lecture et les
+  transitions ;
+- `index.ts` expose le composant et sa surface de types.
+
+La synchronisation avec l'horloge CodPlay est déléguée à la capacité
+`media-sync`, via la surface publique du composant.
+
+## Contrat et limites
+
+- une source n'est jamais réassignée à un nœud déjà créé ;
+- un seek ou un detach ne détruit pas les nœuds persistants ;
+- les nœuds sont libérés à la destruction finale du player ;
+- le composant ne déclenche pas de preload implicite ;
+- les contrôles de données auteur restent dans le fichier de validation.

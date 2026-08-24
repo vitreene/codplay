@@ -1,84 +1,78 @@
-# Media sync V2
+# Synchronisation média V2
 
-> Status: En cours
-> CodPlay version: V2 foundation
+> Statut : En cours
+> Version CodPlay : V2 foundation
 
-## Role
+## Rôle
 
 `media-sync` synchronise les composants `media` avec l'horloge du player. Il
-est enregistré comme module core dans le catalogue runtime et créé une fois par
-instance de player. Il ne précharge pas les ressources et ne lit pas le DOM
-directement : il appelle l'API exposée par le composant materialisé.
+est créé une fois par player et utilise les opérations publiques du composant
+pour lancer, arrêter, positionner et faire évoluer un média.
 
-## Contrat
+Il ne précharge pas les ressources et ne lit pas directement le DOM. Le
+preload prépare les métadonnées séparément ; `media-sync` ne reçoit que les
+informations et les surfaces dont il a besoin.
 
-- les actions compilées `broadcast` acceptent `START`, `PAUSE` et `STOP` ;
-- `broadcast.startAt` et `broadcast.endAt` définissent la fenêtre de lecture
-  effective ; toute position appliquée est clampée dans cette fenêtre ;
-- `broadcast.transition` est transmis au composant pour interpoler les
-  propriétés de lecture déclarées (`from`, `to`, `duration`) ;
-- `initial.master: true` marque une source temporelle candidate ; ce n'est pas
-  un nouveau type de composant ;
-- le master actif fournit le temps logique à CodPlay ; le module ne le corrige
-  pas pendant la lecture ordinaire ;
-- lorsque plusieurs candidats sont actifs, le dernier `START` appliqué est
-  prioritaire ; si le master devient indisponible, inactif, en pause ou
-  terminé, le temps CodPlay revient au ticker ;
-- un média à timeline native non-master avance avec sa propre horloge ; il n'est
-  pas repositionné à chaque frame ;
-- les médias déjà pilotés par le ticker restent dans leur circuit normal ;
-- avant un seek, les médias natifs actifs sont mis en pause ; la scène est
-  ensuite reconstruite, les positions sont repositionnées et la lecture reprend
-  éventuellement ;
-- un seek reconstruit les positions sans détruire ni recharger les nodes média ;
-- un seek arrière rejoue les broadcasts actifs, y compris après que le média
-  natif a atteint sa fin ;
-- la durée utilisée pour la fin d'un média vient des métadonnées produites par
-  le preload, et non de `HTMLMediaElement.duration` ;
-- `setRate(rate)` est propagé aux composants media et à leurs nodes natives ; le
-  master reste la source de l'horloge et n'est pas corrigé par le ticker à
-  chaque frame ;
-- les nodes ne sont libérées qu'au teardown final du player.
+## Fonctionnement
 
-La correction de dérive en lecture continue est une optimisation ultérieure. Elle
-ne fait pas partie de cette étape et ne pourra concerner que les médias natifs
-non-master, jamais la source `master`.
+Les actions compilées `broadcast` acceptent `START`, `PAUSE` et `STOP`.
+`startAt` et `endAt` définissent la fenêtre de lecture effective et toute
+position appliquée reste dans cette fenêtre. Une transition peut interpoler les
+propriétés déclarées par `from`, `to` et `duration`.
 
-Le `preload` reste une capacité externe. `HtmlPlayerRunner.run()` l'enchaîne
-explicitement avant `init()` et `play()` pour la diffusion autonome, mais
-`media-sync` n'en dépend pas par un circuit implicite.
+`initial.master: true` désigne un média candidat pour fournir l'horloge logique
+de CodPlay. Ce n'est pas un nouveau type de composant. Lorsque plusieurs
+candidats sont actifs, le dernier `START` appliqué est prioritaire. Si le master
+devient indisponible, inactif, en pause ou terminé, le player revient à son
+horloge de secours.
 
-## Frontière d'implémentation
+Un média non-master qui possède sa propre horloge native avance sans être
+repositionné à chaque frame. Les médias déjà pilotés par l'horloge de secours
+restent dans leur circuit normal.
 
-`media-sync-capability.ts` est la façade du module player-scoped de cette
-tranche. Elle lit les actions de la `SolvedScene` et appelle la surface
-`MediaSyncRuntimeComponent`, qui reste indépendante du DOM et peut donc être
-fournie par le materializer approprié. Aucun second runtime de synchronisation
-ne concurrence ce module. La surface arrive par le
-`RuntimeComponentSurfaceResolver` du contexte module ; le module demande
-`getSurface(runtimeItemId, 'media')` et ne récupère pas le composant concret.
-La résolution est typée à la déclaration du catalogue et ne comporte pas de
-duck typing à l'exécution.
+Avant un seek, les médias actifs sont mis en pause. La scène est reconstruite,
+les positions sont appliquées et la lecture reprend si nécessaire. Le seek ne
+détruit ni ne recharge les nœuds média ; un seek arrière rejoue les broadcasts
+actifs, même après la fin native du média.
 
-La façade délègue ses responsabilités à des modules spécialisés du même
-dossier :
+## Organisation interne
+
+La façade `media-sync-capability.ts` lit les actions de la scène résolue et
+demande la surface `media` au `RuntimeComponentSurfaceResolver`. Elle ne reçoit
+jamais la classe concrète du composant et n'utilise pas d'inspection dynamique
+de ses méthodes.
+
+Ses sous-modules sont spécialisés :
 
 - `media-sync-state.ts` initialise et conserve l'état logique par média ;
-- `media-sync-broadcasts.ts` lit, ordonne et identifie les occurrences
-  compilées ;
-- `media-sync-playback.ts` applique les transitions, fenêtres, resets et
-  synchronisations avec la surface média ;
-- `media-sync-types.ts` porte les types internes de cette frontière.
+- `media-sync-broadcasts.ts` lit, ordonne et identifie les occurrences ;
+- `media-sync-playback.ts` applique fenêtres, transitions, resets et
+  synchronisations ;
+- `media-sync-types.ts` décrit les contrats internes.
 
-## Preuves
+## Contrat et limites
 
-- `tests/runtime/capabilities/media-sync-module.spec.ts` couvre master,
-  arbitrage du master précédent, fallback ticker, absence de seek par frame,
-  pause avant seek, seek, transition et rate ;
-- `tests/runtime/runner/html-player-runner.spec.ts` couvre la persistance
-  `node-per-src`, le choix audio/vidéo par métadonnée et le rate natif ;
+- la durée de fin d'un média vient des métadonnées du preload, pas de
+  `HTMLMediaElement.duration` ;
+- `setRate(rate)` est propagé au composant et à ses nœuds natifs ;
+- le master reste la source de l'horloge et n'est pas corrigé par le ticker à
+  chaque frame ;
+- les nœuds média sont libérés uniquement lors de la destruction finale du
+  player ;
+- la correction de dérive en lecture continue est une optimisation ultérieure
+  et ne concernera que les médias non-master ;
+- `HtmlPlayerRunner.run()` enchaîne explicitement preload, init et play, mais
+  `media-sync` n'en dépend pas par un circuit implicite.
+
+## Vérification
+
+- `tests/runtime/capabilities/media-sync-module.spec.ts` couvre le master, son
+  arbitrage, l'horloge de secours, le seek, les transitions et le rate ;
+- `tests/runtime/runner/html-player-runner.spec.ts` couvre les nœuds persistants
+  par source, le choix audio/vidéo et le rate natif ;
 - `tests/runtime/preload/runtime-preload.spec.ts` couvre la propagation des
   métadonnées de durée ;
-- `demos/validation/player` valide le preload externe et le circuit de lecture
-  média ; la validation visuelle Safari reste ouverte à cause d'un écran noir
-  signalé pendant la lecture vidéo.
+- `demos/validation/player` valide le preload externe et le circuit média.
+
+La validation visuelle Safari reste ouverte à cause d'un écran noir signalé
+pendant la lecture vidéo.

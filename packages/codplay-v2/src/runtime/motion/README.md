@@ -1,139 +1,127 @@
-# Motion Graph V2
+# Graphe de mouvement V2
 
-> Status: Fini — graphe motion V2 foundation
-> CodPlay version: V2 foundation
-> Review: frontières move/action, résolution Play/Seek et absence de lecture géométrique par frame validées le 2026-08-23
+> Statut : Fini — graphe de mouvement V2 foundation
+> Version CodPlay : V2 foundation
+> Relecture : frontières move/action, résolution Play/Seek et absence de lecture géométrique par frame validées le 2026-08-23
 
-## Contract
+## Rôle
 
-The motion module transforms immutable structural layout boundaries into one
-immutable temporal graph indexed by item.
+Le module de mouvement transforme les changements de structure et de position
+en une description temporelle immuable. Cette description permet de connaître la
+pose d'un élément à n'importe quel instant, pour Play comme pour Seek.
+
+Le module ne possède ni nœud DOM, ni état de transport, ni animation mutable.
+Il produit uniquement des données consommées par le runner et le materializer.
+
+## Fonctionnement
 
 ```text
-Compiled movement/action intents
-  + LayoutSnapshot(before boundary/action)
-  + LayoutSnapshot(after boundary/action)
+Intentions de mouvement compilées
+  + géométrie avant et après la frontière
   -> MotionGraph
-  -> resolvePresentationFrame(graph, currentLayout, t)
+  -> resolvePresentationFrame(graph, layoutCourant, t)
 ```
 
-It has no DOM handles, no transport state and no mutable animation ownership.
+Une frontière correspond à un changement précis de la scène. Le graphe conserve
+les poses de départ et d'arrivée, puis calcule la pose demandée à partir du
+temps absolu `t`.
 
-## Data model
+## Organisation interne
 
-- `LayoutSnapshot`: selected measured item map with target, logical parent,
-  parent-relative pose and root-relative pose. The parent-relative pose is the
-  only local reference used by presentation; no offset from an intermediate DOM
-  wrapper is exported into the motion contract. The runner adds only the
-  ancestor and target-child closure required by the boundary.
-- `MotionBoundary`: exact before/after layouts caused by one event boundary and
-  its direct movement intents. For an action-owned pose transition, `before` is
-  captured at the action start and `after` at `start + delay + duration`.
-- `ItemMotionTrack`: chronological segments owned by one item.
-- `MotionAttachment`: parent ID, target ID, local pose and root fallback for one
-  endpoint.
-- `MotionGraph.presentationItemIds`: the items that own a trajectory requiring
-  presentation, prepared once from the boundary scopes. Their parent context
-  remains in the captured snapshots; the frame resolver does not enumerate
-  unrelated items from the current layout.
-- `PresentationFrame`: current pose and requested representation only for the
-  trajectory owners that need presentation at an absolute time.
+- `LayoutSnapshot` contient les éléments mesurés, leur cible, leur parent
+  logique et leurs poses relatives au parent et à la racine. La pose relative
+  au parent est la seule référence locale publiée ; le runner ajoute seulement
+  les ancêtres nécessaires au calcul ;
+- `MotionBoundary` contient les layouts exacts avant et après un événement. Pour
+  une transition portée par une action, l'après est capturé à
+  `start + delay + duration` ;
+- `ItemMotionTrack` contient les segments chronologiques d'un élément ;
+- `MotionAttachment` décrit le parent, la cible, la pose locale et le fallback
+  vers la racine ;
+- `MotionGraph.presentationItemIds` liste uniquement les éléments qui possèdent
+  une trajectoire à présenter ;
+- `PresentationFrame` contient la pose et la représentation demandées pour ces
+  éléments à un instant donné.
 
-For a structural `move`, the captured target closure includes every item whose
-target is the source or destination target at that boundary. This includes a
-future direct mover when it is a current list participant: its natural layout
-must remain available so the graph can present the list reflow. An item captured
-only as an ancestor dependency is handled differently: if it owns another
-motion track, its dependency snapshot must not overwrite that track's natural
-timeline. This distinction keeps list reflows animated without retargeting an
-unrelated parent.
+Lors d'un `move` structurel, la capture inclut tous les éléments des cibles
+source et destination. Un élément qui possède aussi un mouvement direct ultérieur
+reste disponible pour animer le reflow de la liste, mais son instantané naturel
+ne peut pas écraser sa propre trajectoire. Un élément capturé seulement comme
+ancêtre reste une dépendance de calcul et ne devient pas automatiquement
+propriétaire d'un segment.
 
-## Planning
+## Planification
 
-At each boundary the planner closes the dependency scope over the direct movers,
-the source/target reflow items and every ancestor up to the root. It compares the
-selected local attachments, but only direct movers and reflow items may own a
-segment. Ancestors remain in the scope so the resolver can inspect their own
-segment, if they have one, before falling back to their natural pose. A child
-whose local attachment is unchanged does not duplicate its ancestor's segment;
-it follows through recursive composition. The `before` snapshot is the source
-layout supplied for that boundary; no capture-specific marker or second motion
-algorithm is used.
+À chaque frontière, le planificateur ferme la portée sur les éléments en
+mouvement, les éléments réordonnés et les ancêtres jusqu'à la racine. Il compare
+les attaches locales sélectionnées, mais seuls les mouvements directs et les
+éléments du reflow possèdent un segment. Les ancêtres restent disponibles pour
+composer leur propre trajectoire si nécessaire.
 
-The runner may compile two schedules from the same journal: the current
-presentation schedule excludes `persist-only` facts, while a reconstruction
-schedule includes them. Both schedules are converted to the same
-`MotionBoundary` and resolved by the same graph. Consequently, a live
-`endEmit` uses the current visible FIRST layout, whereas a seek uses the
-persisted logical source-to-target boundary without retaining a live-capture
-branch in the graph.
+Le runner peut produire deux plannings à partir du même journal :
 
-The HTML runner compiles the schedule when the visible journal is initialized,
-after a completed live capture, and after a resize. The schedule contains both
-`move.transition` declarations and materializer-specific action transitions that
-produce a geometric pose. `HtmlMotionSystem` receives only the resulting
-immutable `MotionBoundary[]`; it does not inspect the journal, discover actions
-or maintain a compatibility sampler. Natural geometry is captured at the
-corresponding FIRST/LAST boundaries (or after an explicit structural
-invalidation), then retained as data in the presentation state. During a frame,
-the motion system resolves the same graph without asking the DOM for a new
-layout or creating a measurement tree.
+- le planning de présentation courante exclut les faits `persist-only` ;
+- le planning de reconstruction les inclut.
 
-Direct intent timing applies to its item, including its optional delay. Other
-reflow items use the longest effective timing at that boundary. A target or
-parent change forces presentation mode `reparent`; otherwise the optional author
-hint selects `local` or `reparent`.
+Les deux utilisent les mêmes `MotionBoundary` et le même graphe. Ainsi, un
+`endEmit` live conserve la première géométrie visible, tandis qu'un seek utilise
+la frontière logique persistée sans conserver une branche spéciale de capture.
 
-When a boundary overlaps an existing segment, the destination is retargeted at
-the exact boundary while the existing segment keeps its phase, authored path and
-end time. Its virtual source is solved in the same geometry used by path
-interpolation, so the pose remains continuous for both linear and curved
-trajectories. No active segment is restarted from easing progress zero,
-cancelled globally or replaced by a logical endpoint.
+Le planning est compilé à l'initialisation du journal visible, après une capture
+live terminée et après un resize. Il contient les transitions `move.transition`
+et les transitions d'action qui produisent une pose géométrique. La géométrie
+naturelle est capturée aux frontières FIRST/LAST correspondantes ou après une
+invalidation structurelle explicite, puis conservée comme donnée.
 
-## Resolution
+Une intention directe conserve son délai et son timing. Les éléments réordonnés
+utilisent le timing effectif le plus long de la frontière. Un changement de
+cible ou de parent impose le mode `reparent`; sinon l'indication de l'auteur
+peut choisir `local` ou `reparent`.
 
-Resolution is pure and item-scoped:
+Lorsqu'une frontière recouvre un segment existant, le segment est recalé sur la
+pose visuelle déjà résolue. Sa phase, sa trajectoire et sa date de fin restent
+inchangées. Aucun segment actif n'est redémarré à zéro, annulé globalement ou
+remplacé par un simple point final.
 
-1. select only the trajectory owners in the prepared `presentationItemIds`;
-2. select the latest segment active for the item at `t`;
-3. evaluate the item's current pose, using captured parent context privately
-   when an independently moving parent affects its world position;
-4. interpolate the stored source/destination attachments with ACE easing/path;
-5. emit only the item's presentation entry.
+## Résolution
 
-The parent influence cannot be discarded: independently moving ancestors change
-the exact world pose of a child. What is removed from the frame path is the
-generic traversal of the whole layout and the construction of presentation
-entries for unchanged ancestors and descendants. The graph closes the
-dependency scope during preparation; the frame computes only trajectory-owner
-poses, with no DOM read and no measurement tree. Parent arithmetic remains an
-internal dependency of the requested item's exact pose; it is not a second
-presentation trajectory or a second output entry.
+La résolution est pure et limitée aux éléments qui possèdent une trajectoire :
 
-An ancestor's presence in this walk does not by itself create a FLIP segment.
-If that ancestor has its own declared structural transition, its segment is
-composed normally. If it has no structural segment, its natural materializer
-pose remains the provider for the descendant. This is the boundary between
-motion ownership and hierarchical pose composition.
+1. sélectionner les identifiants préparés dans `presentationItemIds` ;
+2. trouver le dernier segment actif à l'instant `t` ;
+3. calculer la pose de l'élément, en utilisant si nécessaire le contexte privé
+   de ses parents en mouvement ;
+4. interpoler les attaches avec l'easing et le chemin ACE ;
+5. produire uniquement l'entrée de présentation de l'élément.
 
-The same graph and current natural layout always produce the same frame. Calling
-the resolver for earlier times has no effect on later calls.
+Un parent en mouvement ne peut pas être ignoré : il modifie la pose mondiale de
+son enfant. Cependant, sa présence dans le calcul ne crée pas de nouvelle entrée
+de présentation s'il ne possède pas son propre segment. Le graphe prépare cette
+dépendance à l'avance et la frame ne parcourt pas toute la mise en page.
 
-An action-owned HTML pose transition remains in the graph for descendant
-composition, but its source service owns the author-node pose. The HTML host
-therefore presents that item as `source` and does not apply a second local
-matrix; descendants still resolve against the graph's pose.
+Le même graphe et la même géométrie naturelle produisent toujours la même frame.
+Résoudre une frame ancienne ne modifie pas les résolutions suivantes.
 
-The HTML runner clears its previous local presentation before capturing the
-current natural layout. Stable overlay resources remain outside normal layout
-and are reused; they are released only when inactive or destroyed. A resize
-therefore recaptures against the resized author nodes rather than against a
-previous animation transform, without recreating stable overlay DOM.
+Une transition de pose HTML portée par une action reste dans le graphe pour la
+composition des descendants, mais son service possède la pose du nœud auteur.
+Le host HTML ne lui applique donc pas une seconde matrice locale.
 
-## Presentation inference
+## Inférence de la présentation
 
-- same target: `local` by default;
-- different target or logical parent: `reparent`;
-- explicit `flipMode: 'overlay-world'`: `reparent` even when target is unchanged;
-- explicit `local` cannot downgrade an actual target/parent change.
+- même cible : `local` par défaut ;
+- cible ou parent logique différent : `reparent` ;
+- `flipMode: 'overlay-world'` : `reparent`, même si la cible ne change pas ;
+- `local` ne peut pas annuler un véritable changement de cible ou de parent.
+
+## Contrat et limites
+
+- aucune lecture du DOM pendant la résolution d'une frame ;
+- aucune création d'arbre de mesure ;
+- les instantanés de géométrie contiennent des données, jamais des références
+  DOM ;
+- chaque élément possède ses segments temporels indépendamment ;
+- l'influence des parents est composée récursivement ;
+- une trajectoire locale recouverte conserve sa phase d'interpolation ;
+- une seule source ou représentation indépendante est visible par élément ;
+- les poses HTML utilisent des origines affines et des matrices ;
+  `rect.left/top` restent de simples valeurs AABB dérivées.

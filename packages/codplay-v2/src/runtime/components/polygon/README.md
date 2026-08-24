@@ -1,15 +1,32 @@
-# Polygon component V2
+# Composant polygon V2
 
-> Status: Fini
-> CodPlay version: V2 foundation
+> Statut : Fini
+> Version CodPlay : V2 foundation
 
-This folder ports the tested V1 polygon geometry and projects it through the V2
-SVG materializer. Morphing is evaluated from absolute runtime time so Play and
-Seek share one deterministic result.
+## Rôle
 
-`polygon-types.ts` is the public persona profile: `PolygonInitial` is the type
-accepted as `perso.initial`, and `PolygonAction` is the partial update shape.
-`polygon-validation.ts` validates and sanitizes those profiles at compilation.
-`polygon-geometry.ts` contains only pure operations on the resulting complete
-numeric geometry state; `polygon-component.ts` performs the SVG projection and
-temporal orchestration without reintroducing author-data validation.
+Le composant `polygon` affiche une forme SVG avec un contenu textuel. Il
+reprend la géométrie V1 testée et peut interpoler deux formes pendant une
+transition.
+
+## Fonctionnement
+
+Le profil `PolygonInitial` décrit les côtés, les rayons, la rotation,
+l'inflexion et le morphing éventuel. La compilation vérifie ce profil et rend
+explicites les valeurs numériques nécessaires. Play et Seek évaluent ensuite le
+même résultat à partir du temps absolu.
+
+## Organisation interne
+
+- `polygon-types.ts` décrit les données auteur et les états complets ;
+- `polygon-validation.ts` vérifie et complète les profils ;
+- `polygon-geometry.ts` calcule les sommets, chemins, resamplings et
+  interpolations sans connaître le DOM ;
+- `polygon-component.ts` applique le chemin et le contenu au SVG ;
+- `index.ts` expose le composant et les fonctions géométriques.
+
+## Contrat et limites
+
+La classe runtime ne revalide pas les valeurs auteur. Elle orchestre seulement
+la projection SVG et le temps de transition ; les algorithmes géométriques
+restent purs et testables séparément.

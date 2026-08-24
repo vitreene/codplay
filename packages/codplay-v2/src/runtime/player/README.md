@@ -1,132 +1,122 @@
-# Player
+# Lecteur runtime V2
 
-> Status: Fixe
-> CodPlay version: V2 foundation
-> Review: contrat Engine/Player et seek groupé validés le 2026-08-20; renderer de production et capacités supplémentaires restent ouverts
+> Statut : Fixe
+> Version CodPlay : V2 foundation
+> Relecture : contrat Engine/Player et seek groupé validés le 2026-08-20 ; renderer de production et capacités supplémentaires restent ouverts
 
-## Role
+## Rôle
 
-`RuntimePlayer` evaluates one immutable `CompiledScene` at an absolute logical
-time. Its canonical pipeline is:
+`RuntimePlayer` évalue une scène compilée à un instant logique donné. Il pilote
+le cycle de vie, synchronise les composants et demande au materializer d'appliquer
+la structure résolue.
+
+Il ne mesure pas la géométrie du navigateur et ne possède pas l'horloge
+d'animation. Ces responsabilités restent au runner, au materializer et aux
+capacités spécialisées.
+
+## Fonctionnement
+
+Le chemin commun à Play, Seek et à la capture de géométrie est :
 
 ```text
-CompiledScene + time
+CompiledScene + temps
   -> materialize
   -> resolve
   -> solve
   -> SolvedScene + SolvedGraph
 ```
 
-The player owns lifecycle, component synchronization and the structural
-materializer boundary.
-It does not measure browser geometry and does not own an animation clock.
+Le player synchronise chaque composant une fois, puis transmet la scène complète
+au materializer pour le commit structurel et l'éventuelle présentation de
+mouvement. Il n'existe pas de chemin visuel spécial pour `advance`, de replay
+historique séparé ou de carte d'ordre possédée par un module.
 
-## Internal boundaries
+`SolvedGraph` est la source unique pour le parent logique, la cible opaque,
+l'ordre complet des enfants, les racines montées et la révision structurelle.
+`flipMode` reste une indication de présentation ; il ne modifie ni la résolution
+des cibles ni l'ordre structurel.
 
-`RuntimePlayer` remains the public lifecycle facade. Its internal domains are
-organized as follows:
+## Organisation interne
 
-- `capture/` resolves compiled action targets, applies live capture actions,
-  reconciles capture state updates, and owns capture-specific types;
-- `scene/` contains the pure `materialize -> resolve -> solve` reconstruction;
-- `modules/` contains module notifications, clock delegation, structural-order
-  composition, move-delta routing, and staged seek aborts;
-- `diagnostics/` converts solved move issues into detached player reports.
+`RuntimePlayer` reste la façade publique du cycle de vie. Ses dossiers internes
+ont des responsabilités distinctes :
 
-These helpers receive explicit player-owned dependencies. They do not create a
-second player, journal, state store, module registry, or seek circuit.
+- `capture/` résout les cibles d'actions compilées, applique les actions live,
+  fusionne l'état de capture et porte ses types ;
+- `scene/` contient la reconstruction pure `materialize -> resolve -> solve` ;
+- `modules/` délègue les notifications, l'horloge native, l'ordre structurel,
+  les deltas de mouvement et l'annulation du seek ;
+- `diagnostics/` transforme les problèmes de mouvement en rapports détachés.
 
-## Structural timeline
+Ces fonctions reçoivent leurs dépendances depuis le player. Elles ne créent ni
+player, ni journal, ni registre de modules, ni circuit de seek parallèle.
 
-`StructuralTimeline` builds complete immutable child-order snapshots from
-compiled event boundaries. It replaces mutable list replay and historical module
-state. Every `SolvedScene` receives the order selected by that same timeline,
-whether its caller is Play, Seek or the runner's explicit visible-node geometry
-capture phase.
+`StructuralTimeline` produit les instantanés immuables d'ordre des enfants à
+partir des frontières d'événements compilées. Il remplace la relecture d'une
+liste mutable et l'état historique de modules.
 
-The timeline exposes both sides of an event boundary:
+La timeline distingue exactement les deux côtés d'une frontière :
 
-- `resolveAt(t)` includes events at `t`;
-- `resolveBefore(t)` excludes events at `t`.
+- `resolveAt(t)` inclut les événements à `t` ;
+- `resolveBefore(t)` les exclut.
 
-`materializeSceneBeforeBoundary()` implements the left-side evaluation directly;
-no numerical epsilon is used. An event at `0 ms` therefore has a real initial
-state and a distinct post-event state.
+`materializeSceneBeforeBoundary()` applique directement le côté gauche, sans
+epsilon numérique. Un événement à `0 ms` possède donc un état initial réel et un
+état post-événement distinct.
 
-## Presentation circuit
+## Événements et capture
 
-Play and Seek both commit through `RuntimeMaterializer.materializeScene(scene)`. The
-player synchronizes each component once, then gives the complete solved scene to
-the materializer for the structural commit and any optional motion presentation.
-There is no
-`advance`-specific visual
-path, historical replay path or module-owned child-order map.
+`RuntimePlayer.emit()` est l'entrée live. Il ajoute l'événement au
+`RuntimeTrackJournal`, choisit les règles de story avant le fallback de scène,
+exécute les transforms et les straps attendus, persiste les sorties sur leurs
+tracks et ne réinjecte que les `emit` déclarés, avec une profondeur bornée.
 
-`SolvedGraph` is the only source for:
+Un seul allocateur d'identifiants est partagé par les dispatchers ; un événement
+de début et son événement de fin ne peuvent donc pas entrer en collision.
 
-- logical parent by item;
-- opaque target by item;
-- complete child order by target;
-- mounted roots and structural revision.
+Le runner visible possède le journal. Play peut mettre à jour l'affichage
+immédiatement, puis un Seek relit les mêmes événements, sorties de straps et
+mises à jour d'état sans rappeler les straps ni les transforms. La capture de
+géométrie utilise le même hôte de composants persistant et ne crée pas un second
+player.
 
-The optional `flipMode` remains placement metadata for presentation consumers; it
-never changes target resolution or structural ordering.
+La façade de capture (`beginCapture`, `trackCapture`, `endCapture`,
+`cancelCapture`) ne dépend pas de la source. Les samples ne sont pas des
+événements. `endEmit` suit le circuit normal et transporte `data.captureState`
+à travers `listen -> strap -> state`. Les événements de `endCapture` suivent le
+même dispatch avec la position implicite `persist-only` et l'ancrage `now -
+duration`.
 
-## Runtime events
+Un fait `persist-only` est journalisé, mais reste hors de la tête de lecture
+pendant la fermeture courante ; une reconstruction ultérieure peut l'inclure.
+`beginCompiledCapture()` résout les fonctions compilées et utilise l'index fixe
+`actionTargetIndex` produit par le builder. Les références directes sont
+préparées à la construction ; une action live ne fait que lire cet index, puis
+la synchronisation de frame réapplique les cibles avec `Component.update()`.
 
-`RuntimePlayer.emit()` is the live entry point. It appends the source event to
-the player's declared `RuntimeTrackJournal`, selects story rules before scene
-fallback, executes transforms and awaited straps, persists strap outputs on
-their dedicated tracks, and reinjects only declared `emit` records with a
-bounded cascade depth.
+## Actions temporelles
 
-The player supplies one event-identity allocator to every dispatcher instance;
-successive live events therefore cannot collide when a capture start and its
-end are dispatched through separate calls.
+`ActionSequence` est développé pendant `materialize` en actions directes
+appartenant au `perso` qui a déclaré la clé. Cette expansion est pure : elle
+n'ajoute pas d'événement de continuation et ne crée pas de circuit de replay.
+Une occurrence plus récente remplace les étapes en attente de la même clé ; les
+étapes statiques déjà appliquées restent des faits et un `TweenAction` remplacé
+n'est plus évalué à sa cible.
 
-The visible runner owns this journal. Play may update the presentation
-immediately, while a later Seek reads the same source, emitted events, strap
-events and state updates without calling any strap or transform again. The
-runner's geometry-capture phase uses the same persistent component host and does
-not create a second player or playback circuit.
+`TweenAction` est résolu depuis la collection de fonctions compilées avec
+`progress = ease(clamp(elapsed / duration))`. Son résultat est appliqué comme une
+action statique. `tween:stop` est une frontière logique et ne devient pas un
+patch de perso.
 
-The player capture facade (`beginCapture`, `trackCapture`, `endCapture`,
-`cancelCapture`) is source-agnostic. Samples are not events. `endEmit` follows
-the ordinary event circuit and carries `data.captureState` through
-`listen -> strap -> state`; events returned by `endCapture` use that same
-dispatcher circuit with an implicit `persist-only` placement and the resolved
-`now - duration` anchor. A persist-only fact is journaled but remains outside
-the current playback head for the complete close transaction; a later
-reconstruction can include it.
-`beginCompiledCapture()` resolves the capture function references produced by
-the scene builder. The builder also emits the derived `actionTargetIndex` from
-the fixed compiled action table. The player prepares direct target references
-once at construction; a live `actionName` only reads that index and later frame
-synchronization reapplies the stored targets through `Component.update()`.
+## Contrat et limites
 
-## Temporal actions
-
-`ActionSequence` is expanded during `materialize` into direct actions owned by
-the perso that declared the key. The expansion is pure: it never appends
-continuation events or creates a second replay path. A later occurrence replaces
-the pending steps of the same key; already-applied static steps remain facts,
-while a replaced `TweenAction` is no longer evaluated at the target.
-
-`TweenAction` is resolved from the player's compiled function collection with
-`progress = ease(clamp(elapsed / duration))`. Its returned payload uses the same
-state application as a static action. `tween:stop` is intercepted as a logical
-boundary and does not become a perso patch.
-
-## Invariants
-
-- Logical state is never reconstructed from the DOM.
-- A target order contains every mounted child exactly once.
-- Boundary-side evaluation is explicit and scale-independent.
-- Component services are the only writers of authored DOM state.
-- Modules may observe move deltas, but cannot provide an alternative layout
-  history to Play or Seek.
-- `RuntimeTrackJournal` is the only live event history; no dispatch path creates
-  an undeclared track.
-- `seek()` is materialization-only for events, transforms and straps.
-- `ActionSequence` and `TweenAction` are derived and evaluated by the same
-  `materialize -> resolve -> solve` path for Play and Seek.
+- l'état logique n'est jamais reconstruit à partir du DOM ;
+- une cible contient chaque enfant monté exactement une fois ;
+- l'évaluation d'une frontière est explicite et indépendante de l'échelle ;
+- les services des composants sont les seuls écrivains de l'état DOM auteur ;
+- les modules peuvent observer les deltas, mais ne peuvent pas créer une autre
+  histoire de layout pour Play ou Seek ;
+- `RuntimeTrackJournal` est le seul historique live ;
+- `seek()` ne fait que matérialiser les événements, transforms et straps ;
+- `ActionSequence` et `TweenAction` utilisent le même chemin de reconstruction
+  pour Play et Seek.

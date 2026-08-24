@@ -1,180 +1,167 @@
-# DOM Runner V2
+# Présentation DOM V2 (runner)
 
-> Status: Fini — tranche HTML motion et materializer SVG DOM V2
-> CodPlay version: V2 foundation
-> Review: capture géométrique sans DOM dupliqué en validation; renderer de production hors périmètre
+> Statut : Fini — tranche HTML motion et materializer SVG DOM V2
+> Version CodPlay : V2 foundation
+> Relecture : capture géométrique sans DOM dupliqué validée ; renderer de production hors périmètre
 
-`HtmlComponentMaterializer` and `SvgComponentMaterializer` share the same DOM
-component and structural materialization circuit. The SVG entry point selects
-the `svg` materializer binding and rejects non-SVG roots; it does not create a
-second player or structural history.
+## Rôle
 
-## Role
+`HtmlPlayerRunner` relie une scène compilée, un `RuntimePlayer`, le catalogue
+runtime et une racine HTML visible. Il transforme les états résolus de la scène
+en affichage dans le navigateur.
 
-`HtmlPlayerRunner` binds a compiled scene, a `RuntimePlayer`, one
-`RuntimeCapabilityCatalog` composed during CodPlay initialization and one HTML
-root. Its presentation pipeline is unique:
+Le runner possède le circuit de présentation HTML. Il ne crée pas de deuxième
+player, de deuxième scène logique ou de deuxième historique pour animer les
+éléments.
+
+Le point d'entrée SVG réutilise le même circuit structurel. Il sélectionne le
+materializer SVG et refuse une racine qui n'est pas SVG ; il ne crée pas une
+nouvelle histoire structurelle.
+
+## Fonctionnement
+
+Le chemin de présentation est unique :
 
 ```text
 SolvedScene(t)
-  -> authored component sync
-  -> HTML layout materialization
+  -> synchronisation des composants auteur
+  -> materialization de la structure HTML
   -> resolvePresentationFrame(t)
-  -> atomic HTML motion presentation
+  -> commit atomique de la présentation HTML
 ```
 
-The HTML service bindings are assembled in `html-service-definitions.ts` and
-registered by the core runtime catalog. The service folders provide the pure
-validation declarations and the HTML adapter operations; they do not import the
-runtime catalog.
+Les services HTML sont assemblés dans `html-service-definitions.ts` et
+enregistrés par le catalogue core. Le runner reçoit le catalogue déjà composé
+par CodPlay ; il ne crée pas de registre local.
 
-## Internal boundaries
+Play et Seek utilisent exactement cette opération. Le runner conserve les
+frontières géométriques immuables nécessaires à la présentation et, pendant
+une capture live ouverte, le FIRST utilisé pour la remise `endEmit`. Il ne
+conserve jamais un arbre DOM historique et ne rejoue pas une branche spéciale
+de capture.
 
-The public runner imports remain stable while the two high-responsibility HTML
-presenters are split internally:
+Le planning de mouvement est compilé à l'initialisation du journal visible,
+après une capture live terminée et après un resize. Il contient les transitions
+`move.transition` et les transitions d'action qui modifient une pose. La boucle
+de frame résout le graphe conservé et l'état de présentation du materializer ;
+elle ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
+frame.
 
-- `html-motion-presentation/` owns overlay resource types, pose/matrix
-  geometry, and parent/descendant ordering helpers;
-- `html-list-dnd-preview/` owns preview types, hit-test geometry, pointer
-  decoding, ghost/floating effects, and the FLIP-facing controller helpers.
+## Organisation interne
 
-`HtmlMotionPresentationHost` and `HtmlListDndPreview` remain the only
-orchestrators for their respective circuits. These folders do not create a
-second materializer, player, motion system, or logical DnD path.
+Les deux présentateurs HTML qui concentrent le plus de responsabilités sont
+spécialisés dans leurs propres dossiers :
 
-Play and Seek invoke this exact operation. The runner retains only immutable
-geometry boundaries and, during an open live capture, the presentation-only
-FIRST snapshot needed by its current `endEmit` handoff. It never retains a
-historical DOM tree or a second replay circuit. Seek selects the replayable
-boundaries again; the live release pose is not replayed.
+- `html-motion-presentation/` contient les types de ressources temporaires, la
+  géométrie des poses et matrices, ainsi que l'ordre des parents et descendants ;
+- `html-list-dnd-preview/` contient la géométrie du hit-test, le décodage des
+  pointeurs, les ghosts, le nœud flottant et les helpers de prévisualisation
+  FLIP.
 
-The motion schedule is compiled from the visible player's shared journal at
-initialization, after a completed live capture, and after a resize. It includes
-compiled `move.transition` declarations and HTML action transitions that affect
-the geometric pose. Natural geometry is captured only at the corresponding
-boundaries or after an explicit structural invalidation. The frame loop resolves
-the cached graph and the materializer-owned presentation state; its frame output
-contains only items with a trajectory. Parent poses needed to compose those
-items remain private calculation context. It does not read the DOM, recapture the
-active closure or rebuild the schedule on every frame.
+`HtmlMotionPresentationHost` et `HtmlListDndPreview` restent les seuls
+orchestrateurs de leurs circuits respectifs. Ces dossiers ne créent ni nouveau
+materializer, ni nouveau player, ni nouveau système de mouvement, ni autre
+chemin logique de DnD.
 
-## Position capture for motion
+## Capture de géométrie
 
-The runner never creates a second HTML tree, player, engine or materializer for
-FLIP. When the schedule contains a `move` or an action-owned pose transition, an
-explicit position-capture phase reads
-the persistent author nodes of the visible root and stores immutable geometry
-snapshots. The phase first removes the runner-owned local transforms, size slots,
-masks from the previous presentation. Existing overlay resources are retained
-outside normal layout and reused; they are not a measurement tree. The phase
-then uses the same materializations for `before` and `after`, without playing
-media, reloading sources or destroying components. This reset is synchronous:
-no browser frame is rendered between the natural-geometry read and the new
-motion commit.
+Le runner ne construit pas un second arbre HTML pour le FLIP. Lorsqu'un
+`move` ou une transition de pose existe, une phase explicite :
 
-For a structural `move`, the capture includes all current children of its source
-and destination targets. A child that also has a later direct move is retained
-when it participates in this reflow, so its natural position can be animated
-from the current list state. A direct mover captured only as an ancestor
-dependency is not allowed to overwrite its own natural motion track.
+1. retire les transformations locales, réserves de taille et masques du frame
+   précédent ;
+2. lit les nœuds auteur persistants de la racine visible ;
+3. conserve des instantanés de géométrie immuables ;
+4. utilise les mêmes materializations pour le `before` et l'`after`.
 
-The reset also removes source masks left by the previous overlay frame. During
-the commit, existing ghosts are moved into the parent-first order required by
-the resolved frame; `appendChild` here reorders an existing node and does not
-create one. Independent descendant masks are tracked per frame and cleared
-before the next set is applied, so a reused ancestor ghost cannot retain a
-stale hidden child.
+Les overlays existants restent en dehors de la mise en page normale et sont
+réutilisés. Ils ne servent pas d'arbre de mesure. La capture ne joue pas les
+médias, ne recharge pas les sources et ne détruit pas les composants. Le reset
+est synchrone : aucun frame du navigateur ne s'intercale entre la lecture de la
+géométrie naturelle et le nouveau commit.
 
-The overlay does not emit neutral `translate`, `rotate` or `scale` declarations.
-Those longhands are neutralized with `none` only when the author source has a
-non-default value that would compose with the presentation matrix. This rule
-does not modify the `transition` declaration.
+Pour un `move` structurel, la capture inclut les enfants actuels des cibles
+source et destination. Un enfant qui possède aussi un mouvement direct ultérieur
+reste disponible pour animer le reflow de la liste. Un élément capturé seulement
+comme dépendance d'un ancêtre ne peut pas écraser sa propre trajectoire naturelle.
 
-This invariant concerns geometry capture. A `reparent` presentation may still
-own a transient overlay representation because the author node must remain in
-its logical materializer parent. The overlay is not a measurement tree and is
-not a second component materialization. Reusing an unchanged representation
-between frames is the normal path. The runner supplies a logical revision; the
-host synchronizes an existing template in place when its structure is stable and
-only creates a replacement after a structural invalidation.
+Le reset retire aussi les masques de source laissés par l'overlay précédent. Les
+ghosts existants sont remis dans l'ordre parent-avant-enfant ; `appendChild`
+réordonne alors un nœud existant et n'en crée pas un nouveau. Les masques des
+descendants indépendants sont suivis par frame et effacés avant l'application
+suivante, afin qu'un clone d'ancêtre réutilisé ne conserve pas un enfant caché.
 
-For active overlay items, the current logical revision includes the resolved
-author state so content and authored attributes remain synchronized. This
-revision is logical data; it is not obtained from the DOM and it is not part of
-pose resolution. A template revision may trigger an in-place synchronization,
-but that synchronization does not recreate the representation or recapture its
-geometry. Transform-longhand neutralization is measured only when a
-representation is created; a reused representation reapplies the recorded
-decision without a computed-style read.
+Le runner n'écrit pas de transformations neutres `translate`, `rotate` ou
+`scale`. Il les neutralise avec `none` seulement lorsqu'une valeur auteur non
+neutre entrerait en composition avec la matrice de présentation ; la déclaration
+`transition` n'est pas modifiée.
 
-For each compiled movement boundary it captures:
+Cette règle concerne la capture de géométrie. Une présentation `reparent` peut
+posséder une représentation temporaire parce que le nœud auteur doit rester
+dans son parent logique. Cet overlay n'est ni un arbre de mesure ni une seconde
+materialization de composant.
 
-- for a `move`: FIRST with `resolveSceneBeforeBoundary(startAt)`, then LAST
-  with `resolveSceneAt(startAt)` after the structural event;
-- for an action-owned pose transition: FIRST at `startAt`, then LAST at
+Le runner fournit une révision logique. Si la structure du template est stable,
+le host synchronise la représentation existante ; il ne la recrée qu'après une
+invalidation structurelle. La révision inclut l'état auteur résolu afin que le
+contenu et les attributs restent synchronisés. Elle ne provient pas du DOM et
+n'entre pas dans le calcul de pose.
+
+Pour chaque frontière compilée :
+
+- un `move` capture FIRST avec `resolveSceneBeforeBoundary(startAt)`, puis LAST
+  avec `resolveSceneAt(startAt)` après l'événement structurel ;
+- une transition de pose capture FIRST à `startAt`, puis LAST à
   `startAt + delay + duration`.
 
-The `move` LAST is therefore the immediate consequence of its event. The action
-LAST is the measured endpoint of that action, not a scene-wide future state. The
-snapshots supply geometry only;
-`SolvedGraph` supplies identity, order, target and parentage. The capture is
-limited to the moved items, affected siblings and the ancestor/descendant
-closure required to compose their poses.
+Le LAST d'un `move` est donc la conséquence immédiate de l'événement ; le LAST
+d'une action est son endpoint mesuré, pas un état futur de toute la scène. Si la
+scène ne contient aucun `move` transitionnel ni transition de pose du
+materializer, le runner n'initialise pas de système de mouvement, ne capture pas
+les positions et ne crée pas d'overlay.
 
-If the compiled scene has no transition `move` and no materializer-owned pose
-transition, the runner does not initialize a motion system, capture positions or
-create an overlay. A runtime move must be captured before its structural commit
-through the same pre-commit boundary.
+## Présentation locale et reparent
 
-## Local and reparent presentation
+Les deux modes utilisent la même pose résolue.
 
-Both modes consume the same resolved item pose.
+### Mode local
 
-### Local
+Le mode local applique les réserves de taille et les slots de transformation au
+nœud auteur dans son parent courant. Il est choisi par défaut lorsque la cible
+reste la même, notamment pour un réordonnancement dans une liste.
 
-Local presentation applies reserved size and transform slots to the real source
-node in its current parent. It is inferred when target identity is unchanged and
-is the default for an intra-list reorder.
+Les tailles locales actives sont écrites avant le calcul des matrices, dans un
+ordre parent-avant-enfant. Les frères réutilisent la matrice inverse de leur
+parent résolu. Un transform n'est réécrit que si la matrice affine ou le nœud
+source change.
 
-All active local sizes are written first, then matrices are solved parent-first.
-This prevents one item from calculating against a partially updated sibling
-layout.
+### Mode reparent
 
-Within one presentation frame, siblings reuse the inverse matrix of their
-resolved parent. A local transform is written to its source only when its
-resolved affine matrix or source node changes; unchanged local poses produce no
-new CSS write.
+Le mode `reparent` masque le nœud auteur et crée une représentation indexée dans
+l'overlay racine. Il est obligatoire lorsque la cible ou le parent logique
+change, notamment lors d'un transfert entre deux listes. `flipMode:
+'overlay-world'` peut aussi le demander explicitement.
 
-### Reparent
+Les poses de l'overlay sont calculées par rapport à sa propre couche mesurée,
+avec ses bordures et transformations. Un descendant en mouvement indépendant
+est caché dans le clone de son ancêtre. Un descendant seulement local sous un
+ancêtre overlay reçoit ses slots dans le ghost de cet ancêtre et ne possède pas
+de ressource indépendante. Seul un descendant ayant lui-même une représentation
+`reparent` reçoit un ghost séparé.
 
-Reparent presentation masks the source and creates an item-indexed representation
-inside the root overlay. It is forced whenever target or logical parent changes,
-including a transfer from one list to another. Authoring `flipMode:
-'overlay-world'` can also request it explicitly.
+La matrice inverse de la racine est calculée une fois par frame de présentation
+et réutilisée. Les dimensions d'un ghost stable ne sont écrites que lorsqu'elles
+changent ; la matrice de pose reste la seule écriture par frame.
 
-Overlay poses are localized against the measured overlay layer itself, including
-root borders and transforms. An independently moving descendant is hidden in an
-ancestor clone. If a local segment is nested under an active overlay ancestor,
-  the host applies its reserved size/transform slots to the matching descendant
-  inside that ancestor's ghost. It remains a local FLIP and does not receive an
-  independent overlay resource. Only a descendant with its own `reparent`
-  representation gets an independent ghost and is masked in the ancestor clone.
+## Cycle de vie
 
-The host computes the inverse affine matrix of the root once per committed
-presentation frame and reuses it for all active overlay items. Stable ghost
-dimensions are written only when their resolved size changes; the pose matrix
-remains the only per-frame overlay write.
-
-## Lifecycle
-
-- `init()` initializes the visible component host, captures motion boundaries only
-  when a move or pose transition exists, then builds the immutable motion graph.
-- `play()` and `seek(t)` present the graph at absolute logical time.
-- `resize()` prepares natural geometry, invalidates captured geometry, rebuilds
-  the graph, then recommits the current frame without recreating stable overlay
-  nodes.
-- `destroy()` removes local transient slots, overlay representations, components
-  and owned clock resources.
+- `init()` initialise les composants visibles, capture les frontières seulement
+  lorsqu'un mouvement existe, puis construit le graphe immuable ;
+- `play()` et `seek(t)` présentent le graphe à un temps logique absolu ;
+- `resize()` prépare la géométrie naturelle, invalide les captures, reconstruit
+  le graphe et réapplique la frame courante sans recréer les overlays stables ;
+- `destroy()` retire les slots locaux, les overlays, les composants et les
+  horloges possédées.
 
 ## Capture HTML classique
 
@@ -182,68 +169,52 @@ Le runner branche `HtmlPointerCaptureSourceAdapter` après l'initialisation du
 player visible. Pour chaque `perso.emit.pointerdown.capture`, l'adaptateur :
 
 1. émet l'événement de début avec `RuntimePlayer.emit()` ;
-2. ouvre la capture avec `beginCompiledCapture()` une fois la promesse de
-   l'événement de début terminée ;
+2. ouvre la capture avec `beginCompiledCapture()` après la promesse de début ;
 3. transmet les `pointermove` à `trackCapture()` ;
-4. ferme sur l'événement déclaré dans `endOn` (par défaut `pointerup`) avec
+4. ferme sur l'événement déclaré dans `endOn` — `pointerup` par défaut — avec
    `endCapture()`.
 
-Le suivi et la fin sont écoutés sur la cible d'événements globale, en phase de
-capture, afin de rester actifs lorsque le pointeur quitte le perso. L'adaptateur
-ne demande pas de pointer capture natif au navigateur : le routage global est le
-seul circuit de suivi. Le `pointerId` d'ouverture est conservé. Seuls les
-événements déclarés dans `endOn` ferment la session ; `pointercancel` et
+Le suivi et la fin sont écoutés sur la cible globale, en phase de capture, afin
+de rester actifs lorsque le pointeur quitte le perso. L'adaptateur ne demande
+pas la capture native du pointeur au navigateur : le routage global est le seul
+circuit de suivi. Le `pointerId` de l'ouverture est conservé ; seuls les
+événements déclarés dans `endOn` ferment la session. `pointercancel` et
 `lostpointercapture` n'ont aucun effet particulier s'ils ne sont pas déclarés.
-La destruction du runner annule les sessions encore ouvertes. Le runner peut
-recevoir cette cible explicitement avec `captureEventTarget`; dans un navigateur,
-la fenêtre du document de la racine HTML est utilisée par défaut.
+La cible peut être fournie avec `captureEventTarget` ; dans un navigateur, la
+fenêtre du document de la racine HTML est utilisée par défaut. La destruction
+du runner annule les sessions ouvertes.
 
-Le runner n'embarque pas la sémantique `list` ou DnD. Une démo peut brancher
-`HtmlListDndPreview` via les hooks de capture ci-dessus : cette classe reste une
-couche HTML de preview (hit-test et ghost) et ne modifie ni le journal ni l'ordre
-logique. L'hôte peut lui fournir l'ordre des enfants résolu par `list` via
-`resolveListItemNodes`; à défaut, la preview utilise les racines DOM directes
-marquées par le materializer. Le perso saisi est toujours exclu de cet ordre
-transitoire. Le commit passe par `RuntimePlayer`, l'action `move` et la capacité
-`list`. Pendant la preview, le perso saisi conserve son point de prise en pose
-fixe ; le ghost est le seul élément ajouté au flux. Les voisins sont animés par
-un FLIP HTML transitoire à chaque changement de slot. Au `pointerup`, le runner
-photographie la pose visible avant le commit du `move` pour fournir le FIRST de
-la remise live `endEmit` ; cette photographie n'est ni un état logique ni une
-entrée du journal. Si la capture déclare aussi `endCapture`, celui-ci porte la
-trajectoire rejouable source logique → cible à la frontière `end - durée`.
-Cette trajectoire est capturée sur les nodes visibles au point pré-commit. Le
-snapshot de fin live est effacé avant un seek : la remise au relâchement n'est
-donc pas rejouée.
+Le runner n'embarque pas la sémantique `list` ni le DnD. Une démo peut brancher
+`HtmlListDndPreview` comme couche HTML de prévisualisation ; elle ne modifie ni
+le journal ni l'ordre logique. Le commit final passe par `RuntimePlayer`,
+`move` et la capacité `list`.
 
-La preview HTML réserve l'attribut `data-codplay-transient` aux nodes qu'elle
-possède temporairement. Le node auteur flottant et le ghost le portent pendant
-le geste. `HtmlComponentMaterializer` exclut ces nodes de la reconciliation
-structurelle et compare d'abord l'ordre des seuls nodes auteurs avant d'appeler
-`appendChild` ou `insertBefore`. Ainsi, chaque frame de lecture peut repasser
-par le materializer sans réattacher le node flottant ni déplacer le ghost. La
-preview retire ensuite le marqueur à la fermeture ; la frame suivante remonte
-alors l'ordre logique normal.
+L'hôte peut fournir à la preview l'ordre des enfants résolu par `list` avec
+`resolveListItemNodes`; à défaut, les racines DOM directes marquées par le
+materializer sont utilisées. Le perso saisi est toujours exclu de cet ordre
+transitoire. Pour chaque cible, la preview capture une seule fois les rectangles
+stabilisés des enfants de la liste candidate ; le FLIP des voisins réutilise cette
+capture après l'insertion du ghost.
 
-Pour chaque résolution de cible, la preview capture une seule fois les rectangles
-stabilisés des enfants de la liste candidate. Le FLIP des voisins réutilise cette
-capture après l'insertion du ghost ; il ne relit pas une seconde fois les mêmes
-enfants dans le même cycle.
+Pendant la prévisualisation, le perso saisi reste à son point de prise et le
+ghost est le seul élément ajouté au flux. Les voisins reçoivent un FLIP HTML
+temporaire. Au `pointerup`, le runner photographie la pose visible avant le
+commit pour fournir le FIRST de `endEmit`. Cette photographie n'est ni un état
+logique ni une entrée du journal. Le snapshot live est supprimé avant un seek.
+
+Les nœuds temporaires portent `data-codplay-transient`. Le materializer les
+exclut de la réconciliation structurelle et compare d'abord l'ordre des nœuds
+auteur. La preview retire le marqueur à sa fermeture ; la frame suivante
+réapplique alors l'ordre logique normal.
 
 Avec `enableInteractionLock: true`, le runner verrouille la racine HTML tant que
-le player n'est pas en `playing`, puis retrouve son état initial à la destruction.
-La telco doit donc être montée en dehors de cette racine.
+le player n'est pas en lecture et rétablit son état initial à la destruction. La
+telco doit être montée en dehors de cette racine.
 
-## Contexte du materializer
+## Ressources et resize
 
-`HtmlPlayerRunner` reçoit le `RuntimeCapabilityCatalog` déjà composé lors de
-l'initialisation de CodPlay. Les composants, leurs services, leurs modules et
-leurs validateurs sont déclarés dans ce catalogue unique. Le runner crée une
-seule instance du `RuntimeMaterializer` HTML pour le substrat visible, mais
-aucun materializer n'enregistre de service ou de module.
-
-Les ressources déclarées par la scène peuvent être fournies au runner avec
-`resources`. Elles sont enregistrées dans l'engine unique du player visible :
+Les ressources de la scène peuvent être fournies au runner avec `resources` et
+sont enregistrées dans l'engine du player visible :
 
 ```ts
 const runner = new HtmlPlayerRunner({
@@ -252,10 +223,8 @@ const runner = new HtmlPlayerRunner({
 })
 ```
 
-### Preload externe et diffusion autonome
-
-Le preload n'est pas une étape implicite de `init()`. L'hôte choisit le ou les
-manifestes et appelle directement la capacité partagée :
+Le preload n'est pas implicite dans `init()`. L'hôte choisit le manifeste et
+appelle la capacité partagée :
 
 ```ts
 const preload = createRuntimePreload({ cache: sharedPreloadCache })
@@ -266,42 +235,26 @@ await preload.load({
 })
 ```
 
-Sighty et l'éditeur utilisent ce même appel pour leurs manifestes. Ils ne
-créent pas de loader parallèle. Après un preload direct, l'hôte transmet les
-URLs rendues disponibles à l'engine avant `player.init()` :
+Sighty et l'éditeur utilisent ce même appel et ne créent pas de loader
+parallèle. La diffusion autonome peut appeler `runner.run()`, qui enchaîne
+explicitement `preload.load()`, `init()` et `play()`.
+
+Après un preload direct, l'hôte transmet les ressources disponibles à l'engine
+avant `player.init()` et les métadonnées au runner :
 
 ```ts
 engine.registerResources(currentScene.resources.entries.map((entry) => entry.url))
-player.init()
+if (result.ok) runner.setResourceMetadata(result.data.metadata)
 ```
 
-La diffusion autonome dispose de la façade `run()` du runner. Elle enchaîne
-explicitement `preload.load()`, `init()` puis `play()` et accepte elle aussi un
-manifeste ou un tableau de manifestes :
+`RuntimePlayer.init()` et `HtmlPlayerRunner.init()` restent synchrones. Si un
+engine externe pilote les frames, `run()` met le player en lecture mais lui
+laisse l'avancement du temps.
 
-```ts
-const result = await runner.run({
-  preload,
-  manifest: currentScene.resources,
-})
-```
-
-`RuntimePlayer.init()` et `HtmlPlayerRunner.init()` restent synchrones et ne
-déclenchent jamais le preload. Si l'engine est piloté par un hôte externe,
-`run()` met le player en lecture mais laisse à cet hôte l'avancement de ses
-frames.
-
-Le facteur passé à `resize()`
-s'applique uniquement aux longueurs numériques sans unité à la frontière HTML.
-Par exemple, `x: 40` devient `40px` avec un facteur `1` et `80px` avec un facteur
-`2`. Les unités auteur et les chaînes brutes `style.transform` sont conservées.
-
-Le runner réapplique la frame résolue courante lorsque le facteur change ; il ne
-reconstruit pas la scène compilée et ne rejoue pas la timeline.
-
-### Exemple au resize
-
-L'hôte possède la formule du zoom. CodPlay reçoit uniquement le facteur obtenu :
+Le facteur passé à `resize()` s'applique uniquement aux longueurs numériques
+sans unité à la frontière HTML. Par exemple, `x: 40` devient `40px` avec un
+facteur `1` et `80px` avec un facteur `2`. Les unités auteur et les chaînes
+brutes de `style.transform` restent inchangées.
 
 ```ts
 const designWidth = 1440
@@ -318,22 +271,20 @@ window.addEventListener('resize', applyViewportZoom)
 applyViewportZoom()
 ```
 
-Dans cet exemple, une valeur auteur comme `x: 40` est écrite en `40px` avec un
-facteur `1` et en `20px` lorsque la fenêtre produit un facteur `0.5`. Une valeur
-qui porte déjà une unité, comme `x: '40px'`, ainsi qu'une chaîne brute
-`style.transform`, ne sont pas redimensionnées. Le listener de resize appartient
-à l'hôte et doit être retiré par celui-ci lors de la destruction du runner.
+Le runner réapplique la frame courante quand le facteur change ; il ne
+reconstruit pas la scène compilée et ne rejoue pas la timeline. Le listener de
+resize appartient à l'hôte et doit être retiré par celui-ci.
 
-## Invariants
+## Contrat et limites
 
-- The visible DOM is never used to reconstruct logical state.
-- No second DOM, player, engine or materializer is created for motion capture.
-- Geometry snapshots contain data only and never retain DOM references.
-- Every item owns its temporal segments independently.
-- Parent movement is composed recursively at resolution time.
-- An overlapping local reflow retargets its existing segment at the already
-  resolved visual pose and keeps its interpolation phase; it does not restart
-  easing at zero.
-- One source or one independent representation is visible per item.
-- HTML pose composition uses affine origins and matrices; `rect.left/top` remain
-  derived AABB values only.
+- l'état logique n'est jamais reconstruit depuis le DOM visible ;
+- aucun deuxième DOM, player, engine ou materializer n'est créé pour la capture
+  de mouvement ;
+- les instantanés de géométrie ne conservent aucune référence DOM ;
+- chaque élément possède ses segments temporels indépendamment ;
+- le mouvement d'un parent est composé récursivement à la résolution ;
+- un reflow local recouvert recale le segment sur la pose visuelle déjà résolue
+  sans redémarrer l'easing à zéro ;
+- une seule source ou représentation indépendante est visible par élément ;
+- la composition HTML utilise des origines affines et des matrices ;
+  `rect.left/top` restent des valeurs AABB dérivées.

@@ -1,11 +1,15 @@
-# Preload runtime V2
+# Préchargement runtime V2
 
-> Status: En cours
-> CodPlay version: V2 foundation
+> Statut : En cours
+> Version CodPlay : V2 foundation
 
-`RuntimePreload` est une capacité externalisée. Il charge le manifeste fourni
-par un appelant et peut être utilisé directement par la diffusion autonome,
-Sighty ou l'éditeur.
+## Rôle
+
+`RuntimePreload` prépare les ressources nécessaires à une scène avant sa
+lecture. C'est une capacité externe : la diffusion autonome, Sighty ou l'éditeur
+choisit quand l'appeler et lui fournit le manifeste à charger.
+
+## Fonctionnement
 
 ```ts
 const cache = createRuntimePreloadCache()
@@ -17,19 +21,19 @@ await preload.load({
 })
 ```
 
-La diffusion autonome peut ensuite appeler la façade `run` du runner, qui
-enchaîne explicitement preload, initialisation et lecture. `RuntimePlayer.init()`
-et `HtmlPlayerRunner.init()` ne lancent jamais le preload eux-mêmes.
+La façade `run()` du runner peut ensuite enchaîner explicitement preload,
+initialisation et lecture. `RuntimePlayer.init()` et
+`HtmlPlayerRunner.init()` ne lancent jamais le preload eux-mêmes.
 
-Les stratégies natives couvrent `image`, `audio`, `video`, `font` et `css`.
-Les composants et bibliothèques tierces enregistrent leurs stratégies avec
-`registerStrategy`; ils n'ajoutent pas de loader concurrent.
+## Organisation interne
+
+Les stratégies natives couvrent `image`, `audio`, `video`, `font` et `css`. Un
+composant ou une bibliothèque tierce peut ajouter une stratégie avec
+`registerStrategy`, sans créer un loader concurrent.
 
 Le résultat de `load()` expose `data.metadata`, indexé par URL. Les stratégies
-`audio` et `video` y transmettent leur type et, lorsqu'elle est connue au signal
-`canplaythrough`, leur durée en millisecondes. Cette métadonnée est consommée
-par `MediaComponent` et `media-sync` ; elle ne remplace pas le manifeste et ne
-déclenche aucun chargement implicite.
+audio et vidéo y indiquent leur type et, lorsqu'elle est connue au signal
+`canplaythrough`, leur durée en millisecondes.
 
 ```ts
 if (result.ok) {
@@ -37,5 +41,12 @@ if (result.ok) {
 }
 ```
 
-Le cache est partageable et compte les propriétaires. `release()` ne supprime
-une entrée que lorsqu'aucune instance `RuntimePreload` ne la détient encore.
+## Contrat et limites
+
+- la métadonnée complète le manifeste, mais ne le remplace pas ;
+- aucune ressource n'est chargée implicitement par un composant ou par
+  `media-sync` ;
+- le cache est partageable et compte ses propriétaires ;
+- `release()` supprime une entrée uniquement lorsqu'aucune instance ne la
+  détient encore ;
+- les stratégies de preload restent séparées de la logique de lecture.

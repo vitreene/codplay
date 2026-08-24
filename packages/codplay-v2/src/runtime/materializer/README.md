@@ -1,34 +1,46 @@
-# Materializer
+# Matérialisation runtime V2
 
-> Status: Fixe — HTML/SVG DOM tranche
-> CodPlay version: V2 foundation
+> Statut : Fixe — tranche HTML/SVG DOM
+> Version CodPlay : V2 foundation
 
-This folder defines the single runtime materializer boundary. The
-`RuntimeMaterializer` exposes both operations needed by the player:
+## Rôle
 
-- `materializeComponent()` receives one component render result and its selected
-  services;
-- `materializeScene()` applies the solved parentage and order to the same
-  materialization host.
-- `invalidateStructure()` is an optional boundary for a materializer-specific
-  transient presentation that has released or moved author roots. It marks the
-  next scene commit for one structural reconciliation; it is not a second
-  materialization path.
+Le materializer est la couche qui transforme la représentation d'un composant
+en objets du support choisi, puis applique la structure de la scène à ces
+objets. La version actuelle couvre le DOM HTML et SVG.
 
-The component and scene operations therefore use one substrate interface. They
-must not be implemented through separate component and structural catalogs or
-through a demo-only route.
+## Fonctionnement
 
-The current HTML and SVG DOM implementations are in `runtime/runner` and the
-shared HTML/SVG service adapters are kept beside their service declarations
-under `src/services`.
+L'interface `RuntimeMaterializer` fournit trois opérations :
 
-`BaseComponent` is substrate-neutral. The HTML implementation consumes
-`BaseHTMLComponent`; other materializers must define their own projection
-contract instead of requiring `render(): string`, DOM nodes or HTML services from
-every component.
+- `materializeComponent()` reçoit la représentation d'un composant et ses
+  services sélectionnés ;
+- `materializeScene()` applique à ces mêmes objets les parents et l'ordre
+  résolus par la scène ;
+- `invalidateStructure()` signale qu'une présentation temporaire a déplacé ou
+  libéré une racine et que la prochaine validation doit refaire la
+  réconciliation structurelle.
 
-For HTML template strings, one root remains one real node. Multiple roots remain
-an ordered fragment of real nodes; the materializer never creates a wrapper
-element. Structural mount, detach, seek persistence and HTML capture operate on
-those retained roots. A fragment itself is not a service target.
+Ces opérations utilisent un seul hôte de materialization. Elles ne passent pas
+par un catalogue de composants séparé, ni par un circuit spécial de démonstration.
+
+## Organisation interne
+
+Les implémentations HTML et SVG DOM se trouvent dans `runtime/runner`. Les
+services communs HTML/SVG restent à côté de leurs déclarations dans
+`src/services`.
+
+`BaseComponent` ne dépend d'aucun support. Les composants HTML/SVG utilisent
+`BaseHTMLComponent`; un futur materializer Canvas ou Three.js devra définir sa
+propre projection au lieu d'imposer `render(): string` et des nœuds DOM à tous
+les composants.
+
+## Contrat et limites
+
+- un template HTML avec une racine produit un seul nœud réel ;
+- plusieurs racines restent un fragment ordonné, sans wrapper ajouté ;
+- les racines conservées servent au montage, au démontage, au seek et à la
+  capture HTML ;
+- un fragment n'est pas une cible de service ;
+- le materializer ne remplace pas la logique de scène et ne crée pas un second
+  player.
