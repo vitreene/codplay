@@ -1,6 +1,6 @@
-import { BaseComponent } from './base-component'
+import { BaseHTMLComponent } from './base-html-component'
 import { isComponentRecord, reportInvalidComponentValue } from './component-validation'
-import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { HTMLComponentInput, ComponentUpdateInput } from './component-types'
 import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 import type { ValidationFunction } from '../../services'
 
@@ -32,9 +32,9 @@ export const validateLayoutInitial: ValidationFunction = (value, context) => {
 }
 
 /** V2 layout component with no author-facing initialization hook. */
-export class LayoutComponent extends BaseComponent<LayoutInitial> {
+export class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
   /** Creates one layout component with services bound by its runtime definition. */
-  constructor(input: ComponentInput<LayoutInitial>) {
+  constructor(input: HTMLComponentInput<LayoutInitial>) {
     super(input)
   }
 

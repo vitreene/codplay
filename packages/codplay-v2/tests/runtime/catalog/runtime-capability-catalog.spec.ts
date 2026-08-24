@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
-import { BaseComponent } from '../../../src/runtime/components'
+import { BaseHTMLComponent } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import type { RuntimeMaterializer } from '../../../src/runtime/materializer'
 
-class ProbeComponent extends BaseComponent<Record<string, unknown>> {
+class ProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
   render(): string {
     return '<section></section>'
   }

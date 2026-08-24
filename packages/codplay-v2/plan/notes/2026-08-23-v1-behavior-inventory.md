@@ -223,6 +223,37 @@ doit pas etre ajoutee directement dans un strap ou dans un nouveau scheduler.
 
 ## Point de reprise : declaration des services dans les composants
 
+### Correction validee le 2026-08-24 : base generique et base HTML separees
+
+La reprise confirme un second ecart de frontiere : `BaseComponent` V2 est encore
+une base de composant HTML/markup sous un nom generique. La presence de
+`render(): string`, de `node`, de `_materialize()` et de la facade
+`ComponentServices.apply(node, patch)` rend cette base dependante de la
+materialisation HTML/SVG, meme lorsque les types restent `unknown`.
+
+Le contrat vise est desormais le suivant :
+
+```text
+BaseComponent
+  -> construction minimale, donnees auteur et update(state, time)
+
+BaseHTMLComponent
+  -> template markup, node, parts/outlets et services HTML/SVG
+
+BaseCanvasComponent / BaseThreeComponent / BaseRiveComponent / ...
+  -> contrat de projection propre au materializer et au substrat concerne
+```
+
+`BaseComponent` ne declare donc plus de service, de node, de part, ni de forme
+de rendu. `render(): string`, la facade de services HTML et la materialisation
+des parts sont deplaces dans `BaseHTMLComponent`. Les composants Three.js, Rive,
+Canvas et autres materializers peuvent heriter de la base generique ou d'une
+base specialisee sans recevoir une API DOM par defaut.
+
+Cette correction implique le contrat `ComponentInput`, le catalogue de factories,
+le materializer et les tests de frontiere. Elle doit etre implementee avant tout
+nouveau composant de substrat specialise.
+
 L'implementation V2 actuelle s'ecarte du contrat V1 sur la propriete de la
 declaration des services.
 

@@ -8,9 +8,15 @@ Ce module contient les composants auteur instanciés par le
 un composant spécialisé peut posséder des ressources internes qui ne sont pas
 des persos et ne sont pas publiées comme outlets.
 
-Dans la tranche HTML, `BaseComponent` reçoit après `render()` soit un nœud réel,
+Dans la tranche HTML, `BaseHTMLComponent` reçoit après `render()` soit un nœud réel,
 soit la collection ordonnée des nœuds réels d'un fragment. Le fragment n'est
 jamais enveloppé automatiquement et ne constitue pas une cible de service.
+
+La base generique est `BaseComponent` : elle ne connait ni DOM, ni markup, ni
+services de substrat. La tranche actuelle de composants HTML/SVG utilise
+`BaseHTMLComponent`, qui porte `render()`, la racine materialisee, les parts et la
+facade de services HTML. Les futurs composants Canvas, Three.js et Rive doivent
+utiliser la base generique ou une base specialisee de leur materializer.
 
 ## List
 

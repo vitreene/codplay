@@ -3,8 +3,8 @@ import type { ValidationFunction } from '../../services'
 import { reportInvalidServiceValue } from '../../services/service-validation-report'
 import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 import type { RuntimePreloadResourceMetadata } from '../preload'
-import { BaseComponent } from './base-component'
-import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import { BaseHTMLComponent } from './base-html-component'
+import type { HTMLComponentInput, ComponentUpdateInput } from './component-types'
 
 /** Native media element kinds supported by the unified media component. */
 export type MediaTag = 'audio' | 'video'
@@ -62,7 +62,7 @@ export const validateMediaAction: ValidationFunction = (value, context) => {
 }
 
 /** V2 media component that preserves one materialized native media node per source. */
-export class MediaComponent extends BaseComponent<MediaInitial> {
+export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   /** One persistent native media node per source; inactive nodes remain detached here. */
   private readonly mediaBySrc = new Map<string, unknown>()
   /** Source currently attached to the component root. */
@@ -75,7 +75,7 @@ export class MediaComponent extends BaseComponent<MediaInitial> {
   private playbackRate = 1
 
   /** Creates one media component with its declared core services. */
-  constructor(input: ComponentInput<MediaInitial>) {
+  constructor(input: HTMLComponentInput<MediaInitial>) {
     super(input)
     this.resourceMetadata = input.resourceMetadata ?? new Map()
   }

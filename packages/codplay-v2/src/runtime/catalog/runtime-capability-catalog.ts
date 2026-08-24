@@ -5,7 +5,10 @@ import type {
   ValidationFunction,
 } from '../../services'
 import type { BaseComponent } from '../components/base-component'
-import type { ComponentInput, ComponentServices } from '../components/component-types'
+import type {
+  ComponentInput,
+  HTMLComponentServices,
+} from '../components/component-types'
 import type { RuntimeMaterializer } from '../materializer'
 import type {
   RuntimeModuleServiceContext,
@@ -40,8 +43,13 @@ export type RuntimeComponentServiceFactory = (
 ) => RuntimeComponentServiceInstance
 
 /** Factory that creates one V2 component from compiled author data. */
+export type RuntimeComponentFactoryInput = ComponentInput<Record<string, unknown>> & Readonly<{
+  /** Current HTML/SVG facade; substrate-neutral factories may ignore it. */
+  services: HTMLComponentServices
+}>
+
 export type RuntimeComponentFactory = (
-  input: ComponentInput<Record<string, unknown>>,
+  input: RuntimeComponentFactoryInput,
 ) => BaseComponent<Record<string, unknown>>
 
 /** Unified declaration of one service, including validation and materializers. */
@@ -224,7 +232,7 @@ export class RuntimeCapabilityCatalog {
     identity: RuntimeComponentIdentity,
     materializer: RuntimeMaterializer,
     modules: ReadonlyMap<string, RuntimeModuleServiceInstance>,
-  ): ComponentServices {
+  ): HTMLComponentServices {
     const services = new Map<string, RuntimeComponentServiceInstance>()
     for (const name of definition.services) {
       const service = this.services.get(name)

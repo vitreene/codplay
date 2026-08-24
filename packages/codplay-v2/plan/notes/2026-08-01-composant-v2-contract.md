@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: template-string runtime et materializer HTML integres; fragments HTML verifies le 2026-08-21; JSX reste V2.5
+Review: separation BaseComponent/BaseHTMLComponent validee le 2026-08-24; migration du runtime en cours; JSX reste V2.5
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -27,15 +27,20 @@ type ComponentInput<Initial extends Record<string, unknown> = Record<string, unk
     initial: Initial
     actions?: Readonly<Record<string, unknown>>
   }
-  services: ComponentServices
+  resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
 }
+
+type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
+  ComponentInput<Initial> & {
+    services: HTMLComponentServices
+  }
 
 type MaterializedPart = {
   partId: string
   nodeRef: unknown
 }
 
-type ComponentServices = {
+type HTMLComponentServices = {
   apply(node: unknown, patch: Record<string, unknown>): void
 }
 
@@ -53,18 +58,29 @@ Un composant V2 expose deux methodes obligatoires :
 ```ts
 abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly perso: ComponentInput<Initial>['perso']
-  protected readonly services: ComponentServices
+  protected readonly resourceMetadata: ComponentInput<Initial>['resourceMetadata']
+  abstract update(input: ComponentUpdateInput): void
+}
+
+abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
+  extends BaseComponent<Initial> {
+  protected readonly services: HTMLComponentServices
   public node: unknown | null = null
 
   abstract render(): string
-  abstract update(input: ComponentUpdateInput): void
 
   /** Internal materialization registry consumed by specialized components. */
   protected getPartsSnapshot(): readonly MaterializedPart[]
 }
 ```
 
-`render()` fournit le template string de materialisation. Le runtime JSX autonome
+`BaseComponent` ne connait ni template, ni DOM, ni services HTML/SVG. Il conserve
+uniquement les donnees auteur necessaires a l'instance et impose l'application de
+l'etat resolu. `BaseHTMLComponent` fournit la tranche markup actuelle ; les
+materializers Canvas, Three.js, Rive ou autres peuvent definir leur propre base
+specialisee sans heriter de cette API.
+
+`BaseHTMLComponent.render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
 
 Pour la materialisation HTML, un template a une racine reelle lorsque le rendu
@@ -114,13 +130,15 @@ SolvedScene
   -> cleanup au retrait ou a la destruction du player
 ```
 
-Le runtime composant recoit une facade `ComponentServices` deja construite par le
+Le runtime composant HTML recoit une facade `HTMLComponentServices` deja construite par le
 `RuntimeCapabilityCatalog`, ainsi que les instances de modules du player et son
 materializer. La liste des services et modules est portée uniquement par la
 definition runtime du type. Les modules ne sont pas appliques comme des proprietes ;
 ils servent a satisfaire la dependance et restent hors de l'API de mutation du node.
-Le runtime ne cree pas de DOM lui-meme et ne contient aucune branche speciale pour
-`layout` ou `input`.
+Le runtime generique ne cree pas de DOM lui-meme et ne contient aucune branche
+speciale pour `layout` ou `input`. Le materializer HTML n'accepte les composants
+qui exposent `render()` et la materialisation de parts qu'a travers
+`BaseHTMLComponent`.
 
 ## Exemple Tag
 

@@ -1,4 +1,4 @@
-import type { MaterializedPart, BaseComponent } from '../../components'
+import type { MaterializedPart, BaseHTMLComponent } from '../../components'
 import type { MarkupModuleServiceInstance } from './markup-capability'
 
 /** Identity required to register one materialized component with the markup module. */
@@ -10,7 +10,7 @@ export type MaterializedComponentIdentity = Readonly<{
 
 /** Input required to connect one already materialized component to markup. */
 export type MarkupMaterializationInput<Initial extends Record<string, unknown>> = Readonly<{
-  component: BaseComponent<Initial>
+  component: BaseHTMLComponent<Initial>
   identity: MaterializedComponentIdentity
   rootNode: unknown
   parts: readonly MaterializedPart[]

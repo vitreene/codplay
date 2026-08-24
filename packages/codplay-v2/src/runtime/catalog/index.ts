@@ -7,6 +7,7 @@ export type {
   RuntimeCapabilityOrigin,
   RuntimeComponentDefinition,
   RuntimeComponentFactory,
+  RuntimeComponentFactoryInput,
   RuntimeComponentIdentity,
   RuntimeComponentServiceContext,
   RuntimeComponentServiceDefinition,

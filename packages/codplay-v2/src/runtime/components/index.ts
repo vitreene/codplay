@@ -1,4 +1,5 @@
 export { BaseComponent } from './base-component'
+export { BaseHTMLComponent } from './base-html-component'
 export { LayoutComponent } from './layout-component'
 export { ListComponent } from './list-component'
 export { MediaComponent } from './media-component'
@@ -14,7 +15,8 @@ export type { TagState } from './tag-component'
 export { validateMediaAction, validateMediaInitial } from './media-component'
 export type {
   ComponentInput,
-  ComponentServices,
+  HTMLComponentInput,
+  HTMLComponentServices,
   ComponentUpdateInput,
   MaterializedPart,
 } from './component-types'

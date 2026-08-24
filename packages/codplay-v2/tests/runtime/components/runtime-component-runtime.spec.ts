@@ -81,7 +81,6 @@ describe('RuntimeComponentRuntime', () => {
       create: () => {
         const component = new TestComponent({
           perso: { id: 'item', storyId: 'main', initial: {} },
-          services: { apply: () => undefined },
         })
         components.push(component)
         return component

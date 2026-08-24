@@ -1,10 +1,10 @@
-import { BaseComponent } from './base-component'
+import { BaseHTMLComponent } from './base-html-component'
 import {
   isComponentRecord,
   isComponentTagName,
   reportInvalidComponentValue,
 } from './component-validation'
-import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { HTMLComponentInput, ComponentUpdateInput } from './component-types'
 import type { AttrValue, ClassNameValue, ContentValue, StyleValue } from '../../services'
 import type { ValidationFunction } from '../../services'
 
@@ -31,9 +31,9 @@ export const validateTagInitial: ValidationFunction = (value, context) => {
 }
 
 /** V2 template-string component for a plain HTML tag. */
-export class TagComponent extends BaseComponent<TagState> {
+export class TagComponent extends BaseHTMLComponent<TagState> {
   /** Creates one tag component with services already bound by its runtime definition. */
-  constructor(input: ComponentInput<TagState>) {
+  constructor(input: HTMLComponentInput<TagState>) {
     super(input)
   }
 

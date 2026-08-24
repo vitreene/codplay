@@ -1,10 +1,10 @@
-import { BaseComponent } from './base-component'
+import { BaseHTMLComponent } from './base-html-component'
 import {
   isComponentRecord,
   isComponentTagName,
   reportInvalidComponentValue,
 } from './component-validation'
-import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { HTMLComponentInput, ComponentUpdateInput } from './component-types'
 import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 import type { ValidationFunction } from '../../services'
 
@@ -57,9 +57,9 @@ export const validateListInitial: ValidationFunction = (value, context) => {
 }
 
 /** V2 list component: the capability owns order, while the component owns its root. */
-export class ListComponent extends BaseComponent<ListInitial> {
+export class ListComponent extends BaseHTMLComponent<ListInitial> {
   /** Creates one list host with the services declared by the catalog definition. */
-  constructor(input: ComponentInput<ListInitial>) {
+  constructor(input: HTMLComponentInput<ListInitial>) {
     super(input)
   }
 

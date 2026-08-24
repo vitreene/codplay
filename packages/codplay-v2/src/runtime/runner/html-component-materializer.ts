@@ -11,6 +11,7 @@ import type {
   RuntimeComponentHandle,
   RuntimeComponentIdentity,
 } from '../components'
+import { BaseHTMLComponent } from '../components'
 import { materializeTemplateString, type HtmlMaterializedRoot } from './html-template-materializer'
 import { HTML_MATERIALIZER_ID } from '../catalog'
 import type {
@@ -55,6 +56,9 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ): RuntimeComponentHandle {
     void initial
+    if (!(component instanceof BaseHTMLComponent)) {
+      throw new Error(`HTML materializer received a non-HTML component: ${identity.componentType}`)
+    }
     const materialization = materializeTemplateString(component.render())
     const rootNode = materialization.rootNode
     const publicParts = selectPublicParts(materialization.parts, mountablePartIds)

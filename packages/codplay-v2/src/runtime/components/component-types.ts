@@ -9,10 +9,15 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
     /** Complete compiled actions are author data required by source-backed components. */
     actions?: Readonly<Record<string, unknown>>
   }>
-  services: ComponentServices
   /** Metadata prepared by the external preload boundary for source-backed components. */
   resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
 }>
+
+/** Input extension used by the current HTML/SVG component family. */
+export type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
+  ComponentInput<Initial> & Readonly<{
+    services: HTMLComponentServices
+  }>
 
 /** One internal part discovered while materializing a component template. */
 export type MaterializedPart = Readonly<{
@@ -26,7 +31,7 @@ export type ComponentUpdateInput<State extends Record<string, unknown> = Record<
   timeMs: number
 }>
 
-/** Runtime-facing facade bound to the services declared by one component type. */
-export type ComponentServices = Readonly<{
+/** Services that project HTML/SVG properties onto materialized nodes. */
+export type HTMLComponentServices = Readonly<{
   apply(node: unknown, patch: Record<string, unknown>): void
 }>
