@@ -21,6 +21,21 @@ The player owns lifecycle, component synchronization and the structural
 materializer boundary.
 It does not measure browser geometry and does not own an animation clock.
 
+## Internal boundaries
+
+`RuntimePlayer` remains the public lifecycle facade. Its internal domains are
+organized as follows:
+
+- `capture/` resolves compiled action targets, applies live capture actions,
+  reconciles capture state updates, and owns capture-specific types;
+- `scene/` contains the pure `materialize -> resolve -> solve` reconstruction;
+- `modules/` contains module notifications, clock delegation, structural-order
+  composition, move-delta routing, and staged seek aborts;
+- `diagnostics/` converts solved move issues into detached player reports.
+
+These helpers receive explicit player-owned dependencies. They do not create a
+second player, journal, state store, module registry, or seek circuit.
+
 ## Structural timeline
 
 `StructuralTimeline` builds complete immutable child-order snapshots from

@@ -4,16 +4,14 @@ import type {
   CompiledFunctionCollection,
   CompiledRecord,
   CompiledScene,
-  CompiledValue,
 } from '../../scene/compiled'
 import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
   type RuntimeModuleServiceInstance,
   type RuntimeModuleServiceSeekHandle,
-  type RuntimeStructuralOrder,
 } from '../engine'
-import { diffSolvedScenes, type MoveStateDelta } from '../move'
+import { diffSolvedScenes } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -30,7 +28,6 @@ import type { RuntimeComponentRuntime } from '../components'
 import {
   RuntimeCaptureSession,
   resolveCompiledCaptureDeclaration,
-  type RuntimeCaptureAction,
   type RuntimeCaptureBeginInput,
   type RuntimeCaptureBeginResult,
   type RuntimeCaptureFailure,
@@ -41,62 +38,46 @@ import {
   type RuntimeCompiledCaptureBeginInput,
 } from '../capture'
 import {
+  collectSolvedMoveDiagnostics,
+  createEmptyDiagnosticReport,
+  createSolvedMoveDiagnostics,
+} from './diagnostics'
+import {
+  applyCaptureStateUpdate,
+  applyLiveCaptureActions,
+  cancelActiveCaptures,
+  indexCompiledCaptureActionTargets,
+  reapplyLiveCaptureStateUpdates,
+  type ActiveCaptureAction,
+  type CaptureActionTarget,
+  type RuntimeCaptureSessionEntry,
+  type RuntimePlayerEmitInput,
+} from './capture'
+import {
   materializeScene,
-  materializeSceneBeforeBoundary,
-  type MaterializeOptions,
-  resolveLiveCaptureActionState,
-  resolveScene,
   RuntimeStateStore,
-  solveScene,
   validateStrapCollections,
   RuntimeEventDispatcher,
   type SolvedScene,
   type MountTargetDeclaration,
   type RuntimeEventDispatchResult,
-  type RuntimeEventInput,
   type StrapCollections,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
-import { applyStructuralDeltas, StructuralTimeline } from './structural-timeline'
+import { StructuralTimeline } from './structural-timeline'
+import { reconstructPlayerScene } from './scene'
+import {
+  abortPendingModuleSeek,
+  initializeModuleServices,
+  notifyModuleMoveDeltas,
+  notifyModulePlaybackState,
+  notifyModuleRateChange,
+  notifyModuleScenePresented,
+  resolveModuleTimeline,
+  resolveStructuralOrder,
+} from './modules'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
-
-type CaptureActionTarget = Readonly<{
-  persoKey: string
-  actionValue: CompiledValue
-}>
-
-type ActiveCaptureAction = Readonly<{
-  action: RuntimeCaptureAction
-  targets: readonly CaptureActionTarget[]
-}>
-
-type RuntimePlayerEmitInput = Omit<RuntimeEventInput, 'applyAtMs'> & Readonly<{
-  applyAtMs?: number
-}>
-
-/** Resolves the compiled action-target index once when the player is created. */
-function indexCompiledCaptureActionTargets(
-  compiledScene: CompiledScene,
-): ReadonlyMap<string, readonly CaptureActionTarget[]> {
-  const index = new Map<string, readonly CaptureActionTarget[]>()
-  for (const [actionName, targets] of Object.entries(compiledScene.actionTargetIndex)) {
-    const resolvedTargets: CaptureActionTarget[] = []
-    for (const target of targets) {
-      const story = compiledScene.scene.stories[target.storyId]
-      const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
-      const actionValue = perso?.actions[actionName]
-      if (actionValue !== undefined) {
-        resolvedTargets.push({
-          persoKey: `${target.storyId}:${target.persoId}`,
-          actionValue,
-        })
-      }
-    }
-    index.set(actionName, resolvedTargets)
-  }
-  return index
-}
 
 /** Result returned by player initialization. */
 export type PlayerInitResult = Readonly<
@@ -139,11 +120,7 @@ export class RuntimePlayer {
     instance: RuntimeModuleServiceInstance
     handle: RuntimeModuleServiceSeekHandle
   }> = []
-  private readonly captureSessions = new Map<string, Readonly<{
-    storyId: string
-    stateScope: 'scene' | 'story'
-    session: RuntimeCaptureSession
-  }>>()
+  private readonly captureSessions = new Map<string, RuntimeCaptureSessionEntry>()
   private readonly activeCaptureActions = new Map<string, ActiveCaptureAction>()
   private readonly liveCaptureStateUpdates = new Map<string, CompiledRecord>()
   private liveCapturePersoKeys = new Set<string>()
@@ -255,8 +232,8 @@ export class RuntimePlayer {
     const initialSolvedScene = this.reconstructBaseScene(0)
     this.componentRuntime?.sync(initialSolvedScene)
     const resolvedInitialScene = this.reconstructBaseScene(0)
-    this.initializeModuleServices(resolvedInitialScene)
-    this.notifyModuleRateChange(this.rate)
+    initializeModuleServices(this.moduleServiceInstances, resolvedInitialScene)
+    notifyModuleRateChange(this.moduleServiceInstances, this.rate)
     this.rebuildStructuralTimeline()
     this.solvedScene = this.reconstructScene(0)
     this.synchronizeStateStoreFromScene(this.solvedScene)
@@ -265,7 +242,7 @@ export class RuntimePlayer {
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
       getSeekDiagnostics: () => this.pendingSeekDiagnostics,
-      abortSeek: () => this.abortPendingModuleSeek(),
+      abortSeek: () => abortPendingModuleSeek(this.pendingModuleSeekHandles),
       prepareSeek: () => this.renderSync.prepareSeek(),
       commitSeek: (timeMs) => {
         if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
@@ -278,10 +255,10 @@ export class RuntimePlayer {
         if (this.pendingModuleSeekHandles.length > 0) {
           const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
-          this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, preparedInstances, moveDeltas)
+          notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, this.pendingSolvedScene, preparedInstances, moveDeltas)
           this.pendingModuleSeekHandles = []
         } else {
-          this.notifyModuleMoveDeltas(previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
+          notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
         }
         this.solvedScene = this.pendingSolvedScene
         this.includePersistOnlyInCurrent = true
@@ -308,7 +285,7 @@ export class RuntimePlayer {
       this.renderSync.resume()
     }
     this.state = PLAYER_LIFECYCLE_PLAYING
-    this.notifyModulePlaybackState('playing')
+    notifyModulePlaybackState(this.moduleServiceInstances, 'playing', this.currentTimeMs)
   }
 
   /** Pauses logical playback at the current engine-provided time. */
@@ -316,7 +293,7 @@ export class RuntimePlayer {
     this.requireState(PLAYER_LIFECYCLE_PLAYING)
     this.renderSync.pause()
     this.state = PLAYER_LIFECYCLE_PAUSED
-    this.notifyModulePlaybackState('paused')
+    notifyModulePlaybackState(this.moduleServiceInstances, 'paused', this.currentTimeMs)
   }
 
   /** Changes the player rate without changing the current absolute timeline position. */
@@ -327,7 +304,7 @@ export class RuntimePlayer {
     }
     this.rate = rate
     this.renderSync.rateChange(rate)
-    this.notifyModuleRateChange(rate)
+    notifyModuleRateChange(this.moduleServiceInstances, rate)
   }
 
   /** Returns the currently configured player rate. */
@@ -401,7 +378,7 @@ export class RuntimePlayer {
     const moveDeltas = previousSolvedScene === undefined
       ? []
       : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
     return result
@@ -592,10 +569,14 @@ export class RuntimePlayer {
   /** Detaches the player from the engine and closes its lifecycle. */
   destroy(): void {
     if (this.state === PLAYER_LIFECYCLE_DESTROYED) return
-    this.cancelActiveCaptures()
+    cancelActiveCaptures(
+      this.captureSessions,
+      this.activeCaptureActions,
+      this.liveCaptureStateUpdates,
+    )
     for (const instance of this.moduleServiceInstances.values()) instance.destroy?.()
     this.moduleServiceInstances.clear()
-    this.abortPendingModuleSeek()
+    abortPendingModuleSeek(this.pendingModuleSeekHandles)
     this.engine.unregisterInstance(this.id)
     this.renderSync.stop()
     this.materializer?.destroy?.()
@@ -612,12 +593,12 @@ export class RuntimePlayer {
       return
     }
     this.currentTimeMs += frame.deltaMs * this.rate
-    this.currentTimeMs = this.resolveModuleTimeline(this.currentTimeMs)
+    this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
     this.synchronizeStateStoreFromScene(nextSolvedScene)
     const previousSolvedScene = this.solvedScene
     const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    this.notifyModuleMoveDeltas(previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
@@ -626,7 +607,11 @@ export class RuntimePlayer {
   /** Materializes one scene while keeping authored writes inside the render boundary. */
   private materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
     this.componentRuntime?.sync(scene)
-    this.notifyModuleScenePresented(scene)
+    notifyModuleScenePresented(
+      this.moduleServiceInstances,
+      scene,
+      this.state === PLAYER_LIFECYCLE_PLAYING ? 'playing' : 'paused',
+    )
     this.applyLiveCaptureActions(scene)
     this.materializer?.materializeScene(scene, context)
   }
@@ -634,33 +619,13 @@ export class RuntimePlayer {
   /** Reapplies active capture actions through the normal component update path. */
   private applyLiveCaptureActions(scene = this.solvedScene): void {
     if (scene === undefined || this.componentRuntime === undefined) return
-
-    const liveStates = new Map<string, CompiledRecord>()
-    for (const active of this.activeCaptureActions.values()) {
-      for (const target of active.targets) {
-        const perso = scene.persos[target.persoKey]
-        if (perso === undefined) continue
-        const currentState = liveStates.get(target.persoKey) ?? perso.state
-        const nextState = resolveLiveCaptureActionState(
-          currentState,
-          target.actionValue,
-          active.action.data,
-          this.functions,
-        )
-        if (nextState !== undefined) liveStates.set(target.persoKey, nextState)
-      }
-    }
-    const affectedPersoKeys = new Set([...this.liveCapturePersoKeys, ...liveStates.keys()])
-    for (const persoKey of affectedPersoKeys) {
-      const perso = scene.persos[persoKey]
-      if (perso === undefined) continue
-      this.componentRuntime.updateLive(
-        persoKey,
-        liveStates.get(persoKey) ?? perso.state,
-        scene.timeMs,
-      )
-    }
-    this.liveCapturePersoKeys = new Set(liveStates.keys())
+    this.liveCapturePersoKeys = applyLiveCaptureActions(
+      scene,
+      this.componentRuntime,
+      this.activeCaptureActions,
+      this.liveCapturePersoKeys,
+      this.functions,
+    )
   }
 
   /** Enforces one valid lifecycle transition. */
@@ -678,7 +643,11 @@ export class RuntimePlayer {
     if (!Number.isFinite(timeMs) || timeMs < 0) {
       throw new Error('Player seek time must be a finite positive number.')
     }
-    this.cancelActiveCaptures()
+    cancelActiveCaptures(
+      this.captureSessions,
+      this.activeCaptureActions,
+      this.liveCaptureStateUpdates,
+    )
     for (const instance of this.moduleServiceInstances.values()) {
       instance.beforeSeek?.(this.currentTimeMs)
     }
@@ -691,7 +660,7 @@ export class RuntimePlayer {
         if (handle !== undefined) this.pendingModuleSeekHandles.push({ instance, handle })
       }
     } catch (error) {
-      this.abortPendingModuleSeek()
+      abortPendingModuleSeek(this.pendingModuleSeekHandles)
       throw error
     }
   }
@@ -717,7 +686,12 @@ export class RuntimePlayer {
       this.compiledScene,
       (timeMs) => this.reconstructBaseScene(timeMs, undefined, true, includePersistOnly),
       (timeMs) => this.reconstructBaseScene(timeMs, undefined, false, includePersistOnly),
-      (previousOrder, scene, deltas) => this.resolveStructuralOrder(previousOrder, scene, deltas),
+      (previousOrder, scene, deltas) => resolveStructuralOrder(
+        this.moduleServiceInstances,
+        previousOrder,
+        scene,
+        deltas,
+      ),
       this.trackJournal.getEventTimes(),
     )
     this.structuralTimelineRevision = this.trackJournal.getRevision()
@@ -740,17 +714,13 @@ export class RuntimePlayer {
     includeBoundary = true,
     includePersistOnly = true,
   ): SolvedScene {
-    const options: MaterializeOptions = { includePersistOnly }
-    const materialized = includeBoundary
-      ? materializeScene(this.compiledScene, timeMs, this.trackJournal, options)
-      : materializeSceneBeforeBoundary(this.compiledScene, timeMs, this.trackJournal, options)
-    return solveScene(resolveScene(materialized, this.functions), {
-      mountTargets: [
-        ...this.mountTargets,
-        ...[...this.moduleServiceInstances.values()].flatMap((instance) => instance.getMountTargets?.() ?? []),
-      ],
-      ...(childrenByTarget === undefined ? {} : { childrenByTarget }),
-    })
+    return reconstructPlayerScene({
+      compiledScene: this.compiledScene,
+      functions: this.functions,
+      trackJournal: this.trackJournal,
+      mountTargets: this.mountTargets,
+      moduleServiceInstances: this.moduleServiceInstances,
+    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly)
   }
 
   /** Reconciles the mutable strap input snapshot from one solved evaluation. */
@@ -770,11 +740,7 @@ export class RuntimePlayer {
 
   /** Reapplies non-journaled capture state so active straps see its live value. */
   private reapplyLiveCaptureStateUpdates(): void {
-    for (const [captureId, update] of this.liveCaptureStateUpdates) {
-      const entry = this.captureSessions.get(captureId)
-      if (entry === undefined) continue
-      this.applyCaptureStateUpdate(entry, update)
-    }
+    reapplyLiveCaptureStateUpdates(this.stateStore, this.liveCaptureStateUpdates, this.captureSessions)
   }
 
   /** Applies one trackCommand state patch to its declared live scope only. */
@@ -785,96 +751,7 @@ export class RuntimePlayer {
     }>,
     update: CompiledRecord,
   ): void {
-    this.stateStore.applyUpdate(
-      entry.stateScope === 'scene' ? STRAP_SCOPE_SCENE : STRAP_SCOPE_STORY,
-      update,
-      entry.stateScope === 'story' ? entry.storyId : undefined,
-    )
-  }
-
-  /** Initializes player-scoped module services from the first solved snapshot. */
-  private initializeModuleServices(
-    solved: SolvedScene,
-    instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
-  ): void {
-    for (const instance of instances.values()) instance.initializeScene?.(solved)
-  }
-
-  /** Notifies player-scoped capabilities after one solved scene reaches components. */
-  private notifyModuleScenePresented(scene: SolvedScene): void {
-    const playbackState = this.state === PLAYER_LIFECYCLE_PLAYING ? 'playing' : 'paused'
-    for (const instance of this.moduleServiceInstances.values()) {
-      instance.onScenePresented?.(scene, playbackState)
-    }
-  }
-
-  /** Notifies player-scoped capabilities when the player changes playback state. */
-  private notifyModulePlaybackState(state: 'playing' | 'paused'): void {
-    for (const instance of this.moduleServiceInstances.values()) {
-      instance.onPlaybackStateChange?.(state, this.currentTimeMs)
-    }
-  }
-
-  /** Notifies player-scoped capabilities that own native clocks of one rate change. */
-  private notifyModuleRateChange(rate: number): void {
-    for (const instance of this.moduleServiceInstances.values()) instance.onRateChange?.(rate)
-  }
-
-  /** Lets one player-scoped capability provide the active logical clock. */
-  private resolveModuleTimeline(fallbackTimeMs: number): number {
-    let timeMs = fallbackTimeMs
-    for (const instance of this.moduleServiceInstances.values()) {
-      const resolved = instance.resolveTimelineMs?.(timeMs)
-      if (resolved !== undefined && Number.isFinite(resolved) && resolved >= 0) timeMs = resolved
-    }
-    return timeMs
-  }
-
-  /** Composes structural policies while preserving one canonical order timeline. */
-  private resolveStructuralOrder(
-    previousOrder: RuntimeStructuralOrder,
-    scene: SolvedScene,
-    deltas: readonly MoveStateDelta[],
-  ): RuntimeStructuralOrder {
-    let order = previousOrder
-    let resolvedByModule = false
-    for (const instance of this.moduleServiceInstances.values()) {
-      const resolve = instance.resolveStructuralOrder
-      if (resolve === undefined) continue
-      order = resolve(order, scene, deltas)
-      resolvedByModule = true
-    }
-    return resolvedByModule ? order : applyStructuralDeltas(order, scene, deltas)
-  }
-
-  /** Sends generic placement deltas to player-scoped module services. */
-  private notifyModuleMoveDeltas(
-    before: SolvedScene | undefined,
-    after: SolvedScene,
-    excludedInstances: ReadonlySet<RuntimeModuleServiceInstance> = new Set(),
-    deltas = before === undefined ? [] : diffSolvedScenes(before, after),
-    instances: ReadonlyMap<string, RuntimeModuleServiceInstance> = this.moduleServiceInstances,
-  ): void {
-    if (before === undefined) return
-    for (const delta of deltas) {
-      for (const instance of instances.values()) {
-        if (!excludedInstances.has(instance)) instance.onMoveDelta?.(delta)
-      }
-    }
-  }
-
-  /** Aborts staged module-service seek state before a grouped commit can occur. */
-  private abortPendingModuleSeek(): void {
-    for (const { handle } of this.pendingModuleSeekHandles.reverse()) handle.abort?.()
-    this.pendingModuleSeekHandles = []
-  }
-
-  /** Closes every active capture before seek or final player teardown. */
-  private cancelActiveCaptures(): void {
-    for (const entry of this.captureSessions.values()) entry.session.cancel()
-    this.captureSessions.clear()
-    this.activeCaptureActions.clear()
-    this.liveCaptureStateUpdates.clear()
+    applyCaptureStateUpdate(this.stateStore, entry, update)
   }
 
   /** Allocates one player-scoped identity for every live event dispatch. */
@@ -883,25 +760,4 @@ export class RuntimePlayer {
     this.nextRuntimeEventId += 1
     return `runtime-dispatch:${this.compiledScene.scene.id}:${index}`
   }
-}
-
-/** Converts pure move-policy issues into the public diagnostic report. */
-function collectSolvedMoveDiagnostics(solved: SolvedScene, diagnostics: DiagnosticCollector): void {
-  for (const issue of solved.moveIssues) {
-    diagnostics.warning(issue.code, issue.message, {
-      refs: { sceneId: solved.scene.scene.id },
-    })
-  }
-}
-
-/** Builds one detached diagnostic report for a reconstructed scene. */
-function createSolvedMoveDiagnostics(solved: SolvedScene): DiagnosticReport {
-  const diagnostics = new DiagnosticCollector({ output: () => undefined })
-  collectSolvedMoveDiagnostics(solved, diagnostics)
-  return diagnostics.report()
-}
-
-/** Creates an empty diagnostic report for a player before its first seek. */
-function createEmptyDiagnosticReport(): DiagnosticReport {
-  return { all: [], warnings: [], errors: [] }
 }

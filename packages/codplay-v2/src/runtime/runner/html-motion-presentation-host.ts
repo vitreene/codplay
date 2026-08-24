@@ -1,6 +1,6 @@
-import { invertMatrix, multiplyMatrix } from '../../ace'
+import { invertMatrix } from '../../ace'
 import { isMeasurableHtmlElement } from '../html'
-import { ensureHtmlOverlayLayer, worldDeltaToLocalDelta } from '../motion/html-pose'
+import { ensureHtmlOverlayLayer } from '../motion/html-pose'
 import {
   composeMotionPose,
   createMotionRootPose,
@@ -10,23 +10,25 @@ import {
 } from '../motion'
 import type { HtmlMatrix, HtmlPose } from '../motion/html-types'
 import { createHtmlMotionStyleLayer, type HtmlMotionStyleLayer } from './html-motion-style-layer'
-
-type OverlayResource = {
-  source: HTMLElement
-  ghost: HTMLElement
-  revision?: string
-  lastWidth?: number
-  lastHeight?: number
-  lastMatrix?: HtmlMatrix
-  neutralizedTransformProperties: Set<GhostTransformProperty>
-}
-
-type OverlayRevisionResolver = (itemId: string) => string | undefined
-type GhostTransformProperty = 'translate' | 'rotate' | 'scale'
-type LocalTransformResource = Readonly<{
-  target: HTMLElement
-  matrix: HtmlMatrix
-}>
+import {
+  applyGhostPose,
+  findElementPath,
+  findNearestOverlayAncestor,
+  findOverlayLayer,
+  isDefaultTransformPropertyValue,
+  orderParentFirst,
+  poseAffineMatrix,
+  removeElement,
+  resolveElementPath,
+  resolveLocalPresentationMatrix,
+  sameHtmlMatrix,
+  sameStringArray,
+} from './html-motion-presentation'
+import type {
+  LocalTransformResource,
+  OverlayResource,
+  OverlayRevisionResolver,
+} from './html-motion-presentation'
 
 /** Commits one complete motion frame without owning temporal state. */
 export class HtmlMotionPresentationHost {
@@ -430,178 +432,4 @@ export class HtmlMotionPresentationHost {
     this.transientStyles.clearHidden(resource.source)
     removeElement(resource.ghost)
   }
-}
-
-/** Applies one root-localized affine pose to a fixed overlay ghost. */
-function applyGhostPose(resource: OverlayResource, root: HtmlPose, rootInverse: HtmlMatrix, pose: HtmlPose): void {
-  const localized = localizePose(root, rootInverse, pose)
-  if (resource.lastWidth !== pose.localWidth) {
-    resource.ghost.style.width = `${pose.localWidth}px`
-    resource.lastWidth = pose.localWidth
-  }
-  if (resource.lastHeight !== pose.localHeight) {
-    resource.ghost.style.height = `${pose.localHeight}px`
-    resource.lastHeight = pose.localHeight
-  }
-  if (resource.lastMatrix !== undefined && sameHtmlMatrix(resource.lastMatrix, localized)) return
-  resource.ghost.style.transform = `matrix(${localized.a}, ${localized.b}, ${localized.c}, ${localized.d}, ${localized.e}, ${localized.f})`
-  resource.lastMatrix = localized
-}
-
-/** Reports whether one author transform longhand is at its neutral CSS value. */
-function isDefaultTransformPropertyValue(property: GhostTransformProperty, value: string): boolean {
-  const normalized = value.trim().toLowerCase()
-  if (normalized === '' || normalized === 'none') return true
-  if (property === 'rotate') return /^0(?:deg|grad|rad|turn)?$/.test(normalized)
-  if (property === 'scale') {
-    const factors = normalized.split(/\s+/)
-    return factors.length <= 3 && factors.every((factor) => factor === '1')
-  }
-  const translations = normalized.split(/\s+/)
-  return translations.length <= 3 && translations.every((part) => /^0(?:[a-z%]+)?$/.test(part))
-}
-
-/** Resolves a live-node matrix by subtracting the natural origin in the same logical parent space. */
-function resolveLocalPresentationMatrix(
-  naturalOrigin: readonly [number, number],
-  target: HtmlPose,
-  parentInverse: HtmlMatrix,
-): HtmlMatrix {
-  const targetMatrix = multiplyMatrix(parentInverse, poseAffineMatrix(target))
-  return { ...targetMatrix, e: targetMatrix.e - naturalOrigin[0], f: targetMatrix.f - naturalOrigin[1] }
-}
-
-/** Converts one pose into the complete affine matrix of its local-box origin. */
-function poseAffineMatrix(pose: HtmlPose): HtmlMatrix {
-  return { ...pose.matrix, e: pose.origin.x, f: pose.origin.y }
-}
-
-/** Compares two affine matrices before rewriting a local presentation slot. */
-function sameHtmlMatrix(left: HtmlMatrix, right: HtmlMatrix): boolean {
-  return left.a === right.a
-    && left.b === right.b
-    && left.c === right.c
-    && left.d === right.d
-    && left.e === right.e
-    && left.f === right.f
-}
-
-/** Converts one world pose into the overlay root's local coordinates. */
-function localizePose(root: HtmlPose, rootInverse: HtmlMatrix, pose: HtmlPose): HtmlMatrix {
-  const originDelta = worldDeltaToLocalDelta(
-    root.matrix,
-    pose.origin.x - root.origin.x,
-    pose.origin.y - root.origin.y,
-  )
-  return {
-    ...multiplyMatrix(rootInverse, { ...pose.matrix, e: 0, f: 0 }),
-    e: originDelta.x,
-    f: originDelta.y,
-  }
-}
-
-/** Finds one descendant through stable child-index references. */
-function findElementPath(root: HTMLElement, target: HTMLElement): readonly number[] | undefined {
-  const path: number[] = []
-  let current: HTMLElement | null = target
-  while (current !== root) {
-    if (current === null) return undefined
-    const parent: HTMLElement | null = current.parentElement
-    if (parent === null) return undefined
-    const index = Array.from(parent.children).indexOf(current)
-    if (index < 0) return undefined
-    path.unshift(index)
-    current = parent
-  }
-  return path
-}
-
-/** Resolves one child-index path in a cloned subtree. */
-function resolveElementPath(root: HTMLElement, path: readonly number[]): HTMLElement | undefined {
-  let current = root
-  for (const index of path) {
-    const child = current.children[index]
-    if (!(child instanceof HTMLElement)) return undefined
-    current = child
-  }
-  return current
-}
-
-/** Finds the single overlay layer owned by this host. */
-function findOverlayLayer(root: Element): HTMLElement | undefined {
-  const children = (root as Element & { children?: HTMLCollection }).children
-  if (children === undefined) return undefined
-  const layer = Array.from(children).find((child) => child.hasAttribute('data-codplay-motion-overlay'))
-  return layer instanceof HTMLElement ? layer : undefined
-}
-
-/** Finds the nearest direct overlay ancestor that owns one local descendant's presentation. */
-function findNearestOverlayAncestor(
-  frame: PresentationFrame,
-  itemId: string,
-  overlayItemIds: ReadonlySet<string>,
-  naturalLayout?: LayoutSnapshot,
-): string | undefined {
-  const visited = new Set<string>()
-  let parentItemId = resolveParentItemId(frame, naturalLayout, itemId)
-  while (parentItemId !== undefined) {
-    if (visited.has(parentItemId)) throw new Error(`Motion presentation cycle detected: ${parentItemId}`)
-    visited.add(parentItemId)
-    if (overlayItemIds.has(parentItemId)) return parentItemId
-    parentItemId = resolveParentItemId(frame, naturalLayout, parentItemId)
-  }
-  return undefined
-}
-
-/** Orders one selected frame subset from ancestors to descendants. */
-function orderParentFirst(
-  frame: PresentationFrame,
-  selected: ReadonlySet<string>,
-  naturalLayout?: LayoutSnapshot,
-): readonly string[] {
-  const ordered: string[] = []
-  const visited = new Set<string>()
-  const visiting = new Set<string>()
-  for (const itemId of selected) visit(itemId)
-  return ordered
-
-  function visit(itemId: string): void {
-    if (visited.has(itemId)) return
-    if (visiting.has(itemId)) throw new Error(`Motion presentation cycle detected: ${itemId}`)
-    visiting.add(itemId)
-    const parentItemId = resolveParentItemId(frame, naturalLayout, itemId)
-    if (parentItemId !== undefined && selected.has(parentItemId)) visit(parentItemId)
-    visiting.delete(itemId)
-    visited.add(itemId)
-    ordered.push(itemId)
-  }
-}
-
-/** Resolves a selected item's parent from the active frame or natural layout. */
-function resolveParentItemId(
-  frame: PresentationFrame,
-  naturalLayout: LayoutSnapshot | undefined,
-  itemId: string,
-): string | undefined {
-  return frame.items.get(itemId)?.parentItemId
-    ?? naturalLayout?.items.get(itemId)?.parentItemId
-}
-
-/** Removes one element in browsers and lightweight DOM doubles. */
-function removeElement(element: Element | undefined): void {
-  if (element === undefined) return
-  if (typeof (element as Element & { remove?: () => void }).remove === 'function') {
-    ;(element as Element & { remove: () => void }).remove()
-  } else {
-    element.parentElement?.removeChild(element)
-  }
-}
-
-/** Compares overlay identities without reading the overlay DOM on every frame. */
-function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false
-  }
-  return true
 }

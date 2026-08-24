@@ -1,8 +1,7 @@
-import { isFiniteNumber, isPlainRecord } from '../../shared'
+import { isPlainRecord } from '../../shared'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture'
-import type { CompiledRecord, CompiledValue } from '../../scene/compiled'
+import type { CompiledValue } from '../../scene/compiled'
 import { captureHtmlPose, worldDeltaToLocalDelta } from '../motion/html-pose'
-import type { HtmlMatrix } from '../motion/html-types'
 import {
   captureHtmlTransientRects,
   playHtmlTransientFlip,
@@ -12,59 +11,38 @@ import {
   clearHtmlTransientNode,
   markHtmlTransientNode,
 } from './html-transient-node'
+import {
+  asElement,
+  defaultAuthorId,
+  readCandidateListIds,
+  readDirectItemElements,
+  readDirectItemIds,
+  readFiniteNumber,
+  readItemId,
+  readPointerSample,
+  readTransitionDuration,
+  resolveInsertionIndex,
+  sameTarget,
+  toLocalBox,
+} from './html-list-dnd-preview/geometry'
+import {
+  applyFloatingStyle,
+  clearFloatingStyle,
+  createGhost,
+} from './html-list-dnd-preview/effects'
+import type {
+  ActivePreview,
+  DropTarget,
+  HtmlListDndNodeResolver,
+  HtmlListDndPreviewOptions,
+  ResolvedDropTarget,
+} from './html-list-dnd-preview/index'
 
-/** Resolves one mounted HTML perso root owned by the runner. */
-export type HtmlListDndNodeResolver = (persoKey: string) => unknown
-
-/** Resolves the canonical child order exposed by one mounted list target. */
-export type HtmlListDndListItemResolver = (
-  storyId: string,
-  listId: string,
-) => readonly unknown[] | undefined
-
-/** Dependencies needed by the HTML list preview, without exposing runner internals. */
-export type HtmlListDndPreviewOptions = Readonly<{
-  resolveNode: HtmlListDndNodeResolver
-  resolveListNode: (storyId: string, listId: string) => unknown
-  resolveListItemNodes?: HtmlListDndListItemResolver
-  resolveAuthorId?: (persoKey: string) => string
-  ghostClassName?: string
-}>
-
-type DropTarget = Readonly<{
-  listId: string
-  index: number
-}>
-
-type ResolvedDropTarget = DropTarget & Readonly<{
-  children: readonly HTMLElement[]
-  childrenRects: ReadonlyMap<HTMLElement, HtmlTransientRect>
-}>
-
-type LocalBox = Readonly<{
-  left: number
-  top: number
-  width: number
-  height: number
-}>
-
-type ActivePreview = {
-  captureId?: string
-  origin?: DropTarget
-  target?: ResolvedDropTarget
-  targetResolved?: boolean
-  ghost?: HTMLElement
-  sourceList?: HTMLElement
-  sourceIndex?: number
-  sourceRectsBeforeFloat?: ReadonlyMap<HTMLElement, HtmlTransientRect>
-  flipCleanups?: Map<HTMLElement, () => void>
-  lastClientX?: number
-  lastClientY?: number
-  offsetX?: number
-  offsetY?: number
-  width?: number
-  height?: number
-}
+export type {
+  HtmlListDndListItemResolver,
+  HtmlListDndPreviewOptions,
+  HtmlListDndNodeResolver,
+} from './html-list-dnd-preview/index'
 
 /**
  * Owns the HTML-only preview half of list DnD. It never changes logical
@@ -127,9 +105,9 @@ export class HtmlListDndPreview {
       node.remove()
       markHtmlTransientNode(node)
       node.ownerDocument.body?.appendChild(node)
-      this.applyFloatingStyle(node, preview, clientX, clientY)
+      applyFloatingStyle(node, preview, clientX, clientY)
     } else {
-      this.applyFloatingStyle(node, preview, clientX, clientY)
+      applyFloatingStyle(node, preview, clientX, clientY)
     }
 
     if (preview.lastClientX === clientX && preview.lastClientY === clientY) return
@@ -183,7 +161,7 @@ export class HtmlListDndPreview {
     if (captureId !== undefined && preview.captureId !== undefined && preview.captureId !== captureId) return
     this.clearGhost(preview)
     if (!completed) this.restoreSourceNode(persoKey, preview)
-    else this.clearFloatingStyle(this.resolveNode(persoKey))
+    else clearFloatingStyle(this.resolveNode(persoKey))
     this.clearFlipTransitions(preview)
     this.active.delete(persoKey)
   }
@@ -250,7 +228,7 @@ export class HtmlListDndPreview {
   /** Releases transient resources while replacing one stale capture preview. */
   private clearPreviewResources(persoKey: string, preview: ActivePreview): void {
     this.clearGhost(preview)
-    this.clearFloatingStyle(this.resolveNode(persoKey))
+    clearFloatingStyle(this.resolveNode(persoKey))
     this.clearFlipTransitions(preview)
   }
 
@@ -259,7 +237,7 @@ export class HtmlListDndPreview {
     const node = asElement(this.resolveNode(persoKey))
     const list = preview.sourceList
     if (node === undefined || list === undefined) return
-    this.clearFloatingStyle(node)
+    clearFloatingStyle(node)
     const children = readDirectItemElements(list, persoKey, preview.ghost)
     const reference = preview.sourceIndex === undefined ? undefined : children[preview.sourceIndex]
     if (reference === undefined) list.appendChild(node)
@@ -432,163 +410,4 @@ export class HtmlListDndPreview {
     preview.ghost = undefined
   }
 
-  /** Applies the temporary fixed pose used while the item leaves list flow. */
-  private applyFloatingStyle(node: HTMLElement, preview: ActivePreview, clientX: number, clientY: number): void {
-    node.style.position = 'fixed'
-    node.style.left = `${clientX - (preview.offsetX ?? 0)}px`
-    node.style.top = `${clientY - (preview.offsetY ?? 0)}px`
-    if (preview.width !== undefined) node.style.width = `${preview.width}px`
-    if (preview.height !== undefined) node.style.height = `${preview.height}px`
-    node.style.margin = '0'
-    node.style.zIndex = '1000'
-    node.style.pointerEvents = 'none'
-  }
-
-  /** Removes only the inline properties owned by this preview controller. */
-  private clearFloatingStyle(node: unknown): void {
-    const element = asElement(node)
-    if (element === undefined) return
-    for (const property of ['position', 'left', 'top', 'width', 'height', 'margin', 'z-index', 'pointer-events']) {
-      element.style.removeProperty(property)
-    }
-    clearHtmlTransientNode(element)
-  }
-}
-
-/** Creates one non-author ghost with dimensions copied from the dragged node. */
-function createGhost(
-  className: string,
-  preview: ActivePreview,
-  captureState: RuntimeCaptureState,
-): HTMLElement {
-  if (typeof document === 'undefined') throw new Error('HTML DnD preview requires a document.')
-  const configured = isPlainRecord(captureState.ghost)
-    ? captureState.ghost as CompiledRecord
-    : undefined
-  const configuredClassName = typeof configured?.className === 'string' ? configured.className : className
-  const ghost = document.createElement('div')
-  ghost.className = configuredClassName
-  ghost.setAttribute('data-codplay-dnd-ghost', '')
-  markHtmlTransientNode(ghost)
-  if (preview.width !== undefined) ghost.style.width = `${preview.width}px`
-  if (preview.height !== undefined) ghost.style.height = `${preview.height}px`
-  const ghostStyle = isPlainRecord(configured?.style) ? configured.style : undefined
-  if (ghostStyle !== undefined) {
-    for (const [property, value] of Object.entries(ghostStyle)) ghost.style.setProperty(property, String(value))
-  }
-  return ghost
-}
-
-/** Reads the authored live transition duration used by the list preview. */
-function readTransitionDuration(captureState: RuntimeCaptureState): number {
-  const move = isPlainRecord(captureState.move) ? captureState.move as CompiledRecord : undefined
-  const transition = move !== undefined && isPlainRecord(move.transition)
-    ? move.transition as CompiledRecord
-    : undefined
-  return typeof transition?.duration === 'number'
-    && Number.isFinite(transition.duration)
-    && transition.duration > 0
-    ? transition.duration
-    : 220
-}
-
-/** Reads the final pointer sample when the native end event carries coordinates. */
-function readPointerSample(event: Event | undefined): RuntimeCaptureSample | undefined {
-  if (event === undefined) return undefined
-  const pointer = event as Partial<PointerEvent>
-  if (!isFiniteNumber(pointer.clientX) || !isFiniteNumber(pointer.clientY)) return undefined
-  return {
-    clientX: pointer.clientX,
-    clientY: pointer.clientY,
-    movementX: isFiniteNumber(pointer.movementX) ? pointer.movementX : 0,
-    movementY: isFiniteNumber(pointer.movementY) ? pointer.movementY : 0,
-  }
-}
-
-/** Converts one viewport rectangle into the list's local coordinate system. */
-function toLocalBox(matrix: HtmlMatrix, origin: Readonly<{ x: number; y: number }>, rect: HtmlTransientRect): LocalBox {
-  const topLeft = worldDeltaToLocalDelta(matrix, rect.left - origin.x, rect.top - origin.y)
-  const bottomRight = worldDeltaToLocalDelta(
-    matrix,
-    rect.left + rect.width - origin.x,
-    rect.top + rect.height - origin.y,
-  )
-  return {
-    left: Math.min(topLeft.x, bottomRight.x),
-    top: Math.min(topLeft.y, bottomRight.y),
-    width: Math.abs(bottomRight.x - topLeft.x),
-    height: Math.abs(bottomRight.y - topLeft.y),
-  }
-}
-
-/** Resolves one insertion slot with the V1 midpoint hysteresis rule. */
-function resolveInsertionIndex(
-  localY: number,
-  childBoxes: readonly LocalBox[],
-  currentIndex?: number,
-): number {
-  for (let index = 0; index < childBoxes.length; index += 1) {
-    const midpoint = childBoxes[index]!.top + childBoxes[index]!.height / 2
-    const margin = childBoxes[index]!.height * 0.3
-    const threshold = currentIndex === undefined
-      ? midpoint
-      : index < currentIndex
-        ? midpoint - margin
-        : midpoint + margin
-    if (localY < threshold) return index
-  }
-  return childBoxes.length
-}
-
-/** Reads candidate list IDs from the author-controlled capture guard. */
-function readCandidateListIds(captureState: RuntimeCaptureState): readonly string[] {
-  return Array.isArray(captureState.dropIn)
-    ? captureState.dropIn.filter((value): value is string => typeof value === 'string')
-    : []
-}
-
-/** Reads the list perso ID attached to a materialized list root. */
-function readItemId(node: Element): string | undefined {
-  const itemId = node.getAttribute('data-item-id')
-  if (itemId === null || !itemId.includes(':')) return undefined
-  return itemId.slice(itemId.indexOf(':') + 1)
-}
-
-/** Reads direct author item keys while excluding the currently floating item. */
-function readDirectItemIds(list: Element, excludedPersoKey?: string): readonly string[] {
-  return readDirectItemElements(list, excludedPersoKey).map((element) => element.getAttribute('data-item-id') ?? '')
-}
-
-/** Reads direct materialized item roots, excluding ghosts and one dragged root. */
-function readDirectItemElements(
-  list: Element,
-  excludedPersoKey?: string,
-  excludedGhost?: HTMLElement,
-): readonly HTMLElement[] {
-  return Array.from(list.children).filter((child): child is HTMLElement => {
-    if (!(child instanceof HTMLElement) || child === excludedGhost) return false
-    if (child.hasAttribute('data-codplay-dnd-ghost')) return false
-    return child.getAttribute('data-item-id') !== excludedPersoKey
-  })
-}
-
-/** Compares two drop targets without depending on object identity. */
-function sameTarget(left: DropTarget | undefined, right: DropTarget | undefined): boolean {
-  return left?.listId === right?.listId && left?.index === right?.index
-}
-
-/** Narrows a runtime node to the DOM element operations used by the preview. */
-function asElement(value: unknown): HTMLElement | undefined {
-  return typeof HTMLElement !== 'undefined' && value instanceof HTMLElement ? value : undefined
-}
-
-/** Reads one finite numeric sample field. */
-function readFiniteNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-/** Resolves an author ID from the stable story-qualified runtime key. */
-function defaultAuthorId(persoKey: string): string {
-  const separator = persoKey.indexOf(':')
-  return separator < 0 ? persoKey : persoKey.slice(separator + 1)
 }

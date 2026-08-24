@@ -23,6 +23,20 @@ registered by the core runtime catalog. The service folders provide the pure
 validation declarations and the HTML adapter operations; they do not import the
 runtime catalog.
 
+## Internal boundaries
+
+The public runner imports remain stable while the two high-responsibility HTML
+presenters are split internally:
+
+- `html-motion-presentation/` owns overlay resource types, pose/matrix
+  geometry, and parent/descendant ordering helpers;
+- `html-list-dnd-preview/` owns preview types, hit-test geometry, pointer
+  decoding, ghost/floating effects, and the FLIP-facing controller helpers.
+
+`HtmlMotionPresentationHost` and `HtmlListDndPreview` remain the only
+orchestrators for their respective circuits. These folders do not create a
+second materializer, player, motion system, or logical DnD path.
+
 Play and Seek invoke this exact operation. The runner retains only immutable
 geometry boundaries and, during an open live capture, the presentation-only
 FIRST snapshot needed by its current `endEmit` handoff. It never retains a

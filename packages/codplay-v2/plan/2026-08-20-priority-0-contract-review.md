@@ -178,3 +178,49 @@ La preuve d'acceptation est : chaque algorithme retenu n'a plus qu'une
 implémentation, les tests de parité couvrent les cas limites, les imports
 restent orientés vers `shared` sans dépendance inverse et les tests/typecheck
 V2 restent verts.
+
+## Découpage des points chauds — direction validée le 2026-08-24
+
+La restructuration des quatre points chauds identifiés est une opération
+interne de maintenance V2. Elle ne modifie ni le circuit d'exécution, ni les
+contrats publics, ni les invariants de la tranche HTML.
+
+Les façades publiques restent stables :
+
+- `RuntimePlayer` conserve son entrée depuis `runtime/player` ;
+- `HtmlMotionPresentationHost` et `HtmlListDndPreview` conservent leurs
+  imports depuis `runtime/runner` ;
+- `createMediaSyncModuleService` conserve sa factory et sa surface typée.
+
+Les responsabilités sont réparties par domaine :
+
+- `runtime/player/capture`, `runtime/player/modules`,
+  `runtime/player/scene` et `runtime/player/diagnostics` portent les sous-
+  domaines du player sans créer un second player ou un second journal ;
+- `runtime/runner/html-motion-presentation` sépare les ressources d'overlay,
+  les transformations et l'orchestration de présentation ;
+- `runtime/runner/html-list-dnd-preview` sépare les types, la géométrie, les
+  effets transitoires et le contrôleur de preview ;
+- `runtime/capabilities/media-sync` sépare l'état, la lecture des broadcasts
+  et la synchronisation de lecture, sous une seule factory player-scoped.
+
+Invariants de réalisation :
+
+- un déplacement de fichier ne constitue pas une nouvelle frontière runtime ;
+- les façades peuvent réexporter les implémentations internes, mais aucun
+  chemin parallèle ne doit être introduit ;
+- chaque module spécialisé conserve un seul rôle et ne devient pas un dossier
+  `utils` générique ;
+- les helpers de pointeur et les parseurs de matrices restent dans leur domaine
+  tant que leurs contrats diffèrent ;
+- les tests continuent de traverser les entrées publiques existantes et
+  valident le même circuit Play, Seek, capture, materialization et lifecycle.
+
+La preuve d'acceptation est : les imports publics existants restent valides,
+les responsabilités sont localisées dans les dossiers correspondants, aucune
+classe ou service concurrent n'est créé, et les tests, le typecheck, les
+builds V2 ainsi que `git diff --check` restent verts.
+
+Vérification du découpage le 2026-08-24 : `npm run test
+--workspace=@codplay/codplay-v2` passe avec 69 fichiers et 418 tests ; le
+typecheck, `build:runner`, `build:player` et `git diff --check` passent.

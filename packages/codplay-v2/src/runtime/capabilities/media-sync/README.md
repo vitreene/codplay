@@ -50,8 +50,8 @@ explicitement avant `init()` et `play()` pour la diffusion autonome, mais
 
 ## Frontière d'implémentation
 
-`media-sync-capability.ts` est l'unique module player-scoped de cette tranche.
-Il lit les actions de la `SolvedScene` et appelle la surface
+`media-sync-capability.ts` est la façade du module player-scoped de cette
+tranche. Elle lit les actions de la `SolvedScene` et appelle la surface
 `MediaSyncRuntimeComponent`, qui reste indépendante du DOM et peut donc être
 fournie par le materializer approprié. Aucun second runtime de synchronisation
 ne concurrence ce module. La surface arrive par le
@@ -59,6 +59,16 @@ ne concurrence ce module. La surface arrive par le
 `getSurface(runtimeItemId, 'media')` et ne récupère pas le composant concret.
 La résolution est typée à la déclaration du catalogue et ne comporte pas de
 duck typing à l'exécution.
+
+La façade délègue ses responsabilités à des modules spécialisés du même
+dossier :
+
+- `media-sync-state.ts` initialise et conserve l'état logique par média ;
+- `media-sync-broadcasts.ts` lit, ordonne et identifie les occurrences
+  compilées ;
+- `media-sync-playback.ts` applique les transitions, fenêtres, resets et
+  synchronisations avec la surface média ;
+- `media-sync-types.ts` porte les types internes de cette frontière.
 
 ## Preuves
 
