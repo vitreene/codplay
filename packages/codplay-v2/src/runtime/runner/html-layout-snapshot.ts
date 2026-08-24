@@ -1,4 +1,5 @@
 import { captureHtmlPose, createHtmlPoseCaptureContext } from '../motion/html-pose'
+import { isMeasurableHtmlElement } from '../html'
 import {
   composeMotionPose,
   createMotionRootPose,
@@ -21,7 +22,7 @@ export function captureHtmlLayoutSnapshot(
   scene: SolvedScene,
   selection?: ReadonlySet<string>,
 ): LayoutSnapshot {
-  if (!isMeasurableElement(root)) return emptySnapshot(scene)
+  if (!isMeasurableHtmlElement(root)) return emptySnapshot(scene)
   const captureContext = createHtmlPoseCaptureContext()
   const hostRootPose = captureHtmlPose(root, captureContext)
   const rootCoordinatePose = createMotionRootPose()
@@ -30,7 +31,7 @@ export function captureHtmlLayoutSnapshot(
   for (const perso of Object.values(scene.persos)) {
     if (!perso.placement.mounted || !selectedItemIds.has(perso.key)) continue
     const node = nodes.get(perso.key)
-    if (isMeasurableElement(node)) measured.set(perso.key, captureHtmlPose(node, captureContext))
+    if (isMeasurableHtmlElement(node)) measured.set(perso.key, captureHtmlPose(node, captureContext))
   }
 
   const items = new Map<string, LayoutItemSnapshot>()
@@ -98,12 +99,4 @@ function emptySnapshot(scene: SolvedScene): LayoutSnapshot {
     rootPose: createMotionRootPose(),
     items: new Map(),
   })
-}
-
-/** Narrows values to browser elements with a usable document coordinate context. */
-function isMeasurableElement(value: unknown): value is Element {
-  return typeof Element !== 'undefined'
-    && value instanceof Element
-    && value.ownerDocument !== undefined
-    && typeof (value as Element & { getBoundingClientRect?: unknown }).getBoundingClientRect === 'function'
 }

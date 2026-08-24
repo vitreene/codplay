@@ -9,7 +9,7 @@ import {
   type ColorValue,
   type TransformProperty,
 } from '../../../ace'
-import { isPlainRecord } from '../../../shared'
+import { cloneRecord, isPlainRecord } from '../../../shared'
 import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
 import { isActionSequence, isTweenAction } from './action-sequence'
@@ -249,18 +249,6 @@ function applyClassNamePatch(current: CompiledValue | undefined, patch: Compiled
     for (const name of patch.add.split(/\s+/).filter(Boolean)) classes.add(name)
   }
   return [...classes].join(' ')
-}
-
-/** Clones one compiled record before resolving its state. */
-function cloneRecord(record: CompiledRecord): Record<string, CompiledValue> {
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, cloneValue(value)]))
-}
-
-/** Clones recursive compiled values without mutating compiled input. */
-function cloneValue(value: CompiledValue): CompiledValue {
-  if (Array.isArray(value)) return value.map(cloneValue)
-  if (isPlainRecord(value)) return cloneRecord(value)
-  return value
 }
 
 /** Checks values accepted by the scalar and color resolver. */

@@ -1,5 +1,5 @@
 import { isPreparedPath, type Path } from '../../ace'
-import { isPlainRecord } from '../../shared'
+import { compareNumberPaths, isPlainRecord } from '../../shared'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../scene/compiled'
 import type { MoveFlipMode } from '../config/move'
 import type { RuntimeTrackEvent, RuntimeTrackJournal } from '../player/pipeline/track-journal'
@@ -93,7 +93,7 @@ export function compileMotionSchedule(
     }
   }
   return Object.freeze([...effective.values()]
-    .sort((left, right) => left.startAt - right.startAt || comparePaths(left.declarationPath, right.declarationPath)))
+    .sort((left, right) => left.startAt - right.startAt || compareNumberPaths(left.declarationPath, right.declarationPath)))
 }
 
 /** Flattens nested eventimes into absolute declaration positions. */
@@ -204,14 +204,4 @@ function readNonNegativeNumber(value: unknown, label: string): number {
 /** Maps the public presentation choice to the graph's structural terminology. */
 function resolvePresentationMode(mode: MoveFlipMode | undefined): MotionPresentationMode {
   return mode === 'overlay-world' ? 'reparent' : 'local'
-}
-
-/** Compares declaration paths without depending on object insertion order. */
-function comparePaths(left: readonly number[], right: readonly number[]): number {
-  const length = Math.min(left.length, right.length)
-  for (let index = 0; index < length; index += 1) {
-    const difference = left[index]! - right[index]!
-    if (difference !== 0) return difference
-  }
-  return left.length - right.length
 }

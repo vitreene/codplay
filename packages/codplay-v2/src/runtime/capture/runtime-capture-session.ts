@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../shared'
+import { cloneRecord, isPlainRecord } from '../../shared'
 import type { CompiledValue } from '../../scene/compiled'
 import {
   EVENT_INSERT_MODE_APPLY_NOW,
@@ -310,18 +310,6 @@ function propagateDuration(
     patchedStyle[property] = (transition ? { ...rawValue, duration } : rawValue) as CompiledValue
   }
   return { ...data, style: patchedStyle }
-}
-
-/** Clones one compiled record recursively into a mutable working copy. */
-function cloneRecord(record: RuntimeCaptureState): RuntimeCaptureState {
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, cloneValue(value)])) as RuntimeCaptureState
-}
-
-/** Clones one compiled value recursively. */
-function cloneValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(cloneValue)
-  if (isPlainRecord(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]))
-  return value
 }
 
 /** Freezes one record snapshot before giving it to author functions. */

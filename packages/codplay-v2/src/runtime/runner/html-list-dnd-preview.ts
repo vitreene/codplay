@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../shared'
+import { isFiniteNumber, isPlainRecord } from '../../shared'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture'
 import type { CompiledRecord, CompiledValue } from '../../scene/compiled'
 import { captureHtmlPose, worldDeltaToLocalDelta } from '../motion/html-pose'
@@ -519,11 +519,6 @@ function toLocalBox(matrix: HtmlMatrix, origin: Readonly<{ x: number; y: number 
     width: Math.abs(bottomRight.x - topLeft.x),
     height: Math.abs(bottomRight.y - topLeft.y),
   }
-}
-
-/** Accepts only finite native pointer values. */
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }
 
 /** Resolves one insertion slot with the V1 midpoint hysteresis rule. */

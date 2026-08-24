@@ -1,3 +1,5 @@
+import { isFiniteNumber } from '../shared'
+
 /** A two-dimensional point used by ACE's geometry primitives. */
 export type Point = readonly [number, number]
 
@@ -342,11 +344,6 @@ function isPreparedSegment(value: unknown): value is PathSegment {
 /** Checks one numeric point. */
 function isPoint(value: unknown): value is Point {
   return Array.isArray(value) && value.length === 2 && value.every(isFiniteNumber)
-}
-
-/** Checks one finite numeric value. */
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }
 
 /** Checks one JSON-like record without importing the scene layer. */

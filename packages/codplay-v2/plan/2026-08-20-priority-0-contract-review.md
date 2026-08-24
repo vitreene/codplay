@@ -158,3 +158,23 @@ La preuve d'acceptation est : aucune occurrence de `getComponentById` dans le
 contexte module ou `media-sync`, aucun cast `unknown as MediaSyncRuntimeComponent`
 pour résoudre une surface, tests de la registry et de `media-sync` verts, et
 validation typecheck/build V2 inchangée.
+
+## Utilitaires partagés — direction validée le 2026-08-24
+
+Les fonctions communes sont regroupées par contrat dans `src/shared`, avec des
+sous-dossiers spécialisés et des exports explicites :
+
+- `values` pour le clonage récursif de valeurs JSON-like ;
+- `ordering` pour la comparaison lexicographique des chemins numériques ;
+- `numbers` pour les gardes numériques sans effet de bord.
+
+Les consommateurs conservent leurs types métier et délèguent uniquement
+l'algorithme commun. Les lectures d'événements pointeur et les parseurs de
+matrices HTML restent dans leurs domaines tant que leurs contrats ou leurs
+formats diffèrent ; ils ne sont pas fusionnés dans un dossier utilitaire
+global.
+
+La preuve d'acceptation est : chaque algorithme retenu n'a plus qu'une
+implémentation, les tests de parité couvrent les cas limites, les imports
+restent orientés vers `shared` sans dépendance inverse et les tests/typecheck
+V2 restent verts.

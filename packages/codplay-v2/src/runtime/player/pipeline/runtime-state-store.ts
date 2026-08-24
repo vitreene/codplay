@@ -1,5 +1,5 @@
 import { STRAP_SCOPE_SCENE, type StrapScope } from '../../config/strap-scope'
-import { isPlainRecord } from '../../../shared'
+import { cloneRecord, cloneValue, isPlainRecord } from '../../../shared'
 import type { CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
 
 /** Runtime state store separated by scene and story ownership scope. */
@@ -46,19 +46,6 @@ export class RuntimeStateStore {
     this.storyStates.set(storyId, created)
     return created
   }
-}
-
-/** Clones one optional compiled state record. */
-function cloneRecord(record: CompiledRecord | undefined): Record<string, CompiledValue> {
-  if (record === undefined) return {}
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, cloneValue(value)]))
-}
-
-/** Clones one recursive compiled value. */
-function cloneValue(value: CompiledValue): CompiledValue {
-  if (Array.isArray(value)) return value.map(cloneValue)
-  if (isPlainRecord(value)) return cloneRecord(value)
-  return value
 }
 
 /** Freezes a snapshot recursively before exposing it to a strap. */

@@ -5,6 +5,7 @@ import type {
 } from '../../../scene/compiled'
 import type { RuntimePlayer } from '../../player'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture-types'
+import { isFiniteNumber } from '../../../shared'
 
 const DEFAULT_TRACK_EVENT = 'pointermove'
 const DEFAULT_END_EVENT = 'pointerup'
@@ -432,9 +433,4 @@ function readPointerId(event: Event): number | undefined {
 /** Keeps one active capture bound to the pointer that opened it. */
 function matchesPointer(activePointerId: number | undefined, eventPointerId: number | undefined): boolean {
   return activePointerId === undefined || eventPointerId === undefined || activePointerId === eventPointerId
-}
-
-/** Accepts only finite native numeric pointer fields. */
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }

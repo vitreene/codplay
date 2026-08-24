@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../../shared'
+import { cloneRecord, cloneValue, compareNumberPaths } from '../../../shared'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
@@ -269,14 +269,14 @@ function compareMaterializedActions(
 ): number {
   return left.startAt - right.startAt
     || left.trackOrder - right.trackOrder
-    || compareDeclarationPaths(left.declarationPath, right.declarationPath)
+    || compareNumberPaths(left.declarationPath, right.declarationPath)
 }
 
 /** Preserves source chronology and declaration order while expanding sequences. */
 function compareFlattenedEventimes(left: FlattenedEventime, right: FlattenedEventime): number {
   return left.startAt - right.startAt
     || left.trackOrder - right.trackOrder
-    || compareDeclarationPaths(left.declarationPath, right.declarationPath)
+    || compareNumberPaths(left.declarationPath, right.declarationPath)
 }
 
 /** Flattens relative eventimes into absolute timeline positions. */
@@ -335,16 +335,6 @@ function trackIsActive(journal: RuntimeTrackJournal | undefined, trackId: string
   return journal === undefined ? initialActive : journal.isTrackActive(trackId)
 }
 
-/** Compares nested declaration paths without depending on object or map order. */
-function compareDeclarationPaths(left: readonly number[], right: readonly number[]): number {
-  const length = Math.min(left.length, right.length)
-  for (let index = 0; index < length; index += 1) {
-    const difference = left[index] - right[index]
-    if (difference !== 0) return difference
-  }
-  return left.length - right.length
-}
-
 /** Rejects invalid timeline inputs before the hot evaluation path. */
 function assertTimelineTime(timeMs: number): void {
   if (!Number.isFinite(timeMs) || timeMs < 0) {
@@ -352,21 +342,8 @@ function assertTimelineTime(timeMs: number): void {
   }
 }
 
-/** Clones one optional compiled state record into a mutable evaluation copy. */
-function cloneRecord(record: CompiledRecord | undefined): Record<string, CompiledValue> {
-  if (record === undefined) return {}
-  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, cloneValue(value)]))
-}
-
 /** Applies one replayable shallow state patch without mutating compiled input. */
 function applyStateUpdate(state: Record<string, CompiledValue>, update: CompiledRecord | undefined): void {
   if (update === undefined) return
   for (const [key, value] of Object.entries(update)) state[key] = cloneValue(value)
-}
-
-/** Clones one recursive compiled value for a materialized state copy. */
-function cloneValue(value: CompiledValue): CompiledValue {
-  if (Array.isArray(value)) return value.map(cloneValue)
-  if (isPlainRecord(value)) return cloneRecord(value)
-  return value
 }

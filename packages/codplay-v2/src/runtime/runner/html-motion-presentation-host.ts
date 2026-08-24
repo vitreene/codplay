@@ -1,4 +1,5 @@
 import { invertMatrix, multiplyMatrix } from '../../ace'
+import { isMeasurableHtmlElement } from '../html'
 import { ensureHtmlOverlayLayer, worldDeltaToLocalDelta } from '../motion/html-pose'
 import {
   composeMotionPose,
@@ -102,7 +103,7 @@ export class HtmlMotionPresentationHost {
     resolveRevision?: OverlayRevisionResolver,
     naturalLayout?: LayoutSnapshot,
   ): void {
-    if (!isMeasurableElement(this.root)) return
+    if (!isMeasurableHtmlElement(this.root)) return
     this.restoreNaturalCaptureGhosts()
     const directOverlayItemIds = new Set([...frame.items.values()]
       .filter((item) => item.representation === 'reparent')
@@ -603,12 +604,4 @@ function sameStringArray(left: readonly string[], right: readonly string[]): boo
     if (left[index] !== right[index]) return false
   }
   return true
-}
-
-/** Narrows one root to a browser-measurable element. */
-function isMeasurableElement(value: unknown): value is Element {
-  return typeof Element !== 'undefined'
-    && value instanceof Element
-    && value.ownerDocument !== undefined
-    && typeof (value as Element & { getBoundingClientRect?: unknown }).getBoundingClientRect === 'function'
 }

@@ -1,4 +1,4 @@
-import { isPlainRecord } from '../../../shared'
+import { compareNumberPaths, isPlainRecord } from '../../../shared'
 import type { CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import type { RuntimeModuleServiceDefinition } from '../../catalog'
 import type {
@@ -526,17 +526,8 @@ function readMediaTransition(value: unknown): MediaTransition | undefined {
 function compareBroadcastOccurrences(left: BroadcastOccurrence, right: BroadcastOccurrence): number {
   return left.action.startAt - right.action.startAt
     || left.action.trackOrder - right.action.trackOrder
-    || comparePaths(left.action.declarationPath, right.action.declarationPath)
+    || compareNumberPaths(left.action.declarationPath, right.action.declarationPath)
     || left.persoKey.localeCompare(right.persoKey)
-}
-
-/** Compares two declaration paths without relying on object or DOM order. */
-function comparePaths(left: readonly number[], right: readonly number[]): number {
-  const length = Math.min(left.length, right.length)
-  for (let index = 0; index < length; index += 1) {
-    if (left[index] !== right[index]) return left[index] - right[index]
-  }
-  return left.length - right.length
 }
 
 /** Identifies one compiled broadcast occurrence across consecutive presentations. */
