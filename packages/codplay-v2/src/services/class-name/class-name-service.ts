@@ -1,9 +1,6 @@
 import type { ServiceValidationDefinition, ValidationFunction } from '../service-validation-types'
 import { reportInvalidServiceValue } from '../service-validation-report'
 import { isPlainRecord } from '../../shared'
-import { HTML_MATERIALIZER_ID } from '../../runtime/materializer'
-import type { RuntimeComponentServiceDefinition } from '../../runtime/catalog'
-import { createHtmlClassNameService } from './html-class-name-service'
 
 /** Delta form accepted by the className service. */
 export type ClassNamePatch = Readonly<{
@@ -54,11 +51,4 @@ export const validateClassName: ValidationFunction = (value, context) => {
 export const CLASS_NAME_SERVICE: ServiceValidationDefinition = {
   name: 'className',
   validate: validateClassName,
-}
-
-/** Declares the core className service and its HTML materializer implementation. */
-export const HTML_CLASS_NAME_SERVICE: RuntimeComponentServiceDefinition = {
-  ...CLASS_NAME_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
-  create: () => createHtmlClassNameService(),
 }

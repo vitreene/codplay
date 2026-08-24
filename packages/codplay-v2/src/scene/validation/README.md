@@ -8,6 +8,11 @@ Validation is the pure bridge between the declarations in
 `RuntimeCapabilityCatalog` and the `CompiledScene` build. It does not own a second
 mutable registration catalog.
 
+The compile-time markup sanitizer also lives in this boundary. It consumes the
+pure `MarkupAttributeSanitizer` policies declared by services and writes the
+sanitized template into `CompiledScene`; the runtime markup capability only owns
+player-scoped parts and materialization registration.
+
 ## Role
 
 - CodPlay registers component, data-service, and ModuleService requirements in one runtime catalog.

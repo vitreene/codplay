@@ -54,7 +54,11 @@ explicitement avant `init()` et `play()` pour la diffusion autonome, mais
 Il lit les actions de la `SolvedScene` et appelle la surface
 `MediaSyncRuntimeComponent`, qui reste indépendante du DOM et peut donc être
 fournie par le materializer approprié. Aucun second runtime de synchronisation
-ne concurrence ce module.
+ne concurrence ce module. La surface arrive par le
+`RuntimeComponentSurfaceResolver` du contexte module ; le module demande
+`getSurface(runtimeItemId, 'media')` et ne récupère pas le composant concret.
+La résolution est typée à la déclaration du catalogue et ne comporte pas de
+duck typing à l'exécution.
 
 ## Preuves
 

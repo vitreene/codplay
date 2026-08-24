@@ -8,6 +8,10 @@ component instances. `createMarkupModuleServiceDefinition()` exposes that state
 through the `RuntimeCapabilityCatalog`, which creates one player-scoped module
 instance.
 
+Template sanitation is a scene compilation concern and is implemented in
+`src/scene/validation/markup-sanitizer.ts`. This module does not export or invoke
+that sanitizer.
+
 The module does not create components, sanitize templates, read the DOM, or mount
 children. `registerMaterializedComponent()` is the boundary adapter for the
 component materializer; the HTML materializer resolves those logical targets to

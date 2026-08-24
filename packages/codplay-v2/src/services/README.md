@@ -17,11 +17,12 @@ A service name is the shared namespace for:
 
 The component definition consumed by `CompiledScene` and the runtime component
 registry carries the same service and module dependency lists. Each service has
-its own folder. Its pure declaration and its materializer-specific declarations
-remain together. `RuntimeCapabilityCatalog` only registers the selected service
-definitions at CodPlay initialization; it does not recreate their destinations or
-factories. The materializer consumes the resulting instance; it does not register
-services inline.
+its own folder. Its pure declaration and validation remain here; materializer-
+specific bindings are assembled by the corresponding runtime adapter.
+`RuntimeCapabilityCatalog` only registers the selected service definitions at
+CodPlay initialization; it does not recreate their destinations or factories.
+The materializer consumes the resulting instance; it does not register services
+inline.
 
 Core services such as `style`, `className`, `attr`, and `content` belong here.
 Their validation declarations are shared with the V2 component definitions.

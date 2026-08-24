@@ -9,6 +9,7 @@ export {
 export { SceneGuardEngine } from './scene-guard-engine'
 export { validatePersoWithCapabilities } from './validate-perso-with-capabilities'
 export { reportMissingValidator } from './validation-warnings'
+export { sanitizeMarkupTemplate } from './markup-sanitizer'
 export type {
   ComponentValidationDefinition,
   PersoValidationInput,

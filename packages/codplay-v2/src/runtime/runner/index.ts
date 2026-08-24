@@ -10,6 +10,12 @@ export {
   type HtmlComponentMaterializerNodes,
   type HtmlMaterializerRuntimeContext,
 } from './html-component-materializer'
+export {
+  HTML_ATTR_SERVICE,
+  HTML_CLASS_NAME_SERVICE,
+  HTML_CONTENT_SERVICE,
+  HTML_STYLE_SERVICE,
+} from './html-service-definitions'
 export { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
 export { HtmlMotionPresentationHost } from './html-motion-presentation-host'
 export { HtmlMotionSystem } from './html-motion-system'

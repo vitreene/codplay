@@ -1,8 +1,5 @@
 import type { ServiceValidationDefinition, ValidationFunction } from '../service-validation-types'
 import { reportInvalidServiceValue } from '../service-validation-report'
-import { HTML_MATERIALIZER_ID } from '../../runtime/materializer'
-import type { RuntimeComponentServiceDefinition } from '../../runtime/catalog'
-import { createHtmlContentService } from './html-content-service'
 
 /** Runtime content accepted by the default content service. */
 export type ContentValue = string | HTMLElement
@@ -27,11 +24,4 @@ export const validateContent: ValidationFunction = (value, context) => {
 export const CONTENT_SERVICE: ServiceValidationDefinition = {
   name: 'content',
   validate: validateContent,
-}
-
-/** Declares the core content service and its HTML materializer implementation. */
-export const HTML_CONTENT_SERVICE: RuntimeComponentServiceDefinition = {
-  ...CONTENT_SERVICE,
-  materializers: [HTML_MATERIALIZER_ID],
-  create: () => createHtmlContentService(),
 }

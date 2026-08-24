@@ -1,10 +1,10 @@
 import { isHtmlElementNode } from '../html-materializer-service-types'
 import type { HtmlElementNode } from '../html-materializer-service-types'
-import type { RuntimeComponentServiceInstance } from '../../runtime/catalog'
+import type { ServiceRuntimeInstance } from '../service-runtime-types'
 import type { ClassNamePatch } from './class-name-service'
 
 /** Creates the component-scoped HTML adapter for the className service. */
-export function createHtmlClassNameService(): RuntimeComponentServiceInstance {
+export function createHtmlClassNameService(): ServiceRuntimeInstance {
   return {
     apply: (node, value) => {
       if (!isHtmlElementNode(node)) return

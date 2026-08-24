@@ -96,7 +96,7 @@ export class RuntimeEngine {
     playerId: string,
     compiledScene: CompiledScene,
     moduleIds: readonly string[],
-    context: Pick<RuntimeModuleServiceContext, 'getComponentById'> = {},
+    context: Pick<RuntimeModuleServiceContext, 'componentSurfaces'> = {},
   ): ReadonlyMap<string, RuntimeModuleServiceInstance> {
     const instances = new Map<string, RuntimeModuleServiceInstance>()
     for (const id of moduleIds) {

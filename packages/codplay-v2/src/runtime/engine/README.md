@@ -24,7 +24,10 @@ locked.
 
 Runtime modules are defined in the catalog and instantiated per player. The engine
 owns capability availability and grouped seek coordination; module state is never
-a module-level singleton.
+a module-level singleton. A module receives only the typed
+`RuntimeComponentSurfaceResolver` needed to operate on player-local mounted
+components; the engine never exposes a concrete component instance through this
+context.
 
 Player lifecycle creation, initial solved-scene initialization, move-delta routing,
 staged seek preparation/commit, and destruction are wired through that single

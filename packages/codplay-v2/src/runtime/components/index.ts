@@ -11,6 +11,13 @@ export { RuntimeComponentRuntime } from './runtime-component-runtime'
 export type { LayoutInitial, LayoutState } from './layout-component'
 export type { ListInitial, ListState } from './list-component'
 export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media-component'
+export type {
+  MediaComponentSurface,
+  RuntimeComponentSurfaceId,
+  RuntimeComponentSurfaceMap,
+  RuntimeComponentSurfaceProvider,
+  RuntimeComponentSurfaceResolver,
+} from './component-surface-types'
 export type { TagState } from './tag-component'
 export { validateMediaAction, validateMediaInitial } from './media-component'
 export type {

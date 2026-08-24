@@ -8,24 +8,18 @@ import type {
 } from '../../engine'
 import type { MaterializedAction, SolvedPerso, SolvedScene } from '../../player/pipeline'
 import { buildTrackRegistry, resolveStoryTrackId } from '../../player/pipeline'
-import type { MediaTransition } from '../../components/media-component'
+import type {
+  MediaComponentSurface,
+  MediaTransition,
+} from '../../components/component-surface-types'
 
 /** Runtime module identifier for component-owned media playback synchronization. */
 export const MEDIA_SYNC_MODULE_SERVICE_ID = 'media-sync' as const
 
-/** Native operations required from one materialized media component. */
-export type MediaSyncRuntimeComponent = Readonly<{
-  seekTo: (mediaMs: number) => void
-  play: () => void
-  pause: () => void
-  stopAt: (mediaMs: number) => void
-  getCurrentTimeMs: () => number
-  getDurationMs: () => number | null
-  isPaused: () => boolean
-  setPlaybackWindow?: (startMs: number, endMs: number | null) => void
-  applyTransition?: (transition: MediaTransition, progress: number) => void
-  setRate?: (rate: number) => void
-}>
+/** Compatibility name for the typed media surface consumed by media-sync. */
+export type MediaSyncRuntimeComponent = MediaComponentSurface
+
+type MediaComponentSurfaceResolver = (runtimeItemId: string) => MediaComponentSurface | undefined
 
 type MediaLogicalState = 'idle' | 'playing' | 'paused' | 'stopped'
 
@@ -74,7 +68,9 @@ export function createMediaSyncModuleServiceDefinition(): RuntimeModuleServiceDe
 export function createMediaSyncModuleService(
   context: RuntimeModuleServiceContext,
 ): RuntimeModuleServiceInstance {
-  const getComponentById = context.getComponentById ?? (() => undefined)
+  const getMediaComponent: MediaComponentSurfaceResolver = context.componentSurfaces === undefined
+    ? () => undefined
+    : (runtimeItemId) => context.componentSurfaces?.getSurface(runtimeItemId, 'media')
   const mediaById = new Map<string, MediaRuntimeState>()
   let sceneSignature: string | undefined
   let broadcastOccurrenceKeys = new Set<string>()
@@ -92,7 +88,7 @@ export function createMediaSyncModuleService(
       const fullReplayRequested = sceneSignature === undefined || replayBroadcastsOnNextPresentation
       if (fullReplayRequested) {
         nextActivationOrder = 1
-        replayBroadcastOccurrences(occurrences, mediaById, getComponentById, () => nextActivationOrder++)
+        replayBroadcastOccurrences(occurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
         replayBroadcastsOnNextPresentation = false
         forceResync = true
       } else if (nextSignature !== sceneSignature && isBroadcastAdditionOnly(
@@ -102,12 +98,12 @@ export function createMediaSyncModuleService(
         applyBroadcastOccurrences(
           occurrences.filter((occurrence) => !broadcastOccurrenceKeys.has(createBroadcastOccurrenceKey(occurrence))),
           mediaById,
-          getComponentById,
+          getMediaComponent,
           () => nextActivationOrder++,
         )
       } else if (nextSignature !== sceneSignature) {
         nextActivationOrder = 1
-        replayBroadcastOccurrences(occurrences, mediaById, getComponentById, () => nextActivationOrder++)
+        replayBroadcastOccurrences(occurrences, mediaById, getMediaComponent, () => nextActivationOrder++)
         forceResync = true
       }
       sceneSignature = nextSignature
@@ -116,23 +112,23 @@ export function createMediaSyncModuleService(
         for (const state of mediaById.values()) state.needsResync = true
         forceResync = false
       }
-      syncTimeline(scene.timeMs, playbackState, mediaById, getComponentById)
+      syncTimeline(scene.timeMs, playbackState, mediaById, getMediaComponent)
     },
     onPlaybackStateChange: (playbackState, timeMs) => {
-      syncTimeline(timeMs, playbackState, mediaById, getComponentById)
+      syncTimeline(timeMs, playbackState, mediaById, getMediaComponent)
     },
     onRateChange: (rate) => {
       for (const state of mediaById.values()) {
-        getMediaComponent(getComponentById, state.runtimeItemId)?.setRate?.(rate)
+        getMediaComponent(state.runtimeItemId)?.setRate?.(rate)
       }
     },
     resolveTimelineMs: (fallbackTimeMs) => resolveTimelineFromMaster(
       fallbackTimeMs,
       mediaById,
-      getComponentById,
+      getMediaComponent,
     ),
     beforeSeek: (timeMs) => {
-      pauseActivePlayback(timeMs, mediaById, getComponentById)
+      pauseActivePlayback(timeMs, mediaById, getMediaComponent)
     },
     prepareSeek: (): RuntimeModuleServiceSeekHandle => {
       const previous = forceResync
@@ -150,7 +146,7 @@ export function createMediaSyncModuleService(
     },
     destroy: () => {
       for (const state of mediaById.values()) {
-        const component = getMediaComponent(getComponentById, state.runtimeItemId)
+        const component = getMediaComponent(state.runtimeItemId)
         if (component !== undefined) component.stopAt(state.frozenMediaMs)
       }
       mediaById.clear()
@@ -257,14 +253,14 @@ function applyBroadcastOccurrence(
   state: MediaRuntimeState | undefined,
   occurrence: BroadcastOccurrence,
   mediaById: Map<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
   nextActivation: () => number,
 ): void {
   if (state === undefined) return
   state.trackId = occurrence.trackId
   state.trackActive = occurrence.trackActive
   if (occurrence.broadcast.type === 'START') {
-    if (state.isMaster) pausePreviousMasters(state, occurrence.action.startAt, mediaById, getComponentById)
+    if (state.isMaster) pausePreviousMasters(state, occurrence.action.startAt, mediaById, getMediaComponent)
     state.logicalState = 'playing'
     state.sequenceStartMs = occurrence.action.startAt
     state.sourceStartMs = clampMediaMs(occurrence.broadcast.startAt ?? 0)
@@ -275,7 +271,7 @@ function applyBroadcastOccurrence(
     state.activationOrder = nextActivation()
     state.needsResync = true
     state.transition = occurrence.broadcast.transition ?? null
-    const component = getMediaComponent(getComponentById, state.runtimeItemId)
+    const component = getMediaComponent(state.runtimeItemId)
     component?.setPlaybackWindow?.(
       state.sourceStartMs,
       component === undefined ? state.sourceEndMs : resolveEffectiveEndMs(state, component),
@@ -284,13 +280,13 @@ function applyBroadcastOccurrence(
   }
 
   if (occurrence.broadcast.type === 'PAUSE') {
-    state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getComponentById)
+    state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getMediaComponent)
     state.logicalState = 'paused'
     state.needsResync = true
     return
   }
 
-  state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getComponentById)
+  state.frozenMediaMs = resolveExpectedMediaMs(state, occurrence.action.startAt, getMediaComponent)
   state.logicalState = 'stopped'
   state.needsResync = true
 }
@@ -300,14 +296,14 @@ function pausePreviousMasters(
   nextMaster: MediaRuntimeState,
   timelineMs: number,
   mediaById: Map<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const previous of mediaById.values()) {
     if (previous === nextMaster || !previous.isMaster || previous.logicalState !== 'playing') continue
-    previous.frozenMediaMs = resolveExpectedMediaMs(previous, timelineMs, getComponentById)
+    previous.frozenMediaMs = resolveExpectedMediaMs(previous, timelineMs, getMediaComponent)
     previous.logicalState = 'paused'
     previous.needsResync = true
-    getMediaComponent(getComponentById, previous.runtimeItemId)?.pause()
+    getMediaComponent(previous.runtimeItemId)?.pause()
   }
 }
 
@@ -315,7 +311,7 @@ function pausePreviousMasters(
 function applyBroadcastOccurrences(
   occurrences: readonly BroadcastOccurrence[],
   mediaById: Map<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
   nextActivation: () => number,
 ): void {
   for (const occurrence of occurrences) {
@@ -323,7 +319,7 @@ function applyBroadcastOccurrences(
       mediaById.get(occurrence.persoKey),
       occurrence,
       mediaById,
-      getComponentById,
+      getMediaComponent,
       nextActivation,
     )
   }
@@ -334,10 +330,10 @@ function syncTimeline(
   timelineMs: number,
   playbackState: 'playing' | 'paused',
   mediaById: ReadonlyMap<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const state of mediaById.values()) {
-    const component = getMediaComponent(getComponentById, state.runtimeItemId)
+    const component = getMediaComponent(state.runtimeItemId)
     if (component === undefined) continue
 
     applyMediaTransition(state, timelineMs, component)
@@ -367,7 +363,7 @@ function syncTimeline(
       continue
     }
 
-    const expectedMediaMs = resolveExpectedMediaMs(state, timelineMs, getComponentById)
+    const expectedMediaMs = resolveExpectedMediaMs(state, timelineMs, getMediaComponent)
     const effectiveEndMs = resolveEffectiveEndMs(state, component)
     const nativeMediaHasEnded = playbackState === 'playing'
       && !state.needsResync
@@ -404,14 +400,14 @@ function syncTimeline(
 function pauseActivePlayback(
   timelineMs: number,
   mediaById: ReadonlyMap<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const state of mediaById.values()) {
     if (state.logicalState === 'idle' || state.logicalState === 'stopped') continue
-    state.frozenMediaMs = resolveExpectedMediaMs(state, timelineMs, getComponentById)
+    state.frozenMediaMs = resolveExpectedMediaMs(state, timelineMs, getMediaComponent)
     state.logicalState = 'paused'
     state.needsResync = true
-    getMediaComponent(getComponentById, state.runtimeItemId)?.pause()
+    getMediaComponent(state.runtimeItemId)?.pause()
   }
 }
 
@@ -419,14 +415,14 @@ function pauseActivePlayback(
 function resolveTimelineFromMaster(
   fallbackTimelineMs: number,
   mediaById: ReadonlyMap<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): number {
   const activeMaster = [...mediaById.values()]
     .filter((state) => state.isMaster && state.logicalState === 'playing')
     .filter((state) => state.trackActive)
     .sort((left, right) => right.activationOrder - left.activationOrder)[0]
   if (activeMaster === undefined || activeMaster.sequenceStartMs === null) return fallbackTimelineMs
-  const component = getMediaComponent(getComponentById, activeMaster.runtimeItemId)
+  const component = getMediaComponent(activeMaster.runtimeItemId)
   if (component === undefined || component.isPaused()) return fallbackTimelineMs
   const currentMediaMs = component.getCurrentTimeMs()
   const effectiveEndMs = resolveEffectiveEndMs(activeMaster, component)
@@ -438,10 +434,10 @@ function resolveTimelineFromMaster(
 /** Applies a complete reset for initialization, seek replay, or non-monotonic changes. */
 function resetPlaybackStates(
   mediaById: ReadonlyMap<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): void {
   for (const state of mediaById.values()) {
-    const component = getMediaComponent(getComponentById, state.runtimeItemId)
+    const component = getMediaComponent(state.runtimeItemId)
     if (state.logicalState !== 'idle') component?.pause()
     component?.setPlaybackWindow?.(0, null)
     state.logicalState = 'idle'
@@ -459,22 +455,22 @@ function resetPlaybackStates(
 function replayBroadcastOccurrences(
   occurrences: readonly BroadcastOccurrence[],
   mediaById: Map<string, MediaRuntimeState>,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
   nextActivation: () => number,
 ): void {
-  resetPlaybackStates(mediaById, getComponentById)
-  applyBroadcastOccurrences(occurrences, mediaById, getComponentById, nextActivation)
+  resetPlaybackStates(mediaById, getMediaComponent)
+  applyBroadcastOccurrences(occurrences, mediaById, getMediaComponent, nextActivation)
 }
 
 /** Resolves one media position from its broadcast segment and the sequence clock. */
 function resolveExpectedMediaMs(
   state: MediaRuntimeState,
   timelineMs: number,
-  getComponentById: (runtimeItemId: string) => unknown,
+  getMediaComponent: MediaComponentSurfaceResolver,
 ): number {
   if (state.sequenceStartMs === null) return state.frozenMediaMs
   const raw = state.sourceStartMs + (timelineMs - state.sequenceStartMs)
-  const component = getMediaComponent(getComponentById, state.runtimeItemId)
+  const component = getMediaComponent(state.runtimeItemId)
   const end = state.sourceEndMs ?? (component === undefined ? null : component.getDurationMs())
   return clampMediaWindow(raw, state.sourceStartMs, end)
 }
@@ -498,20 +494,6 @@ function resolveEffectiveEndMs(state: MediaRuntimeState, component: MediaSyncRun
   const duration = component.getDurationMs()
   if (state.sourceEndMs === null) return duration
   return duration === null ? state.sourceEndMs : Math.min(state.sourceEndMs, duration)
-}
-
-/** Resolves one component from the opaque module context with a runtime surface check. */
-function getMediaComponent(
-  getComponentById: (runtimeItemId: string) => unknown,
-  runtimeItemId: string,
-): MediaSyncRuntimeComponent | undefined {
-  const value = getComponentById(runtimeItemId)
-  if (typeof value !== 'object' || value === null) return undefined
-  const required = ['seekTo', 'play', 'pause', 'stopAt', 'getCurrentTimeMs', 'getDurationMs', 'isPaused']
-  const candidate = value as Record<string, unknown>
-  return required.every((name) => typeof candidate[name] === 'function')
-    ? value as unknown as MediaSyncRuntimeComponent
-    : undefined
 }
 
 /** Reads one supported broadcast payload from one compiled action. */

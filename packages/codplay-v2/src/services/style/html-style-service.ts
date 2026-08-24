@@ -11,10 +11,10 @@ import {
   setHtmlStyleProperty,
   type HtmlMaterializerRuntimeContext,
 } from '../html-materializer-service-types'
-import type { RuntimeComponentServiceInstance } from '../../runtime/catalog'
+import type { ServiceRuntimeInstance } from '../service-runtime-types'
 
 /** Creates the component-scoped HTML adapter for the style service. */
-export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext): RuntimeComponentServiceInstance {
+export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext): ServiceRuntimeInstance {
   const managedProperties = new Set<string>()
   const transformState = createHtmlTransformStyleState()
   return {

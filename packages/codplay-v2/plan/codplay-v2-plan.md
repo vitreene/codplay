@@ -51,6 +51,12 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
   src/runtime/player     une instance, materialize, resolve et solve
 ```
 
+La sanitation du markup qui précède `CompiledScene` appartient à
+`src/scene/validation`. La capacité runtime `markup` conserve uniquement les
+parts/outlets et leur materialization par player. Les services portent leurs
+déclarations et validations pures ; leurs bindings de materializer sont
+assemblés dans l'adapter runtime concerné.
+
 `CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
 `resources`, `rootNodeIds`, `requirements` et, lorsque nécessaire, les index
 dérivés du contrat compilé comme `actionTargetIndex`. Toute extension doit correspondre
@@ -83,6 +89,7 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
 | Validation/catalogue | Contrat initial fixe, extensions en cours | Les declarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposees au build par `validationSnapshot()`; les formes core de `style`, `className`, `attr` et `content` ainsi que les contrats initiaux de `tag`, `layout`, `list` et `media` sont couverts; la factory executable reste liee a la facade HTML de la tranche actuelle et devra etre generalisee avant l'ouverture d'un materializer non HTML. |
 | Composants | Base générique et base HTML séparées, tranche HTML implémentée | `BaseComponent` est désormais substrat-neutre ; `BaseHTMLComponent`, `LayoutComponent`, `TagComponent`, factories runtime, parts/outlets et materialisation template string — y compris les fragments sans enveloppe — sont couverts par le `RuntimeMaterializer` unifié ; JSX et les autres types restent hors tranche. |
+| Surfaces de composants | Registre typé initial implémenté | Les déclarations peuvent publier une surface via `RuntimeComponentSurfaceProvider`; le runtime la conserve par instance montée et les modules la résolvent par `RuntimeComponentSurfaceResolver`; `media-sync` consomme `media` sans classe concrète ni duck typing. Les nouvelles surfaces restent à ajouter à la map contractuelle. |
 | ACE | Contrat de valeurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
 | Mouvement HTML | Tranche HTML fixe et clôturée | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire, circuit Play/Seek unique et optimisation sans lecture DOM par frame sont couverts ; les materializers SVG/Canvas/Three.js et capacités non compilées restent hors tranche. |
 | Démos standard | Gabarit fixe, extension en cours | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |

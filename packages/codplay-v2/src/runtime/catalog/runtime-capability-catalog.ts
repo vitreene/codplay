@@ -4,11 +4,21 @@ import type {
   ServiceValidationDefinition,
   ValidationFunction,
 } from '../../services'
+import type {
+  ServiceRuntimeContext,
+  ServiceRuntimeDefinition,
+  ServiceRuntimeFactory,
+  ServiceRuntimeInstance,
+} from '../../services/service-runtime-types'
 import type { BaseComponent } from '../components/base-component'
 import type {
   ComponentInput,
   HTMLComponentServices,
 } from '../components/component-types'
+import type {
+  RuntimeComponentSurfaceMap,
+  RuntimeComponentSurfaceProvider,
+} from '../components/component-surface-types'
 import type { RuntimeMaterializer } from '../materializer'
 import type {
   RuntimeModuleServiceContext,
@@ -26,21 +36,13 @@ export type RuntimeComponentIdentity = Readonly<{
   componentType: string
 }>
 
-/** Context passed to one component-owned service factory. */
-export type RuntimeComponentServiceContext = RuntimeComponentIdentity & Readonly<{
-  materializerId: string
-  materializerContext: unknown
+/** Service context aliases retained at the runtime catalog boundary. */
+export type RuntimeComponentServiceContext = ServiceRuntimeContext
+export type RuntimeComponentServiceInstance = ServiceRuntimeInstance
+export type RuntimeComponentServiceFactory = ServiceRuntimeFactory
+export type RuntimeComponentServiceDefinition = ServiceRuntimeDefinition & Readonly<{
+  origin?: RuntimeCapabilityOrigin
 }>
-
-/** One component-owned service instance applied by the component facade. */
-export type RuntimeComponentServiceInstance = Readonly<{
-  apply: (node: unknown, value: unknown) => void
-}>
-
-/** Factory for one component-owned service instance. */
-export type RuntimeComponentServiceFactory = (
-  context: RuntimeComponentServiceContext,
-) => RuntimeComponentServiceInstance
 
 /** Factory that creates one V2 component from compiled author data. */
 export type RuntimeComponentFactoryInput = ComponentInput<Record<string, unknown>> & Readonly<{
@@ -52,13 +54,6 @@ export type RuntimeComponentFactory = (
   input: RuntimeComponentFactoryInput,
 ) => BaseComponent<Record<string, unknown>>
 
-/** Unified declaration of one service, including validation and materializers. */
-export type RuntimeComponentServiceDefinition = ServiceValidationDefinition & Readonly<{
-  materializers: readonly string[]
-  create: RuntimeComponentServiceFactory
-  origin?: RuntimeCapabilityOrigin
-}>
-
 /** Unified declaration of one runtime component type. */
 export type RuntimeComponentDefinition = Readonly<{
   type: string
@@ -67,6 +62,8 @@ export type RuntimeComponentDefinition = Readonly<{
   validateInitial?: ValidationFunction
   validateAction?: ValidationFunction
   create: RuntimeComponentFactory
+  /** Publishes typed substrate-neutral operations for a mounted instance. */
+  surfaces?: RuntimeComponentSurfaceProvider
   mountableParts?: readonly string[]
   origin?: RuntimeCapabilityOrigin
 }>
@@ -152,6 +149,14 @@ export class RuntimeCapabilityCatalog {
   /** Returns one component definition by its compiled type. */
   getComponent(type: string): RuntimeComponentDefinition | undefined {
     return this.components.get(type)
+  }
+
+  /** Resolves the typed surfaces published by one component declaration. */
+  getComponentSurfaces(
+    type: string,
+    component: BaseComponent<Record<string, unknown>>,
+  ): Partial<RuntimeComponentSurfaceMap> {
+    return this.components.get(type)?.surfaces?.(component) ?? {}
   }
 
   /** Returns one service definition by its data namespace. */

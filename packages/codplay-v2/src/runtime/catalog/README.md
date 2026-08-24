@@ -8,9 +8,10 @@ CodPlay instance is initialized. It contains component definitions, service
 definitions and player-scoped module definitions.
 
 The same definitions provide runtime factories and the pure validation snapshot.
-Each service declaration in `src/services/<service>/` also lists the materializer
-IDs it supports; the current HTML/SVG component family receives the services
-declared by its component type and the selected materializer destination.
+Pure service declarations live in `src/services/<service>/`; materializer-specific
+bindings are assembled by the corresponding runtime adapter. The current HTML/SVG
+component family receives the services declared by its component type and the
+selected materializer destination.
 `BaseComponent` itself does not receive or expose this facade; a future
 materializer-specific component family owns its own service boundary.
 
@@ -22,4 +23,7 @@ contract; that boundary must be specified before another substrate is registered
 Core definitions may be overridden and foreign definitions may be added before
 the catalog is locked. After the lock, the engine, player, component runtime and
 materializers all consume this same catalog. Runners and demos do not register
-services, modules or component factories locally.
+services, modules or component factories locally. A component definition may
+also publish a typed runtime surface adapter; the component runtime stores the
+result per mounted instance and exposes it to modules through a resolver, never
+through the concrete component class.

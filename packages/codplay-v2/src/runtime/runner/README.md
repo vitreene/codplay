@@ -18,6 +18,11 @@ SolvedScene(t)
   -> atomic HTML motion presentation
 ```
 
+The HTML service bindings are assembled in `html-service-definitions.ts` and
+registered by the core runtime catalog. The service folders provide the pure
+validation declarations and the HTML adapter operations; they do not import the
+runtime catalog.
+
 Play and Seek invoke this exact operation. The runner retains only immutable
 geometry boundaries and, during an open live capture, the presentation-only
 FIRST snapshot needed by its current `endEmit` handoff. It never retains a

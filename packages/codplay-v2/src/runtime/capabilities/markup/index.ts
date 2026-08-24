@@ -1,7 +1,4 @@
 export {
-  sanitizeMarkupTemplate,
-} from './markup-sanitizer'
-export {
   createMarkupModuleServiceDefinition,
   MarkupCapabilityState,
   MARKUP_MODULE_SERVICE_ID,

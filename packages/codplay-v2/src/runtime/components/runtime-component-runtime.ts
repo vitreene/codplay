@@ -4,6 +4,11 @@ import type { BaseComponent } from './base-component'
 import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
 import type { RuntimeMaterializer } from '../materializer'
 import type { RuntimePreloadResourceMetadata } from '../preload'
+import type {
+  RuntimeComponentSurfaceId,
+  RuntimeComponentSurfaceMap,
+  RuntimeComponentSurfaceResolver,
+} from './component-surface-types'
 
 export type { RuntimeComponentIdentity } from '../catalog'
 
@@ -22,6 +27,7 @@ export type RuntimeComponentRuntimeOptions = Readonly<{
 type MountedComponent = Readonly<{
   component: BaseComponent<Record<string, unknown>>
   handle: RuntimeComponentHandle
+  surfaces: Partial<RuntimeComponentSurfaceMap>
 }>
 
 /** Synchronizes compiled solved persos with a player-local component host. */
@@ -42,9 +48,12 @@ export class RuntimeComponentRuntime {
     this.moduleServices = moduleServices
   }
 
-  /** Returns one player-local component for a capability that operates on its materialized node. */
-  getComponentById(componentId: string): BaseComponent<Record<string, unknown>> | undefined {
-    return this.mounted.get(componentId)?.component
+  /** Returns the typed surface registry for this player-local component host. */
+  getComponentSurfaces(): RuntimeComponentSurfaceResolver {
+    return {
+      getSurface: <SurfaceId extends RuntimeComponentSurfaceId>(componentId: string, surfaceId: SurfaceId) =>
+        this.mounted.get(componentId)?.surfaces[surfaceId],
+    }
   }
 
   /** Returns the logical materialization revision last delivered to one component. */
@@ -112,6 +121,7 @@ export class RuntimeComponentRuntime {
     )
     const mounted: MountedComponent = {
       component,
+      surfaces: this.options.catalog.getComponentSurfaces(perso.type, component),
       handle: this.options.materializer.materializeComponent(
         component,
         identity,

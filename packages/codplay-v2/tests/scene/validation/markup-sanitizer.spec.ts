@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeMarkupTemplate } from '../../../src/runtime/capabilities/markup'
+import { sanitizeMarkupTemplate } from '../../../src/scene/validation'
 import { STYLE_SERVICE } from '../../../src/services'
 
 describe('sanitizeMarkupTemplate', () => {

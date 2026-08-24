@@ -2,13 +2,14 @@ import type { CompiledScene } from '../../scene/compiled'
 import type { MoveStateDelta } from '../move'
 import type { SolvedScene } from '../player/pipeline/types'
 import type { MountTargetDeclaration } from '../player/pipeline/mount-targets'
+import type { RuntimeComponentSurfaceResolver } from '../components/component-surface-types'
 
 /** Context supplied when one module instance is created for a player. */
 export type RuntimeModuleServiceContext = Readonly<{
   playerId: string
   compiledScene: CompiledScene
-  /** Resolves one player-local component after the component host has mounted it. */
-  getComponentById?: (runtimeItemId: string) => unknown
+  /** Resolves typed operations published by player-local mounted components. */
+  componentSurfaces?: RuntimeComponentSurfaceResolver
 }>
 
 /** Runtime handle for one staged module seek. */

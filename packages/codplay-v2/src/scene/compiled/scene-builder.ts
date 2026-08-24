@@ -34,7 +34,7 @@ import type {
   CompiledSceneData,
   CompiledStory,
 } from './types'
-import { sanitizeMarkupTemplate } from '../../runtime/capabilities/markup/markup-sanitizer'
+import { sanitizeMarkupTemplate } from '../validation/markup-sanitizer'
 import { validateCompiledSceneSemantics } from './semantic-validator'
 
 /** Options controlling one deterministic scene compilation. */

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { materializeTemplateString } from '../../../src/runtime/runner/html-template-materializer'
-import { sanitizeMarkupTemplate } from '../../../src/runtime/capabilities/markup'
+import { sanitizeMarkupTemplate } from '../../../src/scene/validation'
 
 describe('HTML template materializer', () => {
   it('materializes an HTML template and consumes data-part markers', () => {

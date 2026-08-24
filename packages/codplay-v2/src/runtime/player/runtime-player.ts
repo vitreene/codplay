@@ -245,7 +245,7 @@ export class RuntimePlayer {
         this.id,
         this.compiledScene,
         this.compiledScene.requirements.modules,
-        { getComponentById: (runtimeItemId) => this.componentRuntime?.getComponentById(runtimeItemId) },
+        { componentSurfaces: this.componentRuntime?.getComponentSurfaces() },
       ))
     } catch (error) {
       diagnostics.error('RUNTIME_MODULE_INIT_FAILED', error instanceof Error ? error.message : 'Runtime module initialization failed.')

@@ -14,7 +14,7 @@ import {
   HTML_CLASS_NAME_SERVICE,
   HTML_CONTENT_SERVICE,
   HTML_STYLE_SERVICE,
-} from '../../services'
+} from '../runner/html-service-definitions'
 
 /** Creates the single built-in catalog used by CodPlay V2 HTML instances. */
 export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
@@ -62,6 +62,7 @@ const coreMediaDefinition: RuntimeComponentDefinition = {
   validateInitial: validateMediaInitial,
   validateAction: validateMediaAction,
   create: (input) => new MediaComponent(input as never),
+  surfaces: (component) => component instanceof MediaComponent ? { media: component } : {},
 }
 
 /** Creates the V2 list host declaration backed by the list capability. */

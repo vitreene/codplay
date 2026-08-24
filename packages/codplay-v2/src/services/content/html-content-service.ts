@@ -1,9 +1,9 @@
 import { isHtmlElementNode } from '../html-materializer-service-types'
-import type { RuntimeComponentServiceInstance } from '../../runtime/catalog'
+import type { ServiceRuntimeInstance } from '../service-runtime-types'
 import { isContentElement } from './content-service'
 
 /** Creates the component-scoped HTML adapter for the content service. */
-export function createHtmlContentService(): RuntimeComponentServiceInstance {
+export function createHtmlContentService(): ServiceRuntimeInstance {
   return {
     apply: (node, value) => {
       if (!isHtmlElementNode(node)) return

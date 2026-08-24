@@ -4,7 +4,10 @@ import {
   RuntimeComponentRuntime,
 } from '../../../src/runtime/components'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
-import type { ComponentUpdateInput } from '../../../src/runtime/components'
+import type {
+  ComponentUpdateInput,
+  MediaComponentSurface,
+} from '../../../src/runtime/components'
 import type { RuntimeMaterializer } from '../../../src/runtime/materializer'
 import type { SolvedScene } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
@@ -73,11 +76,21 @@ describe('RuntimeComponentRuntime', () => {
     const events: string[] = []
     const mountablePartIds: string[][] = []
     let receivedModuleServices: ReadonlyMap<string, unknown> | undefined
+    const surface: MediaComponentSurface = {
+      seekTo: () => undefined,
+      play: () => undefined,
+      pause: () => undefined,
+      stopAt: () => undefined,
+      getCurrentTimeMs: () => 0,
+      getDurationMs: () => null,
+      isPaused: () => true,
+    }
     catalog.registerComponent({
       type: 'test',
       services: [],
       modules: [],
       mountableParts: ['content'],
+      surfaces: () => ({ media: surface }),
       create: () => {
         const component = new TestComponent({
           perso: { id: 'item', storyId: 'main', initial: {} },
@@ -97,11 +110,14 @@ describe('RuntimeComponentRuntime', () => {
       materializeScene: () => undefined,
     }
     const runtime = new RuntimeComponentRuntime({ catalog, materializer })
+    const surfaces = runtime.getComponentSurfaces()
+    expect(surfaces.getSurface('main:item', 'media')).toBeUndefined()
     const markupService = {}
     const moduleServices = new Map([['markup', markupService]])
     runtime.setModuleServices(moduleServices)
 
     runtime.sync(solvedScene(0))
+    expect(surfaces.getSurface('main:item', 'media')).toBe(surface)
     runtime.sync(solvedScene(100))
     runtime.sync(solvedScene(200, false))
 

@@ -226,6 +226,7 @@ describe('RuntimePlayer capture facade', () => {
     const liveUpdates: Array<{ persoKey: string; state: Record<string, unknown> }> = []
     const componentRuntime = {
       setModuleServices: () => undefined,
+      getComponentSurfaces: () => ({ getSurface: () => undefined }),
       sync: () => undefined,
       updateLive: (persoKey: string, state: Record<string, unknown>) => liveUpdates.push({ persoKey, state }),
       destroy: () => undefined,
@@ -289,6 +290,7 @@ describe('RuntimePlayer capture facade', () => {
     const liveUpdates: Array<{ persoKey: string; state: Record<string, unknown> }> = []
     const componentRuntime = {
       setModuleServices: () => undefined,
+      getComponentSurfaces: () => ({ getSurface: () => undefined }),
       sync: () => undefined,
       updateLive: (persoKey: string, state: Record<string, unknown>) => liveUpdates.push({ persoKey, state }),
       destroy: () => undefined,

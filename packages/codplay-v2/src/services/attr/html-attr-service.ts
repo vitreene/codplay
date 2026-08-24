@@ -1,8 +1,8 @@
 import { isHtmlElementNode, isServiceRecord } from '../html-materializer-service-types'
-import type { RuntimeComponentServiceInstance } from '../../runtime/catalog'
+import type { ServiceRuntimeInstance } from '../service-runtime-types'
 
 /** Creates the component-scoped HTML adapter for the attr service. */
-export function createHtmlAttrService(): RuntimeComponentServiceInstance {
+export function createHtmlAttrService(): ServiceRuntimeInstance {
   const managedAttributes = new Set<string>()
   return {
     apply: (node, value) => {

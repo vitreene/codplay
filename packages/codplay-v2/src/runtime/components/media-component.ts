@@ -5,16 +5,12 @@ import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 import type { RuntimePreloadResourceMetadata } from '../preload'
 import { BaseHTMLComponent } from './base-html-component'
 import type { HTMLComponentInput, ComponentUpdateInput } from './component-types'
+import type { MediaTransition } from './component-surface-types'
+
+export type { MediaTransition } from './component-surface-types'
 
 /** Native media element kinds supported by the unified media component. */
 export type MediaTag = 'audio' | 'video'
-
-/** Author-declared media property transition applied by the media-sync module. */
-export type MediaTransition = Readonly<{
-  from?: Readonly<Record<string, unknown>>
-  to?: Readonly<Record<string, unknown>>
-  duration?: number
-}>
 
 /** Initial state accepted by the V2 HTML media component. */
 export type MediaInitial = Readonly<{

@@ -18,6 +18,20 @@ services de substrat. La tranche actuelle de composants HTML/SVG utilise
 facade de services HTML. Les futurs composants Canvas, Three.js et Rive doivent
 utiliser la base generique ou une base specialisee de leur materializer.
 
+## Surfaces de capacité
+
+Une déclaration de composant peut publier des opérations runtime typées via
+`surfaces`. Le `RuntimeComponentRuntime` conserve ces surfaces avec chaque
+instance montée et fournit au contexte des modules un
+`RuntimeComponentSurfaceResolver`. Le module demande une surface par son
+identifiant (`media`, par exemple) ; il ne reçoit jamais l'instance
+`BaseComponent` ni la classe concrète.
+
+La surface `media` est le premier contrat publié. Son adaptateur est déclaré
+dans le catalogue core, tandis que `media-sync` ne dépend que de l'interface
+d'opérations de lecture. Une surface absente renvoie `undefined` et n'est pas
+reconstruite par inspection dynamique des méthodes.
+
 ## List
 
 `ListComponent` est le composant auteur de type `list`. Il possède uniquement sa

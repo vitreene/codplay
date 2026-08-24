@@ -87,9 +87,74 @@ extensions correspondantes :
 | Décision | État | Ouverture bloquée |
 |---|---|---|
 | Factory/catalogue réellement indépendant du substrate HTML | À spécifier avant une factory Canvas, Three.js ou Rive ; le catalogue actuel reste la tranche HTML | materializers et familles de composants non HTML |
-| Dépendances de compilation du sanitizer markup et des services | À traiter avant une généralisation de la frontière scene/services/runtime | compilation ou services indépendants du markup HTML |
-| Surface typée entre modules runtime et composants | À spécifier avant d'ajouter des capabilities qui récupèrent des composants par identifiant | nouvelles capabilities transversales |
+| Dépendances de compilation du sanitizer markup et des services | Restructurées le 2026-08-24 : sanitizer dans `scene/validation`, contrats de binding dans `services`, adapters HTML dans `runtime/runner` | profils de compilation et services indépendants d'HTML |
+| Surface typée entre modules runtime et composants | Fixée le 2026-08-24 : registre de surfaces déclaré par le catalogue, résolveur typé dans le contexte module, aucune classe exposée | nouvelles surfaces à ajouter à la map de contrats |
 
 Les marqueurs `Review: required` restants concernent uniquement des extensions non
 engagées : renderer continu, defaults de couleur, `InputComponent`, composants
 hybrides, et contrat `Behavior/live`. Ils ne bloquent pas la tranche HTML relue.
+
+## Restructuration des frontières — direction validée le 2026-08-24
+
+La tranche de restructuration conserve exactement la sémantique HTML actuelle et
+ne crée aucun nouveau materializer. Elle corrige uniquement la direction des
+imports :
+
+```text
+services
+  -> contrats de validation et contrats de binding runtime sans import runtime
+
+scene/validation
+  -> sanitation compilée du markup et validation des données
+
+runtime/catalog et runtime/runner
+  -> assemblage des contrats et définitions/adapters HTML
+```
+
+Décisions d'implémentation :
+
+- `MarkupAttributeSanitizer` reste un contrat de service ; l'algorithme de
+  sanitation du template est déplacé dans `scene/validation` car il intervient
+  avant la création du `CompiledScene`.
+- Les types `RuntimeComponentService*` sont définis dans la couche services,
+  sans dépendre de `RuntimeCapabilityCatalog`.
+- Les définitions `HTML_*_SERVICE` sont des bindings runtime HTML et sont
+  enregistrées depuis `runtime/runner`; les déclarations pures restent dans
+  `src/services`.
+- `runtime/capabilities/markup` conserve uniquement l'état de parts/outlets et
+  la materialization runtime ; il ne possède plus le sanitizer de compilation.
+
+La preuve d'acceptation est : aucune importation `src/services -> src/runtime`,
+aucune importation `src/scene -> src/runtime/capabilities`, même snapshot de
+validation, même sortie compilée, et tests/typecheck/builds V2 inchangés au
+plan comportemental.
+
+## Registre des surfaces de composants — direction validée le 2026-08-24
+
+Les modules runtime ne récupèrent plus un composant par identifiant sous la
+forme `unknown`. Chaque déclaration de composant peut publier des surfaces
+opérationnelles dans la `RuntimeComponentSurfaceMap`; le
+`RuntimeComponentRuntime` les conserve avec l'instance montée et expose au
+contexte module un `RuntimeComponentSurfaceResolver`.
+
+La première surface est `media`. Elle est typée par les opérations dont
+`media-sync` a besoin (`seekTo`, `play`, `pause`, `stopAt`, lecture de position,
+durée et état de pause, avec fenêtre, transition et rate optionnels). Le
+catalogue core relie explicitement la déclaration `media` à cette surface. Le
+module ne dépend donc ni de `BaseComponent`, ni de `MediaComponent`, ni d'une
+inspection de méthodes à l'exécution.
+
+Invariants :
+
+- le resolver est player-local et reste valide avant et après le mount initial ;
+- une surface absente renvoie `undefined` et ne déclenche aucun fallback par
+  duck typing ;
+- le provider de surface appartient à la déclaration du composant, pas au
+  module qui la consomme ;
+- une nouvelle famille de surfaces ajoute un contrat typé à la map et son
+  provider, sans élargir le contexte module à une classe concrète.
+
+La preuve d'acceptation est : aucune occurrence de `getComponentById` dans le
+contexte module ou `media-sync`, aucun cast `unknown as MediaSyncRuntimeComponent`
+pour résoudre une surface, tests de la registry et de `media-sync` verts, et
+validation typecheck/build V2 inchangée.

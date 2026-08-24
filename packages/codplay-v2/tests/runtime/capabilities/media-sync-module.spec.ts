@@ -6,6 +6,10 @@ import {
 import type { RuntimeModuleServiceInstance } from '../../../src/runtime/engine'
 import type { CompiledRecord, CompiledScene } from '../../../src/scene/compiled'
 import type { SolvedScene } from '../../../src/runtime/player/pipeline'
+import type {
+  MediaComponentSurface,
+  RuntimeComponentSurfaceResolver,
+} from '../../../src/runtime/components'
 
 const compiledScene: CompiledScene = {
   schemaVersion: 'codplay.v2.scene.v1',
@@ -149,6 +153,16 @@ function solvedWithVideo(
   }
 }
 
+/** Creates the typed media surface registry used by module-level tests. */
+function componentSurfaces(
+  resolve: (runtimeItemId: string) => MediaComponentSurface | undefined,
+): RuntimeComponentSurfaceResolver {
+  return {
+    getSurface: <SurfaceId extends 'media'>(runtimeItemId: string, _surfaceId: SurfaceId) =>
+      resolve(runtimeItemId),
+  }
+}
+
 describe('V2 media-sync module service', () => {
   it('pauses active native media before seek reconstruction', () => {
     let paused = false
@@ -165,7 +179,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'test-player',
       compiledScene,
-      getComponentById: () => component,
+      componentSurfaces: componentSurfaces(() => component),
     })
 
     service.initializeScene?.(solved(0))
@@ -191,7 +205,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'test-player',
       compiledScene,
-      getComponentById: () => component,
+      componentSurfaces: componentSurfaces(() => component),
     })
     const scene = solved(0)
 
@@ -227,7 +241,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'test-player',
       compiledScene: nonMasterCompiledScene,
-      getComponentById: () => component,
+      componentSurfaces: componentSurfaces(() => component),
     })
     const scene = solved(0, nonMasterCompiledScene)
 
@@ -272,7 +286,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'incremental-broadcast',
       compiledScene,
-      getComponentById: (runtimeItemId) => runtimeItemId === 'main:audio' ? audio : video,
+      componentSurfaces: componentSurfaces((runtimeItemId) => runtimeItemId === 'main:audio' ? audio : video),
     })
     const initial = solvedWithVideo(0)
 
@@ -316,7 +330,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'master-switch',
       compiledScene: dualMasterCompiledScene,
-      getComponentById: (runtimeItemId) => runtimeItemId === 'main:audio' ? audio : video,
+      componentSurfaces: componentSurfaces((runtimeItemId) => runtimeItemId === 'main:audio' ? audio : video),
     })
 
     service.initializeScene?.(solvedWithVideo(0, dualMasterCompiledScene))
@@ -347,7 +361,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'media-transition',
       compiledScene,
-      getComponentById: (runtimeItemId) => runtimeItemId === 'main:video' ? video : undefined,
+      componentSurfaces: componentSurfaces((runtimeItemId) => runtimeItemId === 'main:video' ? video : undefined),
     })
     const transition: CompiledRecord = {
       from: { volume: 0 },
@@ -377,7 +391,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'media-rate',
       compiledScene,
-      getComponentById: () => component,
+      componentSurfaces: componentSurfaces(() => component),
     })
 
     service.initializeScene?.(solvedWithVideo(0))
@@ -402,7 +416,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'native-end',
       compiledScene,
-      getComponentById: (runtimeItemId) => runtimeItemId === 'main:video' ? video : undefined,
+      componentSurfaces: componentSurfaces((runtimeItemId) => runtimeItemId === 'main:video' ? video : undefined),
     })
 
     service.initializeScene?.(solvedWithVideo(0))
@@ -421,7 +435,7 @@ describe('V2 media-sync module service', () => {
     const service: RuntimeModuleServiceInstance = createMediaSyncModuleService({
       playerId: 'test-player',
       compiledScene,
-      getComponentById: () => ({
+      componentSurfaces: componentSurfaces(() => ({
         seekTo: () => undefined,
         play: () => undefined,
         pause: () => undefined,
@@ -429,7 +443,7 @@ describe('V2 media-sync module service', () => {
         getCurrentTimeMs: () => 100,
         getDurationMs: () => null,
         isPaused: () => true,
-      }),
+      })),
     })
     const scene = solved(0)
     service.initializeScene?.(scene)
@@ -453,7 +467,7 @@ describe('V2 media-sync module service', () => {
     const service = createMediaSyncModuleService({
       playerId: 'test-player',
       compiledScene,
-      getComponentById: () => component,
+      componentSurfaces: componentSurfaces(() => component),
     })
 
     service.initializeScene?.(solved(0))
