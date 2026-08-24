@@ -4,7 +4,7 @@
 
 Status: En cours  
 CodPlay version: V2 foundation  
-Review: required before component implementation
+Review: required before future hybrid component implementation; current HTML base boundary relue le 2026-08-24
 
 Le contrat commun des composants est defini dans
 [`2026-08-01-composant-v2-contract.md`](./2026-08-01-composant-v2-contract.md).
@@ -26,7 +26,7 @@ meshes, les bones, les morphs, la camera et les materiaux restent des ressources
 internes du composant.
 
 ```text
-Component.render()
+BaseHTMLComponent.render()
     -> template string contenant le canvas
     -> Materializer materialise et monte le template
     -> composant recupere le canvas materialise
@@ -91,7 +91,7 @@ type Avatar3DState = Readonly<{
   }
 }>
 
-class Avatar3DComponent extends BaseComponent {
+class Avatar3DComponent extends BaseHTMLComponent {
   private canvas: HTMLCanvasElement | null = null
   private renderer: WebGLRenderer | null = null
   private scene: THREE.Scene | null = null

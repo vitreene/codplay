@@ -62,5 +62,34 @@ npm run typecheck --workspace=@codplay/codplay-v2
 npm run build:runner --workspace=@codplay/codplay-v2
 ```
 
-Vérification actualisée le 2026-08-22 : les tests V2, le typecheck et les builds
+Vérification actualisée le 2026-08-24 : les tests V2, le typecheck et les builds
 des démos runner/player passent ; `git diff --check` est propre.
+
+## Relecture de cohérence documentaire — 2026-08-24
+
+La séparation `BaseComponent`/`BaseHTMLComponent` et la migration de la tranche
+HTML ont été relues contre le code et les tests V2. Les documents qui décrivaient
+encore `render()` ou les services HTML sur `BaseComponent` ont été corrigés. Le
+contrat suivant est maintenant fixe pour la tranche actuelle :
+
+```text
+BaseComponent
+  -> perso + update(state, timeMs)
+
+BaseHTMLComponent
+  -> BaseComponent
+  -> render() + services HTML + racines/parts materialisées
+```
+
+Les décisions suivantes restent ouvertes et bloquent uniquement l'ouverture des
+extensions correspondantes :
+
+| Décision | État | Ouverture bloquée |
+|---|---|---|
+| Factory/catalogue réellement indépendant du substrate HTML | À spécifier avant une factory Canvas, Three.js ou Rive ; le catalogue actuel reste la tranche HTML | materializers et familles de composants non HTML |
+| Dépendances de compilation du sanitizer markup et des services | À traiter avant une généralisation de la frontière scene/services/runtime | compilation ou services indépendants du markup HTML |
+| Surface typée entre modules runtime et composants | À spécifier avant d'ajouter des capabilities qui récupèrent des composants par identifiant | nouvelles capabilities transversales |
+
+Les marqueurs `Review: required` restants concernent uniquement des extensions non
+engagées : renderer continu, defaults de couleur, `InputComponent`, composants
+hybrides, et contrat `Behavior/live`. Ils ne bloquent pas la tranche HTML relue.

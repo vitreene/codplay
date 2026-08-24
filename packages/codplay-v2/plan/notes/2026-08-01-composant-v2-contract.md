@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: En cours  
+Status: Fixe pour la fondation composant et la tranche HTML V2
 CodPlay version: V2 foundation  
-Review: separation BaseComponent/BaseHTMLComponent validee le 2026-08-24; migration du runtime en cours; JSX reste V2.5
+Review: separation BaseComponent/BaseHTMLComponent et migration du runtime validees le 2026-08-24; JSX et les substrats non HTML restent hors tranche
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -53,12 +53,12 @@ type RuntimeComponentDefinition = {
 }
 ```
 
-Un composant V2 expose deux methodes obligatoires :
+Le socle V2 impose une seule methode obligatoire. La tranche HTML ajoute
+`render()` dans une base specialisee :
 
 ```ts
 abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly perso: ComponentInput<Initial>['perso']
-  protected readonly resourceMetadata: ComponentInput<Initial>['resourceMetadata']
   abstract update(input: ComponentUpdateInput): void
 }
 
@@ -75,10 +75,11 @@ abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
 ```
 
 `BaseComponent` ne connait ni template, ni DOM, ni services HTML/SVG. Il conserve
-uniquement les donnees auteur necessaires a l'instance et impose l'application de
-l'etat resolu. `BaseHTMLComponent` fournit la tranche markup actuelle ; les
-materializers Canvas, Three.js, Rive ou autres peuvent definir leur propre base
-specialisee sans heriter de cette API.
+uniquement `perso` et impose l'application de l'etat resolu. Les metadonnees de
+preload restent dans `ComponentInput` pour les composants qui en ont besoin ;
+elles ne deviennent pas une dependance de la base generique. `BaseHTMLComponent`
+fournit la tranche markup actuelle ; les materializers Canvas, Three.js, Rive ou
+autres peuvent definir leur propre base specialisee sans heriter de cette API.
 
 `BaseHTMLComponent.render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
@@ -160,8 +161,8 @@ type ComponentUpdateInput = {
   timeMs: number
 }
 
-class TagComponent extends BaseComponent<TagState> {
-  constructor(input: ComponentInput<TagState>) {
+class TagComponent extends BaseHTMLComponent<TagState> {
+  constructor(input: HTMLComponentInput<TagState>) {
     super(input)
   }
 
@@ -175,7 +176,7 @@ class TagComponent extends BaseComponent<TagState> {
   }
 
   /** Applies one resolved tag state to the materialized root. */
-  update(input: ComponentUpdateInput): void {
+  update(input: ComponentUpdateInput<TagState>): void {
     const state = input.state
 
     this.services.apply(this.node, {
@@ -221,8 +222,8 @@ type LayoutUpdateInput = {
   timeMs: number
 }
 
-class LayoutComponent extends BaseComponent<LayoutInitial> {
-  constructor(input: ComponentInput<LayoutInitial>) {
+class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
+  constructor(input: HTMLComponentInput<LayoutInitial>) {
     super(input)
   }
 

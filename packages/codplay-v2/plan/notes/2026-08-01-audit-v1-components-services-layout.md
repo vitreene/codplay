@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: En cours  
+Status: Référentiel historique — conclusions intégrées
 CodPlay version: V2 foundation  
-Review: required before V2 component implementation
+Review: conclusions intégrées au contrat composant V2 le 2026-08-24; aucune implémentation V2 active ne dépend encore de cette relecture V1
 
 ## Perimetre
 

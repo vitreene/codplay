@@ -2,13 +2,13 @@
 
 ## Statut
 
-Status: En cours  
+Status: Fixe pour la tranche HTML V2
 CodPlay version: V2 foundation  
-Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-21
+Review: interface RuntimeMaterializer unifiée et tranche HTML relues le 2026-08-24
 
 ## Contrat auteur
 
-Le contrat de `BaseComponent.render()` est deja fixe dans
+Le contrat de `BaseHTMLComponent.render()` est deja fixe dans
 [`2026-08-01-composant-v2-contract.md`](./notes/2026-08-01-composant-v2-contract.md).
 Ce plan ne le redéfinit pas et n'ouvre aucune décision sur le rôle de `render()`.
 
@@ -19,9 +19,10 @@ décomposition technique de celles-ci.
 
 ## Frontiere Materializer
 
-`BaseComponent` est la couche auteur en entree du rendu. Il expose une
+`BaseHTMLComponent` est la couche auteur HTML en entree du rendu. Il expose une
 méthode `render()` et recoit les etats resolus; il cible uniquement le
-`Materializer`, jamais le DOM, Canvas ou Three.js directement.
+`Materializer`, jamais le DOM directement. `BaseComponent` reste la base
+substrat-neutre et n'impose pas de rendu markup.
 
 Le `Materializer` est l'interface de rendu vers un substrat. Une implementation
 DOM, Canvas ou Three.js recoit le resultat de `render()` et les mises a jour du
@@ -36,12 +37,18 @@ structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
 local parallèle n'est utilisé. Les services sont choisis par la definition du composant dans
 `RuntimeCapabilityCatalog`; le materializer ne construit pas de catalogue local.
 
+La composition d'une scène Sighty dans un slot de layout relève du plan
+[`replace-foreign-plan.md`](./replace-foreign-plan.md). Le materializer HTML y
+fournit la résolution du node, la capture du clone transitoire et le montage de
+la représentation entrante ; il ne possède ni le player enfant ni sa durée de
+vie.
+
 ## Du template au substrat
 
-La fondation V2 suit cette chaine, sans redefinir le contrat de `render()` :
+La tranche HTML V2 suit cette chaine, sans redefinir le contrat de `render()` :
 
 ```text
-BaseComponent.render() -> template string -> Materializer HTML -> DOM
+BaseHTMLComponent.render() -> template string -> Materializer HTML -> DOM
 ```
 
 Le composant fournit son resultat au materializer. Il ne le parse pas, ne le compare
@@ -52,7 +59,7 @@ pas avec une version precedente et ne cree pas les nodes.
 Le template string est recu par le materializer HTML :
 
 ```text
-BaseComponent.render()
+BaseHTMLComponent.render()
   -> HtmlComponentMaterializer
   -> lecture, assainissement et normalisation
   -> creation du DOM et conservation des references vers les nœuds internes
@@ -189,7 +196,7 @@ L'auteur peut ecrire un layout dont la propriete `markup` fournit la representat
 HTML necessaire :
 
 ```ts
-class LayoutComponent extends BaseComponent {
+class LayoutComponent extends BaseHTMLComponent {
   render() {
     return this.perso.initial.markup
   }

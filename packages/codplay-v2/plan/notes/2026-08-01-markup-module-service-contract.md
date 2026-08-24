@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: En cours  
+Status: Fixe pour la tranche layout HTML V2
 CodPlay version: V2 foundation  
-Review: markup module rename applied; LayoutComponent remains the component type
+Review: markup module rename and BaseHTMLComponent boundary validated le 2026-08-24; Input et les autres familles restent hors tranche
 
 ## Positionnement
 
@@ -125,7 +125,7 @@ selectionne les parts montables ; elle peut donc etre reutilisee par `layout`,
 `input` ou tout autre composant qui expose des cibles de montage :
 
 ```ts
-class LayoutComponent extends BaseComponent {
+class LayoutComponent extends BaseHTMLComponent {
   render(): string {
     return `
       <section>

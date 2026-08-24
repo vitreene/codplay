@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: En cours  
+Status: Référentiel historique — tranche HTML V2 relue
 CodPlay version: V2 foundation  
-Review: required before generic parts integration
+Review: conclusions intégrées au contrat des parts HTML V2 le 2026-08-24; Input et les substrats non HTML restent hors tranche
 
 ## Perimetre
 
