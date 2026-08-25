@@ -1,6 +1,6 @@
 # Intégration V2 de la capture DnD et de la capacité `list`
 
-> Status: Fini — démo consignée, lecture et seek validés
+> Status: En cours — placement validé, seek de la démo encore ouvert
 > CodPlay version: V2 foundation
 > Périmètre: validation HTML de la capacité `list`
 

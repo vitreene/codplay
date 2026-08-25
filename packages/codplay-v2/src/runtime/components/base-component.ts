@@ -1,4 +1,4 @@
-import type { ComponentInput, ComponentUpdateInput } from './component-types'
+import type { ComponentInput, ComponentServices, ComponentUpdateInput } from './component-types'
 import type { AttrValue, ClassNameValue, StyleValue } from '../../services'
 
 /** Common serializable data accepted by every substrate-neutral component profile. */
@@ -15,10 +15,12 @@ export type BaseComponentVisualData = Omit<BaseComponentData, 'content'>
 /** Provides the substrate-neutral V2 component construction and update contract. */
 export abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly perso: ComponentInput<Initial>['perso']
+  protected readonly services: ComponentServices
 
   /** Creates one component from substrate-neutral author data. */
   constructor(input: ComponentInput<Initial>) {
     this.perso = input.perso
+    this.services = input.services
   }
 
   /** Applies one resolved state through the component-specific projection. */

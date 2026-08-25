@@ -4,7 +4,7 @@
 
 Status: Fixe pour la fondation composant et la tranche DOM HTML/SVG V2
 CodPlay version: V2 foundation  
-Review: separation BaseComponent/BaseHTMLComponent et migration du runtime validees le 2026-08-24; JSX, Canvas et Three.js restent hors tranche
+Review: séparation BaseComponent/BaseHTMLComponent et déclaration locale des services validées le 2026-08-25; JSX, Canvas et Three.js restent hors tranche
 
 Le module de capacite layout est defini dans
 [`2026-08-01-markup-module-service-contract.md`](./2026-08-01-markup-module-service-contract.md).
@@ -14,13 +14,15 @@ Son etat pur et son wrapper `RuntimeModuleService` sont implementes dans
 `src/runtime/capabilities/markup/markup-capability.ts`.
 Le socle composant, le catalogue runtime, `RuntimeComponentRuntime` et les
 composants `LayoutComponent`/`TagComponent` sont implementes dans
-`src/runtime/components/`. Leur materializer HTML est branche au player ; la
-factory de chaque type reste fournie par le catalogue.
+`src/runtime/components/`. Leur materializer HTML est branche au player ; le
+catalogue enregistre la classe du composant et ses validateurs, tandis que le
+composant declare lui-même les services qu'il consomme.
 
 ## Contrat
 
 ```ts
 type ComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> = {
+  services: ComponentServices
   perso: {
     id: string
     storyId: string
@@ -31,25 +33,33 @@ type ComponentInput<Initial extends Record<string, unknown> = Record<string, unk
 }
 
 type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
-  ComponentInput<Initial> & {
-    services: HTMLComponentServices
-  }
+  ComponentInput<Initial>
 
 type MaterializedPart = {
   partId: string
   nodeRef: unknown
 }
 
-type HTMLComponentServices = {
+type ComponentService = {
+  apply(node: unknown, value: unknown): void
+}
+
+type ComponentServices = {
+  declare(names: readonly string[]): void
+  get(name: string): ComponentService
   apply(node: unknown, patch: Record<string, unknown>): void
 }
 
 type RuntimeComponentDefinition = {
   type: string
-  services: readonly string[]
+  component: RuntimeComponentClass
   modules: readonly string[]
   mountableParts?: readonly string[]
-  create: RuntimeComponentFactory
+}
+
+type RuntimeComponentClass = {
+  new (input: ComponentInput<Record<string, unknown>>): BaseComponent<Record<string, unknown>>
+  readonly declaredServices: readonly string[]
 }
 ```
 
@@ -59,12 +69,12 @@ Le socle V2 impose une seule methode obligatoire. La tranche HTML ajoute
 ```ts
 abstract class BaseComponent<Initial extends Record<string, unknown>> {
   protected readonly perso: ComponentInput<Initial>['perso']
+  protected readonly services: ComponentServices
   abstract update(input: ComponentUpdateInput): void
 }
 
 abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
   extends BaseComponent<Initial> {
-  protected readonly services: HTMLComponentServices
   public node: unknown | null = null
 
   abstract render(): string
@@ -74,12 +84,13 @@ abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
 }
 ```
 
-`BaseComponent` ne connait ni template, ni DOM, ni services HTML/SVG. Il conserve
-uniquement `perso` et impose l'application de l'etat resolu. Les metadonnees de
-preload restent dans `ComponentInput` pour les composants qui en ont besoin ;
-elles ne deviennent pas une dependance de la base generique. `BaseHTMLComponent`
-fournit la tranche markup actuelle ; les materializers Canvas, Three.js, Rive ou
-autres peuvent definir leur propre base specialisee sans heriter de cette API.
+`BaseComponent` ne connait ni template ni DOM. Il conserve `perso`, reçoit une
+facade de services abstraite et impose l'application de l'etat resolu. Les
+services ne prescrivent aucun substrat : leur implementation est fournie par le
+materializer choisi. Les metadonnees de preload restent dans `ComponentInput`
+pour les composants qui en ont besoin. `BaseHTMLComponent` ajoute uniquement la
+tranche markup actuelle ; les materializers Canvas, Three.js, Rive ou autres
+peuvent utiliser la même frontière de services avec leurs propres adapters.
 
 `BaseHTMLComponent.render()` fournit le template string de materialisation. Le runtime JSX autonome
 est reporte a l'objectif V2.5.
@@ -131,10 +142,12 @@ SolvedScene
   -> cleanup au retrait ou a la destruction du player
 ```
 
-Le runtime composant HTML recoit une facade `HTMLComponentServices` deja construite par le
+Le runtime composant reçoit une facade `ComponentServices` construite par le
 `RuntimeCapabilityCatalog`, ainsi que les instances de modules du player et son
-materializer. La liste des services et modules est portée uniquement par la
-definition runtime du type. Les modules ne sont pas appliques comme des proprietes ;
+materializer. Le composant appelle `this.services.declare()` dans son
+constructeur, dans l'ordre d'application voulu. Le catalogue vérifie cette
+déclaration et résout chaque nom vers l'adapter du materializer courant ; il ne
+fournit pas une seconde liste de services au composant. Les modules ne sont pas appliques comme des proprietes ;
 ils servent a satisfaire la dependance et restent hors de l'API de mutation du node.
 Le runtime generique ne cree pas de DOM lui-meme et ne contient aucune branche
 speciale pour `layout` ou `input`. Le materializer HTML n'accepte les composants
@@ -162,8 +175,11 @@ type ComponentUpdateInput = {
 }
 
 class TagComponent extends BaseHTMLComponent<TagState> {
+  static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
+
   constructor(input: HTMLComponentInput<TagState>) {
     super(input)
+    this.services.declare(TagComponent.declaredServices)
   }
 
   /** Declares the tag root with a template string. */

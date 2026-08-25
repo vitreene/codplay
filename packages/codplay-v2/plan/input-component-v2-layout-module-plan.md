@@ -64,15 +64,19 @@ render(): string {
 }
 ```
 
-La definition runtime du composant declare les services necessaires dans le
-catalogue unifie :
+La classe du composant declare les services necessaires dans l'ordre où elle les
+applique. Le catalogue unifie conserve leurs definitions et resout l'adapter du
+materializer :
 
 ```ts
-  {
-    type: 'input',
-    services: ['className', 'style', 'attr'],
-    modules: ['markup'],
+class InputComponent extends BaseHTMLComponent<InputInitial> {
+  static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
+
+  constructor(input: HTMLComponentInput<InputInitial>) {
+    super(input)
+    this.services.declare(InputComponent.declaredServices)
   }
+}
 ```
 
 Le contrat V2 actuel ne comporte pas `init()`. L'etat initial est applique par

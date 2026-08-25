@@ -36,8 +36,9 @@ implementations DOM actuelles de cette frontiere. Le materializer SVG reutilise
 le circuit structurel commun et impose une racine SVG reelle.
 Elle expose à la fois la materialisation d'un composant et la materialisation
 structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
-local parallèle n'est utilisé. Les services sont choisis par la definition du composant dans
-`RuntimeCapabilityCatalog`; le materializer ne construit pas de catalogue local.
+local parallèle n'est utilisé. Le composant déclare les services abstraits qu'il
+emploie ; `RuntimeCapabilityCatalog` les résout vers les adapters compatibles avec
+le materializer courant. Le materializer ne construit pas de catalogue local.
 
 La composition d'une scène Sighty dans un slot de layout relève du plan
 [`replace-foreign-plan.md`](./replace-foreign-plan.md). Le materializer HTML y

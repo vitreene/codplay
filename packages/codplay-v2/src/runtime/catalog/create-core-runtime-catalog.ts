@@ -64,33 +64,30 @@ export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {
 /** Creates the built-in generic tag component declaration. */
 const coreTagDefinition: RuntimeComponentDefinition = {
   type: 'tag',
-  services: ['className', 'style', 'attr', 'content'],
+  component: TagComponent,
   modules: [],
   validateInitial: validateTagInitial,
   sanitizeInitial: sanitizeTagInitial,
-  create: (input) => new TagComponent(input as never),
 }
 
 /** Creates the core V2 image declaration under the V1-compatible `img` type. */
 const coreImageDefinition: RuntimeComponentDefinition = {
   type: 'img',
-  services: ['className', 'style', 'attr'],
+  component: ImageComponent,
   modules: [],
   validateInitial: validateImageInitial,
   validateAction: validateImageAction,
-  create: (input) => new ImageComponent(input as never),
 }
 
 /** Creates the core V2 quiz input declaration and publishes only icon slots. */
 const coreInputDefinition: RuntimeComponentDefinition = {
   type: 'input',
-  services: ['className', 'style', 'attr', 'content'],
+  component: InputComponent,
   modules: ['markup'],
   validateInitial: validateInputInitial,
   validateAction: validateInputAction,
   sanitizeInitial: sanitizeInputInitial,
   sanitizeAction: sanitizeInputAction,
-  create: (input) => new InputComponent(input as never),
   mountablePartResolver: (identity) => [
     selectionIconPartId(identity.storyId, resolvePersoId(identity)),
     correctionIconPartId(identity.storyId, resolvePersoId(identity)),
@@ -106,42 +103,38 @@ function resolvePersoId(identity: { storyId: string; componentId: string }): str
 /** Creates the built-in layout component declaration. */
 const coreLayoutDefinition: RuntimeComponentDefinition = {
   type: 'layout',
-  services: ['className', 'style', 'attr'],
+  component: LayoutComponent,
   modules: ['markup'],
   validateInitial: validateLayoutInitial,
-  create: (input) => new LayoutComponent(input as never),
   mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
 }
 
 /** Creates the built-in media component declaration. */
 const coreMediaDefinition: RuntimeComponentDefinition = {
   type: 'media',
-  services: ['className', 'style', 'attr'],
+  component: MediaComponent,
   modules: ['media-sync'],
   validateInitial: validateMediaInitial,
   validateAction: validateMediaAction,
-  create: (input) => new MediaComponent(input as never),
   surfaces: (component) => component instanceof MediaComponent ? { media: component } : {},
 }
 
 /** Creates the V2 list host declaration backed by the list capability. */
 const coreListDefinition: RuntimeComponentDefinition = {
   type: 'list',
-  services: ['className', 'style', 'attr'],
+  component: ListComponent,
   modules: ['list'],
   validateInitial: validateListInitial,
   sanitizeInitial: sanitizeListInitial,
-  create: (input) => new ListComponent(input as never),
 }
 
 /** Creates the core V2 polygon declaration projected through the SVG materializer. */
 const corePolygonDefinition: RuntimeComponentDefinition = {
   type: 'polygon',
-  services: ['className', 'style', 'attr', 'content'],
+  component: PolygonComponent,
   modules: [],
   validateInitial: validatePolygonInitial,
   validateAction: validatePolygonAction,
   sanitizeInitial: sanitizePolygonInitial,
   sanitizeAction: sanitizePolygonAction,
-  create: (input) => new PolygonComponent(input as never),
 }

@@ -4,9 +4,13 @@ import type { LayoutInitial, LayoutState } from './layout-types'
 
 /** V2 layout component with no author-facing initialization hook. */
 export class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
-  /** Creates one layout component with services bound by its runtime definition. */
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr'] as const
+
+  /** Creates one layout component and declares only its own services. */
   constructor(input: HTMLComponentInput<LayoutInitial>) {
     super(input)
+    this.services.declare(LayoutComponent.declaredServices)
   }
 
   /** Declares the compile-sanitized layout root and its internal mounting parts. */

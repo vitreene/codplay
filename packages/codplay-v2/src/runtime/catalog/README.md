@@ -17,9 +17,10 @@ propre registre parallèle.
 
 Le catalogue peut enregistrer :
 
-- les définitions de composants, avec leur classe, leurs services et leurs
-  validations ;
-- les services de données, qui appliquent les propriétés aux nœuds ;
+- les définitions de composants, avec leur classe, leurs modules et leurs
+  validations ; les classes déclarent elles-mêmes leurs services ;
+- les services de données, qui appliquent les propriétés à la cible fournie par
+  le materializer ;
 - les modules créés à l'échelle d'un lecteur, comme `list` ou `media-sync`.
 
 La compilation reçoit une vue de validation pure du même catalogue. Elle peut
@@ -30,7 +31,8 @@ composant. La lecture utilise ensuite les définitions runtime correspondantes.
 
 Les déclarations de services générales vivent dans `src/services/<service>/`.
 Les adaptateurs HTML ou SVG sont assemblés par le runtime choisi. Les
-composants HTML/SVG reçoivent uniquement les services déclarés par leur type.
+composants reçoivent uniquement les services qu'ils ont déclarés ; le
+materializer sélectionné fournit l'implémentation de chaque service.
 
 Une définition peut aussi publier une surface runtime typée : une petite
 interface d'opérations destinée aux modules. Le runtime conserve cette surface
@@ -44,7 +46,8 @@ pour chaque instance montée et ne transmet jamais la classe concrète au module
   même catalogue ;
 - chaque composant core ou externe doit déclarer son profil d'entrée et son
   validateur avant d'être enregistré ;
-- la factory actuelle ne définit que la famille HTML/SVG ;
+- le materializer core actuel couvre la famille HTML/SVG ;
 - le contrat Canvas, Three.js ou Rive devra être spécifié avant d'ajouter un
   nouveau support ;
-- `BaseComponent` ne reçoit pas la façade de services HTML/SVG.
+- `BaseComponent` reçoit uniquement la façade abstraite `ComponentServices` ;
+  aucune API DOM n'est imposée aux composants non HTML.

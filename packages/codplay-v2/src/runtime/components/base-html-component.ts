@@ -7,14 +7,12 @@ import { BaseComponent } from './base-component'
 /** Provides the HTML/SVG markup projection contract for current V2 components. */
 export abstract class BaseHTMLComponent<Initial extends Record<string, unknown>>
   extends BaseComponent<Initial> {
-  protected readonly services: HTMLComponentInput<Initial>['services']
   public node: unknown | null = null
   private parts: readonly MaterializedPart[] = []
 
-  /** Creates one markup component with its HTML/SVG services. */
+  /** Creates one markup component through the substrate-neutral component boundary. */
   constructor(input: HTMLComponentInput<Initial>) {
     super(input)
-    this.services = input.services
   }
 
   /** Declares the markup representation consumed by an HTML materializer. */

@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
+import type { RuntimeComponentDefinition } from '../../../src/runtime/catalog'
 import { BaseHTMLComponent } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import type { RuntimeMaterializer } from '../../../src/runtime/materializer'
 
 class ProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
+  static readonly declaredServices = ['probe'] as const
+
+  constructor(input: ConstructorParameters<typeof BaseHTMLComponent<Record<string, unknown>>>[0]) {
+    super(input)
+    this.services.declare(ProbeComponent.declaredServices)
+  }
+
   render(): string {
     return '<section></section>'
   }
@@ -12,6 +20,16 @@ class ProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
   update(input: ComponentUpdateInput): void {
     this.services.apply(this.node, input.state)
   }
+}
+
+class NoServiceProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
+  static readonly declaredServices = [] as const
+
+  render(): string {
+    return '<section></section>'
+  }
+
+  update(_input: ComponentUpdateInput): void {}
 }
 
 function materializer(id = 'test'): RuntimeMaterializer {
@@ -23,13 +41,12 @@ function materializer(id = 'test'): RuntimeMaterializer {
   }
 }
 
-function componentDefinition(services: readonly string[] = ['probe']) {
+function componentDefinition(component: RuntimeComponentDefinition['component'] = ProbeComponent) {
   return {
     type: 'probe',
-    services,
+    component,
     modules: [],
     validateInitial: () => undefined,
-    create: (input: ConstructorParameters<typeof ProbeComponent>[0]) => new ProbeComponent(input),
   }
 }
 
@@ -97,9 +114,9 @@ describe('RuntimeCapabilityCatalog', () => {
   it('supports explicit overrides before locking the CodPlay instance', () => {
     const catalog = new RuntimeCapabilityCatalog()
     catalog.registerComponent(componentDefinition())
-    catalog.overrideComponent({ ...componentDefinition(), services: [] })
+    catalog.overrideComponent(componentDefinition(NoServiceProbeComponent))
 
-    expect(catalog.getComponent('probe')?.services).toEqual([])
+    expect(catalog.getComponent('probe')?.component).toBe(NoServiceProbeComponent)
     catalog.lock()
     expect(() => catalog.overrideComponent(componentDefinition())).toThrow('Runtime capability catalog is locked.')
   })

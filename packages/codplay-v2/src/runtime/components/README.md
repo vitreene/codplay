@@ -81,9 +81,10 @@ modifier l'affichage.
 
 ## Base commune et affichage
 
-`BaseComponent` définit le minimum partagé par tous les futurs composants. Il
-ne dépend ni du navigateur ni d'un mode d'affichage : un composant Canvas,
-Three.js ou Rive pourra donc l'utiliser plus tard.
+`BaseComponent` définit le socle partagé par tous les composants. Il ne dépend
+ni du navigateur ni d'un mode d'affichage. Il reçoit une facade de services
+substrat-neutre ; chaque composant déclare lui-même les services qu'il emploie,
+et le materializer fournit leur implementation adaptée.
 
 `BaseHTMLComponent` ajoute ce qui est nécessaire aux composants HTML et SVG :
 une méthode `render()` pour décrire leur représentation, la racine créée par
@@ -104,9 +105,11 @@ Les champs communs sont définis dans [`base-component.ts`](./base-component.ts)
 ## Contrat et limites
 
 Le catalogue runtime associe chaque type de composant à sa classe, à ses
-services — les fonctions qui appliquent les classes, styles et attributs — et à
-ses validations. Cette association permet au compilateur et au lecteur de
-retrouver le bon composant sans dupliquer sa définition.
+modules et à ses validations. Les services restent enregistrés dans ce même
+catalogue pour leurs contrats et leurs adapters de materializer, mais leur liste
+d'utilisation est déclarée par la classe du composant via
+`this.services.declare([...])`. Il n'existe pas de seconde liste imposée par le
+catalogue.
 
 Un module qui doit déclencher une opération particulière, comme jouer ou mettre
 en pause un média, passe par une petite interface publique dédiée, appelée

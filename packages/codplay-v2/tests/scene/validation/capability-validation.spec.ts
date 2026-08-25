@@ -4,7 +4,28 @@ import { DiagnosticCollector } from '../../../src/diagnostics'
 import { CompiledSceneValidationEngine, validatePersoWithCapabilities } from '../../../src/scene/validation'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog, RuntimeComponentDefinition } from '../../../src/runtime/catalog'
-import { TagComponent } from '../../../src/runtime/components'
+import { BaseHTMLComponent } from '../../../src/runtime/components'
+import type { ComponentUpdateInput, HTMLComponentInput } from '../../../src/runtime/components'
+
+/** Creates a fixture component whose service declaration belongs to the component class. */
+function componentClass(services: readonly string[]) {
+  return class ValidationComponent extends BaseHTMLComponent<Record<string, unknown>> {
+    static readonly declaredServices = services
+
+    constructor(input: HTMLComponentInput<Record<string, unknown>>) {
+      super(input)
+      this.services.declare(services)
+    }
+
+    render(): string {
+      return '<div></div>'
+    }
+
+    update(input: ComponentUpdateInput): void {
+      this.services.apply(this.node, input.state)
+    }
+  }
+}
 
 function componentDefinition(
   type: string,
@@ -14,11 +35,10 @@ function componentDefinition(
 ): RuntimeComponentDefinition {
   return {
     type,
-    services,
+    component: componentClass(services),
     modules: [],
     validateInitial,
     validateAction,
-    create: (input) => new TagComponent(input as never),
   }
 }
 

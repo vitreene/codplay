@@ -3,21 +3,28 @@ import { describe, expect, it, vi } from 'vitest'
 import { isPreparedPath, parseColor, prepareSvgPath } from '../../../src/ace'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
-import { TagComponent } from '../../../src/runtime/components'
+import { BaseComponent, TagComponent } from '../../../src/runtime/components'
+import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import { compileMovePath, SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
+
+/** Substrate-neutral fixture component with no declared services. */
+class NoServiceComponent extends BaseComponent<Record<string, unknown>> {
+  static readonly declaredServices = [] as const
+
+  update(_input: ComponentUpdateInput): void {}
+}
 
 function createCatalogForFixtures(): RuntimeCapabilityCatalog {
   const catalog = createCoreRuntimeCatalog()
   for (const type of ['text']) {
     catalog.registerComponent({
       type,
-      services: ['style', 'className', 'attr'],
+      component: TagComponent,
       modules: [],
       validateInitial: () => undefined,
       validateAction: () => undefined,
-      create: (input) => new TagComponent(input as never),
     })
   }
   return catalog
@@ -276,11 +283,10 @@ describe('SceneBuilder', () => {
     const catalog = createCoreRuntimeCatalog()
     catalog.registerComponent({
       type: 'list-item',
-      services: [],
+      component: NoServiceComponent,
       modules: ['list'],
       validateInitial: () => undefined,
       validateAction: () => undefined,
-      create: (input) => new TagComponent(input as never),
     })
     const builder = new SceneBuilder(catalog.validationSnapshot(), { diagnosticOutput: vi.fn() })
 
@@ -302,11 +308,10 @@ describe('SceneBuilder', () => {
     const catalog = createCoreRuntimeCatalog()
     catalog.overrideComponent({
       type: 'layout',
-      services: [],
+      component: NoServiceComponent,
       modules: ['markup'],
       validateInitial: () => undefined,
       validateAction: () => undefined,
-      create: (input) => new TagComponent(input as never),
     })
     const builder = new SceneBuilder(catalog.validationSnapshot(), { diagnosticOutput: vi.fn() })
 

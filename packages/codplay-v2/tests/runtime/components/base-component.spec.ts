@@ -2,9 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { BaseComponent, BaseHTMLComponent } from '../../../src/runtime/components'
 import type {
   ComponentInput,
+  ComponentServices,
   ComponentUpdateInput,
   HTMLComponentInput,
 } from '../../../src/runtime/components'
+
+/** Creates the minimal component-scoped service facade used by boundary tests. */
+function testServices(apply: ComponentServices['apply'] = () => undefined): ComponentServices {
+  return {
+    declare: () => undefined,
+    get: () => ({ apply: () => undefined }),
+    apply,
+  }
+}
 
 class GenericComponent extends BaseComponent<Record<string, unknown>> {
   readonly updates: number[] = []
@@ -33,6 +43,7 @@ class HtmlProbeComponent extends BaseHTMLComponent<Record<string, unknown>> {
 describe('component base boundaries', () => {
   it('keeps the generic base independent from markup and substrate services', () => {
     const input: ComponentInput = {
+      services: testServices(),
       perso: { id: 'generic', storyId: 'main', initial: {} },
     }
     const component = new GenericComponent(input)
@@ -45,8 +56,8 @@ describe('component base boundaries', () => {
 
   it('keeps markup concerns on the HTML specialization', () => {
     const input: HTMLComponentInput = {
+      services: testServices(),
       perso: { id: 'html', storyId: 'main', initial: {} },
-      services: { apply: () => undefined },
     }
     const component = new HtmlProbeComponent(input)
 

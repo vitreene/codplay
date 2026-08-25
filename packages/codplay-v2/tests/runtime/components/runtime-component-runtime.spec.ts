@@ -5,6 +5,7 @@ import {
 } from '../../../src/runtime/components'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import type {
+  ComponentInput,
   ComponentUpdateInput,
   MediaComponentSurface,
 } from '../../../src/runtime/components'
@@ -13,7 +14,14 @@ import type { SolvedScene } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
 
 class TestComponent extends BaseComponent<Record<string, unknown>> {
+  static readonly declaredServices = [] as const
+  static readonly instances: TestComponent[] = []
   readonly updates: number[] = []
+
+  constructor(input: ComponentInput<Record<string, unknown>>) {
+    super(input)
+    TestComponent.instances.push(this)
+  }
 
   render(): string {
     return '<section></section>'
@@ -72,7 +80,8 @@ function solvedScene(timeMs: number, includePerso = true): SolvedScene {
 describe('RuntimeComponentRuntime', () => {
   it('keeps component instances through scene snapshots and destroys them at final teardown', () => {
     const catalog = new RuntimeCapabilityCatalog()
-    const components: TestComponent[] = []
+    TestComponent.instances.length = 0
+    const components = TestComponent.instances
     const events: string[] = []
     const mountablePartIds: string[][] = []
     let receivedModuleServices: ReadonlyMap<string, unknown> | undefined
@@ -87,18 +96,11 @@ describe('RuntimeComponentRuntime', () => {
     }
     catalog.registerComponent({
       type: 'test',
-      services: [],
+      component: TestComponent,
       modules: [],
       validateInitial: () => undefined,
       mountableParts: ['content'],
       surfaces: () => ({ media: surface }),
-      create: () => {
-        const component = new TestComponent({
-          perso: { id: 'item', storyId: 'main', initial: {} },
-        })
-        components.push(component)
-        return component
-      },
     })
     const materializer: RuntimeMaterializer = {
       id: 'test',

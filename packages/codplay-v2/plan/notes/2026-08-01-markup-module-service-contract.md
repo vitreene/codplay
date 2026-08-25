@@ -182,9 +182,9 @@ La definition runtime du composant porte aussi la liste `mountableParts`. Le
 materialisees avant l'appel a `materializeComponentWithMarkup()`. Le composant
 peut donc conserver des parts internes sans les publier au module.
 
-La meme definition porte les listes `services` et `modules`. Elle est enregistree
-dans `RuntimeCapabilityCatalog`; `validationSnapshot()` et le player la consomment
-pour valider
+La definition de composant porte la classe et les modules. La classe declare ses
+services ; `RuntimeCapabilityCatalog` conserve leurs definitions et
+`validationSnapshot()` ainsi que le player les consomment pour valider
 les exigences compilees, puis injecte les instances de modules dans le runtime
 composant avant sa materialisation.
 
@@ -216,6 +216,7 @@ runtime generique et le passage de la politique `mountableParts` au materializer
 
 - creation de nouveaux composants V2 hors `LayoutComponent`, `TagComponent` et
   des composants de la tranche image/input/polygon ;
-- injection des services de production dans les composants ;
+- ajout de nouveaux services de production ou d'adapters hors ceux déclarés par
+  les composants de cette tranche ;
 - FLIP et mesure ;
 - production du root DOM/JSX par le materializer composant ;

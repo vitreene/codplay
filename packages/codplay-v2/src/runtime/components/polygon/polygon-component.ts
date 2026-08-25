@@ -32,6 +32,9 @@ type ActiveMorph = Readonly<{
 
 /** V2 polygon component projected through an SVG-capable DOM materializer. */
 export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
+
   /** Last logical shape selected by the resolved state. */
   private logicalShapeState: PolygonShapeState | null = null
   /** Current deterministic morph operation, if one is active. */
@@ -40,6 +43,7 @@ export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
   /** Creates one polygon component with root/part service bindings. */
   constructor(input: HTMLComponentInput<PolygonInitial>) {
     super(input)
+    this.services.declare(PolygonComponent.declaredServices)
   }
 
   /** Returns the complete SVG representation consumed by SvgComponentMaterializer. */

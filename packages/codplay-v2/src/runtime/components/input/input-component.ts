@@ -25,9 +25,13 @@ const PART = {
 
 /** V2 quiz input whose public child targets are selected by the runtime catalog. */
 export class InputComponent extends BaseHTMLComponent<InputInitial> {
-  /** Creates one input component with its catalog-bound services. */
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
+
+  /** Creates one input component and declares only its own services. */
   constructor(input: HTMLComponentInput<InputInitial>) {
     super(input)
+    this.services.declare(InputComponent.declaredServices)
   }
 
   /** Returns the complete five-part input template. */

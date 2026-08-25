@@ -100,8 +100,8 @@ services `className`, `style` et `attr` du root ciblent le wrapper.
 control, label, selection-icon, correction-icon, hint
 ```
 
-La definition core declare les services `className`, `style`, `attr` et
-`content`, ainsi que la dependance `markup`. `markup` est le nom de
+La classe core declare les services `className`, `style`, `attr` et `content`,
+tandis que la definition du catalogue porte la dependance `markup`. `markup` est le nom de
 l'implementation V2 deja fixe pour la capacite layout/parts montables ; aucun
 second module `layout` n'est cree.
 

@@ -7,6 +7,9 @@ import type { MediaInitial, MediaState, MediaTag } from './media-types'
 
 /** V2 media component that preserves one materialized native media node per source. */
 export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr'] as const
+
   /** One persistent native media node per source; inactive nodes remain detached here. */
   private readonly mediaBySrc = new Map<string, unknown>()
   /** Source currently attached to the component root. */
@@ -21,6 +24,7 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   /** Creates one media component with its declared core services. */
   constructor(input: HTMLComponentInput<MediaInitial>) {
     super(input)
+    this.services.declare(MediaComponent.declaredServices)
     this.resourceMetadata = input.resourceMetadata ?? new Map()
   }
 

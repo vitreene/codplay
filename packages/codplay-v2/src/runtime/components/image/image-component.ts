@@ -6,6 +6,9 @@ const IMAGE_BASE_CLASS = 'cp-img-inner'
 
 /** V2 image component preserving one materialized `<img>` node per source. */
 export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr'] as const
+
   /** Persistent native image nodes indexed by their immutable source. */
   private readonly imageBySource = new Map<string, unknown>()
   /** Source currently attached to the wrapper. */
@@ -14,6 +17,7 @@ export class ImageComponent extends BaseHTMLComponent<ImageInitial> {
   /** Creates one image component with services bound by the core catalog. */
   constructor(input: HTMLComponentInput<ImageInitial>) {
     super(input)
+    this.services.declare(ImageComponent.declaredServices)
   }
 
   /** Returns the stable wrapper template consumed by the DOM materializer. */

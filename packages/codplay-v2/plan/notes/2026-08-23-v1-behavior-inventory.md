@@ -223,39 +223,39 @@ doit pas etre ajoutee directement dans un strap ou dans un nouveau scheduler.
 
 ## Point de reprise : declaration des services dans les composants
 
-### Correction validee le 2026-08-24 : base generique et base HTML separees
+### Correction validée le 2026-08-25 : base générique et services substrat-neutres
 
-La reprise confirme un second ecart de frontiere : `BaseComponent` V2 est encore
-une base de composant HTML/markup sous un nom generique. La presence de
-`render(): string`, de `node`, de `_materialize()` et de la facade
-`ComponentServices.apply(node, patch)` rend cette base dependante de la
-materialisation HTML/SVG, meme lorsque les types restent `unknown`.
+La reprise confirme que la facade de services ne doit pas être une facade HTML
+imposée par le catalogue. Elle reste injectée par le runtime, mais son contrat
+est substrat-neutre ; chaque composant déclare les noms qu'il emploie et le
+materializer fournit les implementations adaptées.
 
 Le contrat vise est desormais le suivant :
 
 ```text
 BaseComponent
-  -> construction minimale, donnees auteur et update(state, time)
+  -> construction minimale, donnees auteur, services abstraits et update(state, time)
 
 BaseHTMLComponent
-  -> template markup, node, parts/outlets et services HTML/SVG
+  -> template markup, node et parts/outlets
 
 BaseCanvasComponent / BaseThreeComponent / BaseRiveComponent / ...
   -> contrat de projection propre au materializer et au substrat concerne
 ```
 
-`BaseComponent` ne declare donc plus de service, de node, de part, ni de forme
-de rendu. `render(): string`, la facade de services HTML et la materialisation
-des parts sont deplaces dans `BaseHTMLComponent`. Les composants Three.js, Rive,
-Canvas et autres materializers peuvent heriter de la base generique ou d'une
-base specialisee sans recevoir une API DOM par defaut.
+`BaseComponent` ne declare donc ni node, ni part, ni forme de rendu. Il reçoit
+seulement `ComponentServices`, dont le contrat ne contient aucune opération DOM.
+`render(): string`, la node et la materialisation des parts restent dans
+`BaseHTMLComponent`. Les composants Three.js, Rive, Canvas et autres materializers
+peuvent donc heriter de la base generique ou d'une base specialisee sans recevoir
+une API DOM par defaut.
 
-Cette correction implique le contrat `ComponentInput`, le catalogue de factories,
-le materializer et les tests de frontiere. Elle doit etre implementee avant tout
-nouveau composant de substrat specialise.
+Cette correction implique le contrat `ComponentInput`, le catalogue de classes,
+le materializer et les tests de frontiere. Elle est maintenant couverte avant
+tout nouveau composant de substrat specialise.
 
-L'implementation V2 actuelle s'ecarte du contrat V1 sur la propriete de la
-declaration des services.
+La reprise V2 de cette frontière est maintenant implémentée sans créer de
+second catalogue.
 
 En V1, le composant declare lui-meme les services dont il depend via
 `this.services.declare([...])`. La declaration, son ordre et l'orchestration de
@@ -264,39 +264,36 @@ implementations, mais ne decide pas a la place du composant de la liste qu'il
 emploie. Voir
 [v1-component-api.md:106](../../../../docs/formalisation/v1-component-api.md:106).
 
-Dans V2, `TagComponent` et `MediaComponent` ne declarent pas leurs services.
-La liste est actuellement placee dans `RuntimeComponentDefinition.services`,
-par exemple dans
-[create-core-runtime-catalog.ts:39](../../src/runtime/catalog/create-core-runtime-catalog.ts:39),
-puis le catalogue injecte une facade deja construite dans `BaseComponent`.
-`ComponentServices` n'expose actuellement que `apply(node, patch)`.
+`TagComponent`, `MediaComponent` et les autres composants core declarent leurs
+services dans leur classe via `this.services.declare([...])`, dans l'ordre
+d'application voulu. Le catalogue conserve le registry unique des services,
+leurs validateurs et leurs adapters par materializer ; il crée seulement la
+facade locale et résout les noms déclarés par le composant.
 
-La possession d'une facade par `BaseComponent` n'est pas en elle-meme le
-probleme : elle peut rester le point d'injection commun. L'ecart porte sur la
-declaration et la surface :
+La surface de la facade est :
 
 ```text
-V1 : composant -> declare ses services -> registry -> implementation
-V2 actuelle : catalogue -> impose la liste -> facade opaque au composant
+declare(names) -> résolution locale dans le registry unique
+get(name)      -> accès individuel à un service déclaré
+apply(node, patch) -> application dans l'ordre de déclaration
 ```
 
-Cette inversion a plusieurs consequences :
+La frontière obtenue est :
 
-- le composant ne controle plus la liste ni l'ordre des services qu'il emploie ;
-- il ne peut plus acceder proprement a un service nomme pour orchestrer son
-  `update()` ;
-- un service specialise de materialisation, par exemple `orbit` pour une
-  camera Three.js, ne peut pas etre expose par la facade actuelle autrement
-  qu'en le faisant passer indirectement dans un patch ;
-- la declaration du composant est artificiellement dependante du catalogue
-  choisi, alors qu'elle devrait rester abstraite et laisser le materializer
-  fournir l'implementation ;
-- les declarations actuelles `HTML_*_SERVICE` ne couvrent que le materializer
-  HTML, ce qui ne constitue pas encore un support SVG, Canvas ou Three.js.
+```text
+V1/V2 : composant -> declare ses services -> catalogue unique -> adapter du materializer
+```
 
-La reprise doit donc conserver une seule frontiere de registry/catalogue pour
-l'enregistrement, la validation et les overrides core/foreign, mais remettre la
-declaration des besoins au composant. Le flux vise est :
+Cette correction conserve les décisions V2 :
+
+- le composant contrôle sa liste et l'ordre d'application ;
+- l'accès individuel permet une orchestration spécifique dans `update()` ;
+- un service spécialisé, comme `orbit`, est résolu par le même catalogue et
+  reçoit l'adapter du materializer sélectionné ;
+- aucune déclaration HTML n'est imposée à un composant destiné à un autre
+  substrat.
+
+Le flux implémenté est :
 
 ```text
 composant -> declare les services abstraits
@@ -304,9 +301,8 @@ composant -> declare les services abstraits
           -> materializer fournit les implementations adaptees
 ```
 
-La facade devra aussi permettre l'usage individuel des services lorsque le
-composant doit controler leur ordre ou dialoguer avec une capacite specialisee.
-Cette evolution doit etre specifiee avant toute correction de `TagComponent`,
-`MediaComponent` ou ajout d'un composant Canvas/Three.js. Il ne faut pas
-ajouter un second catalogue, un service HTML parallele ou un patch local dans
-les composants.
+La compilation lit la déclaration statique du type pour vérifier les services
+et dériver `CompiledScene.requirements.services`. La construction runtime vérifie
+ensuite que la classe a effectivement déclaré les mêmes noms dans le même ordre.
+Il ne faut pas ajouter un second catalogue, un service HTML parallèle ou un
+patch local dans les composants.

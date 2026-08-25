@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DiagnosticCollector } from '../../../src/diagnostics'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
+import { TagComponent } from '../../../src/runtime/components'
 import type { TickPayload, Ticker } from '../../../src/runtime/time'
 
 describe('RuntimeEngine', () => {
@@ -10,10 +11,9 @@ describe('RuntimeEngine', () => {
     const catalog = new RuntimeCapabilityCatalog()
     catalog.registerComponent({
       type: 'tag',
-      services: [],
+      component: TagComponent,
       modules: [],
       validateInitial: () => undefined,
-      create: () => { throw new Error('not used') },
     })
     const engine = new RuntimeEngine(catalog)
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })

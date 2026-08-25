@@ -40,7 +40,8 @@ including OKLCH, before the compiled scene is frozen.
 
 ## Definitions
 
-Component definitions declare their type, required services, runtime ModuleServices, and their `validateInitial` function;
+Component classes declare their required services. Component definitions declare
+their type, runtime ModuleServices, and their `validateInitial` function;
 `validateAction` is added when the component owns action-specific fields. Service definitions declare reusable group validators and optional validators for named properties inside
 those groups. Service names are therefore the property namespaces, including namespaces owned by one component.
 
@@ -49,8 +50,9 @@ remain open maps, `className` is the V1 string-or-patch form, and `content` is
 string-valued at the serializable `CompiledScene` boundary. Runtime-only DOM
 content is handled by the content materializer adapter and is not compiled.
 
-The runtime component definition is the source of the component type, service names,
-ModuleService names and component validators. The runtime service definition is the
+The component class is the source of its service names and declaration order. The
+runtime component definition is the source of the component type, ModuleService
+names and component validators. The runtime service definition is the
 source of its validation rules and materializer destinations. The builder therefore
 does not receive a second authored component/service list.
 

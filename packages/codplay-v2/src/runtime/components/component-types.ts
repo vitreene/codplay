@@ -1,7 +1,25 @@
 import type { RuntimePreloadResourceMetadata } from '../preload'
 
+/** One component-scoped service implementation supplied by a materializer. */
+export type ComponentService = Readonly<{
+  apply: (node: unknown, value: unknown) => void
+}>
+
+/**
+ * Services available to one component instance.
+ *
+ * The component declares the names it consumes. The runtime catalog only
+ * resolves those names against the selected materializer.
+ */
+export type ComponentServices = Readonly<{
+  declare: (names: readonly string[]) => void
+  get: (name: string) => ComponentService
+  apply: (node: unknown, patch: Record<string, unknown>) => void
+}>
+
 /** Authoring data and services supplied to one V2 component instance. */
 export type ComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
+  services: ComponentServices
   perso: Readonly<{
     id: string
     storyId: string
@@ -15,9 +33,7 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
 
 /** Input extension used by the current HTML/SVG component family. */
 export type HTMLComponentInput<Initial extends Record<string, unknown> = Record<string, unknown>> =
-  ComponentInput<Initial> & Readonly<{
-    services: HTMLComponentServices
-  }>
+  ComponentInput<Initial>
 
 /** One internal part discovered while materializing a component template. */
 export type MaterializedPart = Readonly<{
@@ -42,7 +58,5 @@ export type ComponentActionOccurrence = Readonly<{
   eventId?: string
 }>
 
-/** Services that project HTML/SVG properties onto materialized nodes. */
-export type HTMLComponentServices = Readonly<{
-  apply(node: unknown, patch: Record<string, unknown>): void
-}>
+/** Compatibility name for the current HTML/SVG component family. */
+export type HTMLComponentServices = ComponentServices

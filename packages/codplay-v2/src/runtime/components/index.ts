@@ -80,6 +80,8 @@ export {
   toPolygonPointsString,
 } from './polygon'
 export type {
+  ComponentService,
+  ComponentServices,
   ComponentInput,
   ComponentActionOccurrence,
   HTMLComponentInput,

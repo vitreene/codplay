@@ -10,6 +10,15 @@ import {
 import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
+/** Creates the minimal service boundary required by direct layout tests. */
+function testServices(apply: (node: unknown, patch: Record<string, unknown>) => void = () => undefined) {
+  return {
+    declare: () => undefined,
+    get: () => ({ apply: () => undefined }),
+    apply,
+  }
+}
+
 describe('LayoutComponent V2', () => {
   it('declares its template without exposing service registration methods', () => {
     const component = new LayoutComponent({
@@ -20,9 +29,7 @@ describe('LayoutComponent V2', () => {
           markup: '<section><main data-part="page-layout:content"></main></section>',
         },
       },
-      services: {
-        apply: vi.fn(),
-      },
+      services: testServices(),
     })
 
     expect(component.render()).toContain('data-part="page-layout:content"')
@@ -36,7 +43,7 @@ describe('LayoutComponent V2', () => {
         storyId: 'main',
         initial: { markup: '<section></section>' },
       },
-      services: { apply },
+      services: testServices(apply),
     })
     const root = {}
     component._materialize(root, [])
@@ -72,7 +79,7 @@ describe('LayoutComponent V2', () => {
         storyId: 'main',
         initial: { markup: '<main data-part="page-layout:content"></main>' },
       },
-      services: { apply: vi.fn() },
+      services: testServices(),
     })
 
     const cleanup = materializeComponentWithMarkup(markup, {

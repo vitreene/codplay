@@ -2,8 +2,9 @@
 
 ## Statut
 
-Note de decision pour la future tranche composants. Elle fixe le contexte a respecter sans ouvrir cette tranche
-maintenant.
+Status: Fixe pour la déclaration composant/services V2
+CodPlay version: V2 foundation
+Review: frontière implémentée le 2026-08-25
 
 ## Decision
 
@@ -32,19 +33,22 @@ par defaut et n'est pas retenu comme nom provisoire.
 
 ## Validation et compilation
 
-Une declaration de composant doit etre la source unique de son type, de ses services, de sa capacite runtime et de
-sa definition de validation optionnelle. La forme retenue est un descripteur unique
-consomme par le runtime et `RuntimeCapabilityCatalog.validationSnapshot()`. Aucune
-seconde liste `services` ne doit etre redigee pour la validation.
+Une classe de composant est la source unique de son type de service et de son
+ordre d'application. Le `RuntimeCapabilityCatalog` reste la source unique des
+definitions, validateurs et adapters de materializer. Il expose dans
+`validationSnapshot()` la liste statique portée par la classe ; aucune seconde
+liste `services` n'est rédigée dans la définition du catalogue.
 
-Les composants ne declarent pas leurs services par un appel runtime. La definition
-enregistree est la seule source de verite. Son snapshot est remis au moteur de
-validation de `CompiledScene`; aucune classe runtime ni aucun service instancie n'est
-transmis au build.
+Au runtime, le composant appelle `this.services.declare([...])`. Le catalogue
+résout alors chaque nom dans son registry unique et vérifie que la déclaration
+effective correspond à la liste statique du composant. Aucune classe runtime ni
+aucun service instancié n'est transmis au build.
 
 Les validateurs core des services communs sont obligatoires. Un validateur de composant peut rester absent dans la
 premiere tranche; cette absence produit un warning auteur detaille. Un type de composant ou un service necessaire
 mais inconnu est une erreur de capacite.
 
-Le chantier composants sera ouvert plus tard. A ce moment, les definitions de service devront porter ensemble le
-nom, la surface de donnees, la validation, la normalisation, les defaults et le traitement `update` necessaires.
+Les definitions de service portent ensemble le nom, la surface de donnees, la
+validation, la normalisation, les defaults et l'adapter de materializer
+necessaires. Une extension non HTML déclare ses services dans sa classe et
+enregistre les adapters correspondants dans le même catalogue.

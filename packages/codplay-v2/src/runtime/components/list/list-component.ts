@@ -4,9 +4,13 @@ import type { ListInitial, ListState } from './list-types'
 
 /** V2 list component: the capability owns order, while the component owns its root. */
 export class ListComponent extends BaseHTMLComponent<ListInitial> {
-  /** Creates one list host with the services declared by the catalog definition. */
+  /** Services declared by the component author, in application order. */
+  static readonly declaredServices = ['className', 'style', 'attr'] as const
+
+  /** Creates one list host and declares only its own services. */
   constructor(input: HTMLComponentInput<ListInitial>) {
     super(input)
+    this.services.declare(ListComponent.declaredServices)
   }
 
   /** Returns the compile-validated list root without creating children. */

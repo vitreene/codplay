@@ -54,7 +54,7 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
 La sanitation du markup qui précède `CompiledScene` appartient à
 `src/scene/validation`. La capacité runtime `markup` conserve uniquement les
 parts/outlets et leur materialization par player. Les services portent leurs
-déclarations et validations pures ; leurs bindings de materializer sont
+contrats et validations pures ; leurs bindings de materializer sont
 assemblés dans l'adapter runtime concerné.
 
 `CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
@@ -72,12 +72,15 @@ Un lecteur de diffusion consomme un `CompiledScene` et sa collection de fonction
 le builder. Un export d'intention consomme `SceneDoc`; un export fidele consomme `CompiledScene`; aucun
 export ne passe par engine ou player.
 
-Les composants sont declares avec un descripteur de capacite pur, construit lors de l'instanciation de CodPlay.
-Une declaration unique porte le type, les services, la capacite runtime et la validation optionnelle dans le
-`RuntimeCapabilityCatalog`; les services ne sont pas redesignes dans un second registre. Le build recoit le
-snapshot de validation produit par ce catalogue et `CompiledScene` l'utilise sans
-instancier de composant ni de service runtime. L'absence d'un validateur de composant est autorisee au debut et
-produit un warning detaille; les validateurs des services courants sont la premiere couverture commune.
+Les composants sont enregistres avec une classe de capacite pure, construite lors de l'instanciation de CodPlay.
+La classe declare elle-même les services qu'elle consomme, dans leur ordre
+d'application. Le `RuntimeCapabilityCatalog` conserve le registre unique des
+services, leur validation et leurs adapters de materializer ; il ne porte pas
+une seconde liste de services imposée au composant. Le build reçoit le snapshot
+de validation produit par ce catalogue et `CompiledScene` l'utilise sans
+instancier de composant ni de service runtime. L'absence d'un validateur de
+composant est autorisee au debut et produit un warning detaille; les validateurs
+des services courants sont la premiere couverture commune.
 
 ## Position actuelle
 
@@ -87,8 +90,8 @@ produit un warning detaille; les validateurs des services courants sont la premi
 | Mode | Implementation V2 incrementale | Le code ajoute est destine a V2; une preuve de principe est annoncee comme telle avant d'etre ecrite. |
 | Partie active | Unification runtime V2 | Le catalogue unique, la validation dérivée, les services séparés et les materializers DOM HTML/SVG sont en place; Canvas/Three.js et les familles non encore portées restent hors tranche. |
 | Diagnostics | Contrat fixe, implementation testee | Peut etre consomme par toutes les couches V2. |
-| Validation/catalogue | Contrat par composant, intégration obligatoire | Les déclarations composant/services/modules sont lues depuis `RuntimeCapabilityCatalog` et exposées au build par `validationSnapshot()`. Chaque composant, core ou externe, doit fournir son profil d’entrée, son validateur de profil initial et, lorsque nécessaire, ses validateurs d’actions et callbacks de sanitation. Les services peuvent également normaliser leurs namespaces avant `CompiledScene`; `style` couvre ses couleurs déclarées en sRGB/OKLCH. Les formes core de `style`, `className`, `attr` et `content` ainsi que les contrats de `tag`, `layout`, `list`, `media`, `img`, `input` et `polygon` sont couverts. |
-| Composants | Base générique et base HTML séparées, tranche DOM HTML/SVG implémentée | `BaseComponent` est substrat-neutre ; `BaseHTMLComponent`, les sept composants core (`LayoutComponent`, `TagComponent`, `ListComponent`, `MediaComponent`, `ImageComponent`, `InputComponent`, `PolygonComponent`), leurs dossiers profils/validation/projection, factories runtime, parts/outlets et materialisation template string — y compris les fragments sans enveloppe — sont couverts par le `RuntimeMaterializer` unifié ; JSX, Canvas et Three.js restent hors tranche. |
+| Validation/catalogue | Contrat par composant, intégration obligatoire | Les classes de composants déclarent leurs services ; `RuntimeCapabilityCatalog.validationSnapshot()` expose cette déclaration au build tout en restant la source unique des définitions de services et de leurs validateurs. Chaque composant, core ou externe, doit fournir son profil d’entrée, son validateur de profil initial et, lorsque nécessaire, ses validateurs d’actions et callbacks de sanitation. Les services peuvent également normaliser leurs namespaces avant `CompiledScene`; `style` couvre ses couleurs déclarées en sRGB/OKLCH. Les formes core de `style`, `className`, `attr` et `content` ainsi que les contrats de `tag`, `layout`, `list`, `media`, `img`, `input` et `polygon` sont couverts. |
+| Composants | Base générique et base HTML séparées, tranche DOM HTML/SVG implémentée | `BaseComponent` est substrat-neutre et reçoit une facade de services abstraite ; `BaseHTMLComponent`, les sept composants core (`LayoutComponent`, `TagComponent`, `ListComponent`, `MediaComponent`, `ImageComponent`, `InputComponent`, `PolygonComponent`), leurs dossiers profils/validation/projection, classes runtime, parts/outlets et materialisation template string — y compris les fragments sans enveloppe — sont couverts par le `RuntimeMaterializer` unifié ; JSX, Canvas et Three.js restent hors tranche. |
 | Surfaces de composants | Registre typé initial implémenté | Les déclarations peuvent publier une surface via `RuntimeComponentSurfaceProvider`; le runtime la conserve par instance montée et les modules la résolvent par `RuntimeComponentSurfaceResolver`; `media-sync` consomme `media` sans classe concrète ni duck typing. Les nouvelles surfaces restent à ajouter à la map contractuelle. |
 | Utilitaires partagés | Sous-dossiers spécialisés en cours | `shared/values`, `shared/ordering` et `shared/numbers` centralisent le clonage structuré, la comparaison de chemins et la garde numérique ; `runtime/html` centralise la garde de mesurabilité ; les différences de contrat des pointeurs et des matrices HTML restent locales. |
 | Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
@@ -124,7 +127,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md), [`notes/2026-08-23-v1-behavior-inventory.md`](./notes/2026-08-23-v1-behavior-inventory.md) | Fixe, circuit logique unique en place; inventaire V1 des candidats Behavior consigné |
-| Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Fini pour la tranche de validation : capture continue, placement list, lecture et seek validés ; démo consignée |
+| Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Capture core et placement list validés ; le seek de la démo reste ouvert et la démo n'est pas encore clôturée |
 
 ## Modeles algorithmiques
 
@@ -153,9 +156,9 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, selection story/scene, straps sequentiels et attendus, outputs sur tracks declarees, cascade borne et relecture journalisee; l'invalidation des résultats asynchrones est reportée à V3 et les helpers live restent hors tranche. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Plan Temporel Declaratif fini pour les formes bornees; tout contrat live reste exclu et a specifier avec `f(t)`. |
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime, controles d'activation et tracks dediees aux outputs de straps en place; l'invalidation par génération des résultats asynchrones est reportée à V3. |
-| Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick, transforms scalaires et graphe parent/enfant en place; mesures, diagnostics et politiques de liste restent a ouvrir. |
-| Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | `RuntimeCapabilityCatalog` declare les types et leurs services; le `RuntimeMaterializer` matérialise les composants et leur structure, chaque player instancie ses composants. |
-| Familles de composants | Composants core et composants externes déclarés | Chaque composant ajouté reçoit son profil de données, son validateur, sa déclaration de catalogue, sa factory et les fixtures nécessaires; aucune capacité ne devient un patch générique de `style`. |
+| Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick, transforms scalaires et graphe parent/enfant en place; les mesures dépendantes du materializer et les extensions de diagnostic restent dans leurs tranches dédiées, tandis que les politiques de liste sont portées par la capacité `list`. |
+| Perso et composants | Types de perso, composants, services locaux, application de `PersoState`, parts et outlets | `RuntimeCapabilityCatalog` déclare les types et conserve le registre des services ; chaque classe de composant déclare les services qu'elle emploie. Le `RuntimeMaterializer` matérialise les composants et leur structure, chaque player instancie ses composants. |
+| Familles de composants | Composants core et composants externes déclarés | Chaque composant ajouté reçoit son profil de données, son validateur, sa classe runtime avec sa déclaration de services, et les fixtures nécessaires ; aucune capacité ne devient un patch générique de `style`. |
 | Layout et listes | Contrats de layout/outlets, capacite list et container ordonne | La timeline structurelle immutable possède l'ordre complet par target. Une liste marque une target; elle ne maintient aucun historique concurrent. |
 | Move / List | Politique de conflit, etat parent/enfant, montage, ordre logique, deltas `mount/unmount/move`, `@root`, `@off`, detach/reattach, registre interne de cibles aux IDs opaques uniques par scene | Registre, resolution de placement, conflits same-tick, metadonnees de modes, persistance `first/last`, graphe parent/enfant, deltas generiques, propagation du detach, diagnostics de seek et politiques `reorderOnMove/Add/Remove` fournies par la capacite list en place; le move core reste independant de la capacite. |
 | Mouvement local et reparent | Frontières avant/après, graphe temporel par item, mesures versionnées et présentation HTML atomique | Contrat fixe sur les moves compilés; le mode local est inféré pour une target inchangée et un changement de target/parent utilise automatiquement l'overlay reparent. `flipMode` reste une surcharge facultative. |
@@ -233,7 +236,7 @@ absence de rejeu de strap, dépendances interdites et ordre de solve).
 
 ### 5. Tranches de capacites
 
-Poursuivre par dépendances : reprise de l'authoring uniquement lors de la reprise de l'éditeur, puis ouverture de capacités concrètes identifiées. La capture continue, la capacité list/DnD et la fondation media/preload sont clôturées pour la tranche de validation. Le preload reste externalisé et n'est pas une étape imposée au player.
+Poursuivre par dépendances : reprise de l'authoring uniquement lors de la reprise de l'éditeur, puis ouverture de capacités concrètes identifiées. La capture core et le placement list sont validés pour la tranche de validation ; le seek list et la validation media restent ouverts. Le preload reste externalisé et n'est pas une étape imposée au player.
 Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
 
 ## Sources de reference V2

@@ -50,7 +50,7 @@ La tranche est conduite en deux temps complementaires :
 ## Analyse des proprietes
 
 La surface de proprietes traitables d'un `Perso` depend de son type de composant.
-La definition du composant declare la liste de services qu'elle utilise; chaque
+La classe du composant declare la liste de services qu'elle utilise; chaque
 service porte ensuite le contrat des proprietes recevables, leur validation, leurs
 defaults eventuels et leur mode temporel. `RuntimeCapabilityCatalog.validationSnapshot()`
 expose cette declaration au build. Il n'existe pas de matrice globale independante des
@@ -175,9 +175,10 @@ syntaxes auteur, les unites ou les espaces couleur.
 ## Catalogue de validations
 
 Le `RuntimeCapabilityCatalog` est construit au moment ou CodPlay enregistre les declarations de composants. Une
-declaration unique porte le type, les services, les modules et la definition de validation optionnelle. Son
-`validationSnapshot()` fournit la vue pure du build. Cette vue ne contient ni classe instanciee, ni node, ni
-service runtime vivant ; le builder l'utilise pour valider un `Perso`, ses actions et les services declares.
+declaration unique porte le type, la classe du composant, les modules et la definition de validation optionnelle.
+La classe porte sa liste ordonnee de services declares. Son `validationSnapshot()` fournit la vue pure du build.
+Cette vue ne contient ni classe instanciee, ni node, ni service runtime vivant ; le builder l'utilise pour valider
+un `Perso`, ses actions et les services declares.
 
 Un descripteur de composant peut fournir `validateInitial` et `validateAction`, mais ces fonctions ne sont pas
 obligatoires au debut. Leur absence produit un warning auteur detaille avec le type, le perso et le chemin concernes.
