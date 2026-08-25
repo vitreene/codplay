@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "exports": {
-    "./*": "./src/*"
+    "./*": "./src/v1/*"
   },
   "scripts": {
     "dev": "vite",

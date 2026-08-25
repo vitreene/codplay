@@ -36,7 +36,7 @@ critères sont suivis par le plan correspondant, actuellement
 ## Références obligatoires
 
 - contrat normatif : [`v1-capture-spec.md`](../../../docs/formalisation/v1-capture-spec.md) ;
-- fixture V1 : `packages/demos/src/scenes/s5-drag-scene.ts` ;
+- fixture V1 : `packages/demos/src/v1/scenes/s5-drag-scene.ts` ;
 - plan core V2 : [`capture-authoring-plan.md`](./capture-authoring-plan.md) ;
 - telco de validation V2 et son modèle de progression stabilisé ;
 - flux V2 réel : `RuntimeEventDispatcher -> journal -> materialize -> resolve -> solve -> component -> materializer`.

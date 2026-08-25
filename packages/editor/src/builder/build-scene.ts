@@ -135,7 +135,7 @@ export type BuildSceneResult = {
  * - `styleSheet` — every capsule's own resolved CSS, concatenated. This is NEVER inlined onto any
  *   perso's own `style` — only referenced through `className` — so it has to travel to the player
  *   as an actual stylesheet (a Blob → `extraResources`, see the demo wiring in
- *   `packages/demos/src/codplay/ed2-builder-demo.ts`) for the scene to render correctly at all.
+ *   `packages/demos/src/v1/codplay/ed2-builder-demo.ts`) for the scene to render correctly at all.
  */
 export function buildSceneDoc(scene: EditorScene): BuildSceneResult {
   const editor = new SceneDocEditor()
@@ -701,7 +701,7 @@ function buildKeyframeDecorActions(
  * `OffsetData` (décalage libre — transform + dimensions, distinct de la future `position` de
  * grille) est un module dedit qui fusionne avec le style (pas un mécanisme séparé) — sa partie
  * animable se résout vers les mêmes clés que `Decor.style` porte déjà pour ce même rôle,
- * confirmées par une scène ed2 réelle (`packages/demos/src/scenes/s6-dnd-list-scene.ts`, `x`/`y`
+ * confirmées par une scène ed2 réelle (`packages/demos/src/v1/scenes/s6-dnd-list-scene.ts`, `x`/`y`
  * mélangés à du CSS classique — `zIndex` — dans le même objet `style`, aussi bien en action qu'en
  * `event.data`). Codplay applique `style` (aussi bien `initial` que les actions) via
  * `animejs.utils.set`/le moteur de transition — jamais une assignation DOM littérale — donc toute

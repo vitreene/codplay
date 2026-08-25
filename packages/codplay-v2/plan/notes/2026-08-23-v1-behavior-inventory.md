@@ -38,8 +38,8 @@ Cette notion doit rester distincte de :
 Le corpus des demos ne contient que deux appels executables a
 `context.live.loop` :
 
-- [s4-quiz-reference-scene.ts:626](../../../demos/src/scenes/s4-quiz-reference-scene.ts:626)
-- [mashup-rive-three-quiz-scene.ts:246](../../../demos/src/scenes/mashup-rive-three-quiz-scene.ts:246)
+- [s4-quiz-reference-scene.ts:626](../../../demos/src/v1/scenes/s4-quiz-reference-scene.ts:626)
+- [mashup-rive-three-quiz-scene.ts:246](../../../demos/src/v1/scenes/mashup-rive-three-quiz-scene.ts:246)
 
 Dans les deux cas, le loop produit un compte a rebours toutes les secondes et
 s'arrete sur `counter:stop` ou apres onze occurrences.

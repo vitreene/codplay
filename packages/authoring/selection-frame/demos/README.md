@@ -25,7 +25,7 @@ first validated FLIP fixture and keeps its current timeline and debug controls.
 - runner-owned cold seek, overlay lifecycle, resize invalidation and teardown.
 
 The fixture is now published under
-`packages/demos/src/v2/demos/flip-stress/` and loaded through `v2.html`. The
+`packages/demos/src/v2/demos/flip-stress/` and loaded through `index.html`. The
 stress root fills its containing zone in both dimensions. Its A–D anchors
 and vertical motion use the root's responsive percentage coordinate system, and
 the stage observes its own size so width changes recapture the motion endpoints

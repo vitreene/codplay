@@ -6,7 +6,7 @@
 ## Rôle
 
 Ce dossier contient les démos de validation et de présentation de CodPlay V2.
-Elles sont distinctes des démos historiques de `src/codplay` et ne réutilisent
+Elles sont distinctes des démos historiques de `src/v1` et ne réutilisent
 pas leur circuit de lecture, leur télécommande ou leur registre.
 
 ```text
@@ -15,9 +15,11 @@ src/v2/
   demos/<demo-id>/        # une démo autonome par dossier
   registry.ts             # métadonnées et chargement différé
   main.ts                 # entrée V2 légère
+
+src/v1/                    # démos historiques et leur circuit V1
 ```
 
-La page publique de cette tranche est `v2.html`. Le sélecteur change de démo
+La page publique de cette tranche est `index.html`. Le sélecteur change de démo
 par l'URL ; le module de la démo sélectionnée est chargé dynamiquement. Le
 chargement initial ne compile donc pas toutes les scènes V2.
 

@@ -75,7 +75,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     selector.append(option)
   }
   selector.addEventListener('change', () => {
-    globalThis.location.assign(`v2.html?demo=${encodeURIComponent(selector.value)}`)
+    globalThis.location.assign(`?demo=${encodeURIComponent(selector.value)}`)
   })
 
   const logLines: string[] = []

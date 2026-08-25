@@ -115,7 +115,7 @@ export function createScenePlayerBridge(mountTarget: HTMLElement, machine: Actor
       const styleSheetUrl = URL.createObjectURL(new Blob([styleSheet], { type: 'text/css' }))
       const loadResult = await studio.load({
         // `SceneDef` (sortie du Builder) vs `SceneDoc` (entrée `CodPlay.load`) — même cast déjà établi
-        // côté `packages/demos/src/scenes/ed2-builder-scene.ts`, pas une divergence introduite ici.
+        // côté `packages/demos/src/v1/scenes/ed2-builder-scene.ts`, pas une divergence introduite ici.
         scene: sceneDoc as unknown as SceneDoc,
         mountTarget,
         extraResources: [{ url: styleSheetUrl, type: 'css', policy: { cache: 'no-store' } }],

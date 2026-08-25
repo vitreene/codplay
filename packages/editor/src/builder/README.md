@@ -26,4 +26,4 @@ Chaque capsule (la racine implicite, ou toute capsule écrite par l'auteur) trav
 ## Les deux sorties
 
 - `sceneDoc` — le vrai `SceneDef`, construit via `SceneDocEditor` (l'aide à la construction de scène propre à Codplay), prêt pour `BuilderFacade.compile()`.
-- `styleSheet` — le CSS résolu de chaque capsule, concaténé. Ce CSS n'est JAMAIS mis en ligne dans le `style` propre d'un perso — seulement référencé via `className` — il doit donc voyager jusqu'au player comme une vraie feuille de style (un Blob → `extraResources`, voir le câblage de la démo dans `packages/demos/src/codplay/ed2-builder-demo.ts`) pour que la scène s'affiche correctement.
+- `styleSheet` — le CSS résolu de chaque capsule, concaténé. Ce CSS n'est JAMAIS mis en ligne dans le `style` propre d'un perso — seulement référencé via `className` — il doit donc voyager jusqu'au player comme une vraie feuille de style (un Blob → `extraResources`, voir le câblage de la démo dans `packages/demos/src/v1/codplay/ed2-builder-demo.ts`) pour que la scène s'affiche correctement.
