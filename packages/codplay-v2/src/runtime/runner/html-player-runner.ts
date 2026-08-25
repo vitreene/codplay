@@ -284,6 +284,11 @@ export class HtmlPlayerRunner {
     this.player.setRate(rate)
   }
 
+  /** Returns the logical playback rate exposed by the runner's player. */
+  getRate(): number {
+    return this.player.getRate()
+  }
+
   /** Pauses playback and stops the runner-owned ticker. */
   pause(): void {
     this.player.pause()

@@ -260,6 +260,13 @@ Les phases temporelles des parents et enfants peuvent donc être différentes.
 Un parent reste souverain : une frontière enfant ne termine, n'annule et ne
 recalcule jamais sa trajectoire.
 
+Pour la présentation HTML, le parent effectif d'un item local est résolu en
+remontant toute la chaîne capturée jusqu'au premier ancêtre actuellement
+présenté. Les ancêtres intermédiaires qui ne possèdent pas de trajectoire
+propre sont recomposés avec leur `localPose`. La profondeur de la chaîne est
+illimitée ; aucun calcul de position ne suppose que le parent utile est
+immédiat.
+
 ### 6. Chevauchement et retarget
 
 Lorsqu'une nouvelle frontière affecte un item déjà animé, son nouveau FIRST est
@@ -468,7 +475,7 @@ transactionnelle décrite ci-dessus est le seul chemin HTML. Les materializers
 SVG, Canvas et Three.js relèvent de tranches ultérieures et ne conditionnent pas
 la clôture de ce runner.
 
-### Contrôle de cette passe — 2026-08-23
+### Contrôle de cette passe — 2026-08-25
 
 La démo `flip-stress` reste inchangée et sert de repère visuel final. Elle a été
 rejouée sur les états `BOUNDARY`, `MIDDLE`, `LAST`, après resize et après seeks
@@ -483,8 +490,17 @@ endpoint effectif ; le graphe conserve ensuite le délai et la durée. Les
 ancêtres restent dans la fermeture de données et leurs propres segments sont
 composés récursivement, sans piste FLIP ajoutée par simple propagation.
 
-La suite V2 passe à 63 fichiers et 408 tests. `typecheck`, la suite complète,
-le build du runner HTML et `git diff --check` sont verts.
+La suite V2 passe à 71 fichiers et 438 tests. Un test ciblé de
+`motion-graph.spec.ts` verrouille le cas causal : un enfant reparenté termine
+sur la pose intermédiaire de son ancêtre de destination, et non sur le FIRST
+de cet ancêtre. `typecheck`, la suite complète, le build du runner HTML et
+`git diff --check` sont verts.
+
+La vérification Safari a rejoué la démo réelle aux bornes `0`, `1000` et
+`9000 ms`. À `1000 ms`, Q et K restent présentés depuis leurs positions FIRST
+respectives tandis que C et D sont montés ; à `9000 ms`, les overlays ont
+disparu et Q/K sont revenus dans leurs cibles naturelles. Aucun warning ni
+error de console n'a été relevé.
 
 ### Correction de régression — reflow alterné des listes — 2026-08-23
 
@@ -516,6 +532,51 @@ Ce contrat interdit toute lecture de la fermeture à chaque frame et tout second
 DOM d'analyse. La timeline naturelle assemblée par `motion-layout.ts` fournit le
 layout retenu à `present()`, tandis que les segments du graphe portent les
 intermédiaires des parents et des descendants.
+
+### Ancêtre absent au FIRST, présent au LAST
+
+Un perso détaché reste dans le graphe logique avec son `parentByPerso` et son
+`targetByPerso`. Il ne figure pas dans `childrenByTarget`, dans l'ordre DOM ou
+dans les racines présentées tant que son montage effectif est faux. Un outlet
+interne conserve donc son propriétaire de scène même lorsque celui-ci est
+détaché ; il n'est pas traité comme un outlet externe simplement parce que son
+nœud n'est pas présent.
+
+Lorsqu'un mover direct est absent au FIRST uniquement parce qu'un ancêtre est
+détaché, mais que le mover et la chaîne source sont disponibles au LAST, la
+capture géométrique prépare ponctuellement un état hybride : l'état FIRST du
+mover est présenté dans le contexte des ancêtres montés au LAST. Cette
+composition sert uniquement à obtenir son attachement source exact ; elle
+réutilise les materialisations persistantes, ne crée aucun arbre DOM d'analyse,
+et restaure immédiatement l'état LAST avant de capturer le snapshot final.
+
+Cette composition est limitée au mover absent et à sa fermeture d'ancêtres. Elle
+ne fusionne jamais le snapshot complet de la scène : deux movers réunis à la
+même frontière gardent chacun leur FIRST. Pour une action de pose qui monte son
+perso à `startAt`, FIRST est au contraire l'état monté à `startAt`, avec les
+valeurs initiales de l'action ; LAST reste son endpoint à
+`startAt + delay + duration`. Ce segment de pose reste disponible pour composer
+la trajectoire d'un enfant reparenté, sans créer une piste FLIP supplémentaire
+pour le parent.
+
+La règle ne décale pas l'événement, ne force pas `visibility`, ne monte pas
+l'état absent dans la présentation normale et ne fabrique pas de source si la
+chaîne source n'est pas disponible au LAST. La démo doit continuer à exposer
+ces cas limites, notamment `K -> D` au FIRST puis `K -> C` au LAST à la même
+frontière.
+
+### Correction de régression — FIRST concurrent et parent animé — 2026-08-25
+
+La capture hybride de `K -> C` réécrivait auparavant tout le snapshot FIRST
+avec le contexte utilisé pour mesurer K. Q était donc déjà remplacé par son
+état B à `t=1000`, sans overlay visible. La fusion est maintenant limitée à K
+et à ses ancêtres ; Q conserve son FIRST A et son overlay démarre à sa position
+source.
+
+C et D sont capturés dans l'état monté au FIRST de leur action de révélation,
+puis à leur LAST. Leur trajectoire de pose est ainsi disponible dans le graphe
+pour composer la destination de K, sans lecture DOM pendant la présentation et
+sans duplication d'arbre d'analyse.
 
 ### Correction de régression — ordre et dimensions overlay
 

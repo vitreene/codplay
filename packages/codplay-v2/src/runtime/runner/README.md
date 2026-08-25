@@ -2,7 +2,7 @@
 
 > Statut : Fini — tranche HTML motion et materializer SVG DOM V2
 > Version CodPlay : V2 foundation
-> Relecture : capture géométrique sans DOM dupliqué validée ; renderer de production hors périmètre
+> Relecture : capture géométrique sans DOM dupliqué et frontières FIRST/LAST validées le 2026-08-25 ; renderer de production hors périmètre
 
 ## Rôle
 
@@ -112,13 +112,23 @@ Pour chaque frontière compilée :
 - un `move` capture FIRST avec `resolveSceneBeforeBoundary(startAt)`, puis LAST
   avec `resolveSceneAt(startAt)` après l'événement structurel ;
 - une transition de pose capture FIRST à `startAt`, puis LAST à
-  `startAt + delay + duration`.
+  `startAt + delay + duration` ; si l'action monte le perso à son démarrage,
+  ce FIRST utilise l'état monté et les valeurs initiales de l'action.
 
 Le LAST d'un `move` est donc la conséquence immédiate de l'événement ; le LAST
 d'une action est son endpoint mesuré, pas un état futur de toute la scène. Si la
 scène ne contient aucun `move` transitionnel ni transition de pose du
 materializer, le runner n'initialise pas de système de mouvement, ne capture pas
 les positions et ne crée pas d'overlay.
+
+Un mover qui est absent au FIRST parce qu'un ancêtre est détaché conserve sa
+chaîne logique dans le graphe. Lorsque le mover et cette chaîne sont disponibles
+au LAST, la capture présente ponctuellement l'état FIRST du mover dans le
+contexte des ancêtres montés au LAST afin d'obtenir son attachement source. Elle
+réutilise les nœuds auteur persistants, ne crée pas de DOM de mesure et restaure
+le LAST avant sa lecture finale. L'absence reste inchangée dans la présentation
+normale au FIRST. La fusion hybride est limitée au mover et à ses ancêtres ;
+elle ne peut pas remplacer le FIRST d'un autre mover de la même frontière.
 
 ## Présentation locale et reparent
 

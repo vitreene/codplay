@@ -38,6 +38,7 @@ class FakeScheduler implements FrameScheduler {
 class FakeTransportTarget {
   status: PlayerLifecycleState = PLAYER_LIFECYCLE_READY
   timeMs = 0
+  rate = 1
   readonly calls: string[] = []
 
   /** Returns the fake lifecycle state. */
@@ -50,6 +51,11 @@ class FakeTransportTarget {
     return this.timeMs
   }
 
+  /** Returns the fake playback rate. */
+  getRate(): number {
+    return this.rate
+  }
+
   /** Starts fake playback. */
   play(): void {
     this.calls.push('play')
@@ -60,6 +66,12 @@ class FakeTransportTarget {
   pause(): void {
     this.calls.push('pause')
     this.status = PLAYER_LIFECYCLE_PAUSED
+  }
+
+  /** Changes the fake playback rate. */
+  setRate(rate: number): void {
+    this.calls.push(`rate:${rate}`)
+    this.rate = rate
   }
 
   /** Seeks fake playback to one logical time. */
@@ -107,6 +119,19 @@ describe('Runtime telco', () => {
     telco.destroy()
   })
 
+  it('toggles play and pause through the same command facade', async () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+
+    expect((await telco.togglePlay()).ok).toBe(true)
+    expect(target.status).toBe(PLAYER_LIFECYCLE_PLAYING)
+
+    expect((await telco.togglePlay()).ok).toBe(true)
+    expect(target.status).toBe(PLAYER_LIFECYCLE_PAUSED)
+    expect(target.calls).toEqual(['play', 'pause'])
+    telco.destroy()
+  })
+
   it('allows seeking from the initialized ready state', async () => {
     const target = new FakeTransportTarget()
     const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
@@ -115,6 +140,18 @@ describe('Runtime telco', () => {
     expect(target.calls).toEqual(['seek:320'])
     expect(target.status).toBe(PLAYER_LIFECYCLE_READY)
     expect(telco.getState().timelineMs).toBe(320)
+    telco.destroy()
+  })
+
+  it('exposes the playback rate through the same facade', () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+
+    telco.setRate(2)
+
+    expect(telco.rate).toBe(2)
+    expect(telco.getState().rate).toBe(2)
+    expect(target.calls).toEqual(['rate:2'])
     telco.destroy()
   })
 

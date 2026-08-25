@@ -4,6 +4,7 @@ import type { RuntimeTelco, RuntimeTelcoState } from '../../src/runtime/telco'
 export type TelcoRemoteOptions = Readonly<{
   telco: RuntimeTelco
   durationMs: number
+  onInfo?: (message: string) => void
   onError?: (message: string) => void
 }>
 
@@ -14,15 +15,24 @@ export type TelcoRemote = Readonly<{
   destroy: () => void
 }>
 
-/** [temp: validation] Creates the V2 adaptation of the existing CodPlay transport remote. */
+type TelcoIconName = 'play' | 'pause' | 'rewind'
+
+const TELCO_ICON_PATHS: Readonly<Record<TelcoIconName, string>> = {
+  play: 'M8 5v14l11-7L8 5z',
+  pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
+  rewind: 'M11 5 3 12l8 7V5zm10 0-8 7 8 7V5z',
+}
+
+/** Creates the single V2 validation remote around the RuntimeTelco facade. */
 export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
-  const { telco, durationMs, onError } = options
+  const { telco, durationMs, onInfo, onError } = options
   const seekThrottleMs = 90
   let pendingSeekTargetMs: number | null = null
   let activeSeekTargetMs: number | null = null
   let seekThrottleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   let lastSeekDispatchMs = 0
   let seekInteractionActive = false
+  let seekReleaseHandled = false
   let seekScaleLockMaxMs: number | null = null
 
   /** Creates one typed element for the remote without injecting markup strings. */
@@ -43,19 +53,59 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     return button
   }
 
+  /** Creates one accessible SVG icon without adding a second control path. */
+  function createIcon(name: TelcoIconName): SVGSVGElement {
+    const icon = globalThis.document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    const path = globalThis.document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    icon.setAttribute('viewBox', '0 0 24 24')
+    icon.setAttribute('aria-hidden', 'true')
+    icon.setAttribute('focusable', 'false')
+    icon.classList.add('telco-button__icon')
+    icon.setAttribute('data-icon', name)
+    path.setAttribute('d', TELCO_ICON_PATHS[name])
+    icon.appendChild(path)
+    return icon
+  }
+
+  /** Creates an icon button with a visually hidden, accessible text label. */
+  function createIconButton(
+    name: TelcoIconName,
+    label: string,
+    className: string,
+  ): { button: HTMLButtonElement; icon: SVGSVGElement; label: HTMLSpanElement } {
+    const button = createButton('', className)
+    const icon = createIcon(name)
+    const labelNode = createElement('span', 'telco-button__label')
+    labelNode.textContent = label
+    button.setAttribute('aria-label', label)
+    button.title = label
+    button.append(icon, labelNode)
+    return { button, icon, label: labelNode }
+  }
+
   const root = createElement('div', 'telco-remote')
   const transportRow = createElement('div', 'telco-remote__transport')
-  const playButton = createButton('', 'telco-button')
-  const playButtonLabel = createElement('span')
-  const rewindButton = createButton('Revenir au début', 'telco-button telco-button--secondary')
+  const playControl = createIconButton('play', 'Lire', 'telco-button telco-button--transport')
+  const playButton = playControl.button
+  const playButtonIcon = playControl.icon
+  const playButtonLabel = playControl.label
+  const rewindControl = createIconButton(
+    'rewind',
+    'Revenir au début',
+    'telco-button telco-button--secondary telco-button--transport',
+  )
+  const rewindButton = rewindControl.button
   const seekWrapper = createElement('label', 'telco-remote__seek')
   const seekTitle = createElement('span')
   const seekRange = createElement('input')
   const seekValue = createElement('output')
+  const rateRow = createElement('div', 'telco-remote__rates')
+  const rateButtons = [1, 2, 0.25].map((rate) => ({
+    rate,
+    button: createButton(formatRate(rate), 'telco-button telco-button--secondary'),
+  }))
   const stateOutput = createElement('output', 'telco-remote__state')
 
-  playButtonLabel.textContent = 'Lire'
-  playButton.appendChild(playButtonLabel)
   seekTitle.textContent = 'Temps'
   seekRange.type = 'range'
   seekRange.min = '0'
@@ -65,12 +115,18 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   seekValue.textContent = '0 ms'
   seekWrapper.append(seekTitle, seekRange, seekValue)
   transportRow.append(playButton, rewindButton, seekWrapper)
-  root.append(transportRow, stateOutput)
+  for (const entry of rateButtons) rateRow.append(entry.button)
+  root.append(transportRow, rateRow, stateOutput)
 
   /** Converts one timeline value into the displayed percentage. */
   function formatProgress(timeMs: number, maxMs: number): string {
     if (maxMs <= 0) return '0%'
     return `${Math.max(0, Math.min(100, Math.round(timeMs / maxMs * 100)))}%`
+  }
+
+  /** Formats the compact rate labels displayed by the transport remote. */
+  function formatRate(rate: number): string {
+    return `×${rate}`
   }
 
   /** Reads the current range value as a clamped timeline position. */
@@ -107,7 +163,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     stateOutput.textContent = `état=${state.status} · temps=${Math.round(state.timelineMs)} ms · révision=${state.runtimeRevision}`
   }
 
-  /** Refreshes command availability using the same state model as the V1 remote. */
+  /** Refreshes command availability from the V2 transport snapshot. */
   function syncState(state: RuntimeTelcoState = telco.getState()): void {
     const inFlight = telco.commandInFlight
     const { status, sequenceEnded, initialized } = state
@@ -120,7 +176,16 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     const { displayMs, maxMs } = resolveDisplayedMs(state)
 
     setIfChanged(playButton.disabled, inFlight || (!canPlay && !canPause), (value) => { playButton.disabled = value })
-    setIfChanged(playButtonLabel.textContent, canPause ? 'Pause' : 'Lire', (value) => { playButtonLabel.textContent = value })
+    const playLabel = canPause ? 'Pause' : 'Lire'
+    const playIcon = canPause ? 'pause' : 'play'
+    if (playButtonIcon.getAttribute('data-icon') !== playIcon) {
+      const iconPath = playButtonIcon.firstElementChild
+      if (iconPath !== null) iconPath.setAttribute('d', TELCO_ICON_PATHS[playIcon])
+      playButtonIcon.setAttribute('data-icon', playIcon)
+    }
+    setIfChanged(playButtonLabel.textContent ?? '', playLabel, (value) => { playButtonLabel.textContent = value })
+    setIfChanged(playButton.getAttribute('aria-label') ?? '', playLabel, (value) => { playButton.setAttribute('aria-label', value) })
+    setIfChanged(playButton.title, playLabel, (value) => { playButton.title = value })
     setIfChanged(rewindButton.disabled, inFlight || !canRewind, (value) => { rewindButton.disabled = value })
     // Keep the range enabled while pause/seek is being serialized. Disabling
     // it during pointerdown aborts the native drag before its final input.
@@ -129,6 +194,10 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     setIfChanged(seekRange.value, String(displayMs), (value) => { seekRange.value = value })
     seekValue.textContent = `${displayMs} ms · ${formatProgress(displayMs, maxMs)}`
     stateOutput.textContent = `état=${status} · temps=${Math.round(state.timelineMs)} ms · révision=${state.runtimeRevision}`
+    for (const entry of rateButtons) {
+      entry.button.classList.toggle('telco-button--active', entry.rate === state.rate)
+      setIfChanged(entry.button.disabled, inFlight || !initialized, (value) => { entry.button.disabled = value })
+    }
 
     if (pendingSeekTargetMs !== null && !inFlight) scheduleSeek()
   }
@@ -194,6 +263,11 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
 
   /** Ends range interaction and sends its final position immediately. */
   function clearSeekInteraction(): void {
+    if (seekReleaseHandled) {
+      syncState()
+      return
+    }
+    seekReleaseHandled = true
     pendingSeekTargetMs = readSeekTarget()
     seekInteractionActive = false
     seekScaleLockMaxMs = null
@@ -205,9 +279,9 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   playButton.addEventListener('click', () => {
-    const stateBefore = telco.getState()
-    const commandName = stateBefore.status === 'playing' ? 'pause' : 'play'
-    const command = commandName === 'pause' ? telco.pause() : telco.play()
+    const wasPlaying = telco.getState().status === 'playing'
+    const command = telco.togglePlay()
+    onInfo?.(wasPlaying ? 'pause' : 'play')
     void command.then(reportCommandError).finally(() => syncState())
     syncState()
   })
@@ -219,6 +293,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
 
   seekRange.addEventListener('pointerdown', () => {
     seekInteractionActive = true
+    seekReleaseHandled = false
     if (telco.getState().status === 'playing' && !telco.commandInFlight) {
       seekScaleLockMaxMs = Number(seekRange.max)
       void telco.pause().then(reportCommandError).finally(() => syncState())
@@ -228,6 +303,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
 
   seekRange.addEventListener('input', () => {
     seekInteractionActive = true
+    seekReleaseHandled = false
     pendingSeekTargetMs = readSeekTarget()
     const maxMs = Number(seekRange.max)
     seekValue.textContent = `${pendingSeekTargetMs} ms · ${formatProgress(pendingSeekTargetMs, Number.isFinite(maxMs) ? maxMs : durationMs)}`
@@ -241,6 +317,19 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   seekRange.addEventListener('pointercancel', clearSeekInteraction)
   seekRange.addEventListener('lostpointercapture', clearSeekInteraction)
   seekRange.addEventListener('blur', clearSeekInteraction)
+
+  for (const entry of rateButtons) {
+    entry.button.addEventListener('click', () => {
+      try {
+        telco.setRate(entry.rate)
+        onInfo?.(`rate=${entry.rate}`)
+        syncState(telco.getState())
+      } catch (error) {
+        onError?.(error instanceof Error ? error.message : String(error))
+        syncState(telco.getState())
+      }
+    })
+  }
 
   const stopOnChange = telco.onChange((state) => syncState(state))
   const stopOnProgress = telco.onProgress((state) => syncProgress(state))

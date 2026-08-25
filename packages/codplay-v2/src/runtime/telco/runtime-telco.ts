@@ -49,6 +49,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       status,
       timelineMs,
       durationMs: options.durationMs,
+      rate: target.getRate(),
       initialized: status !== PLAYER_LIFECYCLE_IDLE && status !== PLAYER_LIFECYCLE_DESTROYED,
       sequenceEnded: timelineMs >= options.durationMs,
       runtimeRevision,
@@ -156,6 +157,10 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   const telco: RuntimeTelco = {
     getState,
 
+    get rate(): number {
+      return target.getRate()
+    },
+
     get commandInFlight(): boolean {
       return commandInFlight
     },
@@ -171,6 +176,15 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     }),
 
     pause: () => runCommand(pauseTarget),
+
+    setRate: (rate) => {
+      if (destroyed) throw new Error('Runtime telco has been destroyed.')
+      if (!Number.isFinite(rate) || rate <= 0) {
+        throw new Error('Runtime telco rate must be a finite positive number.')
+      }
+      target.setRate(rate)
+      notifyChange()
+    },
 
     togglePlay: () => runCommand(() => {
       if (target.getLifecycleState() === PLAYER_LIFECYCLE_PLAYING) pauseTarget()

@@ -113,16 +113,16 @@ les positions intermédiaires si le contrat le prévoit, et garantir l’envoi d
 la dernière position au relâchement. Les commandes en cours, la pause avant
 seek et les erreurs doivent être gérées par un seul propriétaire.
 
-Toute façade locale strictement nécessaire à cette fixture est limitée à la
-démonstration et marquée `temp`. Elle ne devient pas le contrat telco V2.
+Le layout ne crée pas de façade de transport locale. Son seul adaptateur
+spécifique (`v2-demo-telco.ts`) relie le remote partagé au journal du layout ;
+il ne crée ni commande ni second contrat de transport.
 
 État de cette reprise : `createRuntimeTelco` est la façade V2 utilisée par
-`HtmlPlayerRunner`, et `demos/shared/telco-remote.ts` est le remote temporaire
-de validation qui reprend le comportement de contrôle V1 sans importer la
-façade V1 ni créer de pont `PlayerApi`. Dans la page courante, la zone telco
-est rendue après la scène et le relevé d'état est le dernier panneau. La
-La vérification manuelle de la démo courante couvre le glissement complet ;
-l’automatisation Safari reste indisponible dans l’environnement.
+`HtmlPlayerRunner`, et `demos/shared/telco-remote.ts` est l'unique remote de
+validation. Dans la page V2 courante, la zone telco est rendue après la scène ;
+le composant `v2-demo-telco.ts` ne fait qu'adapter le journal du layout. La
+vérification manuelle couvre la lecture, la pause en cours de lecture et le
+glissement complet du progress, sans erreur applicative dans la console.
 
 ### 5. Tester le chemin réel
 

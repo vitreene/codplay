@@ -11,6 +11,7 @@ export type RuntimeTelcoState = Readonly<{
   status: PlayerLifecycleState
   timelineMs: number
   durationMs: number
+  rate: number
   initialized: boolean
   sequenceEnded: boolean
   runtimeRevision: number
@@ -20,8 +21,10 @@ export type RuntimeTelcoState = Readonly<{
 export type RuntimeTransportTarget = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   getCurrentTimeMs: () => number
+  getRate: () => number
   play: () => void
   pause: () => void
+  setRate: (rate: number) => void
   seek: (timeMs: number) => Readonly<{ ok: boolean }>
 }>
 
@@ -36,6 +39,8 @@ export type RuntimeTelcoOptions = Readonly<{
 export type RuntimeTelco = Readonly<{
   getState: () => RuntimeTelcoState
   readonly commandInFlight: boolean
+  readonly rate: number
+  setRate: (rate: number) => void
   play: () => Promise<RuntimeTelcoCommandResult>
   pause: () => Promise<RuntimeTelcoCommandResult>
   togglePlay: () => Promise<RuntimeTelcoCommandResult>

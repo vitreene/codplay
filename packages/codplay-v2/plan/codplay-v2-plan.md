@@ -97,7 +97,7 @@ des services courants sont la premiere couverture commune.
 | Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
 | ACE | Contrat de valeurs, couleurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes, la normalisation sRGB/OKLCH et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
 | Mouvement HTML | Tranche HTML fixe et clôturée | FIRST/LAST exacts, modes local/reparent, profondeur arbitraire, circuit Play/Seek unique et optimisation sans lecture DOM par frame sont couverts ; le materializer SVG DOM ajouté pour les composants ne porte pas encore le mouvement SVG. |
-| Démos standard | Gabarit fixe, extension en cours | `packages/authoring/selection-frame/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. |
+| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. Le chargement passe par `packages/demos/v2.html` et son registre V2. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -208,15 +208,16 @@ multi-instance. Les capacités non ouvertes restent absentes de ses types et fix
 
 La démo compacte dans `packages/codplay-v2/demos/validation/runner/` valide les
 contrats local et reparent avec deux scénarios lisibles. La fixture
-`packages/authoring/selection-frame/demos/flip-stress/` en est le gabarit de
-stress et la base de reprise pour les démos standard : elle ajoute plusieurs
+`packages/demos/src/v2/demos/flip-stress/` en est le gabarit de stress et la
+base de reprise pour les démos standard : elle ajoute plusieurs
 conteneurs mobiles, des listes imbriquées, des trajectoires, des transitions
 chevauchées et le redimensionnement responsive.
 
 Ces démos restent des surfaces de validation, pas des implémentations
 alternatives du runtime. Elles doivent conserver une `SceneDoc` déclarative,
-le cycle de vie possédé par `HtmlPlayerRunner`, les checkpoints FIRST / boundary
-/ middle / LAST, ainsi que la comparaison Play/Seek au même temps. Les
+le cycle de vie possédé par `HtmlPlayerRunner`, la télécommande commune et les
+points de seek FIRST / boundary / middle / LAST utilisés pour la validation,
+ainsi que la comparaison Play/Seek au même temps. Les
 paramètres de stress peuvent être réduits pour une démo standard, mais le
 circuit de résolution et les points d'observation restent identiques.
 

@@ -25,6 +25,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         fame: resolve(__dirname, 'fame.html'),
+        v2: resolve(__dirname, 'v2.html'),
       },
     },
   },

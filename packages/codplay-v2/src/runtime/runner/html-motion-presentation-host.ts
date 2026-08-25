@@ -164,9 +164,10 @@ export class HtmlMotionPresentationHost {
     }
     const orderedLocalItemIds = orderParentFirst(frame, localItemIds, naturalLayout)
     const localParentInverses = new Map<string | undefined, HtmlMatrix>()
+    const localParentPoses = new Map<string | undefined, HtmlPose>()
     for (const itemId of orderedLocalItemIds) this.prepareLocal(itemId, frame, directOverlayItemIds, naturalLayout)
     for (const itemId of orderedLocalItemIds) {
-      this.applyLocal(itemId, frame, rootPose, naturalLayout, localParentInverses)
+      this.applyLocal(itemId, frame, rootPose, naturalLayout, localParentInverses, localParentPoses)
     }
 
     const overlayPose = rootPose
@@ -222,6 +223,7 @@ export class HtmlMotionPresentationHost {
     rootPose: HtmlPose,
     naturalLayout: LayoutSnapshot | undefined,
     parentInverses: Map<string | undefined, HtmlMatrix>,
+    parentPoses: Map<string | undefined, HtmlPose>,
   ): void {
     const target = this.localTargets.get(itemId)
     const item = frame.items.get(itemId)
@@ -229,17 +231,13 @@ export class HtmlMotionPresentationHost {
     const worldPose = composeMotionPose(rootPose, decomposeRootMotionPose(item.pose))
     let parentInverse = parentInverses.get(item.parentItemId)
     if (parentInverse === undefined) {
-      const parentPresentation = item.parentItemId === undefined
-        ? undefined
-        : frame.items.get(item.parentItemId)
-      const naturalParent = item.parentItemId === undefined
-        ? undefined
-        : naturalLayout?.items.get(item.parentItemId)
-      const parentPose = parentPresentation !== undefined
-        ? composeMotionPose(rootPose, decomposeRootMotionPose(parentPresentation.pose))
-        : naturalParent !== undefined
-          ? composeMotionPose(rootPose, decomposeRootMotionPose(naturalParent.rootPose))
-          : rootPose
+      const parentLayoutPose = this.resolveParentLayoutPose(
+        item.parentItemId,
+        frame,
+        naturalLayout,
+        parentPoses,
+      )
+      const parentPose = composeMotionPose(rootPose, decomposeRootMotionPose(parentLayoutPose))
       const resolvedParentInverse = invertMatrix(poseAffineMatrix(parentPose))
       if (resolvedParentInverse === null) throw new Error('Motion local parent matrix is singular.')
       parentInverse = resolvedParentInverse
@@ -251,6 +249,46 @@ export class HtmlMotionPresentationHost {
     if (previous?.target === target && sameHtmlMatrix(previous.matrix, matrix)) return
     this.transientStyles.applyLocalTransform(target, matrix)
     this.localTransforms.set(itemId, { target, matrix })
+  }
+
+  /** Resolves an item's effective parent pose through non-presented ancestors. */
+  private resolveParentLayoutPose(
+    parentItemId: string | undefined,
+    frame: PresentationFrame,
+    naturalLayout: LayoutSnapshot | undefined,
+    cache: Map<string | undefined, HtmlPose>,
+  ): HtmlPose {
+    const cached = cache.get(parentItemId)
+    if (cached !== undefined) return cached
+
+    if (parentItemId === undefined) {
+      const root = createMotionRootPose()
+      cache.set(parentItemId, root)
+      return root
+    }
+
+    const presentedParent = frame.items.get(parentItemId)
+    if (presentedParent !== undefined) {
+      cache.set(parentItemId, presentedParent.pose)
+      return presentedParent.pose
+    }
+
+    const naturalParent = naturalLayout?.items.get(parentItemId)
+    if (naturalParent === undefined) {
+      const root = createMotionRootPose()
+      cache.set(parentItemId, root)
+      return root
+    }
+
+    const ancestorPose = this.resolveParentLayoutPose(
+      naturalParent.parentItemId,
+      frame,
+      naturalLayout,
+      cache,
+    )
+    const resolved = composeMotionPose(ancestorPose, naturalParent.localPose)
+    cache.set(parentItemId, resolved)
+    return resolved
   }
 
   /** Resolves the real source or the matching descendant in its nearest overlay ancestor. */

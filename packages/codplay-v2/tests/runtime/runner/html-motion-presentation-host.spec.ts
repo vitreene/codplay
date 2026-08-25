@@ -260,6 +260,79 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     root.remove()
   })
 
+  it('resolves a local descendant through the complete non-presented ancestor chain', () => {
+    const root = document.createElement('main')
+    const parent = document.createElement('section')
+    const outer = document.createElement('div')
+    const intermediary = document.createElement('div')
+    const child = document.createElement('article')
+    intermediary.appendChild(child)
+    outer.appendChild(intermediary)
+    parent.appendChild(outer)
+    root.appendChild(parent)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['parent', parent],
+      ['child', child],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    host.commit(
+      createFrame([
+        { ...createItem('parent'), pose: createPose(100) },
+        {
+          itemId: 'child',
+          parentItemId: 'intermediary',
+          pose: createPose(132),
+          representation: 'local',
+          progress: 0.5,
+        },
+      ]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout',
+        rootPose: createMotionRootPose(),
+        items: new Map([
+          ['parent', {
+            itemId: 'parent',
+            targetId: 'root',
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['outer', {
+            itemId: 'outer',
+            parentItemId: 'parent',
+            targetId: 'parent-content',
+            localPose: localPose(10),
+            rootPose: createPose(10),
+          }],
+          ['intermediary', {
+            itemId: 'intermediary',
+            parentItemId: 'outer',
+            targetId: 'outer-content',
+            localPose: localPose(20),
+            rootPose: createPose(30),
+          }],
+          ['child', {
+            itemId: 'child',
+            parentItemId: 'intermediary',
+            targetId: 'intermediary-content',
+            localPose: localPose(2),
+            rootPose: createPose(32),
+          }],
+        ]),
+      },
+    )
+
+    const parentGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
+    const childGhost = parentGhost?.querySelector<HTMLElement>('article')
+    expect(childGhost?.style.getPropertyValue('--codplay-motion-transform'))
+      .toBe('matrix(1, 0, 0, 1, 0, 0)')
+    host.destroy()
+    root.remove()
+  })
+
   it('uses the parent-relative local pose before writing a local pose', () => {
     const root = document.createElement('main')
     const source = document.createElement('article')
@@ -348,4 +421,9 @@ function createPose(x: number): HtmlPose {
     frameWidth: 20,
     frameHeight: 20,
   }
+}
+
+/** Creates one translation-only local pose for nested-parent assertions. */
+function localPose(x: number): { origin: readonly [number, number]; matrix: HtmlMatrix; width: number; height: number } {
+  return { origin: [x, 0], matrix: IDENTITY, width: 20, height: 20 }
 }

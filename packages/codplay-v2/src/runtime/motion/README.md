@@ -2,7 +2,7 @@
 
 > Statut : Fini — graphe de mouvement V2 foundation
 > Version CodPlay : V2 foundation
-> Relecture : frontières move/action, résolution Play/Seek et absence de lecture géométrique par frame validées le 2026-08-23
+> Relecture : frontières move/action, FIRST concurrent et composition des parents validés le 2026-08-25
 
 ## Rôle
 
@@ -34,7 +34,9 @@ temps absolu `t`.
   les ancêtres nécessaires au calcul ;
 - `MotionBoundary` contient les layouts exacts avant et après un événement. Pour
   une transition portée par une action, l'après est capturé à
-  `start + delay + duration` ;
+  `start + delay + duration`. Si cette action monte son perso au démarrage,
+  son FIRST est capturé dans l'état monté à `start`, avec les valeurs initiales
+  de l'action ;
 - `ItemMotionTrack` contient les segments chronologiques d'un élément ;
 - `MotionAttachment` décrit le parent, la cible, la pose locale et le fallback
   vers la racine ;
@@ -105,6 +107,19 @@ Résoudre une frame ancienne ne modifie pas les résolutions suivantes.
 Une transition de pose HTML portée par une action reste dans le graphe pour la
 composition des descendants, mais son service possède la pose du nœud auteur.
 Le host HTML ne lui applique donc pas une seconde matrice locale.
+
+Un perso détaché conserve ses relations logiques `parentByPerso` et
+`targetByPerso`, sans entrer dans l'ordre des cibles ni dans la présentation DOM.
+Si un mover direct est absent au FIRST à cause d'un ancêtre détaché et que cet
+ancêtre est monté au LAST, la capture peut présenter ponctuellement l'état FIRST
+du mover dans ce contexte LAST pour mesurer son attachement source. Cette phase
+réutilise les materialisations persistantes, ne crée aucun DOM d'analyse et
+restaure le LAST avant sa capture finale.
+
+La composition hybride ne remplace que le mover concerné et les ancêtres
+nécessaires à son attachement. Elle ne peut pas écraser le FIRST d'un autre
+mover capturé dans la même frontière ; Q et K conservent donc chacun leur propre
+côté FIRST.
 
 ## Inférence de la présentation
 

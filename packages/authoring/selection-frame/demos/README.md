@@ -10,7 +10,7 @@ first validated FLIP fixture and keeps its current timeline and debug controls.
 
 ## Stress Test
 
-`flip-stress` is now a declarative `SceneDoc` consumed by
+`flip-stress` was a declarative `SceneDoc` consumed by
 `HtmlPlayerRunner`. It exercises:
 
 - four moving root containers;
@@ -24,13 +24,15 @@ first validated FLIP fixture and keeps its current timeline and debug controls.
 - overlapping transitions with different durations;
 - runner-owned cold seek, overlay lifecycle, resize invalidation and teardown.
 
-The stress root fills its containing zone in both dimensions. Its A–D anchors
+The fixture is now published under
+`packages/demos/src/v2/demos/flip-stress/` and loaded through `v2.html`. The
+stress root fills its containing zone in both dimensions. Its A–D anchors
 and vertical motion use the root's responsive percentage coordinate system, and
 the stage observes its own size so width changes recapture the motion endpoints
 at the current logical time.
 
-The stress entry point remains a separate Vite page, but its scene, parentage,
-capture, overlay and transport lifecycle are owned by the V2 runner. The first
+Its scene, parentage, capture, overlay and transport lifecycle are owned by the
+V2 runner. The first
 content exchange starts at `1200ms` so it overlaps the Q/K transfer without
 sharing the same capture-construction boundary; the remaining exchanges follow
 every `500ms` through `6700ms`. Each content transition lasts `1000ms`, so the
@@ -64,8 +66,8 @@ following boundaries:
 - a declarative `SceneDoc` as the scenario source;
 - `HtmlPlayerRunner` as the only owner of materialization and position capture,
   presentation and the clock-facing Play/Seek entry points;
-- the shared demo shell with Play, Reset, absolute-time seek, named
-  checkpoints and an observable status line;
+- the shared demo shell with Play, Rewind, absolute-time seek, speed controls
+  and the non-blocking log toggle;
 - a responsive root that is measured at its real content-box dimensions;
 - explicit checks at FIRST, the event boundary, a middle frame and LAST,
   followed by the same-time Play/Seek comparison and a resize check;
@@ -75,5 +77,5 @@ following boundaries:
 The four moving containers, twelve colored children, SVG paths and overlapping
 transitions are stress parameters. A standard demo may remove or reduce them,
 but must keep the declarative scene, the runner-owned lifecycle and the same
-observable checkpoints. The older `flip` page remains a preserved Player POC
-reference; it is not the template for new V2 demos.
+absolute-time validation points. The older `flip` page remains a preserved
+Player POC reference; it is not the template for new V2 demos.

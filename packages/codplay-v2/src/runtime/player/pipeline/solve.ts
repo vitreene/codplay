@@ -1,5 +1,5 @@
 import { MOUNT_PLACEMENT_INVALID, MOUNT_PLACEMENT_OFF, MOUNT_PLACEMENT_PARENT, MOUNT_PLACEMENT_ROOT, MOUNT_PLACEMENT_UNSPECIFIED } from '../../config/mount-placement'
-import { MOUNT_TARGET_KIND_PERSO, MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
+import { MOUNT_TARGET_KIND_OUTLET, MOUNT_TARGET_KIND_PERSO, MountTargetRegistry, type MountTargetDeclaration } from './mount-targets'
 import type { ResolvedScene, SolvedPerso, SolvedScene } from './types'
 import { buildSolvedGraph } from './presentation-graph'
 
@@ -14,9 +14,11 @@ export function solveScene(
   const targets = MountTargetRegistry.fromScene(resolved.scene, options.mountTargets)
   const persos: Record<string, SolvedPerso> = {}
   const persoByTargetId = new Map<string, string>()
+  const persoByComponentId = new Map<string, string>()
   for (const perso of Object.values(resolved.persos)) persoByTargetId.set(perso.persoId, perso.key)
+  for (const perso of Object.values(resolved.persos)) persoByComponentId.set(perso.key, perso.key)
   for (const perso of Object.values(resolved.persos)) {
-    const placement = resolvePlacement(perso, targets, persoByTargetId)
+    const placement = resolvePlacement(perso, targets, persoByTargetId, persoByComponentId)
     persos[perso.key] = { ...perso, placement }
   }
 
@@ -40,6 +42,7 @@ function resolvePlacement(
   perso: ResolvedScene['persos'][string],
   targets: MountTargetRegistry,
   persoByTargetId: ReadonlyMap<string, string>,
+  persoByComponentId: ReadonlyMap<string, string>,
 ): SolvedPerso['placement'] {
   switch (perso.placement.kind) {
     case MOUNT_PLACEMENT_ROOT: {
@@ -63,7 +66,13 @@ function resolvePlacement(
         mounted: target !== undefined,
         targetId: perso.placement.targetId,
         target,
-        parentKey: target?.kind === MOUNT_TARGET_KIND_PERSO ? persoByTargetId.get(target.id) : undefined,
+        parentKey: target === undefined
+          ? undefined
+          : target.kind === MOUNT_TARGET_KIND_PERSO
+            ? persoByTargetId.get(target.id)
+            : target.kind === MOUNT_TARGET_KIND_OUTLET
+              ? persoByComponentId.get(target.ownerId ?? '') ?? persoByTargetId.get(target.ownerId ?? '')
+              : undefined,
         mode: perso.placement.mode,
         flipMode: perso.placement.flipMode,
         reorder: perso.placement.reorder,

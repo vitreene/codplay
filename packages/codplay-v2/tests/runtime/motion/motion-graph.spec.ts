@@ -61,6 +61,47 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, afterTransfer, 1500), 'C')).toBeCloseTo(220)
   })
 
+  it('composes a reparented child against the destination ancestor current pose', () => {
+    const beforeParent = snapshot(100, [
+      item('C', 'root', 0),
+      item('D', 'root', 300),
+      item('K', 'D:content', 10, 'D'),
+    ])
+    const afterParent = snapshot(9100, [
+      item('C', 'root', 100),
+      item('D', 'root', 300),
+      item('K', 'D:content', 10, 'D'),
+    ])
+    const beforeReparent = snapshot(100, [
+      item('C', 'root', 0),
+      item('D', 'root', 300),
+      item('K', 'D:content', 10, 'D'),
+    ])
+    const afterReparent = snapshot(100, [
+      item('C', 'root', 0),
+      item('D', 'root', 300),
+      item('K', 'C:content', 10, 'C'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('destination-parent-pose', 100, beforeParent, afterParent, [{
+        ...intent('C', 100, 9000),
+        targetReflow: false,
+      }]),
+      boundary('child-reparent', 100, beforeReparent, afterReparent, [{
+        ...intent('K', 100, 8000),
+        targetReflow: true,
+      }]),
+    ])
+
+    const frame = resolvePresentationFrame(graph, afterReparent, 8100)
+
+    expect(graph.tracksByItem.has('C')).toBe(true)
+    expect(graph.tracksByItem.has('K')).toBe(true)
+    expect(originX(frame, 'C')).toBeCloseTo(88.888, 2)
+    // K ends against C's interpolated pose, not against C's FIRST pose.
+    expect(originX(frame, 'K')).toBeCloseTo(98.888, 2)
+  })
+
   it('holds an action pose during its delay and resolves it from the same graph', () => {
     const before = snapshot(0, [item('A', 'root', 0)])
     const after = snapshot(0, [item('A', 'root', 100)])

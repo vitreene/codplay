@@ -6,9 +6,9 @@ import type { SolvedPerso, SolvedScene } from './types'
 export type SolvedGraph = Readonly<{
   /** Stable identity of the complete logical structure and its order. */
   revision: string
-  /** Logical component parent for every mounted perso, when one exists. */
+  /** Logical component parent for every solved perso, including detached ones. */
   parentByPerso: Readonly<Record<string, string | undefined>>
-  /** Opaque mount target selected by every mounted perso. */
+  /** Opaque mount target selected by every solved perso. */
   targetByPerso: Readonly<Record<string, string | undefined>>
   /** Complete child order, grouped by the exact opaque target ID. */
   childrenByTarget: Readonly<Record<string, readonly string[]>>
@@ -31,6 +31,13 @@ export function buildSolvedGraph(
 
   for (const perso of Object.values(persos)) {
     const placement = perso.placement
+    const declaredParentKey = resolveParentFromPerso(perso, persos)
+    parentByPerso[perso.key] = declaredParentKey
+    targetByPerso[perso.key] = placement.targetId
+
+    // Detached persos remain in the logical graph. Their target and ancestor
+    // relation is needed to prepare a later boundary whose LAST state mounts
+    // them. They do not enter target order or DOM traversal until mounted.
     if (!placement.mounted) continue
     if (placement.targetId === undefined || placement.target === undefined) {
       throw new Error(`Mounted perso has no resolved target: ${perso.key}`)
@@ -39,15 +46,14 @@ export function buildSolvedGraph(
       throw new Error(`Solved target identity diverges from placement: ${perso.key}`)
     }
 
-    const declaredParentKey = resolveParentFromPerso(perso)
     if (declaredParentKey !== undefined
       && perso.placement.target?.kind === MOUNT_TARGET_KIND_PERSO
       && (persos[declaredParentKey] === undefined || persos[declaredParentKey]?.placement.mounted !== true)) {
       throw new Error(`Mounted perso parent is missing from the solved graph: ${perso.key} -> ${declaredParentKey}`)
     }
     // An outlet can be supplied by a host/module without its owner being part
-    // of this scene. Keep the scene mountable while retaining strict perso
-    // parent validation above.
+    // of this scene. Keep the scene mountable while retaining the logical
+    // parent relation whenever that owner is one of this scene's persos.
     const parentKey = declaredParentKey !== undefined && persos[declaredParentKey]?.placement.mounted === true
       ? declaredParentKey
       : undefined
@@ -118,7 +124,7 @@ export function resolveLogicalParentKey(scene: SolvedScene, persoKey: string): s
   return scene.graph.parentByPerso[persoKey]
 }
 
-/** Resolves a strict root-to-parent chain for one mounted perso. */
+/** Resolves the logical root-to-parent chain, including detached ancestors. */
 export function resolveAncestorChain(scene: SolvedScene, persoKey: string): readonly string[] {
   const chain: string[] = []
   const visited = new Set<string>()
@@ -126,8 +132,8 @@ export function resolveAncestorChain(scene: SolvedScene, persoKey: string): read
   while (current !== undefined) {
     if (visited.has(current)) throw new Error(`Solved graph ancestor cycle detected: ${current}`)
     visited.add(current)
-    if (scene.persos[current]?.placement.mounted !== true) {
-      throw new Error(`Solved graph ancestor is not mounted: ${current}`)
+    if (scene.persos[current] === undefined) {
+      throw new Error(`Solved graph ancestor is missing from the solved scene: ${current}`)
     }
     chain.push(current)
     current = scene.graph.parentByPerso[current]
@@ -184,9 +190,17 @@ export function resolvePresentationOrder(
 }
 
 /** Resolves the logical parent encoded by one solved mount target. */
-function resolveParentFromPerso(perso: SolvedPerso): string | undefined {
+function resolveParentFromPerso(
+  perso: SolvedPerso,
+  persos: Readonly<Record<string, SolvedPerso>>,
+): string | undefined {
   if (perso.placement.target?.kind === MOUNT_TARGET_KIND_PERSO) return perso.placement.parentKey
-  if (perso.placement.target?.kind === MOUNT_TARGET_KIND_OUTLET) return perso.placement.target.ownerId
+  if (perso.placement.target?.kind === MOUNT_TARGET_KIND_OUTLET) {
+    const ownerId = perso.placement.target.ownerId
+    if (ownerId === undefined) return undefined
+    if (persos[ownerId] !== undefined) return ownerId
+    return Object.values(persos).find((candidate) => candidate.persoId === ownerId)?.key
+  }
   return undefined
 }
 

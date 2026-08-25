@@ -622,6 +622,37 @@ describe('materialize -> resolve -> solve', () => {
     expect(detached.graph.childrenByTarget.parent).toBeUndefined()
   })
 
+  it('keeps an internal outlet owner in the logical graph while detached', () => {
+    const outletHierarchyScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [
+              { id: 'parent', type: 'tag', initial: { move: '@off' }, actions: {} },
+              { id: 'child', type: 'tag', initial: { move: { target: 'parent-content' } }, actions: {} },
+            ],
+          },
+        },
+      },
+    }
+
+    const solved = solveScene(resolveScene(materializeScene(outletHierarchyScene, 0)), {
+      mountTargets: [
+        { id: 'root-host', kind: MOUNT_TARGET_KIND_ROOT, storyId: 'main' },
+        { id: 'parent-content', kind: MOUNT_TARGET_KIND_OUTLET, storyId: 'main', ownerId: 'main:parent' },
+      ],
+    })
+
+    expect(solved.persos['main:parent']?.placement.mounted).toBe(false)
+    expect(solved.persos['main:child']?.placement).toMatchObject({ mounted: false, parentKey: 'main:parent' })
+    expect(solved.graph.parentByPerso['main:child']).toBe('main:parent')
+    expect(solved.graph.targetByPerso['main:child']).toBe('parent-content')
+    expect(solved.graph.childrenByTarget['parent-content']).toBeUndefined()
+  })
+
   it('rejects cycles in the mounted perso graph', () => {
     const cycleScene: CompiledScene = {
       ...scene,

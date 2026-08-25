@@ -13,7 +13,7 @@ import type {
   MotionScheduleTransition,
   ScheduledMotionIntent,
 } from '../motion'
-import type { SolvedScene } from '../player'
+import { buildSolvedGraph, type SolvedPerso, type SolvedScene } from '../player'
 import { isPlainRecord } from '../../shared'
 import type { CompiledRecord } from '../../scene/compiled'
 
@@ -106,7 +106,13 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   const boundaries: MotionBoundary[] = []
   try {
     for (const group of groupMotionIntents(input.intents)) {
-      const beforeScene = input.player.resolveSceneBeforeBoundary(group.startAt, input.includePersistOnly)
+      // Structural moves are measured around their exact event boundary. A
+      // pose action is measured from its own mounted FIRST state when its
+      // move mounts the item at the action start; otherwise it would have no
+      // source pose to compose with a descendant reparent.
+      const beforeScene = group.structural
+        ? input.player.resolveSceneBeforeBoundary(group.startAt, input.includePersistOnly)
+        : input.player.resolveSceneAt(group.startAt, input.includePersistOnly)
       // Structural moves change their parent/target at the event boundary;
       // their transition only presents that already-committed change. A pose
       // action, in contrast, reaches its measured LAST at the end of its own
@@ -117,8 +123,23 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       const selection = collectBoundarySelection(beforeScene, afterScene, group.intents)
 
       input.player.presentSceneForGeometryCapture(beforeScene)
-      const before = captureCurrentHtmlMotionLayout(input.root, input.nodes, beforeScene, selection)
+      let before = captureCurrentHtmlMotionLayout(input.root, input.nodes, beforeScene, selection)
       input.player.presentSceneForGeometryCapture(afterScene)
+      const missingSourceItemIds = group.structural
+        ? resolveMissingSourceItemIds(beforeScene, afterScene, group.intents)
+        : []
+      if (missingSourceItemIds.length > 0) {
+        const sourceScene = createMissingSourceCaptureScene(beforeScene, afterScene, missingSourceItemIds)
+        if (sourceScene !== undefined) {
+          // This is a capture-only composition: it uses FIRST item state with
+          // LAST-mounted ancestors on the same persistent author nodes. It
+          // creates no analysis DOM and is restored before LAST is captured.
+          input.player.presentSceneForGeometryCapture(sourceScene)
+          const source = captureCurrentHtmlMotionLayout(input.root, input.nodes, sourceScene, selection)
+          before = mergeLayoutSnapshots(before, source, missingSourceItemIds)
+          input.player.presentSceneForGeometryCapture(afterScene)
+        }
+      }
       const after = captureCurrentHtmlMotionLayout(input.root, input.nodes, afterScene, selection)
       const intents = group.intents.map(toMotionIntent)
       boundaries.push(Object.freeze({
@@ -259,16 +280,120 @@ function addTargetChildren(
   for (const itemId of scene.graph.childrenByTarget[targetId] ?? []) selected.add(itemId)
 }
 
-/** Adds mounted parent chains required to derive local poses. */
+/** Adds logical parent chains required to derive FIRST/LAST context. */
 function addAncestorClosure(scene: SolvedScene, selected: Set<string>): void {
   for (const itemId of [...selected]) {
     let parentItemId = scene.graph.parentByPerso[itemId]
     while (parentItemId !== undefined) {
-      const parent = scene.persos[parentItemId]
-      if (parent?.placement.mounted) selected.add(parentItemId)
+      selected.add(parentItemId)
       parentItemId = scene.graph.parentByPerso[parentItemId]
     }
   }
+}
+
+/** Finds direct movers that have no measurable FIRST because an ancestor is detached. */
+function resolveMissingSourceItemIds(
+  before: SolvedScene,
+  after: SolvedScene,
+  intents: readonly ScheduledMotionIntent[],
+): readonly string[] {
+  return Object.freeze([...new Set(intents
+    .map((intent) => intent.itemId)
+    .filter((itemId) => before.persos[itemId]?.placement.mounted !== true
+      && after.persos[itemId]?.placement.mounted === true
+      && before.persos[itemId]?.placement.targetId !== undefined))])
+}
+
+/** Builds a capture-only scene with FIRST movers attached to LAST-mounted context. */
+function createMissingSourceCaptureScene(
+  before: SolvedScene,
+  after: SolvedScene,
+  sourceItemIds: readonly string[],
+): SolvedScene | undefined {
+  const persos: Record<string, SolvedPerso> = { ...after.persos }
+  let prepared = false
+  for (const itemId of sourceItemIds) {
+    const sourcePerso = before.persos[itemId]
+    const destinationPerso = after.persos[itemId]
+    if (sourcePerso === undefined || destinationPerso?.placement.mounted !== true) continue
+    if (sourcePerso.placement.targetId === undefined || sourcePerso.placement.target === undefined) continue
+
+    const sourceParentId = before.graph.parentByPerso[itemId]
+    if (sourceParentId !== undefined && after.persos[sourceParentId]?.placement.mounted !== true) continue
+
+    persos[itemId] = {
+      ...sourcePerso,
+      placement: { ...sourcePerso.placement, mounted: true },
+    }
+    prepared = true
+  }
+  if (!prepared) return undefined
+
+  return {
+    ...after,
+    persos,
+    graph: buildSolvedGraph(persos, resolveCaptureOrder(before, after, persos)),
+  }
+}
+
+/** Keeps authored child order while allowing a capture-only source reparent. */
+function resolveCaptureOrder(
+  before: SolvedScene,
+  after: SolvedScene,
+  persos: Readonly<Record<string, SolvedPerso>>,
+): Readonly<Record<string, readonly string[]>> {
+  const targetIds = new Set(Object.values(persos)
+    .filter((perso) => perso.placement.mounted && perso.placement.targetId !== undefined)
+    .map((perso) => perso.placement.targetId!))
+  const result: Record<string, readonly string[]> = {}
+  for (const targetId of targetIds) {
+    const natural = new Set(Object.values(persos)
+      .filter((perso) => perso.placement.mounted && perso.placement.targetId === targetId)
+      .map((perso) => perso.key))
+    const candidates = [
+      ...(after.graph.childrenByTarget[targetId] ?? []),
+      ...(before.graph.childrenByTarget[targetId] ?? []),
+      ...Object.keys(persos),
+    ]
+    result[targetId] = Object.freeze([...new Set(candidates)].filter((itemId) => natural.has(itemId)))
+  }
+  return Object.freeze(result)
+}
+
+/** Merges one capture-only source measurement into the ordinary FIRST snapshot. */
+function mergeLayoutSnapshots(
+  base: LayoutSnapshot,
+  source: LayoutSnapshot,
+  sourceItemIds: readonly string[],
+): LayoutSnapshot {
+  const items = new Map(base.items)
+  const mergeIds = resolveSourceMergeItemIds(source, sourceItemIds)
+  for (const itemId of mergeIds) {
+    const item = source.items.get(itemId)
+    if (item !== undefined) items.set(itemId, item)
+  }
+  return Object.freeze({
+    ...base,
+    revision: `${base.revision}:missing-source:${source.revision}`,
+    items,
+  })
+}
+
+/** Keeps only each hybrid mover and the ancestor context needed to attach it. */
+function resolveSourceMergeItemIds(
+  source: LayoutSnapshot,
+  sourceItemIds: readonly string[],
+): ReadonlySet<string> {
+  const mergeIds = new Set<string>()
+  for (const sourceItemId of sourceItemIds) {
+    let itemId: string | undefined = sourceItemId
+    while (itemId !== undefined && !mergeIds.has(itemId)) {
+      mergeIds.add(itemId)
+      const item = source.items.get(itemId)
+      itemId = item?.parentItemId
+    }
+  }
+  return mergeIds
 }
 
 /** Identifies HTML style channels whose action tween can change a measured pose. */

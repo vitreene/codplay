@@ -31,6 +31,9 @@
 - Any unavoidable temporary bridge must be explicitly named or documented as `temp`, have a stated scope and removal condition, and must not be presented as a V2 contract.
 - A passing isolated unit test, typecheck, or build does not validate an integration. For browser-facing behavior, test the actual event, player, materializer, seek, replay, and lifecycle boundaries involved.
 - A demo is valid only after the real runtime path has been tested.
+- V2 demos are pre-release validation references, not disposable bug fixtures. A fix in a complex component must not be accepted from one visual symptom or one passing scenario.
+- Before declaring such a fix stable, record the causal analysis and run the complete relevant validation set: focused regression tests for the failing boundary, non-regression tests for affected parent/child and reparent cases, and the applicable Play, Seek, resize, persistence, lifecycle, typecheck, test, build, and Safari checks. Omit categories only when the analysis explicitly proves they are not affected.
+- If this evidence is incomplete, keep the implementation `En cours` or `A relire`; do not present it as stabilized and do not modify the demo to hide the defect.
 - `README.md` files document usage. They are not the authority for internal contracts. Stable contracts belong in the applicable specifications; plans track implementation work and validation status.
 - Keep the specification, plan, implementation status, and acceptance tests aligned. Never mark a module or tranche complete while a required behavior is only simulated, bypassed, or unverified.
 
