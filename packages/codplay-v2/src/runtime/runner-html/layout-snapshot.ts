@@ -1,5 +1,5 @@
 import { captureHtmlPose, createHtmlPoseCaptureContext } from '../motion/html-pose'
-import { isMeasurableHtmlElement } from '../html'
+import { isMeasurableHtmlElement } from './element-guards'
 import {
   composeMotionPose,
   createMotionRootPose,

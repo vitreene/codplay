@@ -5,9 +5,9 @@ import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { validatePersoWithCapabilities } from '../../../src/scene/validation'
 import {
   createMarkupModuleServiceDefinition,
-  materializeComponentWithMarkup,
 } from '../../../src/runtime/capabilities/markup'
 import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
+import { materializeComponentWithMarkup } from '../../../src/runtime/runner-html'
 import type { CompiledScene } from '../../../src/scene/compiled'
 
 /** Creates the minimal service boundary required by direct layout tests. */

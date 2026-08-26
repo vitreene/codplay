@@ -15,12 +15,12 @@ retrouver.
 
 ## Fonctionnement
 
-Lorsqu'un composant est affiché, `materializeComponentWithMarkup()` :
+Lorsqu'un composant est affiché, le runner HTML lui transmet les déclarations
+de parties publiques. La capacité :
 
-1. mémorise sa racine, ou la liste ordonnée de ses racines lorsqu'il s'agit
-   d'un fragment ;
-2. enregistre les parties que la définition du composant autorise à publier ;
-3. retourne une fonction qui supprimera ces enregistrements lors du démontage.
+1. mémorise la racine logique et les parties publiées ;
+2. rend ces parties disponibles comme cibles de montage ;
+3. fournit le retrait logique des enregistrements lors du démontage.
 
 Le lecteur récupère ensuite les cibles avec `getMountTargets()` et les combine
 avec les cibles de son propre conteneur avant de résoudre la scène.
@@ -29,7 +29,10 @@ avec les cibles de son propre conteneur avant de résoudre la scène.
 
 `MarkupCapabilityState` conserve l'état d'un composant. La définition créée par
 `createMarkupModuleServiceDefinition()` est enregistrée dans le catalogue et
-produit une instance par lecteur.
+produit une instance par lecteur. Le pont qui relie cette capacité à la
+materialisation DOM se trouve dans
+`runtime/runner-html/markup-materialization.ts` ; il n'appartient pas à l'état
+logique de la capacité.
 
 La sanitation des templates est une responsabilité de la compilation de scène,
 dans `src/scene/validation/markup-sanitizer.ts`. La capacité `markup` ne

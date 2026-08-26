@@ -1,8 +1,8 @@
 import {
-  materializeComponentWithMarkup,
   MARKUP_MODULE_SERVICE_ID,
   type MarkupModuleServiceInstance,
 } from '../capabilities/markup'
+import { materializeComponentWithMarkup } from './markup-materialization'
 import { resolvePresentationOrder, type SolvedPerso, type SolvedScene } from '../player/pipeline'
 import type { RuntimeModuleServiceInstance } from '../engine'
 import type {

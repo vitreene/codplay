@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   createMarkupModuleServiceDefinition,
   MarkupCapabilityState,
-  registerMaterializedComponent,
-  unregisterMaterializedComponent,
 } from '../../../src/runtime/capabilities/markup'
 import type { MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
+import {
+  registerMaterializedComponent,
+  unregisterMaterializedComponent,
+} from '../../../src/runtime/runner-html'
 import { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { RuntimeEngine } from '../../../src/runtime/engine'
 import type { CompiledScene } from '../../../src/scene/compiled'

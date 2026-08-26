@@ -1,5 +1,5 @@
 import { invertMatrix } from '../../ace'
-import { isMeasurableHtmlElement } from '../html'
+import { isMeasurableHtmlElement } from './element-guards'
 import { ensureHtmlOverlayLayer } from '../motion/html-pose'
 import {
   composeMotionPose,

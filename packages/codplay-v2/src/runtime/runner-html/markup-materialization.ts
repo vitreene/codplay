@@ -1,5 +1,5 @@
-import type { MaterializedPart, BaseHTMLComponent } from '../../components'
-import type { MarkupModuleServiceInstance } from './markup-capability'
+import type { MaterializedPart, BaseHTMLComponent } from '../components'
+import type { MarkupModuleServiceInstance } from '../capabilities/markup'
 
 /** Identity required to register one materialized component with the markup module. */
 export type MaterializedComponentIdentity = Readonly<{

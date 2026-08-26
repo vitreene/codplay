@@ -22,6 +22,16 @@ export { HtmlMotionSystem } from './motion-system'
 export {
   HtmlListDndPreview,
 } from './list-dnd-preview'
+export {
+  materializeComponentWithMarkup,
+  registerMaterializedComponent,
+  unregisterMaterializedComponent,
+} from './markup-materialization'
+export type {
+  MarkupMaterializationInput,
+  MaterializedComponentIdentity,
+} from './markup-materialization'
+export { isMeasurableHtmlElement } from './element-guards'
 export type {
   HtmlListDndNodeResolver,
   HtmlListDndListItemResolver,

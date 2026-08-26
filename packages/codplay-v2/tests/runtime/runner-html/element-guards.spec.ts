@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMeasurableHtmlElement } from '../../../src/runtime/html'
+import { isMeasurableHtmlElement } from '../../../src/runtime/runner-html'
 
 describe('isMeasurableHtmlElement', () => {
   it('rejects values that do not belong to the browser element surface', () => {

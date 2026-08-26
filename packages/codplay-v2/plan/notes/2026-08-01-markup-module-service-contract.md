@@ -203,8 +203,8 @@ avances. Elle ne fait pas partie de l'implementation V2 actuelle.
 
 Le branchement des cibles de modules au `RuntimePlayer` et a `solveScene()` est
 implemente. L'adaptateur `registerMaterializedComponent()` est aussi implemente ;
-`materializeComponentWithMarkup()` couvre le cycle materialisation/enregistrement/
-retrait logique. La production du root DOM/JSX reste une tranche distincte. La
+`runtime/runner-html/markup-materialization.ts` couvre le cycle materialisation/
+enregistrement/retrait logique. La production du root DOM/JSX reste une tranche distincte. La
 selection des parts montables passe par la definition runtime du type. Le materializer
 DOM actuel applique
 desormais le parentage logique sur des nodes deja materialises, et

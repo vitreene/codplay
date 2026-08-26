@@ -34,6 +34,10 @@ Les services HTML sont assemblés dans `service-definitions.ts` et
 enregistrés par le catalogue core. Le runner reçoit le catalogue déjà composé
 par CodPlay ; il ne crée pas de registre local.
 
+La garde `isMeasurableHtmlElement` et le pont HTML du module `markup` sont
+également conservés ici : ils dépendent du substrat DOM et ne font pas partie
+des états logiques des capacités.
+
 Play et Seek utilisent exactement cette opération. Le runner conserve les
 frontières géométriques immuables nécessaires à la présentation et, pendant
 une capture live ouverte, le FIRST utilisé pour la remise `endEmit`. Il ne
