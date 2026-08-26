@@ -21,12 +21,11 @@ elle étend seulement les parts publiques du layout hôte pour ses deux outlets.
 Depuis la racine du dépôt :
 
 ```text
-npm run demo:player --workspace=@codplay/codplay-v2
+npm run demo:v2
 ```
 
-Puis ouvrir la même entrée avec `?demo=components` pour sélectionner cette
-présentation. Sans ce paramètre, `demo:player` conserve sa validation
-`preload-media` existante.
+Puis ouvrir `http://localhost:5173/?demo=components` pour sélectionner cette
+présentation dans le registre V2.
 
 Le build de la scène doit être accepté avant l'initialisation du runner. À
 `800 ms`, le polygone commence son morph ; à `1700 ms`, la réponse Alpha est

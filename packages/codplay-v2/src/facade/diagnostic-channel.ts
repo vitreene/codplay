@@ -29,9 +29,23 @@ export class DiagnosticChannel {
 
   /** Publishes one diagnostic through this channel and its parent. */
   publish(diagnostic: Diagnostic): void {
-    for (const listener of this.listeners) listener(diagnostic)
-    this.output?.(diagnostic)
-    this.parent?.publish(diagnostic)
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(diagnostic)
+      } catch {
+        // A diagnostic consumer must never interrupt the operation being observed.
+      }
+    }
+    try {
+      this.output?.(diagnostic)
+    } catch {
+      // An output adapter is observational and must remain non-blocking.
+    }
+    try {
+      this.parent?.publish(diagnostic)
+    } catch {
+      // A parent diagnostic channel must not propagate consumer failures.
+    }
   }
 
   /** Publishes every entry in one report while attaching stable references. */

@@ -1,9 +1,8 @@
-import { createCoreRuntimeCatalog } from '../../../../codplay-v2/src/runtime/catalog'
-import type { RuntimeCapabilityCatalog } from '../../../../codplay-v2/src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../../codplay-v2/src/runtime/runner-html'
-import { createRuntimeTelco } from '../../../../codplay-v2/src/runtime/telco'
-import { SceneBuilder } from '../../../../codplay-v2/src/scene/compiled'
-import type { SceneDoc } from '../../../../codplay-v2/src/scene/types'
+import {
+  codplay,
+  type CodPlayEngine,
+  type CodPlayInstance,
+} from '../../../../codplay-v2/src'
 import type { V2DemoDefinition } from '../registry'
 import { createV2DemoTelco } from './telco'
 import type { V2DemoLogLevel, V2DemoModule } from './types'
@@ -17,25 +16,6 @@ type V2DemoLayoutOptions = Readonly<{
 }>
 
 const V2_DEMO_LOG_OPEN_STORAGE_KEY = 'codplay-v2-demo-log-open'
-
-/** Creates the shared V2 runtime catalog and publishes the scene's mountable parts. */
-function createDemoRuntimeCatalog(mountableParts: readonly string[]): RuntimeCapabilityCatalog {
-  const catalog = createCoreRuntimeCatalog()
-  const layout = catalog.getComponent('layout')
-  if (layout === undefined) throw new Error('Core layout component is not registered.')
-  catalog.overrideComponent({ ...layout, mountableParts })
-  return catalog
-}
-
-/** Compiles one scene through the same builder boundary as the V2 runtime. */
-function buildDemoScene(
-  scene: SceneDoc,
-  catalog: RuntimeCapabilityCatalog,
-): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(catalog.validationSnapshot(), {
-    createdAt: '2026-08-18T00:00:00.000Z',
-  }).build(scene)
-}
 
 /** Mounts the responsive V2 frame and owns every control shared by its demos. */
 export function createV2DemoLayout(options: V2DemoLayoutOptions): {
@@ -194,16 +174,11 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     }
   }
 
-  /** Installs the shared telco for the currently mounted runner. */
-  function installTelco(runner: HtmlPlayerRunner) {
-    const telco = createRuntimeTelco({
-      durationMs: options.active.durationMs,
-      target: runner,
-    })
+  /** Installs the common remote on the public instance telco. */
+  function installTelco(telco: CodPlayInstance['telco']) {
     telcoControls?.destroy()
     telcoControls = createV2DemoTelco(telco, { onLog: log })
     telcoSlot.replaceChildren(telcoControls.element)
-    return telco
   }
 
   /** Releases the current runner, telco and scene-specific stage state. */
@@ -219,7 +194,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   }
 
   setLogPanelOpen(readLogPanelOpen())
-  logsToggle.addEventListener('click', () => setLogPanelOpen(logPanel.hidden))
+  logsToggle.addEventListener('click', () => setLogPanelOpen(logPanel.hidden !== true))
   logClose.addEventListener('click', () => setLogPanelOpen(false))
   logCopy.addEventListener('click', () => { void copyLogs() })
 
@@ -231,49 +206,46 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       sceneSlot.setAttribute('aria-label', options.active.stageLabel)
 
       const scene = module.createScene()
-      const catalog = createDemoRuntimeCatalog(options.active.mountableParts)
-      const build = buildDemoScene(scene, catalog)
+      let engine: CodPlayEngine
+      try {
+        engine = codplay.engine.create({
+          diagnosticOutput: (diagnostic) => log(
+            `${diagnostic.code}: ${diagnostic.message}`,
+            diagnostic.severity === 'warning' ? 'warn' : 'error',
+          ),
+        })
+      } catch (error) {
+        log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+        return
+      }
+
+      const build = engine.builder.compile({ scene })
       if (!build.ok) {
-        log(`SceneDoc build failed: ${build.diagnostics.errors.map((entry) => entry.message).join(' · ')}`, 'error')
+        if (build.diagnostics.errors.length === 0) log('SceneDoc build failed.', 'error')
+        engine.destroy()
         return
       }
 
-      const runner = new HtmlPlayerRunner({
-        id: scene.id,
-        compiledScene: build.compiledScene,
-        root: sceneSlot,
-        rootTargets: [{ id: 'root-host', storyId: options.active.rootStoryId }],
-        catalog,
-      })
-      const init = runner.init()
-      if (!init.ok) {
-        log(`Runner init failed: ${init.diagnostics.errors.map((entry) => entry.message).join(' · ')}`, 'error')
-        runner.destroy()
+      let instance: CodPlayInstance
+      try {
+        instance = engine.instances.create({
+          instanceId: scene.id,
+          compiledScene: build.compiledScene,
+          functions: build.functions,
+          durationMs: options.active.durationMs,
+          root: sceneSlot,
+          mountTargets: [{ id: 'root-host', kind: 'root', storyId: options.active.rootStoryId }],
+        })
+      } catch {
+        engine.destroy()
         return
       }
 
-      const telco = installTelco(runner)
+      installTelco(instance.telco)
       log(`${options.active.title} initialisée · durée=${options.active.durationMs}ms`)
 
-      /** Rebuilds measured endpoints after the responsive scene root changes size. */
-      function refreshAfterResize(): void {
-        try {
-          runner.resize()
-        } catch (resizeError) {
-          const message = resizeError instanceof Error ? resizeError.message : String(resizeError)
-          log(message, 'error')
-        }
-      }
-
-      const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(refreshAfterResize)
-      if (resizeObserver !== undefined) resizeObserver.observe(sceneSlot)
-      else globalThis.addEventListener('resize', refreshAfterResize)
-
       sceneCleanup = () => {
-        resizeObserver?.disconnect()
-        if (resizeObserver === undefined) globalThis.removeEventListener('resize', refreshAfterResize)
-        telco.destroy()
-        runner.destroy()
+        engine.destroy()
       }
     },
     destroy() {

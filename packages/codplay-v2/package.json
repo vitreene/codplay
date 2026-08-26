@@ -5,11 +5,6 @@
   "type": "module",
   "scripts": {
     "bench": "vitest bench bench/ace",
-    "demo:ace": "vite demos/validation/ace",
-    "demo:player": "vite demos/validation/player",
-    "demo:runner": "vite demos/validation/runner",
-    "build:player": "vite build demos/validation/player",
-    "build:runner": "vite build demos/validation/runner",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

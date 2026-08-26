@@ -1,8 +1,8 @@
-import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
-import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
-import { SceneBuilder } from '../../../src/scene/compiled'
-import type { SceneDoc } from '../../../src/scene/types'
+import { createCoreRuntimeCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
+import type { RuntimeCapabilityCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../../../codplay-v2/src/runtime/runner-html'
+import { SceneBuilder } from '../../../../../codplay-v2/src/scene/compiled'
+import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
 
 import './style.css'
 

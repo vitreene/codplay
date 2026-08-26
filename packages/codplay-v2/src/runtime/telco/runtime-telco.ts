@@ -8,6 +8,7 @@ import type {
   RuntimeTelco,
   RuntimeTelcoCommandResult,
   RuntimeTelcoOptions,
+  RuntimeTelcoProgress,
   RuntimeTelcoState,
 } from './types'
 
@@ -39,6 +40,12 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       sequenceEnded: timelineMs >= options.durationMs,
       runtimeRevision,
     }
+  }
+
+  /** Reads the current timeline position and duration without presentation data. */
+  function getProgress(): RuntimeTelcoProgress {
+    const state = getState()
+    return { timelineMs: state.timelineMs, durationMs: state.durationMs }
   }
 
   /** Notifies state listeners after one transport state transition. */
@@ -132,7 +139,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   /** Seeks the target and turns a rejected seek into a command failure. */
   function seekTarget(timeMs: number): void {
     if (!Number.isFinite(timeMs) || timeMs < 0) {
-      throw new Error('Runtime telco seek time must be a finite positive number.')
+      throw new Error('Runtime telco seek time must be finite and non-negative.')
     }
     const result = target.seek(Math.min(timeMs, options.durationMs))
     if (!result.ok) throw new Error('Runtime telco seek was rejected.')
@@ -140,6 +147,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
 
   const telco: RuntimeTelco = {
     getState,
+    getProgress,
 
     get rate(): number {
       return target.getRate()

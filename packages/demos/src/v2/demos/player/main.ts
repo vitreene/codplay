@@ -1,11 +1,11 @@
-import { createRuntimePreload } from '../../../src/runtime/preload'
-import { createRuntimeTelco } from '../../../src/runtime/telco'
-import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
-import { SceneBuilder } from '../../../src/scene/compiled'
-import type { CompiledResourceManifest } from '../../../src/scene/compiled'
-import type { SceneDoc } from '../../../src/scene/types'
-import { createTelcoRemote } from '../../shared/telco-remote'
+import { createRuntimePreload } from '../../../../../codplay-v2/src/runtime/preload'
+import { createRuntimeTelco } from '../../../../../codplay-v2/src/runtime/telco'
+import { createCoreRuntimeCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../../../codplay-v2/src/runtime/runner-html'
+import { SceneBuilder } from '../../../../../codplay-v2/src/scene/compiled'
+import type { CompiledResourceManifest } from '../../../../../codplay-v2/src/scene/compiled'
+import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
+import { createRemote } from '@codplay/remote'
 import {
   createPreloadMediaScene,
   PRELOAD_MEDIA_IMAGE_URLS,
@@ -110,9 +110,8 @@ async function start(): Promise<void> {
   })
   const preload = createRuntimePreload()
   const telco = createRuntimeTelco({ target: runner, durationMs: PRELOAD_MEDIA_SCENE_END_MS })
-  const remote = createTelcoRemote({
+  const remote = createRemote({
     telco,
-    durationMs: PRELOAD_MEDIA_SCENE_END_MS,
     onError: (error) => showError(error),
   })
   telcoSlot.appendChild(remote.element)

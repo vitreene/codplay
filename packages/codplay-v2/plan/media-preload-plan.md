@@ -153,7 +153,7 @@ propriétaire.
 - façade `run` de diffusion autonome ;
 - socle de synchronisation média V2 couvert par tests de master, fallback
   ticker, absence de seek par frame, pause avant seek et seek ;
-- démo `demos/validation/player` remplacée par l'adaptation V2 `preload-media`,
+- démo `packages/demos/src/v2/demos/player` remplacée par l'adaptation V2 `preload-media`,
   avec manifeste explicite, telco de validation et master audio ;
 - README des modules et plan général mis à jour ;
 - aucune modification du core V1 `packages/codplay`.
@@ -167,7 +167,7 @@ propriétaire.
   média par source, choix audio/vidéo et propagation du rate ;
 - `tests/runtime/preload/runtime-preload.spec.ts` : métadonnées de durée
   transmises au résultat preload ;
-- `demos/validation/player` : preload externe puis `init()` ; la lecture est
+- `packages/demos/src/v2/demos/player` : preload externe puis `init()` ; la lecture est
   déclenchée par le bouton de la telco, pour rester compatible avec l'autoplay
   média des navigateurs. Une vérification Safari a couvert la scène montée,
   la lecture déclenchée par `Lire`, le seek à 4500 ms et le seek arrière après

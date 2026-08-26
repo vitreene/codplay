@@ -106,7 +106,8 @@ const coreLayoutDefinition: RuntimeComponentDefinition = {
   component: LayoutComponent,
   modules: ['markup'],
   validateInitial: validateLayoutInitial,
-  mountableParts: ['outlet', 'source-outlet', 'target-outlet'],
+  // Layout makes every data-part in its template available as a target.
+  mountableParts: 'all',
 }
 
 /** Creates the built-in media component declaration. */

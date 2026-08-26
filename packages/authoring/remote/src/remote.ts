@@ -1,31 +1,62 @@
-import type { RuntimeTelco, RuntimeTelcoState } from '../../src/runtime/telco'
-
-/** Configuration of the validation remote attached to one local telco. */
-export type TelcoRemoteOptions = Readonly<{
-  telco: RuntimeTelco
+/** State fields required by the official CodPlay remote. */
+type RemoteState = Readonly<{
+  status: string
+  timelineMs: number
   durationMs: number
+  rate: number
+  initialized: boolean
+  sequenceEnded: boolean
+  runtimeRevision: number
+}>
+
+type RemoteCommandResult = void | Readonly<{
+  ok: boolean
+  error?: Readonly<{ message: string }>
+}>
+
+type RemoteTransport<State extends RemoteState> = Readonly<{
+  getState: () => State
+  getProgress: () => Readonly<{ timelineMs: number; durationMs: number }>
+  readonly commandInFlight: boolean
+  readonly rate: number
+  setRate: (rate: number) => void
+  play: () => Promise<RemoteCommandResult>
+  pause: () => Promise<RemoteCommandResult>
+  togglePlay: () => Promise<RemoteCommandResult>
+  seek: (targetMs: number) => Promise<RemoteCommandResult>
+  rewind: () => Promise<RemoteCommandResult>
+  onChange: (listener: (state: State) => void) => () => void
+  onProgress: (listener: (state: State) => void) => () => void
+}>
+
+/** Configuration of the remote attached to one CodPlay V2 telco. */
+export type RemoteOptions = Readonly<{
+  telco: RemoteTransport<RemoteState>
   onInfo?: (message: string) => void
   onError?: (message: string) => void
 }>
 
-/** Remote control returned by the validation demo. */
-export type TelcoRemote = Readonly<{
+/** Remote control returned by the official constructor. */
+export type Remote = Readonly<{
   element: HTMLElement
   sync: () => void
   destroy: () => void
 }>
 
-type TelcoIconName = 'play' | 'pause' | 'rewind'
+type RemoteIconName = 'play' | 'pause' | 'rewind'
 
-const TELCO_ICON_PATHS: Readonly<Record<TelcoIconName, string>> = {
+const REMOTE_ICON_PATHS: Readonly<Record<RemoteIconName, string>> = {
   play: 'M8 5v14l11-7L8 5z',
   pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
   rewind: 'M11 5 3 12l8 7V5zm10 0-8 7 8 7V5z',
 }
 
-/** Creates the single V2 validation remote around the RuntimeTelco facade. */
-export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
-  const { telco, durationMs, onInfo, onError } = options
+/** Creates the official CodPlay remote around a V2 telco facade. */
+export function createRemote<State extends RemoteState>(
+  options: Readonly<Omit<RemoteOptions, 'telco'> & { telco: RemoteTransport<State> }>,
+): Remote {
+  const { telco, onInfo, onError } = options
+  const durationMs = Math.max(0, Math.round(telco.getProgress().durationMs))
   const seekThrottleMs = 90
   let pendingSeekTargetMs: number | null = null
   let activeSeekTargetMs: number | null = null
@@ -54,7 +85,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   /** Creates one accessible SVG icon without adding a second control path. */
-  function createIcon(name: TelcoIconName): SVGSVGElement {
+  function createIcon(name: RemoteIconName): SVGSVGElement {
     const icon = globalThis.document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     const path = globalThis.document.createElementNS('http://www.w3.org/2000/svg', 'path')
     icon.setAttribute('viewBox', '0 0 24 24')
@@ -62,14 +93,14 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     icon.setAttribute('focusable', 'false')
     icon.classList.add('telco-button__icon')
     icon.setAttribute('data-icon', name)
-    path.setAttribute('d', TELCO_ICON_PATHS[name])
+    path.setAttribute('d', REMOTE_ICON_PATHS[name])
     icon.appendChild(path)
     return icon
   }
 
   /** Creates an icon button with a visually hidden, accessible text label. */
   function createIconButton(
-    name: TelcoIconName,
+    name: RemoteIconName,
     label: string,
     className: string,
   ): { button: HTMLButtonElement; icon: SVGSVGElement; label: HTMLSpanElement } {
@@ -145,7 +176,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   /** Resolves the range value displayed during an active seek interaction. */
-  function resolveDisplayedMs(state: RuntimeTelcoState): { displayMs: number; maxMs: number } {
+  function resolveDisplayedMs(state: State): { displayMs: number; maxMs: number } {
     const maxMs = seekScaleLockMaxMs ?? Math.round(state.durationMs)
     const currentMs = Math.min(Math.max(0, Math.round(state.timelineMs)), maxMs)
     const interactionMs = Math.min(readSeekTarget(), maxMs)
@@ -156,7 +187,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   /** Refreshes progress without changing the transport state. */
-  function syncProgress(state: RuntimeTelcoState = telco.getState()): void {
+  function syncProgress(state: State = telco.getState()): void {
     const { displayMs, maxMs } = resolveDisplayedMs(state)
     setIfChanged(seekRange.value, String(displayMs), (value) => { seekRange.value = value })
     seekValue.textContent = `${displayMs} ms · ${formatProgress(displayMs, maxMs)}`
@@ -164,7 +195,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   /** Refreshes command availability from the V2 transport snapshot. */
-  function syncState(state: RuntimeTelcoState = telco.getState()): void {
+  function syncState(state: State = telco.getState()): void {
     const inFlight = telco.commandInFlight
     const { status, sequenceEnded, initialized } = state
     const canPlay = initialized && (sequenceEnded || status === 'ready' || status === 'paused')
@@ -180,7 +211,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     const playIcon = canPause ? 'pause' : 'play'
     if (playButtonIcon.getAttribute('data-icon') !== playIcon) {
       const iconPath = playButtonIcon.firstElementChild
-      if (iconPath !== null) iconPath.setAttribute('d', TELCO_ICON_PATHS[playIcon])
+      if (iconPath !== null) iconPath.setAttribute('d', REMOTE_ICON_PATHS[playIcon])
       playButtonIcon.setAttribute('data-icon', playIcon)
     }
     setIfChanged(playButtonLabel.textContent ?? '', playLabel, (value) => { playButtonLabel.textContent = value })
@@ -189,7 +220,8 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
     setIfChanged(rewindButton.disabled, inFlight || !canRewind, (value) => { rewindButton.disabled = value })
     // Keep the range enabled while pause/seek is being serialized. Disabling
     // it during pointerdown aborts the native drag before its final input.
-    setIfChanged(seekRange.disabled, !canSeek, (value) => { seekRange.disabled = value })
+    const seekDisabled = !canSeek || (inFlight && !seekInteractionActive)
+    setIfChanged(seekRange.disabled, seekDisabled, (value) => { seekRange.disabled = value })
     setIfChanged(seekRange.max, String(maxMs), (value) => { seekRange.max = value })
     setIfChanged(seekRange.value, String(displayMs), (value) => { seekRange.value = value })
     seekValue.textContent = `${displayMs} ms · ${formatProgress(displayMs, maxMs)}`
@@ -208,8 +240,8 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
   }
 
   /** Reports a rejected command without creating a second control circuit. */
-  function reportCommandError(result: Readonly<{ ok: boolean; error?: Readonly<{ message: string }> }>): void {
-    if (result.ok) return
+  function reportCommandError(result: RemoteCommandResult): void {
+    if (result === undefined || result.ok) return
     onError?.(result.error?.message ?? 'La commande telco a été refusée.')
   }
 
@@ -219,7 +251,7 @@ export function createTelcoRemote(options: TelcoRemoteOptions): TelcoRemote {
       syncState()
       const paused = await telco.pause()
       reportCommandError(paused)
-      if (!paused.ok) return
+      if (paused !== undefined && !paused.ok) return
     }
     syncState()
     const seekResult = await telco.seek(targetMs)

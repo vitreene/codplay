@@ -15,7 +15,7 @@ export type DemoRemoteConfig = {
   emit?: (event: PlayerPublicEventInput) => Promise<unknown>
 }
 
-export function createDemoRemote(config: DemoRemoteConfig): {
+export function createDemoRemoteV1(config: DemoRemoteConfig): {
   element: HTMLElement
   sync: () => void
   destroy: () => void

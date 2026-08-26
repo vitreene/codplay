@@ -29,7 +29,7 @@ Elle ne crée :
 - aucun comportement propre au DOM dans le core capture.
 
 Cette validation S5 est close. L'entrée active de
-`demos/validation/player` peut porter une tranche différente ; son état et ses
+`packages/demos/src/v2/demos/player` peut porter une tranche différente ; son état et ses
 critères sont suivis par le plan correspondant, actuellement
 [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md).
 
@@ -114,13 +114,13 @@ la dernière position au relâchement. Les commandes en cours, la pause avant
 seek et les erreurs doivent être gérées par un seul propriétaire.
 
 Le layout ne crée pas de façade de transport locale. Son seul adaptateur
-spécifique (`v2-demo-telco.ts`) relie le remote partagé au journal du layout ;
+spécifique (`telco.ts`) relie le remote `@codplay/remote` au journal du layout ;
 il ne crée ni commande ni second contrat de transport.
 
 État de cette reprise : `createRuntimeTelco` est la façade V2 utilisée par
-`HtmlPlayerRunner`, et `demos/shared/telco-remote.ts` est l'unique remote de
+`HtmlPlayerRunner`, et `@codplay/remote` fournit l'export V2 officiel du remote de
 validation. Dans la page V2 courante, la zone telco est rendue après la scène ;
-le composant `v2-demo-telco.ts` ne fait qu'adapter le journal du layout. La
+le composant `telco.ts` ne fait qu'adapter le journal du layout. La
 vérification manuelle couvre la lecture, la pause en cours de lecture et le
 glissement complet du progress, sans erreur applicative dans la console.
 

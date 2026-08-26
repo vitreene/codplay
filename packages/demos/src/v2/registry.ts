@@ -9,7 +9,6 @@ export type V2DemoDefinition = Readonly<{
   description: string
   durationMs: number
   rootStoryId: string
-  mountableParts: readonly string[]
   stageClassName: string
   stageLabel: string
   load: () => Promise<V2DemoModule>
@@ -18,24 +17,32 @@ export type V2DemoDefinition = Readonly<{
 /** V2 demos are loaded on demand so the selector does not import every scene. */
 export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
   {
-    id: 'flip-stress',
-    path: '?demo=flip-stress',
-    label: 'FLIP stress test',
-    title: 'FLIP stress test',
-    description: 'Les deux listes se déplacent pendant que leurs éléments sont échangés un par un, y compris lorsque la fenêtre est redimensionnée.',
+    id: 'flip-list',
+    path: '?demo=flip-list',
+    label: 'Des éléments passent d’une liste à l’autre',
+    title: 'Des éléments passent d’une liste à l’autre',
+    description: 'Deux listes échangent leurs éléments un par un pendant que leurs conteneurs se déplacent et que la fenêtre peut être redimensionnée.',
     durationMs: 10_000,
     rootStoryId: 'main',
-    mountableParts: [
-      'stress-a-outlet',
-      'stress-b-outlet',
-      'stress-c-outlet',
-      'stress-d-outlet',
-      'transfer-q-outlet',
-      'transfer-k-outlet',
-    ],
     stageClassName: 'stress-stage',
     stageLabel: 'scène FLIP stress déclarative',
     load: async () => import('./demos/flip-stress/main'),
+  },
+  {
+    id: 'components',
+    path: '?demo=components',
+    label: 'Image, input et polygone',
+    title: 'Image, input et polygone',
+    description: 'Une scène présente une image, un polygone SVG et une question interactive sur la même timeline.',
+    durationMs: 3_800,
+    rootStoryId: 'main',
+    stageClassName: 'components-stage-host',
+    stageLabel: 'scène des composants core V2',
+    load: async () => {
+      await import('./demos/components/style.css')
+      const module = await import('./demos/components/components-scene')
+      return { createScene: module.createComponentsScene }
+    },
   },
 ]
 

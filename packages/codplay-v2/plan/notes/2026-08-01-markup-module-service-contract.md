@@ -121,8 +121,11 @@ recoit cette vue scopee et selectionne le service `markup` sans fermeture global
 ni binding specifique a la demo.
 
 Le composant conserve sa racine et son template. La definition runtime du type
-selectionne les parts montables ; elle peut donc etre reutilisee par `layout`,
-`input` ou tout autre composant qui expose des cibles de montage :
+selectionne les parts publiees ; elle peut donc etre reutilisee par `layout`,
+`input` ou tout autre composant qui expose des cibles de montage. Pour `layout`,
+la valeur interne `all` signifie simplement que toutes les zones `data-part` du
+template sont publiees, comme dans V1. Pour `input`, une liste reste possible
+afin de garder ses zones internes privees :
 
 ```ts
 class LayoutComponent extends BaseHTMLComponent {
@@ -177,10 +180,11 @@ La declaration doit alimenter :
 - la validation de disponibilite par `RuntimeEngine` ;
 - la creation de l'instance par `RuntimeCapabilityCatalog`.
 
-La definition runtime du composant porte aussi la liste `mountableParts`. Le
-`RuntimeComponentRuntime` la remet au materializer, qui filtre les parts
-materialisees avant l'appel a `materializeComponentWithMarkup()`. Le composant
-peut donc conserver des parts internes sans les publier au module.
+La definition runtime du composant porte donc soit une liste de parts, soit la
+valeur `all`. Le `RuntimeComponentRuntime` la remet au materializer, qui publie
+toutes les parts dans le premier cas ou toutes les parts du template dans le
+second. Le composant peut ainsi conserver des parts internes sans les publier,
+tandis que `layout` conserve le comportement V1 attendu.
 
 La definition de composant porte la classe et les modules. La classe declare ses
 services ; `RuntimeCapabilityCatalog` conserve leurs definitions et
@@ -210,7 +214,7 @@ DOM actuel applique
 desormais le parentage logique sur des nodes deja materialises, et
 `RuntimePlayer` l'appelle a l'initialisation, sur frame, au seek et a la destruction.
 `RuntimeCapabilityCatalog` et `RuntimeComponentRuntime` fournissent la factory
-runtime generique et le passage de la politique `mountableParts` au materializer.
+runtime generique et le passage de la regle de publication au materializer.
 
 ## Hors contrat de cette tranche
 

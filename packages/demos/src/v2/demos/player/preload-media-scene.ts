@@ -1,8 +1,8 @@
-import type { SceneDoc } from '../../../src/scene/types'
-import audioUrl from '../../../../demos/public/assets/uBMXdJ0AyY.mp3?url'
-import videoUrl from '../../../../demos/public/assets/LcXkmXyuZQ.mp4?url'
-import imageAUrl from '../../../../demos/public/assets/35c8ec5a07fc.jpg?url'
-import imageBUrl from '../../../../demos/public/assets/28970388742_2f75d527d6_z.jpg?url'
+import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
+import audioUrl from '../../../../../public/assets/uBMXdJ0AyY.mp3?url'
+import videoUrl from '../../../../../public/assets/LcXkmXyuZQ.mp4?url'
+import imageAUrl from '../../../../../public/assets/35c8ec5a07fc.jpg?url'
+import imageBUrl from '../../../../../public/assets/28970388742_2f75d527d6_z.jpg?url'
 
 /** Static image URLs added to the external preload manifest for the tag persos. */
 export const PRELOAD_MEDIA_IMAGE_URLS = [imageAUrl, imageBUrl] as const

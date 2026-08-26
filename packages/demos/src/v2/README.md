@@ -24,10 +24,11 @@ par l'URL ; le module de la démo sélectionnée est chargé dynamiquement. Le
 chargement initial ne compile donc pas toutes les scènes V2.
 
 Chaque `demos/<demo-id>/main.ts` est un module de scène : il construit et
-retourne uniquement le `SceneDoc`. Le layout possède le catalogue runtime, le
-builder, le runner HTML, la télécommande, les logs et le traitement du resize.
-Le registre porte les métadonnées communes (`path`, titre, durée, racine et
-parts montables) utilisées par le layout.
+retourne uniquement le `SceneDoc`. Le layout commun utilise la façade publique
+CodPlay : il crée l'engine, compile la scène, crée l'instance et branche sa
+telco. Le catalogue, le runner HTML et le traitement du resize restent internes
+à la façade. Le registre porte seulement les informations d'affichage et de
+chargement utilisées par le layout.
 
 ## Layout commun
 
@@ -42,9 +43,11 @@ Le CSS privilégie Grid, les tailles fluides et les contraintes `min-height: 0`.
 `AutoCapsule` peut être utilisé par une démo lorsque sa grille apporte une
 valeur réelle ; il n'est pas une dépendance obligatoire du layout.
 
-La télécommande utilise `RuntimeTelco` comme unique façade : play/pause,
-rewind, seek continu, vitesse et état. Une démo ne pilote jamais directement
-le runner pour remplacer cette façade.
+La télécommande `@codplay/remote` utilise `instance.telco` comme unique façade pour les commandes
+de scène : play/pause, rewind, seek continu, vitesse et état. CodPlay réveille
+automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
+suspend lorsqu'aucune instance ne joue. Le layout n'appelle donc pas les
+commandes générales de l'engine et ne pilote jamais directement le runner.
 
 Le journal est une couche d'observation facultative. Son panneau est activable
 par un toggle, ses écritures sont regroupées par frame et son conteneur ne
@@ -63,13 +66,19 @@ parallèle.
 - une démo ne masque pas une lacune du core par un circuit local ;
 - les materializers tiers restent hors de la première tranche ; ils seront
   introduits seulement lorsqu'une démo et son contrat l'exigeront ;
-- `flip-stress` est la première démo déplacée et sert aussi de test du layout.
+- `flip-list` est la première démo déplacée et sert aussi de test du layout.
+
+Le composant `layout` et le composant `list` utilisés par `flip-list` sont les
+composants core fournis par CodPlay. Le layout publie toutes les zones indiquées
+par `data-part` dans son propre template : une zone ainsi marquée peut recevoir
+un autre perso. La démo ne fournit donc ni composant local, ni liste de zones,
+ni catalogue de remplacement.
 
 Les démos conservées pour publication et les démos de validation peuvent
 partager leur scène, mais pas créer une seconde horloge, une seconde telco ou
 une seconde matérialisation.
 
-Dans `flip-stress`, les lettres `Q` et `K` sont le contenu statique des deux
+Dans `flip-list`, les lettres `Q` et `K` sont le contenu statique des deux
 layouts de transfert qui contiennent chacun leur liste. Elles accompagnent le
 layout pendant son déplacement et ne constituent pas des items déplacés par les
 flips internes.

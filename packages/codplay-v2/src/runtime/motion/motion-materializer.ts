@@ -23,7 +23,7 @@ export class MotionMaterializer implements RuntimeMaterializer {
     component: BaseComponent<Record<string, unknown>>,
     identity: RuntimeComponentIdentity,
     initial: Record<string, unknown>,
-    mountablePartIds: readonly string[],
+    mountablePartIds: readonly string[] | 'all',
     moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ): RuntimeComponentHandle {
     return this.base.materializeComponent(component, identity, initial, mountablePartIds, moduleServices)

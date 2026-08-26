@@ -24,7 +24,7 @@ export type RuntimeMaterializer = Readonly<{
     component: BaseComponent<Record<string, unknown>>,
     identity: RuntimeComponentIdentity,
     initial: Record<string, unknown>,
-    mountablePartIds: readonly string[],
+    mountablePartIds: readonly string[] | 'all',
     moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ) => RuntimeComponentHandle
   materializeScene: (scene: SolvedScene, context?: RuntimeMaterializerSceneContext) => void

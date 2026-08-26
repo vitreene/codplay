@@ -6,6 +6,7 @@ import {
 } from '../runtime/telco'
 import type { RuntimePlayer } from '../runtime/player'
 import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import type { HtmlPlayerRunner } from '../runtime/runner-html'
 import type {
   CodPlayEventListener,
   CodPlayInstance,
@@ -22,10 +23,12 @@ import { toPublicEvent } from './public-event'
 type InstanceFacadeOptions = Readonly<{
   instanceId: string
   player: RuntimePlayer
+  runner: HtmlPlayerRunner
   durationMs: number
   diagnostics: DiagnosticChannel
   eventListeners: Set<CodPlayEventListener>
   onPublicEvent: (event: CodPlayPublicEvent) => void
+  onPlaybackStateChange: (state: 'playing' | 'paused') => void
   destroy: () => void
 }>
 
@@ -78,12 +81,6 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.onPublicEvent(publicEvent)
   }
 
-  /** Publishes the diagnostics produced by one grouped engine seek. */
-  publishSeekReport(report: DiagnosticReport): void {
-    if (this.destroyed) return
-    this.diagnostics.publishReport(report, { instanceId: this.instanceId })
-  }
-
   /** Releases the telco, player, and listener references exactly once. */
   destroyInternal(): void {
     if (this.destroyed) return
@@ -94,7 +91,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   }
 }
 
-/** Creates the public telco around the RuntimePlayer transport target. */
+/** Creates the public telco around the runner's transport boundary. */
 function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
   api: CodPlayTelco
   destroy: () => void
@@ -104,11 +101,17 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
     getCurrentTimeMs: () => options.player.getCurrentTimeMs(),
     getRate: () => options.player.getRate(),
     subscribe: (listener: () => void) => options.player.subscribeTransport(listener),
-    play: () => options.player.play(),
-    pause: () => options.player.pause(),
-    setRate: (rate: number) => options.player.setRate(rate),
+    play: () => {
+      options.runner.play()
+      options.onPlaybackStateChange('playing')
+    },
+    pause: () => {
+      options.runner.pause()
+      options.onPlaybackStateChange('paused')
+    },
+    setRate: (rate: number) => options.runner.setRate(rate),
     seek: (timeMs: number): Readonly<{ ok: boolean }> => {
-      const result = options.player.seek(timeMs)
+      const result = options.runner.seek(timeMs)
       publishSeekDiagnostics(options.diagnostics, options.instanceId, result.diagnostics)
       return { ok: result.ok }
     },

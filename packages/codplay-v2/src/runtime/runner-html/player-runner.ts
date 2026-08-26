@@ -40,7 +40,6 @@ import type {
   RuntimePreloadFailure,
   RuntimePreloadSuccess,
 } from '../preload'
-import { mergeRuntimePreloadManifests } from '../preload'
 
 /** One HTML root target mapped to the runner's supplied root element. */
 export type HtmlRootTarget = Readonly<{
@@ -262,7 +261,7 @@ export class HtmlPlayerRunner {
 
     this.setResourceMetadata(preload.data.metadata)
 
-    const resourceUrls = mergeRuntimePreloadManifests(manifest).entries.map((entry) => entry.url)
+    const resourceUrls = [...new Set([...preload.data.loaded, ...preload.data.skipped])]
     this.engine.registerResources(resourceUrls)
     const init = this.init()
     if (!init.ok) return { ok: false, phase: 'init', preload, init }
@@ -294,10 +293,10 @@ export class HtmlPlayerRunner {
     return this.player.getRate()
   }
 
-  /** Pauses playback and stops the runner-owned ticker. */
+  /** Pauses playback and suspends the runner-owned ticker. */
   pause(): void {
     this.player.pause()
-    if (this.ownsEngine) this.engine.stop()
+    if (this.ownsEngine) this.engine.pause()
     this.syncInteractionLock()
   }
 

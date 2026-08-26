@@ -222,6 +222,11 @@ Le materializer HTML :
 - enregistre les references vers ces nœuds avec leurs IDs opaques ;
 - ne demande pas a l'auteur de fournir un tableau `id + selector`.
 
+Le composant core `layout` publie toutes les parts découvertes. Ce choix
+reproduit le comportement V1 sans demander à chaque démo d'énumérer ses zones.
+Un autre composant peut publier seulement certaines parts si les autres restent
+internes à son fonctionnement.
+
 Le selector n'est donc pas un contrat auteur separe. Si le materializer DOM utilise
 un selector interne, il reste un detail d'implementation du materializer.
 

@@ -16,6 +16,12 @@ export type RuntimeTelcoState = Readonly<{
   runtimeRevision: number
 }>
 
+/** Time-only progress exposed by the V2 telco without presentation values. */
+export type RuntimeTelcoProgress = Readonly<{
+  timelineMs: number
+  durationMs: number
+}>
+
 /** Minimal transport target required by the V2 telco facade. */
 export type RuntimeTransportTarget = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
@@ -37,6 +43,7 @@ export type RuntimeTelcoOptions = Readonly<{
 /** Local transport facade used by an authoring or validation remote. */
 export type RuntimeTelco = Readonly<{
   getState: () => RuntimeTelcoState
+  getProgress: () => RuntimeTelcoProgress
   readonly commandInFlight: boolean
   readonly rate: number
   setRate: (rate: number) => void

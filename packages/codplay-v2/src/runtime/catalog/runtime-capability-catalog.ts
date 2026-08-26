@@ -71,9 +71,10 @@ export type RuntimeComponentDefinition = Readonly<{
   sanitizeAction?: ComponentSanitizer
   /** Publishes typed substrate-neutral operations for a mounted instance. */
   surfaces?: RuntimeComponentSurfaceProvider
-  mountableParts?: readonly string[]
-  /** Resolves dynamic public part IDs for component instances whose targets must be unique. */
-  mountablePartResolver?: (identity: RuntimeComponentIdentity) => readonly string[]
+  /** Lists the template zones usable as targets; `all` means every data-part. */
+  mountableParts?: readonly string[] | 'all'
+  /** Resolves the template zones for an instance when their IDs are dynamic. */
+  mountablePartResolver?: (identity: RuntimeComponentIdentity) => readonly string[] | 'all'
   origin?: RuntimeCapabilityOrigin
 }>
 
@@ -185,8 +186,8 @@ export class RuntimeCapabilityCatalog {
     return this.components.has(type)
   }
 
-  /** Returns the parts a component type is allowed to publish as mount targets. */
-  getMountablePartIds(type: string, identity?: RuntimeComponentIdentity): readonly string[] {
+  /** Returns which template zones one component type makes available. */
+  getMountablePartIds(type: string, identity?: RuntimeComponentIdentity): readonly string[] | 'all' {
     const definition = this.components.get(type)
     if (definition === undefined) return []
     return identity === undefined

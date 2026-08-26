@@ -25,6 +25,11 @@ de parties publiques. La capacité :
 Le lecteur récupère ensuite les cibles avec `getMountTargets()` et les combine
 avec les cibles de son propre conteneur avant de résoudre la scène.
 
+Pour le composant core `layout`, toutes les zones marquées `data-part` sont
+publiées. Pour un composant qui garde certaines zones pour son usage interne,
+sa définition peut n'en publier qu'une partie. Le choix est fait par le
+catalogue du runtime, pas par la démo et pas par le composant parent.
+
 ## Organisation interne
 
 `MarkupCapabilityState` conserve l'état d'un composant. La définition créée par

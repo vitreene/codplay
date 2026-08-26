@@ -1,12 +1,14 @@
 import type {
   Diagnostic,
   DiagnosticOutput,
+  DiagnosticReport,
 } from '../diagnostics'
 import type {
   CompiledFunctionCollection,
   CompiledRecord,
   CompiledScene,
 } from '../scene/compiled'
+import type { SceneDoc } from '../scene/types'
 import type {
   RuntimeCapabilityOrigin,
   RuntimeComponentDefinition,
@@ -52,6 +54,39 @@ export type CodPlayEngineConfig = Readonly<{
   diagnosticOutput?: DiagnosticOutput
 }>
 
+/** Input accepted by the engine-bound public scene compiler. */
+export type CodPlayCompileInput = Readonly<{
+  scene: SceneDoc
+}>
+
+/** Optional metadata for one public scene compilation. */
+export type CodPlayCompileOptions = Readonly<{
+  createdAt?: string
+  schemaVersion?: string
+}>
+
+/** Successful public compilation result reused by instance creation. */
+export type CodPlayCompileSuccess = Readonly<{
+  ok: true
+  compiledScene: CompiledScene
+  functions: CompiledFunctionCollection
+  diagnostics: DiagnosticReport
+}>
+
+/** Failed public compilation result containing structured diagnostics only. */
+export type CodPlayCompileFailure = Readonly<{
+  ok: false
+  diagnostics: DiagnosticReport
+}>
+
+/** Result of compiling one authored SceneDoc against the engine catalog. */
+export type CodPlayCompileResult = CodPlayCompileSuccess | CodPlayCompileFailure
+
+/** Public compiler bound to the engine's locked capability catalog. */
+export type CodPlayEngineBuilder = Readonly<{
+  compile: (input: CodPlayCompileInput, options?: CodPlayCompileOptions) => CodPlayCompileResult
+}>
+
 /** Options for one independent public preload service. */
 export type CodPlayPreloadOptions = Readonly<{
   cache?: RuntimePreloadCacheApi
@@ -93,12 +128,6 @@ export type CodPlayPublicEvent = Readonly<{
   data?: CompiledRecord
   context?: Readonly<Record<string, unknown>>
   meta?: Readonly<Record<string, unknown>>
-}>
-
-/** One local seek target used by the grouped engine seek. */
-export type CodPlaySeekTarget = Readonly<{
-  instanceId: string
-  timeMs: number
 }>
 
 /** State exposed to the instance telco and its remote control. */
@@ -198,6 +227,7 @@ export type CodPlayEngineEvents = Readonly<{
 
 /** Public engine boundary for addressing, ordering, and instance ownership. */
 export type CodPlayEngine = Readonly<{
+  readonly builder: CodPlayEngineBuilder
   readonly instances: CodPlayEngineInstances
   readonly resources: CodPlayEngineResources
   readonly events: CodPlayEngineEvents
@@ -205,7 +235,6 @@ export type CodPlayEngine = Readonly<{
   pause: () => void
   stop: () => void
   advance: (nowMs: number, marginMs?: number) => void
-  seek: (targets: readonly CodPlaySeekTarget[]) => void
   destroy: () => void
 }>
 

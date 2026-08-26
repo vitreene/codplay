@@ -52,7 +52,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
     component: BaseComponent<Record<string, unknown>>,
     identity: RuntimeComponentIdentity,
     initial: Record<string, unknown>,
-    mountablePartIds: readonly string[],
+    mountablePartIds: readonly string[] | 'all',
     moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance>,
   ): RuntimeComponentHandle {
     void initial
@@ -156,8 +156,12 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   }
 }
 
-/** Keeps only the component parts explicitly published by its runtime definition. */
-function selectPublicParts(parts: readonly MaterializedPart[], mountablePartIds: readonly string[]): readonly MaterializedPart[] {
+/** Keeps only the template zones made available by the component definition. */
+function selectPublicParts(
+  parts: readonly MaterializedPart[],
+  mountablePartIds: readonly string[] | 'all',
+): readonly MaterializedPart[] {
+  if (mountablePartIds === 'all') return parts
   const allowed = new Set(mountablePartIds)
   return parts.filter((part) => allowed.has(part.partId))
 }

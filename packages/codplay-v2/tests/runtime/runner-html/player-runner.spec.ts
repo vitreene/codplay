@@ -6,7 +6,7 @@ import type { CompiledFunctionCollection, CompiledScene } from '../../../src/sce
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 import type { Ticker } from '../../../src/runtime/engine'
-import { createDragCaptureScene, s6Straps } from '../../../demos/validation/player/drag-scene'
+import { createDragCaptureScene, s6Straps } from '../../../../demos/src/v2/demos/player/drag-scene'
 
 class FakeNode {
   parentNode: FakeNode | null = null

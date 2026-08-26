@@ -1,6 +1,6 @@
 import { RuntimeEngine } from '../runtime/engine'
 import type { MountTargetDeclaration } from '../runtime/player/pipeline'
-import { RuntimePlayer } from '../runtime/player'
+import { RuntimePlayer, type PlayerInitResult } from '../runtime/player'
 import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner-html'
 import type { RuntimePreloadMetadata } from '../runtime/preload'
 import type { CodPlayInstanceOptions } from './facade-types'
@@ -12,11 +12,14 @@ export type InstanceHostOptions = Readonly<{
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>
   instance: CodPlayInstanceOptions
   onPublicEvent: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
+  onResizeError: (error: unknown) => void
 }>
 
 /** One runtime player and the single teardown that owns its host resources. */
 export type InstanceHost = Readonly<{
   player: RuntimePlayer
+  runner: HtmlPlayerRunner
+  init: PlayerInitResult
   destroy: () => void
 }>
 
@@ -35,10 +38,43 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     strapCollections: options.instance.strapCollections,
     onPublicEvent: options.onPublicEvent,
   })
-  return {
-    player: runner.player,
-    destroy: () => runner.destroy(),
+  let stopResizeObservation = (): void => undefined
+  try {
+    const init = runner.init()
+    if (init.ok) {
+      stopResizeObservation = observeRootResize(options.instance.root, () => {
+        try {
+          runner.resize()
+        } catch (error) {
+          options.onResizeError(error)
+        }
+      })
+    }
+    return {
+      player: runner.player,
+      runner,
+      init,
+      destroy: () => {
+        stopResizeObservation()
+        runner.destroy()
+      },
+    }
+  } catch (error) {
+    runner.destroy()
+    throw error
   }
+}
+
+/** Observes the instance root so responsive motion geometry stays inside the facade host. */
+function observeRootResize(root: HTMLElement, onResize: () => void): () => void {
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(onResize)
+    observer.observe(root)
+    return () => observer.disconnect()
+  }
+
+  globalThis.addEventListener('resize', onResize)
+  return () => globalThis.removeEventListener('resize', onResize)
 }
 
 /** Converts the internal metadata map to the runner's indexed metadata shape. */

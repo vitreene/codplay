@@ -2,9 +2,10 @@
 
 ## Statut
 
-> Statut : En cours
+> Statut : Fini
 > Version CodPlay : V2 foundation
-> Contrat validé le 2026-08-26 ; implémentation en cours.
+> Contrat validé le 2026-08-26 ; implémentation et vérification terminées pour
+> la façade V2 foundation.
 
 ## Objet
 
@@ -13,7 +14,7 @@ Définir la frontière publique de CodPlay V2 pour :
 - configurer les capacités communes ;
 - créer un engine et ses instances ;
 - compiler séparément une `SceneDoc` en `CompiledScene` ;
-- piloter une instance ou un groupe d'instances ;
+- piloter une instance ;
 - injecter des events dans une scène ;
 - exposer les events publics produits par une instance ;
 - utiliser l'assemblage HTML/DOM core sans faire entrer le DOM dans le cœur.
@@ -27,20 +28,19 @@ substrat.
 ## Constat actuel
 
 Les briques internes existent. L’assemblage public est engagé dans
-`src/facade/`; la migration des consommateurs reste à terminer :
+`src/facade/`; la démo V2 commune l'utilise désormais :
 
 | Brique | Rôle actuel | Limite actuelle |
 |---|---|---|
 | `RuntimeCapabilityCatalog` | registre unique des composants, services et modules | reste interne ; sa composition passe par la configuration de la façade |
-| `RuntimeEngine` | ressources, horloge, ordre des instances, seek groupé | est adapté par `EngineFacadeImpl` |
+| `RuntimeEngine` | ressources, horloge et ordre des instances ; transaction interne des seeks | est adapté par `EngineFacadeImpl` |
 | `RuntimePlayer` | une scène compilée, lifecycle, events, capture et reconstruction | est adapté par `InstanceFacadeImpl` |
 | `RuntimeMaterializer` | frontière interne de materialisation consommée par le runner HTML | n'est pas exposé dans les options d'instance et n'est pas sélectionnable par l'hôte |
-| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur et resize | raccordement à la surface publique encore à faire |
+| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; son `init()` est l'unique initialisation d'une instance |
 | `RuntimeTelco` | adaptateur de pilotage local | branché sur les notifications du player, sans boucle propre |
 
-`packages/demos/src/v2/layout/layout.ts` contourne encore cette frontière avec
-`createCoreRuntimeCatalog()`, `getComponent()` et `overrideComponent()`. Cette
-fonction reste à supprimer lors de la migration de la démo.
+`packages/demos/src/v2/layout/layout.ts` passe maintenant par la façade publique.
+Il ne construit plus de catalogue et n'accède plus au runner.
 
 ## Références V2
 
@@ -77,8 +77,8 @@ spécification [`Player API V1`](../../../docs/evolution/formalisation-archive/f
 
 | V1 | Décision de transposition V2 |
 |---|---|
-| `BuilderFacade` | reste une étape pure et séparée ; le runtime ne reçoit que `CompiledScene` |
-| `CodPlay.load(SceneDoc)` | ne devient pas le chemin interne V2 ; une commodité de compilation peut exister au-dessus, sans mélanger compilation et instance |
+| `BuilderFacade` | reste une étape pure et séparée ; V2 l'expose sous `engine.builder.compile()` afin d'utiliser le catalogue configuré de cet engine, puis le runtime ne reçoit que `CompiledScene` |
+| `CodPlay.load(SceneDoc)` | ne devient pas le chemin combiné V2 ; l'appelant compile explicitement avec `engine.builder.compile()` puis crée l'instance avec le résultat, sans mélanger compilation et instance |
 | `PlayerFacade` / `PlayerApi` | devient la base de la façade d'instance : lifecycle, seek, events, observation |
 | `RendererFacade.component/service/module` | est déplacée à la configuration de l'engine ; elle n'est plus exposée comme registre mutable du renderer ou de la démo |
 | `RendererFacade` | est remplacée par la frontière interne de materialisation HTML/DOM ; aucun runner d'un autre substrat n'est ouvert en V2 |
@@ -98,10 +98,11 @@ la première implémentation de la façade.
 ```text
 CodPlay / EngineFacade
   ├─ configuration des capacités avant verrouillage
+  ├─ compilation explicite via le builder lié au catalogue de l'engine
   ├─ accès explicite au service de preload
   ├─ ressources partagées et source de temps
   ├─ création et destruction des instances
-  ├─ avancement commun et seek groupé
+  ├─ avancement commun
   └─ diagnostics et observation des events de portée `public`
 
 InstanceFacade
@@ -111,6 +112,13 @@ InstanceFacade
   ├─ propriété `events` pour l'injection et l'observation des events `public`
   └─ propriété `diagnostic` pour les diagnostics techniques
 ```
+
+Le composant `layout` fait partie des composants core fournis par défaut. Quand
+son template contient une zone `data-part`, cette zone peut être utilisée comme
+cible par un autre perso. Toutes les zones du template sont publiées pour
+`layout`, comme dans V1. La démo n'a donc pas à fournir une liste d'identifiants
+ou à remplacer la définition du composant. Les composants qui gardent des zones
+internes peuvent, eux, n'en publier qu'une sélection.
 
 Les façades sont des adaptateurs de frontière. Elles ne réimplémentent ni
 `materialize -> resolve -> solve`, ni le journal, ni les services, ni le graphe
@@ -172,24 +180,22 @@ engine.events.onEvent(listener)
 
 Les opérations propres à l'objet `engine` restent directes lorsqu'elles ne
 désignent pas une sous-capacité : `engine.start`, `engine.pause`,
-`engine.stop`, `engine.advance`, `engine.seek` et `engine.destroy`.
+`engine.stop`, `engine.advance` et `engine.destroy`.
 
 La convention de namespace concerne l'adressage des capacités, pas
 l'obligation d'extraire leurs méthodes. L'appel contractuel reste donc
-`engine.seek(targets)`, `instance.telco.play()` ou
-`engine.instances.create(options)`. Une destructuration comme
-`const { seek } = engine` peut être supportée comme commodité, mais elle ne
-constitue pas une exigence de la façade et ne doit pas conditionner son
-implémentation.
+`instance.telco.seek(timeMs)`, `instance.telco.play()` ou
+`engine.instances.create(options)`. Le seek n'est pas une méthode directe de
+l'engine : la façade publique le porte par l'instance concernée.
 
 Les accès qui restent directs sont limités à ce qui n'est pas une capacité
 opérationnelle de l'instance :
 
 - `instanceId`, valeur d'identité immuable utilisée pour l'adressage et les
   diagnostics ;
-- les méthodes de coordination de l'engine (`start`, `stop`, `advance`,
-  `seek`), parce qu'elles concernent l'ordonnancement ou la coordination de
-  plusieurs instances, et non une capacité interne d'une instance.
+- les méthodes de coordination de l'engine (`start`, `stop`, `advance`), parce
+  qu'elles concernent l'ordonnancement, et non une capacité interne d'une
+  instance.
 
 Le `CompiledScene`, le materializer, la racine et le contexte de substrat ne
 sont pas des propriétés opérationnelles publiques de l'instance : ils sont
@@ -264,6 +270,14 @@ est assemblée par `HtmlPlayerRunner`, qui possède les détails de la
 materialisation HTML/DOM. La façade ne reçoit pas de materializer et n'ouvre
 aucun chemin de materialisation étranger.
 
+L'initialisation publique délègue au runner complet : `createInstanceHost()` appelle
+`HtmlPlayerRunner.init()` et transmet son rapport à la façade. La façade ne doit
+jamais rappeler `RuntimePlayer.init()` sur `host.player` ; cet appel direct
+initialiserait seulement la logique de scène et laisserait le graphe FLIP, la
+présentation du mouvement et l'attachement de capture non préparés. Le player
+logique reste l'objet piloté par `InstanceFacadeImpl`, mais son cycle
+d'initialisation appartient au runner HTML.
+
 ## 2. Compilation et instanciation
 
 La compilation reste indépendante :
@@ -272,6 +286,25 @@ La compilation reste indépendante :
 SceneDoc --SceneBuilder + snapshot de validation--> CompiledScene + functions
 CompiledScene + engine + instance options --------> InstanceFacade
 ```
+
+La frontière publique de compilation reprend la méthode V1 `BuilderFacade.compile`,
+mais elle est liée à l'engine qui porte le catalogue core/foreign :
+
+```text
+const engine = codplay.engine.create(config)
+const build = engine.builder.compile({ scene })
+const instance = engine.instances.create({
+  ...options,
+  compiledScene: build.compiledScene,
+  functions: build.functions,
+})
+```
+
+`engine.builder.compile()` ne crée ni instance, ni materialisation, ni circuit
+de lecture. Il valide et prépare seulement la scène avec les capacités qui
+seront ensuite utilisées par ce même engine. Son résultat conserve
+`compiledScene`, `functions` et les diagnostics ; en cas d'échec, il ne produit
+aucun artefact utilisable.
 
 La création d'une instance reçoit au minimum :
 
@@ -315,7 +348,8 @@ dans quel ordre les instances doivent être avancées :
   imposer de remise à `0` ni détruire les instances ;
 - `advance(nowMs, marginMs?)` lorsque l'hôte fournit les frames ;
 - enregistrement et retrait ordonnés des instances ;
-- `seek(targets)` avec une cible locale par instance et commit groupé ;
+- coordination interne des seeks de players, sans méthode supplémentaire sur la
+  façade ;
 - état de l'engine et diagnostics d'opération.
 
 Par exemple, avec deux instances `scene-a` et `scene-b` :
@@ -329,15 +363,11 @@ event { instanceId: "scene-a", name: "open" }
 frame à 1000 ms
   -> l'engine avance scene-a puis scene-b
   -> chaque instance applique son propre rate et sa propre scène
-
-seek([
-  { instanceId: "scene-a", timeMs: 2000 },
-  { instanceId: "scene-b", timeMs: 750 },
-])
-  -> l'engine valide et coordonne les deux instances
-  -> chaque instance reconstruit sa scène à son temps local
-  -> l'engine présente les deux résultats ensemble
 ```
+
+Le seek groupé de `RuntimeEngine` reste une primitive interne du runtime. Il est
+utilisé par les players pour leurs transactions de reconstruction ; il n'est
+pas exposé comme `engine.seek()` par cette façade.
 
 Ainsi :
 
@@ -380,17 +410,19 @@ par `start(ticker?)`, soit les frames fournies par `advance()`. `advance()` ne
 doit pas être utilisé en parallèle d'un ticker possédé par l'engine ; cette
 concurrence doit être refusée par un diagnostic.
 
-Il ne doit pas exposer un `seek(globalTime)` qui inventerait la politique de
-conversion globale de Sighty. L'hôte fournit les cibles locales.
+La façade n'expose pas de seek au niveau de l'engine. Le seek public est
+`instance.telco.seek(timeMs)` : il désigne une instance et délègue au runner
+HTML déjà assemblé. La politique éventuelle de conversion d'un temps global
+reste extérieure à cette façade.
 
-Un `seek` groupé suit toujours :
+La transaction interne de `RuntimeEngine.seek()` suit toujours :
 
 ```text
 validate -> prepare -> commit -> present
 ```
 
-L'engine ne détruit pas une instance parce qu'elle n'est pas incluse dans une
-portée de seek.
+Cette primitive interne ne détruit pas une instance parce qu'elle n'est pas
+incluse dans une opération de seek.
 
 Le seek groupé est atomique du point de vue de la présentation : toutes les
 instances ciblées doivent terminer `validate` et `prepare` avant le moindre
@@ -438,7 +470,22 @@ lifecycle retenue), tandis que `telco.destroy()` ne pourra désigner que la
 libération de l'adaptateur de commande si celle-ci est nécessaire.
 
 Le temps logique est fourni par l'engine. La telco ne crée pas de ticker et
-ne déduit jamais son état du DOM.
+ne déduit jamais son état du DOM. Dans le mode CodPlay normal, l'engine réveille
+automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
+suspend lorsque le dernier lecteur est en pause. Ce réveil est interne à la
+façade : l'hôte de la démo n'appelle pas `engine.start()` ou `engine.pause()`.
+
+Les commandes générales `engine.start()` et `engine.pause()` restent cependant
+disponibles pour une suspension ou une reprise volontaires de toute la
+propagation partagée. Elles ne remplacent pas `instance.telco.pause()` : cette
+dernière ne concerne que l'état de lecture de son instance. Le futur contexte
+Sighty pourra les employer lorsque son rôle de pilote engine sera déclaré.
+
+Le mode où un hôte fournit ses propres frames utilise `engine.advance()` et
+doit être déclaré par le contrat de pilotage de cet hôte. La déclaration du
+pilote engine de Sighty reste à formaliser avant d'activer ce mode ; elle devra
+désactiver le réveil automatique du ticker CodPlay, sans supprimer le moteur ni
+son API interne.
 
 La telco regroupe également l'état et les abonnements nécessaires à la
 télécommande : `getState`, `seek` pour l'écriture de la position, le progress
@@ -934,6 +981,13 @@ codplay.engine.create(config) -> EngineFacade
 codplay.preload.create(options?: CodPlayPreloadOptions) -> RuntimePreloadApi
 ```
 
+La compilation est accessible sur l'engine créé, comme méthode du builder
+V1, afin de partager son catalogue configuré :
+
+```text
+engine.builder.compile({ scene }) -> CodPlayCompileResult
+```
+
 `config` regroupe :
 
 ```text
@@ -1017,7 +1071,6 @@ engine.start(ticker?)
 engine.pause() // suspend la propagation, sans repositionner les instances
 engine.stop() // cesse l'emploi de la machine, sans remise à zéro imposée
 engine.advance(nowMs, marginMs?)
-engine.seek(targets)
 engine.events.emit(input)
 ```
 
@@ -1025,9 +1078,7 @@ engine.events.emit(input)
 d'entrée lorsque l'hôte fournit les frames. Dans ce second mode, le ticker
 reste la propriété de l'hôte et n'est jamais répliqué par CodPlay. `pause` ou
 `stop` peuvent laisser les appels `advance` arriver, mais aucune frame n'est
-alors propagée aux instances. `seek` reçoit une liste de cibles
-locales et coordonne `validate -> prepare -> commit -> present` pour le groupe.
-`emit` lit dans `input` l'`instanceId`, l'eventime et le contexte d'adressage
+alors propagée aux instances. `emit` lit dans `input` l'`instanceId`, l'eventime et le contexte d'adressage
 `scene`/`story`/`track`, puis transmet ces mêmes données à l'instance. Une
 erreur d'injection est publiée par le diagnostic ; l'engine adresse et ordonne,
 il ne résout pas les règles de scène.
@@ -1151,12 +1202,14 @@ cachées de l'instance.
 #### Phase B — engine, instances et hôtes HTML/DOM — implémentée pour la façade de base
 
 - [x] créer les types de configuration, options d'instance, snapshots et résultats ;
+- [x] exposer `engine.builder.compile({ scene })` avec le catalogue de l'engine et
+  retourner `compiledScene`, `functions` et les diagnostics sans créer d'instance ;
 - [x] encapsuler la création et le verrouillage du catalogue core/foreign ;
 - [x] créer, ordonner et détruire les instances ;
 - [x] créer `engine.destroy()` avec la façade et lui faire orchestrer l'arrêt du
   ticker, le teardown idempotent de toutes les instances puis la libération
   des ressources partagées ;
-- [x] déléguer `start`, `pause`, `stop`, `advance` et `seek` à `RuntimeEngine` ;
+- [x] déléguer `start`, `pause`, `stop` et `advance` à `RuntimeEngine` ;
 - [x] faire respecter par `engine.pause` la suspension de la propagation sans
   repositionnement ;
 - [x] faire respecter par `engine.stop` l'arrêt de la propagation sans remise à
@@ -1167,10 +1220,8 @@ cachées de l'instance.
   catalogue secondaire ;
 - [x] partager le catalogue et l'horloge entre les instances d'un même engine,
   sans partager leur racine ni leur état runtime ;
-- [x] rendre le seek groupé atomique : `validate -> prepare -> commit -> present`
-  pour toutes les cibles, avec une seule présentation et aucun sous-ensemble
-  partiellement appliqué ; restaurer l'état logique et la présentation si le
-  commit ou la présentation échoue ;
+- [x] conserver le seek groupé comme transaction interne du runtime ; la façade
+  ne l'expose pas et le seek public passe par `instance.telco` ;
 - [x] garantir que `engine.start` réarme le ticker sans recréer d'instance ni de
   circuit de lecture ;
 - [x] rendre le teardown idempotent : chaque instance et ses materializations sont
@@ -1191,10 +1242,14 @@ cachées de l'instance.
 - [x] ne pas exposer `RuntimePlayer.refresh()` dans la telco : il reste une
   opération interne de réapplication liée au materializer ;
 - [x] adapter `RuntimeTelco` à cette propriété d'instance ;
-- [x] retirer du remote tout calcul de l'état publié et tout accès direct au runner ;
+- [x] retirer du remote V2 tout calcul de l'état publié et tout accès direct au runner ;
 - [x] vérifier que la telco reste l'unique surface de commande de lecture ;
 - [x] laisser le teardown de l'instance au propriétaire, hors commandes telco ;
 - [x] ne pas créer de boucle de lecture ni de ticker dans la telco.
+- [x] réveiller et suspendre automatiquement le ticker CodPlay depuis les
+  commandes telco, sans exposer ce raccord au layout ou à la démo ; conserver
+  les commandes générales de l'engine pour le futur hôte qui le déclarera comme
+  pilote.
 
 #### Phase D — events et capture — façade eventime implémentée ; capture publique hors tranche
 
@@ -1226,14 +1281,7 @@ cachées de l'instance.
 - [x] ajouter les diagnostics sous `instance.diagnostic`, l'état de lecture sous
   `instance.telco` et l'observation des events de portée `public` sous
   `instance.events` ;
-- [ ] conserver l'adapter authoring hors du cœur et implémenter, lors de la reprise
-  de l'éditeur, la lecture `getPersoStates` ainsi que l'écriture d'état
-  temporaire `{ persoId, timeMs, state }` avant materialisation ;
-- [ ] vérifier dans ce même chantier si les opérations V1 de nœud (`subscribeToNode`,
-  `getNodePose`, `setNodePose`, `getNodeSnapshot`) sont nécessaires pour
-  l'éditeur HTML ; ne pas les transformer en API générique ni les implémenter
-  dans le core par défaut ;
-- [ ] raccorder l'assemblage HTML/DOM core par défaut à la façade sans exposer
+- [x] raccorder l'assemblage HTML/DOM core par défaut à la façade sans exposer
   `HtmlPlayerRunner` ni le catalogue ;
 - [x] exposer `codplay.preload.create(options?) -> RuntimePreloadApi` sans le
   rattacher à une instance ;
@@ -1241,33 +1289,36 @@ cachées de l'instance.
   l'engine ;
 - [x] conserver `run()` comme option de diffusion autonome.
 
-#### Phase F — migration et validation — à faire
+#### Phase F — migration et validation — en cours
 
-- migrer `packages/demos/src/v2/layout/layout.ts` ;
-- supprimer `createDemoRuntimeCatalog` ;
-- supprimer tout appel de démo à `createCoreRuntimeCatalog`, `getComponent`,
+- [x] migrer `packages/demos/src/v2/layout/layout.ts` ;
+- [x] supprimer `createDemoRuntimeCatalog` ;
+- [x] supprimer tout appel de démo à `createCoreRuntimeCatalog`, `getComponent`,
   `overrideComponent` et aux constructeurs runtime internes ;
-- vérifier que `flip-stress` reste une scène uniquement ;
-- migrer ensuite les fixtures V2 de validation et vérifier, sur le chemin
-  public réel, les invariants suivants :
-  - une démo n'appelle aucune API interne du catalogue et les composants
-    `core`/`foreign` ne sont ajoutés ou surchargés qu'à l'initialisation ;
-  - le catalogue refuse toute mutation après verrouillage ;
-  - `engine.pause`, `engine.stop` et `engine.start` respectent leurs effets
-    respectifs sur le ticker, la propagation et les positions, y compris quand
-    les frames continuent d'arriver depuis un hôte externe ;
-  - le seek groupé est atomique et ne présente qu'une seule fois ;
-  - les commandes et le progress passent par l'unique `instance.telco` ;
-  - l'emit immédiat, l'emit daté et les events sortants suivent le même
-    contrat, le même dispatcher et le même journal, sans fuite d'events privés ;
-  - `instance.diagnostic`, le preload explicite et le materializer HTML n'ouvrent
-    pas de circuit secondaire ni de création DOM par la façade générique ;
-  - le teardown est idempotent et détruit chaque materialization une seule
-    fois ;
-  - les cas instance unique, instances multiples, extensions `foreign` de
-    capacités, events, preload, destruction et materialisation HTML sont couverts ;
-  - `flip-stress` fonctionne sur la surface V2 publique et reste une scène
-    sans logique de layout ou de telco.
+- [x] vérifier que `flip-stress` reste une scène uniquement ;
+- [x] vérifier que `layout` publie toutes les zones `data-part` de son template
+  sans configuration portée par la démo ;
+- [x] vérifier sur la façade les commandes telco, leur propagation vers le
+  player HTML et la publication du progress ;
+- [x] vérifier sur la façade le cycle public de l'engine (`start`, `pause`,
+  `stop`, `advance`) : la pause et l'arrêt ne repositionnent pas l'instance et
+  les frames externes suivent la même propagation ;
+- [x] vérifier sur la façade l'injection directe et adressée des eventimes, leur
+  attente du tick normal et la visibilité des events publics ;
+- [x] vérifier le transfert explicite du preload, y compris les ressources
+  `skipped`, ainsi que les diagnostics non bloquants ;
+- [x] vérifier la composition `foreign`, l'absence de registre secondaire et le
+  teardown idempotent des instances ;
+- [x] exécuter la suite complète V2 : 72 fichiers et 456 tests passés ;
+- [x] compiler l'application de démos V2 avec le layout public ;
+- [x] valider visuellement `flip-stress` dans le navigateur et conserver cette
+  vérification séparée des tests de façade ; lecture lancée, temps avancé et
+  aucune erreur console constatée dans Safari.
+
+L'accès authoring (`getPersoStates`, écriture d'état temporaire et opérations
+éventuelles sur les nœuds) est reporté au chantier de reprise de l'éditeur. Il
+ne fait pas partie de l'implémentation de la façade V2 et ne bloque pas sa
+clôture.
 
 ## État de travail
 
@@ -1276,6 +1327,7 @@ Le contrat est validé et son implémentation de base est engagée.
 Déjà implémenté :
 
 - `codplay.engine.create(config)` et `codplay.preload.create(options?)` ;
+- `engine.builder.compile({ scene })`, lié au catalogue configuré de l'engine ;
 - composition unique core/foreign et verrouillage du catalogue ;
 - création, adressage, pilotage et destruction des instances ;
 - `instance.telco`, sa progression branchée sur les notifications du player,
@@ -1284,14 +1336,17 @@ Déjà implémenté :
 - diagnostics par le canal V2 existant et transfert explicite des ressources ;
 - tests de contrat du socle et absence de ticker propre à la telco.
 
-Reste à traiter dans ce plan :
+Validation exécutée :
 
-- fournir le raccordement public de l'assemblage HTML/DOM core par défaut, puis
-  retirer le catalogue construit directement par
-  `packages/demos/src/v2/layout/layout.ts` ;
-- exécuter la validation sur le chemin public de la démo et compléter les
-  tests de materializer ;
-- reprendre séparément l'accès authoring de l'éditeur si ce chantier l'exige.
+- `npm test --workspace=@codplay/codplay-v2` : 72 fichiers, 456 tests passés ;
+- `npm run typecheck --workspace=@codplay/codplay-v2` : succès ;
+- `npm run build --workspace=@codplay/demos` : succès ;
+- `git diff --check` : succès.
+
+Reste à traiter dans ce plan : aucun point de la façade V2 foundation.
+
+La reprise séparée de l'accès authoring de l'éditeur reste un chantier
+ultérieur, hors de ce plan.
 
 Le descriptif de découverte destiné aux agents sera créé lorsque ces points du
 plan seront clôturés. Aucune API supplémentaire ne doit être ajoutée en dehors

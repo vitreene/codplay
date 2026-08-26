@@ -5,7 +5,7 @@ import { RuntimeEngine } from '../../../src/runtime/engine'
 import { RuntimePlayer } from '../../../src/runtime/player'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { CompiledEmitRule } from '../../../src/scene/compiled'
-import { createDragCaptureScene, s6Straps } from '../../../demos/validation/player/drag-scene'
+import { createDragCaptureScene, s6Straps } from '../../../../demos/src/v2/demos/player/drag-scene'
 
 describe('V2 drag capture demo scene', () => {
   it('compiles capture functions and routes the end state through the normal event path', async () => {

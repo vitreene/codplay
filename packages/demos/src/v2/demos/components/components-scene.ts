@@ -1,5 +1,5 @@
-import type { SceneDoc } from '../../../src/scene/types'
-import { correctionIconPartId, selectionIconPartId } from '../../../src/runtime/components/input'
+import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
+import { correctionIconPartId, selectionIconPartId } from '../../../../../codplay-v2/src/runtime/components/input'
 import componentDemoImageUrl from './component-demo-image.svg?url'
 
 /** Total duration exposed by the V2 component showcase. */

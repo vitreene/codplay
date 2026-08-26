@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import { SceneBuilder } from '../../../src/scene/compiled'
-import { createComponentsScene } from '../../../demos/validation/components/components-scene'
+import { createComponentsScene } from '../../../../demos/src/v2/demos/components/components-scene'
 
 describe('V2 core components demo', () => {
   let runner: HtmlPlayerRunner | undefined

@@ -1,7 +1,7 @@
 import "../shared/demo-shell.css";
 
 import { CodPlay } from "codplay/creator";
-import { createDemoRemote } from "@codplay/remote";
+import { createDemoRemoteV1 } from "@codplay/remote";
 import { createTraceLogPanel } from "../shared/trace-log-panel";
 import { resolveSceneSeekMaxMs } from "../shared/resolve-scene-seek-max-ms";
 import { buildDemoLinksMarkup } from "../shared/demo-registry";
@@ -116,7 +116,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
     traceLogPanel.push(row);
   });
 
-  const remote = createDemoRemote({
+  const remote = createDemoRemoteV1({
     telco: studio.telco,
     seekMaxMsFromScene: resolveSceneSeekMaxMs(config.scene),
     actions: config.actions,

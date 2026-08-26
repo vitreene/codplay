@@ -3,18 +3,19 @@
 > Status: En cours — validation locale
 > CodPlay version: V2 foundation
 
-Cette entrée unique de validation présente l'adaptation V2 de la démo
-`preload-media`. Elle vérifie le chemin réel :
+Cette source de validation présente l'adaptation V2 de la démo `preload-media`.
+Elle a été déplacée sous l'arborescence des démos V2 ; son adaptation au layout
+commun et son entrée de registre restent à faire. Elle vérifie le chemin réel :
 
 ```text
 manifeste explicite -> preload externe -> runner.init() -> telco.play()
                                       -> media-sync / master
 ```
 
-La même entrée expose aussi la présentation des composants core V2 avec le
-paramètre `?demo=components`. Elle ne crée pas de script ou de runner
-supplémentaire : `demo:player` reste le point d'entrée unique de cette
-verticale de validation.
+La présentation des composants core V2 est désormais une entrée distincte du
+registre. Cette source ne crée pas de runner supplémentaire pour le runtime ;
+son `main.ts` conserve encore l'orchestration de l'ancienne page de validation
+jusqu'à sa reprise par le layout commun.
 
 La scène démarre après le preload. Elle présente un media audio marqué
 `initial.master: true`, une vidéo, deux images et la feuille de style de la
@@ -31,12 +32,6 @@ importe pas de code d'exécution V1 : les fichiers médias réutilisés sont
 uniquement des assets de démonstration.
 
 ## Vérification
-
-Lancer depuis la racine :
-
-```text
-npm run demo:player --workspace=@codplay/codplay-v2
-```
 
 Le build de scène est refusé avant le preload si le contrat V2 est invalide.
 Le résultat attendu est un preload terminé, puis une lecture lancée par le

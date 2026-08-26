@@ -1,9 +1,9 @@
-import { createRuntimeTelco } from '../../../src/runtime/telco'
-import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
-import { SceneBuilder } from '../../../src/scene/compiled'
-import type { SceneDoc } from '../../../src/scene/types'
-import { createTelcoRemote } from '../../shared/telco-remote'
+import { createRuntimeTelco } from '../../../../../codplay-v2/src/runtime/telco'
+import { createCoreRuntimeCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
+import { HtmlPlayerRunner } from '../../../../../codplay-v2/src/runtime/runner-html'
+import { SceneBuilder } from '../../../../../codplay-v2/src/scene/compiled'
+import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
+import { createRemote } from '@codplay/remote'
 import { COMPONENTS_DEMO_DURATION_MS, createComponentsScene } from './components-scene'
 
 import './style.css'
@@ -107,9 +107,8 @@ export async function startComponentsDemo(): Promise<void> {
     enableInteractionLock: true,
   })
   const telco = createRuntimeTelco({ target: runner, durationMs: COMPONENTS_DEMO_DURATION_MS })
-  const remote = createTelcoRemote({
+  const remote = createRemote({
     telco,
-    durationMs: COMPONENTS_DEMO_DURATION_MS,
     onError: showError,
   })
   telcoSlot.appendChild(remote.element)

@@ -1,11 +1,20 @@
 import {
+  DiagnosticCollector,
+  type DiagnosticReport,
+} from '../diagnostics'
+import {
   createCoreRuntimeCatalog,
   RuntimeCapabilityCatalog,
 } from '../runtime/catalog'
 import { RuntimeEngine } from '../runtime/engine'
 import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import { SceneBuilder } from '../scene/compiled'
 import type {
+  CodPlayCompileInput,
+  CodPlayCompileOptions,
+  CodPlayCompileResult,
   CodPlayEngine,
+  CodPlayEngineBuilder,
   CodPlayEngineConfig,
   CodPlayEngineEventInput,
   CodPlayEngineEvents,
@@ -16,9 +25,8 @@ import type {
   CodPlayInstanceOptions,
   CodPlayPublicEvent,
   CodPlayResourceRegistration,
-  CodPlaySeekTarget,
 } from './facade-types'
-import { DiagnosticChannel, publishFacadeError } from './diagnostic-channel'
+import { DiagnosticChannel, publishFacadeError, withDiagnosticRefs } from './diagnostic-channel'
 import { InstanceFacadeImpl } from './instance-facade'
 import { toPublicEvent } from './public-event'
 import { createInstanceHost, type InstanceHost } from './instance-host'
@@ -27,6 +35,7 @@ type ManagedInstance = InstanceFacadeImpl
 
 /** Public engine adapter that owns one catalog, clock, and instance registry. */
 export class EngineFacadeImpl implements CodPlayEngine {
+  readonly builder: CodPlayEngineBuilder
   readonly instances: CodPlayEngineInstances
   readonly resources: CodPlayEngineResources
   readonly events: CodPlayEngineEvents
@@ -35,6 +44,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private readonly diagnostics: DiagnosticChannel
   private readonly defaultTicker: import('../runtime/time').Ticker | undefined
   private readonly managedInstances = new Map<string, ManagedInstance>()
+  private readonly playingInstanceIds = new Set<string>()
   private readonly publicEventListeners = new Set<CodPlayEventListener>()
   private readonly resourceMetadata = new Map<string, import('../runtime/preload').RuntimePreloadResourceMetadata>()
   private destroyed = false
@@ -53,6 +63,10 @@ export class EngineFacadeImpl implements CodPlayEngine {
       this.runtimeEngine = new RuntimeEngine(this.catalog, {
         resources: config.resources === undefined ? [] : resourceUrls(config.resources),
       })
+
+      this.builder = {
+        compile: (input, options) => this.compileScene(input, options),
+      }
     } catch (error) {
       publishFacadeError(this.diagnostics, 'CODPLAY_ENGINE_CONFIGURATION_FAILED', error)
       throw error
@@ -72,6 +86,35 @@ export class EngineFacadeImpl implements CodPlayEngine {
         this.publicEventListeners.add(listener)
         return () => { this.publicEventListeners.delete(listener) }
       },
+    }
+  }
+
+  /** Compiles one authored scene against this engine's configured capability catalog. */
+  private compileScene(
+    input: CodPlayCompileInput,
+    options: CodPlayCompileOptions = {},
+  ): CodPlayCompileResult {
+    try {
+      const result = new SceneBuilder(this.catalog.validationSnapshot(), {
+        ...options,
+        diagnosticOutput: (diagnostic) => this.diagnostics.publish(withDiagnosticRefs(diagnostic, {
+          sceneId: input.scene.id,
+        })),
+      }).build(input.scene)
+      return {
+        ...result,
+        diagnostics: withDiagnosticReportRefs(result.diagnostics, { sceneId: input.scene.id }),
+      }
+    } catch (error) {
+      const collector = new DiagnosticCollector({ output: () => undefined })
+      collector.error(
+        'CODPLAY_SCENE_COMPILE_FAILED',
+        error instanceof Error ? error.message : String(error),
+        { refs: { sceneId: input.scene.id } },
+      )
+      const diagnostics = collector.report()
+      this.diagnostics.publishReport(diagnostics)
+      return { ok: false, diagnostics }
     }
   }
 
@@ -97,23 +140,11 @@ export class EngineFacadeImpl implements CodPlayEngine {
     this.runEngineOperation('CODPLAY_ENGINE_ADVANCE_FAILED', () => this.runtimeEngine.advance(nowMs, marginMs))
   }
 
-  /** Coordinates one grouped local seek and routes reports to target instances. */
-  seek(targets: readonly CodPlaySeekTarget[]): void {
-    this.runEngineOperation('CODPLAY_ENGINE_SEEK_FAILED', () => {
-      const result = this.runtimeEngine.seek(targets)
-      for (const target of targets) {
-        const instance = this.managedInstances.get(target.instanceId)
-        if (instance === undefined) continue
-        const report = result.diagnostics[target.instanceId]
-        if (report !== undefined) instance.publishSeekReport(report)
-      }
-    })
-  }
-
   /** Destroys every instance and then releases the shared engine resources. */
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.playingInstanceIds.clear()
     for (const instance of this.managedInstances.values()) instance.destroyInternal()
     this.managedInstances.clear()
     this.publicEventListeners.clear()
@@ -154,9 +185,14 @@ export class EngineFacadeImpl implements CodPlayEngine {
         resourceMetadata: new Map(this.resourceMetadata),
         instance: options,
         onPublicEvent: (event) => this.forwardPublicEvent(options.instanceId, eventListeners, event),
+        onResizeError: (error) => publishFacadeError(
+          diagnostics,
+          'CODPLAY_INSTANCE_RESIZE_FAILED',
+          error,
+          { instanceId: options.instanceId },
+        ),
       })
-      const player = host.player
-      const init = player.init()
+      const { player, runner, init } = host
       diagnostics.publishReport(init.diagnostics, { instanceId: options.instanceId })
       reportPublished = true
       if (!init.ok) {
@@ -165,10 +201,12 @@ export class EngineFacadeImpl implements CodPlayEngine {
       const instance = new InstanceFacadeImpl({
         instanceId: options.instanceId,
         player,
+        runner,
         durationMs: options.durationMs,
         diagnostics,
         eventListeners,
         onPublicEvent: (event) => this.forwardEnginePublicEvent(event),
+        onPlaybackStateChange: (state) => this.syncPlaybackClock(options.instanceId, state),
         destroy: host.destroy,
       })
       this.managedInstances.set(options.instanceId, instance)
@@ -250,8 +288,31 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private destroyInstance(instanceId: string): void {
     const instance = this.managedInstances.get(instanceId)
     if (instance === undefined) return
+    this.playingInstanceIds.delete(instanceId)
+    this.pausePlaybackClockWhenIdle()
     this.managedInstances.delete(instanceId)
     instance.destroyInternal()
+  }
+
+  /** Wakes or suspends the one CodPlay-owned clock from instance playback demand. */
+  private syncPlaybackClock(instanceId: string, state: 'playing' | 'paused'): void {
+    if (this.destroyed) return
+    if (state === 'playing') this.playingInstanceIds.add(instanceId)
+    else this.playingInstanceIds.delete(instanceId)
+
+    if (this.playingInstanceIds.size > 0) {
+      this.runEngineOperation('CODPLAY_ENGINE_AUTO_START_FAILED', () => {
+        this.runtimeEngine.start(this.defaultTicker)
+      })
+      return
+    }
+    this.pausePlaybackClockWhenIdle()
+  }
+
+  /** Suspends the shared clock when no instance still requests playback. */
+  private pausePlaybackClockWhenIdle(): void {
+    if (this.playingInstanceIds.size > 0 || this.destroyed) return
+    this.runEngineOperation('CODPLAY_ENGINE_AUTO_PAUSE_FAILED', () => this.runtimeEngine.pause())
   }
 }
 
@@ -282,7 +343,20 @@ function applyModuleCapabilities(
   for (const definition of group?.override ?? []) catalog.overrideModule(definition, 'foreign')
 }
 
-/** Extracts only successfully loaded URLs from one preload transfer. */
+/** Extracts every URL available after one preload transfer. */
 function resourceUrls(resources: CodPlayResourceRegistration): readonly string[] {
-  return [...new Set(resources.loaded)]
+  return [...new Set([...resources.loaded, ...resources.skipped])]
+}
+
+/** Attaches the compiled scene reference to every diagnostic returned by the builder. */
+function withDiagnosticReportRefs(
+  report: DiagnosticReport,
+  refs: Readonly<{ sceneId: string }>,
+): DiagnosticReport {
+  const all = report.all.map((diagnostic) => withDiagnosticRefs(diagnostic, refs))
+  return {
+    all,
+    warnings: all.filter((diagnostic) => diagnostic.severity === 'warning'),
+    errors: all.filter((diagnostic) => diagnostic.severity === 'error'),
+  }
 }

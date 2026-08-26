@@ -72,7 +72,7 @@ Ses sous-modules sont spécialisés :
   par source, le choix audio/vidéo et le rate natif ;
 - `tests/runtime/preload/runtime-preload.spec.ts` couvre la propagation des
   métadonnées de durée ;
-- `demos/validation/player` valide le preload externe et le circuit média.
+- `packages/demos/src/v2/demos/player` valide le preload externe et le circuit média.
 
 La validation visuelle Safari reste ouverte à cause d'un écran noir signalé
 pendant la lecture vidéo.

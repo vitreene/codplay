@@ -1,9 +1,9 @@
 import type {
   AuthorCaptureEndFunction,
   AuthorCaptureInitFunction,
-} from '../../../src/scene/capture/authoring-types'
-import type { PersoDoc, SceneDoc } from '../../../src/scene/types'
-import type { StrapCollection } from '../../../src/runtime/player'
+} from '../../../../../codplay-v2/src/scene/capture/authoring-types'
+import type { PersoDoc, SceneDoc } from '../../../../../codplay-v2/src/scene/types'
+import type { StrapCollection } from '../../../../../codplay-v2/src/runtime/player'
 
 /** Candidate lists and items retained by the single S6 validation scene. */
 export const LIST_IDS = ['list-a', 'list-b'] as const

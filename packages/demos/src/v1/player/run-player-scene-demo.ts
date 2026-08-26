@@ -7,7 +7,7 @@ import { PlayerFacade } from 'codplay/player/create-player';
 import type { PlayerApi } from 'codplay/player/player';
 import type { ApiResult } from 'codplay/builder/types';
 import { createTelco } from 'codplay/telco/create-telco';
-import { createDemoRemote } from '@codplay/remote';
+import { createDemoRemoteV1 } from '@codplay/remote';
 import { createTraceLogPanel } from '../shared/trace-log-panel';
 import { resolveSceneSeekMaxMs } from '../shared/resolve-scene-seek-max-ms';
 import { buildDemoLinksMarkup } from '../shared/demo-registry';
@@ -183,7 +183,7 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 
 	const telco = createTelco(adaptPlayerFacadeToPlayerApi(player), { subscribeOnTick });
 
-	const remote = createDemoRemote({
+	const remote = createDemoRemoteV1({
 		telco,
 		seekMaxMsFromScene,
 		actions: config.actions,

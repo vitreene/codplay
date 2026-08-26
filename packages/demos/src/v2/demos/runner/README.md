@@ -6,9 +6,13 @@ Review: gabarit de validation validé le 2026-08-20; cette démo ne constitue pa
 
 ## Rôle
 
-Cette démo compile des `SceneDoc` déclaratifs et les présente avec
+Cette source de validation compile des `SceneDoc` déclaratifs et les présente avec
 `HtmlPlayerRunner`. Elle n'implémente ni capture, ni mutation DOM, ni boucle de
 rendu parallèle : tout le mouvement appartient au runner V2.
+
+La source a été déplacée sous l'arborescence des démos V2. Elle n'est pas encore
+une entrée du registre commun : son `main.ts` conserve deux scénarios et leur
+orchestration de page, qui seront repris séparément par le layout V2.
 
 Deux scénarios exposent les usages distincts du même graphe :
 
@@ -25,18 +29,17 @@ avant l'événement et LAST son état structurel immédiatement après. Play et 
 
 ## Vérifications manuelles
 
-1. Lancer `npm run demo:runner` depuis la racine du dépôt.
-2. Dans `List / local movement`, vérifier à `0 ms` l'ordre `[B, C, A]`.
-3. Vérifier à `1500 ms` l'ordre DOM `[A, B, C]`, A visuellement en première
+1. Dans `List / local movement`, vérifier à `0 ms` l'ordre `[B, C, A]`.
+2. Vérifier à `1500 ms` l'ordre DOM `[A, B, C]`, A visuellement en première
    position et l'absence de représentation overlay.
-4. Vérifier à `2200 ms` l'ordre `[A, B, C]` sans transform transitoire.
-5. Dans `Nested reparent / overlay`, vérifier à `1500 ms` deux représentations
+3. Vérifier à `2200 ms` l'ordre `[A, B, C]` sans transform transitoire.
+4. Dans `Nested reparent / overlay`, vérifier à `1500 ms` deux représentations
    overlay indépendantes pour P et Q, et des déplacements locaux pour B et C.
-6. Vérifier à `2200 ms` que l'overlay est vide, que les sources sont visibles et
+5. Vérifier à `2200 ms` que l'overlay est vide, que les sources sont visibles et
    que Q est monté dans le dernier outlet de P.
-7. Comparer Play et Seek au même instant : rectangles et matrices doivent être
+6. Comparer Play et Seek au même instant : rectangles et matrices doivent être
    identiques.
-8. Redimensionner le viewport : le graphe est remesuré sans créer de doublons.
+7. Redimensionner le viewport : le graphe est remesuré sans créer de doublons.
 
 La ligne de statut expose l'ordre logique, les régimes effectifs et le nombre de
 représentations overlay afin que les invariants restent directement observables.

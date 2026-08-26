@@ -188,12 +188,12 @@ ajouté pour raccourcir cette phase.
 
 Creer d'abord sous `packages/codplay-v2/tests/runtime/` une verticale de test qui traverse le flux entier avec
 un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML. La demo existante
-`demos/validation/player` reste un banc visible du runtime, sans sortie ou catalogue parallele. Ni cette demo ni
+`packages/demos/src/v2/demos/player` reste un banc visible du runtime, sans sortie ou catalogue parallele. Ni cette demo ni
 la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
 
 La démo courante est unique et remplace la précédente lorsqu'une nouvelle
 tranche doit être présentée, sauf demande explicite de conservation. La démo
-FLIP de `demos/validation/runner` est consignée ; elle reste séparée de la démo
+FLIP de `packages/demos/src/v2/demos/runner` est consignée ; elle reste séparée de la démo
 courante et ne doit pas être dupliquée sous une autre entrée.
 
 - un composant racine fixe;
@@ -207,7 +207,7 @@ multi-instance. Les capacités non ouvertes restent absentes de ses types et fix
 
 ### 3. Validation mouvement/list
 
-La démo compacte dans `packages/codplay-v2/demos/validation/runner/` valide les
+La démo compacte dans `packages/demos/src/v2/demos/runner/` valide les
 contrats local et reparent avec deux scénarios lisibles. La fixture
 `packages/demos/src/v2/demos/flip-stress/` en est le gabarit de stress et la
 base de reprise pour les démos standard : elle ajoute plusieurs
