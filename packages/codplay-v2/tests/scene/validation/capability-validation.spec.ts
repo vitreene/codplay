@@ -84,17 +84,17 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     expect(output).not.toHaveBeenCalled()
   })
 
-  it('keeps the core service contracts attached to their service declarations', () => {
+  it('keeps the core HTML/DOM service contracts attached to their service declarations', () => {
     const runtimeCatalog = catalog()
 
     expect(runtimeCatalog.getService('style')).toMatchObject({
       name: 'style',
       allowUnknownProperties: true,
-      materializers: ['html', 'svg'],
+      materializers: ['html'],
     })
-    expect(runtimeCatalog.getService('className')).toMatchObject({ name: 'className', materializers: ['html', 'svg'] })
-    expect(runtimeCatalog.getService('attr')).toMatchObject({ name: 'attr', materializers: ['html', 'svg'] })
-    expect(runtimeCatalog.getService('content')).toMatchObject({ name: 'content', materializers: ['html', 'svg'] })
+    expect(runtimeCatalog.getService('className')).toMatchObject({ name: 'className', materializers: ['html'] })
+    expect(runtimeCatalog.getService('attr')).toMatchObject({ name: 'attr', materializers: ['html'] })
+    expect(runtimeCatalog.getService('content')).toMatchObject({ name: 'content', materializers: ['html'] })
   })
 
   it('validates only the declared style color properties with the V2 color contract', () => {

@@ -1,13 +1,15 @@
 # Matérialisation runtime V2
 
-> Statut : Fixe — tranche HTML/SVG DOM
+> Statut : Fixe — materialisation HTML/DOM
 > Version CodPlay : V2 foundation
 
 ## Rôle
 
-Le materializer est la couche qui transforme la représentation d'un composant
-en objets du support choisi, puis applique la structure de la scène à ces
-objets. La version actuelle couvre le DOM HTML et SVG.
+Le materializer est la frontière interne qui transforme la représentation d'un
+composant en nœuds HTML/DOM, puis applique la structure de la scène à ces nœuds.
+Il n'existe qu'une materialisation CodPlay en V2 : le DOM HTML. Un élément SVG
+produit par le template reste un nœud DOM pris en charge par cette même
+materialisation ; il ne constitue pas un materializer distinct.
 
 ## Fonctionnement
 
@@ -21,19 +23,20 @@ L'interface `RuntimeMaterializer` fournit trois opérations :
   libéré une racine et que la prochaine validation doit refaire la
   réconciliation structurelle.
 
-Ces opérations utilisent un seul hôte de materialization. Elles ne passent pas
+Ces opérations utilisent un seul hôte de materialisation. Elles ne passent pas
 par un catalogue de composants séparé, ni par un circuit spécial de démonstration.
 
 ## Organisation interne
 
-Les implémentations HTML et SVG DOM se trouvent dans `runtime/runner`. Les
-services communs HTML/SVG restent à côté de leurs déclarations dans
-`src/services`.
+L'implémentation HTML/DOM se trouve dans `runtime/runner`. Les services communs
+aux éléments HTML et SVG restent à côté de leurs déclarations dans
+`src/services` ; leur cible est le nœud DOM reçu, quel que soit son namespace.
 
-`BaseComponent` ne dépend d'aucun support. Les composants HTML/SVG utilisent
-`BaseHTMLComponent`; un futur materializer Canvas ou Three.js devra définir sa
-propre projection au lieu d'imposer `render(): string` et des nœuds DOM à tous
-les composants.
+`BaseComponent` ne dépend d'aucun support. Les composants markup utilisent
+`BaseHTMLComponent` et retournent un template HTML, qui peut contenir du SVG ou
+un `canvas`. Un contexte Three.js éventuel appartient au composant spécialisé
+qui possède ce canvas ; il n'est ni une materialisation CodPlay ni un choix de
+la façade.
 
 ## Contrat et limites
 
@@ -43,4 +46,6 @@ les composants.
   capture HTML ;
 - un fragment n'est pas une cible de service ;
 - le materializer ne remplace pas la logique de scène et ne crée pas un second
-  player.
+  player ;
+- aucune option publique ne permet de fournir ou sélectionner un materializer
+  Canvas, Three.js, SVG ou autre.

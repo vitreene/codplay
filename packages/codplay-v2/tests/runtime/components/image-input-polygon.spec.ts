@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DiagnosticCollector } from '../../../src/diagnostics'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { createMarkupModuleServiceDefinition, type MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
-import { HtmlComponentMaterializer, SvgComponentMaterializer } from '../../../src/runtime/runner'
+import { HtmlComponentMaterializer } from '../../../src/runtime/runner'
 import { correctionIconPartId, selectionIconPartId } from '../../../src/runtime/components/input'
 import {
   resolvePolygonPathString,
@@ -143,7 +143,7 @@ describe('V2 core image, input and polygon components', () => {
   it('materializes a real SVG root and projects polygon morph deterministically', () => {
     const catalog = createCoreRuntimeCatalog()
     const nodes = createNodeMaps()
-    const materializer = new SvgComponentMaterializer(nodes)
+    const materializer = new HtmlComponentMaterializer(nodes)
     const identity = { componentId: 'shape:polygon', storyId: 'shape', componentType: 'polygon' }
     const initial = sanitizePolygonInitial({ sides: 3, outer: 40, content: 'triangle' }) as PolygonState
     const targetAction = sanitizePolygonAction({
@@ -189,26 +189,6 @@ describe('V2 core image, input and polygon components', () => {
     expect(path.getAttribute('d')).toBe(resolvePolygonPathString(target))
     expect(root.querySelector('text')?.textContent).toBe('heptagram')
     handle.destroy()
-  })
-
-  it('rejects an HTML root at the SVG materializer boundary', () => {
-    const catalog = createCoreRuntimeCatalog()
-    const nodes = createNodeMaps()
-    const materializer = new SvgComponentMaterializer(nodes)
-    const identity = { componentId: 'shape:tag', storyId: 'shape', componentType: 'tag' }
-    const initial = { tag: 'div' }
-    const component = catalog.createComponent(
-      'tag',
-      { perso: { id: 'tag', storyId: 'shape', initial, actions: {} } },
-      identity,
-      materializer,
-      new Map(),
-    )
-
-    expect(() => materializer.materializeComponent(component, identity, initial, [], new Map())).toThrow(
-      'SVG materializer requires an SVG root: tag',
-    )
-    expect(nodes.persoNodes.has(identity.componentId)).toBe(false)
   })
 
   it('carries component-specific action fields through the canonical V2 resolver', () => {

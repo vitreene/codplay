@@ -66,6 +66,21 @@ describe('RuntimeEngine', () => {
     expect(engine.isRunning()).toBe(false)
   })
 
+  it('does not propagate external frames after stop until the external clock resumes', () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const frames: number[] = []
+    engine.registerInstance('player', (frame) => frames.push(frame.nowMs))
+
+    engine.advance(100)
+    engine.stop()
+    engine.advance(200)
+    expect(frames).toEqual([100])
+
+    engine.start()
+    engine.advance(300)
+    expect(frames).toEqual([100, 300])
+  })
+
   it('seeks a selected group through validate, prepare, commit, and present phases', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const phases: string[] = []
@@ -79,6 +94,7 @@ describe('RuntimeEngine', () => {
           prepareSeek: () => phases.push(`${instanceId}:prepare`),
           commitSeek: (timeMs) => phases.push(`${instanceId}:commit:${timeMs}`),
           presentSeek: () => phases.push(`${instanceId}:present`),
+          rollbackSeek: () => phases.push(`${instanceId}:rollback`),
         },
       )
     }
@@ -110,6 +126,7 @@ describe('RuntimeEngine', () => {
       prepareSeek: () => phases.push('first:prepare'),
       commitSeek: () => phases.push('first:commit'),
       presentSeek: () => phases.push('first:present'),
+      rollbackSeek: () => phases.push('first:rollback'),
     })
     engine.registerInstance('second', () => undefined, {
       validateSeek: () => {
@@ -119,6 +136,7 @@ describe('RuntimeEngine', () => {
       prepareSeek: () => phases.push('second:prepare'),
       commitSeek: () => phases.push('second:commit'),
       presentSeek: () => phases.push('second:present'),
+      rollbackSeek: () => phases.push('second:rollback'),
     })
 
     expect(() =>
@@ -128,5 +146,43 @@ describe('RuntimeEngine', () => {
       ]),
     ).toThrow('not seekable')
     expect(phases).toEqual(['first:validate', 'second:validate', 'first:abort'])
+  })
+
+  it('rolls back every target when commit fails after preparation', () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const phases: string[] = []
+
+    engine.registerInstance('first', () => undefined, {
+      validateSeek: () => phases.push('first:validate'),
+      prepareSeek: () => phases.push('first:prepare'),
+      commitSeek: () => phases.push('first:commit'),
+      presentSeek: () => phases.push('first:present'),
+      rollbackSeek: () => phases.push('first:rollback'),
+    })
+    engine.registerInstance('second', () => undefined, {
+      validateSeek: () => phases.push('second:validate'),
+      prepareSeek: () => phases.push('second:prepare'),
+      commitSeek: () => {
+        phases.push('second:commit')
+        throw new Error('commit failed')
+      },
+      presentSeek: () => phases.push('second:present'),
+      rollbackSeek: () => phases.push('second:rollback'),
+    })
+
+    expect(() => engine.seek([
+      { instanceId: 'first', timeMs: 3000 },
+      { instanceId: 'second', timeMs: 2000 },
+    ])).toThrow('commit failed')
+    expect(phases).toEqual([
+      'first:validate',
+      'second:validate',
+      'first:prepare',
+      'second:prepare',
+      'first:commit',
+      'second:commit',
+      'second:rollback',
+      'first:rollback',
+    ])
   })
 })

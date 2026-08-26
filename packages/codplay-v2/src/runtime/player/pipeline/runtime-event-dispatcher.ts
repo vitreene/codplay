@@ -203,6 +203,7 @@ export class RuntimeEventDispatcher {
       cascade: appended.data.cascade,
       context: appended.data.context,
       meta: appended.data.meta,
+      visibility: appended.data.visibility,
     }
     const execution = await executeListenPipeline({
       rules: selection.rules,

@@ -2,7 +2,7 @@
 
 ## Statut
 
-Status: Fixe pour la fondation composant et la tranche DOM HTML/SVG V2
+Status: Fixe pour la fondation composant et la tranche HTML/DOM V2
 CodPlay version: V2 foundation  
 Review: séparation BaseComponent/BaseHTMLComponent et déclaration locale des services validées le 2026-08-25; JSX, Canvas et Three.js restent hors tranche
 

@@ -12,7 +12,7 @@ pas leur circuit de lecture, leur télécommande ou leur registre.
 ```text
 src/v2/
   layout/                 # cadre responsive, télécommande et journal
-  demos/<demo-id>/        # une démo autonome par dossier
+  demos/<demo-id>/        # une scène seule par dossier
   registry.ts             # métadonnées et chargement différé
   main.ts                 # entrée V2 légère
 
@@ -22,6 +22,12 @@ src/v1/                    # démos historiques et leur circuit V1
 La page publique de cette tranche est `index.html`. Le sélecteur change de démo
 par l'URL ; le module de la démo sélectionnée est chargé dynamiquement. Le
 chargement initial ne compile donc pas toutes les scènes V2.
+
+Chaque `demos/<demo-id>/main.ts` est un module de scène : il construit et
+retourne uniquement le `SceneDoc`. Le layout possède le catalogue runtime, le
+builder, le runner HTML, la télécommande, les logs et le traitement du resize.
+Le registre porte les métadonnées communes (`path`, titre, durée, racine et
+parts montables) utilisées par le layout.
 
 ## Layout commun
 

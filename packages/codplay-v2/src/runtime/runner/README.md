@@ -1,6 +1,6 @@
 # Présentation DOM V2 (runner)
 
-> Statut : Fini — tranche HTML motion et materializer SVG DOM V2
+> Statut : Fini — tranche HTML/DOM motion V2
 > Version CodPlay : V2 foundation
 > Relecture : capture géométrique sans DOM dupliqué et frontières FIRST/LAST validées le 2026-08-25 ; renderer de production hors périmètre
 
@@ -14,9 +14,9 @@ Le runner possède le circuit de présentation HTML. Il ne crée pas de deuxièm
 player, de deuxième scène logique ou de deuxième historique pour animer les
 éléments.
 
-Le point d'entrée SVG réutilise le même circuit structurel. Il sélectionne le
-materializer SVG et refuse une racine qui n'est pas SVG ; il ne crée pas une
-nouvelle histoire structurelle.
+Un composant peut produire des éléments SVG dans son template. Ils sont
+matérialisés par ce même runner HTML/DOM ; aucun point d'entrée ni materializer
+SVG distinct n'est sélectionné.
 
 ## Fonctionnement
 

@@ -144,11 +144,12 @@ function isValidStory(value: unknown): value is CompiledStory {
 /** Checks one relative compiled eventime and all of its nested occurrences. */
 function isValidEventime(value: unknown): boolean {
   return isPlainRecord(value)
-    && hasOnlyKeys(value, ['name', 'startAt', 'data', 'events'])
+    && hasOnlyKeys(value, ['name', 'startAt', 'visibility', 'data', 'events'])
     && typeof value.name === 'string'
     && typeof value.startAt === 'number'
     && Number.isFinite(value.startAt)
     && value.startAt >= 0
+    && (value.visibility === undefined || value.visibility === 'story' || value.visibility === 'scene' || value.visibility === 'public')
     && (value.data === undefined || isCompiledRecord(value.data))
     && (value.events === undefined || Array.isArray(value.events) && value.events.every(isValidEventime))
 }

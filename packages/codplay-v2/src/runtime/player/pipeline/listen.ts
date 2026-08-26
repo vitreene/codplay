@@ -1,5 +1,5 @@
 import { isPlainRecord } from '../../../shared'
-import type { CompiledFunctionCollection } from '../../../scene/compiled'
+import type { CompiledEventime, CompiledFunctionCollection } from '../../../scene/compiled'
 import type { CompiledListenRule, CompiledRecord } from '../../../scene/compiled'
 import { executeStrapsSequentially, type StrapCollection, type StrapExecutionResult } from './strap-executor'
 
@@ -18,6 +18,8 @@ export type ListenEventInput = Readonly<{
   context?: Readonly<Record<string, unknown>>
   /** Opaque runtime metadata preserved across the runtime pipeline. */
   meta?: Readonly<Record<string, unknown>>
+  /** Named visibility retained when the event is observed outside the scene. */
+  visibility?: CompiledEventime['visibility']
 }>
 
 /** Event emitted by a listen rule after transforms and declaration filtering. */

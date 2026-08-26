@@ -31,7 +31,8 @@ Ces limites ne sont pas des ambiguïtés du contrat gelé : elles constituent le
 des tranches ultérieures de V2 ou de V3 selon le statut indiqué ci-dessous.
 
 - migrations de schema et extensions de validation portées par les services ;
-- renderer de production et materializer DOM/SVG final ;
+- renderer de production et extensions de mouvement non couvertes par la
+  tranche HTML/DOM core ;
 - familles de composants supplémentaires et JSX V2.5 ;
 - invalidation et générations obsolètes des straps asynchrones, reportées à V3 ;
 - contrat `live`, renderer continu et composition additive des tweens ;
@@ -93,8 +94,9 @@ extensions correspondantes :
 
 Les marqueurs `Review: required` restants concernent uniquement des extensions non
 engagées : renderer continu, defaults de couleur, composants hybrides, et contrat
-`Behavior/live`. La tranche `img`/`input`/`polygon` et le materializer SVG DOM
-sont maintenant ouverts par le plan de portage dédié.
+`Behavior/live`. La tranche `img`/`input`/`polygon` et le traitement des éléments
+SVG par le materializer HTML/DOM sont maintenant ouverts par le plan de portage
+dédié.
 
 ## Restructuration des frontières — direction validée le 2026-08-24
 

@@ -317,6 +317,43 @@ describe('RuntimePlayer', () => {
     expect(result.diagnostics.errors[0]?.code).toBe('RUNTIME_SEEK_FAILED')
   })
 
+  it('restores the presented scene when materialization fails during seek', () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const materializedTimes: number[] = []
+    let failAtTarget = true
+    const player = new RuntimePlayer(
+      'instance-a',
+      engine,
+      scene,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      {
+        id: 'test:materializer',
+        context: {},
+        materializeComponent: () => ({ destroy: () => undefined }),
+        materializeScene: (solved) => {
+          materializedTimes.push(solved.timeMs)
+          if (failAtTarget && solved.timeMs === 100) throw new Error('materialization failed')
+        },
+      },
+    )
+
+    expect(player.init().ok).toBe(true)
+    const failed = player.seek(100)
+
+    expect(failed.ok).toBe(false)
+    expect(player.getCurrentTimeMs()).toBe(0)
+    expect(player.getSolvedScene()?.timeMs).toBe(0)
+    expect(materializedTimes).toEqual([0, 100, 0])
+
+    failAtTarget = false
+    expect(player.seek(100).ok).toBe(true)
+    expect(player.getCurrentTimeMs()).toBe(100)
+    player.destroy()
+  })
+
   it('aggregates seek diagnostics by instance at the engine boundary', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const invalidScene: CompiledScene = {

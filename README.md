@@ -25,7 +25,7 @@ Réécriture déclarative séparée de V1. La fondation couvre actuellement la c
 
 ### `@codplay/demos` — application de démonstration (`packages/demos`)
 
-Exemples interactifs qui valident les fonctionnalités du moteur et révèlent les pièces manquantes. Chaque démo expose une scène dans un shell commun avec contrôles play/pause/seek.
+Exemples interactifs qui valident les fonctionnalités du moteur et révèlent les pièces manquantes. Chaque démo expose une scène dans un cadre commun avec contrôles play/pause/seek.
 
 Les scènes V1 (`src/v1/scenes/`) servent aussi de fixtures aux tests
 d'intégration. Les démos V2 sont regroupées dans `src/v2/`.

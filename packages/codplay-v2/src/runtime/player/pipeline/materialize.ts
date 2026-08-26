@@ -320,7 +320,7 @@ function getLiveEventsForStory(
 /** Converts one live journal event into the materialize event representation. */
 function toFlattenedLiveEvent(event: RuntimeTrackEvent, trackId: string, trackOrder: number): FlattenedEventime {
   return {
-    event: { name: event.name, startAt: event.applyAtMs, data: event.data },
+    event: { name: event.name, startAt: event.applyAtMs, visibility: event.visibility, data: event.data },
     startAt: event.applyAtMs,
     trackId,
     trackOrder,

@@ -31,6 +31,8 @@ export type RuntimeTrackEvent = Readonly<{
   meta?: Readonly<Record<string, unknown>>
   /** Controls whether the fact enters the current presentation at insertion. */
   mode?: RuntimeEventInsertMode
+  /** Named visibility retained for public event observation. */
+  visibility?: CompiledEventime['visibility']
 }>
 
 /** Input used to append one live event without creating a track. */
@@ -47,14 +49,19 @@ export type AppendRuntimeTrackEventInput = Readonly<{
   context?: Readonly<Record<string, unknown>>
   meta?: Readonly<Record<string, unknown>>
   mode?: RuntimeEventInsertMode
+  visibility?: CompiledEventime['visibility']
 }>
 
 /** Input used to anchor a portable relative eventime tree at runtime. */
 export type AppendAnchoredEventimesInput = Readonly<{
   trackId: string
-  storyId: string
+  storyId?: string
   anchorMs: number
   eventimes: readonly CompiledEventime[]
+  cascade?: boolean
+  mode?: RuntimeEventInsertMode
+  context?: Readonly<Record<string, unknown>>
+  meta?: Readonly<Record<string, unknown>>
 }>
 
 /** Result returned by a runtime track command. */
@@ -162,6 +169,11 @@ export class RuntimeTrackJournal {
         name: event.name,
         applyAtMs: event.applyAtMs,
         data: event.data,
+        cascade: input.cascade,
+        context: input.context,
+        meta: input.meta,
+        mode: input.mode,
+        visibility: event.visibility,
       })
       if (!result.ok) return result
       appended.push(result.data)
@@ -337,10 +349,10 @@ export class RuntimeTrackJournal {
   }
 
   /** Creates a deterministic identifier for one anchored runtime occurrence. */
-  private createGeneratedEventId(trackId: string, storyId: string): string {
+  private createGeneratedEventId(trackId: string, storyId: string | undefined): string {
     const index = this.nextGeneratedEventId
     this.nextGeneratedEventId += 1
-    return `runtime-event:${trackId}:${storyId}:${index}`
+    return `runtime-event:${trackId}:${storyId ?? 'scene'}:${index}`
   }
 
   /** Appends one strap event with a generated runtime identity. */
@@ -390,11 +402,16 @@ export class RuntimeTrackJournal {
 function flattenAnchoredEventimes(
   eventimes: readonly CompiledEventime[],
   parentStartAt: number,
-): readonly Readonly<{ name: string; applyAtMs: number; data?: CompiledRecord }>[] {
+): readonly Readonly<{
+  name: string
+  applyAtMs: number
+  data?: CompiledRecord
+  visibility?: CompiledEventime['visibility']
+}>[] {
   return eventimes.flatMap((eventime) => {
     const applyAtMs = parentStartAt + eventime.startAt
     return [
-      { name: eventime.name, applyAtMs, data: eventime.data },
+      { name: eventime.name, applyAtMs, data: eventime.data, visibility: eventime.visibility },
       ...flattenAnchoredEventimes(eventime.events ?? [], applyAtMs),
     ]
   })

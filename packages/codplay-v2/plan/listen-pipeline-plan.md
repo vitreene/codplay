@@ -21,7 +21,7 @@ RuntimePlayer.emit(event)
     -> transform references
     -> sequential awaited straps
     -> append strap outputs on their declared tracks
-    -> append/reinject declared emits with bounded cascade
+    -> append/reinject declared emits with bounded declared emissions
     -> materializeScene(journal, t)
 
 RuntimePlayer.seek(t)
@@ -46,8 +46,8 @@ RuntimePlayer.seek(t)
 - l'event source est append une seule fois avant l'execution des regles;
 - une story utilise ses regles si le nom correspond; sinon la scene est essayee,
   sans melanger les deux collections;
-- un event `cascade` est stocke sur la track `global` et est materialise pour
-  chaque story;
+- un event de portée `scene` est stocke sur la track globale de la scene et est
+  materialise pour chaque story;
 - seuls les `emit` declares sont reinjectes: la sortie pass-through d'une regle
   sans `emit` ne reboucle pas dans `listen`;
 - une profondeur maximale borne les cycles de declarations;
@@ -77,7 +77,7 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 
 - `src/runtime/player/pipeline/listen.ts` porte les primitives pures;
 - `src/runtime/player/pipeline/runtime-event-dispatcher.ts` porte le routage
-  scene/story, le cascade borne et l'append journal;
+  scene/story, les emissions declarees bornees et l'append journal;
 - `src/runtime/player/runtime-player.ts` expose `emit()` et reconcilie l'etat
   depuis le journal;
 - `HtmlPlayerRunner` partage le journal entre l'hote visible et l'hote de mesure.

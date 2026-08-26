@@ -19,6 +19,7 @@ import type { RuntimeCaptureState } from '../capture'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
 import type { LayoutSnapshot, MotionBoundary } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
+import type { RuntimeTrackEvent } from '../player/pipeline'
 import {
   HtmlComponentMaterializer,
   type HtmlMaterializerRuntimeContext,
@@ -102,6 +103,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
     persoKey: string
     completed: boolean
   }>) => void
+  /** Forwards public eventimes to the enclosing facade without opening another journal. */
+  onPublicEvent?: (event: RuntimeTrackEvent) => void
 }>
 
 /** Generic HTML host with one absolute-time presentation circuit. */
@@ -165,6 +168,8 @@ export class HtmlPlayerRunner {
       materializer,
       componentRuntime,
       options.functions,
+      undefined,
+      options.onPublicEvent,
     )
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
       player: this.player,
@@ -385,6 +390,11 @@ export class HtmlPlayerRunner {
   /** Returns the current logical scene time. */
   getCurrentTimeMs(): number {
     return this.player.getCurrentTimeMs()
+  }
+
+  /** Subscribes transport observers to the player-owned update circuit. */
+  subscribe(listener: () => void): () => void {
+    return this.player.subscribeTransport(listener)
   }
 
   /** Resolves one materialized perso node for diagnostics and adapters. */

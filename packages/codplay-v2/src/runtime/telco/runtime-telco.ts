@@ -4,27 +4,12 @@ import {
   PLAYER_LIFECYCLE_PLAYING,
   type PlayerLifecycleState,
 } from '../config/player-lifecycle'
-import type { FrameScheduler } from '../time'
 import type {
   RuntimeTelco,
   RuntimeTelcoCommandResult,
   RuntimeTelcoOptions,
   RuntimeTelcoState,
 } from './types'
-
-/** Creates the browser scheduler used by the default telco progress observer. */
-function createDefaultScheduler(): FrameScheduler {
-  if (
-    typeof globalThis.requestAnimationFrame !== 'function'
-    || typeof globalThis.cancelAnimationFrame !== 'function'
-  ) {
-    throw new Error('Runtime telco requires requestAnimationFrame and cancelAnimationFrame.')
-  }
-  return {
-    request: (callback) => globalThis.requestAnimationFrame(callback),
-    cancel: (requestId) => globalThis.cancelAnimationFrame(requestId),
-  }
-}
 
 /** Creates one transport facade around an already initialized V2 runtime target. */
 export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
@@ -33,12 +18,12 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   }
 
   const target = options.target
-  const scheduler = options.scheduler ?? createDefaultScheduler()
   const changeListeners = new Set<(state: RuntimeTelcoState) => void>()
   const progressListeners = new Set<(state: RuntimeTelcoState) => void>()
   let commandInFlight = false
   let runtimeRevision = 0
-  let progressRequestId: number | null = null
+  let stopTargetSubscription: (() => void) | null = null
+  let endClampScheduled = false
   let destroyed = false
 
   /** Reads one immutable transport snapshot from the target. */
@@ -63,41 +48,41 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     for (const listener of changeListeners) listener(state)
   }
 
-  /** Schedules one progress observation while the target is playing. */
-  function scheduleProgress(): void {
-    if (destroyed || progressRequestId !== null || progressListeners.size === 0) return
-    if (target.getLifecycleState() !== PLAYER_LIFECYCLE_PLAYING) return
-    progressRequestId = scheduler.request(() => {
-      progressRequestId = null
-      flushProgress()
-    })
-  }
-
-  /** Stops the pending progress observation. */
-  function stopProgress(): void {
-    if (progressRequestId === null) return
-    scheduler.cancel(progressRequestId)
-    progressRequestId = null
-  }
-
-  /** Publishes one progress snapshot and clamps the optional sequence end. */
-  function flushProgress(): void {
+  /** Publishes progress from the target's existing engine/player update. */
+  function publishProgress(): void {
     if (destroyed) return
-    let state = getState()
-    if (state.status === PLAYER_LIFECYCLE_PLAYING && state.sequenceEnded) {
-      target.pause()
-      const seekResult = target.seek(options.durationMs)
-      if (!seekResult.ok) {
-        // Keep the transport usable even when a target rejects the final clamp.
-        state = getState()
-      } else {
-        notifyChange()
-        state = getState()
+    const state = getState()
+    for (const listener of [...progressListeners]) {
+      try {
+        listener(state)
+      } catch {
+        // A remote observer must not interrupt the engine's update circuit.
       }
     }
 
-    for (const listener of progressListeners) listener(state)
-    scheduleProgress()
+    if (state.status !== PLAYER_LIFECYCLE_PLAYING || !state.sequenceEnded || endClampScheduled) return
+    endClampScheduled = true
+    queueMicrotask(() => {
+      endClampScheduled = false
+      if (destroyed) return
+      const current = getState()
+      if (current.status !== PLAYER_LIFECYCLE_PLAYING || !current.sequenceEnded) return
+      target.pause()
+      const seekResult = target.seek(options.durationMs)
+      if (seekResult.ok) notifyChange()
+    })
+  }
+
+  /** Subscribes to the target only while progress listeners exist. */
+  function startProgressObservation(): void {
+    if (destroyed || stopTargetSubscription !== null || progressListeners.size === 0) return
+    stopTargetSubscription = target.subscribe(publishProgress)
+  }
+
+  /** Removes the target subscription when no progress listener remains. */
+  function stopProgressObservation(): void {
+    stopTargetSubscription?.()
+    stopTargetSubscription = null
   }
 
   /** Converts one thrown command error into the public telco result. */
@@ -136,7 +121,6 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     } finally {
       commandInFlight = false
       notifyChange()
-      scheduleProgress()
     }
   }
 
@@ -215,16 +199,16 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
 
     onProgress(listener) {
       progressListeners.add(listener)
-      scheduleProgress()
+      startProgressObservation()
       return () => {
         progressListeners.delete(listener)
-        if (progressListeners.size === 0) stopProgress()
+        if (progressListeners.size === 0) stopProgressObservation()
       }
     },
 
     destroy() {
       destroyed = true
-      stopProgress()
+      stopProgressObservation()
       changeListeners.clear()
       progressListeners.clear()
     },

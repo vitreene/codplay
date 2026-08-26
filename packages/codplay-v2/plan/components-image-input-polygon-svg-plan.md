@@ -1,4 +1,4 @@
-# CodPlay V2 - image, input, polygon et materializer SVG
+# CodPlay V2 - image, input, polygon et materialisation HTML/DOM
 
 ## Statut
 
@@ -17,9 +17,9 @@ La tranche ajoute les trois types core suivants dans le catalogue V2 :
 - `input`, le composant de reponse quiz V1 ;
 - `polygon`, le composant SVG specialise V1.
 
-Elle installe aussi une materialisation SVG partageant le circuit DOM structurel
-de la materialisation HTML. Cette tranche ne modifie pas le runtime V1 et
-n'ouvre pas Canvas, Three.js, Rive ou Flutter.
+Le composant `polygon` produit du balisage SVG, pris en charge par l'unique
+materialisation HTML/DOM. Cette tranche ne modifie pas le runtime V1 et n'ouvre
+pas de materialisation Canvas, Three.js, Rive ou Flutter.
 
 ## Invariants V2
 
@@ -128,21 +128,21 @@ specifiques des composants dans l'etat et fusionne les definitions de parts
 imbriquees ; `InputComponent` ne reconstruit donc pas son etat logique depuis le
 DOM ni depuis un historique d'actions local.
 
-## Materializer SVG
+## SVG dans la materialisation HTML/DOM
 
-`SvgComponentMaterializer` reutilise l'implementation structurelle DOM commune
-au materializer HTML : materialisation de template, collecte de parts,
-enregistrement markup, parentage, ordre, detach et destruction. Sa difference
-contractuelle est l'identifiant `svg` et le controle du namespace SVG de la
-racine.
+`HtmlComponentMaterializer` prend en charge le template SVG de `polygon` comme
+n'importe quel template HTML : materialisation du template, collecte des parts,
+enregistrement markup, parentage, ordre, détachement et destruction. Le parsing
+DOM conserve le namespace SVG réel de la racine et de ses descendants ; aucun
+materializer SVG distinct ni aucun identifiant `svg` n'est introduit.
 
 Les services `attr`, `className`, `style` et `content` sont disponibles pour les
-materializers `html` et `svg`. Les adapters existants savent deja projeter les
-attributs, classes et styles sur les elements SVG ; ils deviennent scopes par
-node pour supporter les parts internes.
+nœuds HTML et SVG via le même materializer HTML/DOM. Les adapters existants
+savent déjà projeter les attributs, classes et styles sur les éléments SVG ; ils
+restent attachés aux nœuds désignés par le composant.
 
-La materialisation SVG reste une materialisation DOM : elle ne constitue pas une
-interface generique pour Canvas ou Three.js.
+Le contexte Three.js éventuel d'un composant spécialisé reste la propriété de ce
+composant et n'est pas créé par le materializer.
 
 ## Composant `polygon`
 

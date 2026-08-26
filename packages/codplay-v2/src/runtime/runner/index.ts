@@ -11,10 +11,6 @@ export {
   type HtmlMaterializerRuntimeContext,
 } from './html-component-materializer'
 export {
-  SvgComponentMaterializer,
-  type SvgComponentMaterializerNodes,
-} from './svg-component-materializer'
-export {
   HTML_ATTR_SERVICE,
   HTML_CLASS_NAME_SERVICE,
   HTML_CONTENT_SERVICE,

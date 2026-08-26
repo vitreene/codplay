@@ -5,6 +5,7 @@ export type DiagnosticSeverity = typeof DIAGNOSTIC_SEVERITY_WARNING | typeof DIA
 
 /** Stable references that help consumers locate one diagnostic. */
 export type DiagnosticRefs = Readonly<{
+  instanceId?: string
   sceneId?: string
   storyId?: string
   persoId?: string

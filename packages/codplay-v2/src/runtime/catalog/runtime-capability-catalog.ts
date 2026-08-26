@@ -28,7 +28,7 @@ import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
 } from '../engine/module-service-types'
-export { HTML_MATERIALIZER_ID, SVG_MATERIALIZER_ID } from '../materializer/materializer-ids'
+export { HTML_MATERIALIZER_ID } from '../materializer/materializer-ids'
 
 /** Origin of one capability definition in a CodPlay instance. */
 export type RuntimeCapabilityOrigin = 'core' | 'foreign'

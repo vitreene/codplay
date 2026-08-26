@@ -18,11 +18,9 @@ progression.
 
 ## Organisation interne
 
-La démo utilise une seule façade telco avec `HtmlPlayerRunner` et un remote de
-contrôle unique. Les boutons de la démo ne possèdent donc pas un circuit de
-pilotage parallèle. Le remote partagé est
-`packages/codplay-v2/demos/shared/telco-remote.ts`; le composant de layout V2 ne
-fait qu'adapter son journal.
+`RuntimeTelco` reçoit une cible de transport déjà initialisée. Il ne connaît ni
+le runner, ni le catalogue, ni le materializer. La façade d'instance l'expose
+comme `instance.telco`, sans créer une seconde cible de commande.
 
 ## Interaction du progress
 
@@ -44,7 +42,6 @@ de second chemin pour `play`, `pause` ou `seek`.
 
 - la telco ne contient ni logique de scène, ni recherche de cibles, ni
   materialization ;
-- elle n'implémente pas encore de transport distant ;
+- elle n'implémente pas de transport distant ;
 - `rate` est transmis par la même façade et ne modifie pas la position logique ;
-- la façade est utilisable par les démos, l'authoring et les materializers qui
-  ont besoin d'un transport V2.
+- elle est utilisable par tout consommateur V2 qui a besoin d'un transport.

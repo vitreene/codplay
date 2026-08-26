@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Référentiel historique — tranche DOM HTML/SVG V2 relue
+Status: Référentiel historique — tranche HTML/DOM V2 relue
 CodPlay version: V2 foundation  
-Review: conclusions intégrées au contrat des parts DOM HTML/SVG le 2026-08-24; Canvas/Three.js restent hors tranche
+Review: conclusions intégrées au contrat des parts HTML/DOM le 2026-08-24 ; les éléments SVG relèvent du même DOM ; Canvas/Three.js restent hors tranche
 
 ## Perimetre
 
@@ -19,7 +19,7 @@ utilisent la meme base.
 | `tag` | aucune | non | non | racine simple |
 | `text` | aucune | non | non | racine simple |
 | `list` | enfants geres par le placement | non | non | racine simple |
-| `layout` | parts du markup auteur | oui | oui | parser HTML/SVG |
+| `layout` | parts du markup auteur | oui | oui | parser HTML/DOM, SVG compris |
 | `input` | controle, label, icons, hint | oui | oui, icons | template injecte apres creation de la racine |
 | `media` | video active | non, `setPart` direct | non | nodes media persistants |
 | `img` | image active | non, `setPart` direct | non | nodes image persistants |

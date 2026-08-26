@@ -31,7 +31,7 @@ export type HtmlComponentMaterializerNodes = Readonly<{
 
 /** Materializes V2 components and exposes their selected outlet parts. */
 export class HtmlComponentMaterializer implements RuntimeMaterializer {
-  readonly id: string
+  readonly id = HTML_MATERIALIZER_ID
   readonly context: HtmlMaterializerRuntimeContext
   private readonly nodes: HtmlComponentMaterializerNodes
   private mountedPersos = new Set<string>()
@@ -42,11 +42,9 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
   constructor(
     nodes: HtmlComponentMaterializerNodes,
     context: HtmlMaterializerRuntimeContext = { numericLengthScale: 1 },
-    materializerId: string = HTML_MATERIALIZER_ID,
   ) {
     this.nodes = nodes
     this.context = context
-    this.id = materializerId
   }
 
   /** Creates one DOM component instance and its deterministic cleanup action. */

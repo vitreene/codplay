@@ -49,6 +49,38 @@ enregistrer les URLs disponibles dans leur engine avant d'initialiser ou
 remplacer leurs instances. La façade `run` n'est qu'un raccourci de diffusion
 autonome ; elle ne redéfinit pas le contrat de `RuntimePreload`.
 
+### Accès public final
+
+La façade CodPlay expose le service sans le rattacher à une instance :
+
+```ts
+codplay.preload.create(options?: CodPlayPreloadOptions): RuntimePreloadApi
+```
+
+`RuntimePreloadApi` est la forme publique unique :
+
+```ts
+type CodPlayPreloadOptions = Readonly<{
+  cache?: RuntimePreloadCacheApi
+  strategies?: Readonly<Record<string, RuntimePreloadStrategy>>
+}>
+
+type RuntimePreloadApi = {
+  readonly state: RuntimePreloadState
+  load(input: {
+    manifest: RuntimePreloadManifestInput
+    options?: RuntimePreloadOptions
+  }): Promise<RuntimePreloadResult>
+  cancel(): void
+  release(urls: readonly string[]): void
+  registerStrategy(type: string, strategy: RuntimePreloadStrategy): void
+}
+```
+
+`codplay.preload.create` ne crée pas de singleton caché. Le cache est fourni par
+l'hôte ou créé pour le service retourné, puis partagé explicitement si besoin.
+Il n'existe ni `instance.preload()` ni preload implicite dans `init()`.
+
 ## Cache partagé
 
 Le cache est possédé par l'engine ou fourni par l'hôte. Une entrée en cours de

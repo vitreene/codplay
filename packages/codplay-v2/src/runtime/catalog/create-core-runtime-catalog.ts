@@ -128,7 +128,7 @@ const coreListDefinition: RuntimeComponentDefinition = {
   sanitizeInitial: sanitizeListInitial,
 }
 
-/** Creates the core V2 polygon declaration projected through the SVG materializer. */
+/** Creates the core V2 polygon declaration projected to SVG nodes by the HTML materializer. */
 const corePolygonDefinition: RuntimeComponentDefinition = {
   type: 'polygon',
   component: PolygonComponent,

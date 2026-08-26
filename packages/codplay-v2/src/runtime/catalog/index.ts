@@ -1,6 +1,5 @@
 export {
   HTML_MATERIALIZER_ID,
-  SVG_MATERIALIZER_ID,
   RuntimeCapabilityCatalog,
 } from './runtime-capability-catalog'
 export { createCoreRuntimeCatalog } from './create-core-runtime-catalog'

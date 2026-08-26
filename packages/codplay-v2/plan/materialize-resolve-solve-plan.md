@@ -57,8 +57,10 @@ La table `perso.actions` est entièrement déclarée dans `CompiledScene` : le
 runtime ne crée pas d'action. Un event ou une capture sélectionne une clé
 existante et peut seulement lui fournir un payload dynamique selon la policy de
 fusion prévue.
-Les events globaux marques `cascade` sont inclus dans la materialisation de chaque
-story; les events locaux restent limites a leur story. Les outputs de straps et les
+Les events de portée `scene` sont inclus dans la materialisation de chaque story;
+les events de portée `story` restent limites a leur story. Les events de portée
+`public` sortent de la scene vers l'hote selon le contrat de visibilité, sans
+déclencher de communication scene-vers-scene. Les outputs de straps et les
 patches d'etat suivent exactement la meme selection de journal.
 
 ## Resolve

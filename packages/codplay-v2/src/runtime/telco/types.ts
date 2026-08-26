@@ -1,5 +1,4 @@
 import type { PlayerLifecycleState } from '../config/player-lifecycle'
-import type { FrameScheduler } from '../time'
 
 /** Result returned by one local transport command. */
 export type RuntimeTelcoCommandResult =
@@ -22,6 +21,7 @@ export type RuntimeTransportTarget = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   getCurrentTimeMs: () => number
   getRate: () => number
+  subscribe: (listener: () => void) => () => void
   play: () => void
   pause: () => void
   setRate: (rate: number) => void
@@ -32,7 +32,6 @@ export type RuntimeTransportTarget = Readonly<{
 export type RuntimeTelcoOptions = Readonly<{
   target: RuntimeTransportTarget
   durationMs: number
-  scheduler?: FrameScheduler
 }>
 
 /** Local transport facade used by an authoring or validation remote. */

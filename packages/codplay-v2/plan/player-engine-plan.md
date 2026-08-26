@@ -44,9 +44,12 @@ Une instance possede :
 - un lifecycle `idle -> ready -> playing <-> paused -> destroyed`;
 - un temps logique avance par l'engine.
 
-`seek` positionne le temps logique sans rejouer les straps ni les effets et retourne
-un resultat structure avec `ok`, `timeMs` et `diagnostics`. La reconstruction des
-persos appartient aux tranches materialize/resolve/solve.
+`seek` positionne le temps logique sans rejouer les straps ni les effets. Les
+erreurs et anomalies de l'opération passent par le `DiagnosticCollector` de
+l'engine ou du player : `error` bloque la présentation, `warning` permet de
+continuer lorsque la règle le permet. Le seek ne renvoie pas d'enveloppe
+`{ ok: false }`. La reconstruction des persos appartient aux tranches
+materialize/resolve/solve.
 
 `RuntimePlayer.emit()` est l'entree live unique. Il append l'event et les sorties
 du dispatcher dans le `RuntimeTrackJournal`, puis reconstruit l'etat courant.
@@ -68,9 +71,10 @@ elle n'est pas une consequence du nom `seek(3000)`.
 Le seek V2 reste synchrone. Une future disponibilite asynchrone devra bloquer ou mettre en attente
 la portee entiere, jamais presenter un sous-ensemble reconstruit.
 
-`RuntimeEngine.seek()` retourne egalement un rapport par instance apres la validation du groupe et
-le commit de presentation. Sighty peut donc agreger ou router les diagnostics sans que CodPlay
-interprete sa portee ni sa timeline globale.
+`RuntimeEngine.seek()` collecte les diagnostics par instance après la validation
+du groupe et le commit de présentation, puis les publie par la sortie de
+diagnostics prévue. Sighty peut donc agréger ou router ces diagnostics sans que
+CodPlay interprète sa portée ni sa timeline globale.
 
 La premiere frontiere engine est en place : `RuntimeEngine.seek()` orchestre les cibles locales par
 phases `validateSeek`, `prepareSeek`, `commitSeek` puis `presentSeek`. Le player individuel utilise

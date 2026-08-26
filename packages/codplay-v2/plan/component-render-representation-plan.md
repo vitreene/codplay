@@ -2,9 +2,9 @@
 
 ## Statut
 
-Status: Fixe pour les tranches HTML et SVG DOM V2
+Status: Fixe pour la materialisation HTML/DOM V2
 CodPlay version: V2 foundation  
-Review: interface RuntimeMaterializer unifiée, tranche HTML et materializer SVG relus le 2026-08-24
+Review: frontière HTML/DOM et composants à contexte interne relus le 2026-08-26
 
 ## Contrat auteur
 
@@ -24,16 +24,17 @@ méthode `render()` et recoit les etats resolus; il cible uniquement le
 `Materializer`, jamais le DOM directement. `BaseComponent` reste la base
 substrat-neutre et n'impose pas de rendu markup.
 
-Le `Materializer` est l'interface de rendu vers un substrat. Une implementation
-DOM, Canvas ou Three.js recoit le resultat de `render()` et les mises a jour du
-composant, cree ou met a jour ses ressources et conserve les references necessaires
-vers le substrat. Le cycle de vie runtime declenche ensuite leur retrait ; le
-materializer execute le nettoyage prevu par ce cycle. Le composant ne connait pas
-l'implementation choisie.
+Le `Materializer` est ici la frontière interne de materialisation HTML/DOM. Il
+reçoit le résultat de `render()` et les mises à jour du composant, crée ou met à
+jour les nœuds DOM et conserve les références nécessaires. Le cycle de vie
+runtime déclenche ensuite leur retrait ; le materializer exécute le nettoyage
+prévu par ce cycle. Le composant ne connaît pas les détails DOM.
 
-`HtmlComponentMaterializer` et `SvgComponentMaterializer` sont les
-implementations DOM actuelles de cette frontiere. Le materializer SVG reutilise
-le circuit structurel commun et impose une racine SVG reelle.
+`HtmlComponentMaterializer` est l'unique implementation de cette frontière.
+Un template peut contenir une racine SVG : elle est alors créée dans le
+namespace SVG par le parsing HTML du template, mais elle reste une partie de la
+materialisation HTML/DOM. Il n'existe pas de `SvgComponentMaterializer` ni de
+sélection de materializer SVG.
 Elle expose à la fois la materialisation d'un composant et la materialisation
 structurelle d'une scène ; aucune interface structurelle distincte ou catalogue
 local parallèle n'est utilisé. Le composant déclare les services abstraits qu'il
@@ -68,9 +69,10 @@ BaseHTMLComponent.render()
   -> creation du DOM et conservation des references vers les nœuds internes
 ```
 
-La politique de lecture et d'assainissement appartient au materializer et a ses
-services. Elle valide les balises et attributs autorises, conserve les marqueurs
-structurels internes et traite le namespace SVG dans la materialisation SVG.
+La politique de lecture et d'assainissement appartient au materializer et à ses
+services. Elle valide les balises et attributs autorisés, conserve les marqueurs
+structurels internes et laisse le parsing DOM établir le namespace SVG des
+éléments SVG présents dans le template.
 
 ### Materialisation initiale
 
@@ -84,9 +86,9 @@ template string + mount target
   -> references internes vers les nœuds désignés
 ```
 
-Les appels DOM, Canvas ou Three.js sont internes a l'implementation du materializer.
-Le composant ne connait ni `createElement`, ni `createElementNS`, ni la structure
-des ressources produites.
+Les appels DOM sont internes à l'implementation du materializer. Le composant ne
+connaît ni `createElement`, ni `createElementNS`, ni la structure des ressources
+produites.
 
 Le materializer ne preclasse pas les proprietes SVG. Une propriete SVG generique
 est partagee uniquement lorsqu'un service existant la couvre ; une propriete ou
@@ -208,7 +210,7 @@ class LayoutComponent extends BaseHTMLComponent {
 Le template peut contenir ses marqueurs structurels internes :
 
 ```html
-<section class="shell">
+<section class="layout-frame">
   <main data-part="content"></main>
 </section>
 ```
@@ -231,7 +233,7 @@ La chaine de mutation est :
 SolvedPerso.state
   -> Component.update(state, time)
   -> Materializer
-  -> substrat DOM/SVG/Canvas/Three.js
+  -> nœuds HTML/DOM (y compris les nœuds SVG)
 ```
 
 Le composant peut declarer ou demander les changements d'etat prevus par ses
@@ -242,9 +244,9 @@ standard du composant.
 
 La reference de materialisation reste une cible d'application :
 
-`PersoState(t) -> Component.update(state, t) -> Materializer -> substrat`
+`PersoState(t) -> Component.update(state, t) -> Materializer HTML/DOM -> nœuds DOM`
 
-La materialisation ne doit pas lire le substrat pour reconstruire `PersoState(t)`
+La materialisation ne doit pas lire le DOM pour reconstruire `PersoState(t)`
 ni dependre d'une accumulation de mutations precedentes.
 
 ## Move et FLIP
@@ -352,9 +354,10 @@ Au seek, l'étape de présentation transitoire est committée directement à `t`
 animation ni rejeu d'une transition passée. À `LAST`, les slots et ressources
 transitoires sont retirés ; la materialisation auteur reste la seule représentation.
 
-Ce contrat est limité aux materializers DOM HTML/SVG et aux moves HTML compiles.
-Il ne fixe pas encore une interface générique pour Canvas ou Three.js, ni le
-runtime JSX.
+Ce contrat est limité à la materialisation HTML/DOM et aux moves HTML compilés.
+Canvas et Three.js peuvent exister comme contexte interne d'un composant attaché
+à un nœud HTML, mais ne sont pas des materializers CodPlay ni des options de la
+façade. Le runtime JSX reste hors contrat.
 
 ## Hors contrat actuel
 

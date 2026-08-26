@@ -7,39 +7,13 @@ import {
   type PlayerLifecycleState,
 } from '../../../src/runtime/player'
 import { createRuntimeTelco } from '../../../src/runtime/telco'
-import type { FrameScheduler } from '../../../src/runtime/time'
-
-class FakeScheduler implements FrameScheduler {
-  private nextRequestId = 0
-  private readonly callbacks = new Map<number, () => void>()
-
-  /** Queues one deterministic progress callback. */
-  request(callback: () => void): number {
-    const requestId = this.nextRequestId
-    this.nextRequestId += 1
-    this.callbacks.set(requestId, callback)
-    return requestId
-  }
-
-  /** Removes one queued progress callback. */
-  cancel(requestId: number): void {
-    this.callbacks.delete(requestId)
-  }
-
-  /** Flushes the next queued progress callback. */
-  flush(): void {
-    const entry = this.callbacks.entries().next().value as [number, () => void] | undefined
-    if (entry === undefined) return
-    this.callbacks.delete(entry[0])
-    entry[1]()
-  }
-}
 
 class FakeTransportTarget {
   status: PlayerLifecycleState = PLAYER_LIFECYCLE_READY
   timeMs = 0
   rate = 1
   readonly calls: string[] = []
+  private readonly listeners = new Set<() => void>()
 
   /** Returns the fake lifecycle state. */
   getLifecycleState(): PlayerLifecycleState {
@@ -54,6 +28,17 @@ class FakeTransportTarget {
   /** Returns the fake playback rate. */
   getRate(): number {
     return this.rate
+  }
+
+  /** Subscribes to deterministic fake transport updates. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+
+  /** Publishes one deterministic fake transport update. */
+  notify(): void {
+    for (const listener of [...this.listeners]) listener()
   }
 
   /** Starts fake playback. */
@@ -78,6 +63,7 @@ class FakeTransportTarget {
   seek(timeMs: number): Readonly<{ ok: boolean }> {
     this.calls.push(`seek:${timeMs}`)
     this.timeMs = timeMs
+    this.notify()
     return { ok: true }
   }
 }
@@ -85,14 +71,13 @@ class FakeTransportTarget {
 describe('Runtime telco', () => {
   it('delegates transport commands and publishes progress', async () => {
     const target = new FakeTransportTarget()
-    const scheduler = new FakeScheduler()
-    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler })
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
     const progress: number[] = []
     telco.onProgress((state) => progress.push(state.timelineMs))
 
     expect((await telco.play()).ok).toBe(true)
     target.timeMs = 240
-    scheduler.flush()
+    target.notify()
 
     expect(target.calls).toEqual(['play'])
     expect(progress).toEqual([240])
@@ -106,7 +91,7 @@ describe('Runtime telco', () => {
 
   it('pauses before seek and rewinds through the same command surface', async () => {
     const target = new FakeTransportTarget()
-    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
 
     await telco.play()
     await telco.seek(480)
@@ -121,7 +106,7 @@ describe('Runtime telco', () => {
 
   it('toggles play and pause through the same command facade', async () => {
     const target = new FakeTransportTarget()
-    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
 
     expect((await telco.togglePlay()).ok).toBe(true)
     expect(target.status).toBe(PLAYER_LIFECYCLE_PLAYING)
@@ -134,7 +119,7 @@ describe('Runtime telco', () => {
 
   it('allows seeking from the initialized ready state', async () => {
     const target = new FakeTransportTarget()
-    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
 
     expect((await telco.seek(320)).ok).toBe(true)
     expect(target.calls).toEqual(['seek:320'])
@@ -145,7 +130,7 @@ describe('Runtime telco', () => {
 
   it('exposes the playback rate through the same facade', () => {
     const target = new FakeTransportTarget()
-    const telco = createRuntimeTelco({ target, durationMs: 1000, scheduler: new FakeScheduler() })
+    const telco = createRuntimeTelco({ target, durationMs: 1000 })
 
     telco.setRate(2)
 
@@ -157,13 +142,13 @@ describe('Runtime telco', () => {
 
   it('clamps the sequence end and stops the target at the telco duration', async () => {
     const target = new FakeTransportTarget()
-    const scheduler = new FakeScheduler()
-    const telco = createRuntimeTelco({ target, durationMs: 600, scheduler })
+    const telco = createRuntimeTelco({ target, durationMs: 600 })
     telco.onProgress(() => undefined)
 
     await telco.play()
     target.timeMs = 720
-    scheduler.flush()
+    target.notify()
+    await Promise.resolve()
 
     expect(target.status).toBe(PLAYER_LIFECYCLE_PAUSED)
     expect(target.timeMs).toBe(600)

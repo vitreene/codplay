@@ -14,7 +14,7 @@ import {
   type PolygonState,
 } from './polygon-types'
 
-/** Polygon part identifiers retained by the SVG materializer. */
+/** Polygon part identifiers retained by the HTML materializer. */
 const PART = { path: 'path', content: 'content' } as const
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
@@ -30,7 +30,7 @@ type ActiveMorph = Readonly<{
   key: string
 }>
 
-/** V2 polygon component projected through an SVG-capable DOM materializer. */
+/** V2 polygon component projected to SVG nodes by the HTML materializer. */
 export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
   /** Services declared by the component author, in application order. */
   static readonly declaredServices = ['className', 'style', 'attr', 'content'] as const
@@ -46,7 +46,7 @@ export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
     this.services.declare(PolygonComponent.declaredServices)
   }
 
-  /** Returns the complete SVG representation consumed by SvgComponentMaterializer. */
+  /** Returns the complete SVG markup consumed by the HTML materializer. */
   render(): string {
     return `
       <svg viewBox="0 0 100 100" xmlns="${SVG_NAMESPACE}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">

@@ -35,6 +35,8 @@ export type InstanceSeekParticipant = Readonly<{
   prepareSeek: () => void
   commitSeek: (timeMs: number) => void
   presentSeek: () => void
+  /** Restores the participant after a commit or presentation failure. */
+  rollbackSeek: () => void
 }>
 
 /** Reports returned for each instance after one grouped seek. */
@@ -58,6 +60,10 @@ export class RuntimeEngine {
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
+  private paused = false
+  private stopped = false
+  private destroyed = false
+  private clockMode: 'idle' | 'ticker' | 'external' = 'idle'
 
   /** Creates one engine around the CodPlay-owned capability catalog. */
   constructor(catalog: RuntimeCapabilityCatalog, options: RuntimeEngineOptions = {}) {
@@ -67,6 +73,7 @@ export class RuntimeEngine {
 
   /** Marks resources as available after an external preload operation completes. */
   registerResources(resources: readonly string[]): void {
+    this.assertUsable()
     for (const resource of resources) this.resources.add(resource)
   }
 
@@ -80,6 +87,7 @@ export class RuntimeEngine {
 
   /** Registers one player callback in deterministic registration order. */
   registerInstance(id: string, onFrame: InstanceTick, seekParticipant?: InstanceSeekParticipant): void {
+    this.assertUsable()
     if (this.instances.has(id)) {
       throw new Error(`Runtime instance already registered: ${id}`)
     }
@@ -109,6 +117,10 @@ export class RuntimeEngine {
 
   /** Advances all registered instances from one externally supplied timestamp. */
   advance(nowMs: number, marginMs = 0): void {
+    this.assertUsable()
+    if (this.clockMode === 'ticker' && this.ticker?.isRunning()) {
+      throw new Error('External engine frames cannot be used while an engine ticker is active.')
+    }
     if (!Number.isFinite(nowMs)) {
       throw new Error('Engine time must be finite.')
     }
@@ -116,25 +128,71 @@ export class RuntimeEngine {
     if (deltaMs < 0) {
       throw new Error('Engine time must be monotonic.')
     }
+    if (this.stopped) {
+      this.lastNowMs = nowMs
+      return
+    }
+    // A ticker that has already stopped no longer owns the clock. This keeps
+    // the external-frame boundary usable for hosts that explicitly take over
+    // after stopping the previous source.
+    if (this.clockMode === 'ticker') {
+      this.running = false
+      this.ticker = null
+    }
+    this.clockMode = 'external'
     const prevMs = this.lastNowMs ?? nowMs
+    if (this.paused) {
+      this.lastNowMs = nowMs
+      return
+    }
     this.dispatchFrame({ prevMs, nowMs, deltaMs, marginMs })
   }
 
   /** Starts the shared ticker and routes accepted frames to all players. */
-  start(ticker: Ticker = new TimeTicker()): void {
+  start(ticker?: Ticker): void {
+    this.assertUsable()
     if (this.running) return
-    this.ticker = ticker
+    if (this.clockMode === 'external') {
+      if (ticker !== undefined) {
+        throw new Error('An engine driven by external frames cannot start an owned ticker.')
+      }
+      this.stopped = false
+      this.paused = false
+      return
+    }
+    this.stopped = false
+    this.clockMode = 'ticker'
+    this.ticker = ticker ?? this.ticker ?? new TimeTicker()
+    this.paused = false
     this.running = true
-    ticker.start((payload) => this.advanceTick(payload))
+    this.ticker.start((payload) => this.advanceTick(payload))
   }
 
   /** Stops the shared ticker and resets the next engine frame baseline. */
   stop(): void {
-    if (!this.running) return
+    if (this.destroyed) return
     this.running = false
     this.ticker?.stop()
     this.ticker = null
     this.lastNowMs = undefined
+    this.paused = false
+    this.stopped = true
+  }
+
+  /** Suspends propagation while retaining the logical state of every instance. */
+  pause(): void {
+    this.assertUsable()
+    this.stopped = false
+    this.paused = true
+    if (this.running) {
+      this.running = false
+      this.ticker?.stop()
+    }
+  }
+
+  /** Returns whether frame propagation is currently suspended. */
+  isPaused(): boolean {
+    return this.paused
   }
 
   /** Returns whether this engine currently owns a running ticker. */
@@ -149,6 +207,7 @@ export class RuntimeEngine {
 
   /** Reconstructs a selected group and presents all local seek targets once. */
   seek(targets: readonly EngineSeekTarget[]): EngineSeekResult {
+    this.assertUsable()
     if (targets.length === 0) {
       throw new Error('Engine seek requires at least one target.')
     }
@@ -170,11 +229,11 @@ export class RuntimeEngine {
     const validated: Array<{ participant: InstanceSeekParticipant }> = []
     try {
       for (const { target, participant } of participants) {
-        participant.validateSeek(target.timeMs)
         validated.push({ participant })
+        participant.validateSeek(target.timeMs)
       }
     } catch (error) {
-      for (const { participant } of validated.reverse()) participant.abortSeek?.()
+      abortSeekParticipants(validated)
       throw error
     }
     const diagnostics = Object.fromEntries(
@@ -183,14 +242,32 @@ export class RuntimeEngine {
         participant.getSeekDiagnostics?.() ?? emptyDiagnosticReport(),
       ]),
     )
-    for (const { participant } of participants) participant.prepareSeek()
-    for (const { target, participant } of participants) participant.commitSeek(target.timeMs)
-    for (const { participant } of participants) participant.presentSeek()
+    const prepared: Array<{ participant: InstanceSeekParticipant }> = []
+    try {
+      for (const { participant } of participants) {
+        prepared.push({ participant })
+        participant.prepareSeek()
+      }
+    } catch (error) {
+      abortSeekParticipants(prepared)
+      throw error
+    }
+    try {
+      for (const { target, participant } of participants) participant.commitSeek(target.timeMs)
+      for (const { participant } of participants) participant.presentSeek()
+    } catch (error) {
+      rollbackSeekParticipants(participants)
+      throw error
+    }
     return { ok: true, diagnostics }
   }
 
   /** Accepts one ticker payload without recomputing its measured delta. */
   private advanceTick(payload: TickPayload): void {
+    this.assertUsable()
+    if (this.clockMode !== 'ticker') {
+      throw new Error('Owned ticker frame received while the engine is not in ticker mode.')
+    }
     if (!Number.isFinite(payload.prevMs) || !Number.isFinite(payload.nowMs) || !Number.isFinite(payload.deltaMs)) {
       throw new Error('Ticker frame time must be finite.')
     }
@@ -199,6 +276,10 @@ export class RuntimeEngine {
     }
     if (this.lastNowMs !== undefined && payload.nowMs < this.lastNowMs) {
       throw new Error('Engine time must be monotonic.')
+    }
+    if (this.paused) {
+      this.lastNowMs = payload.nowMs
+      return
     }
     this.dispatchFrame(payload)
   }
@@ -210,9 +291,49 @@ export class RuntimeEngine {
       instance.onFrame(frame)
     }
   }
+
+  /** Releases the shared ticker, instance registrations, and resource index. */
+  destroy(): void {
+    if (this.destroyed) return
+    this.stop()
+    this.instances.clear()
+    this.resources.clear()
+    this.destroyed = true
+  }
+
+  /** Rejects operations after the engine-owned runtime has been destroyed. */
+  private assertUsable(): void {
+    if (this.destroyed) throw new Error('Runtime engine has been destroyed.')
+  }
 }
 
 /** Provides a stable empty report for participants without diagnostic output. */
 function emptyDiagnosticReport(): DiagnosticReport {
   return { all: [], warnings: [], errors: [] }
+}
+
+/** Aborts every staged participant while preserving the original seek error. */
+function abortSeekParticipants(
+  participants: readonly { participant: InstanceSeekParticipant }[],
+): void {
+  for (const { participant } of [...participants].reverse()) {
+    try {
+      participant.abortSeek?.()
+    } catch {
+      // Cleanup must not replace the validation or preparation failure.
+    }
+  }
+}
+
+/** Rolls back every participant after a grouped commit or presentation failure. */
+function rollbackSeekParticipants(
+  participants: readonly { participant: InstanceSeekParticipant }[],
+): void {
+  for (const { participant } of [...participants].reverse()) {
+    try {
+      participant.rollbackSeek()
+    } catch {
+      // The original transaction error remains the diagnostic reported to the host.
+    }
+  }
 }

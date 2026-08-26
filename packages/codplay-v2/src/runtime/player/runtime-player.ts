@@ -1,17 +1,19 @@
-import type { DiagnosticReport } from '../../diagnostics'
+import type { DiagnosticOutput, DiagnosticReport } from '../../diagnostics'
 import { DiagnosticCollector } from '../../diagnostics'
 import type {
   CompiledFunctionCollection,
   CompiledRecord,
+  CompiledEventime,
   CompiledScene,
 } from '../../scene/compiled'
+import { cloneRecord } from '../../shared'
 import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
   type RuntimeModuleServiceInstance,
   type RuntimeModuleServiceSeekHandle,
 } from '../engine'
-import { diffSolvedScenes } from '../move'
+import { diffSolvedScenes, type MoveStateDelta } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
   PLAYER_LIFECYCLE_IDLE,
@@ -22,6 +24,7 @@ import {
 } from '../config/player-lifecycle'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 import { EVENT_INSERT_MODE_PERSIST_ONLY } from '../config/event-insertion'
+import { TRACK_GLOBAL_ID } from '../config/track'
 import { RenderSync } from './render-sync'
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
@@ -61,11 +64,17 @@ import {
   type SolvedScene,
   type MountTargetDeclaration,
   type RuntimeEventDispatchResult,
+  type RuntimeTrackEvent,
   type StrapCollections,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
 import { StructuralTimeline } from './structural-timeline'
 import { reconstructPlayerScene } from './scene'
+import {
+  type RuntimePlayerEventime,
+  type RuntimePlayerEventimeAddress,
+  type RuntimePlayerEventimeResult,
+} from './eventime'
 import {
   abortPendingModuleSeek,
   initializeModuleServices,
@@ -90,6 +99,17 @@ export type PlayerSeekResult = Readonly<
   | { ok: true; timeMs: number; diagnostics: DiagnosticReport }
   | { ok: false; timeMs: number; diagnostics: DiagnosticReport }
 >
+
+/** State retained while one player participates in a grouped seek transaction. */
+type RuntimePlayerSeekTransaction = {
+  previousSolvedScene: SolvedScene | undefined
+  previousTimeMs: number
+  previousIncludePersistOnly: boolean
+  previousSkipNextDelta: boolean
+  moveDeltas: readonly MoveStateDelta[]
+  preparedInstances: ReadonlySet<RuntimeModuleServiceInstance>
+  committed: boolean
+}
 
 /** One compiled-scene runtime instance with one optional materializer boundary. */
 export class RuntimePlayer {
@@ -120,12 +140,17 @@ export class RuntimePlayer {
     instance: RuntimeModuleServiceInstance
     handle: RuntimeModuleServiceSeekHandle
   }> = []
+  private seekTransaction: RuntimePlayerSeekTransaction | undefined
   private readonly captureSessions = new Map<string, RuntimeCaptureSessionEntry>()
   private readonly activeCaptureActions = new Map<string, ActiveCaptureAction>()
   private readonly liveCaptureStateUpdates = new Map<string, CompiledRecord>()
   private liveCapturePersoKeys = new Set<string>()
   private readonly compiledCaptureActionTargets: ReadonlyMap<string, readonly CaptureActionTarget[]>
   private nextRuntimeEventId = 0
+  private readonly diagnosticOutput: DiagnosticOutput | undefined
+  private readonly publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  private readonly observedPublicEventIds = new Set<string>()
+  private readonly transportListeners = new Set<() => void>()
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -139,6 +164,8 @@ export class RuntimePlayer {
     materializer?: RuntimeMaterializer,
     componentRuntime?: RuntimeComponentRuntime,
     functions: CompiledFunctionCollection = {},
+    diagnosticOutput?: DiagnosticOutput,
+    publicEventListener?: (event: RuntimeTrackEvent) => void,
   ) {
     this.id = id
     this.engine = engine
@@ -152,6 +179,8 @@ export class RuntimePlayer {
     this.componentRuntime = componentRuntime
     this.stateStore = new RuntimeStateStore(compiledScene)
     this.compiledCaptureActionTargets = indexCompiledCaptureActionTargets(compiledScene)
+    this.diagnosticOutput = diagnosticOutput
+    this.publicEventListener = publicEventListener
   }
 
   /** Returns the current lifecycle state. */
@@ -162,6 +191,12 @@ export class RuntimePlayer {
   /** Returns the logical time advanced by the engine or set by seek. */
   getCurrentTimeMs(): number {
     return this.currentTimeMs
+  }
+
+  /** Subscribes to logical position updates produced by the shared engine circuit. */
+  subscribeTransport(listener: () => void): () => void {
+    this.transportListeners.add(listener)
+    return () => { this.transportListeners.delete(listener) }
   }
 
   /** Returns the currently presented solved scene for a host transaction. */
@@ -201,7 +236,7 @@ export class RuntimePlayer {
 
   /** Validates capabilities and attaches this player to the shared engine. */
   init(): PlayerInitResult {
-    const diagnostics = new DiagnosticCollector()
+    const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
     if (this.state !== PLAYER_LIFECYCLE_IDLE) {
       diagnostics.error('RUNTIME_PLAYER_STATE_INVALID', 'Player can only be initialized from idle state.', {
         context: { state: this.state },
@@ -242,36 +277,56 @@ export class RuntimePlayer {
     this.engine.registerInstance(this.id, (frame) => this.onEngineFrame(frame), {
       validateSeek: (timeMs) => this.validateSeek(timeMs),
       getSeekDiagnostics: () => this.pendingSeekDiagnostics,
-      abortSeek: () => abortPendingModuleSeek(this.pendingModuleSeekHandles),
+      abortSeek: () => this.abortSeekTransaction(),
       prepareSeek: () => this.renderSync.prepareSeek(),
       commitSeek: (timeMs) => {
         if (this.pendingSolvedScene === undefined || this.pendingSolvedScene.timeMs !== timeMs) {
           throw new Error('Player seek reconstruction is missing.')
         }
-        const previousSolvedScene = this.solvedScene
+        const transaction = this.seekTransaction
+        if (transaction === undefined) throw new Error('Player seek transaction is missing.')
+        const previousSolvedScene = transaction.previousSolvedScene
         const moveDeltas = previousSolvedScene === undefined
           ? []
           : diffSolvedScenes(previousSolvedScene, this.pendingSolvedScene)
+        const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
         if (this.pendingModuleSeekHandles.length > 0) {
-          const preparedInstances = new Set(this.pendingModuleSeekHandles.map((entry) => entry.instance))
           for (const { handle } of this.pendingModuleSeekHandles) handle.commit()
-          notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, this.pendingSolvedScene, preparedInstances, moveDeltas)
-          this.pendingModuleSeekHandles = []
-        } else {
-          notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, this.pendingSolvedScene, new Set(), moveDeltas)
         }
         this.solvedScene = this.pendingSolvedScene
         this.includePersistOnlyInCurrent = true
         this.synchronizeStateStoreFromScene(this.solvedScene)
-        this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
-        this.pendingSolvedScene = undefined
-        this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
         this.currentTimeMs = timeMs
         this.skipNextDelta = true
+        transaction.moveDeltas = moveDeltas
+        transaction.preparedInstances = preparedInstances
+        transaction.committed = true
       },
       presentSeek: () => {
+        const transaction = this.seekTransaction
+        if (transaction === undefined || !transaction.committed) {
+          throw new Error('Player seek commit is missing.')
+        }
+        const solvedScene = this.solvedScene
+        if (solvedScene === undefined) throw new Error('Player seek scene is missing.')
+        this.notifyModuleMoveDeltas(
+          transaction.previousSolvedScene,
+          solvedScene,
+          transaction.preparedInstances,
+          transaction.moveDeltas,
+        )
+        this.materializeScene(solvedScene, {
+          previousScene: transaction.previousSolvedScene,
+          moveDeltas: transaction.moveDeltas,
+        })
         this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
+        this.pendingSolvedScene = undefined
+        this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
+        this.pendingModuleSeekHandles = []
+        this.seekTransaction = undefined
+        this.notifyTransportObservers()
       },
+      rollbackSeek: () => this.rollbackSeekTransaction(),
     })
     this.state = PLAYER_LIFECYCLE_READY
     return { ok: true, diagnostics: diagnostics.report() }
@@ -343,6 +398,30 @@ export class RuntimePlayer {
     return this.emitEvent(input)
   }
 
+  /** Integrates one external relative eventime into the same runtime journal. */
+  emitEventime(
+    eventime: RuntimePlayerEventime,
+    address: RuntimePlayerEventimeAddress,
+  ): RuntimePlayerEventimeResult {
+    this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
+    const normalized = normalizeRuntimeEventime(eventime, true)
+    const target = resolveEventimeTarget(this.compiledScene, address)
+    const appended = this.trackJournal.appendAnchoredEventimes({
+      trackId: target.trackId,
+      storyId: target.storyId,
+      cascade: target.cascade,
+      anchorMs: this.currentTimeMs,
+      eventimes: [normalized.eventime],
+      mode: normalized.mode,
+    })
+    if (!appended.ok) throw new Error(appended.message)
+    this.includePersistOnlyInCurrent = normalized.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
+    if (normalized.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
+      this.synchronizeStateStore(this.currentTimeMs, false)
+    }
+    return appended.data
+  }
+
   /** Routes one event with an optional internal presentation boundary policy. */
   private async emitEvent(
     input: RuntimePlayerEmitInput,
@@ -381,6 +460,7 @@ export class RuntimePlayer {
     notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.notifyTransportObservers()
     return result
   }
 
@@ -581,6 +661,7 @@ export class RuntimePlayer {
     this.renderSync.stop()
     this.materializer?.destroy?.()
     this.componentRuntime?.destroy()
+    this.transportListeners.clear()
     this.state = PLAYER_LIFECYCLE_DESTROYED
   }
 
@@ -601,7 +682,9 @@ export class RuntimePlayer {
     notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
+    this.notifyTransportObservers()
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */
@@ -614,6 +697,11 @@ export class RuntimePlayer {
     )
     this.applyLiveCaptureActions(scene)
     this.materializer?.materializeScene(scene, context)
+  }
+
+  /** Publishes one logical position update without creating another frame loop. */
+  private notifyTransportObservers(): void {
+    for (const listener of [...this.transportListeners]) listener()
   }
 
   /** Reapplies active capture actions through the normal component update path. */
@@ -643,6 +731,18 @@ export class RuntimePlayer {
     if (!Number.isFinite(timeMs) || timeMs < 0) {
       throw new Error('Player seek time must be a finite positive number.')
     }
+    if (this.seekTransaction !== undefined) {
+      throw new Error('Player seek transaction is already active.')
+    }
+    this.seekTransaction = {
+      previousSolvedScene: this.solvedScene,
+      previousTimeMs: this.currentTimeMs,
+      previousIncludePersistOnly: this.includePersistOnlyInCurrent,
+      previousSkipNextDelta: this.skipNextDelta,
+      moveDeltas: [],
+      preparedInstances: new Set(),
+      committed: false,
+    }
     cancelActiveCaptures(
       this.captureSessions,
       this.activeCaptureActions,
@@ -663,6 +763,70 @@ export class RuntimePlayer {
       abortPendingModuleSeek(this.pendingModuleSeekHandles)
       throw error
     }
+  }
+
+  /** Aborts a seek that failed before any participant commit. */
+  private abortSeekTransaction(): void {
+    abortPendingModuleSeek(this.pendingModuleSeekHandles)
+    this.restoreSeekTransaction(false)
+  }
+
+  /** Rolls back a seek whose logical state or presentation was already committed. */
+  private rollbackSeekTransaction(): void {
+    abortPendingModuleSeek(this.pendingModuleSeekHandles)
+    this.restoreSeekTransaction(true)
+  }
+
+  /** Restores the previous player snapshot after a failed grouped seek. */
+  private restoreSeekTransaction(represent: boolean): void {
+    const transaction = this.seekTransaction
+    if (transaction === undefined) return
+    const currentSolvedScene = this.solvedScene
+    try {
+      this.solvedScene = transaction.previousSolvedScene
+      this.pendingSolvedScene = undefined
+      this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
+      this.currentTimeMs = transaction.previousTimeMs
+      this.includePersistOnlyInCurrent = transaction.previousIncludePersistOnly
+      this.skipNextDelta = transaction.previousSkipNextDelta
+      if (this.solvedScene !== undefined) {
+        this.synchronizeStateStoreFromScene(this.solvedScene)
+      } else {
+        this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      }
+      if (represent && this.solvedScene !== undefined) {
+        const moveDeltas = currentSolvedScene === undefined
+          ? []
+          : diffSolvedScenes(currentSolvedScene, this.solvedScene)
+        this.materializeScene(this.solvedScene, {
+          previousScene: currentSolvedScene,
+          moveDeltas,
+        })
+        this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
+      }
+    } finally {
+      this.pendingSolvedScene = undefined
+      this.pendingSeekDiagnostics = createEmptyDiagnosticReport()
+      this.pendingModuleSeekHandles = []
+      this.seekTransaction = undefined
+    }
+  }
+
+  /** Sends seek move deltas through the same module boundary as normal frames. */
+  private notifyModuleMoveDeltas(
+    previousScene: SolvedScene | undefined,
+    nextScene: SolvedScene | undefined,
+    preparedInstances: ReadonlySet<RuntimeModuleServiceInstance>,
+    moveDeltas: readonly MoveStateDelta[],
+  ): void {
+    if (nextScene === undefined) return
+    notifyModuleMoveDeltas(
+      this.moduleServiceInstances,
+      previousScene,
+      nextScene,
+      preparedInstances,
+      moveDeltas,
+    )
   }
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
@@ -759,5 +923,65 @@ export class RuntimePlayer {
     const index = this.nextRuntimeEventId
     this.nextRuntimeEventId += 1
     return `runtime-dispatch:${this.compiledScene.scene.id}:${index}`
+  }
+
+  /** Publishes newly reached public eventime occurrences without replaying seeks. */
+  private notifyPublicEvents(previousTimeMs: number, currentTimeMs: number): void {
+    if (this.publicEventListener === undefined) return
+    for (const event of this.trackJournal.getAllEvents()) {
+      if (event.visibility !== 'public') continue
+      if (event.applyAtMs > currentTimeMs || event.applyAtMs < previousTimeMs) continue
+      if (this.observedPublicEventIds.has(event.eventId)) continue
+      this.observedPublicEventIds.add(event.eventId)
+      this.publicEventListener(event)
+    }
+  }
+}
+
+/** Resolves the declared story or scene target for one eventime insertion. */
+function resolveEventimeTarget(
+  scene: CompiledScene,
+  address: RuntimePlayerEventimeAddress,
+): Readonly<{ trackId: string; storyId?: string; cascade: boolean }> {
+  if (address.scope === 'scene') {
+    if (address.storyId !== undefined) throw new Error('Scene eventime address must not contain storyId.')
+    return { trackId: address.trackId ?? TRACK_GLOBAL_ID, cascade: true }
+  }
+  if (address.storyId === undefined) throw new Error('Story eventime address requires storyId.')
+  const story = scene.scene.stories[address.storyId]
+  if (story === undefined) throw new Error(`Eventime story is not declared: ${address.storyId}`)
+  return {
+    trackId: address.trackId ?? story.trackId ?? story.id,
+    storyId: story.id,
+    cascade: false,
+  }
+}
+
+/** Normalizes one external eventime tree without mutating the caller's value. */
+function normalizeRuntimeEventime(
+  eventime: RuntimePlayerEventime,
+  root: boolean,
+): Readonly<{ eventime: CompiledEventime; mode?: RuntimePlayerEventime['mode'] }> {
+  if (eventime.name.trim().length === 0) throw new Error('Eventime name must not be empty.')
+  const startAt = eventime.startAt ?? (root ? 0 : undefined)
+  if (startAt === undefined || !Number.isFinite(startAt) || startAt < 0) {
+    throw new Error('Eventime startAt must be finite and non-negative; only the root may omit it.')
+  }
+  if (eventime.visibility !== undefined
+    && eventime.visibility !== 'story'
+    && eventime.visibility !== 'scene'
+    && eventime.visibility !== 'public') {
+    throw new Error(`Eventime visibility is invalid: ${eventime.visibility}`)
+  }
+  const children = eventime.events?.map((child) => normalizeRuntimeEventime(child, false).eventime)
+  return {
+    eventime: {
+      name: eventime.name,
+      startAt,
+      visibility: eventime.visibility,
+      data: eventime.data === undefined ? undefined : cloneRecord(eventime.data),
+      events: children,
+    },
+    mode: eventime.mode,
   }
 }

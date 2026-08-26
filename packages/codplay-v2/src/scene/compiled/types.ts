@@ -69,6 +69,7 @@ export type CompiledPerso = Readonly<{
 export type CompiledEventime = Readonly<{
   name: string
   startAt: number
+  visibility?: 'story' | 'scene' | 'public'
   data?: CompiledRecord
   events?: readonly CompiledEventime[]
 }>

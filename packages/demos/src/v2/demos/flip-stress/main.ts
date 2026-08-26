@@ -1,10 +1,4 @@
-import { createCoreRuntimeCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
-import type { RuntimeCapabilityCatalog } from '../../../../../codplay-v2/src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../../../codplay-v2/src/runtime/runner'
-import { createRuntimeTelco } from '../../../../../codplay-v2/src/runtime/telco'
-import { SceneBuilder } from '../../../../../codplay-v2/src/scene/compiled'
 import type { PersoDoc, SceneDoc } from '../../../../../codplay-v2/src/scene/types'
-import type { V2DemoMountContext } from '../../layout/types'
 
 import './style.css'
 
@@ -33,7 +27,6 @@ type ContentExchange = Readonly<{
 
 const HOST_ID = 'flip-stress-test-v2'
 const BOUNDARY_TIME_MS = 1_000
-const TRANSFER_END_TIME_MS = 9_000
 const CONTAINER_DURATION_MS = 10_000
 const SECONDARY_CONTAINER_DURATION_MS = 9_000
 const TRANSFER_DURATION_MS = 8_000
@@ -41,7 +34,6 @@ const CONTENT_DURATION_MS = 1_000
 const REVEAL_OPACITY_DURATION_MS = 400
 const CONTENT_FIRST_EXCHANGE_MS = 1_200
 const CONTENT_EXCHANGE_SPACING_MS = 500
-const TIMELINE_END_MS = 10_000
 const CONTENT_EASE = 'inOutQuad'
 const CENTER_CURVE_PATH = 'M 0 0 A 0.8 0.8 0 0 0 1 0'
 
@@ -310,98 +302,7 @@ function createStressScene(): SceneDoc {
   }
 }
 
-/** Compiles the declarative stress scene through the normative SceneDoc boundary. */
-function buildScene(catalog: RuntimeCapabilityCatalog): ReturnType<SceneBuilder['build']> {
-  return new SceneBuilder(catalog.validationSnapshot(), {
-    createdAt: '2026-08-18T00:00:00.000Z',
-  }).build(createStressScene())
-}
-
-/** Creates the CodPlay runtime catalog and configures the stress scene's outlets. */
-function createRuntimeCatalog(): RuntimeCapabilityCatalog {
-  const catalog = createCoreRuntimeCatalog()
-  const layout = catalog.getComponent('layout')
-  if (layout === undefined) throw new Error('Core layout component is not registered.')
-  catalog.overrideComponent({
-    ...layout,
-    mountableParts: [
-      'stress-a-outlet',
-      'stress-b-outlet',
-      'stress-c-outlet',
-      'stress-d-outlet',
-      'transfer-q-outlet',
-      'transfer-k-outlet',
-    ],
-  })
-  return catalog
-}
-
-/** Mounts the declarative stress scene through the shared V2 layout and telco. */
-export function mount(context: V2DemoMountContext): () => void {
-  context.stage.innerHTML = `
-    <div class="stress-stage" id="stress-stage" aria-label="declarative FLIP stress scene"></div>
-  `
-
-  const stage = context.stage.querySelector<HTMLElement>('#stress-stage')!
-
-  const catalog = createRuntimeCatalog()
-  const build = buildScene(catalog)
-  if (!build.ok) {
-    context.log(`SceneDoc build failed: ${build.diagnostics.errors.map((entry) => entry.message).join(' · ')}`, 'error')
-    return () => undefined
-  }
-
-  const runner = new HtmlPlayerRunner({
-    id: HOST_ID,
-    compiledScene: build.compiledScene,
-    root: stage,
-    rootTargets: [{ id: 'root-host', storyId: 'main' }],
-    catalog,
-  })
-  const init = runner.init()
-  if (!init.ok) {
-    context.log(`Runner init failed: ${init.diagnostics.errors.map((entry) => entry.message).join(' · ')}`, 'error')
-    runner.destroy()
-    return () => undefined
-  }
-
-
-  const telco = createRuntimeTelco({
-    durationMs: TIMELINE_END_MS,
-    target: {
-      getLifecycleState: () => runner.getLifecycleState(),
-      getCurrentTimeMs: () => runner.getCurrentTimeMs(),
-      getRate: () => runner.getRate(),
-      play: () => runner.play(),
-      pause: () => runner.pause(),
-      setRate: (rate) => runner.setRate(rate),
-      seek: (timeMs) => {
-        const result = runner.seek(timeMs)
-        return { ok: result.ok }
-      },
-    },
-  })
-  context.setTelco(telco)
-  context.log(`FLIP stress initialisée · durée=${TIMELINE_END_MS}ms`)
-
-  /** Rebuilds measured endpoints after the responsive root changes size. */
-  function refreshAfterResize(): void {
-    try {
-      runner.resize()
-    } catch (resizeError) {
-      const message = resizeError instanceof Error ? resizeError.message : String(resizeError)
-      context.log(message, 'error')
-    }
-  }
-
-  const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(refreshAfterResize)
-  if (resizeObserver !== undefined) resizeObserver.observe(stage)
-  else window.addEventListener('resize', refreshAfterResize)
-
-  return () => {
-    resizeObserver?.disconnect()
-    if (resizeObserver === undefined) globalThis.removeEventListener('resize', refreshAfterResize)
-    telco.destroy()
-    runner.destroy()
-  }
+/** Returns the declarative FLIP stress scene consumed by the shared V2 layout. */
+export function createScene(): SceneDoc {
+  return createStressScene()
 }
