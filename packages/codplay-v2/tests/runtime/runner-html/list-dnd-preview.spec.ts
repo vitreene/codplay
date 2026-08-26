@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { HtmlListDndPreview } from '../../../src/runtime/runner'
+import { HtmlListDndPreview } from '../../../src/runtime/runner-html'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../../../src/runtime/capture'
 
 /** Implements only the inline style operations used by the HTML preview. */

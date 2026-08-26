@@ -9,7 +9,7 @@ import {
   type PresentationFrame,
 } from '../motion'
 import type { HtmlMatrix, HtmlPose } from '../motion/html-types'
-import { createHtmlMotionStyleLayer, type HtmlMotionStyleLayer } from './html-motion-style-layer'
+import { createHtmlMotionStyleLayer, type HtmlMotionStyleLayer } from './motion-style-layer'
 import {
   applyGhostPose,
   findElementPath,
@@ -23,12 +23,12 @@ import {
   resolveLocalPresentationMatrix,
   sameHtmlMatrix,
   sameStringArray,
-} from './html-motion-presentation'
+} from './motion-presentation'
 import type {
   LocalTransformResource,
   OverlayResource,
   OverlayRevisionResolver,
-} from './html-motion-presentation'
+} from './motion-presentation'
 
 /** Commits one complete motion frame without owning temporal state. */
 export class HtmlMotionPresentationHost {

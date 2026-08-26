@@ -28,7 +28,7 @@ par un catalogue de composants séparé, ni par un circuit spécial de démonstr
 
 ## Organisation interne
 
-L'implémentation HTML/DOM se trouve dans `runtime/runner`. Les services communs
+L'implémentation HTML/DOM se trouve dans `runtime/runner-html`. Les services communs
 aux éléments HTML et SVG restent à côté de leurs déclarations dans
 `src/services` ; leur cible est le nœud DOM reçu, quel que soit son namespace.
 

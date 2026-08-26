@@ -1,7 +1,7 @@
 import { RuntimeEngine } from '../runtime/engine'
 import type { MountTargetDeclaration } from '../runtime/player/pipeline'
 import { RuntimePlayer } from '../runtime/player'
-import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner'
+import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner-html'
 import type { RuntimePreloadMetadata } from '../runtime/preload'
 import type { CodPlayInstanceOptions } from './facade-types'
 

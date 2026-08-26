@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { HtmlMotionSystem } from '../../../src/runtime/runner'
-import type { HtmlMotionPresentationHost } from '../../../src/runtime/runner/html-motion-presentation-host'
+import { HtmlMotionSystem } from '../../../src/runtime/runner-html'
+import type { HtmlMotionPresentationHost } from '../../../src/runtime/runner-html/motion-presentation-host'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 import type {
   LayoutSnapshot,

@@ -4,29 +4,29 @@ export {
   type HtmlPlayerRunOptions,
   type HtmlPlayerRunResult,
   type HtmlRootTarget,
-} from './html-player-runner'
+} from './player-runner'
 export {
   HtmlComponentMaterializer,
   type HtmlComponentMaterializerNodes,
   type HtmlMaterializerRuntimeContext,
-} from './html-component-materializer'
+} from './component-materializer'
 export {
   HTML_ATTR_SERVICE,
   HTML_CLASS_NAME_SERVICE,
   HTML_CONTENT_SERVICE,
   HTML_STYLE_SERVICE,
-} from './html-service-definitions'
-export { captureHtmlLayoutSnapshot } from './html-layout-snapshot'
-export { HtmlMotionPresentationHost } from './html-motion-presentation-host'
-export { HtmlMotionSystem } from './html-motion-system'
+} from './service-definitions'
+export { captureHtmlLayoutSnapshot } from './layout-snapshot'
+export { HtmlMotionPresentationHost } from './motion-presentation-host'
+export { HtmlMotionSystem } from './motion-system'
 export {
   HtmlListDndPreview,
-} from './html-list-dnd-preview'
+} from './list-dnd-preview'
 export type {
   HtmlListDndNodeResolver,
   HtmlListDndListItemResolver,
   HtmlListDndPreviewOptions,
-} from './html-list-dnd-preview'
+} from './list-dnd-preview'
 export {
   HtmlPointerCaptureSourceAdapter,
 } from '../capture'

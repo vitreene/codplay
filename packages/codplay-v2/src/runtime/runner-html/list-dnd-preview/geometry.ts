@@ -3,7 +3,7 @@ import type { CompiledRecord } from '../../../scene/compiled'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../../capture'
 import { worldDeltaToLocalDelta } from '../../motion/html-pose'
 import type { HtmlMatrix } from '../../motion/html-types'
-import type { HtmlTransientRect } from '../html-transient-flip'
+import type { HtmlTransientRect } from '../transient-flip'
 import type { DropTarget, LocalBox } from './types'
 
 /** Reads the authored live transition duration used by the list preview. */

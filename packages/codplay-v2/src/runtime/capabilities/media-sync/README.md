@@ -68,7 +68,7 @@ Ses sous-modules sont spécialisés :
 
 - `tests/runtime/capabilities/media-sync-module.spec.ts` couvre le master, son
   arbitrage, l'horloge de secours, le seek, les transitions et le rate ;
-- `tests/runtime/runner/html-player-runner.spec.ts` couvre les nœuds persistants
+- `tests/runtime/runner-html/player-runner.spec.ts` couvre les nœuds persistants
   par source, le choix audio/vidéo et le rate natif ;
 - `tests/runtime/preload/runtime-preload.spec.ts` couvre la propagation des
   métadonnées de durée ;

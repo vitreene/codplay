@@ -1,6 +1,6 @@
 import { createCoreRuntimeCatalog } from '../../../../codplay-v2/src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../../codplay-v2/src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../../codplay-v2/src/runtime/runner'
+import { HtmlPlayerRunner } from '../../../../codplay-v2/src/runtime/runner-html'
 import { createRuntimeTelco } from '../../../../codplay-v2/src/runtime/telco'
 import { SceneBuilder } from '../../../../codplay-v2/src/scene/compiled'
 import type { SceneDoc } from '../../../../codplay-v2/src/scene/types'

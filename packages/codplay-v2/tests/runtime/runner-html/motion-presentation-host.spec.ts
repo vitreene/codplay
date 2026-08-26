@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
-import { HtmlMotionPresentationHost } from '../../../src/runtime/runner'
+import { HtmlMotionPresentationHost } from '../../../src/runtime/runner-html'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 import { createMotionRootPose } from '../../../src/runtime/motion'
 import type { ItemPresentation, PresentationFrame } from '../../../src/runtime/motion'

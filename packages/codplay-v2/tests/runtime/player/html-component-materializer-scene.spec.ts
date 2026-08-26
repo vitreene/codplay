@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { MOUNT_PLACEMENT_PARENT } from '../../../src/runtime/player'
 import { buildSolvedGraph } from '../../../src/runtime/player'
-import { HtmlComponentMaterializer } from '../../../src/runtime/runner'
-import { HTML_TRANSIENT_NODE_ATTRIBUTE } from '../../../src/runtime/runner/html-transient-node'
+import { HtmlComponentMaterializer } from '../../../src/runtime/runner-html'
+import { HTML_TRANSIENT_NODE_ATTRIBUTE } from '../../../src/runtime/runner-html/transient-node'
 import type { SolvedPerso, SolvedScene } from '../../../src/runtime/player'
 
 type TestNode = {

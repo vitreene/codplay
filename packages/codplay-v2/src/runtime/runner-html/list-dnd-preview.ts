@@ -6,11 +6,11 @@ import {
   captureHtmlTransientRects,
   playHtmlTransientFlip,
   type HtmlTransientRect,
-} from './html-transient-flip'
+} from './transient-flip'
 import {
   clearHtmlTransientNode,
   markHtmlTransientNode,
-} from './html-transient-node'
+} from './transient-node'
 import {
   asElement,
   defaultAuthorId,
@@ -24,25 +24,25 @@ import {
   resolveInsertionIndex,
   sameTarget,
   toLocalBox,
-} from './html-list-dnd-preview/geometry'
+} from './list-dnd-preview/geometry'
 import {
   applyFloatingStyle,
   clearFloatingStyle,
   createGhost,
-} from './html-list-dnd-preview/effects'
+} from './list-dnd-preview/effects'
 import type {
   ActivePreview,
   DropTarget,
   HtmlListDndNodeResolver,
   HtmlListDndPreviewOptions,
   ResolvedDropTarget,
-} from './html-list-dnd-preview/index'
+} from './list-dnd-preview/index'
 
 export type {
   HtmlListDndListItemResolver,
   HtmlListDndPreviewOptions,
   HtmlListDndNodeResolver,
-} from './html-list-dnd-preview/index'
+} from './list-dnd-preview/index'
 
 /**
  * Owns the HTML-only preview half of list DnD. It never changes logical

@@ -1,7 +1,7 @@
 import { isPlainRecord } from '../../../shared'
 import type { CompiledRecord } from '../../../scene/compiled'
 import type { RuntimeCaptureState } from '../../capture'
-import { clearHtmlTransientNode, markHtmlTransientNode } from '../html-transient-node'
+import { clearHtmlTransientNode, markHtmlTransientNode } from '../transient-node'
 import { asElement } from './geometry'
 import type { ActivePreview } from './types'
 

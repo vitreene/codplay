@@ -124,7 +124,7 @@ mesurée dans sa pose stabilisée avant d'être éventuellement relancée ; un m
 slot ne redémarre donc pas l'animation à chaque `pointermove`.
 
 Les primitives HTML de rectangle stabilisé, de capture de rectangles et de
-transition FLIP sont partagées dans `html-transient-flip.ts`. Cette mutualisation
+transition FLIP sont partagées dans `transient-flip.ts`. Cette mutualisation
 ne mélange pas le cycle live de la preview avec le graphe de lecture : elle évite
 seulement de dupliquer le traitement géométrique élémentaire.
 

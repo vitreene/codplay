@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../src/runtime/runner'
+import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import { createComponentsScene } from '../../../demos/validation/components/components-scene'
 

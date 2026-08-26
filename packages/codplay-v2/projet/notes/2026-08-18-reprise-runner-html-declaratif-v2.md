@@ -115,7 +115,7 @@ de captures, ni algorithme de projection.
 
 ### Tranche runner logique validée
 
-- `packages/codplay-v2/src/runtime/runner` fournit une façade HTML générique hors démo.
+- `packages/codplay-v2/src/runtime/runner-html` fournit une façade HTML générique hors démo.
 - `HtmlComponentMaterializer` matérialise le template de chaque composant, appelle
   `_materialize`, publie les parts sélectionnées par le catalogue et détache tout au
   teardown.
@@ -301,7 +301,7 @@ Avant le stress-test, créer une petite scène déclarative avec :
 
 Cette verticale doit valider le runner, pas ajouter un cas particulier dans FLIP.
 
-La verticale existe dans `tests/runtime/runner/html-player-runner.spec.ts`. Elle
+La verticale existe dans `tests/runtime/runner-html/player-runner.spec.ts`. Elle
 utilise un faux DOM déterministe afin de vérifier uniquement le contrat logique;
 elle ne sert pas d'oracle pour les poses FLIP.
 
@@ -750,7 +750,7 @@ le sont également.
 - `packages/codplay-v2/src/runtime/flip/html-dom-projection.ts`
 - `packages/codplay-v2/src/runtime/flip/html-pose.ts`
 - `packages/codplay-v2/src/runtime/flip/README.md`
-- `packages/codplay-v2/src/runtime/runner/README.md`
+- `packages/codplay-v2/src/runtime/runner-html/README.md`
 - `packages/codplay-v2/demos/validation/runner/main.ts`
 - `packages/authoring/selection-frame/demos/flip/main.ts`
 - `packages/authoring/selection-frame/demos/flip-stress/main.ts`

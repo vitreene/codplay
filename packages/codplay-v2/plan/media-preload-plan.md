@@ -163,7 +163,7 @@ propriétaire.
 - `tests/runtime/capabilities/media-sync-module.spec.ts` : horloge master,
   arbitrage du master précédent, fallback ticker, absence de seek par frame,
   pause avant seek, resynchronisation après seek, transition et rate ;
-- `tests/runtime/runner/html-player-runner.spec.ts` : persistance des nodes
+- `tests/runtime/runner-html/player-runner.spec.ts` : persistance des nodes
   média par source, choix audio/vidéo et propagation du rate ;
 - `tests/runtime/preload/runtime-preload.spec.ts` : métadonnées de durée
   transmises au résultat preload ;

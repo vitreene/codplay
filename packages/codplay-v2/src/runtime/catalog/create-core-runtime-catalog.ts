@@ -37,7 +37,7 @@ import {
   HTML_CLASS_NAME_SERVICE,
   HTML_CONTENT_SERVICE,
   HTML_STYLE_SERVICE,
-} from '../runner/html-service-definitions'
+} from '../runner-html/service-definitions'
 
 /** Creates the single built-in catalog used by CodPlay V2 HTML instances. */
 export function createCoreRuntimeCatalog(): RuntimeCapabilityCatalog {

@@ -8,7 +8,7 @@ import {
   type NaturalLayoutTimeline,
   type LayoutSnapshot,
 } from '../motion'
-import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
+import { HtmlMotionPresentationHost } from './motion-presentation-host'
 
 /** Owns one immutable captured graph and one absolute-time HTML presentation. */
 export class HtmlMotionSystem {

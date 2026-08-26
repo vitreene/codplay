@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it } from 'vitest'
-import { materializeTemplateString } from '../../../src/runtime/runner/html-template-materializer'
+import { materializeTemplateString } from '../../../src/runtime/runner-html/template-materializer'
 import { sanitizeMarkupTemplate } from '../../../src/scene/validation'
 
 describe('HTML template materializer', () => {

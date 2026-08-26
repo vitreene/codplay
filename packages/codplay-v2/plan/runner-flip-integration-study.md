@@ -150,8 +150,8 @@ propriétés de layout/transform et transmet uniquement leur timing au schedule.
 
 Fichiers :
 
-- `src/runtime/runner/html-layout-snapshot.ts` ;
-- `src/runtime/runner/html-player-runner.ts`.
+- `src/runtime/runner-html/layout-snapshot.ts` ;
+- `src/runtime/runner-html/player-runner.ts`.
 
 La capture géométrique lit les nodes auteur persistants du root visible. Elle ne
 crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
@@ -684,7 +684,7 @@ Les optimisations sans changement de contrat sont : limiter les mesures aux
 listes candidates et au slot dont la cible a changé, conserver les rectangles
 jusqu'à l'invalidation par déplacement du ghost ou resize, et réutiliser le
 ghost déjà créé. Les primitives de rectangle stabilisé et de transition FLIP
-sont maintenant isolées dans `html-transient-flip.ts`, afin d'être partagées
+sont maintenant isolées dans `transient-flip.ts`, afin d'être partagées
 par les previews HTML sans dupliquer leur algorithme. La décision de cible et le
 cycle de capture restent dans la capacité `list`/preview.
 

@@ -1,4 +1,4 @@
-# Présentation DOM V2 (runner)
+# Présentation DOM V2 (runner HTML)
 
 > Statut : Fini — tranche HTML/DOM motion V2
 > Version CodPlay : V2 foundation
@@ -30,7 +30,7 @@ SolvedScene(t)
   -> commit atomique de la présentation HTML
 ```
 
-Les services HTML sont assemblés dans `html-service-definitions.ts` et
+Les services HTML sont assemblés dans `service-definitions.ts` et
 enregistrés par le catalogue core. Le runner reçoit le catalogue déjà composé
 par CodPlay ; il ne crée pas de registre local.
 
@@ -52,9 +52,9 @@ frame.
 Les deux présentateurs HTML qui concentrent le plus de responsabilités sont
 spécialisés dans leurs propres dossiers :
 
-- `html-motion-presentation/` contient les types de ressources temporaires, la
+- `motion-presentation/` contient les types de ressources temporaires, la
   géométrie des poses et matrices, ainsi que l'ordre des parents et descendants ;
-- `html-list-dnd-preview/` contient la géométrie du hit-test, le décodage des
+- `list-dnd-preview/` contient la géométrie du hit-test, le décodage des
   pointeurs, les ghosts, le nœud flottant et les helpers de prévisualisation
   FLIP.
 

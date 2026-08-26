@@ -1,5 +1,5 @@
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../../capture'
-import type { HtmlTransientRect } from '../html-transient-flip'
+import type { HtmlTransientRect } from '../transient-flip'
 
 /** Resolves one mounted HTML perso root owned by the runner. */
 export type HtmlListDndNodeResolver = (persoKey: string) => unknown

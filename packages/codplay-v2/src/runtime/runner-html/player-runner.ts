@@ -23,15 +23,15 @@ import type { RuntimeTrackEvent } from '../player/pipeline'
 import {
   HtmlComponentMaterializer,
   type HtmlMaterializerRuntimeContext,
-} from './html-component-materializer'
-import { HtmlMotionPresentationHost } from './html-motion-presentation-host'
-import { HtmlMotionSystem } from './html-motion-system'
+} from './component-materializer'
+import { HtmlMotionPresentationHost } from './motion-presentation-host'
+import { HtmlMotionSystem } from './motion-system'
 import {
   captureCurrentHtmlMotionLayout,
   captureHtmlLiveMotionBoundary,
   captureHtmlMotionBoundaries,
   resolveHtmlMotionActionTransition,
-} from './html-motion-capture'
+} from './motion-capture'
 import type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,

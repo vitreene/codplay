@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DiagnosticCollector } from '../../../src/diagnostics'
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import { createMarkupModuleServiceDefinition, type MarkupModuleServiceInstance } from '../../../src/runtime/capabilities/markup'
-import { HtmlComponentMaterializer } from '../../../src/runtime/runner'
+import { HtmlComponentMaterializer } from '../../../src/runtime/runner-html'
 import { correctionIconPartId, selectionIconPartId } from '../../../src/runtime/components/input'
 import {
   resolvePolygonPathString,

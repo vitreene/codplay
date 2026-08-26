@@ -1,6 +1,6 @@
 import { createCoreRuntimeCatalog } from '../../../src/runtime/catalog'
 import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
-import { HtmlPlayerRunner } from '../../../src/runtime/runner'
+import { HtmlPlayerRunner } from '../../../src/runtime/runner-html'
 import { SceneBuilder } from '../../../src/scene/compiled'
 import type { SceneDoc } from '../../../src/scene/types'
 

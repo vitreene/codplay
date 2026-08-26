@@ -5,7 +5,7 @@ import {
 } from '../../ace'
 import {
   captureHtmlLayoutSnapshot,
-} from './html-layout-snapshot'
+} from './layout-snapshot'
 import type {
   LayoutSnapshot,
   MotionBoundary,

@@ -12,14 +12,14 @@ import type {
   RuntimeComponentIdentity,
 } from '../components'
 import { BaseHTMLComponent } from '../components'
-import { materializeTemplateString, type HtmlMaterializedRoot } from './html-template-materializer'
+import { materializeTemplateString, type HtmlMaterializedRoot } from './template-materializer'
 import { HTML_MATERIALIZER_ID } from '../catalog'
 import type {
   RuntimeMaterializer,
   RuntimeMaterializerSceneContext,
 } from '../materializer'
 import type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
-import { isHtmlTransientNode } from './html-transient-node'
+import { isHtmlTransientNode } from './transient-node'
 
 export type { HtmlMaterializerRuntimeContext } from '../../services/html-materializer-service-types'
 

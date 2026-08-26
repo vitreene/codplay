@@ -23,7 +23,7 @@ verticale de test ne l'ont pas ouverte.
 | Pipeline runtime | `emit → journal → materialize → resolve → solve`, ordre déterministe, straps séquentiels, sorties planifiées bornées et relecture sans réexécution | tests `listen`, `runtime-event-dispatcher`, `strap-*`, `pipeline` |
 | Move / List | graphe structurel immuable, targets opaques, ordre complet par target, deltas `mount/unmount/move`, modes d'ordre, politiques V1 `reorderOnMove/Add/Remove` et détachement des descendants | tests `move-state`, `presentation-graph`, `pipeline`, `runtime-player` |
 | Motion | graphe temporel par item, FIRST/LAST exacts, modes `local` et `reparent`, retargeting continu au chevauchement, résolution absolue sans historique de DOM | tests `tests/runtime/motion/` |
-| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner/html-player-runner.spec.ts` et démo runner |
+| Runner HTML | même circuit pour Play et Seek, host de mesure isolé, materialisation locale/reparent, overlays hiérarchiques, resize ; persistance des materialisations auteur jusqu'au teardown final | `tests/runtime/runner-html/player-runner.spec.ts` et démo runner |
 
 ## Limites volontairement ouvertes
 
@@ -89,7 +89,7 @@ extensions correspondantes :
 | Décision | État | Ouverture bloquée |
 |---|---|---|
 | Factory/catalogue réellement indépendant du substrate HTML | À spécifier avant une factory Canvas, Three.js ou Rive ; le catalogue actuel reste la tranche HTML | materializers et familles de composants non HTML |
-| Dépendances de compilation du sanitizer markup et des services | Restructurées le 2026-08-24 : sanitizer dans `scene/validation`, contrats de binding dans `services`, adapters HTML dans `runtime/runner` | profils de compilation et services indépendants d'HTML |
+| Dépendances de compilation du sanitizer markup et des services | Restructurées le 2026-08-24 : sanitizer dans `scene/validation`, contrats de binding dans `services`, adapters HTML dans `runtime/runner-html` | profils de compilation et services indépendants d'HTML |
 | Surface typée entre modules runtime et composants | Fixée le 2026-08-24 : registre de surfaces déclaré par le catalogue, résolveur typé dans le contexte module, aucune classe exposée | nouvelles surfaces à ajouter à la map de contrats |
 
 Les marqueurs `Review: required` restants concernent uniquement des extensions non
@@ -111,7 +111,7 @@ services
 scene/validation
   -> sanitation compilée du markup et validation des données
 
-runtime/catalog et runtime/runner
+runtime/catalog et runtime/runner-html
   -> assemblage des contrats et définitions/adapters HTML
 ```
 
@@ -123,7 +123,7 @@ Décisions d'implémentation :
 - Les types `RuntimeComponentService*` sont définis dans la couche services,
   sans dépendre de `RuntimeCapabilityCatalog`.
 - Les définitions `HTML_*_SERVICE` sont des bindings runtime HTML et sont
-  enregistrées depuis `runtime/runner`; les déclarations pures restent dans
+  enregistrées depuis `runtime/runner-html`; les déclarations pures restent dans
   `src/services`.
 - `runtime/capabilities/markup` conserve uniquement l'état de parts/outlets et
   la materialization runtime ; il ne possède plus le sanitizer de compilation.
@@ -193,7 +193,7 @@ Les façades publiques restent stables :
 
 - `RuntimePlayer` conserve son entrée depuis `runtime/player` ;
 - `HtmlMotionPresentationHost` et `HtmlListDndPreview` conservent leurs
-  imports depuis `runtime/runner` ;
+  imports depuis `runtime/runner-html` ;
 - `createMediaSyncModuleService` conserve sa factory et sa surface typée.
 
 Les responsabilités sont réparties par domaine :
@@ -201,9 +201,9 @@ Les responsabilités sont réparties par domaine :
 - `runtime/player/capture`, `runtime/player/modules`,
   `runtime/player/scene` et `runtime/player/diagnostics` portent les sous-
   domaines du player sans créer un second player ou un second journal ;
-- `runtime/runner/html-motion-presentation` sépare les ressources d'overlay,
+- `runtime/runner-html/motion-presentation` sépare les ressources d'overlay,
   les transformations et l'orchestration de présentation ;
-- `runtime/runner/html-list-dnd-preview` sépare les types, la géométrie, les
+- `runtime/runner-html/list-dnd-preview` sépare les types, la géométrie, les
   effets transitoires et le contrôleur de preview ;
 - `runtime/capabilities/media-sync` sépare l'état, la lecture des broadcasts
   et la synchronisation de lecture, sous une seule factory player-scoped.
