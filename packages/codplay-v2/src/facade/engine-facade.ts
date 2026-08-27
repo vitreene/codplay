@@ -10,77 +10,137 @@ import { RuntimeEngine } from '../runtime/engine'
 import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
 import { SceneBuilder } from '../scene/compiled'
 import type {
+  CodPlayComponents,
   CodPlayCompileInput,
   CodPlayCompileOptions,
   CodPlayCompileResult,
   CodPlayEngine,
-  CodPlayEngineBuilder,
-  CodPlayEngineConfig,
-  CodPlayEngineEventInput,
-  CodPlayEngineEvents,
-  CodPlayEngineInstances,
-  CodPlayEngineResources,
+  CodPlayEngineOptions,
+  CodPlayEvents,
   CodPlayEventListener,
+  CodPlayEventInput,
+  CodPlayInstances,
   CodPlayInstance,
   CodPlayInstanceOptions,
+  CodPlayModules,
   CodPlayPublicEvent,
+  CodPlayRegistryError,
+  CodPlayRegistryResult,
   CodPlayResourceRegistration,
+  CodPlayResources,
+  CodPlayServices,
 } from './facade-types'
 import { DiagnosticChannel, publishFacadeError, withDiagnosticRefs } from './diagnostic-channel'
 import { InstanceFacadeImpl } from './instance-facade'
 import { toPublicEvent } from './public-event'
 import { createInstanceHost, type InstanceHost } from './instance-host'
+import type { Ticker } from '../runtime/time'
 
 type ManagedInstance = InstanceFacadeImpl
+type EngineFacadeConfig = CodPlayEngineOptions & Readonly<{
+  ticker?: Ticker
+}>
 
-/** Public engine adapter that owns one catalog, clock, and instance registry. */
+type CapabilityRegistries = Readonly<{
+  components: CodPlayComponents
+  services: CodPlayServices
+  modules: CodPlayModules
+}>
+
+type CapabilityFamily = 'component' | 'service' | 'module'
+type RegistryOperation = 'register' | 'override'
+
+/** Internal engine adapter that owns one catalog, clock, and instance registry. */
 export class EngineFacadeImpl implements CodPlayEngine {
-  readonly builder: CodPlayEngineBuilder
-  readonly instances: CodPlayEngineInstances
-  readonly resources: CodPlayEngineResources
-  readonly events: CodPlayEngineEvents
   private readonly catalog: RuntimeCapabilityCatalog
   private readonly runtimeEngine: RuntimeEngine
   private readonly diagnostics: DiagnosticChannel
-  private readonly defaultTicker: import('../runtime/time').Ticker | undefined
+  private readonly defaultTicker: Ticker | undefined
   private readonly managedInstances = new Map<string, ManagedInstance>()
   private readonly playingInstanceIds = new Set<string>()
   private readonly publicEventListeners = new Set<CodPlayEventListener>()
   private readonly resourceMetadata = new Map<string, import('../runtime/preload').RuntimePreloadResourceMetadata>()
+  private externalClockMode = false
   private destroyed = false
 
-  /** Composes core and foreign capabilities, then locks the catalog. */
-  constructor(config: CodPlayEngineConfig = {}) {
+  /** Composes core and foreign capabilities while keeping the catalog open for direct registration. */
+  constructor(config: EngineFacadeConfig = {}) {
     this.diagnostics = new DiagnosticChannel(config.diagnosticOutput)
     try {
       this.catalog = createCoreRuntimeCatalog()
       applyComponentCapabilities(this.catalog, config.components)
       applyServiceCapabilities(this.catalog, config.services)
       applyModuleCapabilities(this.catalog, config.modules)
-      this.catalog.lock()
       this.defaultTicker = config.ticker
       this.registerResourceData(config.resources)
       this.runtimeEngine = new RuntimeEngine(this.catalog, {
         resources: config.resources === undefined ? [] : resourceUrls(config.resources),
       })
 
-      this.builder = {
-        compile: (input, options) => this.compileScene(input, options),
-      }
     } catch (error) {
       publishFacadeError(this.diagnostics, 'CODPLAY_ENGINE_CONFIGURATION_FAILED', error)
       throw error
     }
+  }
 
-    this.instances = {
-      create: (options) => this.createInstance(options),
-      get: (instanceId) => this.managedInstances.get(instanceId),
-      destroy: (instanceId) => this.destroyInstance(instanceId),
+  /** Creates the three direct capability registries over this engine's catalog. */
+  createCapabilityRegistries(): CapabilityRegistries {
+    return {
+      components: {
+        register: (definition) => this.applyCapability(
+          'component',
+          'register',
+          definition.type,
+          () => this.catalog.registerComponent(definition, 'foreign'),
+        ),
+        override: (definition) => this.applyCapability(
+          'component',
+          'override',
+          definition.type,
+          () => this.catalog.overrideComponent(definition, 'foreign'),
+        ),
+      },
+      services: {
+        register: (definition) => this.applyCapability(
+          'service',
+          'register',
+          definition.name,
+          () => this.catalog.registerService(definition, 'foreign'),
+        ),
+        override: (definition) => this.applyCapability(
+          'service',
+          'override',
+          definition.name,
+          () => this.catalog.overrideService(definition, 'foreign'),
+        ),
+      },
+      modules: {
+        register: (definition) => this.applyCapability(
+          'module',
+          'register',
+          definition.id,
+          () => this.catalog.registerModule(definition, 'foreign'),
+        ),
+        override: (definition) => this.applyCapability(
+          'module',
+          'override',
+          definition.id,
+          () => this.catalog.overrideModule(definition, 'foreign'),
+        ),
+      },
     }
-    this.resources = {
+  }
+
+  /** Creates the direct resource transfer surface while resource definitions remain preload-owned. */
+  createResourceRegistry(): CodPlayResources {
+    return {
       register: (resources) => this.registerResources(resources),
     }
-    this.events = {
+  }
+
+  /** Creates the direct event surface shared by all instances of this owner. */
+  createEventRegistry(): CodPlayEvents {
+    return {
       emit: (input) => this.emitEvent(input),
       onEvent: (listener) => {
         this.publicEventListeners.add(listener)
@@ -89,12 +149,22 @@ export class EngineFacadeImpl implements CodPlayEngine {
     }
   }
 
-  /** Compiles one authored scene against this engine's configured capability catalog. */
-  private compileScene(
+  /** Creates the instance registry exposed by the owning CodPlay facade. */
+  createInstanceRegistry(): CodPlayInstances {
+    return {
+      create: (options) => this.createInstance(options),
+      get: (instanceId) => this.managedInstances.get(instanceId),
+      destroy: (instanceId) => this.destroyInstance(instanceId),
+    }
+  }
+
+  /** Builds one authored scene against this engine's configured capability catalog. */
+  buildScene(
     input: CodPlayCompileInput,
     options: CodPlayCompileOptions = {},
   ): CodPlayCompileResult {
     try {
+      this.lockCatalog()
       const result = new SceneBuilder(this.catalog.validationSnapshot(), {
         ...options,
         diagnosticOutput: (diagnostic) => this.diagnostics.publish(withDiagnosticRefs(diagnostic, {
@@ -118,10 +188,47 @@ export class EngineFacadeImpl implements CodPlayEngine {
     }
   }
 
-  /** Starts the engine-owned ticker or resumes its external clock mode. */
-  start(ticker?: import('../runtime/time').Ticker): void {
+  /** Applies one direct registry operation and converts catalog failures to public results. */
+  private applyCapability(
+    family: CapabilityFamily,
+    operation: RegistryOperation,
+    key: string,
+    apply: () => void,
+  ): CodPlayRegistryResult {
+    const code = `CODPLAY_${family.toUpperCase()}_${operation.toUpperCase()}_FAILED`
+    try {
+      if (this.destroyed) throw new Error('CodPlay owner has been destroyed.')
+      apply()
+      return {
+        ok: true,
+        status: operation === 'register' ? 'registered' : 'overridden',
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const registryError: CodPlayRegistryError = {
+        code,
+        message,
+        details: { family, operation, key },
+      }
+      this.diagnostics.publish({
+        severity: 'error',
+        code,
+        message,
+        details: { context: registryError.details },
+      })
+      return { ok: false, error: registryError }
+    }
+  }
+
+  /** Closes capability composition at the first operation that consumes it. */
+  private lockCatalog(): void {
+    if (!this.catalog.isLocked()) this.catalog.lock()
+  }
+
+  /** Starts the CodPlay-owned ticker or resumes its external clock mode. */
+  start(): void {
     this.runEngineOperation('CODPLAY_ENGINE_START_FAILED', () => {
-      this.runtimeEngine.start(ticker ?? this.defaultTicker)
+      this.runtimeEngine.start(this.externalClockMode ? undefined : this.defaultTicker)
     })
   }
 
@@ -137,7 +244,10 @@ export class EngineFacadeImpl implements CodPlayEngine {
 
   /** Accepts one host-supplied frame through the single engine clock. */
   advance(nowMs: number, marginMs = 0): void {
-    this.runEngineOperation('CODPLAY_ENGINE_ADVANCE_FAILED', () => this.runtimeEngine.advance(nowMs, marginMs))
+    this.runEngineOperation('CODPLAY_ENGINE_ADVANCE_FAILED', () => {
+      this.runtimeEngine.advance(nowMs, marginMs)
+      this.externalClockMode = true
+    })
   }
 
   /** Destroys every instance and then releases the shared engine resources. */
@@ -179,6 +289,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
     let host: InstanceHost | undefined
     let reportPublished = false
     try {
+      this.lockCatalog()
       host = createInstanceHost({
         catalog: this.catalog,
         engine: this.runtimeEngine,
@@ -234,7 +345,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
   }
 
   /** Routes one addressed public eventime to its selected instance. */
-  private async emitEvent(input: CodPlayEngineEventInput): Promise<void> {
+  private async emitEvent(input: CodPlayEventInput): Promise<void> {
     const instance = this.managedInstances.get(input.instanceId)
     if (instance === undefined) {
       publishFacadeError(this.diagnostics, 'CODPLAY_INSTANCE_UNKNOWN', new Error(`CodPlay instance is not registered: ${input.instanceId}`), {
@@ -302,7 +413,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
 
     if (this.playingInstanceIds.size > 0) {
       this.runEngineOperation('CODPLAY_ENGINE_AUTO_START_FAILED', () => {
-        this.runtimeEngine.start(this.defaultTicker)
+        this.runtimeEngine.start(this.externalClockMode ? undefined : this.defaultTicker)
       })
       return
     }
@@ -319,7 +430,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
 /** Registers component additions and overrides in one deterministic order. */
 function applyComponentCapabilities(
   catalog: RuntimeCapabilityCatalog,
-  group: CodPlayEngineConfig['components'],
+  group: EngineFacadeConfig['components'],
 ): void {
   for (const definition of group?.register ?? []) catalog.registerComponent(definition, 'foreign')
   for (const definition of group?.override ?? []) catalog.overrideComponent(definition, 'foreign')
@@ -328,7 +439,7 @@ function applyComponentCapabilities(
 /** Registers service additions and overrides in one deterministic order. */
 function applyServiceCapabilities(
   catalog: RuntimeCapabilityCatalog,
-  group: CodPlayEngineConfig['services'],
+  group: EngineFacadeConfig['services'],
 ): void {
   for (const definition of group?.register ?? []) catalog.registerService(definition, 'foreign')
   for (const definition of group?.override ?? []) catalog.overrideService(definition, 'foreign')
@@ -337,7 +448,7 @@ function applyServiceCapabilities(
 /** Registers module additions and overrides in one deterministic order. */
 function applyModuleCapabilities(
   catalog: RuntimeCapabilityCatalog,
-  group: CodPlayEngineConfig['modules'],
+  group: EngineFacadeConfig['modules'],
 ): void {
   for (const definition of group?.register ?? []) catalog.registerModule(definition, 'foreign')
   for (const definition of group?.override ?? []) catalog.overrideModule(definition, 'foreign')

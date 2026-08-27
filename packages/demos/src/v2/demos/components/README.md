@@ -17,7 +17,7 @@ La télécommande V2 permet de comparer Play, Pause, Rewind et Seek. La démo
 n'ajoute aucun circuit runtime parallèle et ne modifie pas le catalogue core :
 elle étend seulement les parts publiques du layout hôte pour ses deux outlets.
 
-`style.css` est chargé par le layout avec `codplay.preload.create()` avant la
+`style.css` est chargé par le layout avec `codplay.preload` avant la
 création de l'instance. Le preload reçoit le conteneur de scène comme portée
 CSS ; les styles de cette démo ne peuvent donc pas modifier la télécommande,
 le journal ou l'en-tête communs.

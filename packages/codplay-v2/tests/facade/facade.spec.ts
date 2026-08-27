@@ -3,10 +3,24 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  codplay,
+  CodPlay,
+  type CodPlayFrameScheduler,
+  type CodPlayInstances,
+  type CodPlayInstance,
+  type CodPlayOptions,
   type CompiledScene,
-  type Ticker,
 } from '../../src'
+import * as publicApi from '../../src'
+import { BaseHTMLComponent } from '../../src/runtime/components'
+import type {
+  ComponentUpdateInput,
+  HTMLComponentInput,
+} from '../../src/runtime/components'
+import type {
+  RuntimeComponentDefinition,
+  RuntimeComponentServiceDefinition,
+  RuntimeModuleServiceDefinition,
+} from '../../src/runtime/catalog'
 import type { SceneDoc } from '../../src/scene/types'
 
 const emptyRequirements: CompiledScene['requirements'] = {
@@ -31,12 +45,12 @@ function scene(requirements = emptyRequirements): CompiledScene {
 
 /** Creates one instance on the public HTML/DOM path. */
 function createInstance(
-  engine: ReturnType<typeof codplay.engine.create>,
+  instances: CodPlayInstances,
   instanceId = 'instance-a',
   compiledScene = scene(),
-) {
+): CodPlayInstance {
   const root = document.createElement('div')
-  return engine.instances.create({
+  return instances.create({
     instanceId,
     compiledScene,
     durationMs: 1_000,
@@ -75,51 +89,199 @@ function motionSceneDoc(): SceneDoc {
   }
 }
 
-type ManualTickHandler = Parameters<Ticker['start']>[0]
-type ManualTickPayload = Parameters<ManualTickHandler>[0]
-
-/** Creates a deterministic ticker that exposes the frames accepted by the facade engine. */
-function createManualTicker(): Ticker & {
-  emit: (nowMs: number) => void
-  startCount: () => number
-  stopCount: () => number
+/** Creates a scheduler spy that remains behind the public CodPlay boundary. */
+function createManualFrameScheduler(): CodPlayFrameScheduler & {
+  requestCount: () => number
+  cancelCount: () => number
 } {
-  let handler: ManualTickHandler | undefined
-  let previousMs = 0
-  let running = false
-  let starts = 0
-  let stops = 0
+  let nextRequestId = 1
+  let requests = 0
+  let cancels = 0
+  const pending = new Map<number, () => void>()
   return {
-    start(nextHandler) {
-      handler = nextHandler
-      running = true
-      starts += 1
+    request(callback) {
+      const requestId = nextRequestId
+      nextRequestId += 1
+      requests += 1
+      pending.set(requestId, callback)
+      return requestId
     },
-    stop() {
-      running = false
-      stops += 1
+    cancel(requestId) {
+      if (pending.delete(requestId)) cancels += 1
     },
-    isRunning: () => running,
-    emit(nowMs) {
-      if (!running) return
-      const payload: ManualTickPayload = {
-        prevMs: previousMs,
-        nowMs,
-        deltaMs: nowMs - previousMs,
-        marginMs: 0,
-      }
-      previousMs = nowMs
-      handler?.(payload)
+    requestCount: () => requests,
+    cancelCount: () => cancels,
+  }
+}
+
+/** Creates one public CodPlay owner for facade tests. */
+function createCodPlay(options: CodPlayOptions = {}): CodPlay {
+  return new CodPlay(options)
+}
+
+/** Component used to prove that direct facade definitions reach the HTML runtime. */
+class RegistryComponent extends BaseHTMLComponent<Record<string, unknown>> {
+  static readonly declaredServices = ['registry-service'] as const
+
+  constructor(input: HTMLComponentInput<Record<string, unknown>>) {
+    super(input)
+    this.services.declare(RegistryComponent.declaredServices)
+  }
+
+  render(): string {
+    return '<div data-registry-component="registered"></div>'
+  }
+
+  update(_input: ComponentUpdateInput): void {
+    this.services.get('registry-service').apply(this.node, true)
+  }
+}
+
+/** Replacement component used to prove that the direct override is selected at runtime. */
+class OverriddenRegistryComponent extends RegistryComponent {
+  render(): string {
+    return '<div data-registry-component="overridden"></div>'
+  }
+}
+
+/** Creates one component definition with a player module dependency. */
+function registryComponentDefinition(
+  component: RuntimeComponentDefinition['component'],
+): RuntimeComponentDefinition {
+  return {
+    type: 'registry-component',
+    component,
+    modules: ['registry-module'],
+    validateInitial: () => undefined,
+  }
+}
+
+/** Creates one service definition whose adapter leaves a visible runtime marker. */
+function registryServiceDefinition(marker: string): RuntimeComponentServiceDefinition {
+  return {
+    name: 'registry-service',
+    materializers: ['html'],
+    create: () => ({
+      apply: (node) => {
+        if (node instanceof HTMLElement) node.dataset.registryService = marker
+      },
+    }),
+  }
+}
+
+/** Creates one module definition whose construction count identifies the selected override. */
+function registryModuleDefinition(onCreate: () => void): RuntimeModuleServiceDefinition {
+  return {
+    id: 'registry-module',
+    create: () => {
+      onCreate()
+      return { destroy: () => undefined }
     },
-    startCount: () => starts,
-    stopCount: () => stops,
+  }
+}
+
+/** Scene requiring all three definitions registered through the public facade. */
+function registrySceneDoc(): SceneDoc {
+  return {
+    id: 'registry-scene',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'item',
+          type: 'registry-component',
+          initial: { move: '@root' },
+          actions: {},
+        }],
+      },
+    },
   }
 }
 
 describe('CodPlay facade', () => {
+  it('keeps runtime implementation details outside the public entry point', () => {
+    expect(publicApi.CodPlay).toBeDefined()
+    expect(publicApi).not.toHaveProperty('codplay')
+    expect(publicApi).not.toHaveProperty('TimeTicker')
+    expect(publicApi).not.toHaveProperty('EngineFacadeImpl')
+    expect(publicApi).not.toHaveProperty('InstanceFacadeImpl')
+
+    const codplay = createCodPlay()
+    expect(codplay.engine).not.toHaveProperty('builder')
+    expect(codplay.engine).not.toHaveProperty('events')
+    expect(codplay.engine).not.toHaveProperty('resources')
+    expect(codplay.engine).not.toHaveProperty('destroy')
+    codplay.destroy()
+  })
+
+  it('registers and overrides components, services, and modules through one public catalog', () => {
+    const diagnostics: string[] = []
+    let registeredModuleCreates = 0
+    let overriddenModuleCreates = 0
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+      },
+    })
+
+    expect(codplay.services.register(registryServiceDefinition('registered'))).toEqual({
+      ok: true,
+      status: 'registered',
+    })
+    expect(codplay.modules.register(registryModuleDefinition(() => { registeredModuleCreates += 1 }))).toEqual({
+      ok: true,
+      status: 'registered',
+    })
+    expect(codplay.components.register(registryComponentDefinition(RegistryComponent))).toEqual({
+      ok: true,
+      status: 'registered',
+    })
+
+    expect(codplay.services.override(registryServiceDefinition('overridden'))).toEqual({
+      ok: true,
+      status: 'overridden',
+    })
+    expect(codplay.modules.override(registryModuleDefinition(() => { overriddenModuleCreates += 1 }))).toEqual({
+      ok: true,
+      status: 'overridden',
+    })
+    expect(codplay.components.override(registryComponentDefinition(OverriddenRegistryComponent))).toEqual({
+      ok: true,
+      status: 'overridden',
+    })
+
+    const build = codplay.build({ scene: registrySceneDoc() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+
+    const root = document.createElement('div')
+    codplay.instances.create({
+      instanceId: 'registry-instance',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      durationMs: 1_000,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
+    })
+
+    expect(root.querySelector('[data-registry-component="registered"]')).toBeNull()
+    expect(root.querySelector('[data-registry-component="overridden"]')).not.toBeNull()
+    expect(root.querySelector('[data-registry-service="overridden"]')).not.toBeNull()
+    expect(registeredModuleCreates).toBe(0)
+    expect(overriddenModuleCreates).toBe(1)
+
+    const lateRegistration = codplay.modules.register(registryModuleDefinition(() => undefined))
+    expect(lateRegistration.ok).toBe(false)
+    if (!lateRegistration.ok) {
+      expect(lateRegistration.error.message).toContain('locked')
+    }
+    expect(diagnostics).toContain('CODPLAY_MODULE_REGISTER_FAILED')
+    codplay.destroy()
+  })
+
   it('exposes compilation through the engine configured for the runtime', () => {
-    const engine = codplay.engine.create()
-    const result = engine.builder.compile({
+    const codplay = createCodPlay()
+    const result = codplay.build({
       scene: {
         id: 'compiled-through-facade',
         stories: {
@@ -133,12 +295,12 @@ describe('CodPlay facade', () => {
     expect(result.compiledScene.scene.id).toBe('compiled-through-facade')
     expect(result.functions).toEqual({})
     expect(result.diagnostics.errors).toEqual([])
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('uses the core layout component to publish every authored data-part', () => {
-    const engine = codplay.engine.create()
-    const build = engine.builder.compile({
+    const codplay = createCodPlay()
+    const build = codplay.build({
       scene: {
         id: 'layout-parts-through-facade',
         stories: {
@@ -173,7 +335,7 @@ describe('CodPlay facade', () => {
     expect(build.ok).toBe(true)
     if (!build.ok) return
     const root = document.createElement('div')
-    engine.instances.create({
+    codplay.instances.create({
       instanceId: 'layout-instance',
       compiledScene: build.compiledScene,
       functions: build.functions,
@@ -187,17 +349,17 @@ describe('CodPlay facade', () => {
     expect(outlets[0]?.textContent).toBe('')
     expect(outlets[1]?.textContent).toBe('child')
     expect(root.querySelector('[data-part]')).toBeNull()
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('routes instance telco seek through the HTML runner so FLIP moves are prepared', async () => {
-    const engine = codplay.engine.create()
-    const build = engine.builder.compile({ scene: motionSceneDoc() })
+    const codplay = createCodPlay()
+    const build = codplay.build({ scene: motionSceneDoc() })
 
     expect(build.ok).toBe(true)
     if (!build.ok) return
     const root = document.createElement('div')
-    const instance = engine.instances.create({
+    const instance = codplay.instances.create({
       instanceId: 'motion-instance',
       compiledScene: build.compiledScene,
       functions: build.functions,
@@ -210,12 +372,13 @@ describe('CodPlay facade', () => {
 
     expect(root.querySelector('[data-codplay-motion-overlay]')).not.toBeNull()
     expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('groups instance playback under telco and keeps the engine clock external', async () => {
-    const engine = codplay.engine.create()
-    const instance = createInstance(engine)
+    const codplay = createCodPlay()
+    const engine = codplay.engine
+    const instance = createInstance(codplay.instances)
 
     expect(instance.telco.getState()).toMatchObject({
       instanceId: 'instance-a',
@@ -233,13 +396,13 @@ describe('CodPlay facade', () => {
     engine.advance(300)
     expect(instance.telco.getProgress()).toEqual({ timelineMs: 150, durationMs: 1_000 })
 
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('routes every telco command through one player and publishes its progress', async () => {
-    const ticker = createManualTicker()
-    const engine = codplay.engine.create({ ticker })
-    const instance = createInstance(engine)
+    const codplay = createCodPlay()
+    const engine = codplay.engine
+    const instance = createInstance(codplay.instances)
     const changes: string[] = []
     const progress: number[] = []
     const removeChangeListener = instance.telco.onChange((state) => {
@@ -249,19 +412,18 @@ describe('CodPlay facade', () => {
       progress.push(state.timelineMs)
     })
 
+    engine.advance(0)
     await instance.telco.play()
     expect(instance.telco.getState().status).toBe('playing')
-    expect(ticker.startCount()).toBe(1)
 
-    ticker.emit(100)
+    engine.advance(100)
     expect(instance.telco.getProgress()).toEqual({ timelineMs: 100, durationMs: 1_000 })
     expect(progress).toContain(100)
 
     await instance.telco.togglePlay()
     expect(instance.telco.getState().status).toBe('paused')
-    expect(ticker.stopCount()).toBe(1)
     const pausedProgressCount = progress.length
-    ticker.emit(200)
+    engine.advance(200)
     expect(instance.telco.getProgress().timelineMs).toBe(100)
     expect(progress).toHaveLength(pausedProgressCount)
 
@@ -269,9 +431,8 @@ describe('CodPlay facade', () => {
     expect(instance.telco.rate).toBe(2)
     await instance.telco.togglePlay()
     expect(instance.telco.getState().status).toBe('playing')
-    expect(ticker.startCount()).toBe(2)
-    ticker.emit(200)
-    ticker.emit(250)
+    engine.advance(200)
+    engine.advance(250)
     expect(instance.telco.getProgress().timelineMs).toBe(200)
 
     await instance.telco.pause()
@@ -282,18 +443,19 @@ describe('CodPlay facade', () => {
 
     removeChangeListener()
     removeProgressListener()
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('keeps an eventime in the single journal until the next normal tick', async () => {
-    const engine = codplay.engine.create()
-    const instance = createInstance(engine)
+    const codplay = createCodPlay()
+    const engine = codplay.engine
+    const instance = createInstance(codplay.instances)
     const localEvents: string[] = []
     const engineEvents: string[] = []
     instance.events.onEvent((event) => localEvents.push(event.name))
-    engine.events.onEvent((event) => engineEvents.push(event.name))
+    codplay.events.onEvent((event) => engineEvents.push(event.name))
 
-    await engine.events.emit({
+    await codplay.events.emit({
       instanceId: 'instance-a',
       address: { scope: 'scene' },
       eventime: {
@@ -313,12 +475,13 @@ describe('CodPlay facade', () => {
     engine.advance(100)
     expect(localEvents).toEqual(['public:root', 'public:child'])
     expect(engineEvents).toEqual(['public:root', 'public:child'])
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('routes direct instance event injection through the normal next-tick path', async () => {
-    const engine = codplay.engine.create()
-    const instance = createInstance(engine)
+    const codplay = createCodPlay()
+    const engine = codplay.engine
+    const instance = createInstance(codplay.instances)
     const events: string[] = []
     instance.events.onEvent((event) => events.push(event.name))
 
@@ -332,93 +495,95 @@ describe('CodPlay facade', () => {
     await instance.telco.play()
     engine.advance(0)
     expect(events).toEqual(['public:direct'])
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('wakes and suspends the CodPlay-owned clock from instance telco playback', async () => {
-    let running = false
-    const ticker = {
-      start: () => { running = true },
-      stop: () => { running = false },
-      isRunning: () => running,
-    }
-    const engine = codplay.engine.create({ ticker })
-    const instance = createInstance(engine)
+    const scheduler = createManualFrameScheduler()
+    const codplay = new CodPlay({
+      frameScheduler: scheduler,
+      pauseOnDocumentHidden: false,
+    })
+    const instance = createInstance(codplay.instances)
 
     await instance.telco.play()
-    expect(running).toBe(true)
+    expect(scheduler.requestCount()).toBe(1)
 
     await instance.telco.pause()
-    expect(running).toBe(false)
+    expect(scheduler.cancelCount()).toBe(1)
 
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('keeps engine lifecycle controls distinct from instance playback state', async () => {
-    const ticker = createManualTicker()
-    const engine = codplay.engine.create({ ticker })
-    const instance = createInstance(engine)
+    const codplay = createCodPlay()
+    const engine = codplay.engine
+    const instance = createInstance(codplay.instances)
 
+    engine.advance(0)
     await instance.telco.play()
     expect(instance.telco.getState().status).toBe('playing')
-    expect(ticker.isRunning()).toBe(true)
 
-    ticker.emit(100)
+    engine.advance(100)
     expect(instance.telco.getProgress().timelineMs).toBe(100)
 
     engine.pause()
     expect(instance.telco.getState().status).toBe('playing')
     expect(instance.telco.getProgress().timelineMs).toBe(100)
-    expect(ticker.isRunning()).toBe(false)
 
-    ticker.emit(200)
+    engine.advance(200)
     expect(instance.telco.getProgress().timelineMs).toBe(100)
 
     engine.start()
     expect(instance.telco.getState().status).toBe('playing')
-    expect(ticker.isRunning()).toBe(true)
 
-    ticker.emit(200)
+    engine.advance(300)
     expect(instance.telco.getProgress().timelineMs).toBe(200)
 
     engine.stop()
     expect(instance.telco.getState().status).toBe('playing')
     expect(instance.telco.getProgress().timelineMs).toBe(200)
-    expect(ticker.isRunning()).toBe(false)
 
-    engine.destroy()
+    engine.advance(400)
+    expect(instance.telco.getProgress().timelineMs).toBe(200)
+
+    codplay.destroy()
   })
 
   it('requires explicit resource registration before instance initialization', () => {
     const diagnostics: string[] = []
-    const engine = codplay.engine.create({
-      diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+      },
     })
     const resourceRequirements: CompiledScene['requirements'] = {
       ...emptyRequirements,
       resources: ['/movie.mp4'],
     }
 
-    expect(() => createInstance(engine, 'missing-resource', scene(resourceRequirements))).toThrow()
+    expect(() => createInstance(codplay.instances, 'missing-resource', scene(resourceRequirements))).toThrow()
     expect(diagnostics).toContain('RUNTIME_RESOURCE_UNAVAILABLE')
 
-    engine.resources.register({
+    codplay.resources.register({
       loaded: ['/movie.mp4'],
       skipped: [],
       metadata: { '/movie.mp4': { type: 'video', durationMs: 1_000 } },
     })
-    expect(createInstance(engine, 'ready-resource', scene(resourceRequirements))).toBeDefined()
-    engine.destroy()
+    expect(createInstance(codplay.instances, 'ready-resource', scene(resourceRequirements))).toBeDefined()
+    codplay.destroy()
   })
 
   it('treats skipped preload resources as already available', () => {
     const diagnostics: string[] = []
-    const engine = codplay.engine.create({
-      diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
-      resources: {
-        loaded: [],
-        skipped: ['/movie.mp4'],
-        metadata: {},
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+        resources: {
+          loaded: [],
+          skipped: ['/movie.mp4'],
+          metadata: {},
+        },
       },
     })
     const resourceRequirements: CompiledScene['requirements'] = {
@@ -426,30 +591,35 @@ describe('CodPlay facade', () => {
       resources: ['/movie.mp4'],
     }
 
-    expect(createInstance(engine, 'skipped-resource', scene(resourceRequirements))).toBeDefined()
+    expect(createInstance(codplay.instances, 'skipped-resource', scene(resourceRequirements))).toBeDefined()
     expect(diagnostics).not.toContain('RUNTIME_RESOURCE_UNAVAILABLE')
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('keeps telco commands resolved when a diagnostic listener fails', async () => {
     const diagnostics: string[] = []
-    const engine = codplay.engine.create({
-      diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+      },
     })
-    const instance = createInstance(engine)
+    const instance = createInstance(codplay.instances)
     instance.diagnostic.onDiagnostic(() => { throw new Error('observer failure') })
 
     await expect(instance.telco.seek(-1)).resolves.toBeUndefined()
     expect(diagnostics).toContain('TELCO_COMMAND_FAILED')
-    engine.destroy()
+    codplay.destroy()
   })
 
-  it('creates preload through the public CodPlay namespace', async () => {
-    const preload = codplay.preload.create({
-      strategies: {
-        fixture: async () => ({ type: 'fixture' }),
+  it('creates preload through the public CodPlay owner', async () => {
+    const codplay = new CodPlay({
+      preload: {
+        strategies: {
+          fixture: async () => ({ type: 'fixture' }),
+        },
       },
     })
+    const preload = codplay.preload
     const result = await preload.load({
       manifest: {
         entries: [{
@@ -468,20 +638,23 @@ describe('CodPlay facade', () => {
       },
     })
     expect(preload.state.status).toBe('ready')
+    codplay.destroy()
   })
 
   it('composes foreign modules once per instance and keeps them behind the facade', () => {
     let createdCount = 0
     let destroyedCount = 0
-    const engine = codplay.engine.create({
-      modules: {
-        register: [{
-          id: 'foreign-module',
-          create: () => {
-            createdCount += 1
-            return { destroy: () => { destroyedCount += 1 } }
-          },
-        }],
+    const codplay = createCodPlay({
+      engine: {
+        modules: {
+          register: [{
+            id: 'foreign-module',
+            create: () => {
+              createdCount += 1
+              return { destroy: () => { destroyedCount += 1 } }
+            },
+          }],
+        },
       },
     })
     const requirements: CompiledScene['requirements'] = {
@@ -489,43 +662,55 @@ describe('CodPlay facade', () => {
       modules: ['foreign-module'],
     }
 
-    const instance = createInstance(engine, 'foreign-instance', scene(requirements))
+    const instance = createInstance(codplay.instances, 'foreign-instance', scene(requirements))
     expect(instance).toBeDefined()
     expect(createdCount).toBe(1)
 
-    engine.instances.destroy('foreign-instance')
+    codplay.instances.destroy('foreign-instance')
     expect(destroyedCount).toBe(1)
-    engine.destroy()
+    codplay.destroy()
   })
 
   it('rejects concurrent owned and external clocks through diagnostics', () => {
     const diagnostics: string[] = []
-    let running = false
-    const ticker = {
-      start: () => { running = true },
-      stop: () => { running = false },
-      isRunning: () => running,
-    }
-    const engine = codplay.engine.create({
-      diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+    const scheduler = createManualFrameScheduler()
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+      },
+      frameScheduler: scheduler,
+      pauseOnDocumentHidden: false,
     })
+    const engine = codplay.engine
 
-    engine.start(ticker)
+    engine.start()
     engine.advance(0)
     expect(diagnostics).toContain('CODPLAY_ENGINE_ADVANCE_FAILED')
     engine.stop()
-    engine.destroy()
+    codplay.destroy()
   })
 
-  it('destroys each public instance once when the engine is destroyed', () => {
-    const engine = codplay.engine.create()
-    createInstance(engine, 'instance-a')
-    createInstance(engine, 'instance-b')
+  it('destroys each public instance once when the CodPlay owner is destroyed', () => {
+    const codplay = createCodPlay()
+    codplay.instances.create({
+      instanceId: 'instance-a',
+      compiledScene: scene(),
+      durationMs: 1_000,
+      root: document.createElement('div'),
+      mountTargets: [{ id: 'root-host-a', kind: 'root', storyId: 'facade-scene' }],
+    })
+    codplay.instances.create({
+      instanceId: 'instance-b',
+      compiledScene: scene(),
+      durationMs: 1_000,
+      root: document.createElement('div'),
+      mountTargets: [{ id: 'root-host-b', kind: 'root', storyId: 'facade-scene' }],
+    })
 
-    engine.destroy()
+    codplay.destroy()
 
-    expect(engine.instances.get('instance-a')).toBeUndefined()
-    expect(engine.instances.get('instance-b')).toBeUndefined()
-    expect(() => engine.destroy()).not.toThrow()
+    expect(codplay.instances.get('instance-a')).toBeUndefined()
+    expect(codplay.instances.get('instance-b')).toBeUndefined()
+    expect(() => codplay.destroy()).not.toThrow()
   })
 })

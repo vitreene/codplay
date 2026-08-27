@@ -97,7 +97,7 @@ des services courants sont la premiere couverture commune.
 | Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner-html` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
 | ACE | Contrat de valeurs, couleurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes, la normalisation sRGB/OKLCH et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
 | Mouvement HTML | Correction de frontière FLIP en cours | Le runner conserve FIRST avant `startAt` et capture le LAST d'un move à `startAt + delay + duration`; les tests ciblés couvrent la cible disponible seulement au LAST. La validation visuelle de `flip-stress` reste à reprendre ; le mouvement SVG suit le même circuit HTML/DOM lorsqu'un composant en produit. |
-| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence et de gabarit; ses paramètres de stress ne sont pas imposés à chaque démo. Le chargement passe par `packages/demos/index.html` et son registre V2. |
+| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence ; `components`, `player`, `runner` et `runner-overlay` passent aussi par le layout et le registre V2. Les modules de scène ne possèdent ni runtime ni page parallèle. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -240,6 +240,31 @@ absence de rejeu de strap, dépendances interdites et ordre de solve).
 
 Poursuivre par dépendances : reprise de l'authoring uniquement lors de la reprise de l'éditeur, puis ouverture de capacités concrètes identifiées. La capture core et le placement list sont validés pour la tranche de validation ; le seek list et la validation media restent ouverts. Le preload reste externalisé et n'est pas une étape imposée au player.
 Chaque tranche commence par le contrat V2, puis sa démo et ses tests.
+
+### Dette d'architecture reportée à V2.5 — DnD et FLIP
+
+La tranche V2 conserve DnD et FLIP/motion comme sous-systèmes de présentation
+HTML. Ce choix est limité à la fondation actuelle et ne constitue pas la cible
+d'architecture : le sous-système HTML est couplé au module `list` par le circuit
+de placement, d'ordre et de transition. Une dépendance d'un sous-système de
+présentation vers un module métier réduit la substituabilité des modules et
+rend la frontière HTML difficile à porter vers un autre materializer.
+
+La mise à jour V2.5 devra spécifier et implémenter :
+
+- un module runtime DnD et un module runtime FLIP/motion, enregistrés et
+  instanciés par le catalogue comme les autres capacités ;
+- des contrats abstraits de capture, placement, trajectoire et composition,
+  séparés des opérations DOM ;
+- une frontière explicite entre ces modules et les runners/materializers HTML ;
+- une direction de dépendance où le runner HTML adapte les contrats des modules
+  sans dépendre directement d'un module concret, notamment `list` ;
+- les dépendances déclarées, le cycle de vie par player et les ports nécessaires
+  aux futurs materializers non HTML ;
+- des tests d'architecture prouvant qu'un changement de materializer ou de
+  module ne reconstruit pas un circuit HTML parallèle.
+
+Aucun rétrofit DnD/FLIP n'est ouvert dans la fondation V2 par cette note.
 
 ## Sources de reference V2
 

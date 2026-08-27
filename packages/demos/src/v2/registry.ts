@@ -61,6 +61,68 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
       }
     },
   },
+  {
+    id: 'player',
+    path: '?demo=player',
+    title: 'Preload media',
+    description: 'Le preload média reste externe ; le player V2 pilote l’audio master, la vidéo, les images et le seek depuis la télécommande commune.',
+    durationMs: 6_890,
+    rootStoryId: 'main',
+    stageClassName: 'preload-media-stage',
+    stageLabel: 'scène de validation preload et media-sync',
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import('./demos/player/main'),
+        import('./demos/player/preload-media.css?url'),
+      ])
+      return {
+        createScene: module.createScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+        preloadManifest: module.preloadManifest,
+        preloadMode: module.preloadMode,
+      }
+    },
+  },
+  {
+    id: 'runner',
+    path: '?demo=runner',
+    title: 'HTML runner / local FLIP',
+    description: 'Le runner HTML présente un reorder local : Play et Seek utilisent le même graphe de mouvement sans circuit de démo parallèle.',
+    durationMs: 3_000,
+    rootStoryId: 'main',
+    stageClassName: 'runner-stage',
+    stageLabel: 'scène de validation du runner HTML, reorder local',
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import('./demos/runner/main'),
+        import('./demos/runner/style.css?url'),
+      ])
+      return {
+        createScene: module.createListScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      }
+    },
+  },
+  {
+    id: 'runner-overlay',
+    path: '?demo=runner-overlay',
+    title: 'HTML runner / nested overlay',
+    description: 'Le runner HTML présente un reparentage parent/enfant : P et Q passent par l’overlay tandis que les frères conservent leur ordre local.',
+    durationMs: 3_000,
+    rootStoryId: 'main',
+    stageClassName: 'runner-stage',
+    stageLabel: 'scène de validation du runner HTML, overlay imbriqué',
+    load: async () => {
+      const [module, stylesheet] = await Promise.all([
+        import('./demos/runner/main'),
+        import('./demos/runner/style.css?url'),
+      ])
+      return {
+        createScene: module.createNestedOverlayScene,
+        stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+      }
+    },
+  },
 ]
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

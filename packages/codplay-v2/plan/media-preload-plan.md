@@ -51,10 +51,11 @@ autonome ; elle ne redéfinit pas le contrat de `RuntimePreload`.
 
 ### Accès public final
 
-La façade CodPlay expose le service sans le rattacher à une instance :
+La façade CodPlay expose le service sans le rattacher à une instance de scène :
 
 ```ts
-codplay.preload.create(options?: CodPlayPreloadOptions): RuntimePreloadApi
+const codplay = new CodPlay({ preload: options })
+codplay.preload: RuntimePreloadApi
 ```
 
 `RuntimePreloadApi` est la forme publique unique :
@@ -77,8 +78,8 @@ type RuntimePreloadApi = {
 }
 ```
 
-`codplay.preload.create` ne crée pas de singleton caché. Le cache est fourni par
-l'hôte ou créé pour le service retourné, puis partagé explicitement si besoin.
+`new CodPlay(options)` ne crée pas de singleton global. Le cache est fourni par
+l'hôte ou créé pour le service de l'instance `CodPlay`, puis partagé explicitement si besoin.
 Il n'existe ni `instance.preload()` ni preload implicite dans `init()`.
 
 ## Cache partagé

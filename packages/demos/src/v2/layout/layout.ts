@@ -1,9 +1,10 @@
 import {
-  codplay,
-  type CodPlayEngine,
+  CodPlay,
+  type CodPlayFrameScheduler,
   type CodPlayInstance,
+  type CompiledResourceManifest,
+  type RuntimePreloadManifestInput,
 } from '../../../../codplay-v2/src'
-import { TimeTicker, type FrameScheduler } from '../../../../codplay-v2/src/runtime/time'
 import type { V2DemoDefinition } from '../registry'
 import { createV2DemoTelco } from './telco'
 import type { V2DemoLogLevel, V2DemoModule } from './types'
@@ -19,7 +20,7 @@ type V2DemoLayoutOptions = Readonly<{
 const V2_DEMO_LOG_OPEN_STORAGE_KEY = 'codplay-v2-demo-log-open'
 
 /** Creates a timer scheduler that remains usable when Safari suspends animation frames. */
-function createV2DemoFrameScheduler(): FrameScheduler {
+function createV2DemoFrameScheduler(): CodPlayFrameScheduler {
   let nextRequestId = 1
   const pendingTimers = new Map<number, ReturnType<typeof globalThis.setTimeout>>()
 
@@ -41,14 +42,6 @@ function createV2DemoFrameScheduler(): FrameScheduler {
       pendingTimers.delete(requestId)
     },
   }
-}
-
-/** Creates the demo ticker without visibility pausing or animation-frame dependence. */
-function createV2DemoTicker(): TimeTicker {
-  return new TimeTicker({
-    pauseOnDocumentHidden: false,
-    scheduler: createV2DemoFrameScheduler(),
-  })
 }
 
 /** Mounts the responsive V2 frame and owns every control shared by its demos. */
@@ -240,52 +233,66 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       sceneSlot.className = `v2-demo-scene-slot ${options.active.stageClassName}`
       sceneSlot.setAttribute('aria-label', options.active.stageLabel)
 
-      const preload = codplay.preload.create()
-      const stylesheetUrls = [module.stylesheetUrl]
-      const releaseStylesheet = (): void => preload.release(stylesheetUrls)
-      const stylesheetResult = await preload.load({
-        manifest: {
-          entries: [{
-            url: module.stylesheetUrl,
-            type: 'css',
-            policy: { cache: 'default', priority: 'high' },
-          }],
-        },
-        options: { mode: 'author', container: sceneSlot },
-      })
-      if (!stylesheetResult.ok) {
-        log(`Feuille de style indisponible : ${stylesheetResult.error.message}`, 'error')
-        releaseStylesheet()
-        return
-      }
-
       const scene = module.createScene()
-      let engine: CodPlayEngine
+      let codplay: CodPlay
       try {
-        engine = codplay.engine.create({
-          ticker: createV2DemoTicker(),
-          diagnosticOutput: (diagnostic) => log(
-            `${diagnostic.code}: ${diagnostic.message}`,
-            diagnostic.severity === 'warning' ? 'warn' : 'error',
-          ),
+        codplay = new CodPlay({
+          engine: {
+            diagnosticOutput: (diagnostic) => log(
+              `${diagnostic.code}: ${diagnostic.message}`,
+              diagnostic.severity === 'warning' ? 'warn' : 'error',
+            ),
+          },
+          frameScheduler: createV2DemoFrameScheduler(),
+          pauseOnDocumentHidden: false,
         })
       } catch (error) {
         log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
-        releaseStylesheet()
+        return
+      }
+      const build = codplay.build({ scene })
+      if (!build.ok) {
+        if (build.diagnostics.errors.length === 0) log('SceneDoc build failed.', 'error')
+        codplay.destroy()
         return
       }
 
-      const build = engine.builder.compile({ scene })
-      if (!build.ok) {
-        if (build.diagnostics.errors.length === 0) log('SceneDoc build failed.', 'error')
-        releaseStylesheet()
-        engine.destroy()
+      const preload = codplay.preload
+      const stylesheetManifest: CompiledResourceManifest = {
+        entries: [{
+          url: module.stylesheetUrl,
+          type: 'css',
+          policy: { cache: 'default', priority: 'high' },
+        }],
+      }
+      const preloadManifest: RuntimePreloadManifestInput = module.preloadManifest === undefined
+        ? [stylesheetManifest, build.compiledScene.resources]
+        : [stylesheetManifest, build.compiledScene.resources, module.preloadManifest]
+      const preloadUrls = [...new Set([
+        ...stylesheetManifest.entries,
+        ...build.compiledScene.resources.entries,
+        ...(module.preloadManifest?.entries ?? []),
+      ].map((entry) => entry.url))]
+      const releaseResources = (): void => preload.release(preloadUrls)
+      const preloadResult = await preload.load({
+        manifest: preloadManifest,
+        options: { mode: module.preloadMode ?? 'author', container: sceneSlot },
+      })
+      if (!preloadResult.ok) {
+        log(`Ressources de démo indisponibles : ${preloadResult.error.message}`, 'error')
+        releaseResources()
+        codplay.destroy()
         return
+      }
+
+      codplay.resources.register(preloadResult.data)
+      for (const warning of preloadResult.data.warnings ?? []) {
+        log(`${warning.code}: ${warning.message}`, 'warn')
       }
 
       let instance: CodPlayInstance
       try {
-        instance = engine.instances.create({
+        instance = codplay.instances.create({
           instanceId: scene.id,
           compiledScene: build.compiledScene,
           functions: build.functions,
@@ -293,9 +300,10 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
           root: sceneSlot,
           mountTargets: [{ id: 'root-host', kind: 'root', storyId: options.active.rootStoryId }],
         })
-      } catch {
-        releaseStylesheet()
-        engine.destroy()
+      } catch (error) {
+        log(`Instance creation failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+        releaseResources()
+        codplay.destroy()
         return
       }
 
@@ -303,8 +311,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       log(`${options.active.title} initialisée · durée=${options.active.durationMs}ms`)
 
       sceneCleanup = () => {
-        releaseStylesheet()
-        engine.destroy()
+        releaseResources()
+        codplay.destroy()
       }
     },
     destroy() {

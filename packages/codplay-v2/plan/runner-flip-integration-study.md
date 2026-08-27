@@ -86,8 +86,10 @@ graphe ni un second algorithme temporel.
 ### Pas de bridge FLIP autonome
 
 Le bridge autonome, les captures persistées et leur cache ont disparu du
-périmètre V2. La géométrie affine HTML est une primitive interne au module
-`motion`; elle n'expose aucun runtime de capture concurrent au runner.
+périmètre V2. La géométrie affine HTML est une primitive interne au
+sous-système de mouvement du runner ; elle n'expose aucun runtime de capture
+concurrent au runner. La modularisation de FLIP/motion en capacité runtime est
+une dette d'architecture explicitement reportée à V2.5 dans le plan général.
 
 ## Architecture appliquée
 
@@ -515,7 +517,7 @@ effectuée dans le contexte Safari MCP avec les horaires de référence ; elle
 ne clôt pas la matrice complète, mais les observations sont consignées
 ci-dessous.
 
-La suite automatisée V2 compte désormais 73 fichiers et 472 tests passés ;
+La suite automatisée V2 compte désormais 73 fichiers et 473 tests passés ;
 le typecheck, le build des démos et `git diff --check` sont également passés.
 
 ### Correction de régression — reflow alterné des listes — 2026-08-23
@@ -613,7 +615,7 @@ resize vers `1120×760` suivi d'un seek à `2200 ms`, puis le cycle
 `LAST=10000 ms → seek 2200 ms` produisent le même ordre ; LAST ne laisse aucun
 overlay résiduel. Les tests couvrent l'ordre parent/enfant, l'ordre des frères,
 la conservation d'un overlay indépendant au-dessus de la cible et le retarget
-de reflow. `vitest` complet (472 tests), `tsc --noEmit` et le build de
+de reflow. `vitest` complet (473 tests), `tsc --noEmit` et le build de
 `@codplay/demos` passent. La validation Safari de ce nouveau graphe et la
 matrice complète de calendriers restent à exécuter.
 
@@ -655,7 +657,7 @@ la rupture.
 
 Les régressions ajoutées couvrent la séparation entre source pré-frontière et
 slot engagé, ainsi que le retarget d'un enfant lorsque son parent indirect est
-déjà animé. La suite V2 passe à `73` fichiers et `472` tests ; le typecheck et
+déjà animé. La suite V2 passe à `73` fichiers et `473` tests ; le typecheck et
 le build des démos passent également.
 
 Firefox 154.0.1 headless a rejoué `flip-stress` sur le chemin réel Seek : les
@@ -771,9 +773,9 @@ contrat avant modification.
 
 La page testée était `http://localhost:5173/?demo=flip-list`, avec le serveur
 déjà actif sur le port `5173`. Pour rendre la validation indépendante de la
-fenêtre Safari, le layout de démo fournit au moteur le `TimeTicker` existant
-avec `pauseOnDocumentHidden: false` et un scheduler de test fondé sur
-`setTimeout`. La vérification peut ainsi être menée page masquée, sans
+fenêtre Safari, le layout de démo construit `CodPlay` avec
+`pauseOnDocumentHidden: false` et un scheduler de test fondé sur `setTimeout`.
+Le `TimeTicker` reste interne à la façade. La vérification peut ainsi être menée page masquée, sans
 dépendre ni de `document.hidden` ni de la suspension du `requestAnimationFrame`.
 
 Le contrôle a effectivement été réalisé avec `document.visibilityState === 'hidden'` :

@@ -1,7 +1,9 @@
-export { codplay } from './facade'
+export { CodPlay } from './facade'
 export type {
   CodPlayApi,
   CodPlayCapabilityGroup,
+  CodPlayBuildMethod,
+  CodPlayComponents,
   CodPlayCompileFailure,
   CodPlayCompileInput,
   CodPlayCompileOptions,
@@ -9,24 +11,29 @@ export type {
   CodPlayCompileSuccess,
   CodPlayDiagnosticListener,
   CodPlayEngine,
-  CodPlayEngineBuilder,
-  CodPlayEngineConfig,
-  CodPlayEngineEventInput,
-  CodPlayEngineEvents,
-  CodPlayEngineInstances,
-  CodPlayEngineResources,
+  CodPlayEngineOptions,
   CodPlayEventime,
   CodPlayEventimeAddress,
+  CodPlayEventInput,
+  CodPlayEvents,
   CodPlayEventListener,
-  CodPlayFacade,
+  CodPlayFrameScheduler,
+  CodPlayInstances,
   CodPlayInstance,
   CodPlayInstanceDiagnostic,
   CodPlayInstanceEvents,
   CodPlayInstanceOptions,
+  CodPlayModules,
+  CodPlayOptions,
   CodPlayPreloadOptions,
   CodPlayProgress,
   CodPlayPublicEvent,
+  CodPlayRegistry,
+  CodPlayRegistryError,
+  CodPlayRegistryResult,
   CodPlayResourceRegistration,
+  CodPlayResources,
+  CodPlayServices,
   CodPlayTelco,
   CodPlayTelcoState,
   CodPlayTelcoStateListener,
@@ -48,11 +55,12 @@ export type {
 } from './runtime/catalog'
 export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
+  CompiledResourceManifest,
   CompiledRecord,
   CompiledScene,
 } from './scene/compiled'
+export type { SceneDoc } from './scene/types'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
-export type { FrameScheduler, Ticker } from './runtime/time'
 export type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,

@@ -24,12 +24,15 @@ par l'URL ; le module de la démo sélectionnée est chargé dynamiquement. Le
 chargement initial ne compile donc pas toutes les scènes V2.
 
 Chaque `demos/<demo-id>/main.ts` est un module de scène : il construit et
-retourne uniquement le `SceneDoc`. Une démo ne construit pas de page, de
-télécommande, de journal ni de boucle de lecture. Le layout commun utilise la
-façade publique CodPlay : il crée l'engine, compile la scène, crée l'instance et
-branche sa télécommande. Le catalogue, le runner HTML et le traitement du
-resize restent internes au layout V2. Le registre porte seulement les
-informations d'affichage et de chargement utilisées par le layout.
+retourne le `SceneDoc`, avec un manifest de preload optionnel lorsque des
+ressources ne peuvent pas être déduites des champs `src` compilés. Une démo ne
+construit pas de page, de télécommande, de journal ni de boucle de lecture. Le
+layout commun utilise la façade publique CodPlay : il crée un propriétaire
+`CodPlay`, compile la scène, précharge et enregistre ses ressources, crée
+l'instance et branche sa télécommande. Le catalogue, le ticker, le runner HTML
+et le traitement du resize restent internes à CodPlay ou au layout V2. Le
+registre porte les informations d'affichage et de chargement utilisées par le
+layout.
 
 ## Layout commun
 
@@ -50,12 +53,12 @@ automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
 suspend lorsqu'aucune instance ne joue. Le layout n'appelle donc pas les
 commandes générales de l'engine et ne pilote jamais directement le runner.
 
-Le layout de validation fournit à chaque engine le `TimeTicker` existant, avec
-`pauseOnDocumentHidden: false` et un scheduler de test fondé sur `setTimeout`.
-Cette configuration appartient uniquement au cadre de test des démos : leur
-lecture ne dépend ni de `document.hidden` ni de la suspension du
-`requestAnimationFrame` lorsque Safari masque la page. Le ticker par défaut de
-CodPlay conserve sa politique normale de visibilité et son scheduler normal.
+Le layout de validation injecte à chaque propriétaire `CodPlay` un scheduler de
+test fondé sur `setTimeout`, avec `pauseOnDocumentHidden: false`. Il ne crée ni
+`TimeTicker` ni ticker de démo : CodPlay garde ces détails en interne. Cette
+configuration appartient uniquement au cadre de test des démos ; leur lecture
+ne dépend ni de `document.hidden` ni de la suspension du
+`requestAnimationFrame` lorsque Safari masque la page.
 
 Le journal est une couche d'observation facultative. Son panneau est activable
 par un toggle, ses écritures sont regroupées par frame et son conteneur ne
@@ -74,7 +77,8 @@ parallèle.
 - une démo ne masque pas une lacune du core par un circuit local ;
 - les materializers tiers restent hors de la première tranche ; ils seront
   introduits seulement lorsqu'une démo et son contrat l'exigeront ;
-- `flip-list` est la première démo déplacée et sert aussi de test du layout.
+- `flip-list` est la première démo déplacée et sert aussi de test du layout ;
+  `components`, `player`, `runner` et `runner-overlay` suivent le même registre.
 
 Le composant `layout` et le composant `list` utilisés par `flip-list` sont les
 composants core fournis par CodPlay. Le layout publie toutes les zones indiquées

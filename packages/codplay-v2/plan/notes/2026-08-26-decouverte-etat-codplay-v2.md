@@ -79,9 +79,12 @@ La façade publique masque `RuntimeEngine`, `RuntimePlayer`, le catalogue, le
 materializer et le runner. Le chemin normal d'une démo V2 est :
 
 ```text
-codplay.engine.create(...)
+const codplay = new CodPlay(options)
+codplay.engine
+codplay.instances
+codplay.preload
   -> engine.builder.compile(...)
-  -> engine.instances.create(...)
+  -> codplay.instances.create(...)
   -> instance.telco / instance.events / instance.diagnostic
 ```
 
@@ -99,25 +102,32 @@ une nouvelle API de materialisation du moteur.
 La surface publique actuelle est :
 
 ```text
-codplay.engine.create(config?)
-codplay.preload.create(options?)
+new CodPlay(options)
+codplay.engine
+codplay.instances
+codplay.preload
 ```
 
 L'engine expose :
 
 ```text
 engine.builder.compile({ scene })
-engine.instances.create(options)
-engine.instances.get(instanceId)
-engine.instances.destroy(instanceId)
 engine.resources.register(resources)
 engine.events.emit(input)
 engine.events.onEvent(listener)
-engine.start(ticker?)
+engine.start()
 engine.pause()
 engine.stop()
 engine.advance(nowMs, marginMs?)
 engine.destroy()
+```
+
+Le propriétaire `CodPlay` expose le registre des instances :
+
+```text
+codplay.instances.create(options)
+codplay.instances.get(instanceId)
+codplay.instances.destroy(instanceId)
 ```
 
 Il n'y a pas de `engine.seek()`. Le seek public passe par l'instance qui doit
@@ -211,7 +221,7 @@ le player.
 `preload` est un service externalisé :
 
 ```text
-codplay.preload.create()
+codplay.preload
   -> preload.load(manifest ou manifestes)
   -> engine.resources.register(result)
   -> création de l'instance puis initialisation après validation
@@ -223,7 +233,7 @@ disponibles. `init()` du player ne déclenche pas un preload implicite. Il n'y a
 pas de duplication d'éléments dans le DOM pour précharger une ressource.
 
 Le plan conserve un éventuel raccourci `run()` pour la diffusion autonome ; il
-ne fait pas partie de la surface `CodPlayFacade` actuellement exposée. Tant
+ne fait pas partie de la surface `CodPlay` actuellement exposée. Tant
 qu'une interface dédiée n'est pas publiée, il ne faut pas l'utiliser comme une
 API V2 ni l'ajouter dans une démo. Lorsqu'il sera construit, il devra enchaîner
 le preload explicite, l'initialisation puis la lecture, sans redéfinir le
@@ -250,7 +260,7 @@ service preload ni créer une seconde façon de lire une scène.
 | `packages/demos/src/v2/registry.ts` | Une définition par démo : id, chemin, titre, description et chargement | Être dupliqué dans chaque page |
 
 Le layout est le consommateur commun de la façade. Une démo ne doit pas
-réinventer `codplay.engine.create`, la telco ou le journal pour « simplifier »
+réinventer `new CodPlay`, la telco ou le journal pour « simplifier »
 son montage. Le titre affiché et le titre de la liste viennent de la même
 entrée du registry ; le choix du texte appartient à l'auteur du projet, pas à
 un helper de layout.
@@ -344,7 +354,7 @@ FLIP.
 | Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
-| Démos V2 | Layout et registry présents ; `flip-stress` sert de fixture visuelle ; chantier encore `En cours` | Les démos utilisent la façade et le layout commun ; elles ne définissent pas le runtime. |
+| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `player`, `runner` et `runner-overlay` passent par le layout commun ; chantier encore `En cours` | Les démos utilisent la façade et le layout commun ; `player` fournit son manifest de preload, les scènes runner ne définissent plus de runtime parallèle. |
 | Authoring éditeur | Reporté à la reprise de l'éditeur | Aucun accès DOM ou API authoring générique à inventer dans la façade actuelle. |
 
 Le code de démonstration historique encore présent sous `packages/demos/src/v2`
@@ -357,7 +367,7 @@ doit pas être réintroduit dans le chemin officiel.
 La vérification automatisée exécutée après cette mise à jour est :
 
 ```text
-npm test --workspace=@codplay/codplay-v2       73 fichiers, 472 tests passés
+npm test --workspace=@codplay/codplay-v2       73 fichiers, 473 tests passés
 npm run typecheck --workspace=@codplay/codplay-v2
 npm run build --workspace=@codplay/demos
 git diff --check
@@ -410,10 +420,36 @@ présents et continus ; le maximum observé sur un pas de `1 ms` est `2.172 px`
 sur `Qa` à `1700 ms`, et `Qc` mesure `1.710 px` à `3700 ms`, sans la rupture
 précédente de plus de `40 px`. Play a traversé `3700 ms` de `3698` à `3715 ms`
 avec la vitesse normale de la trajectoire. La suite complète est à `73` fichiers
-et `472` tests passés ; typecheck, build des démos et `git diff --check` passent.
+et `473` tests passés ; typecheck, build des démos et `git diff --check` passent.
 La validation Safari du nouveau graphe, ainsi que la matrice complète resize,
 persistance et changements de calendrier, restent ouvertes. Le statut reste
 `En cours`.
+
+La passe suivante a raccordé `player` et `runner` au registry V2. Les deux
+anciennes pages autonomes ont été retirées : `player` expose sa scène et son
+manifest média au module chargé par le registry, tandis que `runner` expose ses
+deux scènes (`runner` et `runner-overlay`). Le layout commun compile, précharge,
+enregistre les ressources auprès de l'engine, puis crée l'instance publique ;
+aucun de ces modules ne construit désormais de catalogue, de player, de runner,
+de telco ou de page locale.
+
+Le build Vite et le typecheck V2 passent après cette migration. Firefox 154.0.1
+headless a monté successivement `?demo=player`, `?demo=runner` et
+`?demo=runner-overlay` : remote commun présent, scène montée, anciennes pages
+absentes et aucun diagnostic runtime. `player` expose ses nodes audio/vidéo avec
+`readyState: 4`; Play puis Seek à `150 ms` passent par la telco commune sur les
+trois routes. Le typecheck global de `packages/demos` reste non concluant à
+cause d'erreurs historiques dans `src/v1`, sans erreur signalée dans `src/v2`.
+
+La surface a ensuite été resserrée pour conserver la frontière de construction
+de V1 : `new CodPlay(options)` est l'unique entrée publique. Le layout injecte
+son `frameScheduler` au constructeur ; `CodPlay` construit le `TimeTicker`
+interne et expose seulement `engine`, `instances`, `preload` et `destroy`. `Ticker`, les
+factories de ticker et les adaptateurs `EngineFacadeImpl`/`InstanceFacadeImpl`
+ne sortent plus des modules publics. Les tests de façade couvrent l'injection
+du scheduler ainsi que les modes ticker possédé et frames externes ; le build,
+le typecheck, les 473 tests V2 et la passe Firefox headless des trois routes
+registry restent passants.
 
 ## 10. Procédure obligatoire pour éviter les régressions tournantes
 

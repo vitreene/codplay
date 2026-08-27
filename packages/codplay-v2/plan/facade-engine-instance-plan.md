@@ -4,7 +4,7 @@
 
 > Statut : Fini
 > Version CodPlay : V2 foundation
-> Contrat validé le 2026-08-26 ; implémentation et vérification terminées pour
+> Contrat révisé le 2026-08-27 ; implémentation et vérification terminées pour
 > la façade V2 foundation.
 
 ## Objet
@@ -12,7 +12,7 @@
 Définir la frontière publique de CodPlay V2 pour :
 
 - configurer les capacités communes ;
-- créer un engine et ses instances ;
+- créer un propriétaire `CodPlay`, son engine et son registre d'instances ;
 - compiler séparément une `SceneDoc` en `CompiledScene` ;
 - piloter une instance ;
 - injecter des events dans une scène ;
@@ -96,14 +96,15 @@ Les exports et les regroupements ci-dessous constituent la surface arrêtée pou
 la première implémentation de la façade.
 
 ```text
-CodPlay / EngineFacade
+CodPlay
   ├─ configuration des capacités avant verrouillage
-  ├─ compilation explicite via le builder lié au catalogue de l'engine
   ├─ accès explicite au service de preload
-  ├─ ressources partagées et source de temps
-  ├─ création et destruction des instances
-  ├─ avancement commun
-  └─ diagnostics et observation des events de portée `public`
+  ├─ registre de création, adressage et destruction des instances
+  └─ engine
+      ├─ compilation explicite via le builder lié au catalogue
+      ├─ ressources partagées et source de temps
+      ├─ avancement commun
+      └─ diagnostics et observation des events de portée `public`
 
 InstanceFacade
   ├─ une identité d'instance en lecture seule
@@ -168,11 +169,12 @@ capacité porte le domaine et la méthode garde un nom local. Une méthode ne
 répète donc pas dans son nom le domaine déjà porté par la propriété.
 
 ```text
-codplay.engine.create(config)
-codplay.preload.create(options?)
-engine.instances.create(options)
-engine.instances.get(instanceId)
-engine.instances.destroy(instanceId)
+const codplay = new CodPlay(options)
+codplay.engine
+codplay.preload
+codplay.instances.create(options)
+codplay.instances.get(instanceId)
+codplay.instances.destroy(instanceId)
 engine.resources.register(resources)
 engine.events.emit(input)
 engine.events.onEvent(listener)
@@ -185,7 +187,7 @@ désignent pas une sous-capacité : `engine.start`, `engine.pause`,
 La convention de namespace concerne l'adressage des capacités, pas
 l'obligation d'extraire leurs méthodes. L'appel contractuel reste donc
 `instance.telco.seek(timeMs)`, `instance.telco.play()` ou
-`engine.instances.create(options)`. Le seek n'est pas une méthode directe de
+`codplay.instances.create(options)`. Le seek n'est pas une méthode directe de
 l'engine : la façade publique le porte par l'instance concernée.
 
 Les accès qui restent directs sont limités à ce qui n'est pas une capacité
@@ -200,7 +202,7 @@ opérationnelle de l'instance :
 Le `CompiledScene`, le materializer, la racine et le contexte de substrat ne
 sont pas des propriétés opérationnelles publiques de l'instance : ils sont
 fournis à la création et restent encapsulés. `destroy` reste porté par
-`engine.instances.destroy()` afin que le propriétaire contrôle le teardown.
+`codplay.instances.destroy()` afin que le propriétaire contrôle le teardown.
 
 Il n'y aura donc pas de surface publique `instance.play()`, `instance.pause()`,
 `instance.emit()`, `instance.beginCapture()` ou `instance.onDiagnostic()` en
@@ -212,20 +214,22 @@ fait pas partie de la cible actuelle.
 
 ### Responsabilités
 
-L'engine façade configure, avant toute instance :
+Le propriétaire `CodPlay` configure, avant toute instance :
 
 - les composants `core` déjà fournis ;
 - les composants et capacités `foreign` ajoutés ou surchargés ;
 - les services et leurs destinations de materialization ;
 - les modules déclarés une fois et instanciés par player ;
 - les ressources partagées et le cache de preload ;
-- la source de temps : ticker possédé par CodPlay ou frames fournies par l'hôte ;
+- la source de temps : `frameScheduler` fourni à `CodPlay` pour son ticker
+  interne, ou frames fournies par l'hôte via `advance()` ;
 - la sortie des diagnostics ;
 - le canal d'events sortants.
 
 Les ajouts et overrides doivent être fournis à la façade pendant la
-construction de l'engine. La façade construit le catalogue unique, vérifie les
-collisions puis le verrouille avant de retourner l'engine prêt à instancier.
+construction de `CodPlay`. La façade construit le catalogue unique, vérifie les
+collisions puis le verrouille avant d'exposer l'engine et le registre
+`codplay.instances` prêts à l'emploi.
 L'appel interne de verrouillage n'est pas exposé au consommateur. Le
 `RuntimeCapabilityCatalog` reste une dépendance interne : il n'existe pas de
 registre public ni de mutation de catalogue après la création de l'engine.
@@ -250,22 +254,25 @@ La configuration de création doit fournir des groupes d'entrées équivalents �
 `component`, `service` et `module` de V1 :
 
 ```text
-codplay.engine.create({
+new CodPlay({
   components: { register, override },
   services: { register, override },
   modules: { register, override },
   resources,
-  ticker,
+  frameScheduler,
 })
   -> construit le catalogue
+  -> construit le ticker interne depuis le scheduler hôte
   -> valide la configuration
   -> verrouille le catalogue en interne
-  -> retourne un EngineFacade prêt à l'emploi
+  -> expose l'engine et le preload prêts à l'emploi
 ```
 
 Les types et l'assemblage sont implémentés dans `src/facade/`. Une méthode
 publique `engine.finalize()` n'est pas retenue : le catalogue est verrouillé
-pendant `codplay.engine.create()` et ce détail reste interne. Chaque instance
+pendant `new CodPlay(options)` et ce détail reste interne. Le `TimeTicker` est
+également construit à ce moment-là à partir du `frameScheduler` optionnel ; il
+n'est pas exposé par le layout ou l'engine. Chaque instance
 est assemblée par `HtmlPlayerRunner`, qui possède les détails de la
 materialisation HTML/DOM. La façade ne reçoit pas de materializer et n'ouvre
 aucun chemin de materialisation étranger.
@@ -284,16 +291,17 @@ La compilation reste indépendante :
 
 ```text
 SceneDoc --SceneBuilder + snapshot de validation--> CompiledScene + functions
-CompiledScene + engine + instance options --------> InstanceFacade
+CompiledScene + codplay + instance options --------> InstanceFacade
 ```
 
 La frontière publique de compilation reprend la méthode V1 `BuilderFacade.compile`,
 mais elle est liée à l'engine qui porte le catalogue core/foreign :
 
 ```text
-const engine = codplay.engine.create(config)
+const codplay = new CodPlay(config)
+const engine = codplay.engine
 const build = engine.builder.compile({ scene })
-const instance = engine.instances.create({
+const instance = codplay.instances.create({
   ...options,
   compiledScene: build.compiledScene,
   functions: build.functions,
@@ -308,7 +316,7 @@ aucun artefact utilisable.
 
 La création d'une instance reçoit au minimum :
 
-- un `instanceId` unique dans l'engine ;
+- un `instanceId` unique dans le propriétaire `CodPlay` ;
 - un `CompiledScene` ;
 - sa collection de fonctions ;
 - sa racine HTML et ses cibles de montage ;
@@ -323,10 +331,11 @@ présentation du mouvement et la source pointeur. Un composant peut rendre un
 `svg` ou déclarer un `canvas` comme cible interne ; cela ne constitue pas une
 sélection de materializer ni une ouverture de Canvas ou Three.js dans CodPlay.
 
-L'engine et ses instances partagent le catalogue et l'horloge, mais jamais la
-racine, le materializer ou l'état runtime d'une autre instance. La destruction
-d'une instance passe une seule fois par `engine.instances.destroy()` et libère
-sa materialization sans détruire celles des autres instances.
+Le registre `codplay.instances` et l'engine partagent le catalogue et l'horloge,
+mais jamais la racine, le materializer ou l'état runtime d'une autre instance.
+La destruction d'une instance passe une seule fois par
+`codplay.instances.destroy()` et libère sa materialization sans détruire celles
+des autres instances.
 
 `engine.destroy()` est porté par la façade. Il orchestre, dans un ordre unique,
 l'arrêt du ticker, la destruction ordonnée des instances et la libération des
@@ -347,7 +356,7 @@ dans quel ordre les instances doivent être avancées :
 - `stop()` qui cesse l'emploi de la machine et arrête l'avancement, sans
   imposer de remise à `0` ni détruire les instances ;
 - `advance(nowMs, marginMs?)` lorsque l'hôte fournit les frames ;
-- enregistrement et retrait ordonnés des instances ;
+- coordination interne de l'enregistrement et du retrait ordonnés des instances ;
 - coordination interne des seeks de players, sans méthode supplémentaire sur la
   façade ;
 - état de l'engine et diagnostics d'opération.
@@ -406,7 +415,7 @@ seul responsable du teardown. Ces comportements sont raccordés par
 `EngineFacadeImpl` au `RuntimeEngine` unique.
 
 Une seule source temporelle est autorisée par engine : soit le ticker possédé
-par `start(ticker?)`, soit les frames fournies par `advance()`. `advance()` ne
+par `CodPlay` et démarré par `start()`, soit les frames fournies par `advance()`. `advance()` ne
 doit pas être utilisé en parallèle d'un ticker possédé par l'engine ; cette
 concurrence doit être refusée par un diagnostic.
 
@@ -465,7 +474,7 @@ pas partie de `telco`.
 
 `destroy()` reste une opération de teardown de l'instance et de son
 materializer, pas une commande de lecture de la telco. Elle est donc portée par
-le propriétaire de l'instance (`engine.instances.destroy()` ou l'opération de
+le propriétaire de l'instance (`codplay.instances.destroy()` ou l'opération de
 lifecycle retenue), tandis que `telco.destroy()` ne pourra désigner que la
 libération de l'adaptateur de commande si celle-ci est nécessaire.
 
@@ -819,11 +828,11 @@ transforms ne modifient pas la portée d'un eventime.
 ## 7. Preload, telco et diffusion
 
 - `RuntimePreload` reste une capacité externe au player et à l'instance ; le
-  choix du manifeste et du moment du chargement appartient à l'hôte. Il peut
-  être créé et appelé à tout moment, y compris après la création de l'engine.
-- La façade publique `codplay` propose un accès explicite à cette capacité via
-  `codplay.preload.create(options?)`, plutôt qu'un `instance.preload()` ou qu'un
-  `init()` implicite.
+  choix du manifeste et du moment du chargement appartient à l'hôte. Le
+  service est créé par `CodPlay` et peut être appelé à tout moment, y compris
+  après la création de l'engine.
+- La façade publique `CodPlay` fournit cette capacité via `codplay.preload`,
+  plutôt qu'un `instance.preload()` ou qu'un `init()` implicite.
 - Le résultat d'un chargement est transmis explicitement à l'engine par son
   entrée de ressources (`engine.resources.register(...)`). Le transfert
   conserve les URLs chargées et les métadonnées du résultat preload ; il ne
@@ -845,7 +854,7 @@ transforms ne modifient pas la portée d'un eventime.
 - `RuntimeTelco` est branchée sur `InstanceFacade.telco` et ne connaît ni
   `RuntimePlayer`, ni le catalogue, ni le materializer.
 
-`codplay.preload.create()` est la seule entrée publique de création du service
+`new CodPlay(options)` est la seule entrée publique de création du service
 preload. Aucune instance ne le déclenche dans `init()`, et aucune façade ne
 crée une seconde matérialisation pour le charger.
 
@@ -977,9 +986,17 @@ font pas partie de cette interface.
 #### Création et configuration
 
 ```text
-codplay.engine.create(config) -> EngineFacade
-codplay.preload.create(options?: CodPlayPreloadOptions) -> RuntimePreloadApi
+new CodPlay(options) -> CodPlay
+codplay.engine -> EngineFacade
+codplay.instances -> CodPlayInstances
+codplay.preload -> RuntimePreloadApi
+codplay.destroy()
 ```
+
+Le constructeur est l'unique point de composition du propriétaire CodPlay. Il
+reçoit les capacités, les ressources, les diagnostics et, si nécessaire, le
+`frameScheduler` de l'hôte. `CodPlay` construit le `TimeTicker` en interne ;
+ni `TimeTicker`, ni `Ticker`, ni une factory de ticker ne sortent de la façade.
 
 La compilation est accessible sur l'engine créé, comme méthode du builder
 V1, afin de partager son catalogue configuré :
@@ -988,26 +1005,29 @@ V1, afin de partager son catalogue configuré :
 engine.builder.compile({ scene }) -> CodPlayCompileResult
 ```
 
-`config` regroupe :
+`options` regroupe :
 
 ```text
 components:   { register, override }
 services:     { register, override }
 modules:      { register, override }
 resources
-ticker?
+frameScheduler?
+pauseOnDocumentHidden?
+preload?
 ```
 
-`codplay.preload.create` expose directement le service de preload sans l'attacher à une
+`CodPlay` expose directement son service de preload sans l'attacher à une
 instance :
 
 ```text
-const preload = codplay.preload.create(options?)
+const codplay = new CodPlay(options)
+const preload = codplay.preload
 const result = await preload.load({
   manifest: manifestOrManifests,
   options: loadOptions?,
 })
-const engine = codplay.engine.create(config)
+const engine = codplay.engine
 if (result.ok) engine.resources.register(result.data)
 ```
 
@@ -1038,8 +1058,8 @@ manifestes. `RuntimePreloadOptions` porte `mode`, `timeout` et le `container`
 de portée CSS. `RuntimePreloadResult` fournit les ressources chargées, les
 ressources ignorées, les métadonnées et les warnings éventuels.
 
-La factory ne crée pas de singleton caché : le cache est fourni par l'hôte ou
-créé pour cette instance de service, puis peut être partagé explicitement. Le
+Le constructeur ne crée pas de singleton global : le cache est fourni par
+l'hôte ou créé pour cette instance de service, puis peut être partagé explicitement. Le
 résultat et ses métadonnées sont transmis à l'engine par une entrée de
 ressources explicite ; ils ne sont jamais injectés implicitement par
 `InstanceFacade.init()`.
@@ -1052,9 +1072,9 @@ composés, validés puis verrouillés en interne. L'interface ne propose pas de
 #### Instances et hôte HTML/DOM
 
 ```text
-engine.instances.create(options) -> InstanceFacade
-engine.instances.get(instanceId) -> InstanceFacade | undefined
-engine.instances.destroy(instanceId)
+codplay.instances.create(options) -> InstanceFacade
+codplay.instances.get(instanceId) -> InstanceFacade | undefined
+codplay.instances.destroy(instanceId)
 engine.destroy()
 ```
 
@@ -1067,16 +1087,16 @@ autre instance. Aucun materializer n'est fourni par l'appelant.
 #### Ticker et pilotage de l'engine
 
 ```text
-engine.start(ticker?)
+engine.start()
 engine.pause() // suspend la propagation, sans repositionner les instances
 engine.stop() // cesse l'emploi de la machine, sans remise à zéro imposée
 engine.advance(nowMs, marginMs?)
 engine.events.emit(input)
 ```
 
-`start` concerne le ticker possédé par l'engine ; `advance` est le point
-d'entrée lorsque l'hôte fournit les frames. Dans ce second mode, le ticker
-reste la propriété de l'hôte et n'est jamais répliqué par CodPlay. `pause` ou
+`start` concerne le ticker construit par `CodPlay` ; `advance` est le point
+d'entrée lorsque l'hôte fournit les frames. Dans ce second mode, le scheduler
+de l'hôte reste sa propriété et n'est jamais répliqué par CodPlay. `pause` ou
 `stop` peuvent laisser les appels `advance` arriver, mais aucune frame n'est
 alors propagée aux instances. `emit` lit dans `input` l'`instanceId`, l'eventime et le contexte d'adressage
 `scene`/`story`/`track`, puis transmet ces mêmes données à l'instance. Une
@@ -1168,8 +1188,8 @@ façade générique par anticipation.
 
 #### Preload et diffusion
 
-`codplay.preload.create(options?)` rend la capacité externe utilisable par
-Sighty, l'éditeur et la diffusion. `run()` est une commodité autonome qui peut
+`codplay.preload` rend la capacité externe utilisable par Sighty, l'éditeur et
+la diffusion. `run()` est une commodité autonome qui peut
 enchaîner `preload.load -> init -> play` avec ce même service. Ni `preload`, ni
 `run` ne créent une seconde matérialisation DOM et ne deviennent des méthodes
 cachées de l'instance.
@@ -1184,8 +1204,8 @@ cachées de l'instance.
   de retour `{ ok: false }` ;
 - [x] valider le regroupement des capacités d'instance (`telco`, `events`,
   `diagnostic`) et la liste stricte des accès directs autorisés ;
-- [x] valider `codplay.engine.create(config)` et les groupes `register/override` de
-  composants, services et modules ;
+- [x] valider `new CodPlay(options)`, l'injection du `frameScheduler` et les groupes
+  `register/override` de composants, services et modules ;
 - [x] refuser explicitement tout `register` ou `override` après le verrouillage du
   catalogue ;
 - [x] fixer la frontière de l'hôte HTML/DOM par instance et des ressources partagées ;
@@ -1205,7 +1225,7 @@ cachées de l'instance.
 - [x] exposer `engine.builder.compile({ scene })` avec le catalogue de l'engine et
   retourner `compiledScene`, `functions` et les diagnostics sans créer d'instance ;
 - [x] encapsuler la création et le verrouillage du catalogue core/foreign ;
-- [x] créer, ordonner et détruire les instances ;
+- [x] créer, ordonner et détruire les instances via `codplay.instances` ;
 - [x] créer `engine.destroy()` avec la façade et lui faire orchestrer l'arrêt du
   ticker, le teardown idempotent de toutes les instances puis la libération
   des ressources partagées ;
@@ -1283,8 +1303,8 @@ cachées de l'instance.
   `instance.events` ;
 - [x] raccorder l'assemblage HTML/DOM core par défaut à la façade sans exposer
   `HtmlPlayerRunner` ni le catalogue ;
-- [x] exposer `codplay.preload.create(options?) -> RuntimePreloadApi` sans le
-  rattacher à une instance ;
+- [x] exposer `codplay.preload -> RuntimePreloadApi` depuis le propriétaire
+  `CodPlay`, sans le rattacher à une instance de scène ;
 - [x] fixer le transfert explicite des ressources et métadonnées preload vers
   l'engine ;
 - [x] conserver `run()` comme option de diffusion autonome.
@@ -1307,10 +1327,15 @@ cachées de l'instance.
   attente du tick normal et la visibilité des events publics ;
 - [x] vérifier le transfert explicite du preload, y compris les ressources
   `skipped`, ainsi que les diagnostics non bloquants ;
+- [x] inscrire les verticales V2 `player`, `runner` et `runner-overlay` dans le
+  registry commun, avec le preload média et les scènes runner fournis comme
+  modules sans runtime parallèle ;
 - [x] vérifier la composition `foreign`, l'absence de registre secondaire et le
   teardown idempotent des instances ;
-- [x] exécuter la suite complète V2 : 72 fichiers et 456 tests passés ;
+- [x] exécuter la suite complète V2 : 73 fichiers et 473 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
+- [x] vérifier dans Firefox headless les routes registry `player`, `runner` et
+  `runner-overlay`, avec Play et Seek via la télécommande commune ;
 - [x] valider visuellement `flip-stress` dans le navigateur et conserver cette
   vérification séparée des tests de façade ; lecture lancée, temps avancé et
   aucune erreur console constatée dans Safari.
@@ -1322,11 +1347,12 @@ clôture.
 
 ## État de travail
 
-Le contrat est validé et son implémentation de base est engagée.
+Le contrat est validé et son implémentation de base est terminée.
 
 Déjà implémenté :
 
-- `codplay.engine.create(config)` et `codplay.preload.create(options?)` ;
+- `new CodPlay(options)`, avec `codplay.engine`, `codplay.instances` et `codplay.preload` ; le
+  `frameScheduler` est injecté au constructeur et le `TimeTicker` reste interne ;
 - `engine.builder.compile({ scene })`, lié au catalogue configuré de l'engine ;
 - composition unique core/foreign et verrouillage du catalogue ;
 - création, adressage, pilotage et destruction des instances ;
@@ -1338,7 +1364,7 @@ Déjà implémenté :
 
 Validation exécutée :
 
-- `npm test --workspace=@codplay/codplay-v2` : 72 fichiers, 456 tests passés ;
+- `npm test --workspace=@codplay/codplay-v2` : 73 fichiers, 473 tests passés ;
 - `npm run typecheck --workspace=@codplay/codplay-v2` : succès ;
 - `npm run build --workspace=@codplay/demos` : succès ;
 - `git diff --check` : succès.
@@ -1351,3 +1377,364 @@ ultérieur, hors de ce plan.
 Le [descriptif de découverte et d'état destiné aux agents](./notes/2026-08-26-decouverte-etat-codplay-v2.md)
 est créé. Aucune API supplémentaire ne doit être ajoutée en dehors de ces
 éléments.
+
+## 10. Proposition de recentrage de la façade — à relire
+
+Cette section conserve l'état implémenté ci-dessus comme référence actuelle. Elle
+enregistre une proposition d'évolution de l'API utilisateur ; elle ne constitue
+pas encore un contrat et ne doit pas être implémentée avant relecture.
+
+### Avant — surface actuellement implémentée
+
+La façade crée le propriétaire `CodPlay`, mais le parcours principal traverse
+encore l'objet `engine` :
+
+```ts
+const codplay = new CodPlay({
+  components,
+  services,
+  modules,
+  resources,
+  diagnosticOutput,
+  frameScheduler,
+  preload,
+})
+
+const engine = codplay.engine
+const build = engine.builder.compile({ scene })
+const instance = codplay.instances.create({
+  ...options,
+  compiledScene: build.compiledScene,
+  functions: build.functions,
+})
+
+engine.resources.register(resources)
+engine.events.onEvent(listener)
+engine.start()
+codplay.destroy()
+```
+
+Surface correspondante :
+
+```text
+codplay.engine.builder
+codplay.engine.resources
+codplay.engine.events
+codplay.instances
+codplay.preload
+codplay.engine.start/pause/stop/advance/destroy
+codplay.destroy()
+```
+
+### Après — façade orientée usage utilisateur
+
+`CodPlay` devient l'API de parcours. Les options propres à la composition de
+l'engine sont regroupées sous `options.engine`, tandis que les capacités
+utilisées directement par l'appelant sont portées par `codplay` :
+
+```ts
+const codplay = new CodPlay({
+  engine: {
+    components,
+    services,
+    modules,
+    resources,
+    diagnosticOutput,
+  },
+  frameScheduler,
+})
+
+const build = codplay.build({ scene })
+const instance = codplay.instances.create({
+  ...options,
+  compiledScene: build.compiledScene,
+  functions: build.functions,
+})
+
+codplay.resources.register(definition)
+codplay.events.onEvent(listener)
+codplay.engine.start()
+codplay.destroy()
+```
+
+Surface proposée :
+
+```text
+CodPlay
+  ├─ build(...)
+  ├─ components.register/override
+  ├─ services.register/override
+  ├─ modules.register/override
+  ├─ resources.register/override
+  ├─ instances
+  ├─ events
+  ├─ engine.start/pause/stop/advance   # pilotage technique avancé
+  └─ destroy                           # teardown utilisateur
+```
+
+Le type d'options envisagé devient :
+
+```ts
+type CodPlayOptions = Readonly<{
+  engine?: CodPlayEngineOptions
+  frameScheduler?: CodPlayFrameScheduler
+  pauseOnDocumentHidden?: boolean
+}>
+
+type CodPlayEngineOptions = Readonly<{
+  components?: CodPlayCapabilityGroup<RuntimeComponentDefinition>
+  services?: CodPlayCapabilityGroup<RuntimeComponentServiceDefinition>
+  modules?: CodPlayCapabilityGroup<RuntimeModuleServiceDefinition>
+  resources?: CodPlayResourceRegistration
+  diagnosticOutput?: DiagnosticOutput
+}>
+```
+
+Décisions à commenter avant modification du code :
+
+- `build`, les registres `components`, `services`, `modules`,
+  `resources` et `events` remontent sur `CodPlay` sans créer de second
+  circuit ;
+- `codplay.instances` reste le seul registre public de création, adressage et
+  destruction des instances ;
+- `codplay.preload` et son interface sont reportés ; ils ne sont pas justifiés
+  par la proposition actuelle ;
+- `codplay.engine` est réduit au pilotage technique avancé
+  (`start`, `pause`, `stop`, `advance`) ;
+- `codplay.destroy()` est le teardown utilisateur ; le maintien éventuel de
+  `engine.destroy()` comme primitive publique reste à décider ;
+- les options de composition de l'engine sont regroupées sous `options.engine`.
+
+## 12. Amendement — choix build et registres complets — En cours
+
+### 12.1 Décisions enregistrées
+
+| Sujet | Décision |
+|---|---|
+| méthode de construction de l'artefact | codplay.build(input, options?) |
+| codplay.compile(...) | non retenu |
+| codplay.builder | supprimé de la surface proposée |
+| preload | reporté ; interface non justifiée |
+| registre d'instances | codplay.instances uniquement |
+| pilotage technique | codplay.engine.start/pause/stop/advance |
+| teardown utilisateur | codplay.destroy() |
+
+### 12.2 Entrées de registre actuelles
+
+| Entrée | Version actuelle |
+|---|---|
+| options.components.register[] | composition au constructeur |
+| options.components.override[] | composition au constructeur |
+| options.services.register[] | composition au constructeur |
+| options.services.override[] | composition au constructeur |
+| options.modules.register[] | composition au constructeur |
+| options.modules.override[] | composition au constructeur |
+| codplay.engine.resources.register(resources) | présent |
+| codplay.engine.resources.override(resources) | absent |
+| codplay.engine.builder.compile(input, options?) | présent |
+| codplay.engine.events.emit(input) | présent |
+| codplay.engine.events.onEvent(listener) | présent |
+| codplay.instances.create(options) | présent |
+| codplay.instances.get(instanceId) | présent |
+| codplay.instances.destroy(instanceId) | présent |
+
+Les groupes components, services et modules sont composés dans le même catalogue
+que les registres directs. Le catalogue reste ouvert après `new CodPlay(options)`
+et se verrouille à la première opération qui consomme ses définitions :
+`codplay.build(...)` ou `codplay.instances.create(...)`. Les appels directs
+`register/override` sont donc possibles entre la construction de la façade et
+ce verrouillage, sans créer de catalogue parallèle. Après verrouillage, ils
+retournent un `CodPlayRegistryResult` en échec et publient le diagnostic de
+façade correspondant.
+
+### 12.3 Registres proposés
+
+#### Contrat commun register / override
+
+~~~ts
+type CodPlayRegistryError = Readonly<{
+  code: string
+  message: string
+  details?: Readonly<Record<string, unknown>>
+}>
+
+type CodPlayRegistryResult =
+  | Readonly<{
+      ok: true
+      status: 'registered' | 'overridden'
+    }>
+  | Readonly<{
+      ok: false
+      error: CodPlayRegistryError
+    }>
+
+type CodPlayRegistry<Definition> = Readonly<{
+  register: (definition: Definition) => CodPlayRegistryResult
+  override: (definition: Definition) => CodPlayRegistryResult
+}>
+~~~
+
+#### Entrées complètes
+
+~~~ts
+type CodPlayComponents = CodPlayRegistry<RuntimeComponentDefinition>
+type CodPlayServices = CodPlayRegistry<RuntimeComponentServiceDefinition>
+type CodPlayModules = CodPlayRegistry<RuntimeModuleServiceDefinition>
+
+type CodPlayResources = Readonly<{
+  register: (registration: CodPlayResourceRegistration) => void
+}>
+~~~
+
+Noms de familles V1 à comparer aux noms pluriels proposés :
+
+~~~text
+codplay.component.register(definition)
+codplay.component.override(definition)
+codplay.service.register(definition)
+codplay.service.override(definition)
+codplay.module.register(definition)
+codplay.module.override(definition)
+~~~
+
+~~~text
+codplay.components.register(definition)
+codplay.components.override(definition)
+
+codplay.services.register(definition)
+codplay.services.override(definition)
+
+codplay.modules.register(definition)
+codplay.modules.override(definition)
+~~~
+
+#### Clés de registre
+
+| Registre | Clé candidate | Définition candidate |
+|---|---|---|
+| codplay.components | type | RuntimeComponentDefinition |
+| codplay.services | name | RuntimeComponentServiceDefinition |
+| codplay.modules | id ou name | RuntimeModuleServiceDefinition |
+
+### 12.4 CodPlayApi proposé
+
+~~~ts
+type CodPlayApi = Readonly<{
+  readonly build: CodPlayBuildMethod
+  readonly components: CodPlayComponents
+  readonly services: CodPlayServices
+  readonly modules: CodPlayModules
+  readonly resources: CodPlayResources
+  readonly instances: CodPlayInstances
+  readonly events: CodPlayEvents
+  readonly engine: CodPlayEngine
+  destroy: () => void
+}>
+
+type CodPlayBuildMethod = (
+  input: CodPlayCompileInput,
+  options?: CodPlayCompileOptions,
+) => CodPlayCompileResult
+~~~
+
+Les types CodPlayCompileInput, CodPlayCompileOptions et CodPlayCompileResult
+peuvent rester nommés selon l'artefact de compilation ; seul le point d'entrée
+utilisateur est renommé build.
+
+### 12.5 Arbre proposé complet
+
+~~~text
+CodPlay
+├── build(input, options?)
+├── components
+│   ├── register(definition)
+│   └── override(definition)
+├── services
+│   ├── register(definition)
+│   └── override(definition)
+├── modules
+│   ├── register(definition)
+│   └── override(definition)
+├── resources
+│   └── register(registration)
+├── instances
+│   ├── create(options)
+│   ├── get(instanceId)
+│   └── destroy(instanceId)
+├── events
+│   ├── emit(input)
+│   └── onEvent(listener)
+├── engine
+│   ├── start()
+│   ├── pause()
+│   ├── stop()
+│   └── advance(nowMs, marginMs?)
+└── destroy()
+~~~
+
+preload et son arbre load/state/cancel/release/registerStrategy sont exclus de
+cet arbre jusqu'à justification de leur interface.
+
+### 12.6 Mapping complet
+
+| Version actuelle | Proposition |
+|---|---|
+| options.components.register[] | codplay.components.register(definition) |
+| options.components.override[] | codplay.components.override(definition) |
+| options.services.register[] | codplay.services.register(definition) |
+| options.services.override[] | codplay.services.override(definition) |
+| options.modules.register[] | codplay.modules.register(definition) |
+| options.modules.override[] | codplay.modules.override(definition) |
+| codplay.engine.resources.register(resources) | codplay.resources.register(registration) |
+| codplay.engine.builder.compile(input, options?) | codplay.build(input, options?) |
+| codplay.engine.events.emit(input) | codplay.events.emit(input) |
+| codplay.engine.events.onEvent(listener) | codplay.events.onEvent(listener) |
+| codplay.instances.create(options) | codplay.instances.create(options) |
+| codplay.instances.get(instanceId) | codplay.instances.get(instanceId) |
+| codplay.instances.destroy(instanceId) | codplay.instances.destroy(instanceId) |
+| codplay.preload.* | reporté |
+| codplay.engine.start/pause/stop/advance | codplay.engine.start/pause/stop/advance |
+| codplay.destroy() | codplay.destroy() |
+
+### 12.7 Points ouverts après la tranche components/services/modules
+
+| Point | État |
+|---|---|
+| moment des register/override components/services/modules | avant le premier `build` ou `instances.create`; verrouillage ensuite |
+| options.engine.components/services/modules versus registres directs | même catalogue et même circuit; options initiales puis appels directs |
+| résultat RegistryResult versus diagnostics de façade | résultat structuré retourné; échec également publié en diagnostic |
+| aliases V1 component/service/module versus noms pluriels proposés | noms pluriels retenus; pas d'alias singulier |
+| implémentation des registres components/services/modules | implémentée; validée par tests de contrat |
+| preload | chantier séparé |
+
+### 12.8 Implémentation de la tranche directe
+
+Les décisions suivantes sont maintenant appliquées dans `packages/codplay-v2` :
+
+| Élément | Implémentation |
+|---|---|
+| options de composition | `CodPlayOptions.engine` contient `components`, `services`, `modules`, `resources` et `diagnosticOutput` |
+| construction | `codplay.build(input, options?)` appelle le `SceneBuilder` du catalogue unique |
+| composants | `codplay.components.register/override(definition)` |
+| services | `codplay.services.register/override(definition)` |
+| modules | `codplay.modules.register/override(definition)` |
+| résultat de registre | `{ ok: true, status }` ou `{ ok: false, error }`; l'échec est aussi publié au canal de diagnostic |
+| verrouillage | le catalogue reste ouvert après construction, puis se verrouille au premier `build` ou `instances.create` |
+| events | `codplay.events.emit/onEvent` |
+| resources disponibles | `codplay.resources.register(CodPlayResourceRegistration)` |
+| engine | `start/pause/stop/advance` uniquement sur la vue publique |
+| teardown | `codplay.destroy()`; le `destroy` interne n'est pas exposé par `codplay.engine` |
+| preload | conservé provisoirement sur `codplay.preload` pour les démos; son contrat reste hors de cette tranche |
+
+Les registres directs et les groupes `options.engine.*` appellent les mêmes
+méthodes de `RuntimeCapabilityCatalog`. Aucun catalogue ni circuit runtime
+secondaire n'est créé. Les définitions sont donc utilisables par la validation,
+la création des modules player-scoped et la matérialisation HTML après un seul
+`build`.
+
+Validation de la tranche :
+
+- `npm test --workspace=@codplay/codplay-v2` : 73 fichiers, 474 tests passés ;
+- `npm run typecheck --workspace=@codplay/codplay-v2` : succès ;
+- `npm run build --workspace=@codplay/demos` : succès ;
+- `git diff --check` : succès.

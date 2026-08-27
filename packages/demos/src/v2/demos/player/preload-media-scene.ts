@@ -1,11 +1,34 @@
 import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
-import audioUrl from '../../../../../public/assets/uBMXdJ0AyY.mp3?url'
-import videoUrl from '../../../../../public/assets/LcXkmXyuZQ.mp4?url'
-import imageAUrl from '../../../../../public/assets/35c8ec5a07fc.jpg?url'
-import imageBUrl from '../../../../../public/assets/28970388742_2f75d527d6_z.jpg?url'
+import type { CompiledResourceManifest } from '../../../../../codplay-v2/src/scene/compiled'
+
+const audioUrl = '/assets/uBMXdJ0AyY.mp3'
+const videoUrl = '/assets/LcXkmXyuZQ.mp4'
+const imageAUrl = '/assets/35c8ec5a07fc.jpg'
+const imageBUrl = '/assets/28970388742_2f75d527d6_z.jpg'
 
 /** Static image URLs added to the external preload manifest for the tag persos. */
 export const PRELOAD_MEDIA_IMAGE_URLS = [imageAUrl, imageBUrl] as const
+
+/** Explicit resources required by the media validation scene. */
+export const PRELOAD_MEDIA_RESOURCE_MANIFEST: CompiledResourceManifest = {
+  entries: [
+    {
+      url: audioUrl,
+      type: 'audio',
+      policy: { cache: 'default', priority: 'normal' },
+    },
+    {
+      url: videoUrl,
+      type: 'video',
+      policy: { cache: 'default', priority: 'normal' },
+    },
+    ...PRELOAD_MEDIA_IMAGE_URLS.map((url) => ({
+      url,
+      type: 'image',
+      policy: { cache: 'default' as const, priority: 'normal' as const },
+    })),
+  ],
+}
 
 /** Fixed video window used by this validation asset. */
 export const PRELOAD_MEDIA_VIDEO_START_MS = 1000

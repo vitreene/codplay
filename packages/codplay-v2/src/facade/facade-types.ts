@@ -17,7 +17,6 @@ import type {
 } from '../runtime/catalog'
 import type { RuntimeEventInsertMode } from '../runtime/config/event-insertion'
 import type { MountTargetDeclaration, StrapCollections } from '../runtime/player/pipeline'
-import type { Ticker } from '../runtime/time'
 import type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
@@ -44,14 +43,28 @@ export type CodPlayResourceRegistration = Readonly<{
   metadata: RuntimePreloadMetadata
 }>
 
-/** Configuration used to create one public V2 engine. */
-export type CodPlayEngineConfig = Readonly<{
+/** Configuration dedicated to the CodPlay-owned engine and its capability catalog. */
+export type CodPlayEngineOptions = Readonly<{
   components?: CodPlayCapabilityGroup<RuntimeComponentDefinition>
   services?: CodPlayCapabilityGroup<RuntimeComponentServiceDefinition>
   modules?: CodPlayCapabilityGroup<RuntimeModuleServiceDefinition>
   resources?: CodPlayResourceRegistration
-  ticker?: Ticker
   diagnosticOutput?: DiagnosticOutput
+}>
+
+/** Host-owned frame scheduling primitive injected into one CodPlay instance. */
+export type CodPlayFrameScheduler = Readonly<{
+  request: (callback: () => void) => number
+  cancel: (requestId: number) => void
+}>
+
+/** Options for the single public CodPlay facade instance. */
+export type CodPlayOptions = Readonly<{
+  engine?: CodPlayEngineOptions
+  frameScheduler?: CodPlayFrameScheduler
+  pauseOnDocumentHidden?: boolean
+  /** Retained until the preload interface is reviewed as a separate contract. */
+  preload?: CodPlayPreloadOptions
 }>
 
 /** Input accepted by the engine-bound public scene compiler. */
@@ -82,10 +95,38 @@ export type CodPlayCompileFailure = Readonly<{
 /** Result of compiling one authored SceneDoc against the engine catalog. */
 export type CodPlayCompileResult = CodPlayCompileSuccess | CodPlayCompileFailure
 
-/** Public compiler bound to the engine's locked capability catalog. */
-export type CodPlayEngineBuilder = Readonly<{
-  compile: (input: CodPlayCompileInput, options?: CodPlayCompileOptions) => CodPlayCompileResult
+/** Public result returned by one component, service, or module registry operation. */
+export type CodPlayRegistryResult =
+  | Readonly<{
+      ok: true
+      status: 'registered' | 'overridden'
+    }>
+  | Readonly<{
+      ok: false
+      error: CodPlayRegistryError
+    }>
+
+/** Structured error returned by one rejected registry operation. */
+export type CodPlayRegistryError = Readonly<{
+  code: string
+  message: string
+  details?: Readonly<Record<string, unknown>>
 }>
+
+/** Common public registry surface for one runtime capability family. */
+export type CodPlayRegistry<Definition> = Readonly<{
+  register: (definition: Definition) => CodPlayRegistryResult
+  override: (definition: Definition) => CodPlayRegistryResult
+}>
+
+/** Public component definition registry. */
+export type CodPlayComponents = CodPlayRegistry<RuntimeComponentDefinition>
+
+/** Public component-service definition registry. */
+export type CodPlayServices = CodPlayRegistry<RuntimeComponentServiceDefinition>
+
+/** Public player-module definition registry. */
+export type CodPlayModules = CodPlayRegistry<RuntimeModuleServiceDefinition>
 
 /** Options for one independent public preload service. */
 export type CodPlayPreloadOptions = Readonly<{
@@ -110,8 +151,8 @@ export type CodPlayEventimeAddress = Readonly<{
   trackId?: string
 }>
 
-/** Eventime command addressed to one engine instance. */
-export type CodPlayEngineEventInput = Readonly<{
+/** Eventime command addressed to one CodPlay instance. */
+export type CodPlayEventInput = Readonly<{
   instanceId: string
   eventime: CodPlayEventime
   address: CodPlayEventimeAddress
@@ -207,49 +248,51 @@ export type CodPlayInstance = Readonly<{
   readonly diagnostic: CodPlayInstanceDiagnostic
 }>
 
-/** Public instance registry owned by one engine. */
-export type CodPlayEngineInstances = Readonly<{
+/** Public instance registry owned by one CodPlay owner. */
+export type CodPlayInstances = Readonly<{
   create: (options: CodPlayInstanceOptions) => CodPlayInstance
   get: (instanceId: string) => CodPlayInstance | undefined
   destroy: (instanceId: string) => void
 }>
 
 /** Public shared-resource registration surface. */
-export type CodPlayEngineResources = Readonly<{
+export type CodPlayResources = Readonly<{
   register: (resources: CodPlayResourceRegistration) => void
 }>
 
-/** Public event channel shared by all instances of one engine. */
-export type CodPlayEngineEvents = Readonly<{
-  emit: (input: CodPlayEngineEventInput) => Promise<void>
+/** Public event channel shared by all instances of one CodPlay owner. */
+export type CodPlayEvents = Readonly<{
+  emit: (input: CodPlayEventInput) => Promise<void>
   onEvent: (listener: CodPlayEventListener) => () => void
 }>
 
-/** Public engine boundary for addressing, ordering, and instance ownership. */
+/** Public engine boundary for advanced clock control only. */
 export type CodPlayEngine = Readonly<{
-  readonly builder: CodPlayEngineBuilder
-  readonly instances: CodPlayEngineInstances
-  readonly resources: CodPlayEngineResources
-  readonly events: CodPlayEngineEvents
-  start: (ticker?: Ticker) => void
+  start: () => void
   pause: () => void
   stop: () => void
   advance: (nowMs: number, marginMs?: number) => void
+}>
+
+/** Public scene construction method bound to one CodPlay capability catalog. */
+export type CodPlayBuildMethod = (
+  input: CodPlayCompileInput,
+  options?: CodPlayCompileOptions,
+) => CodPlayCompileResult
+
+/** Public CodPlay owner boundary. */
+export type CodPlayApi = Readonly<{
+  readonly build: CodPlayBuildMethod
+  readonly components: CodPlayComponents
+  readonly services: CodPlayServices
+  readonly modules: CodPlayModules
+  readonly resources: CodPlayResources
+  readonly events: CodPlayEvents
+  readonly engine: CodPlayEngine
+  readonly instances: CodPlayInstances
+  readonly preload: RuntimePreloadApi
   destroy: () => void
 }>
-
-/** Public CodPlay namespace. */
-export type CodPlayFacade = Readonly<{
-  engine: Readonly<{
-    create: (config?: CodPlayEngineConfig) => CodPlayEngine
-  }>
-  preload: Readonly<{
-    create: (options?: CodPlayPreloadOptions) => RuntimePreloadApi
-  }>
-}>
-
-/** Public CodPlay entry point exported by the V2 package. */
-export type CodPlayApi = CodPlayFacade
 
 /** Compatibility names used by the facade plan. */
 export type EngineFacade = CodPlayEngine
