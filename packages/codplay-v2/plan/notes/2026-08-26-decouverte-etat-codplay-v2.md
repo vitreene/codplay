@@ -341,7 +341,7 @@ FLIP.
 | Engine, player, telco, catalogue | Code présent, tests ciblés présents ; plusieurs README restent `En cours` ou `Fixe` | Fondation utilisable, mais ne pas marquer les modules `Fini` sans leur preuve propre. |
 | CompiledScene et validation | Tranche initiale présente ; plans et README encore `En cours` | Toute extension doit être spécifiée et compilée, pas déduite du DOM. |
 | Capture core | Plan capture et validation S5 marqués `Fini`; tests présents | Ne pas ajouter une capacité `instance.capture` pour la démo. |
-| Runner HTML et motion | Corrections de l'endpoint FIRST/LAST et de l'ordre parent/enfant des overlays implémentées et couvertes par tests ; passe Safari MCP ponctuelle effectuée sur `flip-stress`, matrice complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint et place les enfants overlays après leurs frames ; la démo reste la preuve visuelle. |
+| Runner HTML et motion | Corrections de l'endpoint FIRST/LAST et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless ciblé effectué sur `flip-stress`, la passe Safari existante précède ce dernier correctif, matrice complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
 | Démos V2 | Layout et registry présents ; `flip-stress` sert de fixture visuelle ; chantier encore `En cours` | Les démos utilisent la façade et le layout commun ; elles ne définissent pas le runtime. |
@@ -384,6 +384,16 @@ a confirmé les ordres `transfer-q-frame → Qb` à `2200 ms` et
 `transfer-k-frame → Kb` à `2700 ms`. Chaque item contrôlé ne possède alors
 qu'une représentation visible. La capture Safari reste une vérification
 ponctuelle, pas une preuve de toutes les combinaisons de calendrier.
+
+Une passe Firefox 154.0.1 headless a ensuite contrôlé les seeks exacts autour
+de `1200`, `1700`, `2200` et `2700 ms`, puis Play aux frontières correspondantes.
+À `1700 ms`, Q conserve `Qb, Qc, Qd, Qe, Qf, Ka` ; à `2200 ms`, Qb n'est
+retiré de Q et ajouté à K qu'à sa propre frontière ; à `2700 ms`, Kb n'entre
+dans Q qu'à sa propre frontière. Les temps Play observés étaient `1204`,
+`1712`, `2208` et `2715 ms`, avec une seule représentation visible par item
+contrôlé. Cette preuve confirme le découplage `afterStart`/LAST et le ciblage
+direct du mover, sans clôturer la matrice navigateur complète. Aucun code n'a
+été modifié pendant la passe.
 
 ## 10. Procédure obligatoire pour éviter les régressions tournantes
 

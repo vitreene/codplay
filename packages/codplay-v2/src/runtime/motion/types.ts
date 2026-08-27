@@ -17,6 +17,8 @@ export type LayoutItemSnapshot = Readonly<{
   itemId: string
   parentItemId?: string
   targetId: string
+  /** Zero-based order in the solved placement graph for this target. */
+  targetOrder: number
   localPose: RelativeMotionPose
   rootPose: HtmlPose
 }>
@@ -60,6 +62,8 @@ export type MotionBoundary = Readonly<{
 export type MotionAttachment = Readonly<{
   parentItemId?: string
   targetId: string
+  /** Structural sibling order carried with the attachment. */
+  targetOrder: number
   localPose: RelativeMotionPose
   /** Root-relative fallback used only if the historical parent is unavailable. */
   fallbackRootPose: RelativeMotionPose
@@ -114,10 +118,33 @@ export type MotionGraph = Readonly<{
   presentationItemIds: readonly string[]
 }>
 
+/**
+ * Structural data used only to order independent reparent overlays.
+ *
+ * The natural parent remains the geometry parent of the presented item. A
+ * reparented item is instead anchored at its destination for comparisons with
+ * unrelated overlays, while both endpoint parents must stay below it.
+ */
+export type OverlayStackingContext = Readonly<{
+  sourceParentItemId?: string
+  targetParentItemId?: string
+  /** Complete FIRST ancestry, nearest endpoint parent first. */
+  sourceAncestorItemIds: readonly string[]
+  /** Complete LAST ancestry, nearest endpoint parent first. */
+  targetAncestorItemIds: readonly string[]
+  targetId: string
+  targetOrder: number
+}>
+
 /** One fully resolved item representation at one logical time. */
 export type ItemPresentation = Readonly<{
   itemId: string
   parentItemId?: string
+  targetId: string
+  /** Structural sibling order of the item's natural geometry relation. */
+  targetOrder: number
+  /** Extra endpoint relation used by the reparent overlay stacking graph. */
+  overlayStacking?: OverlayStackingContext
   pose: HtmlPose
   representation: 'source' | MotionPresentationMode
   activeSegmentId?: string

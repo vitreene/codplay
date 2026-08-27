@@ -13,11 +13,13 @@ type ContentExchange = Readonly<{
 
 const HOST_ID = 'flip-stress-test-v2';
 const BOUNDARY_TIME_MS = 1_000;
-const CONTAINER_DURATION_MS = 10_000;
-const SECONDARY_CONTAINER_DURATION_MS = 9_000;
-const TRANSFER_DURATION_MS = 8_000;
-const CONTENT_DURATION_MS = 1_000;
-const REVEAL_OPACITY_DURATION_MS = 400;
+// Keep every transition endpoint distinct so the fixture cannot accidentally
+// validate a construction order only because several segments finish together.
+const CONTAINER_DURATION_MS = 9_350;
+const SECONDARY_CONTAINER_DURATION_MS = 8_150;
+const TRANSFER_DURATION_MS = 7_275;
+const CONTENT_DURATION_MS = 875;
+const REVEAL_OPACITY_DURATION_MS = 360;
 const CONTENT_FIRST_EXCHANGE_MS = 1_200;
 const CONTENT_EXCHANGE_SPACING_MS = 500;
 const CONTENT_EASE = 'inOutQuad';

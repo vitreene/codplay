@@ -17,6 +17,7 @@ import {
   findNearestOverlayAncestor,
   findOverlayLayer,
   isDefaultTransformPropertyValue,
+  orderOverlayStack,
   orderParentFirst,
   poseAffineMatrix,
   removeElement,
@@ -135,7 +136,7 @@ export class HtmlMotionPresentationHost {
       this.resources.delete(itemId)
     }
 
-    const orderedActiveItemIds = orderParentFirst(frame, activeItemIds, naturalLayout)
+    const orderedActiveItemIds = orderOverlayStack(frame, activeItemIds, naturalLayout)
     for (const itemId of orderedActiveItemIds) {
       this.ensureOverlay(itemId, resolveRevision?.(itemId))
     }

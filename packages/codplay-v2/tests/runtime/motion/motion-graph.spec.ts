@@ -122,6 +122,78 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
   })
 
+  it('keeps natural placement and exposes both endpoint constraints for an active reparent', () => {
+    const before = snapshot(0, [
+      item('source', 'root', 0),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const after = snapshot(0, [
+      item('target', 'root', 100),
+      item('target-first', 'target:content', 0, 'target'),
+      item('moving', 'target:content', 10, 'target'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('reparent-placement', 0, before, after, [{
+        ...intent('moving', 0, 1000),
+        targetReflow: true,
+      }]),
+    ])
+
+    expect(resolvePresentationFrame(graph, before, 500).items.get('moving')).toMatchObject({
+      parentItemId: 'source',
+      targetId: 'source:content',
+      targetOrder: 0,
+      representation: 'reparent',
+      overlayStacking: {
+        sourceParentItemId: 'source',
+        targetParentItemId: 'target',
+        sourceAncestorItemIds: ['source'],
+        targetAncestorItemIds: ['target'],
+        targetId: 'target:content',
+        targetOrder: 1,
+      },
+    })
+  })
+
+  it('keeps original overlay endpoints when a sibling reflow retargets an active reparent', () => {
+    const beforeFirst = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'source:content', 0, 'source'),
+      item('sibling', 'target:content', 0, 'target'),
+    ])
+    const afterFirst = snapshot(0, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+      item('sibling', 'target:content', 20, 'target'),
+    ])
+    const beforeSecond = snapshot(500, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 10, 'target'),
+      item('sibling', 'target:content', 20, 'target'),
+    ])
+    const afterSecond = snapshot(500, [
+      item('source', 'root', 0),
+      item('target', 'root', 100),
+      item('moving', 'target:content', 30, 'target'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('moving-first', 0, beforeFirst, afterFirst, [intent('moving', 0, 1_000)]),
+      boundary('sibling-reflow', 500, beforeSecond, afterSecond, [intent('sibling', 500, 1_000)]),
+    ])
+
+    expect(resolvePresentationFrame(graph, afterSecond, 750).items.get('moving')?.overlayStacking)
+      .toMatchObject({
+        sourceParentItemId: 'source',
+        targetParentItemId: 'target',
+        sourceAncestorItemIds: ['source'],
+        targetAncestorItemIds: ['target'],
+      })
+  })
+
   it('resolves a child against the parent pose at the child endpoint when the parent starts later', () => {
     const childBefore = snapshot(1_200, [
       item('source-list', 'source:content', 0),
@@ -354,6 +426,12 @@ describe('motion graph', () => {
 /** Creates one synthetic layout snapshot and derives all root poses recursively. */
 function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): LayoutSnapshot {
   const byId = new Map(definitions.map((definition) => [definition.id, definition]))
+  const targetOrders = new Map<string, number>()
+  for (const definition of definitions) {
+    const nextOrder = targetOrders.get(definition.targetId) ?? 0
+    targetOrders.set(definition.targetId, nextOrder + 1)
+    targetOrders.set(`${definition.targetId}:${definition.id}`, nextOrder)
+  }
   const items = new Map<string, LayoutItemSnapshot>()
   const visiting = new Set<string>()
   for (const definition of definitions) resolve(definition.id)
@@ -374,6 +452,7 @@ function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): Layou
       itemId: id,
       ...(definition.parentId === undefined ? {} : { parentItemId: definition.parentId }),
       targetId: definition.targetId,
+      targetOrder: targetOrders.get(`${definition.targetId}:${definition.id}`) ?? Number.MAX_SAFE_INTEGER,
       localPose,
       rootPose: composeMotionPose(parentPose, localPose),
     })

@@ -10,6 +10,7 @@ export {
   findElementPath,
   findNearestOverlayAncestor,
   findOverlayLayer,
+  orderOverlayStack,
   orderParentFirst,
   removeElement,
   resolveElementPath,

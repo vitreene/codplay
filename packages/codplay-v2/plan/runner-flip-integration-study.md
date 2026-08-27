@@ -2,7 +2,7 @@
 
 > Status: En cours — correction de la frontière géométrique FLIP
 > CodPlay version: V2 foundation
-> Review: le contrat du graphe reste conservé ; endpoint de move couvert par tests, passe Safari MCP effectuée le 2026-08-26, matrice complète encore à exécuter
+> Review: le contrat du graphe reste conservé ; endpoint de move et graphe d'empilement overlay couverts par tests et Firefox headless ciblé ; la passe Safari existante précède ce dernier correctif, matrice complète encore à exécuter
 
 ## Objet unique
 
@@ -180,6 +180,7 @@ Un `LayoutSnapshot` contient, par `itemId` :
 
 - `parentItemId` logique ;
 - `targetId` opaque ;
+- rang canonique dans `childrenByTarget` pour cette target ;
 - pose affine locale au parent ;
 - pose affine relative au root ;
 - dimensions locales.
@@ -563,6 +564,71 @@ du LAST), le graphe qui refuse l'import d'un reflow ultérieur et la distinction
 `1700`, `2200` et `2700 ms` montrent que Q reste présent, qu'un seul
 représentant visible existe par item et que les overlays supplémentaires
 correspondent uniquement au mover démarré à chaque frontière.
+
+### Vérification Firefox headless ciblée — 2026-08-27
+
+La page `http://127.0.0.1:5173/?demo=flip-list` a été contrôlée avec Firefox
+154.0.1 headless, en utilisant le chemin réel Play/Seek de la démo. Les seeks
+exacts autour des frontières `1200`, `1700`, `2200` et `2700 ms` montrent que :
+
+- à `1700 ms`, Q conserve `Qb, Qc, Qd, Qe, Qf, Ka` ; `Qc–Qf` ne reçoivent
+  donc pas l'ordre futur où `Qb` est déjà parti ;
+- à `2200 ms`, le transfert de `Qb` ne modifie l'ordre qu'à sa propre
+  frontière, vers `Qc, Qd, Qe, Qf, Ka`, avec `Qb` dans K ;
+- à `2700 ms`, `Kb` n'est ajouté à Q qu'à sa propre frontière, après le LAST
+  de `Ka` ;
+- Play observe les mêmes ordres aux temps réels `1204`, `1712`, `2208` et
+  `2715 ms`, avec une seule représentation visible par item contrôlé ; la
+  pause à `3706 ms` conserve la scène et le temps.
+
+Cette passe confirme le ciblage du LAST du mover direct et l'utilisation de
+`afterStart` pour le reflow des frères, sans recalage anticipé sur l'eventime
+suivant. Elle reste une preuve navigateur ciblée : la matrice complète Play,
+Seek, resize, persistance, reparentage et changements de calendrier reste
+ouverte. Aucun code n'a été modifié pendant cette vérification.
+
+### Correction structurelle — graphe d'empilement des overlays — 2026-08-27
+
+Un overlay `reparent` ne choisit pas un parent de présentation unique. Pendant
+toute sa transition, le mover doit être peint après les branches capturées à son
+FIRST et à son LAST afin de rester visible au-dessus de sa source et de sa
+cible. En revanche, les overlays indépendants qui sont structurellement
+au-dessus de la cible restent au-dessus du mover.
+
+`LayoutSnapshot` et `MotionAttachment` portent donc l'ordre canonique de
+`childrenByTarget`. La frame conserve séparément sa relation naturelle — utile
+à la géométrie locale — et un `overlayStacking` immuable : parent et chaîne
+d'ancêtres FIRST, parent et chaîne d'ancêtres LAST, target et rang LAST.
+`orderOverlayStack()` construit un DAG : chaque ancêtre endpoint actif précède
+le mover ; parmi les sommets sans contrainte, l'ordre est celui du chemin de
+placement LAST et du rang de target. Les retargets de géométrie ne réécrivent
+pas ce contexte d'empilement, car ils ne créent pas un nouveau reparentage.
+
+Cette séparation corrige le cas `Ka` : à `2200 ms`, le reflow de `Qb` avait
+retargeté sa géométrie depuis Q et faisait oublier sa source K. Firefox 154.0.1
+headless observe maintenant `transfer-q-frame, transfer-k-frame, Ka, Qb` à
+`2200 ms`, puis les deux frames avant `Kb` et `Qb` à `2700 ms`; à `3200 ms`,
+elles restent avant `Kb` et `Qc`. Une lecture Play arrêtée à `2209 ms`, un
+resize vers `1120×760` suivi d'un seek à `2200 ms`, puis le cycle
+`LAST=10000 ms → seek 2200 ms` produisent le même ordre ; LAST ne laisse aucun
+overlay résiduel. Les tests couvrent l'ordre parent/enfant, l'ordre des frères,
+la conservation d'un overlay indépendant au-dessus de la cible et le retarget
+de reflow. `vitest` complet (469 tests), `tsc --noEmit` et le build de
+`@codplay/demos` passent. La validation Safari de ce nouveau graphe et la
+matrice complète de calendriers restent à exécuter.
+
+Le contrôle remote a aussi été rejoué pendant Play : le range progresse avec
+la télco à `×0,25` (`0 → 120 → 320 → 630 ms`) et à `×1`
+(`0 → 230 → 680 → 1380 ms`). Le symptôme précédent d'un slider bloqué à zéro
+ne se reproduit donc pas sur Firefox 154.0.1 headless ; aucun correctif remote
+n'est ajouté sans reproduction.
+
+La fixture décorrèle désormais aussi ses durées : containers `9350 ms`,
+introductions C/D `8150 ms`, frames Q/K `7275 ms`, échanges de contenu
+`875 ms` et opacité d'introduction `360 ms`. Les fins ne se confondent plus à
+`10000 ms`. Firefox a rejoué les bornes non alignées `1360`, `2075`, `2575`,
+`3075`, `9275`, `9350` et `9650 ms` sans erreur ni overlay résiduel ; Play
+traverse également l'endpoint `2075 ms` sans saut (`2077 ms` observé).
 
 ### Pose naturelle des ancêtres HTML
 

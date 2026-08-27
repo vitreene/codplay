@@ -40,6 +40,7 @@ export function captureHtmlLayoutSnapshot(
     item.itemId,
     item.parentItemId,
     item.targetId,
+    item.targetOrder,
     item.localPose.origin,
     item.localPose.matrix,
     item.localPose.width,
@@ -54,6 +55,7 @@ export function captureHtmlLayoutSnapshot(
     const targetId = scene.graph.targetByPerso[itemId]
     if (pose === undefined || targetId === undefined) return
     const parentItemId = scene.graph.parentByPerso[itemId]
+    const targetOrder = resolveTargetOrder(scene, targetId, itemId)
     if (parentItemId !== undefined) visit(parentItemId)
     const parentPose = parentItemId === undefined ? hostRootPose : measured.get(parentItemId)
     const localPose = parentPose === undefined
@@ -64,10 +66,19 @@ export function captureHtmlLayoutSnapshot(
       itemId,
       ...(parentItemId === undefined ? {} : { parentItemId }),
       targetId,
+      targetOrder,
       localPose,
       rootPose: composeMotionPose(rootCoordinatePose, rootLocalPose),
     }))
   }
+}
+
+/** Reads one item's structural index from the solved target order. */
+function resolveTargetOrder(scene: SolvedScene, targetId: string, itemId: string): number {
+  const index = scene.graph.childrenByTarget[targetId]?.indexOf(itemId) ?? -1
+  // A source target can be absent during FIRST capture. Its destination
+  // attachment supplies the authoritative order when the item is mounted.
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index
 }
 
 /** Selects mounted items and closes an explicit selection over its ancestors. */

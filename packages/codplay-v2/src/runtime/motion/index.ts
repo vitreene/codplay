@@ -34,6 +34,7 @@ export type {
   MotionIntent,
   MotionPresentationMode,
   MotionSegment,
+  OverlayStackingContext,
   PresentationFrame,
   RelativeMotionPose,
 } from './types'

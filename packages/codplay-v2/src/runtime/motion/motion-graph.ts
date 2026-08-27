@@ -19,6 +19,7 @@ import type {
   MotionIntent,
   MotionRetarget,
   MotionSegment,
+  OverlayStackingContext,
   PresentationFrame,
 } from './types'
 import type { HtmlPose } from './html-types'
@@ -200,9 +201,13 @@ export function resolvePresentationFrame(
     if (base === undefined || pose === undefined) continue
     const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
     const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
+    const overlayStacking = resolveOverlayStackingContext(base, segment)
     items.set(itemId, {
       itemId,
       ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
+      targetId: base.targetId,
+      targetOrder: base.targetOrder,
+      ...(overlayStacking === undefined ? {} : { overlayStacking }),
       pose,
       representation: segment === undefined
         ? 'source'
@@ -290,9 +295,13 @@ function resolveMotionItem(
   const progress = segment === undefined
     ? endpoint?.side === 'from' ? 0 : 1
     : resolveSegmentProgress(segment, timeMs)
+  const overlayStacking = resolveOverlayStackingContext(base, segment)
   return {
     itemId,
     ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
+    targetId: base.targetId,
+    targetOrder: base.targetOrder,
+    ...(overlayStacking === undefined ? {} : { overlayStacking }),
     pose,
     representation: segment === undefined
       ? 'source'
@@ -389,6 +398,7 @@ function createAttachment(
   return Object.freeze({
     ...(snapshot.parentItemId === undefined || parentPose === undefined ? {} : { parentItemId: snapshot.parentItemId }),
     targetId: snapshot.targetId,
+    targetOrder: snapshot.targetOrder,
     localPose: parentPose === undefined
       ? decomposeRootMotionPose(visualPose)
       : deriveRelativeMotionPose(parentPose, visualPose),
@@ -406,10 +416,54 @@ function createStaticAttachment(
   return Object.freeze({
     ...(snapshot.parentItemId === undefined ? {} : { parentItemId: snapshot.parentItemId }),
     targetId: snapshot.targetId,
+    targetOrder: snapshot.targetOrder,
     localPose: snapshot.localPose,
     fallbackRootPose: decomposeRootMotionPose(fallbackSnapshot.rootPose),
     context: createAttachmentContext(snapshot, contextSnapshot),
   })
+}
+
+/** Resolves the endpoint constraints used to stack one active reparent overlay. */
+function resolveOverlayStackingContext(
+  base: LayoutItemSnapshot,
+  segment: MotionSegment | undefined,
+): OverlayStackingContext | undefined {
+  if (segment === undefined || segment.presentationMode !== 'reparent' || segment.materializerOwned) {
+    return undefined
+  }
+  // Retargets refine geometry inside an already active transition. They do
+  // not change the source and destination branches that the overlay must
+  // remain above for its whole lifetime.
+  const source = segment.from
+  const target = segment.to
+  const sourceParentItemId = source.parentItemId ?? base.parentItemId
+  return Object.freeze({
+    sourceParentItemId,
+    targetParentItemId: target.parentItemId,
+    sourceAncestorItemIds: resolveAttachmentAncestorItemIds(source, sourceParentItemId),
+    targetAncestorItemIds: resolveAttachmentAncestorItemIds(target, target.parentItemId),
+    targetId: target.targetId,
+    targetOrder: target.targetOrder,
+  })
+}
+
+/** Resolves one captured endpoint chain without consulting an intermediate layout. */
+function resolveAttachmentAncestorItemIds(
+  attachment: MotionAttachment,
+  parentItemId: string | undefined,
+): readonly string[] {
+  const ancestors: string[] = []
+  const visited = new Set<string>()
+  let currentItemId = parentItemId
+  while (currentItemId !== undefined) {
+    if (visited.has(currentItemId)) {
+      throw new Error(`Motion attachment ancestor cycle detected: ${currentItemId}`)
+    }
+    visited.add(currentItemId)
+    ancestors.push(currentItemId)
+    currentItemId = attachment.context?.get(currentItemId)?.parentItemId
+  }
+  return Object.freeze(ancestors)
 }
 
 /** Captures one item's measured pose and every measured ancestor in its chain. */

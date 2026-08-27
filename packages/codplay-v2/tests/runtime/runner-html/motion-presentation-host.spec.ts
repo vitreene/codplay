@@ -295,6 +295,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
           ['parent', {
             itemId: 'parent',
             targetId: 'root',
+            targetOrder: 0,
             localPose: localPose(0),
             rootPose: createPose(0),
           }],
@@ -302,6 +303,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'intermediary',
             parentItemId: 'parent',
             targetId: 'parent-content',
+            targetOrder: 0,
             localPose: localPose(0),
             rootPose: createPose(0),
           }],
@@ -309,6 +311,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'child',
             parentItemId: 'intermediary',
             targetId: 'intermediary-content',
+            targetOrder: 0,
             localPose: localPose(0),
             rootPose: createPose(0),
           }],
@@ -355,6 +358,149 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     expect(parentGhost?.querySelector('[data-item-id="child"]')
       ?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    host.destroy()
+    root.remove()
+  })
+
+  it('keeps overlay parents behind children and siblings in target order', () => {
+    const root = document.createElement('main')
+    const parent = document.createElement('section')
+    const first = document.createElement('article')
+    const second = document.createElement('article')
+    parent.append(first, second)
+    root.appendChild(parent)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['parent', parent],
+      ['first', first],
+      ['second', second],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    host.commit(
+      createFrame([
+        createItem('second', 'parent', 1),
+        createItem('parent'),
+        createItem('first', 'parent', 0),
+      ]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout',
+        rootPose: createMotionRootPose(),
+        items: new Map([
+          ['parent', {
+            itemId: 'parent',
+            targetId: 'root',
+            targetOrder: 0,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['first', {
+            itemId: 'first',
+            parentItemId: 'parent',
+            targetId: 'parent:content',
+            targetOrder: 0,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['second', {
+            itemId: 'second',
+            parentItemId: 'parent',
+            targetId: 'parent:content',
+            targetOrder: 1,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+        ]),
+      },
+    )
+
+    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
+      .toEqual(['parent', 'first', 'second'])
+
+    host.destroy()
+    root.remove()
+  })
+
+  it('keeps a mover above both endpoints but below unrelated overlays above its target', () => {
+    const root = document.createElement('main')
+    const sourceParent = document.createElement('section')
+    const targetParent = document.createElement('section')
+    const aboveTarget = document.createElement('section')
+    const moving = document.createElement('article')
+    sourceParent.appendChild(moving)
+    root.append(sourceParent, targetParent, aboveTarget)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['source-parent', sourceParent],
+      ['target-parent', targetParent],
+      ['above-target', aboveTarget],
+      ['moving', moving],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    host.commit(
+      createFrame([
+        {
+          ...createItem('moving', 'source-parent'),
+          overlayStacking: {
+            sourceParentItemId: 'source-parent',
+            targetParentItemId: 'target-parent',
+            sourceAncestorItemIds: ['source-parent'],
+            targetAncestorItemIds: ['target-parent'],
+            targetId: 'target-parent:content',
+            targetOrder: 0,
+          },
+        },
+        createItem('above-target', undefined, 2),
+        createItem('target-parent', undefined, 1),
+        createItem('source-parent', undefined, 0),
+      ]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout',
+        rootPose: createMotionRootPose(),
+        items: new Map([
+          ['source-parent', {
+            itemId: 'source-parent',
+            targetId: 'root',
+            targetOrder: 0,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['target-parent', {
+            itemId: 'target-parent',
+            targetId: 'root',
+            targetOrder: 1,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['above-target', {
+            itemId: 'above-target',
+            targetId: 'root',
+            targetOrder: 2,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['moving', {
+            itemId: 'moving',
+            parentItemId: 'source-parent',
+            targetId: 'source-parent:content',
+            targetOrder: 0,
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+        ]),
+      },
+    )
+
+    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
+      .toEqual(['source-parent', 'target-parent', 'moving', 'above-target'])
+
     host.destroy()
     root.remove()
   })
@@ -410,6 +556,8 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
         {
           itemId: 'child',
           parentItemId: 'intermediary',
+          targetId: 'intermediary-content',
+          targetOrder: 0,
           pose: createPose(132),
           representation: 'local',
           progress: 0.5,
@@ -424,6 +572,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
           ['parent', {
             itemId: 'parent',
             targetId: 'root',
+            targetOrder: 0,
             localPose: localPose(0),
             rootPose: createPose(0),
           }],
@@ -431,6 +580,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'outer',
             parentItemId: 'parent',
             targetId: 'parent-content',
+            targetOrder: 0,
             localPose: localPose(10),
             rootPose: createPose(10),
           }],
@@ -438,6 +588,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'intermediary',
             parentItemId: 'outer',
             targetId: 'outer-content',
+            targetOrder: 0,
             localPose: localPose(20),
             rootPose: createPose(30),
           }],
@@ -445,6 +596,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'child',
             parentItemId: 'intermediary',
             targetId: 'intermediary-content',
+            targetOrder: 0,
             localPose: localPose(2),
             rootPose: createPose(32),
           }],
@@ -480,6 +632,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
           {
             itemId: 'item',
             targetId: 'root',
+            targetOrder: 0,
             localPose: { origin: [40, 0], matrix: IDENTITY, width: 20, height: 20 },
             rootPose: pose,
           },
@@ -504,6 +657,8 @@ function createReparentFrame(pose: HtmlPose): PresentationFrame {
       'item',
       {
         itemId: 'item',
+        targetId: 'root',
+        targetOrder: 0,
         pose,
         representation: 'reparent',
         progress: 0.5,
@@ -523,10 +678,12 @@ function createFrame(items: readonly ItemPresentation[]): PresentationFrame {
 }
 
 /** Creates one reparented item for host lifecycle assertions. */
-function createItem(itemId: string, parentItemId?: string): ItemPresentation {
+function createItem(itemId: string, parentItemId?: string, targetOrder = 0): ItemPresentation {
   return {
     itemId,
     parentItemId,
+    targetId: parentItemId === undefined ? 'root' : `${parentItemId}:content`,
+    targetOrder,
     pose: createPose(0),
     representation: 'reparent',
     progress: 0.5,

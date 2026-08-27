@@ -214,6 +214,7 @@ function createSnapshot(timeMs: number, targetId: string, x: number): LayoutSnap
       {
         itemId: 'item',
         targetId,
+        targetOrder: 0,
         localPose,
         rootPose,
       },

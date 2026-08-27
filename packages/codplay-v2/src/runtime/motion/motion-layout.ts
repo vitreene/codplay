@@ -111,6 +111,8 @@ function applyBoundaryStartSnapshot(
         ?? currentItems.get(before.parentItemId)?.rootPose
     currentItems.set(itemId, {
       ...before,
+      targetId: after.targetId,
+      targetOrder: after.targetOrder,
       localPose: after.localPose,
       rootPose: parentPose === undefined
         ? after.rootPose

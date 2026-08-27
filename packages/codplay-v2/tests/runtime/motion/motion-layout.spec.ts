@@ -223,7 +223,7 @@ function createSnapshot(
 }
 
 /** Creates one root-level item with a horizontal natural position. */
-function createItem(itemId: string, x: number, targetId = 'root'): LayoutItemSnapshot {
+function createItem(itemId: string, x: number, targetId = 'root', targetOrder = 0): LayoutItemSnapshot {
   const localPose: RelativeMotionPose = {
     origin: [x, 0],
     matrix: IDENTITY,
@@ -233,6 +233,7 @@ function createItem(itemId: string, x: number, targetId = 'root'): LayoutItemSna
   return {
     itemId,
     targetId,
+    targetOrder,
     localPose,
     rootPose: {
       ...createMotionRootPose(),
