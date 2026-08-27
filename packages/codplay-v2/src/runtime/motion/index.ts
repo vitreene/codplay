@@ -20,6 +20,7 @@ export {
 export {
   buildNaturalLayoutTimeline,
   resolveNaturalLayout,
+  resolveNaturalLayoutBefore,
   type NaturalLayoutEntry,
   type NaturalLayoutTimeline,
 } from './motion-layout'

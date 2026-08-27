@@ -4,6 +4,7 @@ import {
   buildNaturalLayoutTimeline,
   createMotionRootPose,
   resolveNaturalLayout,
+  resolveNaturalLayoutBefore,
   type LayoutItemSnapshot,
   type LayoutSnapshot,
   type MotionBoundary,
@@ -187,6 +188,37 @@ describe('natural motion layout timeline', () => {
     ])
 
     expect(resolveNaturalLayout(timeline, 100).items.get('moving-b')?.rootPose.origin.x).toBe(0)
+  })
+
+  it('keeps the exact pre-boundary source separate from the committed start layout', () => {
+    const before = createSnapshot(100, 'before', [
+      createItem('source', 0),
+      createNestedItem('moving', 'source', 'source-content', 0, 0),
+    ])
+    const after = createSnapshot(200, 'after', [
+      createItem('target', 100),
+      createNestedItem('moving', 'target', 'target-content', 0, 100),
+    ])
+    const intent: MotionIntent = {
+      id: 'move:moving',
+      itemId: 'moving',
+      startAt: 100,
+      duration: 100,
+      ease: 'linear',
+      presentationMode: 'reparent',
+      targetReflow: true,
+    }
+    const boundary: MotionBoundary = {
+      id: 'boundary:source-start',
+      timeMs: 100,
+      before,
+      after,
+      intents: [intent],
+    }
+    const timeline = buildNaturalLayoutTimeline([boundary])
+
+    expect(resolveNaturalLayoutBefore(timeline, 100, boundary.id).items.get('moving')?.parentItemId).toBe('source')
+    expect(resolveNaturalLayout(timeline, 100).items.get('moving')?.parentItemId).toBe('target')
   })
 })
 

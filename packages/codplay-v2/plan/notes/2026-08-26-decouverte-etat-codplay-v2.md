@@ -341,7 +341,7 @@ FLIP.
 | Engine, player, telco, catalogue | Code présent, tests ciblés présents ; plusieurs README restent `En cours` ou `Fixe` | Fondation utilisable, mais ne pas marquer les modules `Fini` sans leur preuve propre. |
 | CompiledScene et validation | Tranche initiale présente ; plans et README encore `En cours` | Toute extension doit être spécifiée et compilée, pas déduite du DOM. |
 | Capture core | Plan capture et validation S5 marqués `Fini`; tests présents | Ne pas ajouter une capacité `instance.capture` pour la démo. |
-| Runner HTML et motion | Corrections de l'endpoint FIRST/LAST et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless ciblé effectué sur `flip-stress`, la passe Safari existante précède ce dernier correctif, matrice complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
+| Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
 | Démos V2 | Layout et registry présents ; `flip-stress` sert de fixture visuelle ; chantier encore `En cours` | Les démos utilisent la façade et le layout commun ; elles ne définissent pas le runtime. |
@@ -357,7 +357,7 @@ doit pas être réintroduit dans le chemin officiel.
 La vérification automatisée exécutée après cette mise à jour est :
 
 ```text
-npm test --workspace=@codplay/codplay-v2       73 fichiers, 465 tests passés
+npm test --workspace=@codplay/codplay-v2       73 fichiers, 472 tests passés
 npm run typecheck --workspace=@codplay/codplay-v2
 npm run build --workspace=@codplay/demos
 git diff --check
@@ -394,6 +394,26 @@ dans Q qu'à sa propre frontière. Les temps Play observés étaient `1204`,
 contrôlé. Cette preuve confirme le découplage `afterStart`/LAST et le ciblage
 direct du mover, sans clôturer la matrice navigateur complète. Aucun code n'a
 été modifié pendant la passe.
+
+La perturbation signalée autour de `3670–3700 ms` a été reproduite dans
+Firefox 154.0.1 headless. Elle provenait de deux divergences structurelles : le
+retarget lisait le `before` brut au lieu du layout naturel immédiatement
+pré-frontière, et la pose d'une liste sans piste propre ignorait le segment de
+son frame ancêtre déjà mobile. `NaturalLayoutTimeline` conserve maintenant le
+snapshot pré-frontière par boundary ; le graphe l'utilise pour le FIRST réel et
+résout le parent cible par toute sa chaîne active. Les tests ajoutés couvrent le
+slot `afterStart`, le source pré-frontière et l'ancêtre indirect en mouvement.
+
+Une nouvelle passe Seek sur `flip-stress` a contrôlé tous les items aux
+frontières `1700`, `2700`, `3700`, `4700`, `5700` et `6700 ms`. Tous restent
+présents et continus ; le maximum observé sur un pas de `1 ms` est `2.172 px`
+sur `Qa` à `1700 ms`, et `Qc` mesure `1.710 px` à `3700 ms`, sans la rupture
+précédente de plus de `40 px`. Play a traversé `3700 ms` de `3698` à `3715 ms`
+avec la vitesse normale de la trajectoire. La suite complète est à `73` fichiers
+et `472` tests passés ; typecheck, build des démos et `git diff --check` passent.
+La validation Safari du nouveau graphe, ainsi que la matrice complète resize,
+persistance et changements de calendrier, restent ouvertes. Le statut reste
+`En cours`.
 
 ## 10. Procédure obligatoire pour éviter les régressions tournantes
 

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { preparePath } from '../../../src/ace'
 import {
   buildMotionGraph,
+  buildNaturalLayoutTimeline,
   composeMotionPose,
   createMotionRootPose,
   resolvePresentationFrame,
+  resolveNaturalLayout,
   type LayoutItemSnapshot,
   type LayoutSnapshot,
   type MotionBoundary,
@@ -342,6 +344,99 @@ describe('motion graph', () => {
     expect(boundaryRect.top).toBeCloseTo(beforeRect.top, 3)
     expect(graph.tracksByItem.get('A')?.segments).toHaveLength(1)
     expect(graph.tracksByItem.get('A')?.segments[0]?.path).toBeDefined()
+  })
+
+  it('resolves an active mover against its committed slot before a later reflow', () => {
+    const beforeFirst = snapshot(0, [item('A', 'root', 0), item('B', 'root', 0)])
+    const afterFirstStart = snapshot(0, [item('A', 'root', 100), item('B', 'root', 0)])
+    const afterFirstEndpoint = snapshot(1_000, [item('A', 'root', 200), item('B', 'root', 100)])
+    const beforeSecond = snapshot(500, [item('A', 'root', 100), item('B', 'root', 0)])
+    const afterSecond = snapshot(1_500, [item('A', 'root', 200), item('B', 'root', 100)])
+    const path = preparePath({ control: [0.5, 1] }, { traversal: 'parameter' })
+    const graph = buildMotionGraph([
+      {
+        ...boundary('first-slot', 0, beforeFirst, afterFirstEndpoint, [{
+          ...intent('A', 0, 1_000),
+          path,
+          targetReflow: true,
+        }]),
+        afterStart: afterFirstStart,
+      },
+      boundary('second-slot', 500, beforeSecond, afterSecond, [{
+        ...intent('B', 500, 1_000),
+        targetReflow: true,
+      }]),
+    ])
+    const timeline = buildNaturalLayoutTimeline([
+      {
+        ...boundary('first-slot', 0, beforeFirst, afterFirstEndpoint, [{
+          ...intent('A', 0, 1_000),
+          path,
+          targetReflow: true,
+        }]),
+        afterStart: afterFirstStart,
+      },
+      boundary('second-slot', 500, beforeSecond, afterSecond, [{
+        ...intent('B', 500, 1_000),
+        targetReflow: true,
+      }]),
+    ])
+
+    const naturalBeforeReflow = resolveNaturalLayout(timeline, 499)
+    const beforeReflow = resolvePresentationFrame(graph, naturalBeforeReflow, 499).items.get('A')?.pose
+    const atReflow = resolvePresentationFrame(graph, resolveNaturalLayout(timeline, 500), 500).items.get('A')?.pose
+    if (beforeReflow === undefined || atReflow === undefined) throw new Error('Slot retarget test item is missing.')
+
+    expect(naturalBeforeReflow.items.get('A')?.localPose.origin[0]).toBe(100)
+    expect(Math.abs(atReflow.rect.left - beforeReflow.rect.left)).toBeLessThan(0.5)
+    expect(Math.abs(atReflow.rect.top - beforeReflow.rect.top)).toBeLessThan(0.5)
+  })
+
+  it('resolves a retarget destination through an ancestor already in motion', () => {
+    const beforeFirst = snapshot(0, [
+      item('parent', 'root', 0),
+      item('list', 'parent:content', 0, 'parent'),
+      item('source', 'root', 300),
+      item('moving', 'source:content', 0, 'source'),
+      item('leaving', 'list:content', 0, 'list'),
+    ])
+    const afterFirst = snapshot(1_000, [
+      item('parent', 'root', 100),
+      item('list', 'parent:content', 0, 'parent'),
+      item('source', 'root', 300),
+      item('moving', 'list:content', 10, 'list'),
+      item('leaving', 'list:content', 0, 'list'),
+    ])
+    const beforeSecond = snapshot(500, [
+      item('parent', 'root', 0),
+      item('list', 'parent:content', 0, 'parent'),
+      item('source', 'root', 300),
+      item('moving', 'list:content', 10, 'list'),
+      item('leaving', 'list:content', 0, 'list'),
+    ])
+    const afterSecond = snapshot(500, [
+      item('parent', 'root', 0),
+      item('list', 'parent:content', 0, 'parent'),
+      item('source', 'root', 300),
+      item('moving', 'list:content', 20, 'list'),
+      item('leaving', 'source:content', 0, 'source'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('moving-start', 0, beforeFirst, afterFirst, [
+        { ...intent('parent', 0, 1_000), targetReflow: false },
+        { ...intent('moving', 0, 1_000), targetReflow: true },
+      ]),
+      boundary('ancestor-reflow', 500, beforeSecond, afterSecond, [
+        { ...intent('leaving', 500, 1_000), targetReflow: true },
+      ]),
+    ])
+
+    const beforeBoundary = resolvePresentationFrame(graph, beforeSecond, 499.999).items.get('moving')?.pose
+    const atBoundary = resolvePresentationFrame(graph, afterSecond, 500).items.get('moving')?.pose
+    if (beforeBoundary === undefined || atBoundary === undefined) throw new Error('Ancestor retarget test item is missing.')
+
+    expect(atBoundary.rect.left).toBeCloseTo(beforeBoundary.rect.left, 3)
+    expect(atBoundary.rect.top).toBeCloseTo(beforeBoundary.rect.top, 3)
   })
 
   it('does not import a later sibling reflow into an earlier boundary', () => {

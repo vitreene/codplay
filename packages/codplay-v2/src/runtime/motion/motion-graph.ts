@@ -23,11 +23,13 @@ import type {
   PresentationFrame,
 } from './types'
 import type { HtmlPose } from './html-types'
+import { buildNaturalLayoutTimeline, resolveNaturalLayoutBefore } from './motion-layout'
 
 /** Builds one complete immutable motion graph from chronological layout boundaries. */
 export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionGraph {
   const mutableTracks = new Map<string, MotionSegment[]>()
   const presentationItemIds = new Set<string>()
+  const naturalLayoutTimeline = buildNaturalLayoutTimeline(boundaries)
   let graph = freezeMotionGraph(mutableTracks, presentationItemIds)
 
   for (const boundary of [...boundaries].sort((left, right) => left.timeMs - right.timeMs)) {
@@ -54,12 +56,15 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
       if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
       const endpointAfter = boundary.after.items.get(itemId) ?? after
       const timing = directIntent ?? transition
-      const current = resolveMotionItem(graph, boundary.before, itemId, boundary.timeMs)
+      const naturalBefore = resolveNaturalLayoutBefore(naturalLayoutTimeline, boundary.timeMs, boundary.id)
+      const sourceLayout = mergeBoundarySourceLayout(naturalBefore, boundary.before, itemId)
+      const source = sourceLayout.items.get(itemId) ?? before
+      const current = resolveMotionItem(graph, sourceLayout, itemId, boundary.timeMs)
       if (current === undefined) continue
-      const sourceParentPose = before.parentItemId === undefined
+      const sourceParentPose = source.parentItemId === undefined
         ? createMotionRootPose()
-        : resolveMotionItem(graph, boundary.before, before.parentItemId, boundary.timeMs)?.pose
-      const from = createAttachment(before, current.pose, sourceParentPose, boundary.before)
+        : resolveMotionItem(graph, sourceLayout, source.parentItemId, boundary.timeMs)?.pose
+      const from = createAttachment(source, current.pose, sourceParentPose, sourceLayout)
       const to = createStaticAttachment(after, boundary.after, endpointAfter)
       const activeSegment = directIntent === undefined
         && !isReparented(before, after)
@@ -70,8 +75,10 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
           to,
           boundary.after,
           itemId,
-          (parentItemId, context) => resolveLayoutParent(
+          (parentItemId, context) => resolveBoundaryParent(
             graph,
+            boundary.before,
+            structuralAfter,
             boundary.after,
             parentItemId,
             boundary.timeMs,
@@ -91,7 +98,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
               ...(activeSegment.retargets ?? []),
               Object.freeze({
                 at: boundary.timeMs,
-                from: createAttachment(before, retargetedFrom, sourceParentPose, boundary.before),
+                from: createAttachment(source, retargetedFrom, sourceParentPose, sourceLayout),
                 to,
               }),
             ]),
@@ -353,16 +360,26 @@ function resolveMotionPose(
   return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path)
 }
 
-/** Resolves one parent pose from a boundary layout while retaining prior motion segments. */
-function resolveLayoutParent(
+/** Resolves a retarget parent at the boundary instead of at the mover endpoint. */
+function resolveBoundaryParent(
   graph: MotionGraph,
-  layout: LayoutSnapshot,
+  beforeLayout: LayoutSnapshot,
+  afterStartLayout: LayoutSnapshot,
+  endpointLayout: LayoutSnapshot,
   parentItemId: string | undefined,
   timeMs: number,
   context?: ReadonlyMap<string, LayoutItemSnapshot>,
 ): HtmlPose | undefined {
   if (parentItemId === undefined) return createMotionRootPose()
-  return resolveMotionItem(graph, layout, parentItemId, timeMs, undefined, context)?.pose
+
+  const currentLayout = beforeLayout.items.has(parentItemId) ? beforeLayout : afterStartLayout
+  if (currentLayout.items.has(parentItemId)) {
+    // Resolve the whole current ancestor chain. A list may have no sovereign
+    // track while its frame ancestor is already moving, so returning the
+    // captured list root would discard that ancestor phase.
+    return resolveMotionItem(graph, currentLayout, parentItemId, timeMs)?.pose
+  }
+  return resolveMotionItem(graph, endpointLayout, parentItemId, timeMs, undefined, context)?.pose
 }
 
 /** Resolves one static or current destination attachment in root coordinates. */
@@ -382,10 +399,34 @@ function resolveAttachment(
     && current.targetId === attachment.targetId
     ? current.localPose
     : attachment.localPose
-  const parent = resolveParent(attachment.parentItemId, attachment.context)
+  // A dynamic destination follows the current natural parent when that parent
+  // is already mounted. The attachment context remains the fallback for a
+  // target branch that is not present in the current layout yet.
+  const parentContext = useCurrentDestination
+    && attachment.parentItemId !== undefined
+    && layout.items.has(attachment.parentItemId)
+    ? undefined
+    : attachment.context
+  const parent = resolveParent(attachment.parentItemId, parentContext)
   return parent === undefined
     ? composeMotionPose(createMotionRootPose(), attachment.fallbackRootPose)
     : composeMotionPose(parent, effective)
+}
+
+/** Adds only missing FIRST items needed to resolve a sovereign source pose. */
+function mergeBoundarySourceLayout(
+  naturalLayout: LayoutSnapshot,
+  boundaryBefore: LayoutSnapshot,
+  itemId: string,
+): LayoutSnapshot {
+  if (naturalLayout.items.has(itemId)) return naturalLayout
+  const items = new Map(boundaryBefore.items)
+  for (const [candidateId, item] of naturalLayout.items) items.set(candidateId, item)
+  return Object.freeze({
+    ...naturalLayout,
+    revision: `${naturalLayout.revision}:source:${boundaryBefore.revision}:${itemId}`,
+    items,
+  })
 }
 
 /** Creates a source attachment from the exact already-resolved visual pose. */

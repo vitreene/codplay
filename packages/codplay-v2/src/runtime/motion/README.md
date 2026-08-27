@@ -2,7 +2,7 @@
 
 > Statut : En cours — correction de la frontière géométrique FLIP
 > Version CodPlay : V2 foundation
-> Relecture : frontière move/action et composition des parents ; chaîne FIRST/LAST et parent démarré plus tard couverts par tests
+> Relecture : frontière move/action, source naturelle pré-frontière et composition des parents ; validation Firefox ciblée effectuée, matrice Safari complète encore ouverte
 
 ## Rôle
 
@@ -49,6 +49,13 @@ temps absolu `t`.
   une trajectoire à présenter ;
 - `PresentationFrame` contient la pose et la représentation demandées pour ces
   éléments à un instant donné.
+
+La timeline naturelle distingue le layout engagé à la frontière de celui qui
+était encore visible juste avant. `resolveNaturalLayoutBefore()` conserve ce
+dernier état par identifiant de frontière ; le graphe l'utilise pour construire
+le FIRST réel d'un retarget, sans remplacer un mover par le `before` brut d'une
+frontière ultérieure. Au démarrage structurel, le mover et les slots de reflow
+engagent `afterStart`, tandis que la pose présentée part toujours du FIRST.
 
 Lors d'un `move` structurel, la capture inclut tous les éléments des cibles
 source et destination. Un élément qui possède aussi un mouvement direct ultérieur
@@ -134,6 +141,13 @@ La composition hybride ne remplace que le mover concerné et les ancêtres
 nécessaires à son attachement. Elle ne peut pas écraser le FIRST d'un autre
 mover capturé dans la même frontière ; Q et K conservent donc chacun leur propre
 côté FIRST.
+
+Lorsqu'un retarget vise une liste dont l'ancêtre possède déjà un segment, la
+pose de la liste est résolue en remontant cette chaîne au temps exact de la
+frontière. Un intermédiaire sans piste propre ne doit pas réintroduire sa pose
+capturée statique et perdre la phase de son parent animé. Le contexte LAST reste
+le fallback uniquement lorsque la branche cible n'est pas encore montée dans le
+layout courant.
 
 ## Inférence de la présentation
 

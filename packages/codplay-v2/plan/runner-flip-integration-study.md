@@ -2,7 +2,7 @@
 
 > Status: En cours — correction de la frontière géométrique FLIP
 > CodPlay version: V2 foundation
-> Review: le contrat du graphe reste conservé ; endpoint de move et graphe d'empilement overlay couverts par tests et Firefox headless ciblé ; la passe Safari existante précède ce dernier correctif, matrice complète encore à exécuter
+> Review: le contrat du graphe reste conservé ; endpoint de move, source pré-frontière et chaîne d'ancêtres overlay couverts par tests et Firefox headless ciblé ; matrice Safari complète encore à exécuter
 
 ## Objet unique
 
@@ -515,7 +515,7 @@ effectuée dans le contexte Safari MCP avec les horaires de référence ; elle
 ne clôt pas la matrice complète, mais les observations sont consignées
 ci-dessous.
 
-La suite automatisée V2 compte actuellement 73 fichiers et 465 tests passés ;
+La suite automatisée V2 compte désormais 73 fichiers et 472 tests passés ;
 le typecheck, le build des démos et `git diff --check` sont également passés.
 
 ### Correction de régression — reflow alterné des listes — 2026-08-23
@@ -613,7 +613,7 @@ resize vers `1120×760` suivi d'un seek à `2200 ms`, puis le cycle
 `LAST=10000 ms → seek 2200 ms` produisent le même ordre ; LAST ne laisse aucun
 overlay résiduel. Les tests couvrent l'ordre parent/enfant, l'ordre des frères,
 la conservation d'un overlay indépendant au-dessus de la cible et le retarget
-de reflow. `vitest` complet (469 tests), `tsc --noEmit` et le build de
+de reflow. `vitest` complet (472 tests), `tsc --noEmit` et le build de
 `@codplay/demos` passent. La validation Safari de ce nouveau graphe et la
 matrice complète de calendriers restent à exécuter.
 
@@ -629,6 +629,43 @@ introductions C/D `8150 ms`, frames Q/K `7275 ms`, échanges de contenu
 `10000 ms`. Firefox a rejoué les bornes non alignées `1360`, `2075`, `2575`,
 `3075`, `9275`, `9350` et `9650 ms` sans erreur ni overlay résiduel ; Play
 traverse également l'endpoint `2075 ms` sans saut (`2077 ms` observé).
+
+### Correction de régression — source pré-frontière et ancêtre en mouvement — 2026-08-27
+
+La perturbation observée autour de `3670–3700 ms` ne venait pas du chemin
+courbe lui-même. Deux repères étaient incohérents au moment d'un reflow qui
+recouvre un move actif :
+
+- le graphe recalculait le `current` depuis `boundary.before`, alors que la
+  timeline naturelle conservait encore le mover sur sa source jusqu'à la
+  frontière exacte ;
+- lorsqu'une liste cible n'avait pas de piste propre mais que son frame ancêtre
+  se déplaçait déjà, le retarget prenait la pose racine capturée de la liste et
+  perdait la phase de l'ancêtre.
+
+La correction reste structurelle : `NaturalLayoutTimeline` conserve un snapshot
+pré-frontière par identifiant de boundary et le graphe construit le FIRST du
+retarget depuis ce snapshot, en ajoutant seulement les items FIRST absents de
+la sélection naturelle. La résolution du parent de destination parcourt ensuite
+la chaîne courante complète ; elle compose le segment de l'ancêtre même si
+l'intermédiaire n'est pas lui-même propriétaire d'une piste. `afterStart` reste
+le layout engagé pour les slots, tandis que `after` reste le contexte LAST du
+mover direct. Aucun endpoint final ni transform DOM n'est injecté pour masquer
+la rupture.
+
+Les régressions ajoutées couvrent la séparation entre source pré-frontière et
+slot engagé, ainsi que le retarget d'un enfant lorsque son parent indirect est
+déjà animé. La suite V2 passe à `73` fichiers et `472` tests ; le typecheck et
+le build des démos passent également.
+
+Firefox 154.0.1 headless a rejoué `flip-stress` sur le chemin réel Seek : les
+frontières `1700`, `2700`, `3700`, `4700`, `5700` et `6700 ms` restent continues
+pour tous les items contrôlés. Le résidu maximal mesuré est `2.172 px` sur un
+pas de `1 ms` à `1700 ms`, compatible avec la vitesse de la trajectoire ; le
+résidu de `Qc` à `3700 ms` est `1.710 px`, contre une rupture précédente de plus
+de `40 px`. Play a aussi traversé `3700 ms` (`3698 -> 3715 ms`) sans saut
+supplémentaire. La validation Safari de ce nouveau graphe et la matrice
+complète resize/persistance restent ouvertes ; le statut demeure `En cours`.
 
 ### Pose naturelle des ancêtres HTML
 

@@ -10,6 +10,7 @@ export type NaturalLayoutEntry = Readonly<{
 /** Timeline of natural layouts assembled once from captured boundary snapshots. */
 export type NaturalLayoutTimeline = Readonly<{
   entries: readonly NaturalLayoutEntry[]
+  beforeByBoundaryId: ReadonlyMap<string, LayoutSnapshot>
 }>
 
 /** One captured snapshot applied at the time at which it actually exists. */
@@ -27,6 +28,7 @@ export function buildNaturalLayoutTimeline(
 ): NaturalLayoutTimeline {
   const events = createSnapshotEvents(boundaries)
   const entries: NaturalLayoutEntry[] = []
+  const beforeByBoundaryId = new Map<string, LayoutSnapshot>()
   const directMotionItemIds = new Set(boundaries.flatMap((boundary) => boundary.intents.map((intent) => intent.itemId)))
   const currentItems = new Map<string, LayoutItemSnapshot>()
   let currentRootPose = createMotionRootPose()
@@ -38,7 +40,20 @@ export function buildNaturalLayoutTimeline(
       : event.boundary.after
     const boundaryItemIds = resolveBoundaryItemIds(event.boundary, directMotionItemIds, afterSnapshot)
     if (event.phase === 'before') {
-      applyBoundaryStartSnapshot(event.boundary, currentItems, boundaryItemIds, directMotionItemIds)
+      applyBeforeSnapshot(
+        event.boundary.before,
+        currentItems,
+        boundaryItemIds,
+        directMotionItemIds,
+        new Set(event.boundary.intents.map((intent) => intent.itemId)),
+      )
+      beforeByBoundaryId.set(event.boundary.id, createSnapshot(
+        event.boundary.before.timeMs,
+        event.boundary.before.revision,
+        event.boundary.before.rootPose ?? currentRootPose,
+        currentItems,
+      ))
+      applyCommittedBoundaryStartSnapshot(event.boundary, currentItems, boundaryItemIds)
     }
     else {
       applyAfterSnapshot(
@@ -60,27 +75,24 @@ export function buildNaturalLayoutTimeline(
     })
   }
 
-  return Object.freeze({ entries: Object.freeze(entries) })
+  return Object.freeze({
+    entries: Object.freeze(entries),
+    beforeByBoundaryId,
+  })
 }
 
-/** Applies one boundary's natural start while preserving structural reflow immediately. */
-function applyBoundaryStartSnapshot(
+/** Applies the structural destination slots after the exact boundary start. */
+function applyCommittedBoundaryStartSnapshot(
   boundary: MotionBoundary,
   currentItems: Map<string, LayoutItemSnapshot>,
   selectedItemIds: ReadonlySet<string>,
-  directMotionItemIds: ReadonlySet<string>,
 ): void {
-  applyBeforeSnapshot(
-    boundary.before,
-    currentItems,
-    selectedItemIds,
-    directMotionItemIds,
-    new Set(boundary.intents.map((intent) => intent.itemId)),
-  )
   if (!boundary.intents.some((intent) => intent.targetReflow === true)) return
 
-  const directItemIds = new Set(boundary.intents.map((intent) => intent.itemId))
   const committedAfter = boundary.afterStart ?? boundary.after
+  const directItemIds = new Set(boundary.intents
+    .filter((intent) => intent.targetReflow === true)
+    .map((intent) => intent.itemId))
   const reflowTargetIds = new Set<string>()
   for (const intent of boundary.intents) {
     if (intent.targetReflow !== true) continue
@@ -88,6 +100,17 @@ function applyBoundaryStartSnapshot(
     const after = committedAfter.items.get(intent.itemId)
     if (before !== undefined) reflowTargetIds.add(before.targetId)
     if (after !== undefined) reflowTargetIds.add(after.targetId)
+  }
+
+  // A direct structural mover commits its destination relation at startAt as
+  // well. Its visible pose is still resolved from FIRST by the motion graph,
+  // but the natural layout must expose its afterStart slot to active segments
+  // that use the current destination before a later reflow boundary.
+  for (const itemId of directItemIds) {
+    const committedItem = committedAfter.items.get(itemId)
+    if (committedItem !== undefined && selectedItemIds.has(itemId)) {
+      currentItems.set(itemId, committedItem)
+    }
   }
 
   // A structural move commits its new layout at startAt. Its direct mover is
@@ -197,6 +220,30 @@ export function resolveNaturalLayout(
   while (low < high) {
     const middle = Math.ceil((low + high) / 2)
     if (timeline.entries[middle]!.startAt <= timeMs) low = middle
+    else high = middle - 1
+  }
+  return timeline.entries[low]!.snapshot
+}
+
+/** Resolves the natural layout immediately before one exact logical boundary. */
+export function resolveNaturalLayoutBefore(
+  timeline: NaturalLayoutTimeline,
+  timeMs: number,
+  boundaryId?: string,
+): LayoutSnapshot {
+  if (boundaryId !== undefined) {
+    const boundarySnapshot = timeline.beforeByBoundaryId.get(boundaryId)
+    if (boundarySnapshot !== undefined) return boundarySnapshot
+  }
+  if (timeline.entries.length === 0) {
+    return createSnapshot(timeMs, `${timeMs}:empty`, createMotionRootPose(), new Map())
+  }
+
+  let low = 0
+  let high = timeline.entries.length - 1
+  while (low < high) {
+    const middle = Math.floor((low + high + 1) / 2)
+    if (timeline.entries[middle]!.startAt < timeMs) low = middle
     else high = middle - 1
   }
   return timeline.entries[low]!.snapshot
