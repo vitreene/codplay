@@ -53,6 +53,82 @@ describe('natural motion layout timeline', () => {
     expect(resolveNaturalLayout(timeline, 200).items.get('a')?.rootPose.origin.x).toBe(20)
   })
 
+  it('uses the committed reflow slots at a structural move start', () => {
+    const before = createSnapshot(1_200, 'reflow-before', [
+      createItem('list', 0),
+      createNestedItem('moving', 'list', 'list-content', 0, 0),
+      createNestedItem('sibling', 'list', 'list-content', 35, 35),
+    ])
+    const after = createSnapshot(2_200, 'reflow-after', [
+      createItem('list', 700),
+      createNestedItem('moving', 'target-list', 'target-content', 0, 700),
+      createNestedItem('sibling', 'list', 'list-content', 0, 700),
+    ])
+    const intent: MotionIntent = {
+      id: 'move:moving',
+      itemId: 'moving',
+      startAt: 1_200,
+      duration: 1_000,
+      ease: 'linear',
+      presentationMode: 'reparent',
+      targetReflow: true,
+    }
+
+    const timeline = buildNaturalLayoutTimeline([{
+      id: 'boundary:reflow',
+      timeMs: 1_200,
+      before,
+      after,
+      intents: [intent],
+    }])
+    const natural = resolveNaturalLayout(timeline, 1_200)
+
+    expect(natural.items.get('moving')?.localPose.origin[0]).toBe(0)
+    expect(natural.items.get('sibling')?.localPose.origin[0]).toBe(0)
+    // The sibling uses its committed local slot, but its parent remains at
+    // the current FIRST pose until the parent's own transition starts.
+    expect(natural.items.get('list')?.rootPose.origin.x).toBe(0)
+    expect(natural.items.get('sibling')?.rootPose.origin.x).toBe(0)
+  })
+
+  it('uses the post-boundary slots instead of endpoint slots changed by a later event', () => {
+    const before = createSnapshot(1_700, 'before', [
+      createItem('list', 0),
+      createNestedItem('moving', 'list', 'list-content', 0, 0),
+      createNestedItem('sibling', 'list', 'list-content', 35, 35),
+    ])
+    const afterStart = createSnapshot(1_700, 'after-start', [
+      createItem('list', 0),
+      createNestedItem('moving', 'target-list', 'target-content', 0, 700),
+      createNestedItem('sibling', 'list', 'list-content', 0, 0),
+    ])
+    const endpoint = createSnapshot(2_700, 'endpoint-after-later-event', [
+      createItem('list', 0),
+      createNestedItem('moving', 'target-list', 'target-content', 0, 700),
+      createNestedItem('sibling', 'list', 'list-content', 35, 35),
+    ])
+    const intent: MotionIntent = {
+      id: 'move:moving',
+      itemId: 'moving',
+      startAt: 1_700,
+      duration: 1_000,
+      ease: 'linear',
+      presentationMode: 'reparent',
+      targetReflow: true,
+    }
+
+    const timeline = buildNaturalLayoutTimeline([{
+      id: 'boundary:later-event',
+      timeMs: 1_700,
+      before,
+      afterStart,
+      after: endpoint,
+      intents: [intent],
+    }])
+
+    expect(resolveNaturalLayout(timeline, 1_700).items.get('sibling')?.localPose.origin[0]).toBe(0)
+  })
+
   it('does not let a dependency snapshot overwrite an item with its own motion track', () => {
     const parentBefore = createSnapshot(0, 'parent-before', [createItem('parent', 0, 'root')])
     const parentAfter = createSnapshot(10_000, 'parent-after', [createItem('parent', 100, 'root')])
@@ -162,6 +238,24 @@ function createItem(itemId: string, x: number, targetId = 'root'): LayoutItemSna
       ...createMotionRootPose(),
       origin: { x, y: 0 },
       rect: { left: x, top: 0, width: 20, height: 20 },
+    },
+  }
+}
+
+/** Creates one child item with an explicit parent-local and root pose. */
+function createNestedItem(
+  itemId: string,
+  parentItemId: string,
+  targetId: string,
+  localX: number,
+  rootX: number,
+): LayoutItemSnapshot {
+  return {
+    ...createItem(itemId, rootX, targetId),
+    parentItemId,
+    localPose: {
+      ...createItem(itemId, localX, targetId).localPose,
+      origin: [localX, 0],
     },
   }
 }

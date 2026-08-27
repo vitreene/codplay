@@ -24,11 +24,12 @@ par l'URL ; le module de la démo sélectionnée est chargé dynamiquement. Le
 chargement initial ne compile donc pas toutes les scènes V2.
 
 Chaque `demos/<demo-id>/main.ts` est un module de scène : il construit et
-retourne uniquement le `SceneDoc`. Le layout commun utilise la façade publique
-CodPlay : il crée l'engine, compile la scène, crée l'instance et branche sa
-telco. Le catalogue, le runner HTML et le traitement du resize restent internes
-à la façade. Le registre porte seulement les informations d'affichage et de
-chargement utilisées par le layout.
+retourne uniquement le `SceneDoc`. Une démo ne construit pas de page, de
+télécommande, de journal ni de boucle de lecture. Le layout commun utilise la
+façade publique CodPlay : il crée l'engine, compile la scène, crée l'instance et
+branche sa télécommande. Le catalogue, le runner HTML et le traitement du
+resize restent internes au layout V2. Le registre porte seulement les
+informations d'affichage et de chargement utilisées par le layout.
 
 ## Layout commun
 
@@ -48,6 +49,13 @@ de scène : play/pause, rewind, seek continu, vitesse et état. CodPlay réveill
 automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
 suspend lorsqu'aucune instance ne joue. Le layout n'appelle donc pas les
 commandes générales de l'engine et ne pilote jamais directement le runner.
+
+Le layout de validation fournit à chaque engine le `TimeTicker` existant, avec
+`pauseOnDocumentHidden: false` et un scheduler de test fondé sur `setTimeout`.
+Cette configuration appartient uniquement au cadre de test des démos : leur
+lecture ne dépend ni de `document.hidden` ni de la suspension du
+`requestAnimationFrame` lorsque Safari masque la page. Le ticker par défaut de
+CodPlay conserve sa politique normale de visibilité et son scheduler normal.
 
 Le journal est une couche d'observation facultative. Son panneau est activable
 par un toggle, ses écritures sont regroupées par frame et son conteneur ne

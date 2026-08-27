@@ -106,24 +106,34 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   const boundaries: MotionBoundary[] = []
   try {
     for (const group of groupMotionIntents(input.intents)) {
-      // Structural moves are measured around their exact event boundary. A
-      // pose action is measured from its own mounted FIRST state when its
-      // move mounts the item at the action start; otherwise it would have no
-      // source pose to compose with a descendant reparent.
+      // FIRST is the logical state immediately before the event. For a
+      // structural move, the destination may be mounted only after that
+      // boundary, so it is deliberately not required to exist here.
       const beforeScene = group.structural
         ? input.player.resolveSceneBeforeBoundary(group.startAt, input.includePersistOnly)
         : input.player.resolveSceneAt(group.startAt, input.includePersistOnly)
-      // Structural moves change their parent/target at the event boundary;
-      // their transition only presents that already-committed change. A pose
-      // action, in contrast, reaches its measured LAST at the end of its own
-      // delay and duration. Keeping these two boundary meanings here avoids
-      // importing the next alternating list move into the previous snapshot.
-      const afterTime = group.structural ? group.startAt : group.endAt
-      const afterScene = input.player.resolveSceneAt(afterTime, input.includePersistOnly)
-      const selection = collectBoundarySelection(beforeScene, afterScene, group.intents)
+      const afterStartScene = group.structural
+        ? input.player.resolveSceneAt(group.startAt, input.includePersistOnly)
+        : undefined
+      // The logical move is committed at startAt, but its geometric LAST is
+      // the transition endpoint. Resolve the left side of that endpoint so a
+      // following event scheduled at the exact same time is not imported into
+      // the preceding move. The current move is already included because its
+      // startAt is earlier than endAt. The same boundary data is then consumed
+      // by Play and Seek.
+      const afterScene = input.player.resolveSceneBeforeBoundary(group.endAt, input.includePersistOnly)
+      const selection = mergeSelections(
+        collectBoundarySelection(beforeScene, afterScene, group.intents),
+        afterStartScene === undefined
+          ? []
+          : collectBoundarySelection(beforeScene, afterStartScene, group.intents),
+      )
 
       input.player.presentSceneForGeometryCapture(beforeScene)
       let before = captureCurrentHtmlMotionLayout(input.root, input.nodes, beforeScene, selection)
+      const afterStart = afterStartScene === undefined
+        ? undefined
+        : captureStartLayout(afterStartScene, selection)
       input.player.presentSceneForGeometryCapture(afterScene)
       const missingSourceItemIds = group.structural
         ? resolveMissingSourceItemIds(beforeScene, afterScene, group.intents)
@@ -146,6 +156,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         id: `boundary:${group.startAt}:${group.endAt}:${intents.map((intent) => intent.id).join(',')}`,
         timeMs: group.startAt,
         before,
+        ...(afterStart === undefined ? {} : { afterStart }),
         after,
         intents: Object.freeze(intents),
       }))
@@ -157,6 +168,24 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
     input.player.presentSceneForGeometryCapture(currentScene)
   }
   return Object.freeze(boundaries)
+
+  /** Captures the post-boundary structural layout before endpoint-only events. */
+  function captureStartLayout(
+    scene: SolvedScene,
+    selection: ReadonlySet<string>,
+  ): LayoutSnapshot {
+    input.player.presentSceneForGeometryCapture(scene)
+    return captureCurrentHtmlMotionLayout(input.root, input.nodes, scene, selection)
+  }
+}
+
+/** Unions the selected branches required by two boundary layout states. */
+function mergeSelections(
+  ...selections: readonly (ReadonlySet<string> | readonly string[])[]
+): ReadonlySet<string> {
+  const merged = new Set<string>()
+  for (const selection of selections) for (const itemId of selection) merged.add(itemId)
+  return merged
 }
 
 /**

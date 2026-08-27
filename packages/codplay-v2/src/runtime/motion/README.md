@@ -1,8 +1,8 @@
 # Graphe de mouvement V2
 
-> Statut : Fini — graphe de mouvement V2 foundation
+> Statut : En cours — correction de la frontière géométrique FLIP
 > Version CodPlay : V2 foundation
-> Relecture : frontières move/action, FIRST concurrent et composition des parents validés le 2026-08-25
+> Relecture : frontière move/action et composition des parents ; chaîne FIRST/LAST et parent démarré plus tard couverts par tests
 
 ## Rôle
 
@@ -32,14 +32,19 @@ temps absolu `t`.
   logique et leurs poses relatives au parent et à la racine. La pose relative
   au parent est la seule référence locale publiée ; le runner ajoute seulement
   les ancêtres nécessaires au calcul ;
-- `MotionBoundary` contient les layouts exacts avant et après un événement. Pour
-  une transition portée par une action, l'après est capturé à
-  `start + delay + duration`. Si cette action monte son perso au démarrage,
-  son FIRST est capturé dans l'état monté à `start`, avec les valeurs initiales
-  de l'action ;
+- `MotionBoundary` contient les géométries FIRST/LAST d'une transition. Pour un
+  `move`, FIRST est capturé avant `startAt`, `afterStart` décrit la structure
+  immédiatement après `startAt`, et LAST est capturé à
+  `startAt + delay + duration`, même si la cible n'existe qu'à cet endpoint.
+  `afterStart` sert aux slots de reflow des frères ; LAST sert à l'attachement
+  du mover et au contexte temporel de sa destination. Pour une transition de
+  pose portée par une action, FIRST est capturé dans l'état monté à `start` si
+  nécessaire, puis LAST à son endpoint ; cette transition ne devient pas un
+  reflow FLIP ;
 - `ItemMotionTrack` contient les segments chronologiques d'un élément ;
-- `MotionAttachment` décrit le parent, la cible, la pose locale et le fallback
-  vers la racine ;
+- `MotionAttachment` décrit le parent, la cible, la pose locale, le contexte de
+  positions FIRST/LAST de l'item et de ses ancêtres, ainsi qu'un fallback vers
+  la racine uniquement si ce contexte est réellement absent ;
 - `MotionGraph.presentationItemIds` liste uniquement les éléments qui possèdent
   une trajectoire à présenter ;
 - `PresentationFrame` contient la pose et la représentation demandées pour ces
@@ -100,6 +105,15 @@ Un parent en mouvement ne peut pas être ignoré : il modifie la pose mondiale d
 son enfant. Cependant, sa présence dans le calcul ne crée pas de nouvelle entrée
 de présentation s'il ne possède pas son propre segment. Le graphe prépare cette
 dépendance à l'avance et la frame ne parcourt pas toute la mise en page.
+
+La préparation conserve ce contexte sur chaque attachement, séparément pour
+FIRST et LAST. Ainsi, si Qa termine dans K alors que K commence son propre move
+plus tard, la résolution de Qa retrouve la chaîne `Qa -> liste K -> K` dans le
+contexte LAST. Elle évalue ensuite le segment de K au temps demandé : avant le
+début de K, sa pose FIRST ; pendant son move, sa pose interpolée ; après son
+move, sa pose LAST. Qa ne vise donc jamais la pose finale de K par défaut.
+Cette résolution temporelle est pure et n'ajoute ni mesure DOM ni trajectoire
+FLIP aux ancêtres qui n'ont pas leur propre intention.
 
 Le même graphe et la même géométrie naturelle produisent toujours la même frame.
 Résoudre une frame ancienne ne modifie pas les résolutions suivantes.

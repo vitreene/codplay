@@ -1348,6 +1348,6 @@ Reste à traiter dans ce plan : aucun point de la façade V2 foundation.
 La reprise séparée de l'accès authoring de l'éditeur reste un chantier
 ultérieur, hors de ce plan.
 
-Le descriptif de découverte destiné aux agents sera créé lorsque ces points du
-plan seront clôturés. Aucune API supplémentaire ne doit être ajoutée en dehors
-de ces éléments.
+Le [descriptif de découverte et d'état destiné aux agents](./notes/2026-08-26-decouverte-etat-codplay-v2.md)
+est créé. Aucune API supplémentaire ne doit être ajoutée en dehors de ces
+éléments.

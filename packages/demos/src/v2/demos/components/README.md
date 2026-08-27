@@ -3,8 +3,9 @@
 > Status: Fini — validation visuelle confirmée
 > CodPlay version: V2 foundation
 
-Cette démo compile une seule `SceneDoc` avec le catalogue core V2 et la
-présente via `HtmlPlayerRunner`. Elle montre :
+Cette démo fournit une seule `SceneDoc` au layout commun V2. Le titre
+`basic components` est déclaré une seule fois dans le registre V2 ; le sélecteur
+et l'en-tête le lisent au même endroit. Elle montre :
 
 - `img`, avec une entrée en fondu et translation verticale ;
 - `polygon`, avec un morph SVG temporel ;
@@ -15,6 +16,11 @@ présente via `HtmlPlayerRunner`. Elle montre :
 La télécommande V2 permet de comparer Play, Pause, Rewind et Seek. La démo
 n'ajoute aucun circuit runtime parallèle et ne modifie pas le catalogue core :
 elle étend seulement les parts publiques du layout hôte pour ses deux outlets.
+
+`style.css` est chargé par le layout avec `codplay.preload.create()` avant la
+création de l'instance. Le preload reçoit le conteneur de scène comme portée
+CSS ; les styles de cette démo ne peuvent donc pas modifier la télécommande,
+le journal ou l'en-tête communs.
 
 ## Vérification
 

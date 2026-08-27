@@ -102,6 +102,65 @@ describe('motion graph', () => {
     expect(originX(frame, 'K')).toBeCloseTo(98.888, 2)
   })
 
+  it('uses the destination context at LAST when the target mounts after FIRST', () => {
+    const before = snapshot(1_200, [
+      item('source', 'root', 0),
+      item('moving', 'source:content', 10, 'source'),
+    ])
+    const after = snapshot(2_200, [
+      item('target', 'root', 300),
+      item('moving', 'target:content', 20, 'target'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('target-mounted-at-last', 1_200, before, after, [{
+        ...intent('moving', 1_200, 1_000),
+        targetReflow: true,
+      }]),
+    ])
+
+    expect(originX(resolvePresentationFrame(graph, after, 1_200), 'moving')).toBeCloseTo(10)
+    expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
+  })
+
+  it('resolves a child against the parent pose at the child endpoint when the parent starts later', () => {
+    const childBefore = snapshot(1_200, [
+      item('source-list', 'source:content', 0),
+      item('moving', 'source:list', 10, 'source-list'),
+    ])
+    const childAfter = snapshot(2_200, [
+      item('target-frame', 'root', 700),
+      item('target-list', 'target:content', 0, 'target-frame'),
+      item('moving', 'target:list', 10, 'target-list'),
+    ])
+    const parentBefore = snapshot(2_000, [
+      item('target-frame', 'root', 300),
+      item('target-list', 'target:content', 0, 'target-frame'),
+    ])
+    const parentAfter = snapshot(10_000, [
+      item('target-frame', 'root', 700),
+      item('target-list', 'target:content', 0, 'target-frame'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('child-starts-first', 1_200, childBefore, childAfter, [{
+        ...intent('moving', 1_200, 1_000),
+        targetReflow: true,
+      }]),
+      boundary('parent-starts-later', 2_000, parentBefore, parentAfter, [intent('target-frame', 2_000, 8_000)]),
+    ])
+
+    const atChildStart = resolvePresentationFrame(graph, childBefore, 1_200)
+    const frame = resolvePresentationFrame(graph, childBefore, 1_500)
+    const atChildLast = resolvePresentationFrame(graph, childBefore, 2_200)
+
+    // At 1500 ms, K has not started its own move. Qa must head toward K's
+    // source pose, not toward K's eventual 700 pose.
+    expect(originX(atChildStart, 'moving')).toBeCloseTo(10)
+    expect(originX(frame, 'moving')).toBeCloseTo(100)
+    // At Qa's LAST, K is 200 ms into its own 8000 ms transition: 300 + 10
+    // for the target list, then the item's local offset 10.
+    expect(originX(atChildLast, 'moving')).toBeCloseTo(320)
+  })
+
   it('holds an action pose during its delay and resolves it from the same graph', () => {
     const before = snapshot(0, [item('A', 'root', 0)])
     const after = snapshot(0, [item('A', 'root', 100)])
@@ -211,6 +270,37 @@ describe('motion graph', () => {
     expect(boundaryRect.top).toBeCloseTo(beforeRect.top, 3)
     expect(graph.tracksByItem.get('A')?.segments).toHaveLength(1)
     expect(graph.tracksByItem.get('A')?.segments[0]?.path).toBeDefined()
+  })
+
+  it('does not import a later sibling reflow into an earlier boundary', () => {
+    const before = snapshot(1_700, [
+      item('list', 'root', 0),
+      item('target', 'root', 700),
+      item('moving', 'list:content', 0, 'list'),
+      item('sibling', 'list:content', 35, 'list'),
+    ])
+    const afterStart = snapshot(1_700, [
+      item('list', 'root', 0),
+      item('target', 'root', 700),
+      item('moving', 'target:content', 0, 'target'),
+      item('sibling', 'list:content', 0, 'list'),
+    ])
+    const endpoint = snapshot(2_700, [
+      item('list', 'root', 0),
+      item('target', 'root', 700),
+      item('moving', 'target:content', 0, 'target'),
+      item('sibling', 'list:content', 35, 'list'),
+    ])
+    const graph = buildMotionGraph([{ ...boundary('earlier-boundary', 1_700, before, endpoint, [{
+      ...intent('moving', 1_700, 1_000),
+      targetReflow: true,
+    }]),
+      afterStart,
+    }])
+
+    expect(graph.tracksByItem.get('sibling')?.segments[0]?.to.localPose.origin[0]).toBe(0)
+    expect(originX(resolvePresentationFrame(graph, afterStart, 1_700), 'sibling')).toBeCloseTo(35)
+    expect(originX(resolvePresentationFrame(graph, afterStart, 2_700), 'sibling')).toBeCloseTo(0)
   })
 
   it('returns the same absolute frame independently of evaluation history', () => {

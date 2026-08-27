@@ -3,6 +3,7 @@ import {
   type CodPlayEngine,
   type CodPlayInstance,
 } from '../../../../codplay-v2/src'
+import { TimeTicker, type FrameScheduler } from '../../../../codplay-v2/src/runtime/time'
 import type { V2DemoDefinition } from '../registry'
 import { createV2DemoTelco } from './telco'
 import type { V2DemoLogLevel, V2DemoModule } from './types'
@@ -17,9 +18,42 @@ type V2DemoLayoutOptions = Readonly<{
 
 const V2_DEMO_LOG_OPEN_STORAGE_KEY = 'codplay-v2-demo-log-open'
 
+/** Creates a timer scheduler that remains usable when Safari suspends animation frames. */
+function createV2DemoFrameScheduler(): FrameScheduler {
+  let nextRequestId = 1
+  const pendingTimers = new Map<number, ReturnType<typeof globalThis.setTimeout>>()
+
+  return {
+    request(callback) {
+      const requestId = nextRequestId
+      nextRequestId += 1
+      const timerId = globalThis.setTimeout(() => {
+        pendingTimers.delete(requestId)
+        callback()
+      }, 16)
+      pendingTimers.set(requestId, timerId)
+      return requestId
+    },
+    cancel(requestId) {
+      const timerId = pendingTimers.get(requestId)
+      if (timerId === undefined) return
+      globalThis.clearTimeout(timerId)
+      pendingTimers.delete(requestId)
+    },
+  }
+}
+
+/** Creates the demo ticker without visibility pausing or animation-frame dependence. */
+function createV2DemoTicker(): TimeTicker {
+  return new TimeTicker({
+    pauseOnDocumentHidden: false,
+    scheduler: createV2DemoFrameScheduler(),
+  })
+}
+
 /** Mounts the responsive V2 frame and owns every control shared by its demos. */
 export function createV2DemoLayout(options: V2DemoLayoutOptions): {
-  mount: (module: V2DemoModule) => void
+  mount: (module: V2DemoModule) => Promise<void>
   destroy: () => void
 } {
   const layoutRoot = document.createElement('main')
@@ -116,7 +150,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   for (const demo of options.demos) {
     const option = document.createElement('option')
     option.value = demo.path
-    option.textContent = demo.label
+    option.textContent = demo.title
     option.selected = demo.id === options.active.id
     selector.append(option)
   }
@@ -190,6 +224,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telcoSlot.replaceChildren()
     sceneSlot.className = 'v2-demo-scene-slot'
     sceneSlot.removeAttribute('aria-label')
+    sceneSlot.removeAttribute('data-codplay-scope')
     sceneSlot.replaceChildren()
   }
 
@@ -200,15 +235,35 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
 
   return {
     /** Mounts only the scene supplied by a lazily loaded demo module. */
-    mount(module) {
+    async mount(module) {
       unmountScene()
       sceneSlot.className = `v2-demo-scene-slot ${options.active.stageClassName}`
       sceneSlot.setAttribute('aria-label', options.active.stageLabel)
+
+      const preload = codplay.preload.create()
+      const stylesheetUrls = [module.stylesheetUrl]
+      const releaseStylesheet = (): void => preload.release(stylesheetUrls)
+      const stylesheetResult = await preload.load({
+        manifest: {
+          entries: [{
+            url: module.stylesheetUrl,
+            type: 'css',
+            policy: { cache: 'default', priority: 'high' },
+          }],
+        },
+        options: { mode: 'author', container: sceneSlot },
+      })
+      if (!stylesheetResult.ok) {
+        log(`Feuille de style indisponible : ${stylesheetResult.error.message}`, 'error')
+        releaseStylesheet()
+        return
+      }
 
       const scene = module.createScene()
       let engine: CodPlayEngine
       try {
         engine = codplay.engine.create({
+          ticker: createV2DemoTicker(),
           diagnosticOutput: (diagnostic) => log(
             `${diagnostic.code}: ${diagnostic.message}`,
             diagnostic.severity === 'warning' ? 'warn' : 'error',
@@ -216,12 +271,14 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         })
       } catch (error) {
         log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+        releaseStylesheet()
         return
       }
 
       const build = engine.builder.compile({ scene })
       if (!build.ok) {
         if (build.diagnostics.errors.length === 0) log('SceneDoc build failed.', 'error')
+        releaseStylesheet()
         engine.destroy()
         return
       }
@@ -237,6 +294,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
           mountTargets: [{ id: 'root-host', kind: 'root', storyId: options.active.rootStoryId }],
         })
       } catch {
+        releaseStylesheet()
         engine.destroy()
         return
       }
@@ -245,6 +303,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       log(`${options.active.title} initialisée · durée=${options.active.durationMs}ms`)
 
       sceneCleanup = () => {
+        releaseStylesheet()
         engine.destroy()
       }
     },

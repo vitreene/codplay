@@ -16,6 +16,7 @@ describe('compileMotionSchedule', () => {
       duration: 100,
       ease: 'out(2)',
       presentationMode: 'local',
+      targetReflow: true,
     })
     expect(Object.isFrozen(schedule)).toBe(true)
   })
@@ -54,6 +55,7 @@ describe('compileMotionSchedule', () => {
       endAt: 340,
       ease: 'linear',
       presentationMode: 'local',
+      targetReflow: false,
     })
   })
 

@@ -339,6 +339,13 @@ Le `HtmlMotionPresentationHost` reçoit seulement un résolveur
 - retire les contributions transitoires et détruit les clones lorsque la frame ne
   les demande plus.
 
+Le clone est autorisé comme représentation temporaire d'un `reparent`, mais le
+basculement de visibilité est atomique. La source est masquée avant l'insertion
+ou la révélation du clone. Le clone reste masqué pendant sa synchronisation et
+l'écriture de sa pose ; il n'est révélé qu'une fois cette préparation terminée.
+Lorsqu'il est retiré, le clone est supprimé avant que la source soit révélée.
+Une source et son clone ne peuvent donc jamais être visibles ensemble.
+
 FLIP ne demande donc pas au composant de se rerendre et n'appelle aucun service
 auteur. Les services du composant ont déjà appliqué l'état courant avant la mesure
 ou la création d'un clone. La couche transitoire conserve les propriétés auteur et

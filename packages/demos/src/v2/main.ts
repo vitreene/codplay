@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   const selected = resolveV2Demo(new URL(globalThis.location.href).searchParams.get('demo'))
   const layout = createV2DemoLayout({ app, active: selected, demos: V2_DEMO_REGISTRY })
   const module = await selected.load()
-  layout.mount(module)
+  await layout.mount(module)
 
   globalThis.addEventListener('beforeunload', () => {
     layout.destroy()

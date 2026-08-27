@@ -28,6 +28,7 @@
 - Do not implement a plan item whose plan or decision is marked `A relire`. A plan is not a contract until it has been validated.
 - Do not invent missing contracts, APIs, services, event phases, runtime actions, or data paths. Mark the gap and ask for clarification when the specification does not decide it.
 - Demos are validation fixtures. They must exercise the real runtime path and must not introduce duplicate catalogs, duplicate remotes, alternate event circuits, or behavior that exists only to make the demo appear functional.
+- In `packages/demos/src/v2`, `layout/` owns the complete shared page: header, title, selector, remote, journal, engine/instance lifecycle, and scene host. Each `demos/<demo-id>/` module only constructs and returns its scene; it must not render a page or recreate those shared services.
 - Any unavoidable temporary bridge must be explicitly named or documented as `temp`, have a stated scope and removal condition, and must not be presented as a V2 contract.
 - A passing isolated unit test, typecheck, or build does not validate an integration. For browser-facing behavior, test the actual event, player, materializer, seek, replay, and lifecycle boundaries involved.
 - A demo is valid only after the real runtime path has been tested.
@@ -43,6 +44,7 @@
 - Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
 - Once a concept is implemented, maintain a focused specification for future agents: its role, contract, invariants, decisions, and how to understand it without rereading the entire implementation.
 - At the end of each task, update the relevant specification and implementation tracking before closing temporary notes or provisional guardrails.
+- Before resuming CodPlay V2 work, read [`packages/codplay-v2/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay-v2/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
 
 ## Module status
 

@@ -126,7 +126,7 @@ move auteur
   -> matérialisation de l'état avant la frontière
   -> application de l'événement
   -> résolution de l'état après la frontière
-  -> mesure complète FIRST / LAST
+  -> mesure HTML FIRST / LAST aux bornes de présentation
   -> compilation du graphe de mouvement
   -> évaluation de la même frame à t pour Play et Seek
 ```
@@ -136,16 +136,24 @@ attachements et poses avant/après, infère `local` ou `reparent`, puis construi
 une trajectoire possédée par l'item. `MoveStateDelta` n'est pas une source de
 géométrie et aucun cache de captures ne constitue un second historique.
 
+La résolution logique `after` reste immédiate à la frontière `startAt`. Pour la
+présentation HTML, le snapshot géométrique LAST d'un move est toutefois capturé
+à son endpoint `startAt + delay + duration`. Cette distinction permet d'utiliser
+le contexte réel de destination lorsqu'une cible ou un ancêtre n'est monté
+qu'après `startAt`; elle ne décale ni l'événement ni l'état logique.
+
 Pour un `move` produit par la fermeture live d'une capture HTML (`endEmit`), le
 FIRST géométrique est la photographie visible prise à la fin de la capture,
 juste avant le commit de l'événement. Il peut donc différer de la position
 logique initiale : le perso peut être en pose fixe au point du drop et ses
-voisins peuvent être encore en reflow FLIP. Le LAST reste la conséquence
-immédiate du `move` résolu par le player isolé.
+voisins peuvent être encore en reflow FLIP. Pour cette remise live, le LAST
+reste la conséquence immédiate du `move` résolu par le player visible ; le
+runner ne remplace pas cette pose par l'endpoint de la trajectoire persistante.
 
 Lorsqu'une même capture fournit aussi une sortie `endCapture`, celle-ci est
 une frontière `persist-only` distincte. À la relecture, son FIRST est l'état
-logique mesuré juste avant `end - durée`, et son LAST est la cible du `move`.
+logique mesuré juste avant `end - durée`, et son LAST géométrique est capturé
+par le runner à l'endpoint du `move`.
 Le FIRST live de `endEmit` est supprimé avant un seek ; il ne peut donc pas
 remplacer la trajectoire source → cible persistante. Cette distinction ne
 modifie ni la destination, ni le journal, ni la règle de reconstruction ; elle
@@ -161,7 +169,7 @@ sépare la remise visuelle au relâchement de la trajectoire historique.
 - pour `endEmit`, FIRST est l'état exact visible avant l'événement (la pose live
   de fin pour une capture continue) et LAST sa conséquence immédiate ;
 - pour `endCapture` persist-only, FIRST est l'état logique avant la frontière
-  ancrée et LAST sa conséquence persistante ;
+  ancrée et le runner HTML capture le LAST géométrique à l'endpoint du move ;
 - Play et Seek évaluent le même graphe absolu au même temps ;
 - une target invalide produit un diagnostic sans placement implicite ;
 - la policy de placement ne connaît ni le DOM ni la materialisation.

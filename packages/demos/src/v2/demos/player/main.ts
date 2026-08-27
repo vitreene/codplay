@@ -169,14 +169,6 @@ async function start(): Promise<void> {
   globalThis.addEventListener('beforeunload', cleanup, { once: true })
 }
 
-if (new URL(globalThis.location.href).searchParams.get('demo') === 'components') {
-  void import('../components/main')
-    .then(({ startComponentsDemo }) => startComponentsDemo())
-    .catch((error) => {
-      showError(error instanceof Error ? error.message : 'Erreur inattendue de la démo composants.')
-    })
-} else {
-  void start().catch((error) => {
-    showError(error instanceof Error ? error.message : 'Erreur inattendue de la démo media.')
-  })
-}
+void start().catch((error) => {
+  showError(error instanceof Error ? error.message : 'Erreur inattendue de la démo media.')
+})

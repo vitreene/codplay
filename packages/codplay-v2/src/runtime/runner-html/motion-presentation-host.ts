@@ -5,6 +5,7 @@ import {
   composeMotionPose,
   createMotionRootPose,
   decomposeRootMotionPose,
+  type LayoutItemSnapshot,
   type LayoutSnapshot,
   type PresentationFrame,
 } from '../motion'
@@ -41,7 +42,6 @@ export class HtmlMotionPresentationHost {
   }>>()
   private readonly localTransforms = new Map<string, LocalTransformResource>()
   private readonly hiddenDescendantClones = new Set<HTMLElement>()
-  private readonly hiddenNaturalCaptureGhosts = new Set<HTMLElement>()
   private overlayOrder: readonly string[] = []
   private hiddenDescendantKey = ''
   private readonly root: Element
@@ -63,10 +63,13 @@ export class HtmlMotionPresentationHost {
     // The next commit must recompute descendant masking. The capture phase
     // deliberately removes those markers from reused ancestor ghosts.
     this.hiddenDescendantKey = ''
-    for (const resource of this.resources.values()) this.transientStyles.clearHidden(resource.source)
+    // Hide every projection before revealing any source. This keeps a source
+    // and its projection from being visible at the same time at the boundary.
     for (const resource of this.resources.values()) {
-      this.transientStyles.applyHidden(resource.ghost)
-      this.hiddenNaturalCaptureGhosts.add(resource.ghost)
+      if (!resource.presentationHidden) this.transientStyles.applyHidden(resource.ghost)
+      resource.presentationHidden = true
+      if (resource.sourceHidden) this.transientStyles.clearHidden(resource.source)
+      resource.sourceHidden = false
     }
     for (const target of this.localTargets.values()) this.transientStyles.clearLocal(target)
     this.localTargets.clear()
@@ -91,7 +94,6 @@ export class HtmlMotionPresentationHost {
     for (const resource of this.resources.values()) this.release(resource)
     this.resources.clear()
     this.clearHiddenDescendantClones()
-    this.hiddenNaturalCaptureGhosts.clear()
     this.overlayOrder = []
     this.hiddenDescendantKey = ''
     removeElement(this.overlayLayer ?? findOverlayLayer(this.root))
@@ -106,7 +108,6 @@ export class HtmlMotionPresentationHost {
     naturalLayout?: LayoutSnapshot,
   ): void {
     if (!isMeasurableHtmlElement(this.root)) return
-    this.restoreNaturalCaptureGhosts()
     const directOverlayItemIds = new Set([...frame.items.values()]
       .filter((item) => item.representation === 'reparent')
       .map((item) => item.itemId))
@@ -178,6 +179,7 @@ export class HtmlMotionPresentationHost {
       const worldPose = composeMotionPose(rootPose, decomposeRootMotionPose(item.pose))
       if (overlayInverse !== undefined) applyGhostPose(resource, overlayPose, overlayInverse, worldPose)
     }
+    this.showOverlayResources(activeItemIds)
   }
 
   /** Releases every overlay resource and restores all materialized sources. */
@@ -280,13 +282,27 @@ export class HtmlMotionPresentationHost {
       return root
     }
 
-    const ancestorPose = this.resolveParentLayoutPose(
-      naturalParent.parentItemId,
-      frame,
-      naturalLayout,
-      cache,
-    )
-    const resolved = composeMotionPose(ancestorPose, naturalParent.localPose)
+    const chain: LayoutItemSnapshot[] = [naturalParent]
+    let ancestorItemId = naturalParent.parentItemId
+    let presentedAncestor: HtmlPose | undefined
+    while (ancestorItemId !== undefined) {
+      presentedAncestor = frame.items.get(ancestorItemId)?.pose
+      if (presentedAncestor !== undefined) break
+      const naturalAncestor = naturalLayout?.items.get(ancestorItemId)
+      if (naturalAncestor === undefined) break
+      chain.push(naturalAncestor)
+      ancestorItemId = naturalAncestor.parentItemId
+    }
+
+    if (presentedAncestor === undefined) {
+      cache.set(parentItemId, naturalParent.rootPose)
+      return naturalParent.rootPose
+    }
+
+    let resolved = presentedAncestor
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+      resolved = composeMotionPose(resolved, chain[index]!.localPose)
+    }
     cache.set(parentItemId, resolved)
     return resolved
   }
@@ -309,6 +325,16 @@ export class HtmlMotionPresentationHost {
     return path === undefined ? undefined : resolveElementPath(ancestorResource.ghost, path)
   }
 
+  /** Reveals newly prepared projections after their complete pose has been written. */
+  private showOverlayResources(itemIds: ReadonlySet<string>): void {
+    for (const itemId of itemIds) {
+      const resource = this.resources.get(itemId)
+      if (resource === undefined || !resource.presentationHidden) continue
+      this.transientStyles.clearHidden(resource.ghost)
+      resource.presentationHidden = false
+    }
+  }
+
   /** Reuses or creates one ghost for the current author materialization. */
   private ensureOverlay(itemId: string, revision: string | undefined): void {
     const source = this.resolveHandle(itemId)
@@ -316,8 +342,15 @@ export class HtmlMotionPresentationHost {
     const previous = this.resources.get(itemId)
     if (previous !== undefined && previous.source === source) {
       const unchanged = revision === undefined || previous.revision === revision
-      const synchronized = unchanged || this.transientStyles.syncTemplate(source, previous.ghost)
+      this.ensureSourceHidden(previous)
+      if (unchanged) return
+
+      this.ensurePresentationHidden(previous)
+      const synchronized = this.transientStyles.syncTemplate(source, previous.ghost)
       if (synchronized) {
+        // syncTemplate deliberately removes transient attributes before
+        // copying authored content, so restore the hidden phase after it.
+        this.transientStyles.applyHidden(previous.ghost)
         previous.revision = revision
         if (!unchanged) {
           // syncTemplate removes the ghost's inline style attribute before
@@ -334,7 +367,6 @@ export class HtmlMotionPresentationHost {
           // into a computed-style read on the presentation path.
           this.reapplyNeutralizedTransformProperties(previous)
         }
-        this.transientStyles.applyHidden(source)
         return
       }
       this.hiddenDescendantKey = ''
@@ -345,14 +377,21 @@ export class HtmlMotionPresentationHost {
     }
 
     const overlayLayer = this.getOverlayLayer()
+    // Hide the source before inserting its projection. This keeps the two
+    // representations mutually exclusive even at the insertion boundary.
+    this.transientStyles.applyHidden(source)
     const ghost = this.transientStyles.captureTemplate(source)
     this.configureOverlayGhost(ghost, itemId)
+    // The new projection is hidden before insertion. The source is already
+    // hidden, so the first painted state cannot contain both representations.
+    this.transientStyles.applyHidden(ghost)
     overlayLayer.appendChild(ghost)
-    this.transientStyles.applyHidden(source)
     const resource: OverlayResource = {
       source,
       ghost,
       revision,
+      sourceHidden: true,
+      presentationHidden: true,
       neutralizedTransformProperties: new Set(),
     }
     this.resources.set(itemId, resource)
@@ -459,15 +498,27 @@ export class HtmlMotionPresentationHost {
     this.hiddenDescendantClones.clear()
   }
 
-  /** Restores overlay ghosts after the explicit natural-geometry capture phase. */
-  private restoreNaturalCaptureGhosts(): void {
-    for (const ghost of this.hiddenNaturalCaptureGhosts) this.transientStyles.clearHidden(ghost)
-    this.hiddenNaturalCaptureGhosts.clear()
-  }
-
   /** Restores one source and removes its presentation resource. */
   private release(resource: OverlayResource): void {
-    this.transientStyles.clearHidden(resource.source)
+    // Remove the projection while the source is still hidden, then reveal the
+    // source. This ordering also covers a resource released without capture.
     removeElement(resource.ghost)
+    if (resource.sourceHidden) this.transientStyles.clearHidden(resource.source)
+    resource.sourceHidden = false
+    resource.presentationHidden = true
+  }
+
+  /** Hides one source only when the exclusive presentation state changes. */
+  private ensureSourceHidden(resource: OverlayResource): void {
+    if (resource.sourceHidden) return
+    this.transientStyles.applyHidden(resource.source)
+    resource.sourceHidden = true
+  }
+
+  /** Hides one projection only before its template is rewritten. */
+  private ensurePresentationHidden(resource: OverlayResource): void {
+    if (resource.presentationHidden) return
+    this.transientStyles.applyHidden(resource.ghost)
+    resource.presentationHidden = true
   }
 }

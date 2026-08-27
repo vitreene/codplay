@@ -1,8 +1,8 @@
 # CodPlay V2 — architecture du mouvement hiérarchique HTML
 
-> Status: Fini — tranche HTML motion V2
+> Status: En cours — correction de la frontière géométrique FLIP
 > CodPlay version: V2 foundation
-> Review: le contrat du graphe reste conservé ; la mesure par DOM dupliqué est retirée
+> Review: le contrat du graphe reste conservé ; endpoint de move couvert par tests, passe Safari MCP effectuée le 2026-08-26, matrice complète encore à exécuter
 
 ## Objet unique
 
@@ -12,12 +12,20 @@ propre animation à une phase temporelle indépendante.
 
 Les positions FIRST et LAST dépendent du type de transition :
 
-- pour un `move`, FIRST est le layout exact juste avant la frontière et LAST
-  est le layout naturel immédiatement après l'événement ;
+- pour un `move`, FIRST est le layout exact juste avant la frontière logique
+  `startAt` et LAST est le layout naturel à l'endpoint
+  `startAt + delay + duration` ;
 - pour une action qui anime une propriété de pose, FIRST est capturé au début de
   l'action et LAST à sa fin effective (`start + delay + duration`) ;
 - la durée et le délai appartiennent au segment, ils ne déplacent jamais la
   frontière logique du `move`.
+
+La frontière logique et l'endpoint géométrique sont deux temps distincts. Le
+move est appliqué à `startAt`; seul le snapshot LAST est mesuré à l'endpoint.
+Ainsi, une cible ou un ancêtre absent au FIRST mais monté avant le LAST est
+mesuré dans son contexte de destination réel. Le graphe conserve ensuite cette
+paire et Play comme Seek la résolvent de la même manière. Aucun état absent
+n'est forcé au FIRST.
 
 Play et Seek évaluent un circuit unique à un temps absolu `t`.
 
@@ -158,9 +166,9 @@ crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
 `RuntimeComponentMaterializer` auxiliaire. Pour chaque frontière, une phase de
 capture présente successivement les états purs `before` et `after` sur les mêmes
 materialisations, puis ne conserve que leurs données géométriques. Pour un
-`move`, les deux états sont pris au même temps logique, de part et d'autre de
-l'événement. Pour une action de pose, l'état `after` est pris à la fin effective
-de son action, selon le délai et la durée compilés.
+`move`, FIRST est pris au temps logique `startAt` avant le commit et LAST à
+`startAt + delay + duration`. Pour une action de pose, les mêmes bornes sont
+utilisées selon le délai et la durée compilés.
 
 Cette phase est une transaction interne au runner : elle suspend les effets de
 lecture, retire d'abord les contributions transitoires de la présentation
@@ -200,10 +208,12 @@ pose reconnues par le materializer. S'il ne contient aucune transition, il
 n'instancie ni système motion, ni capture géométrique, ni overlay FLIP. Un
 `move` purement structurel sans transition ne demande pas de graphe motion.
 
-Un move ajouté par un événement runtime active le même circuit avant sa mutation :
-la position FIRST est capturée au point pré-commit, puis la position LAST après
-la mutation. Il ne peut pas être découvert après coup sans perdre la source du
-mouvement.
+Un move live ajouté par un événement runtime active le même circuit avant sa
+mutation : la position FIRST est capturée au point pré-commit, puis la position
+LAST après la mutation. Ce cas fournit la remise immédiate `endEmit`. Lorsqu'un
+move est conservé pour la relecture, sa frontière persistante applique la règle
+de l'endpoint géométrique définie plus haut. Il ne peut pas être découvert
+après coup sans perdre la source du mouvement.
 
 ### 4. Graphe temporel par item
 
@@ -350,9 +360,13 @@ partiellement mis à jour.
 
 ### 9. Présentation reparent par overlay
 
-Le host reparent indexe les ressources par `itemId`, jamais par capture. Il masque
-la source, clone son contenu auteur courant, applique la pose résolue dans la
-couche overlay puis restaure la source à LAST.
+Le host reparent indexe les ressources par `itemId`, jamais par capture. Le clone
+reste une représentation technique temporaire : il ne remplace pas le nœud
+auteur et ne doit jamais être visible en même temps que lui. Le host masque la
+source avant d'insérer ou de révéler le clone, garde le clone masqué pendant la
+synchronisation et l'écriture de la pose, puis le révèle seulement quand sa
+présentation complète est prête. À la sortie, il retire le clone avant de
+révéler la source.
 
 La pose est localisée contre la géométrie mesurée de la couche overlay elle-même,
 pas contre une hypothèse sur le root. Les bordures et transforms du root ne
@@ -391,8 +405,8 @@ Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dan
 
 ## Invariants normatifs
 
-1. Un `move` définit FIRST/LAST autour de sa frontière ; une action de pose
-   définit FIRST au démarrage et LAST à sa fin effective.
+1. Un `move` définit FIRST avant `startAt` et LAST à son endpoint
+   `startAt + delay + duration` ; une action de pose utilise les mêmes bornes.
 2. Une frontière possède deux côtés explicites, sans epsilon.
 3. Le graphe structurel est complet et unique à tout temps.
 4. Chaque item possède ses propres segments temporels.
@@ -414,6 +428,10 @@ Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dan
     parent DOM intermédiaire n'entre dans le contrat motion.
 16. Un descendant local d'un ancêtre overlay reste présenté dans le clone de
     cet ancêtre ; seuls les descendants `reparent` indépendants sont détachés.
+17. Pour chaque item reparenté, la source et le clone sont mutuellement exclusifs
+    à l'écran : source masquée avant l'insertion/révélation du clone, clone
+    masqué avant toute révélation de source, et clone retiré avant la révélation
+    finale de la source.
 
 ## Validation appliquée
 
@@ -424,6 +442,8 @@ Les tests à conserver et à rejouer après la refonte couvrent notamment :
 - overlap et retarget continu ;
 - retarget de reflow sans remise à zéro de l'easing ;
 - retarget d'une trajectoire courbe sans saut à la frontière ;
+- cible ou ancêtre absent au FIRST et disponible au LAST ;
+- exclusivité de visibilité entre chaque source et son clone d'overlay ;
 - indépendance à l'historique d'évaluation ;
 - inférence local/reparent et override `overlay-world` ;
 - frontière exclusive à `0 ms` ;
@@ -469,46 +489,41 @@ restent présentes, aucune racine de mesure n'est créée, et les checkpoints
 
 ## État de revue
 
-Le graphe, ses frontières et son résolveur sont le contrat de la tranche HTML
-clôturée. La mesure par second arbre DOM est proscrite ; la capture géométrique
+Le graphe, ses frontières et son résolveur restent le contrat de la tranche
+HTML. La mesure par second arbre DOM est proscrite ; la capture géométrique
 transactionnelle décrite ci-dessus est le seul chemin HTML. Les materializers
 SVG, Canvas et Three.js relèvent de tranches ultérieures et ne conditionnent pas
-la clôture de ce runner.
+ce chantier.
 
-### Contrôle de cette passe — 2026-08-25
+### Contrôle de la correction d'endpoint — 2026-08-26
 
-La démo `flip-stress` reste inchangée et sert de repère visuel final. Elle a été
-rejouée sur les états `BOUNDARY`, `MIDDLE`, `LAST`, après resize et après seeks
-non monotones. `C` et `D` restent visibles après `1000 ms`, les items Q/K
-conservent leur ordre parent-enfant et aucun ghost, masque ou slot transitoire
-ne subsiste à `10000 ms`.
-
-Le schedule V2 traite maintenant les deux sources de mouvement du runner HTML :
+Le schedule V2 conserve les deux sources de mouvement du runner HTML :
 `move.transition` et les actions de pose `style` reconnues par le materializer.
-Pour ces dernières, la capture prend FIRST au début de l'action et LAST à son
-endpoint effectif ; le graphe conserve ensuite le délai et la durée. Les
-ancêtres restent dans la fermeture de données et leurs propres segments sont
-composés récursivement, sans piste FLIP ajoutée par simple propagation.
+Pour un `move`, la capture prend FIRST avant `startAt` et LAST à
+`startAt + delay + duration`. Pour une action de pose, elle utilise les mêmes
+bornes selon le délai et la durée. Les ancêtres restent dans la fermeture de
+données et leurs propres segments sont composés récursivement, sans piste FLIP
+ajoutée par simple propagation.
 
-La suite V2 passe à 71 fichiers et 438 tests. Un test ciblé de
-`motion-graph.spec.ts` verrouille le cas causal : un enfant reparenté termine
-sur la pose intermédiaire de son ancêtre de destination, et non sur le FIRST
-de cet ancêtre. `typecheck`, la suite complète, le build du runner HTML et
-`git diff --check` sont verts.
+Les tests ciblés (`motion-capture.spec.ts` et `motion-graph.spec.ts`)
+verrouillent maintenant deux niveaux du cas causal :
+`captureHtmlMotionBoundaries()` demande bien le snapshot LAST à l'endpoint, et
+le graphe utilise le contexte de destination disponible à ce LAST lorsqu'il
+était absent au FIRST. Une passe manuelle de `flip-stress` a ensuite été
+effectuée dans le contexte Safari MCP avec les horaires de référence ; elle
+ne clôt pas la matrice complète, mais les observations sont consignées
+ci-dessous.
 
-La vérification Safari a rejoué la démo réelle aux bornes `0`, `1000` et
-`9000 ms`. À `1000 ms`, Q et K restent présentés depuis leurs positions FIRST
-respectives tandis que C et D sont montés ; à `9000 ms`, les overlays ont
-disparu et Q/K sont revenus dans leurs cibles naturelles. Aucun warning ni
-error de console n'a été relevé.
+La suite automatisée V2 compte actuellement 73 fichiers et 465 tests passés ;
+le typecheck, le build des démos et `git diff --check` sont également passés.
 
 ### Correction de régression — reflow alterné des listes — 2026-08-23
 
 La démo `flip-stress` lance bien un item de Q ou K toutes les `500 ms`. La
-timeline naturelle excluait auparavant les futurs movers de chaque snapshot,
-alors que ces items sont précisément les voisins qui doivent accompagner le
-déplacement courant. À `1200 ms` et `1700 ms`, `Qb…` et `Ka…` recevaient donc
-directement leur nouvelle position naturelle.
+timeline naturelle doit conserver les futurs movers comme voisins lorsqu'ils
+participent au reflow, mais elle ne doit pas leur appliquer l'endpoint d'un
+move précédent. À `1200 ms` et `1700 ms`, `Qb…` et `Ka…` doivent donc recevoir
+le slot naturel correspondant à la frontière où le reflow commence.
 
 La sélection conserve désormais les participants des targets source et cible
 pour les moves structurels, tout en maintenant l'exclusion des ancêtres capturés
@@ -519,6 +534,35 @@ Vérification Safari : les positions de A, Q et K restent continues entre
 `999/1000/1001 ms`, et les voisins portent une transformation locale aux
 frontières `1200 ms` et `1700 ms`. Les logs temporaires utilisés pour isoler la
 régression ont été retirés.
+
+### Correction de régression — endpoint d'un move et eventime suivant — 2026-08-27
+
+Le défaut observé au démarrage de `Ka` était réel. Le LAST capturé à la fin de
+son move pouvait déjà contenir le transfert ultérieur de `Qb`. Si ce même LAST
+était utilisé pour les frères de la liste, leurs slots étaient ceux de l'état
+futur : Qc–Qf sautaient au démarrage de `Ka`, alors que seule la trajectoire de
+`Ka` devait utiliser son endpoint.
+
+La frontière conserve maintenant trois informations distinctes lorsqu'elle est
+structurelle :
+
+- `before` : état juste avant `startAt` ;
+- `afterStart` : état immédiatement après `startAt`, utilisé pour les slots de
+  reflow et les frères ;
+- `after` : état à l'endpoint, utilisé pour le mover direct et le contexte
+  temporel de ses ancêtres et de sa cible.
+
+La trajectoire `word`/style reste hors de ce mécanisme : elle est marquée
+`targetReflow: false`, reste matérialisée sur le nœud source et ne crée ni
+reflow FLIP ni overlay. Le correctif réutilise donc le graphe existant ; il ne
+crée pas de second circuit de mouvement.
+
+Les tests ciblés couvrent désormais la frontière capture (`afterStart` distinct
+du LAST), le graphe qui refuse l'import d'un reflow ultérieur et la distinction
+`targetReflow` entre `move` et style. Dans Safari MCP, les checkpoints `1200`,
+`1700`, `2200` et `2700 ms` montrent que Q reste présent, qu'un seul
+représentant visible existe par item et que les overlays supplémentaires
+correspondent uniquement au mover démarré à chaque frontière.
 
 ### Pose naturelle des ancêtres HTML
 
@@ -533,7 +577,22 @@ DOM d'analyse. La timeline naturelle assemblée par `motion-layout.ts` fournit l
 layout retenu à `present()`, tandis que les segments du graphe portent les
 intermédiaires des parents et des descendants.
 
-### Ancêtre absent au FIRST, présent au LAST
+### Cible ou ancêtre de destination absent au FIRST, présent au LAST
+
+L'absence de la cible ou d'un de ses ancêtres au FIRST n'est pas une erreur de
+capture. Le snapshot FIRST conserve seulement l'état effectivement présent à
+`startAt`; le snapshot LAST, capturé à `startAt + delay + duration`, inclut la
+cible et sa chaîne lorsqu'elles sont montées à cet endpoint. La sélection de la
+frontière prend l'union des contextes FIRST et LAST, puis ferme chaque contexte
+sur ses ancêtres jusqu'à `root`. Le `MotionGraph` utilise alors l'attachement
+local et la pose LAST de la destination pour calculer la trajectoire du mover.
+
+Cette règle ne monte pas la cible au FIRST, ne change pas l'état logique de la
+scène et ne crée pas de DOM d'analyse. Elle concerne le contexte de destination
+et ne doit pas être confondue avec la composition hybride nécessaire lorsqu'un
+mover source est lui-même absent au FIRST.
+
+### Mover source absent au FIRST, présent au LAST
 
 Un perso détaché reste dans le graphe logique avec son `parentByPerso` et son
 `targetByPerso`. Il ne figure pas dans `childrenByTarget`, dans l'ordre DOM ou
@@ -592,17 +651,53 @@ La vérification visuelle Safari à `LAST` conserve `C` et `D`, l'ordre parent-
 enfant et les positions Q/K du repère. Aucun nœud de mesure n'est créé et la
 lecture géométrique reste limitée aux bornes explicites.
 
-### Référence visuelle de non-régression — 2026-08-23
+### Référence visuelle de non-régression — 2026-08-26
 
-La démo `flip-stress` est actuellement fonctionnelle et constitue la référence
-visuelle finale des évolutions de cette intégration. Elle doit être utilisée telle
-quelle pour contrôler Play, Seek, resize, reparent, l'ordre parent-enfant et la
-persistance des représentations.
+La démo `flip-stress` constitue la référence visuelle des évolutions de cette
+intégration. Son scénario active `revealD` à `BOUNDARY + 500 ms` et les
+transferts Q/K à `BOUNDARY + 1000 ms` afin d'exercer une cible de destination
+qui n'est pas encore montée au FIRST mais l'est au LAST du move.
 
-La démo n'est pas un endroit où compenser une lacune du runner : aucune
-modification de son scénario, de son timing ou de sa structure ne doit servir à
-faire passer un test. Toute divergence observée doit être corrigée dans le
-pipeline V2 ou signalée comme un écart de contrat avant modification.
+Elle sert à contrôler Play, Seek, resize, reparent, l'ordre parent-enfant et la
+persistance des représentations. Elle n'est pas un endroit où compenser une
+lacune du runner : son scénario rend le cas limite observable ; toute
+divergence doit être corrigée dans le pipeline V2 ou signalée comme un écart de
+contrat avant modification.
+
+### Vérification manuelle Safari MCP — 2026-08-26
+
+La page testée était `http://localhost:5173/?demo=flip-list`, avec le serveur
+déjà actif sur le port `5173`. Pour rendre la validation indépendante de la
+fenêtre Safari, le layout de démo fournit au moteur le `TimeTicker` existant
+avec `pauseOnDocumentHidden: false` et un scheduler de test fondé sur
+`setTimeout`. La vérification peut ainsi être menée page masquée, sans
+dépendre ni de `document.hidden` ni de la suspension du `requestAnimationFrame`.
+
+Le contrôle a effectivement été réalisé avec `document.visibilityState === 'hidden'` :
+après activation de Play, le temps de scène a atteint environ
+`1050 ms` et l'état est resté `playing`. L'activation de Pause a ensuite
+stabilisé le temps à cette valeur.
+
+Les contrôles suivants ont été réalisés :
+
+- seek vers `0`, `1000`, `1500`, `2000`, `2500`, `9000` et `10000 ms` ;
+- retour de `10000` à `0 ms`, où `C` et `D` sont absents et où aucun overlay ne
+  reste actif ;
+- lecture continue à `×0,25`, puis pause ; le temps de scène a progressé
+  pendant `playing` et s'est arrêté après `pause` ;
+- contrôle des éléments `K`, `Q`, `C`, `D`, de l'ordre parent-enfant et des
+  positions pendant les reparentages.
+
+Pendant un reparentage actif, le DOM contient le nœud source masqué et un
+clone de présentation dans l'overlay ; le comptage brut de `data-item-id` peut
+donc être supérieur à un. L'observation visuelle et le comptage des nœuds
+visibles montrent au plus une représentation visible par item. Aucun arbre de
+mesure n'a été créé.
+
+Le buffer de console ne contenait aucune erreur après cette passe. Cette
+vérification est une preuve navigateur ponctuelle ; elle ne clôt pas encore
+toutes les combinaisons de resize, seek et changements de calendrier
+indépendants.
 
 ## Repasse de cohérence et optimisation — 2026-08-23
 
@@ -706,7 +801,9 @@ Le contrat corrigé est explicite :
 - `prepareNaturalCapture()` retire les masques des sources overlay et les
   masques de descendants suivis avant toute lecture de géométrie ;
 - `commit()` réordonne les ghosts existants selon `orderParentFirst` par
-  déplacement DOM, sans création de nœud ;
+  déplacement DOM, sans création de nœud. L'ordre remonte toute la chaîne des
+  parents, y compris les intermédiaires sans ghost, afin qu'un enfant
+  indépendant soit peint au-dessus de sa frame lorsqu'ils se recouvrent ;
 - les masques de descendants indépendants sont enregistrés pour la frame
   courante, puis retirés avant d'appliquer le nouvel ensemble ;
 - un ghost stable reste donc réutilisable sans conserver une relation
@@ -781,3 +878,12 @@ interpolation monde approximative : si un parent et son enfant ont chacun une
 transition, la pose courante de l'enfant continue d'intégrer la trajectoire du
 parent, mais cette pose intermédiaire reste une dépendance interne. Les tests
 conservent les cas de parents indépendants, de reparentage et de retarget.
+
+La capture de chaque attachement conserve en plus le sous-graphe de positions
+mesuré pour l'item et sa chaîne d'ancêtres au FIRST ou au LAST de cette
+transition. La résolution temporelle utilise ces données lorsque la scène
+naturelle courante ne contient pas encore la cible, puis évalue la trajectoire
+propre de chaque parent à l'instant demandé. Un enfant dont le LAST tombe
+pendant le move de son parent reçoit donc la pose intermédiaire du parent à ce
+LAST, jamais sa pose finale. Cette donnée reste interne au graphe : elle ne
+crée ni segment pour un ancêtre sans intention, ni lecture DOM par frame.

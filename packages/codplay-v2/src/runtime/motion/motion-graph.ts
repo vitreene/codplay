@@ -39,17 +39,27 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
       // segment merely because a descendant boundary needs their context.
       if (!scope.segmentItemIds.has(itemId)) continue
       const before = boundary.before.items.get(itemId)
-      const after = boundary.after.items.get(itemId)
-      if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
+      // Reflow is committed from the layout immediately after this boundary.
+      // The endpoint snapshot is reserved for ancestor poses that are already
+      // moving while this segment runs; it must not import later sibling moves.
+      const structuralAfter = boundary.afterStart ?? boundary.after
       const directIntent = boundary.intents.find((intent) => intent.itemId === itemId)
+      // A direct mover may be absent from the immediate post-event scene when
+      // its destination is not mounted yet. Its endpoint snapshot is then the
+      // only valid LAST measurement; reflow siblings still use afterStart.
+      const after = directIntent === undefined
+        ? structuralAfter.items.get(itemId)
+        : boundary.after.items.get(itemId) ?? structuralAfter.items.get(itemId)
+      if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
+      const endpointAfter = boundary.after.items.get(itemId) ?? after
       const timing = directIntent ?? transition
       const current = resolveMotionItem(graph, boundary.before, itemId, boundary.timeMs)
       if (current === undefined) continue
       const sourceParentPose = before.parentItemId === undefined
         ? createMotionRootPose()
         : resolveMotionItem(graph, boundary.before, before.parentItemId, boundary.timeMs)?.pose
-      const from = createAttachment(before, current.pose, sourceParentPose)
-      const to = createStaticAttachment(after)
+      const from = createAttachment(before, current.pose, sourceParentPose, boundary.before)
+      const to = createStaticAttachment(after, boundary.after, endpointAfter)
       const activeSegment = directIntent === undefined
         && !isReparented(before, after)
         ? findContinuingSegment(graph.tracksByItem.get(itemId), boundary.timeMs)
@@ -59,8 +69,14 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
           to,
           boundary.after,
           itemId,
-          (parentItemId) => resolveLayoutParent(graph, boundary.after, parentItemId, boundary.timeMs),
-          true,
+          (parentItemId, context) => resolveLayoutParent(
+            graph,
+            boundary.after,
+            parentItemId,
+            boundary.timeMs,
+            context,
+          ),
+          false,
         )
         const phase = resolveSegmentProgress(activeSegment, boundary.timeMs)
         const retargetedFrom = extrapolateMotionPoseAtProgress(current.pose, destinationAtBoundary, phase, activeSegment.path)
@@ -74,7 +90,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
               ...(activeSegment.retargets ?? []),
               Object.freeze({
                 at: boundary.timeMs,
-                from: createAttachment(before, retargetedFrom, sourceParentPose),
+                from: createAttachment(before, retargetedFrom, sourceParentPose, boundary.before),
                 to,
               }),
             ]),
@@ -173,6 +189,7 @@ export function resolvePresentationFrame(
 ): PresentationFrame {
   const items = new Map<string, ItemPresentation>()
   const poses = new Map<string, HtmlPose>()
+  const contextPoses = new Map<ReadonlyMap<string, LayoutItemSnapshot>, Map<string, HtmlPose>>()
   const visiting = new Set<string>()
   // The graph lists only sovereign trajectory owners. Parent poses needed to
   // compose one owner are retained in this private cache, never emitted as
@@ -203,20 +220,45 @@ export function resolvePresentationFrame(
     items,
   })
 
-  function resolvePose(itemId: string): HtmlPose | undefined {
-    const existing = poses.get(itemId)
+  function resolvePose(
+    itemId: string,
+    context?: ReadonlyMap<string, LayoutItemSnapshot>,
+  ): HtmlPose | undefined {
+    const useContext = context?.has(itemId) === true
+    const cache = useContext
+      ? (contextPoses.get(context!) ?? createContextPoseCache(context!))
+      : poses
+    const existing = cache.get(itemId)
     if (existing !== undefined) return existing
     if (visiting.has(itemId)) throw new Error(`Motion graph cycle detected: ${itemId}`)
     visiting.add(itemId)
     try {
-      const resolved = resolveMotionPose(graph, layout, itemId, timeMs, (parentItemId) => (
-        parentItemId === undefined ? createMotionRootPose() : resolvePose(parentItemId)
-      ))
-      if (resolved !== undefined) poses.set(itemId, resolved)
+      const resolved = resolveMotionPose(
+        graph,
+        layout,
+        itemId,
+        timeMs,
+        (parentItemId, parentContext) => (
+          parentItemId === undefined
+            ? createMotionRootPose()
+            : resolvePose(parentItemId, parentContext ?? context)
+        ),
+        context,
+      )
+      if (resolved !== undefined) cache.set(itemId, resolved)
       return resolved
     } finally {
       visiting.delete(itemId)
     }
+  }
+
+  /** Creates one pose cache for one captured FIRST/LAST context map. */
+  function createContextPoseCache(
+    context: ReadonlyMap<string, LayoutItemSnapshot>,
+  ): Map<string, HtmlPose> {
+    const cache = new Map<string, HtmlPose>()
+    contextPoses.set(context, cache)
+    return cache
   }
 }
 
@@ -227,18 +269,27 @@ function resolveMotionItem(
   itemId: string,
   timeMs: number,
   resolveKnown?: (itemId: string) => ItemPresentation | undefined,
+  context?: ReadonlyMap<string, LayoutItemSnapshot>,
 ): ItemPresentation | undefined {
-  const base = layout.items.get(itemId)
+  const base = context?.get(itemId) ?? layout.items.get(itemId)
   if (base === undefined) return undefined
-  const resolveParent = (parentItemId: string | undefined): HtmlPose | undefined => {
+  const resolveParent = (
+    parentItemId: string | undefined,
+    parentContext?: ReadonlyMap<string, LayoutItemSnapshot>,
+  ): HtmlPose | undefined => {
     if (parentItemId === undefined) return createMotionRootPose()
     return resolveKnown?.(parentItemId)?.pose
-      ?? resolveMotionItem(graph, layout, parentItemId, timeMs, resolveKnown)?.pose
+      ?? resolveMotionItem(graph, layout, parentItemId, timeMs, resolveKnown, parentContext ?? context)?.pose
   }
-  const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent)
+  const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent, context)
   if (pose === undefined) return undefined
   const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
-  const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
+  const endpoint = segment === undefined
+    ? findMotionEndpoint(graph.tracksByItem.get(itemId), timeMs)
+    : undefined
+  const progress = segment === undefined
+    ? endpoint?.side === 'from' ? 0 : 1
+    : resolveSegmentProgress(segment, timeMs)
   return {
     itemId,
     ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
@@ -259,13 +310,25 @@ function resolveMotionPose(
   layout: LayoutSnapshot,
   itemId: string,
   timeMs: number,
-  resolveParent: (parentItemId: string | undefined) => HtmlPose | undefined,
+  resolveParent: (
+    parentItemId: string | undefined,
+    context?: ReadonlyMap<string, LayoutItemSnapshot>,
+  ) => HtmlPose | undefined,
+  context?: ReadonlyMap<string, LayoutItemSnapshot>,
 ): HtmlPose | undefined {
-  const base = layout.items.get(itemId)
-  if (base === undefined) return undefined
-  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
+  const base = context?.get(itemId) ?? layout.items.get(itemId)
+  const track = graph.tracksByItem.get(itemId)
+  const segment = findActiveSegment(track, timeMs)
   if (segment === undefined) {
-    const parent = resolveParent(base.parentItemId)
+    const endpoint = findMotionEndpoint(track, timeMs)
+    if (endpoint !== undefined) {
+      const attachment = endpoint.side === 'from'
+        ? endpoint.segment.from
+        : resolveSegmentRetarget(endpoint.segment, timeMs)?.to ?? endpoint.segment.to
+      return resolveAttachment(attachment, layout, itemId, resolveParent, endpoint.side === 'to' && !endpoint.segment.materializerOwned)
+    }
+    if (base === undefined) return undefined
+    const parent = resolveParent(base.parentItemId, context)
     return parent === undefined ? undefined : composeMotionPose(parent, base.localPose)
   }
 
@@ -287,9 +350,10 @@ function resolveLayoutParent(
   layout: LayoutSnapshot,
   parentItemId: string | undefined,
   timeMs: number,
+  context?: ReadonlyMap<string, LayoutItemSnapshot>,
 ): HtmlPose | undefined {
   if (parentItemId === undefined) return createMotionRootPose()
-  return resolveMotionItem(graph, layout, parentItemId, timeMs)?.pose
+  return resolveMotionItem(graph, layout, parentItemId, timeMs, undefined, context)?.pose
 }
 
 /** Resolves one static or current destination attachment in root coordinates. */
@@ -297,7 +361,10 @@ function resolveAttachment(
   attachment: MotionAttachment,
   layout: LayoutSnapshot,
   itemId: string,
-  resolveParent: (parentItemId: string | undefined) => HtmlPose | undefined,
+  resolveParent: (
+    parentItemId: string | undefined,
+    context?: ReadonlyMap<string, LayoutItemSnapshot>,
+  ) => HtmlPose | undefined,
   useCurrentDestination: boolean,
 ): HtmlPose {
   const current = useCurrentDestination ? layout.items.get(itemId) : undefined
@@ -306,7 +373,7 @@ function resolveAttachment(
     && current.targetId === attachment.targetId
     ? current.localPose
     : attachment.localPose
-  const parent = resolveParent(attachment.parentItemId)
+  const parent = resolveParent(attachment.parentItemId, attachment.context)
   return parent === undefined
     ? composeMotionPose(createMotionRootPose(), attachment.fallbackRootPose)
     : composeMotionPose(parent, effective)
@@ -317,6 +384,7 @@ function createAttachment(
   snapshot: LayoutItemSnapshot,
   visualPose: HtmlPose,
   parentPose: HtmlPose | undefined,
+  contextSnapshot: LayoutSnapshot,
 ): MotionAttachment {
   return Object.freeze({
     ...(snapshot.parentItemId === undefined || parentPose === undefined ? {} : { parentItemId: snapshot.parentItemId }),
@@ -325,17 +393,39 @@ function createAttachment(
       ? decomposeRootMotionPose(visualPose)
       : deriveRelativeMotionPose(parentPose, visualPose),
     fallbackRootPose: decomposeRootMotionPose(visualPose),
+    context: createAttachmentContext(snapshot, contextSnapshot),
   })
 }
 
-/** Creates one destination attachment from the immediate post-event layout. */
-function createStaticAttachment(snapshot: LayoutItemSnapshot): MotionAttachment {
+/** Creates one destination attachment from the measured LAST layout. */
+function createStaticAttachment(
+  snapshot: LayoutItemSnapshot,
+  contextSnapshot: LayoutSnapshot,
+  fallbackSnapshot: LayoutItemSnapshot = snapshot,
+): MotionAttachment {
   return Object.freeze({
     ...(snapshot.parentItemId === undefined ? {} : { parentItemId: snapshot.parentItemId }),
     targetId: snapshot.targetId,
     localPose: snapshot.localPose,
-    fallbackRootPose: decomposeRootMotionPose(snapshot.rootPose),
+    fallbackRootPose: decomposeRootMotionPose(fallbackSnapshot.rootPose),
+    context: createAttachmentContext(snapshot, contextSnapshot),
   })
+}
+
+/** Captures one item's measured pose and every measured ancestor in its chain. */
+function createAttachmentContext(
+  snapshot: LayoutItemSnapshot,
+  contextSnapshot: LayoutSnapshot,
+): ReadonlyMap<string, LayoutItemSnapshot> {
+  const context = new Map<string, LayoutItemSnapshot>()
+  let current: LayoutItemSnapshot | undefined = snapshot
+  while (current !== undefined && !context.has(current.itemId)) {
+    context.set(current.itemId, current)
+    current = current.parentItemId === undefined
+      ? undefined
+      : contextSnapshot.items.get(current.parentItemId)
+  }
+  return context
 }
 
 /** Detects local reflow or reparentage without duplicating ancestor movement. */
@@ -369,6 +459,21 @@ function findActiveSegment(track: ItemMotionTrack | undefined, timeMs: number): 
   for (let index = track.segments.length - 1; index >= 0; index -= 1) {
     const segment = track.segments[index]!
     if (timeMs >= segment.startAt && timeMs <= segment.endAt) return segment
+  }
+  return undefined
+}
+
+/** Selects the nearest segment endpoint when the item is outside an active interval. */
+function findMotionEndpoint(
+  track: ItemMotionTrack | undefined,
+  timeMs: number,
+): Readonly<{ segment: MotionSegment; side: 'from' | 'to' }> | undefined {
+  if (track === undefined || track.segments.length === 0) return undefined
+  const first = track.segments[0]!
+  if (timeMs < first.startAt) return { segment: first, side: 'from' }
+  for (let index = track.segments.length - 1; index >= 0; index -= 1) {
+    const segment = track.segments[index]!
+    if (timeMs > segment.endAt) return { segment, side: 'to' }
   }
   return undefined
 }

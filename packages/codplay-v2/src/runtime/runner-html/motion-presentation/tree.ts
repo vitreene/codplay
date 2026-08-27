@@ -72,8 +72,16 @@ export function orderParentFirst(
     if (visited.has(itemId)) return
     if (visiting.has(itemId)) throw new Error(`Motion presentation cycle detected: ${itemId}`)
     visiting.add(itemId)
-    const parentItemId = resolveParentItemId(frame, naturalLayout, itemId)
-    if (parentItemId !== undefined && selected.has(parentItemId)) visit(parentItemId)
+    const ancestorPath = new Set<string>()
+    let parentItemId = resolveParentItemId(frame, naturalLayout, itemId)
+    while (parentItemId !== undefined && !selected.has(parentItemId)) {
+      if (ancestorPath.has(parentItemId)) {
+        throw new Error(`Motion presentation cycle detected: ${parentItemId}`)
+      }
+      ancestorPath.add(parentItemId)
+      parentItemId = resolveParentItemId(frame, naturalLayout, parentItemId)
+    }
+    if (parentItemId !== undefined) visit(parentItemId)
     visiting.delete(itemId)
     visited.add(itemId)
     ordered.push(itemId)

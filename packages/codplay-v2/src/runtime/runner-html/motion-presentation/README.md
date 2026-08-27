@@ -19,7 +19,8 @@ nœuds et le nettoyage des ressources temporaires.
 
 - `geometry.ts` porte la localisation des poses et les comparaisons affines ;
 - `tree.ts` porte l'arbre de l'overlay, les clones stables, l'ordre et le
-  nettoyage ;
+  nettoyage. Son ordre parent-avant-enfant remonte les intermédiaires non
+  présentés afin qu'un enfant indépendant soit peint au-dessus de son parent ;
 - `types.ts` porte les contrats des ressources d'overlay.
 
 ## Contrat et limites

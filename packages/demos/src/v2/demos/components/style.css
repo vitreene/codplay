@@ -1,41 +1,7 @@
-:root {
-  color: #e9eef8;
-  background: #0d1422;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  font-synthesis: none;
-}
-
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
-button, input { font: inherit; }
-
-.components-page {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 48px 0 72px;
-}
-
-.components-page__header { max-width: 760px; }
-.eyebrow { margin: 0 0 12px; color: #f3a77f; font-size: .75rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-h1 { margin: 0; color: #f7f9fc; font-size: clamp(2.2rem, 6vw, 5rem); line-height: .96; }
-.lede { max-width: 680px; color: #aebbd0; line-height: 1.65; }
-
-.components-page__scene,
-.components-page__controls,
-.components-page__readout {
-  margin-top: 24px;
-  border: 1px solid #2a3851;
-  border-radius: 22px;
-  background: rgba(17, 26, 42, .88);
-  box-shadow: 0 24px 72px rgba(0, 0, 0, .24);
-}
-
-.components-page__scene { overflow: hidden; }
-.components-page__controls,
-.components-page__readout { padding: 18px 22px; }
-
 .components-stage {
   display: grid;
+  height: 100%;
+  min-height: 0;
   grid-template-columns: minmax(0, 1.05fr) minmax(330px, .95fr);
   gap: 20px;
   padding: 20px;
@@ -130,24 +96,7 @@ h1 { margin: 0; color: #f7f9fc; font-size: clamp(2.2rem, 6vw, 5rem); line-height
 .components-question__answer.input--revealed-missed-correct .components-question__correction-icon { color: #bd781e; }
 .components-question__status { padding-top: 6px; color: #355b8a; font-weight: 700; }
 
-.telco-remote { display: grid; gap: 12px; }
-.telco-remote__transport { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.telco-button { padding: 9px 14px; border: 0; border-radius: 9px; color: #0d1422; background: #f3a77f; cursor: pointer; font-weight: 800; }
-.telco-button--secondary { color: #e9eef8; background: #2d3c55; }
-.telco-remote__seek { display: flex; align-items: center; gap: 10px; flex: 1 1 300px; color: #aebbd0; font-size: .82rem; }
-.telco-remote__seek input { flex: 1 1 auto; accent-color: #f3a77f; }
-.telco-remote__seek output,
-.telco-remote__state,
-output { color: #f3a77f; font-variant-numeric: tabular-nums; }
-.components-page__help { margin: 0; color: #8fa5c1; font-size: .86rem; line-height: 1.5; }
-.components-page__readout dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
-.components-page__readout dl div { padding: 11px 13px; border-radius: 11px; background: #172239; }
-dt { color: #8294ad; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; }
-dd { margin: 4px 0 0; font-weight: 800; }
-.components-page__error { margin: 16px 0 0; padding: 14px; color: #ffc4c4; background: #3a202d; white-space: pre-wrap; }
-
 @media (max-width: 780px) {
-  .components-page { width: min(100% - 20px, 1120px); padding-top: 28px; }
   .components-stage { grid-template-columns: 1fr; }
 }
 
@@ -155,5 +104,4 @@ dd { margin: 4px 0 0; font-weight: 800; }
   .components-stage__visual { grid-template-columns: 1fr; }
   .components-stage__visual-label { grid-column: auto; }
   .components-polygon { width: 170px; }
-  .components-page__readout dl { grid-template-columns: 1fr; }
 }

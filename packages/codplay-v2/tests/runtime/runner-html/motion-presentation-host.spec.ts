@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { HtmlMotionPresentationHost } from '../../../src/runtime/runner-html'
 import type { HtmlMatrix, HtmlPose } from '../../../src/runtime/motion/html-types'
 import { createMotionRootPose } from '../../../src/runtime/motion'
@@ -22,6 +22,8 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     host.commit(frame, () => 'revision-1')
     const firstGhost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
     expect(firstGhost).not.toBeNull()
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
 
     host.prepareNaturalCapture()
     expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
@@ -31,8 +33,45 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     expect(secondGhost).toBe(firstGhost)
     expect(firstGhost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
     expect(root.querySelectorAll('[data-codplay-motion-item="item"]')).toHaveLength(1)
     host.destroy()
+    root.remove()
+  })
+
+  it('does not toggle source and overlay visibility on every presentation frame', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const frame = createReparentFrame(createPose(0))
+    host.commit(frame, () => 'revision-1')
+    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+    expect(ghost).not.toBeNull()
+
+    const sourceSetAttribute = vi.spyOn(source, 'setAttribute')
+    const sourceRemoveAttribute = vi.spyOn(source, 'removeAttribute')
+    const ghostSetAttribute = vi.spyOn(ghost!, 'setAttribute')
+    const ghostRemoveAttribute = vi.spyOn(ghost!, 'removeAttribute')
+
+    host.commit(frame, () => 'revision-1')
+    host.commit({ ...frame, timeMs: 1, items: new Map([[
+      'item',
+      { ...frame.items.get('item')!, pose: createPose(1) },
+    ]]) }, () => 'revision-1')
+
+    expect(sourceSetAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
+    expect(sourceRemoveAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
+    expect(ghostSetAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
+    expect(ghostRemoveAttribute.mock.calls.filter(([name]) => name === 'data-codplay-motion-hidden')).toHaveLength(0)
+
+    host.destroy()
+    sourceSetAttribute.mockRestore()
+    sourceRemoveAttribute.mockRestore()
+    ghostSetAttribute.mockRestore()
+    ghostRemoveAttribute.mockRestore()
     root.remove()
   })
 
@@ -80,6 +119,36 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')).toBe(ghost)
     expect(ghost?.style.width).toBe('20px')
     expect(ghost?.style.height).toBe('20px')
+    host.destroy()
+    root.remove()
+  })
+
+  it('never leaves a source and its active projection visible together', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const frame = createReparentFrame(createPose(0))
+    host.commit(frame)
+    const ghost = root.querySelector<HTMLElement>('[data-codplay-motion-item="item"]')
+
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+
+    host.prepareNaturalCapture()
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+
+    host.commit(frame)
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(true)
+    expect(ghost?.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+
+    host.commit({ ...frame, items: new Map() })
+    expect(source.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(root.querySelector('[data-codplay-motion-item="item"]')).toBeNull()
+
     host.destroy()
     root.remove()
   })
@@ -193,6 +262,64 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     expect(root.querySelector<HTMLElement>('[data-codplay-motion-item="parent"]')
       ?.querySelector('[data-codplay-motion-hidden]')).toBeNull()
+    host.destroy()
+    root.remove()
+  })
+
+  it('orders an overlay after every selected ancestor across unpresented intermediaries', () => {
+    const root = document.createElement('main')
+    const parent = document.createElement('section')
+    const intermediary = document.createElement('div')
+    const child = document.createElement('article')
+    parent.appendChild(intermediary)
+    intermediary.appendChild(child)
+    root.appendChild(parent)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['parent', parent],
+      ['child', child],
+    ])
+    const host = new HtmlMotionPresentationHost(root, (itemId) => handles.get(itemId))
+    host.commit(
+      createFrame([
+        createItem('child', 'intermediary'),
+        createItem('parent'),
+      ]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout',
+        rootPose: createMotionRootPose(),
+        items: new Map([
+          ['parent', {
+            itemId: 'parent',
+            targetId: 'root',
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['intermediary', {
+            itemId: 'intermediary',
+            parentItemId: 'parent',
+            targetId: 'parent-content',
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+          ['child', {
+            itemId: 'child',
+            parentItemId: 'intermediary',
+            targetId: 'intermediary-content',
+            localPose: localPose(0),
+            rootPose: createPose(0),
+          }],
+        ]),
+      },
+    )
+
+    const layer = root.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    expect([...layer!.children].map((node) => node.getAttribute('data-codplay-motion-item')))
+      .toEqual(['parent', 'child'])
+
     host.destroy()
     root.remove()
   })

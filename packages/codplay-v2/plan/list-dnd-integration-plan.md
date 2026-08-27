@@ -136,12 +136,13 @@ reçu à cette position.
 Avant que `endEmit` ne modifie l'état logique, le runner HTML photographie la
 pose visible courante comme `FIRST` de la frontière live. Cette photographie
 inclut la pose fixe au drop et les reflows FLIP encore visibles des voisins ;
-le `LAST` reste mesuré depuis le player isolé après le `move`. Elle sert au
-handoff immédiat de la fermeture, puis est supprimée au prochain seek. Pour
-`endCapture`, le `FIRST` de relecture est au contraire mesuré par le player
-isolé juste avant la frontière persist-only. Le snapshot live est une donnée de
-présentation du runner, pas un nouvel état de capture et pas une entrée du
-journal.
+le `LAST` de cette remise live reste mesuré depuis le player visible après le
+`move`. Elle sert au handoff immédiat de la fermeture, puis est supprimée au
+prochain seek. Pour `endCapture`, le `FIRST` de relecture est au contraire
+mesuré par le player isolé juste avant la frontière persist-only et le runner
+HTML capture le LAST géométrique à `startAt + delay + duration`. Le snapshot
+live est une donnée de présentation du runner, pas un nouvel état de capture et
+pas une entrée du journal.
 
 ## Donnée de `endEmit`
 

@@ -44,11 +44,14 @@ export type MotionIntent = Readonly<{
   targetReflow?: boolean
 }>
 
-/** The before/after layout pair caused directly by one event boundary. */
+/** The before/after geometry retained for one event transition. */
 export type MotionBoundary = Readonly<{
   id: string
   timeMs: number
   before: LayoutSnapshot
+  /** Natural layout immediately after the boundary, before later eventimes. */
+  afterStart?: LayoutSnapshot
+  /** Natural layout at the transition endpoint, including active ancestors. */
   after: LayoutSnapshot
   intents: readonly MotionIntent[]
 }>
@@ -60,6 +63,8 @@ export type MotionAttachment = Readonly<{
   localPose: RelativeMotionPose
   /** Root-relative fallback used only if the historical parent is unavailable. */
   fallbackRootPose: RelativeMotionPose
+  /** FIRST/LAST item and ancestor poses captured for this attachment. */
+  context?: ReadonlyMap<string, LayoutItemSnapshot>
 }>
 
 /** One destination retarget applied at an exact boundary without restarting phase. */

@@ -1,8 +1,8 @@
 # Présentation DOM V2 (runner HTML)
 
-> Statut : Fini — tranche HTML/DOM motion V2
+> Statut : En cours — correction de la frontière géométrique FLIP
 > Version CodPlay : V2 foundation
-> Relecture : capture géométrique sans DOM dupliqué et frontières FIRST/LAST validées le 2026-08-25 ; renderer de production hors périmètre
+> Relecture : calcul d'endpoint et parent démarré plus tard couverts par les tests ; contrôle navigateur des positions effectué
 
 ## Rôle
 
@@ -90,10 +90,13 @@ reste disponible pour animer le reflow de la liste. Un élément capturé seulem
 comme dépendance d'un ancêtre ne peut pas écraser sa propre trajectoire naturelle.
 
 Le reset retire aussi les masques de source laissés par l'overlay précédent. Les
-ghosts existants sont remis dans l'ordre parent-avant-enfant ; `appendChild`
+ghosts existants sont remis dans l'ordre parent-avant-enfant, en remontant toute
+la chaîne même lorsqu'un intermédiaire n'a pas de ghost ; `appendChild`
 réordonne alors un nœud existant et n'en crée pas un nouveau. Les masques des
 descendants indépendants sont suivis par frame et effacés avant l'application
 suivante, afin qu'un clone d'ancêtre réutilisé ne conserve pas un enfant caché.
+Les ghosts partagent le même `z-index` : l'overlay parent est donc inséré avant
+son enfant indépendant, qui est peint au-dessus de lui lorsqu'ils se recouvrent.
 
 Le runner n'écrit pas de transformations neutres `translate`, `rotate` ou
 `scale`. Il les neutralise avec `none` seulement lorsqu'une valeur auteur non
@@ -103,7 +106,9 @@ neutre entrerait en composition avec la matrice de présentation ; la déclarati
 Cette règle concerne la capture de géométrie. Une présentation `reparent` peut
 posséder une représentation temporaire parce que le nœud auteur doit rester
 dans son parent logique. Cet overlay n'est ni un arbre de mesure ni une seconde
-materialization de composant.
+materialization de composant. Pendant le basculement, la source et le clone
+sont mutuellement exclusifs : la source est masquée avant l'insertion ou la
+révélation du clone, puis le clone est retiré avant que la source soit révélée.
 
 Le runner fournit une révision logique. Si la structure du template est stable,
 le host synchronise la représentation existante ; il ne la recrée qu'après une
@@ -113,17 +118,44 @@ n'entre pas dans le calcul de pose.
 
 Pour chaque frontière compilée :
 
-- un `move` capture FIRST avec `resolveSceneBeforeBoundary(startAt)`, puis LAST
-  avec `resolveSceneAt(startAt)` après l'événement structurel ;
-- une transition de pose capture FIRST à `startAt`, puis LAST à
-  `startAt + delay + duration` ; si l'action monte le perso à son démarrage,
-  ce FIRST utilise l'état monté et les valeurs initiales de l'action.
+- un `move` capture FIRST avec `resolveSceneBeforeBoundary(startAt)` ; pour la
+  structure naturelle immédiatement après le commit, il capture aussi
+  `afterStart` avec `resolveSceneAt(startAt)` ; enfin, il capture LAST à
+  `resolveSceneBeforeBoundary(startAt + delay + duration)` ;
+- `afterStart` sert uniquement à donner aux frères les slots de reflow qui
+  existent dès le démarrage du move. Il ne doit pas être remplacé par le
+  snapshot d'endpoint, car celui-ci peut déjà contenir un autre eventime ;
+- LAST reste le snapshot d'endpoint du mover direct. Il peut donc contenir la
+  cible et la chaîne d'ancêtres dans leur état temporel à cet endpoint, sans
+  importer cet état dans les trajectoires de reflow des frères ;
+- une transition de pose (`style`, y compris un mot ou une propriété de
+  présentation) capture FIRST à `startAt`, puis LAST à
+  `startAt + delay + duration`. Elle reste pilotée par le materializer sur le
+  nœud source : elle ne crée ni reflow FLIP ni overlay par elle-même.
 
-Le LAST d'un `move` est donc la conséquence immédiate de l'événement ; le LAST
-d'une action est son endpoint mesuré, pas un état futur de toute la scène. Si la
-scène ne contient aucun `move` transitionnel ni transition de pose du
-materializer, le runner n'initialise pas de système de mouvement, ne capture pas
-les positions et ne crée pas d'overlay.
+Le LAST d'un `move` est donc sa position géométrique à la fin de sa transition,
+pas une lecture immédiate au temps logique de l'événement. Cette distinction
+permet à une cible ou à un ancêtre absent au FIRST mais monté au LAST de fournir
+le contexte de destination. `afterStart` empêche cependant qu'un eventime
+ultérieur modifie dès le départ la trajectoire des frères du move précédent.
+La distinction ne décale pas l'application logique de l'événement et ne demande
+aucun montage artificiel au FIRST. Si la scène ne contient aucun `move`
+transitionnel ni transition de pose du materializer, le runner n'initialise pas
+de système de mouvement, ne capture pas les positions et ne crée pas d'overlay.
+
+Exemple : un `move` commence à `1200 ms`, dure `1000 ms` et sa cible est montée
+à `1500 ms`. Le snapshot FIRST est celui de `1200 ms` avant le commit ; le
+snapshot `afterStart` est mesuré à `1200 ms` pour les slots de reflow ; le
+snapshot LAST est mesuré à `2200 ms` et peut donc contenir la cible et toute sa
+ chaîne d'ancêtres. Entre ces bornes, le graphe résout l'interpolation à partir
+ des poses conservées ; il ne relit pas le DOM.
+
+Chaque attachement conserve également les mesures de l'item et de sa chaîne
+d'ancêtres au FIRST ou au LAST correspondant. Si l'enfant commence avant son
+parent, la résolution avance dans le segment temporel du parent pour obtenir sa
+pose au temps demandé ; elle n'utilise jamais la pose finale du parent comme
+substitut. Les ancêtres sans transition ne produisent aucune sortie de frame :
+leurs poses locales ne servent qu'à composer celle du mover.
 
 Un mover qui est absent au FIRST parce qu'un ancêtre est détaché conserve sa
 chaîne logique dans le graphe. Lorsque le mover et cette chaîne sont disponibles

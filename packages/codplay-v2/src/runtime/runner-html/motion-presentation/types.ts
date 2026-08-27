@@ -5,6 +5,9 @@ export type OverlayResource = {
   source: HTMLElement
   ghost: HTMLElement
   revision?: string
+  /** Tracks the exclusive source/projection visibility state between frames. */
+  sourceHidden: boolean
+  presentationHidden: boolean
   lastWidth?: number
   lastHeight?: number
   lastMatrix?: HtmlMatrix

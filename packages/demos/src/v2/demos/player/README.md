@@ -12,11 +12,6 @@ manifeste explicite -> preload externe -> runner.init() -> telco.play()
                                       -> media-sync / master
 ```
 
-La présentation des composants core V2 est désormais une entrée distincte du
-registre. Cette source ne crée pas de runner supplémentaire pour le runtime ;
-son `main.ts` conserve encore l'orchestration de l'ancienne page de validation
-jusqu'à sa reprise par le layout commun.
-
 La scène démarre après le preload. Elle présente un media audio marqué
 `initial.master: true`, une vidéo, deux images et la feuille de style de la
 scène. La scène se termine à `6890 ms`, à la fin de la fenêtre de diffusion de
