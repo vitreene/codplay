@@ -256,9 +256,9 @@ class LayoutComponent extends BaseHTMLComponent<LayoutInitial> {
 }
 ```
 
-`markup` est une donnee source de `SceneDoc`. Le builder la parse, la sanitise et
-la normalise dans `CompiledPerso.initial.markup`. Le runtime recoit ce markup de
-confiance et le materialise sans refaire la sanitization.
+`markup` est une donnee source de `SceneDoc`. Le builder conserve la chaîne dans
+`CompiledPerso.initial.markup`. Le materializer HTML la parse avec les API DOM du
+navigateur au moment de la materialization.
 
 Le parseur du template et le module `markup` de la capacite layout enregistrent les elements `data-part`
 en interne. Le composant ne publie pas lui-meme ces declarations. Le runtime de

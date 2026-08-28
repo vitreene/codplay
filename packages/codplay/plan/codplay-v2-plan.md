@@ -21,7 +21,9 @@ ultérieure, et ne constituent pas une dépendance du runtime V2.
 - Aucun jalon ne cree de mini-DSL, de sous-format `CompiledScene`, de fallback ou de branche speciale de
   demo. Une capacite absente est explicitement hors de la tranche.
 - Le flux V2 reste : `SceneDoc -> build -> CompiledScene -> materialize -> resolve -> solve -> composant`.
-- Le builder sanitise une fois; le player ne porte pas de garde defensive sur son chemin chaud.
+- Le builder applique les normalisations des composants/services ; le player
+  ne porte pas de garde defensive sur son chemin chaud. Le markup est parsé par
+  le materializer HTML avec les API DOM du navigateur.
 - L'etat logique ne se reconstruit jamais depuis le DOM. Un composant est l'unique ecrivain de l'etat qui
   lui est remis.
 - Les materialisations auteur sont persistantes pendant toute la sequence/player :
@@ -67,11 +69,11 @@ Ces alias sont déclarés à la fois dans `packages/codplay/tsconfig.json` et
 Vite/Vitest. Les imports du runtime V1 restent explicitement préfixés par
 `codplay-v1`.
 
-La sanitation du markup qui précède `CompiledScene` appartient à
-`src/scene/validation`. La capacité runtime `markup` conserve uniquement les
-parts/outlets et leur materialization par player. Les services portent leurs
-contrats et validations pures ; leurs bindings de materializer sont
-assemblés dans l'adapter runtime concerné.
+Le markup auteur est conservé dans `CompiledScene`. La capacité runtime `markup`
+conserve les parts/outlets et le runner HTML délègue le parsing et la
+materialization aux API DOM du navigateur. Les services portent leurs contrats
+et validations pures ; leurs bindings de materializer sont assemblés dans
+l'adapter runtime concerné.
 
 `CompiledScene` possède son enveloppe V2 : `schemaVersion`, `createdAt`, `scene`,
 `resources`, `rootNodeIds`, `requirements` et, lorsque nécessaire, les index
@@ -170,7 +172,7 @@ Ces modeles commandent les types, signatures, classes et tests. Ils ne justifien
 | CompiledScene | Enveloppe, guards, sanitation, codec, artefact immutable et requirements declares | `src/scene/compiled`; artefact de lecture interne. |
 | Engine | `RuntimeCapabilityCatalog` unifie des composants, services, modules et déclarations `foreign`; cache, styles, horloge et ordre de tick | Le catalogue est composé à l'initialisation puis verrouillé avant l'exécution. L'engine consomme cette source unique et ne lit pas `SceneDoc`. |
 | Player et lifecycle | Instance, racine de montage, canaux diffusion/injection/authoring/observation, cycle init/play/pause/seek/destroy | Recoit engine et `CompiledScene`; ne cree pas sa propre horloge. Play et Seek résolvent le même état et la même frame absolue. |
-| Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, fonctions referencees, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, selection story/scene, straps sequentiels et attendus, outputs sur tracks declarees, emissions declarees bornees et relecture journalisee; la portée nommée remplace le booléen V1 `cascade`; l'invalidation des résultats asynchrones est reportée à V3 et les helpers live restent hors tranche. |
+| Events, listen et straps | Pipeline `listen -> transform -> straps -> emit -> persos`, straps locaux par scène/story par défaut, références réutilisables explicites en exception, ordre stable, events comme contrat primaire | Dispatcher runtime unique en place : append source, sélection story/scene, résolution des deux formes vers la même collection, straps séquentiels et attendus, outputs sur tracks déclarées, émissions déclarées bornées et relecture journalisée ; la portée nommée remplace le booléen V1 `cascade`; l'invalidation des résultats asynchrones est reportée à V3 et les helpers live restent hors tranche. |
 | Helpers de straps et schedule | Delais, repetitions, stagger, `planned` et cas `live` | Plan Temporel Declaratif fini pour les formes bornees; tout contrat live reste exclu et a specifier avec `f(t)`. |
 | Tracks et eventimes | Journal ordonne, eventimes relatifs aplatis, activation, provenance et append live | Registre statique, journal live, ancrage runtime, controles d'activation et tracks dediees aux outputs de straps en place; l'invalidation par génération des résultats asynchrones est reportée à V3. |
 | Materialize, resolve et solve | Faits -> actions -> etat resolu; behaviors ACE, placements opaques, etats discrets par validite, hierarchie de solve | `materialize -> resolve -> solve`, registre de cibles, placements, conflits same-tick, transforms scalaires et graphe parent/enfant en place; les mesures dépendantes du materializer et les extensions de diagnostic restent dans leurs tranches dédiées, tandis que les politiques de liste sont portées par la capacité `list`. |

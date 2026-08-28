@@ -14,7 +14,7 @@ import {
 } from '../../config/track-events'
 import { executeListenPipeline, type ListenEventInput, type ListenPipelineIssue, type ListenStrapExecution } from './listen'
 import { RuntimeStateStore } from './runtime-state-store'
-import type { StrapCollections } from './strap-collections'
+import { resolveStrapCollection, type StrapCollections } from './strap-collections'
 import type { StrapCollection } from './strap-executor'
 import { RuntimeTrackJournal, type RuntimeTrackEvent } from './track-journal'
 import { resolveStoryTrackId } from './tracks'
@@ -108,8 +108,17 @@ export class RuntimeEventDispatcher {
   constructor(options: RuntimeEventDispatcherOptions) {
     this.scene = options.scene
     this.journal = options.journal
-    this.strapCollections = options.strapCollections ?? { scene: {}, stories: {} }
     this.functions = options.functions ?? {}
+    const reusable = options.strapCollections ?? { scene: {}, stories: {} }
+    this.strapCollections = {
+      scene: resolveStrapCollection(this.scene.scene.straps, reusable.scene, this.functions),
+      stories: Object.fromEntries(
+        Object.entries(this.scene.scene.stories).map(([storyId, story]) => [
+          storyId,
+          resolveStrapCollection(story.straps, reusable.stories[storyId] ?? {}, this.functions),
+        ]),
+      ),
+    }
     this.stateStore = options.stateStore
     this.maxCascadeDepth = options.maxCascadeDepth ?? 32
     this.eventIdFactory = options.eventIdFactory

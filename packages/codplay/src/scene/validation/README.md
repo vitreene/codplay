@@ -8,10 +8,9 @@ Validation is the pure bridge between the declarations in
 `RuntimeCapabilityCatalog` and the `CompiledScene` build. It does not own a second
 mutable registration catalog.
 
-The compile-time markup sanitizer also lives in this boundary. It consumes the
-pure `MarkupAttributeSanitizer` policies declared by services and writes the
-sanitized template into `CompiledScene`; the runtime markup capability only owns
-player-scoped parts and materialization registration.
+Markup is not parsed or restricted in this boundary. The authored template
+string is preserved in `CompiledScene`; the HTML runner delegates parsing and
+materialization to the browser DOM.
 
 Component declarations may also publish `sanitizeInitial` and `sanitizeAction`.
 Those pure functions receive the validated perso profile and return the form

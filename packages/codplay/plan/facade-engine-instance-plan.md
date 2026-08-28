@@ -321,7 +321,9 @@ La création d'une instance reçoit au minimum :
 - sa collection de fonctions ;
 - sa racine HTML et ses cibles de montage ;
 - ses racines et cibles de montage ;
-- ses collections de straps si elles sont prévues par la tranche ;
+- ses collections externes de straps uniquement lorsqu'une déclaration de la
+  scène choisit explicitement la forme réutilisable ; les straps locaux sont
+  déjà portés par le `CompiledScene` et sa collection de fonctions ;
 - les ressources déjà déclarées disponibles par l'engine.
 
 La racine HTML et les cibles de montage sont des données d'instance ; elles ne

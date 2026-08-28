@@ -222,7 +222,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   }
 
   setLogPanelOpen(readLogPanelOpen())
-  logsToggle.addEventListener('click', () => setLogPanelOpen(logPanel.hidden !== true))
+  logsToggle.addEventListener('click', () => setLogPanelOpen(logPanel.hidden === true))
   logClose.addEventListener('click', () => setLogPanelOpen(false))
   logCopy.addEventListener('click', () => { void copyLogs() })
 
@@ -238,10 +238,13 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       try {
         codplay = new CodPlay({
           engine: {
-            diagnosticOutput: (diagnostic) => log(
-              `${diagnostic.code}: ${diagnostic.message}`,
-              diagnostic.severity === 'warning' ? 'warn' : 'error',
-            ),
+            diagnosticOutput: (diagnostic) => {
+              console.log('[CodPlay V2 diagnostic]', diagnostic)
+              log(
+                `${diagnostic.code}: ${diagnostic.message}`,
+                diagnostic.severity === 'warning' ? 'warn' : 'error',
+              )
+            },
           },
           frameScheduler: createV2DemoFrameScheduler(),
           pauseOnDocumentHidden: false,

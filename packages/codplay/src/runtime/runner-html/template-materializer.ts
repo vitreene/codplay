@@ -3,13 +3,13 @@ import type { MaterializedPart } from '../components/component-types'
 /** One retained HTML root, or the ordered roots of a rendered fragment. */
 export type HtmlMaterializedRoot = Node | readonly Node[]
 
-/** Result of materializing trusted HTML markup returned by a component. */
+/** Result of materializing HTML markup returned by a component. */
 export type HtmlTemplateMaterialization = Readonly<{
   rootNode: HtmlMaterializedRoot
   parts: readonly MaterializedPart[]
 }>
 
-/** Materializes trusted compiled HTML and consumes its internal part markers. */
+/** Materializes compiled HTML with the browser DOM parser and consumes its internal part markers. */
 export function materializeTemplateString(markup: string): HtmlTemplateMaterialization {
   if (typeof globalThis.document === 'undefined') {
     throw new Error('Template materialization requires a DOM environment.')
@@ -26,7 +26,7 @@ export function materializeTemplateString(markup: string): HtmlTemplateMateriali
   return { rootNode, parts: collectMaterializedParts(rootNode) }
 }
 
-/** Collects trusted data-part markers and removes them from the rendered DOM. */
+/** Collects data-part markers and removes them from the rendered DOM. */
 function collectMaterializedParts(rootNode: HtmlMaterializedRoot): readonly MaterializedPart[] {
   const roots = Array.isArray(rootNode) ? rootNode : [rootNode]
   const elements: Element[] = []

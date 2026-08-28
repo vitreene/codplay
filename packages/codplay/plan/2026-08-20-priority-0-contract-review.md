@@ -89,7 +89,7 @@ extensions correspondantes :
 | Décision | État | Ouverture bloquée |
 |---|---|---|
 | Factory/catalogue réellement indépendant du substrate HTML | À spécifier avant une factory Canvas, Three.js ou Rive ; le catalogue actuel reste la tranche HTML | materializers et familles de composants non HTML |
-| Dépendances de compilation du sanitizer markup et des services | Restructurées le 2026-08-24 : sanitizer dans `scene/validation`, contrats de binding dans `services`, adapters HTML dans `runtime/runner-html` | profils de compilation et services indépendants d'HTML |
+| Parsing HTML et dépendances de materialization | Le markup reste une chaîne du `CompiledScene`; le runner HTML utilise les API DOM du navigateur, tandis que les services conservent leurs normalisations de données | séparation entre validation des données et materialization HTML |
 | Surface typée entre modules runtime et composants | Fixée le 2026-08-24 : registre de surfaces déclaré par le catalogue, résolveur typé dans le contexte module, aucune classe exposée | nouvelles surfaces à ajouter à la map de contrats |
 
 Les marqueurs `Review: required` restants concernent uniquement des extensions non
@@ -109,24 +109,23 @@ services
   -> contrats de validation et contrats de binding runtime sans import runtime
 
 scene/validation
-  -> sanitation compilée du markup et validation des données
+  -> validation des données auteur
 
 runtime/catalog et runtime/runner-html
-  -> assemblage des contrats et définitions/adapters HTML
+  -> assemblage des contrats et parsing/materialization HTML par le browser
 ```
 
 Décisions d'implémentation :
 
-- `MarkupAttributeSanitizer` reste un contrat de service ; l'algorithme de
-  sanitation du template est déplacé dans `scene/validation` car il intervient
-  avant la création du `CompiledScene`.
+- Le markup auteur est conservé comme chaîne dans `CompiledScene`; le
+  materializer HTML utilise le parser du browser au moment de la materialization.
 - Les types `RuntimeComponentService*` sont définis dans la couche services,
   sans dépendre de `RuntimeCapabilityCatalog`.
 - Les définitions `HTML_*_SERVICE` sont des bindings runtime HTML et sont
   enregistrées depuis `runtime/runner-html`; les déclarations pures restent dans
   `src/services`.
-- `runtime/capabilities/markup` conserve uniquement l'état de parts/outlets et
-  la materialization runtime ; il ne possède plus le sanitizer de compilation.
+- `runtime/capabilities/markup` conserve uniquement l'état de parts/outlets ;
+  le runner HTML possède la materialization et son parsing DOM.
 
 La preuve d'acceptation est : aucune importation `src/services -> src/runtime`,
 aucune importation `src/scene -> src/runtime/capabilities`, même snapshot de

@@ -1,7 +1,14 @@
 import type { AuthorEmitDeclaration } from './capture/authoring-types'
+import type { StrapFunction } from '../runtime/player/pipeline/strap-executor'
 
 /** Function value allowed in authoring data before compilation extracts it. */
 export type AuthorFunction = (...args: readonly unknown[]) => unknown
+
+/** Named strap implementations owned by one scene or story. */
+export type AuthorStrapCollection = Readonly<Record<string, StrapFunction>>
+
+/** Strap declarations owned locally or named as an explicit reusable reference. */
+export type AuthorStrapDeclarations = AuthorStrapCollection | readonly string[]
 
 /** Open authoring record normalized by the scene builder. */
 export type AuthorRecord = Record<string, unknown>
@@ -33,7 +40,7 @@ export type StoryDoc = Readonly<{
   initial?: AuthorRecord
   persos: readonly PersoDoc[]
   tracks?: AuthorRecord
-  straps?: readonly string[]
+  straps?: AuthorStrapDeclarations
   listen?: readonly SceneListenRule[]
   eventimes?: readonly AuthorRecord[]
   state?: AuthorRecord
@@ -47,7 +54,7 @@ export type SceneDoc = Readonly<{
   name?: string
   stories: Readonly<Record<string, StoryDoc>>
   initial?: AuthorRecord
-  straps?: readonly string[]
+  straps?: AuthorStrapDeclarations
   listen?: readonly SceneListenRule[]
   state?: AuthorRecord
   tracks?: AuthorRecord

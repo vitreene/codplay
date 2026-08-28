@@ -143,6 +143,10 @@ de propriete ou de composant afin de ne pas obliger chaque scene a les redeclare
 - Les guards valident les formes, identites, references, tokens, valeurs et coherences admises.
 - La sanitation normalise les representations autorisees et retire les donnees exclues de la diffusion.
 - Les fonctions et autres valeurs non serialisables sont extraites avant la production de l'artefact.
+- Les straps locaux de la scène et des stories suivent cette même frontière :
+  leurs fonctions sont extraites dans la collection du builder et l'artefact
+  ne conserve que leurs références. Une liste de noms reste une déclaration
+  explicite de strap réutilisable fourni par l'hôte.
 - Les deriveurs construisent les sections nommees de l'artefact depuis la donnee canonique.
 - Les paths SVG auteur sont transformes une fois en objets `Path` ACE JSON-safe. `prepareSvgPath`, exporte par
   `src/ace/index.ts`, est la primitive pure partageable par le builder et les futurs straps; le runtime ne parse
@@ -210,7 +214,7 @@ créer de namespace parallèle :
 
 - `tag` valide le nom de balise lorsqu'il est fourni ; son absence conserve le
   défaut contractuel `div` ;
-- `layout` exige un `markup` non vide avant la sanitation et la materialisation ;
+- `layout` exige un `markup` non vide avant la materialisation HTML ;
 - `list` valide son nom de balise optionnel et les trois options booléennes de
   `config` (`reorderOnMove`, `reorderOnAdd`, `reorderOnRemove`) ;
 - `media` porte déjà la validation de sa source, de sa balise et de ses options

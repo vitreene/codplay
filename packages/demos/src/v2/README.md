@@ -80,7 +80,7 @@ parallèle.
 - les materializers tiers restent hors de la première tranche ; ils seront
   introduits seulement lorsqu'une démo et son contrat l'exigeront ;
 - `flip-list` est la première démo déplacée et sert aussi de test du layout ;
-  `components`, `runner` et `flip-nested` suivent le même registre.
+  `components`, `runner`, `flip-nested` et `quiz-series` suivent le même registre.
 
 La démo média `player` n'est pas retenue dans ce registre. Les fixtures de
 capture nécessaires aux tests vivent dans `packages/codplay/tests/fixtures`

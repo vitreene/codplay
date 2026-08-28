@@ -9,8 +9,6 @@ export type { StyleValue } from './style/style-service'
 export { VALIDATION_TARGET_ACTION, VALIDATION_TARGET_INITIAL } from './config/validation-targets'
 export type {
   PropertyValidationDefinition,
-  MarkupAttributeSanitizer,
-  MarkupAttributeSanitizerContext,
   ServiceSanitizer,
   ServiceValidationDefinition,
   ValidationContext,

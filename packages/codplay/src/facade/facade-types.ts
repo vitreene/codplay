@@ -232,6 +232,7 @@ type CodPlayInstanceOptionsBase = Readonly<{
   functions?: CompiledFunctionCollection
   durationMs: number
   mountTargets?: readonly MountTargetDeclaration[]
+  /** Optional reusable straps used only by declarations that name external implementations. */
   strapCollections?: StrapCollections
 }>
 

@@ -215,6 +215,56 @@ describe('SceneBuilder', () => {
     }
   })
 
+  it('compiles scene and story straps locally with the existing function collection', () => {
+    const sceneStrap = () => ({ events: [{ name: 'scene:done' }] })
+    const storyStrap = () => ({ events: [{ name: 'story:done' }] })
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), {
+      createdAt: '2026-07-31T00:00:00.000Z',
+    })
+
+    const result = builder.build({
+      id: 'local-straps-scene',
+      straps: { 'scene-action': sceneStrap },
+      stories: {
+        main: {
+          id: 'main',
+          straps: { 'story-action': storyStrap },
+          persos: [],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const sceneStraps = result.compiledScene.scene.straps
+    const storyStraps = result.compiledScene.scene.stories.main?.straps
+    expect(sceneStraps).toMatchObject({ 'scene-action': { ref: expect.stringContaining('fn:') } })
+    expect(storyStraps).toMatchObject({ 'story-action': { ref: expect.stringContaining('fn:') } })
+    expect(Object.values(result.functions)).toEqual(expect.arrayContaining([sceneStrap, storyStrap]))
+    expect(JSON.stringify(result.compiledScene)).not.toContain('sceneStrap')
+    expect(JSON.stringify(result.compiledScene)).not.toContain('storyStrap')
+  })
+
+  it('preserves named strap declarations as explicit reusable references', () => {
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot())
+    const result = builder.build({
+      id: 'reusable-straps-scene',
+      straps: ['portable-scene-action'],
+      stories: {
+        main: {
+          id: 'main',
+          straps: ['portable-story-action'],
+          persos: [],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.scene.straps).toEqual(['portable-scene-action'])
+    expect(result.compiledScene.scene.stories.main?.straps).toEqual(['portable-story-action'])
+  })
+
   it('normalizes author SVG move paths into compact prepared segments', () => {
     const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
     const result = builder.build({
@@ -324,11 +374,7 @@ describe('SceneBuilder', () => {
             id: 'layout',
             type: 'layout',
             initial: {
-              markup: `
-                <section>
-                  <main data-part="page-layout:content"></main>
-                </section>
-              `,
+              markup: '<section><main data-part="page-layout:content"></main></section>',
             },
           }],
         },

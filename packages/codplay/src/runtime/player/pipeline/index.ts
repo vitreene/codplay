@@ -21,7 +21,9 @@ export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'
 export { RuntimeStateStore } from './runtime-state-store'
 export {
+  declaredStrapNames,
   resolveSceneStrap,
+  resolveStrapCollection,
   resolveStoryStrap,
   validateStrapCollections,
 } from './strap-collections'

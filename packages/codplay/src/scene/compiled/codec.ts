@@ -112,7 +112,7 @@ function isValidSceneData(value: unknown): value is CompiledSceneData {
     && (value.name === undefined || typeof value.name === 'string')
     && isRecordOf(value.stories, isValidStory)
     && (value.initial === undefined || isCompiledRecord(value.initial))
-    && (value.straps === undefined || isStringArray(value.straps))
+    && isCompiledStrapDeclarationsOrUndefined(value.straps)
     && isCompiledListenArray(value.listen)
     && (value.state === undefined || isCompiledRecord(value.state))
     && isCompiledRecord(value.tracks)
@@ -134,7 +134,7 @@ function isValidStory(value: unknown): value is CompiledStory {
     && Array.isArray(value.persos)
     && value.persos.every(isValidPerso)
     && (value.tracks === undefined || isCompiledRecord(value.tracks))
-    && (value.straps === undefined || isStringArray(value.straps))
+    && isCompiledStrapDeclarationsOrUndefined(value.straps)
     && isCompiledListenArray(value.listen)
     && (value.eventimes === undefined || Array.isArray(value.eventimes) && value.eventimes.every(isValidEventime))
     && (value.state === undefined || isCompiledRecord(value.state))
@@ -271,6 +271,13 @@ function isFunctionReference(value: unknown): value is { ref: string } {
 /** Checks an optional external function reference. */
 function isFunctionReferenceOrUndefined(value: unknown): boolean {
   return value === undefined || isFunctionReference(value)
+}
+
+/** Checks local compiled strap references or explicit reusable strap names. */
+function isCompiledStrapDeclarationsOrUndefined(value: unknown): boolean {
+  return value === undefined
+    || isStringArray(value)
+    || (isPlainRecord(value) && Object.values(value).every(isFunctionReference))
 }
 
 /** Checks one readonly string array boundary. */

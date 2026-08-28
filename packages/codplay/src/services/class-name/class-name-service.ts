@@ -13,6 +13,10 @@ export type ClassNameValue = string | ClassNamePatch
 
 /** Validates the string or patch form accepted by the className service. */
 export const validateClassName: ValidationFunction = (value, context) => {
+  if (value === undefined) {
+    return
+  }
+
   if (typeof value === 'string') {
     return
   }

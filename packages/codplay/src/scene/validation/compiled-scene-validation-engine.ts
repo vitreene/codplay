@@ -6,7 +6,6 @@ import type {
   CapabilityValidationSnapshot,
   ComponentSanitizer,
 } from './validation-types'
-import type { MarkupAttributeSanitizer } from '../../services'
 
 /** Minimal capability set consumed by the compiled-scene validation engine. */
 export type CompiledSceneValidationInput = Readonly<{
@@ -53,13 +52,6 @@ export class CompiledSceneValidationEngine {
   /** Sanitizes one validated action patch before compilation. */
   sanitizeAction(type: string, value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
     return this.sanitizeServices(type, this.sanitize(type, 'sanitizeAction', value))
-  }
-
-  /** Returns the declared service policies that can sanitize authored markup attributes. */
-  markupSanitizersFor(type: string): readonly MarkupAttributeSanitizer[] {
-    return this.servicesFor(type)
-      .map((name) => this.catalog.services.get(name)?.sanitizeMarkupAttribute)
-      .filter((sanitizer): sanitizer is MarkupAttributeSanitizer => sanitizer !== undefined)
   }
 
   /** Applies a component sanitizer when the registered type provides one. */

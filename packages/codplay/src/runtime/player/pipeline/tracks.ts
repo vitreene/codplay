@@ -2,6 +2,7 @@ import { isPlainRecord } from '../../../shared'
 import { TRACK_GLOBAL_ID, TRACK_STRAP_PREFIX } from '../../config/track'
 import { STRAP_SCOPE_SCENE } from '../../config/strap-scope'
 import type { CompiledScene, CompiledStory, CompiledValue } from '../../../scene/compiled'
+import { declaredStrapNames } from './strap-collections'
 
 /** Static metadata used to select events during materialization. */
 export type MaterializedTrack = Readonly<{
@@ -26,11 +27,11 @@ export function buildTrackRegistry(scene: CompiledScene): MaterializedTrackRegis
   for (const story of Object.values(scene.scene.stories)) {
     registerTrack(story.id, undefined, tracks, order)
     if (story.trackId !== undefined) registerTrack(story.trackId, undefined, tracks, order)
-    for (const strapName of story.straps ?? []) {
+    for (const strapName of declaredStrapNames(story.straps)) {
       registerTrack(createStrapTrackId(story.id, strapName), undefined, tracks, order)
     }
   }
-  for (const strapName of scene.scene.straps ?? []) {
+  for (const strapName of declaredStrapNames(scene.scene.straps)) {
     registerTrack(createStrapTrackId(undefined, strapName), undefined, tracks, order)
   }
   for (const [trackId, declaration] of Object.entries(scene.scene.tracks)) {

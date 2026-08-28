@@ -26,6 +26,33 @@ describe('CompiledSceneCodec', () => {
     }
   })
 
+  it('accepts compiled local strap references alongside reusable strap names', () => {
+    const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
+    const value: CompiledScene = {
+      ...artifact,
+      scene: {
+        ...artifact.scene,
+        straps: { 'scene-local': { ref: 'fn:scene-local' } },
+        stories: {
+          main: {
+            id: 'main',
+            persos: [],
+            straps: ['portable-story-strap'],
+            listen: [],
+          },
+        },
+      },
+    }
+
+    const decoded = codec.decode(codec.encode(value))
+
+    expect(decoded.ok).toBe(true)
+    if (decoded.ok) {
+      expect(decoded.value.scene.straps).toEqual({ 'scene-local': { ref: 'fn:scene-local' } })
+      expect(decoded.value.scene.stories.main?.straps).toEqual(['portable-story-strap'])
+    }
+  })
+
   it('rejects invalid JSON and invalid envelope versions', () => {
     const codec = new CompiledSceneCodec({ diagnosticOutput: vi.fn() })
 

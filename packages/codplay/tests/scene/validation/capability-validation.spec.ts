@@ -155,6 +155,21 @@ describe('RuntimeCapabilityCatalog validation snapshot', () => {
     })
   })
 
+  it('accepts an explicitly undefined optional className value', () => {
+    const diagnostics = new DiagnosticCollector({ output: vi.fn() })
+    const runtimeCatalog = catalog()
+    runtimeCatalog.overrideComponent(componentDefinition('tag', ['className']))
+
+    validatePersoWithCapabilities(runtimeCatalog.validationSnapshot(), {
+      id: 'optional-class-name',
+      type: 'tag',
+      initial: { className: undefined },
+      actions: {},
+    }, diagnostics)
+
+    expect(diagnostics.report().errors).toEqual([])
+  })
+
   it('accepts string and numeric content through the content service at the compiled boundary', () => {
     const diagnostics = new DiagnosticCollector({ output: vi.fn() })
     const runtimeCatalog = catalog()

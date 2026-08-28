@@ -75,6 +75,7 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   engine?: RuntimeEngine
   ticker?: Ticker
   functions?: CompiledFunctionCollection
+  /** Optional reusable straps selected by named declarations in the scene. */
   strapCollections?: StrapCollections
   /** Event target used by the classic HTML pointer capture source. */
   captureEventTarget?: EventTarget

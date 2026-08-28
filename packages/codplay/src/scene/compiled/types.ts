@@ -6,6 +6,12 @@ export type CompiledFunctionReference = Readonly<{
   ref: string
 }>
 
+/** Compiled local strap implementations represented by function references. */
+export type CompiledStrapCollection = Readonly<Record<string, CompiledFunctionReference>>
+
+/** Compiled local strap definitions or explicit reusable strap names. */
+export type CompiledStrapDeclarations = CompiledStrapCollection | readonly string[]
+
 /** Serializable event declaration produced by a capture conclusion. */
 export type CompiledCaptureEvent = Readonly<{
   name: string
@@ -82,7 +88,7 @@ export type CompiledStory = Readonly<{
   initial?: CompiledRecord
   persos: readonly CompiledPerso[]
   tracks?: CompiledRecord
-  straps?: readonly string[]
+  straps?: CompiledStrapDeclarations
   listen: readonly CompiledListenRule[]
   eventimes?: readonly CompiledEventime[]
   state?: CompiledRecord
@@ -95,7 +101,7 @@ export type CompiledSceneData = Readonly<{
   name?: string
   stories: Readonly<Record<string, CompiledStory>>
   initial?: CompiledRecord
-  straps?: readonly string[]
+  straps?: CompiledStrapDeclarations
   listen: readonly CompiledListenRule[]
   state?: CompiledRecord
   tracks: CompiledRecord

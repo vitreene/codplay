@@ -39,9 +39,9 @@ materialisation DOM se trouve dans
 `runtime/runner-html/markup-materialization.ts` ; il n'appartient pas à l'état
 logique de la capacité.
 
-La sanitation des templates est une responsabilité de la compilation de scène,
-dans `src/scene/validation/markup-sanitizer.ts`. La capacité `markup` ne
-l'exporte pas et ne l'appelle pas.
+Le parsing des templates est réalisé par le materializer HTML du runner avec
+les API DOM du navigateur. La capacité `markup` ne parse pas les templates ;
+elle conserve uniquement l'état des parts et des outlets.
 
 ## Contrat et limites
 
@@ -51,4 +51,4 @@ l'exporte pas et ne l'appelle pas.
 - supprimer un composant supprime toutes ses parties publiées ;
 - le module ne déduit pas le sens d'un nom de cible ;
 - son état est indépendant de l'état logique de la scène ;
-- il ne lit pas le DOM, ne monte pas les enfants et ne sanitise pas les templates.
+- il ne lit pas le DOM, ne monte pas les enfants et ne parse pas les templates.

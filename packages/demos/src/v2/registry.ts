@@ -71,6 +71,23 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			};
 		},
 	},
+	{
+		id: 'quiz-series',
+		path: '?demo=quiz-series',
+		title: 'Quiz — Série de 3 questions',
+		description: 'Vrai/Faux, réponse unique, réponses multiples. Résultat final : 2/3 pour réussir.',
+		load: async () => {
+			const [module, stylesheet] = await Promise.all([
+				import('./demos/quiz-series/main'),
+				import('./demos/quiz-series/style.css?url'),
+			]);
+			return {
+				createScene: module.createScene,
+				durationMs: module.SCENE_DURATION_MS,
+				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+			};
+		},
+	},
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */

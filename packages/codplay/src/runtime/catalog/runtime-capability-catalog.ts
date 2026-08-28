@@ -337,8 +337,8 @@ function assertRuntimeServiceDeclaration(
 
 /** Removes runtime factories and materializer destinations from validation snapshots. */
 function toValidationDefinition(definition: RuntimeComponentServiceDefinition): ServiceValidationDefinition {
-  const { name, validate, sanitize, properties, allowUnknownProperties, sanitizeMarkupAttribute } = definition
-  return { name, validate, sanitize, properties, allowUnknownProperties, sanitizeMarkupAttribute }
+  const { name, validate, sanitize, properties, allowUnknownProperties } = definition
+  return { name, validate, sanitize, properties, allowUnknownProperties }
 }
 
 export type { ComponentSanitizer, PropertyValidationDefinition, ServiceValidationDefinition, ValidationFunction }

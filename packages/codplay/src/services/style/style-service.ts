@@ -107,6 +107,4 @@ export const STYLE_SERVICE: ServiceValidationDefinition = {
   // Ordinary CSS properties remain open. The HTML adapter additionally consumes
   // the V2 transform channels without turning them into a global property matrix.
   allowUnknownProperties: true,
-  /** Preserves modern CSS syntax; URL/resource policy belongs to preload. */
-  sanitizeMarkupAttribute: ({ attributeName, value }) => attributeName === 'style' ? value : undefined,
 }

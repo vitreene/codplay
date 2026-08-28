@@ -2,36 +2,26 @@
 
 import { describe, expect, it } from 'vitest'
 import { materializeTemplateString } from '../../../src/runtime/runner-html/template-materializer'
-import { sanitizeMarkupTemplate } from '../../../src/scene/validation'
 
 describe('HTML template materializer', () => {
-  it('materializes an HTML template and consumes data-part markers', () => {
-    const result = materializeTemplateString(sanitizeMarkupTemplate(`
-      <section>
-        <main data-part="content"></main>
-        <aside data-part="aside"></aside>
-      </section>
-    `, 'test.markup'))
+  it('uses the browser parser and consumes data-part markers', () => {
+    const result = materializeTemplateString(`
+      <fieldset>
+        <legend data-part="content">Question</legend>
+        <main data-part="aside"></main>
+      </fieldset>
+    `)
 
     expect(result.rootNode).toBeInstanceOf(HTMLElement)
     expect(result.parts.map((part) => part.partId)).toEqual(['content', 'aside'])
+    expect((result.rootNode as Element).querySelector('legend')?.textContent).toBe('Question')
     expect((result.rootNode as Element).querySelector('[data-part]')).toBeNull()
   })
 
-  it('rejects duplicate data-part identifiers', () => {
-    expect(() => sanitizeMarkupTemplate(`
-      <section>
-        <main data-part="content"></main>
-        <aside data-part="content"></aside>
-      </section>
-    `, 'test.markup')).toThrow('test.markup: data-part is duplicated: content.')
-  })
-
   it('retains multiple real roots as an ordered fragment without generating a wrapper', () => {
-    const result = materializeTemplateString(sanitizeMarkupTemplate(
+    const result = materializeTemplateString(
       '<span data-part="first"></span><span data-part="second"></span>',
-      'test.markup',
-    ))
+    )
 
     expect(Array.isArray(result.rootNode)).toBe(true)
     const roots = result.rootNode as readonly Node[]

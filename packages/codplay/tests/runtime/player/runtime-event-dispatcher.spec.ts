@@ -59,6 +59,47 @@ const scene: CompiledScene = {
 }
 
 describe('runtime event dispatch', () => {
+  it('executes locally declared straps through the same dispatcher circuit', async () => {
+    let sceneCalls = 0
+    let storyCalls = 0
+    const inlineScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        straps: { 'scene-local': { ref: 'fn:scene-local' } },
+        listen: [{ on: 'global:start', straps: ['scene-local'] }],
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            straps: { 'story-local': { ref: 'fn:story-local' } },
+            listen: [{ on: 'source:event', straps: ['story-local'] }],
+          },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(inlineScene)
+    const dispatcher = new RuntimeEventDispatcher({
+      scene: inlineScene,
+      journal,
+      functions: {
+        'fn:scene-local': () => {
+          sceneCalls += 1
+          return undefined
+        },
+        'fn:story-local': () => {
+          storyCalls += 1
+          return undefined
+        },
+      },
+    })
+
+    await dispatcher.dispatch({ name: 'global:start', applyAtMs: 10 })
+    await dispatcher.dispatch({ name: 'source:event', storyId: 'main', applyAtMs: 20 })
+
+    expect(sceneCalls).toBe(1)
+    expect(storyCalls).toBe(1)
+  })
+
   it('journals source, strap, and recursive listen emissions for replay', async () => {
     let strapCalls = 0
     const journal = new RuntimeTrackJournal(scene)

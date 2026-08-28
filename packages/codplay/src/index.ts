@@ -57,9 +57,11 @@ export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
   CompiledResourceManifest,
   CompiledRecord,
+  CompiledStrapCollection,
+  CompiledStrapDeclarations,
   CompiledScene,
 } from './scene/compiled'
-export type { SceneDoc } from './scene/types'
+export type { AuthorStrapCollection, AuthorStrapDeclarations, SceneDoc } from './scene/types'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
 export type {
   RuntimePreloadApi,

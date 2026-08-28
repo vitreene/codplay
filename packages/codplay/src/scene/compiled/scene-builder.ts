@@ -32,9 +32,9 @@ import type {
   CompiledResource,
   CompiledScene,
   CompiledSceneData,
+  CompiledStrapDeclarations,
   CompiledStory,
 } from './types'
-import { sanitizeMarkupTemplate } from '../validation/markup-sanitizer'
 import { validateCompiledSceneSemantics } from './semantic-validator'
 
 /** Options controlling one deterministic scene compilation. */
@@ -165,7 +165,7 @@ function compileSceneData(
       Object.entries(scene.stories).map(([storyId, story]) => [storyId, compileStory(story, `scene.stories.${storyId}`, state, validationEngine)]),
     ),
     initial: extractCompiledRecord(scene.initial, 'scene.initial', state),
-    straps: scene.straps,
+    straps: compileStrapDeclarations(scene.straps, 'scene.straps', state),
     listen: scene.listen.map((rule, index) => compileListenRule(rule, `scene.listen[${index}]`, state)),
     state: extractCompiledRecord(scene.state, 'scene.state', state),
     tracks: extractCompiledRecord(scene.tracks, 'scene.tracks', state) ?? {},
@@ -192,12 +192,25 @@ function compileStory(
     initial: extractCompiledRecord(story.initial, `${scope}.initial`, state),
     persos: story.persos.map((perso, index) => compilePerso(perso, `${scope}.persos[${index}]`, state, validationEngine)),
     tracks: extractCompiledRecord(story.tracks, `${scope}.tracks`, state),
-    straps: story.straps,
+    straps: compileStrapDeclarations(story.straps, `${scope}.straps`, state),
     listen: story.listen.map((rule, index) => compileListenRule(rule, `${scope}.listen[${index}]`, state)),
     eventimes: story.eventimes?.map((eventime, index) => extractCompiledValue(eventime, `${scope}.eventimes[${index}]`, state) as CompiledEventime),
     state: extractCompiledRecord(story.state, `${scope}.state`, state),
     init: story.init === undefined ? undefined : extractFunction(story.init, `${scope}.init`, state),
   }
+}
+
+/** Compiles local strap functions while preserving arrays as explicit references. */
+function compileStrapDeclarations(
+  straps: CanonicalSceneDoc['straps'],
+  scope: string,
+  state: ReturnType<typeof createExtractionState>,
+): CompiledStrapDeclarations | undefined {
+  if (straps === undefined) return undefined
+  if (Array.isArray(straps)) return [...straps]
+  return Object.fromEntries(
+    Object.entries(straps).map(([name, fn]) => [name, extractFunction(fn, `${scope}.${name}`, state)]),
+  )
 }
 
 /** Compiles one perso including initial values, actions, list, and emit data. */
@@ -209,21 +222,11 @@ function compilePerso(
 ): CompiledPerso {
   const sanitizedInitial = validationEngine.sanitizeInitial(perso.type, perso.initial)
   const compiledInitial = extractCompiledRecord(compileMovePath(sanitizedInitial, `${scope}.initial`) as Record<string, unknown>, `${scope}.initial`, state) ?? {}
-  const initial = typeof sanitizedInitial.markup === 'string'
-    ? {
-        ...compiledInitial,
-        markup: sanitizeMarkupTemplate(
-          sanitizedInitial.markup,
-          `${scope}.initial.markup`,
-          validationEngine.markupSanitizersFor(perso.type),
-        ),
-      }
-    : compiledInitial
   return {
     id: perso.id,
     name: perso.name,
     type: perso.type,
-    initial,
+    initial: compiledInitial,
     actions: Object.fromEntries(
       Object.entries(perso.actions).map(([name, value]) => {
         const sanitizedValue = isPlainRecord(value)

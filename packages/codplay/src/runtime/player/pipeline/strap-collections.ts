@@ -1,8 +1,12 @@
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../config/strap-scope'
-import type { CompiledScene } from '../../../scene/compiled'
+import type {
+  CompiledFunctionCollection,
+  CompiledScene,
+  CompiledStrapDeclarations,
+} from '../../../scene/compiled'
 import type { StrapCollection, StrapFunction } from './strap-executor'
 
-/** Injected strap collections separated by their ownership scope. */
+/** Optional reusable strap collections separated by their ownership scope. */
 export type StrapCollections = Readonly<{
   scene: StrapCollection
   stories: Readonly<Record<string, StrapCollection>>
@@ -19,6 +23,31 @@ export type StrapCollectionIssue = Readonly<{
   storyId?: string
   strapName: string
 }>
+
+/** Lists the names declared by either local implementations or reusable references. */
+export function declaredStrapNames(
+  declarations: CompiledStrapDeclarations | undefined,
+): readonly string[] {
+  if (declarations === undefined) return []
+  return Array.isArray(declarations) ? declarations : Object.keys(declarations)
+}
+
+/** Resolves the author-selected declaration into the one runtime collection. */
+export function resolveStrapCollection(
+  declarations: CompiledStrapDeclarations | undefined,
+  reusable: StrapCollection,
+  functions: CompiledFunctionCollection,
+): StrapCollection {
+  if (declarations === undefined) return {}
+  if (Array.isArray(declarations)) return reusable
+
+  const local: Record<string, StrapFunction> = {}
+  for (const [name, reference] of Object.entries(declarations)) {
+    const fn = functions[reference.ref]
+    if (fn !== undefined) local[name] = fn as StrapFunction
+  }
+  return local
+}
 
 /** Resolves a scene strap without falling back to any story collection. */
 export function resolveSceneStrap(name: string, collections: StrapCollections): StrapFunction | undefined {
@@ -37,11 +66,13 @@ export function resolveStoryStrap(
 /** Validates declared scene and story straps against their owned collections. */
 export function validateStrapCollections(
   scene: CompiledScene,
-  collections: StrapCollections,
+  collections: StrapCollections = { scene: {}, stories: {} },
+  functions: CompiledFunctionCollection = {},
 ): readonly StrapCollectionIssue[] {
   const issues: StrapCollectionIssue[] = []
-  for (const strapName of scene.scene.straps ?? []) {
-    if (resolveSceneStrap(strapName, collections) === undefined) {
+  const sceneCollection = resolveStrapCollection(scene.scene.straps, collections.scene, functions)
+  for (const strapName of declaredStrapNames(scene.scene.straps)) {
+    if (sceneCollection[strapName] === undefined) {
       issues.push({
         code: 'AUTHOR_SCENE_STRAP_MISSING',
         message: `Scene strap is declared but not available: ${strapName}`,
@@ -51,8 +82,13 @@ export function validateStrapCollections(
     }
   }
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
-    for (const strapName of story.straps ?? []) {
-      if (resolveStoryStrap(storyId, strapName, collections) === undefined) {
+    const storyCollection = resolveStrapCollection(
+      story.straps,
+      collections.stories[storyId] ?? {},
+      functions,
+    )
+    for (const strapName of declaredStrapNames(story.straps)) {
+      if (storyCollection[strapName] === undefined) {
         issues.push({
           code: 'AUTHOR_STORY_STRAP_MISSING',
           message: `Story strap is declared but not available: ${strapName}`,

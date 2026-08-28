@@ -6,6 +6,25 @@
 > CodPlay version: V2 foundation
 > Review: exécution planned bornée validée le 2026-08-20; l'invalidation des résultats asynchrones est reportée à V3 et live reste une extension
 
+## Déclaration auteur
+
+Un strap appartient par défaut à l'élément qui le définit : une `SceneDoc` peut
+déclarer les straps de la scène et une `StoryDoc` peut déclarer les straps de la
+story. Cette déclaration locale est la forme normative pour un comportement
+propre à la scène ou à la story.
+
+Une déclaration sous forme de noms est la forme exceptionnelle des straps
+réutilisables. Elle désigne explicitement une implémentation portable fournie
+par une collection externe. Le choix entre déclaration locale et référence
+réutilisable appartient à l'auteur ; le runtime ne requalifie pas un strap et
+ne choisit pas un mode en fonction de son contenu.
+
+Après compilation, les fonctions locales deviennent des références dans le
+`CompiledScene` et restent dans la collection de fonctions produite par le
+builder. Les noms réutilisables restent des noms. Les deux formes sont ensuite
+résolues une seule fois dans la même collection d'exécution et suivent le même
+pipeline.
+
 ## Contrat actuel
 
 `executeStrapsSequentially` execute une collection de fonctions stateless dans
@@ -56,7 +75,8 @@ future doit etre specifiquement decidee avant implementation.
 
 ## Deja en place
 
-- collections scene/story sans fallback croise;
+- déclarations locales scene/story et références réutilisables explicites,
+  sans fallback croisé;
 - validation des straps declares a `RuntimePlayer.init`;
 - warnings non bloquants pour les declarations absentes.
 - snapshots scene/story geles via `RuntimeStateStore`.

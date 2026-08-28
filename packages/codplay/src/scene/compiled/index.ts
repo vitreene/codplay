@@ -10,6 +10,8 @@ export type {
   CompiledPerso,
   CompiledPrimitive,
   CompiledRecord,
+  CompiledStrapCollection,
+  CompiledStrapDeclarations,
   CompiledEventime,
   CompiledRequirements,
   CompiledResource,

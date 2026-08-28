@@ -243,9 +243,7 @@ export class RuntimePlayer {
       })
       return { ok: false, diagnostics: diagnostics.report() }
     }
-    for (const issue of this.strapCollections === undefined
-      ? []
-      : validateStrapCollections(this.compiledScene, this.strapCollections)) {
+    for (const issue of validateStrapCollections(this.compiledScene, this.strapCollections, this.functions)) {
       diagnostics.warning(issue.code, issue.message, {
         context: { scope: issue.scope, storyId: issue.storyId, strapName: issue.strapName },
       })

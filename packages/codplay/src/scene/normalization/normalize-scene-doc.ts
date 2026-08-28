@@ -54,7 +54,7 @@ function normalizeStory(story: StoryDoc): CanonicalStoryDoc {
     initial: normalizeOptionalRecord(story.initial),
     persos: story.persos.map(normalizePerso),
     tracks: normalizeOptionalRecord(story.tracks) ?? {},
-    straps: normalizeStringArray(story.straps),
+    straps: normalizeStrapDeclarations(story.straps),
     listen: story.listen === undefined ? [] : story.listen.map(cloneAuthorValue) as readonly SceneListenRule[],
     eventimes: story.eventimes?.map(cloneAuthorValue) as StoryDoc['eventimes'],
     state: normalizeOptionalRecord(story.state),
@@ -71,7 +71,7 @@ export function normalizeSceneDoc(scene: SceneDoc): CanonicalSceneDoc {
     ...scene,
     initial: normalizeOptionalRecord(scene.initial),
     stories,
-    straps: normalizeStringArray(scene.straps),
+    straps: normalizeStrapDeclarations(scene.straps),
     listen: scene.listen === undefined ? [] : scene.listen.map(cloneAuthorValue) as readonly SceneListenRule[],
     state: normalizeOptionalRecord(scene.state),
     tracks: normalizeOptionalRecord(scene.tracks) ?? {},
@@ -80,6 +80,10 @@ export function normalizeSceneDoc(scene: SceneDoc): CanonicalSceneDoc {
 }
 
 /** Normalizes an optional string list while preserving the canonical empty-list convention. */
-function normalizeStringArray(value: readonly string[] | undefined): readonly string[] | undefined {
-  return value === undefined || value.length === 0 ? undefined : [...value]
+function normalizeStrapDeclarations(
+  value: StoryDoc['straps'] | SceneDoc['straps'],
+): StoryDoc['straps'] | SceneDoc['straps'] | undefined {
+  if (value === undefined) return undefined
+  if (Array.isArray(value)) return value.length === 0 ? undefined : [...value]
+  return Object.fromEntries(Object.entries(value))
 }
