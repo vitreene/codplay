@@ -214,7 +214,7 @@ function buildMotionGraphStructure(
         // descendants can compose against its current pose.
         materializerOwned: directIntent?.targetReflow === false,
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
-        targetReflow: directIntent?.targetReflow === true,
+        targetReflow: directIntent?.targetReflow === true || scope.targetContainerItemIds.has(itemId),
         direct: directIntent !== undefined,
         from,
         to,
@@ -248,17 +248,20 @@ function buildMotionGraphStructure(
  * Selects the complete dependency scope and the items that may own a segment
  * at one structural boundary.
  *
- * The dependency scope is the direct movers, the source/target reflow items and
- * every ancestor up to the root. The second set is deliberately narrower:
- * being an ancestor is enough to be retained as preparation data, but not enough
- * to receive a FLIP trajectory. A parent with its own direct intent remains a
- * segment owner and is then composed into the requested child pose.
+ * The dependency scope is the direct movers, the source/target reflow items,
+ * target containers whose measured local pose changes, and every ancestor up
+ * to the root. The second set is deliberately narrower: being an ancestor is
+ * enough to be retained as preparation data, but not enough to receive a FLIP
+ * trajectory. A parent with its own direct intent, or a target container whose
+ * own dimensions changed because of the reflow, remains a segment owner.
  */
 function resolveBoundaryMotionScope(boundary: MotionBoundary): Readonly<{
   itemIds: ReadonlySet<string>
   segmentItemIds: ReadonlySet<string>
+  targetContainerItemIds: ReadonlySet<string>
 }> {
   const segmentItemIds = new Set(boundary.intents.map((intent) => intent.itemId))
+  const targetContainerItemIds = new Set<string>()
   const targetIds = new Set<string>()
   for (const intent of boundary.intents) {
     if (intent.targetReflow === false) continue
@@ -266,6 +269,8 @@ function resolveBoundaryMotionScope(boundary: MotionBoundary): Readonly<{
     const after = boundary.after.items.get(intent.itemId)
     if (before !== undefined) targetIds.add(before.targetId)
     if (after !== undefined) targetIds.add(after.targetId)
+    addTargetContainer(boundary.before, before, segmentItemIds, targetContainerItemIds)
+    addTargetContainer(boundary.after, after, segmentItemIds, targetContainerItemIds)
   }
   for (const item of boundary.before.items.values()) {
     if (targetIds.has(item.targetId) && !boundary.intents.some((intent) => intent.itemId === item.itemId && intent.targetReflow === false)) {
@@ -281,7 +286,27 @@ function resolveBoundaryMotionScope(boundary: MotionBoundary): Readonly<{
   const itemIds = new Set(segmentItemIds)
   addAncestorClosure(boundary.before, itemIds)
   addAncestorClosure(boundary.after, itemIds)
-  return Object.freeze({ itemIds, segmentItemIds })
+  return Object.freeze({ itemIds, segmentItemIds, targetContainerItemIds })
+}
+
+/** Adds a mounted perso target when its own measured pose can reflow. */
+function addTargetContainer(
+  snapshot: LayoutSnapshot,
+  mover: LayoutItemSnapshot | undefined,
+  segmentItemIds: Set<string>,
+  targetContainerItemIds: Set<string>,
+): void {
+  const parentItemId = mover?.parentItemId
+  const targetId = mover?.targetId
+  if (parentItemId === undefined || targetId === undefined || !snapshot.items.has(parentItemId)) return
+
+  // A target perso is represented by its qualified item key as the logical
+  // parent, while an outlet target is represented by its owning perso key.
+  // Only the former is the container whose own dimensions changed because the
+  // moved item entered or left it.
+  if (parentItemId !== targetId && !parentItemId.endsWith(`:${targetId}`)) return
+  segmentItemIds.add(parentItemId)
+  targetContainerItemIds.add(parentItemId)
 }
 
 /** Closes one boundary scope over parent relations without reading a materializer. */

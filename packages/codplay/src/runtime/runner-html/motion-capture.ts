@@ -319,6 +319,8 @@ function collectBoundarySelection(
   for (const intent of intents) {
     selected.add(intent.itemId)
     if (intent.targetReflow) {
+      addTargetContainer(before, before.graph.targetByPerso[intent.itemId], selected)
+      addTargetContainer(after, after.graph.targetByPerso[intent.itemId], selected)
       addTargetChildren(before, before.graph.targetByPerso[intent.itemId], selected)
       addTargetChildren(after, after.graph.targetByPerso[intent.itemId], selected)
     }
@@ -326,6 +328,17 @@ function collectBoundarySelection(
   addAncestorClosure(before, selected)
   addAncestorClosure(after, selected)
   return selected
+}
+
+/** Selects a mounted perso used directly as a structural move target. */
+function addTargetContainer(
+  scene: SolvedScene,
+  targetId: string | undefined,
+  selected: Set<string>,
+): void {
+  if (targetId === undefined) return
+  const target = Object.values(scene.persos).find((perso) => perso.persoId === targetId && perso.placement.mounted)
+  if (target !== undefined) selected.add(target.key)
 }
 
 /** Adds every mounted child currently assigned to one target. */

@@ -32,7 +32,8 @@ graphe de mouvement à l'instant demandé.
 
 Dans `flip imbriqué`, l'enfant Q entre dans un outlet qui est vide au FIRST et
 plus haut au LAST. Le parent P adopte donc la hauteur naturelle de sa cible et
-la présentation interpole cette hauteur avec le reste de sa pose ; aucune
+la liste cible interpole désormais sa propre hauteur mesurée avec le reste de sa
+pose, tandis que P conserve sa trajectoire reparent ; aucune
 hauteur fixe ne masque ce changement. Le mode compact du CSS réduit seulement
 la mise en page de la fixture lorsque la fenêtre est très courte. À largeur
 étroite, l'endpoint de Q devient proportionnel à la largeur disponible et son
@@ -49,8 +50,9 @@ de Q ; le parent ne coupe donc pas l'enfant.
    position et l'absence de représentation overlay.
 3. Vérifier à `2200 ms` l'ordre `[A, B, C]` sans transform transitoire.
 4. Ouvrir `http://localhost:5173/?demo=flip-nested` et vérifier à `1500 ms`
-   deux représentations overlay indépendantes pour P et Q, et des déplacements
-   locaux pour B et C.
+   deux représentations overlay indépendantes pour P et Q, des déplacements
+   locaux pour B et C, ainsi qu'une hauteur intermédiaire de la liste cible
+   entre FIRST et LAST.
 5. Vérifier à `2200 ms` que l'overlay est vide, que les sources sont visibles et
    que Q est monté dans le dernier outlet de P.
 6. Comparer Play et Seek au même instant : rectangles et matrices doivent être

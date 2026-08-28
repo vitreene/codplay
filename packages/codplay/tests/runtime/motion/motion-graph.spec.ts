@@ -24,6 +24,8 @@ type ItemDefinition = Readonly<{
   x: number
   y?: number
   matrix?: RelativeMotionPose['matrix']
+  width?: number
+  height?: number
 }>
 
 describe('motion graph', () => {
@@ -123,6 +125,43 @@ describe('motion graph', () => {
 
     expect(originX(resolvePresentationFrame(graph, after, 1_200), 'moving')).toBeCloseTo(10)
     expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
+  })
+
+  it('animates a target container when structural reflow changes its measured height', () => {
+    const before = snapshot(0, [
+      itemWithSize('target-list', 'target-outlet', 0, 180, 40),
+      item('moving', 'source-outlet', 0),
+    ])
+    const after = snapshot(1_000, [
+      itemWithSize('target-list', 'target-outlet', 0, 180, 80),
+      item('moving', 'target-list', 0, 'target-list'),
+    ])
+    const graph = buildMotionGraph([
+      boundary('target-container-reflow', 0, before, after, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+    ])
+
+    expect(graph.tracksByItem.get('target-list')?.segments[0]).toMatchObject({
+      itemId: 'target-list',
+      direct: false,
+      presentationMode: 'local',
+      targetReflow: true,
+    })
+    const natural = resolveNaturalLayout(buildNaturalLayoutTimeline([boundary(
+      'target-container-reflow',
+      0,
+      before,
+      after,
+      [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }],
+    )]), 500)
+    const frame = resolvePresentationFrame(graph, natural, 500)
+    expect(frame.items.get('target-list')?.representation).toBe('local')
+    expect(frame.items.get('target-list')?.pose.localHeight).toBeCloseTo(60)
   })
 
   it('uses a measured property endpoint before the enclosing move endpoint', () => {
@@ -653,7 +692,13 @@ function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): Layou
     const definition = byId.get(id)
     if (definition === undefined) throw new Error(`Synthetic layout item is missing: ${id}`)
     visiting.add(id)
-    const localPose = relativePose(definition.x, definition.y ?? 0, definition.matrix)
+    const localPose = relativePose(
+      definition.x,
+      definition.y ?? 0,
+      definition.matrix,
+      definition.width,
+      definition.height,
+    )
     const parentPose = definition.parentId === undefined
       ? createMotionRootPose()
       : resolve(definition.parentId).rootPose
@@ -672,8 +717,14 @@ function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): Layou
 }
 
 /** Creates one synthetic translation-only local pose. */
-function relativePose(x: number, y: number, matrix = IDENTITY_MATRIX): RelativeMotionPose {
-  return Object.freeze({ origin: [x, y] as const, matrix, width: 10, height: 10 })
+function relativePose(
+  x: number,
+  y: number,
+  matrix = IDENTITY_MATRIX,
+  width = 10,
+  height = 10,
+): RelativeMotionPose {
+  return Object.freeze({ origin: [x, y] as const, matrix, width, height })
 }
 
 /** Creates one direct intent using a linear easing for exact assertions. */
@@ -695,6 +746,22 @@ function boundary(
 /** Creates one concise synthetic item definition. */
 function item(id: string, targetId: string, x: number, parentId?: string): ItemDefinition {
   return Object.freeze({ id, targetId, x, ...(parentId === undefined ? {} : { parentId }) })
+}
+
+/** Creates one synthetic item with an explicit measured local size. */
+function itemWithSize(
+  id: string,
+  targetId: string,
+  x: number,
+  width: number,
+  height: number,
+  parentId?: string,
+): ItemDefinition {
+  return Object.freeze({
+    ...item(id, targetId, x, parentId),
+    width,
+    height,
+  })
 }
 
 /** Creates one synthetic item with a measured affine rotation. */

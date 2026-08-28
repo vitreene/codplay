@@ -244,11 +244,15 @@ Fichiers :
 `buildMotionGraph()` ferme d'abord le scope de chaque frontière sur les ancêtres,
 afin de pouvoir remonter jusqu'à `root` pendant la résolution. Il compare ensuite
 les deux snapshots sélectionnés. Un segment est créé lorsque l'attachement local
-d'un mover direct ou d'un item de reflow change : parent, target, origine, matrice
-ou dimensions. Un ancêtre de contexte reste résoluble comme pose naturelle ; il
-n'est pas animé une seconde fois par le FLIP du descendant. Si cet ancêtre porte
-sa propre intention de mouvement à la même frontière ou à une autre frontière,
-son segment est conservé et composé récursivement.
+d'un mover direct, d'un item reflué ou d'une cible-perso change : parent, target,
+origine, matrice ou dimensions. Une cible-perso est ajoutée seulement si le
+mover est effectivement attaché à cette perso ; le propriétaire d'un simple
+outlet n'est pas promu par cette règle. Cela permet d'animer la hauteur propre
+d'une liste cible lorsque son contenu entre ou sort, sans attribuer une
+trajectoire à tous ses ancêtres. Un ancêtre de contexte reste résoluble comme
+pose naturelle ; il n'est pas animé une seconde fois par le FLIP du descendant.
+Si cet ancêtre porte sa propre intention de mouvement à la même frontière ou à
+une autre frontière, son segment est conservé et composé récursivement.
 
 Chaque segment appartient à exactement un item :
 
@@ -1085,6 +1089,27 @@ interpolation monde approximative : si un parent et son enfant ont chacun une
 transition, la pose courante de l'enfant continue d'intégrer la trajectoire du
 parent, mais cette pose intermédiaire reste une dépendance interne. Les tests
 conservent les cas de parents indépendants, de reparentage et de retarget.
+
+### Correction — hauteur de la cible-perso pendant un reparentage — 2026-08-28
+
+Lorsqu'un move structurel entre dans une cible qui est elle-même une perso,
+la cible peut changer de dimensions à cause du nouvel enfant. La capture
+FIRST/LAST conserve déjà cette pose ; le manque se trouvait dans la sélection
+des propriétaires de segments : la cible était traitée comme un simple ancêtre
+et sa hauteur passait directement de FIRST à LAST.
+
+Le scope FLIP ajoute maintenant la cible-perso aux propriétaires potentiels. Le
+graphe ne crée effectivement son segment local que si sa pose mesurée change.
+Il réutilise la durée et l'easing du move structurel, puis le host HTML écrit
+la hauteur interpolée sur le nœud auteur existant. À la fin du segment, cette
+écriture transitoire est retirée et la hauteur naturelle responsive reprend la
+main. Un outlet qui appartient à une autre perso ne déclenche pas cette
+promotion ; son propriétaire reste une donnée d'ancêtre, sauf s'il possède une
+transition propre.
+
+Le test `animates a target container when structural reflow changes its measured
+height` vérifie qu'une cible passe par une pose locale intermédiaire, sans
+overlay ni second circuit de mesure.
 
 La capture de chaque attachement conserve en plus le sous-graphe de positions
 mesuré pour l'item et sa chaîne d'ancêtres au FIRST ou au LAST de cette
