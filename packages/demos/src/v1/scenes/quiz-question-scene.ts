@@ -1,5 +1,5 @@
-import type { StrapCollection } from "codplay/player"
-import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay/player/types"
+import type { StrapCollection } from "codplay-v1/player"
+import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay-v1/player/types"
 
 export type QuizQuestionType = "boolean" | "single" | "multiple"
 

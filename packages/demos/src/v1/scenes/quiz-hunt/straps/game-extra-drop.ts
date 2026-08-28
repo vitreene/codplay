@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 const GRID_TILE_PREFIX = "game-grid-tile-"
 

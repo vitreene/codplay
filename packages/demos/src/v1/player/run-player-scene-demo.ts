@@ -2,11 +2,11 @@ import '../shared/demo-shell.css';
 
 import { animate, engine } from 'animejs';
 
-import { createAnimationAdapter, type AnimeImplementation } from 'codplay/animation/adapter';
-import { PlayerFacade } from 'codplay/player/create-player';
-import type { PlayerApi } from 'codplay/player/player';
-import type { ApiResult } from 'codplay/builder/types';
-import { createTelco } from 'codplay/telco/create-telco';
+import { createAnimationAdapter, type AnimeImplementation } from 'codplay-v1/animation/adapter';
+import { PlayerFacade } from 'codplay-v1/player/create-player';
+import type { PlayerApi } from 'codplay-v1/player/player';
+import type { ApiResult } from 'codplay-v1/builder/types';
+import { createTelco } from 'codplay-v1/telco/create-telco';
 import { createDemoRemoteV1 } from '@codplay/remote';
 import { createTraceLogPanel } from '../shared/trace-log-panel';
 import { resolveSceneSeekMaxMs } from '../shared/resolve-scene-seek-max-ms';

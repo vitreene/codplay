@@ -2,11 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@codplay/demos": ["../demos/src/v1/scenes/index.ts"],
-      "@codplay/demos/*": ["../demos/src/v1/*"],
-      "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
-      "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"]
+      "codplay": ["./src/index.ts"],
+      "codplay/*": ["./src/*"],
+      "ace": ["./src/ace/index.ts"],
+      "ace/*": ["./src/ace/*"]
     }
   },
-  "include": ["src", "tests"]
+  "include": ["src", "demos", "tests", "bench"]
 }

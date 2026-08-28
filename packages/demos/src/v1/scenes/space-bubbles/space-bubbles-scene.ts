@@ -1,4 +1,4 @@
-import type { SceneDoc, SceneStoryDoc } from "codplay/player/types"
+import type { SceneDoc, SceneStoryDoc } from "codplay-v1/player/types"
 import { createInitialBubbles, resolveBubbleLevelScale } from "./space-bubbles-state"
 import { initTurretCaptureState, trackTurret } from "./space-bubbles-straps"
 import { resolveBubblePosition } from "./space-bubbles-trajectories"

@@ -25,12 +25,12 @@ npm run build        # build the codplay library
 npm run test                          # all tests
 npm run test:gates                    # critical gate tests only (lot7, lot8, lot18)
 
-# Tests (from packages/codplay)
+# Tests (from packages/codplay-v1)
 npm run test:lot lot3                 # one specific lot
 npm run test:lot lot3 lot12           # multiple lots
 node scripts/run-tests.mjs watch      # watch mode
 
-# Run a single test file directly (from packages/codplay)
+# Run a single test file directly (from packages/codplay-v1)
 npx vitest run tests/v1/reference-scenes.spec.ts
 npx vitest run tests/lot13/create-player.spec.ts
 ```
@@ -48,11 +48,11 @@ A `SceneDoc` is the top-level authored artifact. It contains:
 - `tracks`: optional metadata per story (e.g. `role: "master"` for horizon projection).
 - `rootStories`: which stories auto-initialize.
 
-The builder (`packages/codplay/src/builder/`) normalizes a `SceneDoc` into a `CompiledScene` with fully resolved IDs, validated perso types, and a flat event schedule. This is a pure transformation — no side effects.
+The V1 builder (`packages/codplay-v1/src/builder/`) normalizes a `SceneDoc` into a `CompiledScene` with fully resolved IDs, validated perso types, and a flat event schedule. This is a pure transformation — no side effects.
 
 ### Player lifecycle
 
-`PlayerApi` (`packages/codplay/src/player/player.ts`):
+`PlayerApi` (`packages/codplay-v1/src/player/player.ts`):
 ```
 init → play ↔ pause/resume → stop → destroy
                 ↕
@@ -95,7 +95,7 @@ Every event and state mutation emitted by a strap is written to a **track** as a
 
 ### Runtime components
 
-`packages/codplay/src/runtime/components/` contains typed component classes: `TextComponent`, `ImageComponent`, `MediaComponent`, `ListComponent`, `LayoutComponent`, `InputComponent`. The `RuntimeComponentOrchestrator` dispatches mutations to the correct component based on perso type.
+`packages/codplay-v1/src/runtime/components/` contains typed component classes: `TextComponent`, `ImageComponent`, `MediaComponent`, `ListComponent`, `LayoutComponent`, `InputComponent`. The `RuntimeComponentOrchestrator` dispatches mutations to the correct component based on perso type.
 
 Each component responds to action payloads (style, content, broadcast, etc.) resolved by the director from `perso.actions[eventName]`.
 
@@ -103,14 +103,14 @@ Each component responds to action payloads (style, content, broadcast, etc.) res
 
 | Area | Path |
 |---|---|
-| Player API + lifecycle | `packages/codplay/src/player/player.ts`, `create-player.ts` |
-| Strap types | `packages/codplay/src/player/strap-types.ts` |
-| Helper scheduling | `packages/codplay/src/player/helper-finite-core.ts`, `helper-loop-core.ts` |
-| Builder normalization | `packages/codplay/src/builder/` |
-| Runtime orchestration | `packages/codplay/src/runtime/components/runtime-component-orchestrator.ts` |
-| Component types | `packages/codplay/src/runtime/types.ts` |
-| Track management | `packages/codplay/src/track-manager/` |
-| Authoring API | `packages/codplay/src/creator/` |
+| Player API + lifecycle | `packages/codplay-v1/src/player/player.ts`, `create-player.ts` |
+| Strap types | `packages/codplay-v1/src/player/strap-types.ts` |
+| Helper scheduling | `packages/codplay-v1/src/player/helper-finite-core.ts`, `helper-loop-core.ts` |
+| Builder normalization | `packages/codplay-v1/src/builder/` |
+| Runtime orchestration | `packages/codplay-v1/src/runtime/components/runtime-component-orchestrator.ts` |
+| Component types | `packages/codplay-v1/src/runtime/types.ts` |
+| Track management | `packages/codplay-v1/src/track-manager/` |
+| Authoring API | `packages/codplay-v1/src/creator/` |
 | Demo scenes | `packages/demos/src/scenes/` |
 | Demo entry points | `packages/demos/src/codplay/` |
 | Authoring helpers | `packages/authoring/capsule-automation/src/` |

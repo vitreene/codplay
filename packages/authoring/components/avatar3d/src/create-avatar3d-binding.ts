@@ -14,7 +14,7 @@
  * Idle animations (blink, breath, head drift) are wired in the scene's perso
  * actions using createHeadDriftFn / createBlinkScheduleFn / createBreathTriggerFn.
  */
-import type { RenderAdapter, ThirdPartyBinding } from 'codplay'
+import type { RenderAdapter, ThirdPartyBinding } from 'codplay-v1'
 import { preloadAvatar3DModel } from '@codplay/avatar-engine'
 import { Avatar3DBaseComponent } from './avatar3d-base-component.js'
 

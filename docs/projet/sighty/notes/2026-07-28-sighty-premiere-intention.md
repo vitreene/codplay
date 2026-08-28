@@ -17,7 +17,7 @@ qu'elles ne se figent — sans quoi la préparation se ferait après coup, soit 
 rapportée » que `../../codplay-v2/notes/2026-07-26-conduite-chantier-v2.md` §0 traque. D'où la nécessité de bien le définir, et
 la vocation de cette page à s'enrichir avant, non après, la spécification de codplay V2.
 
-**Frontière tenue avec la page codplay.** `../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` ne contient
+**Frontière tenue avec la page codplay.** `../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` ne contient
 que ce qui incombe à codplay ; les notions ci-dessous sont hors de lui. Codplay ne connaît ni le mot
 *page* ni le mot *groupe* : il reçoit des ensembles d'instances.
 
@@ -144,7 +144,7 @@ Trois conséquences :
   rend le point ouvert « surface publique d'une scène » non optionnel dès le premier scénario réel. Deux
   échelles à ne pas confondre : la sortie d'un **élément** s'achève à la fin de sa séquence — mécanisme
   identifié, `endEmit` libéré de `endOn` appliqué à une `ActionSequence`
-  (`../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §4) — tandis que l'évacuation de la **scène** est
+  (`../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §4) — tandis que l'évacuation de la **scène** est
   `sequence:end`, ce que Sighty écoute.
 
 **Sighty lit des scénarios sous forme d'objets sérialisables.** C'est sa nature première : le scénario est
@@ -326,7 +326,7 @@ maximale où le seek signifie quelque chose.
 
 ## 5. Ce que Sighty exige de codplay
 
-Rappel, développé dans `../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` : instancier/détruire
+Rappel, développé dans `../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` : instancier/détruire
 proprement, suspendre/reprendre, un canal d'events dans les deux sens, une surface publique de scène (les
 events qu'une scène fait remonter sans savoir que sighty existe), un mode hôte permettant qu'une instance
 soit jouée dans une autre, et un seek **atomique** sur un ensemble d'instances vers une cible par membre.
@@ -453,7 +453,7 @@ expliquant le fonctionnement de codplay, et n'entame donc pas la prémisse « l'
 avant » (`../../codplay-v2/notes/2026-07-27-emetteurs-et-events-user-complexes.md` §6.3).
 
 La capacité qu'il appelle — la **lecture arrière** — est du ressort de **codplay**, non de
-l'orchestration : `../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §8.
+l'orchestration : `../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §8.
 
 **Une scène ne pilote pas sa propre lecture.** Raison de fond : une scène *est* `f(t)`, elle n'est pas
 propriétaire de la façon dont `t` est parcouru — décider du parcours est d'un autre ordre que produire
@@ -587,7 +587,7 @@ désigner sans ambiguïté un perso cible ». Reste ouvert : si l'injection dire
 doit déclarer ce qui est réglable du dehors.
 
 **Rien à trancher ici sur la simultanéité d'une transition** : elle est réglée par codplay, pas par Sighty
-— et sans jamais dédoubler une instance vivante. Voir `../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md`
+— et sans jamais dédoubler une instance vivante. Voir `../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md`
 §5.
 
 **Le chapitre est une structure de scénario.** Page → chapitre → œuvre : le concept, jusqu'ici rangé du
@@ -657,7 +657,7 @@ les modifications à Sighty (§6.4).
   **ressource disponible**, employable par plusieurs scénarios ; un scénario **revendique ses besoins**
   auprès d'un catalogue conjoint, il ne le contient pas. Même figure qu'un étage plus bas, où une scène
   déclare ses besoins et l'engine les fournit depuis son catalogue de capacités
-  (`../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §2) — d'où la même propriété : un scénario
+  (`../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §2) — d'où la même propriété : un scénario
   réclamant une scène absente du catalogue échoue **avant lecture**, proprement.
 - **La figure est fractale.** À chaque étage : un catalogue de choses déclarées, des consommateurs qui y
   revendiquent leurs besoins, un arrangement au-dessus qui dit lequel joue.
@@ -833,7 +833,7 @@ class Sighty {
 ```
 
 Ces méthodes sont la **couche de commodité** : la décision « events comme contrat primaire »
-(`../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §4) veut que chacune corresponde à un message, la
+(`../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` §4) veut que chacune corresponde à un message, la
 méthode n'en étant que la façade typée.
 
 *Réserve de nom* : ne pas appeler `play` → `diffuse`, « diffusion » désignant déjà la mise en circulation
@@ -888,5 +888,5 @@ attente du détail que l'auteur donnera à Sighty — détail attendu **avant** 
 V2, dont il conditionne la préparation, et non après.
 
 Lié : `2026-07-26-meta-orchestrateur-preambule.md` (le cadrage du concept, et les trois niveaux à ne pas
-confondre), `../../../../packages/codplay-v2/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` (le versant codplay de la même
+confondre), `../../../../packages/codplay/plan/notes/2026-07-28-decoupage-engine-instances-pilotage.md` (le versant codplay de la même
 discussion), `../../codplay-v2/notes/2026-07-26-conduite-chantier-v2.md` (§5 frontière auteur/diffusion, §6 façade multi-canaux).

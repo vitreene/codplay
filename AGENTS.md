@@ -44,7 +44,7 @@
 - Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
 - Once a concept is implemented, maintain a focused specification for future agents: its role, contract, invariants, decisions, and how to understand it without rereading the entire implementation.
 - At the end of each task, update the relevant specification and implementation tracking before closing temporary notes or provisional guardrails.
-- Before resuming CodPlay V2 work, read [`packages/codplay-v2/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay-v2/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
+- Before resuming CodPlay V2 work, read [`packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md`](packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md) after identifying the applicable detailed plan.
 
 ## Module status
 

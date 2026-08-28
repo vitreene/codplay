@@ -1,4 +1,4 @@
-import type { SceneDoc } from "codplay/player/types";
+import type { SceneDoc } from "codplay-v1/player/types";
 import { createBlinkScheduleFn, createBreathTriggerFn, createHeadDriftFn } from "@codplay/avatar3d";
 import { MOUTH_CUES, PRESTON_TO_TH, phraseWordsFR } from "./avatar-data/phrase-fr";
 

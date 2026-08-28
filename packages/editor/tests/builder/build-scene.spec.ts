@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BuilderFacade } from 'codplay/builder/create-builder'
+import { BuilderFacade } from 'codplay-v1/builder/create-builder'
 import { buildSceneDoc } from '../../src/builder/build-scene'
 import type { EditorScene } from '../../src/app/commands/types'
 

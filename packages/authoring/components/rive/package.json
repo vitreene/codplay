@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "codplay": "*",
+    "codplay-v1": "*",
     "@rive-app/canvas": "^2.38.3"
   },
   "devDependencies": {

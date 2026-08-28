@@ -1,4 +1,4 @@
-import type { ClassNameValue } from 'codplay/runtime/perso-shared-types'
+import type { ClassNameValue } from 'codplay-v1/runtime/perso-shared-types'
 import type { DecorLiveSession } from './decor-live-session'
 
 // ─── Orientation ────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types';
+import type { SceneDoc } from 'codplay/scene/types';
 
 const MOVE_START_MS = 800;
 const MOVE_DURATION_MS = 1400;

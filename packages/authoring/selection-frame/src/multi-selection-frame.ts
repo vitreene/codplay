@@ -1,6 +1,6 @@
 import { createActor } from 'xstate'
-import { worldDeltaToLocalDelta } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
-import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
+import { worldDeltaToLocalDelta } from 'codplay-v1/runtime/modules/list-flip/engine/dom-matrix'
+import type { Matrix2D } from 'codplay-v1/runtime/modules/list-flip/engine/types'
 import { csMachine } from './machine'
 import { bindGestureSession } from './gesture-session'
 import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, measureWorldRect } from './overlay-pose'

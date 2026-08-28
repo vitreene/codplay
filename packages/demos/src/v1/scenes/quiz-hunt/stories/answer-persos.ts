@@ -1,4 +1,4 @@
-import type { PersoDoc } from "codplay/player/types"
+import type { PersoDoc } from "codplay-v1/player/types"
 import type { ResolvedQuizQuestion } from "../../quiz-question-scene"
 
 /**

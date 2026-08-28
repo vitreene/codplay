@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "codplay": "*"
+    "codplay-v1": "*"
   },
   "devDependencies": {
     "typescript": "~6.0.3"

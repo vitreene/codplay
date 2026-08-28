@@ -1,5 +1,5 @@
-import { RUNTIME_TRACE_STATUS } from 'codplay/runtime/trace-constants'
-import type { RuntimeTraceRow } from 'codplay/runtime/trace-store'
+import { RUNTIME_TRACE_STATUS } from 'codplay-v1/runtime/trace-constants'
+import type { RuntimeTraceRow } from 'codplay-v1/runtime/trace-store'
 
 type TracePayload = Record<string, unknown>
 

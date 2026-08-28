@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 /** Routes the extra token visibility window without rehiding a token already collected. */
 export const gameExtraWindowStrap: StrapFn = ({ event, state }) => {

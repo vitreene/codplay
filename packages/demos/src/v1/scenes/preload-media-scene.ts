@@ -1,4 +1,4 @@
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 /**
  * Validates the preload module: audio at 0s, video at 2s, two images at 4s and 5s.

@@ -1,4 +1,4 @@
-import type { SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay-v1/player/types"
 
 /** Root story: title, main stack, then footer zones for basket, extra token, and timer. */
 export function createLayoutStory(title: string): SceneStoryDoc {

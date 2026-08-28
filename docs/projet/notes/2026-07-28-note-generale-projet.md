@@ -109,7 +109,7 @@ packages/*/plan/            plans et specs colocalisés avec leur package (dont 
 ```
 
 **Convention** : `notes/` accueille discussions, descriptions et recommandations. Le plan operatoire de
-CodPlay V2 est dans `packages/codplay-v2/plan/`; Sighty reste sans plan ouvert.
+CodPlay V2 est dans `packages/codplay/plan/`; Sighty reste sans plan ouvert.
 
 **Frontière normative** : seul `docs/formalisation/` fait foi. Tout ce qui est dans `docs/projet/` est de
 la direction, pas de la norme — à une exception près, qui a force obligatoire : la **matrice des

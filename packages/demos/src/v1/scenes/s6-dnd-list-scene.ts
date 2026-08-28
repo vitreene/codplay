@@ -1,5 +1,5 @@
-import type { StrapCollection } from 'codplay/player/strap-types';
-import type { SceneDoc } from 'codplay/player/types';
+import type { StrapCollection } from 'codplay-v1/player/strap-types';
+import type { SceneDoc } from 'codplay-v1/player/types';
 import './s6-dnd-list-scene.css';
 
 // ─── state (auteur — codplay ne connaît que ce que le guard restitue) ───────

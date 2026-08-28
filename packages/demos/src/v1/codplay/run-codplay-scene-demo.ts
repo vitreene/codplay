@@ -1,13 +1,13 @@
 import "../shared/demo-shell.css";
 
-import { CodPlay } from "codplay/creator";
+import { CodPlay } from "codplay-v1/creator";
 import { createDemoRemoteV1 } from "@codplay/remote";
 import { createTraceLogPanel } from "../shared/trace-log-panel";
 import { resolveSceneSeekMaxMs } from "../shared/resolve-scene-seek-max-ms";
 import { buildDemoLinksMarkup } from "../shared/demo-registry";
 import type { PlayerSceneDemoConfig } from "../shared/demo-scene-types";
-import type { Player } from "codplay/player/player";
-import type { TelcoApi } from "codplay/telco/types";
+import type { Player } from "codplay-v1/player/player";
+import type { TelcoApi } from "codplay-v1/telco/types";
 
 type CodPlaySceneDemoConfig = PlayerSceneDemoConfig & {
   /** Mode d'initialisation du player ('author' pour les démos d'édition). */

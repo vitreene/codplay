@@ -1,6 +1,6 @@
-import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
-import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
-import type { RenderSeekInfo, RenderTickInfo } from 'codplay/player/render-adapter-types'
+import { BaseComponent } from 'codplay-v1/runtime/components/lib/base-component'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay-v1/runtime/components/types'
+import type { RenderSeekInfo, RenderTickInfo } from 'codplay-v1/player/render-adapter-types'
 import {
   WebGLRenderer,
   type BufferGeometry,

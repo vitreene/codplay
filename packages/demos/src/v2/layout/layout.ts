@@ -4,7 +4,7 @@ import {
   type CodPlayInstance,
   type CompiledResourceManifest,
   type RuntimePreloadManifestInput,
-} from '../../../../codplay-v2/src'
+} from 'codplay'
 import type { V2DemoDefinition } from '../registry'
 import { createV2DemoTelco } from './telco'
 import type { V2DemoLogLevel, V2DemoModule } from './types'

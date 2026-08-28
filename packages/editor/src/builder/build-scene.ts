@@ -2,7 +2,7 @@ import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '@codplay/capsule-automa
 import { CapsuleDistribution, CapsulePreset, SceneDocEditor, TransitionTiming, validateSceneDoc } from '@codplay/scene-factory'
 import type { AutoCapsuleChildElementArtifact, AutoCapsuleChildInput, AutoCapsuleEventInput, AutoCapsuleType } from '@codplay/capsule-automation'
 import type { CapsuleKind } from '@codplay/scene-factory'
-import type { Perso, SceneDef, StoryDef } from 'codplay/builder/types'
+import type { Perso, SceneDef, StoryDef } from 'codplay-v1/builder/types'
 import type { CapsuleDef, Content, Decor, Easing, EditorScene, Item, Keyframe, OffsetData } from '../app/commands/types'
 import { DEFAULT_EASING } from '../sequence-editor/constants'
 
@@ -774,7 +774,7 @@ function computeStyleDiff(
 
 /**
  * `Easing` (`app/commands/types.ts`, casse à tiret CSS-like — `'ease-in'`) → nom historique CodPlay
- * (`packages/codplay/src/animation/adapter.ts::normalizeAnimeEase`, casse `easeIn`/`easeOut`/
+ * (`packages/codplay-v1/src/animation/adapter.ts::normalizeAnimeEase`, casse `easeIn`/`easeOut`/
  * `easeInOut`, converti ensuite vers Anime.js v4). Simple question de nomenclature entre les deux
  * packages, pas de logique — alignée sur CodPlay ici plutôt que l'inverse (un seul point de
  * conversion, même patron que `toCapsuleKind`). `cubic-bezier` produit la syntaxe CSS standard.

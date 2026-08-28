@@ -17,7 +17,8 @@
     "@codplay/editor": "*",
     "@codplay/remote": "*",
     "@codplay/selection-frame": "*",
-    "codplay": "*"
+    "codplay": "*",
+    "codplay-v1": "*"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",

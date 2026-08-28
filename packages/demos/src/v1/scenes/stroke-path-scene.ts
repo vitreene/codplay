@@ -1,6 +1,6 @@
-import type { StrapCollection } from "codplay/player/strap-types";
-import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay/runtime/capture-types";
-import type { SceneDoc } from "codplay/player/types";
+import type { StrapCollection } from "codplay-v1/player/strap-types";
+import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay-v1/runtime/capture-types";
+import type { SceneDoc } from "codplay-v1/player/types";
 
 type LocalPoint = { x: number; y: number };
 type StrokeCaptureState = { points: LocalPoint[]; color: string; originX: number; originY: number };

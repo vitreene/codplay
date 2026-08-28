@@ -1,4 +1,4 @@
-import type { RenderAdapter, ThirdPartyBinding } from 'codplay'
+import type { RenderAdapter, ThirdPartyBinding } from 'codplay-v1'
 import { ThreejsBaseComponent } from './threejs-base-component.js'
 
 /** Creates the canonical ThirdPartyBinding for the generic `threejs` perso type. */

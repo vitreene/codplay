@@ -1,5 +1,5 @@
 import { SCENE_VALIDATION_LEVEL } from './types'
-import type { SceneDef, StoryDef } from 'codplay/builder/types'
+import type { SceneDef, StoryDef } from 'codplay-v1/builder/types'
 import type { SceneValidationDiagnostic } from './types'
 
 const ROOT_TOKEN = '@root'

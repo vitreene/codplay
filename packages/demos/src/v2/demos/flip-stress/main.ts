@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneDoc } from '../../../../../codplay-v2/src/scene/types';
+import type { PersoDoc, SceneDoc } from 'codplay/scene/types';
 
 type ContentId = 'qa' | 'qb' | 'qc' | 'qd' | 'qe' | 'qf' | 'ka' | 'kb' | 'kc' | 'kd' | 'ke' | 'kf';
 type OwnerId = 'q' | 'k';

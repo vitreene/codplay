@@ -1,5 +1,5 @@
-import { RUNTIME_EVENT_SOURCE } from 'codplay/core/events/constants'
-import type { PersoDoc, SceneDoc } from 'codplay/player/types'
+import { RUNTIME_EVENT_SOURCE } from 'codplay-v1/core/events/constants'
+import type { PersoDoc, SceneDoc } from 'codplay-v1/player/types'
 
 export const playerPocRootNodeIds = ['demo-stage-list', 'demo-list', 'demo-trash-list']
 

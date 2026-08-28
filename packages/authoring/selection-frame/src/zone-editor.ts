@@ -23,7 +23,7 @@
  * par macro-cellule.
  */
 import { createActor } from 'xstate'
-import { worldDeltaToLocalDelta } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
+import { worldDeltaToLocalDelta } from 'codplay-v1/runtime/modules/list-flip/engine/dom-matrix'
 import type { AuthorApi } from './author-api'
 import { calibrateGhostToWorldSnapshot, captureOverlayPose, ensureOverlayLayer, localFractionToViewportPoint } from './overlay-pose'
 import { measureGridTracks, trackIndexAtPx, uniformTrackGeometry } from './grid-geometry'

@@ -1,7 +1,75 @@
-export { CodPlay } from './creator'
-export type { CodPlayApi } from './creator'
-export type { TelcoApi, TelcoCommandResult, TelcoStateListener } from './telco/types'
-export type { RenderAdapter, RenderTickInfo, RenderSeekInfo } from './player/render-adapter-types'
-export { ComponentServiceBase } from './runtime/components/lib/component-service-base'
-export { lerp } from './tween/lerp'
-export type { ThirdPartyBinding } from './player/third-party-binding'
+export { CodPlay } from './facade'
+export type {
+  CodPlayApi,
+  CodPlayCapabilityGroup,
+  CodPlayBuildMethod,
+  CodPlayComponents,
+  CodPlayCompileFailure,
+  CodPlayCompileInput,
+  CodPlayCompileOptions,
+  CodPlayCompileResult,
+  CodPlayCompileSuccess,
+  CodPlayDiagnosticListener,
+  CodPlayEngine,
+  CodPlayEngineOptions,
+  CodPlayEventime,
+  CodPlayEventimeAddress,
+  CodPlayEventInput,
+  CodPlayEvents,
+  CodPlayEventListener,
+  CodPlayFrameScheduler,
+  CodPlayInstances,
+  CodPlayInstance,
+  CodPlayInstanceDiagnostic,
+  CodPlayInstanceEvents,
+  CodPlayInstanceOptions,
+  CodPlayModules,
+  CodPlayOptions,
+  CodPlayPreloadOptions,
+  CodPlayProgress,
+  CodPlayPublicEvent,
+  CodPlayRegistry,
+  CodPlayRegistryError,
+  CodPlayRegistryResult,
+  CodPlayResourceRegistration,
+  CodPlayResources,
+  CodPlayServices,
+  CodPlayTelco,
+  CodPlayTelcoState,
+  CodPlayTelcoStateListener,
+  EngineFacade,
+  InstanceFacade,
+  PreloadFacade,
+} from './facade'
+export type {
+  RuntimeCapabilityOrigin,
+  RuntimeComponentDefinition,
+  RuntimeComponentFactory,
+  RuntimeComponentFactoryInput,
+  RuntimeComponentIdentity,
+  RuntimeComponentServiceContext,
+  RuntimeComponentServiceDefinition,
+  RuntimeComponentServiceFactory,
+  RuntimeComponentServiceInstance,
+  RuntimeModuleServiceDefinition,
+} from './runtime/catalog'
+export type { CompiledFunctionCollection } from './scene/compiled'
+export type {
+  CompiledResourceManifest,
+  CompiledRecord,
+  CompiledScene,
+} from './scene/compiled'
+export type { SceneDoc } from './scene/types'
+export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
+export type {
+  RuntimePreloadApi,
+  RuntimePreloadCacheApi,
+  RuntimePreloadMetadata,
+  RuntimePreloadManifestInput,
+  RuntimePreloadMode,
+  RuntimePreloadOptions,
+  RuntimePreloadResourceMetadata,
+  RuntimePreloadResult,
+  RuntimePreloadState,
+  RuntimePreloadStrategy,
+} from './runtime/preload'

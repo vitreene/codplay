@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { validateSceneDoc } from '@codplay/scene-factory'
 import { buildSceneDoc } from '../src/builder/build-scene'
 import type { EditorScene } from '../src/app/commands/types'
-import type { SceneDef } from 'codplay/builder/types'
+import type { SceneDef } from 'codplay-v1/builder/types'
 
 /**
  * A real `SceneDef`, produced by the actual Builder (`buildSceneDoc`) rather than hand-typed —

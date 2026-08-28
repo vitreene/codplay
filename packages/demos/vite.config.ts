@@ -31,8 +31,12 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      { find: /^codplay-v1\/(.*)/, replacement: resolve(__dirname, '../codplay-v1/src/$1') },
+      { find: 'codplay-v1', replacement: resolve(__dirname, '../codplay-v1/src/index.ts') },
       { find: /^codplay\/(.*)/, replacement: resolve(__dirname, '../codplay/src/$1') },
       { find: 'codplay', replacement: resolve(__dirname, '../codplay/src/index.ts') },
+      { find: /^ace\/(.*)/, replacement: resolve(__dirname, '../codplay/src/ace/$1') },
+      { find: 'ace', replacement: resolve(__dirname, '../codplay/src/ace/index.ts') },
       { find: /^three\/addons\/(.*)$/, replacement: resolve(THREE_ROOT, 'examples/jsm/$1') },
       { find: 'three', replacement: resolve(THREE_ROOT, 'build/three.module.js') },
     ],

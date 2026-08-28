@@ -1,5 +1,5 @@
-import type { SceneDoc } from 'codplay/player/types'
-import { lerp } from 'codplay'
+import type { SceneDoc } from 'codplay-v1/player/types'
+import { lerp } from 'codplay-v1'
 
 const START_SECONDS = 20
 

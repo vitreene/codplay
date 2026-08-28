@@ -1,4 +1,4 @@
-import type { StrapCollection } from 'codplay/player/strap-types'
+import type { StrapCollection } from 'codplay-v1/player/strap-types'
 import { RHUBARB_TO_TALKING_HEAD_VISEME, readRhubarbVisemeCode } from './rhubarb-viseme-map'
 
 /**

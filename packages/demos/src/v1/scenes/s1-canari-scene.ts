@@ -1,4 +1,4 @@
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 /**
  * Creates one minimal canary scene used to validate the V1 loading path.

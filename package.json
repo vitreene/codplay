@@ -11,8 +11,8 @@
   "type": "module",
   "private": true,
   "workspaces": [
+    "packages/codplay-v1",
     "packages/codplay",
-    "packages/codplay-v2",
     "packages/demos",
     "packages/editor",
     "packages/authoring/*",
@@ -23,9 +23,9 @@
     "dev:editor": "npm run dev --workspace=packages/editor",
     "demo:flip": "npm run demo:flip --workspace=@codplay/selection-frame",
     "demo:v2": "npm run dev --workspace=@codplay/demos -- --open /",
-    "test": "npm run test --workspace=packages/codplay",
-    "test:gates": "npm run test:gates --workspace=packages/codplay",
-    "build": "npm run build --workspace=packages/codplay"
+    "test": "npm run test --workspace=codplay-v1",
+    "test:gates": "npm run test:gates --workspace=codplay-v1",
+    "build": "npm run build --workspace=codplay-v1"
   },
   "devDependencies": {
     "@types/three": "^0.185.0",

@@ -12,7 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "codplay": "*",
+    "codplay-v1": "*",
     "@codplay/avatar-engine": "*"
   },
   "devDependencies": {

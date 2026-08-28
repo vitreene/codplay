@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 import type { QuestionRouteEntry } from "../types"
 
 type WordLookup = Record<string, { label: string }>

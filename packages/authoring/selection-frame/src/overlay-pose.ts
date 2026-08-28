@@ -1,6 +1,6 @@
-import { extractRotationMatrix } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
-import { multiplyMatrix, parseCssMatrix } from 'codplay/runtime/modules/list-flip/engine/matrix-2d'
-import type { Matrix2D } from 'codplay/runtime/modules/list-flip/engine/types'
+import { extractRotationMatrix } from 'codplay-v1/runtime/modules/list-flip/engine/dom-matrix'
+import { multiplyMatrix, parseCssMatrix } from 'codplay-v1/runtime/modules/list-flip/engine/matrix-2d'
+import type { Matrix2D } from 'codplay-v1/runtime/modules/list-flip/engine/types'
 
 const CALIBRATION_MAX_ITERATIONS = 4
 const CALIBRATION_TOLERANCE_PX = 0.25

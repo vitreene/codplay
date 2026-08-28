@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 /**
  * Scene-level side-effect strap: reports the finished game session. V1 demo logs to

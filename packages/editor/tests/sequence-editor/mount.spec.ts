@@ -3,8 +3,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { SequenceEditorController } from '../../src/sequence-editor/controller'
 import { mountSequenceEditor } from '../../src/sequence-editor/mount'
 import type { EditorScene } from '../../src/sequence-editor/types'
-import type { TelcoApi, TelcoStateListener } from 'codplay/telco/types'
-import type { PlayerStateSnapshot } from 'codplay/player/types'
+import type { TelcoApi, TelcoStateListener } from 'codplay-v1/telco/types'
+import type { PlayerStateSnapshot } from 'codplay-v1/player/types'
 
 // jsdom does not implement ResizeObserver (https://github.com/jsdom/jsdom/issues/3368) — a
 // no-op stub is enough here, `mountSequenceEditor` only uses it to react to real layout changes,

@@ -1,5 +1,5 @@
-import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from 'codplay/builder/types'
-import type { StrapCollection } from 'codplay/player/strap-types'
+import type { ApiResult, ListenRule, Perso, SceneDef, StoryDef } from 'codplay-v1/builder/types'
+import type { StrapCollection } from 'codplay-v1/player/strap-types'
 
 type SceneState = {
   id: string

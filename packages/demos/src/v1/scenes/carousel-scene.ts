@@ -1,6 +1,6 @@
 import { AutoCapsule } from '@codplay/capsule-automation'
 import type { AutoCapsuleChildElementArtifact, AutoCapsuleResult } from '@codplay/capsule-automation'
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 const CAPSULE_ID = 'carousel'
 const CONTAINER_ID = 'carousel-container'

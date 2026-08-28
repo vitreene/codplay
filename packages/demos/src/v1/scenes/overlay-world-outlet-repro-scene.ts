@@ -1,5 +1,5 @@
 import './overlay-world-outlet-repro.css'
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 /**
  * Visual repro gathering both current overlay-world problems in one place:

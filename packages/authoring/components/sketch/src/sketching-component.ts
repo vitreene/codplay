@@ -1,5 +1,5 @@
-import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
-import type { ComponentRenderResult, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
+import { BaseComponent } from 'codplay-v1/runtime/components/lib/base-component'
+import type { ComponentRenderResult, RuntimeComponentClassInput, RuntimeComponentUpdateInput } from 'codplay-v1/runtime/components/types'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 const STROKE_WIDTH = '4'

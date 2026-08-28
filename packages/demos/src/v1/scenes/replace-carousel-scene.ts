@@ -1,4 +1,4 @@
-import type { SceneDoc } from "codplay/player/types";
+import type { SceneDoc } from "codplay-v1/player/types";
 
 const IMAGES = [
   "/assets/35c8ec5a07fc.jpg",

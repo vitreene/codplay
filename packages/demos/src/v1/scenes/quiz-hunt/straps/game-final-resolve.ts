@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 import type { QuizHuntWord } from "../types"
 
 type BasketEntry = { wordId: string; wordLabel: string }

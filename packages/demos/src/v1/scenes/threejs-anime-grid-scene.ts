@@ -10,7 +10,7 @@ import {
   PointLight,
   Scene,
 } from 'three'
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 import type { ThreejsBuildContext, ThreejsBuildResult, ThreejsSimulationFn } from '@codplay/threejs'
 
 const STAGE_SIZE = 720

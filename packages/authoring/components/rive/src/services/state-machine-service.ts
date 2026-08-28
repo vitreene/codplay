@@ -1,4 +1,4 @@
-import { ComponentServiceBase } from 'codplay'
+import { ComponentServiceBase } from 'codplay-v1'
 import type { RiveContext, RiveSMIInput, RiveStateMachineInstance } from '../rive-context'
 
 export class StateMachineService extends ComponentServiceBase {

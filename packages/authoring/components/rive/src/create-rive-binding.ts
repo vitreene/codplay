@@ -1,5 +1,5 @@
-import type { RenderAdapter } from 'codplay'
-import type { ThirdPartyBinding } from 'codplay'
+import type { RenderAdapter } from 'codplay-v1'
+import type { ThirdPartyBinding } from 'codplay-v1'
 import { RiveBaseComponent } from './rive-base-component'
 import { CoachRiveComponent } from './coach-rive-component'
 import { preloadRiveResource } from './rive-preload'

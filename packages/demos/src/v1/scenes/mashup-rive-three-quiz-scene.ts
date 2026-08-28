@@ -1,5 +1,5 @@
-import type { StrapCollection } from 'codplay/player'
-import type { SceneDoc } from 'codplay/player/types'
+import type { StrapCollection } from 'codplay-v1/player'
+import type { SceneDoc } from 'codplay-v1/player/types'
 import { riveCoachVisemeConversionStraps } from './avatar-data/rive-viseme-conversion'
 import { createQuizQuestionStory, type ResolvedQuizQuestion } from './quiz-question-scene'
 import { createRiveCoachBlock } from './rive-coach-scene'

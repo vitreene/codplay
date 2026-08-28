@@ -1,4 +1,4 @@
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 import { MOUTH_CUES, phraseWordsFR } from './avatar-data/phrase-fr'
 import { riveCoachVisemeConversionStraps } from './avatar-data/rive-viseme-conversion'
 

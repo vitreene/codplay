@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 /**
  * Scene-level handler for final win/loss panels and timer expiry.

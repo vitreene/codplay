@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { PersoDoc, SceneStoryDoc } from "codplay-v1/player/types"
 import type { QuizQuestionLabels, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "../../../quiz-question-scene"
 import { quizQuestionStoryStraps } from "../../../quiz-question-scene"
 import { createQuizAnswerPersos, createQuizControlPersos } from "../answer-persos"

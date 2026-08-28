@@ -1,4 +1,4 @@
-import { ComponentServiceBase } from 'codplay'
+import { ComponentServiceBase } from 'codplay-v1'
 import { VISEME_TO_RIVE_ID } from '../viseme-map'
 import type { RiveSMIInput } from '../rive-context'
 

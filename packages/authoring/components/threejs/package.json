@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "animejs": "^4.5.0",
-    "codplay": "*",
+    "codplay-v1": "*",
     "three": ">=0.150.0"
   },
   "devDependencies": {

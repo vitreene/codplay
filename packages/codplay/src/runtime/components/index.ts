@@ -1,62 +1,96 @@
-export { BaseComponent } from "./lib/base-component";
-export { ImageComponent } from "./image-component";
-export { InputComponent, resolveInputStandardActions } from "./input-component";
-export { LayoutComponent } from "./layout-component";
-export { ListComponent } from "./list-component";
-export { MediaComponent } from "./media-component";
-export { PolygonComponent } from "./polygon-component";
-export { RuntimeComponentOrchestrator } from "./runtime-component-orchestrator";
-export { TagComponent } from "./tag-component";
-export { TextComponent } from "./text-component";
-export { createAnimeSvgService } from "./lib/anime-svg-service";
-export type { AnimeSvgMorphToInput, AnimeSvgService } from "./lib/anime-svg-service";
+export { BaseComponent } from './base-component'
+export type { BaseComponentData, BaseComponentVisualData } from './base-component'
+export { BaseHTMLComponent } from './base-html-component'
+export {
+  ImageComponent,
+  validateImageAction,
+  validateImageInitial,
+} from './image'
+export {
+  InputComponent,
+  INPUT_STANDARD_ACTIONS,
+  sanitizeInputAction,
+  sanitizeInputInitial,
+  resolveInputStandardActions,
+  resolveInputState,
+  validateInputAction,
+  validateInputInitial,
+} from './input'
+export { LayoutComponent, validateLayoutInitial } from './layout'
+export { ListComponent, sanitizeListInitial, validateListInitial } from './list'
+export { MediaComponent, validateMediaAction, validateMediaInitial } from './media'
+export {
+  PolygonComponent,
+} from './polygon'
+export {
+  sanitizePolygonAction,
+  sanitizePolygonInitial,
+  validatePolygonAction,
+  validatePolygonInitial,
+} from './polygon'
+export { TagComponent, sanitizeTagInitial, validateTagInitial } from './tag'
+export { RuntimeComponentRuntime } from './runtime-component-runtime'
+export type { LayoutInitial, LayoutState } from './layout'
+export type { ListConfig, ListInitial, ListState } from './list'
+export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image'
+export type {
+  InputAction,
+  InputActionDoc,
+  InputCorrectionIconDefinition,
+  InputInitial,
+  InputPartDefinition,
+  InputState,
+  ResolvedInputState,
+} from './input'
+export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media'
+export type {
+  PolygonAction,
+  PolygonCompiledMorphOptions,
+  PolygonData,
+  PolygonGeometryState,
+  PolygonInitial,
+  PolygonMorphInput,
+  PolygonMorphOptions,
+  PolygonMorphState,
+  PolygonPoint,
+  PolygonShapeInput,
+  PolygonShapeState,
+  PolygonState,
+} from './polygon'
+export type {
+  MediaComponentSurface,
+  RuntimeComponentSurfaceId,
+  RuntimeComponentSurfaceMap,
+  RuntimeComponentSurfaceProvider,
+  RuntimeComponentSurfaceResolver,
+} from './component-surface-types'
+export type { TagInitial, TagState } from './tag'
 export {
   clampProgress,
   createPolygonVertices,
   interpolatePointSets,
-  normalizePolygonShapeState,
   resolveMorphPathString,
   resolveMorphPointsString,
+  resolvePolygonGeometryState,
   resolvePolygonPathString,
   resolvePolygonPointsString,
   resampleClosedPolyline,
+  samePolygonShape,
   toPolygonPathString,
   toPolygonPointsString,
-} from "./polygon-geometry";
+} from './polygon'
 export type {
-  NormalizedPolygonShapeState,
-  PolygonShapeState,
-} from "./polygon-geometry";
-export type {
-  PolygonAction,
-  PolygonInitial,
-  PolygonMorphOptions,
-  PolygonMorphState,
-} from "./polygon-types";
-export type {
-  ComponentRegisterInput,
-  ComponentRegistryApi,
-  ComponentModules,
+  ComponentService,
   ComponentServices,
-  ModuleRegisterInput,
-  ModuleRegistryApi,
-  RegistryError,
-  RegistryResult,
-  RuntimeComponent,
-  RuntimeComponentClass,
-  RuntimeComponentClassInput,
-  RuntimeComponentUpdateInput,
-  RuntimeComponentWarning,
-  RuntimeComponentWarningReporter,
-  RuntimeLayoutComponent,
-  RuntimeLayoutOutletSnapshot,
-  RuntimeListComponent,
-  RuntimeRegistrySnapshot,
-  RuntimeResolvedUpdate,
-  RuntimeServiceOutput,
-  ServiceApplyContext,
-  ServiceInstance,
-  RuntimeUpdateRoutingResult,
-  ServiceRegisterInput,
-  ServiceRegistryApi,
-} from "./types";
+  ComponentInput,
+  ComponentActionOccurrence,
+  HTMLComponentInput,
+  HTMLComponentServices,
+  ComponentUpdateInput,
+  MaterializedPart,
+} from './component-types'
+export type {
+  RuntimeComponentHandle,
+  RuntimeComponentIdentity,
+  RuntimeComponentRuntimeOptions,
+} from './runtime-component-runtime'

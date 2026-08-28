@@ -1,4 +1,4 @@
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 type StoryEventimeLike = {
 	name: string

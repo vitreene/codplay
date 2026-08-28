@@ -1,6 +1,6 @@
 import "./quiz-series-fame-scene.css"
-import type { StrapCollection } from "codplay/player"
-import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay/player/types"
+import type { StrapCollection } from "codplay-v1/player"
+import type { PersoDoc, SceneDoc, SceneStoryDoc } from "codplay-v1/player/types"
 import type { QuizQuestionAnsweredPayload, QuizQuestionResolvedPayload, QuizQuestionStoryConfig, ResolvedQuizQuestion } from "./quiz-question-scene"
 
 // Local duplicates of quiz-question-scene.ts's handleQuestionSelect/handleQuestionSubmit,

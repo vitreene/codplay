@@ -5,7 +5,7 @@
 import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
 import type { AuthorApi } from '@codplay/selection-frame'
-import type { TelcoApi } from 'codplay/telco/types'
+import type { TelcoApi } from 'codplay-v1/telco/types'
 import type { OffsetEditorBridge } from '../../decor-editor/types'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────

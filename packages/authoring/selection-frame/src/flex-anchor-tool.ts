@@ -1,4 +1,4 @@
-import { worldDeltaToLocalDelta } from 'codplay/runtime/modules/list-flip/engine/dom-matrix'
+import { worldDeltaToLocalDelta } from 'codplay-v1/runtime/modules/list-flip/engine/dom-matrix'
 import type { AuthorApi } from './author-api'
 import type { FlexAdapter, FlexAlignmentPoint } from './adapters/flex-adapter'
 import {

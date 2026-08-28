@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "codplay-v1": ["./src/index.ts"],
+      "codplay-v1/*": ["./src/*"],
+      "@codplay/demos": ["../demos/src/v1/scenes/index.ts"],
+      "@codplay/demos/*": ["../demos/src/v1/*"],
+      "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
+      "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"]
+    }
+  },
+  "include": ["src", "tests"]
+}

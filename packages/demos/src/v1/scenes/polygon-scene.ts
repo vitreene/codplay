@@ -1,5 +1,5 @@
-import type { TransformFn } from 'codplay/player';
-import type { SceneDoc } from 'codplay/player/types';
+import type { TransformFn } from 'codplay-v1/player';
+import type { SceneDoc } from 'codplay-v1/player/types';
 
 const INITIAL = { sides: 5, inner: 18, outer: 42, inflexion: 0, diameter: 280 } as const;
 const MORPH_TEST_FROM = { sides: 5, inner: 18, outer: 42, rotationDeg: -18 } as const;

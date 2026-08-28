@@ -1,4 +1,4 @@
-import type { StrapFn, StrapReturnValue } from "codplay/player/strap-types"
+import type { StrapFn, StrapReturnValue } from "codplay-v1/player/strap-types"
 import type { GameConfig, GameDraw } from "../types"
 
 /**

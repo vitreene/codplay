@@ -1,4 +1,4 @@
-import type { SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay-v1/player/types"
 
 const ELAPSED_RING_RADIUS = 132
 const ELAPSED_RING_CIRCUMFERENCE = 2 * Math.PI * ELAPSED_RING_RADIUS

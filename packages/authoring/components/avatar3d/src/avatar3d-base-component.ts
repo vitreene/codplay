@@ -18,9 +18,9 @@ import {
   SRGBColorSpace,
   ACESFilmicToneMapping,
 } from 'three'
-import { BaseComponent } from 'codplay/runtime/components/lib/base-component'
-import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
-import type { RenderTickInfo, RenderSeekInfo } from 'codplay/player/render-adapter-types'
+import { BaseComponent } from 'codplay-v1/runtime/components/lib/base-component'
+import type { ComponentRenderResult, RuntimeComponentUpdateInput } from 'codplay-v1/runtime/components/types'
+import type { RenderTickInfo, RenderSeekInfo } from 'codplay-v1/player/render-adapter-types'
 import { createAvatarEngine, GazeService, getModelEntry } from '@codplay/avatar-engine'
 import type { AvatarEngine } from '@codplay/avatar-engine'
 import { buildActionHandlers, type ActionHandler } from './avatar3d-component.js'

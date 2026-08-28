@@ -1,4 +1,4 @@
-import type { NodePose, PlayerApi } from 'codplay/player/player'
+import type { NodePose, PlayerApi } from 'codplay-v1/player/player'
 
 export type { NodePose }
 

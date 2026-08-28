@@ -1,6 +1,6 @@
 import { buildSceneDoc } from '@codplay/editor/builder/build-scene'
 import type { EditorScene } from '@codplay/editor/sequence-editor/types'
-import type { SceneDoc } from 'codplay/player/types'
+import type { SceneDoc } from 'codplay-v1/player/types'
 
 /**
  * Fixture `EditorScene` for the ed2 Builder's step-6 increment (nested capsule): 2 levels deep,

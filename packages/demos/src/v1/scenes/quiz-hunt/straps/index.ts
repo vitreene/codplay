@@ -1,5 +1,5 @@
-import type { StrapCollection } from "codplay/player/strap-types"
-import type { SceneDoc } from "codplay/player/types"
+import type { StrapCollection } from "codplay-v1/player/strap-types"
+import type { SceneDoc } from "codplay-v1/player/types"
 import type { GameConfig, GameDraw, QuestionRouteEntry, QuizHuntWord } from "../types"
 import { createGameRouterStrap } from "./game-router"
 import { createGameTrialResolveStrap } from "./game-trial-resolve"

@@ -83,7 +83,7 @@ parallèle.
   `components`, `runner` et `flip-nested` suivent le même registre.
 
 La démo média `player` n'est pas retenue dans ce registre. Les fixtures de
-capture nécessaires aux tests vivent dans `packages/codplay-v2/tests/fixtures`
+capture nécessaires aux tests vivent dans `packages/codplay/tests/fixtures`
 et ne sont pas des démos chargées par le layout.
 
 Le composant `layout` et le composant `list` utilisés par `flip-list` sont les

@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 /**
  * Scene-level `game:final:start` handler: guards on a full basket, stops the timer,

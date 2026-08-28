@@ -1,4 +1,4 @@
-import type { PersoDoc, SceneStoryDoc } from "codplay/player/types"
+import type { PersoDoc, SceneStoryDoc } from "codplay-v1/player/types"
 import type { QuizHuntColorStyle } from "../color-palette"
 import type { QuizHuntWord } from "../types"
 

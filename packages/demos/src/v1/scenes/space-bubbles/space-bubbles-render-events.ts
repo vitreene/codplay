@@ -1,5 +1,5 @@
-import type { TweenFn } from "codplay/tween/tween-runner"
-import type { TransitionEase } from "codplay/animation/types"
+import type { TweenFn } from "codplay-v1/tween/tween-runner"
+import type { TransitionEase } from "codplay-v1/animation/types"
 import { SPACE_BUBBLE_COLORS, SPACE_BUBBLES_MAX_DURATION_MS, SPACE_BUBBLES_WORLD, type SpaceBubbleColor, type SpaceBubblesState, type WorldPoint } from "./space-bubbles-types"
 import { resolveBubbleLevelScale } from "./space-bubbles-state"
 

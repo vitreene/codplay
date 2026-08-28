@@ -1,7 +1,7 @@
 import { ruleMoveParentIntegrity } from './rule-move-parent-integrity'
 import { ruleRootCapsuleInvariants } from './rule-root-capsule-invariants'
 import { ruleUniqueActionNames } from './rule-unique-action-names'
-import type { SceneDef } from 'codplay/builder/types'
+import type { SceneDef } from 'codplay-v1/builder/types'
 import type { SceneValidationDiagnostic } from './types'
 
 export type SceneValidationReport = {

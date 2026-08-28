@@ -1,7 +1,7 @@
 # Codplay
 
 Status: En cours
-CodPlay version: V1 reference + V2 foundation
+CodPlay version: V2 official + V1 legacy
 
 Moteur de scènes interactives basé sur une timeline et un système d'événements. Ce dépôt est organisé en monorepo npm workspaces.
 
@@ -9,7 +9,7 @@ Moteur de scènes interactives basé sur une timeline et un système d'événeme
 
 ## Packages
 
-### `codplay` — librairie moteur (`packages/codplay`)
+### `codplay-v1` — moteur historique (`packages/codplay-v1`)
 
 Le cœur du système. Trois couches :
 
@@ -19,7 +19,7 @@ Le cœur du système. Trois couches :
 
 Les straps sont les unités de comportement : fonctions pures déclenchées par des événements, retournant des effets immédiats ou des séquences planifiées.
 
-### `codplay-v2` — runtime en construction (`packages/codplay-v2`)
+### `codplay` — runtime officiel V2 (`packages/codplay`)
 
 Réécriture déclarative séparée de V1. La fondation couvre actuellement la compilation `SceneDoc -> CompiledScene`, ACE, engine/player, materialize/resolve/solve, seek groupé, les composants de base, le move state et le runner HTML V2 avec projection locale/reparent. La fixture `packages/authoring/selection-frame/demos/flip-stress` sert de surface de validation et de gabarit pour les futures démos standard. Le renderer de production et les capacités encore non spécifiées restent à ouvrir.
 
@@ -81,15 +81,15 @@ npm run test
 # Tests critiques uniquement — doivent passer avant tout merge
 npm run test:gates
 
-# Un lot spécifique (depuis packages/codplay)
-cd packages/codplay
+# Un lot spécifique du moteur historique (depuis packages/codplay-v1)
+cd packages/codplay-v1
 npm run test:lot lot3
 npm run test:lot lot3 lot12
 
-# Mode watch (depuis packages/codplay)
+# Mode watch (depuis packages/codplay-v1)
 node scripts/run-tests.mjs watch
 
-# Un fichier directement (depuis packages/codplay)
+# Un fichier directement (depuis packages/codplay-v1)
 npx vitest run tests/v1/reference-scenes.spec.ts
 ```
 
@@ -100,11 +100,11 @@ Les tests sont organisés en `tests/lot1`–`tests/lot20` (fonctionnalités) et 
 ## Build
 
 ```bash
-# Build de la librairie codplay
+# Build du moteur historique codplay-v1
 npm run build
 ```
 
-Le résultat est produit dans `packages/codplay/dist/`.
+Le résultat est produit dans `packages/codplay-v1/dist/`.
 
 ---
 
@@ -112,8 +112,8 @@ Le résultat est produit dans `packages/codplay/dist/`.
 
 ```
 packages/
-  codplay/                  librairie moteur + tests
-  codplay-v2/               fondation du runtime V2
+  codplay-v1/               moteur historique + tests V1
+  codplay/                  runtime officiel + tests V2
   demos/                    application de démo
   authoring/
     capsule-automation/     helper d'authoring (pur, sans UI)

@@ -1,5 +1,5 @@
-import type { StrapCollection } from "codplay/player";
-import type { SceneDoc } from "codplay/player/types";
+import type { StrapCollection } from "codplay-v1/player";
+import type { SceneDoc } from "codplay-v1/player/types";
 
 /**
  * Creates one business-oriented reference scene with persistent decor and quiz branching.

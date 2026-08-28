@@ -1,5 +1,5 @@
 import { createRemote } from '@codplay/remote'
-import type { CodPlayTelco } from '../../../../codplay-v2/src'
+import type { CodPlayTelco } from 'codplay'
 
 type V2DemoTelcoOptions = Readonly<{
   onLog: (message: string, level?: 'info' | 'warn' | 'error') => void

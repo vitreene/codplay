@@ -1,4 +1,4 @@
-import { ComponentServiceBase } from 'codplay'
+import { ComponentServiceBase } from 'codplay-v1'
 import type { RiveSMIInput } from '../rive-context'
 
 export class EmotionService extends ComponentServiceBase {

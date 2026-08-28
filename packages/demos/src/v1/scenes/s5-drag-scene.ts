@@ -1,6 +1,6 @@
-import type { StrapCollection } from "codplay/player/strap-types";
-import type { CaptureEndFn, CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay/runtime/capture-types";
-import type { SceneDoc } from "codplay/player/types";
+import type { StrapCollection } from "codplay-v1/player/strap-types";
+import type { CaptureEndFn, CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay-v1/runtime/capture-types";
+import type { SceneDoc } from "codplay-v1/player/types";
 
 type DragStoryState = { draggableX: number; draggableY: number };
 type DragCaptureState = { x: number; y: number };

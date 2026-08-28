@@ -1,5 +1,5 @@
-import type { StrapCollection, StrapFn, StrapReturnValue } from "codplay/player/strap-types"
-import type { CaptureInitFn, CaptureTrackFn, KeyboardCaptureSample } from "codplay/runtime/capture-types"
+import type { StrapCollection, StrapFn, StrapReturnValue } from "codplay-v1/player/strap-types"
+import type { CaptureInitFn, CaptureTrackFn, KeyboardCaptureSample } from "codplay-v1/runtime/capture-types"
 import { circleHitsCircle, rectHitsCircle, segmentHitsCircle } from "./space-bubbles-collisions"
 import { seedToUnit } from "./space-bubbles-random"
 import { FAILURE_FALL_DURATION_MS, buildBubbleImpactEvents, buildFailureFallEvents, buildGameEndEvents, buildGameStartEvents, buildImpactClearEvents, buildMaluserEndEvents, buildMaluserHitBubbleEvents, buildMaluserHitClearEvents, buildMaluserShotClearEvents, buildMaluserShotEvents, buildMaluserSpawnEvents, buildPickerEndEvents, buildPickerHeightEvents, buildPickerSpawnEvents, buildProjectileFireEvents, buildTurretMoveEvent, buildTurretRecoilClearEvents } from "./space-bubbles-render-events"

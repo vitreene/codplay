@@ -1,5 +1,5 @@
-import type { TelcoApi } from 'codplay/telco/types'
-import type { PlayerStateSnapshot, PlayerPublicEventInput } from 'codplay/player/types'
+import type { TelcoApi } from 'codplay-v1/telco/types'
+import type { PlayerStateSnapshot, PlayerPublicEventInput } from 'codplay-v1/player/types'
 
 export type DemoRemoteAction = {
   id: string

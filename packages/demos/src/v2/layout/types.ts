@@ -2,7 +2,7 @@ import type {
   CompiledResourceManifest,
   RuntimePreloadMode,
   SceneDoc,
-} from '../../../../codplay-v2/src'
+} from 'codplay'
 
 /** Severity used by the non-blocking V2 demo log panel. */
 export type V2DemoLogLevel = 'info' | 'warn' | 'error'

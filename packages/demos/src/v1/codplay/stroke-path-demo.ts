@@ -3,7 +3,7 @@ import { createStrokePathScene, sceneStraps, SKETCH_STORAGE_KEY } from "../scene
 import type { StoredStroke } from "../scenes/stroke-path-scene";
 import { runCodPlaySceneDemo } from "./run-codplay-scene-demo";
 import type { DemoEntry } from "../shared/demo-registry";
-import type { Player } from "codplay/player/player";
+import type { Player } from "codplay-v1/player/player";
 
 const STROKE_STORY_ID = "stroke-path-story";
 

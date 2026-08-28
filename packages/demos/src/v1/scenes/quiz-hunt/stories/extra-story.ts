@@ -1,5 +1,5 @@
-import type { SceneStoryDoc } from "codplay/player/types"
-import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay/runtime/capture-types"
+import type { SceneStoryDoc } from "codplay-v1/player/types"
+import type { CaptureInitFn, CaptureTrackFn, PointerCaptureSample } from "codplay-v1/runtime/capture-types"
 import type { GameLabels } from "../types"
 
 type ExtraTokenCaptureState = { x: number; y: number; clientX: number; clientY: number }

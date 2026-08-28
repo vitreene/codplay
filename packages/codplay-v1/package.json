@@ -1,0 +1,30 @@
+{
+  "name": "codplay-v1",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs all",
+    "test:watch": "node scripts/run-tests.mjs watch",
+    "test:lot": "node scripts/run-tests.mjs",
+    "test:gates": "node scripts/run-tests.mjs gates"
+  },
+  "devDependencies": {
+    "@codplay/demos": "*",
+    "@codplay/capsule-automation": "*",
+    "jsdom": "^29.1.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "animejs": "^4.5.0",
+    "typed-om-polyfill": "^1.0.0"
+  }
+}

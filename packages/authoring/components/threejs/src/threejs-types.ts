@@ -1,5 +1,5 @@
 import type { Camera, Scene, WebGLRenderer } from 'three'
-import type { PersoActionCommon, PersoInitialCommon } from 'codplay/runtime/perso-shared-types'
+import type { PersoActionCommon, PersoInitialCommon } from 'codplay-v1/runtime/perso-shared-types'
 
 export type ThreejsRendererInitial = {
   alpha?: boolean

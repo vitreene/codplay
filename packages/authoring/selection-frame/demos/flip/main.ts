@@ -1,5 +1,5 @@
-import { createHtmlDomProjection, HtmlFlipRuntime } from '../../../../codplay-v2/src/runtime/flip'
-import type { FlipCapture, HtmlPose } from '../../../../codplay-v2/src/runtime/flip'
+import { createHtmlDomProjection, HtmlFlipRuntime } from 'codplay/runtime/flip/index'
+import type { FlipCapture, HtmlPose } from 'codplay/runtime/flip/index'
 
 import './style.css'
 

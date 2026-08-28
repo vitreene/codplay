@@ -1,5 +1,5 @@
-import type { StrapFn, StrapReturnValue } from "codplay/player/strap-types"
-import type { TweenFn } from "codplay/tween/tween-runner"
+import type { StrapFn, StrapReturnValue } from "codplay-v1/player/strap-types"
+import type { TweenFn } from "codplay-v1/tween/tween-runner"
 
 const ELAPSED_RING_RADIUS = 132
 const ELAPSED_RING_CIRCUMFERENCE = 2 * Math.PI * ELAPSED_RING_RADIUS

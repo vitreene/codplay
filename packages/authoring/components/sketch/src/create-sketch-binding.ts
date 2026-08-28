@@ -1,4 +1,4 @@
-import type { ThirdPartyBinding } from 'codplay'
+import type { ThirdPartyBinding } from 'codplay-v1'
 import { SketchingComponent } from './sketching-component'
 
 /**

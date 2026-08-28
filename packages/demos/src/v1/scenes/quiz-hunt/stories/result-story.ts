@@ -1,4 +1,4 @@
-import type { SceneStoryDoc } from "codplay/player/types"
+import type { SceneStoryDoc } from "codplay-v1/player/types"
 import type { GameLabels } from "../types"
 
 /** Result story: a full-overlay verdict card. Purely passive. */

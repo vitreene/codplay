@@ -1,4 +1,4 @@
-import type { RuntimeComponentUpdateInput } from 'codplay/runtime/components/types'
+import type { RuntimeComponentUpdateInput } from 'codplay-v1/runtime/components/types'
 
 export type Avatar3DRuntimeMode = 'play' | 'seek'
 

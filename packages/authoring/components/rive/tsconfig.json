@@ -3,8 +3,8 @@
   "compilerOptions": {
     "types": [],
     "paths": {
-      "codplay": ["../../../codplay/src/index.ts"],
-      "codplay/*": ["../../../codplay/src/*"]
+      "codplay-v1": ["../../../codplay-v1/src/index.ts"],
+      "codplay-v1/*": ["../../../codplay-v1/src/*"]
     }
   },
   "include": ["src"]

@@ -1,4 +1,4 @@
-import type { StrapFn } from "codplay/player/strap-types"
+import type { StrapFn } from "codplay-v1/player/strap-types"
 
 /** Scene-level `game:extra:collect` handler: grants one retry token, ignores re-collection. */
 export const gameExtraCollectStrap: StrapFn = ({ state }) => {
