@@ -122,6 +122,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         // descendants can compose against its current pose.
         materializerOwned: directIntent?.targetReflow === false,
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
+        targetReflow: directIntent?.targetReflow === true,
         direct: directIntent !== undefined,
         from,
         to,
@@ -355,7 +356,7 @@ function resolveMotionPose(
     layout,
     itemId,
     resolveParent,
-    !segment.materializerOwned,
+    !segment.materializerOwned && !segment.targetReflow,
   )
   return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path)
 }
@@ -618,6 +619,7 @@ function freezeMotionGraph(
       delay: segment.delay,
       ease: segment.ease,
       presentationMode: segment.presentationMode,
+      targetReflow: segment.targetReflow,
       direct: segment.direct,
       from: segment.from,
       to: segment.to,

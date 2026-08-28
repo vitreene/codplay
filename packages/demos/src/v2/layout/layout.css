@@ -351,3 +351,353 @@ select {
     width: calc(100% - 1.6rem);
   }
 }
+
+/* Keeps the three common zones usable when the browser viewport is short. */
+@media (max-height: 420px) {
+  .v2-demo-layout {
+    padding: 0.3rem;
+    gap: 0.3rem;
+  }
+
+  .v2-demo-header {
+    align-items: center;
+    flex-direction: row;
+    gap: 0.35rem;
+    padding: 0.3rem 0.45rem;
+    border-radius: 10px;
+  }
+
+  .v2-demo-header__copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+
+  .v2-demo-eyebrow {
+    flex: 0 0 auto;
+    font-size: 0.52rem;
+    letter-spacing: 0.06em;
+  }
+
+  .v2-demo-title {
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.95rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .v2-demo-description {
+    display: none;
+  }
+
+  .v2-demo-header__tools {
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .v2-demo-selector {
+    min-width: 0;
+    gap: 0.2rem;
+    font-size: 0.58rem;
+  }
+
+  .v2-demo-selector__input {
+    min-width: 6.5rem;
+    padding: 0.18rem 0.25rem;
+    font-size: 0.62rem;
+  }
+
+  .v2-demo-button--icon {
+    flex-basis: 1.8rem;
+    width: 1.8rem;
+    height: 1.8rem;
+  }
+
+  .v2-demo-button__icon {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .v2-demo-log-panel {
+    top: 0.3rem;
+    right: 0.3rem;
+    bottom: 0.3rem;
+    width: calc(100% - 0.6rem);
+  }
+
+  .v2-demo-footer {
+    padding: 0.3rem 0.4rem;
+    border-radius: 10px;
+  }
+
+  .telco-remote {
+    gap: 0.2rem;
+  }
+
+  .v2-demo-telco__transport,
+  .telco-remote__transport,
+  .v2-demo-telco__rates,
+  .telco-remote__rates {
+    gap: 0.25rem;
+  }
+
+  .v2-demo-telco__rates,
+  .telco-remote__rates {
+    margin-top: 0.15rem;
+  }
+
+  .telco-button--transport {
+    flex-basis: 1.8rem;
+    width: 1.8rem;
+    height: 1.8rem;
+  }
+
+  .telco-button__icon {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .telco-remote__seek {
+    min-width: 0;
+    flex-basis: 10rem;
+    gap: 0.25rem;
+    font-size: 0.6rem;
+  }
+
+  .telco-remote__seek input {
+    min-width: 4rem;
+  }
+
+  .telco-remote__seek output,
+  .telco-remote__state {
+    font-size: 0.56rem;
+  }
+}
+
+/* Compress controls once the viewport is too short for the normal telco
+   rhythm, while keeping the scene row present instead of collapsing it. */
+@media (max-height: 260px) {
+  .v2-demo-layout {
+    padding: 0.2rem;
+    gap: 0.2rem;
+  }
+
+  .v2-demo-header {
+    padding: 0.2rem 0.3rem;
+    border-radius: 8px;
+  }
+
+  .v2-demo-header__copy {
+    gap: 0.2rem;
+  }
+
+  .v2-demo-eyebrow {
+    font-size: 0.44rem;
+  }
+
+  .v2-demo-title {
+    font-size: 0.78rem;
+  }
+
+  .v2-demo-selector {
+    gap: 0.12rem;
+    font-size: 0.5rem;
+  }
+
+  .v2-demo-selector__input {
+    min-width: 5.4rem;
+    padding: 0.1rem 0.18rem;
+    font-size: 0.52rem;
+  }
+
+  .v2-demo-button--icon,
+  .telco-button--transport {
+    flex-basis: 1.4rem;
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .v2-demo-button__icon,
+  .telco-button__icon {
+    width: 0.72rem;
+    height: 0.72rem;
+  }
+
+  .v2-demo-log-panel {
+    top: 0.2rem;
+    right: 0.2rem;
+    bottom: 0.2rem;
+    width: calc(100% - 0.4rem);
+  }
+
+  .v2-demo-footer {
+    padding: 0.2rem 0.3rem;
+    border-radius: 8px;
+  }
+
+  .telco-remote {
+    gap: 0.12rem;
+  }
+
+  .v2-demo-telco__transport,
+  .telco-remote__transport,
+  .v2-demo-telco__rates,
+  .telco-remote__rates {
+    gap: 0.15rem;
+  }
+
+  .v2-demo-telco__rates,
+  .telco-remote__rates {
+    margin-top: 0.08rem;
+  }
+
+  .telco-button {
+    padding: 0.18rem 0.35rem;
+    font-size: 0.6rem;
+  }
+
+  .telco-remote__seek {
+    flex-basis: 8rem;
+    gap: 0.15rem;
+    font-size: 0.52rem;
+  }
+
+  .telco-remote__seek input {
+    min-width: 3rem;
+  }
+
+  .telco-remote__seek output,
+  .telco-remote__state {
+    font-size: 0.48rem;
+  }
+}
+
+/* Preserve a visible scene in an extremely short browser viewport. The
+   secondary rate and diagnostic labels are still available through the
+   telco API, but cannot occupy a second visual row at this size. */
+@media (max-height: 140px) {
+  .v2-demo-layout {
+    grid-template-rows: 1.3rem minmax(1rem, 1fr) 1.45rem;
+    padding: 0.1rem;
+    gap: 0.1rem;
+  }
+
+  .v2-demo-header {
+    height: 1.3rem;
+    min-height: 0;
+    padding: 0.1rem 0.2rem;
+    border-radius: 5px;
+  }
+
+  .v2-demo-header__copy {
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .v2-demo-eyebrow,
+  .v2-demo-description,
+  .v2-demo-selector > span {
+    display: none;
+  }
+
+  .v2-demo-title {
+    margin: 0;
+    font-size: 0.62rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .v2-demo-header__tools {
+    align-items: center;
+    gap: 0.1rem;
+  }
+
+  .v2-demo-selector {
+    gap: 0;
+  }
+
+  .v2-demo-selector__input {
+    min-width: 4.5rem;
+    height: 1.1rem;
+    padding: 0 0.1rem;
+    border-radius: 4px;
+    font-size: 0.45rem;
+  }
+
+  .v2-demo-button--icon,
+  .telco-button--transport {
+    flex-basis: 1.1rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 4px;
+  }
+
+  .v2-demo-button__icon,
+  .telco-button__icon {
+    width: 0.6rem;
+    height: 0.6rem;
+  }
+
+  .v2-demo-stage {
+    border-radius: 5px;
+  }
+
+  .v2-demo-log-panel {
+    top: 0.1rem;
+    right: 0.1rem;
+    bottom: 0.1rem;
+    width: calc(100% - 0.2rem);
+    padding: 0.2rem;
+    border-radius: 4px;
+  }
+
+  .v2-demo-footer {
+    height: 1.45rem;
+    min-height: 0;
+    padding: 0.1rem 0.15rem;
+    overflow: hidden;
+    border-radius: 5px;
+  }
+
+  .telco-remote {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    gap: 0.1rem;
+    overflow: hidden;
+  }
+
+  .telco-remote__transport {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 0.1rem;
+  }
+
+  .telco-remote__rates,
+  .telco-remote__state {
+    display: none;
+  }
+
+  .telco-remote__seek {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 0.1rem;
+    font-size: 0.42rem;
+  }
+
+  .telco-remote__seek > span:first-child {
+    display: none;
+  }
+
+  .telco-remote__seek input {
+    min-width: 1rem;
+  }
+
+  .telco-remote__seek output {
+    font-size: 0.4rem;
+  }
+}

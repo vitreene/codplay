@@ -1327,15 +1327,14 @@ cachées de l'instance.
   attente du tick normal et la visibilité des events publics ;
 - [x] vérifier le transfert explicite du preload, y compris les ressources
   `skipped`, ainsi que les diagnostics non bloquants ;
-- [x] inscrire les verticales V2 `player`, `runner` et `runner-overlay` dans le
-  registry commun, avec le preload média et les scènes runner fournis comme
-  modules sans runtime parallèle ;
+- [x] inscrire les verticales V2 `runner` et `flip-nested` dans le registry
+  commun, avec les scènes runner fournies comme modules sans runtime parallèle ;
 - [x] vérifier la composition `foreign`, l'absence de registre secondaire et le
   teardown idempotent des instances ;
 - [x] exécuter la suite complète V2 : 73 fichiers et 473 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
-- [x] vérifier dans Firefox headless les routes registry `player`, `runner` et
-  `runner-overlay`, avec Play et Seek via la télécommande commune ;
+- [x] vérifier dans Firefox headless les routes registry `runner` et
+  `flip-nested`, avec Play et Seek via la télécommande commune ;
 - [x] valider visuellement `flip-stress` dans le navigateur et conserver cette
   vérification séparée des tests de façade ; lecture lancée, temps avancé et
   aucune erreur console constatée dans Safari.

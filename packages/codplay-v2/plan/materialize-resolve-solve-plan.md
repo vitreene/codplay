@@ -147,6 +147,6 @@ leur entree dans ce registre.
 ## Validation
 
 La tranche est couverte par `tests/runtime/player/pipeline.spec.ts`,
-`move-state.spec.ts` et `presentation-graph.spec.ts`, puis reste exercée par la
-demo temporaire `packages/demos/src/v2/demos/player`. La demo est un banc visible, pas la
-definition du contrat final.
+`move-state.spec.ts` et `presentation-graph.spec.ts`. Les démos V2 ne sont pas
+une dépendance de cette tranche et restent des bancs visuels séparés de sa
+définition contractuelle.

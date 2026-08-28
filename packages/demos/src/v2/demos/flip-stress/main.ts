@@ -13,6 +13,8 @@ type ContentExchange = Readonly<{
 
 const HOST_ID = 'flip-stress-test-v2';
 const BOUNDARY_TIME_MS = 1_000;
+/** Total duration owned by the FLIP stress scene. */
+export const SCENE_DURATION_MS = 10_000;
 // Keep every transition endpoint distinct so the fixture cannot accidentally
 // validate a construction order only because several segments finish together.
 const CONTAINER_DURATION_MS = 9_350;

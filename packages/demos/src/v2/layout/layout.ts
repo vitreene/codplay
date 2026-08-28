@@ -230,8 +230,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     /** Mounts only the scene supplied by a lazily loaded demo module. */
     async mount(module) {
       unmountScene()
-      sceneSlot.className = `v2-demo-scene-slot ${options.active.stageClassName}`
-      sceneSlot.setAttribute('aria-label', options.active.stageLabel)
+      sceneSlot.className = 'v2-demo-scene-slot'
+      sceneSlot.setAttribute('aria-label', `Scène : ${options.active.title}`)
 
       const scene = module.createScene()
       let codplay: CodPlay
@@ -296,9 +296,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
           instanceId: scene.id,
           compiledScene: build.compiledScene,
           functions: build.functions,
-          durationMs: options.active.durationMs,
+          durationMs: module.durationMs,
           root: sceneSlot,
-          mountTargets: [{ id: 'root-host', kind: 'root', storyId: options.active.rootStoryId }],
+          mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
         })
       } catch (error) {
         log(`Instance creation failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
@@ -308,7 +308,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       }
 
       installTelco(instance.telco)
-      log(`${options.active.title} initialisée · durée=${options.active.durationMs}ms`)
+      log(`${options.active.title} initialisée · durée=${module.durationMs}ms`)
 
       sceneCleanup = () => {
         releaseResources()

@@ -97,7 +97,7 @@ des services courants sont la premiere couverture commune.
 | Découpage des points chauds | Fini pour la tranche interne du 2026-08-24 | `runtime/player`, `runtime/runner-html` et `runtime/capabilities/media-sync` sont découpés par responsabilités dans des dossiers spécialisés ; les façades publiques, le circuit runtime et les contrats V2 restent inchangés. |
 | ACE | Contrat de valeurs, couleurs et transforms scalaires en place | Les alias, l'ordre, les identités deterministes, la normalisation sRGB/OKLCH et la conservation des unités sont couverts; les séquences `transform` brutes sont conservées par le materializer HTML et les matrices ne sont pas décomposées. |
 | Mouvement HTML | Correction de frontière FLIP en cours | Le runner conserve FIRST avant `startAt` et capture le LAST d'un move à `startAt + delay + duration`; les tests ciblés couvrent la cible disponible seulement au LAST. La validation visuelle de `flip-stress` reste à reprendre ; le mouvement SVG suit le même circuit HTML/DOM lorsqu'un composant en produit. |
-| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence ; `components`, `player`, `runner` et `runner-overlay` passent aussi par le layout et le registre V2. Les modules de scène ne possèdent ni runtime ni page parallèle. |
+| Démos standard | Gabarit fixe, extension en cours | `packages/demos/src/v2/demos/flip-stress` sert de fixture de référence ; `components`, `runner` et `flip-nested` passent par le layout et le registre V2. La démo `player` n'est pas retenue ; les fixtures de test sont hors du registre. Les modules de scène ne possèdent ni runtime ni page parallèle. |
 
 Une decision marquee `A relire` bloque le code qui en depend. Une decision `Fixe` peut etre implementee. Une
 phase de prototype est possible, mais elle porte explicitement `Mode: Prototype`, son perimetre, son critere de
@@ -187,9 +187,9 @@ ajouté pour raccourcir cette phase.
 ### 2. Verticale de validite
 
 Creer d'abord sous `packages/codplay-v2/tests/runtime/` une verticale de test qui traverse le flux entier avec
-un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML. La demo existante
-`packages/demos/src/v2/demos/player` reste un banc visible du runtime, sans sortie ou catalogue parallele. Ni cette demo ni
-la verticale ne doivent ouvrir le renderer de production. Elles couvrent :
+un `RuntimeMaterializer` de test branche sur la meme interface que le runner HTML.
+Les démos V2 ne sont pas une dépendance de cette verticale et celle-ci ne doit
+pas ouvrir le renderer de production. Elle couvre :
 
 La démo courante est unique et remplace la précédente lorsqu'une nouvelle
 tranche doit être présentée, sauf demande explicite de conservation. La démo

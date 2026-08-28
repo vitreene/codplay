@@ -452,12 +452,13 @@ Les tests à conserver et à rejouer après la refonte couvrent notamment :
 - frontière exclusive à `0 ms` ;
 - ordre list reconstruit par la timeline structurelle.
 
-La démo runner expose deux scénarios :
+La démo runner expose deux scénarios, dont le second est enregistré sous le
+titre `flip imbriqué` :
 
 - reorder `[B, C, A] -> [A, B, C]` dans une même list : A/B/C locaux,
   aucun overlay ;
 - P et Q reparentés simultanément dans une hiérarchie imbriquée : deux overlays
-  indépendants, B/C locaux.
+  indépendants, B/C locaux (`?demo=flip-nested`).
 
 Inspection Safari effectuée aux frontières et par pas de `10 ms` :
 
@@ -489,6 +490,33 @@ Safari a vérifié un redimensionnement au milieu de la scène (`t=5000 ms`) ent
 les viewports `900×656`, `850×578` et `1024×786` : les représentations actives
 restent présentes, aucune racine de mesure n'est créée, et les checkpoints
 `BOUNDARY` et `LAST` restent navigables.
+
+### Correction responsive de la démo `flip imbriqué` — 2026-08-27
+
+La petite largeur révélait un effet de la feuille de style de la fixture, et
+non une nouvelle branche du graphe FLIP. L'endpoint cible imposait `3rem` à
+Q, puis son rembourrage s'ajoutait à cette hauteur. À `360×500` demandés
+(`360×396` dans la page), Q mesurait `19,19 px` au FIRST mais `20,19 px` au
+LAST.
+
+La règle de largeur remplace ce minimum par `clamp(1rem, 5cqw, 2.375rem)` et
+retire le rembourrage de Q. Le même cas mesure maintenant `19,19 px` au FIRST
+et `16,86 px` au LAST ; l'overlay est intermédiaire pendant le move et a
+disparu à `2200 ms`.
+
+À hauteur courte, P était en plus contracté comme flex item à `10 px` alors
+que son contenu demandait `33 px`. Son `overflow: hidden` coupait alors Q au
+LAST. La media query compacte masque les titres qui consomment l'espace,
+étend l'outlet à la hauteur disponible, fixe P à sa hauteur naturelle et
+autorise la liste compacte à conserver son contenu. L'endpoint compact de Q
+est `0,75rem`, contre `1rem` au FIRST, afin que P conserve aussi une variation
+de hauteur animable. À `500×300` demandés (`500×196` dans la page), P passe de
+`37,38 px` au FIRST à `33,38 px` au LAST, Q de `16 px` à `12 px`, et B/C
+restent visibles dans l'outlet cible de `61,92 px`.
+
+Ces changements restent dans `packages/demos/src/v2/demos/runner/style.css`.
+Ils ne modifient ni la scène, ni le graphe, ni le contrat du runner HTML ; ils
+corrigent uniquement les contraintes responsive de la fixture.
 
 ## État de revue
 
@@ -559,6 +587,14 @@ La trajectoire `word`/style reste hors de ce mécanisme : elle est marquée
 `targetReflow: false`, reste matérialisée sur le nœud source et ne crée ni
 reflow FLIP ni overlay. Le correctif réutilise donc le graphe existant ; il ne
 crée pas de second circuit de mouvement.
+
+Le segment direct d'un move structurel conserve également `targetReflow: true`.
+Pendant qu'il est actif, son attachement de destination est résolu depuis
+`segment.to`, donc depuis LAST ; la position naturelle `afterStart` reste
+réservée aux frères et aux reflows engagés. Les segments non structurels gardent
+leur résolution de destination existante. Cette distinction corrige le saut de
+fin sans déplacer la responsabilité de `afterStart` ni introduire un chemin
+parallèle.
 
 Les tests ciblés couvrent désormais la frontière capture (`afterStart` distinct
 du LAST), le graphe qui refuse l'import d'un reflow ultérieur et la distinction

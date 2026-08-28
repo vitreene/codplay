@@ -1,36 +1,46 @@
-.runner-stage {
+.runner-stage__canvas {
   position: relative;
   display: grid;
   width: 100%;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  container-type: size;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  padding: 24px;
-  overflow: auto;
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(0.5rem, 2vw, 1.125rem);
+  padding: clamp(0.5rem, 3vw, 1.5rem);
+  overflow: hidden;
   color: #e8edf5;
   background: #0b0f16;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
+.runner-stage__panel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
 .flip-box {
   position: relative;
-  align-self: start;
-  min-height: 360px;
-  padding: 20px;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: clamp(0.65rem, 2vw, 1.25rem);
   border: 1px solid #41506a;
   border-radius: 16px;
+  overflow: hidden;
   transform-origin: center;
 }
 
 .flip-box--source {
-  min-height: 330px;
   background: #182a2d;
   transform: rotate(-2deg);
 }
 
 .flip-box--target {
-  min-height: 390px;
   background: #29243a;
   transform: rotate(2deg);
 }
@@ -38,61 +48,66 @@
 .flip-box h2 {
   margin: 0;
   color: #aeb9cb;
-  font-size: 1rem;
+  font-size: clamp(0.72rem, 1.6vw, 1rem);
 }
 
 .flip-box__tag {
   display: inline-block;
-  margin-bottom: 10px;
+  margin-bottom: clamp(0.35rem, 1vw, 0.625rem);
   color: #f7b267;
-  font-size: 0.68rem;
+  font-size: clamp(0.5rem, 1.1vw, 0.68rem);
   font-weight: 900;
-  letter-spacing: 0.15em;
+  letter-spacing: clamp(0.08em, 0.3vw, 0.15em);
 }
 
 .flip-box__outlet {
   position: absolute;
-  inset: 74px 20px 20px;
+  inset: clamp(3.4rem, 18%, 4.625rem) clamp(0.65rem, 4%, 1.25rem) clamp(0.65rem, 4%, 1.25rem);
   display: grid;
   place-items: center;
   border: 1px dashed #53657f;
   border-radius: 12px;
+  overflow: hidden;
 }
 
 .flip-list {
   display: flex;
-  width: min(230px, 100%);
-  min-height: 230px;
+  width: min(14.375rem, 100%);
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: clamp(0.3rem, 1.5cqh, 0.625rem);
+  padding: clamp(0.4rem, 2cqw, 0.875rem);
   border: 1px solid #f7b26788;
   border-radius: 14px;
   color: #f7b267;
   background: #1c1627;
-  font-size: 0.7rem;
+  font-size: clamp(0.52rem, 1.3vw, 0.7rem);
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: clamp(0.05em, 0.25vw, 0.12em);
+  overflow: hidden;
 }
 
-.flip-list--overlay {
-  width: min(260px, 100%);
-  min-height: 270px;
+.flip-list--nested {
+  width: min(16.25rem, 100%);
   align-items: stretch;
 }
 
 .flip-list::before {
   content: 'TARGET LIST / ORDER';
   display: block;
-  padding-bottom: 4px;
+  flex: 0 0 auto;
+  padding-bottom: clamp(0.15rem, 0.5cqh, 0.25rem);
   color: #aeb9cb;
-  font-size: 0.64rem;
+  font-size: clamp(0.46rem, 1.1vw, 0.64rem);
 }
 
 .flip-item {
   display: grid;
   width: 100%;
-  min-height: 54px;
+  min-height: clamp(1.55rem, 6cqh, 3.375rem);
+  flex: 0 1 auto;
   place-items: center;
   border-radius: 12px;
   color: #10141d;
@@ -106,50 +121,271 @@
 .flip-item--b { background: #8ed1c5; }
 .flip-item--c { background: #a9a1e8; }
 
-.nested-overlay-parent {
+.nested-flip-parent {
   display: grid;
   width: 100%;
-  min-height: 174px;
-  gap: 8px;
-  padding: 12px;
+  min-height: 0;
+  gap: clamp(0.3rem, 1cqh, 0.5rem);
+  padding: clamp(0.45rem, 2cqw, 0.75rem);
   border: 1px solid #f7b267;
   border-radius: 12px;
   background: #10141d;
   box-shadow: 0 14px 30px #0005;
+  overflow: hidden;
 }
 
-.nested-overlay-parent__label {
+.nested-flip-parent__label {
   color: #f7b267;
-  font-size: 0.68rem;
+  font-size: clamp(0.48rem, 1.1vw, 0.68rem);
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: clamp(0.04em, 0.2vw, 0.08em);
 }
 
-.nested-overlay-parent__outlet {
+.nested-flip-parent__outlet {
   display: grid;
-  min-height: 48px;
+  min-height: clamp(1.4rem, 5cqh, 3rem);
   place-items: center;
   border: 1px dashed #53657f;
   border-radius: 8px;
+  overflow: hidden;
 }
 
-.nested-overlay-parent__outlet--last { background: #182a2d; }
+.nested-flip-parent__outlet--last { background: #182a2d; }
 
-.nested-overlay-child {
+/* An empty outlet must not reserve space. The target outlet then grows only
+   when the child has actually entered it, exposing the real reparent resize. */
+.nested-flip-parent__outlet:empty {
+  display: none;
+}
+
+.nested-flip-parent__outlet--last {
+  min-height: clamp(3rem, 12cqh, 6rem);
+}
+
+.nested-flip-child {
   display: grid;
   width: 100%;
-  min-height: 38px;
+  min-height: clamp(1.2rem, 5cqh, 2.375rem);
   place-items: center;
   border-radius: 8px;
   color: #10141d;
   background: #f7b267;
-  font-size: 0.68rem;
+  font-size: clamp(0.48rem, 1.1vw, 0.68rem);
   font-weight: 900;
   letter-spacing: 0;
 }
 
-@media (max-width: 700px) {
-  .runner-stage {
+.nested-flip-parent__outlet--last .nested-flip-child {
+  min-height: clamp(3rem, 12cqh, 6rem);
+  padding: 0.35rem;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+@media (max-width: 360px) {
+  .runner-stage__canvas {
     grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 0.35rem;
+  }
+
+  .flip-box {
+    padding: 0.4rem;
+    border-radius: 10px;
+  }
+
+  .flip-box__tag {
+    margin-bottom: 0.15rem;
+  }
+
+  .flip-box h2 {
+    font-size: 0.66rem;
+  }
+
+  .flip-box__outlet {
+    inset: 2.55rem 0.4rem 0.4rem;
+    border-radius: 8px;
+  }
+
+  .flip-box--source,
+  .flip-box--target {
+    transform: none;
+  }
+
+  /* The narrow layout has the same available width on both sides. Keep the
+     target endpoint proportional to that width instead of forcing the
+     desktop-only 3rem minimum, so Q can shrink at the reparent boundary. */
+  .nested-flip-parent__outlet--last,
+  .nested-flip-parent__outlet--last .nested-flip-child {
+    min-height: clamp(1rem, 5cqw, 2.375rem);
+  }
+
+  .nested-flip-parent__outlet--last .nested-flip-child {
+    padding: 0;
+  }
+}
+
+/* Preserve both states when a narrow viewport is also short: stacking them
+   would leave each state too little height for its own content. */
+@media (max-width: 360px) and (max-height: 420px) {
+  .runner-stage__canvas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+
+@media (max-height: 260px) {
+  .runner-stage__canvas {
+    gap: 0.2rem;
+    padding: 0.2rem;
+  }
+
+  .flip-box {
+    padding: 0.25rem;
+    border-radius: 8px;
+  }
+
+  .flip-box__tag {
+    margin-bottom: 0.05rem;
+    font-size: 0.42rem;
+  }
+
+  .flip-box h2 {
+    font-size: 0.56rem;
+  }
+
+  .flip-box--source,
+  .flip-box--target {
+    transform: none;
+  }
+
+  .flip-box__outlet {
+    inset: 0.25rem;
+    border-radius: 6px;
+  }
+
+  .flip-box__tag,
+  .flip-box h2 {
+    display: none;
+  }
+
+  .flip-list {
+    gap: 0.15rem;
+    padding: 0.25rem;
+    font-size: 0.46rem;
+  }
+
+  .flip-list::before {
+    display: none;
+  }
+
+  .flip-item {
+    min-height: 0.3rem;
+    flex: 0 0 0.3rem;
+    font-size: 0.32rem;
+    line-height: 1;
+    border-radius: 6px;
+  }
+
+  .nested-flip-parent {
+    gap: 0.15rem;
+    padding: 0.25rem;
+    border-radius: 6px;
+    min-height: max-content;
+    flex: 0 0 auto;
+  }
+
+  .nested-flip-parent__label {
+    font-size: 0.42rem;
+  }
+
+  .nested-flip-parent__outlet {
+    min-height: 1rem;
+    border-radius: 5px;
+  }
+
+  .nested-flip-parent__outlet--last {
+    min-height: 0.75rem;
+  }
+
+  .nested-flip-child {
+    min-height: 1rem;
+    font-size: 0.42rem;
+    border-radius: 5px;
+  }
+
+  .nested-flip-parent__outlet--last .nested-flip-child {
+    min-height: 0.75rem;
+    padding: 0;
+  }
+
+  /* Let the compact target list use the endpoint height instead of shrinking
+     P and clipping Q when the common scene row is short. */
+  .flip-list--nested {
+    overflow: visible;
+  }
+}
+
+/* Keep the validation fixture legible when the common frame has only a very
+   small scene row left after its header and essential transport controls. */
+@media (max-height: 140px) {
+  .runner-stage__canvas {
+    gap: 0.1rem;
+    padding: 0.1rem;
+  }
+
+  .flip-box {
+    padding: 0.1rem;
+    border-radius: 4px;
+  }
+
+  .flip-box__tag,
+  .flip-box h2,
+  .flip-list::before,
+  .nested-flip-parent__label {
+    display: none;
+  }
+
+  .flip-box__outlet {
+    inset: 0.1rem;
+    border-radius: 4px;
+  }
+
+  .flip-list {
+    width: 100%;
+    gap: 0.1rem;
+    padding: 0.1rem;
+    border-radius: 4px;
+  }
+
+  .flip-item {
+    min-height: 0.2rem;
+    flex: 0 0 0.2rem;
+    border-radius: 3px;
+    font-size: 0.24rem;
+    line-height: 1;
+  }
+
+  .nested-flip-parent {
+    gap: 0.1rem;
+    padding: 0.1rem;
+    border-radius: 4px;
+  }
+
+  .nested-flip-parent__outlet,
+  .nested-flip-parent__outlet--last,
+  .nested-flip-child,
+  .nested-flip-parent__outlet--last .nested-flip-child {
+    min-height: 0.25rem;
+    border-radius: 3px;
+  }
+
+  .nested-flip-child {
+    font-size: 0.24rem;
+  }
+
+  .nested-flip-parent__outlet--last .nested-flip-child {
+    padding: 0;
   }
 }

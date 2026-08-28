@@ -354,7 +354,7 @@ FLIP.
 | Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
-| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `player`, `runner` et `runner-overlay` passent par le layout commun ; chantier encore `En cours` | Les démos utilisent la façade et le layout commun ; `player` fournit son manifest de preload, les scènes runner ne définissent plus de runtime parallèle. |
+| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner` et `flip-nested` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay-v2/tests/fixtures`. |
 | Authoring éditeur | Reporté à la reprise de l'éditeur | Aucun accès DOM ou API authoring générique à inventer dans la façade actuelle. |
 
 Le code de démonstration historique encore présent sous `packages/demos/src/v2`
@@ -425,21 +425,27 @@ La validation Safari du nouveau graphe, ainsi que la matrice complète resize,
 persistance et changements de calendrier, restent ouvertes. Le statut reste
 `En cours`.
 
-La passe suivante a raccordé `player` et `runner` au registry V2. Les deux
-anciennes pages autonomes ont été retirées : `player` expose sa scène et son
-manifest média au module chargé par le registry, tandis que `runner` expose ses
-deux scènes (`runner` et `runner-overlay`). Le layout commun compile, précharge,
+La vérification courante ajoute le cas `afterStart` différent de LAST : un
+mover structurel conserve son attachement `segment.to` jusqu'à la fin, tandis
+que les frères continuent d'utiliser les slots `afterStart`. Le test dédié et
+la passe Safari sur `flip-nested` confirment l'absence de saut à la disparition
+de l'overlay. La suite actuelle compte `73` fichiers et `475` tests passés.
+
+La passe suivante a raccordé les démos retenues au registry V2. Les anciennes
+pages autonomes ont été retirées : les scènes sont chargées par le registry et
+`runner` expose ses deux scènes (`runner` et `flip-nested`). Le layout commun compile, précharge,
 enregistre les ressources auprès de l'engine, puis crée l'instance publique ;
 aucun de ces modules ne construit désormais de catalogue, de player, de runner,
 de telco ou de page locale.
 
-Le build Vite et le typecheck V2 passent après cette migration. Firefox 154.0.1
-headless a monté successivement `?demo=player`, `?demo=runner` et
-`?demo=runner-overlay` : remote commun présent, scène montée, anciennes pages
-absentes et aucun diagnostic runtime. `player` expose ses nodes audio/vidéo avec
-`readyState: 4`; Play puis Seek à `150 ms` passent par la telco commune sur les
-trois routes. Le typecheck global de `packages/demos` reste non concluant à
-cause d'erreurs historiques dans `src/v1`, sans erreur signalée dans `src/v2`.
+Le build Vite et le typecheck V2 passent après cette migration. La vérification
+historique Firefox 154.0.1 headless avait monté successivement `?demo=player`,
+`?demo=runner` et `?demo=runner-overlay` : remote commun présent, scène montée,
+anciennes pages absentes et aucun diagnostic runtime. Ces routes ont depuis été
+retirées ou renommées par le registry V2 ; la vérification actuelle porte sur
+les routes enregistrées. Le typecheck global de `packages/demos` reste non
+concluant à cause d'erreurs historiques dans `src/v1`, sans erreur signalée
+dans `src/v2`.
 
 La surface a ensuite été resserrée pour conserver la frontière de construction
 de V1 : `new CodPlay(options)` est l'unique entrée publique. Le layout injecte
@@ -492,3 +498,36 @@ L'ordre de travail restant est :
 La correction FLIP ne modifie aucun contrat de façade. La reprise authoring et
 le nettoyage des anciennes démos restent des chantiers séparés ; ils ne doivent
 pas être mélangés au pilotage telco ni servir à contourner un défaut du core.
+
+## 12. État de la démo `flip imbriqué` au 2026-08-27
+
+La fixture utilise une seule scène `SceneDoc` et le layout commun. Son cas
+spécifique est volontaire : l'outlet cible de Q est vide au FIRST et devient
+plus haut lorsque Q y est monté au LAST. La hauteur de P doit donc être mesurée
+à chacune des bornes et interpolée par le même graphe que sa position. Le
+runner ne doit pas remplacer LAST par `afterStart` pour le mover direct ; cette
+régression est couverte par le test de graphe correspondant.
+
+Le layout commun possède aussi un mode compact pour les fenêtres courtes. La
+vérification Safari effectuée avec une fenêtre demandée de `500 × 300` (soit
+`500 × 196 CSS px` exposés à la page) donne une page sans débordement, une scène
+de `80 px` et des items visibles dans `runner` et `flip-nested`. Cette règle ne
+change ni la scène logique ni le contrat du runner ; elle évite seulement que
+les dimensions décoratives de la fixture consomment toute la zone centrale.
+
+La petite largeur a ensuite révélé un second cas de présentation : le minimum
+de `3rem` prévu pour l'outlet LAST faisait grandir Q au lieu de le réduire,
+et le rembourrage du Q cible s'ajoutait à cette taille. La règle responsive de
+`runner/style.css` utilise désormais `clamp(1rem, 5cqw, 2.375rem)` et retire
+ce rembourrage. Safari mesure alors Q à `19,19 px` au FIRST et `16,86 px` au
+LAST dans une fenêtre demandée de `360 × 500` (`360 × 396 CSS px` exposés).
+
+À hauteur courte, le parent P était contracté à `10 px` par le flex layout
+alors que son contenu demandait `33 px`; son débordement masquait Q au LAST.
+Le mode compact donne à l'outlet la hauteur disponible et conserve P à sa
+hauteur naturelle. L'endpoint compact de Q est `0,75rem`, contre `1rem` au
+FIRST : la variation de P reste donc observable et interpolable. Dans une
+fenêtre demandée de `500 × 300` (`500 × 196 CSS px` exposés), P passe de
+`37,38 px` à `33,38 px`, Q de `16 px` à `12 px`, et B/C restent visibles. Il
+s'agit d'une correction de la fixture responsive, sans changement du runner
+ou du graphe FLIP.

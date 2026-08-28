@@ -2,8 +2,8 @@ import type { SceneDoc } from '../../../../../codplay-v2/src/scene/types'
 import { correctionIconPartId, selectionIconPartId } from '../../../../../codplay-v2/src/runtime/components/input'
 import componentDemoImageUrl from './component-demo-image.svg?url'
 
-/** Total duration exposed by the V2 component showcase. */
-export const COMPONENTS_DEMO_DURATION_MS = 3800
+/** Total duration owned by the V2 component scene. */
+export const SCENE_DURATION_MS = 3800
 
 const IMAGE_ENTER_EVENT = 'components:image:enter'
 const POLYGON_MORPH_EVENT = 'components:polygon:morph'
@@ -33,7 +33,7 @@ export function createComponentsScene(): SceneDoc {
           { name: POLYGON_MORPH_EVENT, startAt: 800 },
           { name: QUIZ_SELECT_EVENT, startAt: 1700 },
           { name: QUIZ_RESOLVE_EVENT, startAt: 2700 },
-          { name: 'components:sequence:end', startAt: COMPONENTS_DEMO_DURATION_MS },
+          { name: 'components:sequence:end', startAt: SCENE_DURATION_MS },
         ],
       },
     },

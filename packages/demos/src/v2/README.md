@@ -31,8 +31,10 @@ layout commun utilise la façade publique CodPlay : il crée un propriétaire
 `CodPlay`, compile la scène, précharge et enregistre ses ressources, crée
 l'instance et branche sa télécommande. Le catalogue, le ticker, le runner HTML
 et le traitement du resize restent internes à CodPlay ou au layout V2. Le
-registre porte les informations d'affichage et de chargement utilisées par le
-layout.
+registre porte uniquement les informations d'affichage et de chargement ; la
+durée est fournie par le module de scène au moment du chargement. Le conteneur
+du player est celui du layout, avec une classe stable ; une démo ne lui ajoute
+pas de classe de structure par le registry.
 
 ## Layout commun
 
@@ -78,7 +80,11 @@ parallèle.
 - les materializers tiers restent hors de la première tranche ; ils seront
   introduits seulement lorsqu'une démo et son contrat l'exigeront ;
 - `flip-list` est la première démo déplacée et sert aussi de test du layout ;
-  `components`, `player`, `runner` et `runner-overlay` suivent le même registre.
+  `components`, `runner` et `flip-nested` suivent le même registre.
+
+La démo média `player` n'est pas retenue dans ce registre. Les fixtures de
+capture nécessaires aux tests vivent dans `packages/codplay-v2/tests/fixtures`
+et ne sont pas des démos chargées par le layout.
 
 Le composant `layout` et le composant `list` utilisés par `flip-list` sont les
 composants core fournis par CodPlay. Le layout publie toutes les zones indiquées

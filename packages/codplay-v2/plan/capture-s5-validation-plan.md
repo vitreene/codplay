@@ -28,9 +28,9 @@ Elle ne crée :
 - aucune nouvelle entrée de démo ;
 - aucun comportement propre au DOM dans le core capture.
 
-Cette validation S5 est close. L'entrée active de
-`packages/demos/src/v2/demos/player` peut porter une tranche différente ; son état et ses
-critères sont suivis par le plan correspondant, actuellement
+Cette validation S5 est close. La fixture de capture est conservée sous
+`packages/codplay-v2/tests/fixtures` ; elle n'est pas exposée comme démo et son
+état et ses critères sont suivis par le plan correspondant, actuellement
 [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md).
 
 ## Références obligatoires

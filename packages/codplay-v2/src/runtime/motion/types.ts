@@ -89,6 +89,8 @@ export type MotionSegment = Readonly<{
   ease: string
   presentationMode: MotionPresentationMode
   path?: Path
+  /** The segment owns a structural destination and must use its LAST pose. */
+  targetReflow: boolean
   direct: boolean
   from: MotionAttachment
   to: MotionAttachment

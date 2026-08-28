@@ -124,6 +124,24 @@ describe('motion graph', () => {
     expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
   })
 
+  it('keeps a structural mover aimed at LAST while natural layout is still at afterStart', () => {
+    const before = snapshot(0, [item('moving', 'source', 0)])
+    const afterStart = snapshot(0, [item('moving', 'target', 50)])
+    const after = snapshot(1_000, [item('moving', 'target', 100)])
+    const graph = buildMotionGraph([{
+      ...boundary('last-destination', 0, before, after, [{
+        ...intent('moving', 0, 1_000),
+        targetReflow: true,
+      }]),
+      afterStart,
+    }])
+
+    // The natural layout remains at the committed afterStart slot while the
+    // overlay is active; the sovereign structural mover must still use LAST.
+    expect(originX(resolvePresentationFrame(graph, afterStart, 500), 'moving')).toBeCloseTo(50)
+    expect(originX(resolvePresentationFrame(graph, afterStart, 1_000), 'moving')).toBeCloseTo(100)
+  })
+
   it('keeps natural placement and exposes both endpoint constraints for an active reparent', () => {
     const before = snapshot(0, [
       item('source', 'root', 0),

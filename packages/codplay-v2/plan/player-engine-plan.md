@@ -121,8 +121,8 @@ La verticale `tests/runtime/vertical-validity.spec.ts` traverse le flux avec un
 `RuntimeMaterializer` de test. Elle valide actuellement un perso, les patches de
 classe, un tween d'opacite et le flux `materialize -> resolve -> solve` ainsi que
 les deltas generiques `mount/unmount/move` lorsque les tests concernés les ouvrent.
-La demo `packages/demos/src/v2/demos/player` reste un banc visible et ne possède pas de circuit
-runtime distinct :
+Les démos V2 ne sont pas une dépendance de cette verticale et ne possèdent pas
+de circuit runtime distinct :
 
 - la demo est un banc de validation visible, pas une contrainte de compatibilite du runtime ;
 - si elle entre en conflit avec un contrat V2, le contrat runtime prime et la demo doit etre
