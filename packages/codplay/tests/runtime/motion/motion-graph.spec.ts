@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { preparePath } from '../../../src/ace'
+import { createRotateMatrix, preparePath } from '../../../src/ace'
 import {
   buildMotionGraph,
   buildNaturalLayoutTimeline,
@@ -14,7 +14,7 @@ import {
   type RelativeMotionPose,
 } from '../../../src/runtime/motion'
 
-const IDENTITY_MATRIX = Object.freeze({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 })
+const IDENTITY_MATRIX: RelativeMotionPose['matrix'] = Object.freeze({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 })
 
 /** Defines one item in the synthetic logical layout used by graph tests. */
 type ItemDefinition = Readonly<{
@@ -23,6 +23,7 @@ type ItemDefinition = Readonly<{
   targetId: string
   x: number
   y?: number
+  matrix?: RelativeMotionPose['matrix']
 }>
 
 describe('motion graph', () => {
@@ -122,6 +123,26 @@ describe('motion graph', () => {
 
     expect(originX(resolvePresentationFrame(graph, after, 1_200), 'moving')).toBeCloseTo(10)
     expect(originX(resolvePresentationFrame(graph, after, 2_200), 'moving')).toBeCloseTo(320)
+  })
+
+  it('uses a measured property endpoint before the enclosing move endpoint', () => {
+    const before = snapshot(1_000, [item('C', 'root', 0)])
+    const rotationEnd = snapshot(1_360, [rotatedItem('C', 'root', 0, 14)])
+    const after = snapshot(9_150, [rotatedItem('C', 'root', 100, 14)])
+    const graph = buildMotionGraph([{
+      ...boundary('container-with-short-rotation', 1_000, before, after, [{
+        ...intent('C', 1_000, 8_150),
+        targetReflow: true,
+      }]),
+      keyframes: [rotationEnd],
+    }])
+
+    const frame = resolvePresentationFrame(graph, after, 2_050)
+    const pose = frame.items.get('C')?.pose
+    if (pose === undefined) throw new Error('Measured keyframe item is missing.')
+
+    expect(pose.matrix.a).toBeCloseTo(Math.cos(14 * Math.PI / 180), 6)
+    expect(pose.matrix.b).toBeCloseTo(Math.sin(14 * Math.PI / 180), 6)
   })
 
   it('keeps a structural mover aimed at LAST while natural layout is still at afterStart', () => {
@@ -251,6 +272,81 @@ describe('motion graph', () => {
     // At Qa's LAST, K is 200 ms into its own 8000 ms transition: 300 + 10
     // for the target list, then the item's local offset 10.
     expect(originX(atChildLast, 'moving')).toBeCloseTo(320)
+  })
+
+  it('prepares future ancestor tracks before retargeting an active child', () => {
+    const childBefore = snapshot(1_200, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 100),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'source:content', 0, 'source'),
+      item('sibling', 'target-list:content', 20, 'target-list'),
+    ])
+    const childAfter = snapshot(2_075, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 500),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target-list:content', 0, 'target-list'),
+      item('sibling', 'target-list:content', 20, 'target-list'),
+    ])
+    const reflowBefore = snapshot(1_700, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 100),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target-list:content', 0, 'target-list'),
+      item('sibling', 'target-list:content', 20, 'target-list'),
+    ])
+    const reflowAfter = snapshot(1_700, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 100),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target-list:content', 10, 'target-list'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+    const parentBefore = snapshot(2_000, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 100),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target-list:content', 10, 'target-list'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+    const parentAfter = snapshot(3_000, [
+      item('source', 'root', 0),
+      item('target-frame', 'root', 500),
+      item('target-list', 'target-frame:content', 0, 'target-frame'),
+      item('moving', 'target-list:content', 10, 'target-list'),
+      item('sibling', 'source:content', 20, 'source'),
+    ])
+    const graph = buildMotionGraph([
+      {
+        ...boundary('child-starts-first', 1_200, childBefore, childAfter, [{
+          ...intent('moving', 1_200, 875),
+          targetReflow: true,
+        }]),
+        afterStart: snapshot(1_200, [
+          item('source', 'root', 0),
+          item('target-frame', 'root', 100),
+          item('target-list', 'target-frame:content', 0, 'target-frame'),
+          item('sibling', 'target-list:content', 20, 'target-list'),
+        ]),
+      },
+      boundary('sibling-leaves', 1_700, reflowBefore, reflowAfter, [{
+        ...intent('sibling', 1_700, 875),
+        targetReflow: true,
+      }]),
+      boundary('ancestor-starts-later', 2_000, parentBefore, parentAfter, [{
+        ...intent('target-frame', 2_000, 1_000),
+        targetReflow: false,
+      }]),
+    ])
+
+    const beforeBoundary = resolvePresentationFrame(graph, reflowBefore, 1_699.999).items.get('moving')?.pose
+    const atBoundary = resolvePresentationFrame(graph, reflowAfter, 1_700).items.get('moving')?.pose
+    if (beforeBoundary === undefined || atBoundary === undefined) throw new Error('Future ancestor retarget test item is missing.')
+
+    expect(graph.tracksByItem.has('target-frame')).toBe(true)
+    expect(atBoundary.rect.left).toBeCloseTo(beforeBoundary.rect.left, 3)
+    expect(atBoundary.rect.top).toBeCloseTo(beforeBoundary.rect.top, 3)
   })
 
   it('holds an action pose during its delay and resolves it from the same graph', () => {
@@ -557,7 +653,7 @@ function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): Layou
     const definition = byId.get(id)
     if (definition === undefined) throw new Error(`Synthetic layout item is missing: ${id}`)
     visiting.add(id)
-    const localPose = relativePose(definition.x, definition.y ?? 0)
+    const localPose = relativePose(definition.x, definition.y ?? 0, definition.matrix)
     const parentPose = definition.parentId === undefined
       ? createMotionRootPose()
       : resolve(definition.parentId).rootPose
@@ -576,8 +672,8 @@ function snapshot(timeMs: number, definitions: readonly ItemDefinition[]): Layou
 }
 
 /** Creates one synthetic translation-only local pose. */
-function relativePose(x: number, y: number): RelativeMotionPose {
-  return Object.freeze({ origin: [x, y] as const, matrix: IDENTITY_MATRIX, width: 10, height: 10 })
+function relativePose(x: number, y: number, matrix = IDENTITY_MATRIX): RelativeMotionPose {
+  return Object.freeze({ origin: [x, y] as const, matrix, width: 10, height: 10 })
 }
 
 /** Creates one direct intent using a linear easing for exact assertions. */
@@ -599,6 +695,14 @@ function boundary(
 /** Creates one concise synthetic item definition. */
 function item(id: string, targetId: string, x: number, parentId?: string): ItemDefinition {
   return Object.freeze({ id, targetId, x, ...(parentId === undefined ? {} : { parentId }) })
+}
+
+/** Creates one synthetic item with a measured affine rotation. */
+function rotatedItem(id: string, targetId: string, x: number, degrees: number, parentId?: string): ItemDefinition {
+  return Object.freeze({
+    ...item(id, targetId, x, parentId),
+    matrix: createRotateMatrix(degrees * Math.PI / 180),
+  })
 }
 
 /** Creates a five-level hierarchy whose root is the only moving attachment. */

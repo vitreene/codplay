@@ -53,6 +53,8 @@ export type MotionBoundary = Readonly<{
   before: LayoutSnapshot
   /** Natural layout immediately after the boundary, before later eventimes. */
   afterStart?: LayoutSnapshot
+  /** Natural poses captured at property-transition endpoints inside the move. */
+  keyframes?: readonly LayoutSnapshot[]
   /** Natural layout at the transition endpoint, including active ancestors. */
   after: LayoutSnapshot
   intents: readonly MotionIntent[]
@@ -76,6 +78,12 @@ export type MotionRetarget = Readonly<{
   at: number
   from: MotionAttachment
   to: MotionAttachment
+}>
+
+/** One measured pose at an internal temporal point of a motion segment. */
+export type MotionKeyframe = Readonly<{
+  at: number
+  attachment: MotionAttachment
 }>
 
 /** One sovereign temporal segment belonging to exactly one item. */
@@ -102,6 +110,8 @@ export type MotionSegment = Readonly<{
    * must not apply a second local presentation transform to the same item.
    */
   materializerOwned: boolean
+  /** Measured poses used when one action contains independent property timings. */
+  keyframes?: readonly MotionKeyframe[]
   retargets?: readonly MotionRetarget[]
   boundaryId: string
 }>

@@ -1,7 +1,12 @@
 import { isPlainRecord } from '../../shared'
 import type { RuntimeCaptureSample, RuntimeCaptureState } from '../capture'
 import type { CompiledValue } from '../../scene/compiled'
-import { captureHtmlPose, worldDeltaToLocalDelta } from '../motion/html-pose'
+import {
+  captureHtmlPose,
+  createHtmlPoseCaptureContext,
+  worldDeltaToLocalDelta,
+  type HtmlPoseCaptureContext,
+} from '../motion/html-pose'
 import {
   captureHtmlTransientRects,
   playHtmlTransientFlip,
@@ -83,7 +88,8 @@ export class HtmlListDndPreview {
     const node = asElement(this.resolveNode(input.persoKey))
     if (node === undefined) return
     if (preview.offsetX === undefined || preview.offsetY === undefined) {
-      const rect = node.getBoundingClientRect()
+      const captureContext = createHtmlPoseCaptureContext()
+      const rect = captureHtmlPose(node, captureContext).rect
       preview.sourceList = node.parentElement instanceof HTMLElement ? node.parentElement : undefined
       preview.sourceRectsBeforeFloat = preview.sourceList === undefined
         ? new Map()
@@ -92,6 +98,8 @@ export class HtmlListDndPreview {
           readItemId(preview.sourceList),
           preview.sourceList,
           input.persoKey,
+          undefined,
+          captureContext,
         )
       preview.offsetX = clientX - rect.left
       preview.offsetY = clientY - rect.top
@@ -256,11 +264,12 @@ export class HtmlListDndPreview {
     const storyId = persoKey.slice(0, persoKey.indexOf(':'))
     if (clientX === undefined || clientY === undefined || storyId.length === 0) return undefined
 
+    const captureContext = createHtmlPoseCaptureContext()
     for (const listId of candidateListIds) {
       const list = asElement(this.resolveListNode(storyId, listId))
       if (list === undefined) continue
-      const pose = captureHtmlPose(list)
-      const rect = list.getBoundingClientRect()
+      const pose = captureHtmlPose(list, captureContext)
+      const rect = pose.rect
       const localPoint = worldDeltaToLocalDelta(
         pose.matrix,
         clientX - pose.origin.x,
@@ -275,7 +284,7 @@ export class HtmlListDndPreview {
       ) continue
 
       const children = this.readListItemElements(storyId, listId, list, persoKey)
-      const childrenRects = captureHtmlTransientRects(children)
+      const childrenRects = captureHtmlTransientRects(children, captureContext)
       const childBoxes = children.map((child) => toLocalBox(pose.matrix, pose.origin, childrenRects.get(child)!))
       return {
         listId,
@@ -315,11 +324,12 @@ export class HtmlListDndPreview {
     list: HTMLElement,
     excludedPersoKey: string,
     excludedGhost?: HTMLElement,
+    captureContext: HtmlPoseCaptureContext = createHtmlPoseCaptureContext(),
   ): ReadonlyMap<HTMLElement, HtmlTransientRect> {
     const children = listId === undefined
       ? readDirectItemElements(list, excludedPersoKey, excludedGhost)
       : this.readListItemElements(storyId, listId, list, excludedPersoKey, excludedGhost)
-    return captureHtmlTransientRects(children)
+    return captureHtmlTransientRects(children, captureContext)
   }
 
   /** Reads one list's canonical children, excluding transient preview nodes. */
@@ -391,8 +401,9 @@ export class HtmlListDndPreview {
   ): void {
     const cleanups = preview.flipCleanups ?? new Map<HTMLElement, () => void>()
     preview.flipCleanups = cleanups
+    const captureContext = createHtmlPoseCaptureContext()
     for (const [node, rectBefore] of rectsBefore) {
-      playHtmlTransientFlip(node, rectBefore, duration, cleanups)
+      playHtmlTransientFlip(node, rectBefore, duration, cleanups, captureContext)
     }
   }
 

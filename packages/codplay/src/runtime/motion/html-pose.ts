@@ -10,11 +10,19 @@ type HtmlWorldGeometry = Readonly<{
 
 type HtmlLocalBox = Readonly<{ width: number | null; height: number | null }>
 
+type HtmlMeasuredRect = Readonly<{
+  left: number
+  top: number
+  width: number
+  height: number
+}>
+
 /** Shared read context for one explicit HTML geometry transaction. */
 export type HtmlPoseCaptureContext = Readonly<{
   geometries: Map<Element, HtmlWorldGeometry>
   poses: Map<Element, HtmlPose>
   localBoxes: Map<Element, HtmlLocalBox>
+  measuredRects: Map<Element, HtmlMeasuredRect | undefined>
   computedStyles: Map<Element, CSSStyleDeclaration | undefined>
 }>
 
@@ -24,6 +32,7 @@ export function createHtmlPoseCaptureContext(): HtmlPoseCaptureContext {
     geometries: new Map(),
     poses: new Map(),
     localBoxes: new Map(),
+    measuredRects: new Map(),
     computedStyles: new Map(),
   }
 }
@@ -109,15 +118,44 @@ function measureLocalBox(node: Element, context: HtmlPoseCaptureContext): HtmlLo
   const width = Number.isFinite(computedWidth) && computedWidth > 0 ? computedWidth : null
   const height = Number.isFinite(computedHeight) && computedHeight > 0 ? computedHeight : null
 
+  const measuredRect = readMeasuredRect(node, context)
   const box = node instanceof HTMLElement
     ? {
-      width: width ?? (node.offsetWidth > 0 ? node.offsetWidth : null) ?? (node.clientWidth > 0 ? node.clientWidth : null),
-      height: height ?? (node.offsetHeight > 0 ? node.offsetHeight : null) ?? (node.clientHeight > 0 ? node.clientHeight : null),
+      width: width
+        ?? (node.offsetWidth > 0 ? node.offsetWidth : null)
+        ?? (node.clientWidth > 0 ? node.clientWidth : null)
+        ?? (measuredRect !== undefined && measuredRect.width > 0 ? measuredRect.width : null),
+      height: height
+        ?? (node.offsetHeight > 0 ? node.offsetHeight : null)
+        ?? (node.clientHeight > 0 ? node.clientHeight : null)
+        ?? (measuredRect !== undefined && measuredRect.height > 0 ? measuredRect.height : null),
     }
-    : { width, height }
+    : {
+      width: width ?? (measuredRect !== undefined && measuredRect.width > 0 ? measuredRect.width : null),
+      height: height ?? (measuredRect !== undefined && measuredRect.height > 0 ? measuredRect.height : null),
+    }
 
   context.localBoxes.set(node, box)
   return box
+}
+
+/** Reads and caches one browser rectangle for this explicit pose transaction. */
+function readMeasuredRect(node: Element, context: HtmlPoseCaptureContext): HtmlMeasuredRect | undefined {
+  if (context.measuredRects.has(node)) return context.measuredRects.get(node)
+  const measurableNode = node as Element & { getBoundingClientRect?: () => DOMRect }
+  if (typeof measurableNode.getBoundingClientRect !== 'function') {
+    context.measuredRects.set(node, undefined)
+    return undefined
+  }
+  const rect = measurableNode.getBoundingClientRect()
+  const measured = Number.isFinite(rect.left)
+    && Number.isFinite(rect.top)
+    && Number.isFinite(rect.width)
+    && Number.isFinite(rect.height)
+    ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    : undefined
+  context.measuredRects.set(node, measured)
+  return measured
 }
 
 /** Reads one CSS length used by an individual transform property. */
@@ -211,7 +249,7 @@ function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): H
     x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLocalOrigin.x + parentGeometry.matrix.c * fallbackLocalOrigin.y,
     y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLocalOrigin.x + parentGeometry.matrix.d * fallbackLocalOrigin.y,
   }
-  const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin)
+  const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin, context)
   const geometry: HtmlWorldGeometry = { origin, matrix }
   context.geometries.set(node, geometry)
   return geometry
@@ -224,10 +262,10 @@ function resolveMeasuredWorldOrigin(
   localWidth: number,
   localHeight: number,
   fallback: { x: number; y: number },
+  context: HtmlPoseCaptureContext,
 ): { x: number; y: number } {
-  const measurableNode = node as Element & { getBoundingClientRect?: () => DOMRect }
-  if (typeof measurableNode.getBoundingClientRect !== 'function') return fallback
-  const rect = measurableNode.getBoundingClientRect()
+  const rect = readMeasuredRect(node, context)
+  if (rect === undefined) return fallback
   const hasUsableRect = Number.isFinite(rect.left)
     && Number.isFinite(rect.top)
     && !(localWidth > 0 && rect.width === 0)

@@ -74,15 +74,19 @@ Le runner ne construit pas un second arbre HTML pour le FLIP. Lorsqu'un
 
 1. retire les transformations locales, réserves de taille et masques du frame
    précédent ;
-2. lit les nœuds auteur persistants de la racine visible ;
-3. conserve des instantanés de géométrie immuables ;
-4. utilise les mêmes materializations pour le `before` et l'`after`.
+2. demande au `RuntimePlayer` de résoudre la scène aux temps utiles :
+   `before`, `afterStart`, les éventuels endpoints intermédiaires de propriétés,
+   puis `after` ;
+3. présente chaque état résolu sur les nœuds auteur persistants, puis lit leur
+   géométrie ;
+4. conserve uniquement les instantanés numériques immuables.
 
 Les overlays existants restent en dehors de la mise en page normale et sont
-réutilisés. Ils ne servent pas d'arbre de mesure. La capture ne joue pas les
-médias, ne recharge pas les sources et ne détruit pas les composants. Le reset
-est synchrone : aucun frame du navigateur ne s'intercale entre la lecture de la
-géométrie naturelle et le nouveau commit.
+réutilisés. Ils ne servent pas d'arbre de mesure. « Jouer » un point de capture
+signifie ici résoudre et matérialiser l'état de la scène ; cela n'appelle pas
+`play()`, ne joue pas les médias, ne recharge pas les sources et ne détruit pas
+les composants. Le reset est synchrone : aucun frame du navigateur ne
+s'intercale entre la présentation de l'état et la lecture de sa géométrie.
 
 Pour un `move` structurel, la capture inclut les enfants actuels des cibles
 source et destination. Un enfant qui possède aussi un mouvement direct ultérieur
@@ -133,6 +137,14 @@ Pour chaque frontière compilée :
   `startAt + delay + duration`. Elle reste pilotée par le materializer sur le
   nœud source : elle ne crée ni reflow FLIP ni overlay par elle-même.
 
+Les propriétés d'une même action qui ne finissent pas ensemble ajoutent leurs
+temps de fin intermédiaires à cette séquence. Leur scène est résolue par le
+player canonique avant chaque présentation : le runner HTML ne recalcule donc
+ni leur valeur, ni leur easing, ni leur état logique. `resolveHtmlMotionActionTransition`
+ne fait que transmettre les temps nécessaires au planning ; il partage la
+normalisation de timing du pipeline et ne constitue pas un second moteur de
+transition.
+
 Le LAST d'un `move` est donc sa position géométrique à la fin de sa transition,
 pas une lecture immédiate au temps logique de l'événement. Cette distinction
 permet à une cible ou à un ancêtre absent au FIRST mais monté au LAST de fournir
@@ -147,8 +159,9 @@ Exemple : un `move` commence à `1200 ms`, dure `1000 ms` et sa cible est monté
 à `1500 ms`. Le snapshot FIRST est celui de `1200 ms` avant le commit ; le
 snapshot `afterStart` est mesuré à `1200 ms` pour les slots de reflow ; le
 snapshot LAST est mesuré à `2200 ms` et peut donc contenir la cible et toute sa
- chaîne d'ancêtres. Entre ces bornes, le graphe résout l'interpolation à partir
- des poses conservées ; il ne relit pas le DOM.
+ chaîne d'ancêtres. Entre ces bornes, le graphe résout la présentation à partir
+ des poses conservées ; il ne relit pas le DOM et ne reconstruit pas une scène
+ concurrente.
 
 Chaque attachement conserve également les mesures de l'item et de sa chaîne
 d'ancêtres au FIRST ou au LAST correspondant. Si l'enfant commence avant son

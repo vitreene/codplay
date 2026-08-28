@@ -15,7 +15,6 @@ export class HtmlMotionSystem {
   private graph: MotionGraph = buildMotionGraph([])
   private boundaries: readonly MotionBoundary[] = []
   private naturalLayoutTimeline: NaturalLayoutTimeline = buildNaturalLayoutTimeline([])
-  private dirty = true
   private initialized = false
   private readonly host: HtmlMotionPresentationHost
   private readonly resolveSourceRevision: ((itemId: string) => string | undefined) | undefined
@@ -41,9 +40,9 @@ export class HtmlMotionSystem {
   /** Resolves and commits the same frame regardless of the caller transport. */
   present(timeMs: number, naturalLayout?: LayoutSnapshot): void {
     if (!this.initialized) return
-    if (this.dirty) this.rebuild()
     const layout = naturalLayout ?? resolveNaturalLayout(this.naturalLayoutTimeline, timeMs)
-    this.host.commit(resolvePresentationFrame(this.graph, layout, timeMs), this.resolveSourceRevision, layout)
+    const frame = resolvePresentationFrame(this.graph, layout, timeMs)
+    this.host.commit(frame, this.resolveSourceRevision, layout)
   }
 
   /** Prepares the visible author nodes before the runner captures geometry. */
@@ -64,12 +63,12 @@ export class HtmlMotionSystem {
   /** Replaces the immutable boundary data after an explicit geometry capture. */
   setBoundaries(boundaries: readonly MotionBoundary[]): void {
     this.boundaries = Object.freeze([...boundaries])
-    this.dirty = true
+    if (this.initialized) this.rebuild()
   }
 
   /** Invalidates the graph after a new boundary capture or host geometry change. */
   invalidate(): void {
-    this.dirty = true
+    if (this.initialized) this.rebuild()
   }
 
   /** Releases all HTML presentation resources. */
@@ -82,6 +81,5 @@ export class HtmlMotionSystem {
   private rebuild(): void {
     this.graph = buildMotionGraph(this.boundaries)
     this.naturalLayoutTimeline = buildNaturalLayoutTimeline(this.boundaries)
-    this.dirty = false
   }
 }

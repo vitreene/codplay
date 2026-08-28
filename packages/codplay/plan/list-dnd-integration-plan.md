@@ -124,9 +124,19 @@ mesurée dans sa pose stabilisée avant d'être éventuellement relancée ; un m
 slot ne redémarre donc pas l'animation à chaque `pointermove`.
 
 Les primitives HTML de rectangle stabilisé, de capture de rectangles et de
-transition FLIP sont partagées dans `transient-flip.ts`. Cette mutualisation
-ne mélange pas le cycle live de la preview avec le graphe de lecture : elle évite
-seulement de dupliquer le traitement géométrique élémentaire.
+transition FLIP sont partagées dans `transient-flip.ts`. Leur source de mesure
+est obligatoirement `captureHtmlPose(node, context)` dans
+`runtime/motion/html-pose.ts`. La preview fournit un seul contexte à la liste
+candidate et à ses enfants : la chaîne d'ancêtres est donc capturée une fois
+pour cette résolution, puis réutilisée. `captureHtmlTransientRects()` ne fait
+que retirer la transformation transitoire de la pose déjà capturée ; il ne
+définit pas une autre géométrie. Aucun appel direct à `getBoundingClientRect()`
+n'est autorisé dans DND ou FLIP ; l'appel interne de `captureHtmlPose()` reste
+le seul point navigateur.
+
+Cette mutualisation ne mélange pas le cycle live de la preview avec le graphe
+de lecture : elle évite seulement de dupliquer le traitement géométrique
+élémentaire.
 
 L'événement de fin peut porter un dernier échantillon pointer. La preview le
 traite une seule fois avant de produire le `move`, de sorte que `target` et

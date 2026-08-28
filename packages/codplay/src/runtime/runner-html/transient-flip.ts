@@ -1,3 +1,9 @@
+import {
+  captureHtmlPose,
+  createHtmlPoseCaptureContext,
+  type HtmlPoseCaptureContext,
+} from '../motion/html-pose'
+
 /** Rectangle captured before one transient HTML layout change. */
 export type HtmlTransientRect = Readonly<{
   left: number
@@ -9,13 +15,17 @@ export type HtmlTransientRect = Readonly<{
 /** Captures settled rectangles for a collection of HTML nodes. */
 export function captureHtmlTransientRects(
   nodes: readonly HTMLElement[],
+  context: HtmlPoseCaptureContext = createHtmlPoseCaptureContext(),
 ): ReadonlyMap<HTMLElement, HtmlTransientRect> {
-  return new Map(nodes.map((node) => [node, measureHtmlSettledRect(node)]))
+  return new Map(nodes.map((node) => [node, measureHtmlSettledRect(node, context)]))
 }
 
-/** Reads one rectangle while subtracting a preview transform already in flight. */
-export function measureHtmlSettledRect(node: HTMLElement): HtmlTransientRect {
-  const rect = node.getBoundingClientRect()
+/** Reads one settled rectangle from the shared HTML pose and removes a preview transform. */
+export function measureHtmlSettledRect(
+  node: HTMLElement,
+  context: HtmlPoseCaptureContext = createHtmlPoseCaptureContext(),
+): HtmlTransientRect {
+  const rect = captureHtmlPose(node, context).rect
   const computed = node.ownerDocument.defaultView?.getComputedStyle(node)
   const matrix = parseCssMatrix(computed?.transform ?? node.style.transform)
   if (isIdentityMatrix(matrix)) return copyRect(rect)
@@ -33,8 +43,9 @@ export function playHtmlTransientFlip(
   fromRect: HtmlTransientRect,
   duration: number,
   cleanups: Map<HTMLElement, () => void>,
+  context: HtmlPoseCaptureContext = createHtmlPoseCaptureContext(),
 ): void {
-  const toRect = measureHtmlSettledRect(node)
+  const toRect = measureHtmlSettledRect(node, context)
   const previousCleanup = cleanups.get(node)
   previousCleanup?.()
 
@@ -64,7 +75,8 @@ export function playHtmlTransientFlip(
   node.style.transition = 'none'
   node.style.transformOrigin = 'top left'
   node.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`
-  void node.getBoundingClientRect()
+  // Use the shared pose entry point for the one layout flush required by FLIP.
+  void captureHtmlPose(node)
   node.style.transition = `transform ${duration}ms ease`
   node.style.transform = previousTransform
   node.addEventListener('transitionend', onTransitionEnd)
@@ -92,6 +104,6 @@ function isIdentityMatrix(matrix: ReturnType<typeof identityMatrix>): boolean {
 }
 
 /** Copies the measurable fields needed by a transient FLIP pair. */
-function copyRect(rect: DOMRect): HtmlTransientRect {
+function copyRect(rect: Readonly<Pick<HtmlTransientRect, 'left' | 'top' | 'width' | 'height'>>): HtmlTransientRect {
   return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
 }

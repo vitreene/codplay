@@ -127,7 +127,6 @@
   align-content: center;
   justify-content: start;
   gap: 5px;
-  overflow: hidden;
 }
 
 .transfer-frame--q {

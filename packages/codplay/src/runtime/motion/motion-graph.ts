@@ -17,6 +17,7 @@ import type {
   MotionBoundary,
   MotionGraph,
   MotionIntent,
+  MotionKeyframe,
   MotionRetarget,
   MotionSegment,
   OverlayStackingContext,
@@ -25,12 +26,126 @@ import type {
 import type { HtmlPose } from './html-types'
 import { buildNaturalLayoutTimeline, resolveNaturalLayoutBefore } from './motion-layout'
 
+/** One graph operation retained between structural planning and pose resolution. */
+type MotionBuildOperation = Readonly<{
+  kind: 'segment' | 'retarget'
+  boundary: MotionBoundary
+  itemId: string
+  before: LayoutItemSnapshot
+  after: LayoutItemSnapshot
+  structuralAfter: LayoutSnapshot
+  endpointAfter: LayoutItemSnapshot
+  segmentId: string
+}>
+
 /** Builds one complete immutable motion graph from chronological layout boundaries. */
 export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionGraph {
+  const naturalLayoutTimeline = buildNaturalLayoutTimeline(boundaries)
+  const { graph: structureGraph, operations } = buildMotionGraphStructure(boundaries)
+  let graph = structureGraph
+
+  // Resolve all geometry only after every future segment is present. This is
+  // what lets an active child use the FIRST pose of an ancestor that starts
+  // later, instead of mistaking that ancestor's LAST pose for its current one.
+  for (const operation of operations) {
+    const naturalBefore = resolveNaturalLayoutBefore(
+      naturalLayoutTimeline,
+      operation.boundary.timeMs,
+      operation.boundary.id,
+    )
+    const sourceLayout = mergeBoundarySourceLayout(
+      naturalBefore,
+      operation.boundary.before,
+      operation.itemId,
+    )
+    const source = sourceLayout.items.get(operation.itemId) ?? operation.before
+    const current = resolveMotionItem(graph, sourceLayout, operation.itemId, operation.boundary.timeMs)
+    if (current === undefined) {
+      if (operation.kind === 'segment') {
+        graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, undefined)
+      }
+      continue
+    }
+
+    const sourceParentPose = source.parentItemId === undefined
+      ? createMotionRootPose()
+      : resolveMotionItem(graph, sourceLayout, source.parentItemId, operation.boundary.timeMs)?.pose
+    const to = createStaticAttachment(
+      operation.after,
+      operation.boundary.after,
+      operation.endpointAfter,
+    )
+
+    if (operation.kind === 'retarget') {
+      const activeSegment = graph.tracksByItem
+        .get(operation.itemId)
+        ?.segments.find((segment) => segment.id === operation.segmentId)
+      if (activeSegment === undefined) continue
+
+      const destinationAtBoundary = resolveAttachment(
+        to,
+        operation.boundary.after,
+        operation.itemId,
+        (parentItemId, context) => resolveBoundaryParent(
+          graph,
+          operation.boundary.before,
+          operation.structuralAfter,
+          operation.boundary.after,
+          parentItemId,
+          operation.boundary.timeMs,
+          context,
+        ),
+        false,
+      )
+      const phase = resolveSegmentProgress(activeSegment, operation.boundary.timeMs)
+      const retargetedFrom = extrapolateMotionPoseAtProgress(
+        current.pose,
+        destinationAtBoundary,
+        phase,
+        activeSegment.path,
+      )
+      graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, Object.freeze({
+        ...activeSegment,
+        retargets: Object.freeze([
+          ...(activeSegment.retargets ?? []),
+          Object.freeze({
+            at: operation.boundary.timeMs,
+            from: createAttachment(source, retargetedFrom, sourceParentPose, sourceLayout),
+            to,
+          }),
+        ]),
+      }))
+      continue
+    }
+
+    const segment = graph.tracksByItem
+      .get(operation.itemId)
+      ?.segments.find((candidate) => candidate.id === operation.segmentId)
+    if (segment === undefined) continue
+    const from = createAttachment(source, current.pose, sourceParentPose, sourceLayout)
+    const keyframes = createSegmentKeyframes(segment, operation.boundary, from, to)
+    graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, Object.freeze({
+      ...segment,
+      from,
+      to,
+      ...(keyframes === undefined ? {} : { keyframes }),
+    }))
+  }
+
+  return graph
+}
+
+/** Plans all segment owners before resolving any segment geometry. */
+function buildMotionGraphStructure(
+  boundaries: readonly MotionBoundary[],
+): Readonly<{
+  graph: MotionGraph
+  operations: readonly MotionBuildOperation[]
+}> {
   const mutableTracks = new Map<string, MotionSegment[]>()
   const presentationItemIds = new Set<string>()
-  const naturalLayoutTimeline = buildNaturalLayoutTimeline(boundaries)
   let graph = freezeMotionGraph(mutableTracks, presentationItemIds)
+  const operations: MotionBuildOperation[] = []
 
   for (const boundary of [...boundaries].sort((left, right) => left.timeMs - right.timeMs)) {
     const transition = selectBoundaryTransition(boundary.intents)
@@ -56,59 +171,36 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
       if (before === undefined || after === undefined || !layoutAttachmentChanged(before, after)) continue
       const endpointAfter = boundary.after.items.get(itemId) ?? after
       const timing = directIntent ?? transition
-      const naturalBefore = resolveNaturalLayoutBefore(naturalLayoutTimeline, boundary.timeMs, boundary.id)
-      const sourceLayout = mergeBoundarySourceLayout(naturalBefore, boundary.before, itemId)
-      const source = sourceLayout.items.get(itemId) ?? before
-      const current = resolveMotionItem(graph, sourceLayout, itemId, boundary.timeMs)
-      if (current === undefined) continue
-      const sourceParentPose = source.parentItemId === undefined
-        ? createMotionRootPose()
-        : resolveMotionItem(graph, sourceLayout, source.parentItemId, boundary.timeMs)?.pose
-      const from = createAttachment(source, current.pose, sourceParentPose, sourceLayout)
-      const to = createStaticAttachment(after, boundary.after, endpointAfter)
       const activeSegment = directIntent === undefined
         && !isReparented(before, after)
         ? findContinuingSegment(graph.tracksByItem.get(itemId), boundary.timeMs)
         : undefined
       if (activeSegment !== undefined) {
-        const destinationAtBoundary = resolveAttachment(
-          to,
-          boundary.after,
+        operations.push({
+          kind: 'retarget',
+          boundary,
           itemId,
-          (parentItemId, context) => resolveBoundaryParent(
-            graph,
-            boundary.before,
-            structuralAfter,
-            boundary.after,
-            parentItemId,
-            boundary.timeMs,
-            context,
-          ),
-          false,
-        )
-        const phase = resolveSegmentProgress(activeSegment, boundary.timeMs)
-        const retargetedFrom = extrapolateMotionPoseAtProgress(current.pose, destinationAtBoundary, phase, activeSegment.path)
-        const segments = mutableTracks.get(itemId) ?? []
-        const index = segments.findIndex((segment) => segment.id === activeSegment.id)
-        if (index >= 0) {
-          presentationItemIds.add(itemId)
-          segments[index] = Object.freeze({
-            ...activeSegment,
-            retargets: Object.freeze([
-              ...(activeSegment.retargets ?? []),
-              Object.freeze({
-                at: boundary.timeMs,
-                from: createAttachment(source, retargetedFrom, sourceParentPose, sourceLayout),
-                to,
-              }),
-            ]),
-          })
-          mutableTracks.set(itemId, segments)
-          continue
-        }
+          before,
+          after,
+          structuralAfter,
+          endpointAfter,
+          segmentId: activeSegment.id,
+        })
+        continue
       }
+
+      const segmentId = `${boundary.id}:${itemId}`
+      const from = createAttachment(
+        before,
+        before.rootPose,
+        before.parentItemId === undefined
+          ? createMotionRootPose()
+          : boundary.before.items.get(before.parentItemId)?.rootPose,
+        boundary.before,
+      )
+      const to = createStaticAttachment(after, boundary.after, endpointAfter)
       const segment: MotionSegment = Object.freeze({
-        id: `${boundary.id}:${itemId}`,
+        id: segmentId,
         itemId,
         startAt: boundary.timeMs,
         endAt: boundary.timeMs + (timing.delay ?? 0) + timing.duration,
@@ -132,11 +224,24 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
       segments.push(segment)
       mutableTracks.set(itemId, segments)
       presentationItemIds.add(itemId)
+      operations.push({
+        kind: 'segment',
+        boundary,
+        itemId,
+        before,
+        after,
+        structuralAfter,
+        endpointAfter,
+        segmentId,
+      })
     }
     graph = freezeMotionGraph(mutableTracks, presentationItemIds)
   }
 
-  return freezeMotionGraph(mutableTracks, presentationItemIds)
+  return Object.freeze({
+    graph: freezeMotionGraph(mutableTracks, presentationItemIds),
+    operations: Object.freeze(operations),
+  })
 }
 
 /**
@@ -350,6 +455,27 @@ function resolveMotionPose(
   }
 
   const retarget = resolveSegmentRetarget(segment, timeMs)
+  const keyframeInterval = retarget === undefined
+    ? resolveSegmentKeyframeInterval(segment, timeMs)
+    : undefined
+  if (keyframeInterval !== undefined) {
+    const from = resolveAttachment(
+      keyframeInterval.from,
+      layout,
+      itemId,
+      resolveParent,
+      false,
+    )
+    const to = resolveAttachment(
+      keyframeInterval.to,
+      layout,
+      itemId,
+      resolveParent,
+      false,
+    )
+    return interpolateMotionPose(from, to, keyframeInterval.progress, segment.path)
+  }
+
   const from = resolveAttachment(retarget?.from ?? segment.from, layout, itemId, resolveParent, false)
   const to = resolveAttachment(
     retarget?.to ?? segment.to,
@@ -463,6 +589,32 @@ function createStaticAttachment(
     fallbackRootPose: decomposeRootMotionPose(fallbackSnapshot.rootPose),
     context: createAttachmentContext(snapshot, contextSnapshot),
   })
+}
+
+/** Builds one segment's measured pose intervals from the same player captures. */
+function createSegmentKeyframes(
+  segment: MotionSegment,
+  boundary: MotionBoundary,
+  from: MotionAttachment,
+  to: MotionAttachment,
+): readonly MotionKeyframe[] | undefined {
+  const activeStartAt = segment.startAt + segment.delay
+  const measured = (boundary.keyframes ?? [])
+    .filter((snapshot) => snapshot.timeMs > activeStartAt && snapshot.timeMs < segment.endAt)
+    .map((snapshot) => {
+      const item = snapshot.items.get(segment.itemId)
+      return item === undefined
+        ? undefined
+        : Object.freeze({ at: snapshot.timeMs, attachment: createStaticAttachment(item, snapshot) })
+    })
+    .filter((entry): entry is MotionKeyframe => entry !== undefined)
+  if (measured.length === 0) return undefined
+
+  const entries: MotionKeyframe[] = [Object.freeze({ at: segment.startAt, attachment: from })]
+  if (segment.delay > 0) entries.push(Object.freeze({ at: activeStartAt, attachment: from }))
+  entries.push(...measured)
+  entries.push(Object.freeze({ at: segment.endAt, attachment: to }))
+  return Object.freeze(entries.sort((left, right) => left.at - right.at))
 }
 
 /** Resolves the endpoint constraints used to stack one active reparent overlay. */
@@ -597,7 +749,62 @@ function resolveSegmentRetarget(segment: MotionSegment, timeMs: number): MotionR
 
 /** Resolves one segment's eased progress from absolute logical time. */
 function resolveSegmentProgress(segment: MotionSegment, timeMs: number): number {
+  if (resolveSegmentRetarget(segment, timeMs) === undefined) {
+    const keyframeInterval = resolveSegmentKeyframeInterval(segment, timeMs)
+    if (keyframeInterval !== undefined) return keyframeInterval.progress
+  }
   return resolveTweenProgress(segment.tween, timeMs - segment.startAt)
+}
+
+/** Finds the measured pose interval containing one time, including delay hold. */
+function resolveSegmentKeyframeInterval(
+  segment: MotionSegment,
+  timeMs: number,
+): Readonly<{
+  from: MotionAttachment
+  to: MotionAttachment
+  progress: number
+}> | undefined {
+  const keyframes = segment.keyframes
+  if (keyframes === undefined || keyframes.length < 2) return undefined
+  const first = keyframes[0]!
+  if (timeMs <= first.at) return { from: first.attachment, to: first.attachment, progress: 0 }
+  for (let index = 1; index < keyframes.length; index += 1) {
+    const to = keyframes[index]!
+    const from = keyframes[index - 1]!
+    if (timeMs > to.at) continue
+    const duration = to.at - from.at
+    const progress = duration <= 0 ? 1 : Math.min(1, Math.max(0, (timeMs - from.at) / duration))
+    return { from: from.attachment, to: to.attachment, progress }
+  }
+  const last = keyframes[keyframes.length - 1]!
+  return { from: last.attachment, to: last.attachment, progress: 1 }
+}
+
+/** Replaces one prepared segment while preserving the rest of the graph. */
+function replaceMotionSegment(
+  graph: MotionGraph,
+  itemId: string,
+  segmentId: string,
+  replacement: MotionSegment | undefined,
+): MotionGraph {
+  const tracks = new Map<string, MotionSegment[]>()
+  for (const [trackItemId, track] of graph.tracksByItem) {
+    tracks.set(trackItemId, [...track.segments])
+  }
+
+  const segments = tracks.get(itemId)
+  if (segments === undefined) return graph
+  const index = segments.findIndex((segment) => segment.id === segmentId)
+  if (index < 0) return graph
+
+  if (replacement === undefined) segments.splice(index, 1)
+  else segments[index] = replacement
+  if (segments.length === 0) tracks.delete(itemId)
+
+  const presentationItemIds = new Set(graph.presentationItemIds)
+  if (segments.length === 0) presentationItemIds.delete(itemId)
+  return freezeMotionGraph(tracks, presentationItemIds)
 }
 
 /** Freezes mutable planner tracks into the public graph contract. */
@@ -624,6 +831,7 @@ function freezeMotionGraph(
       from: segment.from,
       to: segment.to,
       retargets: segment.retargets,
+      keyframes: segment.keyframes,
       materializerOwned: segment.materializerOwned,
       path: segment.path,
     })),

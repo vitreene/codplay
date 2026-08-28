@@ -33,6 +33,7 @@ export type {
   MotionBoundary,
   MotionGraph,
   MotionIntent,
+  MotionKeyframe,
   MotionPresentationMode,
   MotionSegment,
   OverlayStackingContext,

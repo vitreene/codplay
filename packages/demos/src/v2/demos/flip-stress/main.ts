@@ -145,6 +145,20 @@ function responsiveVerticalStyle(
 	};
 }
 
+/** Creates one declarative CSS rotation tween toward a target angle. */
+function rotationTransitionStyle(
+	toDegrees: number,
+	duration: number,
+): Readonly<Record<string, unknown>> {
+	return {
+		rotate: {
+			to: `${toDegrees}deg`,
+			duration,
+			ease: 'linear',
+		},
+	};
+}
+
 /** Creates a repeatable pseudo-random source for one content identifier. */
 function createDeterministicRandom(seed: string): () => number {
 	let state = 2166136261;
@@ -220,10 +234,14 @@ function createStressScene(): SceneDoc {
 						initial: {
 							move: '@root',
 							markup: containerMarkup('A', 'source haut gauche', 'stress-a-outlet', 'stress-container--a'),
+							style: { rotate: '-15deg' },
 						},
 						actions: {
 							moveA: {
-								style: responsiveVerticalStyle('top', '5%', '28%', CONTAINER_DURATION_MS),
+								style: {
+									...responsiveVerticalStyle('top', '5%', '28%', CONTAINER_DURATION_MS),
+									...rotationTransitionStyle(10, CONTAINER_DURATION_MS),
+								},
 							},
 						},
 					},
@@ -233,10 +251,14 @@ function createStressScene(): SceneDoc {
 						initial: {
 							move: '@root',
 							markup: containerMarkup('B', 'cible haut droite', 'stress-b-outlet', 'stress-container--b'),
+							style: { rotate: '12deg' },
 						},
 						actions: {
 							moveB: {
-								style: responsiveVerticalStyle('top', '36%', '13%', CONTAINER_DURATION_MS),
+								style: {
+									...responsiveVerticalStyle('top', '36%', '13%', CONTAINER_DURATION_MS),
+									...rotationTransitionStyle(-8, CONTAINER_DURATION_MS),
+								},
 							},
 						},
 					},
@@ -246,12 +268,14 @@ function createStressScene(): SceneDoc {
 						initial: {
 							move: '@off',
 							markup: containerMarkup('C', 'source bas gauche', 'stress-c-outlet', 'stress-container--c'),
+							style: { rotate: '-10deg' },
 						},
 						actions: {
 							revealC: {
 								move: '@root',
 								style: {
 									...responsiveVerticalStyle('bottom', '5%', '28%', SECONDARY_CONTAINER_DURATION_MS),
+									...rotationTransitionStyle(14, 5_000),
 									opacity: { from: 0, to: 1, duration: REVEAL_OPACITY_DURATION_MS, ease: 'linear' },
 								},
 							},
@@ -263,6 +287,7 @@ function createStressScene(): SceneDoc {
 						initial: {
 							move: '@off',
 							markup: containerMarkup('D', 'cible bas droite', 'stress-d-outlet', 'stress-container--d'),
+							style: { rotate: '9deg' },
 						},
 						actions: {
 							revealD: {
@@ -274,6 +299,7 @@ function createStressScene(): SceneDoc {
 										'min(75%, calc(100% - var(--stress-container-size)))',
 										SECONDARY_CONTAINER_DURATION_MS,
 									),
+									...rotationTransitionStyle(-13, 6_000),
 									opacity: { from: 0, to: 1, duration: REVEAL_OPACITY_DURATION_MS, ease: 'linear' },
 								},
 							},

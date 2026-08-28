@@ -107,7 +107,10 @@ function applyCommittedBoundaryStartSnapshot(
   // but the natural layout must expose its afterStart slot to active segments
   // that use the current destination before a later reflow boundary.
   for (const itemId of directItemIds) {
-    const committedItem = committedAfter.items.get(itemId)
+    // The destination may not be mounted in afterStart yet. In that case the
+    // direct mover still has a valid destination relation in LAST; retain it
+    // in the prepared natural layout instead of leaving the mover at FIRST.
+    const committedItem = boundary.afterStart?.items.get(itemId) ?? boundary.after.items.get(itemId)
     if (committedItem !== undefined && selectedItemIds.has(itemId)) {
       currentItems.set(itemId, committedItem)
     }

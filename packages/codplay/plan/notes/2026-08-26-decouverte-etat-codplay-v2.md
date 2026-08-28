@@ -472,6 +472,10 @@ Pour tout prochain changement :
    Play, Seek, resize, persistance et lifecycle ;
 6. vérifier qu'aucune lecture DOM systématique ni création DOM continue n'a été
    introduite ;
+   les appels directs à `getBoundingClientRect()` sont interdits dans le
+   circuit FLIP/DND V2, y compris pendant la capture des frontières ; ils
+   doivent passer par `captureHtmlPose()`. L'appel interne de cette primitive
+   est le point navigateur autorisé et son contexte en mémorise le résultat ;
 7. exécuter test, typecheck, build et `git diff --check`, puis la validation
    navigateur nécessaire ;
 8. mettre à jour le plan, la spécification ciblée et le statut avant de dire

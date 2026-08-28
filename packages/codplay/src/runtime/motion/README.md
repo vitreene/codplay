@@ -40,7 +40,9 @@ temps absolu `t`.
   du mover et au contexte temporel de sa destination. Pour une transition de
   pose portée par une action, FIRST est capturé dans l'état monté à `start` si
   nécessaire, puis LAST à son endpoint ; cette transition ne devient pas un
-  reflow FLIP ;
+  reflow FLIP. Si plusieurs propriétés de l'action ont des fins différentes,
+  les snapshots `keyframes` conservent aussi leurs temps de fin intermédiaires ;
+  ces états sont résolus et présentés par le player avant d'être mesurés ;
 - `ItemMotionTrack` contient les segments chronologiques d'un élément ;
 - `MotionAttachment` décrit le parent, la cible, la pose locale, le contexte de
   positions FIRST/LAST de l'item et de ses ancêtres, ainsi qu'un fallback vers
@@ -86,6 +88,35 @@ live terminée et après un resize. Il contient les transitions `move.transition
 et les transitions d'action qui produisent une pose géométrique. La géométrie
 naturelle est capturée aux frontières FIRST/LAST correspondantes ou après une
 invalidation structurelle explicite, puis conservée comme donnée.
+
+Pour chaque frontière, la capture présente successivement les scènes résolues
+par le player aux points `before`, `afterStart`, aux fins intermédiaires de
+propriétés et à `after`, sur le même DOM auteur. Elle mesure alors ces états et
+ne conserve que leurs poses. Le planning HTML ne relit pas une transition CSS
+parallèle : le résolveur d'action ne fournit que les temps à capturer, tandis
+que la scène et les valeurs courantes viennent du pipeline canonique.
+
+La préparation du graphe est terminée avant la première présentation. Elle
+enregistre d'abord tous les propriétaires de trajectoire, y compris ceux qui
+commencent plus tard mais dont la pose est nécessaire à un enfant déjà en
+mouvement. Elle résout ensuite les poses des segments dans l'ordre temporel.
+Ainsi, un retarget de `Qa` ne peut pas figer la pose finale de `K` simplement
+parce que le segment de `K` n'avait pas encore été parcouru. Cette organisation
+est interne au planificateur : elle n'ajoute pas de seconde API ni de second
+circuit d'événements.
+
+Après cette préparation, `present(t)` ne construit pas le graphe et ne mesure
+pas les ancêtres. Il sélectionne le layout naturel préparé, suit les relations
+parent/enfant déjà enregistrées et calcule la pose interpolée à `t`. La remontée
+jusqu'à `root` peut donc encore être nécessaire pour composer une pose, mais
+elle ne découvre aucune structure et ne consulte pas le DOM. Une nouvelle
+préparation n'est déclenchée qu'après une nouvelle capture ou une invalidation
+explicite, notamment un resize ou une modification structurelle utilisateur.
+
+La capture des points intermédiaires est finie avant la première frame de
+lecture. La RAF de lecture ne fait plus que sélectionner et interpoler les
+poses conservées ; elle ne présente pas successivement des scènes historiques
+et n'effectue aucune mesure.
 
 Une intention directe conserve son délai et son timing. Les éléments réordonnés
 utilisent le timing effectif le plus long de la frontière. Un changement de

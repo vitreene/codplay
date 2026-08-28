@@ -20,6 +20,8 @@ export type ScheduledMotionIntent = Readonly<{
   path?: Path
   /** Whether this movement may create target-sibling reflow segments. */
   targetReflow: boolean
+  /** Absolute times at which the resolved pose must be captured. */
+  keyTimes?: readonly number[]
 }>
 
 /** One action-owned transition that can contribute to a materialized pose. */
@@ -31,6 +33,8 @@ export type MotionScheduleTransition = Readonly<{
   path?: Path
   /** Move transitions reflow their source/target lists; pose transitions do not by default. */
   targetReflow?: boolean
+  /** Relative endpoints of all property transitions contributing to this action. */
+  captureOffsetsMs?: readonly number[]
 }>
 
 /** Selects which journaled facts participate in one motion schedule. */
@@ -54,7 +58,8 @@ export function compileMotionSchedule(
         const itemId = `${storyId}:${perso.id}`
         const eventId = `${itemId}:${event.name}:${event.declarationPath.join('.')}`
         const moveTransition = readTransition(action?.move)
-        const transition = moveTransition ?? options.resolveActionTransition?.(action)
+        const poseTransition = options.resolveActionTransition?.(action)
+        const transition = mergeMotionScheduleTransitions(moveTransition, poseTransition)
         if (transition === undefined) continue
         const intent = createMotionIntent({
           id: `motion:${eventId}:${event.startAt}`,
@@ -77,7 +82,9 @@ export function compileMotionSchedule(
         const story = scene.scene.stories[target.storyId]
         const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
         const action = resolveAction(perso?.actions[event.name], event.data)
-        const transition = readTransition(action?.move) ?? options.resolveActionTransition?.(action)
+        const moveTransition = readTransition(action?.move)
+        const poseTransition = options.resolveActionTransition?.(action)
+        const transition = mergeMotionScheduleTransitions(moveTransition, poseTransition)
         if (transition === undefined) continue
         const itemId = `${target.storyId}:${target.persoId}`
         const declarationPath = Object.freeze([Number.MAX_SAFE_INTEGER, event.eventSeq])
@@ -133,8 +140,15 @@ function createMotionIntent(input: Readonly<{
     flipMode?: MoveFlipMode
     path?: Path
     targetReflow?: boolean
+    captureOffsetsMs?: readonly number[]
   }>
 }>): ScheduledMotionIntent {
+  const delay = input.transition.delay ?? 0
+  const endOffsetMs = delay + input.transition.duration
+  const captureOffsetsMs = uniqueSortedNumbers([
+    endOffsetMs,
+    ...(input.transition.captureOffsetsMs ?? []),
+  ])
   return Object.freeze({
     id: input.id,
     eventId: input.eventId,
@@ -142,11 +156,14 @@ function createMotionIntent(input: Readonly<{
     declarationPath: Object.freeze([...input.declarationPath]),
     startAt: input.startAt,
     duration: input.transition.duration,
-    delay: input.transition.delay ?? 0,
-    endAt: input.startAt + (input.transition.delay ?? 0) + input.transition.duration,
+    delay,
+    endAt: input.startAt + endOffsetMs,
     ease: input.transition.ease ?? 'out(2)',
     presentationMode: resolvePresentationMode(input.transition.flipMode),
     targetReflow: input.transition.targetReflow ?? false,
+    ...(captureOffsetsMs.length === 0 ? {} : {
+      keyTimes: Object.freeze(captureOffsetsMs.map((offset) => input.startAt + offset)),
+    }),
     ...(input.transition.path === undefined ? {} : { path: input.transition.path }),
   })
 }
@@ -170,6 +187,7 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
   flipMode?: MoveFlipMode
   path?: Path
   targetReflow: boolean
+  captureOffsetsMs: readonly number[]
 }> | undefined {
   if (!isPlainRecord(moveValue)) return undefined
   const move = moveValue as CompiledRecord
@@ -189,6 +207,9 @@ function readTransition(moveValue: CompiledValue | undefined): Readonly<{
     ease: (transition.ease as string | undefined) ?? 'out(2)',
     ...(move.flipMode === undefined ? {} : { flipMode: move.flipMode as MoveFlipMode }),
     targetReflow: true,
+    captureOffsetsMs: Object.freeze([
+      transition.duration + (transition.delay === undefined ? 0 : transition.delay as number),
+    ]),
     ...(transition.path === undefined ? {} : { path: transition.path as Path }),
   })
 }
@@ -199,6 +220,27 @@ function readNonNegativeNumber(value: unknown, label: string): number {
     throw new Error(`${label} must be a finite non-negative number.`)
   }
   return value
+}
+
+/** Merges move timing with every pose-transition endpoint in the same action. */
+function mergeMotionScheduleTransitions(
+  moveTransition: MotionScheduleTransition | undefined,
+  poseTransition: MotionScheduleTransition | undefined,
+): MotionScheduleTransition | undefined {
+  if (moveTransition === undefined) return poseTransition
+  if (poseTransition === undefined) return moveTransition
+  return Object.freeze({
+    ...moveTransition,
+    captureOffsetsMs: Object.freeze(uniqueSortedNumbers([
+      ...(moveTransition.captureOffsetsMs ?? []),
+      ...(poseTransition.captureOffsetsMs ?? []),
+    ])),
+  })
+}
+
+/** Sorts finite capture offsets and removes duplicate points. */
+function uniqueSortedNumbers(values: readonly number[]): number[] {
+  return [...new Set(values.filter((value) => Number.isFinite(value)))].sort((left, right) => left - right)
 }
 
 /** Maps the public presentation choice to the graph's structural terminology. */

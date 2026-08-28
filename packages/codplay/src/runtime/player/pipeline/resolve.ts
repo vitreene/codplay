@@ -13,6 +13,7 @@ import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '
 import { selectEffectiveMove } from '../../move/move-policy'
 import { isActionSequence, isTweenAction } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
+import { resolveStyleTweenTiming } from './style-timing'
 import type { MaterializedPerso, MaterializedScene, ResolvedPerso, ResolvedScene } from './types'
 
 /** Resolves discrete patches and continuous ACE values for one materialized scene. */
@@ -171,12 +172,12 @@ function resolveStyleValue(
   if (!isTweenValue(to)) throw new Error('Resolve only supports scalar or color style tweens.')
   const from = value.from ?? current
   if (!isTweenValue(from)) throw new Error('Resolve requires an explicit or materialized tween from.')
+  const timing = resolveStyleTweenTiming(value)
+  if (timing === undefined) throw new Error('Resolve requires a style tween declaration.')
   const tween = prepareTween({
     from,
     to,
-    duration: typeof value.duration === 'number' ? value.duration : undefined,
-    delay: typeof value.delay === 'number' ? value.delay : undefined,
-    ease: typeof value.ease === 'string' ? value.ease : undefined,
+    ...timing,
   })
   return resolveTween(tween, elapsedMs) as CompiledValue
 }
@@ -196,13 +197,13 @@ function resolveTransformStyleValue(
   if (value.from !== undefined && from === undefined) {
     throw new Error(`Transform channel ${property} requires a scalar from value.`)
   }
+  const timing = resolveStyleTweenTiming(value)
+  if (timing === undefined) throw new Error('Resolve requires a transform tween declaration.')
   return resolveTween(prepareTransformTween({
     property,
     from,
     to: value.to,
-    duration: typeof value.duration === 'number' ? value.duration : undefined,
-    delay: typeof value.delay === 'number' ? value.delay : undefined,
-    ease: typeof value.ease === 'string' ? value.ease : undefined,
+    ...timing,
   }), elapsedMs) as CompiledValue
 }
 

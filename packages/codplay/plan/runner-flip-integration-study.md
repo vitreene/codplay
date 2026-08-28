@@ -102,8 +102,8 @@ CompiledScene ---------->| StructuralTimeline   |
        +-> compileMotionSchedule    |
                     |               |
                     v               v
-             event boundaries -> position capture on visible author nodes
-                                      | before / after data snapshots
+             event boundaries -> key-point capture on visible author nodes
+                                      | before / after / intermediate snapshots
                                       v
                                 buildMotionGraph
                                       |
@@ -165,16 +165,18 @@ Fichiers :
 
 La capture géométrique lit les nodes auteur persistants du root visible. Elle ne
 crée ni root hors écran, ni `RuntimePlayer`, ni `RuntimeEngine`, ni
-`RuntimeComponentMaterializer` auxiliaire. Pour chaque frontière, une phase de
-capture présente successivement les états purs `before` et `after` sur les mêmes
-materialisations, puis ne conserve que leurs données géométriques. Pour un
-`move`, FIRST est pris au temps logique `startAt` avant le commit et LAST à
+`RuntimeComponentMaterializer` auxiliaire. Pour chaque frontière, le player
+résout et présente successivement les états `before`, `afterStart`, les points
+de fin intermédiaires nécessaires et `after` sur les mêmes materialisations ; la
+capture ne conserve ensuite que leurs données géométriques. Pour un `move`,
+FIRST est pris au temps logique `startAt` avant le commit et LAST à
 `startAt + delay + duration`. Pour une action de pose, les mêmes bornes sont
 utilisées selon le délai et la durée compilés.
 
 Cette phase est une transaction interne au runner : elle suspend les effets de
 lecture, retire d'abord les contributions transitoires de la présentation
-précédente, puis ne déclenche ni `play()`, ni rechargement de source, ni
+précédente, puis utilise le circuit de résolution du player pour présenter
+chaque point. Elle ne déclenche ni `play()`, ni rechargement de source, ni
 destruction de composant. Elle restaure ensuite l'état courant du player avant
 toute lecture ou seek visible.
 
@@ -196,13 +198,26 @@ posséder une transition ; ils ne reçoivent pas automatiquement une seconde
 trajectoire parce qu'un descendant les utilise. Les branches sans rapport ne
 sont pas capturées.
 
-La géométrie du navigateur reste nécessaire : une simple position logique ne
-remplace pas les dimensions, matrices, transforms hérités, flex/grid, contenus
-intrinsèques ou pourcentages calculés par le materializer HTML.
+Les dimensions, matrices, transforms hérités, flex/grid, contenus intrinsèques
+et pourcentages nécessaires à une pose sont fournis par la primitive HTML
+`captureHtmlPose(node, context)` dans `src/runtime/motion/html-pose.ts`. Cette
+primitive produit uniquement des données numériques et mémorise, dans le
+`HtmlPoseCaptureContext` de la capture explicite, la géométrie de chaque
+ancêtre déjà parcouru. `SolvedGraph` reste l'unique source de structure,
+parentage, target et ordre.
 
-La capture peut lire le DOM visible pendant cette phase explicite ; le DOM reste
-une source de géométrie uniquement. `SolvedGraph` reste l'unique source de
-structure, parentage, target et ordre.
+FLIP et DND doivent appeler cette primitive ou un adaptateur qui en consomme
+la pose ; ils ne lisent jamais directement `getBoundingClientRect()`. L'appel
+interne à `getBoundingClientRect()` de `captureHtmlPose()` est autorisé : il
+sert à récupérer la mesure navigateur nécessaire, une seule fois par élément
+et par contexte, notamment pour conserver les positions fractionnaires. Il ne
+constitue pas une seconde méthode de mesure.
+
+L'adaptation spécifique au FLIP transitoire est
+`captureHtmlTransientRects()`, dans `runner-html/transient-flip.ts`. Elle part
+de `captureHtmlPose()` et retire uniquement la transformation transitoire déjà
+écrite par la preview DND. Elle ne recalcule ni les ancêtres ni une géométrie
+concurrente.
 
 ### 3 bis. Activation conditionnelle
 
@@ -248,9 +263,15 @@ type MotionSegment = {
   presentationMode: 'local' | 'reparent'
   from: MotionAttachment
   to: MotionAttachment
+  keyframes?: readonly MotionKeyframe[]
   direct: boolean
 }
 ```
+
+`keyframes` contient les poses mesurées aux fins intermédiaires de propriétés
+qui ne se terminent pas avec le segment principal. Elles sont des données de
+capture, pas une nouvelle description de scène : chaque pose est produite par
+le player puis matérialisée et mesurée avant la lecture.
 
 Un enfant dont l'attachement local ne change pas ne reçoit pas une trajectoire
 dupliquée : il suit récursivement la pose résolue de son parent. Cette règle ne
@@ -313,6 +334,13 @@ pas remplacer la timeline naturelle de sa propre transition.
 
 `resolvePresentationFrame(graph, currentLayout, t)` est pur. Son résultat ne
 dépend pas des temps précédemment visités.
+
+Les points intermédiaires ne sont pas produits par un résolveur de transition
+parallèle. Le planning ne fait qu'énumérer les temps de fin des propriétés ; le
+player résout la scène à chacun de ces temps, le materializer l'applique au DOM
+auteur persistant et `captureHtmlPose()` en mesure la pose. Une fois cette
+préparation terminée, la RAF de lecture n'effectue plus de présentation
+historique ni de lecture DOM.
 
 Le layout courant est fourni par la timeline de snapshots capturés aux bornes.
 Les mouvements auteur continus sont représentés par leurs propres segments dans
@@ -435,6 +463,9 @@ Le dossier `src/runtime/flip` a été supprimé. La géométrie restante vit dan
     à l'écran : source masquée avant l'insertion/révélation du clone, clone
     masqué avant toute révélation de source, et clone retiré avant la révélation
     finale de la source.
+18. Chaque point clé géométrique est produit par une résolution du player
+    canonique présentée sur les nœuds auteur persistants ; le graphe ne contient
+    ensuite que les poses mesurées et la RAF ne mesure jamais le DOM.
 
 ## Validation appliquée
 
@@ -521,8 +552,10 @@ corrigent uniquement les contraintes responsive de la fixture.
 ## État de revue
 
 Le graphe, ses frontières et son résolveur restent le contrat de la tranche
-HTML. La mesure par second arbre DOM est proscrite ; la capture géométrique
-transactionnelle décrite ci-dessus est le seul chemin HTML. Les materializers
+HTML. La mesure par second arbre DOM est proscrite. Les appels directs à
+`getBoundingClientRect()` sont interdits dans le chemin FLIP ; ils doivent
+passer par `captureHtmlPose()`. Son implémentation interne est le point de
+mesure navigateur autorisé. Les materializers
 SVG, Canvas et Three.js relèvent de tranches ultérieures et ne conditionnent pas
 ce chantier.
 
@@ -804,6 +837,39 @@ persistance des représentations. Elle n'est pas un endroit où compenser une
 lacune du runner : son scénario rend le cas limite observable ; toute
 divergence doit être corrigée dans le pipeline V2 ou signalée comme un écart de
 contrat avant modification.
+
+La fixture ajoute aussi une rotation CSS progressive aux quatre conteneurs afin
+de vérifier la composition des poses dans un contexte transformé. Les
+transitions utilisent des angles non nuls et distincts : A `−15° → +10°`, B
+`+12° → −8°`, C `−10° → +14°` et D `+9° → −13°`. Chaque extrémité reste
+comprise entre `5°` et `15°` en valeur absolue. Le départ est fourni par
+`initial.style.rotate`, puis l'action ne déclare que sa cible `rotate.to` ; A et
+B tournent avec leur déplacement, tandis que les rotations de C et D durent
+respectivement `5000 ms` et `6000 ms`. Leur opacité d'apparition reste une
+transition distincte de `360 ms`.
+
+### Vérification de l'ordre au LAST — 2026-08-28
+
+Une vérification ciblée dans Safari a demandé le seek vers le LAST de chacun
+des onze échanges de contenu (`Qa…Qf` et `Ka…Kf`), puis vers quelques
+millisecondes après chaque frontière. Le contrôle porte sur l'ordre des enfants
+des listes sources et sur l'identifiant des overlays encore actifs.
+
+À chaque frontière contrôlée, l'élément qui venait de terminer était présent
+dans la liste cible au rang attendu par la politique d'insertion ; le ghost
+encore actif appartenait à l'échange suivant. Aucun élément terminé n'a été
+maintenu dans un overlay après sa frontière, et aucun doublon visible n'a été
+observé dans cette séquence. Le décalage de quelques millisecondes entre la
+valeur demandée et la valeur de la télécopie vient du tick de lecture, pas d'un
+recalcul d'index.
+
+Le chemin vérifié reste celui du runner : la réconciliation de l'ordre logique
+est effectuée avant `presentMotion()`, puis le host retire le ghost avant de
+révéler la source. Aucun correctif d'index n'est donc appliqué sur la seule
+base de ce symptôme non reproduit. Le risque d'un recouvrement intermittent
+au moment d'une libération reste un point ouvert à reprendre uniquement avec
+une reproduction enregistrée ; il ne justifie ni un réordonnancement à chaque
+frame ni une modification générale du host.
 
 ### Vérification manuelle Safari MCP — 2026-08-26
 

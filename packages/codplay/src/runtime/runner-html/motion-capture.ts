@@ -14,6 +14,7 @@ import type {
   ScheduledMotionIntent,
 } from '../motion'
 import { buildSolvedGraph, type SolvedPerso, type SolvedScene } from '../player'
+import { resolveStyleTweenTiming, type StyleTweenTiming } from '../player/pipeline'
 import { isPlainRecord } from '../../shared'
 import type { CompiledRecord } from '../../scene/compiled'
 
@@ -74,24 +75,29 @@ export function resolveHtmlMotionActionTransition(
 ): MotionScheduleTransition | undefined {
   if (action === undefined || !isPlainRecord(action.style)) return undefined
 
-  let selected: MotionScheduleTransition | undefined
+  const transitions: StyleTweenTiming[] = []
   for (const [property, value] of Object.entries(action.style)) {
     if (!isHtmlMotionProperty(property)) continue
-    const transition = readStyleTransition(value)
-    if (transition === undefined) continue
-    const selectedEnd = selected === undefined
-      ? Number.NEGATIVE_INFINITY
-      : (selected.delay ?? 0) + selected.duration
-    const transitionEnd = (transition.delay ?? 0) + transition.duration
-    if (selected === undefined || transitionEnd > selectedEnd) selected = transition
+    const timing = resolveStyleTweenTiming(value)
+    if (timing !== undefined) transitions.push(timing)
   }
-  return selected
+  if (transitions.length === 0) return undefined
+
+  const selected = transitions.reduce((longest, timing) => (
+    timing.delay + timing.duration > longest.delay + longest.duration ? timing : longest
+  ))
+  return Object.freeze({
+    ...selected,
+    captureOffsetsMs: Object.freeze([...new Set(transitions
+      .map((timing) => timing.delay + timing.duration))].sort((left, right) => left - right)),
+  })
 }
 
 /**
  * Presents each compiled boundary on one persistent visible host and retains
- * only its before/after geometry. No player, engine, materializer or DOM tree
- * is created by this operation.
+ * only its captured geometry. The player resolves the same scene at each
+ * declared endpoint before the DOM pose is measured; no player, engine,
+ * materializer or DOM tree is created by this operation.
  */
 export function captureHtmlMotionBoundaries(input: Readonly<{
   player: RuntimePlayer
@@ -122,11 +128,17 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       // startAt is earlier than endAt. The same boundary data is then consumed
       // by Play and Seek.
       const afterScene = input.player.resolveSceneBeforeBoundary(group.endAt, input.includePersistOnly)
+      const keyTimes = resolveIntermediateKeyTimes(group.intents, group.startAt, group.endAt)
+      const keyScenes = keyTimes.map((timeMs) => Object.freeze({
+        timeMs,
+        scene: input.player.resolveSceneBeforeBoundary(timeMs, input.includePersistOnly),
+      }))
       const selection = mergeSelections(
         collectBoundarySelection(beforeScene, afterScene, group.intents),
         afterStartScene === undefined
           ? []
           : collectBoundarySelection(beforeScene, afterStartScene, group.intents),
+        ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents)),
       )
 
       input.player.presentSceneForGeometryCapture(beforeScene)
@@ -134,6 +146,11 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
       const afterStart = afterStartScene === undefined
         ? undefined
         : captureStartLayout(afterStartScene, selection)
+      const keyframes: LayoutSnapshot[] = []
+      for (const { scene } of keyScenes) {
+        input.player.presentSceneForGeometryCapture(scene)
+        keyframes.push(captureCurrentHtmlMotionLayout(input.root, input.nodes, scene, selection))
+      }
       input.player.presentSceneForGeometryCapture(afterScene)
       const missingSourceItemIds = group.structural
         ? resolveMissingSourceItemIds(beforeScene, afterScene, group.intents)
@@ -158,6 +175,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
         before,
         ...(afterStart === undefined ? {} : { afterStart }),
         after,
+        ...(keyframes.length === 0 ? {} : { keyframes: Object.freeze(keyframes) }),
         intents: Object.freeze(intents),
       }))
     }
@@ -177,6 +195,17 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
     input.player.presentSceneForGeometryCapture(scene)
     return captureCurrentHtmlMotionLayout(input.root, input.nodes, scene, selection)
   }
+}
+
+/** Resolves the property endpoints that fall strictly inside one boundary. */
+function resolveIntermediateKeyTimes(
+  intents: readonly ScheduledMotionIntent[],
+  startAt: number,
+  endAt: number,
+): readonly number[] {
+  return Object.freeze([...new Set(intents.flatMap((intent) => intent.keyTimes ?? []))]
+    .filter((timeMs) => timeMs > startAt && timeMs < endAt && Number.isFinite(timeMs))
+    .sort((left, right) => left - right))
 }
 
 /** Unions the selected branches required by two boundary layout states. */
@@ -431,21 +460,4 @@ function isHtmlMotionProperty(property: string): boolean {
   if (property === 'transform' || property === 'translate' || property === 'rotate' || property === 'scale') return true
   const canonical = canonicalTransformProperty(property)
   return canonical !== undefined && isScalarTransformProperty(canonical)
-}
-
-/** Reads one action style tween timing without evaluating or materializing it. */
-function readStyleTransition(value: unknown): MotionScheduleTransition | undefined {
-  if (!isPlainRecord(value) || !('to' in value)) return undefined
-  const rawDuration = value.duration
-  const duration = rawDuration === undefined ? 1000 : rawDuration
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return undefined
-  const rawDelay = value.delay
-  const delay = rawDelay === undefined ? 0 : rawDelay
-  if (typeof delay !== 'number' || !Number.isFinite(delay) || delay < 0) return undefined
-  if (value.ease !== undefined && typeof value.ease !== 'string') return undefined
-  return Object.freeze({
-    duration,
-    delay,
-    ease: typeof value.ease === 'string' ? value.ease : 'out(2)',
-  })
 }

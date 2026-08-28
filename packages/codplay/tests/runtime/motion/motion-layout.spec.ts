@@ -92,6 +92,44 @@ describe('natural motion layout timeline', () => {
     expect(natural.items.get('sibling')?.rootPose.origin.x).toBe(0)
   })
 
+  it('commits a direct mover from LAST when its target is absent at afterStart', () => {
+    const before = createSnapshot(1_200, 'missing-target-before', [
+      createItem('source', 0),
+      createNestedItem('moving', 'source', 'source-content', 0, 0),
+    ])
+    const afterStart = createSnapshot(1_200, 'missing-target-after-start', [
+      createItem('source', 0),
+      createItem('target', 300),
+    ])
+    const after = createSnapshot(2_075, 'missing-target-after', [
+      createItem('source', 0),
+      createItem('target', 300),
+      createNestedItem('moving', 'target', 'target-content', 0, 300),
+    ])
+    const intent: MotionIntent = {
+      id: 'move:missing-target',
+      itemId: 'moving',
+      startAt: 1_200,
+      duration: 875,
+      ease: 'linear',
+      presentationMode: 'reparent',
+      targetReflow: true,
+    }
+
+    const timeline = buildNaturalLayoutTimeline([{
+      id: 'boundary:missing-target',
+      timeMs: 1_200,
+      before,
+      afterStart,
+      after,
+      intents: [intent],
+    }])
+    const naturalAtStart = resolveNaturalLayout(timeline, 1_200)
+
+    expect(naturalAtStart.items.get('moving')?.parentItemId).toBe('target')
+    expect(naturalAtStart.items.get('moving')?.targetId).toBe('target-content')
+  })
+
   it('uses the post-boundary slots instead of endpoint slots changed by a later event', () => {
     const before = createSnapshot(1_700, 'before', [
       createItem('list', 0),
