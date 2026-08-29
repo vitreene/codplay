@@ -139,6 +139,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 |---|---|---|
 | Revue priorité 0 des contrats | [`2026-08-20-priority-0-contract-review.md`](./2026-08-20-priority-0-contract-review.md) | Fixe |
 | Façade engine, instances et pilotage | [`facade-engine-instance-plan.md`](./facade-engine-instance-plan.md) | En cours : contrat validé le 2026-08-26, implémentation engagée |
+| Inactivité du player | [`idle-inactivity-plan.md`](./idle-inactivity-plan.md) | Fini pour le monitor core V2 ; l’adaptateur d’inactivité de fenêtre reste hors cœur |
 | CompiledScene, guards et deriveurs | [`compiled-scene-plan.md`](./compiled-scene-plan.md) | En cours, tranche initiale relue |
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fini pour la tranche HTML V2; autres materializers reportés |

@@ -76,6 +76,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
       this.registerResourceData(config.resources)
       this.runtimeEngine = new RuntimeEngine(this.catalog, {
         resources: config.resources === undefined ? [] : resourceUrls(config.resources),
+        idle: config.idle,
       })
 
     } catch (error) {

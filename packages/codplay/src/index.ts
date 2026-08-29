@@ -12,6 +12,8 @@ export type {
   CodPlayDiagnosticListener,
   CodPlayEngine,
   CodPlayEngineOptions,
+  CodPlayIdleEvent,
+  CodPlayIdleOptions,
   CodPlayEventime,
   CodPlayEventimeTarget,
   CodPlayEventInput,
@@ -81,3 +83,14 @@ export type {
   RuntimePreloadState,
   RuntimePreloadStrategy,
 } from './runtime/preload'
+export {
+  DEFAULT_RUNTIME_IDLE_DURATION_MS,
+  DEFAULT_RUNTIME_IDLE_EVENT_NAME,
+  RuntimeIdleMonitor,
+  resolveRuntimeIdleOptions,
+} from './runtime/idle'
+export type {
+  ResolvedRuntimeIdleOptions,
+  RuntimeIdleEvent,
+  RuntimeIdleOptions,
+} from './runtime/idle'

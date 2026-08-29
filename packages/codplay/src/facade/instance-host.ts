@@ -36,6 +36,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
     engine: options.engine,
+    idle: options.instance.idle,
     functions: options.instance.functions,
     strapCollections: options.instance.strapCollections,
     onPublicEvent: options.onPublicEvent,

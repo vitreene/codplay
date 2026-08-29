@@ -12,6 +12,8 @@ export type {
   CodPlayDiagnosticListener,
   CodPlayEngine,
   CodPlayEngineOptions,
+  CodPlayIdleEvent,
+  CodPlayIdleOptions,
   CodPlayEventime,
   CodPlayEventimeTarget,
   CodPlayEventInput,

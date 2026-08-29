@@ -21,11 +21,12 @@ spec pause/telco a reprendre plus tard :
 [ ] a la reprise play, restaurer l'etat normal des tracks, sauf celles deja inactives avant la pause
 [ ] etudier un namespace ou une famille de tracks dediee au mode pause/suspension
 
-spec inactivite user a reprendre plus tard :
-[ ] garde-fou de fin automatique apres une longue inactivite user configurable (ex: 5 min)
-[ ] definir si l'inactivite se base seulement sur les events recus par le track manager ou aussi sur des signaux globaux (souris, clavier)
-[ ] definir des events `idle` derivables a partir de seuils d'inactivite (ex: 30s -> assombrir la sequence)
-[ ] clarifier si les events idle sont places dans la sequence ou emis par un mecanisme runtime distinct
+spec inactivite user :
+[x] garde-fou configurable du player, actif par defaut a 30 s et desactivable par `idle: false` (voir `packages/codplay/plan/idle-inactivity-plan.md`)
+[x] idle core fonde sur les emissions externes recues par le player ; les signaux globaux (souris, clavier) restent du ressort d'un adaptateur hote
+[x] un seuil idle produit l'event configure, `sequence:end` par defaut
+[x] l'event idle passe par le circuit normal du player et son journal
+[ ] ajouter l'adaptateur de signaux d'inactivite de fenetre (hors coeur CodPlay)
 
 observation runtime a revoir plus tard :
 [ ] separer clairement la phase de mise en place initiale avant t=0 du debut effectif de timeline; retard sporadique observe sur intro dans s4, a reconfirmer avant correction

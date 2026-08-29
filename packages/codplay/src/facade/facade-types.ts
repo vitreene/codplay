@@ -17,6 +17,7 @@ import type {
 } from '../runtime/catalog'
 import type { RuntimeEventInsertMode } from '../runtime/config/event-insertion'
 import type { MountTargetDeclaration, StrapCollections } from '../runtime/player/pipeline'
+import type { RuntimeIdleEvent, RuntimeIdleOptions } from '../runtime/idle'
 import type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
@@ -43,6 +44,12 @@ export type CodPlayResourceRegistration = Readonly<{
   metadata: RuntimePreloadMetadata
 }>
 
+/** Event descriptor emitted when one configured instance remains inactive. */
+export type CodPlayIdleEvent = RuntimeIdleEvent
+
+/** Inactivity policy accepted by the engine and by one player instance. */
+export type CodPlayIdleOptions = RuntimeIdleOptions
+
 /** Configuration dedicated to the CodPlay-owned engine and its capability catalog. */
 export type CodPlayEngineOptions = Readonly<{
   components?: CodPlayCapabilityGroup<RuntimeComponentDefinition>
@@ -50,6 +57,8 @@ export type CodPlayEngineOptions = Readonly<{
   modules?: CodPlayCapabilityGroup<RuntimeModuleServiceDefinition>
   resources?: CodPlayResourceRegistration
   diagnosticOutput?: DiagnosticOutput
+  /** Default inactivity policy inherited by every created instance. */
+  idle?: CodPlayIdleOptions
 }>
 
 /** Host-owned frame scheduling primitive injected into one CodPlay instance. */
@@ -232,6 +241,8 @@ type CodPlayInstanceOptionsBase = Readonly<{
   functions?: CompiledFunctionCollection
   /** Fixed duration from an authoritative media or bounded track; omitted for an open scene. */
   durationMs?: number
+  /** Optional inactivity policy overriding the engine default for this player. */
+  idle?: CodPlayIdleOptions
   mountTargets?: readonly MountTargetDeclaration[]
   /** Optional reusable straps used only by declarations that name external implementations. */
   strapCollections?: StrapCollections

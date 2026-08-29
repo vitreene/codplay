@@ -13,6 +13,11 @@ import {
   type RuntimeModuleServiceInstance,
   type RuntimeModuleServiceSeekHandle,
 } from '../engine'
+import {
+  resolveRuntimeIdleOptions,
+  RuntimeIdleMonitor,
+  type RuntimeIdleOptions,
+} from '../idle'
 import { diffSolvedScenes, type MoveStateDelta } from '../move'
 import {
   PLAYER_LIFECYCLE_DESTROYED,
@@ -154,6 +159,7 @@ export class RuntimePlayer {
   private nextRuntimeEventId = 0
   private readonly diagnosticOutput: DiagnosticOutput | undefined
   private readonly publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  private readonly idleMonitor: RuntimeIdleMonitor
   private readonly observedPublicEventIds = new Set<string>()
   private readonly transportListeners = new Set<() => void>()
 
@@ -171,6 +177,7 @@ export class RuntimePlayer {
     functions: CompiledFunctionCollection = {},
     diagnosticOutput?: DiagnosticOutput,
     publicEventListener?: (event: RuntimeTrackEvent) => void,
+    idle?: RuntimeIdleOptions,
   ) {
     this.id = id
     this.engine = engine
@@ -186,6 +193,9 @@ export class RuntimePlayer {
     this.compiledCaptureActionTargets = indexCompiledCaptureActionTargets(compiledScene)
     this.diagnosticOutput = diagnosticOutput
     this.publicEventListener = publicEventListener
+    this.idleMonitor = new RuntimeIdleMonitor(
+      idle === undefined ? engine.getIdleOptions() : resolveRuntimeIdleOptions(idle),
+    )
   }
 
   /** Returns the current lifecycle state. */
@@ -350,6 +360,7 @@ export class RuntimePlayer {
   /** Starts logical playback without creating a clock or rendering anything. */
   play(): void {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PAUSED)
+    this.idleMonitor.reset()
     if (this.state === PLAYER_LIFECYCLE_PAUSED) {
       this.skipNextDelta = true
       this.renderSync.resume()
@@ -388,6 +399,7 @@ export class RuntimePlayer {
     try {
       this.pendingSolvedScene = undefined
       const engineResult = this.engine.seek([{ instanceId: this.id, timeMs }])
+      this.idleMonitor.reset()
       return { ok: true, timeMs, diagnostics: engineResult.diagnostics[this.id] ?? diagnostics.report() }
     } catch (error) {
       this.pendingSolvedScene = undefined
@@ -446,6 +458,7 @@ export class RuntimePlayer {
       mode: normalized.mode,
     })
     if (!appended.ok) throw new Error(appended.message)
+    this.idleMonitor.reset()
     this.includePersistOnlyInCurrent = normalized.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
     if (normalized.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
       this.synchronizeStateStore(this.currentTimeMs, false)
@@ -457,6 +470,7 @@ export class RuntimePlayer {
   private async emitEvent(
     input: RuntimePlayerEmitInput,
     includePersistOnlyOverride?: boolean,
+    resetIdle = true,
   ): Promise<RuntimeEventDispatchResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
     this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
@@ -472,6 +486,7 @@ export class RuntimePlayer {
       ...input,
       applyAtMs: input.applyAtMs ?? this.currentTimeMs,
     })
+    if (resetIdle && result.events.length > 0) this.idleMonitor.reset()
     if (includePersistOnlyOverride !== undefined) {
       this.includePersistOnlyInCurrent = includePersistOnlyOverride
     } else if (input.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
@@ -705,6 +720,7 @@ export class RuntimePlayer {
       return
     }
     this.currentTimeMs += frame.deltaMs * this.rate
+    if (this.idleMonitor.advance(frame.deltaMs)) this.dispatchIdleEvent()
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
     this.synchronizeStateStoreFromScene(nextSolvedScene)
@@ -716,6 +732,35 @@ export class RuntimePlayer {
     this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
     this.notifyTransportObservers()
+  }
+
+  /** Emits the configured idle event through the ordinary player event circuit. */
+  private dispatchIdleEvent(): void {
+    const event = this.idleMonitor.getEvent()
+    if (event === undefined) return
+    void this.emitEvent({
+      name: event.name,
+      applyAtMs: this.currentTimeMs,
+      data: event.data,
+      visibility: event.visibility,
+      storyId: event.storyId,
+      context: { source: 'idle' },
+    }, undefined, false).then((result) => {
+      if (result.ok) return
+      const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
+      diagnostics.error(
+        'RUNTIME_IDLE_EVENT_FAILED',
+        result.issues.map((issue) => issue.message).join(' ') || 'Configured idle event was rejected.',
+        { context: { eventName: event.name, source: 'idle' } },
+      )
+    }).catch((error: unknown) => {
+      const diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput })
+      diagnostics.error(
+        'RUNTIME_IDLE_EVENT_FAILED',
+        error instanceof Error ? error.message : 'Configured idle event failed.',
+        { context: { eventName: event.name, source: 'idle' } },
+      )
+    })
   }
 
   /** Materializes one scene while keeping authored writes inside the render boundary. */

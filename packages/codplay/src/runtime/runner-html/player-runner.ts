@@ -42,6 +42,7 @@ import type {
   RuntimePreloadFailure,
   RuntimePreloadSuccess,
 } from '../preload'
+import type { RuntimeIdleOptions } from '../idle'
 
 /** One HTML root target mapped to the runner's supplied root element. */
 export type HtmlRootTarget = Readonly<{
@@ -76,6 +77,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   resourceMetadata?: RuntimePreloadMetadata
   engine?: RuntimeEngine
   ticker?: Ticker
+  /** Optional inactivity policy overriding the shared engine default. */
+  idle?: RuntimeIdleOptions
   functions?: CompiledFunctionCollection
   /** Optional reusable straps selected by named declarations in the scene. */
   strapCollections?: StrapCollections
@@ -148,7 +151,10 @@ export class HtmlPlayerRunner {
       this.resourceMetadata.set(url, metadata)
     }
     options.catalog.lock()
-    this.engine = options.engine ?? new RuntimeEngine(options.catalog, { resources: options.resources })
+    this.engine = options.engine ?? new RuntimeEngine(options.catalog, {
+      resources: options.resources,
+      idle: options.idle,
+    })
     this.ownsEngine = options.engine === undefined
     const mountTargets: readonly MountTargetDeclaration[] = options.rootTargets.map((target) => ({
       id: target.id,
@@ -176,6 +182,7 @@ export class HtmlPlayerRunner {
       options.functions,
       undefined,
       options.onPublicEvent,
+      options.idle,
     )
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
       player: this.player,

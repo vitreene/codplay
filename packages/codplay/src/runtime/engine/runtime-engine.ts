@@ -3,6 +3,11 @@ import type { CompiledRequirements, CompiledScene } from '../../scene/compiled'
 import { TimeTicker, type TickPayload, type Ticker } from '../time'
 import { reportMissingCapabilities } from './capability-diagnostics'
 import { RuntimeCapabilityCatalog } from '../catalog'
+import {
+  resolveRuntimeIdleOptions,
+  type ResolvedRuntimeIdleOptions,
+  type RuntimeIdleOptions,
+} from '../idle'
 import type {
   RuntimeModuleServiceContext,
   RuntimeModuleServiceInstance,
@@ -11,6 +16,8 @@ import type {
 /** Optional engine resources supplied beside the unified capability catalog. */
 export type RuntimeEngineOptions = Readonly<{
   resources?: readonly string[]
+  /** Default inactivity policy inherited by players created on this engine. */
+  idle?: RuntimeIdleOptions
 }>
 
 /** One externally supplied engine frame. */
@@ -57,6 +64,7 @@ export class RuntimeEngine {
   private readonly catalog: RuntimeCapabilityCatalog
   private readonly resources = new Set<string>()
   private readonly instances = new Map<string, RuntimeInstance>()
+  private readonly idle: ResolvedRuntimeIdleOptions | false
   private lastNowMs: number | undefined
   private ticker: Ticker | null = null
   private running = false
@@ -68,6 +76,7 @@ export class RuntimeEngine {
   /** Creates one engine around the CodPlay-owned capability catalog. */
   constructor(catalog: RuntimeCapabilityCatalog, options: RuntimeEngineOptions = {}) {
     this.catalog = catalog
+    this.idle = resolveRuntimeIdleOptions(options.idle)
     this.registerResources(options.resources ?? [])
   }
 
@@ -203,6 +212,11 @@ export class RuntimeEngine {
   /** Returns the last accepted engine timestamp for seek baselines. */
   getCurrentNowMs(): number {
     return this.lastNowMs ?? 0
+  }
+
+  /** Returns the normalized inactivity policy inherited by new players. */
+  getIdleOptions(): ResolvedRuntimeIdleOptions | false {
+    return this.idle
   }
 
   /** Reconstructs a selected group and presents all local seek targets once. */
