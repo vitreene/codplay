@@ -27,6 +27,10 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   let stopTargetSubscription: (() => void) | null = null
   let endClampScheduled = false
   let destroyed = false
+  let observedTargetState: Readonly<{
+    status: PlayerLifecycleState
+    sequenceEnded: boolean
+  }> | undefined
 
   /** Reads the fixed or currently discovered duration without clamping the head. */
   function resolveDurationMs(timelineMs: number): number {
@@ -47,10 +51,16 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       durationMs,
       rate: target.getRate(),
       initialized: status !== PLAYER_LIFECYCLE_IDLE && status !== PLAYER_LIFECYCLE_DESTROYED,
-      sequenceEnded: options.durationMs !== undefined && timelineMs >= options.durationMs,
+      sequenceEnded: target.getSequenceEnded?.() === true
+        || (options.durationMs !== undefined && timelineMs >= options.durationMs),
       runtimeRevision,
     }
   }
+
+  observedTargetState = (() => {
+    const state = getState()
+    return { status: state.status, sequenceEnded: state.sequenceEnded }
+  })()
 
   /** Reads the current timeline position and duration without presentation data. */
   function getProgress(): RuntimeTelcoProgress {
@@ -62,13 +72,19 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   function notifyChange(): void {
     runtimeRevision += 1
     const state = getState()
+    observedTargetState = { status: state.status, sequenceEnded: state.sequenceEnded }
     for (const listener of changeListeners) listener(state)
   }
 
-  /** Publishes progress from the target's existing engine/player update. */
+  /** Publishes progress and relays target lifecycle changes from the existing update. */
   function publishProgress(): void {
     if (destroyed) return
-    const state = getState()
+    let state = getState()
+    if (observedTargetState?.status !== state.status
+      || observedTargetState.sequenceEnded !== state.sequenceEnded) {
+      notifyChange()
+      state = getState()
+    }
     for (const listener of [...progressListeners]) {
       try {
         listener(state)
@@ -94,14 +110,15 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     })
   }
 
-  /** Subscribes to the target only while progress listeners exist. */
-  function startProgressObservation(): void {
-    if (destroyed || stopTargetSubscription !== null || progressListeners.size === 0) return
+  /** Subscribes to the target while state or progress listeners exist. */
+  function startTargetObservation(): void {
+    if (destroyed || stopTargetSubscription !== null
+      || (progressListeners.size === 0 && changeListeners.size === 0)) return
     stopTargetSubscription = target.subscribe(publishProgress)
   }
 
-  /** Removes the target subscription when no progress listener remains. */
-  function stopProgressObservation(): void {
+  /** Removes the target subscription when no state or progress listener remains. */
+  function stopTargetObservation(): void {
     stopTargetSubscription?.()
     stopTargetSubscription = null
   }
@@ -179,7 +196,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       if (state.status === PLAYER_LIFECYCLE_DESTROYED || state.status === PLAYER_LIFECYCLE_IDLE) {
         throw new Error(`Runtime telco cannot play from ${state.status} state.`)
       }
-      if (state.sequenceEnded) seekTarget(0)
+      if (state.sequenceEnded && target.getSequenceEnded?.() !== true) seekTarget(0)
       target.play()
     }),
 
@@ -201,7 +218,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
         if (state.status === PLAYER_LIFECYCLE_DESTROYED || state.status === PLAYER_LIFECYCLE_IDLE) {
           throw new Error(`Runtime telco cannot play from ${state.status} state.`)
         }
-        if (state.sequenceEnded) seekTarget(0)
+        if (state.sequenceEnded && target.getSequenceEnded?.() !== true) seekTarget(0)
         target.play()
       }
     }),
@@ -218,21 +235,25 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
 
     onChange(listener) {
       changeListeners.add(listener)
-      return () => { changeListeners.delete(listener) }
+      startTargetObservation()
+      return () => {
+        changeListeners.delete(listener)
+        if (changeListeners.size === 0 && progressListeners.size === 0) stopTargetObservation()
+      }
     },
 
     onProgress(listener) {
       progressListeners.add(listener)
-      startProgressObservation()
+      startTargetObservation()
       return () => {
         progressListeners.delete(listener)
-        if (progressListeners.size === 0) stopProgressObservation()
+        if (progressListeners.size === 0 && changeListeners.size === 0) stopTargetObservation()
       }
     },
 
     destroy() {
       destroyed = true
-      stopProgressObservation()
+      stopTargetObservation()
       changeListeners.clear()
       progressListeners.clear()
     },

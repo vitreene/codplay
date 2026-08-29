@@ -140,6 +140,7 @@ export class HtmlPlayerRunner {
   private readonly initialInert: boolean
   private materializationEpoch = 0
   private readonly resourceMetadata = new Map<string, RuntimePreloadMetadata[string]>()
+  private readonly stopTerminalObservation: () => void
 
   /** Creates one visible author host and one optional motion presentation host. */
   constructor(options: HtmlPlayerRunnerOptions) {
@@ -187,6 +188,10 @@ export class HtmlPlayerRunner {
       options.idle,
       options.onTrace,
     )
+    this.stopTerminalObservation = this.player.subscribeTransport(() => {
+      if (this.ownsEngine && this.player.hasSequenceEnded()) this.engine.pause()
+      this.syncInteractionLock()
+    })
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
       player: this.player,
       compiledScene: options.compiledScene,
@@ -551,6 +556,7 @@ export class HtmlPlayerRunner {
   /** Releases visual, component, and clock resources. */
   destroy(): void {
     if (this.ownsEngine) this.engine.stop()
+    this.stopTerminalObservation()
     this.captureSourceAdapter.destroy()
     this.emitSourceAdapter.destroy()
     this.motionSystem?.destroy()

@@ -108,6 +108,7 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
   const target = {
     getLifecycleState: () => options.player.getLifecycleState(),
     getCurrentTimeMs: () => options.player.getCurrentTimeMs(),
+    getSequenceEnded: () => options.player.hasSequenceEnded(),
     getDurationMs: () => options.player.getDiscoveredDurationMs(),
     getRate: () => options.player.getRate(),
     subscribe: (listener: () => void) => options.player.subscribeTransport(listener),
@@ -129,6 +130,13 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
   const runtimeTelco = createRuntimeTelco({
     target,
     durationMs: options.durationMs,
+  })
+  let observedLifecycle = options.player.getLifecycleState()
+  const stopLifecycleObservation = options.player.subscribeTransport(() => {
+    const nextLifecycle = options.player.getLifecycleState()
+    if (nextLifecycle === observedLifecycle) return
+    observedLifecycle = nextLifecycle
+    if (nextLifecycle === 'paused') options.onPlaybackStateChange('paused')
   })
 
   const api: CodPlayTelco = {
@@ -168,7 +176,13 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
     }),
     onProgress: (listener) => runtimeTelco.onProgress((state) => listener(toPublicTelcoState(options.instanceId, state))),
   }
-  return { api, destroy: () => runtimeTelco.destroy() }
+  return {
+    api,
+    destroy: () => {
+      stopLifecycleObservation()
+      runtimeTelco.destroy()
+    },
+  }
 }
 
 /** Creates the public event capability without exposing the internal journal. */

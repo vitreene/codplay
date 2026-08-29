@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { createRemote } from '../../../authoring/remote/src/remote'
 import { CodPlay } from '../../src'
 import type { CompiledScene } from '../../src/scene/compiled'
 
@@ -78,6 +79,69 @@ describe('public idle configuration', () => {
     await flushEventDispatch()
 
     expect(events).toEqual([])
+    codplay.destroy()
+  })
+
+  it('exposes the V1 terminal sequence state and replays through telco.play', async () => {
+    const codplay = new CodPlay({
+      engine: {
+        idle: { durationMs: 100, event: { name: 'sequence:end' } },
+      },
+    })
+    const instance = createInstance(codplay)
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(100)
+    await flushEventDispatch()
+
+    expect(instance.telco.getState()).toMatchObject({
+      status: 'paused',
+      timelineMs: 100,
+      sequenceEnded: true,
+    })
+    codplay.engine.advance(1_000)
+    expect(instance.telco.getState().timelineMs).toBe(100)
+
+    await instance.telco.play()
+    expect(instance.telco.getState()).toMatchObject({
+      status: 'playing',
+      timelineMs: 0,
+      sequenceEnded: false,
+    })
+    codplay.destroy()
+  })
+
+  it('disables remote seeking after the real player reaches sequence end', async () => {
+    const codplay = new CodPlay({
+      engine: {
+        idle: { durationMs: 100, event: { name: 'sequence:end' } },
+      },
+    })
+    const instance = createInstance(codplay)
+    const errors: string[] = []
+    const remote = createRemote({
+      telco: instance.telco,
+      onError: (message) => errors.push(message),
+    })
+    const range = remote.element.querySelector<HTMLInputElement>('input[type="range"]')
+    if (range === null) throw new Error('Remote seek range is missing.')
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(100)
+    await flushEventDispatch()
+    codplay.engine.advance(101)
+
+    expect(instance.telco.getState()).toMatchObject({ sequenceEnded: true, status: 'paused' })
+    expect(range.disabled).toBe(true)
+    range.dispatchEvent(new Event('pointerdown'))
+    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('pointerup'))
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(errors).toEqual([])
+    remote.destroy()
     codplay.destroy()
   })
 

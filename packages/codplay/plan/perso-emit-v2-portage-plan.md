@@ -140,7 +140,9 @@ Le portage doit conserver les comportements effectivement présents dans le circ
 
 1. Chaque clé d’`emit` (`click`, `change`, `input`, etc.) correspond au type d’événement utilisateur écouté.
 2. Une déclaration peut produire une ou plusieurs actions, dans l’ordre déclaré.
-3. L’événement produit porte le nom et les données auteur, ainsi que `self` (`id`, `name` si disponible, `storyId`) et la portée V2 du perso.
+3. L’événement produit porte le nom, les données auteur et la portée V2 du perso.
+   L’identité de l’émetteur reste une métadonnée runtime dans `event.context.persoId` ;
+   elle ne pollue pas le payload brut présenté à l’auteur ou au journal.
 4. Pour un `HTMLInputElement`, le payload runtime ajoute `value`. La conversion
    numérique relève du composant destinataire ; `valueAsNumber` n'est pas une
    donnée sémantique de `Perso.emit`.
@@ -328,7 +330,9 @@ contournement propre à la démo.
 - vérifier qu’un clic sur le label d’un `InputComponent` et sur le contenu textuel
   d’un bouton atteint la racine du perso et produit le même emit ;
 - tester plusieurs actions et leur ordre ;
-- tester `self`, `visibility`, l’inactivité en pause/seek, `preventDefault`, les options clavier et les `ref` ;
+- tester l’identité interne dans `context.persoId`, l’absence de `self` dans le
+  payload brut, `visibility`, l’inactivité en pause/seek, `preventDefault`, les
+  options clavier et les `ref` ;
 - tester seek, reparent, reconstruction et destruction sans écouteurs dupliqués ;
 - vérifier que les tests capture existants restent inchangés et passent ;
 - vérifier qu’un événement immédiat produit par un strap est réinjecté dans le

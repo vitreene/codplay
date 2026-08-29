@@ -215,6 +215,29 @@ describe('SceneBuilder', () => {
     }
   })
 
+  it('extracts the V1-compatible scene lifecycle callbacks as function references', () => {
+    const onStart = (): void => undefined
+    const onSequenceEnd = (): void => undefined
+    const result = new SceneBuilder(createCatalogForFixtures().validationSnapshot()).build({
+      id: 'lifecycle-scene',
+      onStart,
+      onSequenceEnd,
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{ id: 'title', type: 'text' }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.compiledScene.scene.onStart).toMatchObject({ ref: expect.stringContaining('fn:') })
+      expect(result.compiledScene.scene.onSequenceEnd).toMatchObject({ ref: expect.stringContaining('fn:') })
+      expect(Object.values(result.functions)).toEqual(expect.arrayContaining([onStart, onSequenceEnd]))
+    }
+  })
+
   it('compiles scene and story straps locally with the existing function collection', () => {
     const sceneStrap = () => ({ events: [{ name: 'scene:done' }] })
     const storyStrap = () => ({ events: [{ name: 'story:done' }] })

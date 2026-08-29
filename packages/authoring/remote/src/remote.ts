@@ -175,6 +175,19 @@ export function createRemote<State extends RemoteState>(
     if (current !== next) apply(next)
   }
 
+  /** Cancels range interaction state after the player reaches its terminal boundary. */
+  function cancelSeekInteraction(): void {
+    pendingSeekTargetMs = null
+    activeSeekTargetMs = null
+    seekInteractionActive = false
+    seekReleaseHandled = true
+    seekScaleLockMaxMs = null
+    if (seekThrottleTimer !== null) {
+      globalThis.clearTimeout(seekThrottleTimer)
+      seekThrottleTimer = null
+    }
+  }
+
   /** Resolves the range value displayed during an active seek interaction. */
   function resolveDisplayedMs(state: State): { displayMs: number; maxMs: number } {
     const maxMs = seekScaleLockMaxMs ?? Math.round(state.durationMs)
@@ -197,6 +210,7 @@ export function createRemote<State extends RemoteState>(
 
   /** Refreshes command availability from the V2 transport snapshot. */
   function syncState(state: State = telco.getState()): void {
+    if (state.sequenceEnded) cancelSeekInteraction()
     const inFlight = telco.commandInFlight
     const { status, sequenceEnded, initialized } = state
     const canPlay = initialized && (sequenceEnded || status === 'ready' || status === 'paused')
@@ -248,13 +262,27 @@ export function createRemote<State extends RemoteState>(
 
   /** Pauses before seeking, as required by the established remote interaction. */
   async function runSeekFlow(targetMs: number): Promise<void> {
-    if (telco.getState().status === 'playing') {
-      syncState()
+    let state = telco.getState()
+    if (state.sequenceEnded) {
+      syncState(state)
+      return
+    }
+    if (state.status === 'playing') {
+      syncState(state)
       const paused = await telco.pause()
       reportCommandError(paused)
       if (paused !== undefined && !paused.ok) return
+      state = telco.getState()
+      if (state.sequenceEnded) {
+        syncState(state)
+        return
+      }
     }
-    syncState()
+    state = telco.getState()
+    if (state.sequenceEnded) {
+      syncState(state)
+      return
+    }
     const seekResult = await telco.seek(targetMs)
     reportCommandError(seekResult)
   }
@@ -262,6 +290,12 @@ export function createRemote<State extends RemoteState>(
   /** Dispatches the last requested range position when no command is running. */
   function flushPendingSeek(): void {
     if (pendingSeekTargetMs === null) return
+    const state = telco.getState()
+    if (state.sequenceEnded) {
+      cancelSeekInteraction()
+      syncState(state)
+      return
+    }
     if (telco.commandInFlight) {
       if (seekThrottleTimer === null) {
         seekThrottleTimer = globalThis.setTimeout(() => {
@@ -296,6 +330,11 @@ export function createRemote<State extends RemoteState>(
 
   /** Ends range interaction and sends its final position immediately. */
   function clearSeekInteraction(): void {
+    if (telco.getState().sequenceEnded) {
+      cancelSeekInteraction()
+      syncState()
+      return
+    }
     if (seekReleaseHandled) {
       syncState()
       return
@@ -325,6 +364,11 @@ export function createRemote<State extends RemoteState>(
   })
 
   seekRange.addEventListener('pointerdown', () => {
+    if (telco.getState().sequenceEnded) {
+      cancelSeekInteraction()
+      syncState()
+      return
+    }
     seekInteractionActive = true
     seekReleaseHandled = false
     if (telco.getState().status === 'playing' && !telco.commandInFlight) {
@@ -335,6 +379,11 @@ export function createRemote<State extends RemoteState>(
   })
 
   seekRange.addEventListener('input', () => {
+    if (telco.getState().sequenceEnded) {
+      cancelSeekInteraction()
+      syncState()
+      return
+    }
     seekInteractionActive = true
     seekReleaseHandled = false
     pendingSeekTargetMs = readSeekTarget()
@@ -365,7 +414,14 @@ export function createRemote<State extends RemoteState>(
   }
 
   const stopOnChange = telco.onChange((state) => syncState(state))
-  const stopOnProgress = telco.onProgress((state) => syncProgress(state))
+  const stopOnProgress = telco.onProgress((state) => {
+    if (state.sequenceEnded) {
+      cancelSeekInteraction()
+      syncState(state)
+      return
+    }
+    syncProgress(state)
+  })
   syncState()
 
   return {
@@ -374,7 +430,7 @@ export function createRemote<State extends RemoteState>(
     destroy: () => {
       stopOnChange()
       stopOnProgress()
-      if (seekThrottleTimer !== null) globalThis.clearTimeout(seekThrottleTimer)
+      cancelSeekInteraction()
     },
   }
 }

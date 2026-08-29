@@ -13,6 +13,7 @@ class FakeTransportTarget {
   timeMs = 0
   discoveredDurationMs: number | undefined
   rate = 1
+  sequenceEnded = false
   readonly calls: string[] = []
   private readonly listeners = new Set<() => void>()
 
@@ -24,6 +25,11 @@ class FakeTransportTarget {
   /** Returns the fake logical time. */
   getCurrentTimeMs(): number {
     return this.timeMs
+  }
+
+  /** Returns whether the fake target has reached its player-owned terminal state. */
+  getSequenceEnded(): boolean {
+    return this.sequenceEnded
   }
 
   /** Returns the fake horizon discovered by the open sequence. */
@@ -51,6 +57,7 @@ class FakeTransportTarget {
   play(): void {
     this.calls.push('play')
     this.status = PLAYER_LIFECYCLE_PLAYING
+    this.sequenceEnded = false
   }
 
   /** Pauses fake playback. */
@@ -181,6 +188,33 @@ describe('Runtime telco', () => {
     expect(target.status).toBe(PLAYER_LIFECYCLE_PAUSED)
     expect(target.timeMs).toBe(600)
     expect(telco.getState().sequenceEnded).toBe(true)
+    telco.destroy()
+  })
+
+  it('relays a target sequence end through the state channel', () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target })
+    const changes: Array<{ status: PlayerLifecycleState; sequenceEnded: boolean }> = []
+    telco.onChange((state) => changes.push({ status: state.status, sequenceEnded: state.sequenceEnded }))
+
+    target.status = PLAYER_LIFECYCLE_PAUSED
+    target.sequenceEnded = true
+    target.notify()
+
+    expect(changes).toContainEqual({ status: PLAYER_LIFECYCLE_PAUSED, sequenceEnded: true })
+    telco.destroy()
+  })
+
+  it('delegates replay to a target that owns the sequence-end reset', async () => {
+    const target = new FakeTransportTarget()
+    target.status = PLAYER_LIFECYCLE_PAUSED
+    target.timeMs = 600
+    target.sequenceEnded = true
+    const telco = createRuntimeTelco({ target })
+
+    expect((await telco.play()).ok).toBe(true)
+    expect(target.calls).toEqual(['play'])
+    expect(target.sequenceEnded).toBe(false)
     telco.destroy()
   })
 })

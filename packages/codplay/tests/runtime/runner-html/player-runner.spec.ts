@@ -768,9 +768,10 @@ describe('HtmlPlayerRunner', () => {
       data: {
         fromAction: 'yes',
         fromEvent: 'yes',
-        self: { id: 'layout', name: 'Quiz layout', storyId: 'main' },
       },
+      context: { source: 'dom', userEvent: 'click', persoId: 'layout' },
     })
+    expect(emitted?.data).not.toHaveProperty('self')
 
     runner.pause()
     source.dispatch('click', control)

@@ -239,6 +239,110 @@ describe('RuntimePlayer', () => {
     expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_DESTROYED)
   })
 
+  it('applies V1 sequence:end terminal cleanup for authored eventimes and replays from zero', () => {
+    const lifecycleCalls: string[] = []
+    const lifecycleOptionsAreCallable: boolean[] = []
+    const terminalScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        id: 'terminal-scene',
+        init: { ref: 'fn:init' },
+        onStart: { ref: 'fn:start' },
+        onSequenceEnd: { ref: 'fn:end' },
+        stories: {
+          main: {
+            id: 'main',
+            persos: [],
+            listen: [],
+            eventimes: [{ name: 'sequence:end', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const functions: CompiledFunctionCollection = {
+      'fn:init': (...args) => {
+        lifecycleCalls.push('init')
+        lifecycleOptionsAreCallable.push(typeof (args[1] as { schedule: unknown }).schedule === 'function')
+      },
+      'fn:start': (...args) => {
+        lifecycleCalls.push('start')
+        lifecycleOptionsAreCallable.push(typeof (args[1] as { schedule: unknown }).schedule === 'function')
+      },
+      'fn:end': (...args) => {
+        lifecycleCalls.push('end')
+        lifecycleOptionsAreCallable.push(typeof (args[1] as { schedule: unknown }).schedule === 'function')
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('terminal-instance', engine, terminalScene, undefined, undefined, undefined, [], undefined, undefined, functions)
+
+    expect(player.init().ok).toBe(true)
+    expect(lifecycleCalls).toEqual(['init'])
+    player.play()
+    engine.advance(0)
+    engine.advance(200)
+
+    expect(player.getCurrentTimeMs()).toBe(100)
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PAUSED)
+    expect(player.hasSequenceEnded()).toBe(true)
+    expect(lifecycleCalls).toEqual(['init', 'start', 'end'])
+    expect(lifecycleOptionsAreCallable).toEqual([true, true, true])
+    expect(() => player.pause()).toThrow('PLAYER_SEQUENCE_ENDED')
+    expect(player.seek(0).ok).toBe(false)
+
+    player.play()
+    expect(player.getCurrentTimeMs()).toBe(0)
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PLAYING)
+    expect(player.hasSequenceEnded()).toBe(false)
+    expect(lifecycleCalls).toEqual(['init', 'start', 'end', 'init', 'start'])
+    player.destroy()
+  })
+
+  it('terminalizes an externally anchored sequence:end on the next playing frame', async () => {
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('eventime-terminal-instance', engine, scene)
+
+    expect(player.init().ok).toBe(true)
+    player.play()
+    engine.advance(0)
+    await player.emitEventime({ name: 'sequence:end' }, { scope: 'scene' })
+    engine.advance(100)
+
+    expect(player.hasSequenceEnded()).toBe(true)
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PAUSED)
+    expect(player.getCurrentTimeMs()).toBe(0)
+    player.destroy()
+  })
+
+  it('does not terminalize sequence:end when seek only crosses its boundary', () => {
+    const terminalScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            persos: [],
+            listen: [],
+            eventimes: [{ name: 'sequence:end', startAt: 100 }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('seek-sequence-end-instance', engine, terminalScene)
+
+    expect(player.init().ok).toBe(true)
+    expect(player.seek(200).ok).toBe(true)
+    expect(player.hasSequenceEnded()).toBe(false)
+    player.play()
+
+    expect(player.getLifecycleState()).toBe(PLAYER_LIFECYCLE_PLAYING)
+    expect(player.hasSequenceEnded()).toBe(false)
+    player.destroy()
+  })
+
   it('does not initialize when the engine lacks a compiled requirement', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer('instance-a', engine, {

@@ -26,6 +26,8 @@ export type RuntimeTelcoProgress = Readonly<{
 export type RuntimeTransportTarget = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   getCurrentTimeMs: () => number
+  /** Returns the player-owned terminal flag when the target has one. */
+  getSequenceEnded?: () => boolean
   /** Returns the currently discovered horizon for an open-ended sequence. */
   getDurationMs?: () => number | undefined
   getRate: () => number

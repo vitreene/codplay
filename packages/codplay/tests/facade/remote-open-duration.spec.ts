@@ -17,6 +17,7 @@ type TestRemoteState = Readonly<{
 /** Creates the smallest transport stub needed to exercise the official remote. */
 function createTransport(initial: TestRemoteState) {
   let state = initial
+  const seekCalls: number[] = []
   const progressListeners = new Set<(next: TestRemoteState) => void>()
   const changeListeners = new Set<(next: TestRemoteState) => void>()
   return {
@@ -28,7 +29,10 @@ function createTransport(initial: TestRemoteState) {
     play: async () => ({ ok: true as const }),
     pause: async () => ({ ok: true as const }),
     togglePlay: async () => ({ ok: true as const }),
-    seek: async () => ({ ok: true as const }),
+    seek: async (targetMs: number) => {
+      seekCalls.push(targetMs)
+      return { ok: true as const }
+    },
     rewind: async () => ({ ok: true as const }),
     onChange: (listener: (next: TestRemoteState) => void) => {
       changeListeners.add(listener)
@@ -46,6 +50,7 @@ function createTransport(initial: TestRemoteState) {
       state = next
       for (const listener of changeListeners) listener(next)
     },
+    seekCalls,
   }
 }
 
@@ -84,5 +89,39 @@ describe('official remote open duration', () => {
 
     expect(range?.max).toBe('1500')
     expect(range?.value).toBe('1500')
+  })
+
+  it('disables and cancels range seeking when progress reports sequence end', async () => {
+    const transport = createTransport({
+      status: 'ready',
+      timelineMs: 0,
+      durationMs: 1_000,
+      rate: 1,
+      initialized: true,
+      sequenceEnded: false,
+      runtimeRevision: 0,
+    })
+    remote = createRemote({ telco: transport })
+    const range = remote.element.querySelector<HTMLInputElement>('input[type="range"]')
+    if (range === null) throw new Error('Remote seek range is missing.')
+
+    range.dispatchEvent(new Event('pointerdown'))
+    range.value = '500'
+    range.dispatchEvent(new Event('input'))
+
+    transport.publishProgress({
+      status: 'paused',
+      timelineMs: 1_000,
+      durationMs: 1_000,
+      rate: 1,
+      initialized: true,
+      sequenceEnded: true,
+      runtimeRevision: 1,
+    })
+    range.dispatchEvent(new Event('pointerup'))
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(range.disabled).toBe(true)
+    expect(transport.seekCalls).toEqual([])
   })
 })

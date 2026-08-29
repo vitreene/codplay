@@ -87,9 +87,12 @@ describe('runtime idle', () => {
       name: DEFAULT_RUNTIME_IDLE_EVENT_NAME,
       applyAtMs: DEFAULT_RUNTIME_IDLE_DURATION_MS,
     }])
+    expect(player.hasSequenceEnded()).toBe(true)
+    expect(player.getLifecycleState()).toBe('paused')
     engine.advance(DEFAULT_RUNTIME_IDLE_DURATION_MS + 10_000)
     await flushEventDispatch()
     expect(idleEvents(player)).toHaveLength(1)
+    expect(player.getCurrentTimeMs()).toBe(DEFAULT_RUNTIME_IDLE_DURATION_MS)
     player.destroy()
   })
 

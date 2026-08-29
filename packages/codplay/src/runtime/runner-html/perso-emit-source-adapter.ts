@@ -30,7 +30,6 @@ export type HtmlPersoEmitSourceAdapterOptions = Readonly<{
 type IndexedEmitRule = Readonly<{
   storyId: string
   persoId: string
-  persoName?: string
   persoKey: string
   trigger: string
   rule: CompiledEmitRule
@@ -95,7 +94,6 @@ export class HtmlPersoEmitSourceAdapter {
             const indexed: IndexedEmitRule = {
               storyId,
               persoId: perso.id,
-              persoName: perso.name,
               persoKey,
               trigger,
               rule,
@@ -257,17 +255,11 @@ function resolveVisibility(rule: CompiledEmitRule): 'story' | 'scene' | 'public'
   return rule.event.visibility ?? 'story'
 }
 
-/** Builds the V1-compatible event payload, including self and native input values. */
+/** Builds the raw authored event payload and the native input value, when present. */
 function createEmitData(entry: IndexedEmitRule, nativeEvent: Event): CompiledRecord {
-  const self = {
-    id: entry.persoId,
-    storyId: entry.storyId,
-  } as Record<string, unknown>
-  if (entry.persoName !== undefined) self.name = entry.persoName
   const data = {
     ...(entry.rule.event.data ?? {}),
     ...(entry.rule.data ?? {}),
-    self,
   } as Record<string, unknown>
   const input = readInputData(nativeEvent.target)
   return (input === undefined ? data : { ...data, ...input }) as CompiledRecord

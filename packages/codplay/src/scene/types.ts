@@ -58,6 +58,19 @@ export type StoryDoc = Readonly<{
   disabled?: boolean
 }>
 
+/** Runtime options passed to the V1-compatible scene lifecycle callbacks. */
+export type SceneLifecycleOptions = Readonly<{
+  /**
+   * Keeps the V1 callback shape. V2 compiles every declared story and its
+   * eventimes before playback, so scheduling an already compiled story is a
+   * no-op at runtime.
+   */
+  schedule: (story: string | StoryDoc) => void
+}>
+
+/** V1-compatible scene lifecycle callback signature retained at the V2 boundary. */
+export type SceneLifecycleFunction = (scene: SceneDoc, options: SceneLifecycleOptions) => void
+
 /** Authoring scene document accepted by the V2 builder. */
 export type SceneDoc = Readonly<{
   id: string
@@ -68,9 +81,9 @@ export type SceneDoc = Readonly<{
   listen?: readonly SceneListenRule[]
   state?: AuthorRecord
   tracks?: AuthorRecord
-  init?: AuthorFunction
-  onStart?: AuthorFunction
-  onSequenceEnd?: AuthorFunction
+  init?: SceneLifecycleFunction
+  onStart?: SceneLifecycleFunction
+  onSequenceEnd?: SceneLifecycleFunction
   defaults?: AuthorRecord
 }>
 

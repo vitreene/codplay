@@ -6,6 +6,7 @@ import type {
   CompiledEventime,
   CompiledScene,
 } from '../../scene/compiled'
+import type { SceneDoc, SceneLifecycleOptions } from '../../scene/types'
 import { cloneRecord } from '../../shared'
 import type { EngineFrame } from '../engine'
 import {
@@ -69,6 +70,7 @@ import {
 import {
   materializeScene,
   RuntimeStateStore,
+  resolveStoryTrackId,
   validateStrapCollections,
   RuntimeEventDispatcher,
   type SolvedScene,
@@ -97,6 +99,8 @@ import {
 } from './modules'
 
 export type { PlayerLifecycleState } from '../config/player-lifecycle'
+
+const RUNTIME_SEQUENCE_END_EVENT_NAME = 'sequence:end' as const
 
 /** Result returned by player initialization. */
 export type PlayerInitResult = Readonly<
@@ -163,6 +167,8 @@ export class RuntimePlayer {
   private readonly idleMonitor: RuntimeIdleMonitor
   private readonly observedPublicEventIds = new Set<string>()
   private readonly transportListeners = new Set<() => void>()
+  private sequenceEnded = false
+  private sequenceEndPending = false
 
   /** Creates one player bound to one engine and one immutable compiled scene. */
   constructor(
@@ -209,6 +215,11 @@ export class RuntimePlayer {
   /** Returns the logical time advanced by the engine or set by seek. */
   getCurrentTimeMs(): number {
     return this.currentTimeMs
+  }
+
+  /** Returns whether playback has reached the terminal sequence:end boundary. */
+  hasSequenceEnded(): boolean {
+    return this.sequenceEnded
   }
 
   /** Returns the open playback horizon discovered from the head and recorded events. */
@@ -292,6 +303,9 @@ export class RuntimePlayer {
       return { ok: false, diagnostics: diagnostics.report() }
     }
     this.componentRuntime?.setModuleServices(this.moduleServiceInstances)
+    if (!this.invokeSceneLifecycleHook('init', diagnostics)) {
+      return { ok: false, diagnostics: diagnostics.report() }
+    }
     const initialSolvedScene = this.reconstructBaseScene(0)
     this.componentRuntime?.sync(initialSolvedScene)
     const resolvedInitialScene = this.reconstructBaseScene(0)
@@ -362,7 +376,12 @@ export class RuntimePlayer {
 
   /** Starts logical playback without creating a clock or rendering anything. */
   play(): void {
+    if (this.sequenceEnded) this.resetSequenceForReplay()
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PAUSED)
+    const wasReady = this.state === PLAYER_LIFECYCLE_READY
+    if (wasReady && !this.invokeSceneLifecycleHook('onStart')) {
+      throw new Error('RUNTIME_SCENE_LIFECYCLE_FAILED: scene onStart hook failed.')
+    }
     this.idleMonitor.reset()
     if (this.state === PLAYER_LIFECYCLE_PAUSED) {
       this.skipNextDelta = true
@@ -370,10 +389,45 @@ export class RuntimePlayer {
     }
     this.state = PLAYER_LIFECYCLE_PLAYING
     notifyModulePlaybackState(this.moduleServiceInstances, 'playing', this.currentTimeMs)
+    const sequenceEndTime = this.findSequenceEndAtCurrentTime()
+    if (sequenceEndTime !== undefined) this.finalizeSequenceEnd(sequenceEndTime)
+  }
+
+  /** Reconstructs the initial V2 presentation before replaying a terminal sequence. */
+  private resetSequenceForReplay(): void {
+    const previousSolvedScene = this.solvedScene
+    cancelActiveCaptures(
+      this.captureSessions,
+      this.activeCaptureActions,
+      this.liveCaptureStateUpdates,
+    )
+    this.sequenceEnded = false
+    this.sequenceEndPending = false
+    this.idleMonitor.reset()
+    this.currentTimeMs = 0
+    this.includePersistOnlyInCurrent = true
+    this.skipNextDelta = true
+    this.observedPublicEventIds.clear()
+    if (!this.invokeSceneLifecycleHook('init')) {
+      throw new Error('RUNTIME_SCENE_LIFECYCLE_FAILED: scene init hook failed during replay.')
+    }
+
+    const nextSolvedScene = this.reconstructScene(0)
+    this.synchronizeStateStoreFromScene(nextSolvedScene)
+    const moveDeltas = previousSolvedScene === undefined
+      ? []
+      : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+    notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    this.solvedScene = nextSolvedScene
+    this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+    this.renderSync.seek(this.engine.getCurrentNowMs(), this.currentTimeMs)
+    this.state = PLAYER_LIFECYCLE_READY
+    this.notifyTransportObservers()
   }
 
   /** Pauses logical playback at the current engine-provided time. */
   pause(): void {
+    this.requireSequenceActive('pause')
     this.requireState(PLAYER_LIFECYCLE_PLAYING)
     this.renderSync.pause()
     this.state = PLAYER_LIFECYCLE_PAUSED
@@ -434,6 +488,7 @@ export class RuntimePlayer {
     target: RuntimePlayerEventimeTarget,
   ): Promise<RuntimePlayerEventimeResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
+    this.requireSequenceActive('emitEventime')
     const normalized = normalizeRuntimeEventime(eventime, true)
     const resolvedTarget = resolveEventimeTarget(this.compiledScene, target)
     if (isImmediateTrackControlEvent(eventime)) {
@@ -477,6 +532,15 @@ export class RuntimePlayer {
     resetIdle = true,
   ): Promise<RuntimeEventDispatchResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
+    this.requireSequenceActive('emit')
+    const dispatchInput = {
+      ...input,
+      applyAtMs: input.applyAtMs ?? this.currentTimeMs,
+    }
+    const waitsForTerminalDispatch = this.state === PLAYER_LIFECYCLE_PLAYING
+      && dispatchInput.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
+      && dispatchInput.name === RUNTIME_SEQUENCE_END_EVENT_NAME
+    if (waitsForTerminalDispatch) this.sequenceEndPending = true
     this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
     const dispatcher = new RuntimeEventDispatcher({
       scene: this.compiledScene,
@@ -486,33 +550,47 @@ export class RuntimePlayer {
       stateStore: this.stateStore,
       eventIdFactory: () => this.createRuntimeEventId(),
     })
-    const result = await dispatcher.dispatch({
-      ...input,
-      applyAtMs: input.applyAtMs ?? this.currentTimeMs,
-    })
-    this.notifyTraceEvents(result.events)
-    if (resetIdle && result.events.length > 0) this.idleMonitor.reset()
-    if (includePersistOnlyOverride !== undefined) {
-      this.includePersistOnlyInCurrent = includePersistOnlyOverride
-    } else if (input.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
-      this.includePersistOnlyInCurrent = false
+    try {
+      const result = await dispatcher.dispatch(dispatchInput)
+      this.notifyTraceEvents(result.events)
+      if (resetIdle && result.events.length > 0) this.idleMonitor.reset()
+      if (includePersistOnlyOverride !== undefined) {
+        this.includePersistOnlyInCurrent = includePersistOnlyOverride
+      } else if (dispatchInput.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
+        this.includePersistOnlyInCurrent = false
+      }
+      this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      // A persist-only event is recorded for later reconstruction, but it is
+      // deliberately outside the current playback head. In particular, do not
+      // reconstruct or materialize here: the source may still be presenting the
+      // final live capture value until the next normal frame or seek.
+      if (dispatchInput.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
+        this.sequenceEndPending = false
+        return result
+      }
+      const sequenceEndTime = this.resolveSequenceEndEventTime(result.events, this.currentTimeMs)
+      if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
+        this.currentTimeMs = Math.min(this.currentTimeMs, sequenceEndTime)
+      }
+      const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      const previousSolvedScene = this.solvedScene
+      const moveDeltas = previousSolvedScene === undefined
+        ? []
+        : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+      notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+      this.solvedScene = nextSolvedScene
+      this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+      this.notifyTransportObservers()
+      if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
+        this.finalizeSequenceEnd(sequenceEndTime)
+      } else {
+        this.sequenceEndPending = false
+      }
+      return result
+    } catch (error) {
+      this.sequenceEndPending = false
+      throw error
     }
-    this.synchronizeStateStore(this.currentTimeMs, this.includePersistOnlyInCurrent)
-    // A persist-only event is recorded for later reconstruction, but it is
-    // deliberately outside the current playback head. In particular, do not
-    // reconstruct or materialize here: the source may still be presenting the
-    // final live capture value until the next normal frame or seek.
-    if (input.mode === EVENT_INSERT_MODE_PERSIST_ONLY) return result
-    const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
-    const previousSolvedScene = this.solvedScene
-    const moveDeltas = previousSolvedScene === undefined
-      ? []
-      : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
-    this.solvedScene = nextSolvedScene
-    this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
-    this.notifyTransportObservers()
-    return result
   }
 
   /** Opens one source-agnostic capture session against the current player state. */
@@ -718,15 +796,19 @@ export class RuntimePlayer {
 
   /** Applies one engine frame to the logical clock while playing. */
   private onEngineFrame(frame: EngineFrame): void {
-    if (this.state !== PLAYER_LIFECYCLE_PLAYING) return
+    if (this.state !== PLAYER_LIFECYCLE_PLAYING || this.sequenceEnded || this.sequenceEndPending) return
     if (this.skipNextDelta) {
       this.skipNextDelta = false
       this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
       return
     }
+    const previousTimeMs = this.currentTimeMs
     this.currentTimeMs += frame.deltaMs * this.rate
     if (this.idleMonitor.advance(frame.deltaMs)) this.dispatchIdleEvent()
+    if (this.sequenceEndPending) return
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
+    const sequenceEndTime = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
+    if (sequenceEndTime !== undefined) this.currentTimeMs = sequenceEndTime
     const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
     this.synchronizeStateStoreFromScene(nextSolvedScene)
     const previousSolvedScene = this.solvedScene
@@ -737,6 +819,7 @@ export class RuntimePlayer {
     this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
     this.renderSync.tick(frame.nowMs, this.currentTimeMs, this.rate)
     this.notifyTransportObservers()
+    if (sequenceEndTime !== undefined) this.finalizeSequenceEnd(sequenceEndTime)
   }
 
   /** Emits the configured idle event through the ordinary player event circuit. */
@@ -816,8 +899,105 @@ export class RuntimePlayer {
     }
   }
 
+  /** Rejects commands that V1 forbids after the terminal sequence boundary. */
+  private requireSequenceActive(operation: string): void {
+    if (this.sequenceEnded) {
+      throw new Error(`PLAYER_SEQUENCE_ENDED: ${operation} is not allowed after sequence:end.`)
+    }
+  }
+
+  /** Runs one extracted V1-compatible scene lifecycle callback. */
+  private invokeSceneLifecycleHook(
+    hookName: 'init' | 'onStart' | 'onSequenceEnd',
+    diagnostics = new DiagnosticCollector({ output: this.diagnosticOutput }),
+  ): boolean {
+    const reference = this.compiledScene.scene[hookName]
+    if (reference === undefined) return true
+    const hook = this.functions[reference.ref]
+    if (hook === undefined) {
+      diagnostics.error(
+        'RUNTIME_SCENE_LIFECYCLE_UNAVAILABLE',
+        `Scene lifecycle function is unavailable: ${hookName}.`,
+        { context: { sceneId: this.compiledScene.scene.id, hookName, functionRef: reference.ref } },
+      )
+      return false
+    }
+    try {
+      const scene = this.compiledScene.scene as unknown as SceneDoc
+      const options: SceneLifecycleOptions = { schedule: () => undefined }
+      hook(scene, options)
+      return true
+    } catch (error) {
+      diagnostics.error(
+        'RUNTIME_SCENE_LIFECYCLE_FAILED',
+        error instanceof Error ? error.message : `Scene lifecycle function failed: ${hookName}.`,
+        { context: { sceneId: this.compiledScene.scene.id, hookName, functionRef: reference.ref } },
+      )
+      return false
+    }
+  }
+
+  /** Finds a terminal boundary exactly at the current playback cursor. */
+  private findSequenceEndAtCurrentTime(): number | undefined {
+    return this.findSequenceEndBetween(undefined, this.currentTimeMs)
+  }
+
+  /** Finds the earliest active terminal event crossed by one playing frame. */
+  private findSequenceEndBetween(previousTimeMs: number | undefined, currentTimeMs: number): number | undefined {
+    const candidates: number[] = []
+    for (const story of Object.values(this.compiledScene.scene.stories)) {
+      const trackId = resolveStoryTrackId(story)
+      if (!this.trackJournal.isTrackActive(trackId)) continue
+      for (const eventTimeMs of collectSequenceEndTimes(story.eventimes ?? [], 0)) {
+        if (isSequenceEndInRange(eventTimeMs, previousTimeMs, currentTimeMs)) candidates.push(eventTimeMs)
+      }
+    }
+    for (const event of this.trackJournal.getAllEvents()) {
+      if (event.name !== RUNTIME_SEQUENCE_END_EVENT_NAME
+        || event.mode === EVENT_INSERT_MODE_PERSIST_ONLY
+        || !this.trackJournal.isTrackActive(event.trackId)) continue
+      if (isSequenceEndInRange(event.applyAtMs, previousTimeMs, currentTimeMs)) candidates.push(event.applyAtMs)
+    }
+    return candidates.length === 0 ? undefined : Math.min(...candidates)
+  }
+
+  /** Finds a terminal event accepted by one live dispatch at or before the head. */
+  private resolveSequenceEndEventTime(
+    events: readonly RuntimeTrackEvent[],
+    currentTimeMs: number,
+  ): number | undefined {
+    const candidates = events
+      .filter((event) => event.name === RUNTIME_SEQUENCE_END_EVENT_NAME
+        && event.mode !== EVENT_INSERT_MODE_PERSIST_ONLY
+        && event.applyAtMs <= currentTimeMs
+        && this.trackJournal.isTrackActive(event.trackId))
+      .map((event) => event.applyAtMs)
+    return candidates.length === 0 ? undefined : Math.min(...candidates)
+  }
+
+  /** Applies V1 terminal cleanup and invokes the scene hook after cleanup. */
+  private finalizeSequenceEnd(sequenceEndMs: number): void {
+    if (this.sequenceEnded) return
+    this.sequenceEndPending = false
+    this.sequenceEnded = true
+    cancelActiveCaptures(
+      this.captureSessions,
+      this.activeCaptureActions,
+      this.liveCaptureStateUpdates,
+    )
+    this.liveCapturePersoKeys = new Set()
+    this.idleMonitor.reset()
+    this.currentTimeMs = Math.max(0, Math.min(this.currentTimeMs, sequenceEndMs))
+    this.renderSync.pause()
+    this.state = PLAYER_LIFECYCLE_PAUSED
+    notifyModulePlaybackState(this.moduleServiceInstances, 'paused', this.currentTimeMs)
+    this.invokeSceneLifecycleHook('onSequenceEnd')
+    this.notifyTransportObservers()
+  }
+
   /** Validates one local seek before the engine enters a group transaction. */
   private validateSeek(timeMs: number): void {
+    this.requireSequenceActive('seek')
     if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) {
       throw new Error(`Player cannot seek from ${this.state} state.`)
     }
@@ -1048,6 +1228,31 @@ function resolveEventimeTarget(
     storyId: story.id,
     cascade: false,
   }
+}
+
+/** Flattens one story's nested eventimes to the absolute sequence:end times. */
+function collectSequenceEndTimes(
+  eventimes: readonly CompiledEventime[],
+  parentStartAt: number,
+): readonly number[] {
+  return eventimes.flatMap((eventime) => {
+    const startAt = parentStartAt + eventime.startAt
+    return [
+      ...(eventime.name === RUNTIME_SEQUENCE_END_EVENT_NAME ? [startAt] : []),
+      ...collectSequenceEndTimes(eventime.events ?? [], startAt),
+    ]
+  })
+}
+
+/** Applies the play-only boundary rule used for static and live terminal events. */
+function isSequenceEndInRange(
+  eventTimeMs: number,
+  previousTimeMs: number | undefined,
+  currentTimeMs: number,
+): boolean {
+  if (eventTimeMs > currentTimeMs) return false
+  if (previousTimeMs === undefined) return eventTimeMs === currentTimeMs
+  return eventTimeMs >= previousTimeMs
 }
 
 /** Normalizes one external eventime tree without mutating the caller's value. */

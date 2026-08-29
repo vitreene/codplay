@@ -42,6 +42,7 @@ Une instance possede :
 - un identifiant d'instance;
 - un `CompiledScene` immutable;
 - un lifecycle `idle -> ready -> playing <-> paused -> destroyed`;
+- un indicateur terminal `sequenceEnded`, distinct de l'état `paused`;
 - un temps logique avance par l'engine.
 
 `seek` positionne le temps logique sans rejouer les straps ni les effets. Les
@@ -55,6 +56,33 @@ materialize/resolve/solve.
 du dispatcher dans le `RuntimeTrackJournal`, puis reconstruit l'etat courant.
 `seek` ne repasse jamais par `listen`, transform ou strap : il relit le meme journal
 par `materialize -> resolve -> solve`.
+
+`sequence:end` est la borne technique terminale lorsqu'elle est atteinte en
+lecture. Le player arrête alors sa progression, annule les captures actives,
+met les services de module en pause, conserve la tête à la borne et passe à
+`paused` avec `sequenceEnded: true`. `pause`, `seek` et `emit` sont refusés dans
+cet état. Un `play` ultérieur reconstruit la scène à zéro, réinitialise le
+terminal et relance la séquence ; ce n'est donc pas une simple reprise à la
+dernière position.
+
+La même règle s'applique à une occurrence `sequence:end` compilée dans un track
+et à une occurrence live ajoutée au journal. Un `seek` qui franchit la borne ne
+la joue pas et ne pose pas le terminal : il ne fait que projeter l'état demandé.
+
+## Interface de cycle de vie de la scène
+
+La forme V2 de `SceneDoc.init`, `SceneDoc.onStart` et
+`SceneDoc.onSequenceEnd` conserve l'interface runtime V1 :
+`(scene, options)`, avec `options.schedule(story)`. Le builder extrait ces
+fonctions dans `CompiledScene`; le player les invoque respectivement à
+l'initialisation, au passage `ready -> playing` et après le nettoyage terminal.
+
+La frontière V2 transmet aux callbacks la vue compilée et immuable de la scène.
+Les stories et leurs eventimes étant déjà compilés avant l'exécution, toutes les
+stories déclarées sont disponibles dès l'initialisation et `schedule` est
+volontairement sans effet dans cette version. Cette différence est celle de la
+frontière `SceneDoc -> CompiledScene` ; elle ne doit pas être contournée par un
+track ou une API parallèle dans une scène.
 
 ## Seek de portee
 

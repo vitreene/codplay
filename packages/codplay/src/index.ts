@@ -70,6 +70,8 @@ export type {
   AuthorListenTransform,
   AuthorStrapCollection,
   AuthorStrapDeclarations,
+  SceneLifecycleFunction,
+  SceneLifecycleOptions,
   SceneDoc,
 } from './scene/types'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'

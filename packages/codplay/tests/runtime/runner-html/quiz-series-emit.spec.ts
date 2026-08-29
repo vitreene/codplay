@@ -67,9 +67,14 @@ describe('quiz-series Perso.emit integration', () => {
       data: {
         answerId: input?.value,
         value: input?.value,
-        self: { storyId: 'quiz-series-q0-story' },
+      },
+      context: {
+        source: 'dom',
+        userEvent: 'change',
+        persoId: 'quiz-question-1__answer-vrai',
       },
     })
+    expect(selection?.data).not.toHaveProperty('self')
 
     validate?.click()
     await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))

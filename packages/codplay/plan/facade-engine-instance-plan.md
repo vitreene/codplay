@@ -547,18 +547,29 @@ ou d'un consommateur V2.
 
 Le `RuntimeTelco` existant est l'adaptateur interne de cette propriété. Il reçoit
 une cible d'instance et s'abonne aux notifications déjà produites par le
-player ; il ne possède ni ticker ni boucle de progression propre.
+player ; il ne possède ni ticker ni boucle de progression propre. Tant qu'un
+consommateur observe l'état ou le progress, il conserve cette observation de la
+cible. Une transition de lifecycle ou de `sequenceEnded` est relayée par
+`onChange`, tandis que `onProgress` continue de publier la position. Ainsi, la
+fin terminale désactive les commandes de seek du remote sans supprimer le
+dernier état de progress ; `play` reste disponible pour le replay normal.
 
 ### Durée ouverte et horizon découvert — portage du concept V1
 
 Le concept V1 d’horizon ouvert s’applique lorsqu’aucun média ni track borné ne
 fournit de durée autoritative. Dans ce cas, `durationMs` est omis lors de la
-création de l’instance : le player continue d’avancer avec les ticks, la telco
-ne déclare pas `sequenceEnded`, ne borne pas le `seek` et expose comme durée le
-maximum entre la tête courante et les événements compilés ou enregistrés dans
-le journal. Un eventime ajouté au journal étend donc immédiatement l’horizon
-observable, tandis qu’un média ou une track bornée conserve la durée fixe
-fournie par son circuit dédié.
+création de l’instance : le player continue d’avancer avec les ticks et expose
+comme durée le maximum entre la tête courante et les événements compilés ou
+enregistrés dans le journal. Un eventime ajouté au journal étend donc
+immédiatement l’horizon observable, tandis qu’un média ou une track bornée
+conserve la durée fixe fournie par son circuit dédié.
+
+Cette durée ouverte n’empêche pas la fin technique : lorsque le player reçoit
+ou atteint un event `sequence:end` en lecture, il expose `sequenceEnded: true`,
+borne la tête à cet event et suspend la progression. La telco relaie cet état
+du player ; `play()` déclenche alors le replay normal du player depuis zéro. Un
+`seek` qui traverse un `sequence:end` reste une projection et ne déclenche pas
+la fin technique.
 
 Cette adaptation ne crée pas une sémantique d’event supplémentaire et ne
 préjuge pas de la propriété `idle`, qui fera l’objet d’une tranche distincte
@@ -1315,6 +1326,9 @@ cachées de l'instance.
 - [x] ne pas exposer `RuntimePlayer.refresh()` dans la telco : il reste une
   opération interne de réapplication liée au materializer ;
 - [x] adapter `RuntimeTelco` à cette propriété d'instance ;
+- [x] relayer par `onChange` les transitions de la cible, notamment
+  `sequenceEnded`, et désactiver le seek du remote en purgeant ses demandes
+  différées ;
 - [x] retirer du remote V2 tout calcul de l'état publié et tout accès direct au runner ;
 - [x] vérifier que la telco reste l'unique surface de commande de lecture ;
 - [x] laisser le teardown de l'instance au propriétaire, hors commandes telco ;

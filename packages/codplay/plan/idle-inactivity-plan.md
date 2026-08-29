@@ -30,6 +30,11 @@ différents et ne fournissent pas cette sémantique.
 - L'event associé est `{ name: 'sequence:end' }` par défaut. `endSequence` est
   le terme fonctionnel ; le nom d'event existant dans les contrats V1/V2 est
   `sequence:end`.
+- Quand l'event associé est `sequence:end` et que le player est en lecture,
+  l'émission applique aussi la fin technique V1 : arrêt de la progression,
+  nettoyage des captures actives, état `paused` avec `sequenceEnded: true` et
+  invocation de `scene.onSequenceEnd` après le nettoyage. `play()` rejoue alors
+  la scène depuis zéro.
 - La configuration peut remplacer la durée et le descripteur de l'event. Le
   descripteur conserve la forme event du runtime (`name`, `data`, `visibility`)
   et porte `storyId` lorsque la visibilité vaut `story`.
@@ -51,7 +56,9 @@ Le monitor est créé pour chaque `RuntimePlayer`. L'engine ne fait que porter l
 configuration par défaut ; il ne crée ni timer parallèle ni journal parallèle.
 Quand une frame franchit le seuil, le player appelle son `emitEvent` existant,
 avec l'event idle et le temps courant. L'event est ainsi journalisé et passe par
-`listen -> straps -> emit` comme toute autre émission runtime.
+`listen -> straps -> emit` comme toute autre émission runtime. Si cette émission
+produit `sequence:end`, le player applique ensuite la borne terminale V1 ; le
+monitor idle n'introduit pas un circuit d'arrêt distinct.
 
 ## Validation
 
@@ -62,12 +69,13 @@ La tranche doit couvrir au minimum :
 - surcharge player de la configuration engine ;
 - `idle: false` ;
 - reset par émission, pause/reprise et seek ;
+- fin technique `sequence:end`, nettoyage, hook de scène et replay ;
 - diagnostic d'un paramètre invalide ;
 - typecheck et suite complète `codplay`.
 
 Validation exécutée le 2026-08-29 :
 
-- `tests/runtime/idle/runtime-idle.spec.ts` et `tests/facade/idle-config.spec.ts` : 10 tests passés ;
-- `npm test --workspace=codplay` : 80 fichiers, 506 tests passés ;
+- `tests/runtime/idle/runtime-idle.spec.ts`, `tests/facade/idle-config.spec.ts` et les tests player/telco : 55 tests ciblés passés ;
+- `npm test --workspace=codplay` : 80 fichiers, 514 tests passés ;
 - `npm run typecheck --workspace=codplay` : succès ;
 - `git diff --check` : succès.

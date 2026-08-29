@@ -171,11 +171,11 @@ function compileSceneData(
     state: extractCompiledRecord(scene.state, 'scene.state', state),
     tracks: extractCompiledRecord(scene.tracks, 'scene.tracks', state) ?? {},
     defaults: extractCompiledRecord(scene.defaults, 'scene.defaults', state),
-    init: scene.init === undefined ? undefined : extractFunction(scene.init, 'scene.init', state),
-    onStart: scene.onStart === undefined ? undefined : extractFunction(scene.onStart, 'scene.onStart', state),
+    init: scene.init === undefined ? undefined : extractFunction(scene.init as AuthorFunction, 'scene.init', state),
+    onStart: scene.onStart === undefined ? undefined : extractFunction(scene.onStart as AuthorFunction, 'scene.onStart', state),
     onSequenceEnd: scene.onSequenceEnd === undefined
       ? undefined
-      : extractFunction(scene.onSequenceEnd, 'scene.onSequenceEnd', state),
+      : extractFunction(scene.onSequenceEnd as AuthorFunction, 'scene.onSequenceEnd', state),
   }
 }
 
