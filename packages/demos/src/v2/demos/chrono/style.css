@@ -1,0 +1,111 @@
+.chrono-root {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1rem, 3vw, 1.5rem);
+  padding: clamp(1rem, 4vw, 2rem);
+  overflow: auto;
+  background: radial-gradient(circle at 50% 35%, #1e293b, #020617 75%);
+}
+
+.chrono-wrapper {
+  position: relative;
+  flex: 0 1 min(72vw, 300px);
+  width: min(72vw, 300px);
+  aspect-ratio: 1;
+  min-height: 180px;
+  min-width: 180px;
+  overflow: hidden;
+  border: 2px solid #1e293b;
+  border-radius: 50%;
+  background: #0f172a;
+  box-shadow: 0 0 60px rgb(0 0 0 / 80%), inset 0 0 30px rgb(0 0 0 / 50%);
+}
+
+.chrono-face,
+.chrono-face svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.chrono-face { z-index: 1; }
+
+.chrono-needle {
+  position: absolute;
+  bottom: 50%;
+  left: calc(50% - 1.5px);
+  z-index: 2;
+  width: 3px;
+  height: 35%;
+  border-radius: 3px 3px 0 0;
+  background: #ef4444;
+  box-shadow: 0 0 8px rgb(239 68 68 / 70%);
+  transform: rotate(0deg);
+  transform-origin: bottom center;
+}
+
+.chrono-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 6px rgb(239 68 68 / 80%);
+  transform: translate(-50%, -50%);
+}
+
+.chrono-display {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  z-index: 3;
+  color: #334155;
+  font-family: monospace;
+  font-size: clamp(1.3rem, 6vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: 3px;
+  pointer-events: none;
+  text-shadow: 0 0 10px currentColor;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.chrono-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem;
+}
+
+.chrono-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem 1.1rem;
+  border: 0;
+  border-radius: .4rem;
+  color: #fff;
+  cursor: pointer;
+  font-family: sans-serif;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.chrono-button--start,
+.chrono-button--resume { background: #22c55e; }
+.chrono-button--pause { background: #f59e0b; }
+.chrono-button--reset { background: #64748b; }
+
+@media (max-height: 520px) {
+  .chrono-root { justify-content: flex-start; }
+  .chrono-wrapper { width: min(48vh, 260px); min-width: 160px; min-height: 160px; }
+}

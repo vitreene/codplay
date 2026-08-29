@@ -2,6 +2,7 @@ import {
   CodPlay,
   type CodPlayFrameScheduler,
   type CodPlayInstance,
+  type CodPlayPublicEvent,
   type CompiledResourceManifest,
   type RuntimePreloadManifestInput,
 } from 'codplay'
@@ -156,6 +157,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   let logFlushScheduled = false
   let telcoControls: ReturnType<typeof createV2DemoTelco> | undefined
   let telcoPlaybackCleanup: (() => void) | undefined
+  let publicEventCleanup: (() => void) | undefined
   let sceneCleanup: (() => void) | undefined
 
   function flushLogs(): void {
@@ -172,6 +174,12 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       logFlushScheduled = true
       globalThis.requestAnimationFrame(flushLogs)
     }
+  }
+
+  /** Formats one public CodPlay event for the optional layout journal. */
+  function formatPublicEvent(event: CodPlayPublicEvent): string {
+    const data = event.data === undefined ? '' : ` data=${JSON.stringify(event.data)}`
+    return `event ${event.name} @${event.timeMs}ms${data}`
   }
 
   /** Copies the current non-blocking journal without changing its contents. */
@@ -212,15 +220,18 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telcoPlaybackCleanup = undefined
     telcoControls?.destroy()
     telcoControls = createV2DemoTelco(telco, { onLog: log })
-    if (playback !== undefined) {
+    const playbackControl = playback
+    if (playbackControl !== undefined) {
+      const playbackLabel = playbackControl.label
+      const playbackInjections = playbackControl.injections
       const playbackRow = document.createElement('div')
       playbackRow.className = 'v2-demo-telco__playback'
       const playbackButton = document.createElement('button')
       playbackButton.type = 'button'
       playbackButton.className = 'telco-button telco-button--secondary'
-      playbackButton.textContent = playback.label
-      playbackButton.setAttribute('aria-label', playback.label)
-      playbackButton.title = playback.label
+      playbackButton.textContent = playbackLabel
+      playbackButton.setAttribute('aria-label', playbackLabel)
+      playbackButton.title = playbackLabel
       let disposed = false
       let inFlight = false
 
@@ -231,7 +242,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         playbackButton.disabled = true
         try {
           await telco.rewind()
-          for (const injection of playback.injections) {
+          for (const injection of playbackInjections) {
             if (disposed) return
             await instance.events.emit(injection.eventime, injection.target)
           }
@@ -257,6 +268,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   function unmountScene(): void {
     sceneCleanup?.()
     sceneCleanup = undefined
+    publicEventCleanup?.()
+    publicEventCleanup = undefined
     telcoPlaybackCleanup?.()
     telcoPlaybackCleanup = undefined
     telcoControls?.destroy()
@@ -357,6 +370,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         return
       }
 
+      publicEventCleanup = instance.events.onEvent((event) => {
+        log(formatPublicEvent(event))
+      })
       installTelco(instance.telco, instance, module.playback)
       log(`${options.active.title} initialisée · durée=${module.durationMs}ms`)
 

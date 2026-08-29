@@ -90,6 +90,23 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			};
 		},
 	},
+	{
+		id: 'chrono',
+		path: '?demo=chrono',
+		title: 'Chronomètre',
+		description: 'Un chronomètre piloté par des événements discrets et deux TweenAction seek-compatibles.',
+		load: async () => {
+			const [module, stylesheet] = await Promise.all([
+				import('./demos/chrono/main'),
+				import('./demos/chrono/style.css?url'),
+			])
+			return {
+				createScene: module.createScene,
+				durationMs: module.SCENE_DURATION_MS,
+				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+			}
+		},
+	},
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */
