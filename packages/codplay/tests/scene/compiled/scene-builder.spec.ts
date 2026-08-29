@@ -189,7 +189,7 @@ describe('SceneBuilder', () => {
   })
 
   it('extracts functions and leaves the compiled payload JSON-safe', () => {
-    const transform = () => [{ type: 'START' }]
+    const transform = () => [{ name: 'START' }]
     const init = () => undefined
     const scene: SceneDoc = {
       id: 'function-scene',

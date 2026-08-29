@@ -13,10 +13,20 @@ export type AuthorStrapDeclarations = AuthorStrapCollection | readonly string[]
 /** Open authoring record normalized by the scene builder. */
 export type AuthorRecord = Record<string, unknown>
 
+/** Event shape accepted as one output of an authoring listen transform. */
+export type AuthorListenEvent = Readonly<{
+  name: string
+  data?: AuthorRecord
+  visibility?: 'story' | 'scene' | 'public'
+}>
+
+/** V1-compatible listen transform contract producing ordered events. */
+export type AuthorListenTransform = (event: AuthorListenEvent) => readonly AuthorListenEvent[] | undefined
+
 /** One authoring listen declaration. */
 export type SceneListenRule = Readonly<{
   on: string
-  transform?: readonly AuthorFunction[]
+  transform?: readonly AuthorListenTransform[]
   emit?: readonly Readonly<Record<string, unknown>>[]
   straps?: readonly string[]
 }>

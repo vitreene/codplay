@@ -34,6 +34,75 @@ const scene: CompiledScene = {
 }
 
 describe('RuntimePlayer', () => {
+  it('journals every transformed event and replays them through seek without rerunning transforms', async () => {
+    let transformCalls = 0
+    const transformedScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [{ on: 'source:event', transform: [{ ref: 'fn:fanout' }] }],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'idle' },
+              actions: {
+                'first:event': { className: { add: 'first' } },
+                'second:event': { className: { add: 'second' } },
+              },
+            }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer(
+      'transform-instance',
+      engine,
+      transformedScene,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      {
+        'fn:fanout': () => {
+          transformCalls += 1
+          return [
+            { name: 'first:event' },
+            { name: 'second:event' },
+          ]
+        },
+      },
+    )
+
+    expect(player.init().ok).toBe(true)
+    const emitted = await player.emit({ name: 'source:event', storyId: 'main', applyAtMs: 10 })
+    expect(emitted.ok).toBe(true)
+    expect(player.seek(10).ok).toBe(true)
+    expect(transformCalls).toBe(1)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('first'),
+    )
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('second'),
+    )
+
+    expect(player.seek(0).ok).toBe(true)
+    expect(player.seek(10).ok).toBe(true)
+    expect(transformCalls).toBe(1)
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('first'),
+    )
+    expect(player.getSolvedScene()?.persos['main:root']?.state.className).toEqual(
+      expect.stringContaining('second'),
+    )
+    player.destroy()
+  })
+
   it('emits through the journal and seeks the same live result without rerunning straps', async () => {
     let strapCalls = 0
     const liveScene: CompiledScene = {

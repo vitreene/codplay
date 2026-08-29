@@ -4,7 +4,7 @@
 
 > Status: Fixe
 > CodPlay version: V2 foundation
-> Review: pipeline borné validé le 2026-08-20; l'invalidation des résultats asynchrones est reportée à V3, live et effets restent des extensions
+> Review: pipeline borné validé le 2026-08-20; extension V1 multi-événements acceptée le 2026-08-29; l'invalidation des résultats asynchrones est reportée à V3, live et effets restent des extensions
 
 ## Frontiere
 
@@ -36,7 +36,12 @@ RuntimePlayer.seek(t)
 - une liste de regles non vide filtre les events sans correspondance;
 - une story sans regle transmet l'event sans transformation;
 - les transforms s'executent dans l'ordre de declaration;
-- une transform retourne une data ou `undefined`, sans modifier le nom de l'event;
+- chaque transform peut retourner une liste ordonnée d'events produits; `undefined`
+  produit une liste vide;
+- chaque transform reçoit l'event déclencheur; les sorties de transforms successifs
+  sont concaténées dans l'ordre et ne deviennent pas l'entrée du transform suivant;
+- les events produits par les transforms héritent de l'ancrage et du contexte de
+  l'event déclencheur, avec leur `name` et leur `data` propres;
 - `emit` peut produire plusieurs events dans l'ordre de declaration;
 - les fonctions sont resolues depuis la collection extraite du build;
 - les erreurs de fonction sont retournees comme issues et ne font pas tomber le pipeline;
@@ -53,9 +58,9 @@ RuntimePlayer.seek(t)
   sans melanger les deux collections;
 - un event de portée `scene` est stocke sur la track globale de la scene et est
   materialise pour chaque story;
-- les `events` immédiats produits par les straps et les `emit` déclarés sont
-  réinjectés; la sortie pass-through d'une règle sans `emit` ne reboucle pas
-  dans `listen`;
+- les `events` immédiats produits par les straps, les transforms et les `emit`
+  déclarés sont réinjectés; la sortie pass-through d'une règle sans production
+  ne reboucle pas dans `listen`;
 - une profondeur maximale borne les cycles de declarations;
 - aucune track n'est creee pendant le dispatch;
 - les mises a jour d'etat sont journalisees avant d'etre presentees au strap et
@@ -83,8 +88,8 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 
 - `src/runtime/player/pipeline/listen.ts` porte les primitives pures;
 - `src/runtime/player/pipeline/runtime-event-dispatcher.ts` porte le routage
-  scene/story, la réinjection des sorties immédiates de straps et des émissions
-  déclarées bornées, ainsi que l'append journal;
+  scene/story, la réinjection des sorties immédiates de straps, transforms et
+  émissions déclarées bornées, ainsi que l'append journal;
 - `src/runtime/player/runtime-player.ts` expose `emit()` et reconcilie l'etat
   depuis le journal;
 - `HtmlPlayerRunner` partage le journal entre l'hote visible et l'hote de mesure.
@@ -92,3 +97,23 @@ La forme future devra etre specifiee en V2 avant toute implementation.
 La tranche est couverte par les tests du dispatcher, du player, du journal, de
 `listen` et des straps. La demo reste un banc visible et ne constitue pas une
 seconde implementation du pipeline.
+
+## Extension de compatibilité V1 acceptée le 2026-08-29
+
+La forme V2 initiale qui traitait `listen.transform` comme une transformation
+unique de `event.data` était trop restrictive pour le contrat effectivement
+utilisé par V1. La forme retenue est désormais la suivante :
+
+```ts
+type ListenTransform = (event: ListenEventInput) => readonly ListenEvent[] | undefined
+```
+
+Chaque élément produit est un event (`name`, `data` et les champs d'event
+explicitement supportés). Le dispatcher l'ajoute au journal avec un nouvel
+identifiant d'occurrence, puis le réinjecte dans le même pipeline que toute
+autre émission déclarée. `seek()` ne réexécute jamais le transform : il relit
+les events déjà journalisés. Cette règle conserve l'identité `Play(t) = Seek(t)`.
+
+Cette extension ne concerne ni `capture`, ni les effects live par tick, ni le
+composant polygon. Elle porte uniquement la production multi-événements déjà
+présente dans `listen.transform` V1.

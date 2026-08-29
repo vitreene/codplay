@@ -230,7 +230,8 @@ type CodPlayInstanceOptionsBase = Readonly<{
   instanceId: string
   compiledScene: CompiledScene
   functions?: CompiledFunctionCollection
-  durationMs: number
+  /** Fixed duration from an authoritative media or bounded track; omitted for an open scene. */
+  durationMs?: number
   mountTargets?: readonly MountTargetDeclaration[]
   /** Optional reusable straps used only by declarations that name external implementations. */
   strapCollections?: StrapCollections

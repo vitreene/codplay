@@ -61,7 +61,13 @@ export type {
   CompiledStrapDeclarations,
   CompiledScene,
 } from './scene/compiled'
-export type { AuthorStrapCollection, AuthorStrapDeclarations, SceneDoc } from './scene/types'
+export type {
+  AuthorListenEvent,
+  AuthorListenTransform,
+  AuthorStrapCollection,
+  AuthorStrapDeclarations,
+  SceneDoc,
+} from './scene/types'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
 export type {
   RuntimePreloadApi,

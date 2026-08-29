@@ -189,6 +189,7 @@ export function createRemote<State extends RemoteState>(
   /** Refreshes progress without changing the transport state. */
   function syncProgress(state: State = telco.getState()): void {
     const { displayMs, maxMs } = resolveDisplayedMs(state)
+    setIfChanged(seekRange.max, String(maxMs), (value) => { seekRange.max = value })
     setIfChanged(seekRange.value, String(displayMs), (value) => { seekRange.value = value })
     seekValue.textContent = `${displayMs} ms · ${formatProgress(displayMs, maxMs)}`
     stateOutput.textContent = `état=${state.status} · temps=${Math.round(state.timelineMs)} ms · révision=${state.runtimeRevision}`

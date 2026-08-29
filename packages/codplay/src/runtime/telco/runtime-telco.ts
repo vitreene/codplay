@@ -14,7 +14,8 @@ import type {
 
 /** Creates one transport facade around an already initialized V2 runtime target. */
 export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
-  if (!Number.isFinite(options.durationMs) || options.durationMs <= 0) {
+  if (options.durationMs !== undefined
+    && (!Number.isFinite(options.durationMs) || options.durationMs <= 0)) {
     throw new Error('Runtime telco durationMs must be a finite positive number.')
   }
 
@@ -27,17 +28,26 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
   let endClampScheduled = false
   let destroyed = false
 
+  /** Reads the fixed or currently discovered duration without clamping the head. */
+  function resolveDurationMs(timelineMs: number): number {
+    if (options.durationMs !== undefined) return options.durationMs
+    const discovered = options.target.getDurationMs?.()
+    if (discovered === undefined || !Number.isFinite(discovered) || discovered < 0) return timelineMs
+    return Math.max(timelineMs, discovered)
+  }
+
   /** Reads one immutable transport snapshot from the target. */
   function getState(): RuntimeTelcoState {
     const status = target.getLifecycleState()
     const timelineMs = Math.max(0, target.getCurrentTimeMs())
+    const durationMs = resolveDurationMs(timelineMs)
     return {
       status,
       timelineMs,
-      durationMs: options.durationMs,
+      durationMs,
       rate: target.getRate(),
       initialized: status !== PLAYER_LIFECYCLE_IDLE && status !== PLAYER_LIFECYCLE_DESTROYED,
-      sequenceEnded: timelineMs >= options.durationMs,
+      sequenceEnded: options.durationMs !== undefined && timelineMs >= options.durationMs,
       runtimeRevision,
     }
   }
@@ -67,7 +77,11 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       }
     }
 
-    if (state.status !== PLAYER_LIFECYCLE_PLAYING || !state.sequenceEnded || endClampScheduled) return
+    if (options.durationMs === undefined
+      || state.status !== PLAYER_LIFECYCLE_PLAYING
+      || !state.sequenceEnded
+      || endClampScheduled) return
+    const fixedDurationMs = options.durationMs
     endClampScheduled = true
     queueMicrotask(() => {
       endClampScheduled = false
@@ -75,7 +89,7 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
       const current = getState()
       if (current.status !== PLAYER_LIFECYCLE_PLAYING || !current.sequenceEnded) return
       target.pause()
-      const seekResult = target.seek(options.durationMs)
+      const seekResult = target.seek(fixedDurationMs)
       if (seekResult.ok) notifyChange()
     })
   }
@@ -141,7 +155,9 @@ export function createRuntimeTelco(options: RuntimeTelcoOptions): RuntimeTelco {
     if (!Number.isFinite(timeMs) || timeMs < 0) {
       throw new Error('Runtime telco seek time must be finite and non-negative.')
     }
-    const result = target.seek(Math.min(timeMs, options.durationMs))
+    const result = target.seek(
+      options.durationMs === undefined ? timeMs : Math.min(timeMs, options.durationMs),
+    )
     if (!result.ok) throw new Error('Runtime telco seek was rejected.')
   }
 

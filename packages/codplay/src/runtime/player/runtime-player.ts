@@ -73,7 +73,7 @@ import {
   type StrapCollections,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
-import { StructuralTimeline } from './structural-timeline'
+import { collectCompiledEventStartTimes, StructuralTimeline } from './structural-timeline'
 import { reconstructPlayerScene } from './scene'
 import {
   type RuntimePlayerEventime,
@@ -196,6 +196,18 @@ export class RuntimePlayer {
   /** Returns the logical time advanced by the engine or set by seek. */
   getCurrentTimeMs(): number {
     return this.currentTimeMs
+  }
+
+  /** Returns the open playback horizon discovered from the head and recorded events. */
+  getDiscoveredDurationMs(): number {
+    let durationMs = Math.max(0, this.currentTimeMs)
+    for (const timeMs of collectCompiledEventStartTimes(this.compiledScene)) {
+      durationMs = Math.max(durationMs, timeMs)
+    }
+    for (const timeMs of this.trackJournal.getEventTimes()) {
+      durationMs = Math.max(durationMs, timeMs)
+    }
+    return durationMs
   }
 
   /** Subscribes to logical position updates produced by the shared engine circuit. */

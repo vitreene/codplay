@@ -68,6 +68,8 @@ export type { RuntimeActionDefinition } from './action-resolution'
 export type {
   ListenEventInput,
   ListenEventOutput,
+  ListenTransformEvent,
+  ListenTransformResult,
   ListenPipelineIssue,
   ListenPipelineResult,
   ListenPipelineExecutionInput,

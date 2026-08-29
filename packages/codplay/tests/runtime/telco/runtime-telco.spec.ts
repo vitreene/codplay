@@ -11,6 +11,7 @@ import { createRuntimeTelco } from '../../../src/runtime/telco'
 class FakeTransportTarget {
   status: PlayerLifecycleState = PLAYER_LIFECYCLE_READY
   timeMs = 0
+  discoveredDurationMs: number | undefined
   rate = 1
   readonly calls: string[] = []
   private readonly listeners = new Set<() => void>()
@@ -23,6 +24,11 @@ class FakeTransportTarget {
   /** Returns the fake logical time. */
   getCurrentTimeMs(): number {
     return this.timeMs
+  }
+
+  /** Returns the fake horizon discovered by the open sequence. */
+  getDurationMs(): number | undefined {
+    return this.discoveredDurationMs
   }
 
   /** Returns the fake playback rate. */
@@ -137,6 +143,28 @@ describe('Runtime telco', () => {
     expect(telco.rate).toBe(2)
     expect(telco.getState().rate).toBe(2)
     expect(target.calls).toEqual(['rate:2'])
+    telco.destroy()
+  })
+
+  it('keeps an open sequence unbounded while its discovered horizon follows the head', async () => {
+    const target = new FakeTransportTarget()
+    const telco = createRuntimeTelco({ target })
+
+    await telco.play()
+    target.timeMs = 1_200
+    target.discoveredDurationMs = 1_200
+    target.notify()
+
+    expect(target.status).toBe(PLAYER_LIFECYCLE_PLAYING)
+    expect(telco.getState()).toMatchObject({
+      timelineMs: 1_200,
+      durationMs: 1_200,
+      sequenceEnded: false,
+    })
+
+    await telco.seek(2_000)
+    expect(target.timeMs).toBe(2_000)
+    expect(telco.getProgress().durationMs).toBe(2_000)
     telco.destroy()
   })
 

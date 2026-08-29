@@ -52,6 +52,22 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			};
 		},
 	},
+	{
+		id: 'polygon',
+		path: '?demo=polygon',
+		title: 'Polygone interactif',
+		description: 'Le polygone V2 reprend la scène V1 : paramètres, remises à zéro et morphing SVG.',
+		load: async () => {
+			const [module, stylesheet] = await Promise.all([
+				import('./demos/polygon/main'),
+				import('./demos/polygon/style.css?url'),
+			])
+			return {
+				createScene: module.createScene,
+				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+			}
+		},
+	},
 
 	{
 		id: 'flip-nested',

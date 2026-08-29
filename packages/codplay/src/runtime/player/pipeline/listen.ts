@@ -1,6 +1,6 @@
 import { isPlainRecord } from '../../../shared'
-import type { CompiledEventime, CompiledFunctionCollection } from '../../../scene/compiled'
-import type { CompiledListenRule, CompiledRecord } from '../../../scene/compiled'
+import type { CompiledEventime, CompiledFunctionCollection, CompiledRecord } from '../../../scene/compiled'
+import type { CompiledListenRule } from '../../../scene/compiled'
 import { executeStrapsSequentially, type StrapCollection, type StrapExecutionResult } from './strap-executor'
 
 /** Event input consumed by one story-level listen pipeline. */
@@ -24,6 +24,16 @@ export type ListenEventInput = Readonly<{
 
 /** Event emitted by a listen rule after transforms and declaration filtering. */
 export type ListenEventOutput = Readonly<ListenEventInput>
+
+/** One event descriptor returned by a V1-compatible listen transform. */
+export type ListenTransformEvent = Readonly<{
+  name: string
+  data?: CompiledRecord
+  visibility?: CompiledEventime['visibility']
+}>
+
+/** Result accepted from one listen transform, preserving ordered fan-out. */
+export type ListenTransformResult = readonly ListenTransformEvent[] | undefined
 
 /** One non-fatal issue found while resolving a listen rule. */
 export type ListenPipelineIssue = Readonly<{
@@ -81,56 +91,14 @@ export function propagateListenEvent(
   for (const rule of rules) {
     if (rule.on !== input.name) continue
     matched = true
-    let data = input.data
-    for (const transform of rule.transform ?? []) {
-      const fn = functions[transform.ref]
-      if (fn === undefined) {
-        issues.push({
-          code: 'RUNTIME_LISTEN_FUNCTION_MISSING',
-          message: `Listen transform function is not available: ${transform.ref}`,
-          ruleName: rule.on,
-          functionRef: transform.ref,
-        })
-        continue
-      }
-      try {
-        const transformed = fn({ ...input, data })
-        if (transformed === undefined) {
-          data = undefined
-        } else if (isPlainRecord(transformed)) {
-          data = transformed as CompiledRecord
-        } else {
-          issues.push({
-            code: 'RUNTIME_LISTEN_TRANSFORM_INVALID',
-            message: `Listen transform must return a record or undefined: ${transform.ref}`,
-            ruleName: rule.on,
-            functionRef: transform.ref,
-          })
-        }
-      } catch (error) {
-        issues.push({
-          code: 'RUNTIME_LISTEN_TRANSFORM_FAILED',
-          message: error instanceof Error ? error.message : `Listen transform failed: ${transform.ref}`,
-          ruleName: rule.on,
-          functionRef: transform.ref,
-        })
-      }
-    }
-
+    const transformed = evaluateListenTransforms(rule, input, functions)
+    events.push(...transformed.events)
+    issues.push(...transformed.issues)
     pendingStraps.push(...(rule.straps ?? []))
-    if (rule.emit === undefined) {
-      events.push({ ...input, data })
-      continue
+    if (rule.emit === undefined && rule.transform === undefined) {
+      events.push({ ...input, data: input.data })
     }
-    for (const emission of rule.emit) {
-      events.push({
-        ...input,
-        name: typeof emission.name === 'string' ? emission.name : input.name,
-        data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : data,
-        cascade: typeof emission.cascade === 'boolean' ? emission.cascade : input.cascade,
-        visibility: isEventVisibility(emission.visibility) ? emission.visibility : input.visibility,
-      })
-    }
+    events.push(...createDeclaredEvents(rule, input))
   }
 
   return {
@@ -154,13 +122,8 @@ export async function executeListenPipeline(
   for (const rule of input.rules) {
     if (rule.on !== input.event.name) continue
     matched = true
-    const transformed = propagateListenEvent(
-      [{ on: rule.on, transform: rule.transform }],
-      input.event,
-      input.functions,
-    )
+    const transformed = evaluateListenTransforms(rule, input.event, input.functions ?? {})
     issues.push(...transformed.issues)
-    const transformedEvent = transformed.events[0] ?? input.event
     const strapNames = rule.straps ?? []
     if (strapNames.length === 0) {
       straps.push({
@@ -175,12 +138,12 @@ export async function executeListenPipeline(
           input.straps ?? {},
           {
             event: {
-              name: transformedEvent.name,
-              data: transformedEvent.data,
-              eventId: transformedEvent.eventId,
-              eventSeq: transformedEvent.eventSeq,
-              applyAtMs: transformedEvent.applyAtMs,
-              cascade: transformedEvent.cascade,
+              name: input.event.name,
+              data: input.event.data,
+              eventId: input.event.eventId,
+              eventSeq: input.event.eventSeq,
+              applyAtMs: input.event.applyAtMs,
+              cascade: input.event.cascade,
             },
             state: input.state ?? {},
             meta: input.meta ?? {},
@@ -191,22 +154,102 @@ export async function executeListenPipeline(
       }
     }
 
-    if (rule.emit === undefined) {
-      events.push(transformedEvent)
+    events.push(...transformed.events)
+    events.push(...createDeclaredEvents(rule, input.event))
+  }
+
+  return { events: matched ? events : [], straps, issues }
+}
+
+/** Evaluates every transform against the source event and preserves fan-out order. */
+function evaluateListenTransforms(
+  rule: CompiledListenRule,
+  input: ListenEventInput,
+  functions: CompiledFunctionCollection,
+): { events: readonly ListenEventOutput[]; issues: readonly ListenPipelineIssue[] } {
+  const events: ListenEventOutput[] = []
+  const issues: ListenPipelineIssue[] = []
+
+  for (const transform of rule.transform ?? []) {
+    const fn = functions[transform.ref]
+    if (fn === undefined) {
+      issues.push({
+        code: 'RUNTIME_LISTEN_FUNCTION_MISSING',
+        message: `Listen transform function is not available: ${transform.ref}`,
+        ruleName: rule.on,
+        functionRef: transform.ref,
+      })
       continue
     }
-    for (const emission of rule.emit) {
+
+    let transformed: unknown
+    try {
+      transformed = fn({ ...input })
+    } catch (error) {
+      issues.push({
+        code: 'RUNTIME_LISTEN_TRANSFORM_FAILED',
+        message: error instanceof Error ? error.message : `Listen transform failed: ${transform.ref}`,
+        ruleName: rule.on,
+        functionRef: transform.ref,
+      })
+      continue
+    }
+
+    if (transformed === undefined) continue
+    if (!Array.isArray(transformed)) {
+      issues.push({
+        code: 'RUNTIME_LISTEN_TRANSFORM_INVALID',
+        message: `Listen transform must return an array of events or undefined: ${transform.ref}`,
+        ruleName: rule.on,
+        functionRef: transform.ref,
+      })
+      continue
+    }
+
+    for (let index = 0; index < transformed.length; index += 1) {
+      const candidate = transformed[index]
+      if (!isPlainRecord(candidate) || typeof candidate.name !== 'string' || candidate.name.trim().length === 0) {
+        issues.push({
+          code: 'RUNTIME_LISTEN_TRANSFORM_EVENT_INVALID',
+          message: `Listen transform event at index ${index} must contain a non-empty name: ${transform.ref}`,
+          ruleName: rule.on,
+          functionRef: transform.ref,
+        })
+        continue
+      }
+      if (candidate.data !== undefined && !isPlainRecord(candidate.data)) {
+        issues.push({
+          code: 'RUNTIME_LISTEN_TRANSFORM_EVENT_INVALID',
+          message: `Listen transform event data at index ${index} must be a record: ${transform.ref}`,
+          ruleName: rule.on,
+          functionRef: transform.ref,
+        })
+        continue
+      }
       events.push({
-        ...transformedEvent,
-        name: typeof emission.name === 'string' ? emission.name : transformedEvent.name,
-        data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : transformedEvent.data,
-        cascade: typeof emission.cascade === 'boolean' ? emission.cascade : transformedEvent.cascade,
-        visibility: isEventVisibility(emission.visibility) ? emission.visibility : transformedEvent.visibility,
+        ...input,
+        name: candidate.name,
+        data: candidate.data as CompiledRecord | undefined,
+        visibility: isEventVisibility(candidate.visibility) ? candidate.visibility : input.visibility,
       })
     }
   }
 
-  return { events: matched ? events : [], straps, issues }
+  return { events, issues }
+}
+
+/** Creates declared listen emissions after transforms and straps, using source data by default. */
+function createDeclaredEvents(
+  rule: CompiledListenRule,
+  input: ListenEventInput,
+): readonly ListenEventOutput[] {
+  return (rule.emit ?? []).map((emission) => ({
+    ...input,
+    name: typeof emission.name === 'string' ? emission.name : input.name,
+    data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : input.data,
+    cascade: typeof emission.cascade === 'boolean' ? emission.cascade : input.cascade,
+    visibility: isEventVisibility(emission.visibility) ? emission.visibility : input.visibility,
+  }))
 }
 
 /** Checks the named V2 event visibility carried by a listen emission. */

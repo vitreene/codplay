@@ -7,6 +7,7 @@ import type {
   CanonicalPersoDoc,
   CanonicalSceneDoc,
   CanonicalStoryDoc,
+  AuthorFunction,
   SceneListenRule,
   SceneDoc,
 } from '../types'
@@ -248,7 +249,7 @@ function compileListenRule(
 ): CompiledListenRule {
   return {
     on: rule.on,
-    transform: rule.transform?.map((fn, index) => extractFunction(fn, `${scope}.transform[${index}]`, state)),
+    transform: rule.transform?.map((fn, index) => extractFunction(fn as unknown as AuthorFunction, `${scope}.transform[${index}]`, state)),
     emit: rule.emit?.map((value, index) => extractCompiledValue(value, `${scope}.emit[${index}]`, state) as CompiledRecord),
     straps: rule.straps,
   }

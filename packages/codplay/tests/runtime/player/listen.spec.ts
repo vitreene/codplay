@@ -18,7 +18,7 @@ describe('listen -> transform -> emit', () => {
     expect(propagateListenEvent([], input)).toEqual({ events: [input], pendingStraps: [], issues: [] })
   })
 
-  it('transforms data, emits declared events, and exposes pending straps', () => {
+  it('fans out transformed events, emits declared events, and exposes pending straps', () => {
     const rules: readonly CompiledListenRule[] = [{
       on: 'source:event',
       transform: [{ ref: 'fn:normalize' }],
@@ -26,28 +26,56 @@ describe('listen -> transform -> emit', () => {
       straps: ['save-result'],
     }]
     const functions: CompiledFunctionCollection = {
-      'fn:normalize': (value) => ({ value: String((value as { data?: { value?: string } }).data?.value).toUpperCase() }),
+      'fn:normalize': (value) => [{
+        name: 'normalized:event',
+        data: { value: String((value as { data?: { value?: string } }).data?.value).toUpperCase() },
+      }],
     }
 
     expect(propagateListenEvent(rules, input, functions)).toEqual({
-      events: [{ ...input, name: 'target:event', data: { value: 'emitted' } }],
+      events: [
+        { ...input, name: 'normalized:event', data: { value: 'RAW' } },
+        { ...input, name: 'target:event', data: { value: 'emitted' } },
+      ],
       pendingStraps: ['save-result'],
       issues: [],
     })
   })
 
-  it('uses transformed data when a matching rule emits without an explicit payload', () => {
+  it('does not produce a pass-through event when a transform returns no events', () => {
     const rules: readonly CompiledListenRule[] = [{
       on: 'source:event',
       transform: [{ ref: 'fn:normalize' }],
     }]
     const functions: CompiledFunctionCollection = {
-      'fn:normalize': () => ({ value: 'normalized' }),
+      'fn:normalize': () => [],
     }
 
-    expect(propagateListenEvent(rules, input, functions).events).toEqual([
-      { ...input, data: { value: 'normalized' } },
+    expect(propagateListenEvent(rules, input, functions).events).toEqual([])
+  })
+
+  it('preserves declaration order and gives every transform the source event', () => {
+    const seen: unknown[] = []
+    const rules: readonly CompiledListenRule[] = [{
+      on: 'source:event',
+      transform: [{ ref: 'fn:first' }, { ref: 'fn:second' }],
+    }]
+    const functions: CompiledFunctionCollection = {
+      'fn:first': (value) => {
+        seen.push((value as { data?: { value?: string } }).data?.value)
+        return [{ name: 'first:event' }]
+      },
+      'fn:second': (value) => {
+        seen.push((value as { data?: { value?: string } }).data?.value)
+        return [{ name: 'second:event' }]
+      },
+    }
+
+    expect(propagateListenEvent(rules, input, functions).events.map((event) => event.name)).toEqual([
+      'first:event',
+      'second:event',
     ])
+    expect(seen).toEqual(['raw', 'raw'])
   })
 
   it('reports missing transforms and does not match unrelated events', () => {

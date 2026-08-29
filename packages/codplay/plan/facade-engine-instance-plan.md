@@ -2,10 +2,10 @@
 
 ## Statut
 
-> Statut : Fini
+> Statut : En cours
 > Version CodPlay : V2 foundation
-> Contrat révisé le 2026-08-27 ; implémentation et vérification terminées pour
-> la façade V2 foundation.
+> Contrat révisé le 2026-08-29 ; la base de façade est implémentée et le
+> portage V1 de l’horizon ouvert est en cours de validation.
 
 ## Objet
 
@@ -548,6 +548,21 @@ ou d'un consommateur V2.
 Le `RuntimeTelco` existant est l'adaptateur interne de cette propriété. Il reçoit
 une cible d'instance et s'abonne aux notifications déjà produites par le
 player ; il ne possède ni ticker ni boucle de progression propre.
+
+### Durée ouverte et horizon découvert — portage du concept V1
+
+Le concept V1 d’horizon ouvert s’applique lorsqu’aucun média ni track borné ne
+fournit de durée autoritative. Dans ce cas, `durationMs` est omis lors de la
+création de l’instance : le player continue d’avancer avec les ticks, la telco
+ne déclare pas `sequenceEnded`, ne borne pas le `seek` et expose comme durée le
+maximum entre la tête courante et les événements compilés ou enregistrés dans
+le journal. Un eventime ajouté au journal étend donc immédiatement l’horizon
+observable, tandis qu’un média ou une track bornée conserve la durée fixe
+fournie par son circuit dédié.
+
+Cette adaptation ne crée pas une sémantique d’event supplémentaire et ne
+préjuge pas de la propriété `idle`, qui fera l’objet d’une tranche distincte
+après validation des démos concernées.
 
 Toutes les commandes de lecture et de progress passent par `instance.telco`.
 La télécommande et les démos ne peuvent pas appeler directement le player, le
@@ -1341,7 +1356,11 @@ cachées de l'instance.
   commun, avec les scènes runner fournies comme modules sans runtime parallèle ;
 - [x] vérifier la composition `foreign`, l'absence de registre secondaire et le
   teardown idempotent des instances ;
-- [x] exécuter la suite complète V2 : 73 fichiers et 473 tests passés ;
+- [x] transposer l’horizon ouvert V1 : durée d’instance facultative, progression
+  par ticks et extension par les événements compilés ou journalisés ;
+- [x] vérifier que la télécommande officielle étend le curseur de seek lorsque
+  `onProgress` découvre un nouvel horizon ;
+- [x] exécuter la suite complète V2 : 78 fichiers et 496 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
 - [x] vérifier dans Firefox headless les routes registry `runner` et
   `flip-nested`, avec Play et Seek via la télécommande commune ;
@@ -1356,7 +1375,8 @@ clôture.
 
 ## État de travail
 
-Le contrat est validé et son implémentation de base est terminée.
+Le contrat de base est validé et son implémentation est terminée ; la
+validation de l’horizon ouvert V1 est suivie dans la phase F.
 
 Déjà implémenté :
 
@@ -1366,19 +1386,24 @@ Déjà implémenté :
 - composition unique core/foreign et verrouillage du catalogue ;
 - création, adressage, pilotage et destruction des instances ;
 - `instance.telco`, sa progression branchée sur les notifications du player,
-  et le cycle externe ou possédé de l'engine ;
+  son horizon fixe ou découvert, et le cycle externe ou possédé de l'engine ;
 - `instance.events`, `engine.events`, l'adressage séparé et l'eventime récursif ;
 - diagnostics par le canal V2 existant et transfert explicite des ressources ;
 - tests de contrat du socle et absence de ticker propre à la telco.
 
 Validation exécutée :
 
-- `npm test --workspace=codplay` : 73 fichiers, 473 tests passés ;
+- `npm test --workspace=codplay` : 78 fichiers, 496 tests passés ;
 - `npm run typecheck --workspace=codplay` : succès ;
 - `npm run build --workspace=@codplay/demos` : succès ;
+- le typecheck global des démos et celui de `@codplay/remote` restent bloqués
+  par les erreurs V1/`typed-om-polyfill` préexistantes, sans erreur dans cette
+  tranche ;
 - `git diff --check` : succès.
 
-Reste à traiter dans ce plan : aucun point de la façade V2 foundation.
+Reste à valider dans ce plan : la suite complète après le portage de l’horizon
+ouvert et le contrôle navigateur associé. La propriété `idle` est explicitement
+hors de ce plan et sera traitée séparément.
 
 La reprise séparée de l'accès authoring de l'éditeur reste un chantier
 ultérieur, hors de ce plan.

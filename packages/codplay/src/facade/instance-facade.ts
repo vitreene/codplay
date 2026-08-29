@@ -24,7 +24,7 @@ type InstanceFacadeOptions = Readonly<{
   instanceId: string
   player: RuntimePlayer
   runner: HtmlPlayerRunner
-  durationMs: number
+  durationMs?: number
   diagnostics: DiagnosticChannel
   eventListeners: Set<CodPlayEventListener>
   onPublicEvent: (event: CodPlayPublicEvent) => void
@@ -99,6 +99,7 @@ function createTelcoFacade(options: InstanceFacadeOptions): Readonly<{
   const target = {
     getLifecycleState: () => options.player.getLifecycleState(),
     getCurrentTimeMs: () => options.player.getCurrentTimeMs(),
+    getDurationMs: () => options.player.getDiscoveredDurationMs(),
     getRate: () => options.player.getRate(),
     subscribe: (listener: () => void) => options.player.subscribeTransport(listener),
     play: () => {

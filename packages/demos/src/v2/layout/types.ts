@@ -24,8 +24,8 @@ export type V2DemoPlayback = Readonly<{
 /** Scene module and its lazily loaded, instance-scoped stylesheet. */
 export type V2DemoModule = Readonly<{
   createScene: () => SceneDoc
-  /** Duration owned by the scene module and passed to the instance at mount. */
-  durationMs: number
+  /** Fixed duration owned by the scene module; omitted when the horizon is open. */
+  durationMs?: number
   stylesheetUrl: string
   /** Adds scene resources that are not derivable from compiled `src` fields. */
   preloadManifest?: CompiledResourceManifest

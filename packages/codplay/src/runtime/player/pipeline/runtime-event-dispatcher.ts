@@ -427,7 +427,7 @@ export class RuntimeEventDispatcher {
     }
   }
 
-  /** Reinjects only declared `emit` outputs, preventing pass-through loops. */
+  /** Reinjects transform and declared emit outputs, preventing pass-through loops. */
   private async routeDeclaredEmissions(
     selection: PipelineSelection,
     outputs: readonly ListenEventInput[],
@@ -435,32 +435,22 @@ export class RuntimeEventDispatcher {
     depth: number,
     accumulator: DispatchAccumulator,
   ): Promise<void> {
-    let outputIndex = 0
-    for (const rule of selection.rules) {
-      if (rule.emit === undefined) {
-        if (outputIndex < outputs.length) outputIndex += 1
-        continue
-      }
-      for (let emissionIndex = 0; emissionIndex < rule.emit.length; emissionIndex += 1) {
-        const output = outputs[outputIndex]
-        outputIndex += 1
-        if (output === undefined) continue
-        const visibility = output.visibility ?? input.visibility
-        const cascade = visibility === undefined ? output.cascade === true : false
-        await this.route({
-          name: output.name,
-          applyAtMs: input.applyAtMs,
-          data: output.data,
-          storyId: visibility === 'story'
-            ? selection.storyId
-            : cascade ? undefined : selection.scope === 'story' ? selection.storyId : undefined,
-          cascade,
-          visibility,
-          context: output.context ?? input.context,
-          meta: output.meta ?? input.meta,
-          mode: input.mode,
-        }, depth + 1, accumulator)
-      }
+    for (const output of outputs) {
+      const visibility = output.visibility ?? input.visibility
+      const cascade = visibility === undefined ? output.cascade === true : false
+      await this.route({
+        name: output.name,
+        applyAtMs: output.applyAtMs,
+        data: output.data,
+        storyId: visibility === 'story'
+          ? selection.storyId
+          : cascade ? undefined : selection.scope === 'story' ? selection.storyId : undefined,
+        cascade,
+        visibility,
+        context: output.context ?? input.context,
+        meta: output.meta ?? input.meta,
+        mode: input.mode,
+      }, depth + 1, accumulator)
     }
   }
 

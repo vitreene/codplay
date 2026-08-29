@@ -159,6 +159,8 @@ export {
   type StrapOutputAppendResult,
   type ListenEventInput,
   type ListenEventOutput,
+  type ListenTransformEvent,
+  type ListenTransformResult,
   type ListenPipelineIssue,
   type ListenPipelineResult,
   type ListenPipelineExecutionInput,

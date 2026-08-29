@@ -374,7 +374,10 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         log(formatPublicEvent(event))
       })
       installTelco(instance.telco, instance, module.playback)
-      log(`${options.active.title} initialisée · durée=${module.durationMs}ms`)
+      const durationLabel = module.durationMs === undefined
+        ? 'durée ouverte (horizon découvert)'
+        : `durée=${module.durationMs}ms`
+      log(`${options.active.title} initialisée · ${durationLabel}`)
 
       sceneCleanup = () => {
         releaseResources()

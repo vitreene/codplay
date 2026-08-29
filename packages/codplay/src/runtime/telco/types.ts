@@ -26,6 +26,8 @@ export type RuntimeTelcoProgress = Readonly<{
 export type RuntimeTransportTarget = Readonly<{
   getLifecycleState: () => PlayerLifecycleState
   getCurrentTimeMs: () => number
+  /** Returns the currently discovered horizon for an open-ended sequence. */
+  getDurationMs?: () => number | undefined
   getRate: () => number
   subscribe: (listener: () => void) => () => void
   play: () => void
@@ -37,7 +39,8 @@ export type RuntimeTransportTarget = Readonly<{
 /** Dependencies used to construct one local V2 telco. */
 export type RuntimeTelcoOptions = Readonly<{
   target: RuntimeTransportTarget
-  durationMs: number
+  /** Fixed duration supplied by a media or an authoritatively bounded track. */
+  durationMs?: number
 }>
 
 /** Local transport facade used by an authoring or validation remote. */
