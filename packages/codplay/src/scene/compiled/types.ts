@@ -20,6 +20,15 @@ export type CompiledCaptureEvent = Readonly<{
   mode?: 'apply-now' | 'persist-only'
 }>
 
+/** Shared compiled event representation; the codec applies the ordinary/capture shape rule. */
+export type CompiledEmitEvent = Readonly<{
+  name: string
+  data?: CompiledRecord
+  cascade?: boolean
+  visibility?: 'story' | 'scene' | 'public'
+  mode?: 'apply-now' | 'persist-only'
+}>
+
 /** Serializable capture declaration with functions held as external references. */
 export type CompiledCaptureDeclaration = Readonly<{
   trackOn?: readonly string[]
@@ -33,7 +42,11 @@ export type CompiledCaptureDeclaration = Readonly<{
 
 /** Serializable emit rule containing the optional capture declaration. */
 export type CompiledEmitRule = Readonly<{
-  event: CompiledCaptureEvent
+  ref?: string
+  keyCode?: string
+  preventDefault?: boolean
+  event: CompiledEmitEvent
+  data?: CompiledRecord
   capture?: CompiledCaptureDeclaration
 }>
 

@@ -16,6 +16,8 @@ import {
 } from '../player'
 import { HtmlPointerCaptureSourceAdapter } from '../capture'
 import type { RuntimeCaptureState } from '../capture'
+import { HtmlPersoEmitSourceAdapter } from './perso-emit-source-adapter'
+import type { Diagnostic } from '../../diagnostics'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
 import type { LayoutSnapshot, MotionBoundary } from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
@@ -83,6 +85,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   enableInteractionLock?: boolean
   /** Receives source-adapter failures instead of hiding them in native listeners. */
   onCaptureError?: (error: unknown) => void
+  /** Receives structured diagnostics emitted by the generic DOM event source. */
+  onEmitDiagnostic?: (diagnostic: Diagnostic) => void
   /** Observes one completed HTML capture sample for a materializer-specific preview. */
   onCaptureTrack?: (input: Readonly<{
     captureId: string
@@ -115,6 +119,7 @@ export class HtmlPlayerRunner {
   private readonly defaultTicker: Ticker | undefined
   private readonly nodes = {
     persoNodes: new Map<string, unknown>(),
+    persoParts: new Map<string, readonly import('../components').MaterializedPart[]>(),
     targetNodes: new Map<string, unknown>(),
   }
   private motionSystem: HtmlMotionSystem | undefined = undefined
@@ -122,6 +127,7 @@ export class HtmlPlayerRunner {
   private presentationMotionBoundaries: readonly MotionBoundary[] = []
   private readonly liveFirstLayouts = new Map<string, { timeMs: number; snapshot: LayoutSnapshot }>()
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
+  private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
   private readonly interactionLockEnabled: boolean
   private readonly interactionRoot: HTMLElement
@@ -192,6 +198,13 @@ export class HtmlPlayerRunner {
         materializer.invalidateStructure?.()
       },
     })
+    this.emitSourceAdapter = new HtmlPersoEmitSourceAdapter({
+      player: this.player,
+      compiledScene: options.compiledScene,
+      nodes: this.nodes,
+      eventTarget: options.captureEventTarget ?? resolveCaptureEventTarget(options.root),
+      onDiagnostic: options.onEmitDiagnostic,
+    })
 
     const compiledIntents = compileMotionSchedule(options.compiledScene, undefined, {
       resolveActionTransition: resolveHtmlMotionActionTransition,
@@ -210,6 +223,7 @@ export class HtmlPlayerRunner {
     if (this.motionSystem === undefined) {
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
+      this.emitSourceAdapter.attach()
       return visible
     }
     try {
@@ -236,6 +250,7 @@ export class HtmlPlayerRunner {
       this.presentMotion(this.player.getCurrentTimeMs())
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
+      this.emitSourceAdapter.attach()
       return visible
     } catch (error) {
       this.motionSystem.destroy()
@@ -527,10 +542,12 @@ export class HtmlPlayerRunner {
   destroy(): void {
     if (this.ownsEngine) this.engine.stop()
     this.captureSourceAdapter.destroy()
+    this.emitSourceAdapter.destroy()
     this.motionSystem?.destroy()
     this.liveFirstLayouts.clear()
     this.player.destroy()
     this.nodes.persoNodes.clear()
+    this.nodes.persoParts.clear()
     this.nodes.targetNodes.clear()
     this.restoreInteractionLock()
   }

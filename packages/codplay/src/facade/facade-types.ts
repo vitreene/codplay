@@ -144,8 +144,8 @@ export type CodPlayEventime = Readonly<{
   mode?: RuntimeEventInsertMode
 }>
 
-/** Scene or story address carried separately from one eventime declaration. */
-export type CodPlayEventimeAddress = Readonly<{
+/** Scene or story target carried separately from one eventime declaration. */
+export type CodPlayEventimeTarget = Readonly<{
   scope: 'scene' | 'story'
   storyId?: string
   trackId?: string
@@ -155,7 +155,7 @@ export type CodPlayEventimeAddress = Readonly<{
 export type CodPlayEventInput = Readonly<{
   instanceId: string
   eventime: CodPlayEventime
-  address: CodPlayEventimeAddress
+  target: CodPlayEventimeTarget
 }>
 
 /** Public event emitted by an eventime whose visibility is `public`. */
@@ -216,7 +216,7 @@ export type CodPlayTelco = Readonly<{
 
 /** Public event injection and observation surface of one instance. */
 export type CodPlayInstanceEvents = Readonly<{
-  emit: (eventime: CodPlayEventime, address: CodPlayEventimeAddress) => Promise<void>
+  emit: (eventime: CodPlayEventime, target: CodPlayEventimeTarget) => Promise<void>
   onEvent: (listener: CodPlayEventListener) => () => void
 }>
 

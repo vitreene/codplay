@@ -169,9 +169,9 @@ function createEventsFacade(
   eventListeners: Set<CodPlayEventListener>,
 ): CodPlayInstanceEvents {
   return {
-    emit: async (eventime, address) => {
+    emit: async (eventime, target) => {
       try {
-        player.emitEventime(eventime, address)
+        await player.emitEventime(eventime, target)
       } catch (error) {
         publishFacadeError(diagnostics, 'CODPLAY_EVENTIME_EMIT_FAILED', error, { instanceId })
       }

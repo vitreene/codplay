@@ -116,6 +116,32 @@ describe('materialize -> resolve -> solve', () => {
     expect(materializeScene(inactiveScene, 150).persos['main:root']?.actions).toHaveLength(0)
   })
 
+  it('materializes a live event from its active track when the story track is inactive', () => {
+    const alternateTrackScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        tracks: {
+          main: { active: false },
+          automatic: { active: true },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(alternateTrackScene)
+    expect(journal.appendLiveEvent({
+      eventId: 'automatic-a',
+      trackId: 'automatic',
+      storyId: 'main',
+      name: 'data:show',
+      applyAtMs: 100,
+      data: { className: { add: 'automatic' } },
+    })).toMatchObject({ ok: true })
+
+    const actions = materializeScene(alternateTrackScene, 150, journal).persos['main:root']?.actions
+    expect(actions).toHaveLength(1)
+    expect(actions?.[0]).toMatchObject({ trackId: 'automatic', eventId: 'automatic-a' })
+  })
+
   it('appends live events only to declared tracks and preserves event sequence', () => {
     const journal = new RuntimeTrackJournal(scene)
     const first = journal.appendLiveEvent({

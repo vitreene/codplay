@@ -1,5 +1,6 @@
 import {
   DiagnosticCollector,
+  type Diagnostic,
   type DiagnosticReport,
 } from '../diagnostics'
 import {
@@ -296,6 +297,10 @@ export class EngineFacadeImpl implements CodPlayEngine {
         resourceMetadata: new Map(this.resourceMetadata),
         instance: options,
         onPublicEvent: (event) => this.forwardPublicEvent(options.instanceId, eventListeners, event),
+        onEmitDiagnostic: (diagnostic: Diagnostic) => diagnostics.publish(withDiagnosticRefs(diagnostic, {
+          instanceId: options.instanceId,
+          sceneId: options.compiledScene.scene.id,
+        })),
         onResizeError: (error) => publishFacadeError(
           diagnostics,
           'CODPLAY_INSTANCE_RESIZE_FAILED',
@@ -353,7 +358,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
       })
       return
     }
-    await instance.events.emit(input.eventime, input.address)
+    await instance.events.emit(input.eventime, input.target)
   }
 
   /** Forwards one public event from the player to the instance listeners. */

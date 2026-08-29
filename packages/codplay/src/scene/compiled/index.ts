@@ -3,6 +3,7 @@ export type {
   CompiledActionTargetIndex,
   CompiledCaptureDeclaration,
   CompiledCaptureEvent,
+  CompiledEmitEvent,
   CompiledEmitDeclaration,
   CompiledEmitRule,
   CompiledFunctionReference,

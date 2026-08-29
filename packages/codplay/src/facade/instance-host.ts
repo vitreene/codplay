@@ -1,4 +1,5 @@
 import { RuntimeEngine } from '../runtime/engine'
+import type { Diagnostic } from '../diagnostics'
 import type { MountTargetDeclaration } from '../runtime/player/pipeline'
 import { RuntimePlayer, type PlayerInitResult } from '../runtime/player'
 import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner-html'
@@ -12,6 +13,7 @@ export type InstanceHostOptions = Readonly<{
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>
   instance: CodPlayInstanceOptions
   onPublicEvent: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
+  onEmitDiagnostic: (diagnostic: Diagnostic) => void
   onResizeError: (error: unknown) => void
 }>
 
@@ -37,6 +39,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     functions: options.instance.functions,
     strapCollections: options.instance.strapCollections,
     onPublicEvent: options.onPublicEvent,
+    onEmitDiagnostic: options.onEmitDiagnostic,
   })
   let stopResizeObservation = (): void => undefined
   try {

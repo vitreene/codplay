@@ -96,6 +96,7 @@ export type AppendStrapOutputInput = Readonly<{
 export type StrapOutputAppendResult = Readonly<{
   trackId: string
   events: readonly RuntimeTrackEvent[]
+  immediateEvents: readonly RuntimeTrackEvent[]
   materializedUpdateCount: number
 }>
 
@@ -203,6 +204,7 @@ export class RuntimeTrackJournal {
     }
 
     const events: RuntimeTrackEvent[] = []
+    const immediateEvents: RuntimeTrackEvent[] = []
     const storyId = input.storyId
     for (const event of input.output.events) {
       const appended = this.appendStrapEvent(
@@ -215,6 +217,7 @@ export class RuntimeTrackJournal {
       )
       if (!appended.ok) return appended
       events.push(appended.data)
+      immediateEvents.push(appended.data)
     }
     for (const update of input.output.updates) {
       const appended = this.appendStateUpdate(update, trackId, input.scope, input.storyId, input.anchorMs, input.mode)
@@ -247,7 +250,15 @@ export class RuntimeTrackJournal {
         events.push(appended.data)
       }
     }
-    return { ok: true, data: { trackId, events, materializedUpdateCount: input.output.updates.length + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined).length } }
+    return {
+      ok: true,
+      data: {
+        trackId,
+        events,
+        immediateEvents,
+        materializedUpdateCount: input.output.updates.length + input.output.planned.filter((occurrence) => occurrence.step.update !== undefined).length,
+      },
+    }
   }
 
   /** Applies one scene-level track control without creating a track. */
@@ -371,7 +382,8 @@ export class RuntimeTrackJournal {
       name: event.name,
       applyAtMs,
       data: event.data,
-      cascade,
+      cascade: event.cascade ?? cascade,
+      visibility: event.visibility,
       mode,
     })
   }

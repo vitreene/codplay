@@ -35,7 +35,9 @@ Materialize :
 - ne lit pas le DOM;
 - ne rejoue pas de strap;
 - porte l'elapsed time de chaque action active vers l'etape suivante.
-- ignore les occurrences des tracks desactivees;
+- ignore les occurrences des tracks desactivees ; pour un event live, la track
+  source est celle portée par l’event lui-même, indépendamment de la track par
+  défaut de sa story;
 - preserve les metadonnees de track et le chemin de declaration dans l'action materialisee.
 - derive les steps `ActionSequence` depuis leur occurrence source sans les append dans le journal;
 - invalide les steps différés remplacés par une occurrence ultérieure de la même clé;
@@ -62,6 +64,11 @@ les events de portée `story` restent limites a leur story. Les events de porté
 `public` sortent de la scene vers l'hote selon le contrat de visibilité, sans
 déclencher de communication scene-vers-scene. Les outputs de straps et les
 patches d'etat suivent exactement la meme selection de journal.
+
+Une story peut donc recevoir un event live depuis une track déclarée différente
+de sa track par défaut. L’activité de cette track live est évaluée
+indépendamment ; désactiver la track interactive d’une story n’efface pas une
+lecture externe injectée sur une track automatique active.
 
 ## Resolve
 

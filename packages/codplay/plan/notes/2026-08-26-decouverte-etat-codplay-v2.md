@@ -183,9 +183,9 @@ Il n'y a pas actuellement de `instance.capture()` public, de `instance.init()`
 ou de `instance.refresh()` dans la telco, ni d'accès générique de l'éditeur au
 DOM. L'accès authoring est un chantier séparé à reprendre avec l'éditeur.
 
-### 3.3 Eventimes et adressage
+### 3.3 Eventimes et ciblage
 
-`instance.events.emit(eventime, address)` et `engine.events.emit(input)
+`instance.events.emit(eventime, target)` et `engine.events.emit(input)
 aboutissent au même point d'entrée du player. `engine.events.emit` ne crée pas
 un journal ou un dispatcher parallèle : il adresse l'instance puis délègue au
 circuit normal.
@@ -204,7 +204,7 @@ Les règles temporelles fixées sont :
   son temps ;
 - `applyAtMs` est interne et ne doit pas être exposé ;
 - la syntaxe `startAt: "+200"` n'est pas un contrat V2 ;
-- l'adresse est séparée de l'eventime et porte l'instance puis la portée
+- la cible est séparée de l'eventime et porte l'instance puis la portée
   `scene` ou `story`, avec la track éventuelle ;
 - l'observation sortante concerne les events de visibilité `public` ;
 - la notion de `cascade` n'est pas réintroduite : la portée nommée du contrat

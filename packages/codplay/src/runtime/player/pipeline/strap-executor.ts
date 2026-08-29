@@ -9,6 +9,7 @@ export type StrapEvent = Readonly<{
   eventSeq?: number
   applyAtMs?: number
   cascade?: boolean
+  visibility?: 'story' | 'scene' | 'public'
 }>
 
 /** One immediate or planned strap step. */

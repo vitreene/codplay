@@ -81,7 +81,8 @@ future doit etre specifiquement decidee avant implementation.
 - warnings non bloquants pour les declarations absentes.
 - snapshots scene/story geles via `RuntimeStateStore`.
 - `RuntimeEventDispatcher` appelle chaque strap declare dans l'ordre, attend sa
-  completion, journalise son resultat, puis seulement reinjecte les emits;
+  completion, journalise son resultat, réinjecte ses événements immédiats dans le
+  pipeline puis réinjecte les emits déclarés;
 - plusieurs straps dans une meme regle gardent chacun leur provenance et leur
   track dediee;
 - le `RuntimePlayer` reconcilie les snapshots d'etat depuis le journal apres

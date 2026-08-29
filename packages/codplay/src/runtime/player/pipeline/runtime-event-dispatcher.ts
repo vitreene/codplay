@@ -1,4 +1,5 @@
 import type {
+  CompiledEventime,
   CompiledFunctionCollection,
   CompiledListenRule,
   CompiledRecord,
@@ -29,6 +30,8 @@ export type RuntimeEventInput = Readonly<{
   data?: CompiledRecord
   /** Routes the event through scene rules and global materialization. */
   cascade?: boolean
+  /** Named V2 event visibility; preferred over the legacy internal cascade flag. */
+  visibility?: CompiledEventime['visibility']
   /** Opaque context available to transforms and straps. */
   context?: Readonly<Record<string, unknown>>
   /** Opaque metadata retained with each journal event. */
@@ -74,6 +77,7 @@ type DispatchTarget = Readonly<{
   trackId: string
   storyId?: string
   cascade: boolean
+  visibility?: CompiledEventime['visibility']
 }>
 
 type PipelineSelection = Readonly<{
@@ -124,7 +128,7 @@ export class RuntimeEventDispatcher {
     this.eventIdFactory = options.eventIdFactory
   }
 
-  /** Dispatches one live event and recursively routes only declared emissions. */
+  /** Dispatches one live event through the complete V2 event circuit. */
   async dispatch(input: RuntimeEventInput): Promise<RuntimeEventDispatchResult> {
     const accumulator: DispatchAccumulator = {
       ok: true,
@@ -170,6 +174,7 @@ export class RuntimeEventDispatcher {
       applyAtMs: input.applyAtMs,
       data: input.data,
       cascade: target.cascade,
+      visibility: input.visibility,
       context: input.context,
       meta: input.meta,
       mode: input.mode,
@@ -186,6 +191,17 @@ export class RuntimeEventDispatcher {
     }
     accumulator.events.push(appended.data)
 
+    await this.processAppendedEvent(input, target, appended.data, depth, accumulator)
+  }
+
+  /** Processes one journaled event without appending it a second time. */
+  private async processAppendedEvent(
+    input: RuntimeEventInput,
+    target: DispatchTarget,
+    appended: RuntimeTrackEvent,
+    depth: number,
+    accumulator: DispatchAccumulator,
+  ): Promise<void> {
     if (isTrackControlEvent(input.name)) {
       const control = this.journal.applyControlEvent(input.name, input.data)
       if (!control.ok) {
@@ -202,17 +218,17 @@ export class RuntimeEventDispatcher {
     const selection = this.selectPipeline(input, target)
     if (selection === undefined) return
     const event: ListenEventInput = {
-      eventId: appended.data.eventId,
-      eventSeq: appended.data.eventSeq,
-      name: appended.data.name,
-      applyAtMs: appended.data.applyAtMs,
-      trackId: appended.data.trackId,
-      storyId: appended.data.storyId,
-      data: appended.data.data,
-      cascade: appended.data.cascade,
-      context: appended.data.context,
-      meta: appended.data.meta,
-      visibility: appended.data.visibility,
+      eventId: appended.eventId,
+      eventSeq: appended.eventSeq,
+      name: appended.name,
+      applyAtMs: appended.applyAtMs,
+      trackId: appended.trackId,
+      storyId: appended.storyId,
+      data: appended.data,
+      cascade: appended.cascade,
+      context: appended.context,
+      meta: appended.meta,
+      visibility: appended.visibility,
     }
     const execution = await executeListenPipeline({
       rules: selection.rules,
@@ -220,8 +236,8 @@ export class RuntimeEventDispatcher {
       functions: this.functions,
       straps: selection.straps,
       state: this.readState(selection.scope, selection.storyId),
-      meta: input.meta,
-      context: input.context,
+      meta: appended.meta ?? input.meta,
+      context: appended.context ?? input.context,
     })
     for (const issue of execution.issues) accumulator.issues.push(this.toDispatchIssue(issue, input.name, depth))
 
@@ -272,9 +288,51 @@ export class RuntimeEventDispatcher {
         input.applyAtMs,
         input.mode !== EVENT_INSERT_MODE_PERSIST_ONLY,
       )
+      for (const immediateEvent of appendedOutput.data.immediateEvents) {
+        await this.routeAppendedEvent(immediateEvent, depth + 1, accumulator)
+      }
     }
 
     await this.routeDeclaredEmissions(selection, execution.events, input, depth, accumulator)
+  }
+
+  /** Re-enters one already journaled immediate strap event into listen. */
+  private async routeAppendedEvent(
+    event: RuntimeTrackEvent,
+    depth: number,
+    accumulator: DispatchAccumulator,
+  ): Promise<void> {
+    if (depth > this.maxCascadeDepth) {
+      accumulator.issues.push({
+        code: 'RUNTIME_EVENT_CASCADE_LIMIT',
+        message: `Runtime event cascade exceeded the maximum depth of ${this.maxCascadeDepth}.`,
+        eventName: event.name,
+        depth,
+      })
+      return
+    }
+    if (event.update !== undefined) return
+
+    const input: RuntimeEventInput = {
+      name: event.name,
+      applyAtMs: event.applyAtMs,
+      eventId: event.eventId,
+      trackId: event.trackId,
+      storyId: event.storyId,
+      data: event.data,
+      cascade: event.cascade,
+      visibility: event.visibility,
+      context: event.context,
+      meta: event.meta,
+      mode: event.mode,
+    }
+    const target: DispatchTarget = {
+      trackId: event.trackId,
+      storyId: event.visibility === undefined || event.visibility === 'story' ? event.storyId : undefined,
+      cascade: event.visibility === undefined && event.cascade === true,
+      visibility: event.visibility,
+    }
+    await this.processAppendedEvent(input, target, event, depth, accumulator)
   }
 
   /** Resolves the declared storage track without creating a runtime track. */
@@ -283,6 +341,43 @@ export class RuntimeEventDispatcher {
     accumulator: DispatchAccumulator,
     depth: number,
   ): DispatchTarget | undefined {
+    if (input.visibility !== undefined) {
+      if (input.visibility === 'story') {
+        if (input.storyId === undefined) {
+          accumulator.ok = false
+          accumulator.issues.push({
+            code: 'RUNTIME_EVENT_STORY_ID_MISSING',
+            message: 'Story-visible runtime event requires storyId.',
+            eventName: input.name,
+            depth,
+          })
+          return undefined
+        }
+        const story = this.scene.scene.stories[input.storyId]
+        if (story === undefined) {
+          accumulator.ok = false
+          accumulator.issues.push({
+            code: 'RUNTIME_STORY_UNKNOWN',
+            message: `Runtime event story is not declared: ${input.storyId}`,
+            eventName: input.name,
+            depth,
+          })
+          return undefined
+        }
+        return {
+          trackId: input.trackId ?? resolveStoryTrackId(story),
+          storyId: story.id,
+          cascade: false,
+          visibility: input.visibility,
+        }
+      }
+      return {
+        trackId: input.trackId ?? TRACK_GLOBAL_ID,
+        storyId: undefined,
+        cascade: false,
+        visibility: input.visibility,
+      }
+    }
     const localStory = input.storyId !== undefined && input.cascade !== true
     if (localStory) {
       const story = this.scene.scene.stories[input.storyId!]
@@ -350,13 +445,17 @@ export class RuntimeEventDispatcher {
         const output = outputs[outputIndex]
         outputIndex += 1
         if (output === undefined) continue
-        const cascade = output.cascade === true
+        const visibility = output.visibility ?? input.visibility
+        const cascade = visibility === undefined ? output.cascade === true : false
         await this.route({
           name: output.name,
           applyAtMs: input.applyAtMs,
           data: output.data,
-          storyId: cascade ? undefined : selection.scope === 'story' ? selection.storyId : undefined,
+          storyId: visibility === 'story'
+            ? selection.storyId
+            : cascade ? undefined : selection.scope === 'story' ? selection.storyId : undefined,
           cascade,
+          visibility,
           context: output.context ?? input.context,
           meta: output.meta ?? input.meta,
           mode: input.mode,

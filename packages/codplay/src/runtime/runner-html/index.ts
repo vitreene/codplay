@@ -44,3 +44,10 @@ export type {
   HtmlPointerCaptureSourceAdapterOptions,
   HtmlPointerCaptureSourceNodes,
 } from '../capture'
+export {
+  HtmlPersoEmitSourceAdapter,
+} from './perso-emit-source-adapter'
+export type {
+  HtmlPersoEmitSourceAdapterOptions,
+  HtmlPersoEmitSourceNodes,
+} from './perso-emit-source-adapter'

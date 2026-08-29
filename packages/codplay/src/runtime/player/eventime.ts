@@ -12,8 +12,8 @@ export type RuntimePlayerEventime = Readonly<{
   mode?: RuntimeEventInsertMode
 }>
 
-/** Scene-local address kept separate from the eventime content. */
-export type RuntimePlayerEventimeAddress = Readonly<{
+/** Scene-local target kept separate from the eventime content. */
+export type RuntimePlayerEventimeTarget = Readonly<{
   scope: 'scene' | 'story'
   storyId?: string
   trackId?: string

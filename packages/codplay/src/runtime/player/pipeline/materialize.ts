@@ -85,18 +85,18 @@ function materializeSceneAtBoundary(
     const trackId = resolveStoryTrackId(story)
     const track = tracks.tracks[trackId]
     if (track === undefined) throw new Error(`Materialize track is not registered: ${trackId}`)
-    const events = trackIsActive(journal, trackId, track.active)
-      ? [
-          ...flattenEventimes(story.eventimes ?? [], trackId, track.order),
-          ...getLiveEventsForStory(
-            journal,
-            storyId,
-            timeMs,
-            includeBoundary,
-            options.includePersistOnly !== false,
-          ),
-        ]
-      : []
+    const events = [
+      ...(trackIsActive(journal, trackId, track.active)
+        ? flattenEventimes(story.eventimes ?? [], trackId, track.order)
+        : []),
+      ...getLiveEventsForStory(
+        journal,
+        storyId,
+        timeMs,
+        includeBoundary,
+        options.includePersistOnly !== false,
+      ),
+    ]
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
       const actions = materializePersoActions(events, perso.actions, timeMs, includeBoundary)

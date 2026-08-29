@@ -179,12 +179,26 @@ function isCompiledEmitDeclaration(value: unknown): boolean {
 
 /** Checks one compiled event-plus-capture rule. */
 function isCompiledEmitRule(value: unknown): boolean {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['event', 'capture'])) return false
-  return isCompiledCaptureEvent(value.event)
-    && (value.capture === undefined || isCompiledCaptureDeclaration(value.capture))
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['ref', 'keyCode', 'preventDefault', 'event', 'data', 'capture'])) return false
+  if (value.ref !== undefined && typeof value.ref !== 'string') return false
+  if (value.keyCode !== undefined && typeof value.keyCode !== 'string') return false
+  if (value.preventDefault !== undefined && typeof value.preventDefault !== 'boolean') return false
+  if (value.data !== undefined && !isCompiledRecord(value.data)) return false
+  if (value.capture === undefined) return isCompiledEmitEvent(value.event)
+  return isCompiledCaptureEvent(value.event) && isCompiledCaptureDeclaration(value.capture)
 }
 
-/** Checks one compiled event carried by a capture declaration. */
+/** Checks one ordinary V2 event carried by a non-capture emit rule. */
+function isCompiledEmitEvent(value: unknown): boolean {
+  return isPlainRecord(value)
+    && hasOnlyKeys(value, ['name', 'data', 'visibility', 'mode'])
+    && typeof value.name === 'string'
+    && (value.data === undefined || isCompiledRecord(value.data))
+    && (value.visibility === undefined || value.visibility === 'story' || value.visibility === 'scene' || value.visibility === 'public')
+    && (value.mode === undefined || value.mode === 'apply-now' || value.mode === 'persist-only')
+}
+
+/** Checks one compiled event carried by an existing capture declaration. */
 function isCompiledCaptureEvent(value: unknown): boolean {
   return isPlainRecord(value)
     && hasOnlyKeys(value, ['name', 'data', 'cascade', 'mode'])

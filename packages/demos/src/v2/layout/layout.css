@@ -161,6 +161,14 @@ select {
   margin-top: 0.4rem;
 }
 
+.v2-demo-telco__playback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
 .v2-demo-button,
 .telco-button {
   appearance: none;

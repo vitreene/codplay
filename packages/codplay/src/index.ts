@@ -13,7 +13,7 @@ export type {
   CodPlayEngine,
   CodPlayEngineOptions,
   CodPlayEventime,
-  CodPlayEventimeAddress,
+  CodPlayEventimeTarget,
   CodPlayEventInput,
   CodPlayEvents,
   CodPlayEventListener,

@@ -25,6 +25,11 @@ import {
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../config/strap-scope'
 import { EVENT_INSERT_MODE_PERSIST_ONLY } from '../config/event-insertion'
 import { TRACK_GLOBAL_ID } from '../config/track'
+import {
+  TRACK_EVENT_ACTIVATE,
+  TRACK_EVENT_DEACTIVATE,
+  TRACK_EVENT_TOGGLE,
+} from '../config/track-events'
 import { RenderSync } from './render-sync'
 import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import type { RuntimeComponentRuntime } from '../components'
@@ -72,7 +77,7 @@ import { StructuralTimeline } from './structural-timeline'
 import { reconstructPlayerScene } from './scene'
 import {
   type RuntimePlayerEventime,
-  type RuntimePlayerEventimeAddress,
+  type RuntimePlayerEventimeTarget,
   type RuntimePlayerEventimeResult,
 } from './eventime'
 import {
@@ -397,17 +402,33 @@ export class RuntimePlayer {
   }
 
   /** Integrates one external relative eventime into the same runtime journal. */
-  emitEventime(
+  async emitEventime(
     eventime: RuntimePlayerEventime,
-    address: RuntimePlayerEventimeAddress,
-  ): RuntimePlayerEventimeResult {
+    target: RuntimePlayerEventimeTarget,
+  ): Promise<RuntimePlayerEventimeResult> {
     this.requireState(PLAYER_LIFECYCLE_READY, PLAYER_LIFECYCLE_PLAYING, PLAYER_LIFECYCLE_PAUSED)
     const normalized = normalizeRuntimeEventime(eventime, true)
-    const target = resolveEventimeTarget(this.compiledScene, address)
+    const resolvedTarget = resolveEventimeTarget(this.compiledScene, target)
+    if (isImmediateTrackControlEvent(eventime)) {
+      const dispatched = await this.emitEvent({
+        name: eventime.name,
+        applyAtMs: this.currentTimeMs,
+        trackId: resolvedTarget.trackId,
+        storyId: resolvedTarget.storyId,
+        cascade: resolvedTarget.cascade,
+        visibility: normalized.eventime.visibility,
+        data: normalized.eventime.data,
+        mode: normalized.mode,
+      })
+      if (!dispatched.ok) {
+        throw new Error(dispatched.issues.map((issue) => issue.message).join(' '))
+      }
+      return { events: dispatched.events }
+    }
     const appended = this.trackJournal.appendAnchoredEventimes({
-      trackId: target.trackId,
-      storyId: target.storyId,
-      cascade: target.cascade,
+      trackId: resolvedTarget.trackId,
+      storyId: resolvedTarget.storyId,
+      cascade: resolvedTarget.cascade,
       anchorMs: this.currentTimeMs,
       eventimes: [normalized.eventime],
       mode: normalized.mode,
@@ -939,17 +960,17 @@ export class RuntimePlayer {
 /** Resolves the declared story or scene target for one eventime insertion. */
 function resolveEventimeTarget(
   scene: CompiledScene,
-  address: RuntimePlayerEventimeAddress,
+  target: RuntimePlayerEventimeTarget,
 ): Readonly<{ trackId: string; storyId?: string; cascade: boolean }> {
-  if (address.scope === 'scene') {
-    if (address.storyId !== undefined) throw new Error('Scene eventime address must not contain storyId.')
-    return { trackId: address.trackId ?? TRACK_GLOBAL_ID, cascade: true }
+  if (target.scope === 'scene') {
+    if (target.storyId !== undefined) throw new Error('Scene eventime target must not contain storyId.')
+    return { trackId: target.trackId ?? TRACK_GLOBAL_ID, cascade: true }
   }
-  if (address.storyId === undefined) throw new Error('Story eventime address requires storyId.')
-  const story = scene.scene.stories[address.storyId]
-  if (story === undefined) throw new Error(`Eventime story is not declared: ${address.storyId}`)
+  if (target.storyId === undefined) throw new Error('Story eventime target requires storyId.')
+  const story = scene.scene.stories[target.storyId]
+  if (story === undefined) throw new Error(`Eventime story is not declared: ${target.storyId}`)
   return {
-    trackId: address.trackId ?? story.trackId ?? story.id,
+    trackId: target.trackId ?? story.trackId ?? story.id,
     storyId: story.id,
     cascade: false,
   }
@@ -982,4 +1003,13 @@ function normalizeRuntimeEventime(
     },
     mode: eventime.mode,
   }
+}
+
+/** Identifies an immediate public command that must change track activity now. */
+function isImmediateTrackControlEvent(eventime: RuntimePlayerEventime): boolean {
+  return eventime.startAt === undefined
+    && (eventime.events === undefined || eventime.events.length === 0)
+    && (eventime.name === TRACK_EVENT_ACTIVATE
+      || eventime.name === TRACK_EVENT_DEACTIVATE
+      || eventime.name === TRACK_EVENT_TOGGLE)
 }

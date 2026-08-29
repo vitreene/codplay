@@ -1,6 +1,7 @@
 import type {
   AuthorCaptureDeclaration,
   AuthorCaptureEvent,
+  AuthorEmitEvent,
   AuthorEmitDeclaration,
   AuthorEmitRule,
 } from '../capture'
@@ -12,6 +13,7 @@ import type { AuthorFunction } from '../types'
 import type {
   CompiledCaptureDeclaration,
   CompiledCaptureEvent,
+  CompiledEmitEvent,
   CompiledEmitDeclaration,
   CompiledEmitRule,
 } from './types'
@@ -41,11 +43,36 @@ function compileEmitRule(
   scope: string,
   state: ExtractionState,
 ): CompiledEmitRule {
+  const base = {
+    ...(rule.ref === undefined ? {} : { ref: rule.ref }),
+    ...(rule.keyCode === undefined ? {} : { keyCode: rule.keyCode }),
+    ...(rule.preventDefault === undefined ? {} : { preventDefault: rule.preventDefault }),
+    data: rule.data === undefined ? undefined : extractCompiledRecord(rule.data, `${scope}.data`, state),
+  }
+  if (rule.capture === undefined) {
+    return {
+      ...base,
+      event: compileEmitEvent(rule.event, `${scope}.event`, state),
+    }
+  }
   return {
+    ...base,
     event: compileCaptureEvent(rule.event, `${scope}.event`, state),
-    capture: rule.capture === undefined
-      ? undefined
-      : compileCaptureDeclaration(rule.capture, `${scope}.capture`, state),
+    capture: compileCaptureDeclaration(rule.capture, `${scope}.capture`, state),
+  }
+}
+
+/** Compiles one ordinary V2 emit event with named visibility. */
+function compileEmitEvent(
+  event: AuthorEmitEvent,
+  scope: string,
+  state: ExtractionState,
+): CompiledEmitEvent {
+  return {
+    name: event.name,
+    ...(event.data === undefined ? {} : { data: extractCompiledRecord(event.data, `${scope}.data`, state) }),
+    ...(event.visibility === undefined ? {} : { visibility: event.visibility }),
+    ...(event.mode === undefined ? {} : { mode: event.mode }),
   }
 }
 

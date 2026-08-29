@@ -128,6 +128,7 @@ export function propagateListenEvent(
         name: typeof emission.name === 'string' ? emission.name : input.name,
         data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : data,
         cascade: typeof emission.cascade === 'boolean' ? emission.cascade : input.cascade,
+        visibility: isEventVisibility(emission.visibility) ? emission.visibility : input.visibility,
       })
     }
   }
@@ -200,9 +201,15 @@ export async function executeListenPipeline(
         name: typeof emission.name === 'string' ? emission.name : transformedEvent.name,
         data: isPlainRecord(emission.data) ? emission.data as CompiledRecord : transformedEvent.data,
         cascade: typeof emission.cascade === 'boolean' ? emission.cascade : transformedEvent.cascade,
+        visibility: isEventVisibility(emission.visibility) ? emission.visibility : transformedEvent.visibility,
       })
     }
   }
 
   return { events: matched ? events : [], straps, issues }
+}
+
+/** Checks the named V2 event visibility carried by a listen emission. */
+function isEventVisibility(value: unknown): value is CompiledEventime['visibility'] {
+  return value === 'story' || value === 'scene' || value === 'public'
 }

@@ -217,6 +217,58 @@ function compiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Builds one ordinary `Perso.emit` fixture with a private layout control. */
+function persoEmitCompiledScene(controlRef = 'control'): CompiledScene {
+  const scene: SceneDoc = {
+    id: 'html-runner-perso-emit',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'layout',
+          name: 'Quiz layout',
+          type: 'layout',
+          initial: {
+            move: '@root',
+            markup: '<section><button data-part="control"></button></section>',
+          },
+          actions: {},
+          emit: {
+            click: {
+              ref: controlRef,
+              data: { fromAction: 'yes' },
+              event: {
+                name: 'control:clicked',
+                data: { fromEvent: 'yes' },
+                visibility: 'story',
+              },
+            },
+            keydown: {
+              keyCode: 'Space',
+              preventDefault: true,
+              event: { name: 'control:space', visibility: 'story' },
+            },
+          },
+        }, {
+          id: 'status',
+          type: 'tag',
+          initial: { tag: 'p', move: '@root', content: 'idle' },
+          actions: {
+            'control:clicked': { content: 'clicked' },
+            'control:space': { content: 'space' },
+          },
+        }],
+        listen: [],
+      },
+    },
+  }
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), {
+    createdAt: '2026-08-26T00:00:00.000Z',
+  }).build(scene)
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Builds a compiled scene whose only timeline change is continuous style state. */
 function continuousCompiledScene(): CompiledScene {
   const scene: SceneDoc = {
@@ -679,6 +731,115 @@ describe('HtmlPlayerRunner', () => {
     expect(root.childNodes).toEqual([])
     expect(runner.getPersoNode('main:item')).toBeUndefined()
     expect(runner.getTargetNode('outlet')).toBeUndefined()
+  })
+
+  it('routes ordinary Perso.emit through the V2 player and preserves V1 action data', async () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const source = new FakeEventTarget()
+    const runner = new HtmlPlayerRunner({
+      id: 'perso-emit-runner',
+      compiledScene: persoEmitCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      captureEventTarget: source as unknown as EventTarget,
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const layout = runner.getPersoNode('main:layout') as FakeElement
+    const control = layout.childNodes[0]
+    const status = runner.getPersoNode('main:status') as FakeElement
+    expect(status.textContent).toBe('idle')
+
+    source.dispatch('click', control)
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(status.textContent).toBe('idle')
+    expect(runner.player.trackJournal.getEventsForStory('main')).toHaveLength(0)
+
+    runner.play(ticker())
+    source.dispatch('click', control)
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+
+    expect(status.textContent).toBe('clicked')
+    const emitted = runner.player.trackJournal.getEventsForStory('main').find((event) => event.name === 'control:clicked')
+    expect(emitted).toMatchObject({
+      visibility: 'story',
+      data: {
+        fromAction: 'yes',
+        fromEvent: 'yes',
+        self: { id: 'layout', name: 'Quiz layout', storyId: 'main' },
+      },
+    })
+
+    runner.pause()
+    source.dispatch('click', control)
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(runner.player.trackJournal.getEventsForStory('main').filter((event) => event.name === 'control:clicked')).toHaveLength(1)
+
+    runner.destroy()
+    source.dispatch('click', control)
+    await Promise.resolve()
+    expect(runner.player.trackJournal.getEventsForStory('main').filter((event) => event.name === 'control:clicked')).toHaveLength(1)
+  })
+
+  it('filters V1 keyCode and applies preventDefault before dispatch', async () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const source = new FakeEventTarget()
+    const runner = new HtmlPlayerRunner({
+      id: 'perso-emit-keyboard-runner',
+      compiledScene: persoEmitCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      captureEventTarget: source as unknown as EventTarget,
+    })
+
+    expect(runner.init().ok).toBe(true)
+    runner.play(ticker())
+    let prevented = false
+    source.dispatch('keydown', null, {
+      code: 'Enter',
+      preventDefault: () => { prevented = true },
+    })
+    await Promise.resolve()
+    expect(prevented).toBe(false)
+    expect(runner.player.trackJournal.getEventsForStory('main')).toHaveLength(0)
+
+    source.dispatch('keydown', null, {
+      code: 'Space',
+      preventDefault: () => { prevented = true },
+    })
+    await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 0))
+    expect(prevented).toBe(true)
+    expect(runner.player.trackJournal.getEventsForStory('main').some((event) => event.name === 'control:space')).toBe(true)
+    runner.destroy()
+  })
+
+  it('reports an unknown emit ref through the V2 diagnostic callback', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const source = new FakeEventTarget()
+    const diagnostics: Array<{ code: string; details?: { refs?: { persoId?: string } } }> = []
+    const runner = new HtmlPlayerRunner({
+      id: 'perso-emit-diagnostic-runner',
+      compiledScene: persoEmitCompiledScene('missing-control'),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      captureEventTarget: source as unknown as EventTarget,
+      onEmitDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    })
+
+    expect(runner.init().ok).toBe(true)
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      code: 'AUTHOR_COMPONENT_REF_UNKNOWN',
+      details: expect.objectContaining({
+        refs: { storyId: 'main', persoId: 'layout' },
+      }),
+    }))
+    runner.destroy()
   })
 
   it('presents continuous color, opacity and translation without changing parentage', () => {

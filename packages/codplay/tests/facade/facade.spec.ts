@@ -457,7 +457,7 @@ describe('CodPlay facade', () => {
 
     await codplay.events.emit({
       instanceId: 'instance-a',
-      address: { scope: 'scene' },
+      target: { scope: 'scene' },
       eventime: {
         name: 'public:root',
         visibility: 'public',

@@ -564,13 +564,13 @@ pas une seconde surface de façade hors des capacités explicitement retenues.
 L'eventime injecté reprend la structure déclarée dans une scène : un nom, un
 `startAt` lorsqu'il est présent, des données éventuelles et des eventimes
 enfants éventuels.
-Il n'existe pas de forme `emit` distincte. L'instance reçoit en plus un
-contexte d'adressage séparé, nécessaire parce qu'une déclaration de scène
-hérite déjà de l'adresse de son story ou de sa track.
+Il n'existe pas de forme `emit` distincte. L'instance reçoit en plus une cible
+séparée, nécessaire parce qu'une déclaration de scène hérite déjà de la cible
+de son story ou de sa track.
 
 ```text
-instance.events.emit(eventime, contexte d'adressage séparé)
-  -> validation de l'adresse par la façade
+instance.events.emit(eventime, target)
+  -> validation de la cible par la façade
   -> entrée eventime unique du player
      -> immédiat : enregistrement à l'ancrage, présentation au prochain tick
      -> planifié : inscription à son temps dans le journal
@@ -610,6 +610,14 @@ reprise. Le chemin public `instance.events.emit` utilise l'entrée eventime du
 player ; le chemin interne historique `RuntimePlayer.emit()` conserve sa
 sémantique propre aux entrées runtime déjà constituées et ne constitue pas une
 seconde API publique.
+
+Exception de commande officielle : un eventime racine sans `startAt`, sans
+enfants, dont le nom est `track:activate`, `track:deactivate` ou `track:toggle`,
+est traité comme une commande de sélection de tracks. Il passe par le
+dispatcher live au temps courant afin d’appliquer immédiatement l’activité des
+tracks, tout en conservant la commande dans le journal. Un eventime portant un
+`startAt`, ou tout autre eventime, conserve la sémantique de timeline et n’est
+pas pré-exécuté par la façade.
 
 La forme publique reste celle d'un eventime déclarable dans une scène :
 `name`, `startAt` relatif lorsqu'il est présent, sa portée nommée éventuelle,
@@ -673,11 +681,11 @@ Le dispatcher interne actuel fournit seulement un point de comparaison : son
 cible globale vers le track global. Ce nom interne est un écart à résorber ; il
 ne constitue pas l'API CodPlay et ne doit pas réapparaître dans le contrat.
 
-L'entrée publique adressée est `engine.events.emit(input)`. `input` porte
-`instanceId`, l'eventime racine et le contexte d'adressage de la scène. L'engine
+L'entrée publique ciblée est `engine.events.emit(input)`. `input` porte
+`instanceId`, l'eventime racine et la cible de la scène. L'engine
 ne résout pas l'eventime : il vérifie l'instance, lui transmet l'eventime et le
-contexte, puis utilise le même circuit que
-`instance.events.emit(eventime, contexte d'adressage)`. L'event aboutit donc dans le
+la cible, puis utilise le même circuit que
+`instance.events.emit(eventime, target)`. L'event aboutit donc dans le
 player de l'instance ciblée, puis dans son journal et sa reconstruction ; le
 dispatcher interne n'est appelé que par le circuit central lorsque la
 sémantique de l'entrée le requiert. Une erreur d'injection est publiée par le
@@ -1100,7 +1108,7 @@ engine.events.emit(input)
 d'entrée lorsque l'hôte fournit les frames. Dans ce second mode, le scheduler
 de l'hôte reste sa propriété et n'est jamais répliqué par CodPlay. `pause` ou
 `stop` peuvent laisser les appels `advance` arriver, mais aucune frame n'est
-alors propagée aux instances. `emit` lit dans `input` l'`instanceId`, l'eventime et le contexte d'adressage
+alors propagée aux instances. `emit` lit dans `input` l'`instanceId`, l'eventime et la cible
 `scene`/`story`/`track`, puis transmet ces mêmes données à l'instance. Une
 erreur d'injection est publiée par le diagnostic ; l'engine adresse et ordonne,
 il ne résout pas les règles de scène.
@@ -1130,12 +1138,12 @@ destruction éventuelle de l'adaptateur telco.
 #### Events entrants et capture
 
 ```text
-instance.events.emit(eventime, contexte d'adressage)
+instance.events.emit(eventime, target)
 ```
 
-L'adresse est donc un contexte de commande séparé ; elle ne modifie pas la
+La cible est donc un contexte de commande séparé ; elle ne modifie pas la
 forme de l'eventime déclaré dans une scène. `engine.events.emit` reçoit
-`instanceId` pour sélectionner l'instance, puis transmet le même contexte
+`instanceId` pour sélectionner l'instance, puis transmet la même cible
 `story`/`scene`/`track` que celui utilisé par une scène. Il ne crée pas de
 nouveau type de cible et ne déduit jamais le track à partir du nom de
 l'eventime.
@@ -1143,7 +1151,7 @@ l'eventime.
 `instance.events.emit` reçoit un eventime racine pouvant contenir des eventimes enfants et une
 cible `scene` ou `story` avec son `trackId` éventuel. Il utilise le temps
 logique courant de l'instance comme ancrage et le journal unique. `startAt`
-reste un offset relatif ; son omission à la racine vaut zéro. L'adresse n'est
+reste un offset relatif ; son omission à la racine vaut zéro. La cible n'est
 jamais déduite du nom de l'eventime.
 Les captures suivent la même frontière `begin -> track -> end / cancel`, sans
 variante DnD dans la façade.
@@ -1217,7 +1225,7 @@ cachées de l'instance.
   et présenté au prochain tick ; event daté inscrit dans la timeline ;
 - [x] retenir `startAt` comme offset relatif et ne pas exposer de temps absolu ;
   valider la convention d'une racine sans `startAt` pour l'immédiat ;
-- [x] conserver la forme du contexte d'adressage : `instanceId` au niveau engine,
+- [x] conserver la forme de la cible : `instanceId` au niveau engine,
   puis story/scene/track au niveau de l'instance ;
 - [x] ne pas exposer les classes internes comme contrat public.
 
@@ -1275,7 +1283,7 @@ cachées de l'instance.
 
 #### Phase D — events et capture — façade eventime implémentée ; capture publique hors tranche
 
-- [x] appliquer le transport d'adresse séparée et les règles d'adressage
+- [x] appliquer le transport de cible séparée et les règles de ciblage
   `instanceId -> scene/story -> trackId` ;
 - [x] valider et détacher la forme externe de l'eventime avant toute écriture dans
   le runtime ;

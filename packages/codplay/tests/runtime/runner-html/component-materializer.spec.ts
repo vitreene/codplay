@@ -98,6 +98,32 @@ describe('HTML component materializer services', () => {
     expect(node.firstElementChild).toBeNull()
   })
 
+  it('keeps a stable text node when the content value is unchanged', () => {
+    const content = createHtmlContentService()
+    const node = document.createElement('button')
+
+    content.apply(node, 'Suivant')
+    const textNode = node.firstChild
+    content.apply(node, 'Suivant')
+
+    expect(node.firstChild).toBe(textNode)
+    expect(node.textContent).toBe('Suivant')
+  })
+
+  it('replaces an element child even when its text matches the next value', () => {
+    const content = createHtmlContentService()
+    const node = document.createElement('button')
+    const child = document.createElement('span')
+    child.textContent = 'Suivant'
+
+    content.apply(node, child)
+    content.apply(node, 'Suivant')
+
+    expect(node.firstElementChild).toBeNull()
+    expect(node.firstChild?.nodeType).toBe(3)
+    expect(node.textContent).toBe('Suivant')
+  })
+
   it('removes previously managed style and attribute values', () => {
     const catalog = createHtmlServices()
     const services = catalog

@@ -26,6 +26,8 @@ export type { HtmlMaterializerRuntimeContext } from '../../services/html-materia
 /** Mutable DOM maps owned by one HTML player host. */
 export type HtmlComponentMaterializerNodes = Readonly<{
   persoNodes: Map<string, unknown>
+  /** All rendered parts, including private controls used by V1-compatible refs. */
+  persoParts?: Map<string, readonly MaterializedPart[]>
   targetNodes: Map<string, unknown>
 }>
 
@@ -67,6 +69,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
       : requireMarkupService(moduleServices, identity.componentId)
 
     this.nodes.persoNodes.set(identity.componentId, rootNode)
+    this.nodes.persoParts?.set(identity.componentId, materialization.parts)
     markHtmlItem(rootNode, identity.componentId)
     try {
       const cleanupMarkup = markup === undefined
@@ -89,6 +92,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
           cleanupMarkup?.()
           detachMaterializedRoot(rootNode)
           this.nodes.persoNodes.delete(identity.componentId)
+          this.nodes.persoParts?.delete(identity.componentId)
           for (const part of publicParts) {
             if (this.nodes.targetNodes.get(part.partId) === part.nodeRef) this.nodes.targetNodes.delete(part.partId)
           }
@@ -96,6 +100,7 @@ export class HtmlComponentMaterializer implements RuntimeMaterializer {
       }
     } catch (error) {
       this.nodes.persoNodes.delete(identity.componentId)
+      this.nodes.persoParts?.delete(identity.componentId)
       detachMaterializedRoot(rootNode)
       throw error
     }

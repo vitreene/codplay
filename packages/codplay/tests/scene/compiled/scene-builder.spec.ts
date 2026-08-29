@@ -445,4 +445,49 @@ describe('SceneBuilder', () => {
     expect(result.functions[compiledCapture!.trackCommandRef!.ref]).toBe(trackCommand)
     expect(result.functions[compiledCapture!.endCaptureRef!.ref]).toBe(endCapture)
   })
+
+  it('preserves ordinary V1 emit fields while compiling V2 visibility', () => {
+    const builder = new SceneBuilder(createCatalogForFixtures().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'ordinary-emit-compiled-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'button',
+            type: 'text',
+            initial: {},
+            emit: {
+              click: {
+                ref: 'control',
+                keyCode: 'Space',
+                preventDefault: true,
+                data: { answerId: 'yes' },
+                event: {
+                  name: 'answer:selected',
+                  data: { source: 'button' },
+                  visibility: 'story',
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const emit = result.compiledScene.scene.stories.main?.persos[0]?.emit?.click
+    expect(emit).toMatchObject({
+      ref: 'control',
+      keyCode: 'Space',
+      preventDefault: true,
+      data: { answerId: 'yes' },
+      event: {
+        name: 'answer:selected',
+        data: { source: 'button' },
+        visibility: 'story',
+      },
+    })
+  })
 })

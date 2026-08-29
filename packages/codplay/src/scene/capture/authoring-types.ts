@@ -1,6 +1,9 @@
 /** Insertion policy available to an event produced by a capture conclusion. */
 export type CaptureEventMode = 'apply-now' | 'persist-only'
 
+/** Named visibility of one V2 runtime event. */
+export type EventVisibility = 'story' | 'scene' | 'public'
+
 /** Duration policy used to anchor events returned by `endCapture`. */
 export type CaptureEndDurationMode = 'value' | 'default' | 'capture'
 
@@ -9,6 +12,14 @@ export type AuthorCaptureEvent = Readonly<{
   name: string
   data?: Record<string, unknown>
   cascade?: boolean
+  mode?: CaptureEventMode
+}>
+
+/** Ordinary V2 event carried by a non-capture `Perso.emit` rule. */
+export type AuthorEmitEvent = Readonly<{
+  name: string
+  data?: Record<string, unknown>
+  visibility?: EventVisibility
   mode?: CaptureEventMode
 }>
 
@@ -78,11 +89,27 @@ export type AuthorCaptureDeclaration = Readonly<{
   endCapture?: AuthorCaptureEndFunction
 }>
 
-/** One authoring emit rule, following the V1 event-plus-capture shape. */
-export type AuthorEmitRule = Readonly<{
-  event: AuthorCaptureEvent
-  capture?: AuthorCaptureDeclaration
+/** Common authoring fields shared by ordinary and captured emit rules. */
+type AuthorEmitRuleBase = Readonly<{
+  /** Optional materialized part reference used by the DOM source adapter. */
+  ref?: string
+  /** Matches KeyboardEvent.code, retaining the V1 property name. */
+  keyCode?: string
+  /** Prevents the native browser default for a matched event. */
+  preventDefault?: boolean
+  /** Author data attached to this action, at the same level as `event`. */
+  data?: Record<string, unknown>
 }>
+
+/** Ordinary V2 `Perso.emit` rule with named event visibility. */
+export type AuthorEmitRule = (AuthorEmitRuleBase & Readonly<{
+  event: AuthorEmitEvent
+  capture?: undefined
+}>) | (AuthorEmitRuleBase & Readonly<{
+  /** The existing source-agnostic capture declaration keeps its own event shape. */
+  event: AuthorCaptureEvent
+  capture: AuthorCaptureDeclaration
+}>)
 
 /** Emit declarations indexed by the source trigger understood by an adapter. */
 export type AuthorEmitDeclaration = Record<string, AuthorEmitRule | readonly AuthorEmitRule[]>

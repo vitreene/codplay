@@ -1,40 +1,24 @@
 import type { CompiledRecord } from "codplay"
 import type { PersoDoc, SceneDoc, StoryDoc } from "codplay/scene/types"
 import { correctionIconPartId, selectionIconPartId } from "codplay/runtime/components/input"
+import {
+  DEFAULT_SERIES_CONFIG,
+  SERIES_BACKGROUNDS,
+  SERIES_BORDERS,
+  SERIES_QUESTIONS,
+  SERIES_THRESHOLD,
+  SERIES_TOTAL,
+  type ResolvedQuizQuestion,
+} from "./series-data"
+import {
+  QUIZ_SERIES_AUTO_TRACK_ID,
+  QUIZ_SERIES_INTERACTIVE_TRACK_ID,
+} from "./track-contract"
+
+export { QUIZ_SERIES_AUTO_TRACK_ID, QUIZ_SERIES_INTERACTIVE_TRACK_ID } from "./track-contract"
 
 type QuizSeriesSelectionPayload = {
   answerId: string
-}
-
-type QuizQuestionType = "boolean" | "single" | "multiple"
-
-type QuizAnswer = {
-  id: string
-  label: string
-  isCorrect: boolean
-}
-
-type QuizQuestionLabels = {
-  validate: string
-  next: string
-  correct: string
-  incorrect: string
-  multipleHint: string
-}
-
-type ResolvedQuizQuestion = {
-  index: number
-  type: QuizQuestionType
-  prompt: string
-  answers: QuizAnswer[]
-  labels: QuizQuestionLabels
-}
-
-type QuizQuestionStoryConfig = {
-  showCorrection: boolean
-  showResult: boolean
-  maxRetries: number
-  disableValidateAfterSubmit: boolean
 }
 
 type QuizQuestionResolvedPayload = {
@@ -163,74 +147,15 @@ function handleSeriesQuestionSubmit(prefix: string, state: Readonly<Record<strin
 
 // --- Configuration ---
 
-export const SERIES_TOTAL = 3
-const SERIES_THRESHOLD = 2
-
 /** Duration exposed by this scene to the common V2 layout. */
 export const SCENE_DURATION_MS = 20_000
-
-const SERIES_LABELS = {
-  validate: "Valider",
-  next: "Suivant",
-  correct: "Correct !",
-  incorrect: "Incorrect",
-  multipleHint: "Plusieurs réponses possibles"
-}
-
-const SERIES_BACKGROUNDS = ["#eff6ff", "#f0fdf4", "#fff7ed"]
-const SERIES_BORDERS = ["#2563eb", "#16a34a", "#ea580c"]
-
-const DEFAULT_SERIES_CONFIG: QuizQuestionStoryConfig = {
-  showCorrection: true,
-  showResult: true,
-  maxRetries: 0,
-  disableValidateAfterSubmit: true
-}
-
-// --- Questions (français) ---
-
-const SERIES_QUESTIONS: ResolvedQuizQuestion[] = [
-  {
-    index: 1,
-    type: "boolean",
-    prompt: "La Tour Eiffel se trouve à Paris.",
-    answers: [
-      { id: "vrai", label: "Vrai", isCorrect: true },
-      { id: "faux", label: "Faux", isCorrect: false }
-    ],
-    labels: SERIES_LABELS
-  },
-  {
-    index: 2,
-    type: "single",
-    prompt: "Quelle est la plus grande planète du système solaire ?",
-    answers: [
-      { id: "mars", label: "Mars", isCorrect: false },
-      { id: "jupiter", label: "Jupiter", isCorrect: true },
-      { id: "saturne", label: "Saturne", isCorrect: false },
-      { id: "neptune", label: "Neptune", isCorrect: false }
-    ],
-    labels: SERIES_LABELS
-  },
-  {
-    index: 3,
-    type: "multiple",
-    prompt: "Parmi ces éléments, lesquels sont des fruits ?",
-    answers: [
-      { id: "pomme", label: "Pomme", isCorrect: true },
-      { id: "carotte", label: "Carotte", isCorrect: false },
-      { id: "banane", label: "Banane", isCorrect: true },
-      { id: "poireau", label: "Poireau", isCorrect: false }
-    ],
-    labels: SERIES_LABELS
-  }
-]
 
 // --- Container story ---
 
 function createSeriesContainerStory(): StoryDoc {
   return {
     id: "main",
+    trackId: QUIZ_SERIES_INTERACTIVE_TRACK_ID,
     initial: { move: "@root" },
     straps: undefined,
     listen: [],
@@ -356,6 +281,7 @@ export function createSeriesProgressStory(options: SeriesProgressStoryOptions = 
 
   return {
     id: storyId,
+    trackId: QUIZ_SERIES_INTERACTIVE_TRACK_ID,
     initial: { move: { target: parentId } },
     straps: undefined,
     listen: [],
@@ -538,16 +464,16 @@ function createSeriesQuestionStory(
           backgroundColor,
           margin: 0,
           boxSizing: "border-box",
-          ...(position > 0 ? { transform: "translateX(100%)" } : {})
+          x: position > 0 ? "100%" : "0%"
         },
         move: { target: "quiz-series:slot" }
       },
       actions: {
         [`quiz:question:${position}:hide`]: {
-          style: { x: { from: 0, to: "-100%", duration: 350, ease: "inOutCubic" } }
+          style: { x: { from: "0%", to: "-100%", duration: 350, ease: "inOutCubic" } }
         },
         [`quiz:question:${position}:show`]: {
-          style: { x: { from: "100%", to: 0, duration: 350, ease: "inOutCubic" } }
+          style: { x: { from: "100%", to: "0%", duration: 350, ease: "inOutCubic" } }
         }
       }
     },
@@ -647,6 +573,7 @@ function createSeriesQuestionStory(
 
   return {
     id: storyId,
+    trackId: QUIZ_SERIES_INTERACTIVE_TRACK_ID,
     initial: { move: { target: "quiz-series:slot" } },
     state: {
       question,
@@ -697,6 +624,7 @@ function createSeriesResultStory(): StoryDoc {
 
   return {
     id: "quiz-series-result-story",
+    trackId: QUIZ_SERIES_INTERACTIVE_TRACK_ID,
     initial: { move: { target: "quiz-series:slot" } },
     straps: undefined,
     listen: [],
@@ -836,6 +764,16 @@ export function createQuizSeriesFameScene(): SceneDoc {
       { on: "quiz:result:show", straps: ["quiz-result-render"] }
     ],
     stories: allStories,
+    tracks: {
+      [QUIZ_SERIES_INTERACTIVE_TRACK_ID]: {
+        active: true,
+        role: "interactive"
+      },
+      [QUIZ_SERIES_AUTO_TRACK_ID]: {
+        active: false,
+        role: "automatic"
+      }
+    },
   }
 }
 

@@ -10,8 +10,10 @@ export type {
   AuthorCaptureTrackFunction,
   AuthorCaptureTrackInput,
   AuthorCaptureTrackOutput,
+  AuthorEmitEvent,
   AuthorEmitDeclaration,
   AuthorEmitRule,
   CaptureEndDurationMode,
   CaptureEventMode,
+  EventVisibility,
 } from './authoring-types'

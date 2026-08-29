@@ -7,7 +7,7 @@ import {
 } from 'codplay'
 import type { V2DemoDefinition } from '../registry'
 import { createV2DemoTelco } from './telco'
-import type { V2DemoLogLevel, V2DemoModule } from './types'
+import type { V2DemoLogLevel, V2DemoModule, V2DemoPlayback } from './types'
 
 import './layout.css'
 
@@ -155,6 +155,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   const logLines: string[] = []
   let logFlushScheduled = false
   let telcoControls: ReturnType<typeof createV2DemoTelco> | undefined
+  let telcoPlaybackCleanup: (() => void) | undefined
   let sceneCleanup: (() => void) | undefined
 
   function flushLogs(): void {
@@ -201,10 +202,54 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     }
   }
 
-  /** Installs the common remote on the public instance telco. */
-  function installTelco(telco: CodPlayInstance['telco']) {
+  /** Installs the common remote and any declared external playback control. */
+  function installTelco(
+    telco: CodPlayInstance['telco'],
+    instance: CodPlayInstance,
+    playback: V2DemoPlayback | undefined,
+  ) {
+    telcoPlaybackCleanup?.()
+    telcoPlaybackCleanup = undefined
     telcoControls?.destroy()
     telcoControls = createV2DemoTelco(telco, { onLog: log })
+    if (playback !== undefined) {
+      const playbackRow = document.createElement('div')
+      playbackRow.className = 'v2-demo-telco__playback'
+      const playbackButton = document.createElement('button')
+      playbackButton.type = 'button'
+      playbackButton.className = 'telco-button telco-button--secondary'
+      playbackButton.textContent = playback.label
+      playbackButton.setAttribute('aria-label', playback.label)
+      playbackButton.title = playback.label
+      let disposed = false
+      let inFlight = false
+
+      /** Injects one declared playback sequence through the public events facade. */
+      async function runPlayback(): Promise<void> {
+        if (disposed || inFlight) return
+        inFlight = true
+        playbackButton.disabled = true
+        try {
+          await telco.rewind()
+          for (const injection of playback.injections) {
+            if (disposed) return
+            await instance.events.emit(injection.eventime, injection.target)
+          }
+          if (!disposed) await telco.play()
+        } finally {
+          inFlight = false
+          if (!disposed) playbackButton.disabled = false
+        }
+      }
+
+      playbackButton.addEventListener('click', () => { void runPlayback() })
+      playbackRow.append(playbackButton)
+      telcoControls.element.append(playbackRow)
+      telcoPlaybackCleanup = () => {
+        disposed = true
+        playbackButton.remove()
+      }
+    }
     telcoSlot.replaceChildren(telcoControls.element)
   }
 
@@ -212,6 +257,8 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   function unmountScene(): void {
     sceneCleanup?.()
     sceneCleanup = undefined
+    telcoPlaybackCleanup?.()
+    telcoPlaybackCleanup = undefined
     telcoControls?.destroy()
     telcoControls = undefined
     telcoSlot.replaceChildren()
@@ -310,7 +357,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         return
       }
 
-      installTelco(instance.telco)
+      installTelco(instance.telco, instance, module.playback)
       log(`${options.active.title} initialisée · durée=${module.durationMs}ms`)
 
       sceneCleanup = () => {

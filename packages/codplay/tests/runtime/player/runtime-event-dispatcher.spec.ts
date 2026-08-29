@@ -182,6 +182,61 @@ describe('runtime event dispatch', () => {
     )
   })
 
+  it('reinjects immediate events returned by a story strap into scene listen', async () => {
+    let aggregateCalls = 0
+    const chainedScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        straps: { aggregate: { ref: 'fn:aggregate' } },
+        listen: [
+          { on: 'source:event', straps: ['record'] },
+          { on: 'strap:event', straps: ['aggregate'] },
+        ],
+      },
+    }
+    const journal = new RuntimeTrackJournal(chainedScene)
+    const stateStore = new RuntimeStateStore(chainedScene)
+    const dispatcher = new RuntimeEventDispatcher({
+      scene: chainedScene,
+      journal,
+      stateStore,
+      functions: {
+        'fn:aggregate': () => {
+          aggregateCalls += 1
+          return { update: { aggregated: true } }
+        },
+      },
+      strapCollections: {
+        scene: {},
+        stories: {
+          main: {
+            record: () => ({ events: [{ name: 'strap:event' }] }),
+          },
+        },
+      },
+    })
+
+    const result = await dispatcher.dispatch({
+      name: 'source:event',
+      storyId: 'main',
+      applyAtMs: 100,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(aggregateCalls).toBe(1)
+    expect(stateStore.snapshot('scene')).toMatchObject({ aggregated: true })
+    expect(materializeScene(chainedScene, 101, journal).sceneState).toMatchObject({ aggregated: true })
+    expect(journal.getEvents('strap-main-record').filter((event) => event.name === 'strap:event')).toHaveLength(1)
+    expect(result.events.map((event) => event.name)).toEqual([
+      'source:event',
+      'strap:event',
+      'runtime:state:update',
+      'story:done',
+      'follow:event',
+    ])
+  })
+
   it('keeps multiple straps on their own declared tracks', async () => {
     const multiStrapScene: CompiledScene = {
       ...scene,

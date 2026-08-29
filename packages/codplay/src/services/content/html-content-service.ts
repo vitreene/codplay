@@ -8,7 +8,12 @@ export function createHtmlContentService(): ServiceRuntimeInstance {
     apply: (node, value) => {
       if (!isHtmlElementNode(node)) return
       if (typeof value === 'string' || typeof value === 'number') {
-        node.textContent = String(value)
+        const nextText = String(value)
+        // Safari can lose hit-testing on a button when its direct text node is
+        // replaced during a live sync. Keep the existing text node when the
+        // rendered value is already correct, as the V1 remote does.
+        const hasOnlyTextNode = node.childNodes?.length === 1 && node.firstChild?.nodeType === 3
+        if (!hasOnlyTextNode || node.textContent !== nextText) node.textContent = nextText
         return
       }
       if (!isContentElement(value) || (value as unknown) === node) return

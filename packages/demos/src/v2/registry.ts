@@ -81,10 +81,12 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 				import('./demos/quiz-series/main'),
 				import('./demos/quiz-series/style.css?url'),
 			]);
+			const { quizSeriesAutoPlayback } = await import('./demos/quiz-series/auto-playback');
 			return {
 				createScene: module.createScene,
 				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+				playback: quizSeriesAutoPlayback,
 			};
 		},
 	},
