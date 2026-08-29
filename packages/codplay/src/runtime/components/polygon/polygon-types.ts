@@ -21,6 +21,8 @@ export type PolygonMorphInput = boolean | Readonly<{
 
 /** Complete author-facing data profile accepted by a polygon perso. */
 export type PolygonData = BaseComponentData & PolygonShapeInput & Readonly<{
+  /** Logical diameter projected to the SVG root width and height. */
+  diameter?: number
   morph?: PolygonMorphInput
 }>
 
@@ -61,6 +63,8 @@ export type PolygonCompiledMorphOptions = Readonly<{
 
 /** Resolved state delivered to PolygonComponent by the V2 player. */
 export type PolygonState = BaseComponentData & PolygonShapeState & Readonly<{
+  /** Numeric author value or a raw native input value awaiting component normalization. */
+  diameter?: number | string
   morph?: PolygonCompiledMorphOptions
 }>
 

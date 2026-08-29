@@ -34,7 +34,7 @@ function createDynamicMountSceneFixture(): SceneDoc {
             type: 'layout',
             initial: {
               move: '@root',
-              markup: '<section class="shell"><main data-part="scene-layout:slot"></main></section>'
+              markup: '<section class="container"><main data-part="scene-layout:slot"></main></section>'
             },
             actions: { 'scene-layout': null }
           },

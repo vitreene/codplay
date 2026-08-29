@@ -299,7 +299,7 @@ const layoutPerso: PersoDoc = {
   initial: {
     move: { target: '@root' },
     markup: `
-      <section class="page-shell">
+      <section class="page-container">
         <main data-part="page-layout:content"></main>
         <aside data-part="page-layout:aside"></aside>
       </section>

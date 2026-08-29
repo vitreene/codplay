@@ -149,7 +149,7 @@ export function createPolygonScene(): SceneDoc {
 						type: 'layout',
 						initial: {
 							move: '@root',
-							className: 'polygon-demo-shell',
+							className: 'polygon-demo-container',
 							markup: `
                 <div class="polygon-demo-shape" data-part="polygon-layout:shape"></div>
                 <div class="polygon-demo-morph-corner" data-part="polygon-layout:morph-corner"></div>

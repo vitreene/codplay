@@ -35,9 +35,9 @@ function toCapsuleKind(capsuleType: AutoCapsuleType): CapsuleKind {
  * Fixed appearance, kept stable across iterations of this increment on purpose — dashed orange,
  * same as when this marker was first introduced (step 4). `border` (not `outline`): the ghost
  * zone makes the item full-bleed (fills the whole root capsule), so its edge IS the demo
- * container's own edge (`demo-shell.css`'s `.container { overflow: hidden }`) — `outline` draws
+ * container's own edge (`demo-container.css`'s `.container { overflow: hidden }`) — `outline` draws
  * OUTSIDE the border box and gets clipped there, `border` draws AT the edge, inside the box
- * (`box-sizing: border-box`, set explicitly here rather than assumed from the demo shell's own
+ * (`box-sizing: border-box`, set explicitly here rather than assumed from the demo container's own
  * reset), so it stays visible regardless of context.
  */
 const STYLE_CHECK_CLASS = 'ed2-style-check'

@@ -12,8 +12,10 @@ visuelles communes.
 ## Fonctionnement
 
 Le profil `TagInitial` décrit la balise et les données communes de contenu,
-classe, style et attributs. La validation vérifie le nom de balise et complète
-la valeur absente par `div` avant l'instanciation.
+classe, style et attributs. Il accepte également `value` pour les balises
+sémantiques qui portent une valeur ; pour `output`, cette valeur est projetée
+comme contenu affiché. La validation vérifie le nom de balise et complète la
+valeur absente par `div` avant l'instanciation.
 
 ## Organisation interne
 

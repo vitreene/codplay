@@ -133,12 +133,12 @@ export function createDragCaptureScene(): SceneDoc {
         eventimes: [{ name: 'sequence:end', startAt: 24000 }],
         persos: [
           {
-            id: 's6-shell',
+            id: 's6-container',
             type: 'tag',
             initial: {
               tag: 'section',
               move: '@root',
-              className: 's6-shell',
+              className: 's6-container',
               content: '',
             },
             actions: {},
@@ -148,7 +148,7 @@ export function createDragCaptureScene(): SceneDoc {
             type: 'list',
             initial: {
               tag: 'section',
-              move: { target: 's6-shell' },
+              move: { target: 's6-container' },
               className: 's6-list',
               attr: { 'data-list-id': 'list-a' },
               style: { minHeight: '190px' },
@@ -160,7 +160,7 @@ export function createDragCaptureScene(): SceneDoc {
             type: 'list',
             initial: {
               tag: 'section',
-              move: { target: 's6-shell' },
+              move: { target: 's6-container' },
               className: 's6-list',
               attr: { 'data-list-id': 'list-b' },
               style: { minHeight: '190px' },
@@ -172,7 +172,7 @@ export function createDragCaptureScene(): SceneDoc {
             type: 'tag',
             initial: {
               tag: 'span',
-              move: { target: 's6-shell' },
+              move: { target: 's6-container' },
               content: '3',
               className: 's6-count',
             },
@@ -183,7 +183,7 @@ export function createDragCaptureScene(): SceneDoc {
             type: 'tag',
             initial: {
               tag: 'span',
-              move: { target: 's6-shell' },
+              move: { target: 's6-container' },
               content: '0',
               className: 's6-count',
             },

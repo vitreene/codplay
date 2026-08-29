@@ -1,4 +1,4 @@
-import "../shared/demo-shell.css";
+import "../shared/demo-container.css";
 
 import { CodPlay } from "codplay-v1/creator";
 import { createDemoRemoteV1 } from "@codplay/remote";
@@ -35,7 +35,7 @@ export async function runCodPlaySceneDemo(config: CodPlaySceneDemoConfig): Promi
 
   const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo, config.demoLinks);
   appNode.innerHTML = `
-    <main class="demo-shell">
+    <main class="demo-container">
       <aside>
         <p class="eyebrow">CodPlay V1</p>
         ${demoLinksMarkup.length > 0 ? `<nav class="demo-links">${demoLinksMarkup}</nav>` : ""}

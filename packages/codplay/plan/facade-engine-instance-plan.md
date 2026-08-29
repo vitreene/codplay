@@ -850,6 +850,32 @@ code actuel ne porte pas encore ce marqueur et `flattenAnchoredEventimes()` ne
 le conserve pas ; ces deux points font partie de la migration prévue. Les
 transforms ne modifient pas la portée d'un eventime.
 
+### Extension acceptée le 2026-08-29 : contexte runtime sous `diagnostic`
+
+Le besoin du journal commun des démos est une observation des events runtime,
+pas un strap de scène et pas une nouvelle sortie d'event public. La façade
+regroupe cette observation dans `instance.diagnostic` afin de conserver une
+seule surface de contexte :
+
+```ts
+instance.diagnostic.onDiagnostic(listener) // warnings et erreurs
+instance.diagnostic.onTrace(listener)      // events runtime enregistrés
+```
+
+`onTrace` ne publie pas un `Diagnostic` et ne modifie pas la sémantique de
+`onDiagnostic`. Il reçoit une ligne pour chaque `RuntimeTrackEvent` accepté et
+ajouté au journal par le circuit live : event source, event produit par un
+transform ou un strap, et eventime injecté par l'hôte. La ligne expose le nom
+et le contexte déjà porté par l'event (`instanceId`, identifiants, temps,
+track, story, portée, données, contexte, métadonnées et mode d'insertion).
+
+L'observation est faite après l'append réussi, une seule fois par occurrence.
+Elle ne réexécute aucun `listen`, transform ou strap et ne produit rien lors
+d'une reconstruction `seek`. Les erreurs d'abonnement restent publiées par le
+canal diagnostic normal. Le layout peut donc s'abonner après la création de
+l'instance et afficher le nom de chaque event sans modifier la `SceneDoc`, ses
+tracks ou son routage.
+
 ## 7. Preload, telco et diffusion
 
 - `RuntimePreload` reste une capacité externe au player et à l'instance ; le
@@ -1236,6 +1262,8 @@ cachées de l'instance.
 - [x] fixer la frontière de l'hôte HTML/DOM par instance et des ressources partagées ;
 - [x] appliquer la portée nommée des eventimes (`story`, `scene`, `public`) et
   réserver l'observation sortante aux events `public` ;
+- [x] regrouper l'observation du contexte des events runtime sous
+  `instance.diagnostic.onTrace`, sans modifier `onDiagnostic` ni `events.onEvent` ;
 - [x] retenir les deux modes d'application : event non daté enregistré à l'ancrage
   et présenté au prochain tick ; event daté inscrit dans la timeline ;
 - [x] retenir `startAt` comme offset relatif et ne pas exposer de temps absolu ;
@@ -1326,6 +1354,8 @@ cachées de l'instance.
 - [x] ajouter les diagnostics sous `instance.diagnostic`, l'état de lecture sous
   `instance.telco` et l'observation des events de portée `public` sous
   `instance.events` ;
+- [x] exposer `instance.diagnostic.onTrace` pour les events live ajoutés au
+  journal, sans strap attrape-tout ni journal parallèle ;
 - [x] raccorder l'assemblage HTML/DOM core par défaut à la façade sans exposer
   `HtmlPlayerRunner` ni le catalogue ;
 - [x] exposer `codplay.preload -> RuntimePreloadApi` depuis le propriétaire
@@ -1350,6 +1380,8 @@ cachées de l'instance.
   les frames externes suivent la même propagation ;
 - [x] vérifier sur la façade l'injection directe et adressée des eventimes, leur
   attente du tick normal et la visibilité des events publics ;
+- [x] vérifier que le contexte trace remonte les events live une seule fois,
+  sans les rendre publics et sans bloquer le circuit si un observateur échoue ;
 - [x] vérifier le transfert explicite du preload, y compris les ressources
   `skipped`, ainsi que les diagnostics non bloquants ;
 - [x] inscrire les verticales V2 `runner` et `flip-nested` dans le registry
@@ -1360,7 +1392,7 @@ cachées de l'instance.
   par ticks et extension par les événements compilés ou journalisés ;
 - [x] vérifier que la télécommande officielle étend le curseur de seek lorsque
   `onProgress` découvre un nouvel horizon ;
-- [x] exécuter la suite complète V2 : 78 fichiers et 496 tests passés ;
+- [x] exécuter la suite complète V2 : 80 fichiers et 508 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
 - [x] vérifier dans Firefox headless les routes registry `runner` et
   `flip-nested`, avec Play et Seek via la télécommande commune ;
@@ -1388,12 +1420,13 @@ Déjà implémenté :
 - `instance.telco`, sa progression branchée sur les notifications du player,
   son horizon fixe ou découvert, et le cycle externe ou possédé de l'engine ;
 - `instance.events`, `engine.events`, l'adressage séparé et l'eventime récursif ;
-- diagnostics par le canal V2 existant et transfert explicite des ressources ;
+- diagnostics par le canal V2 existant, trace de contexte des events sous
+  `instance.diagnostic` et transfert explicite des ressources ;
 - tests de contrat du socle et absence de ticker propre à la telco.
 
 Validation exécutée :
 
-- `npm test --workspace=codplay` : 78 fichiers, 496 tests passés ;
+- `npm test --workspace=codplay` : 80 fichiers, 508 tests passés ;
 - `npm run typecheck --workspace=codplay` : succès ;
 - `npm run build --workspace=@codplay/demos` : succès ;
 - le typecheck global des démos et celui de `@codplay/remote` restent bloqués

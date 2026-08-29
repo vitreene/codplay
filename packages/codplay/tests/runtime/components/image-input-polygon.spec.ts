@@ -145,7 +145,7 @@ describe('V2 core image, input and polygon components', () => {
     const nodes = createNodeMaps()
     const materializer = new HtmlComponentMaterializer(nodes)
     const identity = { componentId: 'shape:polygon', storyId: 'shape', componentType: 'polygon' }
-    const initial = sanitizePolygonInitial({ sides: 3, outer: 40, content: 'triangle' }) as PolygonState
+    const initial = sanitizePolygonInitial({ sides: 3, outer: 40, diameter: 120, content: 'triangle' }) as PolygonState
     const targetAction = sanitizePolygonAction({
       sides: 7,
       inner: 18,
@@ -170,6 +170,12 @@ describe('V2 core image, input and polygon components', () => {
     expect(root.namespaceURI).toBe('http://www.w3.org/2000/svg')
     expect(path.namespaceURI).toBe('http://www.w3.org/2000/svg')
     expect(path.getAttribute('d')).toBe(resolvePolygonPathString(initial))
+    expect(root.style.width).toBe('120px')
+    expect(root.style.height).toBe('120px')
+
+    component.update({ state: { ...initial, diameter: '240' } as PolygonState, timeMs: 0 })
+    expect(root.style.width).toBe('240px')
+    expect(root.style.height).toBe('240px')
 
     const occurrence: ComponentActionOccurrence = {
       name: 'morph',

@@ -211,7 +211,7 @@ Tests automatiques:
 
 Verification manuelle:
 
-- la demo se lance depuis le shell demos
+- la demo se lance depuis le conteneur demos
 - play / pause / rewind / seek n'empilent pas plusieurs animations concurrentes
 - un seek a un instant intermediaire donne le meme etat visuel qu'une lecture continue au meme
   instant

@@ -112,6 +112,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   }>) => void
   /** Forwards public eventimes to the enclosing facade without opening another journal. */
   onPublicEvent?: (event: RuntimeTrackEvent) => void
+  /** Forwards every successfully journaled live event to the enclosing facade. */
+  onTrace?: (event: RuntimeTrackEvent) => void
 }>
 
 /** Generic HTML host with one absolute-time presentation circuit. */
@@ -183,6 +185,7 @@ export class HtmlPlayerRunner {
       undefined,
       options.onPublicEvent,
       options.idle,
+      options.onTrace,
     )
     this.captureSourceAdapter = new HtmlPointerCaptureSourceAdapter({
       player: this.player,

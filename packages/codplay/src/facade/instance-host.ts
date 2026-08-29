@@ -13,6 +13,7 @@ export type InstanceHostOptions = Readonly<{
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>
   instance: CodPlayInstanceOptions
   onPublicEvent: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
+  onTrace: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
   onEmitDiagnostic: (diagnostic: Diagnostic) => void
   onResizeError: (error: unknown) => void
 }>
@@ -40,6 +41,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     functions: options.instance.functions,
     strapCollections: options.instance.strapCollections,
     onPublicEvent: options.onPublicEvent,
+    onTrace: options.onTrace,
     onEmitDiagnostic: options.onEmitDiagnostic,
   })
   let stopResizeObservation = (): void => undefined

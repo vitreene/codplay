@@ -1,4 +1,4 @@
-import '../shared/demo-shell.css';
+import '../shared/demo-container.css';
 
 import { animate, engine } from 'animejs';
 
@@ -129,7 +129,7 @@ export async function runPlayerSceneDemo(config: PlayerDemoConfig): Promise<void
 	const demoLinksMarkup = buildDemoLinksMarkup(config.activeDemo, config.demoLinks);
 
 	appNode.innerHTML = `
-    <main class="demo-shell">
+    <main class="demo-container">
       <aside>
         <p class="eyebrow">Runtime V1</p>
         ${demoLinksMarkup.length > 0 ? `<nav class="demo-links">${demoLinksMarkup}</nav>` : ''}

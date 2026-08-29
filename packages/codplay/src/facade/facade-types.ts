@@ -180,6 +180,22 @@ export type CodPlayPublicEvent = Readonly<{
   meta?: Readonly<Record<string, unknown>>
 }>
 
+/** Runtime event context exposed to the instance diagnostic observers. */
+export type CodPlayTraceEvent = Readonly<{
+  instanceId: string
+  eventId: string
+  eventSeq: number
+  name: string
+  timeMs: number
+  trackId: string
+  storyId?: string
+  visibility?: 'story' | 'scene' | 'public'
+  data?: CompiledRecord
+  context?: Readonly<Record<string, unknown>>
+  meta?: Readonly<Record<string, unknown>>
+  mode?: RuntimeEventInsertMode
+}>
+
 /** State exposed to the instance telco and its remote control. */
 export type CodPlayTelcoState = Readonly<{
   instanceId: string
@@ -200,6 +216,9 @@ export type CodPlayProgress = Readonly<{
 
 /** Listener for one public event. */
 export type CodPlayEventListener = (event: CodPlayPublicEvent) => void
+
+/** Listener for one event recorded by the runtime event circuit. */
+export type CodPlayTraceListener = (event: CodPlayTraceEvent) => void
 
 /** Listener for one instance telco state snapshot. */
 export type CodPlayTelcoStateListener = (state: CodPlayTelcoState) => void
@@ -232,6 +251,7 @@ export type CodPlayInstanceEvents = Readonly<{
 /** Public diagnostic observation surface of one instance. */
 export type CodPlayInstanceDiagnostic = Readonly<{
   onDiagnostic: (listener: CodPlayDiagnosticListener) => () => void
+  onTrace: (listener: CodPlayTraceListener) => () => void
 }>
 
 /** Common options used to create and initialize one public instance. */

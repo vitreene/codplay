@@ -1,118 +1,24 @@
-import type { AuthorListenTransform, SceneDoc } from 'codplay/scene/types'
+import type { StrapFunction } from 'codplay/runtime/player'
+import type { SceneDoc } from 'codplay/scene/types'
 
 const INITIAL = { sides: 5, inner: 18, outer: 42, inflexion: 0, diameter: 280 } as const
 const MORPH_TEST_FROM = { sides: 5, inner: 18, outer: 42, rotationDeg: -18 } as const
 const MORPH_TEST_TO = { sides: 8, inner: null, outer: 42, rotationDeg: 22.5 } as const
 
 type ScenePerso = SceneDoc['stories']['main']['persos'][number]
-
-/** Reads one native range value and applies a fallback when it is unavailable. */
-function readRangeValue(event: Parameters<AuthorListenTransform>[0], fallback: number): number {
-  const raw = Number(event.data?.valueAsNumber)
-  return Number.isFinite(raw) ? raw : fallback
-}
-
-/** Translates the sides slider into the polygon update and displayed value events. */
-const sidesTransform: AuthorListenTransform = (event) => {
-  const value = Math.max(3, Math.min(32, Math.round(readRangeValue(event, INITIAL.sides))))
-  return [
-    { name: 'polygon:update', data: { sides: value, content: String(value) } },
-    { name: 'polygon:value:sides', data: { content: String(value), value } },
-  ]
-}
-
-/** Translates the inner-radius slider while preserving zero as the V1 null form. */
-const innerTransform: AuthorListenTransform = (event) => {
-  const rounded = Math.round(readRangeValue(event, INITIAL.inner))
-  const inner = rounded === 0 ? null : rounded
-  return [
-    { name: 'polygon:update', data: { inner } },
-    { name: 'polygon:value:inner', data: { content: String(rounded), value: rounded } },
-  ]
-}
-
-/** Translates the outer-radius slider into the polygon update and displayed value events. */
-const outerTransform: AuthorListenTransform = (event) => {
-  const value = Math.round(readRangeValue(event, INITIAL.outer))
-  return [
-    { name: 'polygon:update', data: { outer: value } },
-    { name: 'polygon:value:outer', data: { content: String(value), value } },
-  ]
-}
-
-/** Translates the inflexion slider into the polygon update and displayed value events. */
-const inflexionTransform: AuthorListenTransform = (event) => {
-  const value = readRangeValue(event, INITIAL.inflexion)
-  return [
-    { name: 'polygon:update', data: { inflexion: value } },
-    { name: 'polygon:value:inflexion', data: { content: String(value), value } },
-  ]
-}
-
-/** Translates the diameter slider into SVG dimensions and its displayed value event. */
-const diameterTransform: AuthorListenTransform = (event) => {
-  const value = Math.round(readRangeValue(event, INITIAL.diameter))
-  return [
-    { name: 'polygon:update', data: { style: { width: `${value}px`, height: `${value}px` } } },
-    { name: 'polygon:value:diameter', data: { content: String(value), value } },
-  ]
-}
-
-/** Resets the sides parameter and its displayed value to the V1 initial state. */
-const sidesResetTransform: AuthorListenTransform = () => [
-  { name: 'polygon:update', data: { sides: INITIAL.sides, content: String(INITIAL.sides) } },
-  { name: 'polygon:value:sides', data: { content: String(INITIAL.sides), value: INITIAL.sides } },
-]
-
-/** Resets the inner-radius parameter and its displayed value to the V1 initial state. */
-const innerResetTransform: AuthorListenTransform = () => [
-  { name: 'polygon:update', data: { inner: INITIAL.inner } },
-  { name: 'polygon:value:inner', data: { content: String(INITIAL.inner), value: INITIAL.inner } },
-]
-
-/** Resets the outer-radius parameter and its displayed value to the V1 initial state. */
-const outerResetTransform: AuthorListenTransform = () => [
-  { name: 'polygon:update', data: { outer: INITIAL.outer } },
-  { name: 'polygon:value:outer', data: { content: String(INITIAL.outer), value: INITIAL.outer } },
-]
-
-/** Resets the inflexion parameter and its displayed value to the V1 initial state. */
-const inflexionResetTransform: AuthorListenTransform = () => [
-  { name: 'polygon:update', data: { inflexion: INITIAL.inflexion } },
-  { name: 'polygon:value:inflexion', data: { content: String(INITIAL.inflexion), value: INITIAL.inflexion } },
-]
-
-/** Resets the diameter parameter and its displayed value to the V1 initial state. */
-const diameterResetTransform: AuthorListenTransform = () => [
-  {
-    name: 'polygon:update',
-    data: { style: { width: `${INITIAL.diameter}px`, height: `${INITIAL.diameter}px` } },
-  },
-  { name: 'polygon:value:diameter', data: { content: String(INITIAL.diameter), value: INITIAL.diameter } },
-]
+type PolygonRangeParameter = 'sides' | 'inner' | 'outer' | 'inflexion' | 'diameter'
 
 /** Creates the V2 transposition of the interactive V1 polygon scene. */
 export function createScene(): SceneDoc {
-  const morphTestTransform = createMorphTestTransform()
+  const morphStrap = createMorphStrap()
   return {
     id: 'polygon-scene',
     stories: {
       main: {
         id: 'main',
         initial: { move: '@root' },
-        listen: [
-          { on: 'polygon:sides:raw', transform: [sidesTransform] },
-          { on: 'polygon:inner:raw', transform: [innerTransform] },
-          { on: 'polygon:outer:raw', transform: [outerTransform] },
-          { on: 'polygon:inflexion:raw', transform: [inflexionTransform] },
-          { on: 'polygon:diameter:raw', transform: [diameterTransform] },
-          { on: 'polygon:reset:sides', transform: [sidesResetTransform] },
-          { on: 'polygon:reset:inner', transform: [innerResetTransform] },
-          { on: 'polygon:reset:outer', transform: [outerResetTransform] },
-          { on: 'polygon:reset:inflexion', transform: [inflexionResetTransform] },
-          { on: 'polygon:reset:diameter', transform: [diameterResetTransform] },
-          { on: 'polygon:morph-test:click', transform: [morphTestTransform] },
-        ],
+        straps: { 'polygon-morph': morphStrap },
+        listen: [{ on: 'polygon:morph:click', straps: ['polygon-morph'] }],
         persos: [
           createPolygonLayout(),
           createPolygonShape(),
@@ -129,25 +35,31 @@ export function createScene(): SceneDoc {
   }
 }
 
-/** Creates the per-scene morph toggle, alternating between the two V1 shapes. */
-function createMorphTestTransform(): AuthorListenTransform {
+/**
+ * Creates the non-normative demo strap that alternates between the two V1 shapes.
+ * The closure state is kept only to reproduce the toggle behavior in this fixture;
+ * normative story state must live in the story runtime state.
+ */
+function createMorphStrap(): StrapFunction {
   let isMorphed = false
 
   return () => {
     const from = isMorphed ? MORPH_TEST_TO : MORPH_TEST_FROM
     const to = isMorphed ? MORPH_TEST_FROM : MORPH_TEST_TO
     isMorphed = !isMorphed
-    return [
-      { name: 'polygon:morph-test:reset', data: { ...from, content: 'morph' } },
-      {
-        name: 'polygon:morph-test:run',
-        data: {
-          ...to,
-          morph: { duration: 700, delayMs: 0, ease: 'inOutCubic', sampleCount: 96 },
-          content: 'done',
+    return {
+      events: [
+        { name: 'polygon:morph:reset', data: { ...from, content: 'morph' } },
+        {
+          name: 'polygon:morph:run',
+          data: {
+            ...to,
+            morph: { duration: 700, delayMs: 0, ease: 'inOutCubic', sampleCount: 96 },
+            content: 'done',
+          },
         },
-      },
-    ]
+      ],
+    }
   }
 }
 
@@ -158,7 +70,7 @@ function createPolygonLayout(): ScenePerso {
     type: 'layout',
     initial: {
       move: '@root',
-      className: 'polygon-demo-shell',
+      className: 'polygon-demo-container',
       markup: `
         <div class="polygon-demo-main">
           <div class="polygon-demo-shape" data-part="polygon-layout:shape"></div>
@@ -181,10 +93,9 @@ function createPolygonShape(): ScenePerso {
       sides: INITIAL.sides,
       inner: INITIAL.inner,
       outer: INITIAL.outer,
+      diameter: INITIAL.diameter,
       content: String(INITIAL.sides),
       style: {
-        width: `${INITIAL.diameter}px`,
-        height: `${INITIAL.diameter}px`,
         color: '#312e81',
         overflow: 'visible',
         filter: 'drop-shadow(0 18px 32px rgba(49, 46, 129, 0.30))',
@@ -193,7 +104,13 @@ function createPolygonShape(): ScenePerso {
         '--polygon-label-color': '#f8fafc',
       },
     },
-    actions: { 'polygon:update': {} },
+    actions: {
+      'polygon:sides': {},
+      'polygon:inner': {},
+      'polygon:outer': {},
+      'polygon:inflexion': {},
+      'polygon:diameter': {},
+    },
   }
 }
 
@@ -218,17 +135,17 @@ function createMorphTest(): ScenePerso {
         filter: 'drop-shadow(0 8px 18px rgba(76, 29, 149, 0.32))',
       },
     },
-    emit: { click: { event: { name: 'polygon:morph-test:click' } } },
+    emit: { click: { event: { name: 'polygon:morph:click' } } },
     actions: {
-      'polygon:morph-test:reset': {},
-      'polygon:morph-test:run': {},
+      'polygon:morph:reset': {},
+      'polygon:morph:run': {},
     },
   }
 }
 
 /** Creates one label, range input and output triplet for a polygon parameter. */
 function createParameterPersos(
-  parameter: string,
+  parameter: PolygonRangeParameter,
   label: string,
   min: number,
   max: number,
@@ -246,7 +163,7 @@ function createParameterPersos(
         move: { target: 'polygon-layout:controls' },
         className: 'polygon-demo-param-btn',
       },
-      emit: { click: { event: { name: `polygon:reset:${parameter}` } } },
+      emit: { click: { event: { name: `polygon:${parameter}`, data: { value } } } },
       actions: {},
     },
     {
@@ -261,22 +178,19 @@ function createParameterPersos(
         move: { target: 'polygon-layout:controls' },
         className: 'polygon-demo-slider-bare',
       },
-      emit: { input: { event: { name: `polygon:${parameter}:raw` } } },
-      actions: {
-        [`polygon:reset:${parameter}`]: { value },
-        [`polygon:value:${parameter}`]: { value },
-      },
+      emit: { input: { event: { name: `polygon:${parameter}` } } },
+      actions: { [`polygon:${parameter}`]: {} },
     },
     {
       id: `polygon-value-${parameter}`,
       type: 'tag',
       initial: {
         tag: 'output',
-        content: String(value),
+        value,
         move: { target: 'polygon-layout:controls' },
         className: 'polygon-demo-value',
       },
-      actions: { [`polygon:value:${parameter}`]: {} },
+      actions: { [`polygon:${parameter}`]: {} },
     },
   ]
 }

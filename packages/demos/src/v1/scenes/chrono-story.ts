@@ -117,7 +117,7 @@ export function createChronoScene(): SceneDoc {
           },
         },
         persos: [
-          // ── outer shell ───────────────────────────────────────
+          // ── outer container ───────────────────────────────────
           {
             id: 'chrono-root',
             type: 'list',

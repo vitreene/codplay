@@ -159,6 +159,7 @@ export class RuntimePlayer {
   private nextRuntimeEventId = 0
   private readonly diagnosticOutput: DiagnosticOutput | undefined
   private readonly publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  private readonly traceEventListener: ((event: RuntimeTrackEvent) => void) | undefined
   private readonly idleMonitor: RuntimeIdleMonitor
   private readonly observedPublicEventIds = new Set<string>()
   private readonly transportListeners = new Set<() => void>()
@@ -178,6 +179,7 @@ export class RuntimePlayer {
     diagnosticOutput?: DiagnosticOutput,
     publicEventListener?: (event: RuntimeTrackEvent) => void,
     idle?: RuntimeIdleOptions,
+    traceEventListener?: (event: RuntimeTrackEvent) => void,
   ) {
     this.id = id
     this.engine = engine
@@ -193,6 +195,7 @@ export class RuntimePlayer {
     this.compiledCaptureActionTargets = indexCompiledCaptureActionTargets(compiledScene)
     this.diagnosticOutput = diagnosticOutput
     this.publicEventListener = publicEventListener
+    this.traceEventListener = traceEventListener
     this.idleMonitor = new RuntimeIdleMonitor(
       idle === undefined ? engine.getIdleOptions() : resolveRuntimeIdleOptions(idle),
     )
@@ -463,6 +466,7 @@ export class RuntimePlayer {
     if (normalized.mode === EVENT_INSERT_MODE_PERSIST_ONLY) {
       this.synchronizeStateStore(this.currentTimeMs, false)
     }
+    this.notifyTraceEvents(appended.data.events)
     return appended.data
   }
 
@@ -486,6 +490,7 @@ export class RuntimePlayer {
       ...input,
       applyAtMs: input.applyAtMs ?? this.currentTimeMs,
     })
+    this.notifyTraceEvents(result.events)
     if (resetIdle && result.events.length > 0) this.idleMonitor.reset()
     if (includePersistOnlyOverride !== undefined) {
       this.includePersistOnlyInCurrent = includePersistOnlyOverride
@@ -778,6 +783,18 @@ export class RuntimePlayer {
   /** Publishes one logical position update without creating another frame loop. */
   private notifyTransportObservers(): void {
     for (const listener of [...this.transportListeners]) listener()
+  }
+
+  /** Forwards successfully journaled live events without affecting playback. */
+  private notifyTraceEvents(events: readonly RuntimeTrackEvent[]): void {
+    if (this.traceEventListener === undefined) return
+    for (const event of events) {
+      try {
+        this.traceEventListener(event)
+      } catch {
+        // Trace observers are diagnostic context consumers and must not break the event circuit.
+      }
+    }
   }
 
   /** Reapplies active capture actions through the normal component update path. */

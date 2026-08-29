@@ -38,6 +38,7 @@ export function sanitizePolygonInitial(value: Readonly<Record<string, unknown>>)
   result.outer = outer
   result.inner = inner
   result.rotationDeg = value.rotationDeg === undefined ? DEFAULT_ROTATION_DEG : value.rotationDeg
+  if (value.diameter !== undefined) result.diameter = normalizeDiameter(value.diameter as number)
   result.inflexion = normalizeInflexions(value.inflexion, segmentCount(sides, inner, outer))
   if (value.morph !== undefined) result.morph = sanitizeMorph(value.morph as PolygonMorphInput)
   return result
@@ -54,6 +55,8 @@ export function sanitizePolygonAction(value: Readonly<Record<string, unknown>>):
   else if (result.inner === null) result.inner = null
   else result.inner = normalizeInner(result.inner as number, result.outer as number | undefined)
   if (result.rotationDeg === undefined) delete result.rotationDeg
+  if (result.diameter === undefined) delete result.diameter
+  else result.diameter = normalizeDiameter(result.diameter as number)
   if (result.inflexion !== undefined) result.inflexion = normalizeInflexionInput(result.inflexion)
   if (result.morph !== undefined) result.morph = sanitizeMorph(result.morph as PolygonMorphInput)
   return result
@@ -68,6 +71,7 @@ function validatePolygonFields(
   validateFiniteNumber(value.inner, 'inner', context, true)
   validateFiniteNumber(value.outer, 'outer', context)
   validateFiniteNumber(value.rotationDeg, 'rotationDeg', context)
+  validateFiniteNumber(value.diameter, 'diameter', context)
   validateInflexion(value.inflexion, context)
   if (value.morph !== undefined) validateMorph(value.morph, context)
 }
@@ -120,6 +124,11 @@ function normalizeSides(value: number): number {
 /** Applies the V1-compatible outer-radius lower bound at compilation. */
 function normalizeOuter(value: number): number {
   return Math.max(1, value)
+}
+
+/** Applies the non-negative dimension constraint owned by the polygon component. */
+function normalizeDiameter(value: number): number {
+  return Math.max(0, value)
 }
 
 /** Applies the V1-compatible inner-radius bounds at compilation. */

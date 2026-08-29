@@ -1,4 +1,4 @@
-.polygon-demo-shell {
+.polygon-demo-container {
   position: relative;
   display: flex;
   width: 100%;
@@ -110,7 +110,7 @@
 }
 
 @media (max-width: 640px) {
-  .polygon-demo-shell {
+  .polygon-demo-container {
     gap: 12px;
     padding: 16px;
   }

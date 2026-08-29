@@ -106,7 +106,7 @@ function formatTraceRowCompact(row: RuntimeTraceRow, firstTraceMs: number): stri
 }
 
 /**
- * Creates one retained trace panel controller for the shared demo shell.
+ * Creates one retained trace panel controller for the shared demo container.
  */
 export function createTraceLogPanel(node: HTMLDivElement, options: { maxLines?: number; compact?: boolean } | number = {}): {
 	push: (row: RuntimeTraceRow) => void;

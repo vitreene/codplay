@@ -273,23 +273,23 @@ function createEmitData(entry: IndexedEmitRule, nativeEvent: Event): CompiledRec
   return (input === undefined ? data : { ...data, ...input }) as CompiledRecord
 }
 
-/** Reads the native input payload required by V1 straps and transforms. */
+/** Reads the generic native input payload exposed to the receiving component. */
 function readInputData(target: EventTarget | null): CompiledRecord | undefined {
   if (!isInputLike(target)) return undefined
   return {
     value: target.value,
-    valueAsNumber: target.valueAsNumber,
   }
 }
 
 /** Checks the minimal native input surface used by the event contract. */
-function isInputLike(value: unknown): value is { value: string; valueAsNumber: number } {
+function isInputLike(value: unknown): value is { value: string } {
   return typeof value === 'object'
     && value !== null
+    && 'tagName' in value
+    && typeof (value as { tagName?: unknown }).tagName === 'string'
+    && /^(INPUT|TEXTAREA|SELECT)$/i.test((value as { tagName: string }).tagName)
     && 'value' in value
     && typeof (value as { value?: unknown }).value === 'string'
-    && 'valueAsNumber' in value
-    && typeof (value as { valueAsNumber?: unknown }).valueAsNumber === 'number'
 }
 
 /** Reads KeyboardEvent.code without relying on a realm-specific constructor. */

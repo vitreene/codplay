@@ -11,9 +11,9 @@ Il fonctionne comme un toggle : un second clic anime le retour à la forme
 initiale.
 
 Les valeurs sont transmises par les événements natifs `input` et `click` de
-`Perso.emit`. Chaque `listen.transform` produit ensuite les deux événements
-V2 attendus : la mise à jour du polygone et la mise à jour de l'affichage de la
-valeur. Ces événements suivent le journal et le pipeline V2 communs.
+`Perso.emit`. Le composant `polygon` reçoit directement ses propriétés
+spécialisées, les interprète et adapte son rendu SVG ; les contrôles affichent
+la valeur courante de chaque propriété.
 
 La scène ne fixe pas de durée artificielle. Sans média ni piste bornée, la
 lecture reste ouverte et son horizon suit la tête de lecture ainsi que les

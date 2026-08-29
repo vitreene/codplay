@@ -30,6 +30,8 @@ export type {
   CodPlayPreloadOptions,
   CodPlayProgress,
   CodPlayPublicEvent,
+  CodPlayTraceEvent,
+  CodPlayTraceListener,
   CodPlayRegistry,
   CodPlayRegistryError,
   CodPlayRegistryResult,

@@ -121,7 +121,7 @@ export function createS6DndListScene(): SceneDoc {
 				persos: [
 					// ── conteneur principal (grille 2×2) ────────────────────────────
 					{
-						id: 's6-shell',
+						id: 's6-container',
 						type: 'tag',
 						initial: {
 							move: '@root',
@@ -145,7 +145,7 @@ export function createS6DndListScene(): SceneDoc {
 						id: 'list-a',
 						type: 'list',
 						initial: {
-							move: { parentId: 's6-shell' },
+							move: { parentId: 's6-container' },
 							style: {
 								minHeight: '180px',
 								border: '2px dashed #94a3b8',
@@ -163,7 +163,7 @@ export function createS6DndListScene(): SceneDoc {
 						id: 'list-b',
 						type: 'list',
 						initial: {
-							move: { parentId: 's6-shell' },
+							move: { parentId: 's6-container' },
 							style: {
 								minHeight: '180px',
 								border: '2px dashed #94a3b8',
@@ -185,7 +185,7 @@ export function createS6DndListScene(): SceneDoc {
 						initial: {
 							tag: 'span',
 							content: '3',
-							move: { parentId: 's6-shell' },
+							move: { parentId: 's6-container' },
 							style: { fontSize: '13px', color: '#64748b', pointerEvents: 'none' },
 						},
 						actions: { 'count:update:a': {} },
@@ -196,7 +196,7 @@ export function createS6DndListScene(): SceneDoc {
 						initial: {
 							tag: 'span',
 							content: '0',
-							move: { parentId: 's6-shell' },
+							move: { parentId: 's6-container' },
 							style: { fontSize: '13px', color: '#64748b', pointerEvents: 'none' },
 						},
 						actions: { 'count:update:b': {} },

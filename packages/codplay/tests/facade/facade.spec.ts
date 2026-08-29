@@ -8,6 +8,7 @@ import {
   type CodPlayInstances,
   type CodPlayInstance,
   type CodPlayOptions,
+  type CodPlayTraceEvent,
   type CompiledScene,
 } from '../../src'
 import * as publicApi from '../../src'
@@ -495,6 +496,50 @@ describe('CodPlay facade', () => {
     await instance.telco.play()
     engine.advance(0)
     expect(events).toEqual(['public:direct'])
+    codplay.destroy()
+  })
+
+  it('exposes live event context through the diagnostic trace without making it public', async () => {
+    const codplay = createCodPlay()
+    const instance = createInstance(codplay.instances)
+    const traces: CodPlayTraceEvent[] = []
+    const publicEvents: string[] = []
+    instance.diagnostic.onTrace((event) => traces.push(event))
+    instance.events.onEvent((event) => publicEvents.push(event.name))
+
+    await instance.events.emit(
+      {
+        name: 'internal:root',
+        data: { source: 'test' },
+        events: [{ name: 'internal:child', startAt: 25 }],
+      },
+      { scope: 'scene' },
+    )
+
+    expect(traces.map((event) => event.name)).toEqual(['internal:root', 'internal:child'])
+    expect(traces[0]).toMatchObject({
+      instanceId: 'instance-a',
+      name: 'internal:root',
+      timeMs: 0,
+      data: { source: 'test' },
+      trackId: 'global',
+    })
+    expect(publicEvents).toEqual([])
+    codplay.destroy()
+  })
+
+  it('keeps trace observers non-blocking and reports their failures as diagnostics', async () => {
+    const diagnostics: string[] = []
+    const codplay = createCodPlay({
+      engine: {
+        diagnosticOutput: (diagnostic) => diagnostics.push(diagnostic.code),
+      },
+    })
+    const instance = createInstance(codplay.instances)
+    instance.diagnostic.onTrace(() => { throw new Error('trace observer failure') })
+
+    await expect(instance.events.emit({ name: 'trace:failure' }, { scope: 'scene' })).resolves.toBeUndefined()
+    expect(diagnostics).toContain('CODPLAY_TRACE_LISTENER_FAILED')
     codplay.destroy()
   })
 

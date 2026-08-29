@@ -74,7 +74,7 @@ function describePose(pose: HtmlPose): Record<string, unknown> {
 function mountPlayerPocDemo(container: HTMLElement): void {
   logFlip('demo-loaded', { version: 'flip-v2-debug-7700' })
   container.innerHTML = `
-    <main class="demo-shell">
+    <main class="demo-container">
       <aside>
         <p class="eyebrow">Runtime V2</p>
         <h1>Player POC</h1>

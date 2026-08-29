@@ -297,6 +297,6 @@ des demos, qui ne doit **jamais** interferer avec la performance de la scene, pr
 Fix : `trace-log-panel.ts` accumule desormais chaque trace dans un tableau (aucun acces DOM) et ne
 declenche qu'un seul `requestAnimationFrame` par rafale pour ecrire `textContent`/lire `scrollHeight`
 une unique fois — une rafale synchrone de seek (qui ne laisse jamais la main au navigateur entre les
-traces) ne peut produire qu'un seul flush, juste apres la fin du seek. Le compteur de traces du shell
+traces) ne peut produire qu'un seul flush, juste apres la fin du seek. Le compteur de traces du conteneur
 de demo suit le meme principe. Hors-perimetre de l'architecture CodPlay (moteur non concerne) — fix
 localise a `packages/demos/src/shared/trace-log-panel.ts` et `packages/demos/src/codplay/run-codplay-scene-demo.ts`.

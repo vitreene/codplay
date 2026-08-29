@@ -13,17 +13,17 @@ export function createPreloadMediaScene(): SceneDoc {
         initial: { move: '@root' },
         persos: [
           {
-            id: 'media-shell',
+            id: 'media-container',
             type: 'layout',
             initial: {
               move: '@root',
               markup: `
-                <div class="preload-media-shell">
+                <div class="preload-media-container">
                   <div class="preload-media-grid">
-                    <div data-part="media-shell:cell-audio" class="preload-media-cell preload-media-cell--audio"></div>
-                    <div data-part="media-shell:cell-video" class="preload-media-cell"></div>
-                    <div data-part="media-shell:cell-img-a" class="preload-media-cell"></div>
-                    <div data-part="media-shell:cell-img-b" class="preload-media-cell"></div>
+                    <div data-part="media-container:cell-audio" class="preload-media-cell preload-media-cell--audio"></div>
+                    <div data-part="media-container:cell-video" class="preload-media-cell"></div>
+                    <div data-part="media-container:cell-img-a" class="preload-media-cell"></div>
+                    <div data-part="media-container:cell-img-b" class="preload-media-cell"></div>
                   </div>
                 </div>
               `,
@@ -39,7 +39,7 @@ export function createPreloadMediaScene(): SceneDoc {
               master: false,
               className: 'preload-media-audio',
               video: { style: { display: 'none' } },
-              move: { parentId: 'media-shell:cell-audio' },
+              move: { parentId: 'media-container:cell-audio' },
             },
             actions: {
               'media:audio:start': {
@@ -56,7 +56,7 @@ export function createPreloadMediaScene(): SceneDoc {
               master: false,
               className: 'preload-media-video',
               video: { style: { objectFit: 'cover', display: 'block' } },
-              move: { parentId: 'media-shell:cell-video' },
+              move: { parentId: 'media-container:cell-video' },
             },
             actions: {
               'media:video:start': {
@@ -71,7 +71,7 @@ export function createPreloadMediaScene(): SceneDoc {
               src: '/assets/35c8ec5a07fc.jpg',
               className: 'preload-media-item',
               img: { style: { objectFit: 'cover' } },
-              move: { parentId: 'media-shell:cell-img-a' },
+              move: { parentId: 'media-container:cell-img-a' },
               style: { opacity: 0 },
             },
             actions: {
@@ -87,7 +87,7 @@ export function createPreloadMediaScene(): SceneDoc {
               src: '/assets/28970388742_2f75d527d6_z.jpg',
               className: 'preload-media-item',
               img: { style: { objectFit: 'cover' } },
-              move: { parentId: 'media-shell:cell-img-b' },
+              move: { parentId: 'media-container:cell-img-b' },
               style: { opacity: 0 },
             },
             actions: {

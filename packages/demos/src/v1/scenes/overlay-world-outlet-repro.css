@@ -1,4 +1,4 @@
-.owor-shell {
+.owor-container {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 1rem;

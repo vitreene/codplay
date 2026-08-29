@@ -107,6 +107,12 @@ l’engine ; `skipped` signifie que le cache a déjà fourni la ressource.
   seuls `{ ok: false }` de la façade sont les résultats structurés des
   registres de capacités.
 
+`instance.diagnostic.onDiagnostic()` observe les warnings et erreurs. La même
+surface expose `instance.diagnostic.onTrace()` pour le contexte des events
+runtime ajoutés au journal live ; cette trace ne devient pas un diagnostic et
+ne réexécute jamais la scène. `instance.events.onEvent()` reste réservé aux
+eventimes de portée `public`.
+
 Le chemin HTML/DOM est fourni par défaut. Le composant core `layout` expose
 toutes les zones `data-part` écrites dans son template ; le composant `input`,
 qui possède aussi des zones internes, n'en expose qu'une sélection. Cette

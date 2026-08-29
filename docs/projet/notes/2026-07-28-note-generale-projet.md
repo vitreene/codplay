@@ -185,7 +185,7 @@ transforment le **contenu** — travail sur la donnée. L'**empaquetage** transf
 fichiers, descripteur, archive. La seconde n'est pas du code du projet.
 
 *Forme concrète de SCORM* : l'export y crée un **manifeste** et d'autres fichiers, le tout **zippé**, par
-un **script shell** lancé une fois les modules obtenus. **Ce chemin doit exister** — hors périmètre pour le
+un **script d'exécution** lancé une fois les modules obtenus. **Ce chemin doit exister** — hors périmètre pour le
 moment, mais sujet réel. **Cible de l'e-learning uniquement** : le signage n'a pas de SCORM.
 
 *Deux modèles de livraison, à ne pas fondre* :

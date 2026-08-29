@@ -12,7 +12,7 @@ function createLayoutSceneFixture(input: { format?: 'html' | 'svg'; includeMissi
   const layoutMarkup =
     input.format === 'svg'
       ? '<g data-part="scene-layout:header"></g><g data-part="scene-layout:slot"></g>'
-      : '<section class="layout-shell"><header data-part="scene-layout:header"></header><main data-part="scene-layout:slot"></main></section>'
+      : '<section class="layout-container"><header data-part="scene-layout:header"></header><main data-part="scene-layout:slot"></main></section>'
 
   const persos: SceneDoc['stories'][string]['persos'] = [
     {
@@ -95,7 +95,7 @@ describe('V1 - layout runtime', () => {
     expect(insertedNode?.parentNode).toBe(slotNode)
 
     const layoutRoot = registry.getNodeById('scene-layout') as Element | null
-    expect(layoutRoot?.className).toBe('layout-shell')
+    expect(layoutRoot?.className).toBe('layout-container')
     expect(Array.from(layoutRoot?.children ?? []).map((child) => child.tagName.toLowerCase())).toEqual([
       'header',
       'main'

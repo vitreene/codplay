@@ -54,7 +54,7 @@ Utiliser une structure visuelle hybride :
 Structure racine recommandee :
 
 ```html
-<div class="space-bubbles-shell">
+<div class="space-bubbles-container">
   <svg data-part="space-stage:world" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet"></svg>
   <div data-part="space-stage:hud"></div>
   <div data-part="space-stage:overlay"></div>

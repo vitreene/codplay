@@ -4,7 +4,7 @@
 
 Status: Fixe - tranche de portage V1 accepte le 2026-08-24
 CodPlay version: V2 foundation
-Implementation: complete pour l'acceptance path ci-dessous
+Implementation: complete — extension du contrat polygon validée le 2026-08-29
 
 Cette tranche est autorisee par la decision de portage V1 vers V2. Les contrats
 ci-dessous sont la reference de l'implementation et de son acceptance path.
@@ -171,6 +171,38 @@ Le path et le texte sont projetes par les services de materialisation sur leurs
 parts respectives. Le composant ne modifie jamais la racine d'un autre
 composant.
 
+## Extension du contrat polygon acceptée le 2026-08-29
+
+`polygon` est un composant spécialisé : ses propriétés métier et leurs
+conséquences de rendu lui appartiennent. Le contrat V2 étend donc le profil
+polygon avec `diameter`, en plus des propriétés géométriques déjà présentes.
+
+Les contrôles émettent directement un seul événement sémantique par paramètre,
+sous le nom `polygon:<parameter>` ; aucun suffixe `:raw` ni transform de scène
+n'est nécessaire. Le payload DOM conserve la valeur native générique `value`.
+Les actions des persos intéressés diffusent ce même événement ; chacun réalise
+sa projection au plus près de lui. `PolygonComponent` associe le nom de son
+action à sa propriété (`sides`, `inner`, `outer`, `inflexion`, `diameter`),
+normalise la valeur et projette le chemin SVG ou `width`/`height` en pixels.
+Le contrôle et son `output` projettent leur propre `value`. Aucun patch CSS,
+événement `polygon:update` ou duplication `polygon:value:*` n'est produit par
+la scène.
+
+Cette spécialisation reste interne au composant et réutilise le service `style`
+existant ; elle ne crée pas de service polygon global. Elle constitue le modèle
+V2 pour une propriété propre à un composant qui doit produire plusieurs effets
+de présentation.
+
+### Écart non normatif de la démo morph
+
+La démo conserve dans `packages/demos/src/v2/demos/polygon/main.ts` une fonction
+nommée `createMorphStrap` qui alterne deux séquences à l'aide d'un état local
+capturé par fermeture. Elle est déclarée dans `StoryDoc.straps` et appelée par la
+règle `listen.straps`. Cet état local est une tolérance propre à cette fixture et
+ne constitue pas un contrat V2. Dans une implémentation normative, l'état de
+l'alternance appartient à la `StoryDoc` et passe par le state runtime ; il ne
+vit pas dans la fonction de production d'événements.
+
 ## Acceptance path
 
 La tranche est acceptee seulement lorsque les preuves suivantes passent :
@@ -186,6 +218,10 @@ La tranche est acceptee seulement lorsque les preuves suivantes passent :
    destruction ;
 6. polygon : sorties geometriques V1, refresh sans recreation de racine, morph
    a progression 0/1 et seek vers la forme finale.
+7. polygon : une propriété `diameter` dynamique est normalisée et projetée par
+   le composant, sans événement `polygon:update`, suffixe `:raw`, transform de
+   scène, `polygon:value:*` ni calcul CSS dans la scène ; un seul événement
+   `polygon:<parameter>` est diffusé aux persos intéressés.
 
 Les README des nouveaux dossiers portent le statut de la tranche et restent
 alignes avec ce document avant sa cloture.

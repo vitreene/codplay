@@ -25,6 +25,7 @@ import type {
   CodPlayInstanceOptions,
   CodPlayModules,
   CodPlayPublicEvent,
+  CodPlayTraceListener,
   CodPlayRegistryError,
   CodPlayRegistryResult,
   CodPlayResourceRegistration,
@@ -34,6 +35,7 @@ import type {
 import { DiagnosticChannel, publishFacadeError, withDiagnosticRefs } from './diagnostic-channel'
 import { InstanceFacadeImpl } from './instance-facade'
 import { toPublicEvent } from './public-event'
+import { toTraceEvent } from './trace-event'
 import { createInstanceHost, type InstanceHost } from './instance-host'
 import type { Ticker } from '../runtime/time'
 
@@ -288,6 +290,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
 
     const diagnostics = new DiagnosticChannel(undefined, this.diagnostics)
     const eventListeners = new Set<CodPlayEventListener>()
+    const traceListeners = new Set<CodPlayTraceListener>()
     let host: InstanceHost | undefined
     let reportPublished = false
     try {
@@ -298,6 +301,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
         resourceMetadata: new Map(this.resourceMetadata),
         instance: options,
         onPublicEvent: (event) => this.forwardPublicEvent(options.instanceId, eventListeners, event),
+        onTrace: (event) => this.forwardTraceEvent(options.instanceId, traceListeners, diagnostics, event),
         onEmitDiagnostic: (diagnostic: Diagnostic) => diagnostics.publish(withDiagnosticRefs(diagnostic, {
           instanceId: options.instanceId,
           sceneId: options.compiledScene.scene.id,
@@ -322,6 +326,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
         durationMs: options.durationMs,
         diagnostics,
         eventListeners,
+        traceListeners,
         onPublicEvent: (event) => this.forwardEnginePublicEvent(event),
         onPlaybackStateChange: (state) => this.syncPlaybackClock(options.instanceId, state),
         destroy: host.destroy,
@@ -332,6 +337,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
       if (!reportPublished) publishFacadeError(diagnostics, 'CODPLAY_INSTANCE_CREATE_FAILED', error, { instanceId: options.instanceId })
       host?.destroy()
       eventListeners.clear()
+      traceListeners.clear()
       throw error
     }
   }
@@ -385,6 +391,26 @@ export class EngineFacadeImpl implements CodPlayEngine {
       } catch (error) {
         publishFacadeError(this.diagnostics, 'CODPLAY_EVENT_LISTENER_FAILED', error, {
           instanceId: event.instanceId,
+          eventId: event.eventId,
+        })
+      }
+    }
+  }
+
+  /** Forwards one internal runtime event to the diagnostic trace observers. */
+  private forwardTraceEvent(
+    instanceId: string,
+    traceListeners: Set<CodPlayTraceListener>,
+    diagnostics: DiagnosticChannel,
+    event: RuntimeTrackEvent,
+  ): void {
+    const traceEvent = toTraceEvent(instanceId, event)
+    for (const listener of [...traceListeners]) {
+      try {
+        listener(traceEvent)
+      } catch (error) {
+        publishFacadeError(diagnostics, 'CODPLAY_TRACE_LISTENER_FAILED', error, {
+          instanceId,
           eventId: event.eventId,
         })
       }

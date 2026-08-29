@@ -116,7 +116,7 @@ export function mountSequenceEditor(
   let unsubscribeTelcoGlyph: (() => void) | null = null
   let unsubscribeTelcoProgress: (() => void) | null = null
 
-  // ── Build shell ───────────────────────────────────────────────────────────────
+  // ── Build container ──────────────────────────────────────────────────────────
 
   container.style.cssText = 'display:flex;flex-direction:column;height:100%;background:#111827'
 

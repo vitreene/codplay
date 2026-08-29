@@ -22,11 +22,14 @@ export class TagComponent extends BaseHTMLComponent<TagInitial> {
   /** Applies one complete resolved tag state to the materialized node. */
   update(input: ComponentUpdateInput<TagState>): void {
     if (this.node === null) throw new Error(`Tag component is not materialized: ${this.perso.id}`)
+    const content = input.state.tag === 'output' && input.state.value !== undefined
+      ? input.state.value
+      : input.state.content
     this.services.apply(this.node, {
       className: input.state.className,
       style: input.state.style,
       attr: input.state.attr,
-      content: input.state.content,
+      content,
     })
   }
 }

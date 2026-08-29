@@ -49,7 +49,7 @@ function createRootStory(): SceneStoryDoc {
         type: "layout",
         initial: {
           move: "@root",
-          className: "space-bubbles-shell",
+          className: "space-bubbles-container",
           markup: `
             <div class="space-bubbles-frame">
               ${createNightSkyMarkup()}

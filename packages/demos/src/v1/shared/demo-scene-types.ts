@@ -19,7 +19,7 @@ export type PlayerSceneDemoAction = {
 };
 
 /**
- * Defines one scene-based demo rendered through the shared shell.
+ * Defines one scene-based demo rendered through the shared container.
  */
 export type PlayerSceneDemoConfig = {
 	title: string;

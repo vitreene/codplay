@@ -250,27 +250,27 @@ export function createStrokePathScene(): SceneDoc {
             // aucune valeur figée, la mise en page reste stable quel que
             // soit le contenu du SVG. `padding` porte l'espacement (plus de
             // `margin` sur le SVG lui-même).
-            id: "sketchShell",
+            id: "sketchContainer",
             type: "layout",
             initial: {
               move: "@root",
               format: "html",
               markup:
-                '<div style="display:grid;grid-template-rows:1fr auto;gap:12px;width:100%;min-height:100%;padding:4rem;"><div data-part="sketchShell:area"></div><div data-part="sketchShell:controls"></div></div>',
-              outlets: [{ id: "sketchShell:area" }, { id: "sketchShell:controls" }],
+                '<div style="display:grid;grid-template-rows:1fr auto;gap:12px;width:100%;min-height:100%;padding:4rem;"><div data-part="sketchContainer:area"></div><div data-part="sketchContainer:controls"></div></div>',
+              outlets: [{ id: "sketchContainer:area" }, { id: "sketchContainer:controls" }],
             },
-            actions: { sketchShell: null },
+            actions: { sketchContainer: null },
           },
           {
             id: "strokeArea",
             type: "layout",
             initial: {
-              move: { parentId: "sketchShell:area" },
+              move: { parentId: "sketchContainer:area" },
               format: "svg",
               // Pas de `viewBox` : 1 unité svg = 1px css, quelle que soit la taille
               // réelle du conteneur — les coordonnées locales (issues de `clientX`/
               // `clientY`, voir `trackStroke`) restent alignées 1:1 sans déformation.
-              // Fond/bordure distincts du blanc de `.container` (demo-shell.css) pour
+              // Fond/bordure distincts du blanc de `.container` (demo-container.css) pour
               // que la zone de tracé se voie clairement.
               markup:
                 '<svg width="100%" height="100%" style="background:#eef2f7;border:2px solid #cbd5e1;box-sizing:border-box;touch-action:none;display:block;"><g data-part="strokeArea:shape"></g></svg>',
@@ -327,7 +327,7 @@ export function createStrokePathScene(): SceneDoc {
             type: "tag",
             initial: {
               tag: "button",
-              move: { parentId: "sketchShell:controls" },
+              move: { parentId: "sketchContainer:controls" },
               content: "Effacer",
               style: {
                 margin: "0 24px 8px",

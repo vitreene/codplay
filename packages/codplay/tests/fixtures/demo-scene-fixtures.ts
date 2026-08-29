@@ -87,7 +87,7 @@ function createS4QuizReferenceScene(): SceneDoc {
           type: 'layout',
           initial: {
             move: '@root',
-            markup: '<section class="quiz-layout-shell"></section>',
+            markup: '<section class="quiz-layout-container"></section>',
             style: { display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' },
           },
         }],

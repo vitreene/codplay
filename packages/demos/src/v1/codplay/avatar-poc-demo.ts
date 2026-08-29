@@ -1,4 +1,4 @@
-import '../shared/demo-shell.css'
+import '../shared/demo-container.css'
 
 import { TalkingHead } from '@met4citizen/talkinghead'
 import { phraseWordsFR, MOUTH_CUES, PRESTON_TO_TH } from '../scenes/avatar-data/phrase-fr'
@@ -37,7 +37,7 @@ export async function runAvatarPocDemo(): Promise<void> {
   const demoLinksMarkup = buildDemoLinksMarkup('avatar-poc')
 
   appNode.innerHTML = `
-    <main class="demo-shell">
+    <main class="demo-container">
       <aside>
         <p class="eyebrow">CodPlay V1</p>
         ${demoLinksMarkup.length > 0 ? `<nav class="demo-links">${demoLinksMarkup}</nav>` : ''}

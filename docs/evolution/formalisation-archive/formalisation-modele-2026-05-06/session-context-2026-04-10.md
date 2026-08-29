@@ -191,7 +191,7 @@ Specifique demo uniquement (a isoler hors noyau):
 
 - scene fixture "DEMO" (bloc rouge, wording UI, mise en page)
 - rendu des traces en texte dans la page de demo
-- presentation visuelle (`src/style.css`, shell de test manuel)
+- presentation visuelle (`src/style.css`, conteneur de test manuel)
 - messages d'interface orientee validation manuelle
 
 Regle pratique:

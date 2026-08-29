@@ -3,6 +3,7 @@ import {
   type CodPlayFrameScheduler,
   type CodPlayInstance,
   type CodPlayPublicEvent,
+  type CodPlayTraceEvent,
   type CompiledResourceManifest,
   type RuntimePreloadManifestInput,
 } from 'codplay'
@@ -157,8 +158,10 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   let logFlushScheduled = false
   let telcoControls: ReturnType<typeof createV2DemoTelco> | undefined
   let telcoPlaybackCleanup: (() => void) | undefined
+  let traceCleanup: (() => void) | undefined
   let publicEventCleanup: (() => void) | undefined
   let sceneCleanup: (() => void) | undefined
+  const loggedEventIds = new Set<string>()
 
   function flushLogs(): void {
     logFlushScheduled = false
@@ -176,7 +179,13 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     }
   }
 
-  /** Formats one public CodPlay event for the optional layout journal. */
+  /** Formats one runtime event context for the optional layout journal. */
+  function formatTraceEvent(event: CodPlayTraceEvent): string {
+    const data = event.data === undefined ? '' : ` data=${JSON.stringify(event.data)}`
+    return `event ${event.name} @${event.timeMs}ms${data}`
+  }
+
+  /** Formats one public event that has no preceding runtime trace row. */
   function formatPublicEvent(event: CodPlayPublicEvent): string {
     const data = event.data === undefined ? '' : ` data=${JSON.stringify(event.data)}`
     return `event ${event.name} @${event.timeMs}ms${data}`
@@ -268,8 +277,11 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   function unmountScene(): void {
     sceneCleanup?.()
     sceneCleanup = undefined
+    traceCleanup?.()
+    traceCleanup = undefined
     publicEventCleanup?.()
     publicEventCleanup = undefined
+    loggedEventIds.clear()
     telcoPlaybackCleanup?.()
     telcoPlaybackCleanup = undefined
     telcoControls?.destroy()
@@ -370,7 +382,12 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         return
       }
 
+      traceCleanup = instance.diagnostic.onTrace((event) => {
+        loggedEventIds.add(event.eventId)
+        log(formatTraceEvent(event))
+      })
       publicEventCleanup = instance.events.onEvent((event) => {
+        if (loggedEventIds.has(event.eventId)) return
         log(formatPublicEvent(event))
       })
       installTelco(instance.telco, instance, module.playback)

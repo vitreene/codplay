@@ -1,8 +1,8 @@
 # Portage de `Perso.emit` vers V2
 
-**Statut : Fini**  
-**Version cible : CodPlay V2**  
-**Portage autorisé le 2026-08-28 ; implémentation et validations terminées le 2026-08-29.**
+**Statut : En cours**
+**Version cible : CodPlay V2**
+**Portage autorisé le 2026-08-28 ; correction du payload natif et validation en cours le 2026-08-29.**
 
 ## 1. Motif et diagnostic
 
@@ -141,12 +141,20 @@ Le portage doit conserver les comportements effectivement présents dans le circ
 1. Chaque clé d’`emit` (`click`, `change`, `input`, etc.) correspond au type d’événement utilisateur écouté.
 2. Une déclaration peut produire une ou plusieurs actions, dans l’ordre déclaré.
 3. L’événement produit porte le nom et les données auteur, ainsi que `self` (`id`, `name` si disponible, `storyId`) et la portée V2 du perso.
-4. Pour un `HTMLInputElement`, le payload runtime ajoute `value` et `valueAsNumber`, afin que `change` puisse alimenter le circuit de quiz.
+4. Pour un `HTMLInputElement`, le payload runtime ajoute `value`. La conversion
+   numérique relève du composant destinataire ; `valueAsNumber` n'est pas une
+   donnée sémantique de `Perso.emit`.
 5. `ref` conserve la sémantique V1 pour la racine (`undefined` ou `root`) et
    les parts internes publiées par le materializer.
 6. `keyCode`, `preventDefault` et le filtrage des répétitions clavier conservent la sémantique V1.
 7. Le branchement est installé au montage et supprimé à la destruction, sans doublons lors d’un seek, d’une reconstruction ou d’un reparent.
 8. L’erreur d’émission doit être publiée par le canal de diagnostics V2 (`DiagnosticChannel` / `instance.diagnostic`), avec les références du perso et de l’événement concernés. La sortie console éventuelle relève uniquement de la configuration de ce canal.
+
+L'adaptateur DOM V2 ne recopie pas `valueAsNumber` dans le payload générique.
+Cette valeur est une commodité du DOM, pas une donnée d'événement ; le
+composant destinataire est responsable de la conversion lorsqu'une propriété
+numérique lui est propre. La valeur native textuelle `value` et les données
+auteur déclarées restent transmises.
 
 La capture attachée à une déclaration reste une capacité distincte. Son adaptateur et son circuit ne sont pas modifiés par ce portage.
 
@@ -311,12 +319,12 @@ contournement propre à la démo.
 - connecter les erreurs du bridge au canal de diagnostics V2, avec un code et des références stables (`instanceId`, `storyId`, `persoId`, `eventId` si disponible) ;
 - ne pas modifier `runtime/capture` ni son adaptateur.
 
-### Étape D — Régressions et intégration — réalisée
+### Étape D — Régressions et intégration — en cours
 
 - tester une émission `click` sur une racine HTML ;
 - tester une émission `change` dont la déclaration conserve `data.answerId` au
-  niveau V1 et dont la cible est le contrôle interne d’un input, avec `answerId`,
-  `value` et `valueAsNumber` ;
+  niveau V1 et dont la cible est le contrôle interne d’un input, avec `answerId`
+  et `value` ;
 - vérifier qu’un clic sur le label d’un `InputComponent` et sur le contenu textuel
   d’un bouton atteint la racine du perso et produit le même emit ;
 - tester plusieurs actions et leur ordre ;

@@ -22,7 +22,7 @@ describe('polygon V2 demo', () => {
     document.body.replaceChildren()
   })
 
-  it('builds and runs the polygon through the real DOM emit and transform path', async () => {
+  it('builds and runs the polygon through the direct DOM emit path', async () => {
     const root = document.createElement('main')
     document.body.append(root)
     const catalog = createCoreRuntimeCatalog()
@@ -31,7 +31,6 @@ describe('polygon V2 demo', () => {
     }).build(createScene())
     expect(build.ok).toBe(true)
     if (!build.ok) return
-
     runner = new HtmlPlayerRunner({
       id: 'v2-polygon-demo-test',
       compiledScene: build.compiledScene,
@@ -65,10 +64,24 @@ describe('polygon V2 demo', () => {
     expect(input.value).toBe('8')
     expect(polygon.querySelector('text')?.textContent).toBe('8')
     expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).toEqual([
-      'polygon:sides:raw',
-      'polygon:update',
-      'polygon:value:sides',
+      'polygon:sides',
     ])
+
+    const diameterRange = runner.getPersoNode('main:polygon-range-diameter') as HTMLLabelElement
+    const diameterInput = diameterRange.querySelector('input') as HTMLInputElement
+    diameterInput.value = '360'
+    diameterInput.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushDomEmit()
+    expect(polygon.style.width).toBe('360px')
+    expect(polygon.style.height).toBe('360px')
+    expect(runner.player.trackJournal.getAllEvents().slice(-1).map((event) => event.name)).toEqual([
+      'polygon:diameter',
+    ])
+    expect(runner.player.trackJournal.getAllEvents().find((event) => event.name === 'polygon:diameter')?.data).toMatchObject({
+      value: '360',
+    })
+    const diameterEvent = runner.player.trackJournal.getAllEvents().find((event) => event.name === 'polygon:diameter')
+    expect(diameterEvent?.data).not.toHaveProperty('valueAsNumber')
 
     const reset = runner.getPersoNode('main:polygon-btn-sides') as HTMLButtonElement
     reset.click()
@@ -78,6 +91,10 @@ describe('polygon V2 demo', () => {
 
     morphTest.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushDomEmit()
+    expect(runner.player.trackJournal.getAllEvents().map((event) => event.name)).toEqual(expect.arrayContaining([
+      'polygon:morph:reset',
+      'polygon:morph:run',
+    ]))
     expect(morphTest.querySelector('text')?.textContent).toBe('done')
     const morphStartPath = morphTest.querySelector('path')?.getAttribute('d')
     runner.advance(350)

@@ -140,7 +140,7 @@ describe('buildGrid() — sceneRoot fills its real host container', () => {
 
   it('min-width:0/min-height:0 prevent the capsule\'s own oversized children from growing the parent grid track (and it) beyond the real container', () => {
     // CSS Grid items default to min-width/min-height:auto, refusing to shrink below their own
-    // content's intrinsic size — that pushes an auto-sized parent track (ex. the demo shell's
+    // content's intrinsic size — that pushes an auto-sized parent track (ex. the demo container's
     // `.container`, no explicit grid-template) to grow around it, defeating width:100%/height:100%
     // entirely. min-width:0/min-height:0 is what actually makes the fill bound-able.
     const capsule = new AutoCapsule({
@@ -152,7 +152,7 @@ describe('buildGrid() — sceneRoot fills its real host container', () => {
   })
 
   it('grid-area:1/-1 matters when the real host container is itself display:grid — fills the whole parent area, not one auto-placed cell', () => {
-    // Simulates a grid parent with no explicit template (like the demo shell's `.container`,
+    // Simulates a grid parent with no explicit template (like the demo container's `.container`,
     // `display:grid;place-items:center`, no `grid-template-columns/rows`) — a plain
     // `width:100%;height:100%` child there only fills its own auto-placed implicit cell.
     const capsule = new AutoCapsule({

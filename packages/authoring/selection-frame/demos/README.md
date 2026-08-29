@@ -66,7 +66,7 @@ following boundaries:
 - a declarative `SceneDoc` as the scenario source;
 - `HtmlPlayerRunner` as the only owner of materialization and position capture,
   presentation and the clock-facing Play/Seek entry points;
-- the shared demo shell with Play, Rewind, absolute-time seek, speed controls
+- the shared demo container with Play, Rewind, absolute-time seek, speed controls
   and the non-blocking log toggle;
 - a responsive root that is measured at its real content-box dimensions;
 - explicit checks at FIRST, the event boundary, a middle frame and LAST,

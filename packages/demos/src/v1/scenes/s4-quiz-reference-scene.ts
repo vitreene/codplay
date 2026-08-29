@@ -18,7 +18,7 @@ export function createS4QuizReferenceScene(): SceneDoc {
             initial: {
               move: "@root",
               markup: `
-                <section class="quiz-layout-shell">
+                <section class="quiz-layout-container">
                   <div data-part="quiz-layout:decor" style="grid-column: 1/-1; grid-row: 1/-1; position: relative;"></div>
                   <div data-part="quiz-layout:intro" style="grid-area: intro; position: relative;"></div>
                   <div data-part="quiz-layout:question" style="grid-area: question; position: relative;"></div>

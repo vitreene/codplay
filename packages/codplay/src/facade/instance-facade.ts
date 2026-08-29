@@ -14,6 +14,7 @@ import type {
   CodPlayInstanceEvents,
   CodPlayProgress,
   CodPlayPublicEvent,
+  CodPlayTraceListener,
   CodPlayTelco,
   CodPlayTelcoState,
 } from './facade-types'
@@ -27,6 +28,7 @@ type InstanceFacadeOptions = Readonly<{
   durationMs?: number
   diagnostics: DiagnosticChannel
   eventListeners: Set<CodPlayEventListener>
+  traceListeners: Set<CodPlayTraceListener>
   onPublicEvent: (event: CodPlayPublicEvent) => void
   onPlaybackStateChange: (state: 'playing' | 'paused') => void
   destroy: () => void
@@ -41,6 +43,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   private readonly player: RuntimePlayer
   private readonly diagnostics: DiagnosticChannel
   private readonly eventListeners: Set<CodPlayEventListener>
+  private readonly traceListeners: Set<CodPlayTraceListener>
   private readonly destroyTelco: () => void
   private readonly destroyHost: () => void
   private destroyed = false
@@ -51,6 +54,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.player = options.player
     this.diagnostics = options.diagnostics
     this.eventListeners = options.eventListeners
+    this.traceListeners = options.traceListeners
     this.destroyHost = options.destroy
     const telco = createTelcoFacade(options)
     this.telco = telco.api
@@ -58,6 +62,10 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.events = createEventsFacade(this.player, this.diagnostics, this.instanceId, this.eventListeners)
     this.diagnostic = {
       onDiagnostic: (listener) => this.diagnostics.onDiagnostic(listener),
+      onTrace: (listener) => {
+        this.traceListeners.add(listener)
+        return () => { this.traceListeners.delete(listener) }
+      },
     }
     this.onPublicEvent = options.onPublicEvent
   }
@@ -86,6 +94,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     if (this.destroyed) return
     this.destroyed = true
     this.eventListeners.clear()
+    this.traceListeners.clear()
     this.destroyTelco()
     this.destroyHost()
   }

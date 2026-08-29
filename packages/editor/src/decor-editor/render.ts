@@ -5,7 +5,7 @@ import { hexToCssOklch, cssOklchComponentsToHex } from './color-adapter'
 import { formatNumberForCssProperty, parseNumberFromCssValue } from './css-value-format'
 import { iconSvg } from './icons'
 
-// ─── Palette shell ───────────────────────────────────────────────────────────
+// ─── Palette container ────────────────────────────────────────────────────────
 //
 // Couche de RENDU — dupliquable/adaptable sans toucher au contrat (domaine,
 // machine, contrôleur). Cf plan/2026-07-07-dedit-palette-panels-plan.md
