@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseColor } from 'ace'
 import { CodPlay } from 'codplay'
 import { buildSceneDocV2, EDITOR_V2_ROOT_PERSO_ID, EDITOR_V2_STORY_ID } from '../../src/builder-v2'
 import type { EditorScene } from '../../src/app/commands/types'
@@ -57,7 +58,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
       move: { target: EDITOR_V2_ROOT_PERSO_ID },
       tag: 'div',
       content: 'Bonjour ed2 V2',
-      style: { color: '#ffffff', fontSize: '2rem', opacity: 0 },
+      style: { color: parseColor('#ffffff'), fontSize: '2rem', opacity: 0 },
     })
     expect(item.initial).not.toHaveProperty(['move', 'parentId'])
   })
@@ -71,7 +72,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     const item = story.persos.find((perso) => perso.id === 'item-1')!
     expect(item.actions['item-1-intro']).toEqual({ style: { opacity: { from: 0, to: 1, duration: 400 } } })
     expect(item.actions['item-1-kf-kf-b']).toEqual({
-      style: { color: { from: '#ffffff', to: '#00ff00', duration: 1000, ease: 'easeInOut' } },
+      style: { color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'easeInOut' } },
     })
     expect(story.eventimes).toEqual([
       { name: 'item-1-intro', startAt: 0 },
@@ -79,6 +80,19 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     ])
     expect(result.preRollMs).toBe(400)
     expect(result.durationMs).toBe(3000)
+  })
+
+  it('ignores discrete CSS keyword changes without maintaining a property whitelist', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-a']!.style!.objectFit = 'contain'
+    scene.decors['text-decor-b']!.style!.objectFit = 'cover'
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.actions['item-1-kf-kf-b']?.style).not.toHaveProperty('objectFit')
   })
 
   it('is accepted by the real CodPlay V2 compiler without importing V1', () => {
@@ -169,13 +183,82 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     codplay.destroy()
   })
 
-  it('returns a blocking diagnostic instead of emitting a partial V2 scene for offsets', () => {
+  it('emits structured cqw lengths for offsets without qualifying CSS styles', () => {
     const scene = fixtureScene()
-    scene.decors['text-decor-a']!.offset = { width: 12.5 }
+    scene.decors['text-decor-a']!.offset = {
+      x: 3,
+      y: 4,
+      translate: { x: 12.5, y: -8 },
+      width: 12.5,
+      height: 25,
+      rotate: 15,
+      scale: { x: 1.2, y: 0.9 },
+    }
     const result = buildSceneDocV2(scene)
-    expect(result).toMatchObject({ ok: false, diagnostics: [{ code: 'EDITOR_V2_OFFSET_REQUIRES_CQW', level: 'error' }] })
-    if (result.ok) return
-    expect(result).not.toHaveProperty('sceneDoc')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.initial).toMatchObject({
+      style: {
+        x: { kind: 'length', unit: 'cqw', value: 12.5 },
+        y: { kind: 'length', unit: 'cqw', value: -8 },
+        width: { kind: 'length', unit: 'cqw', value: 12.5 },
+        height: { kind: 'length', unit: 'cqw', value: 25 },
+        rotate: 15,
+        scaleX: 1.2,
+        scaleY: 0.9,
+      },
+    })
+  })
+
+  it('does not emit an interpolation action when structured cqw offsets are unchanged', () => {
+    const scene = fixtureScene()
+    const offset = { x: 12.5, y: -8, width: 12.5, height: 25 }
+    scene.decors['text-decor-a']!.offset = offset
+    scene.decors['text-decor-b']!.offset = { ...offset }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.actions['item-1-kf-kf-b']).toEqual({
+      style: {
+        color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'easeInOut' },
+      },
+    })
+  })
+
+  it('normalizes standalone CSS colors without reinterpreting open CSS values', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-a']!.style = {
+      'background-color': '#ff0000',
+      'line-height': '1.2',
+      'object-fit': 'contain',
+      '--editor-fill': 'calc(10px + var(--gap))',
+    }
+    scene.decors['text-decor-b']!.style = {
+      'background-color': '#00ff00',
+      'line-height': '1.4',
+      'object-fit': 'cover',
+      '--editor-fill': 'calc(20px + var(--gap))',
+    }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.initial).toMatchObject({ style: { 'background-color': parseColor('#ff0000'), 'line-height': '1.2' } })
+    expect(item.actions['item-1-kf-kf-b']).toMatchObject({
+      style: {
+        'background-color': { from: parseColor('#ff0000'), to: parseColor('#00ff00') },
+      },
+    })
+    expect(item.actions['item-1-kf-kf-b']?.style).not.toHaveProperty('object-fit')
+    expect(item.actions['item-1-kf-kf-b']?.style).toMatchObject({
+      'line-height': { from: '1.2', to: '1.4' },
+      '--editor-fill': { from: 'calc(10px + var(--gap))', to: 'calc(20px + var(--gap))' },
+    })
   })
 
   it('maps bloc to an empty tag and image to the V2 img component without inventing content', () => {

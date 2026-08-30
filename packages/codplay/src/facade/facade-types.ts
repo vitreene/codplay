@@ -262,6 +262,47 @@ export type CodPlayInstanceDiagnostic = Readonly<{
   onTrace: (listener: CodPlayTraceListener) => () => void
 }>
 
+/** Logical target identified by one story and one perso inside an instance. */
+export type CodPlaySnapshotTarget = Readonly<{
+  storyId: string
+  persoId: string
+}>
+
+/** One resolved logical state returned by the instance snapshot read operation. */
+export type CodPlaySnapshotState = Readonly<{
+  target: CodPlaySnapshotTarget
+  state: Readonly<Record<string, unknown>>
+}>
+
+/** Logical frame presented by one instance, excluding its active preview. */
+export type CodPlaySnapshot = Readonly<{
+  timeMs: number
+  states: readonly CodPlaySnapshotState[]
+}>
+
+/** One partial logical state contribution applied to a presented frame. */
+export type CodPlaySnapshotPatch = Readonly<{
+  target: CodPlaySnapshotTarget
+  timeMs: number
+  state: Readonly<Record<string, unknown>>
+}>
+
+/** Result returned after validating and presenting one snapshot replacement. */
+export type CodPlaySnapshotSetResult = Readonly<
+  | { ok: true }
+  | {
+      ok: false
+      code: 'INSTANCE_DESTROYED' | 'TIME_NOT_PRESENTED' | 'TARGET_NOT_PRESENT' | 'INVALID_PATCH'
+    }
+>
+
+/** Public logical preview capability owned directly by one CodPlay instance. */
+export type CodPlaySnapshotApi = Readonly<{
+  get: () => CodPlaySnapshot | null
+  set: (patches: readonly CodPlaySnapshotPatch[]) => CodPlaySnapshotSetResult
+  clear: () => void
+}>
+
 /** Common options used to create and initialize one public instance. */
 type CodPlayInstanceOptionsBase = Readonly<{
   instanceId: string
@@ -287,6 +328,7 @@ export type CodPlayInstance = Readonly<{
   readonly telco: CodPlayTelco
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
+  readonly snapshot: CodPlaySnapshotApi
 }>
 
 /** Public instance registry owned by one CodPlay owner. */

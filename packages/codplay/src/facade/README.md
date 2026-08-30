@@ -77,9 +77,9 @@ en cas de succès, il fournit le `CompiledScene` et la collection de fonctions
 consommateur n'a donc pas à appeler `engine.start()` ou `engine.pause()` pour
 une lecture locale. Ces commandes générales restent disponibles :
 `engine.pause()` suspend volontairement la propagation de toutes les instances
-et `engine.start()` la reprend. Un hôte, comme Sighty, peut donc les employer
-pour son pilotage général, avec la déclaration de pilote prévue par son
-contexte.
+et `engine.start()` la reprend. Un futur hôte, comme Sighty lorsqu'il sera
+raccordé, pourra les employer pour son pilotage général, avec la déclaration de
+pilote prévue par son contexte.
 
 Le preload est fourni par `codplay.preload`. Son résultat et
 ses métadonnées sont transmis explicitement à l’engine avec
@@ -98,6 +98,33 @@ codplay.preload.css.clear('editor-scene')
 Ce canal est distinct du preload URL des médias et des autres ressources ; il
 est adapté aux reconstructions fréquentes de l’éditeur.
 
+## Snapshot logique d'édition
+
+Chaque instance expose `snapshot` au même niveau que `telco` :
+
+```ts
+const frame = instance.snapshot.get()
+instance.snapshot.set([{
+  target: { storyId: 'main', persoId: 'item' },
+  timeMs: frame?.timeMs ?? 0,
+  state: { style: { opacity: 0.5 } },
+}])
+instance.snapshot.clear()
+```
+
+`get()` reconstruit l'état logique résolu du temps présenté, sans lire le DOM
+et sans inclure la preview active. `set()` remplace atomiquement la preview
+courante ; dans la première tranche, seule la clé `style` est admise et ses
+propriétés sont fusionnées avant `solve` et materialization. La contribution ne
+rejoint ni `CompiledScene` ni le journal. Une opération rejetée retourne son
+code (`TIME_NOT_PRESENTED`, `TARGET_NOT_PRESENT`, `INVALID_PATCH` ou
+`INSTANCE_DESTROYED`) et publie le diagnostic correspondant.
+
+La contribution est conservée jusqu'à `snapshot.clear()` ; elle n'est projetée
+que lorsque le temps présenté correspond à son `timeMs`. Cette règle provisoire
+évite d'imposer une annulation automatique avant l'observation des gestes réels
+de l'éditeur.
+
 ## Frontières
 
 - le catalogue core/foreign est composé à la création puis verrouillé au
@@ -114,9 +141,11 @@ est adapté aux reconstructions fréquentes de l’éditeur.
   portées par `instance.telco` et utilisent la transaction interne du runtime ;
 - `CodPlay` reçoit le `frameScheduler` de l’hôte et garde `TimeTicker` interne ;
 - la façade ne crée ni DOM, ni journal, ni dispatcher parallèle ;
+- `instance.snapshot` reste une capacité logique de l'instance, sans handle DOM,
+  `getNodePose` ou `setNodePose` ;
 - les erreurs de pilotage et d'instance passent par les diagnostics V2 ; les
-  seuls `{ ok: false }` de la façade sont les résultats structurés des
-  registres de capacités.
+  opérations de registre et `instance.snapshot.set()` retournent leurs rejets
+  structurés en plus du diagnostic correspondant.
 
 `instance.diagnostic.onDiagnostic()` observe les warnings et erreurs. La même
 surface expose `instance.diagnostic.onTrace()` pour le contexte des events
@@ -138,10 +167,13 @@ trouvent dans
 
 ## État
 
-La tranche de registres directs est implémentée et testée. La démo V2 utilise
+La tranche de registres directs est implémentée et testée. Le port logique
+`instance.snapshot` et la projection `cqw` sont implémentés et couverts par des
+tests de façade ; la preuve navigateur complète et le bridge éditeur restent en
+cours. La démo V2 utilise
 `codplay.build`, `codplay.resources` et `codplay.instances` ; elle ne construit
 plus de catalogue, de runner ou de télécommande internes. Le contrat
 `resources.override` reste reporté avec la définition de ressource associée.
 
-L'accès authoring de l'éditeur est un chantier ultérieur et ne fait pas partie
-de cette façade.
+Le raccordement authoring de l'éditeur consommera ce port sans introduire de
+package `authoring` dans CodPlay.

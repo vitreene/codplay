@@ -31,9 +31,9 @@ Les présentations FLIP et leurs matrices sont transitoires et distinctes de la 
 
 ## Unités de dimension ed2
 
-La convention V1 effective est `cqw` pour les longueurs d'offset, y compris `x`, `y`, `width` et `height`. Le builder ed2 ne devine pas l'intention d'une déclaration CSS : les seuls champs structurés de longueur (`OffsetData.x/y/width/height` et `translate.x/y`) deviennent une longueur `cqw` explicite dans la `SceneDoc` V2. `Decor.style`, CSS libre et les propriétés custom restent opaques ; ainsi `line-height: '1.2'`, `calc()` ou une variable CSS ne sont pas réinterprétés. Cette décision ne repose sur aucune whitelist et ne lit pas le DOM.
+La convention V1 effective est `cqw` pour les longueurs d'offset, y compris `x`, `y`, `width` et `height`. Le builder ed2 ne devine pas l'intention d'une déclaration CSS : les seuls champs structurés de longueur (`OffsetData.x/y/width/height` et `translate.x/y`) deviennent une longueur `cqw` explicite dans la `SceneDoc` V2. Les chaînes CSS libres et propriétés custom restent opaques, sauf une couleur autonome portée par une propriété nommée couleur, normalisée en `ColorValue` pour ACE ; ainsi `line-height: '1.2'`, `calc()` ou une variable CSS ne sont pas réinterprétés. Cette décision ne repose sur aucune whitelist de propriétés de dimension et ne lit pas le DOM.
 
-V2 doit conserver et interpoler cette valeur de longueur explicite. Le materializer HTML ne vérifie ni la grammaire CSS ni l'unité : il reçoit une longueur déjà qualifiée, la projette avec la largeur de référence explicite et écrit le résultat en `px`. `100cqw` est la largeur de la racine de scène, y compris pour `y` et `height`. Une longueur `cqw` et une valeur CSS incompatible ne sont jamais interpolées implicitement : V2 produit un diagnostic. V2 possède déjà `numericLengthScale` pour les traductions et autres canaux de transformation, mais la forme explicite et sa projection générique pour les autres styles n'existent pas encore. Cet écart devra être qualifié avant tout code V2 : correctif s'il contredit un contrat V2 fixé, feature sinon. La décision ne doit pas être contournée en remettant des chaînes `cqw` dans le builder ed2.
+V2 doit conserver et interpoler cette valeur de longueur explicite. Le materializer HTML ne vérifie ni la grammaire CSS ni l'unité : il reçoit une longueur déjà qualifiée, la projette avec la largeur de référence explicite et écrit le résultat en `px`. `100cqw` est la largeur de la racine de scène, y compris pour `y` et `height`. Une longueur `cqw` et une valeur CSS incompatible ne sont jamais interpolées implicitement : V2 produit un diagnostic. La tranche autorisée porte maintenant cette forme explicite et sa projection générique ; les preuves façade/navigateur restent à compléter. La décision ne doit pas être contournée en remettant des chaînes `cqw` dans le builder ed2.
 
 L'interpolation `Decor` est définie par la mesure de l'écart entre deux `Decor` du même item. Les propriétés interpolables doivent être projetées dans la représentation V2 avec leur unité et leur forme correctes. Les classes et les propriétés CSS intrinsèquement discrètes, telles que `object-fit`, ne sont pas interpolables : elles sont ignorées par ce calcul.
 
@@ -71,9 +71,15 @@ Le raccordement zones est différé après l'intégration V2 initiale. Il devra 
 
 `snapshot` est une capacité directe de l'instance V2, au même niveau que `telco`. Elle est créée dans CodPlay et exposée par sa façade ; aucun package `authoring` ne la crée ni ne l'enveloppe. Elle ne donne accès ni à `RuntimePlayer`, ni au catalogue, ni au materializer. Elle reste limitée à `get`, `set` et `clear`, définis dans le plan de reprise ed2.
 
-Toute intervention V2 révélée par l'adaptation doit être qualifiée avant code :
+Toute nouvelle intervention V2 révélée par l'adaptation doit être qualifiée avant code :
 
 - **correctif de bug** : divergence prouvée avec un contrat V2 déjà fixé ;
-- **feature** : capacité V2 absente.
+- **feature** : capacité V2 absente. `snapshot` et `cqw` sont les features déjà
+  autorisées dans la tranche en cours.
 
 La cause ou le besoin, les invariants, le périmètre, le plan et les preuves d'acceptation sont documentés et validés avant toute écriture. Chaque intervention V2 requiert ensuite l'autorisation explicite de l'auteur. Un correctif ne sert jamais de prétexte à introduire une feature, et une feature ne se présente jamais comme un correctif.
+
+La tranche autorisée du 2026-08-30 implémente désormais `instance.snapshot` dans
+CodPlay et la longueur logique `cqw` dans le builder, la résolution et la
+projection HTML. Elle ne couvre pas encore le bridge éditeur, le Selection Frame
+ni les zones ; ces écarts restent suivis par le plan principal.

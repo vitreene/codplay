@@ -25,10 +25,11 @@ les frontières V2. Les références normatives sont :
 
 `preload` est une capacité externalisée et distincte. Il consomme un manifeste fourni par
 l'appelant et ne connaît ni le scénario Sighty, ni l'éditeur, ni la décision de
-transition entre scènes.
+transition entre scènes. Le contrat reste réutilisable par de futurs hôtes ; la
+présente reprise ne raccorde que l'éditeur.
 
 ```text
-manifeste(s) fourni(s) par Sighty / editor / diffusion
+manifeste(s) fourni(s) par l'éditeur / diffusion
   -> RuntimePreload.load()
   -> cache partagé + stratégie de type
 ```
@@ -43,8 +44,8 @@ preload.load(manifest) -> player.init() -> player.play()
 ```
 
 `RuntimePlayer.init()` et `HtmlPlayerRunner.init()` restent synchrones et ne
-déclenchent jamais un preload implicite. Sighty et l'éditeur peuvent donc
-précharger leurs prochains manifestes sans créer un second loader, puis
+déclenchent jamais un preload implicite. L'éditeur peut donc précharger ses
+prochains manifestes sans créer un second loader, puis
 enregistrer les URLs disponibles dans leur engine avant d'initialiser ou
 remplacer leurs instances. La façade `run` n'est qu'un raccourci de diffusion
 autonome ; elle ne redéfinit pas le contrat de `RuntimePreload`.
@@ -126,9 +127,10 @@ Le canal CSS possède ses propres règles :
   synchrone du point de vue du bridge ;
 - `clear(slot)` ne touche ni `CompiledScene`, ni `engine.resources`, ni les
   handles média ; `clear()` sans argument libère tous les slots du service ;
-- plusieurs slots sont possibles pour l'éditeur et Sighty : chaque scène
-  montée possède un `slot` et un `container`, et `clear(slot)` ne retire
-  jamais la feuille d'une autre scène ;
+- plusieurs slots sont possibles pour l'éditeur : chaque scène montée possède
+  un `slot` et un `container`, et `clear(slot)` ne retire jamais la feuille
+  d'une autre scène ; le même contrat pourra être réutilisé ultérieurement par
+  Sighty, hors périmètre de cette tranche ;
 - `CodPlay.destroy()` libère les slots CSS possédés par son service preload ;
 - `preload.load()` conserve son chemin URL pour les médias, images, fonts et
   CSS externe destinés à la diffusion ou à l'export.
@@ -142,9 +144,9 @@ ne demande aucune intervention au materializer.
 
 L'API `preload.css` est implémentée dans le service V2 et couverte par les tests
 de slots, d'isolement entre conteneurs, de remplacement sans accumulation et de
-nettoyage par `CodPlay.destroy()`. Le bridge éditeur et le montage multi-scène
-Sighty restent à raccorder dans la tranche d'intégration prévue ; ils ne sont
-pas simulés par ce service.
+nettoyage par `CodPlay.destroy()`. Le bridge de l'éditeur reste à raccorder dans
+la tranche d'intégration prévue. Sighty n'est pas raccordé et n'est pas simulé
+par ce service.
 
 ## Cache partagé
 

@@ -1,6 +1,7 @@
 export { materializeScene, materializeSceneBeforeBoundary } from './materialize'
 export type { MaterializeOptions } from './materialize'
 export { resolveLiveCaptureActionState, resolveScene } from './resolve'
+export { applyRuntimeSnapshotContribution } from './snapshot'
 export { solveScene } from './solve'
 export {
   buildSolvedGraph,
@@ -45,6 +46,14 @@ export type {
 } from './types'
 export type { SolvedGraph, SolvedGraphTargetKind } from './presentation-graph'
 export type { MaterializedTrack, MaterializedTrackRegistry } from './tracks'
+export type {
+  RuntimeSnapshot,
+  RuntimeSnapshotContribution,
+  RuntimeSnapshotContributionPatch,
+  RuntimeSnapshotPatch,
+  RuntimeSnapshotSetResult,
+  RuntimeSnapshotState,
+} from './snapshot'
 export type { MountTarget, MountTargetDeclaration } from './mount-targets'
 export type { MovePolicyIssue } from '../../config/move'
 export type {

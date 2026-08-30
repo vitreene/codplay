@@ -8,6 +8,7 @@ export type {
   CompiledEmitRule,
   CompiledFunctionReference,
   CompiledListenRule,
+  CompiledLengthValue,
   CompiledPerso,
   CompiledPrimitive,
   CompiledRecord,
@@ -22,6 +23,7 @@ export type {
   CompiledStory,
   CompiledValue,
 } from './types'
+export { isCompiledLengthValue } from './length'
 export {
   createExtractionState,
   extractCompiledRecord,

@@ -34,6 +34,11 @@ Les services HTML sont assemblés dans `service-definitions.ts` et
 enregistrés par le catalogue core. Le runner reçoit le catalogue déjà composé
 par CodPlay ; il ne crée pas de registre local.
 
+Pour une scène qui utilise les longueurs logiques `cqw`, le host initialise
+`numericLengthScale` à `largeur-de-la-racine / 100` et le recalcule à chaque
+resize. Le runner ne déduit aucune unité depuis une déclaration CSS : il ne
+projette que la forme logique déjà produite par le builder V2.
+
 La garde `isMeasurableHtmlElement` et le pont HTML du module `markup` sont
 également conservés ici : ils dépendent du substrat DOM et ne font pas partie
 des états logiques des capacités.
@@ -310,9 +315,10 @@ if (result.ok) runner.setResourceMetadata(result.data.metadata)
 engine externe pilote les frames, `run()` met le player en lecture mais lui
 laisse l'avancement du temps.
 
-Le facteur passé à `resize()` s'applique uniquement aux longueurs numériques
-sans unité à la frontière HTML. Par exemple, `x: 40` devient `40px` avec un
-facteur `1` et `80px` avec un facteur `2`. Les unités auteur et les chaînes
+Le facteur passé à `resize()` s'applique aux longueurs numériques sans unité et
+aux valeurs logiques explicites `{ kind: 'length', unit: 'cqw', value }` à la
+frontière HTML. Par exemple, une longueur `cqw` de `20` devient `20px` avec un
+facteur `1` et `40px` avec un facteur `2`. Les unités CSS opaques et les chaînes
 brutes de `style.transform` restent inchangées.
 
 ```ts

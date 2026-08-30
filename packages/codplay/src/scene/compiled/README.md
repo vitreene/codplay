@@ -18,6 +18,20 @@ artifact.
 `CompiledScene` is an artifact produced by the scene build. It is not a
 parallel top-level `compiled-scene` module.
 
+## Logical cqw lengths
+
+Structured geometry that is declared as a container-query width is retained in
+the artifact as `CompiledLengthValue`:
+
+```ts
+{ kind: 'length', unit: 'cqw', value: 12.5 }
+```
+
+The value is logical scene state, not CSS text. The runtime interpolates two
+values with the same unit; the HTML materializer projects the result to pixels
+using the scene-root width. CSS strings in an open style map are not converted
+to this form.
+
 `SceneBuilder` currently covers the first build slice: active stories, structural
 and catalog validation (including the typed profiles and validators of the built-in
 components), external function references, exhaustive component/service/module

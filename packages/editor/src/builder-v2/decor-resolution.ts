@@ -1,11 +1,26 @@
 import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
+import { parseColor } from 'ace'
+
+/** Explicit logical length emitted for structured editor geometry. */
+export type EditorV2CqwLength = Readonly<{
+  kind: 'length'
+  unit: 'cqw'
+  value: number
+}>
 
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
   return {
-    ...decor?.style,
+    ...resolveAuthoredStyle(decor?.style),
+    ...resolveOffsetAsStyle(decor?.offset),
     ...resolveCustomStyle(decor?.custom),
   }
+}
+
+/** Normalizes standalone CSS colors while preserving every other authored CSS value. */
+function resolveAuthoredStyle(style: Decor['style']): Record<string, unknown> {
+  if (style === undefined) return {}
+  return Object.fromEntries(Object.entries(style).map(([property, value]) => [property, normalizeStyleValue(property, value)]))
 }
 
 /** Resolves the effective style at one keyframe using the ed2 cascade order. */
@@ -79,15 +94,83 @@ export function computeStyleDiff(
 ): Record<string, unknown> {
   const diff: Record<string, unknown> = {}
   for (const [property, value] of Object.entries(toStyle)) {
-    if (Object.is(fromStyle[property], value)) continue
+    if (areStyleValuesEqual(fromStyle[property], value)) continue
     diff[property] = value
   }
   return diff
 }
 
-/** Reports whether a Decor contains structured offset data not supported by this V2 increment. */
+/** Compares primitive and structured logical style values without relying on object identity. */
+function areStyleValuesEqual(source: unknown, destination: unknown): boolean {
+  if (Object.is(source, destination)) return true
+  if (Array.isArray(source) || Array.isArray(destination)) {
+    if (!Array.isArray(source) || !Array.isArray(destination) || source.length !== destination.length) return false
+    return source.every((value, index) => areStyleValuesEqual(value, destination[index]))
+  }
+  if (!isPlainStyleRecord(source) || !isPlainStyleRecord(destination)) return false
+  const sourceKeys = Object.keys(source)
+  const destinationKeys = Object.keys(destination)
+  if (sourceKeys.length !== destinationKeys.length) return false
+  return sourceKeys.every((key) => key in destination && areStyleValuesEqual(source[key], destination[key]))
+}
+
+/** Narrows one style value to a non-array record for structural comparison. */
+function isPlainStyleRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+/** Reports whether two style values expose a numeric structure ACE can interpolate. */
+export function isInterpolableStylePair(from: unknown, to: unknown): boolean {
+  if (typeof from !== 'string' || typeof to !== 'string') return true
+  const sourceColor = isColorString(from)
+  const destinationColor = isColorString(to)
+  if (sourceColor || destinationColor) return sourceColor && destinationColor
+  const sourceNumbers = extractNumericParts(from).length
+  const destinationNumbers = extractNumericParts(to).length
+  return sourceNumbers > 0 && sourceNumbers === destinationNumbers
+}
+
+/** Recognizes colors through the existing ACE parser, without a CSS property list. */
+function isColorString(value: string): boolean {
+  try {
+    parseColor(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Counts numeric components used by ACE's generic compound-value interpolation. */
+function extractNumericParts(value: string): readonly string[] {
+  return value.match(/[-+]?(?:\d+\.?\d*|\.?\d+)(?:[eE][-+]?\d+)?/g) ?? []
+}
+
+/** Reports whether a Decor contains structured offset data. */
 export function hasOffsetData(decor: Decor | undefined): boolean {
   return decor?.offset !== undefined && Object.keys(decor.offset).length > 0
+}
+
+/** Resolves structured offset lengths into the explicit V2 logical-length form. */
+export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, unknown> {
+  if (offset === undefined) return {}
+  const style: Record<string, unknown> = {}
+  if (offset.x !== undefined) style.x = cqwLength(offset.x)
+  if (offset.y !== undefined) style.y = cqwLength(offset.y)
+  if (offset.translate?.x !== undefined) style.x = cqwLength(offset.translate.x)
+  if (offset.translate?.y !== undefined) style.y = cqwLength(offset.translate.y)
+  if (offset.width !== undefined) style.width = cqwLength(offset.width)
+  if (offset.height !== undefined) style.height = cqwLength(offset.height)
+  if (offset.rotate !== undefined) style.rotate = offset.rotate
+  if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
+  if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
+  return style
+}
+
+/** Creates one immutable logical cqw length without converting it to CSS text. */
+function cqwLength(value: number): EditorV2CqwLength {
+  return { kind: 'length', unit: 'cqw', value }
 }
 
 /** Reports whether a Decor uses an editor zone that is intentionally deferred to the zones tranche. */
@@ -105,9 +188,28 @@ function resolveCustomStyle(custom: string | undefined): Record<string, unknown>
     if (separator < 0) continue
     const property = declaration.slice(0, separator).trim()
     const value = declaration.slice(separator + 1).trim()
-    if (property !== '' && value !== '') style[property] = value
+    if (property !== '' && value !== '') style[property] = normalizeStyleValue(property, value)
   }
   return style
+}
+
+/** Parses a complete color token only for a color-named property. */
+function normalizeStyleValue(property: string, value: unknown): unknown {
+  if (!isColorProperty(property) || typeof value !== 'string') return value
+  try {
+    return parseColor(value)
+  } catch {
+    return value
+  }
+}
+
+/** Recognizes CSS color property naming without maintaining a fixed property whitelist. */
+function isColorProperty(property: string): boolean {
+  const normalized = property.trim()
+  if (normalized.startsWith('--')) return false
+  return normalized === 'color'
+    || normalized.endsWith('-color')
+    || normalized.endsWith('Color')
 }
 
 /** Normalizes the editor's string-or-array class form to the V2 className string form. */

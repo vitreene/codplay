@@ -7,6 +7,7 @@ import {
 } from './html-transform-service'
 import {
   isHtmlElementNode,
+  projectHtmlLogicalLength,
   isServiceRecord,
   setHtmlStyleProperty,
   type HtmlMaterializerRuntimeContext,
@@ -46,7 +47,7 @@ export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext):
           continue
         }
         if (!applyHtmlTransformStyleProperty(transformState, node, property, rawValue, context)) {
-          setHtmlStyleProperty(node, property, cssValue(rawValue))
+          setHtmlStyleProperty(node, property, cssValue(rawValue, context))
         }
         managedProperties.add(property)
       }
@@ -60,7 +61,9 @@ export function createHtmlStyleService(context: HtmlMaterializerRuntimeContext):
 }
 
 /** Converts normalized ACE colors and scalar values to CSS text. */
-function cssValue(value: unknown): string {
+function cssValue(value: unknown, context: HtmlMaterializerRuntimeContext): string {
+  const logicalLength = projectHtmlLogicalLength(value, context)
+  if (logicalLength !== undefined) return logicalLength
   if (!isServiceRecord(value)) return String(value)
   if (value.kind !== 'color' || !Array.isArray(value.coords) || typeof value.alpha !== 'number') return String(value)
   const coordinates = value.coords

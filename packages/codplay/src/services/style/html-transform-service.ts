@@ -5,6 +5,7 @@ import {
   type TransformProperty,
 } from 'ace'
 import {
+  projectHtmlLogicalLength,
   setHtmlStyleProperty,
   type HtmlElementNode,
   type HtmlMaterializerRuntimeContext,
@@ -89,6 +90,8 @@ export function commitHtmlTransformStyle(
 
 /** Converts a numeric or unitless translate property at the HTML boundary. */
 function formatTranslateProperty(value: unknown, context: HtmlMaterializerRuntimeContext): string {
+  const logicalLength = projectHtmlLogicalLength(value, context)
+  if (logicalLength !== undefined) return logicalLength
   if (typeof value === 'number') return `${scaleNumericLength(value, context)}px`
   if (typeof value !== 'string') return String(value)
   const tokens = value.trim().split(/\s+/).filter(Boolean)
@@ -136,6 +139,8 @@ function transformCssValue(
   value: unknown,
   context: HtmlMaterializerRuntimeContext,
 ): string {
+  const logicalLength = projectHtmlLogicalLength(value, context)
+  if (logicalLength !== undefined) return logicalLength
   if (typeof value !== 'number' || !isLengthTransformProperty(property)) return String(value)
   return `${scaleNumericLength(value, context)}px`
 }

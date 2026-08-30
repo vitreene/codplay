@@ -38,6 +38,12 @@ export type {
   CodPlayResourceRegistration,
   CodPlayResources,
   CodPlayServices,
+  CodPlaySnapshot,
+  CodPlaySnapshotApi,
+  CodPlaySnapshotPatch,
+  CodPlaySnapshotSetResult,
+  CodPlaySnapshotState,
+  CodPlaySnapshotTarget,
   CodPlayTelco,
   CodPlayTelcoState,
   CodPlayTelcoStateListener,
@@ -60,6 +66,7 @@ export type {
 export type { CompiledFunctionCollection } from './scene/compiled'
 export type {
   CompiledResourceManifest,
+  CompiledLengthValue,
   CompiledRecord,
   CompiledStrapCollection,
   CompiledStrapDeclarations,

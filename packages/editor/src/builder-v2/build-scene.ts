@@ -17,8 +17,8 @@ import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app
 import { DEFAULT_EASING } from '../sequence-editor/constants'
 import {
   computeStyleDiff,
-  hasOffsetData,
   hasZoneAssignment,
+  isInterpolableStylePair,
   resolveInitialClassName,
   resolveInitialStyle,
   resolveKeyframeClassName,
@@ -122,8 +122,8 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
     preRollMs,
     styleSheet: styleSheets.filter((styleSheet) => styleSheet.trim() !== '').join('\n'),
     rootGrid: rootResolution.grid,
-    // The browser bridge creates a CSS Blob from styleSheet. Content URLs are derived by
-    // CodPlay.build(), so no URL is invented at this pure builder boundary.
+    // The browser bridge sends styleSheet to codplay.preload.css.set(). Content URLs are derived
+    // by CodPlay.build(), so no URL is invented at this pure builder boundary.
     preloadManifest: { entries: [] },
     diagnostics,
   }
@@ -156,7 +156,7 @@ function validateSceneInput(scene: EditorScene): BuilderDiagnostic[] {
   return diagnostics
 }
 
-/** Validates the implicit scene-root decor with the same offset/zone rules as item decors. */
+/** Validates the implicit scene-root decor with the same zone rules as item decors. */
 function validateRootDecor(scene: EditorScene, diagnostics: BuilderDiagnostic[]): void {
   if (scene.rootDecorId === undefined) return
   const decor = scene.decors[scene.rootDecorId]
@@ -164,7 +164,6 @@ function validateRootDecor(scene: EditorScene, diagnostics: BuilderDiagnostic[])
     diagnostics.push(error('EDITOR_V2_DECOR_NOT_FOUND', `Decor '${scene.rootDecorId}' is not present.`, { decorId: scene.rootDecorId, target: 'scene-root' }))
     return
   }
-  if (hasOffsetData(decor)) diagnostics.push(error('EDITOR_V2_OFFSET_REQUIRES_CQW', 'Structured OffsetData is deferred until the V2 cqw capability is implemented.', { decorId: decor.id, target: 'scene-root' }))
   if (hasZoneAssignment(decor)) diagnostics.push({
     level: 'warning',
     code: 'EDITOR_V2_ZONE_DEFERRED',
@@ -244,7 +243,6 @@ function validateItemInput(
     }
   }
   for (const decor of [...new Set(decorIds)].map((decorId) => scene.decors[decorId])) {
-    if (hasOffsetData(decor)) diagnostics.push(error('EDITOR_V2_OFFSET_REQUIRES_CQW', 'Structured OffsetData is deferred until the V2 cqw capability is implemented.', { itemId: item.id, decorId: decor?.id }))
     if (hasZoneAssignment(decor)) diagnostics.push({
       level: 'warning',
       code: 'EDITOR_V2_ZONE_DEFERRED',
@@ -563,10 +561,13 @@ function buildInterpolationActions(
     const style: Record<string, unknown> = {}
     for (const [property, value] of Object.entries(diff)) {
       const from = fromStyle[property]
+      if (!isInterpolableStylePair(from, value)) continue
       style[property] = from === undefined
         ? { to: value, duration: durationMs, ease }
         : { from, to: value, duration: durationMs, ease }
     }
+
+    if (Object.keys(style).length === 0) continue
 
     const startAt = durationMs <= 0
       ? destination.timeMs + preRollMs

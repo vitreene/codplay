@@ -1,6 +1,6 @@
 # Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
 
-**Statut : En cours — tranche 2 (builder V2) autorisée le 2026-08-30.**
+**Statut : En cours — tranche 3 (capacités V2 `cqw` et `snapshot`) implémentée ; bridge éditeur à ouvrir après décision Selection Frame.**
 **Cible : ed2 avec CodPlay V2 foundation.**
 **Date : 2026-08-30.**
 
@@ -17,8 +17,8 @@ Les zones restent hors de cette première intégration. Leur modèle existe dans
 - Le builder ed2 prépare le `SceneDoc` V2 ; CodPlay ne connaît pas `EditorScene`.
 - `snapshot` est une capacité directe de l'instance V2, au même niveau que `telco`. Elle est créée dans CodPlay et exposée par sa façade ; aucun package `authoring` ne la crée ni ne l'enveloppe. Elle ne connaît ni `EditorScene`, ni `Decor`, ni les classes runtime internes.
 - État résolu et contribution temporaire sont logiques. Un node HTML peut servir à la géométrie, au hit-test ou aux pointeurs, jamais à lire ou écrire `Decor`.
-- Entre deux `Decor` d'un même item, le builder calcule l'écart et l'interpole par défaut. Classes et propriétés intrinsèquement discrètes, telles que `object-fit`, sont exclues de ce calcul.
-- La convention de longueur ed2 est `cqw`, déjà utilisée par V1 pour `x`, `y`, `width` et `height`. Seules les données structurées explicitement longues produisent une longueur `cqw` dans la `SceneDoc` V2 ; `Decor.style`, CSS libre et propriétés custom restent opaques. Aucune whitelist ni inférence depuis la grammaire CSS n'est introduite.
+- Entre deux `Decor` d'un même item, le builder calcule l'écart et l'interpole par défaut. Les couleurs portées par une propriété explicitement nommée couleur sont normalisées pour ACE ; les chaînes CSS composées, classes et propriétés intrinsèquement discrètes, telles que `object-fit`, sont exclues de ce calcul.
+- La convention de longueur ed2 est `cqw`, déjà utilisée par V1 pour `x`, `y`, `width` et `height`. Seules les données structurées explicitement longues produisent une longueur `cqw` dans la `SceneDoc` V2 ; les chaînes CSS libres et propriétés custom restent opaques, à l'exception de la normalisation des couleurs autonomes sur les propriétés nommées couleur. Aucune whitelist de propriétés de dimension ni inférence depuis la grammaire CSS n'est introduite.
 - V2 reçoit cette longueur explicite ; le materializer ne qualifie pas le CSS. Il ne fait que projeter une longueur déjà connue avec la largeur de référence de la scène.
 - Cascade, copy-on-write et l'unique écriture persistante `Decor` demeurent des responsabilités ed2.
 
@@ -26,12 +26,40 @@ Les zones restent hors de cette première intégration. Leur modèle existe dans
 
 | Écart constaté | État actuel | Décision à produire |
 | --- | --- | --- |
-| Lecture snapshot | Le contrat `instance.snapshot.get()` est validé, mais absent de l'implémentation V2. | Qualifier l'implémentation : correctif ou feature d'instance. |
-| Preview temporaire | Le contrat `instance.snapshot.set()/clear()` est validé, mais absent de l'implémentation V2. | Qualifier l'implémentation : correctif ou feature d'instance. |
-| Longueur logique | Le contrat `cqw` est validé, mais la forme de longueur explicite et son interpolation générique n'existent pas dans V2. | Qualifier l'implémentation : correctif ou feature. |
+| Lecture snapshot | Contrat et port runtime V2 implémentés ; lecture logique exposée par la façade, sans accès au DOM. | Compléter la preuve navigateur avec le cycle d’instance du bridge. |
+| Preview temporaire | Contribution runtime V2 implémentée après résolution et avant solve/materialize ; journal et `CompiledScene` inchangés. | Compléter la preuve navigateur et raccorder la session Decor. |
+| Longueur logique | Builder, interpolation logique et projection HTML `cqw` implémentés. | Compléter la preuve façade/navigateur Play, Seek et resize. |
 | Géométrie du Selection Frame | La façade n'expose pas encore la géométrie ou le node matérialisé. | Reprendre nativement en V2 le comportement déjà défini du cadre (sélection, hit-test, pointeurs et gestes) ; ne décider que de sa source V2 — géométrie exposée ou node observable — sans lecture ni écriture de `Decor` par le DOM. |
 
 Chaque ligne devient une tranche V2 séparée : cause démontrée, classification bug/feature, contrat, fichiers V2, tests d'intégration et autorisation explicite avant code. Aucune ne peut être masquée par un bridge temporaire.
+
+### Qualification technique préalable à la tranche d'intégration
+
+Les écarts `snapshot` et `cqw` sont des **features V2**, pas des correctifs de bug :
+
+- `snapshot` : le runtime possède déjà un `SolvedScene` présenté, mais aucune
+  surface publique d'instance ni point d'application d'une contribution
+  temporaire. Il faut donc ajouter le port `get/set/clear` prévu par le contrat,
+  ses diagnostics et son raccordement au cycle `resolve → solve → materialize`,
+  sans modifier `CompiledScene` ni le journal ;
+- `cqw` : la tranche autorisée a retiré le blocage
+  `EDITOR_V2_OFFSET_REQUIRES_CQW` et porte maintenant une longueur logique
+  explicite jusqu'à l'interpolation et la projection HTML. Les preuves de
+  façade/navigateur restent à compléter, sans inférence CSS dans le materializer
+  ni conversion de `line-height`, `object-fit` ou CSS libre.
+
+Le bridge éditeur est ensuite une tranche d'adaptation, non une capacité core :
+il remplacera le pont V1 par `CodPlay.build()`, `preload.load()`,
+`preload.css.set()`, `instances.create()` et le `telco` d'instance, puis
+émettra les résultats vers les événements xState existants. Tant que les deux
+features core ne sont pas intégrées et validées sur le chemin façade, écrire ce bridge imposerait
+un fallback V1 ou une lecture de pose par le DOM, tous deux exclus par ce plan.
+
+L'ordre retenu est donc : `cqw` (les scènes réelles portent des offsets),
+`snapshot`, bridge éditeur, puis bascule des régions et suppression des imports
+V1 après preuve navigateur. L'autorisation explicite de modifier le core V2 pour
+ces deux features a été donnée le 2026-08-30 ; elle ne couvre pas d'autre
+évolution du core.
 
 ## Tranche 0 — fermer les deux contrats d'entrée
 
@@ -128,7 +156,8 @@ Le bridge ed2 consomme `instance.snapshot` directement. V2 reste propriétaire d
 
 **Fichiers de plan concernés :** `packages/codplay/plan/facade-engine-instance-plan.md` §8, façade/types d'instance V2, puis ce plan ed2.
 
-**Acceptation :** contrat accepté. Reste à produire le sous-plan V2 qui qualifie et autorise son implémentation.
+**Acceptation :** contrat accepté. Le sous-plan V2 est autorisé le 2026-08-30 ;
+la validation de l'implémentation reste suivie par les preuves de la tranche dédiée.
 
 ### 0.2 Contrat de longueur `cqw` — validé le 2026-08-30
 
@@ -136,7 +165,7 @@ Le contrat fixe la valeur V2 et son origine :
 
 - `OffsetData.x/y/width/height` et `OffsetData.translate.x/y` sont toujours des longueurs `cqw` ;
 - le builder porte ces valeurs dans `SceneDoc` sous la forme `{ kind: 'length', unit: 'cqw', value }` ;
-- `Decor.style`, le CSS libre, les propriétés custom et les chaînes composées (`calc()`, `var()`, gradients, filtres) restent des valeurs CSS opaques ;
+- les chaînes CSS libres, les propriétés custom et les valeurs composées (`calc()`, `var()`, gradients, filtres) restent opaques ; une couleur autonome sur une propriété nommée couleur est normalisée en `ColorValue` pour l'interpolation ACE ;
 - `100cqw` correspond à la largeur de la racine de scène, y compris pour `y` et `height`, conformément à V1 ;
 - V2 interpole deux longueurs `cqw` puis les projette en `px` avec cette largeur de référence, sans qualification CSS dans le materializer ;
 - une interpolation entre une longueur `cqw` et une valeur CSS incompatible produit un diagnostic explicite.
@@ -145,7 +174,46 @@ Les valeurs unitless CSS, telles que `line-height: '1.2'`, ne sont pas convertie
 
 **Fichiers de plan concernés :** spécification V2 de style/ACE, plan de façade, nouveau plan ed2 de builder V2.
 
-**Acceptation :** contrat accepté. Le sous-plan V2 doit prouver : `offset.width: 12.5` devient une longueur logique, `line-height: '1.2'` reste opaque, `object-fit: 'cover'` reste discret, et CSS libre/`calc()` restent opaques, en Play, Seek et resize.
+**Acceptation :** contrat accepté. Le sous-plan V2 doit prouver : `offset.width: 12.5` devient une longueur logique, les couleurs `color`/`background-color` sont normalisées, `line-height: '1.2'` reste opaque, `object-fit: 'cover'` reste discret, et CSS libre/`calc()` restent opaques, en Play, Seek et resize.
+
+### 0.3 Sous-plan V2 autorisé — longueur `cqw`
+
+Cette intervention est une **feature V2** : aucun comportement V2 existant ne
+est corrigé opportunément. Elle se limite aux quatre frontières suivantes :
+
+1. **Builder ed2** (`packages/editor/src/builder-v2`) : remplacer le blocage
+   `EDITOR_V2_OFFSET_REQUIRES_CQW` par la projection des champs structurés
+   `OffsetData` en valeurs `{ kind: 'length', unit: 'cqw', value }`. Les
+   champs `rotate`/`scale` restent numériques ; `anchor`/`ratio` restent
+   signalés comme écart séparé. En dehors de la normalisation des couleurs
+   autonomes sur les propriétés nommées couleur, `Decor.style`, `custom` et les
+   classes ne sont pas réinterprétés.
+2. **Résolution V2** (`packages/codplay/src/runtime/player/pipeline`) :
+   accepter deux longueurs explicites de même unité dans le tween générique,
+   interpoler leur nombre, et conserver la valeur structurée dans l'état
+   logique. Une borne `cqw` et une valeur CSS incompatible produisent l'erreur
+   dédiée ; aucune propriété CSS n'est consultée.
+3. **Projection HTML** (`packages/codplay/src/services/style` et
+   `packages/codplay/src/runtime/runner-html`) : convertir uniquement la valeur
+   logique `cqw` déjà déclarée en pixels avec `largeur-racine / 100`. La largeur
+   est fournie par le host lors de l'initialisation et des resizes ; le
+   materializer ne déduit ni unité ni grammaire CSS.
+4. **Preuves** : tests du builder, du tween V2, de l'adaptateur style et du
+   resize du host. Les cas `line-height`, `object-fit`, CSS libre et `calc()`
+   doivent rester inchangés ; les couleurs `color` et `background-color` sont
+   normalisées avant compilation.
+
+Les modifications sont autorisées uniquement dans ces frontières. Toute
+extension vers la façade snapshot, le bridge éditeur ou les zones reste dans sa
+tranche dédiée.
+
+### Décision d'implémentation provisoire — conservation de la preview
+
+Pour ne pas imposer une annulation automatique avant l'observation de l'interface,
+le port V2 conserve la contribution jusqu'à `snapshot.clear()`. Elle n'est
+présentée que lorsque le temps courant correspond au `timeMs` de la contribution ;
+un seek vers un autre temps retrouve donc l'état résolu. Cette règle concrétise
+provisoirement le contrat et sera réévaluée sur les gestes réels de l'éditeur.
 
 ## Tranche 1 — planifier et autoriser les capacités V2 éventuelles
 
@@ -222,9 +290,11 @@ La première preuve de cette tranche est en place dans une verticale isolée :
 - `packages/editor/src/builder-v2/` expose `buildSceneDocV2()` et sa résolution pure de décor ;
 - la story déterministe de l'éditeur reste `story-main`, conformément au modèle ed2 existant, tandis que les persos sont natifs V2 (`list` pour la racine et les capsules, `tag`/`img`/`media` pour les feuilles) et utilisent `move.target` ;
 - les fixtures couvrent une racine, deux niveaux de capsules, les placements grille, la feuille CSS produite par `capsule-automation`, les mappings `bloc`/`text`/`image`/`video`/`media`, zéro à plusieurs keyframes, une transition `fade`, un diff de couleur, la ressource vidéo et une compilation par `CodPlay.build()` ;
-- les erreurs de forme, de contenu, de transition et d'offset retournent des diagnostics sans `SceneDoc` partiel ; `scene.zones` et les classes discrètes sont signalées sans être interpolées ;
-- `styleSheet` restitue la source CSS de tous les niveaux résolus, tandis que `preloadManifest` reste explicitement vide à cette frontière pure : le bridge navigateur créera la ressource CSS sans URL inventée par le builder ;
-- les offsets structurés sont bloquants (`EDITOR_V2_OFFSET_REQUIRES_CQW`) jusqu'à l'implémentation V2 autorisée de la capacité `cqw`. Ils ne sont pas remplacés par des chaînes `cqw` dans le builder.
+- les erreurs de forme, de contenu et de transition retournent des diagnostics sans `SceneDoc` partiel ; les couleurs autonomes des propriétés nommées couleur sont normalisées par ACE, tandis que `scene.zones` et les classes discrètes sont signalées sans être interpolées ;
+- `styleSheet` restitue la source CSS de tous les niveaux résolus, tandis que `preloadManifest` reste explicitement vide à cette frontière pure : le bridge navigateur la transmettra à `codplay.preload.css.set()` sans URL inventée par le builder ;
+- les offsets structurés sont désormais portés par des valeurs logiques `{ kind: 'length', unit: 'cqw', value }` ; aucune chaîne `cqw` n'est fabriquée par le builder ;
+- la projection HTML applique `largeur-racine / 100` aux longueurs logiques, et le même facteur est recalculé lors d'un resize ; `line-height`, `object-fit`, `calc()` et les autres chaînes CSS restent opaques, hors couleurs autonomes déjà normalisées au builder.
+- `instance.snapshot` fournit maintenant la lecture logique sans preview, le remplacement atomique d'une preview `style` et `clear()` directement depuis la façade CodPlay ; les rejets publient leurs diagnostics sans modifier la scène compilée ni le journal.
 
 L'arborescence imbriquée et la feuille CSS ont été incluses dans cette même tranche parce qu'elles
 correspondent déjà à la ligne de mapping `CapsuleDef` de ce plan et qu'elles sont produites par le
@@ -232,9 +302,9 @@ service existant `capsule-automation` ; il n'y a ni nouveau contrat, ni chemin d
 ni intervention dans le core V2. Cette extension reste limitée au builder pur et à sa preuve de
 compilation.
 
-Les tests ciblés et la suite `packages/editor` (487 tests) passent. Cette tranche reste `En cours` :
-le bridge navigateur, `snapshot`, la capacité `cqw`, le circuit `Decor` et les zones n'ont pas
-commencé. Le bridge devra appeler `codplay.preload.css.set()` pour rendre `styleSheet` disponible
+Les tests ciblés du builder et du core passent. Cette tranche reste `En cours` :
+la preuve navigateur du host, le bridge navigateur, le circuit `Decor` et les zones
+restent à traiter. Le bridge devra appeler `codplay.preload.css.set()` pour rendre `styleSheet` disponible
 immédiatement, tandis que les ressources URL continueront de passer par `preload.load()` ; cette
 étape n'est pas encore câblée dans l'application.
 
@@ -319,4 +389,10 @@ Cette tranche doit décider séparément le comportement temporel de l'affectati
 
 ## Conditions de validation du présent plan
 
-Les décisions de la tranche 0 sont validées et la tranche 2 est explicitement autorisée pour le slice décrit ci-dessus. Les tranches qui nécessitent une intervention dans `packages/codplay` (`snapshot`, `cqw`, puis le cycle d'instance) restent soumises à leur qualification bug/feature, à un sous-plan accepté et à une autorisation explicite avant code. Aucune tranche ultérieure n'est déduite de la réussite de cette première preuve.
+Les décisions de la tranche 0 sont validées. La modification du cœur V2 pour
+les seules features `snapshot` et `cqw` a été explicitement autorisée le
+2026-08-30 et son port est couvert par les tests unitaires et de façade indiqués
+dans l’état ci-dessus. Cette autorisation ne couvre ni une autre évolution du
+cœur, ni le bridge éditeur, ni les zones. Le cycle d’instance, le circuit
+`Decor`, la source V2 du Selection Frame et la suppression des imports V1
+restent des tranches distinctes à traiter selon leur contrat et leurs preuves.

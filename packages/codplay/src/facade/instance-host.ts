@@ -38,6 +38,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     compiledScene: options.instance.compiledScene,
     root: options.instance.root,
     rootTargets,
+    numericLengthScale: resolveRootNumericLengthScale(options.instance.root),
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
     resourceMedia: toResourceMedia(options.resourceMedia),
@@ -55,7 +56,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     if (init.ok) {
       stopResizeObservation = observeRootResize(options.instance.root, () => {
         try {
-          runner.resize()
+          runner.resize(resolveRootNumericLengthScale(options.instance.root))
         } catch (error) {
           options.onResizeError(error)
         }
@@ -74,6 +75,12 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     runner.destroy()
     throw error
   }
+}
+
+/** Resolves the pixel scale for one cqw from the current scene-root width. */
+function resolveRootNumericLengthScale(root: HTMLElement): number {
+  const width = root.getBoundingClientRect().width
+  return Number.isFinite(width) && width > 0 ? width / 100 : 1
 }
 
 /** Observes the instance root so responsive motion geometry stays inside the facade host. */

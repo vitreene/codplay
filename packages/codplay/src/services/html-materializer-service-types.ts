@@ -1,6 +1,8 @@
+import { isCompiledLengthValue } from '../scene/compiled'
+
 /** Runtime values supplied by the HTML materializer and kept outside logical state. */
 export type HtmlMaterializerRuntimeContext = {
-  /** Scale applied to unitless numeric CSS lengths at the HTML boundary. */
+  /** Pixel scale for unitless lengths and explicit cqw values at the HTML boundary. */
   numericLengthScale: number
 }
 
@@ -32,6 +34,16 @@ export function isHtmlElementNode(value: unknown): value is HtmlElementNode {
 /** Narrows a value to a non-array record accepted by service adapters. */
 export function isServiceRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Projects one already-qualified logical cqw length at the HTML boundary. */
+export function projectHtmlLogicalLength(
+  value: unknown,
+  context: HtmlMaterializerRuntimeContext,
+): string | undefined {
+  if (!isCompiledLengthValue(value)) return undefined
+  const scale = Number.isFinite(context.numericLengthScale) ? context.numericLengthScale : 1
+  return `${value.value * scale}px`
 }
 
 /** Writes one CSS declaration through the browser style declaration contract. */

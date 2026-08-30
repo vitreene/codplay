@@ -5,7 +5,11 @@ import {
   type RuntimeTelcoState,
 } from '../runtime/telco'
 import type { RuntimePlayer } from '../runtime/player'
-import type { RuntimeTrackEvent } from '../runtime/player/pipeline'
+import type {
+  RuntimeSnapshotPatch,
+  RuntimeSnapshotSetResult,
+  RuntimeTrackEvent,
+} from '../runtime/player/pipeline'
 import type { HtmlPlayerRunner } from '../runtime/runner-html'
 import type {
   CodPlayEventListener,
@@ -14,6 +18,10 @@ import type {
   CodPlayInstanceEvents,
   CodPlayProgress,
   CodPlayPublicEvent,
+  CodPlaySnapshot,
+  CodPlaySnapshotApi,
+  CodPlaySnapshotPatch,
+  CodPlaySnapshotSetResult,
   CodPlayTraceListener,
   CodPlayTelco,
   CodPlayTelcoState,
@@ -40,6 +48,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   readonly telco: CodPlayTelco
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
+  readonly snapshot: CodPlaySnapshotApi
   private readonly player: RuntimePlayer
   private readonly diagnostics: DiagnosticChannel
   private readonly eventListeners: Set<CodPlayEventListener>
@@ -60,6 +69,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.telco = telco.api
     this.destroyTelco = telco.destroy
     this.events = createEventsFacade(this.player, this.diagnostics, this.instanceId, this.eventListeners)
+    this.snapshot = createSnapshotFacade(this.player, this.diagnostics, this.instanceId, () => this.destroyed)
     this.diagnostic = {
       onDiagnostic: (listener) => this.diagnostics.onDiagnostic(listener),
       onTrace: (listener) => {
@@ -98,6 +108,69 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.destroyTelco()
     this.destroyHost()
   }
+}
+
+/** Creates the direct logical snapshot port owned by one public instance. */
+function createSnapshotFacade(
+  player: RuntimePlayer,
+  diagnostics: DiagnosticChannel,
+  instanceId: string,
+  isDestroyed: () => boolean,
+): CodPlaySnapshotApi {
+  return {
+    get: (): CodPlaySnapshot | null => {
+      if (isDestroyed()) return null
+      const snapshot = player.getSnapshot()
+      if (snapshot === undefined) return null
+      return {
+        timeMs: snapshot.timeMs,
+        states: snapshot.states.map((state) => ({
+          target: { storyId: state.storyId, persoId: state.persoId },
+          state: state.state,
+        })),
+      }
+    },
+    set: (patches: readonly CodPlaySnapshotPatch[]): CodPlaySnapshotSetResult => {
+      if (isDestroyed()) return { ok: false, code: 'INSTANCE_DESTROYED' }
+      try {
+        const result = player.setSnapshot(patches.map((patch): RuntimeSnapshotPatch => ({
+          storyId: patch.target.storyId,
+          persoId: patch.target.persoId,
+          timeMs: patch.timeMs,
+          state: patch.state,
+        })))
+        publishSnapshotResultDiagnostic(diagnostics, instanceId, result)
+        return result
+      } catch (error) {
+        publishFacadeError(diagnostics, 'CODPLAY_SNAPSHOT_SET_FAILED', error, { instanceId })
+        throw error
+      }
+    },
+    clear: (): void => {
+      if (isDestroyed()) return
+      try {
+        player.clearSnapshot()
+      } catch (error) {
+        publishFacadeError(diagnostics, 'CODPLAY_SNAPSHOT_CLEAR_FAILED', error, { instanceId })
+        throw error
+      }
+    },
+  }
+}
+
+/** Publishes a stable diagnostic for a rejected public snapshot operation. */
+function publishSnapshotResultDiagnostic(
+  diagnostics: DiagnosticChannel,
+  instanceId: string,
+  result: RuntimeSnapshotSetResult,
+): void {
+  if (result.ok) return
+  publishFacadeError(
+    diagnostics,
+    `CODPLAY_SNAPSHOT_${result.code}`,
+    `Snapshot operation rejected: ${result.code}.`,
+    { instanceId },
+  )
 }
 
 /** Creates the public telco around the runner's transport boundary. */

@@ -377,6 +377,66 @@ describe('materialize -> resolve -> solve', () => {
       .toEqual([50])
   })
 
+  it('interpolates explicit cqw lengths and retains the logical value until HTML projection', () => {
+    const start = { kind: 'length' as const, unit: 'cqw' as const, value: 10 }
+    const end = { kind: 'length' as const, unit: 'cqw' as const, value: 30 }
+    const lengthScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { x: start, width: start, 'line-height': '1.2' } },
+              actions: {
+                resize: {
+                  style: {
+                    x: { from: start, to: end, duration: 100, ease: 'linear' },
+                    width: { from: start, to: end, duration: 100, ease: 'linear' },
+                  },
+                },
+              },
+            }],
+            eventimes: [{ name: 'resize', startAt: 0 }],
+          },
+        },
+      },
+    }
+
+    const halfway = resolveScene(materializeScene(lengthScene, 50)).persos['main:root']?.state.style
+    expect(halfway).toMatchObject({
+      x: { kind: 'length', unit: 'cqw', value: 20 },
+      width: { kind: 'length', unit: 'cqw', value: 20 },
+      'line-height': '1.2',
+    })
+  })
+
+  it('rejects an interpolation that mixes an explicit cqw length with an opaque CSS value', () => {
+    const lengthScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { x: { kind: 'length', unit: 'cqw', value: 10 } } },
+              actions: { incompatible: { style: { x: { to: '20px', duration: 100 } } } },
+            }],
+            eventimes: [{ name: 'incompatible', startAt: 0 }],
+          },
+        },
+      },
+    }
+
+    expect(() => resolveScene(materializeScene(lengthScene, 50))).toThrow('RUNTIME_STYLE_LENGTH_INCOMPATIBLE')
+  })
+
   it('stops direct and sequenced TweenAction occurrences at the logical boundary', () => {
     const stopScene: CompiledScene = {
       ...scene,

@@ -7,7 +7,7 @@ import type {
   CompiledScene,
 } from '../../scene/compiled'
 import type { SceneDoc, SceneLifecycleOptions } from '../../scene/types'
-import { cloneRecord } from '../../shared'
+import { cloneRecord, isPlainRecord } from '../../shared'
 import type { EngineFrame } from '../engine'
 import {
   RuntimeEngine,
@@ -80,6 +80,11 @@ import {
   type RuntimeEventDispatchResult,
   type RuntimeTrackEvent,
   type StrapCollections,
+  type RuntimeSnapshot,
+  type RuntimeSnapshotContribution,
+  type RuntimeSnapshotContributionPatch,
+  type RuntimeSnapshotPatch,
+  type RuntimeSnapshotSetResult,
 } from './pipeline'
 import { RuntimeTrackJournal } from './pipeline'
 import { collectCompiledEventStartTimes, StructuralTimeline } from './structural-timeline'
@@ -145,6 +150,7 @@ export class RuntimePlayer {
   private rate = 1
   private skipNextDelta = false
   private solvedScene: SolvedScene | undefined
+  private snapshotContribution: RuntimeSnapshotContribution | undefined
   private pendingSolvedScene: SolvedScene | undefined
   private pendingSeekDiagnostics: DiagnosticReport = createEmptyDiagnosticReport()
   private includePersistOnlyInCurrent = true
@@ -247,6 +253,85 @@ export class RuntimePlayer {
   /** Returns the currently presented solved scene for a host transaction. */
   getSolvedScene(): SolvedScene | undefined {
     return this.solvedScene
+  }
+
+  /** Returns the resolved logical frame without any active preview contribution. */
+  getSnapshot(): RuntimeSnapshot | undefined {
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.state === PLAYER_LIFECYCLE_DESTROYED) return undefined
+    const scene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+    return {
+      timeMs: scene.timeMs,
+      states: Object.freeze(Object.values(scene.persos).map((perso) => Object.freeze({
+        storyId: perso.storyId,
+        persoId: perso.persoId,
+        state: freezeSnapshotRecord(perso.state),
+      }))),
+    }
+  }
+
+  /** Validates, replaces, and presents one logical preview snapshot atomically. */
+  setSnapshot(patches: readonly RuntimeSnapshotPatch[]): RuntimeSnapshotSetResult {
+    if (this.state === PLAYER_LIFECYCLE_DESTROYED) return { ok: false, code: 'INSTANCE_DESTROYED' }
+    if (this.state === PLAYER_LIFECYCLE_IDLE || this.solvedScene === undefined) {
+      return { ok: false, code: 'TIME_NOT_PRESENTED' }
+    }
+    const baseScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+    const normalized: RuntimeSnapshotContributionPatch[] = []
+    for (const patch of patches) {
+      if (!Number.isFinite(patch.timeMs) || patch.timeMs !== this.currentTimeMs) {
+        return { ok: false, code: 'TIME_NOT_PRESENTED' }
+      }
+      if (!isPlainRecord(patch.state) || !isPlainRecord(patch.state.style)) {
+        return { ok: false, code: 'INVALID_PATCH' }
+      }
+      if (Object.keys(patch.state).some((key) => key !== 'style')
+        || !isSnapshotValueRecord(patch.state.style)) {
+        return { ok: false, code: 'INVALID_PATCH' }
+      }
+      const target = Object.values(baseScene.persos).find((perso) => (
+        perso.storyId === patch.storyId && perso.persoId === patch.persoId
+      ))
+      if (target === undefined) return { ok: false, code: 'TARGET_NOT_PRESENT' }
+      normalized.push({
+        storyId: patch.storyId,
+        persoId: patch.persoId,
+        timeMs: patch.timeMs,
+        state: { style: cloneRecord(patch.state.style) },
+      })
+    }
+
+    const previousContribution = this.snapshotContribution
+    const previousScene = this.solvedScene
+    this.snapshotContribution = normalized.length === 0
+      ? undefined
+      : { timeMs: this.currentTimeMs, patches: Object.freeze(normalized) }
+    try {
+      const nextScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      this.solvedScene = nextScene
+      this.materializeScene(nextScene, { previousScene, moveDeltas: [] })
+      return { ok: true }
+    } catch (error) {
+      this.snapshotContribution = previousContribution
+      this.solvedScene = previousScene
+      throw error
+    }
+  }
+
+  /** Clears the active logical preview and re-presents the base resolved frame. */
+  clearSnapshot(): void {
+    if (this.snapshotContribution === undefined) return
+    const previousContribution = this.snapshotContribution
+    const previousScene = this.solvedScene
+    this.snapshotContribution = undefined
+    try {
+      const nextScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent, false)
+      this.solvedScene = nextScene
+      this.materializeScene(nextScene, { previousScene, moveDeltas: [] })
+    } catch (error) {
+      this.snapshotContribution = previousContribution
+      this.solvedScene = previousScene
+      throw error
+    }
   }
 
   /** Reconstructs one solved scene for a historical host presentation. */
@@ -1119,10 +1204,20 @@ export class RuntimePlayer {
   }
 
   /** Rebuilds one logical scene without replaying straps or render effects. */
-  private reconstructScene(timeMs: number, includePersistOnly = true): SolvedScene {
+  private reconstructScene(
+    timeMs: number,
+    includePersistOnly = true,
+    includeSnapshot = true,
+  ): SolvedScene {
     this.ensureStructuralTimeline(includePersistOnly)
     const structural = this.structuralTimeline?.resolveAt(timeMs)
-    return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, true, includePersistOnly)
+    return this.reconstructBaseScene(
+      timeMs,
+      structural?.childrenByTarget,
+      true,
+      includePersistOnly,
+      includeSnapshot ? this.snapshotContribution : undefined,
+    )
   }
 
   /** Reuses the last logical scene when the current frame has no state boundary. */
@@ -1154,6 +1249,7 @@ export class RuntimePlayer {
     if (current === undefined) return true
     if (timeMs < current.timeMs) return true
     if (includePersistOnly !== this.includePersistOnlyInCurrent) return true
+    if (this.snapshotContribution !== undefined && this.snapshotContribution.timeMs !== timeMs) return true
     if (this.structuralTimelineRevision !== this.trackJournal.getRevision()) return true
     if (hasActiveTimeDependentStateActions(current)) return true
     return hasEventBoundaryBetween(this.getLogicalEvaluationBoundaries(), previousTimeMs, timeMs)
@@ -1210,6 +1306,7 @@ export class RuntimePlayer {
     childrenByTarget?: Readonly<Record<string, readonly string[]>>,
     includeBoundary = true,
     includePersistOnly = true,
+    snapshotContribution?: RuntimeSnapshotContribution,
   ): SolvedScene {
     return reconstructPlayerScene({
       compiledScene: this.compiledScene,
@@ -1217,7 +1314,7 @@ export class RuntimePlayer {
       trackJournal: this.trackJournal,
       mountTargets: this.mountTargets,
       moduleServiceInstances: this.moduleServiceInstances,
-    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly)
+    }, timeMs, childrenByTarget, includeBoundary, includePersistOnly, snapshotContribution)
   }
 
   /** Reconciles the mutable strap input snapshot from one solved evaluation. */
@@ -1361,4 +1458,39 @@ function isImmediateTrackControlEvent(eventime: RuntimePlayerEventime): boolean 
     && (eventime.name === TRACK_EVENT_ACTIVATE
       || eventime.name === TRACK_EVENT_DEACTIVATE
       || eventime.name === TRACK_EVENT_TOGGLE)
+}
+
+/** Clones and deeply freezes one logical snapshot record before exposing it. */
+function freezeSnapshotRecord(record: CompiledRecord): CompiledRecord {
+  for (const value of Object.values(record)) freezeSnapshotValue(value)
+  return Object.freeze({ ...record })
+}
+
+/** Freezes nested snapshot values without retaining caller-owned references. */
+function freezeSnapshotValue(value: unknown): void {
+  if (Array.isArray(value)) {
+    for (const item of value) freezeSnapshotValue(item)
+    Object.freeze(value)
+    return
+  }
+  if (isPlainRecord(value)) {
+    for (const item of Object.values(value)) freezeSnapshotValue(item)
+    Object.freeze(value)
+  }
+}
+
+/** Checks the JSON-compatible values allowed inside a snapshot style patch. */
+function isSnapshotValueRecord(value: unknown): value is CompiledRecord {
+  if (!isPlainRecord(value)) return false
+  return Object.values(value).every(isSnapshotValue)
+}
+
+/** Checks one recursively serializable snapshot value. */
+function isSnapshotValue(value: unknown): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return true
+  }
+  if (Array.isArray(value)) return value.every(isSnapshotValue)
+  if (isPlainRecord(value)) return Object.values(value).every(isSnapshotValue)
+  return false
 }

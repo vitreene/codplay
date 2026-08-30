@@ -4,6 +4,7 @@ export {
   hasOffsetData,
   hasZoneAssignment,
   resolveDecorStyle,
+  resolveOffsetAsStyle,
   resolveInitialClassName,
   resolveInitialStyle,
   resolveKeyframeClassName,
@@ -20,3 +21,4 @@ export {
   type BuilderDiagnostic,
   type BuilderDiagnosticLevel,
 } from './types'
+export type { EditorV2CqwLength } from './decor-resolution'

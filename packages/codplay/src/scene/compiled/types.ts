@@ -53,10 +53,18 @@ export type CompiledEmitRule = Readonly<{
 /** Emit declarations indexed by the source trigger understood by an adapter. */
 export type CompiledEmitDeclaration = Readonly<Record<string, CompiledEmitRule | readonly CompiledEmitRule[]>>
 
+/** Explicit logical length retained until the materializer projection boundary. */
+export type CompiledLengthValue = Readonly<{
+  kind: 'length'
+  unit: 'cqw'
+  value: number
+}>
+
 /** Recursive serializable value used by compiled scene sections. */
 export type CompiledValue =
   | CompiledPrimitive
   | CompiledFunctionReference
+  | CompiledLengthValue
   | readonly CompiledValue[]
   | CompiledRecord
 

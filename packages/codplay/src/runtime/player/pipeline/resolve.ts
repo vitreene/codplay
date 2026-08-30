@@ -9,7 +9,12 @@ import {
   type TransformProperty,
 } from 'ace'
 import { cloneRecord, cloneValue, isPlainRecord } from '../../../shared'
-import type { CompiledFunctionCollection, CompiledRecord, CompiledValue } from '../../../scene/compiled'
+import {
+  isCompiledLengthValue,
+  type CompiledFunctionCollection,
+  type CompiledRecord,
+  type CompiledValue,
+} from '../../../scene/compiled'
 import { selectEffectiveMove } from '../../move/move-policy'
 import { isActionSequence, isTweenAction } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
@@ -165,6 +170,7 @@ function resolveStyleValue(
   value: CompiledValue,
   elapsedMs: number,
 ): CompiledValue {
+  if (isLengthTween(value, current)) return resolveLengthStyleValue(property, current, value, elapsedMs)
   const transformProperty = resolveTransformProperty(property)
   if (transformProperty !== undefined) return resolveTransformStyleValue(transformProperty, current, value, elapsedMs)
   if (!isPlainRecord(value) || !('to' in value)) return value
@@ -180,6 +186,46 @@ function resolveStyleValue(
     ...timing,
   })
   return resolveTween(tween, elapsedMs) as CompiledValue
+}
+
+/** Resolves one tween whose bounds are explicit logical lengths and retains that shape. */
+function resolveLengthStyleValue(
+  property: string,
+  current: CompiledValue | undefined,
+  value: CompiledRecord,
+  elapsedMs: number,
+): CompiledValue {
+  const to = value.to
+  if (!isCompiledLengthValue(to)) {
+    throw new Error(`RUNTIME_STYLE_LENGTH_INCOMPATIBLE: property ${property} mixes a cqw length with a CSS value.`)
+  }
+  const from = value.from ?? current
+  if (!isCompiledLengthValue(from)) {
+    throw new Error(`RUNTIME_STYLE_LENGTH_INCOMPATIBLE: property ${property} mixes a cqw length with a CSS value.`)
+  }
+  if (from.unit !== to.unit) {
+    throw new Error(`RUNTIME_STYLE_LENGTH_INCOMPATIBLE: property ${property} uses incompatible length units.`)
+  }
+  const timing = resolveStyleTweenTiming(value)
+  if (timing === undefined) throw new Error('Resolve requires a style tween declaration.')
+  const resolved = resolveTween(prepareTween({
+    from: `${from.value}${from.unit}`,
+    to: `${to.value}${to.unit}`,
+    ...timing,
+  }), elapsedMs)
+  const numericValue = typeof resolved === 'number' ? resolved : Number.parseFloat(String(resolved))
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`RUNTIME_STYLE_LENGTH_INCOMPATIBLE: property ${property} produced an invalid cqw value.`)
+  }
+  return { kind: 'length', unit: to.unit, value: numericValue }
+}
+
+/** Reports whether a style tween has an explicit logical length endpoint. */
+function isLengthTween(value: CompiledValue, current: CompiledValue | undefined): value is CompiledRecord {
+  if (!isPlainRecord(value) || !('to' in value)) return false
+  return isCompiledLengthValue(value.to)
+    || isCompiledLengthValue(value.from)
+    || isCompiledLengthValue(current)
 }
 
 /** Resolves one scalar transform channel from the authored x/y aliases. */
@@ -214,12 +260,12 @@ function resolveTransformProperty(property: string): TransformProperty | undefin
 }
 
 /** Checks scalar and normalized color values accepted by ACE. */
-function isTweenValue(value: CompiledValue | undefined): value is string | number | ColorValue {
+function isTweenValue(value: unknown): value is string | number | ColorValue {
   return isScalar(value) || isColorValue(value)
 }
 
 /** Checks one normalized color value. */
-function isColorValue(value: CompiledValue | undefined): value is ColorValue {
+function isColorValue(value: unknown): value is ColorValue {
   if (!isPlainRecord(value)) return false
   const candidate = value as Record<string, unknown>
   return candidate.kind === 'color'
@@ -242,6 +288,6 @@ function applyClassNamePatch(current: CompiledValue | undefined, patch: Compiled
 }
 
 /** Checks values accepted by the scalar and color resolver. */
-function isScalar(value: CompiledValue | undefined): value is string | number {
+function isScalar(value: unknown): value is string | number {
   return typeof value === 'string' || typeof value === 'number'
 }

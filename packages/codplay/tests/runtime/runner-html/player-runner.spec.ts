@@ -305,6 +305,37 @@ function continuousCompiledScene(): CompiledScene {
   return build.compiledScene
 }
 
+/** Builds a compiled scene carrying explicit logical cqw values to the HTML boundary. */
+function cqwCompiledScene(): CompiledScene {
+  const scene: SceneDoc = {
+    id: 'html-runner-cqw',
+    stories: {
+      main: {
+        id: 'main',
+        persos: [{
+          id: 'item',
+          type: 'tag',
+          initial: {
+            tag: 'article',
+            move: '@root',
+            style: {
+              x: { kind: 'length', unit: 'cqw', value: 10 },
+              width: { kind: 'length', unit: 'cqw', value: 25 },
+            },
+          },
+          actions: {},
+        }],
+        listen: [],
+      },
+    },
+  }
+  const build = new SceneBuilder(runtimeCatalog().validationSnapshot(), {
+    createdAt: '2026-08-30T00:00:00.000Z',
+  }).build(scene)
+  if (!build.ok) throw new Error(build.diagnostics.errors.map((entry) => entry.message).join('\n'))
+  return build.compiledScene
+}
+
 /** Builds one classic pointer capture scene for the HTML runner vertical. */
 function pointerCaptureCompiledScene(): Readonly<{
   compiledScene: CompiledScene
@@ -882,6 +913,30 @@ describe('HtmlPlayerRunner', () => {
     expect(item.style.transform).toBe('translate(100px, 40px)')
 
     runner.pause()
+    runner.destroy()
+  })
+
+  it('projects cqw values through the real runner and reprojects them after resize', () => {
+    installFakeDom()
+    const root = new FakeElement()
+    const runner = new HtmlPlayerRunner({
+      id: 'cqw-runner',
+      compiledScene: cqwCompiledScene(),
+      root: root as unknown as HTMLElement,
+      rootTargets: [{ id: 'root-host', storyId: 'main' }],
+      catalog: runtimeCatalog(),
+      numericLengthScale: 4,
+    })
+
+    expect(runner.init().ok).toBe(true)
+    const item = runner.getPersoNode('main:item') as FakeElement
+    expect(item.style.transform).toBe('translateX(40px)')
+    expect(item.style.width).toBe('100px')
+
+    expect(runner.seek(0).ok).toBe(true)
+    runner.resize(8)
+    expect(item.style.transform).toBe('translateX(80px)')
+    expect(item.style.width).toBe('200px')
     runner.destroy()
   })
 

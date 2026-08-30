@@ -4,8 +4,9 @@
 
 > Statut : En cours
 > Version CodPlay : V2 foundation
-> Contrat révisé le 2026-08-29 ; la base de façade est implémentée et le
-> portage V1 de l’horizon ouvert est en cours de validation.
+> Contrat révisé le 2026-08-30 ; la base de façade et les capacités `snapshot`
+> et `cqw` du chantier de reprise éditeur sont implémentées. Les preuves
+> navigateur et le raccordement éditeur restent à faire.
 
 ## Objet
 
@@ -500,8 +501,8 @@ son API interne.
 
 La telco regroupe également l'état et les abonnements nécessaires à la
 télécommande : `getState`, `seek` pour l'écriture de la position, le progress
-publié, `onChange` et `onProgress`. La façade expose un snapshot sérialisable
-au minimum avec :
+publié, `onChange` et `onProgress`. L'état sérialisable de la telco contient au
+minimum :
 
 - `instanceId` ;
 - lifecycle ;
@@ -944,7 +945,7 @@ La façade V2 ne propose qu'une materialisation HTML/DOM :
 
 ### Snapshot d'édition
 
-**Décision validée le 2026-08-30 — implémentation reportée au sous-plan de reprise ed2.**
+**Décision validée le 2026-08-30 — implémentation engagée dans le sous-plan de reprise ed2.**
 
 L'instance V2 porte directement une capacité `snapshot`, au même niveau que
 `telco`. Elle ne passe ni par `telco`, ni par `events`, ni par `diagnostic`, et
@@ -1020,7 +1021,7 @@ Cette capacité ne justifie pas la création d'un second circuit runtime.
 
 #### Longueurs `cqw` ed2
 
-**Décision validée le 2026-08-30 — implémentation reportée au sous-plan V2.**
+**Décision validée le 2026-08-30 — implémentation engagée dans le sous-plan V2.**
 
 Les champs structurés de longueur ed2 (`OffsetData.x/y/width/height` et
 `OffsetData.translate.x/y`) deviennent dans `SceneDoc` une valeur explicite :
@@ -1037,8 +1038,9 @@ avec la largeur de la racine de scène (`100cqw`), y compris pour `y` et
 `height`. Cette projection ne requalifie pas le CSS.
 
 Une interpolation entre une longueur `cqw` et une valeur CSS incompatible est
-rejetée avec diagnostic. L'implémentation doit préserver cette valeur dans le
-snapshot, la contribution temporaire, Play, Seek et resize.
+rejetée avec diagnostic. L'implémentation préserve cette valeur dans le
+snapshot, la contribution temporaire, Play, Seek et resize ; les preuves
+unitaires du circuit logique et de la projection HTML sont maintenant présentes.
 
 #### Accès éventuel au nœud matérialisé
 
@@ -1059,7 +1061,10 @@ Dans ce cas :
 
 L'implémentation de cet accès est donc volontairement reportée au chantier
 éditeur. Ce plan formalise la frontière et les invariants ; il ne déclenche
-aucune modification du cœur V2 ni du materializer HTML à ce stade.
+aucune capacité de node ou de pose dans le cœur V2 ni dans le materializer HTML.
+Les features distinctes `snapshot` et `cqw`, autorisées le 2026-08-30 pour la
+reprise ed2, sont suivies et documentées dans leurs sous-plans respectifs ;
+elles ne constituent pas un accès au node.
 
 ## 9. Interface publique cible et phases de réalisation
 
@@ -1263,7 +1268,8 @@ snapshot.set([{ target: { storyId, persoId }, timeMs, state }])
 snapshot.clear()
 ```
 
-Cette capacité n'ouvre aucun handle runtime.
+Cette capacité n'ouvre aucun handle runtime. Son implémentation reste portée par
+CodPlay et sa façade ; aucun package `authoring` n'est introduit.
 
 #### Preload et diffusion
 
@@ -1423,7 +1429,7 @@ cachées de l'instance.
   par ticks et extension par les événements compilés ou journalisés ;
 - [x] vérifier que la télécommande officielle étend le curseur de seek lorsque
   `onProgress` découvre un nouvel horizon ;
-- [x] exécuter la suite complète V2 : 80 fichiers et 508 tests passés ;
+- [x] exécuter la suite complète V2 : 86 fichiers et 537 tests passés ;
 - [x] compiler l'application de démos V2 avec le layout public ;
 - [x] vérifier dans Firefox headless les routes registry `runner` et
   `flip-nested`, avec Play et Seek via la télécommande commune ;
@@ -1431,15 +1437,16 @@ cachées de l'instance.
   vérification séparée des tests de façade ; lecture lancée, temps avancé et
   aucune erreur console constatée dans Safari.
 
-L'implémentation de `instance.snapshot` (lecture, preview temporaire et accès
-éventuel aux nœuds) est reportée au chantier de reprise de l'éditeur. Elle ne
-fait pas partie de l'implémentation actuelle de la façade V2 et ne bloque pas
-sa clôture.
+L'implémentation de `instance.snapshot` (lecture et preview logique) est
+présente dans la façade et le runtime V2, avec une première preuve de contrat.
+L'accès éventuel aux nœuds reste explicitement hors de cette tranche et ne doit
+pas être déduit de `snapshot`.
 
 ## État de travail
 
-Le contrat de base est validé et son implémentation est terminée ; la
-validation de l’horizon ouvert V1 est suivie dans la phase F.
+Le contrat de base est validé. La base de façade est terminée ; les capacités
+`snapshot` et `cqw` ajoutées pour la reprise de l'éditeur sont implémentées et
+restent à compléter par la preuve navigateur et leur raccordement éditeur.
 
 Déjà implémenté :
 
@@ -1453,11 +1460,15 @@ Déjà implémenté :
 - `instance.events`, `engine.events`, l'adressage séparé et l'eventime récursif ;
 - diagnostics par le canal V2 existant, trace de contexte des events sous
   `instance.diagnostic` et transfert explicite des ressources ;
+- `instance.snapshot`, avec lecture logique, remplacement atomique d'une
+  preview de style et effacement explicite, sans accès au DOM ;
+- la longueur logique `cqw` pour les offsets structurés, son interpolation dans
+  `resolve` et sa projection HTML selon la largeur de la racine ;
 - tests de contrat du socle et absence de ticker propre à la telco.
 
 Validation exécutée :
 
-- `npm test --workspace=codplay` : 80 fichiers, 508 tests passés ;
+- `npm test --workspace=codplay` : 86 fichiers, 537 tests passés ;
 - `npm run typecheck --workspace=codplay` : succès ;
 - `npm run build --workspace=@codplay/demos` : succès ;
 - le typecheck global des démos et celui de `@codplay/remote` restent bloqués

@@ -83,6 +83,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   ticker?: Ticker
   /** Optional inactivity policy overriding the shared engine default. */
   idle?: RuntimeIdleOptions
+  /** Initial HTML projection scale; one cqw is the scene-root width divided by 100. */
+  numericLengthScale?: number
   functions?: CompiledFunctionCollection
   /** Optional reusable straps selected by named declarations in the scene. */
   strapCollections?: StrapCollections
@@ -154,7 +156,9 @@ export class HtmlPlayerRunner {
     this.interactionLockEnabled = options.enableInteractionLock === true
     this.initialPointerEvents = options.root.style.pointerEvents
     this.initialInert = options.root.hasAttribute('inert')
-    this.materializerContext = { numericLengthScale: 1 }
+    this.materializerContext = {
+      numericLengthScale: options.numericLengthScale ?? 1,
+    }
     for (const [url, metadata] of Object.entries(options.resourceMetadata ?? {})) {
       this.resourceMetadata.set(url, metadata)
     }

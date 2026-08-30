@@ -4,10 +4,12 @@ import {
   materializeScene,
   materializeSceneBeforeBoundary,
   type MaterializeOptions,
+  applyRuntimeSnapshotContribution,
   resolveScene,
   solveScene,
   type MountTargetDeclaration,
   type SolvedScene,
+  type RuntimeSnapshotContribution,
 } from '../pipeline'
 import type { RuntimeTrackJournal } from '../pipeline'
 
@@ -27,12 +29,14 @@ export function reconstructPlayerScene(
   childrenByTarget?: Readonly<Record<string, readonly string[]>>,
   includeBoundary = true,
   includePersistOnly = true,
+  snapshotContribution?: RuntimeSnapshotContribution,
 ): SolvedScene {
   const options: MaterializeOptions = { includePersistOnly }
   const materialized = includeBoundary
     ? materializeScene(context.compiledScene, timeMs, context.trackJournal, options)
     : materializeSceneBeforeBoundary(context.compiledScene, timeMs, context.trackJournal, options)
-  return solveScene(resolveScene(materialized, context.functions), {
+  const resolved = resolveScene(materialized, context.functions)
+  return solveScene(applyRuntimeSnapshotContribution(resolved, snapshotContribution), {
     mountTargets: [
       ...context.mountTargets,
       ...[...context.moduleServiceInstances.values()].flatMap((instance) => instance.getMountTargets?.() ?? []),

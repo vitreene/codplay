@@ -226,6 +226,30 @@ describe('HTML component materializer services', () => {
     expect(node.style.translate).toBe('15px 18px')
   })
 
+  it('projects explicit cqw lengths while leaving opaque CSS values untouched', () => {
+    const context = { numericLengthScale: 8 }
+    const style = createHtmlStyleService(context)
+    const node = element()
+
+    style.apply(node, {
+      width: { kind: 'length', unit: 'cqw', value: 12.5 },
+      x: { kind: 'length', unit: 'cqw', value: 5 },
+      'line-height': '1.2',
+      'object-fit': 'cover',
+      '--editor-size': 'calc(10px + var(--gap))',
+    })
+
+    expect(node.style.width).toBe('100px')
+    expect(node.style.transform).toBe('translateX(40px)')
+    expect(node.style['line-height']).toBe('1.2')
+    expect(node.style['object-fit']).toBe('cover')
+    expect(node.style['--editor-size']).toBe('calc(10px + var(--gap))')
+
+    context.numericLengthScale = 10
+    style.apply(node, { width: { kind: 'length', unit: 'cqw', value: 12.5 } })
+    expect(node.style.width).toBe('125px')
+  })
+
   it('writes kebab-case CSS declarations through setProperty', () => {
     const catalog = createHtmlServices()
     const node = element()

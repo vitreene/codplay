@@ -6,8 +6,9 @@
 ## Rôle
 
 `RuntimePreload` prépare les ressources nécessaires à une scène avant sa
-lecture. C'est une capacité externe : la diffusion autonome, Sighty ou l'éditeur
-choisit quand l'appeler et lui fournit le manifeste à charger.
+lecture. C'est une capacité externe : la diffusion autonome ou l'éditeur choisit
+quand l'appeler et lui fournit le manifeste à charger. Le contrat pourra être
+réutilisé par Sighty lorsqu'il sera raccordé ; ce n'est pas le périmètre actuel.
 
 ## Fonctionnement
 
