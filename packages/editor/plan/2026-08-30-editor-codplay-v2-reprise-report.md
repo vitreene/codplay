@@ -1,6 +1,6 @@
 # Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
 
-**Statut : A relire — aucune étape de code autorisée avant validation.**
+**Statut : En cours — tranche 2 (builder V2 minimal) autorisée le 2026-08-30.**
 **Cible : ed2 avec CodPlay V2 foundation.**
 **Date : 2026-08-30.**
 
@@ -209,6 +209,19 @@ Le CSS libre reste de responsabilité auteur. Ses valeurs composées ne sont pas
 
 **Acceptation :** le premier incrément produit une `SceneDoc` compilable, sans player V1, et les assertions portent sur état logique et projection HTML. Aucun travail sur palette ou Selection Frame n'est engagé ici.
 
+### État de l'implémentation — 2026-08-30
+
+La première preuve de cette tranche est en place dans une verticale isolée :
+
+- `packages/editor/src/builder-v2/` expose `buildSceneDocV2()` et sa résolution pure de décor ;
+- la story déterministe de l'éditeur reste `story-main`, conformément au modèle ed2 existant, tandis que les persos sont natifs V2 (`list` pour la racine, `tag` pour le texte) et utilisent `move.target` ;
+- la fixture de départ couvre une racine, un texte, deux keyframes, une transition `fade`, un diff de couleur et une compilation par `CodPlay.build()` ;
+- les erreurs de forme, de contenu, de transition et d'offset retournent des diagnostics sans `SceneDoc` partiel ; `scene.zones` et les classes discrètes sont signalées sans être interpolées ;
+- le manifeste de preload reste explicitement vide dans ce slice : aucune classe ou feuille CSS `capsule-automation` n'est encore produite par cette verticale ;
+- les offsets structurés sont bloquants (`EDITOR_V2_OFFSET_REQUIRES_CQW`) jusqu'à l'implémentation V2 autorisée de la capacité `cqw`. Ils ne sont pas remplacés par des chaînes `cqw` dans le builder.
+
+Les tests ciblés et la suite `packages/editor` passent. Cette tranche reste `En cours` : le portage des types image/media/capsule, la résolution CSS `capsule-automation`, le bridge d'instance et le circuit `Decor` n'ont pas commencé.
+
 ## Tranche 3 — installer le cycle d'instance V2 dans l'éditeur
 
 Créer un bridge V2 séparé ; ne modifier `scene-player-bridge.ts` qu'au moment de la bascule. Son cycle est :
@@ -282,4 +295,4 @@ Cette tranche doit décider séparément le comportement temporel de l'affectati
 
 ## Conditions de validation du présent plan
 
-Le plan peut être validé comme ordre de travail lorsque les décisions de la tranche 0 et le statut des écarts V2 sont revus. Cette validation n'autorise pas encore le code V2 : chaque sous-plan V2 identifié doit être accepté et explicitement autorisé avant son implémentation.
+Les décisions de la tranche 0 sont validées et la tranche 2 est explicitement autorisée pour le slice décrit ci-dessus. Les tranches qui nécessitent une intervention dans `packages/codplay` (`snapshot`, `cqw`, puis le cycle d'instance) restent soumises à leur qualification bug/feature, à un sous-plan accepté et à une autorisation explicite avant code. Aucune tranche ultérieure n'est déduite de la réussite de cette première preuve.
