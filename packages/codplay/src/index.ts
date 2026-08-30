@@ -85,6 +85,8 @@ export type { MountTargetDeclaration, StrapCollections } from './runtime/player/
 export type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
+  RuntimePreloadCssApi,
+  RuntimePreloadCssSetInput,
   RuntimePreloadMetadata,
   RuntimePreloadManifestInput,
   RuntimePreloadMediaHandle,

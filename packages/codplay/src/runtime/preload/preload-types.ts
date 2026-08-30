@@ -16,6 +16,24 @@ export type RuntimePreloadOptions = Readonly<{
   container?: Element | null
 }>
 
+/** Input used to replace one synchronously available, container-scoped CSS slot. */
+export type RuntimePreloadCssSetInput = Readonly<{
+  /** Stable slot identifier, independent from resource URLs. */
+  slot: string
+  /** CSS text already generated and resolved by the caller. */
+  cssText: string
+  /** Existing editor or host container used to scope the stylesheet. */
+  container: Element
+}>
+
+/** Public CSS channel for generated stylesheets that must be replaced without a network load. */
+export interface RuntimePreloadCssApi {
+  /** Replaces one CSS slot synchronously before the next instance mount. */
+  set(input: RuntimePreloadCssSetInput): void
+  /** Clears one slot, or every slot owned by this preload service when omitted. */
+  clear(slot?: string): void
+}
+
 /** Metadata discovered while preparing one resource for runtime use. */
 export type RuntimePreloadResourceMetadata = Readonly<{
   type?: string
@@ -127,6 +145,7 @@ export interface RuntimePreloadApi {
     manifest: RuntimePreloadManifestInput
     options?: RuntimePreloadOptions
   }>): Promise<RuntimePreloadResult>
+  readonly css: RuntimePreloadCssApi
   readonly state: RuntimePreloadState
   cancel(): void
   release(urls: readonly string[]): void

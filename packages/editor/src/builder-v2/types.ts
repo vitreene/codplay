@@ -17,13 +17,17 @@ export type BuilderDiagnostic = Readonly<{
   context?: Readonly<Record<string, unknown>>
 }>
 
-/** Successful output of the first native V2 editor-builder increment. */
+/** Successful output of the current native V2 editor-builder increment. */
 export type BuildSceneV2Success = Readonly<{
   ok: true
   sceneDoc: SceneDoc
   durationMs: number
   preRollMs: number
-  /** Empty in the minimal increment; scoped capsule CSS is added with capsule resolution. */
+  /** CSS emitted by capsule-automation; the browser bridge turns it into its preload resource. */
+  styleSheet: string
+  /** Resolved scene-root grid used by the editor host for its aspect ratio. */
+  rootGrid: Readonly<{ rows: number; cols: number }>
+  /** Reserved for bridge-owned preload entries; content URLs are also derived by CodPlay.build(). */
   preloadManifest: CompiledResourceManifest
   diagnostics: readonly BuilderDiagnostic[]
 }>

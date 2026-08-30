@@ -1,6 +1,6 @@
 # Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
 
-**Statut : En cours — tranche 2 (builder V2 minimal) autorisée le 2026-08-30.**
+**Statut : En cours — tranche 2 (builder V2) autorisée le 2026-08-30.**
 **Cible : ed2 avec CodPlay V2 foundation.**
 **Date : 2026-08-30.**
 
@@ -161,12 +161,15 @@ Créer une verticale de builder V2 dédiée dans `packages/editor/src/builder-v2
 
 ### 2.1 Entrée et sortie
 
-Entrée : `EditorScene` et la feuille CSS produite par `capsule-automation`.
+Entrée : `EditorScene`. La résolution de placement et la production CSS sont déléguées aux
+services existants de `capsule-automation` ; le builder n'en recopie pas les règles.
 
 Sortie :
 
 - un `SceneDoc` V2 à une story principale ;
-- un manifeste de preload pour la feuille CSS scoped de la racine de scène et les ressources de contenu ;
+- la source CSS scoped concaténée (`styleSheet`) et la grille racine résolue (`rootGrid`) ;
+- un manifeste de preload réservé au bridge navigateur pour les ressources URL de contenu ; la
+  feuille générée passe par `codplay.preload.css` ;
 - la durée et le pré-roll nécessaires au seek de l'éditeur ;
 - des diagnostics de builder structurés, jamais un `SceneDoc` partiel silencieux.
 
@@ -182,7 +185,10 @@ Sortie :
 | `initialDecorId` et premier keyframe | `initial.style` | une propriété n'est jamais écrite deux fois au même instant. |
 | paires de keyframes suivantes | action V2 + eventime V2 | interpolation par l'écart de décors résolus. |
 
-Le premier incrément n'accepte qu'une capsule racine, un item texte et deux keyframes. Les mappings image, media et capsules imbriquées sont construits nativement en V2 après cette preuve. Une absence de mapping produit un diagnostic explicite : elle n'est pas contournée par V1.
+Le slice actuellement porté accepte la capsule racine implicite, une arborescence de capsules
+imbriquées et les feuilles (`bloc`, `text`, `image`, `video` ou `media`), avec zéro, une ou plusieurs
+keyframes. Une absence de mapping produit un diagnostic explicite : elle n'est pas contournée par
+V1.
 
 ### 2.3 Émission `Decor`
 
@@ -214,13 +220,23 @@ Le CSS libre reste de responsabilité auteur. Ses valeurs composées ne sont pas
 La première preuve de cette tranche est en place dans une verticale isolée :
 
 - `packages/editor/src/builder-v2/` expose `buildSceneDocV2()` et sa résolution pure de décor ;
-- la story déterministe de l'éditeur reste `story-main`, conformément au modèle ed2 existant, tandis que les persos sont natifs V2 (`list` pour la racine, `tag` pour le texte) et utilisent `move.target` ;
-- la fixture de départ couvre une racine, un texte, deux keyframes, une transition `fade`, un diff de couleur et une compilation par `CodPlay.build()` ;
+- la story déterministe de l'éditeur reste `story-main`, conformément au modèle ed2 existant, tandis que les persos sont natifs V2 (`list` pour la racine et les capsules, `tag`/`img`/`media` pour les feuilles) et utilisent `move.target` ;
+- les fixtures couvrent une racine, deux niveaux de capsules, les placements grille, la feuille CSS produite par `capsule-automation`, les mappings `bloc`/`text`/`image`/`video`/`media`, zéro à plusieurs keyframes, une transition `fade`, un diff de couleur, la ressource vidéo et une compilation par `CodPlay.build()` ;
 - les erreurs de forme, de contenu, de transition et d'offset retournent des diagnostics sans `SceneDoc` partiel ; `scene.zones` et les classes discrètes sont signalées sans être interpolées ;
-- le manifeste de preload reste explicitement vide dans ce slice : aucune classe ou feuille CSS `capsule-automation` n'est encore produite par cette verticale ;
+- `styleSheet` restitue la source CSS de tous les niveaux résolus, tandis que `preloadManifest` reste explicitement vide à cette frontière pure : le bridge navigateur créera la ressource CSS sans URL inventée par le builder ;
 - les offsets structurés sont bloquants (`EDITOR_V2_OFFSET_REQUIRES_CQW`) jusqu'à l'implémentation V2 autorisée de la capacité `cqw`. Ils ne sont pas remplacés par des chaînes `cqw` dans le builder.
 
-Les tests ciblés et la suite `packages/editor` passent. Cette tranche reste `En cours` : le portage des types image/media/capsule, la résolution CSS `capsule-automation`, le bridge d'instance et le circuit `Decor` n'ont pas commencé.
+L'arborescence imbriquée et la feuille CSS ont été incluses dans cette même tranche parce qu'elles
+correspondent déjà à la ligne de mapping `CapsuleDef` de ce plan et qu'elles sont produites par le
+service existant `capsule-automation` ; il n'y a ni nouveau contrat, ni chemin de placement parallèle,
+ni intervention dans le core V2. Cette extension reste limitée au builder pur et à sa preuve de
+compilation.
+
+Les tests ciblés et la suite `packages/editor` (487 tests) passent. Cette tranche reste `En cours` :
+le bridge navigateur, `snapshot`, la capacité `cqw`, le circuit `Decor` et les zones n'ont pas
+commencé. Le bridge devra appeler `codplay.preload.css.set()` pour rendre `styleSheet` disponible
+immédiatement, tandis que les ressources URL continueront de passer par `preload.load()` ; cette
+étape n'est pas encore câblée dans l'application.
 
 ## Tranche 3 — installer le cycle d'instance V2 dans l'éditeur
 
@@ -228,19 +244,27 @@ Créer un bridge V2 séparé ; ne modifier `scene-player-bridge.ts` qu'au moment
 
 1. préparer la scène par le builder V2 ;
 2. `codplay.build({ scene })` ;
-3. précharger le manifeste, enregistrer le résultat dans `codplay.resources` ;
-4. créer une unique instance avec la racine HTML de l'éditeur ;
-5. seek au temps éditeur mémorisé ;
-6. transmettre `instance.snapshot` aux consommateurs une fois l'instance prête ;
-7. à un rebuild validé, détruire l'ancienne instance et ses abonnements exactement une fois.
+3. précharger uniquement les ressources URL du `CompiledScene` (médias, images et autres ressources
+   déclarées), puis enregistrer le résultat dans `codplay.resources` ;
+4. appeler `codplay.preload.css.set({ slot, cssText: styleSheet, container })` pour remplacer
+   de façon synchrone la feuille CSS de l'éditeur, sans l'ajouter à `engine.resources` ;
+5. créer une unique instance avec la racine HTML de l'éditeur ;
+6. seek au temps éditeur mémorisé ;
+7. transmettre `instance.snapshot` aux consommateurs une fois l'instance prête ;
+8. à un rebuild validé, détruire l'ancienne instance et ses abonnements exactement une fois.
 
 Le bridge doit définir son point de commit : un échec de build ou preload ne publie ni `PLAYER_READY` incomplet, ni snapshot d'une instance détruite. La politique de conservation ou de destruction de l'ancienne preview en cas d'échec est à décider et tester avant code.
 
 Le bridge est un adaptateur d'infrastructure : il remet les résultats V2 aux acteurs xState existants et reçoit leurs commandes par les bridges existants. Il ne possède aucun état de sélection, de `Decor`, de séquence ou de persistance. Toute transition xState nécessaire mais absente doit faire l'objet d'une décision distincte, avant code ; aucune machine parallèle ou voie impérative de contournement n'est admise.
 
-**Fichiers cibles :** nouveau bridge V2 dans `packages/editor/src/app/bridges/`, types et événements du contrôleur, bridge sequence/telco, registration du preload CSS scoped.
+**Fichiers cibles :** nouveau bridge V2 dans `packages/editor/src/app/bridges/`, types et événements
+du contrôleur, bridge sequence/telco, appel à `codplay.preload.css` pour le slot CSS scoped.
 
-**Acceptation :** navigateur réel : build, preload, instance, Play, pause, Seek, resize, changement de scène, destruction, rebuild puis re-sélection. Un seul `CodPlay` et une seule instance active ; aucune importation V1 dans la verticale V2.
+**Acceptation :** navigateur réel : build, preload URL, application CSS immédiate, instance, Play,
+pause, Seek, resize, changement de scène, destruction, rebuild puis re-sélection. Une ressource
+média déjà préchargée est réutilisée, le slot CSS ne s'accumule pas et un échec conserve l'ancienne
+instance et sa feuille. Un seul `CodPlay` et une seule instance active ; aucune importation V1 dans
+la verticale V2.
 
 ## Tranche 4 — refaire le circuit `Decor`
 

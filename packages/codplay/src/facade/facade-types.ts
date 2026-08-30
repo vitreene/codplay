@@ -21,6 +21,8 @@ import type { RuntimeIdleEvent, RuntimeIdleOptions } from '../runtime/idle'
 import type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
+  RuntimePreloadCssApi,
+  RuntimePreloadCssSetInput,
   RuntimePreloadMetadata,
   RuntimePreloadManifestInput,
   RuntimePreloadMediaHandle,
@@ -351,6 +353,8 @@ export type {
   RuntimePreloadResult,
   RuntimePreloadState,
   RuntimePreloadStrategy,
+  RuntimePreloadCssApi,
+  RuntimePreloadCssSetInput,
 }
 
 /** Public capability origin retained for extension declarations. */

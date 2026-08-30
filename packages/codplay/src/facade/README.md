@@ -87,6 +87,17 @@ ses métadonnées sont transmis explicitement à l’engine avec
 Dans ce transfert, les URLs de `loaded` comme de `skipped` sont disponibles pour
 l’engine ; `skipped` signifie que le cache a déjà fourni la ressource.
 
+Une feuille CSS générée en mémoire peut être remplacée directement dans un
+slot scoped, sans passer par le cache des ressources :
+
+```ts
+codplay.preload.css.set({ slot: 'editor-scene', cssText, container: mountTarget })
+codplay.preload.css.clear('editor-scene')
+```
+
+Ce canal est distinct du preload URL des médias et des autres ressources ; il
+est adapté aux reconstructions fréquentes de l’éditeur.
+
 ## Frontières
 
 - le catalogue core/foreign est composé à la création puis verrouillé au

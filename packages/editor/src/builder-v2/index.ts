@@ -4,6 +4,8 @@ export {
   hasOffsetData,
   hasZoneAssignment,
   resolveDecorStyle,
+  resolveInitialClassName,
+  resolveInitialStyle,
   resolveKeyframeClassName,
   resolveKeyframeStyle,
   resolveRootClassName,

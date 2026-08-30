@@ -6,11 +6,13 @@ import {
   loadRuntimeFont,
   loadRuntimeImage,
   loadRuntimeVideo,
+  scopeRuntimeCssText,
   withRuntimePreloadTimeout,
 } from './preload-strategies'
 import type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
+  RuntimePreloadCssSetInput,
   RuntimePreloadLoadResult,
   RuntimePreloadManifestInput,
   RuntimePreloadMediaHandle,
@@ -54,6 +56,35 @@ export function createRuntimePreload(options: Readonly<{
     totalCount: 0,
   }
   let currentOperation: { controller: AbortController; pendingUrls: Set<string> } | undefined
+  const cssSlots = new Map<string, HTMLStyleElement>()
+
+  /** Replaces one generated stylesheet in a stable scoped slot. */
+  function setCssSlot(input: RuntimePreloadCssSetInput): void {
+    validateCssSetInput(input)
+    if (typeof globalThis.document === 'undefined') {
+      throw new Error('Inline CSS preload requires a browser document.')
+    }
+    const head = globalThis.document.head
+    if (head === null) throw new Error('Inline CSS preload requires a document head.')
+
+    const existing = cssSlots.get(input.slot)
+    const style = existing ?? globalThis.document.createElement('style')
+    style.setAttribute('data-codplay-preload-css-slot', input.slot)
+    style.textContent = scopeRuntimeCssText(input.cssText, input.container)
+    if (style.parentNode === null) head.appendChild(style)
+    cssSlots.set(input.slot, style)
+  }
+
+  /** Clears one generated stylesheet slot, or every slot owned by this service. */
+  function clearCssSlots(slot?: string): void {
+    const slots = slot === undefined ? [...cssSlots.keys()] : [slot]
+    for (const currentSlot of slots) {
+      const style = cssSlots.get(currentSlot)
+      if (style === undefined) continue
+      style.remove()
+      cssSlots.delete(currentSlot)
+    }
+  }
 
   /** Loads one entry with its native or registered type strategy. */
   function loadEntry(
@@ -232,6 +263,10 @@ export function createRuntimePreload(options: Readonly<{
   }
 
   return {
+    css: {
+      set: setCssSlot,
+      clear: clearCssSlots,
+    },
     get state(): RuntimePreloadState {
       return { ...state }
     },
@@ -248,6 +283,21 @@ export function createRuntimePreload(options: Readonly<{
       strategies.set(type, strategy)
     },
   }
+}
+
+/** Validates the public input before mutating the stylesheet slot registry. */
+function validateCssSetInput(input: RuntimePreloadCssSetInput): void {
+  if (typeof input !== 'object' || input === null) throw new Error('Inline CSS preload input must be an object.')
+  if (typeof input.slot !== 'string' || input.slot.trim() === '') throw new Error('Inline CSS preload slot must not be empty.')
+  if (typeof input.cssText !== 'string') throw new Error('Inline CSS preload cssText must be a string.')
+  if (!isElement(input.container)) throw new Error('Inline CSS preload container must be an Element.')
+}
+
+/** Detects a DOM Element without relying on the caller's realm constructor. */
+function isElement(value: unknown): value is Element {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as { nodeType?: unknown; setAttribute?: unknown }
+  return candidate.nodeType === 1 && typeof candidate.setAttribute === 'function'
 }
 
 /** Converts legacy metadata results and prepared native resources to one shape. */

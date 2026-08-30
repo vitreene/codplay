@@ -62,5 +62,6 @@ export class CodPlay implements CodPlayApi {
     // Keep the internal teardown primitive behind the public engine view.
     this.#engineOwner.destroy()
     this.preload.cancel()
+    this.preload.css.clear()
   }
 }

@@ -67,6 +67,7 @@ type CodPlayPreloadOptions = Readonly<{
 }>
 
 type RuntimePreloadApi = {
+  readonly css: RuntimePreloadCssApi
   readonly state: RuntimePreloadState
   load(input: {
     manifest: RuntimePreloadManifestInput
@@ -81,6 +82,69 @@ type RuntimePreloadApi = {
 `new CodPlay(options)` ne crée pas de singleton global. Le cache est fourni par
 l'hôte ou créé pour le service de l'instance `CodPlay`, puis partagé explicitement si besoin.
 Il n'existe ni `instance.preload()` ni preload implicite dans `init()`.
+
+### Canal CSS généré par l'éditeur — feature V2 validée le 2026-08-30
+
+Le contrat URL de `preload.load()` reste adapté aux ressources qui doivent être
+chargées depuis l'extérieur. Il ne couvre pas la feuille `styleSheet` produite
+en mémoire par le builder de l'éditeur, dont le contenu peut changer à chaque commit.
+L'ouverture d'un canal CSS direct est donc une **feature V2**, et non un
+correctif : l'API existante ne promet ni source CSS inline, ni remplacement de
+slot.
+
+La façade expose un canal dédié, sans dupliquer la logique de portée et de
+nettoyage dans le bridge éditeur :
+
+```ts
+type RuntimePreloadCssSetInput = Readonly<{
+  /** Identifiant stable du slot, distinct de toute URL de ressource. */
+  slot: string
+  /** CSS généré par le builder, déjà résolu et prêt à être projeté. */
+  cssText: string
+  /** Conteneur éditeur auquel la feuille doit être limitée. */
+  container: Element
+}>
+
+type RuntimePreloadCssApi = Readonly<{
+  /** Remplace le slot de façon synchrone et rend la feuille disponible avant le montage. */
+  set(input: RuntimePreloadCssSetInput): void
+  /** Retire un slot ; sans argument, retire tous les slots du service. */
+  clear(slot?: string): void
+}>
+
+type RuntimePreloadApi = Readonly<{
+  css: RuntimePreloadCssApi
+  // load, cancel, release, registerStrategy...
+}>
+```
+
+Le canal CSS possède ses propres règles :
+
+- `set()` remplace le contenu du même slot au lieu de créer une nouvelle URL,
+  un nouveau `<style>` permanent ou une entrée du cache média ;
+- la portée est appliquée au `container` fourni et la mise à jour est
+  synchrone du point de vue du bridge ;
+- `clear(slot)` ne touche ni `CompiledScene`, ni `engine.resources`, ni les
+  handles média ; `clear()` sans argument libère tous les slots du service ;
+- plusieurs slots sont possibles pour l'éditeur et Sighty : chaque scène
+  montée possède un `slot` et un `container`, et `clear(slot)` ne retire
+  jamais la feuille d'une autre scène ;
+- `CodPlay.destroy()` libère les slots CSS possédés par son service preload ;
+- `preload.load()` conserve son chemin URL pour les médias, images, fonts et
+  CSS externe destinés à la diffusion ou à l'export.
+
+Dans le chemin éditeur, le bridge compile d'abord la scène et précharge
+uniquement les nouvelles ressources URL de contenu. Il applique ensuite `styleSheet`
+dans le slot CSS avant de créer ou remplacer l'instance. Un échec ne publie pas
+la nouvelle instance ; le bridge conserve ou restaure le slot et l'instance
+précédents. Le canal CSS ne change donc pas la sémantique du preload média et
+ne demande aucune intervention au materializer.
+
+L'API `preload.css` est implémentée dans le service V2 et couverte par les tests
+de slots, d'isolement entre conteneurs, de remplacement sans accumulation et de
+nettoyage par `CodPlay.destroy()`. Le bridge éditeur et le montage multi-scène
+Sighty restent à raccorder dans la tranche d'intégration prévue ; ils ne sont
+pas simulés par ce service.
 
 ## Cache partagé
 
@@ -225,6 +289,9 @@ propriétaire.
   transmises au résultat preload et libération d'un handoff non adopté ;
 - `tests/runtime/preload/preload-video-handoff.spec.ts` : la stratégie vidéo
   conserve son nœud après `canplaythrough` et le remet à une lease d'adoption ;
+- `tests/runtime/preload/preload-css-slot.spec.ts` : remplacement synchrone d'une
+  feuille, isolement de deux scènes par slots et conteneurs, nettoyage ciblé ou
+  global, et nettoyage automatique par `CodPlay.destroy()` ;
 - `tests/facade/media-preload-handoff.spec.ts` : `resources.register()` transmet
   le nœud retenu au composant média d'une instance publique ;
 - `tests/runtime/components/preload-media-demo.spec.ts` : le `START` de la

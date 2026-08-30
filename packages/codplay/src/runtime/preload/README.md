@@ -45,6 +45,28 @@ if (result.ok) {
 }
 ```
 
+## CSS généré et slots
+
+Les ressources CSS référencées par une URL continuent de passer par
+`preload.load()`. Pour une feuille générée en mémoire — notamment le
+`styleSheet` reconstruit par l'éditeur — la façade expose un canal direct :
+
+```ts
+codplay.preload.css.set({
+  slot: 'editor-scene',
+  cssText: styleSheet,
+  container: mountTarget,
+})
+codplay.preload.css.clear('editor-scene')
+```
+
+`set()` remplace le même slot de façon synchrone, applique la portée au
+conteneur fourni et ne crée ni URL Blob ni entrée du cache des ressources.
+`clear()` sans argument retire tous les slots possédés par ce service. Ce canal
+est destiné aux feuilles éphémères d'un hôte ; les médias restent sur le
+chemin URL, avec cache partagé, métadonnées et transfert éventuel d'un nœud
+prêt.
+
 ## Contrat et limites
 
 - la métadonnée complète le manifeste, mais ne le remplace pas ;

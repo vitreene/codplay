@@ -63,7 +63,7 @@ Elle remplace partiellement l'état résolu avant sa matérialisation, sans modi
 
 Les zones sont un modèle de l'éditeur. Elles sont résolues vers des classes CSS par `packages/authoring/capsule-automation`, puis consommées comme `className` par le player. Leur preview est un overlay autonome de l'éditeur ; elle n'appartient pas au player, à la telco ou au cycle V2 de materialize/seek.
 
-`capsule-automation` est l'autorité du placement explicite `{ row, col, rowSpan, colSpan }`, des règles CSS et de leurs classes. La verticale builder V1 de l'éditeur l'utilise déjà pour les grilles et les placements automatiques, mais construit les `AutoCapsuleChildInput` sans `placement` et ne transmet pas `scene.zones`/`Decor.zoneId`. La nouvelle verticale builder V2 n'en produit pas encore les classes : cette résolution est explicitement reportée après la preuve racine/texte.
+`capsule-automation` est l'autorité du placement explicite `{ row, col, rowSpan, colSpan }`, des règles CSS et de leurs classes. La verticale builder V1 de l'éditeur l'utilise déjà pour les grilles et les placements automatiques, mais construit les `AutoCapsuleChildInput` sans `placement` et ne transmet pas `scene.zones`/`Decor.zoneId`. La verticale builder V2 utilise maintenant les artefacts de ce même service pour les classes de grille et le CSS de chaque niveau de capsule ; elle ne transmet toujours pas `scene.zones`/`Decor.zoneId` et ne produit donc aucune classe liée aux zones.
 
 Le raccordement zones est différé après l'intégration V2 initiale. Il devra réutiliser le modèle et l'automation existants, garder séparées la modification de la définition de zone et l'affectation d'une zone à un enfant, et ne pas les faire entrer dans le calcul d'interpolation `Decor`.
 

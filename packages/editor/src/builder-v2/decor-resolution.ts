@@ -29,6 +29,11 @@ export function resolveKeyframeStyle(
   )
 }
 
+/** Resolves the item's initial decor when no keyframe exists yet. */
+export function resolveInitialStyle(scene: EditorScene, item: Item): Record<string, unknown> {
+  return resolveDecorStyle(scene.decors[item.initialDecorId])
+}
+
 /** Resolves the static class value at one keyframe without treating classes as interpolable data. */
 export function resolveKeyframeClassName(
   scene: EditorScene,
@@ -60,6 +65,11 @@ export function resolveRootStyle(scene: EditorScene): Record<string, unknown> {
 /** Resolves the root's static classes while preserving their editor-authored ordering. */
 export function resolveRootClassName(scene: EditorScene): string | undefined {
   return normalizeClassName(scene.rootDecorId === undefined ? undefined : scene.decors[scene.rootDecorId]?.classes)
+}
+
+/** Resolves the item's static class value when it has no keyframe yet. */
+export function resolveInitialClassName(scene: EditorScene, item: Item): string | undefined {
+  return normalizeClassName(scene.decors[item.initialDecorId]?.classes)
 }
 
 /** Computes a forward style diff; absent destination properties are intentionally untouched. */

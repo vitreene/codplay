@@ -215,6 +215,12 @@ export function loadRuntimeCss(url: string, signal: AbortSignal, container?: Ele
   })
 }
 
+/** Wraps generated CSS in the same container scope used by URL-backed CSS preload. */
+export function scopeRuntimeCssText(cssText: string, container: Element): string {
+  if (typeof globalThis.document === 'undefined') throw new Error('CSS preload requires a browser document.')
+  return `@scope (${resolveScopeSelector(container)}) {\n${cssText}\n}`
+}
+
 /** Fetches and scopes CSS without adding a child node to the caller's mount. */
 async function loadScopedCss(url: string, signal: AbortSignal, container: Element): Promise<void> {
   if (signal.aborted) throw createAbortError()
@@ -223,6 +229,6 @@ async function loadScopedCss(url: string, signal: AbortSignal, container: Elemen
   const cssText = await response.text()
   if (typeof globalThis.document === 'undefined') throw new Error('CSS preload requires a browser document.')
   const style = globalThis.document.createElement('style')
-  style.textContent = `@scope (${resolveScopeSelector(container)}) {\n${cssText}\n}`
+  style.textContent = scopeRuntimeCssText(cssText, container)
   globalThis.document.head.appendChild(style)
 }

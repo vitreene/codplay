@@ -47,6 +47,8 @@ export type {
 } from './facade-types'
 export type {
   RuntimePreloadApi,
+  RuntimePreloadCssApi,
+  RuntimePreloadCssSetInput,
   RuntimePreloadManifestInput,
   RuntimePreloadMediaHandle,
   RuntimePreloadMediaLease,

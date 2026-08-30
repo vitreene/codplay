@@ -40,7 +40,7 @@ function fixtureScene(): EditorScene {
   }
 }
 
-describe('buildSceneDocV2 — first native editor increment', () => {
+describe('buildSceneDocV2 — current native editor increment', () => {
   it('produces V2 list/tag persos with target placement and no V1 shape', () => {
     const result = buildSceneDocV2(fixtureScene())
     expect(result.ok).toBe(true)
@@ -94,6 +94,81 @@ describe('buildSceneDocV2 — first native editor increment', () => {
     codplay.destroy()
   })
 
+  it('builds a nested capsule with V2 parent targets and capsule-automation CSS', () => {
+    const scene = fixtureScene()
+    scene.items = [
+      {
+        id: 'capsule-a',
+        type: 'capsule',
+        parentId: null,
+        order: 'mmm',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'root-decor',
+        capsule: {
+          kind: 'grille',
+          grid: { rows: 1, cols: 1 },
+          distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        },
+        keyframes: [],
+      },
+      {
+        id: 'capsule-b',
+        type: 'capsule',
+        parentId: 'capsule-a',
+        order: 'mmm',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'root-decor',
+        capsule: {
+          kind: 'liste',
+          distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+        },
+        keyframes: [],
+      },
+      {
+        id: 'item-nested',
+        type: 'text',
+        parentId: 'capsule-b',
+        order: 'mmm',
+        visible: true,
+        contentId: 'text-content',
+        initialDecorId: 'text-decor-a',
+        keyframes: [],
+      },
+    ]
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    const root = story.persos.find((perso) => perso.id === EDITOR_V2_ROOT_PERSO_ID)!
+    const capsule = story.persos.find((perso) => perso.id === 'capsule-a')!
+    const nestedCapsule = story.persos.find((perso) => perso.id === 'capsule-b')!
+    const item = story.persos.find((perso) => perso.id === 'item-nested')!
+
+    expect(root.type).toBe('list')
+    expect(root.initial).toMatchObject({ move: '@root' })
+    expect((root.initial as { className?: string }).className).toContain('ac-scene-root')
+    expect(capsule.type).toBe('list')
+    expect(capsule.initial).toMatchObject({ move: { target: EDITOR_V2_ROOT_PERSO_ID }, tag: 'div' })
+    expect((capsule.initial as { className?: string }).className).toContain('ac-grid-grille-1x1-manual')
+    expect(nestedCapsule.type).toBe('list')
+    expect(nestedCapsule.initial).toMatchObject({ move: { target: 'capsule-a' }, tag: 'div' })
+    expect((nestedCapsule.initial as { className?: string }).className).toContain('ac-grid-liste-1x1-list')
+    expect(item.type).toBe('tag')
+    expect(item.initial).toMatchObject({ move: { target: 'capsule-b' }, content: 'Bonjour ed2 V2' })
+    expect(result.styleSheet).toContain('.ac-grid-grille-1x1-manual{display:grid;')
+    expect(result.styleSheet).toContain('.ac-grid-liste-1x1-list{display:grid;')
+    expect(result.rootGrid).toEqual({ rows: 9, cols: 16 })
+
+    const codplay = new CodPlay()
+    const compiled = codplay.build({ scene: result.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    codplay.destroy()
+  })
+
   it('returns a blocking diagnostic instead of emitting a partial V2 scene for offsets', () => {
     const scene = fixtureScene()
     scene.decors['text-decor-a']!.offset = { width: 12.5 }
@@ -101,5 +176,77 @@ describe('buildSceneDocV2 — first native editor increment', () => {
     expect(result).toMatchObject({ ok: false, diagnostics: [{ code: 'EDITOR_V2_OFFSET_REQUIRES_CQW', level: 'error' }] })
     if (result.ok) return
     expect(result).not.toHaveProperty('sceneDoc')
+  })
+
+  it('maps bloc to an empty tag and image to the V2 img component without inventing content', () => {
+    const scene = fixtureScene()
+    scene.items[0] = {
+      ...scene.items[0]!,
+      id: 'item-image',
+      type: 'image',
+      contentId: 'image-content',
+      keyframes: [],
+    }
+    scene.contents['image-content'] = { id: 'image-content', type: 'image', source: '/assets/photo.jpg' }
+    let result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const image = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-image')!
+    expect(image.type).toBe('img')
+    expect(image.initial).toMatchObject({ src: '/assets/photo.jpg' })
+    expect(image.initial).not.toHaveProperty('content')
+
+    scene.items[0] = {
+      ...scene.items[0]!,
+      id: 'item-bloc',
+      type: 'bloc',
+      contentId: null,
+    }
+    result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const bloc = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-bloc')!
+    expect(bloc.type).toBe('tag')
+    expect(bloc.initial).toMatchObject({ tag: 'div' })
+    expect(bloc.initial).not.toHaveProperty('content')
+  })
+
+  it('maps video/media to the V2 media component and exposes the source to CodPlay resources', () => {
+    const scene = fixtureScene()
+    scene.items[0] = {
+      ...scene.items[0]!,
+      id: 'item-video',
+      type: 'video',
+      contentId: 'video-content',
+      keyframes: [],
+    }
+    scene.contents['video-content'] = { id: 'video-content', type: 'video', source: '/assets/clip.mp4' }
+    scene.masterItemId = 'item-video'
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const video = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-video')!
+    expect(video.type).toBe('media')
+    expect(video.initial).toMatchObject({ tag: 'video', src: '/assets/clip.mp4', master: true })
+
+    const codplay = new CodPlay()
+    const compiled = codplay.build({ scene: result.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    expect(compiled.compiledScene.resources.entries).toContainEqual(expect.objectContaining({ url: '/assets/clip.mp4', type: 'video' }))
+    codplay.destroy()
+  })
+
+  it('rejects media without an authored source instead of emitting an undefined V2 src', () => {
+    const scene = fixtureScene()
+    scene.items[0] = {
+      ...scene.items[0]!,
+      type: 'media',
+      contentId: 'media-content',
+      keyframes: [],
+    }
+    scene.contents['media-content'] = { id: 'media-content', type: 'media' }
+    const result = buildSceneDocV2(scene)
+    expect(result).toMatchObject({ ok: false, diagnostics: [{ code: 'EDITOR_V2_MEDIA_SOURCE_MISSING', level: 'error' }] })
   })
 })

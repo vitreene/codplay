@@ -13,6 +13,8 @@ export type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
   RuntimePreloadCacheEntry,
+  RuntimePreloadCssApi,
+  RuntimePreloadCssSetInput,
   RuntimePreloadLoadResult,
   RuntimePreloadMetadata,
   RuntimePreloadFailure,
