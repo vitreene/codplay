@@ -3,7 +3,6 @@ import type {
   CanonicalPersoDoc,
   CanonicalSceneDoc,
   CanonicalStoryDoc,
-  PersoDoc,
   SceneListenRule,
   SceneDoc,
   StoryDoc,
@@ -30,7 +29,7 @@ function normalizeOptionalRecord(value: AuthorRecord | undefined): AuthorRecord 
 }
 
 /** Normalizes one perso and completes its canonical action self-reference. */
-function normalizePerso(perso: PersoDoc): CanonicalPersoDoc {
+function normalizePerso(perso: StoryDoc<string>['persos'][number]): CanonicalPersoDoc {
   const actions: Record<string, unknown> = isPlainRecord(perso.actions)
     ? cloneAuthorValue(perso.actions) as Record<string, unknown>
     : {}
@@ -48,7 +47,7 @@ function normalizePerso(perso: PersoDoc): CanonicalPersoDoc {
 }
 
 /** Normalizes one story while preserving undefined story placement. */
-function normalizeStory(story: StoryDoc): CanonicalStoryDoc {
+function normalizeStory(story: StoryDoc<string>): CanonicalStoryDoc {
   return {
     ...story,
     initial: normalizeOptionalRecord(story.initial),
@@ -62,7 +61,7 @@ function normalizeStory(story: StoryDoc): CanonicalStoryDoc {
 }
 
 /** Normalizes one scene document into the canonical V2 authoring shape. */
-export function normalizeSceneDoc(scene: SceneDoc): CanonicalSceneDoc {
+export function normalizeSceneDoc(scene: SceneDoc<string>): CanonicalSceneDoc {
   const stories = Object.fromEntries(
     Object.entries(scene.stories).map(([storyId, story]) => [storyId, normalizeStory(story)]),
   )

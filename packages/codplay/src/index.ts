@@ -70,9 +70,16 @@ export type {
   AuthorListenTransform,
   AuthorStrapCollection,
   AuthorStrapDeclarations,
+  CorePersoType,
+  CustomPersoDoc,
+  PersoActionSequenceStep,
+  PersoActionValue,
+  PersoDoc,
+  PersoTypeRegistry,
   SceneLifecycleFunction,
   SceneLifecycleOptions,
   SceneDoc,
+  StoryDoc,
 } from './scene/types'
 export type { MountTargetDeclaration, StrapCollections } from './runtime/player/pipeline'
 export type {

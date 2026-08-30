@@ -69,6 +69,8 @@ import {
 } from './capture'
 import {
   materializeScene,
+  collectLogicalEvaluationBoundaries,
+  hasActiveTimeDependentStateActions,
   RuntimeStateStore,
   resolveStoryTrackId,
   validateStrapCollections,
@@ -149,6 +151,8 @@ export class RuntimePlayer {
   private structuralTimeline: StructuralTimeline | undefined
   private structuralTimelineRevision = -1
   private structuralTimelineIncludesPersistOnly = true
+  private logicalEvaluationBoundariesRevision = -1
+  private logicalEvaluationBoundaries: readonly number[] = []
   private moduleServiceInstances = new Map<string, RuntimeModuleServiceInstance>()
   private pendingModuleSeekHandles: Array<{
     instance: RuntimeModuleServiceInstance
@@ -269,6 +273,7 @@ export class RuntimePlayer {
       throw new Error('Geometry capture requires an initialized runtime player.')
     }
     this.componentRuntime?.sync(scene)
+    this.componentRuntime?.presentAt?.(scene.timeMs)
     this.materializer?.materializeScene(scene, {
       moveDeltas: [],
       phase: 'geometry-capture',
@@ -471,6 +476,7 @@ export class RuntimePlayer {
   /** Reapplies the current solved scene after a materializer-context change. */
   refresh(): void {
     if (this.solvedScene === undefined) throw new Error('Player has not been initialized.')
+    this.componentRuntime?.sync(this.solvedScene, true)
     this.materializeScene(this.solvedScene, { previousScene: this.solvedScene, moveDeltas: [] })
   }
 
@@ -809,11 +815,20 @@ export class RuntimePlayer {
     this.currentTimeMs = resolveModuleTimeline(this.moduleServiceInstances, this.currentTimeMs)
     const sequenceEndTime = this.findSequenceEndBetween(previousTimeMs, this.currentTimeMs)
     if (sequenceEndTime !== undefined) this.currentTimeMs = sequenceEndTime
-    const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
-    this.synchronizeStateStoreFromScene(nextSolvedScene)
+    const frameScene = this.resolveFrameScene(
+      previousTimeMs,
+      this.currentTimeMs,
+      this.includePersistOnlyInCurrent,
+    )
+    const nextSolvedScene = frameScene.scene
     const previousSolvedScene = this.solvedScene
-    const moveDeltas = previousSolvedScene === undefined ? [] : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
-    notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    const moveDeltas = frameScene.reconstructed && previousSolvedScene !== undefined
+      ? diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+      : []
+    if (frameScene.reconstructed) {
+      this.synchronizeStateStoreFromScene(nextSolvedScene)
+      notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+    }
     this.solvedScene = nextSolvedScene
     this.materializeScene(this.solvedScene, { previousScene: previousSolvedScene, moveDeltas })
     this.notifyPublicEvents(previousSolvedScene?.timeMs ?? this.currentTimeMs, this.currentTimeMs)
@@ -860,6 +875,7 @@ export class RuntimePlayer {
       this.state === PLAYER_LIFECYCLE_PLAYING ? 'playing' : 'paused',
     )
     this.applyLiveCaptureActions(scene)
+    this.componentRuntime?.presentAt?.(scene.timeMs)
     this.materializer?.materializeScene(scene, context)
   }
 
@@ -1109,6 +1125,50 @@ export class RuntimePlayer {
     return this.reconstructBaseScene(timeMs, structural?.childrenByTarget, true, includePersistOnly)
   }
 
+  /** Reuses the last logical scene when the current frame has no state boundary. */
+  private resolveFrameScene(
+    previousTimeMs: number,
+    timeMs: number,
+    includePersistOnly: boolean,
+  ): Readonly<{ scene: SolvedScene; reconstructed: boolean }> {
+    const current = this.solvedScene
+    if (current === undefined || this.shouldReconstructFrameScene(previousTimeMs, timeMs, includePersistOnly)) {
+      return {
+        scene: this.reconstructScene(timeMs, includePersistOnly),
+        reconstructed: true,
+      }
+    }
+    return {
+      scene: current.timeMs === timeMs ? current : { ...current, timeMs },
+      reconstructed: false,
+    }
+  }
+
+  /** Decides whether one advancing frame can reuse the previous logical state. */
+  private shouldReconstructFrameScene(
+    previousTimeMs: number,
+    timeMs: number,
+    includePersistOnly: boolean,
+  ): boolean {
+    const current = this.solvedScene
+    if (current === undefined) return true
+    if (timeMs < current.timeMs) return true
+    if (includePersistOnly !== this.includePersistOnlyInCurrent) return true
+    if (this.structuralTimelineRevision !== this.trackJournal.getRevision()) return true
+    if (hasActiveTimeDependentStateActions(current)) return true
+    return hasEventBoundaryBetween(this.getLogicalEvaluationBoundaries(), previousTimeMs, timeMs)
+  }
+
+  /** Returns cached logical boundaries and refreshes them after journal changes. */
+  private getLogicalEvaluationBoundaries(): readonly number[] {
+    const revision = this.trackJournal.getRevision()
+    if (this.logicalEvaluationBoundariesRevision !== revision) {
+      this.logicalEvaluationBoundaries = collectLogicalEvaluationBoundaries(this.compiledScene, this.trackJournal)
+      this.logicalEvaluationBoundariesRevision = revision
+    }
+    return this.logicalEvaluationBoundaries
+  }
+
   /** Resolves the left side of one event boundary with the preceding structural order. */
   private reconstructSceneBeforeBoundary(timeMs: number, includePersistOnly = true): SolvedScene {
     this.ensureStructuralTimeline(includePersistOnly)
@@ -1253,6 +1313,16 @@ function isSequenceEndInRange(
   if (eventTimeMs > currentTimeMs) return false
   if (previousTimeMs === undefined) return eventTimeMs === currentTimeMs
   return eventTimeMs >= previousTimeMs
+}
+
+/** Reports whether one advancing frame crosses a known logical event boundary. */
+function hasEventBoundaryBetween(
+  boundaries: readonly number[],
+  previousTimeMs: number,
+  currentTimeMs: number,
+): boolean {
+  if (currentTimeMs <= previousTimeMs) return currentTimeMs < previousTimeMs
+  return boundaries.some((boundary) => boundary > previousTimeMs && boundary <= currentTimeMs)
 }
 
 /** Normalizes one external eventime tree without mutating the caller's value. */

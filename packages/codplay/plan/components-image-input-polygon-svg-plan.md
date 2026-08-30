@@ -163,9 +163,13 @@ valeur `unknown`.
 Le morph est un comportement specialise du composant, pas un nouveau Behavior
 global ni un appel direct a Anime.js. L'occurrence d'action active et son
 `startAt` sont transmis facultativement a `update()` ; la forme courante est
-calculee a partir de `timeMs`, `delayMs`, `duration` et `ease`. Cela rend le
-morph deterministe au seek et anime le meme path pendant Play. Sans occurrence
-temporelle disponible, le composant applique directement la forme cible.
+calculee a partir de `timeMs`, `delayMs`, `duration`, `ease` et `sampleCount`.
+Lorsque le runtime fournit `registerAnimation`, le composant enregistre alors
+un flux de presentation cadence par l'horloge du player ; le runtime n'applique
+que les echantillons dont la valeur differe. Le morph reste ainsi deterministe
+au seek et anime le meme path pendant Play sans rappeler `update()` a chaque
+tick. Un appel direct du composant sans ce callback conserve la projection
+immediate utile aux tests de la classe.
 
 Le path et le texte sont projetes par les services de materialisation sur leurs
 parts respectives. Le composant ne modifie jamais la racine d'un autre

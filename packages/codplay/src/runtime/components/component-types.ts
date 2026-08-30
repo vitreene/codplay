@@ -41,12 +41,28 @@ export type MaterializedPart = Readonly<{
   nodeRef: unknown
 }>
 
+/** One component-owned presentation sample produced by a temporal update. */
+export type ComponentAnimationFrame = Readonly<{
+  value: unknown
+  apply: () => void
+}>
+
+/** One player-clocked presentation stream registered by a component update. */
+export type ComponentAnimation = Readonly<{
+  id: string
+  startAt: number
+  endAt: number
+  sample: (timeMs: number) => ComponentAnimationFrame | undefined
+}>
+
 /** One state update delivered by the V2 player to a component. */
 export type ComponentUpdateInput<State extends Record<string, unknown> = Record<string, unknown>> = Readonly<{
   state: State
   timeMs: number
   /** Active authored occurrences available to components with deterministic temporal behavior. */
   activeActions?: readonly ComponentActionOccurrence[]
+  /** Registers component-owned presentation streams for this logical update. */
+  registerAnimation?: (animation: ComponentAnimation) => void
 }>
 
 /** Minimal occurrence metadata needed by a component-specific time projection. */

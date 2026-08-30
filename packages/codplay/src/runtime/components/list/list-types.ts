@@ -15,3 +15,6 @@ export type ListInitial = BaseComponentVisualData & Readonly<{
 
 /** Resolved root data applied to one list host. */
 export type ListState = BaseComponentVisualData
+
+/** Action patch accepted by one list perso. */
+export type ListAction = Partial<ListInitial>

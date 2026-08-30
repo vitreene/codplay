@@ -354,7 +354,7 @@ FLIP.
 | Runner HTML et motion | Corrections de l'endpoint FIRST/LAST, de la source pré-frontière du retarget et du graphe d'empilement source/cible des overlays implémentées et couvertes par tests ; Firefox headless rejoué sur `flip-stress`, matrice Safari complète encore ouverte | Le runner mesure le LAST d'un move à son endpoint, conserve le mover et ses ancêtres dans le bon repère temporel, garde le mover au-dessus de ses deux endpoints et respecte les frères structurellement au-dessus de sa cible ; la démo reste la preuve visuelle. |
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
-| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner` et `flip-nested` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay/tests/fixtures`. |
+| Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner`, `flip-nested` et `preload-media` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay/tests/fixtures`. |
 | Authoring éditeur | Reporté à la reprise de l'éditeur | Aucun accès DOM ou API authoring générique à inventer dans la façade actuelle. |
 
 Le code de démonstration historique encore présent sous `packages/demos/src/v2`

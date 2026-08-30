@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Diagnostic Safari — lecture média programmée</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .options,
+      .cases {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .options {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        padding: 1rem;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        background: #1e293b;
+      }
+
+      .case {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) minmax(280px, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        background: #1e293b;
+      }
+
+      .case video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #020617;
+      }
+
+      .detached-stage {
+        width: 100%;
+        height: 14rem;
+        overflow: hidden;
+        background: #020617;
+      }
+
+      .detached-grid {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+      }
+
+      .detached-cell {
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .detached-stage .codplay-media-root,
+      .detached-stage .codplay-media-root > video {
+        width: 100%;
+        height: 100%;
+      }
+
+      .detached-stage .codplay-media-root > video {
+        display: block;
+        object-fit: cover;
+      }
+
+      .exact-preload-stage {
+        width: 100%;
+        height: 14rem;
+        overflow: hidden;
+        background: #020617;
+      }
+
+      .exact-preload-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .exact-preload-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 1rem;
+        width: 80%;
+        aspect-ratio: 16 / 9;
+      }
+
+      .exact-preload-cell {
+        overflow: hidden;
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        background: #1e293b;
+      }
+
+      .exact-preload-media-root,
+      .exact-preload-media-root > video {
+        width: 100%;
+        height: 100%;
+      }
+
+      .exact-preload-media-root > video {
+        display: block;
+        object-fit: cover;
+      }
+
+      .case__controls,
+      .case__buttons {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .case__buttons {
+        margin: 0.75rem 0;
+      }
+
+      button {
+        padding: 0.45rem 0.7rem;
+        border: 1px solid #64748b;
+        border-radius: 0.35rem;
+        background: #334155;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #475569;
+      }
+
+      .status {
+        min-height: 1.5rem;
+        color: #93c5fd;
+      }
+
+      .log {
+        min-height: 13rem;
+        max-height: 30rem;
+        overflow: auto;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background: #020617;
+        color: #cbd5e1;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 760px) {
+        body {
+          padding: 1rem;
+        }
+
+        .case {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Diagnostic Safari — lecture média programmée</h1>
+      <p>
+        Banc d’essai autonome : aucun import CodPlay et aucun composant de scène.
+        Il compare le nœud chargé directement, le nœud préchargé réutilisé et le
+        cas « preload puis nouveau nœud ». Le cas E reproduit spécifiquement
+        l’insertion tardive d’un arbre média préparé alors qu’il est détaché.
+      </p>
+
+      <section class="options" aria-label="Options de lecture">
+        <label><input id="muted" type="checkbox"> muted</label>
+        <label><input id="plays-inline" type="checkbox" checked> playsinline</label>
+        <button id="rebuild" type="button">Reconstruire les cas</button>
+        <button id="clear-log" type="button">Effacer le journal</button>
+      </section>
+
+      <h2>Cas comparés</h2>
+      <section id="cases" class="cases"></section>
+
+      <h2>Journal natif</h2>
+      <pre id="log" class="log" aria-live="polite"></pre>
+    </main>
+
+    <script>
+      const SOURCE = '/assets/LcXkmXyuZQ.mp4'
+      const PRELOAD_TIMEOUT_MS = 15_000
+      const casesRoot = document.querySelector('#cases')
+      const logOutput = document.querySelector('#log')
+      const mutedInput = document.querySelector('#muted')
+      const playsInlineInput = document.querySelector('#plays-inline')
+      const mediaCases = new Map()
+
+      /** Writes one diagnostic line with the native media state. */
+      function writeLog(message, video) {
+        const time = new Date().toLocaleTimeString()
+        const state = video === undefined ? '' : ` readyState=${video.readyState} networkState=${video.networkState} currentTime=${formatNumber(video.currentTime)} duration=${formatNumber(video.duration)} dimensions=${video.videoWidth}x${video.videoHeight} paused=${video.paused}`
+        logOutput.textContent += `[${time}] ${message}${state}\n`
+        logOutput.scrollTop = logOutput.scrollHeight
+      }
+
+      /** Formats one possibly unavailable native media number. */
+      function formatNumber(value) {
+        return Number.isFinite(value) ? value.toFixed(3) : String(value)
+      }
+
+      /** Describes the connection and geometry state of one native media node. */
+      function describeLayout(video) {
+        const rect = video.getBoundingClientRect()
+        return `connected=${video.isConnected} rect=${Math.round(rect.width)}x${Math.round(rect.height)}`
+      }
+
+      /** Attaches the native events required to distinguish loading, pausing and decoding. */
+      function observeVideo(video, caseId) {
+        const events = [
+          'loadstart', 'durationchange', 'loadedmetadata', 'loadeddata',
+          'canplay', 'canplaythrough', 'play', 'playing', 'pause',
+          'waiting', 'stalled', 'suspend', 'error', 'abort', 'ended',
+        ]
+        for (const eventName of events) {
+          video.addEventListener(eventName, () => {
+            const error = video.error === null ? '' : ` mediaError=${video.error.code}:${video.error.message || 'no-message'}`
+            writeLog(`${caseId} event=${eventName}${error}`, video)
+            updateStatus(caseId, `${eventName} · readyState=${video.readyState} · ${formatNumber(video.currentTime)}s`)
+          })
+        }
+        observePresentedFrames(video, caseId)
+      }
+
+      /** Observes frames sent to the compositor, without flooding the diagnostic journal. */
+      function observePresentedFrames(video, caseId) {
+        if (typeof video.requestVideoFrameCallback !== 'function') {
+          writeLog(`${caseId} requestVideoFrameCallback=unavailable`, video)
+          return
+        }
+        let frameCount = 0
+        const requestNextFrame = () => {
+          video.requestVideoFrameCallback((now, metadata) => {
+            frameCount += 1
+            if (frameCount <= 3 || frameCount % 30 === 0) {
+              writeLog(
+                `${caseId} frame=${frameCount} callbackNow=${formatNumber(now / 1000)} mediaTime=${formatNumber(metadata.mediaTime)} presentedFrames=${metadata.presentedFrames} frame=${metadata.width}x${metadata.height}`,
+                video,
+              )
+            }
+            updateStatus(caseId, `frame présentée #${frameCount} · ${metadata.width}x${metadata.height} · ${formatNumber(metadata.mediaTime)}s`)
+            requestNextFrame()
+          })
+        }
+        requestNextFrame()
+      }
+
+      /** Creates one visible native video with the selected playback attributes. */
+      function createVisibleVideo(caseId) {
+        const video = document.createElement('video')
+        video.controls = true
+        video.muted = mutedInput.checked
+        video.playsInline = playsInlineInput.checked
+        video.className = 'native-video'
+        observeVideo(video, caseId)
+        return video
+      }
+
+      /** Assigns a source to one native video and optionally performs an explicit load. */
+      function assignSource(video, loadExplicitly) {
+        video.src = SOURCE
+        if (loadExplicitly) video.load()
+      }
+
+      /** Waits until one preload node reaches canplaythrough or reports an error. */
+      function waitForPreload(video, caseId) {
+        return new Promise((resolve, reject) => {
+          let timeoutId
+          const cleanup = () => {
+            clearTimeout(timeoutId)
+            video.removeEventListener('canplaythrough', onReady)
+            video.removeEventListener('error', onError)
+          }
+          const onReady = () => {
+            cleanup()
+            writeLog(`${caseId} preload=ready`, video)
+            resolve()
+          }
+          const onError = () => {
+            cleanup()
+            reject(new Error('preload error'))
+          }
+          timeoutId = setTimeout(() => {
+            cleanup()
+            reject(new Error('preload timeout'))
+          }, PRELOAD_TIMEOUT_MS)
+          video.addEventListener('canplaythrough', onReady, { once: true })
+          video.addEventListener('error', onError, { once: true })
+        })
+      }
+
+      /** Attempts one programmatic play and records both resolution and rejection. */
+      function attemptPlay(caseId, video, reason) {
+        writeLog(`${caseId} play() called reason=${reason}`, video)
+        let result
+        try {
+          result = video.play()
+        } catch (error) {
+          writeLog(`${caseId} play() threw ${formatError(error)}`, video)
+          return
+        }
+        if (result === undefined || typeof result.then !== 'function') {
+          writeLog(`${caseId} play() returned without Promise`, video)
+          return
+        }
+        void result.then(() => {
+          writeLog(`${caseId} play() resolved`, video)
+        }).catch((error) => {
+          writeLog(`${caseId} play() rejected ${formatError(error)}`, video)
+        })
+      }
+
+      /** Formats one thrown value without hiding the browser error name. */
+      function formatError(error) {
+        if (error instanceof Error) return `${error.name}:${error.message}`
+        return String(error)
+      }
+
+      /** Updates one case status label. */
+      function updateStatus(caseId, message) {
+        const entry = mediaCases.get(caseId)
+        if (entry !== undefined) entry.status.textContent = message
+      }
+
+      /** Adds the common controls used to compare immediate and delayed play. */
+      function addPlaybackButtons(container, caseId, video) {
+        const playNow = document.createElement('button')
+        playNow.type = 'button'
+        playNow.textContent = 'play() dans le click'
+        playNow.addEventListener('click', () => attemptPlay(caseId, video, 'click'))
+
+        const playDelayed = document.createElement('button')
+        playDelayed.type = 'button'
+        playDelayed.textContent = 'play() après 2 s'
+        playDelayed.addEventListener('click', () => {
+          writeLog(`${caseId} délai de 2 s armé`, video)
+          setTimeout(() => attemptPlay(caseId, video, 'timer-2s'), 2_000)
+        })
+
+        const playOnTicks = document.createElement('button')
+        playOnTicks.type = 'button'
+        playOnTicks.textContent = 'play() dans les ticks'
+        playOnTicks.addEventListener('click', () => {
+          writeLog(`${caseId} lecture par ticks armée`, video)
+          const startAt = performance.now() + 2_000
+          let attempts = 0
+          const runTick = (now) => {
+            if (now < startAt) {
+              requestAnimationFrame(runTick)
+              return
+            }
+            if (video.paused && attempts < 8) {
+              attempts += 1
+              attemptPlay(caseId, video, `tick-${attempts}`)
+            }
+            if (video.paused && attempts < 8 && !video.ended) {
+              requestAnimationFrame(runTick)
+              return
+            }
+            writeLog(`${caseId} lecture par ticks terminée attempts=${attempts}`, video)
+          }
+          requestAnimationFrame(runTick)
+        })
+
+        const reset = document.createElement('button')
+        reset.type = 'button'
+        reset.textContent = 'reset'
+        reset.addEventListener('click', () => {
+          video.pause()
+          video.currentTime = 0
+          writeLog(`${caseId} reset`, video)
+        })
+
+        container.append(playNow, playDelayed, playOnTicks, reset)
+      }
+
+      /** Creates one case card and returns its media host and status label. */
+      function createCaseCard(definition) {
+        const card = document.createElement('article')
+        card.className = 'case'
+        const mediaHost = document.createElement('div')
+        const details = document.createElement('div')
+        const title = document.createElement('h3')
+        title.textContent = definition.title
+        const description = document.createElement('p')
+        description.textContent = definition.description
+        const buttons = document.createElement('div')
+        buttons.className = 'case__buttons'
+        const status = document.createElement('div')
+        status.className = 'status'
+        status.textContent = 'préparation…'
+        details.append(title, description, buttons, status)
+        card.append(mediaHost, details)
+        casesRoot.append(card)
+        mediaCases.set(definition.id, { mediaHost, status })
+        return { mediaHost, buttons, status }
+      }
+
+      /** Builds the direct DOM case with no temporary preload node. */
+      function buildDirectCase() {
+        const definition = {
+          id: 'direct',
+          title: 'A — nœud direct',
+          description: 'Nœud visible créé directement, src affecté une seule fois, sans preload temporaire.',
+        }
+        const { mediaHost, buttons } = createCaseCard(definition)
+        const video = createVisibleVideo(definition.id)
+        assignSource(video, false)
+        mediaHost.append(video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, 'src affecté, sans load() explicite')
+      }
+
+      /** Builds a visible node that is explicitly loaded before delayed playback. */
+      function buildVisibleLoadCase() {
+        const definition = {
+          id: 'visible-load',
+          title: 'B — même nœud, load() explicite',
+          description: 'Le nœud visible lui-même reçoit preload=auto, src et load() avant la lecture.',
+        }
+        const { mediaHost, buttons } = createCaseCard(definition)
+        const video = createVisibleVideo(definition.id)
+        video.preload = 'auto'
+        assignSource(video, true)
+        mediaHost.append(video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, 'visible node loading…')
+      }
+
+      /** Builds the current architecture: temporary preload followed by a new visible node. */
+      async function buildTemporaryThenNewCase() {
+        const definition = {
+          id: 'temporary-new',
+          title: 'C — preload temporaire puis nouveau nœud',
+          description: 'Le preload atteint canplaythrough, est supprimé, puis un autre nœud reçoit le src.',
+        }
+        const { mediaHost, buttons, status } = createCaseCard(definition)
+        const temporary = document.createElement('video')
+        temporary.preload = 'auto'
+        temporary.muted = mutedInput.checked
+        temporary.playsInline = playsInlineInput.checked
+        temporary.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'
+        observeVideo(temporary, `${definition.id}:preload`)
+        document.body.append(temporary)
+        const preloadReady = waitForPreload(temporary, definition.id)
+        assignSource(temporary, true)
+        try {
+          await preloadReady
+        } catch (error) {
+          status.textContent = `échec ${formatError(error)}`
+          writeLog(`${definition.id} ${formatError(error)}`)
+        } finally {
+          temporary.remove()
+        }
+        const video = createVisibleVideo(definition.id)
+        assignSource(video, false)
+        mediaHost.append(video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, 'preload terminé, nouveau nœud visible prêt à tester')
+      }
+
+      /** Builds the intended handoff: the preloaded native node becomes the visible node. */
+      async function buildTemporaryReuseCase() {
+        const definition = {
+          id: 'temporary-reuse',
+          title: 'D — preload puis réutilisation du même nœud',
+          description: 'Le nœud qui a atteint canplaythrough est déplacé dans la zone visible et réutilisé.',
+        }
+        const { mediaHost, buttons, status } = createCaseCard(definition)
+        const video = createVisibleVideo(definition.id)
+        video.preload = 'auto'
+        video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'
+        document.body.append(video)
+        const preloadReady = waitForPreload(video, definition.id)
+        assignSource(video, true)
+        try {
+          await preloadReady
+        } catch (error) {
+          status.textContent = `échec ${formatError(error)}`
+          writeLog(`${definition.id} ${formatError(error)}`)
+        }
+        video.style.cssText = ''
+        mediaHost.append(video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, 'même nœud conservé après preload')
+      }
+
+      /** Reproduces V2 preparation while the component tree is detached, then attaches it. */
+      async function buildDetachedAssemblyCase() {
+        const definition = {
+          id: 'detached-assembly',
+          title: 'E — arbre détaché puis insertion',
+          description: 'Preload terminé, puis src affecté à un nouveau nœud avant l’insertion de son arbre dans la zone visible.',
+        }
+        const { mediaHost, buttons, status } = createCaseCard(definition)
+        const temporary = document.createElement('video')
+        temporary.preload = 'auto'
+        temporary.muted = mutedInput.checked
+        temporary.playsInline = playsInlineInput.checked
+        temporary.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'
+        observeVideo(temporary, `${definition.id}:preload`)
+        document.body.append(temporary)
+        const preloadReady = waitForPreload(temporary, definition.id)
+        assignSource(temporary, true)
+        try {
+          await preloadReady
+        } catch (error) {
+          status.textContent = `échec ${formatError(error)}`
+          writeLog(`${definition.id} ${formatError(error)}`)
+        } finally {
+          temporary.remove()
+        }
+
+        const stage = document.createElement('div')
+        stage.className = 'detached-stage'
+        const grid = document.createElement('div')
+        grid.className = 'detached-grid'
+        const cell = document.createElement('div')
+        cell.className = 'detached-cell'
+        const mediaRoot = document.createElement('div')
+        mediaRoot.className = 'codplay-media-root preload-media-video'
+        const video = document.createElement('video')
+        observeVideo(video, definition.id)
+        assignSource(video, false)
+        video.controls = true
+        video.muted = mutedInput.checked
+        video.playsInline = playsInlineInput.checked
+        mediaRoot.append(video)
+        cell.append(mediaRoot)
+        grid.append(cell)
+        stage.append(grid)
+        writeLog(`${definition.id} src affecté avant insertion ${describeLayout(video)}`, video)
+        mediaHost.append(stage)
+        writeLog(`${definition.id} arbre inséré ${describeLayout(video)}`, video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, `arbre inséré · ${describeLayout(video)}`)
+      }
+
+      /** Reproduces V2's zero-sized preload and the real four-cell layout shape. */
+      async function buildExactPreloadLayoutCase() {
+        const definition = {
+          id: 'exact-preload-layout',
+          title: 'F — preload 0×0 et layout réel',
+          description: 'Même preload 0×0 que CodPlay, puis nouveau nœud préparé dans une grille quatre cellules avant insertion.',
+        }
+        const { mediaHost, buttons, status } = createCaseCard(definition)
+        const temporary = document.createElement('video')
+        temporary.preload = 'auto'
+        temporary.muted = mutedInput.checked
+        temporary.playsInline = playsInlineInput.checked
+        temporary.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none'
+        observeVideo(temporary, `${definition.id}:preload`)
+        document.body.append(temporary)
+        const preloadReady = waitForPreload(temporary, definition.id)
+        assignSource(temporary, true)
+        try {
+          await preloadReady
+        } catch (error) {
+          status.textContent = `échec ${formatError(error)}`
+          writeLog(`${definition.id} ${formatError(error)}`)
+        } finally {
+          temporary.remove()
+        }
+
+        const stage = document.createElement('div')
+        stage.className = 'exact-preload-stage'
+        const container = document.createElement('div')
+        container.className = 'exact-preload-container'
+        const grid = document.createElement('div')
+        grid.className = 'exact-preload-grid'
+        const cell = document.createElement('div')
+        cell.className = 'exact-preload-cell'
+        const mediaRoot = document.createElement('div')
+        mediaRoot.className = 'exact-preload-media-root'
+        const video = document.createElement('video')
+        observeVideo(video, definition.id)
+        assignSource(video, false)
+        video.controls = true
+        video.muted = mutedInput.checked
+        video.playsInline = playsInlineInput.checked
+        mediaRoot.append(video)
+        cell.append(mediaRoot)
+        grid.append(cell)
+        container.append(grid)
+        stage.append(container)
+        writeLog(`${definition.id} src affecté avant insertion ${describeLayout(video)}`, video)
+        mediaHost.append(stage)
+        writeLog(`${definition.id} layout inséré ${describeLayout(video)}`, video)
+        addPlaybackButtons(buttons, definition.id, video)
+        updateStatus(definition.id, `layout inséré · ${describeLayout(video)}`)
+      }
+
+      /** Rebuilds every independent case with the current Safari playback options. */
+      async function rebuildCases() {
+        casesRoot.replaceChildren()
+        mediaCases.clear()
+        buildDirectCase()
+        buildVisibleLoadCase()
+        await Promise.all([
+          buildTemporaryThenNewCase(),
+          buildTemporaryReuseCase(),
+          buildDetachedAssemblyCase(),
+          buildExactPreloadLayoutCase(),
+        ])
+      }
+
+      document.querySelector('#rebuild').addEventListener('click', () => { void rebuildCases() })
+      document.querySelector('#clear-log').addEventListener('click', () => { logOutput.textContent = '' })
+      void rebuildCases()
+    </script>
+  </body>
+</html>

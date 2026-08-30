@@ -3,7 +3,7 @@ import type { RuntimePreloadResourceMetadata } from '../../preload'
 import { BaseHTMLComponent } from '../base-html-component'
 import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
 import type { MediaTransition } from '../component-surface-types'
-import type { MediaInitial, MediaState, MediaTag } from './media-types'
+import type { MediaInitial, MediaPartState, MediaState, MediaTag } from './media-types'
 
 /** V2 media component that preserves one materialized native media node per source. */
 export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
@@ -43,6 +43,8 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
     })
     this.ensureStaticSourceNodes()
     this.setActiveSource(input.state.src)
+    const active = this.activeMediaNode()
+    if (active !== undefined) this.applyMediaPartState(active, input.state.video)
   }
 
   /** Creates every statically declared source node once before the first presentation. */
@@ -74,6 +76,7 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
     ))
     setMediaSource(node, src)
     if (this.perso.initial.controls === true) setMediaControls(node)
+    this.applyMediaPartState(node, this.perso.initial.video)
     setNativePlaybackRate(node, this.playbackRate)
     this.mediaBySrc.set(src, node)
     return node
@@ -163,6 +166,16 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   /** Returns the currently attached persistent media node. */
   private activeMediaNode(): unknown {
     return this.activeSrc === null ? undefined : this.mediaBySrc.get(this.activeSrc)
+  }
+
+  /** Applies the authored visual and attribute patch to the native media part. */
+  private applyMediaPartState(node: unknown, state: MediaPartState | undefined): void {
+    if (state === undefined) return
+    this.services.apply(node, {
+      className: state.className,
+      style: state.style,
+      attr: state.attr,
+    })
   }
 
   /** Clamps one native position to the currently effective CodPlay window. */

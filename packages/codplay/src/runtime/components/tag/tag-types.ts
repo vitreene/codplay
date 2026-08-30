@@ -9,3 +9,6 @@ export type TagState = BaseComponentData & Readonly<{
 
 /** Author-facing initial profile for the tag component. */
 export type TagInitial = TagState
+
+/** Action patch accepted by one tag perso. */
+export type TagAction = Partial<TagInitial>

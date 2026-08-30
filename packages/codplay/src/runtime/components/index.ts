@@ -30,8 +30,8 @@ export {
 } from './polygon'
 export { TagComponent, sanitizeTagInitial, validateTagInitial } from './tag'
 export { RuntimeComponentRuntime } from './runtime-component-runtime'
-export type { LayoutInitial, LayoutState } from './layout'
-export type { ListConfig, ListInitial, ListState } from './list'
+export type { LayoutAction, LayoutInitial, LayoutState } from './layout'
+export type { ListAction, ListConfig, ListInitial, ListState } from './list'
 export type { ImageAction, ImageInitial, ImagePartState, ImageState } from './image'
 export type {
   InputAction,
@@ -42,7 +42,7 @@ export type {
   InputState,
   ResolvedInputState,
 } from './input'
-export type { MediaInitial, MediaState, MediaTag, MediaTransition } from './media'
+export type { MediaAction, MediaInitial, MediaPartState, MediaState, MediaTag, MediaTransition } from './media'
 export type {
   PolygonAction,
   PolygonCompiledMorphOptions,
@@ -64,7 +64,7 @@ export type {
   RuntimeComponentSurfaceProvider,
   RuntimeComponentSurfaceResolver,
 } from './component-surface-types'
-export type { TagInitial, TagState } from './tag'
+export type { TagAction, TagInitial, TagState } from './tag'
 export {
   clampProgress,
   createPolygonVertices,
@@ -84,6 +84,8 @@ export type {
   ComponentServices,
   ComponentInput,
   ComponentActionOccurrence,
+  ComponentAnimation,
+  ComponentAnimationFrame,
   HTMLComponentInput,
   HTMLComponentServices,
   ComponentUpdateInput,

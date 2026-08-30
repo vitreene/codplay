@@ -116,6 +116,30 @@ Ce sont des producteurs ou consommateurs d'etat situes de part et d'autre de sa 
 doit reconstruire l'etat disponible et le transmettre ; il n'a pas a implementer les capacites que
 le solve ou le renderer ne supportent pas encore.
 
+## Évaluation logique et présentation
+
+> Statut : En cours — extension générique en validation
+
+La reconstruction de `state(t)` et la présentation d'un composant sont deux
+optimisations distinctes :
+
+- le player reconstruit lorsque le temps franchit une frontière connue, qu'un
+  fait du journal est nouveau ou qu'une action core reste dépendante du temps ;
+- entre ces frontières, il peut réutiliser le dernier `SolvedScene` en mettant
+  seulement à jour `timeMs` ;
+- `RuntimeComponentRuntime` compare séparément l'état et l'intention d'action,
+  hors `elapsedMs`, puis appelle `Component.update()` uniquement lorsqu'une
+  nouvelle donnée logique est présentée ;
+- une animation calculée par un composant est présentée par son flux enregistré
+  et par l'horloge du player, sans forcer une reconstruction logique ni créer
+  un event supplémentaire.
+
+La réutilisation ne contourne ni `seek`, ni les modules qui possèdent une
+horloge native, ni la présentation motion : ces frontières reçoivent toujours
+la position courante. L'acceptance exige des tests ciblés sur l'absence de
+reconstruction après endpoint, le changement d'état, le morph composant, le
+seek avant/arrière et les parcours Play/Seek existants.
+
 ## RenderSync
 
 `RenderSync` est la frontiere temporelle entre le player V2 et des adapters de rendu

@@ -68,6 +68,23 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			}
 		},
 	},
+	{
+		id: 'preload-media',
+		path: '?demo=preload-media',
+		title: 'Preload média',
+		description: 'Audio, vidéo et images sont chargés avant le démarrage de la scène.',
+		load: async () => {
+			const [module, stylesheet] = await Promise.all([
+				import('./demos/preload-media/main'),
+				import('./demos/preload-media/style.css?url'),
+			])
+			return {
+				createScene: module.createScene,
+				durationMs: module.SCENE_DURATION_MS,
+				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+			}
+		},
+	},
 
 	{
 		id: 'flip-nested',

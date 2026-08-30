@@ -17,6 +17,7 @@ export const validateMediaInitial: ValidationFunction = (value, context) => {
   if (value.master !== undefined && typeof value.master !== 'boolean') {
     reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_MASTER_INVALID', 'media.master must be a boolean.', context)
   }
+  validateMediaPart(value.video, context, 'video')
 }
 
 /** Validates a source replacement carried by one media action. */
@@ -25,7 +26,23 @@ export const validateMediaAction: ValidationFunction = (value, context) => {
   if (value.src !== undefined && (typeof value.src !== 'string' || value.src.length === 0)) {
     reportInvalidServiceValue(context.diagnostics, 'AUTHOR_MEDIA_SRC_INVALID', 'media action src must be a non-empty string.', context)
   }
+  validateMediaPart(value.video, context, 'video')
   validateBroadcast(value.broadcast, context)
+}
+
+/** Validates one optional patch targeted at the native media part. */
+function validateMediaPart(
+  value: unknown,
+  context: Parameters<ValidationFunction>[1],
+  name: string,
+): void {
+  if (value === undefined || isPlainRecord(value)) return
+  reportInvalidServiceValue(
+    context.diagnostics,
+    'AUTHOR_MEDIA_PART_INVALID',
+    `media.${name} must be a plain object.`,
+    context,
+  )
 }
 
 /** Validates one optional media broadcast action. */

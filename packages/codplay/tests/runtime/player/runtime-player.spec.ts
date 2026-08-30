@@ -219,6 +219,96 @@ describe('RuntimePlayer', () => {
     player.destroy()
   })
 
+  it('reuses the solved state after a time-dependent action has reached its endpoint', () => {
+    let evaluations = 0
+    const staticAfterTweenScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { style: { opacity: 0 } },
+              actions: { run: { duration: 100, fn: { ref: 'fn:opacity' } } },
+            }],
+            eventimes: [{ name: 'run', startAt: 0 }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer(
+      'static-after-tween-instance',
+      engine,
+      staticAfterTweenScene,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      undefined,
+      {
+        'fn:opacity': () => {
+          evaluations += 1
+          return { style: { opacity: 1 } }
+        },
+      },
+    )
+
+    expect(player.init().ok).toBe(true)
+    player.play()
+    engine.advance(0)
+    engine.advance(100)
+    const evaluationsAtEndpoint = evaluations
+    engine.advance(200)
+    engine.advance(300)
+
+    expect(evaluationsAtEndpoint).toBeGreaterThan(0)
+    expect(evaluations).toBe(evaluationsAtEndpoint)
+    player.destroy()
+  })
+
+  it('reconstructs when an action sequence reaches an internal step boundary', () => {
+    const sequenceScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { content: 'first' },
+              actions: {
+                run: [
+                  { action: { content: 'first' }, durationMs: 100 },
+                  { action: { content: 'second' } },
+                ],
+              },
+            }],
+            eventimes: [{ name: 'run', startAt: 0 }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('sequence-boundary-instance', engine, sequenceScene)
+
+    expect(player.init().ok).toBe(true)
+    player.play()
+    engine.advance(0)
+    engine.advance(150)
+
+    expect(player.getSolvedScene()?.persos['main:root']?.state.content).toBe('second')
+    player.destroy()
+  })
+
   it('owns lifecycle and logical time without creating a clock', () => {
     const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
     const player = new RuntimePlayer('instance-a', engine, scene)

@@ -11,9 +11,24 @@ nœuds natifs nécessaires aux différentes sources déclarées par le `perso`.
 ## Fonctionnement
 
 Le profil `MediaInitial` décrit la source, la balise éventuelle, les contrôles
-et le rôle de source temporelle. `media-validation.ts` vérifie le profil et les
-actions de diffusion. Les métadonnées de durée viennent du preload ; elles ne
-sont pas inventées par le composant.
+et le rôle de source temporelle. Les propriétés communes (`className`, `style`,
+`attr`) ciblent le wrapper ; `video` cible la node native persistante, qu'elle
+soit une `video` ou une `audio`. Cette forme conserve le contrat de la partie
+interne V1 :
+
+```ts
+initial: {
+  src: '/assets/movie.mp4',
+  video: {
+    attr: { controls: true },
+    style: { objectFit: 'cover' },
+  },
+}
+```
+
+`media-validation.ts` vérifie le profil et les actions de diffusion. Les
+métadonnées de durée viennent du preload ; elles ne sont pas inventées par le
+composant.
 
 ## Organisation interne
 

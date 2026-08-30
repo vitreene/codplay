@@ -1,4 +1,5 @@
 import type { SceneDoc } from 'codplay/scene/types'
+import type { InputAction } from 'codplay/runtime/components/input'
 import { correctionIconPartId, selectionIconPartId } from 'codplay/runtime/components/input'
 import componentDemoImageUrl from './component-demo-image.svg?url'
 
@@ -182,7 +183,7 @@ function createAnswerPersos(
 ): SceneDoc['stories']['main']['persos'] {
   const inputId = `components-answer-${answerId}`
   const value = answerId
-  const inputActions = correct
+  const inputActions: Record<string, InputAction> = correct
     ? {
         [QUIZ_SELECT_EVENT]: {
           selectedAnswerIds: [value],

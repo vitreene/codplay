@@ -122,6 +122,24 @@ synchronisation média est player-scoped :
   repositionner le master au nouvel instant ;
 - le teardown final arrête et libère les composants, jamais un seek.
 
+### Profil auteur et part native
+
+Le profil `media` conserve la séparation V1 entre la racine du perso et sa
+partie média native :
+
+- `initial.className`, `initial.style` et `initial.attr` ciblent le wrapper du
+  perso ;
+- `initial.video.className`, `initial.video.style` et `initial.video.attr`
+  ciblent la node native `video` ou `audio` conservée par le composant ;
+- une action `video` met à jour cette même partie native sans diffuser un
+  second event ni demander à l'auteur de convertir les propriétés en styles
+  de wrapper.
+
+Le nom `video` est conservé pour cette partie interne, y compris lorsque la
+source est résolue en `audio`, conformément au contrat V1. Le service `attr`
+reste le même service V2 ; seule la cible de projection est choisie par le
+composant.
+
 La correction de dérive des médias natifs non-master est une optimisation finale.
 Elle sera étudiée après validation de la lecture et du seek, avec des garde-fous
 contre les faux écarts au lancement, à la pause et après un seek. Elle ne sera
@@ -142,6 +160,11 @@ Une seule implémentation relie cette règle au player :
 
 - `media-sync-capability.ts` est le module player-scoped qui lit les actions
   compilées `broadcast` et appelle la surface du composant materialisé.
+
+La fixture V2 `packages/demos/src/v2/demos/preload-media/` transpose la scène
+V1 et passe par le layout commun, le manifeste dérivé du `SceneBuilder` et
+`codplay.preload`. Sa vérification Safari reste ouverte tant que l'écran noir
+n'est pas reproduit dans un navigateur réel.
 
 Les composants hybrides et les types tiers enregistrent leur stratégie dans la
 même infrastructure `RuntimePreload`; ils ne créent pas d'API de chargement

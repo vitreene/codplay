@@ -78,7 +78,7 @@ export type CodPlayOptions = Readonly<{
 
 /** Input accepted by the engine-bound public scene compiler. */
 export type CodPlayCompileInput = Readonly<{
-  scene: SceneDoc
+  scene: SceneDoc<string>
 }>
 
 /** Optional metadata for one public scene compilation. */

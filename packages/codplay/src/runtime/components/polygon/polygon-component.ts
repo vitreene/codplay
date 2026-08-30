@@ -1,7 +1,12 @@
 import { parseEase } from 'ace'
 import { isPlainRecord } from '../../../shared'
 import { BaseHTMLComponent } from '../base-html-component'
-import type { ComponentActionOccurrence, ComponentUpdateInput, HTMLComponentInput } from '../component-types'
+import type {
+  ComponentActionOccurrence,
+  ComponentAnimation,
+  ComponentUpdateInput,
+  HTMLComponentInput,
+} from '../component-types'
 import {
   resolveMorphPathString,
   resolvePolygonPathString,
@@ -93,10 +98,28 @@ export class PolygonComponent extends BaseHTMLComponent<PolygonInitial> {
     }
     this.logicalShapeState = nextShape
 
+    const pathPart = this.getPart(PART.path)
+    if (input.registerAnimation !== undefined && this.activeMorph !== null) {
+      const morph = this.activeMorph
+      const animation: ComponentAnimation = {
+        id: `polygon-morph:${morph.key}`,
+        startAt: morph.startAt,
+        endAt: morph.startAt + morph.delayMs + morph.duration,
+        sample: (timeMs) => {
+          const path = resolveMorphAt(morph, timeMs)
+          return {
+            value: path,
+            apply: () => this.services.apply(pathPart, { attr: { d: path } }),
+          }
+        },
+      }
+      input.registerAnimation(animation)
+      return
+    }
     const path = this.activeMorph === null
       ? resolvePolygonPathString(nextShape)
       : resolveMorphAt(this.activeMorph, input.timeMs)
-    this.services.apply(this.getPart(PART.path), { attr: { d: path } })
+    this.services.apply(pathPart, { attr: { d: path } })
   }
 }
 

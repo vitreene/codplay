@@ -5,6 +5,11 @@ import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../cata
 import type { RuntimeMaterializer } from '../materializer'
 import type { RuntimePreloadResourceMetadata } from '../preload'
 import type {
+  ComponentActionOccurrence,
+  ComponentAnimation,
+  ComponentUpdateInput,
+} from './component-types'
+import type {
   RuntimeComponentSurfaceId,
   RuntimeComponentSurfaceMap,
   RuntimeComponentSurfaceResolver,
@@ -30,11 +35,22 @@ type MountedComponent = Readonly<{
   surfaces: Partial<RuntimeComponentSurfaceMap>
 }>
 
+type StableComponentAction = Readonly<Omit<ComponentActionOccurrence, 'elapsedMs'>>
+
+type ActiveComponentAnimation = {
+  animation: ComponentAnimation
+  hasValue: boolean
+  lastValue: unknown
+  lastTimeMs: number | undefined
+}
+
 /** Synchronizes compiled solved persos with a player-local component host. */
 export class RuntimeComponentRuntime {
   private readonly mounted = new Map<string, MountedComponent>()
   private readonly stateRevisions = new Map<string, number>()
   private readonly lastStates = new Map<string, Readonly<Record<string, unknown>>>()
+  private readonly lastActions = new Map<string, readonly StableComponentAction[]>()
+  private readonly animations = new Map<string, ActiveComponentAnimation[]>()
   private readonly options: RuntimeComponentRuntimeOptions
   private moduleServices: ReadonlyMap<string, RuntimeModuleServiceInstance> = new Map()
 
@@ -64,17 +80,30 @@ export class RuntimeComponentRuntime {
   /**
    * Synchronizes the logical scene without destroying persistent component instances.
    * Structural unmounting is handled by the materializer; final cleanup is handled by destroy().
+   * An explicit force is reserved for commands such as refresh that must reapply
+   * the current state despite its logical identity being unchanged.
    */
-  sync(scene: SolvedScene): void {
+  sync(scene: SolvedScene, force = false): void {
     for (const perso of Object.values(scene.persos)) {
       const mounted = this.mounted.get(perso.key) ?? this.mountComponent(scene, perso.key)
-      mounted.component.update({
-        state: perso.state,
-        timeMs: scene.timeMs,
-        activeActions: perso.actions,
-      })
-      this.recordStateRevision(perso.key, perso.state)
+      const actions = createStableActionSignature(perso.actions)
+      if (force
+        || this.hasStateChanged(perso.key, perso.state)
+        || !sameRuntimeValue(this.lastActions.get(perso.key), actions)) {
+        this.applyComponentUpdate(mounted, perso.key, {
+          state: perso.state,
+          timeMs: scene.timeMs,
+          activeActions: perso.actions,
+        })
+        this.lastActions.set(perso.key, actions)
+        this.recordStateRevision(perso.key, perso.state)
+      }
     }
+  }
+
+  /** Presents component-owned animation samples at one player-clocked time. */
+  presentAt(timeMs: number): void {
+    for (const componentId of this.animations.keys()) this.presentAnimations(componentId, timeMs)
   }
 
   /** Applies one transient live state through the same component update path. */
@@ -85,7 +114,8 @@ export class RuntimeComponentRuntime {
   ): void {
     const mounted = this.mounted.get(persoKey)
     if (mounted === undefined) throw new Error(`Runtime component is not mounted: ${persoKey}`)
-    mounted.component.update({ state, timeMs })
+    if (!this.hasStateChanged(persoKey, state)) return
+    this.applyComponentUpdate(mounted, persoKey, { state, timeMs })
     this.recordStateRevision(persoKey, state)
   }
 
@@ -95,6 +125,74 @@ export class RuntimeComponentRuntime {
     this.mounted.clear()
     this.stateRevisions.clear()
     this.lastStates.clear()
+    this.lastActions.clear()
+    this.animations.clear()
+  }
+
+  /** Delivers one logical state update and replaces its component-owned animations. */
+  private applyComponentUpdate(
+    mounted: MountedComponent,
+    persoKey: string,
+    input: Omit<ComponentUpdateInput<Record<string, unknown>>, 'registerAnimation'>,
+  ): void {
+    const registered: ComponentAnimation[] = []
+    mounted.component.update({
+      ...input,
+      registerAnimation: (animation) => registered.push(animation),
+    })
+    if (registered.length === 0) {
+      this.animations.delete(persoKey)
+      return
+    }
+    this.animations.set(
+      persoKey,
+      registered.map((animation) => {
+        const previous = this.animations.get(persoKey)?.find((entry) =>
+          entry.animation.id === animation.id
+          && entry.animation.startAt === animation.startAt
+          && entry.animation.endAt === animation.endAt)
+        return previous === undefined
+          ? {
+              animation,
+              hasValue: false,
+              lastValue: undefined,
+              lastTimeMs: undefined,
+            }
+          : { ...previous, animation }
+      }),
+    )
+  }
+
+  /** Applies only changed samples from the player-clocked component streams. */
+  private presentAnimations(componentId: string, timeMs: number): void {
+    const active = this.animations.get(componentId)
+    if (active === undefined) return
+    for (const entry of active) {
+      const movingForwardAfterEnd = entry.lastTimeMs !== undefined
+        && entry.lastTimeMs >= entry.animation.endAt
+        && timeMs >= entry.lastTimeMs
+      if (movingForwardAfterEnd) {
+        entry.lastTimeMs = timeMs
+        continue
+      }
+      const frame = entry.animation.sample(timeMs)
+      if (frame !== undefined
+        && (!entry.hasValue || !sameRuntimeValue(entry.lastValue, frame.value))) {
+        frame.apply()
+        entry.lastValue = frame.value
+        entry.hasValue = true
+      }
+      entry.lastTimeMs = timeMs
+    }
+  }
+
+  /** Checks whether one state differs from the last state delivered to its component. */
+  private hasStateChanged(
+    componentId: string,
+    state: Readonly<Record<string, unknown>>,
+  ): boolean {
+    const previous = this.lastStates.get(componentId)
+    return previous === undefined || !sameRuntimeValue(previous, state)
   }
 
   /** Creates one component instance from its compiled scene declaration. */
@@ -145,6 +243,13 @@ export class RuntimeComponentRuntime {
     this.lastStates.set(componentId, state)
     this.stateRevisions.set(componentId, (this.stateRevisions.get(componentId) ?? 0) + 1)
   }
+}
+
+/** Removes per-frame elapsed time while retaining the action identity and payload. */
+function createStableActionSignature(
+  actions: readonly ComponentActionOccurrence[] | undefined,
+): readonly StableComponentAction[] {
+  return (actions ?? []).map(({ elapsedMs, ...stableAction }) => stableAction)
 }
 
 /** Compares compiled component state without serializing it on every frame. */

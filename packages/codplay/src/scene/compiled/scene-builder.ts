@@ -75,7 +75,7 @@ export class SceneBuilder {
   }
 
   /** Normalizes, validates, derives, extracts, and freezes one compiled scene. */
-  build(scene: SceneDoc): SceneBuildResult {
+  build(scene: SceneDoc<string>): SceneBuildResult {
     const diagnostics = new DiagnosticCollector({ output: this.options.diagnosticOutput })
     const canonical = normalizeSceneDoc(scene)
     this.guardEngine.validate(canonical, diagnostics)

@@ -182,7 +182,7 @@ function registryModuleDefinition(onCreate: () => void): RuntimeModuleServiceDef
 }
 
 /** Scene requiring all three definitions registered through the public facade. */
-function registrySceneDoc(): SceneDoc {
+function registrySceneDoc(): SceneDoc<string> {
   return {
     id: 'registry-scene',
     stories: {

@@ -1,7 +1,7 @@
 import type { SceneDoc } from '../../src/scene/types'
 
 /** Creates the minimal S1 canary shape used by the V1 demos. */
-function createS1CanaryScene(): SceneDoc {
+function createS1CanaryScene(): SceneDoc<string> {
   return {
     id: 's1-canary-scene',
     stories: {
@@ -19,7 +19,7 @@ function createS1CanaryScene(): SceneDoc {
 }
 
 /** Creates the S2 hierarchy and eventime shape used by the V1 demos. */
-function createS2ReferenceScene(): SceneDoc {
+function createS2ReferenceScene(): SceneDoc<string> {
   return {
     id: 's2-reference-scene',
     stories: {
@@ -49,7 +49,7 @@ function createS2ReferenceScene(): SceneDoc {
 }
 
 /** Creates the S3 move transition shape used by the V1 robustness demo. */
-function createS3RobustesseScene(): SceneDoc {
+function createS3RobustesseScene(): SceneDoc<string> {
   return {
     id: 's3-robustesse-scene',
     stories: {
@@ -75,7 +75,7 @@ function createS3RobustesseScene(): SceneDoc {
 }
 
 /** Creates the representative S4 multi-story layout and media shape. */
-function createS4QuizReferenceScene(): SceneDoc {
+function createS4QuizReferenceScene(): SceneDoc<string> {
   return {
     id: 's4-quiz-reference-scene',
     stories: {
@@ -107,7 +107,7 @@ function createS4QuizReferenceScene(): SceneDoc {
 }
 
 /** Provides representative V1 demo scene forms without importing the V1 demo package. */
-export const demoSceneFixtures: readonly Readonly<{ id: string; scene: SceneDoc }>[] = [
+export const demoSceneFixtures: readonly Readonly<{ id: string; scene: SceneDoc<string> }>[] = [
   { id: 's1', scene: createS1CanaryScene() },
   { id: 's2', scene: createS2ReferenceScene() },
   { id: 's3', scene: createS3RobustesseScene() },

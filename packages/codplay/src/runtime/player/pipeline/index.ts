@@ -16,6 +16,10 @@ export { RuntimeEventDispatcher } from './runtime-event-dispatcher'
 export { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 export { resolveActionDefinition } from './action-resolution'
 export { resolveStyleTweenTiming, type StyleTweenTiming } from './style-timing'
+export {
+  collectLogicalEvaluationBoundaries,
+  hasActiveTimeDependentStateActions,
+} from './scene-evaluation'
 export { executeListenPipeline, propagateListenEvent } from './listen'
 export { executeStrapsSequentially } from './strap-executor'
 export { createPlannedStrapHelpers } from './planned-helpers'

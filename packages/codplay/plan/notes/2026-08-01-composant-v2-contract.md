@@ -61,6 +61,28 @@ type RuntimeComponentClass = {
   new (input: ComponentInput<Record<string, unknown>>): BaseComponent<Record<string, unknown>>
   readonly declaredServices: readonly string[]
 }
+
+type ComponentActionOccurrence = {
+  name: string
+  startAt: number
+  elapsedMs: number
+  action: Record<string, unknown>
+  eventId?: string
+}
+
+type ComponentAnimation = {
+  id: string
+  startAt: number
+  endAt: number
+  sample(timeMs: number): { value: unknown; apply(): void } | undefined
+}
+
+type ComponentUpdateInput = {
+  state: Record<string, unknown>
+  timeMs: number
+  activeActions?: readonly ComponentActionOccurrence[]
+  registerAnimation?: (animation: ComponentAnimation) => void
+}
 ```
 
 Le socle V2 impose une seule methode obligatoire. La tranche HTML ajoute
@@ -110,6 +132,21 @@ V1.
 
 `update()` applique l'etat resolu a la materialisation du composant.
 
+La reconstruction logique et la presentation sont deux etapes distinctes. Le
+player peut reconstruire `state(t)` a chaque tick lorsqu'une action core
+depend encore du temps ; hors d'une frontiere d'event ou d'une action de ce
+type, il reutilise le dernier etat resolu en ne mettant a jour que son
+horodatage. Le runtime composant compare l'etat et l'intention d'action hors de
+`elapsedMs` avant d'appeler `update()` : le temps seul ne constitue donc pas
+une nouvelle donnee logique.
+
+Un composant qui possede un calcul temporel peut enregistrer une presentation
+interne depuis `update()`. Le runtime l'echantillonne avec l'horloge du player
+via `presentAt(timeMs)` et n'appelle `apply()` que lorsque la valeur produite
+change. Ce flux ne cree ni event ni second circuit de reconstruction ; il
+presente une interpolation declenchee par une mise a jour logique et reste
+rejouable lors d'un seek arriere.
+
 `update()` peut muter directement `this.node`, qui est le node racine possede par
 l'instance du composant. Les mutations restent limitees a la materialisation de
 cette instance.
@@ -139,6 +176,7 @@ SolvedScene
   -> factory du type
   -> materialization du markup compile
   -> Component.update(state, timeMs)
+  -> presentation des animations composant a `presentAt(timeMs)`
   -> cleanup au retrait ou a la destruction du player
 ```
 
@@ -270,6 +308,21 @@ V2.5. Elle ne fait pas partie du contrat V2 actuel.
 La decouverte des parts et leur enregistrement sont des operations internes de la
 materialisation et du module `markup`. Elles ne font pas partie des methodes du
 composant auteur.
+
+## Profils auteur des persos
+
+`PersoDoc` est discrimine par le registre des composants V2. Pour un type core,
+`PersoDoc<'media'>`, par exemple, reprend `MediaInitial` pour `initial` et
+`MediaAction` pour ses actions, auxquels s'ajoutent les champs de placement et
+de routage propres a la frontiere `SceneDoc`. Les valeurs propres au composant
+ne sont donc pas remplacees par `Record<string, unknown>` dans l'authoring
+TypeScript.
+
+Une scene destinee a un composant etranger peut employer la forme generique
+ouverte `SceneDoc<string>` et reste validee par le catalogue runtime. Apres
+normalisation, les persos retrouvent leur forme canonique ouverte avant la
+compilation ; ce changement de type ne modifie pas le circuit
+`SceneDoc -> build -> CompiledScene`.
 
 Dans cet exemple :
 

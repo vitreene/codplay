@@ -91,8 +91,7 @@ Un fait `persist-only` est journalisé, mais reste hors de la tête de lecture
 pendant la fermeture courante ; une reconstruction ultérieure peut l'inclure.
 `beginCompiledCapture()` résout les fonctions compilées et utilise l'index fixe
 `actionTargetIndex` produit par le builder. Les références directes sont
-préparées à la construction ; une action live ne fait que lire cet index, puis
-la synchronisation de frame réapplique les cibles avec `Component.update()`.
+préparées à la construction ; une action live ne fait que lire cet index.
 
 ## Actions temporelles
 
