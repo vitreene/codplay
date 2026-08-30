@@ -125,6 +125,13 @@ que lorsque le temps présenté correspond à son `timeMs`. Cette règle proviso
 évite d'imposer une annulation automatique avant l'observation des gestes réels
 de l'éditeur.
 
+La géométrie nécessaire à ces gestes relève d'une autre sortie V2 : elle doit
+être fournie par la projection HTML comme frame numérique cohérente avec la
+présentation, sans exposer de référence DOM. Les briques internes de mesure du
+runner existent déjà, mais cette surface de façade et son contrat restent à
+ouvrir dans le plan de reprise de l'éditeur. Elle est obligatoire pour
+l'architecture V2 ; elle n'est pas un retour à `getNodePose` ou `setNodePose`.
+
 ## Frontières
 
 - le catalogue core/foreign est composé à la création puis verrouillé au

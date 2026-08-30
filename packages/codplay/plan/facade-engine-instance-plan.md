@@ -37,7 +37,7 @@ Les briques internes existent. L’assemblage public est engagé dans
 | `RuntimeEngine` | ressources, horloge et ordre des instances ; transaction interne des seeks | est adapté par `EngineFacadeImpl` |
 | `RuntimePlayer` | une scène compilée, lifecycle, events, capture et reconstruction | est adapté par `InstanceFacadeImpl` |
 | `RuntimeMaterializer` | frontière interne de materialisation consommée par le runner HTML | n'est pas exposé dans les options d'instance et n'est pas sélectionnable par l'hôte |
-| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; son `init()` est l'unique initialisation d'une instance |
+| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur, mesure de géométrie et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; sa mesure authoring existe encore seulement comme briques internes ; son `init()` est l'unique initialisation d'une instance |
 | `RuntimeTelco` | adaptateur de pilotage local | branché sur les notifications du player, sans boucle propre |
 
 `packages/demos/src/v2/layout/layout.ts` passe maintenant par la façade publique.
@@ -62,10 +62,12 @@ Il ne construit plus de catalogue et n'accède plus au runner.
 
 Pour l'accès d'authoring de l'éditeur, la référence comportementale est
 [`v1-author-api-spec.md`](../../../docs/formalisation/v1-author-api-spec.md) :
-elle fournit le vocabulaire des lectures d'authoring et des accès au nœud.
-La cible V2 fixe la lecture d'état logique et l'écriture temporaire avant
-materialisation ; le recours effectif au nœud HTML reste une capacité à vérifier
-dans le chantier de reprise de l'éditeur.
+elle fournit le vocabulaire des interactions, mais ses accès directs au nœud
+ne sont pas transposés. La cible V2 fixe la lecture d'état logique et
+l'écriture temporaire avant materialisation ; elle doit aussi exposer la mesure
+numérique de la projection HTML pour les cadres, poignées, hit-tests et
+conversions de coordonnées. Cette géométrie est une sortie de la frontière
+`Projection.measure`, pas un handle DOM remis à l'éditeur.
 
 ## Référence V1 et adaptation V2
 
@@ -78,8 +80,8 @@ spécification [`Player API V1`](../../../docs/evolution/formalisation-archive/f
 
 | V1 | Décision de transposition V2 |
 |---|---|
-| `BuilderFacade` | reste une étape pure et séparée ; V2 l'expose sous `engine.builder.compile()` afin d'utiliser le catalogue configuré de cet engine, puis le runtime ne reçoit que `CompiledScene` |
-| `CodPlay.load(SceneDoc)` | ne devient pas le chemin combiné V2 ; l'appelant compile explicitement avec `engine.builder.compile()` puis crée l'instance avec le résultat, sans mélanger compilation et instance |
+| `BuilderFacade` | reste une étape pure et séparée ; V2 l'expose sous `codplay.build()` afin d'utiliser le catalogue configuré de ce propriétaire, puis le runtime ne reçoit que `CompiledScene` |
+| `CodPlay.load(SceneDoc)` | ne devient pas le chemin combiné V2 ; l'appelant compile explicitement avec `codplay.build()` puis crée l'instance avec le résultat, sans mélanger compilation et instance |
 | `PlayerFacade` / `PlayerApi` | devient la base de la façade d'instance : lifecycle, seek, events, observation |
 | `RendererFacade.component/service/module` | est déplacée à la configuration de l'engine ; elle n'est plus exposée comme registre mutable du renderer ou de la démo |
 | `RendererFacade` | est remplacée par la frontière interne de materialisation HTML/DOM ; aucun runner d'un autre substrat n'est ouvert en V2 |
@@ -1019,6 +1021,43 @@ qualifier à partir des usages réels avant de le stabiliser. Le contrat complet
 des formes et des diagnostics est défini dans le plan de reprise de l'éditeur.
 Cette capacité ne justifie pas la création d'un second circuit runtime.
 
+### Géométrie de présentation pour l'authoring — obligation V2, contrat à ouvrir
+
+La séparation logique/projection de V2 n'est complète que si la projection
+HTML peut restituer la géométrie qu'elle vient de produire. Cette sortie est
+requise par la frontière architecturale `Projection.set / measure / mount` ;
+elle n'est pas une option ajoutée pour l'éditeur et ne doit pas être remplacée
+par un accès au nœud. Le cœur `RuntimePlayer` reste sans DOM et `SolvedScene`
+reste logique et portable.
+
+Les briques internes existent déjà : le runner conserve les nœuds auteur
+persistants, `captureHtmlPose` lit une pose numérique dans une transaction
+HTML, `captureHtmlLayoutSnapshot` compose les relations parent/enfant et
+`presentSceneForGeometryCapture` reprojette un état avant la mesure. Ce qui
+manque est une surface d'instance qui expose la frame courante de façon stable,
+sans exposer ces types internes de mouvement ni aucune référence DOM.
+
+Le contrat à arrêter avant code devra garantir :
+
+- une frame immuable, liée au temps présenté et à une révision, adressée par
+  `{ storyId, persoId }`, avec présence/montage explicite ;
+- rectangle viewport, dimensions locales, origine, matrice affine et relation
+  parent/racine pour les opérations de sélection, hit-test et conversion de
+  coordonnées ;
+- les cibles/conteneurs nécessaires aux grilles et aux poignées, pas seulement
+  l'item sélectionné ;
+- une mesure des nœuds auteur après `component.update`, hors overlays FLIP/DnD
+  et hors géométrie historique ;
+- une nouvelle frame après init, seek, resize, `snapshot.set/clear`, rebuild,
+  montage/démontage et remplacement de nœud, avec rejet possible d'une frame
+  obsolète par son temps ou sa révision.
+
+La surface et les noms d'opérations restent à fixer dans le sous-plan de
+reprise de l'éditeur. Ce sous-plan devra aussi définir les diagnostics
+d'absence et la conversion de la géométrie de grille. Son implémentation est
+une évolution de frontière V2 à autoriser séparément de `snapshot` et `cqw` ;
+elle ne constitue ni un correctif de bug, ni une compatibilité V1.
+
 #### Longueurs `cqw` ed2
 
 **Décision validée le 2026-08-30 — implémentation engagée dans le sous-plan V2.**
@@ -1042,26 +1081,24 @@ rejetée avec diagnostic. L'implémentation préserve cette valeur dans le
 snapshot, la contribution temporaire, Play, Seek et resize ; les preuves
 unitaires du circuit logique et de la projection HTML sont maintenant présentes.
 
-#### Accès éventuel au nœud matérialisé
+#### Frontière de géométrie — aucun accès public au nœud
 
-La préférence actuelle est de ne pas rendre le nœud nécessaire à l'édition :
-l'éditeur doit pouvoir écrire l'état logique temporaire avant materialisation.
-Cette préférence ne constitue pas une exclusion définitive. Si une fonction
-d'éditeur exige le nœud HTML courant, une capacité distincte sera spécifiée ;
-elle ne rejoint pas la surface `snapshot`.
+Le nœud n'est pas rendu nécessaire à l'édition : l'éditeur écrit l'état logique
+temporaire avant materialisation et reçoit séparément la géométrie mesurée par
+la projection HTML. Cette dernière est une capacité obligatoire de V2, pas une
+option à décider après coup.
 
-Dans ce cas :
+La façade ne publie donc ni référence de nœud, ni `subscribeToNode`, ni
+`getNodePose`/`setNodePose`. Elle devra publier une frame géométrique numérique
+stable pour la sélection et les gestes, sans donner accès aux contextes internes
+éventuellement possédés par un composant (par exemple une scène Three.js). La
+référence de nœud reste remplaçable à l'intérieur du runner et ne constitue
+jamais l'état logique.
 
-- l'accès est une capacité optionnelle de la materialisation HTML/DOM ; il ne
-  donne pas accès aux contextes internes éventuellement possédés par un
-  composant, comme une scène Three.js ;
-- la référence de nœud est remplaçable et ne constitue jamais l'état logique ;
-- la pertinence et la forme finale de cette capacité seront vérifiées lors de
-  la reprise de l'éditeur, sans invalider la surface d'état logique ci-dessus.
-
-L'implémentation de cet accès est donc volontairement reportée au chantier
-éditeur. Ce plan formalise la frontière et les invariants ; il ne déclenche
-aucune capacité de node ou de pose dans le cœur V2 ni dans le materializer HTML.
+La forme exacte de cette frame et de son port d'observation est reportée au
+sous-plan de reprise de l'éditeur ; le besoin architectural et la frontière
+`Projection.measure` sont, eux, arrêtés par la V2. Cette évolution doit être
+autorisée avant toute modification du cœur.
 Les features distinctes `snapshot` et `cqw`, autorisées le 2026-08-30 pour la
 reprise ed2, sont suivies et documentées dans leurs sous-plans respectifs ;
 elles ne constituent pas un accès au node.
@@ -1439,8 +1476,9 @@ cachées de l'instance.
 
 L'implémentation de `instance.snapshot` (lecture et preview logique) est
 présente dans la façade et le runtime V2, avec une première preuve de contrat.
-L'accès éventuel aux nœuds reste explicitement hors de cette tranche et ne doit
-pas être déduit de `snapshot`.
+La géométrie authoring V2 est une frontière obligatoire encore à exposer ; elle
+ne doit pas être déduite de `snapshot` et ne sera pas remplacée par un accès aux
+nœuds.
 
 ## État de travail
 
@@ -1452,12 +1490,12 @@ Déjà implémenté :
 
 - `new CodPlay(options)`, avec `codplay.engine`, `codplay.instances` et `codplay.preload` ; le
   `frameScheduler` est injecté au constructeur et le `TimeTicker` reste interne ;
-- `engine.builder.compile({ scene })`, lié au catalogue configuré de l'engine ;
+- `codplay.build({ scene })`, lié au catalogue configuré du propriétaire ;
 - composition unique core/foreign et verrouillage du catalogue ;
 - création, adressage, pilotage et destruction des instances ;
 - `instance.telco`, sa progression branchée sur les notifications du player,
   son horizon fixe ou découvert, et le cycle externe ou possédé de l'engine ;
-- `instance.events`, `engine.events`, l'adressage séparé et l'eventime récursif ;
+- `instance.events`, `codplay.events`, l'adressage séparé et l'eventime récursif ;
 - diagnostics par le canal V2 existant, trace de contexte des events sous
   `instance.diagnostic` et transfert explicite des ressources ;
 - `instance.snapshot`, avec lecture logique, remplacement atomique d'une
@@ -1492,6 +1530,14 @@ est créé. Aucune API supplémentaire ne doit être ajoutée en dehors de ces
 Cette section conserve l'état implémenté ci-dessus comme référence actuelle. Elle
 enregistre une proposition d'évolution de l'API utilisateur ; elle ne constitue
 pas encore un contrat et ne doit pas être implémentée avant relecture.
+
+> **Repère d'état 2026-08-30.** Les blocs « Avant » et les tableaux de
+> propositions ci-dessous sont conservés comme historique de conception. La
+> surface effectivement utilisée par le code et par le plan de reprise éditeur
+> est celle de l'amendement appliqué : `codplay.build`, `codplay.resources`,
+> `codplay.events`, `codplay.preload`, `codplay.instances` et
+> `codplay.engine.start/pause/stop/advance`. Aucun nouveau bridge ne doit
+> repartir des exemples `engine.builder`, `engine.resources` ou `engine.events`.
 
 ### Avant — surface actuellement implémentée
 
@@ -1606,15 +1652,15 @@ Décisions à commenter avant modification du code :
   circuit ;
 - `codplay.instances` reste le seul registre public de création, adressage et
   destruction des instances ;
-- `codplay.preload` et son interface sont reportés ; ils ne sont pas justifiés
-  par la proposition actuelle ;
+- `codplay.preload` et son interface sont présents comme service séparé ; leur
+  usage CSS/média est décrit dans le plan de reprise éditeur ;
 - `codplay.engine` est réduit au pilotage technique avancé
   (`start`, `pause`, `stop`, `advance`) ;
-- `codplay.destroy()` est le teardown utilisateur ; le maintien éventuel de
-  `engine.destroy()` comme primitive publique reste à décider ;
+- `codplay.destroy()` est le teardown utilisateur ; `engine.destroy()` n'est
+  pas une primitive publique ;
 - les options de composition de l'engine sont regroupées sous `options.engine`.
 
-## 12. Amendement — choix build et registres complets — En cours
+## 12. Amendement — choix build et registres complets — appliqué
 
 ### 12.1 Décisions enregistrées
 
@@ -1623,7 +1669,7 @@ Décisions à commenter avant modification du code :
 | méthode de construction de l'artefact | codplay.build(input, options?) |
 | codplay.compile(...) | non retenu |
 | codplay.builder | supprimé de la surface proposée |
-| preload | reporté ; interface non justifiée |
+| preload | codplay.preload (load, css.set/clear, cancel, release, stratégies) |
 | registre d'instances | codplay.instances uniquement |
 | pilotage technique | codplay.engine.start/pause/stop/advance |
 | teardown utilisateur | codplay.destroy() |
@@ -1638,11 +1684,11 @@ Décisions à commenter avant modification du code :
 | options.services.override[] | composition au constructeur |
 | options.modules.register[] | composition au constructeur |
 | options.modules.override[] | composition au constructeur |
-| codplay.engine.resources.register(resources) | présent |
-| codplay.engine.resources.override(resources) | absent |
-| codplay.engine.builder.compile(input, options?) | présent |
-| codplay.engine.events.emit(input) | présent |
-| codplay.engine.events.onEvent(listener) | présent |
+| codplay.resources.register(registration) | présent |
+| codplay.resources.override(resources) | absent |
+| codplay.build(input, options?) | présent |
+| codplay.events.emit(input) | présent |
+| codplay.events.onEvent(listener) | présent |
 | codplay.instances.create(options) | présent |
 | codplay.instances.get(instanceId) | présent |
 | codplay.instances.destroy(instanceId) | présent |

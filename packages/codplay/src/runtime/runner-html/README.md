@@ -98,6 +98,23 @@ source et destination. Un enfant qui possède aussi un mouvement direct ultérie
 reste disponible pour animer le reflow de la liste. Un élément capturé seulement
 comme dépendance d'un ancêtre ne peut pas écraser sa propre trajectoire naturelle.
 
+## Géométrie authoring V2
+
+La mesure de géométrie n'est pas une option du runner : elle est la réalisation
+HTML de la capacité `Projection.measure` requise par V2. Le runner possède déjà
+les briques qui la rendent possible (`captureHtmlPose`,
+`captureHtmlLayoutSnapshot` et `presentSceneForGeometryCapture`) et mesure les
+nœuds auteur persistants dans une transaction explicite.
+
+Ces snapshots internes de mouvement ne sont pas encore le contrat public de
+l'éditeur. Une future surface de façade devra publier une frame numérique
+immuable, liée au temps et à une révision, en excluant les overlays FLIP/DnD et
+les références DOM. Elle sera alimentée après la projection courante et après
+les changements de layout (init, seek, resize, preview snapshot, rebuild et
+montage/démontage). Le runner ne doit pas déplacer cette mesure dans
+`RuntimePlayer` ni laisser l'éditeur relire `getBoundingClientRect()` ou
+`getComputedStyle()`.
+
 Le reset retire aussi les masques de source laissés par l'overlay précédent. Les
 ghosts existants sont remis dans l'ordre parent-avant-enfant, en remontant toute
 la chaîne même lorsqu'un intermédiaire n'a pas de ghost ; `appendChild`

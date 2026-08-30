@@ -9,6 +9,29 @@ trouve chaque responsabilité, ce qui est fixé, ce qui est effectivement
 implémenté et ce qui reste ouvert. Il évite de redécouvrir les mêmes décisions
 à partir d'une démo ou d'un symptôme visuel.
 
+### Mise à jour du 2026-08-30
+
+La façade V2 expose désormais `instance.snapshot` (`get`, `set`, `clear`) et
+les longueurs structurées `cqw` sont portées par le builder, la résolution et
+la projection HTML. Ces deux capacités sont suivies par le plan de reprise
+éditeur ; leurs preuves navigateur restent à compléter.
+
+La géométrie de présentation n'est pas une capacité facultative : elle est la
+sortie authoring obligatoire de la frontière HTML `Projection.measure`, car
+c'est la raison pour laquelle V2 sépare l'état logique de sa projection. Les
+briques internes de mesure existent (`captureHtmlPose`, snapshots de layout,
+présentation de capture), mais aucun DTO public d'instance n'est encore
+arrêté. Ce manque est une frontière V2 à spécifier et à autoriser, pas un
+prétexte pour réintroduire `AuthorApi`, `getNodePose` ou une lecture du DOM
+dans l'éditeur.
+
+La verticale ed2 utilise encore le bridge et les consommateurs V1 ; le plan
+`packages/editor/plan/2026-08-30-editor-codplay-v2-reprise-report.md` distingue
+désormais l'achèvement de cette frontière V2 de la réécriture des bridges,
+machines et outils de l'éditeur. Les zones restent postérieures à cette
+preuve et restent une preview de l'éditeur, produite avec le modèle existant
+de `capsule-automation`.
+
 Il ne remplace pas les spécifications ni les plans. En cas de conflit, l'ordre
 d'autorité est celui de la section 1. Une affirmation de ce document ne crée
 jamais une API ou une règle absente des contrats cités.
@@ -80,10 +103,9 @@ materializer et le runner. Le chemin normal d'une démo V2 est :
 
 ```text
 const codplay = new CodPlay(options)
-codplay.engine
-codplay.instances
+codplay.build({ scene })
 codplay.preload
-  -> engine.builder.compile(...)
+codplay.resources
   -> codplay.instances.create(...)
   -> instance.telco / instance.events / instance.diagnostic
 ```
@@ -103,23 +125,32 @@ La surface publique actuelle est :
 
 ```text
 new CodPlay(options)
+codplay.build({ scene })
 codplay.engine
+codplay.resources
 codplay.instances
 codplay.preload
 ```
 
-L'engine expose :
+L'engine expose uniquement le contrôle avancé de l'horloge :
 
 ```text
-engine.builder.compile({ scene })
-engine.resources.register(resources)
-engine.events.emit(input)
-engine.events.onEvent(listener)
 engine.start()
 engine.pause()
 engine.stop()
 engine.advance(nowMs, marginMs?)
-engine.destroy()
+```
+
+La compilation, les ressources et les émissions d'eventimes appartiennent
+directement au propriétaire `CodPlay` :
+
+```text
+codplay.resources.register(resources)
+codplay.instances.create(options)
+codplay.preload.load({ manifest, options })
+codplay.preload.css.set({ slot, cssText, container })
+codplay.events.emit(input)
+codplay.events.onEvent(listener)
 ```
 
 Le propriétaire `CodPlay` expose le registre des instances :
@@ -137,7 +168,7 @@ son ticker. Ces deux modes ne doivent pas être utilisés simultanément.
 
 `engine.pause()` suspend la propagation et conserve l'état logique présenté.
 `engine.stop()` cesse d'employer la machine et ne promet pas une remise à zéro
-automatique. `engine.destroy()` effectue le teardown final des instances et
+automatique. `codplay.destroy()` effectue le teardown final des instances et
 des ressources. Ces opérations ne constituent pas des variantes de player
 créées par la démo.
 
@@ -149,13 +180,14 @@ en `error` lorsqu'ils interrompent l'opération.
 
 ### 3.2 Instance et telco
 
-Une instance expose uniquement :
+Une instance expose actuellement :
 
 ```text
 instance.instanceId
 instance.telco
 instance.events
 instance.diagnostic
+instance.snapshot
 ```
 
 La propriété `telco` regroupe le pilotage local :
@@ -181,12 +213,15 @@ cibles, ni accès direct au runner.
 
 Il n'y a pas actuellement de `instance.capture()` public, de `instance.init()`
 ou de `instance.refresh()` dans la telco, ni d'accès générique de l'éditeur au
-DOM. L'accès authoring est un chantier séparé à reprendre avec l'éditeur.
+DOM. `instance.snapshot` est le port logique authoring direct validé ; la
+géométrie de présentation nécessaire aux poignées et au hit-test reste un
+port V2 distinct à spécifier et à exposer depuis la projection HTML. L'accès
+authoring complet est donc un chantier séparé à reprendre avec l'éditeur.
 
 ### 3.3 Eventimes et ciblage
 
-`instance.events.emit(eventime, target)` et `engine.events.emit(input)
-aboutissent au même point d'entrée du player. `engine.events.emit` ne crée pas
+`instance.events.emit(eventime, target)` et `codplay.events.emit(input)`
+aboutissent au même point d'entrée du player. `codplay.events.emit` ne crée pas
 un journal ou un dispatcher parallèle : il adresse l'instance puis délègue au
 circuit normal.
 
@@ -223,7 +258,7 @@ le player.
 ```text
 codplay.preload
   -> preload.load(manifest ou manifestes)
-  -> engine.resources.register(result)
+  -> codplay.resources.register(result)
   -> création de l'instance puis initialisation après validation
 ```
 
@@ -250,6 +285,7 @@ service preload ni créer une seconde façon de lire une scène.
 | `src/runtime/components` | Composants logiques et leurs services déclarés | Imposer un materializer concurrent |
 | `src/runtime/materializer` | Contrat abstrait de materialisation interne | Devenir une option publique de substrate en V2 foundation |
 | `src/runtime/runner-html` | Présentation HTML/DOM, géométrie d'endpoints, FLIP et preview DnD HTML | Créer un second player, une seconde scène logique ou un arbre de mesure permanent |
+| frontière authoring de la projection HTML | Mesurer la présentation naturelle et fournir, après décision de contrat, une frame numérique à la façade | Retourner un node, faire relire le DOM par l'éditeur ou publier une pose FLIP comme pose auteur |
 | `src/runtime/motion` | Poses, graphes temporels et interpolation pure | Lire la géométrie DOM à chaque frame |
 | `src/runtime/capture` | Session de capture générique et sorties du contrat capture | Connaître les listes, le DOM ou le hit-test |
 | `src/runtime/capabilities/list` | Ordre, placement et réordonnancement d'une liste | Créer un pipeline d'animation distinct |
@@ -355,7 +391,7 @@ FLIP.
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
 | Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner`, `flip-nested` et `preload-media` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay/tests/fixtures`. |
-| Authoring éditeur | Reporté à la reprise de l'éditeur | Aucun accès DOM ou API authoring générique à inventer dans la façade actuelle. |
+| Authoring éditeur | `snapshot` direct est présent ; la géométrie numérique obligatoire de `Projection.measure` reste à spécifier/exposer ; le bridge et les consommateurs utilisent encore V1 | Ne pas inventer `AuthorApi` ou un accès DOM. Arrêter le contrat de géométrie, puis porter l'éditeur vers les ports V2 sans compatibilité V1. |
 
 Le code de démonstration historique encore présent sous `packages/demos/src/v2`
 doit être évalué par rapport au registry. Un fichier non enregistré qui importe
@@ -496,7 +532,7 @@ L'ordre de travail restant est :
 2. terminer la validation Seek de `list`/DnD ;
 3. reprendre l'écran noir Safari de `preload-media` avec des observations média
    concrètes ;
-4. reprendre l'accès authoring avec le chantier de l'éditeur ;
+4. arrêter puis implémenter la frontière de géométrie authoring V2, et reprendre ensuite l'accès authoring avec le chantier de l'éditeur ;
 5. nettoyer les anciennes démos et références internes selon un plan séparé.
 
 La correction FLIP ne modifie aucun contrat de façade. La reprise authoring et

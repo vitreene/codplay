@@ -45,7 +45,55 @@ Il n'existe pas de contrat public V2 nommé `vDom`, ni d'arbre virtuel mutable p
 materialize -> resolve -> solve -> component.update -> runner HTML
 ```
 
-Les outils éditeur lisent `instance.snapshot.get()` et remettent une preview logique temporaire par `instance.snapshot.set()`. Le node HTML demeure utile à la géométrie du cadre de sélection, au hit-test et aux pointeurs, jamais à la lecture ou l'écriture de décor.
+Les outils éditeur lisent `instance.snapshot.get()` et remettent une preview logique temporaire par `instance.snapshot.set()`. La géométrie utile au cadre de sélection ne vient pas d'un node remis à l'éditeur : elle est mesurée par la projection HTML et fournie sous forme de données numériques cohérentes. L'overlay du cadre, son hit-test et ses pointeurs restent des DOM appartenant à l'éditeur ; ils ne deviennent pas la projection du player.
+
+## Géométrie V2 exposée — obligation de la refonte
+
+La possibilité de fournir cette géométrie est constitutive de V2. Elle réalise la
+frontière `Projection.set / measure / mount` déjà posée dans le cahier des
+charges : le player résout un état logique, la projection le présente, puis la
+projection peut mesurer le résultat réel lorsqu'une interaction doit connaître
+la position, la taille ou les matrices du rendu. Dire que la géométrie serait
+« une option » confondait donc l'absence actuelle de façade avec l'absence de
+la capacité architecturale.
+
+La mesure existe déjà à l'intérieur du runner HTML : `captureHtmlPose` lit une
+frame de pose dans une transaction de mesure ; `captureHtmlLayoutSnapshot`
+compose les poses root/parent/enfant ; `presentSceneForGeometryCapture` présente
+un état sur les nœuds auteur persistants avant cette lecture. Ces fonctions sont
+des briques internes et les snapshots de mouvement ne sont pas directement le
+contrat de l'éditeur : ils portent des notions FLIP (`targetOrder`, frontières,
+attachments) qui ne doivent pas fuir dans la façade.
+
+La cible d'intégration est donc une sortie publique V2 dédiée, distincte de
+`snapshot` :
+
+- `snapshot` expose l'état logique résolu et reçoit la preview `style`, sans
+  dépendre du substrat ;
+- la géométrie expose une frame numérique immuable, associée au temps et à une
+  révision, après la présentation naturelle de cet état en HTML ;
+- chaque item doit être adressable par son identité story/perso, signaler sa
+  présence, et fournir le rectangle viewport, la boîte locale, l'origine, la
+  matrice affine et les relations parent/racine nécessaires aux poignées et
+  aux conversions de coordonnées ;
+- les conteneurs/cibles utiles aux outils (notamment les pistes de grille
+  résolues) doivent être mesurables dans la même frontière ; un simple
+  rectangle de l'item sélectionné ne suffit pas ;
+- aucune référence DOM, lecture `getBoundingClientRect()` ou
+  `getComputedStyle()` n'est réalisée par l'éditeur ; aucun overlay FLIP/DnD
+  n'est présenté comme la pose auteur.
+
+La frame doit être cohérente avec chaque opération qui peut changer le rendu :
+initialisation, seek, resize, preview `snapshot.set/clear`, reconstruction,
+montage/démontage et remplacement d'un node. Une révision ou un temps permet
+au consommateur de rejeter une frame devenue obsolète. La mesure est déclenchée
+à ces frontières explicites ; elle ne devient pas une lecture DOM supplémentaire
+à chaque tick de la boucle.
+
+Le nom exact de la surface, ses opérations de lecture/observation et la forme
+publique du DTO restent à fixer dans le sous-plan avant toute modification du
+core. Ce point est une évolution de frontière V2 à autoriser séparément, pas un
+correctif opportuniste et pas une compatibilité V1.
 
 ## Conséquence pour `setNodePose()`
 
@@ -55,9 +103,9 @@ La cible V2, déjà bornée par le plan de façade, est un patch de preview temp
 { target: { storyId, persoId }, timeMs, state: Partial<Record<string, unknown>> }
 ```
 
-Elle remplace partiellement l'état résolu avant sa matérialisation, sans modifier `CompiledScene`, le journal ou le document éditeur. Palette, Selection Frame et multi-sélection doivent produire cette même forme ; la persistance convertit ensuite ce patch en `DecorPatch` par l'unique transaction éditeur et le copy-on-write existant.
+Elle remplace partiellement l'état résolu avant sa matérialisation, sans modifier `CompiledScene`, le journal ou le document éditeur. Palette, Selection Frame et multi-sélection doivent produire cette même forme ; la persistance convertit ensuite ce patch en `DecorPatch` par l'unique transaction éditeur et le copy-on-write existant. Après `snapshot.set()`, la géométrie publique doit être rafraîchie afin que le cadre puisse suivre immédiatement la projection de la preview.
 
-`setNodePose()` n'est donc pas le mécanisme cible des gestes connus. Une éventuelle capacité HTML `subscribeToNode()` peut rester utile à l'ancrage du cadre de sélection. Toute conservation de lecture/écriture de pose par node exigerait de démontrer une interaction impossible à exprimer en état logique.
+`setNodePose()` n'est donc pas le mécanisme cible des gestes connus. `subscribeToNode()` et les autres références de node V1 ne sont pas la sortie de géométrie V2 : le cadre est notifié par la frame numérique de la projection et produit ensuite un patch logique. Toute interaction qui semblerait exiger un node doit d'abord être examinée comme un manque du contrat de mesure V2, jamais contournée par une écriture DOM.
 
 ## Zones
 
