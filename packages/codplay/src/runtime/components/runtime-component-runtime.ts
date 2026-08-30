@@ -3,7 +3,10 @@ import type { RuntimeModuleServiceInstance } from '../engine'
 import type { BaseComponent } from './base-component'
 import { RuntimeCapabilityCatalog, type RuntimeComponentIdentity } from '../catalog'
 import type { RuntimeMaterializer } from '../materializer'
-import type { RuntimePreloadResourceMetadata } from '../preload'
+import type {
+  RuntimePreloadMediaHandle,
+  RuntimePreloadResourceMetadata,
+} from '../preload'
 import type {
   ComponentActionOccurrence,
   ComponentAnimation,
@@ -27,6 +30,7 @@ export type RuntimeComponentRuntimeOptions = Readonly<{
   catalog: RuntimeCapabilityCatalog
   materializer: RuntimeMaterializer
   resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
+  resourceMedia?: ReadonlyMap<string, RuntimePreloadMediaHandle>
 }>
 
 type MountedComponent = Readonly<{
@@ -121,7 +125,10 @@ export class RuntimeComponentRuntime {
 
   /** Destroys all materialized component instances. */
   destroy(): void {
-    for (const mounted of this.mounted.values()) mounted.handle.destroy()
+    for (const mounted of this.mounted.values()) {
+      mounted.component.destroy()
+      mounted.handle.destroy()
+    }
     this.mounted.clear()
     this.stateRevisions.clear()
     this.lastStates.clear()
@@ -216,6 +223,7 @@ export class RuntimeComponentRuntime {
           actions: compiledPerso.actions,
         },
         resourceMetadata: this.options.resourceMetadata,
+        resourceMedia: this.options.resourceMedia,
       },
       identity,
       this.options.materializer,

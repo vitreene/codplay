@@ -63,6 +63,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private readonly playingInstanceIds = new Set<string>()
   private readonly publicEventListeners = new Set<CodPlayEventListener>()
   private readonly resourceMetadata = new Map<string, import('../runtime/preload').RuntimePreloadResourceMetadata>()
+  private readonly resourceMedia = new Map<string, import('../runtime/preload').RuntimePreloadMediaResources[string]>()
   private externalClockMode = false
   private destroyed = false
 
@@ -264,6 +265,8 @@ export class EngineFacadeImpl implements CodPlayEngine {
     this.publicEventListeners.clear()
     this.runtimeEngine.destroy()
     this.resourceMetadata.clear()
+    for (const media of this.resourceMedia.values()) media.release()
+    this.resourceMedia.clear()
   }
 
   /** Creates and initializes one instance against the locked engine catalog. */
@@ -299,6 +302,7 @@ export class EngineFacadeImpl implements CodPlayEngine {
         catalog: this.catalog,
         engine: this.runtimeEngine,
         resourceMetadata: new Map(this.resourceMetadata),
+        resourceMedia: new Map(this.resourceMedia),
         instance: options,
         onPublicEvent: (event) => this.forwardPublicEvent(options.instanceId, eventListeners, event),
         onTrace: (event) => this.forwardTraceEvent(options.instanceId, traceListeners, diagnostics, event),
@@ -354,6 +358,13 @@ export class EngineFacadeImpl implements CodPlayEngine {
   private registerResourceData(resources: CodPlayResourceRegistration | undefined): void {
     if (resources === undefined) return
     for (const [url, metadata] of Object.entries(resources.metadata)) this.resourceMetadata.set(url, metadata)
+    for (const [url, media] of Object.entries(resources.media ?? {})) {
+      const previous = this.resourceMedia.get(url)
+      if (previous === media) continue
+      media.retain()
+      previous?.release()
+      this.resourceMedia.set(url, media)
+    }
   }
 
   /** Routes one addressed public eventime to its selected instance. */

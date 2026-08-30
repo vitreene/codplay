@@ -48,8 +48,12 @@ export type {
 export type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
+  RuntimePreloadMediaLease,
+  RuntimePreloadMediaResources,
   RuntimePreloadMode,
   RuntimePreloadOptions,
+  RuntimePreloadPreparedResource,
   RuntimePreloadResult,
   RuntimePreloadState,
   RuntimePreloadStrategy,

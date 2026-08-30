@@ -1,9 +1,16 @@
 import { isPlainRecord } from '../../../shared'
-import type { RuntimePreloadResourceMetadata } from '../../preload'
+import {
+  clearRuntimePreloadPresentation,
+  type RuntimePreloadMediaHandle,
+  type RuntimePreloadMediaLease,
+  type RuntimePreloadResourceMetadata,
+} from '../../preload'
 import { BaseHTMLComponent } from '../base-html-component'
 import type { HTMLComponentInput, ComponentUpdateInput } from '../component-types'
 import type { MediaTransition } from '../component-surface-types'
 import type { MediaInitial, MediaPartState, MediaState, MediaTag } from './media-types'
+
+const MEDIA_TIME_SYNC_TOLERANCE_MS = 40
 
 /** V2 media component that preserves one materialized native media node per source. */
 export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
@@ -16,6 +23,10 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   private activeSrc: string | null = null
   /** Metadata produced by the external preload boundary. */
   private readonly resourceMetadata: ReadonlyMap<string, RuntimePreloadResourceMetadata>
+  /** Native media handoffs produced by the external preload boundary. */
+  private readonly resourceMedia: ReadonlyMap<string, RuntimePreloadMediaHandle>
+  /** Leases adopted from the preload boundary and released with this component. */
+  private readonly mediaLeases = new Map<string, RuntimePreloadMediaLease>()
   /** Effective playback window supplied by the media-sync module. */
   private playbackWindow: { startMs: number; endMs: number | null } = { startMs: 0, endMs: null }
   /** Native playback rate applied to every persistent source node. */
@@ -26,6 +37,7 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
     super(input)
     this.services.declare(MediaComponent.declaredServices)
     this.resourceMetadata = input.resourceMetadata ?? new Map()
+    this.resourceMedia = input.resourceMedia ?? new Map()
   }
 
   /** Returns the authored media wrapper; native media nodes belong to its private media part. */
@@ -69,12 +81,20 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   private ensureNodeForSource(src: string): unknown {
     const existing = this.mediaBySrc.get(src)
     if (existing !== undefined) return existing
-    const node = createMediaNode(resolveMediaTag(
+    const mediaTag = resolveMediaTag(
       src,
       this.perso.initial.tag,
       this.resourceMetadata.get(src),
-    ))
-    setMediaSource(node, src)
+    )
+    const prepared = this.resourceMedia.get(src)
+    const lease = prepared?.type === mediaTag ? prepared.take() : undefined
+    const node = lease?.node ?? createMediaNode(mediaTag)
+    if (lease !== undefined) {
+      clearRuntimePreloadPresentation(lease.node)
+      this.mediaLeases.set(src, lease)
+    } else {
+      setMediaSource(node, src)
+    }
     if (this.perso.initial.controls === true) setMediaControls(node)
     this.applyMediaPartState(node, this.perso.initial.video)
     setNativePlaybackRate(node, this.playbackRate)
@@ -86,7 +106,10 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
   seekTo(mediaMs: number): void {
     const node = this.activeMediaNode()
     if (!isMediaElementLike(node)) return
-    node.currentTime = this.clampPlaybackMs(mediaMs) / 1000
+    const nextCurrentTimeSeconds = this.clampPlaybackMs(mediaMs) / 1000
+    const currentTimeSeconds = node.currentTime
+    if (Math.abs(currentTimeSeconds - nextCurrentTimeSeconds) * 1000 <= MEDIA_TIME_SYNC_TOLERANCE_MS) return
+    node.currentTime = nextCurrentTimeSeconds
   }
 
   /** Starts playback on the active persistent source. */
@@ -102,6 +125,14 @@ export class MediaComponent extends BaseHTMLComponent<MediaInitial> {
     const node = this.activeMediaNode()
     if (!isMediaElementLike(node)) return
     node.pause?.()
+  }
+
+  /** Releases every native node adopted from the preload boundary. */
+  destroy(): void {
+    for (const lease of this.mediaLeases.values()) lease.release()
+    this.mediaLeases.clear()
+    this.mediaBySrc.clear()
+    this.activeSrc = null
   }
 
   /** Seeks and pauses the active source at one logical media position. */

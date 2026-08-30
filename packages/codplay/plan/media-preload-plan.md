@@ -90,6 +90,30 @@ instance de `RuntimePreload`; `release()` ne retire une entrée que lorsque plus
 aucun appelant ne la détient. `cancel()` ne coupe pas un chargement encore détenu
 par un autre appelant.
 
+### Transfert d'un nœud média prêt
+
+La solution retenue pour l'aperçu vidéo avant `play()` est le transfert du nœud
+préchargé, et non la seule conservation de ses métadonnées :
+
+- les stratégies natives `audio` et `video` conservent leur nœud prêt et
+  renvoient un handle opaque séparé de `metadata` ;
+- `resources.register()` transfère ce handle à l'engine avec le résultat du
+  preload ;
+- `MediaComponent` adopte le handle correspondant à la source, conserve ce
+  même nœud pour sa partie native et ne réassigne ni `src` ni `load()` ;
+- l'adoption retire uniquement les styles de masquage propres au preload avant
+  l'application de la présentation auteur ;
+- un handle n'est adopté qu'une fois, car un nœud DOM ne peut pas appartenir à
+  plusieurs composants. Un composant qui ne peut pas adopter un handle conserve
+  le comportement existant de création de son propre nœud persistant ;
+- le cache, l'engine et le composant détiennent chacun leur référence ; un
+  handle non adopté est donc libéré par l'éviction du cache, tandis qu'un handle
+  adopté reste vivant jusqu'à la destruction finale du player.
+
+Le transfert ne modifie pas `media-sync` : `play`, `pause`, `seek` et les
+transitions continuent d'emprunter la surface du composant et s'appliquent au
+nœud adopté comme à tout nœud média persistant.
+
 ## Synchronisation média
 
 Le composant `media` conserve une node native par `src` statique. Le module de
@@ -110,6 +134,9 @@ synchronisation média est player-scoped :
   reprend immédiatement ;
 - un media à timeline native non-master avance avec sa propre horloge ; il ne
   reçoit pas un `seek` à chaque frame ;
+- une synchronisation de position est idempotente : le composant n'écrit pas
+  `currentTime` lorsque la position native est déjà à moins de 40 ms de la
+  cible ; un repositionnement réel reste appliqué ;
 - `setRate` atteint le player, le module `media-sync` et les nodes natives ;
 - la durée effective est issue des métadonnées du preload ; elle ne dépend pas
   de la disponibilité tardive de `HTMLMediaElement.duration` ;
@@ -147,14 +174,17 @@ jamais appliquée au master.
 
 ## Anomalie de validation ouverte
 
-- [ ] Safari — écran noir de la vidéo pendant la lecture de la démo
-  `preload-media`. Le transport peut progresser et les contrôles natifs peuvent
-  indiquer que la vidéo est en lecture alors que sa surface reste noire. La
-  cause n'est pas déterminée : ce point doit être reproduit et analysé à partir
-  du résultat de `play()`, des événements `playing`/`error`, de `readyState`,
-  de `currentTime`, des dimensions vidéo et du rendu effectivement produit.
-  Ne pas attribuer cette anomalie à `preload` ou à une question de structure DOM
-  sans nouvelle preuve.
+- [ ] Safari — aperçu vidéo avant `play()` dans la démo `preload-media`.
+  La comparaison du layout avec journal actif et avec
+  `v2.html?demo=preload-media&v2-log=off` ne reproduit plus le gel de lecture et
+  ne permet pas de corréler ce défaut au journal. Le point restant est distinct :
+  la scène ne déclare aucun `poster`, tandis que `loadRuntimeVideo()` supprimait
+  le nœud temporaire après `canplaythrough` et ne retournait que des métadonnées.
+  Le nœud visible neuf ne recevait donc pas de frame décodée avant `play()`. Le
+  contrat V2 retenu est désormais le transfert et la réutilisation du nœud média
+  prêt décrit ci-dessus. La vérification Safari doit confirmer que sa première
+  frame reste visible après cette adoption, sans nouvel appel à `src`, `load()`
+  ou `play()` au moment de la matérialisation.
 
 Une seule implémentation relie cette règle au player :
 
@@ -174,6 +204,8 @@ propriétaire.
 
 - API preload autonome utilisable avec un manifeste ou un tableau de manifestes ;
 - cache partagé avec comptage de références et stratégies natives/tiers ;
+- transfert du nœud média prêt jusqu'au composant, avec adoption et destruction
+  couvertes par le chemin de ressources ;
 - façade `run` de diffusion autonome ;
 - socle de synchronisation média V2 couvert par tests de master, fallback
   ticker, absence de seek par frame, pause avant seek et seek ;
@@ -190,6 +222,14 @@ propriétaire.
 - `tests/runtime/runner-html/player-runner.spec.ts` : persistance des nodes
   média par source, choix audio/vidéo et propagation du rate ;
 - `tests/runtime/preload/runtime-preload.spec.ts` : métadonnées de durée
-  transmises au résultat preload ;
+  transmises au résultat preload et libération d'un handoff non adopté ;
+- `tests/runtime/preload/preload-video-handoff.spec.ts` : la stratégie vidéo
+  conserve son nœud après `canplaythrough` et le remet à une lease d'adoption ;
+- `tests/facade/media-preload-handoff.spec.ts` : `resources.register()` transmet
+  le nœud retenu au composant média d'une instance publique ;
+- `tests/runtime/components/preload-media-demo.spec.ts` : le `START` de la
+  scène appelle la lecture sans écriture native redondante de `currentTime` et
+  les updates du composant vidéo ne réapparaissent pas pendant les événements
+  d'image ;
 - la démo V2 `player` n'est pas conservée ; la validation de l'API preload et
   de la synchronisation média reste portée par les tests runtime du plan.

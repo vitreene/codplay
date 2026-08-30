@@ -8,6 +8,7 @@ export {
   loadRuntimeVideo,
   withRuntimePreloadTimeout,
 } from './preload-strategies'
+export { clearRuntimePreloadPresentation, createRuntimePreloadMediaHandle } from './preload-media-resource'
 export type {
   RuntimePreloadApi,
   RuntimePreloadCacheApi,
@@ -16,8 +17,12 @@ export type {
   RuntimePreloadMetadata,
   RuntimePreloadFailure,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
+  RuntimePreloadMediaLease,
+  RuntimePreloadMediaResources,
   RuntimePreloadMode,
   RuntimePreloadOptions,
+  RuntimePreloadPreparedResource,
   RuntimePreloadResource,
   RuntimePreloadResourceMetadata,
   RuntimePreloadResult,

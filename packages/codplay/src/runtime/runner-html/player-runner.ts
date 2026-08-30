@@ -37,7 +37,9 @@ import {
 import type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
   RuntimePreloadMetadata,
+  RuntimePreloadMediaResources,
   RuntimePreloadOptions,
   RuntimePreloadFailure,
   RuntimePreloadSuccess,
@@ -75,6 +77,8 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   resources?: readonly string[]
   /** Metadata already obtained from the external preload boundary. */
   resourceMetadata?: RuntimePreloadMetadata
+  /** Native media handoffs already retained by the external preload boundary. */
+  resourceMedia?: RuntimePreloadMediaResources
   engine?: RuntimeEngine
   ticker?: Ticker
   /** Optional inactivity policy overriding the shared engine default. */
@@ -140,6 +144,7 @@ export class HtmlPlayerRunner {
   private readonly initialInert: boolean
   private materializationEpoch = 0
   private readonly resourceMetadata = new Map<string, RuntimePreloadMetadata[string]>()
+  private readonly resourceMedia = new Map<string, RuntimePreloadMediaHandle>()
   private readonly stopTerminalObservation: () => void
 
   /** Creates one visible author host and one optional motion presentation host. */
@@ -152,6 +157,9 @@ export class HtmlPlayerRunner {
     this.materializerContext = { numericLengthScale: 1 }
     for (const [url, metadata] of Object.entries(options.resourceMetadata ?? {})) {
       this.resourceMetadata.set(url, metadata)
+    }
+    for (const [url, media] of Object.entries(options.resourceMedia ?? {})) {
+      this.resourceMedia.set(url, media)
     }
     options.catalog.lock()
     this.engine = options.engine ?? new RuntimeEngine(options.catalog, {
@@ -171,7 +179,12 @@ export class HtmlPlayerRunner {
       componentMaterializer,
       (timeMs) => this.presentMotion(timeMs),
     )
-    const componentRuntime = createComponentRuntime(options.catalog, materializer, this.resourceMetadata)
+    const componentRuntime = createComponentRuntime(
+      options.catalog,
+      materializer,
+      this.resourceMetadata,
+      this.resourceMedia,
+    )
     this.player = new RuntimePlayer(
       options.id,
       this.engine,
@@ -291,6 +304,7 @@ export class HtmlPlayerRunner {
     if (!preload.ok) return { ok: false, phase: 'preload', preload }
 
     this.setResourceMetadata(preload.data.metadata)
+    this.setResourceMedia(preload.data.media ?? {})
 
     const resourceUrls = [...new Set([...preload.data.loaded, ...preload.data.skipped])]
     this.engine.registerResources(resourceUrls)
@@ -311,6 +325,13 @@ export class HtmlPlayerRunner {
   setResourceMetadata(metadata: RuntimePreloadMetadata): void {
     this.resourceMetadata.clear()
     for (const [url, entry] of Object.entries(metadata)) this.resourceMetadata.set(url, entry)
+    if (this.player.getSolvedScene() !== undefined) this.player.refresh()
+  }
+
+  /** Sets native media handoffs before initialization; existing nodes are never replaced. */
+  setResourceMedia(media: RuntimePreloadMediaResources): void {
+    this.resourceMedia.clear()
+    for (const [url, handle] of Object.entries(media)) this.resourceMedia.set(url, handle)
     if (this.player.getSolvedScene() !== undefined) this.player.refresh()
   }
 
@@ -591,11 +612,13 @@ function createComponentRuntime(
   catalog: RuntimeCapabilityCatalog,
   materializer: RuntimeMaterializer,
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
+  resourceMedia: ReadonlyMap<string, RuntimePreloadMediaHandle>,
 ): RuntimeComponentRuntime {
   return new RuntimeComponentRuntime({
     catalog,
     materializer,
     resourceMetadata,
+    resourceMedia,
   })
 }
 

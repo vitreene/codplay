@@ -3,7 +3,10 @@ import type { Diagnostic } from '../diagnostics'
 import type { MountTargetDeclaration } from '../runtime/player/pipeline'
 import { RuntimePlayer, type PlayerInitResult } from '../runtime/player'
 import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner-html'
-import type { RuntimePreloadMetadata } from '../runtime/preload'
+import type {
+  RuntimePreloadMediaResources,
+  RuntimePreloadMetadata,
+} from '../runtime/preload'
 import type { CodPlayInstanceOptions } from './facade-types'
 
 /** Dependencies used to assemble one public HTML/DOM instance host. */
@@ -11,6 +14,7 @@ export type InstanceHostOptions = Readonly<{
   catalog: import('../runtime/catalog').RuntimeCapabilityCatalog
   engine: RuntimeEngine
   resourceMetadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>
+  resourceMedia: ReadonlyMap<string, RuntimePreloadMediaResources[string]>
   instance: CodPlayInstanceOptions
   onPublicEvent: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
   onTrace: (event: import('../runtime/player/pipeline').RuntimeTrackEvent) => void
@@ -36,6 +40,7 @@ export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
     rootTargets,
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
+    resourceMedia: toResourceMedia(options.resourceMedia),
     engine: options.engine,
     idle: options.instance.idle,
     functions: options.instance.functions,
@@ -88,6 +93,13 @@ function toResourceMetadata(
   metadata: ReadonlyMap<string, RuntimePreloadMetadata[string]>,
 ): RuntimePreloadMetadata {
   return Object.fromEntries(metadata.entries())
+}
+
+/** Converts the internal media handoff map to the runner's indexed shape. */
+function toResourceMedia(
+  media: ReadonlyMap<string, RuntimePreloadMediaResources[string]>,
+): RuntimePreloadMediaResources {
+  return Object.fromEntries(media.entries())
 }
 
 /** Converts public root declarations to the HTML runner's root-target shape. */

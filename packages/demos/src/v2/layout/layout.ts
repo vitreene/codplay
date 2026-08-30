@@ -20,6 +20,7 @@ type V2DemoLayoutOptions = Readonly<{
 }>
 
 const V2_DEMO_LOG_OPEN_STORAGE_KEY = 'codplay-v2-demo-log-open'
+const V2_DEMO_LOG_ENABLED = new URLSearchParams(globalThis.location.search).get('v2-log') !== 'off'
 
 /** Creates a timer scheduler that remains usable when Safari suspends animation frames. */
 function createV2DemoFrameScheduler(): CodPlayFrameScheduler {
@@ -170,6 +171,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   }
 
   function log(message: string, level: V2DemoLogLevel = 'info'): void {
+    if (!V2_DEMO_LOG_ENABLED) return
     const time = new Date().toLocaleTimeString('fr-FR', { hour12: false })
     logLines.push(`[${time}] ${level.toUpperCase()} ${message}`)
     if (logLines.length > 500) logLines.shift()
@@ -311,6 +313,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         codplay = new CodPlay({
           engine: {
             diagnosticOutput: (diagnostic) => {
+              if (!V2_DEMO_LOG_ENABLED) return
               console.log('[CodPlay V2 diagnostic]', diagnostic)
               log(
                 `${diagnostic.code}: ${diagnostic.message}`,
@@ -382,14 +385,16 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         return
       }
 
-      traceCleanup = instance.diagnostic.onTrace((event) => {
-        loggedEventIds.add(event.eventId)
-        log(formatTraceEvent(event))
-      })
-      publicEventCleanup = instance.events.onEvent((event) => {
-        if (loggedEventIds.has(event.eventId)) return
-        log(formatPublicEvent(event))
-      })
+      if (V2_DEMO_LOG_ENABLED) {
+        traceCleanup = instance.diagnostic.onTrace((event) => {
+          loggedEventIds.add(event.eventId)
+          log(formatTraceEvent(event))
+        })
+        publicEventCleanup = instance.events.onEvent((event) => {
+          if (loggedEventIds.has(event.eventId)) return
+          log(formatPublicEvent(event))
+        })
+      }
       installTelco(instance.telco, instance, module.playback)
       const durationLabel = module.durationMs === undefined
         ? 'durée ouverte (horizon découvert)'

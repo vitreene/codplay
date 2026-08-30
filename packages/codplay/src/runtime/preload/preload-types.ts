@@ -25,6 +25,29 @@ export type RuntimePreloadResourceMetadata = Readonly<{
 /** Metadata indexed by the stable resource URL used by compiled scenes. */
 export type RuntimePreloadMetadata = Readonly<Record<string, RuntimePreloadResourceMetadata>>
 
+/** One adopted native media node owned by a component until its final release. */
+export type RuntimePreloadMediaLease = Readonly<{
+  node: HTMLMediaElement
+  release: () => void
+}>
+
+/** Opaque handoff for one native media node retained by the preload cache. */
+export type RuntimePreloadMediaHandle = Readonly<{
+  type: 'audio' | 'video'
+  retain: () => void
+  release: () => void
+  take: () => RuntimePreloadMediaLease | undefined
+}>
+
+/** Native media handoffs indexed by the stable resource URL. */
+export type RuntimePreloadMediaResources = Readonly<Record<string, RuntimePreloadMediaHandle>>
+
+/** Extended result used by a native strategy when it retains a live media node. */
+export type RuntimePreloadPreparedResource = Readonly<{
+  metadata?: RuntimePreloadResourceMetadata
+  media: RuntimePreloadMediaHandle
+}>
+
 /** Warning emitted for an unavailable resource in broadcast mode. */
 export type RuntimePreloadWarning = Readonly<{
   code: 'RUNTIME_PRELOAD_RESOURCE_UNAVAILABLE'
@@ -39,6 +62,7 @@ export type RuntimePreloadSuccess = Readonly<{
     loaded: readonly string[]
     skipped: readonly string[]
     metadata: RuntimePreloadMetadata
+    media?: RuntimePreloadMediaResources
     warnings?: readonly RuntimePreloadWarning[]
   }>
 }>
@@ -67,10 +91,10 @@ export type RuntimePreloadState = Readonly<{
 export type RuntimePreloadStrategy = (
   url: string,
   signal: AbortSignal,
-) => Promise<RuntimePreloadResourceMetadata | void>
+) => Promise<RuntimePreloadLoadResult>
 
 /** Result returned by one native or foreign preload strategy. */
-export type RuntimePreloadLoadResult = RuntimePreloadResourceMetadata | void
+export type RuntimePreloadLoadResult = RuntimePreloadResourceMetadata | RuntimePreloadPreparedResource | void
 
 /** One entry owned by the shared preload cache. */
 export type RuntimePreloadCacheEntry = Readonly<{
@@ -78,6 +102,7 @@ export type RuntimePreloadCacheEntry = Readonly<{
   status: 'loading' | 'ready' | 'error'
   promise: Promise<RuntimePreloadLoadResult | undefined>
   metadata?: RuntimePreloadResourceMetadata
+  media?: RuntimePreloadMediaHandle
   error?: string
 }>
 
@@ -86,7 +111,12 @@ export interface RuntimePreloadCacheApi {
   get(url: string): RuntimePreloadCacheEntry | undefined
   claim(url: string, owner: symbol): RuntimePreloadCacheEntry | undefined
   start(url: string, owner: symbol, promise: Promise<RuntimePreloadLoadResult | undefined>, controller: AbortController): RuntimePreloadCacheEntry
-  markReady(url: string, entry: RuntimePreloadCacheEntry, metadata?: RuntimePreloadResourceMetadata): void
+  markReady(
+    url: string,
+    entry: RuntimePreloadCacheEntry,
+    metadata?: RuntimePreloadResourceMetadata,
+    media?: RuntimePreloadMediaHandle,
+  ): void
   markError(url: string, entry: RuntimePreloadCacheEntry, error: string): void
   release(owner: symbol, urls: readonly string[]): void
 }

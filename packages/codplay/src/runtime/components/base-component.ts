@@ -25,4 +25,9 @@ export abstract class BaseComponent<Initial extends Record<string, unknown>> {
 
   /** Applies one resolved state through the component-specific projection. */
   abstract update(input: ComponentUpdateInput): void
+
+  /** Releases component-owned resources at the final player teardown boundary. */
+  destroy(): void {
+    // Most components only own their materialized root, which the materializer releases.
+  }
 }

@@ -23,8 +23,12 @@ import type {
   RuntimePreloadCacheApi,
   RuntimePreloadMetadata,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
+  RuntimePreloadMediaLease,
+  RuntimePreloadMediaResources,
   RuntimePreloadMode,
   RuntimePreloadOptions,
+  RuntimePreloadPreparedResource,
   RuntimePreloadResult,
   RuntimePreloadState,
   RuntimePreloadStrategy,
@@ -42,6 +46,8 @@ export type CodPlayResourceRegistration = Readonly<{
   loaded: readonly string[]
   skipped: readonly string[]
   metadata: RuntimePreloadMetadata
+  /** Native media nodes retained by preload and transferred to components. */
+  media?: RuntimePreloadMediaResources
 }>
 
 /** Event descriptor emitted when one configured instance remains inactive. */
@@ -336,8 +342,12 @@ export type PreloadFacade = RuntimePreloadApi
 export type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
+  RuntimePreloadMediaLease,
+  RuntimePreloadMediaResources,
   RuntimePreloadMode,
   RuntimePreloadOptions,
+  RuntimePreloadPreparedResource,
   RuntimePreloadResult,
   RuntimePreloadState,
   RuntimePreloadStrategy,

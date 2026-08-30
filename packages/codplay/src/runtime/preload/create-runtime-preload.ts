@@ -13,7 +13,9 @@ import type {
   RuntimePreloadCacheApi,
   RuntimePreloadLoadResult,
   RuntimePreloadManifestInput,
+  RuntimePreloadMediaHandle,
   RuntimePreloadOptions,
+  RuntimePreloadPreparedResource,
   RuntimePreloadResource,
   RuntimePreloadResourceMetadata,
   RuntimePreloadResult,
@@ -116,6 +118,7 @@ export function createRuntimePreload(options: Readonly<{
     const outcomes: Array<'loaded' | 'skipped' | undefined> = new Array(manifest.entries.length)
     const warnings: RuntimePreloadWarning[] = []
     const metadata: Record<string, RuntimePreloadResourceMetadata> = {}
+    const media: Record<string, RuntimePreloadMediaHandle> = {}
 
     if (manifest.entries.length === 0) {
       state.status = 'ready'
@@ -128,14 +131,16 @@ export function createRuntimePreload(options: Readonly<{
       if (cached?.status === 'ready') {
         outcomes[index] = 'skipped'
         if (cached.metadata !== undefined) metadata[entry.url] = cached.metadata
+        if (cached.media !== undefined) media[entry.url] = cached.media
         state.loadedCount += 1
         return
       }
       if (cached?.status === 'loading') {
         pendingUrls.add(entry.url)
         try {
-          const loadedMetadata = await cached.promise
-          if (loadedMetadata !== undefined) metadata[entry.url] = loadedMetadata
+          const loaded = normalizePreloadResult(await cached.promise)
+          if (loaded.metadata !== undefined) metadata[entry.url] = loaded.metadata
+          if (loaded.media !== undefined) media[entry.url] = loaded.media
           outcomes[index] = 'loaded'
           state.loadedCount += 1
           return
@@ -157,9 +162,10 @@ export function createRuntimePreload(options: Readonly<{
       const cacheEntry = cache.start(entry.url, owner, promise, entryController)
       pendingUrls.add(entry.url)
       try {
-        const loadedMetadata = await promise
-        cache.markReady(entry.url, cacheEntry, loadedMetadata ?? undefined)
-        if (loadedMetadata !== undefined) metadata[entry.url] = loadedMetadata
+        const loaded = normalizePreloadResult(await promise)
+        cache.markReady(entry.url, cacheEntry, loaded.metadata, loaded.media)
+        if (loaded.metadata !== undefined) metadata[entry.url] = loaded.metadata
+        if (loaded.media !== undefined) media[entry.url] = loaded.media
         pendingUrls.delete(entry.url)
         outcomes[index] = 'loaded'
         state.loadedCount += 1
@@ -215,7 +221,13 @@ export function createRuntimePreload(options: Readonly<{
       .map((entry) => entry.url)
     return {
       ok: true,
-      data: { loaded, skipped, metadata, warnings: warnings.length > 0 ? warnings : undefined },
+      data: {
+        loaded,
+        skipped,
+        metadata,
+        media: Object.keys(media).length === 0 ? undefined : media,
+        warnings: warnings.length > 0 ? warnings : undefined,
+      },
     }
   }
 
@@ -236,6 +248,27 @@ export function createRuntimePreload(options: Readonly<{
       strategies.set(type, strategy)
     },
   }
+}
+
+/** Converts legacy metadata results and prepared native resources to one shape. */
+function normalizePreloadResult(
+  result: RuntimePreloadLoadResult | undefined,
+): Readonly<{ metadata?: RuntimePreloadResourceMetadata; media?: RuntimePreloadMediaHandle }> {
+  if (result === undefined) return {}
+  if (isPreparedResource(result)) return result
+  return { metadata: result }
+}
+
+/** Identifies the extended result returned by native media strategies. */
+function isPreparedResource(
+  result: RuntimePreloadLoadResult,
+): result is RuntimePreloadPreparedResource {
+  return typeof result === 'object'
+    && result !== null
+    && 'media' in result
+    && typeof result.media === 'object'
+    && result.media !== null
+    && typeof result.media.take === 'function'
 }
 
 /** Identifies browser abort failures without depending on DOMException. */

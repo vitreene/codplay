@@ -2,6 +2,7 @@ import type {
   RuntimePreloadCacheApi,
   RuntimePreloadCacheEntry,
   RuntimePreloadLoadResult,
+  RuntimePreloadMediaHandle,
   RuntimePreloadResourceMetadata,
 } from './preload-types'
 
@@ -46,10 +47,16 @@ export class RuntimePreloadCache implements RuntimePreloadCacheApi {
   }
 
   /** Marks one still-current entry as ready. */
-  markReady(url: string, entry: RuntimePreloadCacheEntry, metadata?: RuntimePreloadResourceMetadata): void {
+  markReady(
+    url: string,
+    entry: RuntimePreloadCacheEntry,
+    metadata?: RuntimePreloadResourceMetadata,
+    media?: RuntimePreloadMediaHandle,
+  ): void {
     const record = this.entries.get(url)
     if (record?.entry !== entry) return
-    record.entry = { url, status: 'ready', promise: Promise.resolve(metadata), metadata }
+    const result = media === undefined ? metadata : { metadata, media }
+    record.entry = { url, status: 'ready', promise: Promise.resolve(result), metadata, media }
   }
 
   /** Marks one still-current entry as failed. */
@@ -67,6 +74,7 @@ export class RuntimePreloadCache implements RuntimePreloadCacheApi {
       record.owners.delete(owner)
       if (record.owners.size > 0) continue
       if (record.entry.status === 'loading') record.controller.abort()
+      record.entry.media?.release()
       this.entries.delete(url)
     }
   }

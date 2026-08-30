@@ -32,6 +32,7 @@
 | 13 | Représentation sequence-editor (pistes, mini-éditeur audio) | Plan | **Écrit (2026-07-11)** — multipiste audio non fait | `packages/editor/plan/modules/2026-07-11-sequence-editor-representation.md` |
 | 14 | Item avatar (typeDef, pistes, macros, tempérament) | Spec + Plan | **Écrit (2026-07-16)** — chantier futur, rien d'implémenté | `packages/editor/plan/2026-07-16-avatar-item-plan.md` |
 | 15 | Récupération sélection/commit de phase (régression chantiers 1-3) | Plan | **Terminé et vérifié (2026-07-17)** — vitest + Safari, zéro régression | `packages/editor/plan/app/2026-07-17-phase-commit-selection-recovery-plan.md` |
+| 16 | Reprise de l'éditeur avec CodPlay V2 | Rapport + plan de migration | **A relire (2026-08-30)** — frontière authoring, builder V2 et interactions Decor à valider avant code | `packages/editor/plan/2026-08-30-editor-codplay-v2-reprise-report.md` |
 
 **Schémas de présentation** (pédagogiques, **non normatifs** → `notes/`, jetables) : architecture logique de l'app (`notes/2026-07-11-ed2-architecture.md`), présentation Codplay (`notes/2026-07-11-codplay-presentation.md`). Ils expliquent, ne prescrivent pas.
 

@@ -1,4 +1,7 @@
-import type { RuntimePreloadResourceMetadata } from '../preload'
+import type {
+  RuntimePreloadMediaHandle,
+  RuntimePreloadResourceMetadata,
+} from '../preload'
 
 /** One component-scoped service implementation supplied by a materializer. */
 export type ComponentService = Readonly<{
@@ -29,6 +32,8 @@ export type ComponentInput<Initial extends Record<string, unknown> = Record<stri
   }>
   /** Metadata prepared by the external preload boundary for source-backed components. */
   resourceMetadata?: ReadonlyMap<string, RuntimePreloadResourceMetadata>
+  /** Native media handoffs prepared by the external preload boundary. */
+  resourceMedia?: ReadonlyMap<string, RuntimePreloadMediaHandle>
 }>
 
 /** Input extension used by the current HTML/SVG component family. */

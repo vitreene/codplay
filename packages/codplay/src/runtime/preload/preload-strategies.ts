@@ -1,4 +1,8 @@
-import type { RuntimePreloadResourceMetadata } from './preload-types'
+import { createRuntimePreloadMediaHandle } from './preload-media-resource'
+import type {
+  RuntimePreloadPreparedResource,
+  RuntimePreloadResourceMetadata,
+} from './preload-types'
 
 /** Resolves one portable AbortError in browser and non-browser test hosts. */
 function createAbortError(): Error {
@@ -55,9 +59,9 @@ export function loadRuntimeImage(url: string, signal: AbortSignal): Promise<Runt
   })
 }
 
-/** Loads one audio resource until the browser reports it can play through. */
-export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<RuntimePreloadResourceMetadata> {
-  return new Promise<RuntimePreloadResourceMetadata>((resolve, reject) => {
+/** Loads one audio resource and retains its ready node for the next media component. */
+export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<RuntimePreloadPreparedResource> {
+  return new Promise<RuntimePreloadPreparedResource>((resolve, reject) => {
     if (signal.aborted) {
       reject(createAbortError())
       return
@@ -67,6 +71,7 @@ export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<Runt
       return
     }
     const audio = new globalThis.Audio()
+    const media = createRuntimePreloadMediaHandle(audio, 'audio')
     audio.preload = 'auto'
     const cleanup = (): void => {
       audio.removeEventListener('canplaythrough', onReady)
@@ -76,15 +81,19 @@ export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<Runt
     const onReady = (): void => {
       cleanup()
       const durationMs = Number.isFinite(audio.duration) ? Math.max(0, audio.duration * 1000) : undefined
-      resolve({ type: 'audio', ...(durationMs === undefined ? {} : { durationMs }) })
+      resolve({
+        metadata: { type: 'audio', ...(durationMs === undefined ? {} : { durationMs }) },
+        media,
+      })
     }
     const onError = (): void => {
       cleanup()
+      media.release()
       reject(new Error(`Failed to load audio: ${url}`))
     }
     const onAbort = (): void => {
       cleanup()
-      audio.src = ''
+      media.release()
       reject(createAbortError())
     }
     audio.addEventListener('canplaythrough', onReady)
@@ -95,9 +104,9 @@ export function loadRuntimeAudio(url: string, signal: AbortSignal): Promise<Runt
   })
 }
 
-/** Loads one video resource through a temporary, non-visible media node. */
-export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<RuntimePreloadResourceMetadata> {
-  return new Promise<RuntimePreloadResourceMetadata>((resolve, reject) => {
+/** Loads one video resource through a hidden node retained for component adoption. */
+export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<RuntimePreloadPreparedResource> {
+  return new Promise<RuntimePreloadPreparedResource>((resolve, reject) => {
     if (signal.aborted) {
       reject(createAbortError())
       return
@@ -115,23 +124,28 @@ export function loadRuntimeVideo(url: string, signal: AbortSignal): Promise<Runt
       return
     }
     parent.appendChild(video)
-    const cleanup = (): void => {
+    const media = createRuntimePreloadMediaHandle(video, 'video')
+    const cleanupListeners = (): void => {
       video.removeEventListener('canplaythrough', onReady)
       video.removeEventListener('error', onError)
       signal.removeEventListener('abort', onAbort)
-      video.remove()
     }
     const onReady = (): void => {
-      cleanup()
+      cleanupListeners()
       const durationMs = Number.isFinite(video.duration) ? Math.max(0, video.duration * 1000) : undefined
-      resolve({ type: 'video', ...(durationMs === undefined ? {} : { durationMs }) })
+      resolve({
+        metadata: { type: 'video', ...(durationMs === undefined ? {} : { durationMs }) },
+        media,
+      })
     }
     const onError = (): void => {
-      cleanup()
+      cleanupListeners()
+      media.release()
       reject(new Error(`Failed to load video: ${url}`))
     }
     const onAbort = (): void => {
-      cleanup()
+      cleanupListeners()
+      media.release()
       reject(createAbortError())
     }
     video.addEventListener('canplaythrough', onReady)

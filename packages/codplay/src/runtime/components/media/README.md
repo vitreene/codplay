@@ -1,6 +1,6 @@
 # Composant media V2
 
-> Statut : Fini
+> Statut : En cours
 > Version CodPlay : V2 foundation
 
 ## Rôle
@@ -41,9 +41,15 @@ composant.
 La synchronisation avec l'horloge CodPlay est déléguée à la capacité
 `media-sync`, via la surface publique du composant.
 
+Lorsqu'un preload natif a conservé un nœud `audio` ou `video`, le composant
+adopte le handoff correspondant à l'URL avant sa première présentation. Il
+réutilise alors ce nœud et sa ressource prête ; il ne réassigne pas `src` et ne
+relance pas `load()`.
+
 ## Contrat et limites
 
 - une source n'est jamais réassignée à un nœud déjà créé ;
+- un nœud conservé par le preload n'est adopté qu'une fois ;
 - un seek ou un detach ne détruit pas les nœuds persistants ;
 - les nœuds sont libérés à la destruction finale du player ;
 - le composant ne déclenche pas de preload implicite ;

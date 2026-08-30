@@ -3,6 +3,7 @@ import type { CompiledResourceManifest } from '../../../src/scene/compiled'
 import {
   createRuntimePreload,
   createRuntimePreloadCache,
+  createRuntimePreloadMediaHandle,
   mergeRuntimePreloadManifests,
 } from '../../../src/runtime/preload'
 
@@ -54,6 +55,31 @@ describe('RuntimePreload', () => {
         },
       },
     })
+  })
+
+  it('transfers one retained media node and releases it only when it was not adopted', async () => {
+    const node = {
+      parentNode: null,
+      pause: vi.fn(),
+      removeAttribute: vi.fn(),
+    } as unknown as HTMLMediaElement
+    const media = createRuntimePreloadMediaHandle(node, 'video')
+    const preload = createRuntimePreload({
+      strategies: {
+        fixture: async () => ({ metadata: { type: 'video' }, media }),
+      },
+    })
+
+    const result = await preload.load({ manifest: manifest('/retained-video') })
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        media: { '/retained-video': media },
+      },
+    })
+    preload.release(['/retained-video'])
+    expect(node.pause).toHaveBeenCalledTimes(1)
   })
 
   it('shares one in-flight strategy and reports the second consumer as loaded', async () => {
