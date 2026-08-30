@@ -942,26 +942,30 @@ La façade V2 ne propose qu'une materialisation HTML/DOM :
 - aucun second DOM ou catalogue n'est créé par la façade ;
 - l'engine et la façade générique ne créent jamais de DOM.
 
-### Accès authoring de l'éditeur
+### Snapshot d'édition
 
-L'accès de l'éditeur est un accès d'authoring externe, construit dans le
-contexte de `packages/authoring` lors de la reprise de l'éditeur. Il ne passe
-ni par `telco`, ni par `events`, ni par `diagnostic`, et ne donne pas accès aux
-classes `RuntimePlayer`, `RuntimeMaterializer` ou au catalogue.
+**Décision validée le 2026-08-30 — implémentation reportée au sous-plan de reprise ed2.**
 
-La direction de dépendance reste celle de V1 : l'adapter authoring dépend de
-la façade d'instance ; le cœur V2 ne dépend pas de l'éditeur ni d'un type
-`AuthorApi` propre à l'authoring. La référence comportementale est
+L'instance V2 porte directement une capacité `snapshot`, au même niveau que
+`telco`. Elle ne passe ni par `telco`, ni par `events`, ni par `diagnostic`, et
+ne donne pas accès aux classes `RuntimePlayer`, `RuntimeMaterializer` ou au
+catalogue. Elle est créée dans CodPlay et exposée par `InstanceFacade` ; aucun
+package `authoring` ne la crée ni ne l'enveloppe. Elle ne connaît ni
+`EditorScene`, ni `Decor`, ni un type authoring externe : l'éditeur lui fournit
+seulement des patches logiques.
+
+La référence comportementale reste
 [`v1-author-api-spec.md`](../../../docs/formalisation/v1-author-api-spec.md),
-mais la cible V2 est définie par les règles ci-dessous.
+mais sa surface node n'est pas reprise dans ce premier contrat V2. La cible V2
+est définie par les règles ci-dessous.
 
 #### Surface de lecture
 
 La lecture principale est logique et indépendante du substrat :
 
 ```text
-authorApi.getPersoStates()
-  -> ReadonlyMap<string, Record<string, unknown>>
+instance.snapshot.get()
+  -> { timeMs, states: [{ target: { storyId, persoId }, state }] } | null
 ```
 
 Cette lecture fournit l'état résolu du temps logique actuellement présenté par
@@ -971,30 +975,28 @@ frame de lecture. Elle ne lit ni le DOM, ni `getComputedStyle`, ni une matrice
 FLIP ou un overlay. Un perso peut être absent du DOM et rester lisible par
 cette voie.
 
-L'adapter authoring peut également reprendre les lectures de cycle déjà
-définies par `AuthorApi` (`getPlayerState`, `subscribeToPlayerState`) si
-l'éditeur en a besoin. Elles restent des observations de l'instance et ne
-commandent pas sa lecture.
+L'observation du cycle de lecture reste portée par `instance.telco`. La
+capacité `snapshot` ne crée pas un second protocole de transport.
 
 #### Écriture temporaire à un temps donné
 
-L'API d'authoring doit accepter une écriture temporaire décrite par :
+`instance.snapshot.set()` doit accepter une preview temporaire décrite par :
 
 ```text
 {
-  persoId,
+  target: { storyId, persoId },
   timeMs: t,
   state: Partial<Record<string, unknown>>
 }
 ```
 
-Cette écriture est une contribution d'authoring appliquée avant la prochaine
+Cette écriture est un patch de preview appliqué avant la prochaine
 matérialisation de l'état présenté. `timeMs` est le temps logique local de
 l'instance ; ce n'est ni un `startAt` d'eventime, ni un event daté.
 
 Ses invariants sont fixes :
 
-- l'état est partiel et adressé par `persoId` ;
+- l'état est partiel et adressé par `{ storyId, persoId }` ;
 - il reste dans les unités et la forme logique du perso, jamais dans la forme
   DOM d'un materializer particulier ;
 - pour chaque propriété fournie, il remplace la valeur résolue correspondante
@@ -1002,25 +1004,49 @@ Ses invariants sont fixes :
   résolu ;
 - il ne passe ni par `telco`, ni par `events`, ni par le journal, ni par
   `persist-only` ;
-- il ne modifie pas `CompiledScene` et n'est pas rejoué par `seek` comme un
-  event ; pour présenter un autre `timeMs`, l'éditeur demande ce temps au
-  moyen du `seek` puis fournit l'état temporaire correspondant ;
+- il ne modifie ni `CompiledScene` ni le journal ; le comportement de la
+  preview lorsque l'instance change de temps reste une décision du circuit
+  d'interaction ed2, pas une annulation automatique imposée par cette capacité ;
 - sa conversion en décor, keyframe ou autre donnée persistante relève
   exclusivement de l'éditeur et de son canal de commandes.
 
-Le nom public de l'opération d'écriture et son mécanisme de remise à
-l'instance sont à arrêter dans le plan de reprise de l'éditeur. Le contrat
-ci-dessus fixe déjà la donnée, le temps, la frontière et la persistance ; il
-ne justifie pas la création d'un second circuit runtime.
+`set()` remplace atomiquement l'ensemble de patches de preview courant ;
+`clear()` l'efface de façon idempotente. L'abandon explicite appelle `clear()`.
+Le devenir d'une preview au seek, au changement de sélection, au rebuild ou au
+remplacement d'instance n'est pas fixé par ce contrat : l'éditeur devra le
+qualifier à partir des usages réels avant de le stabiliser. Le contrat complet
+des formes et des diagnostics est défini dans le plan de reprise de l'éditeur.
+Cette capacité ne justifie pas la création d'un second circuit runtime.
+
+#### Longueurs `cqw` ed2
+
+**Décision validée le 2026-08-30 — implémentation reportée au sous-plan V2.**
+
+Les champs structurés de longueur ed2 (`OffsetData.x/y/width/height` et
+`OffsetData.translate.x/y`) deviennent dans `SceneDoc` une valeur explicite :
+
+```ts
+{ kind: 'length', unit: 'cqw', value: number }
+```
+
+`Decor.style`, CSS libre et propriétés custom restent des chaînes CSS opaques.
+CodPlay ne déduit jamais une longueur depuis la grammaire CSS et ne maintient
+aucune whitelist de propriétés. Cette valeur est logique : deux longueurs
+`cqw` s'interpolent dans `resolve`, puis le materializer les projette en `px`
+avec la largeur de la racine de scène (`100cqw`), y compris pour `y` et
+`height`. Cette projection ne requalifie pas le CSS.
+
+Une interpolation entre une longueur `cqw` et une valeur CSS incompatible est
+rejetée avec diagnostic. L'implémentation doit préserver cette valeur dans le
+snapshot, la contribution temporaire, Play, Seek et resize.
 
 #### Accès éventuel au nœud matérialisé
 
 La préférence actuelle est de ne pas rendre le nœud nécessaire à l'édition :
 l'éditeur doit pouvoir écrire l'état logique temporaire avant materialisation.
 Cette préférence ne constitue pas une exclusion définitive. Si une fonction
-d'éditeur exige le nœud HTML courant, l'adapter authoring pourra reprendre,
-dans son propre contexte, les opérations V1 `subscribeToNode`, `getNodePose`,
-`setNodePose` et `getNodeSnapshot`.
+d'éditeur exige le nœud HTML courant, une capacité distincte sera spécifiée ;
+elle ne rejoint pas la surface `snapshot`.
 
 Dans ce cas :
 
@@ -1028,8 +1054,6 @@ Dans ce cas :
   donne pas accès aux contextes internes éventuellement possédés par un
   composant, comme une scène Three.js ;
 - la référence de nœud est remplaçable et ne constitue jamais l'état logique ;
-- `setNodePose` passe par l'écrivain de pose du runtime, jamais par une écriture
-  directe `node.style.*` de l'éditeur ;
 - la pertinence et la forme finale de cette capacité seront vérifiées lors de
   la reprise de l'éditeur, sans invalider la surface d'état logique ci-dessus.
 
@@ -1229,24 +1253,17 @@ dans le circuit de l'instance. Le journal interne ne devient jamais observable
 par défaut. Les erreurs d'opération sont publiées par le diagnostic, jamais
 retournées comme `{ ok: false }`.
 
-#### Accès authoring
+#### Snapshot d'édition
 
-L'accès authoring est fourni à l'éditeur par l'adapter externe décrit en §8 ;
-il n'est pas une méthode directe supplémentaire de `InstanceFacade`. Sa surface
-doit couvrir :
+`InstanceFacade` expose directement `snapshot`, décrit en §8, avec :
 
 ```text
-getPersoStates()
-getPlayerState()
-subscribeToPlayerState(listener)
-write transient authored state at { persoId, timeMs, state }
+snapshot.get()
+snapshot.set([{ target: { storyId, persoId }, timeMs, state }])
+snapshot.clear()
 ```
 
-La dernière opération est une capacité sémantique à formaliser dans le plan de
-reprise de l'éditeur ; son nom de méthode et son mode de remise ne sont pas
-encore arrêtés. Les opérations V1 liées au nœud restent optionnelles et
-materializer-spécifiques, comme indiqué en §8. Elles ne sont pas ajoutées à la
-façade générique par anticipation.
+Cette capacité n'ouvre aucun handle runtime.
 
 #### Preload et diffusion
 
@@ -1414,10 +1431,10 @@ cachées de l'instance.
   vérification séparée des tests de façade ; lecture lancée, temps avancé et
   aucune erreur console constatée dans Safari.
 
-L'accès authoring (`getPersoStates`, écriture d'état temporaire et opérations
-éventuelles sur les nœuds) est reporté au chantier de reprise de l'éditeur. Il
-ne fait pas partie de l'implémentation de la façade V2 et ne bloque pas sa
-clôture.
+L'implémentation de `instance.snapshot` (lecture, preview temporaire et accès
+éventuel aux nœuds) est reportée au chantier de reprise de l'éditeur. Elle ne
+fait pas partie de l'implémentation actuelle de la façade V2 et ne bloque pas
+sa clôture.
 
 ## État de travail
 

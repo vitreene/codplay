@@ -1,164 +1,285 @@
-# ed2 — Reprise CodPlay V2 : rapport et plan de migration
+# Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
 
-**Statut : A relire — aucune étape de code n'est autorisée avant validation.**  
-**Cible : ed2 avec CodPlay V2 foundation.**  
+**Statut : A relire — aucune étape de code autorisée avant validation.**
+**Cible : ed2 avec CodPlay V2 foundation.**
 **Date : 2026-08-30.**
 
-## Conclusion
+## Objet et frontière
 
-Le raccordement de l'éditeur à V2 n'est pas un remplacement local de `codplay-v1` par `codplay`. Le bridge actuel dépend du cycle V1 `new CodPlay() -> studio.load() -> studio.player`, du `SceneDef` V1 produit par le builder et d'un `AuthorApi` construit sur le player V1. V2 impose le circuit explicite suivant :
+Cette reprise remplace la verticale V1 de l'éditeur par une verticale V2 complète : préparation de `SceneDoc`, compilation, preload, instance, accès authoring et preview `Decor`. Elle n'emporte aucun patch legacy ni couche de compatibilité V1/V2 : V1 ne reste qu'une référence de comportement et de preuves. La verticale V2 nativement construite ne crée ni player parallèle, ni reconstruction de décor depuis le DOM.
 
-```text
-EditorScene -> SceneDoc V2 -> CompiledScene -> preload
-  -> CodPlay.instances.create -> instance.telco
-  -> état logique résolu -> runner HTML/DOM
-```
+Elle se raccorde aux acteurs et machines xState déjà propriétaires de l'état et des commandes de l'éditeur. Le bridge V2 ne duplique ni le contrôleur, ni la machine Decor, ni la machine de séquence, et ne les contourne pas par un état authoring concurrent.
 
-V2 permet de lever la limite structurante de V1 : l'éditeur peut lire et modifier une contribution logique au temps `t`, avant matérialisation, au lieu de déduire ou d'écrire l'état depuis le DOM. Ce canal authoring est toutefois explicitement reporté par le plan de façade V2. Il doit être spécifié et construit comme adaptateur externe avant que le bridge puisse migrer.
+Les zones restent hors de cette première intégration. Leur modèle existe dans `packages/authoring/capsule-automation`, leur preview reste autonome dans l'éditeur, et leur raccordement est une tranche postérieure. Le contexte et les choix expliqués sont dans la [note de contexte](./notes/2026-08-30-editor-codplay-v2-context.md).
 
-La migration doit porter une verticale complète (builder, instance, authoring et interactions), puis remplacer le pont V1. Il ne faut ni adapter V1 vers V2 à l'exécution, ni maintenir deux players, deux catalogues ou deux circuits de décor dans l'application.
+## Décisions déjà retenues
 
-## Sources d'autorité lues
+- Le builder ed2 prépare le `SceneDoc` V2 ; CodPlay ne connaît pas `EditorScene`.
+- `snapshot` est une capacité directe de l'instance V2, au même niveau que `telco`. Elle est créée dans CodPlay et exposée par sa façade ; aucun package `authoring` ne la crée ni ne l'enveloppe. Elle ne connaît ni `EditorScene`, ni `Decor`, ni les classes runtime internes.
+- État résolu et contribution temporaire sont logiques. Un node HTML peut servir à la géométrie, au hit-test ou aux pointeurs, jamais à lire ou écrire `Decor`.
+- Entre deux `Decor` d'un même item, le builder calcule l'écart et l'interpole par défaut. Classes et propriétés intrinsèquement discrètes, telles que `object-fit`, sont exclues de ce calcul.
+- La convention de longueur ed2 est `cqw`, déjà utilisée par V1 pour `x`, `y`, `width` et `height`. Seules les données structurées explicitement longues produisent une longueur `cqw` dans la `SceneDoc` V2 ; `Decor.style`, CSS libre et propriétés custom restent opaques. Aucune whitelist ni inférence depuis la grammaire CSS n'est introduite.
+- V2 reçoit cette longueur explicite ; le materializer ne qualifie pas le CSS. Il ne fait que projeter une longueur déjà connue avec la largeur de référence de la scène.
+- Cascade, copy-on-write et l'unique écriture persistante `Decor` demeurent des responsabilités ed2.
 
-- `AGENTS.md` ;
-- `packages/codplay/plan/codplay-v2-plan.md` ;
-- `packages/codplay/plan/facade-engine-instance-plan.md`, particulièrement §8 ;
-- `packages/codplay/plan/component-render-representation-plan.md` et `capture-authoring-plan.md` ;
-- `packages/codplay/plan/notes/2026-08-26-decouverte-etat-codplay-v2.md` ;
-- `packages/editor/plan/2026-07-18-editor-data-flow-inventory.md` ;
-- `packages/editor/plan/2026-07-25-decor-unified-api-study.md` et `2026-07-25-decor-unified-channel-plan.md` ;
-- `packages/authoring/selection-frame/plan/2026-07-18-pose-edit-architecture-study.md`.
+## Écarts V2 à qualifier avant code
 
-Les contrats V1, dont `docs/formalisation/v1-author-api-spec.md`, restent des oracles de comportement à préserver, jamais une API à réimporter dans V2.
-
-## État constaté
-
-`app/bridges/scene-player-bridge.ts` crée `CodPlay` depuis `codplay-v1/creator`, appelle `studio.load()`, récupère `studio.telco`, puis construit `AuthorApi` depuis `studio.player`. Après chaque modification de document, le player V1 est reconstruit et le seek courant est rejoué. Les autres ponts reçoivent ensuite `AuthorApi`, telco et bridge offset via `PLAYER_READY`.
-
-`packages/editor/src/builder/build-scene.ts` produit un `SceneDef` V1, des eventimes V1 et une feuille CSS injectée avec `extraResources`. Il ne produit ni `SceneDoc` V2 ni `CompiledScene` V2. Le builder et le bridge doivent donc être portés ensemble, par tranches.
-
-| Besoin | Usage V1 actuel | État V2 |
+| Écart constaté | État actuel | Décision à produire |
 | --- | --- | --- |
-| Lecture à `t` | `getPersoStates()` pour le décor temporaire | Contrat cible prévu, non exposé |
-| Pilotage | telco du studio | `instance.telco` disponible |
-| Suivi du noeud | `subscribeToNode()` pour le cadre | Capacité HTML optionnelle, à spécifier |
-| Lecture/écriture pose | `getNodePose()` / `setNodePose()` | À sortir du flux principal |
-| Lecture CSS | ancien `getNodeSnapshot()` | Ne pas réintroduire |
+| Lecture snapshot | Le contrat `instance.snapshot.get()` est validé, mais absent de l'implémentation V2. | Qualifier l'implémentation : correctif ou feature d'instance. |
+| Preview temporaire | Le contrat `instance.snapshot.set()/clear()` est validé, mais absent de l'implémentation V2. | Qualifier l'implémentation : correctif ou feature d'instance. |
+| Longueur logique | Le contrat `cqw` est validé, mais la forme de longueur explicite et son interpolation générique n'existent pas dans V2. | Qualifier l'implémentation : correctif ou feature. |
+| Géométrie du Selection Frame | La façade n'expose pas encore la géométrie ou le node matérialisé. | Reprendre nativement en V2 le comportement déjà défini du cadre (sélection, hit-test, pointeurs et gestes) ; ne décider que de sa source V2 — géométrie exposée ou node observable — sans lecture ni écriture de `Decor` par le DOM. |
 
-Le décor temporaire lit déjà `getPersoStates()`, dans l'unité auteur, au lieu du node. En revanche, `LibreAdapter` écrit encore une pose V1 au fil du geste, puis l'offset est reconstruit pour rejoindre le canal `Decor`.
+Chaque ligne devient une tranche V2 séparée : cause démontrée, classification bug/feature, contrat, fichiers V2, tests d'intégration et autorisation explicite avant code. Aucune ne peut être masquée par un bridge temporaire.
 
-Le modèle `Decor` actuel reste à préserver : données keyframe-varying, cascade dynamique, copy-on-write et interpolation par le builder. Les données stables de l'item (contenu, définition des zones, preset) restent hors de cette cascade, selon la décision du 2026-07-25.
+## Tranche 0 — fermer les deux contrats d'entrée
 
-Quatre producteurs d'aspect doivent converger : palette/style/CSS libre, offset du Selection Frame, multi-sélection et édition de zones. Les deux premiers ne convergent aujourd'hui vers `controller.applyPatch()` qu'après des circuits distincts. La multi-sélection multiplie la même rupture. `zone-editor` est entièrement déconnecté de `Decor` et sa relation au simple `Decor.zoneId` n'est pas décidée : le portage V2 ne doit pas inventer cette relation.
+### 0.1 Contrat snapshot V2 — validé le 2026-08-30
 
-V2 fournit déjà une projection logique puis une matérialisation HTML/DOM unique, persistante pendant play, seek, detach et reparentage ; la même boucle pour play, seek et resize ; les composants `tag`, `img`, `media`, `list` et les services `style`, `className`, `attr`, `content` ; le preload CSS scoped ; et une telco par instance.
+Le contrat validé de la capacité `snapshot`, attachée à une instance V2, précise :
 
-V2 ne fournit pas aujourd'hui `load()` ni player public réutilisable, un accès générique de l'éditeur au DOM, `getPersoStates()` ou l'écriture authoring transitoire sur une instance, ni un équivalent V2 du builder ed2. Le runtime a en interne un chemin de mise à jour live des composants, mais ce n'est pas une API que l'éditeur peut appeler.
+- lecture synchrone de l'état résolu, par `persoId`, au temps effectivement présenté ;
+- observation du cycle de lecture nécessaire aux outils, sans piloter ce cycle ;
+- remise, remplacement et effacement d'un patch partiel `{ target: { storyId, persoId }, timeMs, state }` ;
+- comportement de la preview et du brouillon aux seek, rebuild, destruction et remplacement d'instance, à établir après observation des manipulations réelles ;
+- diagnostics pour cible absente, instance détruite, temps non présenté et patch rejeté ;
+- éventuelle observation de node, avec référence remplaçable et sans API de pose.
 
-## "vDom" : clarification
+La surface et ses noms d'opérations sont validés. Le contrat ne réintroduit pas `getNodePose`, `setNodePose` ou `getComputedStyle` comme mécanisme de décor.
 
-Il n'existe pas de contrat public nommé `vDom` dans le dépôt. V2 n'expose ni un arbre virtuel mutable par l'éditeur, ni le DOM comme modèle de données. Le terme opérant est la **projection logique retenue/réconciliée** :
+### 0.1.1 Surface minimale proposée
 
-```text
-materialize -> resolve -> solve -> component.update -> runner HTML
-```
-
-La migration doit s'appuyer sur cette projection : document et état résolu sont les sources de vérité ; un geste produit une contribution logique temporaire ; le runner la projette sur le DOM. Le DOM reste utile pour la géométrie du cadre, le hit-test et les pointeurs, jamais pour reconstituer `Decor` ou une pose persistable. Cela est indispensable pour rester correct pendant une présentation FLIP, un seek ou un resize.
-
-## Position proposée sur `setNodePose()`
-
-`setNodePose()` ne doit plus être le mécanisme principal d'édition de l'offset. La cible est la contribution authoring déjà fixée par le plan de façade :
+V2 expose un port public étroit sur l'instance. Il ne connaît aucun package authoring ni type `EditorScene` :
 
 ```ts
-{ persoId, timeMs, state: Partial<Record<string, unknown>> }
+type SnapshotTarget = Readonly<{
+  storyId: string
+  persoId: string
+}>
+
+type SnapshotState = Readonly<{
+  target: SnapshotTarget
+  state: Readonly<Record<string, unknown>>
+}>
+
+type CodPlaySnapshot = Readonly<{
+  /** Temps logique effectivement présenté par l'instance. */
+  timeMs: number
+  /** État résolu avant toute contribution de preview. */
+  states: readonly SnapshotState[]
+}>
+
+type SnapshotPatch = Readonly<{
+  target: SnapshotTarget
+  /** Doit être égal au `snapshot.timeMs` courant. */
+  timeMs: number
+  /** Patch logique partiel ; l'incrément ed2 ne produit que `style`. */
+  state: Readonly<Record<string, unknown>>
+}>
+
+type SnapshotSetResult =
+  | Readonly<{ ok: true }>
+  | Readonly<{
+      ok: false
+      code: 'INSTANCE_DESTROYED' | 'TIME_NOT_PRESENTED' | 'TARGET_NOT_PRESENT' | 'INVALID_PATCH'
+    }>
+
+type CodPlaySnapshotApi = Readonly<{
+  /** Lit une frame logique présentée, jamais le DOM ni la preview courante. */
+  get(): CodPlaySnapshot | null
+  /** Remplace atomiquement l'ensemble de la preview courante. */
+  set(patches: readonly SnapshotPatch[]): SnapshotSetResult
+  /** Efface la preview courante ; opération idempotente. */
+  clear(): void
+}>
 ```
 
-Elle remplace, avant matérialisation, les seules propriétés fournies de l'état résolu à `timeMs`. Elle ne modifie ni `CompiledScene`, ni journal, ni document éditeur. À la fin du geste, l'éditeur convertit cette même contribution en `DecorPatch` et la persiste par son unique transaction `setDecor`/copy-on-write.
+Cette capacité est portée directement par l'instance :
 
-Le Selection Frame reste un consommateur de géométrie DOM, non l'écrivain de l'état de l'item. `subscribeToNode()` peut donc subsister comme capacité HTML optionnelle pour ancrer le cadre. `getNodePose()`/`setNodePose()` ne seraient conservés que si une interaction impossible à exprimer logiquement était démontrée ; les gestes connus (move, resize, rotate, scale) ne le justifient pas.
-
-## Architecture cible
-
-```text
-EditorScene
-  -> builder ed2 V2 -> SceneDoc V2 -> CodPlay.build -> CompiledScene
-  -> preload CSS/médias -> resources.register -> instances.create
-  -> instance.telco
-
-adaptateur authoring externe
-  -> état résolu à t / contribution transitoire à t
-  -> solve + component.update + runner HTML
-  -> noeud HTML (géométrie seulement) -> Selection Frame
-  -> deltas -> contribution transitoire -> DecorPatch
-  -> transaction éditeur unique -> EditorScene
+```ts
+type CodPlayInstance = Readonly<{
+  // ... telco, events, diagnostic
+  snapshot: CodPlaySnapshotApi
+}>
 ```
 
-L'adaptateur authoring appartient à `packages/authoring`, dépend de la frontière d'instance V2 et ne donne pas accès au `RuntimePlayer`, catalogue ou materializer. Son point d'attachement précis est ouvert : la façade actuelle cache justement ces objets, mais ne livre pas encore cette capacité.
+Le bridge ed2 consomme `instance.snapshot` directement. V2 reste propriétaire de la frame logique et de la preview ; aucun adaptateur externe ne maintient de copie de scène ou de cache de pose.
 
-## Plan de reprise proposé
+### 0.1.2 Sémantique de contribution
 
-### 0. Valider le contrat authoring V2
+- `set()` remplace l'ensemble précédent, pas seulement les persos cités. Cette opération rend un patch multi-sélection atomique et évite des previews résiduelles.
+- Tous les patches d'un appel visent le même temps présenté. Chaque `target` contient `storyId` et `persoId`, ce qui permet de prévisualiser plusieurs stories dans une même instance. ed2 fournit simplement la story unique qu'il prépare aujourd'hui. Sinon l'appel échoue avec `TIME_NOT_PRESENTED` et ne modifie pas la preview.
+- `get()` retourne l'état résolu sans preview. L'éditeur compose chaque nouveau patch à partir de cette base et de sa propre session ; il ne relit jamais une valeur de preview pour l'accumuler.
+- Au premier incrément ed2, seule la clé `style` est admise dans `state`. Les propriétés de `style` fusionnent clé par clé avec le style résolu, comme une action V2 ; une autre clé est rejetée avec `INVALID_PATCH`. Toute extension de ce vocabulaire exige une décision V2 distincte.
+- Une contribution est appliquée après `resolve` et avant `solve` et `component.update`. Elle n'est jamais enregistrée dans le journal ni dans `CompiledScene`.
+- `clear()` est l'opération explicite et idempotente qui abandonne la preview. La conservation, le masquage, la reprojection ou l'effacement d'une preview lors d'un seek, d'un changement de sélection, d'un rebuild ou d'un remplacement d'instance ne sont pas décidés à ce stade : ils devront être qualifiés à partir des manipulations réelles de l'interface.
+- Les nodes HTML, `subscribeToNode()`, lecture de pose et écriture de pose ne font pas partie de cette surface. Le comportement du Selection Frame est celui déjà fixé en V1 ; seule sa source technique V2 (géométrie exposée ou node observable) reste à choisir, sans lecture ni écriture de décor par le DOM.
 
-Écrire puis valider le contrat de l'adaptateur : obtention depuis une instance, lecture de l'état résolu, observation de lecture, écriture/remplacement/effacement d'une contribution transitoire, annulation au seek/rebuild/destroy, et diagnostics. Aucune modification de `packages/codplay` avant l'acceptation explicite de cette tranche.
+### 0.1.3 Preuves propres à l'API
 
-**Preuve :** contrat relu et décisions dépendantes hors statut `A relire`.
+1. lecture par `get()` d'un état interpolé à un temps seeké ;
+2. contribution partielle `style` sans perte des propriétés absentes ;
+3. remplacement atomique d'une preview mono puis multi-perso ;
+4. rejet sans effet d'un temps différent, cible absente et clé non admise ;
+5. effacement explicite par `clear()` ;
+6. observation documentée des gestes interrompus par seek, changement de sélection, rebuild, remplacement et destroy, sans postuler une annulation automatique ;
+7. identité Play/Seek de l'état logique et de sa projection HTML, avant et pendant une preview.
 
-### 1. Porter une verticale de builder vers V2
+**Fichiers de plan concernés :** `packages/codplay/plan/facade-engine-instance-plan.md` §8, façade/types d'instance V2, puis ce plan ed2.
 
-Créer une frontière `EditorScene -> SceneDoc V2`, d'abord avec une capsule racine, un texte et deux keyframes de décor. Préserver ids, cascade, styles, offset dans l'unité auteur, interpolation, pré-roll et les mappings supportés : `text/bloc -> tag`, `image -> img`, `media/video -> media`, capsules -> `list`.
+**Acceptation :** contrat accepté. Reste à produire le sous-plan V2 qui qualifie et autorise son implémentation.
 
-Le CSS de capsule-automation passe par le preload V2 scoped sur la racine de scène ; pas de `<style>` ou `extraResources` V1 dans le bridge.
+### 0.2 Contrat de longueur `cqw` — validé le 2026-08-30
 
-**Preuve :** build, preload, création d'instance, seek avant/dans/après interpolation, play, resize et teardown dans un navigateur réel. Les cas V1 servent d'oracles, mais les deux runtimes ne tournent pas dans la même scène.
+Le contrat fixe la valeur V2 et son origine :
 
-### 2. Construire l'adaptateur authoring minimal
+- `OffsetData.x/y/width/height` et `OffsetData.translate.x/y` sont toujours des longueurs `cqw` ;
+- le builder porte ces valeurs dans `SceneDoc` sous la forme `{ kind: 'length', unit: 'cqw', value }` ;
+- `Decor.style`, le CSS libre, les propriétés custom et les chaînes composées (`calc()`, `var()`, gradients, filtres) restent des valeurs CSS opaques ;
+- `100cqw` correspond à la largeur de la racine de scène, y compris pour `y` et `height`, conformément à V1 ;
+- V2 interpole deux longueurs `cqw` puis les projette en `px` avec cette largeur de référence, sans qualification CSS dans le materializer ;
+- une interpolation entre une longueur `cqw` et une valeur CSS incompatible produit un diagnostic explicite.
 
-Implémenter l'adaptateur accepté à l'étape 0. La surface node reste différée ; si le cadre en a besoin, n'ajouter que `subscribeToNode()` comme capacité HTML étroite, sans lecture ou écriture d'état via le node.
+Les valeurs unitless CSS, telles que `line-height: '1.2'`, ne sont pas converties : elles restent dans `Decor.style`. Tout futur module ed2 qui produit une longueur doit la déclarer explicitement, plutôt que demander au builder de deviner son intention.
 
-**Preuve :** tests au temps exact : contribution partielle, remplacement, effacement, seek, destruction et absence de lecture DOM après resize.
+**Fichiers de plan concernés :** spécification V2 de style/ACE, plan de façade, nouveau plan ed2 de builder V2.
 
-### 3. Unifier le canal `Decor`
+**Acceptation :** contrat accepté. Le sous-plan V2 doit prouver : `offset.width: 12.5` devient une longueur logique, `line-height: '1.2'` reste opaque, `object-fit: 'cover'` reste discret, et CSS libre/`calc()` restent opaques, en Play, Seek et resize.
 
-Faire de la contribution transitoire la seule preview. Palette et Selection Frame produisent des patches de même nature ; le contrôleur garde l'unique écriture persistante, la cascade et le copy-on-write. Définir une résolution de cascade unique consommée par lecture, insertion de keyframe et builder.
+## Tranche 1 — planifier et autoriser les capacités V2 éventuelles
 
-**Preuve :** palette, offset, couleur, CSS libre, insertion à mi-interpolation, seek/replay, annulation, copy-on-write et réordonnancement.
+Cette tranche ne modifie pas l'éditeur. Elle ouvre seulement les sous-plans V2 révélés par la tranche 0.
 
-### 4. Porter Selection Frame et multi-sélection
+Pour chaque capacité acceptée, le sous-plan doit nommer : contrat public, frontière interne touchée, invariants de scène compilée et journal, sémantique de cycle de vie de la preview, diagnostics, tests unitaires et test navigateur Play/Seek/resize/rebuild. La contribution authoring ne modifie jamais `CompiledScene`, le journal, les événements ni le document ed2.
 
-`LibreAdapter` transforme les deltas de pointeur et la géométrie locale en patchs logiques remis au canal authoring V2. La multi-sélection diffuse le même patch sur les items ciblés avec une persistance atomique.
+**Acceptation :** sous-plan V2 accepté et autorisé séparément. En l'absence de cette acceptation, la reprise reste limitée aux travaux ed2 qui ne dépendent pas de la capacité.
 
-**Preuve :** move/resize/rotate/scale sur un et plusieurs items, pendant une interpolation, avec pause/reprise, seek, resize, changement de sélection, interruption, rebuild et Safari.
+## Tranche 2 — construire le builder V2, sans toucher au bridge V1
 
-### 5. Spécifier les zones avant intégration
+Créer une verticale de builder V2 dédiée dans `packages/editor/src/builder-v2/`. Le builder V1 `packages/editor/src/builder/build-scene.ts` reste intact et sert seulement de référence pour les fixtures et assertions de comportement ; aucun de ses types, sorties ou chemins d'exécution ne participe à V2.
 
-Décider la relation entre la définition stable de zone de capsule et l'affectation temporelle de zone de l'enfant, ainsi que la représentation V2 du placement. Cette décision est bloquante : elle ne se déduit pas de `Decor.zoneId`.
+### 2.1 Entrée et sortie
 
-**Preuve :** spécification `Fixe`, puis tests parent/enfant, orientation, play/seek/resize et persistance.
+Entrée : `EditorScene` et la feuille CSS produite par `capsule-automation`.
 
-### 6. Basculer puis retirer V1
+Sortie :
 
-Remplacer `scene-player-bridge` seulement une fois les étapes précédentes validées. L'éditeur possède alors un seul `CodPlay` V2, une instance de scène et un adaptateur authoring. Retirer les imports V1 et le bridge de pose devenu inutile après la validation intégrale, pas avant.
+- un `SceneDoc` V2 à une story principale ;
+- un manifeste de preload pour la feuille CSS scoped de la racine de scène et les ressources de contenu ;
+- la durée et le pré-roll nécessaires au seek de l'éditeur ;
+- des diagnostics de builder structurés, jamais un `SceneDoc` partiel silencieux.
 
-**Preuve :** application éditeur réelle : décor, interactions, play, seek, resize, persistance, destruction ; tests complets affectés, typecheck, build, Safari et absence de double runtime.
+### 2.2 Mapping structurel à porter
 
-## Décisions à valider
-
-| Décision | Proposition | Statut |
+| Source ed2 | Sortie V2 | Invariant |
 | --- | --- | --- |
-| "vDom" | Projection logique réconciliée, pas API VDOM mutable | À valider |
-| Interaction | Contribution transitoire `{ persoId, timeMs, state }` | À valider |
-| `setNodePose()` | Non requis pour les gestes connus | À valider |
-| Attachement authoring | Capability externe sans exposition des classes runtime | À concevoir |
-| Rebuild sur commit | Recompiler et recréer l'instance ; jamais muter `CompiledScene` | À valider |
-| CSS généré | Preload V2 scoped, cycle de libération des Blob URLs à spécifier | À valider |
-| Zones | Définition stable de capsule distincte de l'affectation temporelle enfant | Bloquant |
+| Capsule racine et capsules imbriquées | persos `list` et `move` V2 | parentage et ordre stables ; aucune relation déduite depuis le DOM. |
+| `bloc` et `text` | perso `tag` | contenu texte absent conservé absent. |
+| `image` | perso `img` | source issue de `Content`. |
+| `media` et `video` | perso `media` | tag, source et master préservés. |
+| `CapsuleDef` | résolution `capsule-automation` + classes scoped | une seule production des classes et du CSS. |
+| `initialDecorId` et premier keyframe | `initial.style` | une propriété n'est jamais écrite deux fois au même instant. |
+| paires de keyframes suivantes | action V2 + eventime V2 | interpolation par l'écart de décors résolus. |
 
-## Garde-fous
+Le premier incrément n'accepte qu'une capsule racine, un item texte et deux keyframes. Les mappings image, media et capsules imbriquées sont construits nativement en V2 après cette preuve. Une absence de mapping produit un diagnostic explicite : elle n'est pas contournée par V1.
 
-- Les actions V1 du builder ne prouvent pas leur compatibilité V2 : chaque mapping doit passer par le contrat du composant V2 concerné.
-- Une conversion unitaire ne suffit pas : toute validation traverse builder, player, materializer, seek et lifecycle réels.
-- Une transformation FLIP est une présentation transitoire, jamais une pose auteur à capturer.
-- Le travail local non lié sur le preload média est hors périmètre et doit être préservé.
-- Ce rapport n'autorise aucune modification du cœur V2. Une tranche acceptée et une autorisation explicite restent nécessaires.
+### 2.3 Émission `Decor`
 
-La revue doit d'abord trancher la frontière authoring et les zones. Ce document pourra ensuite être découpé en plans exécutables ; tant qu'il est `A relire`, il décrit une direction et les preuves attendues, pas un contrat de code.
+Avant toute émission, extraire ou désigner une résolution pure unique de la cascade. Elle doit servir aux lectures ed2, à l'insertion de keyframe et au builder ; aucun des circuits de résolution V1 ne subsiste dans cette verticale.
+
+Pour chaque item :
+
+1. résoudre le décor initial puis chaque keyframe dans l'ordre temporel ;
+2. fusionner `style`, l'offset structuré et le CSS libre selon les règles ed2 existantes ;
+3. convertir les seuls champs structurés de longueur en valeurs `cqw`, puis calculer le diff vers le keyframe suivant ;
+4. émettre uniquement les propriétés modifiées ;
+5. appliquer la transition implicite sur tout l'intervalle, ou l'override `transitionIn`/`transitionOut` existant ;
+6. ne pas émettre classes, `zoneId` ni propriétés intrinsèquement discrètes dans ce circuit.
+
+Le CSS libre reste de responsabilité auteur. Ses valeurs composées ne sont pas artificiellement converties en longueurs ; elles suivent seulement les capacités d'interpolation V2 déjà admises.
+
+### 2.4 Preuves de la tranche builder
+
+- tests purs : mapping racine/texte, id, parentage, pré-roll, cascade, diff, durée et easing ;
+- cas de deux keyframes où position, dimensions, rotation, échelle et couleur évoluent au même temps logique ;
+- cas de valeur unitless, longueur `cqw`, valeur opaque et propriété discrète ;
+- compilation par `codplay.build()` et diagnostic d'un type ou style non supporté ;
+- test navigateur réel : initial, milieu et fin de l'intervalle, en Play et Seek.
+
+**Acceptation :** le premier incrément produit une `SceneDoc` compilable, sans player V1, et les assertions portent sur état logique et projection HTML. Aucun travail sur palette ou Selection Frame n'est engagé ici.
+
+## Tranche 3 — installer le cycle d'instance V2 dans l'éditeur
+
+Créer un bridge V2 séparé ; ne modifier `scene-player-bridge.ts` qu'au moment de la bascule. Son cycle est :
+
+1. préparer la scène par le builder V2 ;
+2. `codplay.build({ scene })` ;
+3. précharger le manifeste, enregistrer le résultat dans `codplay.resources` ;
+4. créer une unique instance avec la racine HTML de l'éditeur ;
+5. seek au temps éditeur mémorisé ;
+6. transmettre `instance.snapshot` aux consommateurs une fois l'instance prête ;
+7. à un rebuild validé, détruire l'ancienne instance et ses abonnements exactement une fois.
+
+Le bridge doit définir son point de commit : un échec de build ou preload ne publie ni `PLAYER_READY` incomplet, ni snapshot d'une instance détruite. La politique de conservation ou de destruction de l'ancienne preview en cas d'échec est à décider et tester avant code.
+
+Le bridge est un adaptateur d'infrastructure : il remet les résultats V2 aux acteurs xState existants et reçoit leurs commandes par les bridges existants. Il ne possède aucun état de sélection, de `Decor`, de séquence ou de persistance. Toute transition xState nécessaire mais absente doit faire l'objet d'une décision distincte, avant code ; aucune machine parallèle ou voie impérative de contournement n'est admise.
+
+**Fichiers cibles :** nouveau bridge V2 dans `packages/editor/src/app/bridges/`, types et événements du contrôleur, bridge sequence/telco, registration du preload CSS scoped.
+
+**Acceptation :** navigateur réel : build, preload, instance, Play, pause, Seek, resize, changement de scène, destruction, rebuild puis re-sélection. Un seul `CodPlay` et une seule instance active ; aucune importation V1 dans la verticale V2.
+
+## Tranche 4 — refaire le circuit `Decor`
+
+Cette tranche commence seulement quand `instance.snapshot` et le cycle d'instance sont validés.
+
+### 4.1 Point d'entrée unique
+
+Définir une session d'édition de décor avec les opérations explicites preview, commit et abandon. Palette, Selection Frame et multi-sélection produisent toutes un `DecorPatch` dans ce canal. La session :
+
+- construit la contribution temporaire depuis le décor résolu à `timeMs` ;
+- l'envoie à `instance.snapshot.set()` pour la preview ;
+- remet au contrôleur le patch à persister par l'unique commande ed2 ;
+- appelle `instance.snapshot.clear()` lors de l'abandon explicite.
+
+La granularité de persistance pendant un geste (transaction continue ou regroupée) doit préserver la sémantique V1 validée et être décidée explicitement avant implementation. Le devenir du brouillon et de la preview au commit, au seek, au changement de sélection, au rebuild et au destroy reste volontairement ouvert : il sera décidé à partir des manipulations effectives de l'interface, puis couvert par les preuves du circuit.
+
+### 4.2 Consumers à rebrancher
+
+| Consumer actuel | Remplacement V2 attendu | À retirer après preuve |
+| --- | --- | --- |
+| Palette et CSS libre | `DecorPatch` vers session unique | lecture live depuis snapshot/node. |
+| `LibreAdapter` et offset bridge | patch logique move/resize/rotate/scale vers session | appels ed2 à `setNodePose` et `getNodePose`, offset bridge et double protocole offset. Ces méthodes ne sont pas recréées dans V2. |
+| Selection Frame | raccord V2 du comportement existant ; géométrie V2 ou node observable pour le cadre, contribution logique pour la pose | node comme état de décor. |
+| MultiSelectionFrame | diffusion atomique du même patch logique par item | adaptateurs de pose indépendants. |
+
+Le contrôleur conserve cascade, fork d'un décor partagé et copy-on-write. L'insertion d'un keyframe lit le même état logique résolu que la preview ; elle ne recalcule ni style ni pose depuis une autre voie.
+
+### 4.3 Preuves du circuit
+
+- palette : couleur, valeur CSS libre, abandon et commit ;
+- cadre : move, resize, rotate, scale, changement de sélection et interruption, selon le comportement existant ;
+- multi-sélection : patch identique, persistance atomique et copy-on-write ;
+- insertion de keyframe à mi-interpolation ;
+- Play/Seek/replay/resize/rebuild sans divergence entre état résolu, preview et décor persisté ;
+- Safari, tests ciblés editor/authoring puis suites affectées complètes.
+
+## Tranche 5 — basculer l'application et retirer V1
+
+Remplacer l'usage de `scene-player-bridge.ts`, les types `AuthorApi` V1 et l'offset bridge seulement une fois les tranches précédentes validées. Les appels ed2 à `getNodePose()` et `setNodePose()` sont alors supprimés et ne reçoivent aucun équivalent V2. Mettre à jour le contrôleur, les bridges palette/sequence et les tests qui publient aujourd'hui `PLAYER_READY` avec des objets V1.
+
+La suppression V1 est une conséquence de la preuve d'intégration, jamais le moyen de rendre la migration irréversible. Les fichiers et appels V1 propres à ed2 sont retirés dans une modification dédiée, avec recherche d'imports et test de l'application éditeur réelle. Les méthodes peuvent demeurer dans `packages/codplay-v1` tant que ce runtime possède d'autres consommateurs ; elles ne font plus partie de la verticale ed2 V2.
+
+**Acceptation finale :** décor, interactions, Play, Seek, resize, persistance, destruction et reconstruction dans le navigateur réel ; typecheck, tests pertinents, build et Safari ; absence de double runtime, de lecture DOM du décor et de bridge temporaire.
+
+## Tranche 6 — reprendre les zones, après V2
+
+Auditer le travail interrompu avant toute modification. Le raccordement devra préparer `scene.zones` et l'affectation `Decor.zoneId` pour `capsule-automation`, qui reste l'unique producteur des classes de placement. La preview de zones reste dans l'éditeur et ne devient pas un service du player.
+
+Cette tranche doit décider séparément le comportement temporel de l'affectation de zone : elle est hors de l'interpolation générique `Decor`, et aucune transition de classe n'est introduite implicitement par la reprise V2.
+
+**Acceptation :** plan zones accepté, puis tests de définition, affectation, classes initiales, preview sans player, Play/Seek/resize et persistance.
+
+## Conditions de validation du présent plan
+
+Le plan peut être validé comme ordre de travail lorsque les décisions de la tranche 0 et le statut des écarts V2 sont revus. Cette validation n'autorise pas encore le code V2 : chaque sous-plan V2 identifié doit être accepté et explicitement autorisé avant son implémentation.
