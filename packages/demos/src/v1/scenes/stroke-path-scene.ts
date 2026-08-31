@@ -270,7 +270,7 @@ export function createStrokePathScene(): SceneDoc {
               // Pas de `viewBox` : 1 unité svg = 1px css, quelle que soit la taille
               // réelle du conteneur — les coordonnées locales (issues de `clientX`/
               // `clientY`, voir `trackStroke`) restent alignées 1:1 sans déformation.
-              // Fond/bordure distincts du blanc de `.container` (demo-container.css) pour
+              // Fond/bordure distincts du blanc de `.container` (demo-shell.css) pour
               // que la zone de tracé se voie clairement.
               markup:
                 '<svg width="100%" height="100%" style="background:#eef2f7;border:2px solid #cbd5e1;box-sizing:border-box;touch-action:none;display:block;"><g data-part="strokeArea:shape"></g></svg>',
