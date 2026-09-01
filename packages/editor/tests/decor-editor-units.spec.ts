@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pxToCqw, cqwToPx } from '../src/decor-editor/units'
+import { offsetPatchToValuesPx, offsetValuesPxToPatch, pxToCqw, cqwToPx } from '../src/decor-editor/units'
 
 describe('pxToCqw / cqwToPx', () => {
   it('convertit px → cqw relatif à la largeur du conteneur', () => {
@@ -19,5 +19,27 @@ describe('pxToCqw / cqwToPx', () => {
 
   it('100% de la largeur du conteneur = 100 cqw', () => {
     expect(pxToCqw(500, 500)).toBeCloseTo(100)
+  })
+
+  it('projette une valeur complète du cadre vers le vocabulaire offset unitless', () => {
+    expect(offsetValuesPxToPatch({ x: 80, y: 40, width: 160, height: 96, rotate: 12, scaleX: 1.2, scaleY: 0.8 }, 800)).toEqual({
+      translate: { x: 10, y: 5 },
+      width: 20,
+      height: 12,
+      rotate: 12,
+      scale: { x: 1.2, y: 0.8 },
+    })
+  })
+
+  it('réhydrate la valeur px sans modifier la donnée logique', () => {
+    expect(offsetPatchToValuesPx({ translate: { x: 13, y: 5 }, width: 25, height: 12, rotate: 12, scale: { x: 1.2, y: 0.8 } }, 1200)).toEqual({
+      x: 156,
+      y: 60,
+      width: 300,
+      height: 144,
+      rotate: 12,
+      scaleX: 1.2,
+      scaleY: 0.8,
+    })
   })
 })

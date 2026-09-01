@@ -1,5 +1,10 @@
 # Plan (esquisse) — Refonte de l'interface dedit en shadcn
 
+> Ce plan ne porte que le rendu visuel. Pour l'intégration player/cadre, il est
+> supersédé par [`../2026-09-01-editor-v2-organization-plan.md`](../2026-09-01-editor-v2-organization-plan.md) :
+> l'entrée `selection-frame/v2` est déjà raccordée par `decor-editor-bridge`.
+> Le point « Pont position » ci-dessous n'est donc plus une action à réaliser.
+
 **Périmètre** : `packages/editor/src/decor-editor/render.ts` et tout ce qui en dépend visuellement.
 **Statut** : esquisse d'engineering seulement — les détails visuels/UX seront pilotés par l'utilisateur au moment venu. Ce document ne fixe aucun choix de présentation, uniquement la mécanique de migration.
 
@@ -24,7 +29,7 @@
 Deux panneaux identifiés comme mécaniquement câblés mais **sans aucune UI existante**, à concevoir en même temps que la bascule shadcn plutôt qu'après :
 - **Panneau capsule** (`CapsulePatch` — `behavior`/`defaultTransition`/`sequencing`/`staggerMs`/`grid`) — aujourd'hui, un item capsule reçoit les mêmes panneaux qu'image/média dans `dedit-demo.ts`. Cf `2026-07-08-capsule-spec.md` §5.
 - **Panneau zones** — `zoneMode`/`setZones`/`onZonesChange` existent côté machine/contrôleur, `render.ts` ne les lit jamais. Dépend de `createZoneEditor` (`docs/plans/2026-07-03-selection-frame-variantes-plan.md`, Phase 2, pas commencée) pour avoir quelque chose de réel à afficher — panneau nommage/sélection de zones côté dedit, tracé/géométrie côté `createZoneEditor`.
-- **Pont position** (`PositionEditorBridge` vers selection-frame) — type déclaré (`PositionValuesPx`), zéro consommateur dans le repo. À câbler.
+- Le raccordement du cadre de sélection ne relève pas de ce plan visuel ; il est traité dans le plan V2 actif par `decor-editor-bridge` et l'entrée `selection-frame/v2`.
 
 ## 4. Ordre proposé
 

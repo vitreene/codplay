@@ -1,6 +1,6 @@
 import type { OffsetPatch, SelectionFrameValue } from './types'
 
-/** Partial value used when projecting an existing structured offset to the frame. */
+/** Partial local-pixel value used when projecting an existing structured offset to the frame. */
 export type OffsetValuesPx = Partial<SelectionFrameValue>
 
 /** cqw = 1% de la largeur du conteneur de référence, en px. */
@@ -19,16 +19,15 @@ export function cqwToPx(cqw: number, containerWidthPx: number): number {
  */
 export function offsetValuesPxToPatch(values: OffsetValuesPx, containerWidthPx: number): OffsetPatch {
   const patch: OffsetPatch = {}
-  if (values.x !== undefined) patch.x = pxToCqw(values.x, containerWidthPx)
-  if (values.y !== undefined) patch.y = pxToCqw(values.y, containerWidthPx)
+  if (values.x !== undefined && values.y !== undefined) {
+    patch.translate = { x: pxToCqw(values.x, containerWidthPx), y: pxToCqw(values.y, containerWidthPx) }
+  }
   if (values.width !== undefined) patch.width = pxToCqw(values.width, containerWidthPx)
   if (values.height !== undefined) patch.height = pxToCqw(values.height, containerWidthPx)
-  if (values.translate !== undefined) {
-    patch.translate = { x: pxToCqw(values.translate.x, containerWidthPx), y: pxToCqw(values.translate.y, containerWidthPx) }
-  }
   if (values.rotate !== undefined) patch.rotate = values.rotate
-  if (values.scale !== undefined) patch.scale = values.scale
-  if (values.anchor !== undefined) patch.anchor = values.anchor
+  if (values.scaleX !== undefined && values.scaleY !== undefined) {
+    patch.scale = { x: values.scaleX, y: values.scaleY }
+  }
   return patch
 }
 
@@ -40,10 +39,13 @@ export function offsetPatchToValuesPx(patch: OffsetPatch, containerWidthPx: numb
   if (patch.width !== undefined) values.width = cqwToPx(patch.width, containerWidthPx)
   if (patch.height !== undefined) values.height = cqwToPx(patch.height, containerWidthPx)
   if (patch.translate !== undefined) {
-    values.translate = { x: cqwToPx(patch.translate.x, containerWidthPx), y: cqwToPx(patch.translate.y, containerWidthPx) }
+    values.x = cqwToPx(patch.translate.x, containerWidthPx)
+    values.y = cqwToPx(patch.translate.y, containerWidthPx)
   }
   if (patch.rotate !== undefined) values.rotate = patch.rotate
-  if (patch.scale !== undefined) values.scale = patch.scale
-  if (patch.anchor !== undefined) values.anchor = patch.anchor
+  if (patch.scale !== undefined) {
+    values.scaleX = patch.scale.x
+    values.scaleY = patch.scale.y
+  }
   return values
 }

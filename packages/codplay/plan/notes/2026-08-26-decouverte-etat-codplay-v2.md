@@ -9,31 +9,26 @@ trouve chaque responsabilité, ce qui est fixé, ce qui est effectivement
 implémenté et ce qui reste ouvert. Il évite de redécouvrir les mêmes décisions
 à partir d'une démo ou d'un symptôme visuel.
 
-### Mise à jour du 2026-08-30
+### Mises à jour des 2026-08-30 et 2026-09-01
 
-La façade V2 expose désormais `instance.snapshot` (`get`, `set`, `clear`) et
-une première version du circuit des longueurs structurées. L'implémentation
-actuelle porte déjà des valeurs explicites `cqw` jusqu'à la résolution et la
-projection HTML, mais le plan de migration éditeur doit encore déplacer la
-qualification des nombres `unitless` vers CodPlay et centraliser `cqw` dans la
-configuration. Ces deux capacités sont suivies par le plan de reprise éditeur ;
-leurs preuves navigateur restent à compléter.
+La façade V2 expose `instance.snapshot` (`get`, `set`, `clear`) et la
+configuration de longueur logique `cqw`. Les nombres `unitless` des quatre
+champs structurés de position/taille sont qualifiés une seule fois dans
+CodPlay ; les patches de preview suivent le même chemin. L'interpolation
+combinée d'une couleur et d'une géométrie est couverte par un test de frontière
+et par le parcours éditeur.
 
-La géométrie de présentation n'est pas une capacité facultative : elle est la
-sortie authoring obligatoire de la frontière HTML `Projection.measure`, car
-c'est la raison pour laquelle V2 sépare l'état logique de sa projection. Les
-briques internes de mesure existent (`captureHtmlPose`, snapshots de layout,
-présentation de capture), mais aucun DTO public d'instance n'est encore
-arrêté. Ce manque est une frontière V2 à spécifier et à autoriser, pas un
-prétexte pour réintroduire `AuthorApi`, `getNodePose` ou une lecture du DOM
-dans l'éditeur.
+La première verticale authoring de l'éditeur est désormais raccordée :
+`decor-editor-bridge` lit le snapshot, projette `x/y/width/height` en pixels
+locaux avec la largeur de sa racine de scène, et compose le cadre V2 dans cette
+même racine. Le runner conserve ses captures internes pour FLIP/reparent ;
+elles ne sont pas promues en API d'authoring. Aucun accès au node du player ni
+aucune façade de mesure supplémentaire ne fait partie de cette verticale.
 
-La verticale ed2 utilise encore le bridge et les consommateurs V1 ; le plan
-`packages/editor/plan/2026-08-30-editor-codplay-v2-reprise-report.md` distingue
-désormais l'achèvement de cette frontière V2 de la réécriture des bridges,
-machines et outils de l'éditeur. Les zones restent postérieures à cette
-preuve et restent une preview de l'éditeur, produite avec le modèle existant
-de `capsule-automation`.
+Le plan d'organisation de l'éditeur du 2026-09-01 consigne le raccordement de
+la façade de commandes, du bridge de coordination, de `sequence-editor`, de
+`decor-editor` et du Selection Frame. Les zones, les grilles et les cas de
+géométrie intrinsèque restent postérieurs et devront avoir leur propre tranche.
 
 Il ne remplace pas les spécifications ni les plans. En cas de conflit, l'ordre
 d'autorité est celui de la section 1. Une affirmation de ce document ne crée
@@ -216,10 +211,10 @@ cibles, ni accès direct au runner.
 
 Il n'y a pas actuellement de `instance.capture()` public, de `instance.init()`
 ou de `instance.refresh()` dans la telco, ni d'accès générique de l'éditeur au
-DOM. `instance.snapshot` est le port logique authoring direct validé ; la
-géométrie de présentation nécessaire aux poignées et au hit-test reste un
-port V2 distinct à spécifier et à exposer depuis la projection HTML. L'accès
-authoring complet est donc un chantier séparé à reprendre avec l'éditeur.
+DOM. `instance.snapshot` est le port logique authoring direct validé ; pour la
+première verticale, l'application éditeur fournit elle-même le repère px avec
+la racine de scène. Une géométrie player dédiée ne sera étudiée que pour les
+cas hors périmètre actuels.
 
 ### 3.3 Eventimes et ciblage
 
@@ -288,7 +283,7 @@ service preload ni créer une seconde façon de lire une scène.
 | `src/runtime/components` | Composants logiques et leurs services déclarés | Imposer un materializer concurrent |
 | `src/runtime/materializer` | Contrat abstrait de materialisation interne | Devenir une option publique de substrate en V2 foundation |
 | `src/runtime/runner-html` | Présentation HTML/DOM, géométrie d'endpoints, FLIP et preview DnD HTML | Créer un second player, une seconde scène logique ou un arbre de mesure permanent |
-| frontière authoring de la projection HTML | Mesurer la présentation naturelle et fournir, après décision de contrat, une frame numérique à la façade | Retourner un node, faire relire le DOM par l'éditeur ou publier une pose FLIP comme pose auteur |
+| intégration authoring éditeur | L'éditeur lit `snapshot` et projette la verticale position/taille dans la racine de scène ; son cadre reste un overlay local | Ajouter un accès au node, réutiliser une pose FLIP comme état auteur ou ouvrir une API core non validée |
 | `src/runtime/motion` | Poses, graphes temporels et interpolation pure | Lire la géométrie DOM à chaque frame |
 | `src/runtime/capture` | Session de capture générique et sorties du contrat capture | Connaître les listes, le DOM ou le hit-test |
 | `src/runtime/capabilities/list` | Ordre, placement et réordonnancement d'une liste | Créer un pipeline d'animation distinct |
@@ -394,7 +389,7 @@ FLIP.
 | List / DnD | Placement et capture couverts ; plan marqué `En cours` car le seek de la démo reste ouvert | Ne pas déclarer la tranche complète sur le seul drop live. |
 | Media / preload | Socle présent ; plan marqué `En cours` | Preload séparé, ressources explicites, anomalie Safari ouverte, garde de dérive reporté. |
 | Démos V2 | Layout et registry présents ; `flip-stress`, `components`, `runner`, `flip-nested` et `preload-media` passent par le layout commun ; chantier encore `En cours` | Les démos retenues utilisent la façade et le layout commun ; la démo `player` n'est pas retenue et les fixtures de test vivent sous `codplay/tests/fixtures`. |
-| Authoring éditeur | `snapshot` direct est présent ; la géométrie numérique obligatoire de `Projection.measure` reste à spécifier/exposer ; le bridge et les consommateurs utilisent encore V1 | Ne pas inventer `AuthorApi` ou un accès DOM. Arrêter le contrat de géométrie, puis porter l'éditeur vers les ports V2 sans compatibilité V1. |
+| Authoring éditeur | `snapshot` direct est présent ; la première verticale position/taille lit ce snapshot et projette localement dans la racine de scène via le bridge V2 | Ne pas inventer d'accès au node ou d'API core de géométrie pour cette verticale. Les besoins de grille, taille intrinsèque et repères transformés restent des tranches distinctes. |
 
 Le code de démonstration historique encore présent sous `packages/demos/src/v2`
 doit être évalué par rapport au registry. Un fichier non enregistré qui importe
@@ -535,7 +530,7 @@ L'ordre de travail restant est :
 2. terminer la validation Seek de `list`/DnD ;
 3. reprendre l'écran noir Safari de `preload-media` avec des observations média
    concrètes ;
-4. arrêter puis implémenter la frontière de géométrie authoring V2, et reprendre ensuite l'accès authoring avec le chantier de l'éditeur ;
+4. conserver `snapshot` et `cqw` comme frontières suffisantes pour la première verticale éditeur ; étudier séparément les besoins de grille, de taille intrinsèque et de repères transformés ;
 5. nettoyer les anciennes démos et références internes selon un plan séparé.
 
 La correction FLIP ne modifie aucun contrat de façade. La reprise authoring et

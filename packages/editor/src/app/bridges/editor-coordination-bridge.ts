@@ -38,6 +38,12 @@ export type EditorCoordinationSnapshot = Readonly<{
 
 type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime'>
 
+/** Internal editor handoff notification used to resynchronize decor before playback resumes. */
+export type EditorPlaybackReconciledListener = (timelineMs: number) => void
+
+/** DOM host port used only to mount editor overlays in the scene region. */
+export type EditorSceneHostListener = (host: HTMLElement | null) => void
+
 /**
  * Coordinates autonomous editor modules around the player command facade.
  * It owns no CodPlay instance and never writes the document model.
@@ -46,7 +52,9 @@ export class EditorCoordinationBridge {
   readonly transport: EditorCoordinationTransport
   readonly snapshot: EditorCoordinationSnapshot
   private sequence: SequenceReconciliationPort | null = null
-  private readonly unsubscribeSeekApplied: () => void
+  private sceneHost: HTMLElement | null = null
+  private readonly sceneHostListeners = new Set<EditorSceneHostListener>()
+  private readonly playbackReconciledListeners = new Set<EditorPlaybackReconciledListener>()
   private readonly machine: Actor<typeof controllerMachine>
   private readonly player: EditorPlayerCommandFacade
 
@@ -73,15 +81,36 @@ export class EditorCoordinationBridge {
       set: (patches) => this.player.setSnapshot(patches),
       clear: () => this.player.clearSnapshot(),
     }
-    this.unsubscribeSeekApplied = this.machine.on('seekApplied', () => {
-      const progress = this.player.getProgress()
-      if (progress !== null) this.sequence?.reconcilePlaybackTime(progress.timelineMs)
-    }).unsubscribe
   }
 
   /** Registers the sequence model as the owner of the author playhead. */
   attachSequenceEditor(sequence: SequenceReconciliationPort): void {
     this.sequence = sequence
+  }
+
+  /** Publishes the stable scene-region host to editor overlays without exposing the player. */
+  bindSceneHost(host: HTMLElement): void {
+    this.sceneHost = host
+    for (const listener of this.sceneHostListeners) listener(host)
+  }
+
+  /** Removes the scene-region host only when it is the currently bound host. */
+  unbindSceneHost(host: HTMLElement): void {
+    if (this.sceneHost !== host) return
+    this.sceneHost = null
+    for (const listener of this.sceneHostListeners) listener(null)
+  }
+
+  /** Returns the current overlay host, never a player item node. */
+  getSceneHost(): HTMLElement | null {
+    return this.sceneHost
+  }
+
+  /** Subscribes to scene-host lifecycle changes and immediately reports the current host. */
+  onSceneHostChange(listener: EditorSceneHostListener): () => void {
+    this.sceneHostListeners.add(listener)
+    listener(this.sceneHost)
+    return () => { this.sceneHostListeners.delete(listener) }
   }
 
   /** Binds the current V2 player to the separate player facade. */
@@ -102,23 +131,30 @@ export class EditorCoordinationBridge {
   /** Requests play after giving the controller the chance to flush pending document edits. */
   requestPlay(): void {
     this.machine.send({ type: 'TELCO_ACTION_REQUEST' })
-    void this.execute({ type: 'play' })
   }
 
-  /** Requests pause and adopts the resulting player time once the command has completed. */
+  /** Requests pause and adopts the resulting player time before leaving the playing state. */
   requestPause(): void {
-    this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
     void this.execute({ type: 'pause' }).then((result) => {
-      if (result.ok) this.sequence?.reconcilePlaybackTime(result.progress.timelineMs)
+      if (!result.ok) return
+      this.reconcilePlaybackTime(result.progress.timelineMs)
+      this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
     })
   }
 
-  /** Requests rewind and adopts its resulting time without emitting a second seek intention. */
+  /** Requests rewind and adopts its resulting time without an intermediate handoff. */
   requestRewind(): void {
-    if (this.player.getState()?.status === 'playing') this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
     void this.execute({ type: 'rewind' }).then((result) => {
-      if (result.ok) this.sequence?.reconcilePlaybackTime(result.progress.timelineMs)
+      if (!result.ok) return
+      this.reconcilePlaybackTime(result.progress.timelineMs)
+      if (this.machine.getSnapshot().value === 'playing') this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
     })
+  }
+
+  /** Subscribes to the one-shot player-to-author time handoff after pause or rewind. */
+  onPlaybackReconciled(listener: EditorPlaybackReconciledListener): () => void {
+    this.playbackReconciledListeners.add(listener)
+    return () => { this.playbackReconciledListeners.delete(listener) }
   }
 
   /** Executes one command through the player facade and exposes its checked result to callers. */
@@ -134,7 +170,15 @@ export class EditorCoordinationBridge {
 
   /** Releases bridge subscriptions and the module references it owns. */
   destroy(): void {
-    this.unsubscribeSeekApplied()
     this.sequence = null
+    this.sceneHost = null
+    this.sceneHostListeners.clear()
+    this.playbackReconciledListeners.clear()
+  }
+
+  /** Applies one checked player time to the autonomous sequence and its editor projections. */
+  private reconcilePlaybackTime(timelineMs: number): void {
+    this.sequence?.reconcilePlaybackTime(timelineMs)
+    for (const listener of this.playbackReconciledListeners) listener(timelineMs)
   }
 }

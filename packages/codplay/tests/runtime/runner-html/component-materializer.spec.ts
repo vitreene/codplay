@@ -195,6 +195,25 @@ describe('HTML component materializer services', () => {
     expect(node.style.transform).toBe('translate(10%, 4px) translateZ(3cqw) rotate(20deg) scale(2)')
   })
 
+  it('materializes numeric V2 rotation channels as degrees without invalidating translation', () => {
+    const style = createHtmlStyleService({ numericLengthScale: 8 })
+    const node = element()
+
+    style.apply(node, {
+      x: { kind: 'length', unit: 'cqw', value: 5 },
+      y: { kind: 'length', unit: 'cqw', value: 10 },
+      rotate: 0,
+    })
+    expect(node.style.transform).toBe('translate(40px, 80px) rotate(0deg)')
+
+    style.apply(node, {
+      x: { kind: 'length', unit: 'cqw', value: 5 },
+      y: { kind: 'length', unit: 'cqw', value: 10 },
+      rotate: 12.5,
+    })
+    expect(node.style.transform).toBe('translate(40px, 80px) rotate(12.5deg)')
+  })
+
   it('keeps a raw transform sequence separate from scalar channels', () => {
     const catalog = createHtmlServices()
     const services = catalog

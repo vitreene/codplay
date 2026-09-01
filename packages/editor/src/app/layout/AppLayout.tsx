@@ -3,6 +3,7 @@ import type { Actor } from 'xstate'
 import './app-layout.css'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { EditorScene } from '../commands/types'
+import { EDITOR_V2_STORY_ID } from '../../builder-v2'
 import { EditorPlayerCommandFacade } from '../commands/editor-player-command-facade'
 import { EditorCoordinationBridge } from '../bridges/editor-coordination-bridge'
 import { DemoMenuRegion } from './DemoMenuRegion'
@@ -15,16 +16,16 @@ export interface AppLayoutProps {
 }
 
 /**
- * Résout l'item cliqué, s'il y en a un — `base-component.ts` pose `id = perso.id` sur le node
- * RACINE de chaque composant (universel, tous types), ed2 ne fournit jamais d'`id` authored qui
- * primerait dessus (`build-scene.ts`). `.closest('[id]')` remonte donc jusqu'à l'item le plus
- * proche du clic (le plus imbriqué, comportement attendu) — y compris jusqu'à la capsule racine
- * implicite (`story-main__root`) si le clic tombe sur du fond vide ; le filtre `scene.items` exclut
- * cette dernière (jamais un item du document) sans cas particulier à coder.
+ * Résout l'item cliqué, s'il y en a un — le materializer HTML V2 pose l'identité publique sous
+ * `data-item-id="storyId:persoId"` sur la racine rendue de chaque composant. Le filtre par
+ * `scene.items` exclut la capsule racine implicite (`story-main__root`) et conserve l'identité
+ * documentaire attendue par le contrôleur.
  */
 function resolveClickedItemId(target: Element, scene: EditorScene): string | null {
-  const candidateId = target.closest('[id]')?.id
-  if (!candidateId) return null
+  const runtimeId = target.closest('[data-item-id]')?.getAttribute('data-item-id')
+  if (!runtimeId) return null
+  const prefix = `${EDITOR_V2_STORY_ID}:`
+  const candidateId = runtimeId.startsWith(prefix) ? runtimeId.slice(prefix.length) : runtimeId
   return scene.items.some((item) => item.id === candidateId) ? candidateId : null
 }
 
@@ -108,7 +109,7 @@ export function AppLayout({ controller }: AppLayoutProps) {
         <ScenePlayerRegion controller={controller} coordination={coordination} />
       </div>
       <div className="app-region app-region--panel">
-        <DecorEditorRegion controller={controller} />
+        <DecorEditorRegion controller={controller} coordination={coordination} />
       </div>
       <div className="app-region app-region--timeline">
         <SequenceEditorRegion controller={controller} coordination={coordination} />

@@ -3,8 +3,10 @@ import type {
   EditorScene, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
 } from './types'
 import type { Command } from '../app/controller/types'
-import { CapsuleDistribution, CapsulePreset, TransitionTiming } from '@codplay/scene-factory'
-import type { ChildInput } from '@codplay/scene-factory'
+import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
+import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
+import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
+import type { ChildInput } from '@codplay/scene-factory/capsule-distribution'
 import {
   ZOOM_DEFAULT_PX_PER_SEC, ZOOM_MIN_PX_PER_SEC, ZOOM_MAX_PX_PER_SEC,
   TIME_STEP_MS,

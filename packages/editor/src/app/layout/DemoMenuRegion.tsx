@@ -115,7 +115,7 @@ export function DemoMenuRegion({ controller }: DemoMenuRegionProps) {
         type="button"
         disabled={!hasScene}
         onClick={() => {
-          // `buildSceneDoc` ne supporte que `type: 'text'` (§6 du plan) — sans ce second temps,
+          // `buildSceneDocV2` ne supporte que `type: 'text'` (§6 du plan) — sans ce second temps,
           // l'item reste `bloc` et ne peut pas être rendu par `scenePlayer`. `createItem` ne
           // renvoie pas son id via `RUN_COMMAND` (§4 : la seule sortie du contrôleur est `scene`) ;
           // il est ajouté en fin de tableau (`base-commands.ts::createItem`), donc lisible juste après.

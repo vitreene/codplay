@@ -13,6 +13,24 @@ distincte. Ce que la boîte à outils garantit, c'est la **cohérence** des méc
 (un geste de pointeur se comporte pareil partout, une poignée se positionne pareil partout) — pas
 l'uniformité des comportements de haut niveau.
 
+## Entrée V2 utilisée par l'éditeur
+
+L'intégration V2 de l'éditeur importe `@codplay/selection-frame/v2`. Cette entrée fournit un
+overlay neutre de move/resize :
+
+- `setValue(value)` reçoit une `SelectionFrameValue` en pixels locaux dans le repère de la racine
+  de scène ;
+- les gestes émettent des deltas pixels (`move` ou `resize`) au callback de l'hôte ;
+- `setSuspended(true)` masque le cadre pendant la lecture ;
+- le cadre ne connaît ni `instance.snapshot`, ni le player, ni le document, ni les unités
+  logiques ;
+- le commit, l'abandon et la conversion px ↔ valeur logique restent sous la responsabilité de
+  `decor-editor` et de son bridge d'application.
+
+Le cadre V2 ne mesure donc pas un item player et n'écrit pas dans son DOM. Les autres entrées du
+package restent disponibles pour les modules non encore migrés ; elles ne font pas partie du
+circuit V2 de l'éditeur.
+
 ## La boîte à outils bas niveau
 
 Quatre fichiers, chacun résout UN problème précis rencontré au moins deux fois avant extraction.

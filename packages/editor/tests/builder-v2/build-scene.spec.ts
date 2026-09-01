@@ -72,7 +72,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     const item = story.persos.find((perso) => perso.id === 'item-1')!
     expect(item.actions['item-1-intro']).toEqual({ style: { opacity: { from: 0, to: 1, duration: 400 } } })
     expect(item.actions['item-1-kf-kf-b']).toEqual({
-      style: { color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'easeInOut' } },
+      style: { color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'inOut' } },
     })
     expect(story.eventimes).toEqual([
       { name: 'item-1-intro', startAt: 0 },
@@ -224,9 +224,38 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
     expect(item.actions['item-1-kf-kf-b']).toEqual({
       style: {
-        color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'easeInOut' },
+        color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'inOut' },
       },
     })
+  })
+
+  it('emits one combined action for color and position/size interpolation', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-a']!.offset = {
+      translate: { x: 10, y: 5 },
+      width: 20,
+      height: 12,
+    }
+    scene.decors['text-decor-b']!.offset = {
+      translate: { x: 30, y: 5 },
+      width: 30,
+      height: 12,
+    }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.actions['item-1-kf-kf-b']).toEqual({
+      style: {
+        color: { from: parseColor('#ffffff'), to: parseColor('#00ff00'), duration: 1000, ease: 'inOut' },
+        x: { from: 10, to: 30, duration: 1000, ease: 'inOut' },
+        width: { from: 20, to: 30, duration: 1000, ease: 'inOut' },
+      },
+    })
+    expect(item.actions['item-1-kf-kf-b']?.style).not.toHaveProperty('y')
+    expect(item.actions['item-1-kf-kf-b']?.style).not.toHaveProperty('height')
   })
 
   it('normalizes standalone CSS colors without reinterpreting open CSS values', () => {

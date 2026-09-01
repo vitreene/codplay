@@ -1,20 +1,27 @@
-# Rapport de reprise — pause après B3
+# Rapport de reprise — état après B3, D1, D2 et R1
 
-**Statut : pause volontaire après la réalisation structurelle de B3.**  
+**Statut : point de reprise après la réalisation et la preuve de la première verticale V2 position/taille.**
 **Date : 2026-09-01.**  
 **Plan actif :** [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md)
 
 Ce fichier est un point de reprise factuel. Les contrats normatifs restent dans
 les spécifications V2 ; les actions et leur statut restent dans le plan actif.
-Ce rapport ne valide pas D1, D2, R1 ni le parcours navigateur.
+Il ne crée aucun contrat et ne remplace pas le plan. Il consigne l'état atteint
+pour permettre une reprise ultérieure.
 
 ## Point de reprise
 
-La connexion player/éditeur V2 est posée jusqu'à B3 : le builder produit des
-nombres `unitless`, CodPlay les qualifie en `cqw`, l'instance expose
-`snapshot`, la façade de commandes possède le transport et le bridge de
-coordination relie le player au `sequence-editor`. Le décor n'est pas encore
-rebranché sur ce circuit : c'est la prochaine tranche D1.
+La première verticale player/éditeur V2 est raccordée de bout en bout : le
+builder produit des nombres `unitless`, CodPlay les qualifie selon la
+configuration courante `cqw`, `instance.snapshot` porte la lecture et la
+preview, la façade player exécute le transport, le bridge de coordination
+relie `sequence-editor` et `decor-editor`, et le cadre V2 projette la valeur
+logique dans la racine de scène.
+
+Le parcours réel Firefox a validé sélection, déplacement, redimensionnement,
+commit, abandon, Play/Pause, seek, Stop et changement de largeur de racine.
+Le plan reste `En cours` pour les contrôles navigateur complémentaires, S2
+(`snapshot.onChange`) et les extensions hors de cette verticale.
 
 ## Réalisations effectuées
 
@@ -53,8 +60,8 @@ rebranché sur ce circuit : c'est la prochaine tranche D1.
 5. le remplacement transactionnel d'une instance par une autre ;
 6. le port `snapshot` et le `preRollMs` via le bridge de coordination.
 
-Les imports et appels V1 ont été retirés de ce bridge. Le cycle n'a pas encore
-été accepté par un parcours navigateur réel.
+Les imports et appels V1 ont été retirés de ce bridge. Le cycle de remplacement
+et le parcours navigateur réel sont validés dans la preuve ci-dessous.
 
 ### B3 — contrôleur et `sequence-editor`
 
@@ -73,6 +80,31 @@ Les imports et appels V1 ont été retirés de ce bridge. Le cycle n'a pas encor
   séquence historique, mais leur exécution passe maintenant par la façade et
   le bridge V2.
 
+### D1 — décor et snapshot
+
+- `decor-editor-bridge.ts` lit la base par `coordination.snapshot.get()` et
+  résout la valeur logique au temps présenté ; il ne lit aucun node player.
+- La valeur du cadre est locale à la racine de scène et exprimée en px.
+  `decor-editor-bridge` convertit les deltas px en patch `offset` unitless,
+  puis envoie le même patch de style à `snapshot.set()`.
+- La base du geste est conservée séparément de la valeur candidate. Le cadre
+  reste donc stable lorsque plusieurs événements de pointeur arrivent pendant
+  un même geste.
+- Le commit efface la preview, passe par la commande xState et reconstruit
+  l'instance V2 ; l'abandon efface la preview sans mutation documentaire.
+- Les champs `style.width`/`style.height` de la palette ne concurrencent plus
+  `offset.width`/`offset.height`.
+
+### D2 — Selection Frame V2
+
+- `packages/authoring/selection-frame/src/v2.ts` fournit un overlay neutre de
+  move/resize, piloté par `SelectionFrameValue` et des deltas px.
+- Le cadre ne connaît ni CodPlay, ni snapshot, ni document, ni node rendu.
+- `decor-editor-bridge` est l'unique adaptateur qui connaît la sélection, le
+  snapshot, la largeur de racine, le patch et la décision preview/commit.
+- Pendant la lecture, le cadre est suspendu ; après pause ou seek, il est
+  reprojeté depuis la base logique.
+
 ## Retrait V1 effectué et restant
 
 Retiré de la verticale B1–B3 :
@@ -83,34 +115,19 @@ Retiré de la verticale B1–B3 :
 - les imports V1 du bridge de scène et du bridge de séquence ;
 - l'appel direct aux méthodes de transport depuis `sequence-editor`.
 
-Restent volontairement à traiter dans D1/D2/R1 :
+R1 a retiré de la verticale migrée :
 
-- `packages/editor/src/app/bridges/decor-editor-bridge.ts`, dont le câblage
-  principal référence encore `authorApi`, `offsetBridge` et l'ancien montage ;
-- `packages/editor/src/app/bridges/offset-editor-bridge.ts`, qui est encore le
-  pont V1 de pose et doit être supprimé après la réécriture D1 ;
-- les modules historiques de `packages/authoring/selection-frame` et le
-  builder historique V1, hors de la verticale déjà basculée ;
-- les tests qui doublent `AuthorApi`, `subscribeToNode` ou une pose DOM.
+- les bridges et tests éditeur qui importaient ou simulaient `AuthorApi`,
+  `subscribeToNode`, `NodePose` ou le player V1 ;
+- `packages/editor/src/app/bridges/offset-editor-bridge.ts` ;
+- `packages/editor/src/builder/` et son chemin de build historique ;
+- la dépendance directe `codplay-v1` de `packages/editor` ;
+- les appels V1 dans le code de production de `packages/editor/src`.
 
-La mention `Projection.measure` n'est pas retenue comme API : elle n'est ni
-nécessaire ni validée dans B3. La définition du circuit géométrique du cadre
-reste à faire dans D1/D2 sans inventer de façade core.
-
-## État des préparatifs D1/D2
-
-Quelques préparatifs D1 sont présents dans l'arbre, mais ils ne constituent pas
-une implémentation acceptée :
-
-- le montage de palette a été réduit à une vue qui n'écrit plus directement un
-  node player ;
-- les types de décor ne dépendent plus de `codplay-v1` pour `ClassNameValue` ;
-- des helpers de lecture snapshot existent dans `decor-editor-bridge.ts` ;
-- le raccord principal de ce bridge et `offset-editor-bridge.ts` n'est pas
-  reconstruit et le typecheck éditeur les signale encore.
-
-D2 n'est pas engagé : aucun nouveau package, contrat public de mesure ou
-prototype de Selection Frame V2 n'est conservé dans cette pause.
+Les modules historiques restant dans `packages/authoring/selection-frame` ne
+sont pas consommés par l'entrée `/v2` de cette verticale. Leur migration
+éventuelle relève d'un plan séparé ; ils ne sont pas supprimés globalement par
+R1.
 
 ## Validation exécutée
 
@@ -118,36 +135,51 @@ Les validations suivantes ont été exécutées sans suite V1 :
 
 - `npm run test --workspace=codplay -- tests/scene/compiled/scene-builder.spec.ts tests/facade/cqw.spec.ts tests/facade/snapshot.spec.ts` : **3 fichiers, 21 tests passés** ;
 - `npm run typecheck --workspace=codplay` : **passé** ;
-- `./../../node_modules/.bin/vitest run --config vitest.config.ts tests/builder-v2/build-scene.spec.ts` depuis `packages/editor` : **1 fichier, 11 tests passés**.
+- `./../../node_modules/.bin/vitest run --config vitest.config.ts tests/builder-v2/build-scene.spec.ts` depuis `packages/editor` : **1 fichier, 11 tests passés** ;
+- suite éditeur V2 : **28 fichiers, 340 tests passés** ;
+- tests Selection Frame V2 : **3 tests passés** ;
+- régression builder/player couleur + position/taille : **passée** ;
+- `./../../node_modules/.bin/tsc --noEmit -p tsconfig.json` depuis
+  `packages/editor` : **passé** ;
+- build `@codplay/editor` : **passé**.
 
-Le typecheck global `packages/editor/tsconfig.json` n'est pas passant à cette
-étape. Les erreurs propres au chantier sont limitées au raccord décor/offset
-ancien : propriétés supprimées du contexte, ancien `setOffsetBridge`, ancienne
-signature de montage et types retirés. Le même typecheck inclut également des
-erreurs existantes sous `packages/codplay-v1/src/`. Ce résultat ne justifie ni
-la réintroduction de V1 ni l'exécution des tests V1.
+### Preuve navigateur Firefox
 
-Aucun test live navigateur n'a été lancé à cette pause. Il reste obligatoire
-après D1/D2, avant de déclarer l'intégration stable.
+Sur l'outil lancé avec le serveur Vite réel :
+
+1. la scène de démonstration et le scénario position/couleur ont été chargés ;
+2. l'item a été sélectionné par son identité DOM V2 ; le cadre et l'item
+   avaient le même rectangle local ;
+3. un déplacement de `24px` a produit `offset.translate.x = 10.7777…` et le
+   cadre a suivi la valeur candidate ;
+4. un redimensionnement de `40px × 20px` a produit
+   `offset.width = 22.6296…` et `offset.height = 20.3148…` ; commit et rebuild
+   ont conservé ces valeurs ;
+5. Play a masqué le cadre, Pause a réconcilié une fois le temps auteur
+   (`~660ms`), Seek a repositionné la scène (`~2425ms`), puis Stop a ramené le
+   temps à zéro ;
+6. l'interpolation à `~2425ms` affichait simultanément la couleur et la
+   géométrie ;
+7. un abandon par Échap a effacé la preview sans modifier le décor persistant ;
+8. la racine est passée de `864px` à `1098px` de large : les nombres logiques
+   sont restés identiques tandis que le cadre et l'item ont été reprojetés avec
+   le même rectangle px.
+
+Cette preuve a été faite avec Firefox headless. Elle ne vaut pas contrôle Safari
+et ne couvre pas les scénarios grille, parent transformé, taille intrinsèque,
+multi-sélection ou reparentage.
 
 ## Reprise ordonnée
 
-1. Relire les spécifications `decor-editor`, Selection Frame et snapshot V2,
-   puis terminer D1 : unifier palette, cadre et multi-sélection autour du
-   snapshot via le bridge de coordination.
-2. Supprimer `offset-editor-bridge.ts` et les usages de pose V1 ; ne créer
-   aucun équivalent `getNodePose`/`setNodePose`.
-3. Implémenter D2 sur l'interface interne de `decor-editor` : valeur px et
-   deltas de geste côté cadre, patch logique `unitless` au bord du bridge,
-   `snapshot.set/clear` pour la preview, commandes xState pour le commit.
-4. Réécrire les tests de frontière sur snapshot, interpolation simultanée
-   couleur + position/taille, sélection, abandon, commit et rebuild.
-5. Effectuer le parcours live réel : sélection, Play/Pause/Stop, Seek, move,
-   resize, couleur, resize de racine, abandon, commit et rebuild.
-6. Exécuter R1 : retrait des imports, dépendances et fichiers V1 encore
-   présents dans la verticale migrée, puis typecheck/build et contrôles
-   navigateur applicables.
+1. Mettre à jour les suivis des modules concernés sans les marquer `Fini` tant
+   que leur matrice de navigateur applicable n'est pas complète.
+2. Décider séparément S2 (`snapshot.onChange`) ; ne pas l'ajouter pour cette
+   verticale tant que son contenu, son payload, son moment d'émission et son
+   abonnement unique ne sont pas validés.
+3. Exécuter les contrôles Safari ou autres navigateurs prévus par la matrice,
+   en conservant Firefox comme preuve déjà acquise.
+4. Ouvrir, dans un plan distinct, les besoins de grille, multi-sélection,
+   parent transformé, taille intrinsèque et reparentage.
 
-La reprise doit commencer par D1 ; elle ne doit pas revenir sur C1/S1 ni
-réintroduire une synchronisation continue de `playheadMs` depuis
-`telco.onProgress()`.
+La reprise ne doit pas revenir sur C1/S1 ni réintroduire une synchronisation
+continue de `playheadMs` depuis `telco.onProgress()`.

@@ -254,21 +254,6 @@ describe('panning', () => {
   })
 })
 
-// ─── Playhead ────────────────────────────────────────────────────────────────
-
-// Le statut de lecture réel et son avance ne sont plus simulés localement (`PLAYHEAD.TICK`/
-// `START_PLAY`/`PAUSE`/`STOP` retirés) — `TelcoApi` (`codplay`) les possède désormais ;
-// `TELCO.SYNC_PLAYHEAD` en est le seul écho (`2026-07-17-telco-real-transport-plan.md` §Étape C).
-describe('playhead', () => {
-  it('TELCO.SYNC_PLAYHEAD reflète le curseur telco', () => {
-    const actor = boot(EMPTY)
-    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 500 })
-    expect(actor.getSnapshot().value).toBe('idle')
-    expect(actor.getSnapshot().context.playheadMs).toBe(500)
-    actor.stop()
-  })
-})
-
 // ─── SCENE.LOAD ──────────────────────────────────────────────────────────────
 
 describe('SCENE.LOAD', () => {

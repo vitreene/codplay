@@ -10,8 +10,11 @@ import type {
   AutoCapsuleEventInput,
   AutoCapsuleType,
 } from '@codplay/capsule-automation'
-import { CapsuleDistribution, CapsulePreset, TransitionTiming } from '@codplay/scene-factory'
-import type { CapsuleDistributionOutput, CapsuleKind } from '@codplay/scene-factory'
+import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
+import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
+import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
+import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-distribution'
+import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, SceneDoc } from 'codplay'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
 import { DEFAULT_EASING } from '../sequence-editor/constants'
@@ -597,9 +600,9 @@ function normalizeEasing(easing: string | { kind: 'cubic-bezier'; p1x: number; p
   if (typeof easing !== 'string') return `cubic-bezier(${easing.p1x},${easing.p1y},${easing.p2x},${easing.p2y})`
   return {
     linear: 'linear',
-    'ease-in': 'easeIn',
-    'ease-out': 'easeOut',
-    'ease-in-out': 'easeInOut',
+    'ease-in': 'in',
+    'ease-out': 'out',
+    'ease-in-out': 'inOut',
   }[easing] ?? easing
 }
 

@@ -1,5 +1,12 @@
 # ed2 — Pont position dedit + généralisation de la session de phase
 
+> **Document historique, supersédé.** Les actions de ce plan reposaient sur le
+> pont de pose V1 et ne sont plus à exécuter. Le circuit retenu est décrit dans
+> [`../2026-09-01-editor-v2-organization-plan.md`](../2026-09-01-editor-v2-organization-plan.md) :
+> `decor-editor-bridge` lit `instance.snapshot`, le cadre V2 échange des px
+> locaux et le commit passe par xState. Aucun pont de pose parallèle ne doit
+> être recréé.
+
 Plan précis, pas de code à ce stade. Réconcilie le travail des chantiers 1-3
 (`2026-07-16-gesture-rebuild-ordering-plan.md` + sous-plans) avec le spec déjà écrit et jamais
 implémenté `2026-07-07-dedit-spec.md` §6 (« Pont position — coordination avec l'éditeur visuel »).

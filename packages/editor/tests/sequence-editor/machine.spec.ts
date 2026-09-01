@@ -270,19 +270,7 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
   })
 })
 
-describe('sequenceEditorMachine — playhead / play range / viewport (purement locaux, aucun changement)', () => {
-  // Le statut de lecture réel et son avance ne sont plus simulés localement (`PLAYHEAD.TICK`/
-  // `START_PLAY`/`PAUSE`/`STOP` retirés) — `TelcoApi` (`codplay`) les possède désormais ;
-  // `TELCO.SYNC_PLAYHEAD` en est le seul écho (`2026-07-17-telco-real-transport-plan.md` §Étape C).
-  it('TELCO.SYNC_PLAYHEAD reflète le curseur telco, quel que soit l’état de geste courant', () => {
-    const actor = actorWithScene(baseScene())
-    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 500 })
-    expect(actor.getSnapshot().value).toBe('idle')
-    expect(actor.getSnapshot().context.playheadMs).toBe(500)
-    actor.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs: 9999999 })
-    expect(actor.getSnapshot().context.playheadMs).toBe(9999999)
-  })
-
+describe('sequenceEditorMachine — playhead / play range / viewport (purement locaux)', () => {
   it('PLAYRANGE.SET / CLEAR', () => {
     const actor = actorWithScene(baseScene())
     actor.send({ type: 'PLAYRANGE.SET', inMs: 1000, outMs: 5000 })

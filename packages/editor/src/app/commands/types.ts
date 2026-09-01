@@ -3,7 +3,7 @@
  * fait foi ; `sequence-editor/types.ts` le réexporte, ne le redéclare jamais.
  */
 
-import type { CapsuleKind } from '@codplay/scene-factory'
+import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 
 // ─── Transitions ────────────────────────────────────────────────────────────
 

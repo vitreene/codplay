@@ -404,12 +404,9 @@ describe('zoom / pan / notifyResize', () => {
   })
 })
 
-// ─── Playhead — purement local ──────────────────────────────────────────────
-// `play()`/`pause()`/`stop()`/`tick()`/`isPlaying()` retirés (`2026-07-17-telco-real-transport-
-// plan.md` §Étape C) : la lecture réelle vit désormais dans `TelcoApi` (`codplay`), jamais simulée
-// ici. `syncPlayheadFromTelco` en est le seul écho.
+// ─── Playhead auteur et réconciliation silencieuse ──────────────────────────
 
-describe('seek / syncPlayheadFromTelco', () => {
+describe('seek / reconcilePlaybackTime', () => {
   it('seek met à jour playheadMs', () => {
     const ctrl = new SequenceEditorController(EMPTY)
     ctrl.seek(4000)
@@ -417,10 +414,11 @@ describe('seek / syncPlayheadFromTelco', () => {
     ctrl.destroy()
   })
 
-  it('syncPlayheadFromTelco met à jour playheadMs sans changer l\'état de geste', () => {
+  it('reconcilePlaybackTime met à jour le playhead sans émettre un seek auteur', () => {
     const ctrl = new SequenceEditorController(EMPTY)
-    ctrl.syncPlayheadFromTelco(2500)
+    ctrl.reconcilePlaybackTime(2500)
     expect(ctrl.getPlayheadMs()).toBe(2500)
+    expect(ctrl.getSnapshot().context.playheadOrigin).toBe('reconciled')
     expect(ctrl.getSnapshot().value).toBe('idle')
     ctrl.destroy()
   })

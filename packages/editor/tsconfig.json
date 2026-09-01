@@ -7,8 +7,7 @@
       "codplay/*": ["../codplay/src/*"],
       "ace": ["../codplay/src/ace/index.ts"],
       "ace/*": ["../codplay/src/ace/*"],
-      "codplay-v1": ["../codplay-v1/src/index.ts"],
-      "codplay-v1/*": ["../codplay-v1/src/*"],
+      "@codplay/selection-frame/v2": ["../authoring/selection-frame/src/v2.ts"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
       "@codplay/scene-factory": ["../authoring/scene-factory/src/index.ts"],
@@ -17,5 +16,5 @@
       "@codplay/text-auto-size/*": ["../authoring/text-auto-size/src/*"]
     }
   },
-  "include": ["src", "../codplay-v1/src/types/typed-om-polyfill.d.ts"]
+  "include": ["src"]
 }

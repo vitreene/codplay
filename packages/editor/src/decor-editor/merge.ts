@@ -1,12 +1,9 @@
-import type { ClassNameValue } from 'codplay-v1/runtime/perso-shared-types'
-import type { DecorPatch, ResolvedDecor } from './types'
+import type { ClassNameValue, DecorPatch, ResolvedDecor } from './types'
 import { STRUCTURED_GROUPS } from './decor-patch-groups'
 
 /**
  * Résout un `classes` déjà courant (chaîne, toujours le cas dans un décor résolu)
- * contre un nouveau patch — même algorithme que `applyClassNamePatch` du runtime
- * (`packages/codplay-v1/src/runtime/components/lib/dom-component-adapter.ts`), en
- * pur (pas de DOM) puisqu'ici on compose des écarts, pas un élément réel.
+ * contre un nouveau patch, en pur (pas de DOM) puisqu'ici on compose des écarts.
  */
 function resolveClassNamePatch(current: string, patch: ClassNameValue): string {
   if (typeof patch === 'string') return patch

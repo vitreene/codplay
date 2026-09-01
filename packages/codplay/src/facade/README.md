@@ -125,12 +125,13 @@ que lorsque le temps présenté correspond à son `timeMs`. Cette règle proviso
 évite d'imposer une annulation automatique avant l'observation des gestes réels
 de l'éditeur.
 
-La géométrie nécessaire à ces gestes relève d'une autre sortie V2 : elle doit
-être fournie par la projection HTML comme frame numérique cohérente avec la
-présentation, sans exposer de référence DOM. Les briques internes de mesure du
-runner existent déjà, mais cette surface de façade et son contrat restent à
-ouvrir dans le plan de reprise de l'éditeur. Elle est obligatoire pour
-l'architecture V2 ; elle n'est pas un retour à `getNodePose` ou `setNodePose`.
+Pour l'édition position/taille de la verticale éditeur, `snapshot` fournit l'état
+logique. L'intégration de l'éditeur le projette en pixels locaux avec la largeur
+de la racine hôte de la scène, puis reconvertit les deltas du cadre en nombres
+unitless avant `snapshot.set()`. Ce repère appartient à l'intégration éditeur.
+La façade CodPlay n'expose pas de cadre de sélection, de mesure, de `getBCR`, de
+pose de nœud ni de handle DOM ; aucune API supplémentaire n'est nécessaire pour
+ce circuit.
 
 ## Frontières
 
@@ -148,8 +149,8 @@ l'architecture V2 ; elle n'est pas un retour à `getNodePose` ou `setNodePose`.
   portées par `instance.telco` et utilisent la transaction interne du runtime ;
 - `CodPlay` reçoit le `frameScheduler` de l’hôte et garde `TimeTicker` interne ;
 - la façade ne crée ni DOM, ni journal, ni dispatcher parallèle ;
-- `instance.snapshot` reste une capacité logique de l'instance, sans handle DOM,
-  `getNodePose` ou `setNodePose` ;
+- `instance.snapshot` reste une capacité logique de l'instance, sans handle DOM
+  ni opération de pose ;
 - les erreurs de pilotage et d'instance passent par les diagnostics V2 ; les
   opérations de registre et `instance.snapshot.set()` retournent leurs rejets
   structurés en plus du diagnostic correspondant.
@@ -176,8 +177,8 @@ trouvent dans
 
 La tranche de registres directs est implémentée et testée. Le port logique
 `instance.snapshot` et la projection `cqw` sont implémentés et couverts par des
-tests de façade ; la preuve navigateur complète et le bridge éditeur restent en
-cours. La démo V2 utilise
+tests de façade ; la première verticale éditeur position/taille est raccordée au
+bridge V2 et validée en navigateur Firefox. La démo V2 utilise
 `codplay.build`, `codplay.resources` et `codplay.instances` ; elle ne construit
 plus de catalogue, de runner ou de télécommande internes. Le contrat
 `resources.override` reste reporté avec la définition de ressource associée.

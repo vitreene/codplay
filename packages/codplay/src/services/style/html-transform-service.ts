@@ -141,8 +141,20 @@ function transformCssValue(
 ): string {
   const logicalLength = projectHtmlLogicalLength(value, context)
   if (logicalLength !== undefined) return logicalLength
+  if (typeof value === 'number' && isAngleTransformProperty(property)) return `${value}deg`
   if (typeof value !== 'number' || !isLengthTransformProperty(property)) return String(value)
   return `${scaleNumericLength(value, context)}px`
+}
+
+/** Identifies transform channels whose numeric values are CSS angles in degrees. */
+function isAngleTransformProperty(property: TransformProperty): boolean {
+  return property === 'rotate'
+    || property === 'rotateX'
+    || property === 'rotateY'
+    || property === 'rotateZ'
+    || property === 'skew'
+    || property === 'skewX'
+    || property === 'skewY'
 }
 
 /** Identifies transform channels whose numeric values represent lengths. */

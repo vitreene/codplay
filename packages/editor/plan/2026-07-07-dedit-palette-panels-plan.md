@@ -1,5 +1,10 @@
 # Dedit — moteur de panneaux de palette : plan de conception
 
+> Le raccordement au player et au cadre décrit par les anciens plans est
+> remplacé par le plan V2 actif [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md).
+> Ce document ne doit pas être relu comme une instruction de créer un pont V1;
+> il conserve uniquement le plan du moteur de panneaux et de son rendu.
+
 **Date** : 2026-07-07
 **Périmètre** : refonte de `Family` (`packages/editor/src/decor-editor/`) en un moteur de
 panneaux de palette générique, avec séparation stricte contrat/rendu.
@@ -186,9 +191,9 @@ du module.
 
 ## 7. Reste à faire
 
-- **Pont position** (spec § 6) : implémentation du `PositionEditorBridge` sur
-  selection-frame, coordination bidirectionnelle temps réel, conversion au pont, bascule
-  éditeur visuel, attache-flex.
+- **Cadre de sélection** : l'intégration V2 est traitée par le plan actif ; ce
+  plan de panneaux ne crée pas de pont de position. Les extensions attache-flex
+  et coordination multi-contexte restent hors de son périmètre.
 - **Zones** (spec § 7) : palette de nommage/sélection, cards, contextes d'orientation,
   contrat avec `createZoneEditor` — dépend du module `createZoneEditor` de
   `selection-frame`, non implémenté.

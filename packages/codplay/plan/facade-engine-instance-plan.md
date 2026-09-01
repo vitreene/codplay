@@ -5,8 +5,9 @@
 > Statut : En cours
 > Version CodPlay : V2 foundation
 > Contrat révisé le 2026-08-30 ; la base de façade et les capacités `snapshot`
-> et `cqw` du chantier de reprise éditeur sont implémentées. Les preuves
-> navigateur et le raccordement éditeur restent à faire.
+> et `cqw` du chantier de reprise éditeur sont implémentées. La première
+> verticale éditeur position/taille est raccordée et prouvée dans Firefox ; les
+> contrôles navigateur complémentaires restent ouverts.
 
 ## Objet
 
@@ -37,7 +38,7 @@ Les briques internes existent. L’assemblage public est engagé dans
 | `RuntimeEngine` | ressources, horloge et ordre des instances ; transaction interne des seeks | est adapté par `EngineFacadeImpl` |
 | `RuntimePlayer` | une scène compilée, lifecycle, events, capture et reconstruction | est adapté par `InstanceFacadeImpl` |
 | `RuntimeMaterializer` | frontière interne de materialisation consommée par le runner HTML | n'est pas exposé dans les options d'instance et n'est pas sélectionnable par l'hôte |
-| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur, mesure de géométrie et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; sa mesure authoring existe encore seulement comme briques internes ; son `init()` est l'unique initialisation d'une instance |
+| `HtmlPlayerRunner` | assemblage HTML, mouvement, capture pointeur, mesure interne des mouvements et resize | reste interne à la façade ; le chemin public HTML/DOM est raccordé ; ses captures de mouvement ne sont pas un contrat d'authoring ; son `init()` est l'unique initialisation d'une instance |
 | `RuntimeTelco` | adaptateur de pilotage local | branché sur les notifications du player, sans boucle propre |
 
 `packages/demos/src/v2/layout/layout.ts` passe maintenant par la façade publique.
@@ -64,10 +65,10 @@ Pour l'accès d'authoring de l'éditeur, la référence comportementale est
 [`v1-author-api-spec.md`](../../../docs/formalisation/v1-author-api-spec.md) :
 elle fournit le vocabulaire des interactions, mais ses accès directs au nœud
 ne sont pas transposés. La cible V2 fixe la lecture d'état logique et
-l'écriture temporaire avant materialisation ; elle doit aussi exposer la mesure
-numérique de la projection HTML pour les cadres, poignées, hit-tests et
-conversions de coordonnées. Cette géométrie est une sortie de la frontière
-`Projection.measure`, pas un handle DOM remis à l'éditeur.
+l'écriture temporaire avant materialisation. Pour la première verticale
+position/taille, l'éditeur utilise sa propre racine de scène comme repère px et
+projette l'état logique lu par `snapshot`; aucun contrat de mesure ou handle DOM
+n'est ajouté à la façade CodPlay.
 
 ## Référence V1 et adaptation V2
 
@@ -1052,42 +1053,25 @@ qualifier à partir des usages réels avant de le stabiliser. Le contrat complet
 des formes et des diagnostics est défini dans le plan de reprise de l'éditeur.
 Cette capacité ne justifie pas la création d'un second circuit runtime.
 
-### Géométrie de présentation pour l'authoring — obligation V2, contrat à ouvrir
+### Géométrie d'authoring — hors façade CodPlay pour la première verticale
 
-La séparation logique/projection de V2 n'est complète que si la projection
-HTML peut restituer la géométrie qu'elle vient de produire. Cette sortie est
-requise par la frontière architecturale `Projection.set / measure / mount` ;
-elle n'est pas une option ajoutée pour l'éditeur et ne doit pas être remplacée
-par un accès au nœud. Le cœur `RuntimePlayer` reste sans DOM et `SolvedScene`
-reste logique et portable.
+La première verticale éditeur position/taille ne demande pas une sortie de
+géométrie au core. Elle lit `instance.snapshot`, qui fournit les valeurs
+logiques présentées, puis `decor-editor-bridge` les projette en pixels locaux
+avec la largeur de la racine de scène montée par l'application. Le cadre de
+sélection est monté dans cette même racine et reçoit une valeur px ; il n'a pas
+besoin de lire le nœud materialisé.
 
-Les briques internes existent déjà : le runner conserve les nœuds auteur
-persistants, `captureHtmlPose` lit une pose numérique dans une transaction
-HTML, `captureHtmlLayoutSnapshot` compose les relations parent/enfant et
-`presentSceneForGeometryCapture` reprojette un état avant la mesure. Ce qui
-manque est une surface d'instance qui expose la frame courante de façon stable,
-sans exposer ces types internes de mouvement ni aucune référence DOM.
+Les briques internes du runner (`captureHtmlPose`,
+`captureHtmlLayoutSnapshot` et `presentSceneForGeometryCapture`) restent
+réservées aux mouvements HTML, FLIP et reparent. Elles ne sont pas promues en
+API d'authoring et ne doivent pas être réutilisées comme un second canal de
+position/taille.
 
-Le contrat à arrêter avant code devra garantir :
-
-- une frame immuable, liée au temps présenté et à une révision, adressée par
-  `{ storyId, persoId }`, avec présence/montage explicite ;
-- rectangle viewport, dimensions locales, origine, matrice affine et relation
-  parent/racine pour les opérations de sélection, hit-test et conversion de
-  coordonnées ;
-- les cibles/conteneurs nécessaires aux grilles et aux poignées, pas seulement
-  l'item sélectionné ;
-- une mesure des nœuds auteur après `component.update`, hors overlays FLIP/DnD
-  et hors géométrie historique ;
-- une nouvelle frame après init, seek, resize, `snapshot.set/clear`, rebuild,
-  montage/démontage et remplacement de nœud, avec rejet possible d'une frame
-  obsolète par son temps ou sa révision.
-
-La surface et les noms d'opérations restent à fixer dans le sous-plan de
-reprise de l'éditeur. Ce sous-plan devra aussi définir les diagnostics
-d'absence et la conversion de la géométrie de grille. Son implémentation est
-une évolution de frontière V2 à autoriser séparément de `snapshot` et `cqw` ;
-elle ne constitue ni un correctif de bug, ni une compatibilité V1.
+Les cas qui exigeraient une géométrie calculée par le player — grille, taille
+intrinsèque, parent transformé, hit-test dans un autre repère — sont hors de la
+verticale actuelle. Ils devront être décrits et autorisés dans une tranche
+CodPlay distincte avant toute modification du core.
 
 #### Longueurs unitless ed2 → `cq*`
 
@@ -1115,28 +1099,16 @@ conservent leur sémantique propre. CodPlay ne déduit jamais une longueur depui
 la grammaire CSS et ne maintient aucune whitelist implicite.
 
 Une interpolation entre une longueur logique et une valeur CSS incompatible est
-rejetée avec diagnostic. La première implémentation actuelle prouve le circuit
-avec des valeurs déjà explicites en `cqw`; la migration de la qualification vers
-CodPlay, sa configuration et sa preuve façade/navigateur restent à réaliser.
+rejetée avec diagnostic. La qualification CodPlay, sa configuration et la
+preuve façade/navigateur sont implémentées pour la verticale éditeur actuelle.
 
 #### Frontière de géométrie — aucun accès public au nœud
 
-Le nœud n'est pas rendu nécessaire à l'édition : l'éditeur écrit l'état logique
-temporaire avant materialisation et reçoit séparément la géométrie mesurée par
-la projection HTML. Cette dernière est une capacité obligatoire de V2, pas une
-option à décider après coup.
-
-La façade ne publie donc ni référence de nœud, ni `subscribeToNode`, ni
-`getNodePose`/`setNodePose`. Elle devra publier une frame géométrique numérique
-stable pour la sélection et les gestes, sans donner accès aux contextes internes
-éventuellement possédés par un composant (par exemple une scène Three.js). La
-référence de nœud reste remplaçable à l'intérieur du runner et ne constitue
-jamais l'état logique.
-
-La forme exacte de cette frame et de son port d'observation est reportée au
-sous-plan de reprise de l'éditeur ; le besoin architectural et la frontière
-`Projection.measure` sont, eux, arrêtés par la V2. Cette évolution doit être
-autorisée avant toute modification du cœur.
+La façade ne publie ni référence de nœud, ni mesure de pose, ni abonnement au
+DOM. L'éditeur écrit l'état logique temporaire avant materialisation et son
+bridge local projette les quatre champs nécessaires dans le repère de la racine
+de scène. La référence de nœud reste remplaçable à l'intérieur du runner et ne
+constitue jamais l'état logique.
 Les features distinctes `snapshot` et `cqw`, autorisées le 2026-08-30 pour la
 reprise ed2, sont suivies et documentées dans leurs sous-plans respectifs ;
 elles ne constituent pas un accès au node.
@@ -1513,16 +1485,18 @@ cachées de l'instance.
   aucune erreur console constatée dans Safari.
 
 L'implémentation de `instance.snapshot` (lecture et preview logique) est
-présente dans la façade et le runtime V2, avec une première preuve de contrat.
-La géométrie authoring V2 est une frontière obligatoire encore à exposer ; elle
-ne doit pas être déduite de `snapshot` et ne sera pas remplacée par un accès aux
-nœuds.
+présente dans la façade et le runtime V2, avec une preuve de contrat et une
+preuve d'interpolation combinée. La première verticale éditeur position/taille
+consomme cette surface via son bridge d'application et conserve la projection
+px dans la racine de scène ; aucune frontière de géométrie supplémentaire n'est
+ouverte dans CodPlay.
 
 ## État de travail
 
 Le contrat de base est validé. La base de façade est terminée ; les capacités
-`snapshot` et `cqw` ajoutées pour la reprise de l'éditeur sont implémentées et
-restent à compléter par la preuve navigateur et leur raccordement éditeur.
+`snapshot` et `cqw` ajoutées pour la reprise de l'éditeur sont implémentées,
+raccordées à la première verticale éditeur position/taille et prouvées dans
+Firefox. Les contrôles navigateur complémentaires restent ouverts.
 
 Déjà implémenté :
 

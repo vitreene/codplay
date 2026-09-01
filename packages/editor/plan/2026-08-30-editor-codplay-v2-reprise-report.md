@@ -1,4 +1,11 @@
-# Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
+# Rapport de reprise historique — éditeur avec CodPlay V2
+
+> Ce document est un rapport de reprise historique. Il est supersédé par
+> [`2026-09-01-editor-v2-organization-plan.md`](./2026-09-01-editor-v2-organization-plan.md)
+> et [`2026-09-01-editor-v2-b3-reprise-report.md`](./2026-09-01-editor-v2-b3-reprise-report.md).
+> Les propositions d'une frontière de mesure dédiée ne sont pas retenues : la
+> première verticale utilise `instance.snapshot` et la racine de scène de
+> l'éditeur pour sa projection locale.
 
 **Statut : En cours — plan de migration de la verticale éditeur V1 vers une verticale V2 ; les capacités `snapshot` et `cqw` ont une première implémentation, mais leurs frictions de migration et la preuve de la verticale complète restent à traiter.**
 **Cible : ed2 avec CodPlay V2 foundation.**

@@ -120,9 +120,8 @@ export interface SelectionFrameValue {
   y: number
   width: number
   height: number
-  translate?: { x: number; y: number }
   rotate?: number
-  scale?: { x: number; y: number }
-  anchor?: FlexAnchor
+  scaleX?: number
+  scaleY?: number
 }
 export type Unsubscribe = () => void

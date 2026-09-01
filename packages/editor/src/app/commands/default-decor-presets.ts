@@ -5,7 +5,7 @@ import type { Decor, ItemType } from './types'
  * (`assignType`) — un objet JSON simple, pas une couche vivante
  * (`2026-07-17-decor-keyframe-model-notes.md` §3/§4 : « on y reviendra quand on pourra en
  * créer »). Un type absent de cette table démarre sans preset (décor initial vide, comportement
- * inchangé) — seul `'text'` est couvert aujourd'hui, seul type que `buildSceneDoc` sait construire.
+ * inchangé) — seul `'text'` est couvert aujourd'hui, seul type que `buildSceneDocV2` sait construire.
  * Valeurs indicatives fournies par l'auteur (2026-07-17) : fond bleu océan, bords cyan épais
  * arrondis, texte centré horizontalement et verticalement, largeur 80% de la scène.
  * `display:flex` + `align-items:center` pour le centrage vertical — aucune convention existante

@@ -98,22 +98,20 @@ source et destination. Un enfant qui possède aussi un mouvement direct ultérie
 reste disponible pour animer le reflow de la liste. Un élément capturé seulement
 comme dépendance d'un ancêtre ne peut pas écraser sa propre trajectoire naturelle.
 
-## Géométrie authoring V2
+## Géométrie interne de présentation
 
-La mesure de géométrie n'est pas une option du runner : elle est la réalisation
-HTML de la capacité `Projection.measure` requise par V2. Le runner possède déjà
-les briques qui la rendent possible (`captureHtmlPose`,
-`captureHtmlLayoutSnapshot` et `presentSceneForGeometryCapture`) et mesure les
-nœuds auteur persistants dans une transaction explicite.
+Le runner possède des briques de capture (`captureHtmlPose`,
+`captureHtmlLayoutSnapshot` et `presentSceneForGeometryCapture`) pour ses propres
+besoins de mouvement HTML, FLIP et reparent. Elles mesurent des nœuds dans une
+transaction interne et ne constituent pas un contrat d'authoring.
 
-Ces snapshots internes de mouvement ne sont pas encore le contrat public de
-l'éditeur. Une future surface de façade devra publier une frame numérique
-immuable, liée au temps et à une révision, en excluant les overlays FLIP/DnD et
-les références DOM. Elle sera alimentée après la projection courante et après
-les changements de layout (init, seek, resize, preview snapshot, rebuild et
-montage/démontage). Le runner ne doit pas déplacer cette mesure dans
-`RuntimePlayer` ni laisser l'éditeur relire `getBoundingClientRect()` ou
-`getComputedStyle()`.
+La première verticale éditeur position/taille ne consomme pas ces captures : elle
+lit l'état logique par `instance.snapshot`, utilise la largeur de sa racine de
+scène comme repère local et monte son cadre d'interaction dans cette racine. Le
+runner ne publie donc ni frame de sélection, ni référence DOM, ni pose de nœud à
+l'éditeur. Toute évolution de capture pour une grille, une taille intrinsèque ou
+un repère transformé devra faire l'objet d'une spécification et d'une tranche
+distinctes.
 
 Le reset retire aussi les masques de source laissés par l'overlay précédent. Les
 ghosts existants sont remis dans l'ordre parent-avant-enfant, en remontant toute

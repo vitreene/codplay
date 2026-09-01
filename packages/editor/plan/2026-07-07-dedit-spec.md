@@ -30,7 +30,7 @@ Trois modules d'édition directe se complètent :
 |---|---|
 | Cadre de sélection (`selection-frame`) | Géométrie par geste (move/resize/rotate/scale, placement grid, attache-flex) |
 | Timeline (`sequence-editor`) | Association décor ↔ instant via keyframes, distribution capsule |
-| **Dedit** | Édition du **contenu** du décor courant |
+| **Dedit** | Édition du **décor complet** de l'item courant : contenu, style, offset et transform |
 
 L'éditeur visuel de position (cadre de sélection inséré dans le player) est **sous la
 responsabilité de dedit** : dedit pilote son activation et coordonne ses valeurs en temps réel
@@ -158,7 +158,7 @@ interface CapsulePatch {
 /** Module non-CSS transposé en aval (styles/classes) — premier exemple d'une famille
  *  de modules (bordures par côté, clip-path…) chaque fois qu'une interface intermédiaire
  *  est nécessaire pour éditer confortablement une notion géométrique. */
-interface PositionPatch {
+interface OffsetPatch {
   x?: number; y?: number; width?: number; height?: number   // cqw
   ratio?: number | null          // contrainte l/h ; null = libre
   anchor?: FlexAnchor            // position d'appui, résolue par l'attache-flex
@@ -175,7 +175,7 @@ interface DecorPatch {
   /** Même modèle que le runtime codplay (`ClassNameValue`, cf perso-shared-types) :
    *  remplacement total via une chaîne, ou patch { add?, remove? } sur tokens espacés. */
   classes?: string | { add?: string; remove?: string }
-  position?: PositionPatch       // module à part (cf ci-dessus)
+  offset?: OffsetPatch            // transform et dimensions ; le placement de grille reste séparé
   zone?: string | null           // référence PAR NOM ; null = surface de la capsule
   capsule?: CapsulePatch          // items capsule uniquement (§ 8)
   text?: string                   // contenu textuel (saisie dans dedit)
@@ -204,7 +204,7 @@ Notes :
 - **`custom`** : aucune validation bloquante. L'auteur y met ce qu'il veut, unités
   comprises ; si ça casse, c'est sa responsabilité. Le contenu est stocké tel quel dans
   l'écart et prime sur `style` (dernier appliqué).
-- **`position.ratio`** : quand il est posé, largeur et hauteur sont liées dans les champs de
+- **`offset.ratio`** : quand il est posé, largeur et hauteur sont liées dans les champs de
   dedit ; la contrainte est aussi communiquée au cadre de sélection (politique de poignées).
 
 ### 3.3 Unités : cqw exclusif
@@ -226,8 +226,8 @@ le player ne connaît jamais à l'avance les contraintes d'affichage, le pixel e
   — pour des grandeurs fines (épaisseur de bord, rayon, padding), un facteur inférieur à 1
   rapproche l'unité saisie du rendu visuel réel. Ce facteur est une évaluation empirique,
   ajustable sans toucher au reste du code.
-- Le cadre de sélection continue d'émettre en px (contrats actuels) : la **conversion
-  px ↔ cqw est localisée dans le pont position** (§ 6), jamais dans le cadre de sélection
+- Le cadre de sélection émet et reçoit des valeurs en px locaux : la **conversion
+  px ↔ cqw est localisée dans l'intégration V2 de decor-editor** (§ 6), jamais dans le cadre de sélection
   ni dans le modèle de décor.
 
 ### 3.4 Zones et contexte d'orientation
@@ -276,8 +276,8 @@ domaine (pur) → machine XState → contrôleur → rendu
 ```
 
 Emplacement : `packages/editor/src/decor-editor/` (même package que sequence-editor, dedit
-est un module d'UI éditeur ; le pont position est le seul lien, inversé, vers
-`packages/authoring/selection-frame`).
+est un module d'UI éditeur ; l'intégration applicative du cadre est composée dans
+`packages/editor/src/app/bridges/`, avec `packages/authoring/selection-frame` comme outil bas niveau).
 
 ### 4.1 Domaine (pur, testable sans DOM)
 
@@ -314,7 +314,6 @@ interface DecorEditorOptions {
     cards: ZoneCard[]                      // presets de zones (§ 7)
     palette: PaletteConfig                 // panneaux + visibilité par type (§ 4 bis)
   }
-  positionBridge?: PositionEditorBridge    // pont vers le cadre de sélection (§ 6)
 }
 
 interface DecorEditorApi {
@@ -428,7 +427,7 @@ interface PaletteConfig {
 ```
 
 - Un panneau lit des champs de **n'importe quelle propriété CSS de `style`**, plus
-  éventuellement `custom`/`classes`/`position.*` — ex. un panneau « Forme » peut regrouper
+  éventuellement `custom`/`classes`/`offset.*` — ex. un panneau « Forme » peut regrouper
   `style.background-color`, `style.border-color`, `style.border-width`,
   `style.border-radius`, `style.padding` : un regroupement purement thématique, sans rapport
   avec une structure du décor (`style` est un groupe plat unique, § 3.2).
@@ -463,36 +462,55 @@ possède des zones définies — à intégrer à une configuration de panneaux d
 
 ---
 
-## 6. Pont position — coordination avec l'éditeur visuel
+## 6. Cadre de sélection — interface V2 de `decor-editor`
 
-L'éditeur visuel de position (cadre de sélection inséré dans le player, outil attache-flex
-compris) est sous la responsabilité de dedit. Les données de position sont **partagées** entre
-l'éditeur visuel et les champs de dedit, coordonnées en temps réel dans les deux sens :
+Le cadre de sélection est une surface d'interaction de `decor-editor`. Le package
+`selection-frame` fournit le mécanisme bas niveau de l'overlay et des gestes ; il ne
+connaît ni le player, ni `instance.snapshot`, ni le document, ni la conversion d'unités.
+L'intégration applicative est portée par `decor-editor-bridge`.
 
-- **geste → champs** : le cadre de sélection émet ses diffs continus (px, contrats actuels) ;
-  le pont convertit en cqw, fusionne dans l'écart (`position.*` — module à part, § 3.2),
-  met à jour les champs affichés et émet `onDecorChange` ;
-- **champs → geste** : une saisie dans dedit est convertie cqw → px et appliquée via
-  l'adaptateur du cadre de sélection, qui recale son cadre sur l'élément (mécanique de
-  recapture de pose existante).
+La première verticale V2 manipule la valeur suivante dans le repère local px de la racine
+de scène :
 
 ```typescript
-interface PositionEditorBridge {
-  activate(mode: 'position' | 'transform' | 'flex-anchor'): void
-  deactivate(): void
-  apply(patch: PositionValuesPx): void            // champs → élément
-  onValues(cb: (v: PositionValuesPx) => void): Unsubscribe   // geste → champs
-  containerRefWidthPx(): number                   // référence de conversion cqw
+interface SelectionFrameValue {
+  x: number
+  y: number
+  width: number
+  height: number
+  rotate?: number       // degrés, sans conversion d'unité
+  scaleX?: number       // facteur, sans conversion d'unité
+  scaleY?: number       // facteur, sans conversion d'unité
 }
+
+type SelectionFrameDelta =
+  | { kind: 'move'; dx: number; dy: number }
+  | { kind: 'resize'; handle: string; dx: number; dy: number }
 ```
 
-L'implémentation du pont adosse `selection-frame` (adaptateurs, presets de poignées
-existants) ; dedit n'importe jamais selection-frame directement — il ne connaît que
-l'interface du pont, fournie par l'hôte. Accès UI :
+Le circuit est déterministe :
 
-- panneau **position** : un bouton entre dans le mode position d'appui (attache-flex) ;
-- panneau **transform** : bouton-bascule vers l'éditeur visuel (sélectionné par défaut),
-  complété par l'accès aux propriétés distinctes (translate, rotate, scale).
+1. à la sélection, `decor-editor-bridge` lit `instance.snapshot.get()` via le bridge de
+   coordination et résout l'état logique de l'item au temps présenté ;
+2. il convertit `x/y/width/height` en px avec la largeur de la racine de scène et remet
+   cette valeur au cadre ; le cadre n'effectue aucune lecture du node rendu ;
+3. pendant un geste, le cadre émet des deltas px. Le bridge conserve la base du geste,
+   calcule la valeur candidate en px et convertit cette valeur en nombres `unitless` dans
+   `offset.translate`, `offset.width` et `offset.height` ;
+4. le même patch de décor peut contenir des changements de style. Il est envoyé
+   atomiquement à `instance.snapshot.set()` pour la preview ; `snapshot.get()` n'est pas
+   utilisé pour relire cette preview ;
+5. un commit appelle `snapshot.clear()`, persiste le `DecorPatch` par la commande xState
+   historique, puis le rebuild V2 relit le snapshot ; un abandon appelle `snapshot.clear()`
+   sans mutation documentaire ;
+6. en lecture, le cadre est suspendu. Un seek, un rebuild, une nouvelle sélection ou un
+   redimensionnement de la racine déclenche une nouvelle projection depuis la base logique.
+
+Le bridge est une composition de l'application, pas une option du contrôleur `dedit` et
+pas une API CodPlay. Cette verticale n'expose aucune façade publique de géométrie,
+de pose ou d'accès au node du player.
+Les notions de placement de grille et d'attache-flex restent des extensions séparées ;
+elles ne doivent pas réintroduire une lecture de node dans le circuit position/taille.
 
 ---
 

@@ -1,5 +1,7 @@
 import type { Actor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
+import { createSelectionFrameV2 } from '@codplay/selection-frame/v2'
+import type { SelectionFrameDelta, SelectionFrameV2Handle } from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
@@ -7,12 +9,14 @@ import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
 import { findPanel, panelsForType } from '../../decor-editor/palette-panel'
 import type { PanelField, PaletteConfig } from '../../decor-editor/palette-panel'
-import type { DecorPatch, OffsetPatch } from '../../decor-editor/types'
+import type { DecorPatch, OffsetPatch, SelectionFrameValue } from '../../decor-editor/types'
 import type { Content, Decor, EditorScene, Item, OffsetData } from '../commands/types'
 import type { Command, Selection } from '../controller/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
 import { mergePatch } from '../../decor-editor/merge'
+import { cqwToPx, offsetValuesPxToPatch, pxToCqw } from '../../decor-editor/units'
+import { EDITOR_V2_STORY_ID } from '../../builder-v2'
 
 /**
  * Pont `decorEditor` — `2026-07-13-controller-islands-bridge-plan.md` §3.2. `defaults`/`chain`
@@ -28,7 +32,7 @@ export type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
  * déduit de l'alignement playhead — les deux s'écrivent pareil, `2026-07-17-resolved-state-at-
  * time-notes.md`, « initialDecorId ≈ kf1 »). `isTemporary: true` = aucun décor réel ne correspond
  * à l'instant courant (entre deux kf) — jamais de cible d'écriture dans ce cas (`writeDecorId` reste
- * `null`), le décor affiché est lu en direct sur le node, pas dans le document.
+ * `null`), le décor affiché est relu depuis le snapshot logique présenté, pas dans le document.
  */
 type Target = {
   itemId: string
@@ -113,19 +117,9 @@ export function styleFieldsForItemType(config: PaletteConfig, itemType: ItemVisu
 }
 
 /**
- * Décor temporaire — lecture live via `AuthorApi.getPersoStates()`, jamais `scene.decors`, jamais
- * le node/DOM (`2026-07-25-perso-state-at-t-plan.md`). Remplace l'ancienne lecture par
- * `authorApi.getNodeSnapshot` (`utils.get` d'anime sur le node réel) : cette dernière dépendait du
- * timing d'anime.js — deux défauts distincts constatés en direct la même session (`width`/`height`
- * parfois lus en cqw brut mal réinterprété comme px ; `background-color` figé sur le keyframe
- * précédent, jamais rafraîchi avant un rendez-vous explicite). `getPersoStates()` renvoie l'état du
- * PERSO, capturé une fois par seek, dans son unité d'origine — jamais dérivé du DOM/du cache anime
- * lié à un node.
- *
- * `getPersoStates()` renvoie une valeur BRUTE par propriété, TOUJOURS déjà dans l'unité native du
- * perso (jamais du px, contrairement à `getNodeSnapshot`) — `formatPersoValueForCssProperty`
- * (`css-value-format.ts`) formate sans jamais convertir physiquement (pas de `referenceWidthPx`
- * ici, devenu inutile pour ce chemin de lecture).
+ * Décor temporaire — lecture depuis le snapshot logique V2 présenté, jamais depuis `scene.decors`
+ * ou le DOM. Les propriétés absentes du snapshot sont complétées par la cascade documentaire
+ * précédente ; aucune valeur physique n'est réinterprétée comme une valeur logique.
  */
 export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: string, fields: PanelField[]): DecorPatch {
   const state = snapshotState(snapshot, itemId)
@@ -142,22 +136,8 @@ export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: 
 }
 
 /**
- * Pose live d'un perso — `x`/`y`/`width`/`height`/`rotate`/`scaleX`/`scaleY`, jamais couverte par
- * la palette (aucun champ position/rotate/scale dans `default-palette.ts`), mais bien fournie par
- * `getPersoStates()` (`2026-07-25-perso-state-at-t-plan.md`) comme n'importe quelle autre
- * propriété du perso — la palette n'est jamais la limite de ce que « photographier » un item peut
- * capturer. `x`/`y`/`width`/`height` sont des chaînes cqw brutes (jamais px) : un simple
- * `Number.parseFloat` suffit, sans le facteur d'échelle de `parseNumberFromCssValue` (celui-ci
- * n'a de sens que pour une SAISIE utilisateur, cf `css-value-format.ts` — pas une valeur perso déjà
- * dans l'unité finale).
- *
- * `getPersoStates()` ne porte QUE les propriétés activement animées à cet instant (issues des
- * transitions actives, `2026-07-25-perso-state-at-t-plan.md` §4) — un champ constant (ex. `x`,
- * jamais transitionné si l'item ne bouge qu'en `y`) en est absent, PAS égal à 0. `base` (la
- * cascade déjà résolue jusqu'au keyframe précédent) fournit la valeur de repli pour ces champs —
- * jamais un défaut arbitraire (`0`/`1`) qui écraserait silencieusement l'héritage : `translate`/
- * `scale` sont fusionnés par `mergePatch` comme des groupes ENTIERS (`STRUCTURED_GROUPS`), donc un
- * `x: 0` inventé ici écraserait le vrai `x` hérité de `base`, pas seulement le compléter.
+ * Pose temporaire des champs structurés présents dans le snapshot V2. Un champ absent est complété
+ * par `base`, jamais par un défaut arbitraire qui écraserait silencieusement l'héritage.
  */
 function resolveTemporaryOffset(snapshot: CodPlaySnapshot | null, itemId: string, base: DecorPatch): DecorPatch {
   const state = snapshotState(snapshot, itemId)
@@ -241,17 +221,11 @@ function freshDecorId(): string {
 export function resolveCurrentPatch(decor: Decor, content: Content | undefined, scene: EditorScene): DecorPatch {
   const patch: DecorPatch = {}
   if (decor.style) patch.style = decor.style
-  // `ClassNameValue` — deux types homonymes distincts : `string|string[]` côté document
-  // (`app/commands/types.ts`) contre le modèle add/remove du runtime codplay côté dedit
-  // (`codplay/runtime/perso-shared-types`). Un remplacement total (jamais un diff add/remove)
-  // reste une valeur valide des deux côtés — seul point de passage, comme `offset` ci-dessous.
+  // Le modèle document accepte une chaîne ou un tableau ; le modèle décor accepte aussi
+  // add/remove. Une valeur issue du document est déjà une valeur complète et reste donc une chaîne.
   if (decor.classes) patch.classes = decor.classes as unknown as DecorPatch['classes']
-  // `OffsetPatch`/`OffsetData` — même représentation valeur, `anchor` typé en littéraux stricts
-  // côté dedit contre `string` générique côté document (même raisonnement que le cast `CapsuleKind`/
-  // `AutoCapsuleType` de `build-scene.ts`, un seul point de passage).
+  // Le document et le décor portent la même structure d'offset pour cette frontière.
   if (decor.offset) patch.offset = decor.offset as unknown as OffsetPatch
-  // Même traitement qu'`offset` ci-dessus (un champ structuré côté document, ici juste une
-  // chaîne — même type des deux côtés, pas de cast nécessaire) — bien plus simple, de même nature.
   if (decor.custom !== undefined) patch.custom = decor.custom
   if (decor.zoneId) {
     const zone = scene.zones[decor.zoneId]
@@ -417,11 +391,23 @@ function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatc
 /** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif (spec §4.3, `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B.4). Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
 export const PHASE_IDLE_FLUSH_MS = 4000
 
-export function createDecorEditorBridge(container: HTMLElement, machine: Actor<typeof controllerMachine>): BridgeHandle {
+export function createDecorEditorBridge(
+  container: HTMLElement,
+  machine: Actor<typeof controllerMachine>,
+  coordination: import('./editor-coordination-bridge').EditorCoordinationBridge,
+): BridgeHandle {
   const catalogs: DecorEditorCatalogs = { presets: DEFAULT_PRESETS, cards: [], palette: DEFAULT_PALETTE }
   const controller = new DecorEditorController(catalogs)
   let mountHandle: DecorEditorMountHandle | null = null
-  let offsetBridgeWired = false
+  let selectionFrame: SelectionFrameV2Handle | null = null
+  let sceneHost: HTMLElement | null = null
+  let resizeObserver: ResizeObserver | null = null
+  let frameTarget: Target | null = null
+  let frameValuePx: SelectionFrameValue | null = null
+  let frameLogicalValue: SelectionFrameValue | null = null
+  let frameGestureBasePx: SelectionFrameValue | null = null
+  let lastPreviewAccepted = false
+  let snapshotPreviewActive = false
 
   // ── Commit de fin de phase (`2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B) —
   // dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est ce pont, l'hôte, qui
@@ -469,18 +455,26 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
    */
   function flushNow(): void {
     cancelIdleFlush()
-    if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) return
+    if (selectionFrame?.isGestureActive()) return
     const commands = pendingCommands
     pendingCommands = null
-    if (commands && commands.length > 0) machine.send({ type: 'RUN_TRANSACTION', commands })
+    if (commands && commands.length > 0) {
+      coordination.snapshot.clear()
+      snapshotPreviewActive = false
+      machine.send({ type: 'RUN_TRANSACTION', commands })
+    }
   }
 
   /** Échap — abandon de phase (§Étape B.6) : jette l'écart en attente sans committer, puis force le pont `scenePlayer` à rejouer le document inchangé pour effacer la preview live devenue périmée. */
   function abortPhase(): void {
-    if (pendingCommands === null) return
     cancelIdleFlush()
+    const hadPendingCommands = pendingCommands !== null
     pendingCommands = null
-    machine.send({ type: 'PHASE_ABORT' })
+    if (snapshotPreviewActive) {
+      coordination.snapshot.clear()
+      snapshotPreviewActive = false
+    }
+    if (hadPendingCommands) machine.send({ type: 'PHASE_ABORT' })
   }
 
   /**
@@ -499,73 +493,244 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
   }
   document.addEventListener('keydown', onKeyDown, { capture: true })
 
-  /** Câblé une fois le pont offset disponible (`context.offsetBridge`, publié avec `authorApi`). */
-  function wireOffsetBridge(): void {
-    if (offsetBridgeWired) return
-    const { offsetBridge } = machine.getSnapshot().context
-    if (!offsetBridge) return
-    offsetBridgeWired = true
-    controller.setOffsetBridge(offsetBridge)
-    // Début de geste — annule un flush déjà armé, jamais un commit en soi (arbitrage 2026-07-17,
-    // regroupement de phase préservé). Fin de geste — armée par `onCommit` (message explicite du
-    // geste qui vient de finir, `2026-07-18-pose-edit-architecture-study.md` §7), pas par
-    // `onGestureActiveChange(false)` (état redéduit) : même comportement observable (un seul flush
-    // pour une salve de gestes enchaînés, idle en déclenche un), signal de déclenchement fiabilisé.
-    offsetBridge.onGestureActiveChange(active => {
-      if (active) cancelIdleFlush()
-    })
-    offsetBridge.onCommit(() => {
-      if (pendingCommands !== null) armIdleFlush()
-    })
-    // La `DecorLiveSession` (§2/§3 du plan) reste alimentée (`offset-editor-bridge.ts`) mais n'est PAS
-    // consultée ici pour l'écriture : `onDecorChange`/`pendingCommands` ci-dessus est DÉJÀ l'unique
-    // écrivain de l'offset, sensible à tous les signaux de fin de phase (sélection, seek, mutation
-    // externe — pas seulement la fin du geste CS) — `onCommit` n'arme qu'un flush déjà préparé,
-    // jamais une écriture indépendante. Faire écrire la session ICI créerait un second chemin
-    // d'écriture concurrent (double fork possible sur un décor partagé) — constaté en écrivant les
-    // tests de cette étape, corrigé en ne branchant PAS ce point d'écriture. La session sert pour
-    // l'instant de lecture seule (insertion de kf, §4 du plan) ; `committing`/`notifyWritten` restent
-    // définis pour un futur producteur (zone/multi-sélection) qui n'a pas déjà de chemin d'écriture.
+  /** Mounts the palette as soon as the editor region exists; it has no player dependency. */
+  function ensureMounted(): void {
+    if (mountHandle) return
+    mountHandle = mountDecorEditor(container, controller)
   }
 
-  /** Différé jusqu'au premier `PLAYER_READY` (`authorApi` requis pour `subscribeToNode`, §3.2). */
-  function ensureMounted(): void {
-    wireOffsetBridge()
-    if (mountHandle) return
-    const { authorApi, referenceWidthPx } = machine.getSnapshot().context
-    if (!authorApi) return
-    mountHandle = mountDecorEditor(container, controller, authorApi.subscribeToNode, { referenceWidthPx })
+  /** Returns the current scene-root width used by the single logical-length conversion boundary. */
+  function sceneRootWidthPx(): number | null {
+    if (sceneHost === null) return null
+    const width = sceneHost.getBoundingClientRect().width
+    return Number.isFinite(width) && width > 0 ? width : null
+  }
+
+  /** Reads one logical cqw value from the immutable V2 snapshot representation. */
+  function readLogicalLength(value: unknown): number | undefined {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+    if (typeof value === 'string') {
+      const match = value.trim().match(/^(-?(?:\d+\.?\d*|\.\d+))cqw$/)
+      return match ? Number(match[1]) : undefined
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const record = value as Record<string, unknown>
+    if (record.kind !== 'length' || typeof record.value !== 'number' || !Number.isFinite(record.value)) return undefined
+    return record.value
+  }
+
+  /** Reads a dimensionless V2 value without interpreting CSS text as a pixel measurement. */
+  function readNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+  }
+
+  /** Resolves a logical frame from snapshot state, with document offset only as a missing-field fallback. */
+  function readLogicalFrame(snapshot: CodPlaySnapshot | null, itemId: string, fallback: DecorPatch): SelectionFrameValue | null {
+    const stateStyle = snapshotState(snapshot, itemId)?.style
+    const style = stateStyle && typeof stateStyle === 'object' ? stateStyle as Record<string, unknown> : {}
+    const offset = fallback.offset
+    const x = readLogicalLength(style.x) ?? offset?.translate?.x ?? offset?.x
+    const y = readLogicalLength(style.y) ?? offset?.translate?.y ?? offset?.y
+    const width = readLogicalLength(style.width) ?? offset?.width
+    const height = readLogicalLength(style.height) ?? offset?.height
+    if (x === undefined || y === undefined || width === undefined || height === undefined) return null
+    return {
+      x,
+      y,
+      width,
+      height,
+      rotate: readNumber(style.rotate) ?? offset?.rotate ?? 0,
+      scaleX: readNumber(style.scaleX) ?? offset?.scale?.x ?? 1,
+      scaleY: readNumber(style.scaleY) ?? offset?.scale?.y ?? 1,
+    }
+  }
+
+  /** Projects one logical frame into the local pixel coordinate system of the scene root. */
+  function logicalFrameToPx(value: SelectionFrameValue, rootWidthPx: number): SelectionFrameValue {
+    return {
+      x: cqwToPx(value.x, rootWidthPx),
+      y: cqwToPx(value.y, rootWidthPx),
+      width: cqwToPx(value.width, rootWidthPx),
+      height: cqwToPx(value.height, rootWidthPx),
+      rotate: value.rotate ?? 0,
+      scaleX: value.scaleX ?? 1,
+      scaleY: value.scaleY ?? 1,
+    }
+  }
+
+  /** Converts one local pixel frame to the unitless structured offset vocabulary. */
+  function frameToOffsetPatch(value: SelectionFrameValue, rootWidthPx: number): OffsetPatch {
+    return offsetValuesPxToPatch(value, rootWidthPx)
+  }
+
+  /** Applies one raw move/resize delta to the current local-pixel frame. */
+  function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
+    if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
+
+    const minSize = 4
+    let { x, y, width, height } = base
+    if (delta.handle.includes('e')) width = Math.max(minSize, base.width + delta.dx)
+    if (delta.handle.includes('w')) {
+      width = Math.max(minSize, base.width - delta.dx)
+      x = base.x + base.width - width
+    }
+    if (delta.handle.includes('s')) height = Math.max(minSize, base.height + delta.dy)
+    if (delta.handle.includes('n')) {
+      height = Math.max(minSize, base.height - delta.dy)
+      y = base.y + base.height - height
+    }
+    return { ...base, x, y, width, height }
+  }
+
+  /** Builds the one snapshot patch shared by palette and Selection Frame previews. */
+  function toSnapshotPatch(itemId: string, patch: DecorPatch): import('codplay').CodPlaySnapshotPatch | null {
+    const progress = coordination.transport.getProgress()
+    if (progress === null) return null
+    const style: Record<string, unknown> = {}
+    for (const [property, value] of Object.entries(patch.style ?? {})) {
+      if (property === 'x' || property === 'y' || property === 'width' || property === 'height'
+        || property === 'rotate' || property === 'scaleX' || property === 'scaleY') continue
+      style[property] = value
+    }
+    if (patch.offset) {
+      const offset = patch.offset
+      if (offset.x !== undefined) style.x = offset.x
+      if (offset.y !== undefined) style.y = offset.y
+      if (offset.translate !== undefined) {
+        style.x = offset.translate.x
+        style.y = offset.translate.y
+      }
+      if (offset.width !== undefined) style.width = offset.width
+      if (offset.height !== undefined) style.height = offset.height
+      if (offset.rotate !== undefined) style.rotate = offset.rotate
+      if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
+      if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
+    }
+    if (Object.keys(style).length === 0) return null
+    return {
+      target: { storyId: EDITOR_V2_STORY_ID, persoId: itemId },
+      timeMs: progress.playerTimeMs,
+      state: { style },
+    }
+  }
+
+  /** Presents a patch through snapshot and records whether its candidate was accepted. */
+  function previewPatch(itemId: string, patch: DecorPatch): boolean {
+    const snapshotPatch = toSnapshotPatch(itemId, patch)
+    if (snapshotPatch === null) return false
+    const result = coordination.snapshot.set([snapshotPatch])
+    const accepted = result?.ok === true
+    if (accepted) snapshotPreviewActive = true
+    return accepted
+  }
+
+  /** Converts a frame delta to a controller patch and returns the accepted pixel candidate. */
+  function previewFrame(delta: SelectionFrameDelta): SelectionFrameValue | null {
+    const target = frameTarget
+    const base = frameGestureBasePx ?? frameValuePx
+    const rootWidth = sceneRootWidthPx()
+    if (target === null || base === null || rootWidth === null || target.isTemporary) return null
+    frameGestureBasePx = base
+    const candidate = applyFrameDelta(base, delta)
+    lastPreviewAccepted = false
+    controller.applyPatch({ offset: frameToOffsetPatch(candidate, rootWidth) })
+    if (!lastPreviewAccepted) return base
+    frameValuePx = candidate
+    frameLogicalValue = {
+      x: pxToCqw(candidate.x, rootWidth),
+      y: pxToCqw(candidate.y, rootWidth),
+      width: pxToCqw(candidate.width, rootWidth),
+      height: pxToCqw(candidate.height, rootWidth),
+      rotate: candidate.rotate ?? 0,
+      scaleX: candidate.scaleX ?? 1,
+      scaleY: candidate.scaleY ?? 1,
+    }
+    return candidate
+  }
+
+  /** Creates the frame once a scene host exists and binds it to the decor-owned callbacks. */
+  function mountSelectionFrame(host: HTMLElement): void {
+    if (selectionFrame !== null && sceneHost === host) return
+    selectionFrame?.destroy()
+    resizeObserver?.disconnect()
+    sceneHost = host
+    selectionFrame = createSelectionFrameV2({
+      sceneRoot: host,
+      onPreview: previewFrame,
+      onCommit: () => {
+        frameGestureBasePx = null
+        controller.notifyInteractionEnd()
+      },
+      onCancel: () => {
+        frameGestureBasePx = null
+        abortPhase()
+      },
+    })
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        const rootWidth = sceneRootWidthPx()
+        if (rootWidth === null || selectionFrame === null) return
+        if (pendingCommands !== null && frameLogicalValue !== null) {
+          frameValuePx = logicalFrameToPx(frameLogicalValue, rootWidth)
+          selectionFrame.setValue(frameValuePx)
+          return
+        }
+        const { scene, selection } = machine.getSnapshot().context
+        if (scene) syncSelection(scene, selection)
+      })
+      resizeObserver.observe(host)
+    }
+  }
+
+  /** Removes the frame and root observer when the scene host is unavailable. */
+  function unmountSelectionFrame(): void {
+    resizeObserver?.disconnect()
+    resizeObserver = null
+    selectionFrame?.destroy()
+    selectionFrame = null
+    sceneHost = null
+    frameTarget = null
+    frameValuePx = null
+    frameLogicalValue = null
+    frameGestureBasePx = null
   }
 
   function syncSelection(scene: EditorScene, selection: Selection): void {
     const target = resolveTarget(scene, selection, lastKnownTimelineMs)
     if (!target) {
+      frameTarget = null
+      frameValuePx = null
+      frameLogicalValue = null
+      frameGestureBasePx = null
+      selectionFrame?.setValue(null)
       controller.detach()
       return
     }
     const content = target.contentId ? scene.contents[target.contentId] : undefined
     const item = scene.items.find((i) => i.id === target.itemId)!
 
-    // Un keyframe (explicite OU déduit de l'alignement playhead) se lit en cascade
-    // (item.initialDecorId ⊕ keyframes antérieurs ⊕ lui-même) — jamais son seul décor brut, qui
-    // peut rester vide tant que rien n'a divergé dessus (`2026-07-17-decor-keyframe-layering-
-    // plan.md` §3). Décor temporaire (`isTemporary`) : lu en direct sur le node, jamais dans
-    // `scene.decors` — `resolveKeyframeAlignment` garantit qu'on est alors ENTRE deux kf réels,
-    // le cascade au kf précédent sert de base (propriétés non couvertes par la palette).
+    // Un keyframe (explicite ou déduit de l'alignement playhead) se lit en cascade. Un décor
+    // temporaire part de la cascade précédente puis superpose l'état logique présenté par snapshot.
     let patch: DecorPatch
     if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
       const base = alignment.kind === 'between' ? resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content) : {}
-      const { authorApi } = machine.getSnapshot().context
-      // Fiable même pendant un geste CS actif : `getPersoStates()` est capturé au dernier seek,
-      // indépendamment de tout geste CS en cours (`2026-07-25-perso-state-at-t-plan.md`).
-      const liveStyle = authorApi ? resolveTemporaryPatch(authorApi, target.itemId, styleFieldsForItemType(controller.getPaletteConfig(), target.itemType)) : {}
-      patch = mergePatch(base, liveStyle)
+      const snapshot = coordination.snapshot.get()
+      const liveStyle = resolveTemporaryPatch(snapshot, target.itemId, styleFieldsForItemType(controller.getPaletteConfig(), target.itemType))
+      const liveOffset = resolveTemporaryOffset(snapshot, target.itemId, base)
+      patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)
     } else {
       patch = resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content, scene)
     }
+    const rootWidth = sceneRootWidthPx()
+    const logicalFrame = rootWidth === null ? null : readLogicalFrame(coordination.snapshot.get(), target.itemId, patch)
+    frameTarget = target
+    frameLogicalValue = logicalFrame
+    frameValuePx = rootWidth === null || logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidth)
+    frameGestureBasePx = null
+    selectionFrame?.setValue(frameValuePx)
     controller.attachItems([
       {
         itemId: target.itemId,
@@ -585,7 +750,7 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     if (!scene) return
     const target = resolveTarget(scene, selection, lastKnownTimelineMs)
     if (!target) return
-    // Décor temporaire : rien à écrire (`2026-07-17-resolved-state-at-time-notes.md` — persisté
+    // Décor temporaire : rien à écrire — persisté
     // seulement si l'auteur pose un keyframe à cette position, un chantier séparé, pas cette
     // écriture-ci). Écrire dans `initialDecorId` par défaut serait FAUX — ce n'est pas ce que
     // l'auteur regarde.
@@ -595,6 +760,8 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     }
     const entry = entries.find((e) => e.itemId === target.itemId)
     if (!entry) return
+
+    lastPreviewAccepted = previewPatch(entry.itemId, entry.patch)
 
     // Ne commet plus immédiatement — accumulé pour la fin de phase (§Étape B). `entry.patch` porte
     // déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour (pont §Étape A) —
@@ -608,7 +775,7 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
 
   const unsubscribeInteractionEnd = controller.onInteractionEnd(() => {
     if (pendingCommands === null) return
-    if (machine.getSnapshot().context.offsetBridge?.isGestureActive()) {
+    if (selectionFrame?.isGestureActive()) {
       cancelIdleFlush()
       return
     }
@@ -658,7 +825,12 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
     lastObservedScene = scene
     lastSelectionKey = selectionKey(selection)
   })
-  const unsubscribeAuthorApiReady = machine.on('authorApiReady', () => ensureMounted())
+  const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
+    coordination.snapshot.clear()
+    snapshotPreviewActive = false
+    const selection = machine.getSnapshot().context.selection
+    syncSelection(scene, selection)
+  })
   // Signal 3 — seek de l'auteur : flush immédiat (le rebuild qui suit rejoue la position demandée).
   // Resynchronise aussi la palette après coup — l'alignement kf/décor temporaire dépend de
   // `lastKnownTimelineMs` (`2026-07-17-resolved-state-at-time-notes.md`) ; sans ce resync explicite,
@@ -690,8 +862,8 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
   /**
    * État `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — aucune écriture de
    * preview live pendant que `isPlaying === true`, y compris quand le rebuild forcé du pont
-   * `scenePlayer` remonte un nouveau node (sans ce gel, `subscribeToNode`, câblé dans
-   * `decor-editor/mount.ts`, réappliquerait aussitôt la preview périmée sur le node flambant neuf).
+   * `scenePlayer` remonte un nouvel arbre de rendu (sans ce gel, la palette pourrait réappliquer
+   * aussitôt une preview périmée pendant le remplacement de l'instance).
    * `mountHandle.setPreviewSuspended` — pas `controller.detach()` — préserve le panneau actif et les
    * toggles (`visualPosition`/`zoneMode`) à travers un cycle play→pause : `ITEMS.DETACH` les
    * réinitialise (vérifié dans `decor-editor/machine.ts`), ce que ce chantier ne veut pas faire pour
@@ -702,12 +874,29 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
     if (active) {
       mountHandle?.setPreviewSuspended(true)
+      selectionFrame?.setSuspended(true)
       return
     }
     ensureMounted()
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
     mountHandle?.setPreviewSuspended(false)
+    selectionFrame?.setSuspended(false)
+  })
+  const unsubscribePlaybackReconciled = coordination.onPlaybackReconciled((timelineMs) => {
+    lastKnownTimelineMs = timelineMs
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene) syncSelection(scene, selection)
+  })
+
+  const unsubscribeSceneHost = coordination.onSceneHostChange((host) => {
+    if (host === null) {
+      unmountSelectionFrame()
+      return
+    }
+    mountSelectionFrame(host)
+    const { scene, selection } = machine.getSnapshot().context
+    if (scene) syncSelection(scene, selection)
   })
 
   ensureMounted()
@@ -724,14 +913,19 @@ export function createDecorEditorBridge(container: HTMLElement, machine: Actor<t
       unsubscribeSeekApplied.unsubscribe()
       unsubscribeFlushPending.unsubscribe()
       unsubscribePlaybackActive.unsubscribe()
+      unsubscribePlaybackReconciled()
       pendingCommands = null
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
-      unsubscribeAuthorApiReady.unsubscribe()
+      unsubscribeReverted.unsubscribe()
+      unsubscribeSceneHost()
       unsubscribeDecorChange()
       unsubscribeInteractionEnd()
       unsubscribeSnapToFirstKeyframe()
       mountHandle?.destroy()
+      resizeObserver?.disconnect()
+      selectionFrame?.destroy()
+      frameGestureBasePx = null
       controller.destroy()
     },
   }

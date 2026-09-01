@@ -1,7 +1,8 @@
 # Plan d'organisation — migration de l'éditeur vers CodPlay V2
 
-**Statut : En cours — C1/S1 et la structure B1–B3 sont engagées ; la validation
-de l'intégration et les tranches D1/D2/R1 restent à exécuter.**
+**Statut : En cours — C1/S1, B1–B3, D1, D2 et R1 de la verticale position/taille
+sont implémentés et vérifiés ; S2, les contrôles navigateur complémentaires et
+les extensions hors verticale restent ouverts.**
 **Cible :** `ed2` avec la façade CodPlay V2.
 **Date :** 2026-09-01.
 
@@ -106,12 +107,12 @@ la conversion et la décision de preview/commit.
   auteur (`playheadMs`). Il émet une intention de seek vers la façade de
   pilotage player de l'éditeur ; le bridge de coordination commande le player
   par `SEEK` puis publie l'accusé de réception.
-- En mode lecture, les deux interfaces de l'éditeur commandent l'animation
-  par la façade de pilotage player de l'éditeur, dont l'unique backend CodPlay est
-  `instance.telco`. La séquence historique reste `play`, `pause`, `rewind`,
-  `rate` et seek. `telco.onProgress()` alimente les vues de progression, mais
-  ne pilote pas le cadre de sélection pendant l'édition. La connexion cible est
-  exclusivement V2.
+- En mode lecture, `sequence-editor` et sa télécommande intégrée commandent
+  l'animation par la façade de pilotage player de l'éditeur, dont l'unique
+  backend CodPlay est `instance.telco`. La séquence historique reste `play`,
+  `pause`, `rewind`, `rate` et seek. `telco.onProgress()` alimente les vues de
+  progression, mais ne pilote pas le cadre de sélection pendant l'édition. La
+  connexion cible est exclusivement V2.
 - Le passage lecture → édition fait une réconciliation unique du temps
   player vers le temps auteur ; il ne crée pas une écriture concurrente à
   chaque notification. `telco.onChange` est observé par la façade de pilotage
@@ -163,10 +164,10 @@ fixe les points suivants avant toute implémentation :
   contrôleur central, ne produit pas de `SEEK` et n'ajoute pas d'entrée
   d'historique.
 
-Ainsi, C1 et S1 ont été implémentés sur la façade V2 existante et B1–B3 ont
-maintenant une première réalisation dans l'éditeur. Cette réalisation reste
-à valider sur le parcours réel ; D1/D2 ne doivent pas être considérées comme
-engagées par les préparatifs présents dans l'arbre.
+Ainsi, C1 et S1 sont implémentés sur la façade V2 existante et B1–B3, D1, D2
+et R1 ont une réalisation dans l'éditeur. Le parcours réel Firefox de la
+verticale position/taille est validé ; les limites et validations restantes
+sont celles indiquées dans l'état courant ci-dessous.
 
 ## Baseline initiale — intégration `decor-editor` / CodPlay V2
 
@@ -212,10 +213,10 @@ Le typecheck de l'éditeur de cette baseline pouvait conserver des erreurs
 héritées tant que le code V1 concerné était retiré ; le résultat courant est
 consigné dans le rapport de reprise dédié ci-dessous.
 
-## État courant à la pause — fin de B3 (2026-09-01)
+## État historique à la pause — fin de B3 (2026-09-01)
 
-La structure des tranches suivantes est maintenant repérable dans le code,
-mais seule la partie explicitement listée ici est considérée comme travaillée.
+Cette section conserve le point de reprise intermédiaire avant D1/D2/R1. Elle
+est historique et ne décrit pas l'état courant.
 
 | Tranche | Réalisation présente | Limite à la reprise |
 | --- | --- | --- |
@@ -224,21 +225,52 @@ mais seule la partie explicitement listée ici est considérée comme travaillé
 | B2 | `scene-player-bridge` utilise `buildSceneDocV2`, `codplay.build`, preload CSS/ressources, une instance V2 et une transaction de remplacement; il transmet le port `snapshot` à la coordination. | Aucun parcours navigateur réel n'a encore validé le cycle complet, le rebuild ou l'échec de remplacement. |
 | B3 | Le contrôleur ne stocke plus `AuthorApi`, `TelcoApi`, `referenceWidthPx`, `offsetBridge` ni `PLAYER_READY`; `sequence-editor` expose un transport générique, conserve `playheadMs` comme progression auteur et adopte le temps player seulement par `PLAYHEAD.RECONCILE`; l'insertion de keyframe lit `coordination.snapshot.get()`. | Le vieux circuit `decor-editor`/`offset-editor-bridge` reste à réécrire ou supprimer dans D1/R1; le typecheck éditeur complet reste donc ouvert. |
 
-### Ce qui n'est pas engagé à cette pause
+### Limites consignées à cette pause (historique)
 
 - D1 n'est pas validé. Le montage de palette a été préparé pour ne plus
   écrire directement dans un node, mais `decor-editor-bridge.ts` et
   `offset-editor-bridge.ts` contiennent encore l'ancien raccord et ne doivent
   pas être présentés comme le circuit V2 final.
-- D2 n'est pas engagé. Aucun nouveau contrat public de mesure n'est ajouté;
-  la mention non validée d'une `Projection.measure` ne fait pas partie de la
-  sortie B3.
+- D2 n'est pas engagé. Aucun nouveau contrat public de mesure n'est ajouté à
+  cette étape ; le cadre sera raccordé par une interface px interne à
+  `decor-editor`.
 - R1 n'est pas engagé. Les modules V1 encore isolés dans
   `packages/authoring/selection-frame` et le builder historique seront retirés
   après la preuve D1/D2, selon l'inventaire du plan.
 
 Le détail opératoire, les commandes de validation et le point de reprise sont
 dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.md).
+
+## État courant après D1/D2/R1 (2026-09-01)
+
+| Tranche | État vérifié | Preuve disponible |
+| --- | --- | --- |
+| C1/S1 | Les nombres unitless des quatre longueurs structurées sont qualifiés en `cqw` par CodPlay ; `snapshot.get/set/clear` suit le même transport. La frontière HTML ajoute l'unité aux angles numériques avant l'application CSS. | Tests core ciblés : 3 fichiers, 21 tests ; typecheck core passé. |
+| B1–B3 | `EditorPlayerCommandFacade` est le seul appelant de `instance.telco`. `EditorCoordinationBridge` est indépendant de la façade et relie le player, `sequence-editor` et `decor-editor`. La progression auteur reste dans `sequence-editor`; la télécommande intégrée à cette interface conserve la séquence de pilotage historique. | Play/Pause/Stop, seek et réconciliation exécutés sur l'outil réel. |
+| D1 | `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés. |
+| D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas px. Le bridge d'application conserve la sélection, les unités et le cycle preview/commit. | 3 tests V2 et parcours navigateur avec cadre visible. |
+| R1 | Les bridges, tests, dépendances et chemins V1 de la verticale migrée sont retirés. `packages/authoring/selection-frame` conserve ses autres entrées historiques hors de cette verticale ; seule l'entrée `/v2` est consommée par l'éditeur. | Recherche sans import V1 dans `packages/editor/src` et `packages/editor/package.json` ; suite éditeur V2 passée. |
+
+### Preuve live de la verticale position/taille
+
+Le serveur Vite de l'éditeur et l'outil ont été utilisés dans Firefox headless.
+Le parcours réel a établi les rendez-vous suivants :
+
+- sélection par l'identité `data-item-id` rendue par le materializer V2 ;
+- cadre et item avec le même rectangle px local à la sélection ;
+- déplacement de `24px`, puis commit et rebuild ;
+- resize de `40px × 20px`, puis commit et rebuild ;
+- Play masque le cadre ; Pause réconcilie une seule fois le temps auteur ;
+- seek vers environ `2425ms`, avec interpolation simultanée de couleur,
+  position, taille et rotation ;
+- Stop revient à `0ms` ; Échap abandonne une preview sans mutation documentaire ;
+- passage de la racine de `864px` à `1098px` : les valeurs logiques restent
+  identiques et le cadre comme l'item sont reprojetés au même rectangle px.
+
+Le typecheck éditeur, le build éditeur, la suite éditeur V2 et les tests
+Selection Frame V2 sont passés. Cette preuve ne couvre pas Safari, les grilles,
+la taille intrinsèque, les parents transformés, la multi-sélection ou le
+reparentage.
 
 ## Audit ciblé — façade documentaire et machines d'état
 
@@ -271,13 +303,18 @@ fonctions internes pour tester leur composition. Le commentaire de
 pour décrire le modèle ed2 ; la commande `assignType` n'est pas à retirer pour
 cette raison.
 
-La façade distincte à créer pour le player sera
+La façade distincte créée pour le player est
 `EditorPlayerCommandFacade`. Elle recevra une instance CodPlay V2 et exposera
 les commandes de transport ainsi que les retours nécessaires au bridge de
 coordination. Elle ne prendra pas en charge les mutations documentaires ni
 l'historisation.
 
-### Écarts relevés et modifications requises
+### Audit initial — écarts et retraits de la verticale V1
+
+Cet audit décrit l'état de départ et les cibles de migration. L'état atteint
+après exécution de ces actions est consigné dans « État courant après
+D1/D2/R1 » ; les entrées qui mentionnent un fichier retiré sont conservées
+comme traçabilité du retrait, pas comme actions encore à réaliser.
 
 | Frontière | Ce qui existe aujourd'hui | Modification V2 requise | Retrait V1 précis |
 | --- | --- | --- | --- |
@@ -289,9 +326,9 @@ l'historisation.
 | `decor-editor/machine.ts` | La machine ne contient pas d'import V1 ; elle porte les items, le décor, la chaîne, les patches et le statut temporaire. | Conserver ce modèle d'état autonome. Alimenter le statut temporaire et la prévisualisation par le port de snapshot logique fourni par la coordination ; le commit continue de produire une commande documentaire via la façade conservée. | Aucun retrait mécanique dans cette machine. Retirer seulement les sources V1 auxquelles ses contrôleurs la relient. |
 | `decor-editor/controller.ts`, `types.ts`, `merge.ts` | Le contrôleur dépend de `OffsetEditorBridge` ; les types importent `ClassNameValue` depuis `codplay-v1` et exposent une interface de frame couplée à `AuthorApi`/`TrackedSession`. | Garder le contrôleur comme propriétaire des valeurs d'apparence et des patches. Remplacer la frontière par un port neutre de Selection Frame en px ; convertir une fois à la frontière décor (`px ↔ cqw`) et envoyer un patch cohérent au bridge, qui prévisualise par `instance.snapshot`. Conserver l'algorithme de merge pur. | `ClassNameValue` V1, `OffsetEditorBridge`, `AuthorApi`, `LibreAdapter`, `TrackedSession`, `NodePose`, `DecorLiveSession` dans le port public et toute conversion pilotée par un nœud DOM. `DecorLiveSession` ne sera supprimé que s'il n'est plus utilisé après le remplacement du port ; sa sémantique de groupement de geste reste utile. |
 | `decor-editor/mount.ts`, `css-value-format.ts`, `decor-editor-bridge.ts` | Le mount observe `subscribeToNode` et écrit directement les décors/textes dans les nœuds player. Les helpers de valeur live relisent `getNodeSnapshot`/`getPersoStates`. Le bridge V1 résout les patches temporaires depuis `AuthorApi`. | Rendre le mount piloté par l'état de la machine et le snapshot logique présenté. Le bridge conserve la séquence pending → preview → commit, mais sa source devient `instance.snapshot.get` ou le port logique fourni par la coordination. Une transition d'apparence complète doit rester atomique (couleur et géométrie du même item). | `subscribeToNode`, `applyResolvedDecor`, écritures de nœud, `getNodeSnapshot`, `getPersoStates` et helpers `AuthorApi`/DOM. |
-| `offset-editor-bridge.ts` | Construit `AuthorApi`, `LibreAdapter`, `TrackedSession` ; lit `NodePose`, applique directement les opérations au player et convertit via `referenceWidthPx`. | Remplacer ce module par l'adaptateur de geste neutre du Selection Frame, ou le retirer si cette responsabilité est absorbée par `decor-editor`. Le geste produit des valeurs px ; le contrôleur décor produit ensuite le patch logique et le bridge coordonne snapshot/commit. | Le fichier entier dans sa forme actuelle et ses imports `@codplay/selection-frame` V1. |
+| `offset-editor-bridge.ts` | Construisait `AuthorApi`, `LibreAdapter`, `TrackedSession` et lisait `NodePose`. | Responsabilité absorbée par `decor-editor-bridge` et l'entrée `selection-frame/v2` : valeur px locale, deltas px, conversion unitless au bord du bridge, preview snapshot et commit xState. | Fichier entier retiré par R1, avec ses imports et tests V1. |
 | `scene-player-bridge.ts` | Construit `new CodPlay({})` V1, utilise `studio.telco`, `buildSceneDoc`, `createAuthorApi`, `createSelectionFrame`, `createTrackedSession`, puis transmet des handles à la machine. | Réécrire le bridge autour de `CodPlay` V2 (`build` → `preload` → `instances.create`). Il possède le cycle de vie de l'instance, fournit le port snapshot/lifecycle et enregistre l'instance auprès de `EditorPlayerCommandFacade`. Il ne crée ni frame ni session d'édition et ne transmet aucun handle V1 à l'éditeur. | Import `codplay-v1/creator`, `studio.telco`, `buildSceneDoc` V1, `AuthorApi`, `LibreAdapter`, `createSelectionFrame`, `createTrackedSession`, `NodePose` et le montage frame/session du bridge. |
-| Composition `main.tsx` / `AppLayout` / régions | Les régions montent trois bridges indépendants ; le player bridge injecte aujourd'hui ses handles dans le contrôleur ; la région telco est vide. | Créer au niveau de composition une unique `EditorPlayerCommandFacade` et un unique `editor-coordination-bridge`, frères des façades. Injecter des ports génériques aux régions ; ne pas faire appartenir le bridge à la façade documentaire ni à une région. | Toute injection de `AuthorApi`, `TelcoApi`, `OffsetEditorBridge` ou `codplay-v1` dans les régions et bridges éditeur. |
+| Composition `main.tsx` / `AppLayout` / régions | Les régions montaient trois bridges indépendants ; la région telco est restée vide. | Une unique `EditorPlayerCommandFacade` et un unique `editor-coordination-bridge` sont composés dans `AppLayout`. `sequence-editor` porte aussi la télécommande de l'éditeur et reçoit des ports génériques ; le bridge n'appartient ni à la façade documentaire ni à une région. | Toute injection de `AuthorApi`, `TelcoApi`, `OffsetEditorBridge` ou `codplay-v1` dans les régions et bridges éditeur. |
 | Configuration `packages/editor` | `package.json`, `tsconfig.json` et `vite.config.ts` déclarent encore la dépendance, les paths, le polyfill et l'alias `codplay-v1`. | Retirer ces déclarations après migration des sources et tests. `@codplay/selection-frame` peut rester une dépendance uniquement si son API consommée par l'éditeur est V2-neutre ; le package ne doit pas être supprimé globalement sans audit des autres consommateurs. | Dépendance directe `codplay-v1`, alias Vite, path TypeScript et inclusion du polyfill V1. |
 
 ### Cible de la machine de contrôleur
@@ -319,31 +356,18 @@ sélection et son playhead auteur. La machine de `decor-editor` conserve les
 patches et le statut de geste. Aucune des deux ne doit importer CodPlay,
 `TelcoApi`, `AuthorApi` ou observer un nœud player.
 
-### Tests et preuves à réécrire
+### Tests et preuves V2
 
-Les tests dépendant de V1 ne doivent plus être exécutés ni comptés dans la
-validation V2. Ils constituent l'inventaire de retrait ou de réécriture
-suivant :
+Les tests V1 ont été retirés de la commande de validation ou supprimés avec les
+fichiers qu'ils couvraient. Les tests éditeur conservés ont été réécrits sur
+les ports V2 et couvrent sélection, scène, transactions, phases, snapshot,
+interpolation couleur + géométrie, preview, abandon, commit, rebuild et
+réconciliation silencieuse. Le test navigateur complète cette couverture sur
+le chemin réel.
 
-- retirer ou remplacer `packages/editor/tests/builder/build-scene.spec.ts` et
-  `packages/editor/tests/validate-scene-doc.spec.ts`, qui importent les
-  types/builder V1 ;
-- réécrire sur des ports V2 les tests
-  `tests/decor-editor-bridge.spec.ts`, `tests/decor-editor/mount.spec.ts`,
-  `tests/decor-editor-controller.spec.ts`, `tests/offset-editor-bridge.spec.ts`
-  et `tests/sequence-editor/mount.spec.ts` ;
-- supprimer les scénarios `TELCO.SYNC_PLAYHEAD` de
-  `tests/machine.spec.ts` et `tests/sequence-editor/machine.spec.ts`, ainsi
-  que les tests de `syncPlayheadFromTelco()` dans `tests/controller.spec.ts`,
-  puis les remplacer par le scrub auteur et la réconciliation silencieuse de
-  sortie de lecture ;
-- conserver et étendre `tests/commands/facade.spec.ts`, les tests de commandes
-  pures et les tests de machine qui vérifient sélection, scène, transactions et
-  phases, à condition qu'ils ne construisent aucun double V1 ;
-- ajouter les preuves V2 de la frontière réelle : création/rebuild d'instance,
-  `snapshot.get/set/clear`, preview atomique couleur + géométrie, commit avec
-  une seule transaction documentaire, transport de la télécommande et retour
-  de seek.
+Les commandes et résultats sont consignés dans l'état courant et le rapport de
+reprise ; aucune suite qui importe `codplay-v1`, `AuthorApi`,
+`subscribeToNode` ou une pose DOM V1 ne compte dans la validation V2.
 
 Le critère de sortie n'est pas « les anciens tests passent » : aucune suite
 qui importe `codplay-v1` ou les handles V1 ne doit être dans la commande de
@@ -498,8 +522,7 @@ L'éditeur possède deux surfaces d'entrée, mais une seule instance V2 :
 
 | Surface | Rôle | Chemin V2 |
 | --- | --- | --- |
-| `sequence-editor` | choisir le temps auteur et piloter play/pause/stop de la scène | intentions vers le port `sequenceEditor` du bridge de coordination |
-| télécommande éditeur | piloter l'animation et son transport avec la séquence d'utilisation historique | commandes vers le `RemoteTransport` construit par le bridge de coordination |
+| `sequence-editor` et sa télécommande intégrée | choisir le temps auteur et piloter play/pause/stop de la scène | intentions vers le port `sequenceEditor` du bridge de coordination |
 
 `sequence-editor` est donc aussi une interface de pilotage, mais son modèle
 reste autonome : il ne connaît ni CodPlay ni la télécommande. Son bridge émet
@@ -513,10 +536,10 @@ Le câblage à réaliser est le suivant :
 | Action | Émetteur | Circuit central | Conséquence sur le temps auteur et le cadre |
 | --- | --- | --- | --- |
 | scrub de la timeline, clic sur une keyframe ou Stop | `sequence-editor` | `ctrl.seek()` → bridge de coordination → `SEEK` → `EditorPlayerCommandFacade.execute(seek auteur)` → `instance.telco.seek(editorTimeMs + preRollMs)` | la cible du seek est le `playheadMs` auteur ; si la lecture était active, ce `SEEK` termine `playing` et sa cible, non l'ancien temps telco, est adoptée ; après `SEEK_APPLIED`, le snapshot et le cadre sont relus |
-| Play | bouton de `sequence-editor` ou remote | bridge de coordination → `TELCO_ACTION_REQUEST`/flush → `EditorPlayerCommandFacade.execute(play)` → `instance.telco.play()` | entrée dans `playing` ; le cadre et l'édition sont suspendus ; aucun `playheadMs` n'est écrit par `onProgress` |
-| Pause explicite | bouton de `sequence-editor` ou remote | bridge de coordination → `TELCO_PAUSE_REQUEST` → `EditorPlayerCommandFacade.execute(pause)` → `instance.telco.pause()` → résultat vérifié → `RECONCILE_PLAYBACK_TIME` | une seule lecture de `getProgress()`, retrait du `preRollMs`, adoption dans `playheadMs`, puis réactivation du cadre ; aucun `SEEK` supplémentaire |
-| Rewind | remote, ou futur bouton équivalent de `sequence-editor` | bridge de coordination → `EditorPlayerCommandFacade.execute(rewind)` → `instance.telco.rewind()` → résultat vérifié → `RECONCILE_PLAYBACK_TIME` | même handoff unique après la commande ; le rewind ne passe pas par une copie continue de `onProgress` |
-| Rate | remote, ou futur bouton équivalent de `sequence-editor` | bridge de coordination → `EditorPlayerCommandFacade.execute(setRate)` → `instance.telco.setRate(rate)` | modification du transport uniquement ; aucune modification du `playheadMs` ni du snapshot |
+| Play | télécommande intégrée à `sequence-editor` | bridge de coordination → `TELCO_ACTION_REQUEST`/flush → `EditorPlayerCommandFacade.execute(play)` → `instance.telco.play()` | entrée dans `playing` ; le cadre et l'édition sont suspendus ; aucun `playheadMs` n'est écrit par `onProgress` |
+| Pause explicite | télécommande intégrée à `sequence-editor` | bridge de coordination → `TELCO_PAUSE_REQUEST` → `EditorPlayerCommandFacade.execute(pause)` → `instance.telco.pause()` → résultat vérifié → `RECONCILE_PLAYBACK_TIME` | une seule lecture de `getProgress()`, retrait du `preRollMs`, adoption dans `playheadMs`, puis réactivation du cadre ; aucun `SEEK` supplémentaire |
+| Rewind | télécommande intégrée à `sequence-editor` | bridge de coordination → `EditorPlayerCommandFacade.execute(rewind)` → `instance.telco.rewind()` → résultat vérifié → `RECONCILE_PLAYBACK_TIME` | même handoff unique après la commande ; le rewind ne passe pas par une copie continue de `onProgress` |
+| Rate | télécommande intégrée à `sequence-editor` | bridge de coordination → `EditorPlayerCommandFacade.execute(setRate)` → `instance.telco.setRate(rate)` | modification du transport uniquement ; aucune modification du `playheadMs` ni du snapshot |
 
 Le bouton Stop conserve la sémantique observée de l'éditeur : il fixe
 `sequence-editor.playheadMs` à zéro et émet une intention `seek` au bridge de
@@ -612,7 +635,8 @@ suivant :
    l'appel telco unique.
 2. La façade recueille `telco.onChange()` et `telco.onProgress()` sur l'instance
    active. Le bridge
-   redistribue l'état de transport à `sequence-editor` et au remote, et une
+    redistribue l'état de transport à `sequence-editor` et à sa télécommande
+    intégrée, et une
    progression projetée en temps auteur à l'affichage temporaire de la
    timeline. Ce flux ne modifie ni `playheadMs`, ni `EditorScene`, ni le
    snapshot, ni le cadre.
@@ -629,14 +653,14 @@ suivant :
    `scene-player-bridge`, qui rebinde la façade et rediffuse `SCENE.SYNC` aux
    modèles. Aucun modèle ne reçoit la référence `CodPlayInstance`.
 
-`sequence-editor/mount.ts` recevra donc du bridge un port de vue générique — état de
+`sequence-editor/mount.ts` reçoit du bridge un port de vue générique — état de
 transport, progression de lecture et résultat/accusé de seek — et une méthode
 de mise à jour silencieuse du playhead. Il affichera ces valeurs sans appeler
-la telco et sans décider de la réussite. Le remote V2 (`@codplay/remote`) sera
-monté sur une vue `RemoteTransport` construite par le bridge de coordination à
-partir de `EditorPlayerCommandFacade`. Cette vue traduit le temps player en
-temps auteur et rejoint le même circuit `SEEK` que la timeline ; le remote ne
-contourne donc pas le bridge.
+la telco et sans décider de la réussite. La télécommande de l'éditeur est la
+barre de pilotage intégrée à `sequence-editor` dans cette tranche ; elle rejoint
+le même circuit `SEEK` que la timeline. Aucun remote séparé n'est monté dans la
+composition actuelle. Un futur consommateur devra être raccordé par le bridge,
+sans recevoir directement l'instance.
 
 Dans ce plan, « suivre V1 » signifie uniquement conserver la séquence
 d'utilisation historique de la télécommande : play/pause, rewind, seek
@@ -686,12 +710,10 @@ commandes de transport. Les commandes documentaires restent
 `EditorScene → EditorScene` ; les commandes de transport sont impératives,
 peuvent être asynchrones et ne produisent aucune entrée d'historique.
 
-Le remote V2 attend un `RemoteTransport` dont les commandes peuvent retourner
-un résultat `ok`. Le passage direct de `instance.telco` au remote n'est donc
-pas le contrat de l'éditeur. Le bridge de coordination construit cette vue
-`RemoteTransport` à partir de `EditorPlayerCommandFacade` et la partage avec
-le remote ; il ne doit pas prétendre déduire un succès du seul retour de
-`Promise<void>`.
+La télécommande intégrée à `sequence-editor` ne reçoit pas directement
+`instance.telco`. Le bridge de coordination adapte ses intentions à
+`EditorPlayerCommandFacade`, vérifie les postconditions dans `getState()` et
+`getProgress()`, et ne déduit pas un succès du seul retour de `Promise<void>`.
 
 Avant d'émettre un accusé d'application ou le handoff, la façade de pilotage
 player doit vérifier la postcondition dans `getState()`/`getProgress()` :
@@ -716,7 +738,8 @@ snapshot. La propriété du temps dépend explicitement du mode :
 
 - en mode édition ou scène arrêtée, l'éditeur possède le temps auteur ;
 - en mode `playing`, `instance.telco` possède le temps d'animation et
-  `telco.onProgress()` alimente le remote, selon la séquence d'utilisation
+   `telco.onProgress()` alimente l'affichage de pilotage intégré à
+   `sequence-editor`, selon la séquence d'utilisation
   historique ;
 - à la sortie de `playing`, une adoption unique du temps player rend la main à
   l'éditeur.
@@ -773,7 +796,7 @@ migration initiale.
 | `decor-editor/mount.ts` | monter les panneaux et le Selection Frame comme une seule interface du `decor-editor`, depuis le décor xState et la valeur snapshot ; ne plus suivre ni muter les nodes du player |
 | `selection-frame` | rester un outil d'overlay et de gestes consommé par `decor-editor` ; remplacer la source node V1 par une entrée `SelectionFrameValue` et une sortie de delta vers le contrôleur/bridge du décor |
 | `scene-player-bridge.ts` | ne plus publier directement aux modules une instance V2, son `telco` ou une API de node ; supprimer les chemins `CodPlay` V1/`AuthorApi` et la construction du Selection Frame ; garder le cycle `build → preload/resources → instances.create`, enregistrer le binding telco dans `EditorPlayerCommandFacade`, et exposer au bridge de coordination seulement le port `snapshot`/lifecycle nécessaire à `decor-editor` |
-| `editor-player-command-facade.ts`, `editor-coordination-bridge.ts`, `remote-bridge.ts`, `TelcoRegion.tsx` et `SequenceEditorRegion.tsx` | créer la façade de pilotage player indépendante de la façade documentaire ; créer le bridge de coordination qui adapte cette façade au remote V2 et aux ports de `sequence-editor`, recueillir les retours de la telco et faire converger les seek vers `SEEK` |
+| `editor-player-command-facade.ts`, `editor-coordination-bridge.ts` et `SequenceEditorRegion.tsx` | créer la façade de pilotage player indépendante de la façade documentaire ; créer le bridge de coordination pour la télécommande intégrée et les ports de `sequence-editor`, recueillir les retours de la telco et faire converger les seek vers `SEEK` |
 | `controller/types.ts` et `controller-machine.ts` | supprimer `referenceWidthPx`, `authorApi`, `telco` et les rendez-vous node V1 ; conserver seulement les événements métier de coordination sans référence runtime ni readiness player |
 | `sequence-editor/machine.ts`, `controller.ts`, `mount.ts` | conserver `playheadMs` comme progression auteur en mode édition ; faire émettre les intentions Play/Pause vers le bridge de coordination ; supprimer `TELCO.SYNC_PLAYHEAD` et son mirroring continu depuis `telco.onProgress()` ; afficher, si nécessaire, une progression de lecture distincte et ajouter le handoff unique de sortie |
 | palette dimensions | écrire `offset.width` et `offset.height`, jamais `style.width` ou `style.height` |
@@ -791,7 +814,7 @@ chemin V1 dans `packages/editor/src` doivent disparaître ou être remplacés.
 | `packages/editor/src/app/bridges/scene-player-bridge.ts` | `CodPlay` de `codplay-v1/creator`, `SceneDoc` de `codplay-v1/player/types`, `createAuthorApi`, `createLibreAdapter`, `createTrackedSession`, les types `AuthorApi`/`TrackedSession`/`SelectionFrameHandle`, puis les variables et chemins `authorApi`, session node, `studio.player`, `studio.load()`, `subscribeToNode`, `destroySelection()` et `reattachSelection()` fondés sur le remplacement d'un node | `CodPlay` V2, `buildSceneDocV2`, `build()`, `preload`, `instances.create()` ; l'instance reste privée au bridge de scène et à `EditorPlayerCommandFacade`, tandis que le bridge de coordination transmet à l'intégration `decor-editor` le port `snapshot`/lifecycle. Le Selection Frame est créé et piloté par `decor-editor`, pas par le bridge de scène |
 | `packages/editor/src/app/controller/types.ts` et `controller-machine.ts` | l'import `TelcoApi` V1, l'import `AuthorApi`, les champs `authorApi`, `telco` et `referenceWidthPx`, les payloads V1 de `PLAYER_READY`/`authorApiReady`, `setAuthorApi`, `emitAuthorApiReady` et les commentaires `AuthorApi`/node | supprimer ces champs, événements et actions sans les remplacer par un readiness runtime ; l'instance reste liée dans `scene-player-bridge`/`EditorPlayerCommandFacade`, et le port snapshot est transmis par le bridge de coordination |
 | `packages/editor/src/app/bridges/sequence-editor-bridge.ts` | la lecture de `context.authorApi` dans `enrichIfKeyframeCreation`, le passage de cet objet à `resolveKeyframeInsertionPatch`, le branchement raw `attachTelco(TelcoApi)` et l'abonnement `authorApiReady` | lecture de l'état présenté par le port snapshot fourni par le bridge de coordination au temps auteur courant ; raccordement à ses ports d'intentions et de retours de pilotage ; aucun accès à l'instance V2 |
-| `packages/editor/src/app/layout/AppLayout.tsx`, `SequenceEditorRegion.tsx` et future `TelcoRegion.tsx` | région telco actuellement vide et branchement du timeline créé sans coordination de transport | créer une seule `EditorPlayerCommandFacade` et un seul `editor-coordination-bridge` au même niveau dans la composition de l'application ; les régions ne reçoivent que leurs ports de module ; détruire les raccordements une seule fois au démontage |
+| `packages/editor/src/app/layout/AppLayout.tsx` et `SequenceEditorRegion.tsx` | région telco laissée vide ; `sequence-editor` porte la télécommande et le timeline | composer une seule `EditorPlayerCommandFacade` et un seul `editor-coordination-bridge` au même niveau dans `AppLayout` ; la région reçoit seulement les ports de module ; détruire les raccordements une seule fois au démontage |
 | `packages/editor/src/app/bridges/offset-editor-bridge.ts` | `OffsetEditorBinding` avec `TrackedSession`/`LibreAdapter`/`AuthorApi`, `nodePoseToOffsetValuesPx`, `readActivePose`, les appels `getNodePose`/`setNodePose`, `referenceWidthPx` et la production de valeurs depuis un node | devenir l'adaptateur interne de l'interface Selection Frame du `decor-editor` — ou être remplacé par cette interface — avec base issue du port `snapshot.get()`, algèbre px locale, conversion px → unitless au bord du décor, `snapshot.set()` et valeur candidate `SelectionFrameValue` |
 | `packages/editor/src/app/bridges/decor-editor-bridge.ts` | l'import `AuthorApi`, les signatures `resolveTemporaryPatch(authorApi, ...)`, `resolveTemporaryOffset(authorApi, ...)`, `resolveKeyframeInsertionPatch(..., authorApi, ...)`, `getPersoStates`, `getNodeSnapshot`, `context.authorApi`, `subscribeToNode`, `authorApiReady` et les commentaires de pose/node | résolution depuis le port `snapshot.get()` et la base xState ; les helpers restent purs et reçoivent une donnée V2 déjà lue, jamais une référence player |
 | `packages/editor/src/decor-editor/mount.ts` | `SubscribeToNode`, l'argument `subscribeToNode`, `referenceWidthPx`, les maps d'abonnements aux nodes et `applyResolvedDecor`/`applyTextAutoSize` lorsqu'ils écrivent directement dans les nodes du player | montage des panneaux et de leur état depuis xState et le bridge ; aucune écriture ni observation du DOM du player |
@@ -801,15 +824,16 @@ chemin V1 dans `packages/editor/src` doivent disparaître ou être remplacés.
 | `packages/editor/src/sequence-editor/mount.ts` | les imports `TelcoApi`/`PlayerStateSnapshot` de `codplay-v1`, `attachTelco(telco)`, les appels directs `telco.play()`/`telco.pause()`, `unsubscribeTelcoProgress`, `syncFromTelco()` et l'appel `ctrl.syncPlayheadFromTelco(...)` | recevoir un port de transport générique fourni par `sequence-editor-bridge` ; ses commandes Play/Pause deviennent des intentions vers le bridge de coordination ; consommer `onTransportChange` pour l'état UI et `onPlaybackProgress` pour un affichage de lecture distinct, sans écriture continue du playhead |
 | `packages/editor/src/decor-editor/decor-live-session.ts` | les seules mentions de `TrackedSession` dans les commentaires | le module et sa machine xState restent utiles ; les commentaires parlent d'une session de geste éditeur, sans type ni contrat `selection-frame` V1 |
 | `packages/editor/src/builder/build-scene.ts` et `src/builder/` | le builder V1, son import `codplay-v1/builder/types`, son README et son exposition comme chemin de build de l'éditeur | `src/builder-v2/` et `buildSceneDocV2` ; supprimer l'ancien dossier après migration ou retrait de ses tests et consommateurs, jamais maintenir deux chemins de build dans l'éditeur |
-| `packages/editor/package.json` | la dépendance directe `codplay-v1` | conserver `codplay` et ajouter/utiliser le remote V2 si nécessaire ; la dépendance ne doit plus être justifiée par le code éditeur |
+| `packages/editor/package.json` | la dépendance directe `codplay-v1` | conserver `codplay` ; la télécommande de l'éditeur est portée par `sequence-editor` dans cette tranche et aucune dépendance remote séparée n'est ajoutée |
 
 Le même contrôle doit être appliqué aux deux paquets consommés par cette
 verticale : `packages/authoring/selection-frame` ne doit plus fournir au
 chemin migré `createAuthorApi`, `AuthorApi`, `NodePose`, `createTrackedSession`
 ou `createLibreAdapter` ; son interface de cadre est réécrite sur
-`SelectionFrameValue` et les deltas dans D2. `packages/authoring/remote`
-utilise déjà le remote V2, mais sa dépendance déclarée `codplay-v1` dans son
-`package.json` est à retirer si elle n'est pas requise par son implémentation.
+`SelectionFrameValue` et les deltas dans D2. Le package
+`packages/authoring/remote`, s'il est repris ultérieurement, devra être audité
+dans un plan distinct ; il n'est pas monté dans la composition de cette
+verticale et ne doit pas être introduit pour valider le circuit présent.
 Les outils de zone et d'ancrage qui dépendent encore de cette ancienne
 interface restent hors de cette verticale tant qu'un plan dédié ne les a pas
 migrés ; ils ne doivent pas être réintroduits dans le circuit position/taille.
@@ -1014,9 +1038,9 @@ mode édition.
    `scene-player-bridge` et `EditorPlayerCommandFacade`, sans transférer une
    référence CodPlay à un modèle de module.
 4. Faire transiter par ce bridge les intentions de transport et les retours :
-   `sequence-editor` et le remote demandent ; la façade player exécute et
-   vérifie ; le bridge rediffuse l'état, la progression, le résultat et les
-   accusés au module concerné.
+   la télécommande intégrée à `sequence-editor` demande ; la façade player
+   exécute et vérifie ; le bridge rediffuse l'état, la progression, le résultat
+   et les accusés au module concerné.
 5. Vérifier que les commandes documentaires émises par `sequence-editor` et
    `decor-editor` continuent d'emprunter `RUN_COMMAND`/`RUN_TRANSACTION` et la
    façade pure existante. Une commande Play/Pause/Seek ne doit jamais créer une
@@ -1045,10 +1069,10 @@ dans la façade player et le contrat historique est inchangé.
    `instance.telco`. Pour un seek, le bridge transmet l'intention `SEEK` au
    contrôleur, puis la façade ajoute le `preRollMs`, appelle la telco et
    vérifie la position player avant de remettre le résultat au bridge.
-7. Rebrancher les boutons Play/Pause de `sequence-editor` et le remote sur les
-   ports du bridge de coordination. Les interfaces ne reçoivent plus de
-   `TelcoApi` brut et n'appellent plus directement `telco.play()`,
-   `telco.pause()` ou `telco.seek()`.
+7. Rebrancher les boutons Play/Pause de la télécommande intégrée à
+   `sequence-editor` sur les ports du bridge de coordination. L'interface ne
+   reçoit plus de `TelcoApi` brut et n'appelle plus directement
+   `telco.play()`, `telco.pause()` ou `telco.seek()`.
 8. Faire de `instance.snapshot` la source de lecture de la base pour les
    consommateurs éditeur ; transmettre au bridge de coordination un port
    snapshot, jamais le handle d'instance ni une API de node.
@@ -1057,7 +1081,7 @@ dans la façade player et le contrat historique est inchangé.
    signal accuse réception et ne modifie pas `playheadMs` par lui-même.
 10. Faire recueillir par `EditorPlayerCommandFacade` `telco.onChange()` et
    `telco.onProgress()`, puis faire relayer par le bridge les états/résultats
-   vers le remote et `sequence-editor`. Le flux de progression ne doit ni appeler
+   vers `sequence-editor` et sa télécommande intégrée. Le flux de progression ne doit ni appeler
    `snapshot.set()` ni synchroniser le cadre ou écrire `playheadMs` pendant
    l'édition.
 11. Conserver la transaction de remplacement : en cas d'échec de build,
@@ -1100,10 +1124,11 @@ sans accès aux classes runtime internes.
    `EditorPlayerCommandFacade` ; cette façade reçoit `CodPlayInstance`, le
    `preRollMs` et les commandes déjà routées par le bridge, observe les retours
    V2 et reste le seul code autorisé à appeler `instance.telco`.
-5. Faire converger les deux interfaces vers le bridge : un seek demandé par
-   le remote rejoint `SEEK`, comme le scrub de la timeline ; `play`, `pause`,
-   `rewind` et `rate` passent par `EditorPlayerCommandFacade` via le bridge avec la
-   sérialisation historique. Le flux de seek interactif (pause préparatoire
+5. Faire converger la télécommande intégrée et la timeline vers le bridge : un
+   seek de la télécommande rejoint `SEEK`, comme le scrub de la timeline ;
+   `play`, `pause`, `rewind` et `rate` passent par
+   `EditorPlayerCommandFacade` via le bridge avec la sérialisation historique.
+   Le flux de seek interactif (pause préparatoire
    éventuelle puis seek final) est traité comme une seule transition : la
    pause préparatoire ne déclenche pas `RECONCILE_PLAYBACK_TIME`, le `SEEK`
    final devient la seule mise à jour auteur. Une pause explicite ou un rewind
@@ -1124,7 +1149,8 @@ sans accès aux classes runtime internes.
    `SEEK` V2 → résultat vérifié → `SEEK_APPLIED` →
    lecture snapshot → affichage du cadre et du panneau, puis le cycle commit
    → commande → rebuild. Vérifier les deux entrées de transport sur le même
-   cycle : `sequence-editor/remote → bridge de coordination → façade player → telco → retours`,
+   cycle : `sequence-editor` (timeline et télécommande intégrée) → bridge de
+   coordination → façade player → telco → retours,
    puis le handoff unique `pause/rewind → RECONCILE_PLAYBACK_TIME →
    `playheadMs`.
 
@@ -1134,13 +1160,16 @@ coordination nécessaires au cycle d'édition et de lecture.
 
 ### D1 — refaire le circuit Decor par snapshot
 
+**Statut : réalisé pour la verticale position/taille ; extensions grille,
+multi-sélection et repères complexes hors périmètre.**
+
 **Fichiers concernés :**
 
 - `packages/editor/src/app/bridges/decor-editor-bridge.ts` ;
 - `packages/editor/src/decor-editor/controller.ts` ;
 - `packages/editor/src/decor-editor/mount.ts` ;
 - `packages/editor/src/decor-editor/types.ts` et unités ;
-- `packages/editor/src/app/bridges/offset-editor-bridge.ts`.
+- l'ancien `offset-editor-bridge.ts`, retiré par R1.
 
 **Actions :**
 
@@ -1178,9 +1207,9 @@ coordination nécessaires au cycle d'édition et de lecture.
 9. Rejouer la scène et la lecture après `set`, seek, resize et rebuild pour
    vérifier que le cadre et le panneau lisent le même état.
 
-**Sortie :** palette, cadre et multi-sélection utilisent le même canal de
-preview et la même base logique ; aucune lecture de node ne participe à la
-construction d'un `DecorPatch`.
+**Sortie :** palette et cadre utilisent le même canal de preview et la même
+base logique ; aucune lecture de node ne participe à la construction d'un
+`DecorPatch`. La multi-sélection reste hors de cette tranche.
 
 ### Scénario d'acceptation de la verticale position/taille
 
@@ -1202,15 +1231,15 @@ Ce scénario est la preuve minimale avant d'élargir la migration aux autres
    après le succès de `instance.telco.pause()`, le bridge exécute une seule
    fois `RECONCILE_PLAYBACK_TIME`, adopte `getProgress() - preRollMs` dans
    `playheadMs`, puis réactive le cadre sans émettre de nouveau `SEEK`.
-4. Le remote lance `play` puis `pause`. Les traces de commandes et de
-   handoff sont identiques à celles du bouton de `sequence-editor` ; aucune
-   seconde instance ni branche telco n'est créée.
-5. Le remote demande un seek à `400ms` : conformément à la séquence historique,
-   la lecture est d'abord mise en pause si nécessaire, sans handoff
-   intermédiaire, la demande rejoint `SEEK`, le player reçoit
-   `400 + preRollMs`, puis le remote et le timeline affichent la progression
-   de lecture sans réécrire le `playheadMs` auteur avant la fin de la
-   transition. Le cadre reprend après `SEEK_APPLIED`.
+4. Les commandes Play puis Pause de l'interface de pilotage de l'éditeur
+   passent par le même bridge et la même façade ; leurs traces de commande et
+   de handoff sont identiques, sans seconde instance ni branche telco.
+5. L'interface de pilotage demande un seek à `400ms` : conformément à la
+   séquence historique, la lecture est d'abord mise en pause si nécessaire,
+   sans handoff intermédiaire, la demande rejoint `SEEK`, le player reçoit
+   `400 + preRollMs`, puis la progression de lecture est affichée sans
+   réécrire le `playheadMs` auteur avant la fin de la transition. Le cadre
+   reprend après `SEEK_APPLIED`.
 6. Le bouton Stop de `sequence-editor` fixe `playheadMs` à zéro et produit un
    seul `SEEK` vers `preRollMs` ; il ne déclenche pas de réconciliation de
    l'ancien temps telco.
@@ -1250,26 +1279,27 @@ charge ; ils ne peuvent pas réintroduire une lecture de node V1.
 
 ### D2 — connecter le Selection Frame comme interface de `decor-editor`
 
-**Fichiers à traiter après B1, B2, B3 et D1 :** `packages/authoring/selection-frame/src/`
-et ses adaptateurs, uniquement sur les interfaces réellement consommées par
-le cadre. Le package reste un outil bas niveau ; il ne devient pas le
-propriétaire du décor.
+**Statut : réalisé pour l'entrée V2 consommée par l'éditeur.**
+
+**Fichiers traités :** `packages/authoring/selection-frame/src/v2.ts` et son
+test ; le package reste un outil bas niveau et ne devient pas le propriétaire du
+décor. Les autres entrées historiques du package sont hors de cette migration.
 
 **Actions :**
 
 1. Garder le DOM de l'overlay, les pointeurs et les machines de geste du
    Selection Frame côté éditeur.
-2. Remplacer la source `subscribeToNode`/`getNodePose` par
-   `SelectionFrameValue` fourni par l'interface `decor-editor` (l'adaptateur
-   interne peut rester dans `offset-editor-bridge`).
+2. Fournir au cadre une `SelectionFrameValue` locale en px depuis
+   `decor-editor-bridge`, après lecture du snapshot et projection dans la
+   racine de scène. Aucun adaptateur de pose V1 n'est conservé.
 3. Garder les coordonnées du geste en px pour `move` et `resize`, puis
    transmettre uniquement des deltas au bridge ; celui-ci produit les champs
    structurés unitless du patch V2.
 4. Après chaque preview, afficher la valeur candidate fournie par
    `decor-editor` ;
    ne pas relire `snapshot.get()` pour chercher une preview absente du getter.
-5. Réutiliser les mêmes règles pour une sélection simple et une
-   multi-sélection ; la diffusion des patches reste atomique côté snapshot.
+5. Appliquer ces règles à la sélection simple de la première verticale ; la
+   multi-sélection et la diffusion de groupes restent hors de cette tranche.
 6. Utiliser les rendez-vous de rebuild, sélection et `SEEK_APPLIED` pour
    relire la base. `telco.onProgress` ne doit piloter ni le cadre ni le
    `playheadMs` de l'éditeur. S2 pourra traiter `snapshot.onChange`
@@ -1282,6 +1312,8 @@ réécrite côté éditeur ; aucune API de mesure n'est ajoutée à CodPlay pour
 conserver l'ancienne interface.
 
 ### R1 — persistance, rebuild et suppression de V1
+
+**Statut : réalisé pour la verticale position/taille.**
 
 **Actions :**
 
@@ -1316,8 +1348,8 @@ pas de filet de compatibilité.
 | Résolution | une action unique interpole simultanément couleur et position/taille ; `rotate`/`scale` inchangés |
 | Projection | largeur de racine initiale puis resize ; même état logique, px projetés différents |
 | Autorité temporelle | édition : `sequence-editor.playheadMs` → `SEEK` → `SEEK_APPLIED` ; lecture : `telco` ; sortie : une seule adoption `getProgress() - preRollMs` |
-| Interfaces de pilotage | boutons Play/Pause/Stop de `sequence-editor` et remote V2 convergent sur le bridge de coordination ; commandes player exécutées par la façade player, seek centralisé, progress de lecture depuis `telco.onProgress` |
-| Façade player / bridge | `instance.telco` garde le contrat V2 (`Promise<void>` + diagnostics) ; `EditorPlayerCommandFacade` exécute et observe, le bridge adapte le `RemoteTransport` et vérifie les postconditions avant `SEEK_APPLIED`/handoff |
+| Interfaces de pilotage | boutons Play/Pause/Stop de la télécommande intégrée à `sequence-editor` convergent sur le bridge de coordination ; commandes player exécutées par la façade player, seek centralisé, progress de lecture depuis `telco.onProgress` |
+| Façade player / bridge | `instance.telco` garde le contrat V2 (`Promise<void>` + diagnostics) ; `EditorPlayerCommandFacade` exécute et observe, le bridge adapte les intentions de `sequence-editor` et vérifie les postconditions avant `SEEK_APPLIED`/handoff |
 | Lecture | animation pilotée par `telco` ; CS et édition suspendus ; sortie de lecture = une seule réconciliation player → temps auteur |
 | Édition | move et resize px, avec les autres changements du décor, → patch unitless cohérent → preview atomique → retour px |
 | Persistance | commit par commande xState, rebuild, resélection et snapshot cohérents |
@@ -1331,8 +1363,8 @@ pas de filet de compatibilité.
 2. Implémenter et tester C1 puis S1 sur le core autorisé.
 3. Décider séparément S2 (`onChange`) ; ne pas la déduire de S1.
 4. Implémenter B1, B2 et B3 avec une seule `EditorPlayerCommandFacade` et un
-   seul bridge de coordination indépendant, partagés par `sequence-editor` et
-   le remote, `playheadMs` comme référence en
+   seul bridge de coordination indépendant, partagés par la timeline et la
+   télécommande intégrées à `sequence-editor`, `playheadMs` comme référence en
    mode édition, `telco` comme transport d'animation en mode `playing` et le
    handoff unique `RECONCILE_PLAYBACK_TIME` entre les deux.
 5. Implémenter D1, puis D2 sur le circuit réel.
