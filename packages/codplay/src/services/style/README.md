@@ -6,13 +6,14 @@
 The style service validates an open CSS declaration map without reading a
 materializer. It does not maintain a global list of CSS properties.
 
-The HTML materializer additionally consumes the V2 transform extras. Unitless
-numeric lengths and the explicit logical `{ kind: 'length', unit: 'cqw', value }`
-form receive `px` only at that HTML boundary, after the runtime
+The HTML materializer additionally consumes the V2 transform extras. Qualified
+logical lengths, including the current `{ kind: 'length', unit: 'cqw', value }`
+form, receive `px` only at that HTML boundary, after the runtime
 `numericLengthScale` has been applied. The latter is supplied by the scene host
-as its root width divided by 100. The adapter does not infer a CSS property
-grammar or inspect the DOM to qualify a value. Raw `style.transform` text
-remains opaque and keeps its authored order, including matrices.
+as its root width divided by 100. CodPlay qualifies structured editor
+`unitless` values before this boundary; the adapter does not infer a CSS
+property grammar or inspect the DOM to qualify a value. Raw `style.transform`
+text remains opaque and keeps its authored order, including matrices.
 
 ## Declared colors
 

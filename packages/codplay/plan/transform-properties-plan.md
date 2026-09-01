@@ -73,7 +73,9 @@ compilée ni une source de lecture du composant.
 - Une composition partielle ne doit pas effacer les autres canaux deja resolus.
 - L'ordre de composition est une donnee du contrat, pas un detail du materializer.
 - Un `transform` brut n'est jamais parsé ou réordonné par le materializer.
-- Une valeur numérique de longueur n'est convertie en `px` qu'à la frontière HTML.
+- Une valeur de longueur logique, y compris une longueur `unitless` structurée
+  préalablement qualifiée par CodPlay, n'est convertie en `px` qu'à la frontière
+  HTML. La qualification logique n'est pas une conversion vers le substrat.
 - Le facteur d'échelle de cette conversion appartient au contexte runtime du
   materializer, jamais à `CompiledScene` ou à l'état logique.
 

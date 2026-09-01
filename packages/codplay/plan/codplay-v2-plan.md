@@ -144,7 +144,7 @@ diagnostics de plusieurs compilations, instances ou scenes.
 | Contrat auteur `move` | [`move-contract-plan.md`](./move-contract-plan.md) | Fixe |
 | Mouvement visuel HTML et circuit Play/Seek | [`runner-flip-integration-study.md`](./runner-flip-integration-study.md) | Fini pour la tranche HTML V2; autres materializers reportés |
 | Materializer composants et représentation | [`component-render-representation-plan.md`](./component-render-representation-plan.md) | Interface unifiée et tranche HTML en place; substrats supplémentaires reportés |
-| Démo standard runner | [`../../authoring/selection-frame/demos/README.md`](../../authoring/selection-frame/demos/README.md) | Fixe comme gabarit de validation |
+| Démo standard runner | [`../../demos/src/v2/README.md`](../../demos/src/v2/README.md) | Fixe comme gabarit de validation |
 | Valeurs couleur | [`color-values-plan.md`](./color-values-plan.md) | Fini pour la tranche sRGB/OKLCH; defaults universels exclus |
 | ActionSequence et TweenAction | [`action-sequence-tween-plan.md`](./action-sequence-tween-plan.md), [`notes/2026-08-23-v1-behavior-inventory.md`](./notes/2026-08-23-v1-behavior-inventory.md) | Fixe, circuit logique unique en place; inventaire V1 des candidats Behavior consigné |
 | Capture continue et liste DnD V2 | [`list-dnd-integration-plan.md`](./list-dnd-integration-plan.md) | Capture core et placement list validés ; le seek de la démo reste ouvert et la démo n'est pas encore clôturée |

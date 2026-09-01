@@ -45,7 +45,9 @@ de captures, ni algorithme de projection.
 
 ## Contraintes non négociables
 
-- Ne pas supprimer `packages/authoring/selection-frame/demos/flip-stress`.
+- La fixture de stress est désormais située sous
+  `packages/demos/src/v2/demos/flip-stress` ; l'ancien emplacement authoring est
+  supprimé et ne doit pas être recréé.
 - Ne pas utiliser sa forme impérative actuelle comme validation normative.
 - Ne pas corriger un défaut du moteur par une condition spécifique à la démo.
 - Le nettoyage des captures expirées appartient entièrement à `HtmlFlipRuntime`.
@@ -229,17 +231,15 @@ de captures, ni algorithme de projection.
 
 ## Fixtures
 
-### Référence conservée
+### Référence Player POC historique
 
-`packages/authoring/selection-frame/demos/flip`
+La fixture Player POC historique du package authoring a été retirée. Les
+observations qu'elle a permis de valider restent conservées dans cette archive,
+mais elle n'est plus une fixture active et ne doit pas être recréée.
 
-Cette démo est conservée comme fixture de référence actuelle. Elle possède son
-propre bootstrap historique et ne doit pas être enrichie avec de nouvelles règles
-FLIP. Elle reste utile pour les observations déjà validées.
+### Stress-test V2 conservé
 
-### Stress-test suspendu mais conservé
-
-`packages/authoring/selection-frame/demos/flip-stress`
+`packages/demos/src/v2/demos/flip-stress`
 
 Le scénario à conserver est :
 
@@ -407,7 +407,7 @@ Lorsque le runner existe, vérifier :
   deux ghosts dont un clone Q masque dans le ghost parent, puis `2200ms` sans ghost,
   avec Q vivant dans le dernier outlet de P. La baseline confirme de nouveau que A
   est le premier enfant DOM et le premier visuellement a `1500ms`.
-- La fixture `packages/authoring/selection-frame/demos/flip-stress` est maintenant
+- La fixture `packages/demos/src/v2/demos/flip-stress` est maintenant
   declarative et delegue son parentage, son transport, ses captures et ses
   overlays a `HtmlPlayerRunner`. Le contrat d'ownership hiérarchique est explicite:
   les ancêtres servent au calcul des coordonnées, une capture enfant ne projette
@@ -752,5 +752,4 @@ le sont également.
 - `packages/codplay/src/runtime/flip/README.md`
 - `packages/codplay/src/runtime/runner-html/README.md`
 - `packages/codplay/demos/validation/runner/main.ts`
-- `packages/authoring/selection-frame/demos/flip/main.ts`
-- `packages/authoring/selection-frame/demos/flip-stress/main.ts`
+- `packages/demos/src/v2/demos/flip-stress/main.ts`

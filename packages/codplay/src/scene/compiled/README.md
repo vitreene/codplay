@@ -18,10 +18,12 @@ artifact.
 `CompiledScene` is an artifact produced by the scene build. It is not a
 parallel top-level `compiled-scene` module.
 
-## Logical cqw lengths
+## Logical lengths from editor unitless values
 
-Structured geometry that is declared as a container-query width is retained in
-the artifact as `CompiledLengthValue`:
+Structured editor geometry is transported to the V2 build boundary as
+`unitless` numbers. CodPlay qualifies the recognized length fields with the
+configured logical length unit; `cqw` is the current configuration value. The
+qualification is semantic and does not project to pixels:
 
 ```ts
 { kind: 'length', unit: 'cqw', value: 12.5 }
@@ -30,7 +32,8 @@ the artifact as `CompiledLengthValue`:
 The value is logical scene state, not CSS text. The runtime interpolates two
 values with the same unit; the HTML materializer projects the result to pixels
 using the scene-root width. CSS strings in an open style map are not converted
-to this form.
+to this form, and the editor does not prequalify the value. The same
+qualification rule applies to structured geometry in V2 preview patches.
 
 `SceneBuilder` currently covers the first build slice: active stories, structural
 and catalog validation (including the typed profiles and validators of the built-in

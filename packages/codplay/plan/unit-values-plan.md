@@ -8,10 +8,18 @@
 
 ## Frontiere
 
-La compilation ne convertit pas les unites. Elle conserve une valeur auteur dans
-son unite semantique et transmet une forme preparee a ACE. La conversion vers une
-unite de rendu appartient au materializer, car elle peut dependre du substrat, du
-viewport, du parent ou du contexte runtime de materialization.
+La compilation ne convertit pas une unité de rendu en une autre unité de rendu.
+Elle conserve les unités explicites de l'auteur et transmet une forme préparée à
+ACE. Pour le contrat éditeur V2, un nombre `unitless` de longueur structurée est
+déjà une représentation logique définie : CodPlay lui attribue la longueur
+`cq*` choisie par sa configuration (actuellement `cqw`). Cette qualification
+sémantique n'est pas une conversion en `px` et ne s'applique pas aux chaînes CSS
+ou aux valeurs CSS intrinsèquement `unitless`.
+
+La conversion vers une unité de rendu appartient au materializer, car elle peut
+dépendre du substrat, du viewport, du parent ou du contexte runtime de
+materialization. Dans le cas `cqw` ed2, le player V2 fournit la largeur de la
+racine de scène et le materializer réalise cette projection.
 
 Le compile et le composant ne lisent donc ni le DOM, ni les styles calcules, ni les
 dimensions du viewport pour transformer `cqw`, `%`, `px` ou une autre unite.
@@ -54,6 +62,10 @@ numérique, neutre à `1` par défaut, multiplie les valeurs numériques
 juste avant leur écriture CSS. L'hôte le transmet avec `runner.resize(scale)`,
 puis la frame courante est réappliquée sans compiler à nouveau la scène ni rejouer
 les événements.
+
+Cette frontière ne doit pas être utilisée pour requalifier un nombre unitless
+éditeur : cette qualification a lieu une seule fois dans le circuit V2, avant la
+résolution logique. Un resize ne modifie donc ni le nombre logique ni son unité.
 
 Le chemin chaud ACE n'est donc pas prevu pour melanger deux unites. Le comportement
 CSS, qui peut interpoler certaines unites heterogenes via le substrat, reste un
@@ -98,5 +110,6 @@ Le contrat doit couvrir :
 - interpolation dans une unite commune;
 - refus des unites incompatibles;
 - valeurs relatives avec unite;
-- absence de conversion pendant le build;
+- absence de conversion en `px` pendant le build, avec qualification contrôlée
+  des longueurs unitless structurées du contrat éditeur V2;
 - conversion eventuelle testee separement dans le materializer.

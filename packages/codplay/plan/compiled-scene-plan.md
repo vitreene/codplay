@@ -155,8 +155,13 @@ de propriete ou de composant afin de ne pas obliger chaque scene a les redeclare
   [`transform-properties-plan.md`](./transform-properties-plan.md).
 - Les couleurs suivent une seconde frontiere de normalisation, documentee dans
   [`color-values-plan.md`](./color-values-plan.md), avant toute interpolation ACE.
-- Les unites ne sont jamais converties pendant le build; ACE impose une unite compatible et `render` porte
-  la conversion dependante du substrat, selon [`unit-values-plan.md`](./unit-values-plan.md).
+- Les unites de rendu explicites ne sont jamais converties pendant le build;
+  ACE impose une unite compatible et `render` porte la conversion dependante du
+  substrat, selon [`unit-values-plan.md`](./unit-values-plan.md). Exception
+  sémantique documentée : un nombre `unitless` provenant d'un champ de longueur
+  structurée du contrat éditeur V2 est qualifié par CodPlay en unité logique
+  `cq*` configurée (actuellement `cqw`) ; cette qualification ne convertit pas
+  en `px` et ne s'applique pas aux chaînes CSS ni aux valeurs CSS `unitless`.
 - Le codec valide l'enveloppe et les artefacts serialises avant leur entree dans un player.
 - Le player fait confiance au resultat compile et ne recree pas ces guards sur son chemin chaud.
 

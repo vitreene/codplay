@@ -15,9 +15,10 @@ La demo actuellement validée reprend la présentation et la timeline de :
 
 `packages/demos/src/scenes/player-poc-scene.ts`
 
-Elle est portée dans :
+Elle était portée dans une ancienne fixture du package authoring, désormais
+retirée. La fixture V2 active est :
 
-`packages/authoring/selection-frame/demos/flip`
+`packages/demos/src/v2/demos/flip-stress`
 
 Elle utilise `HtmlFlipRuntime` V2 et le host HTML autonome de la tranche V2. Elle
 possède un Play/Pause, un seek et des logs de diagnostic.
@@ -140,12 +141,11 @@ détaillés des transitions invalides ou incomplètes.
 
 ## Fixtures de démonstration — 2026-08-18
 
-La démo `packages/authoring/selection-frame/demos/flip` est conservée comme
-référence Player POC validée. La fixture `demos/flip-stress` est également
-conservée avec son scénario A/B/C/D, ses transferts Q/K et ses échanges alternés,
-mais son utilisation est suspendue : elle ne doit pas servir de validation tant
-qu'elle n'est pas une simple déclaration de scène consommée par un runner V2/HTML
-partagé. L'architecture de navigation et ce runner restent à construire.
+La démo Player POC historique du package authoring a été retirée. La fixture
+`packages/demos/src/v2/demos/flip-stress` est conservée avec son scénario
+A/B/C/D, ses transferts Q/K et ses échanges alternés. Elle est désormais la
+fixture V2 déclarative consommée par le runner HTML partagé ; cette note reste
+une archive et ne réintroduit pas l'ancien emplacement.
 
 La fixture stress-test impose désormais des dimensions fixes aux containers A/B/C/D
 et Q/K afin que les montages et démontages internes ne modifient pas la géométrie

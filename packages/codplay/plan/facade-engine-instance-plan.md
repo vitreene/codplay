@@ -1058,28 +1058,35 @@ d'absence et la conversion de la géométrie de grille. Son implémentation est
 une évolution de frontière V2 à autoriser séparément de `snapshot` et `cqw` ;
 elle ne constitue ni un correctif de bug, ni une compatibilité V1.
 
-#### Longueurs `cqw` ed2
+#### Longueurs unitless ed2 → `cq*`
 
-**Décision validée le 2026-08-30 — implémentation engagée dans le sous-plan V2.**
+**Décision validée le 2026-08-30 — migration engagée dans le sous-plan V2.**
 
 Les champs structurés de longueur ed2 (`OffsetData.x/y/width/height` et
-`OffsetData.translate.x/y`) deviennent dans `SceneDoc` une valeur explicite :
+`OffsetData.translate.x/y`) sont transportés par l'éditeur comme des nombres
+`unitless` représentant des longueurs logiques. Le builder éditeur ne fabrique
+pas d'objet `cqw` et ne convertit pas ces nombres en texte CSS.
 
-```ts
-{ kind: 'length', unit: 'cqw', value: number }
-```
+À la frontière V2 `SceneDoc → CompiledScene`, CodPlay reconnaît ces champs
+structurés et les qualifie avec la constante de configuration de longueur
+logique. La configuration courante vaut `cqw`, mais cette valeur n'est pas une
+norme de l'éditeur ni de tous les contextes futurs. La même qualification est
+appliquée aux patches de géométrie unitless destinés à `snapshot`.
+
+La qualification ne convertit pas en `px` : la valeur reste logique et deux
+longueurs compatibles s'interpolent dans `resolve`, puis le materializer les
+projette en `px` avec la largeur de la racine de scène (`100cqw`), y compris
+pour `y` et `height`. Cette projection ne requalifie pas le CSS.
 
 `Decor.style`, CSS libre et propriétés custom restent des chaînes CSS opaques.
-CodPlay ne déduit jamais une longueur depuis la grammaire CSS et ne maintient
-aucune whitelist de propriétés. Cette valeur est logique : deux longueurs
-`cqw` s'interpolent dans `resolve`, puis le materializer les projette en `px`
-avec la largeur de la racine de scène (`100cqw`), y compris pour `y` et
-`height`. Cette projection ne requalifie pas le CSS.
+Les valeurs CSS `unitless` et les champs dimensionless tels que `rotate`/`scale`
+conservent leur sémantique propre. CodPlay ne déduit jamais une longueur depuis
+la grammaire CSS et ne maintient aucune whitelist implicite.
 
-Une interpolation entre une longueur `cqw` et une valeur CSS incompatible est
-rejetée avec diagnostic. L'implémentation préserve cette valeur dans le
-snapshot, la contribution temporaire, Play, Seek et resize ; les preuves
-unitaires du circuit logique et de la projection HTML sont maintenant présentes.
+Une interpolation entre une longueur logique et une valeur CSS incompatible est
+rejetée avec diagnostic. La première implémentation actuelle prouve le circuit
+avec des valeurs déjà explicites en `cqw`; la migration de la qualification vers
+CodPlay, sa configuration et sa preuve façade/navigateur restent à réaliser.
 
 #### Frontière de géométrie — aucun accès public au nœud
 

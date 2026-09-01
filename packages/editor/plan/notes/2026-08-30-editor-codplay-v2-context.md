@@ -31,9 +31,29 @@ Les présentations FLIP et leurs matrices sont transitoires et distinctes de la 
 
 ## Unités de dimension ed2
 
-La convention V1 effective est `cqw` pour les longueurs d'offset, y compris `x`, `y`, `width` et `height`. Le builder ed2 ne devine pas l'intention d'une déclaration CSS : les seuls champs structurés de longueur (`OffsetData.x/y/width/height` et `translate.x/y`) deviennent une longueur `cqw` explicite dans la `SceneDoc` V2. Les chaînes CSS libres et propriétés custom restent opaques, sauf une couleur autonome portée par une propriété nommée couleur, normalisée en `ColorValue` pour ACE ; ainsi `line-height: '1.2'`, `calc()` ou une variable CSS ne sont pas réinterprétés. Cette décision ne repose sur aucune whitelist de propriétés de dimension et ne lit pas le DOM.
+La migration distingue la sémantique retenue de la technique V1. Les nombres
+des champs structurés de longueur (`OffsetData.x/y/width/height` et
+`translate.x/y`) sont des valeurs `unitless` de transport : ils représentent
+une longueur logique, mais ne sont pas encore une unité CSS. Le `unitless` CSS
+de `line-height`, `opacity` ou d'une propriété intrinsèquement dimensionless
+reste une autre sémantique.
 
-V2 doit conserver et interpoler cette valeur de longueur explicite. Le materializer HTML ne vérifie ni la grammaire CSS ni l'unité : il reçoit une longueur déjà qualifiée, la projette avec la largeur de référence explicite et écrit le résultat en `px`. `100cqw` est la largeur de la racine de scène, y compris pour `y` et `height`. Une longueur `cqw` et une valeur CSS incompatible ne sont jamais interpolées implicitement : V2 produit un diagnostic. La tranche autorisée porte maintenant cette forme explicite et sa projection générique ; les preuves façade/navigateur restent à compléter. La décision ne doit pas être contournée en remettant des chaînes `cqw` dans le builder ed2.
+Le builder ed2 transmet ces nombres dans le contrat V2. CodPlay les qualifie à
+sa frontière de compilation, avec la constante de configuration de longueur
+logique ; pour le contexte actuel, cette constante vaut `cqw`. La même règle
+s'applique aux patches de géométrie envoyés à `snapshot`. Le choix `cqw` est
+donc une configuration courante, pas une norme que l'éditeur devrait fabriquer
+ou que tous les contextes futurs devraient imposer.
+
+V2 conserve et interpole ensuite la valeur logique qualifiée. Le materializer
+HTML ne vérifie ni la grammaire CSS ni l'unité : il projette la valeur avec la
+largeur de la racine de scène et écrit le résultat en `px`. `100cqw` est la
+largeur de cette racine, y compris pour `y` et `height`. Une longueur logique
+et une valeur CSS incompatible ne sont jamais interpolées implicitement : V2
+produit un diagnostic. Les chaînes CSS libres, propriétés custom, `calc()` et
+variables restent opaques ; une couleur autonome sur une propriété nommée
+couleur est normalisée pour ACE. La qualification et la projection sont des
+étapes V2, sans méthode, bridge ou conversion V1.
 
 L'interpolation `Decor` est définie par la mesure de l'écart entre deux `Decor` du même item. Les propriétés interpolables doivent être projetées dans la représentation V2 avec leur unité et leur forme correctes. Les classes et les propriétés CSS intrinsèquement discrètes, telles que `object-fit`, ne sont pas interpolables : elles sont ignorées par ce calcul.
 
@@ -128,6 +148,9 @@ Toute nouvelle intervention V2 révélée par l'adaptation doit être qualifiée
 La cause ou le besoin, les invariants, le périmètre, le plan et les preuves d'acceptation sont documentés et validés avant toute écriture. Chaque intervention V2 requiert ensuite l'autorisation explicite de l'auteur. Un correctif ne sert jamais de prétexte à introduire une feature, et une feature ne se présente jamais comme un correctif.
 
 La tranche autorisée du 2026-08-30 implémente désormais `instance.snapshot` dans
-CodPlay et la longueur logique `cqw` dans le builder, la résolution et la
-projection HTML. Elle ne couvre pas encore le bridge éditeur, le Selection Frame
-ni les zones ; ces écarts restent suivis par le plan principal.
+CodPlay et une première version de la longueur logique `cqw` dans le builder,
+la résolution et la projection HTML. Cette première version est une étape de
+migration : la qualification `unitless → cq*` doit encore être déplacée du
+builder vers CodPlay et centralisée dans la configuration. Le bridge éditeur,
+le Selection Frame et les zones ne sont pas encore raccordés ; ces frictions
+restent suivies par le plan principal.

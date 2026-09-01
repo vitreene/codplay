@@ -12,9 +12,12 @@ implémenté et ce qui reste ouvert. Il évite de redécouvrir les mêmes décis
 ### Mise à jour du 2026-08-30
 
 La façade V2 expose désormais `instance.snapshot` (`get`, `set`, `clear`) et
-les longueurs structurées `cqw` sont portées par le builder, la résolution et
-la projection HTML. Ces deux capacités sont suivies par le plan de reprise
-éditeur ; leurs preuves navigateur restent à compléter.
+une première version du circuit des longueurs structurées. L'implémentation
+actuelle porte déjà des valeurs explicites `cqw` jusqu'à la résolution et la
+projection HTML, mais le plan de migration éditeur doit encore déplacer la
+qualification des nombres `unitless` vers CodPlay et centraliser `cqw` dans la
+configuration. Ces deux capacités sont suivies par le plan de reprise éditeur ;
+leurs preuves navigateur restent à compléter.
 
 La géométrie de présentation n'est pas une capacité facultative : elle est la
 sortie authoring obligatoire de la frontière HTML `Projection.measure`, car

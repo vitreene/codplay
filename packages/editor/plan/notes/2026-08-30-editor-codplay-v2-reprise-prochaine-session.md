@@ -38,11 +38,13 @@ porte les tranches et leurs critères d'acceptation :
   logique, ciblé par `storyId`/`persoId` et `timeMs`, et ne porte pour l'instant
   que `state.style`. L'effacement est explicite ; aucune annulation automatique
   n'est imposée avant observation des manipulations réelles.
-- Les dimensions structurées de l'éditeur sont exprimées en `cqw`. Le builder
-  et V2 portent cette unité logique jusqu'à l'interpolation et à la projection
-  HTML. Le materializer ne déduit pas la grammaire CSS et ne qualifie pas une
-  chaîne libre. Les propriétés discrètes comme `object-fit`, `line-height` et
-  les chaînes CSS composées ne sont pas transformées en longueurs par cette
+- Les dimensions structurées de l'éditeur sont transportées comme nombres
+  `unitless` dans le contrat V2. CodPlay les qualifie selon sa configuration ;
+  `cqw` est la valeur courante, héritée de la sémantique de racine observée en
+  V1, mais aucune méthode V1 ni aucune qualification n'est conservée dans
+  l'éditeur. Le materializer ne déduit pas la grammaire CSS et ne qualifie pas
+  une chaîne libre. Les propriétés discrètes comme `object-fit`, `line-height`
+  et les chaînes CSS composées ne sont pas transformées en longueurs par cette
   convention.
 - Les CSS générés et les médias suivent deux chemins distincts : CSS immédiat
   par l'API `codplay.preload.css.set/clear`, médias par le preload/cache déjà

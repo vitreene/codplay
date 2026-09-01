@@ -1,12 +1,24 @@
 # Plan d'implémentation — reprise de l'éditeur avec CodPlay V2
 
-**Statut : En cours — tranche 3 (capacités V2 `cqw` et `snapshot`) implémentée ; le contrat de géométrie V2 est obligatoire et doit être arrêté avant le bridge éditeur.**
+**Statut : En cours — plan de migration de la verticale éditeur V1 vers une verticale V2 ; les capacités `snapshot` et `cqw` ont une première implémentation, mais leurs frictions de migration et la preuve de la verticale complète restent à traiter.**
 **Cible : ed2 avec CodPlay V2 foundation.**
 **Date : 2026-08-30.**
+
+**Mise à jour 2026-09-01 :** le choix `cqw`, le contexte de racine et la
+sémantique `unitless` sont considérés comme arrêtés. Le travail restant est
+formulé comme une migration de responsabilité et de connexions, sans maintien
+de méthodes V1.
 
 ## Objet et frontière
 
 Cette reprise remplace la verticale V1 de l'éditeur par une verticale V2 complète : préparation de `SceneDoc`, compilation, preload, instance, accès authoring et preview `Decor`. Elle n'emporte aucun patch legacy ni couche de compatibilité V1/V2 : V1 ne reste qu'une référence de comportement et de preuves. La verticale V2 nativement construite ne crée ni player parallèle, ni reconstruction de décor depuis le DOM.
+
+Il s'agit d'un plan de migration, pas d'un simple raccordement d'APIs. Les frictions
+entre les modèles, les unités, les frontières de mesure et les circuits V1 sont
+attendues. Pour chacune, le plan doit conserver la cause observée, désigner la
+frontière V2 qui la résout, nommer le code à retirer ou à adapter et fixer la
+preuve qui autorise la suppression de l'ancien chemin. Une friction ne devient
+donc ni une nouvelle API de compatibilité, ni un choix de conception implicite.
 
 Elle se raccorde aux acteurs et machines xState déjà propriétaires de l'état et des commandes de l'éditeur. Le bridge V2 ne duplique ni le contrôleur, ni la machine Decor, ni la machine de séquence, et ne les contourne pas par un état authoring concurrent.
 
@@ -19,20 +31,44 @@ Les zones restent hors de cette première intégration. Leur modèle existe dans
 - État résolu et contribution temporaire sont logiques. La projection HTML peut mesurer ses nœuds pour produire la géométrie nécessaire au hit-test et aux pointeurs, mais aucun node n'est remis à l'éditeur pour lire ou écrire `Decor`.
 - La géométrie de présentation nécessaire à l'authoring est une capacité constitutive de V2, non une option du raccordement Selection Frame. Elle découle de la frontière `Projection.set / measure / mount` : la projection HTML mesure les nœuds persistants et expose un frame numérique immuable ; elle n'expose pas les nœuds comme API de pose et l'éditeur ne relit pas le DOM.
 - Entre deux `Decor` d'un même item, le builder calcule l'écart et l'interpole par défaut. Les couleurs portées par une propriété explicitement nommée couleur sont normalisées pour ACE ; les chaînes CSS composées, classes et propriétés intrinsèquement discrètes, telles que `object-fit`, sont exclues de ce calcul.
-- La convention de longueur ed2 est `cqw`, déjà utilisée par V1 pour `x`, `y`, `width` et `height`. Seules les données structurées explicitement longues produisent une longueur `cqw` dans la `SceneDoc` V2 ; les chaînes CSS libres et propriétés custom restent opaques, à l'exception de la normalisation des couleurs autonomes sur les propriétés nommées couleur. Aucune whitelist de propriétés de dimension ni inférence depuis la grammaire CSS n'est introduite.
-- V2 reçoit cette longueur explicite ; le materializer ne qualifie pas le CSS. Il ne fait que projeter une longueur déjà connue avec la largeur de référence de la scène.
+- Les nombres de longueur de l'`OffsetData` sont des valeurs `unitless` de transport du contrat éditeur-V2. Cette notion n'est pas le `unitless` CSS de `line-height`, `opacity` ou d'une autre propriété intrinsèquement sans unité.
+- CodPlay qualifie les longueurs structurées `unitless` à sa frontière V2 de compilation, selon la constante de configuration de longueur logique. La valeur retenue pour le contexte actuel est `cqw` ; ce choix n'est pas une convention normative de tous les contextes futurs et ne doit pas être codé dans l'éditeur.
+- La racine de scène fournit au player V2 le contexte nécessaire à la projection de la longueur logique. La continuité avec V1 porte sur cette sémantique de racine, pas sur ses méthodes, ses APIs ou son bridge.
+- Les chaînes CSS libres, les propriétés custom et les valeurs composées restent opaques. Les valeurs `unitless` CSS autonomes restent également inchangées ; CodPlay ne déduit pas une longueur à partir d'une chaîne CSS.
 - Cascade, copy-on-write et l'unique écriture persistante `Decor` demeurent des responsabilités ed2.
 
-## Écarts V2 à qualifier avant code
+## Principe de migration — résoudre les frictions, sans reconduire V1
 
-| Écart constaté | État actuel | Décision à produire |
+La cible de la migration est une connexion V2 directe. La référence V1 est
+utilisée pour préserver la sémantique observée et construire les régressions,
+jamais pour choisir une méthode d'appel ou maintenir une forme de données V1.
+
+| Friction de départ | Résolution V2 | Preuve de sortie |
+| --- | --- | --- |
+| L'éditeur transforme aujourd'hui les longueurs structurées en objets `cqw` dans [`decor-resolution.ts`](../src/builder-v2/decor-resolution.ts). | Le builder V2 conserve les nombres `unitless` du contrat `OffsetData`. CodPlay les qualifie à la frontière `SceneDoc → CompiledScene` avec la constante de configuration courante (`cqw`). | La sortie éditeur ne contient plus de décision d'unité ; la `CompiledScene` contient une longueur logique qualifiée et aucune propriété CSS libre n'est réinterprétée. |
+| Des chemins graphiques peuvent enchaîner `px → cqw → px` ou relire une valeur déjà projetée. | L'état échangé entre l'éditeur et le player reste logique. Une conversion physique n'existe qu'à la frontière nécessaire au geste graphique ou à la projection HTML ; elle ne passe jamais par un node, un cache V1 ou une reconversion à chaque seek. | Après resize, la valeur logique et le snapshot restent identiques ; seule la projection px change. Un geste complet produit un patch logique V2 sans `getNodePose`/`setNodePose`. |
+| Le player doit connaître le conteneur pour évaluer `cqw`, alors que l'éditeur ne doit pas porter ce contexte. | L'instance/player V2 reçoit la racine de scène et mesure sa largeur pour projeter `cqw`. Le contexte de racine est interne au player V2 ; il n'est pas une API V1 exposée à l'éditeur. | Play, Seek et resize utilisent la même longueur logique avec la largeur courante de la racine, sans contexte de conteneur parallèle dans l'éditeur. |
+| Le choix `cqw` est actuellement dispersé et hardcodé. | Centraliser la valeur par défaut dans la configuration CodPlay et généraliser le type logique juste assez pour ne pas faire de `cqw` une norme implicite. Aucun support `cqh`, ratio ou autre contexte n'est ajouté dans cette migration. | Un test de configuration démontre que la qualification passe par cette constante ; aucune référence d'unité ne subsiste dans le builder éditeur. |
+| Les bridges et éditeurs graphiques dépendent encore de méthodes V1 et de poses DOM. | Rebrancher les outils sur les ports V2 (`snapshot`, géométrie numérique, commandes xState). Les outils graphiques peuvent être adaptés ou réécrits ; aucune méthode V1 n'est conservée comme contrat de transition. | La verticale éditeur réelle fonctionne sans import V1, `AuthorApi`, lecture/écriture de node, player parallèle ou état authoring concurrent. |
+
+Cette matrice est le fil directeur des tranches suivantes : chaque friction
+reste visible jusqu'à sa preuve de sortie. La présence d'une implémentation
+intermédiaire qui fonctionne avec des valeurs déjà en `cqw` ne clôt donc pas la
+migration de l'unité.
+
+## Écarts opérationnels et tranches de résolution
+
+| Écart constaté | État actuel | Résolution à appliquer |
 | --- | --- | --- |
 | Lecture snapshot | Contrat et port runtime V2 implémentés ; lecture logique exposée par la façade, sans accès au DOM. | Compléter la preuve navigateur avec le cycle d’instance du bridge. |
 | Preview temporaire | Contribution runtime V2 implémentée après résolution et avant solve/materialize ; journal et `CompiledScene` inchangés. | Compléter la preuve navigateur et raccorder la session Decor. |
-| Longueur logique | Builder, interpolation logique et projection HTML `cqw` implémentés. | Compléter la preuve façade/navigateur Play, Seek et resize. |
+| Longueur `unitless → cq*` | Première implémentation avec `cqw` déjà explicite ; qualification encore portée par le builder éditeur et unité hardcodée. | Déplacer la qualification dans CodPlay, centraliser la valeur courante dans la configuration, puis compléter la preuve façade/navigateur Play, Seek et resize. |
 | Géométrie du Selection Frame | Le runner possède déjà une mesure HTML interne (`captureHtmlPose` et snapshots de layout), mais la façade ne l'expose pas encore comme frame authoring. | Achever la frontière V2 `Projection.measure` par un frame géométrique numérique, cohérent avec la présentation courante, puis raccorder le cadre à ce frame. Aucun node observable ni API de pose ne remplace cette sortie. |
 
-Chaque ligne devient une tranche V2 séparée : cause démontrée, classification bug/feature, contrat, fichiers V2, tests d'intégration et autorisation explicite avant code. Aucune ne peut être masquée par un bridge temporaire.
+Chaque ligne devient une tranche de migration séparée : cause démontrée,
+classification bug/feature/correction éditeur, frontière V2 cible, fichiers à
+adapter ou à supprimer, tests d'intégration et porte de sortie. Aucune ne peut
+être masquée par un bridge temporaire.
 
 ### Qualification technique préalable à la tranche d'intégration
 
@@ -43,11 +79,13 @@ Les écarts `snapshot` et `cqw` sont des **features V2**, pas des correctifs de 
   temporaire. Il faut donc ajouter le port `get/set/clear` prévu par le contrat,
   ses diagnostics et son raccordement au cycle `resolve → solve → materialize`,
   sans modifier `CompiledScene` ni le journal ;
-- `cqw` : la tranche autorisée a retiré le blocage
-  `EDITOR_V2_OFFSET_REQUIRES_CQW` et porte maintenant une longueur logique
-  explicite jusqu'à l'interpolation et la projection HTML. Les preuves de
-  façade/navigateur restent à compléter, sans inférence CSS dans le materializer
-  ni conversion de `line-height`, `object-fit` ou CSS libre.
+- `cqw` : le choix fonctionnel est arrêté et la première implémentation prouve
+  le chemin avec des valeurs déjà explicites. La friction de migration reste à
+  résoudre : la qualification est encore faite par le builder éditeur, elle
+  n'est pas centralisée dans CodPlay et la valeur n'est pas encore portée par
+  une constante de configuration. Les preuves de façade/navigateur restent à
+  compléter, sans inférence CSS dans le materializer ni conversion de
+  `line-height`, `object-fit` ou CSS libre.
 
 Le bridge éditeur est ensuite une tranche d'adaptation, non une capacité core :
 il remplacera le pont V1 par `CodPlay.build()`, `preload.load()`,
@@ -161,49 +199,91 @@ Le bridge ed2 consomme `instance.snapshot` directement. V2 reste propriétaire d
 **Acceptation :** contrat accepté. Le sous-plan V2 est autorisé le 2026-08-30 ;
 la validation de l'implémentation reste suivie par les preuves de la tranche dédiée.
 
-### 0.2 Contrat de longueur `cqw` — validé le 2026-08-30
+### 0.2 Contrat V2 de longueur `unitless` et qualification `cq*` — décision fonctionnelle arrêtée
 
-Le contrat fixe la valeur V2 et son origine :
+La décision porte sur la responsabilité de chaque frontière, pas sur la
+conservation d'une forme V1 :
 
-- `OffsetData.x/y/width/height` et `OffsetData.translate.x/y` sont toujours des longueurs `cqw` ;
-- le builder porte ces valeurs dans `SceneDoc` sous la forme `{ kind: 'length', unit: 'cqw', value }` ;
-- les chaînes CSS libres, les propriétés custom et les valeurs composées (`calc()`, `var()`, gradients, filtres) restent opaques ; une couleur autonome sur une propriété nommée couleur est normalisée en `ColorValue` pour l'interpolation ACE ;
-- `100cqw` correspond à la largeur de la racine de scène, y compris pour `y` et `height`, conformément à V1 ;
-- V2 interpole deux longueurs `cqw` puis les projette en `px` avec cette largeur de référence, sans qualification CSS dans le materializer ;
-- une interpolation entre une longueur `cqw` et une valeur CSS incompatible produit un diagnostic explicite.
+- `OffsetData.x/y/width/height` et `OffsetData.translate.x/y` sont des nombres
+  `unitless` de transport représentant des longueurs logiques. Le `unitless`
+  CSS de `line-height`, `opacity` ou d'une propriété intrinsèquement
+  dimensionless est une autre sémantique.
+- Le builder éditeur transmet ces nombres dans le contrat V2 sans fabriquer un
+  objet `cqw` et sans convertir en texte CSS.
+- CodPlay reconnaît ces champs structurés à la frontière `SceneDoc →
+  CompiledScene` et les qualifie en valeur logique `cq*` avec la constante de
+  configuration de longueur. Pour l'éditeur actuel, cette constante vaut
+  `cqw` ; elle n'est pas une norme de tous les contextes futurs.
+- La même règle s'applique aux patches de géométrie unitless envoyés par les
+  outils graphiques à la preview V2 : l'éditeur ne préqualifie pas le patch et
+  `snapshot` ne crée pas une seconde convention d'unité.
+- `100cqw` correspond à la largeur de la racine de scène, y compris pour `y` et
+  `height`. Cette sémantique est héritée de V1 ; sa mesure, son transport et
+  sa projection relèvent exclusivement du player V2.
+- V2 interpole deux longueurs logiques compatibles, puis le player les projette
+  en `px` avec le contexte courant de la racine. Le materializer ne qualifie
+  jamais une chaîne CSS.
+- Une longueur logique et une valeur CSS incompatible produisent un diagnostic
+  explicite.
+- Les chaînes CSS libres, les propriétés custom et les valeurs composées
+  (`calc()`, `var()`, gradients, filtres) restent opaques. Une couleur autonome
+  sur une propriété nommée couleur est normalisée en `ColorValue` pour ACE.
+  Les valeurs `unitless` CSS restent inchangées.
 
-Les valeurs unitless CSS, telles que `line-height: '1.2'`, ne sont pas converties : elles restent dans `Decor.style`. Tout futur module ed2 qui produit une longueur doit la déclarer explicitement, plutôt que demander au builder de deviner son intention.
+Tout futur support de `cqh`, `cqi`, d'un ratio ou d'un autre contexte est hors
+de cette migration. Il devra remplacer la constante de configuration et ses
+preuves, sans modifier le contrat éditeur par anticipation.
 
-**Fichiers de plan concernés :** spécification V2 de style/ACE, plan de façade, nouveau plan ed2 de builder V2.
+**Fichiers de plan concernés :** spécification V2 de style/ACE, configuration
+de compilation CodPlay, plan de façade, plan ed2 du builder V2 et plans des
+éditeurs graphiques.
 
-**Acceptation :** contrat accepté. Le sous-plan V2 doit prouver : `offset.width: 12.5` devient une longueur logique, les couleurs `color`/`background-color` sont normalisées, `line-height: '1.2'` reste opaque, `object-fit: 'cover'` reste discret, et CSS libre/`calc()` restent opaques, en Play, Seek et resize.
+**Acceptation :** le builder conserve `offset.width: 12.5` comme donnée de
+transport unitless ; `CodPlay.build()` produit la longueur logique qualifiée
+selon la configuration (`cqw` dans cette tranche). Les couleurs
+`color`/`background-color` sont normalisées, `rotate`/`scale` restent
+dimensionless, `line-height: '1.2'` reste opaque, `object-fit: 'cover'` reste
+discret, et CSS libre/`calc()` restent opaques, en Play, Seek et resize.
 
-### 0.3 Sous-plan V2 autorisé — longueur `cqw`
+### 0.3 Sous-plan de migration V2 autorisé — qualification des longueurs
 
 Cette intervention est une **feature V2** : aucun comportement V2 existant ne
-est corrigé opportunément. Elle se limite aux quatre frontières suivantes :
+est corrigé opportunément. Elle résout la friction de responsabilité identifiée
+ci-dessus et se limite aux frontières suivantes :
 
-1. **Builder ed2** (`packages/editor/src/builder-v2`) : remplacer le blocage
-   `EDITOR_V2_OFFSET_REQUIRES_CQW` par la projection des champs structurés
-   `OffsetData` en valeurs `{ kind: 'length', unit: 'cqw', value }`. Les
-   champs `rotate`/`scale` restent numériques ; `anchor`/`ratio` restent
-   signalés comme écart séparé. En dehors de la normalisation des couleurs
-   autonomes sur les propriétés nommées couleur, `Decor.style`, `custom` et les
-   classes ne sont pas réinterprétés.
-2. **Résolution V2** (`packages/codplay/src/runtime/player/pipeline`) :
-   accepter deux longueurs explicites de même unité dans le tween générique,
-   interpoler leur nombre, et conserver la valeur structurée dans l'état
-   logique. Une borne `cqw` et une valeur CSS incompatible produisent l'erreur
-   dédiée ; aucune propriété CSS n'est consultée.
-3. **Projection HTML** (`packages/codplay/src/services/style` et
+1. **Builder ed2** (`packages/editor/src/builder-v2`) : conserver les champs
+   structurés `OffsetData` comme nombres unitless dans la sortie de transport
+   V2. Retirer la fabrication d'objets `{ kind: 'length', unit: 'cqw', value }`
+   de l'éditeur. Les champs `rotate`/`scale` restent numériques et
+   dimensionless ; `anchor`/`ratio` restent signalés comme écart séparé. En
+   dehors de la normalisation des couleurs autonomes sur les propriétés
+   nommées couleur, `Decor.style`, `custom` et les classes ne sont pas
+   réinterprétés.
+2. **Qualification CodPlay** (`packages/codplay/src/scene/compiled`) :
+   reconnaître les champs structurés de longueur du contrat V2 pendant la
+   compilation et produire une valeur logique qualifiée avec la constante de
+   configuration courante. Le type compilé ne doit pas rendre `cqw` normatif ;
+   le contexte de l'éditeur fournit simplement `cqw` comme valeur par défaut.
+3. **Résolution V2** (`packages/codplay/src/runtime/player/pipeline`) :
+   accepter deux longueurs logiques compatibles, interpoler leur nombre et
+   conserver la valeur structurée dans l'état logique. Une longueur logique et
+   une valeur CSS incompatible produisent l'erreur dédiée ; aucune propriété
+   CSS libre n'est consultée.
+4. **Projection HTML** (`packages/codplay/src/services/style` et
    `packages/codplay/src/runtime/runner-html`) : convertir uniquement la valeur
-   logique `cqw` déjà déclarée en pixels avec `largeur-racine / 100`. La largeur
-   est fournie par le host lors de l'initialisation et des resizes ; le
+   logique déjà qualifiée en pixels avec `largeur-racine / 100`. La largeur est
+   fournie par le host V2 à l'initialisation et lors des resizes ; le
    materializer ne déduit ni unité ni grammaire CSS.
-4. **Preuves** : tests du builder, du tween V2, de l'adaptateur style et du
-   resize du host. Les cas `line-height`, `object-fit`, CSS libre et `calc()`
-   doivent rester inchangés ; les couleurs `color` et `background-color` sont
-   normalisées avant compilation.
+5. **Adaptateurs graphiques V2** : si un geste a besoin de coordonnées physiques
+   pour son algèbre, utiliser la frame et le contexte numériques fournis par
+   V2, puis produire un patch logique. Ne pas réintroduire
+   `referenceWidthPx`, `getNodePose`, `setNodePose` ou une conversion répétée
+   issue du DOM/cache V1.
+6. **Preuves** : tester séparément le builder unitless, la qualification
+   CodPlay, le tween V2, l'adaptateur style et le resize du host. Les cas
+   `line-height`, `object-fit`, CSS libre et `calc()` doivent rester inchangés ;
+   les couleurs `color` et `background-color` sont normalisées avant
+   compilation.
 
 Les modifications sont autorisées uniquement dans ces frontières. Toute
 extension vers la façade snapshot, le bridge éditeur ou les zones reste dans sa
@@ -348,7 +428,7 @@ frontière V2 `Projection.measure` décrit en §0.4.
 | Builder natif | `packages/editor/src/builder-v2/` | Déjà construit ; preuve pure encore à compléter dans le navigateur | Auditer le mapping et raccorder sa sortie, sans recopier le builder V1 | `SceneDoc` compilable, une story, capsules imbriquées, CSS de `capsule-automation`, ressources média et diagnostics vérifiés sur le chemin façade. |
 | Pipeline logique | `packages/codplay/src/runtime/player/pipeline/` | Contrat V2 existant ; aucun correctif déduit de l'ancien bridge | Ne pas le modifier pendant l'inventaire. Toute divergence observée est d'abord reproduite et classée | Même état logique aux temps identiques en Play, Seek et replay ; aucune lecture DOM. |
 | Preview logique | `instance.snapshot` | Feature déjà implémentée et validée comme surface | Finir la preuve navigateur et la consommation par l'éditeur | `get/set/clear`, patch atomique multi-item, diagnostics et géométrie rafraîchie après application. |
-| Longueurs `cqw` | builder/résolution/projection | Feature V2 déjà portée ; pas de conversion CSS à ajouter | Compléter Play/Seek/resize et vérifier l'éditeur | Offset structuré `cqw` interpolé ; `line-height`, `object-fit`, `calc()` et CSS libre inchangés. |
+| Longueurs `unitless → cqw` | `decor-resolution`, compilation CodPlay, résolution et projection | Première implémentation avec `cqw` explicite ; qualification encore portée par l'éditeur et unité hardcodée | Déplacer la qualification dans CodPlay, centraliser `cqw` dans la configuration, puis compléter Play/Seek/resize et vérifier l'éditeur | Offset structuré unitless qualifié une seule fois par CodPlay ; état logique stable au resize ; `line-height`, `object-fit`, `calc()` et CSS libre inchangés. |
 | Géométrie authoring | `runner-html` mesure en interne, façade sans sortie publique | Feature/frontière V2 obligatoire, non un bug établi | Arrêter le contrat, puis exposer un DTO numérique depuis la projection HTML | Frame cohérente après init, seek, resize, preview, rebuild et montage ; aucune référence DOM. |
 | Bridge de scène | `packages/editor/src/app/bridges/scene-player-bridge.ts` | Résidu V1 | Créer et valider un bridge V2 séparé, puis basculer | `build → preload → resources → CSS slot → instance → seek`, une instance active, erreurs transactionnelles. |
 | Décor live | `packages/editor/src/decor-editor/mount.ts`, `decor-editor-bridge.ts` | Hypothèse V1 : écriture et lecture du node | Réécrire la preview en contribution `snapshot`, conserver la palette et xState | Aucun `style.*` de l'éditeur écrit sur le node du player ; commit par commande xState. |
@@ -499,13 +579,15 @@ aucun bridge.
 - vérifier le calcul d'écart entre deux décors du même item : toutes les
   propriétés structurées interpolables voyagent ensemble au même temps,
   classes et propriétés discrètes sont ignorées, les couleurs autonomes sont
-  normalisées, les valeurs unitless/CSS composées restent opaques ;
+  normalisées, les longueurs unitless structurées restent unitless jusqu'à la
+  qualification CodPlay et les chaînes CSS composées restent opaques ;
 - ajouter une fixture où `x`, `y`, `width`, `height`, rotation, échelle et une
   couleur changent simultanément entre deux décors. À un temps intermédiaire,
   une seule lecture de `snapshot` doit contenir toutes les valeurs au même
   progrès ; une propriété absente doit rester issue de la cascade précédente.
-- vérifier que les longueurs structurées sont des valeurs logiques `cqw` et
-  non des chaînes CSS ; le materializer ne reçoit aucune décision à prendre ;
+- vérifier que le builder transmet les longueurs structurées comme nombres
+  unitless et que CodPlay les transforme ensuite en valeurs logiques `cqw` ;
+  le materializer ne reçoit aucune décision d'unité à prendre ;
 - vérifier que `CodPlay.build()` produit le manifeste média et les diagnostics
   attendus sans importer V1.
 
@@ -518,8 +600,11 @@ scènes zonées appartient à Z1.
 **Classement :** une erreur de mapping `EditorScene → SceneDoc` est une
 correction éditeur si le contrat V2 et le modèle ed2 la prescrivent ; une forme
 de scène non décidée devient un écart de spécification ; elle ne justifie pas
-un changement du core. **Arrêt :** la preuve doit inclure un test navigateur
-initial/milieu/fin et Play/Seek, pas seulement les tests purs actuels.
+un changement du core. La localisation de la qualification `unitless → cq*`
+est, elle, une décision déjà prise : elle relève de CodPlay et constitue une
+étape de migration du core autorisée par le sous-plan 0.3. **Arrêt :** la
+preuve doit inclure un test navigateur initial/milieu/fin et Play/Seek, pas
+seulement les tests purs actuels.
 
 #### E2 — Bridge V2 de scène et transaction de remplacement
 
@@ -607,11 +692,13 @@ l'éditeur.
    rend la palette mais n'écrit plus `applyResolvedDecor` sur un node du
    player.
 2. Pour les propriétés qui appartiennent à `state.style` (styles déclarés,
-   longueurs d'offset déjà qualifiées `cqw` et déclarations `custom` résolues
-   par le builder), construire un patch logique depuis le décor de base et le
-   temps courant, puis appeler atomiquement `instance.snapshot.set()` pour
-   tous les items concernés. `snapshot.get()` est la base résolue ; la preview
-   précédente n'est jamais relue pour l'accumuler.
+   longueurs d'offset unitless du contrat V2 et déclarations `custom` résolues
+   par le builder), construire un patch depuis le décor de base et le temps
+   courant, puis appeler atomiquement `instance.snapshot.set()` pour tous les
+   items concernés. La qualification des longueurs du patch relève du même
+   point d'entrée CodPlay que celle de la scène compilée. `snapshot.get()` est
+   la base résolue ; la preview précédente n'est jamais relue pour
+   l'accumuler.
 3. `snapshot` n'admet actuellement que `state.style`. Les classes, les zones,
    le contenu textuel et toute autre clé ne sont donc pas envoyés dans ce port
    par une extension implicite : soit leur preview est déjà couverte par un
@@ -619,8 +706,10 @@ l'éditeur.
    constatée et un contrat V2 séparé est ouvert. La tranche zones ne débute pas
    ici.
 4. Utiliser la frame géométrique uniquement pour l'overlay et les gestes. Les
-   valeurs de pose sont remises dans leur forme logique `cqw`; aucune conversion
-   px→cqw ne se fait à partir d'un node ou d'un cache V1.
+   valeurs de pose sont produites dans la forme logique unitless du contrat V2;
+   CodPlay les qualifie ensuite selon sa configuration. Une éventuelle
+   conversion physique nécessaire à l'algèbre du geste s'appuie sur la frame
+   V2 courante et ne se fait jamais à partir d'un node ou d'un cache V1.
 5. À la fin d'une phase, produire les commandes `setDecor`/`assignContent` et
    les envoyer à xState avec le copy-on-write existant. Le commit ne passe
    jamais par `snapshot.set()` comme écriture persistante.
@@ -685,6 +774,244 @@ les entrées sont numériques et toutes les sorties sont logiques. Les tests
 doivent couvrir item monté/absent, parent/enfant, reparentage, scroll/resize,
 seek et remplacement de scène.
 
+#### D2.1 — Validation ciblée du circuit position/taille
+
+Le circuit à valider porte sur un item unique et sur les quatre longueurs
+`translate.x`, `translate.y`, `width` et `height`. La rotation et l'échelle
+restent des canaux dimensionless séparés ; elles ne doivent pas masquer un
+échec du circuit position/taille.
+
+Le chemin V2 attendu est le suivant :
+
+1. la sélection adresse l'item par son identité V2 et reçoit de la projection
+   une frame numérique courante ; la frame contient les coordonnées de travail
+   en pixels, les dimensions locales et la relation au parent, mais aucun node ;
+2. le cadre calcule ses deltas de geste dans ce repère physique, puis
+   l'adaptateur compose un patch logique `OffsetData` en nombres `unitless` ;
+3. la session `Decor` remplace la preview de l'item par ce patch via
+   `instance.snapshot.set()` ; elle ne lit pas une pose précédente dans le DOM
+   et ne convertit pas elle-même le patch en `cqw` ;
+4. CodPlay qualifie les longueurs unitless en `cqw` à la compilation/résolution
+   prévue, puis le runner les projette avec `largeur de racine / 100` ;
+5. la projection republie une frame numérique après `snapshot.set()`. Le cadre
+   se recale sur cette frame, et non sur une mesure ou une écriture de node ;
+6. le commit persistant passe par les commandes xState existantes et conserve
+   les nombres unitless dans `Decor`. Un rebuild fournit une nouvelle frame ; un
+   abandon efface la preview sans écrire le document.
+
+Ce circuit n'est **pas validé V2** dans l'état observé au 2026-09-01. Le chemin
+réel actuel est encore :
+
+```text
+SelectionFrame (frame mesurée depuis le node, px)
+  -> LibreAdapter.applyMove/applyResize (deltas px)
+  -> AuthorApi.setNodePose (pose V1 dans anime.js)
+  -> OffsetEditorBridge.getNodePose (pose px)
+  -> offsetValuesPxToPatch(referenceWidthPx) (cqw dans l'éditeur)
+  -> DecorEditorController / commandes xState
+  -> builder V1 et reconstruction du player V1
+```
+
+Les points établis sont précis :
+
+- `selection-frame` mesure encore le node avec `getBoundingClientRect()` et
+  `getComputedStyle()` (`overlay-pose.ts`), puis le cadre émet des deltas locaux
+  arrondis en pixels (`types.ts`, `selection-frame.ts`) ;
+- `LibreAdapter` applique ces deltas par `AuthorApi.setNodePose()` et ne
+  produit pas de patch logique ;
+- `offset-editor-bridge.ts` relit `AuthorApi.getNodePose()`, émet des
+  `OffsetValuesPx`, puis appelle `offsetValuesPxToPatch()` avec
+  `referenceWidthPx` à chaque notification ;
+- `DecorEditorController` effectue le chemin inverse pour une saisie de champ
+  (`offsetPatchToValuesPx()`), ce qui forme précisément la boucle physique
+  `px → cqw → px` que la migration doit supprimer ;
+- le builder V2 porte encore les objets explicites
+  `{ kind: 'length', unit: 'cqw', value }`. Les tests actuels le vérifient ; ils
+  ne vérifient donc pas l'entrée unitless ni la qualification CodPlay.
+
+Les preuves exécutées dans cette reprise sont utiles comme baseline, mais ne
+ferment pas D2 : les tests ciblés `selection-frame` passent (70 tests, dont un
+ignoré), les tests `editor` de bridge/contrôleur/unités passent (93 tests) et
+le builder V2 passe (11 tests). Elles prouvent les gestes V1, les conversions
+arithmétiques et le regroupement de commit séparément. Aucun test ne couvre
+encore `pointerdown → frame V2 → snapshot.set → qualification cqw → frame V2`
+sur une instance réelle. Le build éditeur et le typecheck CodPlay passent ; le
+typecheck `selection-frame` reste en échec sur des dépendances/types V1
+existants et ne constitue pas une preuve V2.
+
+La preuve de sortie à ajouter après A1/C1, E2 et E3 est un scénario navigateur
+unique : avec une racine de 800 px, une pose logique connue est sélectionnée,
+déplacée de 24 px et redimensionnée de 40 px ; le snapshot et le décor
+reçoivent les mêmes valeurs unitless finales (`translate.x: 13`, `width: 25`),
+puis la racine est redimensionnée à 1200 px. Les nombres logiques restent
+identiques, tandis que la frame physique est reprojetée par le facteur
+`1200 / 100`. Le scénario répète ensuite `seek`, rebuild, abandon et commit,
+et vérifie l'absence de `AuthorApi`, `getNodePose`, `setNodePose`,
+`subscribeToNode`, `referenceWidthPx` et d'écriture de style sur le node dans
+la verticale V2.
+
+##### Contrat cible — synchronisation Selection Frame / item V2
+
+Le cadre de sélection ne se synchronise pas avec un node et ne reconstruit pas
+un `Decor` depuis la projection. Il consomme deux flux V2 distincts, assemblés
+par le bridge éditeur :
+
+```text
+sélection xState (itemId)
+  → identité V2 stable (storyId, persoId)
+  → frame de projection V2 révisée
+  → overlay et geste en px
+  → patch OffsetData unitless
+  → snapshot.set() + session Decor
+  → nouvelle projection
+  → nouvelle frame V2 du même item
+```
+
+La donnée éditable reste dans ed2 : au début d'un geste, la base est le
+`Decor` résolu au temps courant, sous forme unitless. Pour la première
+verticale, le déplacement écrit `offset.translate.x/y` et le redimensionnement
+écrit `offset.width/height` ; `x/y`, rotation, échelle, flex et grille ne sont
+pas lus ni modifiés par cet adaptateur. CodPlay reçoit ce patch comme preview,
+le qualifie en interne avec sa configuration `cqw`, puis renvoie seulement ce
+qui intéresse le cadre : la géométrie effectivement projetée en pixels.
+
+`snapshot` n'est donc pas une source de pose ni une boucle de retour des
+longueurs. Il applique une contribution logique temporaire ; le retour vers le
+cadre est le frame de projection. Le bridge ne déqualifie aucun `cqw` pour
+reconstruire un `Decor` et ne lit pas la preview précédente pour accumuler un
+delta.
+
+| Responsable | Rôle de synchronisation |
+| --- | --- |
+| Builder/bridge V2 | Conserve, pour la génération d'instance courante, la correspondance stable entre `itemId` ed2 et la cible `{ storyId, persoId }` construite dans la scène V2. Il ne déduit pas cette identité depuis le DOM. |
+| Port de géométrie V2 | Publie après chaque présentation une collection de frames immuables, indexées par cible, avec `instanceGeneration`, `revision`, temps présenté, état monté/absent, repères viewport/local/parent et le contexte numérique nécessaire au passage local px → longueur logique. |
+| Bridge éditeur | Joint la sélection xState à la frame de la même génération et de la même cible ; il abonne/désabonne le cadre, invalide les frames périmées et relaie les résultats de `snapshot.set()`. |
+| Selection Frame | Dessine l'overlay à partir de la frame reçue. Au geste, il transforme le delta physique dans le repère local, produit un patch unitless depuis la base capturée et ne touche jamais au player. |
+| Session Decor/xState | Reçoit le même patch unitless, le garde comme preview éditable puis le persiste au commit, ou l'abandonne. Elle reste propriétaire du document et de la sélection. |
+
+La synchronisation suit ces séquences déterministes :
+
+1. **Sélection ou nouvelle instance.** Le contrôleur donne l'`itemId` au
+   bridge. Celui-ci résout la cible V2 dans la génération d'instance courante,
+   récupère la dernière frame compatible ou attend sa publication, puis attache
+   le cadre. Sans frame montée compatible, le cadre est masqué et aucun geste
+   n'est actif.
+2. **Présentation normale.** Init, seek, resize, rebuild, montage/démontage et
+   application/effacement d'un snapshot publient une frame de révision
+   nouvelle. Le bridge ne transmet au cadre que la frame dont la génération et
+   la cible correspondent à la sélection actuelle. Le cadre redessine alors
+   son overlay ; il ne mesure pas le node projeté.
+3. **Geste.** Au `pointerdown`, l'adaptateur fige la base unitless et la frame
+   de départ. À chaque `pointermove`, il convertit le delta viewport vers le
+   repère local à partir de cette frame, puis vers l'unité logique avec le
+   contexte numérique fourni par V2. Il compose le patch depuis la base — pas
+   depuis la frame nouvellement reçue — et l'envoie à `snapshot.set()` ainsi
+   qu'à la session `Decor`.
+4. **Retour de projection.** `snapshot.set()` provoque la présentation puis la
+   publication d'une frame plus récente. Cette frame recale l'overlay, mais ne
+   rebase pas le geste en cours : le delta suivant reste calculé depuis la
+   base et la frame capturées au `pointerdown`. Cette règle supprime la boucle
+   de conversions et la dérive d'arrondi.
+5. **Fin ou invalidation.** Au `pointerup`, xState persiste exactement le patch
+   unitless déjà prévisualisé. À l'abandon, `snapshot.clear()` restaure la
+   projection et le frame correspondant. Changement de sélection, seek,
+   rebuild, destruction, cible absente ou génération différente invalident la
+   liaison ; le geste est arrêté par l'événement xState prévu, sans écriture
+   persistante issue d'une frame obsolète.
+
+Le seul contrat core à arrêter avant code est donc celui du frame de
+projection : il doit transporter les nombres nécessaires au geste et notifier
+chaque nouvelle présentation. Il ne s'agit ni d'une API de pose ni d'un
+contexte de conteneur parallèle dans l'éditeur ; la racine et l'échelle logique
+restent calculées par CodPlay.
+
+##### Plan d'action détaillé — verticale position/taille
+
+Les étapes ci-dessous complètent A0, A1, C1, E1, E2, E3, D1 et D2 ; elles ne
+changent pas leur ordre de dépendance. Une étape qui mentionne le core suit
+l'autorisation déjà acquise pour la qualification des longueurs (§0.3) ou
+l'autorisation séparée requise pour la géométrie (§0.4).
+
+| Étape | Objet et périmètre | Sortie contrôlable | Porte avant l'étape suivante |
+| --- | --- | --- | --- |
+| P0 — figer la liaison sélection/frame | Arrêter la correspondance `itemId → cible V2`, la forme canonique de la première verticale (`translate`, `width`, `height`) et les champs numériques que le frame remet à l'adaptateur. | Contrat court relu : base ed2 unitless, preview qualifiée en interne, retour uniquement par frame px révisé. | Aucun bridge ni adaptateur V2 tant que l'identité, la révision et la conversion local px → logique ne sont pas fixées. |
+| P1 — déplacer la qualification | Réaliser le sous-plan §0.3 : builder V2 sans objet `cqw`, constante CodPlay, qualification des champs structurés en compilation, résolution/interpolation et projection conservées. Faire appliquer à `snapshot.set()` le même schéma, sans interpréter CSS libre ni nombres CSS ordinaires. | Une scène et une preview unitless deviennent une même longueur logique qualifiée par CodPlay ; le `Decor` reste numérique unitless et le retour visible est un nouveau frame. | Tests core et façade de qualification verts ; aucune conversion ou déqualification n'est ajoutée au bridge. |
+| P2 — fermer et exposer la géométrie | Réaliser A1 puis C1. Le DTO de frame contient les coordonnées et transformations nécessaires aux gestes, son temps/révision, l'absence de cible et le facteur ou l'opération numérique qui relie le repère local à la longueur logique de racine. | Port de géométrie V2 immuable, mis à jour après init, seek, preview, resize, rebuild et montage. | Revue A1 et autorisation core distincte ; preuve façade et navigateur de la cohérence frame/projection. |
+| P3 — établir le bridge et la session Decor V2 | Créer le bridge V2 prévu par E2, publier instance/snapshot/frame au contrôleur E3, puis remplacer la preview DOM de D1 par une contribution logique. La base d'un geste est le `Decor` résolu et la frame de départ de même révision. | Une mise à jour de position/taille appelle `snapshot.set()` avec un patch logique et le même patch est disponible pour le commit xState. | Aucun `AuthorApi`, aucune pose node et aucune conversion par `referenceWidthPx` dans la nouvelle verticale. |
+| P4 — adapter le Selection Frame | Réécrire uniquement le chemin libre de position/taille pour consommer le frame P2. Convertir le delta viewport en delta local avec la géométrie V2, puis en delta unitless avec le contexte numérique fourni par V2. Recomposer depuis la base du geste, jamais depuis une preview ou un frame possiblement retardé. | Move/resize publient des patches unitless, le cadre se recale sur le frame republie après `snapshot.set()`, et un frame absent ou d'une autre révision désactive le geste avec diagnostic. | Tests de gestes unitaires et intégration réelle sans node joueur ; flex, grid, rotation et multi-sélection restent hors de cette première preuve sauf régression de parentage. |
+| P5 — prouver puis supprimer | Exécuter le scénario navigateur ci-dessous, les non-régressions et les contrôles statiques. Basculer l'application seulement après succès ; supprimer ensuite la verticale V1 et les commentaires/API devenus faux. | Trace de frontières, tests et builds concernés ; recherche d'import V1 vide pour la verticale portée. | D3 : suppression V1 seulement après la preuve complète, jamais comme préparation de la preuve. |
+
+**P0 — contenu minimal du contrat à fixer.** Le schéma de longueurs nomme les
+propriétés structurées de cette tranche dans l'état initial/action compilable
+et dans le patch de preview. Il exclut `Decor.style`, `custom`, `line-height`,
+`opacity`, `rotate`, `scale`, `calc()` et toute chaîne CSS. La liaison de
+sélection fixe aussi l'identité V2, la génération d'instance, la révision de
+frame, les repères de coordonnées et le facteur ou l'opération local px →
+longueur logique. Un resize modifie le frame px, jamais le nombre unitless
+stocké ou la contribution logique. La base de geste est le `Decor` résolu ed2 ;
+`snapshot.get()` n'est pas utilisé pour décoder une pose ou accumuler la
+preview.
+
+**P1 — points de contrôle techniques.** La qualification doit être unique et
+partagée : une fonction ou un passage de compilation V2 commun aux valeurs de
+scène et de preview, plutôt qu'une copie dans `builder-v2` et une seconde dans
+le bridge. La configuration CodPlay choisit `cqw` pour cette tranche ; le type
+interne ne doit pas transformer ce défaut en règle normative de tous les
+futurs contextes. Les tests doivent démontrer que le nombre `12.5` traverse le
+builder sans unité, devient une longueur compilée `cqw` une seule fois, reste
+logique pendant un tween et est projeté seulement par le materializer. Ils
+doivent démontrer symétriquement qu'une chaîne CSS et les propriétés
+dimensionless listées ci-dessus restent intactes.
+
+**P2 — informations nécessaires au geste, sans fuite DOM.** Une frame ne se
+limite pas à `getBoundingClientRect()` : le déplacement doit pouvoir ramener
+un delta viewport dans le repère local de l'item, y compris sous parent ou
+rotation, puis l'exprimer dans l'échelle logique de racine. La revue A1 décide
+si cette dernière opération est publiée comme donnée de frame ou comme
+opération du port, mais l'éditeur ne la reconstitue ni depuis un node ni depuis
+une largeur lue par lui-même. La révision de frame est obligatoire : pendant
+un geste, un retour de preview, un seek ou un rebuild plus ancien ne doit pas
+rebaser le patch en cours.
+
+**P3/P4 — algorithme de la première verticale.** Au `pointerdown`, l'adaptateur
+capture la frame V2 et le patch `OffsetData` unitless de base. À chaque delta,
+il transforme le delta physique avec cette frame, compose le prochain
+`translate`/`width`/`height` unitless depuis la base, appelle `snapshot.set()`
+et transmet exactement ce patch à la session `Decor`. Il ne relit ni
+`snapshot` de preview, ni style calculé, ni pose anime.js. Au `pointerup`, la
+session xState persiste ce même patch ; à l'abandon, elle efface la preview et
+conserve le document ; après publication de la nouvelle frame, l'overlay se
+recale. Si la cible devient absente, si l'instance est remplacée ou si la
+révision ne permet plus le calcul, le geste s'arrête sans écriture persistante.
+
+##### Scénario d'acceptation navigateur de P5
+
+La fixture initiale isole volontairement le repère : racine sans translation,
+parent identité, aucun zoom ni rotation. Elle porte `translate: { x: 10,
+y: 5 }`, `width: 20`, `height: 12` et une largeur de racine de 800 px. La
+frame locale attendue correspond donc à 80 px, 40 px, 160 px et 96 px ; ces
+valeurs ne sont pas des valeurs à persister.
+
+| Action réelle | Valeur logique attendue | Frame/projection attendue |
+| --- | --- | --- |
+| Sélection de l'item | `{ x: 10, y: 5 }`, largeur `20`, hauteur `12` dans `translate`/`offset` | Frame initiale 80/40/160/96 px dans le repère de fixture. |
+| Déplacement de `+24 px` sur X | `translate.x: 13`, autres longueurs inchangées | La frame publiée se décale de 24 px. |
+| Resize de `+40 px` sur la largeur | `width: 25`, autres longueurs inchangées | La largeur publiée vaut 200 px. |
+| Commit | Le `Decor` contient les mêmes nombres unitless `13`, `5`, `25`, `12` ; aucune chaîne ni objet `cqw` n'est écrit par ed2 | La preview est remplacée par le rebuild logique normal. |
+| Resize de racine à 1200 px | Ces quatre nombres restent identiques dans document et preview | La frame devient 156/60/300/144 px, par projection V2 seule. |
+| Seek, rebuild, abandon | Aucun nouveau nombre n'est dérivé du px ; abandon conserve le document antérieur et efface la preview | Chaque opération republie une frame de révision courante ; une cible absente désactive le geste. |
+
+Le scénario doit capturer les valeurs à six frontières : `Decor`, `SceneDoc`,
+`CompiledScene`, entrée/sortie `snapshot` définie en P0, frame publique et
+style projeté. Il doit aussi contenir des contrôles négatifs : `line-height`,
+`opacity`, `object-fit` et CSS libre ne changent pas de forme ; aucun appel à
+`AuthorApi`, `getNodePose`, `setNodePose`, `subscribeToNode` ou
+`referenceWidthPx` n'est atteint. Une version parent/enfant et une version
+avec rotation du parent complètent la preuve de coordonnées avant de déclarer
+le libre stabilisé. Flex/grid, multi-sélection et les autres transformations
+gardent leurs tranches D2 dédiées et ne sont pas déclarés couverts par ce seul
+scénario.
+
 #### D3 — Bascule applicative, suppression V1 et preuve complète
 
 Après E2, E3, D1, D2 et leurs tests navigateur :
@@ -713,7 +1040,7 @@ verticale.
 | Frontière | Preuves existantes à conserver | Preuves à compléter ou créer après le contrat |
 | --- | --- | --- |
 | Builder ed2 | `packages/editor/tests/builder-v2/build-scene.spec.ts`, distribution/preset et validation de scène | Fixture navigateur du builder réel : une scène sans zones pour la tranche initiale, puis une scène zonée qui conserve `ZONE_DEFERRED` sans masquer l'écart. |
-| Compilation et longueurs | `packages/codplay/tests/scene/compiled/scene-builder.spec.ts`, `packages/codplay/tests/runtime/runner-html/player-runner.spec.ts` | Cas façade du builder ed2 avec `cqw`, couleur, propriété unitless, CSS composé et interpolation simultanée. |
+| Compilation et longueurs | `packages/codplay/tests/scene/compiled/scene-builder.spec.ts`, `packages/codplay/tests/runtime/runner-html/player-runner.spec.ts` | Cas façade du builder ed2 avec entrée unitless, qualification configurée en `cqw`, couleur, propriété CSS unitless, CSS composé et interpolation simultanée. |
 | Snapshot et preload | `packages/codplay/tests/facade/snapshot.spec.ts`, `packages/codplay/tests/runtime/preload/preload-css-slot.spec.ts`, `packages/codplay/tests/facade/media-preload-handoff.spec.ts` | Scénario unique build → preload média/CSS → instance → snapshot → geometry, avec remplacement et rollback. |
 | Géométrie V2 | `packages/codplay/tests/runtime/motion/motion-capture.spec.ts`, `motion-graph.spec.ts` pour les briques internes | Contrat public runner/facade à créer après A1 : frame, révision, absence, parent/enfant, grid, seek, resize, snapshot et montage. |
 | Contrôleur xState | `packages/editor/tests/controller/controller-machine.spec.ts`, `controller.spec.ts` | Rendez-vous `PLAYER_READY`/`instanceReady`, génération de rebuild, erreur et destruction sans état concurrent. |
@@ -755,8 +1082,9 @@ L'état de départ est désormais explicite :
 
 - `snapshot` : contrat validé, implémentation CodPlay présente, preuve de
   consommation éditeur à faire ;
-- `cqw` : contrat validé, implémentation builder/résolution/projection présente,
-  preuve façade/navigateur à faire ;
+- `cqw` : choix fonctionnel validé et première implémentation présente ; la
+  qualification est encore au mauvais endroit, la configuration n'est pas
+  centralisée et la preuve façade/navigateur reste à faire ;
 - géométrie : obligation architecturale de V2, contrat public à arrêter et
   intervention core à autoriser séparément ;
 - bridge, xState, Decor et Selection Frame : aucune adaptation V1 n'est
@@ -832,7 +1160,9 @@ Pour chaque item :
 
 1. résoudre le décor initial puis chaque keyframe dans l'ordre temporel ;
 2. fusionner `style`, l'offset structuré et le CSS libre selon les règles ed2 existantes ;
-3. convertir les seuls champs structurés de longueur en valeurs `cqw`, puis calculer le diff vers le keyframe suivant ;
+3. conserver les seuls champs structurés de longueur comme nombres unitless,
+   puis calculer le diff vers le keyframe suivant ; CodPlay les qualifiera à sa
+   frontière V2 de compilation ;
 4. émettre uniquement les propriétés modifiées ;
 5. appliquer la transition implicite sur tout l'intervalle, ou l'override `transitionIn`/`transitionOut` existant ;
 6. ne pas émettre classes, `zoneId` ni propriétés intrinsèquement discrètes dans ce circuit.
@@ -843,7 +1173,8 @@ Le CSS libre reste de responsabilité auteur. Ses valeurs composées ne sont pas
 
 - tests purs : mapping racine/texte, id, parentage, pré-roll, cascade, diff, durée et easing ;
 - cas de deux keyframes où position, dimensions, rotation, échelle et couleur évoluent au même temps logique ;
-- cas de valeur unitless, longueur `cqw`, valeur opaque et propriété discrète ;
+- cas de longueur unitless, qualification CodPlay en `cqw`, valeur opaque et
+  propriété discrète ;
 - compilation par `codplay.build()` et diagnostic d'un type ou style non supporté ;
 - test navigateur réel : initial, milieu et fin de l'intervalle, en Play et Seek.
 
@@ -858,7 +1189,10 @@ La première preuve de cette tranche est en place dans une verticale isolée :
 - les fixtures couvrent une racine, deux niveaux de capsules, les placements grille, la feuille CSS produite par `capsule-automation`, les mappings `bloc`/`text`/`image`/`video`/`media`, zéro à plusieurs keyframes, une transition `fade`, un diff de couleur, la ressource vidéo et une compilation par `CodPlay.build()` ;
 - les erreurs de forme, de contenu et de transition retournent des diagnostics sans `SceneDoc` partiel ; les couleurs autonomes des propriétés nommées couleur sont normalisées par ACE, tandis que `scene.zones` et les classes discrètes sont signalées sans être interpolées ;
 - `styleSheet` restitue la source CSS de tous les niveaux résolus, tandis que `preloadManifest` reste explicitement vide à cette frontière pure : le bridge navigateur la transmettra à `codplay.preload.css.set()` sans URL inventée par le builder ;
-- les offsets structurés sont désormais portés par des valeurs logiques `{ kind: 'length', unit: 'cqw', value }` ; aucune chaîne `cqw` n'est fabriquée par le builder ;
+- les offsets structurés sont actuellement portés par des valeurs logiques
+  `{ kind: 'length', unit: 'cqw', value }` : cette première implémentation
+  constitue la friction de migration identifiée. La cible est que le builder
+  transmette les nombres unitless et que CodPlay réalise cette qualification ;
 - la projection HTML applique `largeur-racine / 100` aux longueurs logiques, et le même facteur est recalculé lors d'un resize ; `line-height`, `object-fit`, `calc()` et les autres chaînes CSS restent opaques, hors couleurs autonomes déjà normalisées au builder.
 - `instance.snapshot` fournit maintenant la lecture logique sans preview, le remplacement atomique d'une preview `style` et `clear()` directement depuis la façade CodPlay ; les rejets publient leurs diagnostics sans modifier la scène compilée ni le journal.
 
@@ -957,9 +1291,11 @@ Cette tranche doit décider séparément le comportement temporel de l'affectati
 ## Conditions de validation du présent plan
 
 Les décisions de la tranche 0 sont validées. La modification du cœur V2 pour
-les seules features `snapshot` et `cqw` a été explicitement autorisée le
-2026-08-30 et son port est couvert par les tests unitaires et de façade indiqués
-dans l’état ci-dessus. L’exposition de la géométrie est une obligation
+les features `snapshot` et `cqw` a été explicitement autorisée le 2026-08-30.
+Le port initial est couvert par les tests unitaires et de façade indiqués dans
+l’état ci-dessus, mais la qualification `unitless → cq*` et sa centralisation
+de configuration restent une étape de migration à exécuter et à prouver.
+L’exposition de la géométrie est une obligation
 architecturale de V2, mais son contrat public et son autorisation de modification
 du core restent à produire séparément ; elle ne peut donc pas encore être codée.
 Cette autorisation ne couvre ni le bridge éditeur, ni les zones. Le cycle

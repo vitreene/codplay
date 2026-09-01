@@ -21,7 +21,7 @@
   "scripts": {
     "dev:demos": "npm run dev --workspace=packages/demos",
     "dev:editor": "npm run dev --workspace=packages/editor",
-    "demo:flip": "npm run demo:flip --workspace=@codplay/selection-frame",
+    "demo:flip": "npm run dev --workspace=@codplay/demos -- --open '/?demo=flip-list'",
     "demo:v2": "npm run dev --workspace=@codplay/demos -- --open /",
     "test": "npm run test --workspace=codplay-v1",
     "test:gates": "npm run test:gates --workspace=codplay-v1",
