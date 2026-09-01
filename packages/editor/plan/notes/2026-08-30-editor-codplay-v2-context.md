@@ -154,3 +154,26 @@ migration : la qualification `unitless → cq*` doit encore être déplacée du
 builder vers CodPlay et centralisée dans la configuration. Le bridge éditeur,
 le Selection Frame et les zones ne sont pas encore raccordés ; ces frictions
 restent suivies par le plan principal.
+
+## Élaboration — observation éventuelle du snapshot
+
+La surface V2 actuellement arrêtée reste `instance.snapshot.get/set/clear`.
+Une méthode `onChange` est une possibilité d'organisation à étudier, pas un
+contrat. La question porte sur le rôle d'une notification dans le circuit
+existant : le core conserverait l'état unique, la façade porterait
+éventuellement l'observation, et le bridge la transmettrait aux machines xState
+sans cache ni protocole V1.
+
+L'étude doit décider séparément :
+
+- si la notification concerne l'état de base présenté, les previews
+  `set/clear`, ou les deux ;
+- quel état est transmis, puisque `snapshot.get()` exclut la preview active ;
+- quelles frontières déclenchent le signal et dans quel ordre avec `set`,
+  `clear` et le seek ;
+- l'appel initial, le regroupement, la désinscription, la destruction et
+  l'isolation des erreurs de listener.
+
+Cette note ne valide ni nom de méthode, ni DTO, ni événement de façade. Les
+actions de validation éventuelles appartiennent au plan correspondant ; une
+implémentation ne peut commencer qu'après cette validation.

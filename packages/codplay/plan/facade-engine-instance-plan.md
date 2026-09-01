@@ -981,6 +981,37 @@ cette voie.
 L'observation du cycle de lecture reste portée par `instance.telco`. La
 capacité `snapshot` ne crée pas un second protocole de transport.
 
+#### Organisation proposée de l'observation du snapshot — à valider
+
+La surface actuellement validée reste limitée à `get`, `set` et `clear`. Une
+méthode `onChange` est une possibilité d'organisation à examiner avant toute
+évolution de la façade ; elle ne constitue pas encore un contrat V2.
+
+La question porte sur le rôle exact de cette observation :
+
+- le core serait la source unique des changements de l'état présenté et des
+  previews, et la façade relayerait l'observation sous `instance.snapshot` ;
+- le bridge éditeur s'abonnerait une seule fois, puis transmettrait le signal
+  aux machines xState existantes ; il ne conserverait ni copie de scène, ni
+  cache de pose, ni abonnement direct au runner ;
+- `telco.onChange` et `telco.onProgress` resteraient responsables du lifecycle
+  et du temps, tandis que `instance.events.onEvent` resterait responsable des
+  events publics ; `snapshot.onChange` ne doit pas dupliquer ces canaux ;
+- il faut encore décider si le signal concerne les changements de l'état de
+  base, les appels réussis à `set`/`clear`, ou les deux. `get()` excluant la
+  preview active, un signal de preview ne peut pas être défini correctement
+  sans préciser ce que le consommateur reçoit ou relit ;
+- il faut également fixer l'appel initial éventuel, le synchronisme après la
+  présentation, le regroupement des notifications, l'ordre par rapport à
+  `set`/`clear` et au seek, le comportement après destruction et l'isolation
+  des erreurs de listener.
+
+Avant validation, aucun nom de DTO, aucun événement de façade et aucune
+notification de snapshot ne doit être ajouté au code. La preuve devra couvrir
+une lecture initiale, une preview partielle, son remplacement, son
+effacement, un seek et la destruction, en vérifiant qu'un seul circuit est
+observé par le bridge.
+
 #### Écriture temporaire à un temps donné
 
 `instance.snapshot.set()` doit accepter une preview temporaire décrite par :

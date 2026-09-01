@@ -40,6 +40,12 @@
 
 ## Documentation and implementation tracking
 
+- Documentation roles are exclusive and must not be mixed:
+  - `notes/` records project elaboration, exploration, rationale, and open questions;
+  - `plan/` records actions to perform, their order, gates, status, and acceptance path;
+  - specifications record what has been implemented, normalized, and made normative;
+  - `README.md` records the user operating instructions.
+- A `*-reprise-report.md` is a handoff report, not a living documentation surface. Do not append project elaboration, implementation specification, or user instructions to it. Put each new content in the one appropriate category above; if an action must be retained, record it in the applicable plan, not in the report.
 - Keep plans and implementation tracking up to date until the corresponding work is complete.
 - Keep resolved situations that explain the current design; do not keep investigation history merely for its chronology.
 - Once a concept is implemented, maintain a focused specification for future agents: its role, contract, invariants, decisions, and how to understand it without rereading the entire implementation.
