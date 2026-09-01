@@ -23,7 +23,12 @@ export type {
   CompiledStory,
   CompiledValue,
 } from './types'
-export { isCompiledLengthValue } from './length'
+export type { LogicalLengthUnit } from '../config/scene-build'
+export {
+  isCompiledLengthValue,
+  qualifyStructuredLengthStyle,
+  qualifyStructuredLengthStyles,
+} from './length'
 export {
   createExtractionState,
   extractCompiledRecord,

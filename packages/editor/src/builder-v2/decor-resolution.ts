@@ -1,13 +1,6 @@
 import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
 import { parseColor } from 'ace'
 
-/** Explicit logical length emitted for structured editor geometry. */
-export type EditorV2CqwLength = Readonly<{
-  kind: 'length'
-  unit: 'cqw'
-  value: number
-}>
-
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
   return {
@@ -152,25 +145,20 @@ export function hasOffsetData(decor: Decor | undefined): boolean {
   return decor?.offset !== undefined && Object.keys(decor.offset).length > 0
 }
 
-/** Resolves structured offset lengths into the explicit V2 logical-length form. */
+/** Resolves structured offset lengths into unitless V2 transport values. */
 export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, unknown> {
   if (offset === undefined) return {}
   const style: Record<string, unknown> = {}
-  if (offset.x !== undefined) style.x = cqwLength(offset.x)
-  if (offset.y !== undefined) style.y = cqwLength(offset.y)
-  if (offset.translate?.x !== undefined) style.x = cqwLength(offset.translate.x)
-  if (offset.translate?.y !== undefined) style.y = cqwLength(offset.translate.y)
-  if (offset.width !== undefined) style.width = cqwLength(offset.width)
-  if (offset.height !== undefined) style.height = cqwLength(offset.height)
+  if (offset.x !== undefined) style.x = offset.x
+  if (offset.y !== undefined) style.y = offset.y
+  if (offset.translate?.x !== undefined) style.x = offset.translate.x
+  if (offset.translate?.y !== undefined) style.y = offset.translate.y
+  if (offset.width !== undefined) style.width = offset.width
+  if (offset.height !== undefined) style.height = offset.height
   if (offset.rotate !== undefined) style.rotate = offset.rotate
   if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
   if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
   return style
-}
-
-/** Creates one immutable logical cqw length without converting it to CSS text. */
-function cqwLength(value: number): EditorV2CqwLength {
-  return { kind: 'length', unit: 'cqw', value }
 }
 
 /** Reports whether a Decor uses an editor zone that is intentionally deferred to the zones tranche. */

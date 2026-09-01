@@ -1,5 +1,5 @@
 import type { Actor } from 'xstate'
-import type { AuthorApi } from '@codplay/selection-frame'
+import type { CodPlaySnapshot } from 'codplay'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
@@ -7,7 +7,6 @@ import type { DecorEditorCatalogs } from '../../decor-editor/controller'
 import type { DecorEditorMountHandle } from '../../decor-editor/mount'
 import { findPanel, panelsForType } from '../../decor-editor/palette-panel'
 import type { PanelField, PaletteConfig } from '../../decor-editor/palette-panel'
-import { formatPersoValueForCssProperty } from '../../decor-editor/css-value-format'
 import type { DecorPatch, OffsetPatch } from '../../decor-editor/types'
 import type { Content, Decor, EditorScene, Item, OffsetData } from '../commands/types'
 import type { Command, Selection } from '../controller/types'
@@ -128,17 +127,16 @@ export function styleFieldsForItemType(config: PaletteConfig, itemType: ItemVisu
  * (`css-value-format.ts`) formate sans jamais convertir physiquement (pas de `referenceWidthPx`
  * ici, devenu inutile pour ce chemin de lecture).
  */
-export function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fields: PanelField[]): DecorPatch {
-  const persoState = authorApi.getPersoStates().get(itemId)
-  if (!persoState) return {}
+export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: string, fields: PanelField[]): DecorPatch {
+  const state = snapshotState(snapshot, itemId)
+  const persoState = state?.style
+  if (!persoState || typeof persoState !== 'object') return {}
   const style: Record<string, string> = {}
   for (const field of fields) {
     const prop = field.path.slice('style.'.length)
-    const raw = persoState[prop]
+    const raw = (persoState as Record<string, unknown>)[prop]
     if (raw === undefined) continue
-    style[prop] = field.kind === 'number' || field.kind === 'slider'
-      ? formatPersoValueForCssProperty(prop, raw)
-      : String(raw)
+    style[prop] = formatSnapshotValue(raw)
   }
   return Object.keys(style).length > 0 ? { style } : {}
 }
@@ -161,21 +159,27 @@ export function resolveTemporaryPatch(authorApi: AuthorApi, itemId: string, fiel
  * `scale` sont fusionnés par `mergePatch` comme des groupes ENTIERS (`STRUCTURED_GROUPS`), donc un
  * `x: 0` inventé ici écraserait le vrai `x` hérité de `base`, pas seulement le compléter.
  */
-function resolveTemporaryOffset(authorApi: AuthorApi, itemId: string, base: DecorPatch): DecorPatch {
-  const persoState = authorApi.getPersoStates().get(itemId)
-  if (!persoState) return {}
+function resolveTemporaryOffset(snapshot: CodPlaySnapshot | null, itemId: string, base: DecorPatch): DecorPatch {
+  const state = snapshotState(snapshot, itemId)
+  const persoState = state?.style
+  if (!persoState || typeof persoState !== 'object') return {}
   const parseCqw = (raw: unknown): number | undefined => {
     if (raw === undefined) return undefined
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const value = (raw as Record<string, unknown>).value
+      return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+    }
     const parsed = typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
     return Number.isFinite(parsed) ? parsed : undefined
   }
-  const x = parseCqw(persoState.x) ?? base.offset?.translate?.x
-  const y = parseCqw(persoState.y) ?? base.offset?.translate?.y
-  const width = parseCqw(persoState.width) ?? base.offset?.width
-  const height = parseCqw(persoState.height) ?? base.offset?.height
-  const rotate = parseCqw(persoState.rotate) ?? base.offset?.rotate
-  const scaleX = parseCqw(persoState.scaleX) ?? base.offset?.scale?.x
-  const scaleY = parseCqw(persoState.scaleY) ?? base.offset?.scale?.y
+  const style = persoState as Record<string, unknown>
+  const x = parseCqw(style.x) ?? base.offset?.translate?.x
+  const y = parseCqw(style.y) ?? base.offset?.translate?.y
+  const width = parseCqw(style.width) ?? base.offset?.width
+  const height = parseCqw(style.height) ?? base.offset?.height
+  const rotate = parseCqw(style.rotate) ?? base.offset?.rotate
+  const scaleX = parseCqw(style.scaleX) ?? base.offset?.scale?.x
+  const scaleY = parseCqw(style.scaleY) ?? base.offset?.scale?.y
   const offset: OffsetPatch = {}
   if (x !== undefined || y !== undefined) offset.translate = { x: x ?? 0, y: y ?? 0 }
   if (width !== undefined) offset.width = width
@@ -183,6 +187,31 @@ function resolveTemporaryOffset(authorApi: AuthorApi, itemId: string, base: Deco
   if (rotate !== undefined) offset.rotate = rotate
   if (scaleX !== undefined || scaleY !== undefined) offset.scale = { x: scaleX ?? 1, y: scaleY ?? 1 }
   return Object.keys(offset).length > 0 ? { offset } : {}
+}
+
+/** Returns the selected item state from a CodPlay V2 snapshot. */
+function snapshotState(snapshot: CodPlaySnapshot | null, itemId: string): Record<string, unknown> | null {
+  return snapshot?.states.find((entry) => entry.target.persoId === itemId)?.state ?? null
+}
+
+/** Formats one logical V2 value for the decor model without converting its unit. */
+function formatSnapshotValue(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return String(value)
+  const record = value as Record<string, unknown>
+  if (record.kind === 'length' && typeof record.value === 'number' && typeof record.unit === 'string') {
+    return `${record.value}${record.unit}`
+  }
+  if (record.kind === 'color' && Array.isArray(record.coords) && typeof record.alpha === 'number') {
+    const coords = record.coords.filter((coordinate): coordinate is number => typeof coordinate === 'number')
+    if (record.space === 'srgb' && coords.length >= 3) {
+      return `rgba(${Math.round(coords[0]! * 255)}, ${Math.round(coords[1]! * 255)}, ${Math.round(coords[2]! * 255)}, ${record.alpha})`
+    }
+    if (record.space === 'oklch' && coords.length >= 3) {
+      return `oklch(${coords[0]} ${coords[1]} ${coords[2]} / ${record.alpha})`
+    }
+  }
+  return String(value)
 }
 
 /**
@@ -305,15 +334,15 @@ export function resolveKeyframeInsertionPatch(
   item: Item,
   timelineMs: number,
   content: Content | undefined,
-  authorApi: AuthorApi,
+  snapshot: CodPlaySnapshot | null,
   paletteConfig: PaletteConfig,
   itemType: ItemVisualType,
 ): DecorPatch | null {
   const alignment = resolveKeyframeAlignment(item, timelineMs)
   if (alignment.kind !== 'between') return null
   const base = resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
-  const liveStyle = resolveTemporaryPatch(authorApi, item.id, styleFieldsForItemType(paletteConfig, itemType))
-  const liveOffset = resolveTemporaryOffset(authorApi, item.id, base)
+  const liveStyle = resolveTemporaryPatch(snapshot, item.id, styleFieldsForItemType(paletteConfig, itemType))
+  const liveOffset = resolveTemporaryOffset(snapshot, item.id, base)
   const patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
   return patchDiffersFromBase(base, patch) ? patch : null
 }

@@ -21,4 +21,3 @@ export {
   type BuilderDiagnostic,
   type BuilderDiagnosticLevel,
 } from './types'
-export type { EditorV2CqwLength } from './decor-resolution'

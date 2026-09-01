@@ -31,8 +31,8 @@ import { childrenOf, findParentClipBounds } from './utils'
  * l'éphémère des gestes, qui n'a jamais été le problème. `isPlaying` a existé ici (drapeau local
  * piloté par une simulation de lecture propre à ce module) puis a été retiré
  * (`2026-07-17-telco-real-transport-plan.md` §Étape C) : le statut de lecture réel vit désormais
- * dans `TelcoApi` (`codplay`), jamais dupliqué ici — `playheadMs` reste, mais reçu depuis `telco`
- * (`TELCO.SYNC_PLAYHEAD`), jamais accumulé localement par un tick.
+ * dans le port de coordination, jamais dupliqué ici — `playheadMs` reste la progression auteur ;
+ * la sortie de lecture peut l'adopter une fois via `PLAYHEAD.RECONCILE`, sans boucle vers le player.
  *
  * `selection.markerId` fait exception : les marqueurs n'ont pas d'équivalent dans le modèle
  * `Selection` central (`{itemIds, keyframeId}` — pas de notion de marqueur sélectionné), donc
@@ -83,6 +83,8 @@ export interface MachineContext {
   scene: EditorScene
   viewport: MachineViewport
   playheadMs: number
+  /** Distinguishes author seeks from one silent playback handoff. */
+  playheadOrigin: 'author' | 'reconciled'
   playRange: PlayRange | null
   followPlayhead: boolean
   /** trackId/keyframeId : projection en lecture seule (idem `scene`). markerId : possédé localement. */
@@ -132,9 +134,8 @@ export type SequenceEditorEvent =
   | { type: 'CLIP.DRAW_MOVE'; pointerMs: number }
   | { type: 'CLIP.DRAW_END' }
   | { type: 'PLAYHEAD.SET'; timeMs: number }
-  /** Miroir du statut réel de lecture (`TelcoApi.onProgress`/`.onChange`, `attachTelco` dans `mount.ts`)
-   * — jamais un tick local, jamais d'accumulation ; `timelineMs` vient toujours de `telco`. */
-  | { type: 'TELCO.SYNC_PLAYHEAD'; timelineMs: number }
+  /** Adopts one player time at a handoff boundary without emitting a new seek intention. */
+  | { type: 'PLAYHEAD.RECONCILE'; timelineMs: number }
   | { type: 'VIEWPORT.PAN_START'; pointerPx: number }
   | { type: 'VIEWPORT.PAN_MOVE'; pointerPx: number }
   | { type: 'VIEWPORT.PAN_END' }
@@ -324,10 +325,9 @@ export const sequenceEditorMachine = setup({
     'FOLLOW.TOGGLE': {
       actions: assign(({ context }) => ({ followPlayhead: !context.followPlayhead })),
     },
-    // Miroir telco — valide quel que soit le mode de geste courant (un pan/drag en cours ne doit
-    // pas bloquer la synchronisation du curseur avec la lecture réelle).
-    'TELCO.SYNC_PLAYHEAD': {
-      actions: assign(({ event }) => ({ playheadMs: event.timelineMs })),
+    // Handoff de sortie de lecture — un rendez-vous ponctuel, jamais un miroir de progression.
+    'PLAYHEAD.RECONCILE': {
+      actions: assign(({ event }) => ({ playheadMs: event.timelineMs, playheadOrigin: 'reconciled' as const })),
     },
     'VIEWPORT.SCROLL': {
       actions: assign(({ context, event }) => {
@@ -371,6 +371,7 @@ export const sequenceEditorMachine = setup({
         snapGrid: computeSnapGrid(event.scene),
         virtualKeyframes: computeVirtualKeyframes(event.scene, context.displayConfig.capsuleOrder),
         playheadMs: 0,
+        playheadOrigin: 'author',
         selection: { trackId: null, keyframeId: null, markerId: null },
         interaction: null,
       })),
@@ -385,6 +386,7 @@ export const sequenceEditorMachine = setup({
       scene: input.scene,
       viewport: { startMs: 0, endMs: viewWidthPx / pixelsPerMs, pixelsPerMs, viewWidthPx, viewHeightPx },
       playheadMs: 0,
+      playheadOrigin: 'author',
       playRange: null,
       followPlayhead: false,
       selection: { trackId: null, keyframeId: null, markerId: null },
@@ -429,6 +431,7 @@ export const sequenceEditorMachine = setup({
               return {
                 selection: { ...context.selection, markerId: null },
                 playheadMs: kf ? Math.max(0, Math.min(kf.timeMs, context.scene.meta.durationMs)) : context.playheadMs,
+                playheadOrigin: 'author' as const,
               }
             }),
           ],
@@ -522,6 +525,7 @@ export const sequenceEditorMachine = setup({
                 },
                 selection: { ...context.selection, markerId: null },
                 playheadMs: kf ? Math.max(0, Math.min(kf.timeMs, context.scene.meta.durationMs)) : context.playheadMs,
+                playheadOrigin: 'author' as const,
               }
             }),
             emit(({ event }) => ({ type: 'selectionRequested' as const, itemIds: [event.trackId], keyframeId: event.keyframeId })),
@@ -565,7 +569,10 @@ export const sequenceEditorMachine = setup({
         },
 
         'PLAYHEAD.SET': {
-          actions: assign(({ context, event }) => ({ playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) })),
+          actions: assign(({ context, event }) => ({
+            playheadMs: Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)),
+            playheadOrigin: 'author' as const,
+          })),
         },
 
         'VIEWPORT.PAN_START': {

@@ -6,6 +6,7 @@ import type { RuntimeCapabilityCatalog } from '../../../src/runtime/catalog'
 import { BaseComponent, TagComponent } from '../../../src/runtime/components'
 import type { ComponentUpdateInput } from '../../../src/runtime/components'
 import { compileMovePath, SceneBuilder } from '../../../src/scene/compiled'
+import { SCENE_BUILD_CONFIG } from '../../../src/scene/config/scene-build'
 import type { SceneDoc } from '../../../src/scene/types'
 import { demoSceneFixtures } from '../../fixtures/demo-scene-fixtures'
 
@@ -75,6 +76,68 @@ describe('SceneBuilder', () => {
       style: {
         color: { from: parseColor('#000'), to: parseColor('#fff'), duration: 100 },
         transform: 'rotate(20deg)',
+      },
+    })
+  })
+
+  it('qualifies structured numeric geometry while preserving other style values', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
+    const result = builder.build({
+      id: 'logical-length-scene',
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
+            id: 'item',
+            type: 'tag',
+            initial: {
+              style: {
+                x: 10,
+                y: 5,
+                width: 20,
+                height: 12,
+                opacity: 0.5,
+                rotate: 15,
+                'line-height': 1.25,
+              },
+            },
+            actions: {
+              resize: {
+                style: {
+                  x: { from: 10, to: 30, duration: 100, ease: 'linear' },
+                  width: { from: 20, to: 40, duration: 100, ease: 'linear' },
+                  opacity: { from: 0.5, to: 1, duration: 100, ease: 'linear' },
+                },
+              },
+            },
+          }],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const perso = result.compiledScene.scene.stories.main?.persos[0]
+    expect(perso?.initial.style).toMatchObject({
+      x: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 10 },
+      y: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 5 },
+      width: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 20 },
+      height: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 12 },
+      opacity: 0.5,
+      rotate: 15,
+      'line-height': 1.25,
+    })
+    expect(perso?.actions.resize).toMatchObject({
+      style: {
+        x: {
+          from: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 10 },
+          to: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 30 },
+        },
+        width: {
+          from: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 20 },
+          to: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 40 },
+        },
+        opacity: { from: 0.5, to: 1, duration: 100, ease: 'linear' },
       },
     })
   })

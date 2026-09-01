@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { Actor } from 'xstate'
 import './app-layout.css'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { EditorScene } from '../commands/types'
+import { EditorPlayerCommandFacade } from '../commands/editor-player-command-facade'
+import { EditorCoordinationBridge } from '../bridges/editor-coordination-bridge'
 import { DemoMenuRegion } from './DemoMenuRegion'
 import { SequenceEditorRegion } from './SequenceEditorRegion'
 import { ScenePlayerRegion } from './ScenePlayerRegion'
@@ -90,6 +92,12 @@ function useClearSelectionShortcuts(controller: Actor<typeof controllerMachine>)
  */
 export function AppLayout({ controller }: AppLayoutProps) {
   useClearSelectionShortcuts(controller)
+  const playerFacade = useMemo(() => new EditorPlayerCommandFacade(), [])
+  const coordination = useMemo(() => new EditorCoordinationBridge(controller, playerFacade), [controller, playerFacade])
+  useEffect(() => () => {
+    coordination.destroy()
+    playerFacade.destroy()
+  }, [coordination, playerFacade])
   return (
     <div className="app-layout">
       <div className="app-region app-region--menu">
@@ -97,13 +105,13 @@ export function AppLayout({ controller }: AppLayoutProps) {
       </div>
       <div className="app-region app-region--chutier" />
       <div className="app-region app-region--scene">
-        <ScenePlayerRegion controller={controller} />
+        <ScenePlayerRegion controller={controller} coordination={coordination} />
       </div>
       <div className="app-region app-region--panel">
         <DecorEditorRegion controller={controller} />
       </div>
       <div className="app-region app-region--timeline">
-        <SequenceEditorRegion controller={controller} />
+        <SequenceEditorRegion controller={controller} coordination={coordination} />
       </div>
       <div className="app-region app-region--telco" />
     </div>

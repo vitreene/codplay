@@ -50,14 +50,6 @@ export const DEFAULT_PALETTE: PaletteConfig = {
       ],
     },
     {
-      id: 'dimensions',
-      label: 'Dimensions',
-      fields: [
-        { path: 'style.width', kind: 'number', label: 'Largeur' },
-        { path: 'style.height', kind: 'number', label: 'Hauteur' },
-      ],
-    },
-    {
       id: 'content',
       label: 'Contenu',
       fields: [{ path: 'text', kind: 'text', label: 'Texte' }],
@@ -66,11 +58,11 @@ export const DEFAULT_PALETTE: PaletteConfig = {
     { id: 'presets', label: 'Presets', kind: 'preset-list' },
   ],
   panelsByItemType: {
-    text: ['shape', 'typo', 'dimensions', 'content', 'custom', 'presets'],
-    image: ['shape', 'dimensions', 'custom', 'presets'],
-    media: ['shape', 'dimensions', 'custom', 'presets'],
-    video: ['shape', 'dimensions', 'custom', 'presets'],
-    capsule: ['shape', 'dimensions', 'custom', 'presets'],
+    text: ['shape', 'typo', 'content', 'custom', 'presets'],
+    image: ['shape', 'custom', 'presets'],
+    media: ['shape', 'custom', 'presets'],
+    video: ['shape', 'custom', 'presets'],
+    capsule: ['shape', 'custom', 'presets'],
   },
 }
 

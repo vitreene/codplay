@@ -183,7 +183,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     codplay.destroy()
   })
 
-  it('emits structured cqw lengths for offsets without qualifying CSS styles', () => {
+  it('emits unitless structured offsets without qualifying CSS styles', () => {
     const scene = fixtureScene()
     scene.decors['text-decor-a']!.offset = {
       x: 3,
@@ -200,10 +200,10 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
     expect(item.initial).toMatchObject({
       style: {
-        x: { kind: 'length', unit: 'cqw', value: 12.5 },
-        y: { kind: 'length', unit: 'cqw', value: -8 },
-        width: { kind: 'length', unit: 'cqw', value: 12.5 },
-        height: { kind: 'length', unit: 'cqw', value: 25 },
+        x: 12.5,
+        y: -8,
+        width: 12.5,
+        height: 25,
         rotate: 15,
         scaleX: 1.2,
         scaleY: 0.9,
@@ -211,7 +211,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     })
   })
 
-  it('does not emit an interpolation action when structured cqw offsets are unchanged', () => {
+  it('does not emit an interpolation action when structured offsets are unchanged', () => {
     const scene = fixtureScene()
     const offset = { x: 12.5, y: -8, width: 12.5, height: 25 }
     scene.decors['text-decor-a']!.offset = offset

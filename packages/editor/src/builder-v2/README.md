@@ -14,11 +14,10 @@ portées par `move.target` ; aucun parentage n'est relu dans le DOM.
 La résolution de décor est pure et locale à cette verticale. `Decor.style` et `Decor.custom` sont
 projetés vers le style V2, les couleurs autonomes des propriétés nommées couleur sont normalisées
 en `ColorValue`, les différences entre keyframes deviennent des actions V2 et les classes restent
-discrètes. Dans l'état intermédiaire actuel, les longueurs structurées de `Decor.offset` sont
-émises comme valeurs explicites `{ kind: 'length', unit: 'cqw', value }`; cette qualification doit
-être déplacée dans CodPlay pour la migration V2. La cible du builder est de transmettre les nombres
-`unitless` du contrat éditeur-player, sans conversion en chaîne CSS. Les autres chaînes CSS restent
-opaques. Les zones sont signalées comme différées : leur preview reste une responsabilité de l'éditeur et leur
+discrètes. Les longueurs structurées de `Decor.offset` sont émises comme nombres `unitless` du
+contrat éditeur-player, sans conversion en chaîne CSS ni objet de compilation. CodPlay qualifie
+ensuite `x`, `y`, `width` et `height` en longueur logique selon sa configuration. Les autres chaînes
+CSS restent opaques. Les zones sont signalées comme différées : leur preview reste une responsabilité de l'éditeur et leur
 matérialisation par `capsule-automation` fera l'objet de la tranche zones.
 
 Chaque niveau de capsule est résolu par `capsule-automation`, qui reste l'unique producteur des

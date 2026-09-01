@@ -6,6 +6,7 @@ import type {
   CompiledEventime,
   CompiledScene,
 } from '../../scene/compiled'
+import { qualifyStructuredLengthStyle } from '../../scene/compiled'
 import type { SceneDoc, SceneLifecycleOptions } from '../../scene/types'
 import { cloneRecord, isPlainRecord } from '../../shared'
 import type { EngineFrame } from '../engine'
@@ -296,7 +297,7 @@ export class RuntimePlayer {
         storyId: patch.storyId,
         persoId: patch.persoId,
         timeMs: patch.timeMs,
-        state: { style: cloneRecord(patch.state.style) },
+        state: { style: cloneRecord(qualifyStructuredLengthStyle(patch.state.style)) },
       })
     }
 

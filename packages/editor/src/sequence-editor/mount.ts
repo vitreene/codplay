@@ -2,8 +2,6 @@ import './sequence-editor.css'
 
 import type { MachineContext, VirtualKeyframe } from './machine'
 import type { SequenceEditorController } from './controller'
-import type { TelcoApi } from 'codplay-v1/telco/types'
-import type { PlayerStateSnapshot } from 'codplay-v1/player/types'
 import { formatTimeMs } from './constants'
 import { createTimeRuler, renderTimeRuler } from './render/time-ruler'
 import { createTrackLabelList, renderTrackLabelList } from './render/track-label-list'
@@ -28,36 +26,40 @@ function setButtonGlyph(btn: HTMLButtonElement, glyph: string): void {
 }
 
 export interface MountSequenceEditorOptions {
-  /** Notifié à chaque changement de playhead — le pont vers `player.seek({ timelineMs })` vit chez l'appelant, pas ici. */
+  /** Transport générique fourni par le bridge de coordination, jamais une référence CodPlay. */
+  transport?: SequenceEditorTransport
+  /** Notifié à chaque changement de playhead auteur — le bridge décide comment le player se déplace. */
   onPlayheadChange?: (timeMs: number) => void
-  /**
-   * Notifié juste AVANT tout appel `telco.*` engageant une lecture/relecture du document (play
-   * aujourd'hui — même patron pour un futur stop/rewind direct, remarque utilisateur 2026-07-17 :
-   * « pas besoin de dupliquer le flush, factoriser plutôt »). Le pont vers `TELCO_ACTION_REQUEST`
-   * vit chez l'appelant, pas ici — même séparation que `onPlayheadChange`/`SEEK`.
-   */
-  onTelcoActionRequest?: () => void
-  /**
-   * Notifié juste AVANT tout appel `telco.pause()` — geste explicite (clic Play/Pause) OU pause
-   * automatique en fin de scène (`syncFromTelco`). Sort l'état `playing` du contrôleur
-   * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) : point d'entrée/sortie tous deux au
-   * niveau du GESTE éditeur, jamais du statut brut du transport (`isPlaying`) — un rebuild forcé
-   * déclenché à l'entrée dans `playing` produit lui-même du bruit transitoire sur ce statut,
-   * confirmé en direct (2026-07-18) : `isPlaying` comme signal de sortie sortait de l'état AVANT
-   * que le rebuild forcé n'ait fini, quel que soit l'ordre d'exécution.
-   */
-  onTelcoPauseRequest?: () => void
+}
+
+/** Transport state intentionally reduced to the values needed by sequence-editor. */
+export interface SequenceEditorTransportState {
+  status: string
+  timelineMs: number
+  durationMs: number
+  rate: number
+}
+
+/** Transport progress intentionally separate from the author-owned playhead. */
+export interface SequenceEditorTransportProgress {
+  timelineMs: number
+  durationMs: number
+}
+
+/** Player commands and observations consumed by the autonomous sequence-editor view. */
+export interface SequenceEditorTransport {
+  getState: () => SequenceEditorTransportState | null
+  getProgress: () => SequenceEditorTransportProgress | null
+  play: () => void
+  pause: () => void
+  rewind: () => void
+  seek: (timelineMs: number) => void
+  setRate: (rate: number) => void
+  onChange: (listener: (state: SequenceEditorTransportState) => void) => () => void
+  onProgress: (listener: (progress: SequenceEditorTransportProgress) => void) => () => void
 }
 
 export interface SequenceEditorMountHandle {
-  /**
-   * `context.telco` (contrôleur central) n'existe qu'après le premier rebuild réussi de
-   * `scenePlayer` — jamais disponible à la construction de ce module (même contrainte que
-   * `decorEditor`/`AuthorApi`, `2026-07-16-position-bridge-reconciliation-plan.md`). L'appelant
-   * (`sequence-editor-bridge.ts`) l'invoque une fois ce moment venu ; tant que ce n'est pas fait,
-   * Play/Pause/Stop restent inertes (`telco` reste `null`).
-   */
-  attachTelco(telco: TelcoApi): void
   destroy(): void
 }
 
@@ -105,16 +107,13 @@ export function mountSequenceEditor(
     render(ctrl.getSnapshot())
   }
 
-  // ── Telco (transport réel) ──────────────────────────────────────────────────────
-  // La lecture réelle est pilotée par `TelcoApi` (`codplay`), jamais par une boucle RAF locale —
-  // `2026-07-17-telco-real-transport-plan.md` §1/§Étape C. `telco` n'est branché qu'après coup via
-  // `attachTelco` (voir `SequenceEditorMountHandle`) ; tant que c'est `null`, Play/Pause/Stop sont
-  // inertes plutôt que de lever une erreur (même tolérance que `decorEditor` avant son propre
-  // branchement tardif).
+  // ── Transport (fourni par le bridge de coordination) ────────────────────────────
 
-  let telco: TelcoApi | null = null
-  let unsubscribeTelcoGlyph: (() => void) | null = null
-  let unsubscribeTelcoProgress: (() => void) | null = null
+  const transport = options.transport ?? null
+  let transportState = transport?.getState() ?? null
+  let playbackProgress = transport?.getProgress() ?? null
+  let unsubscribeTransportChange: (() => void) | null = null
+  let unsubscribeTransportProgress: (() => void) | null = null
 
   // ── Build container ──────────────────────────────────────────────────────────
 
@@ -432,14 +431,12 @@ export function mountSequenceEditor(
   // ── Controls ──────────────────────────────────────────────────────────────────
 
   function onPlayClick(): void {
-    if (!telco) return
-    if (telco.getState().status === 'playing') {
-      options.onTelcoPauseRequest?.()
-      void telco.pause()
+    if (!transport) return
+    if (transport.getState()?.status === 'playing') {
+      transport.pause()
       return
     }
-    options.onTelcoActionRequest?.()
-    void telco.play()
+    transport.play()
   }
   btnPlay.addEventListener('click', onPlayClick)
 
@@ -504,15 +501,16 @@ export function mountSequenceEditor(
 
   function render(snap: { context: MachineContext }): void {
     const ctx = snap.context
-    timeDisplay.textContent = formatTimeMs(ctx.playheadMs, ctx.displayConfig.timeUnit)
-    // Le glyphe play/pause est piloté par `telco.onChange` (`attachTelco`), pas par le contexte de
-    // cette machine — le statut de lecture réel n'y est plus dupliqué (§Étape C).
+    const displayedTimeMs = transportState?.status === 'playing'
+      ? playbackProgress?.timelineMs ?? ctx.playheadMs
+      : ctx.playheadMs
+    timeDisplay.textContent = formatTimeMs(displayedTimeMs, ctx.displayConfig.timeUnit)
     btnFollow.classList.toggle('seq-toolbar__btn--active', ctx.followPlayhead)
     const hasRange = ctx.playRange !== null
     btnZoomRange.style.display = hasRange ? '' : 'none'
     btnClearRange.style.display = hasRange ? '' : 'none'
 
-    if (options.onPlayheadChange && ctx.playheadMs !== lastPlayheadMs) {
+    if (options.onPlayheadChange && ctx.playheadOrigin === 'author' && ctx.playheadMs !== lastPlayheadMs) {
       lastPlayheadMs = ctx.playheadMs
       options.onPlayheadChange(ctx.playheadMs)
     }
@@ -592,7 +590,7 @@ export function mountSequenceEditor(
       startMarkerDrag,
     )
     renderWaveformRow(waveformRow, ctx)
-    renderPlayhead(playheadOverlay, ctx)
+    renderPlayhead(playheadOverlay, ctx, displayedTimeMs)
     renderInfobar(infobar, ctx)
   }
 
@@ -674,64 +672,39 @@ export function mountSequenceEditor(
   const ro = new ResizeObserver(() => ctrl.notifyResize(timeline.clientWidth, timeline.clientHeight))
   ro.observe(timeline)
 
-  // ── Telco attach (tardif — voir SequenceEditorMountHandle) ─────────────────────
-
-  function attachTelco(t: TelcoApi): void {
-    unsubscribeTelcoGlyph?.()
-    unsubscribeTelcoProgress?.()
-
-    telco = t
-    setButtonGlyph(btnPlay, t.getState().status === 'playing' ? '⏸' : '▶')
-    unsubscribeTelcoGlyph = t.onChange((state) => {
-      setButtonGlyph(btnPlay, state.status === 'playing' ? '⏸' : '▶')
-    })
-
-    // Marque `lastPlayheadMs` AVANT la transition — sans ça, le diff de `render()` (ligne ~488)
-    // reforwarderait cette valeur via `onPlayheadChange`, ré-émettant un SEEK vers ce même telco :
-    // boucle. Abonné à `onProgress` SEUL, jamais `onChange` : `PlayerFacade.seek()` appelle
-    // `setStatus('seeking')` — donc émet `onChange` — AVANT de mettre à jour `this.timelineMs`
-    // (`create-player.ts::seek()`) ; un `onChange` y était abonné en plus jusqu'ici, et recevait
-    // cette notification transitoire avec l'ANCIENNE position, qu'il remirait aussitôt dans le
-    // contexte — la tête sautait brièvement sur le kf cliqué puis revenait en arrière avant que le
-    // seek ne s'achève (bug constaté 2026-07-17). `onProgress` ne fire jamais pendant un `seek` (family
-    // gate `status === 'playing'` seulement), donc insensible à cette transition intermédiaire.
-    function syncFromTelco(state: PlayerStateSnapshot): void {
-      lastPlayheadMs = state.timelineMs
-      ctrl.syncPlayheadFromTelco(state.timelineMs)
-
-      const ctx = ctrl.getSnapshot().context
-      // Suivi de tête — l'ancien `rafLoop` en était l'unique lecteur (retiré avec la simulation
-      // locale) ; rebranché ici, sur le flux réel de `telco`, plutôt que sur le diff de `render()`
-      // (indépendant de la garde anti-boucle ci-dessus, qui ne concerne que `onPlayheadChange`).
-      if (ctx.followPlayhead && ctx.playheadMs >= ctx.viewport.endMs) {
-        ctrl.scrollToMs(ctx.playheadMs)
-      }
-
-      // Fin de scène — l'ancienne garde locale (`PLAYHEAD.TICK`) stoppait à `scene.meta.durationMs`
-      // ; ce plafond n'existe pas côté `telco` pour une scène ed2 (`sequenceEnded`/`authorEndMs`
-      // dépendent d'un event `sequenceEnd` que le Builder n'émet pas forcément ici), donc sans ce
-      // garde-fou la lecture réelle continue indéfiniment au-delà de la durée affichée.
-      if (state.status === 'playing' && state.timelineMs >= ctx.scene.meta.durationMs) {
-        options.onTelcoPauseRequest?.()
-        void telco?.pause()
-      }
-    }
-    unsubscribeTelcoProgress = t.onProgress(syncFromTelco)
-  }
-
   // ── Boot ──────────────────────────────────────────────────────────────────────
+
+  if (transport) {
+    const initialState = transport.getState()
+    if (initialState) {
+      transportState = initialState
+      setButtonGlyph(btnPlay, initialState.status === 'playing' ? '⏸' : '▶')
+    }
+    unsubscribeTransportChange = transport.onChange((state) => {
+      transportState = state
+      setButtonGlyph(btnPlay, state.status === 'playing' ? '⏸' : '▶')
+      render(ctrl.getSnapshot())
+    })
+    unsubscribeTransportProgress = transport.onProgress((progress) => {
+      playbackProgress = progress
+      const ctx = ctrl.getSnapshot().context
+      if (transportState?.status === 'playing' && progress.timelineMs >= ctx.scene.meta.durationMs) {
+        transport.pause()
+      }
+      render(ctrl.getSnapshot())
+    })
+  }
 
   ctrl.notifyResize(timeline.clientWidth, timeline.clientHeight)
   const unsubscribe = ctrl.subscribe(render)
 
   return {
-    attachTelco,
     destroy(): void {
       unsubscribe()
       ro.disconnect()
       document.removeEventListener('keydown', onKeyDown)
-      unsubscribeTelcoGlyph?.()
-      unsubscribeTelcoProgress?.()
+      unsubscribeTransportChange?.()
+      unsubscribeTransportProgress?.()
       container.innerHTML = ''
     },
   }

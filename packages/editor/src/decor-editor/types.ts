@@ -1,5 +1,5 @@
-import type { ClassNameValue } from 'codplay-v1/runtime/perso-shared-types'
-import type { DecorLiveSession } from './decor-live-session'
+/** V2 class value accepted by the className service. */
+export type ClassNameValue = string | { add?: string; remove?: string }
 
 // ─── Orientation ────────────────────────────────────────────────────────────
 
@@ -113,67 +113,16 @@ export interface ZoneCard {
   zones: ZoneTable
 }
 
-// ─── Offset bridge (px, contrats actuels du cadre de sélection) ───────────
+// ─── Selection Frame value (px, interface de decor-editor) ───────────────
 
-export interface OffsetValuesPx {
-  x?: number
-  y?: number
-  width?: number
-  height?: number
+export interface SelectionFrameValue {
+  x: number
+  y: number
+  width: number
+  height: number
   translate?: { x: number; y: number }
   rotate?: number
   scale?: { x: number; y: number }
   anchor?: FlexAnchor
 }
-
-// ─── Offset editor bridge (spec 2026-07-07-dedit-spec.md §6, "PositionEditorBridge") ──────
-//
-// dedit est le seul interlocuteur de l'app pour l'édition du décor — l'éditeur visuel de
-// position (cadre de sélection) lui est subordonné, jamais un pont indépendant câblé par
-// l'app (`2026-07-16-position-bridge-reconciliation-plan.md`). dedit n'importe jamais
-// `selection-frame` : cette interface, fournie par l'hôte, est le seul lien.
-
 export type Unsubscribe = () => void
-
-export interface OffsetEditorBridge {
-  /** `'transform'` est le mode sélectionné par défaut (spec §6) — seul mode câblé à ce stade
-   *  (`'position'`/`'flex-anchor'` n'ont pas encore d'éditeur visuel intégré à l'app). */
-  activate(mode: 'position' | 'transform' | 'flex-anchor'): void
-  deactivate(): void
-  /** champs → geste : une saisie dedit convertie en px, appliquée sur l'élément. */
-  apply(patch: OffsetValuesPx): void
-  /** geste → champs : diffs continus du cadre de sélection, en px (pas de debounce ici). */
-  onValues(cb: (values: OffsetValuesPx) => void): Unsubscribe
-  /** Référence de conversion cqw — largeur du conteneur en px. */
-  containerRefWidthPx(): number
-  /**
-   * Extension au-delà du spec §6 (`2026-07-16-position-bridge-reconciliation-plan.md` §Étape D) :
-   * un geste CS est-il actuellement en cours ? Seul moyen pour l'hôte de généraliser le flush de
-   * fin de phase (chantier 3) à TOUTE édition continue du décor (position ET couleur ET curseur),
-   * pas seulement au CS — sans ça, le pont couleur/curseur n'aurait aucun moyen de savoir qu'une
-   * phase de manipulation de position est en cours ailleurs.
-   */
-  isGestureActive(): boolean
-  /**
-   * Signal de bord (pas un sondage) pour la même raison — un geste CS peut rester actif plus de
-   * 250ms sans produire de nouveau delta (pointer immobile, toujours enfoncé) ; un flush purement
-   * temporisé le couperait à tort. L'hôte s'abonne pour déclencher le flush exactement à la
-   * transition actif → inactif, jamais avant.
-   */
-  onGestureActiveChange(cb: (active: boolean) => void): Unsubscribe
-  /**
-   * Message explicite « ce geste vient de se terminer » (`2026-07-18-pose-edit-architecture-
-   * study.md` §7) — remplace `onGestureActiveChange(false)` comme déclencheur du regroupement de
-   * phase : l'hôte réagit désormais à un événement reçu directement du geste qui vient de finir,
-   * jamais à un état (`isGestureActive()`) redéduit à un instant sans rapport garanti avec la fin
-   * réelle du geste. Ne porte aucune valeur — celle-ci a déjà atteint `onValues` en continu.
-   */
-  onCommit(cb: (kind: 'move' | 'resize' | 'rotate' | 'scale') => void): Unsubscribe
-  /**
-   * Canal unique geste → Decor (`2026-07-25-decor-unified-channel-plan.md` §2/§4) — état
-   * `idle`/`live`/`committing` + `DecorPatch` accumulé, consulté par `decor-editor-bridge.ts` au lieu
-   * de s'abonner à `onValues`/`onCommit` ci-dessus (qui restent pour d'autres usages — voir
-   * `decor-live-session.ts`).
-   */
-  getLiveSession(): DecorLiveSession
-}

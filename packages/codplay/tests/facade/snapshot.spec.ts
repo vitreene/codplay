@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { CodPlay, type CodPlayInstance } from '../../src'
+import { SCENE_BUILD_CONFIG } from '../../src/scene/config/scene-build'
 import type { SceneDoc } from '../../src/scene/types'
 
 /** Builds one scene whose item exposes two independent style properties. */
@@ -18,7 +19,7 @@ function snapshotScene(): SceneDoc {
           initial: {
             tag: 'article',
             move: '@root',
-            style: { opacity: 0, color: 'red' },
+            style: { opacity: 0, color: 'red', x: 10, width: 25 },
           },
           actions: {
             reveal: { style: { opacity: 1, color: 'blue' } },
@@ -31,10 +32,16 @@ function snapshotScene(): SceneDoc {
 }
 
 /** Creates and initializes one public instance on the HTML path. */
-function createSnapshotInstance(codplay: CodPlay): CodPlayInstance {
+function createSnapshotInstance(codplay: CodPlay, rootWidth?: number): CodPlayInstance {
   const build = codplay.build({ scene: snapshotScene() })
   if (!build.ok) throw new Error('Snapshot test scene did not compile.')
   const root = document.createElement('div')
+  if (rootWidth !== undefined) {
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: rootWidth }),
+    })
+  }
   document.body.append(root)
   return codplay.instances.create({
     instanceId: 'snapshot-instance',
@@ -61,6 +68,7 @@ describe('CodPlay instance snapshot', () => {
     if (node === null) throw new Error('Snapshot test node is missing.')
 
     expect(node.style.opacity).toBe('0')
+    expect(node.style.transform).toBe('translateX(10px)')
     const base = instance.snapshot.get()
     expect(base).not.toBeNull()
     expect(base?.timeMs).toBe(0)
@@ -79,6 +87,37 @@ describe('CodPlay instance snapshot', () => {
 
     instance.snapshot.clear()
     expect(node.style.opacity).toBe('0')
+  })
+
+  it('qualifies geometry in snapshot previews and keeps the base frame logical', () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const instance = createSnapshotInstance(codplay, 800)
+    const node = document.body.querySelector<HTMLElement>('article')
+    if (node === null) throw new Error('Snapshot test node is missing.')
+
+    const base = instance.snapshot.get()
+    expect(base?.states[0]?.state.style).toMatchObject({
+      x: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 10 },
+      width: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 25 },
+    })
+    expect(node.style.transform).toBe('translateX(80px)')
+    expect(node.style.width).toBe('200px')
+
+    expect(instance.snapshot.set([{
+      target: { storyId: 'main', persoId: 'item' },
+      timeMs: 0,
+      state: { style: { x: 14, width: 30 } },
+    }])).toEqual({ ok: true })
+    expect(node.style.transform).toBe('translateX(112px)')
+    expect(node.style.width).toBe('240px')
+    expect(instance.snapshot.get()?.states[0]?.state.style).toMatchObject({
+      x: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 10 },
+      width: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 25 },
+    })
+
+    instance.snapshot.clear()
+    expect(node.style.transform).toBe('translateX(80px)')
+    expect(node.style.width).toBe('200px')
   })
 
   it('replaces the preview atomically and reports rejected patches without changing it', () => {

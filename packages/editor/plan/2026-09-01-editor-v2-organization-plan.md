@@ -1,7 +1,7 @@
 # Plan d'organisation — migration de l'éditeur vers CodPlay V2
 
-**Statut : En cours — proposition d'organisation, à valider avant les tranches
-qui ne sont pas déjà autorisées.**
+**Statut : En cours — C1/S1 et la structure B1–B3 sont engagées ; la validation
+de l'intégration et les tranches D1/D2/R1 restent à exécuter.**
 **Cible :** `ed2` avec la façade CodPlay V2.
 **Date :** 2026-09-01.
 
@@ -163,15 +163,16 @@ fixe les points suivants avant toute implémentation :
   contrôleur central, ne produit pas de `SEEK` et n'ajoute pas d'entrée
   d'historique.
 
-Ainsi, C1 et S1 sont implémentables sur la façade V2 existante après validation
-de ce plan. B1–D2 restent des tranches d'intégration à écrire dans cet ordre ;
-leur code ne doit pas être commencé comme s'il existait déjà un port de
-géométrie, de notification snapshot ou de readiness dans le contrôleur.
+Ainsi, C1 et S1 ont été implémentés sur la façade V2 existante et B1–B3 ont
+maintenant une première réalisation dans l'éditeur. Cette réalisation reste
+à valider sur le parcours réel ; D1/D2 ne doivent pas être considérées comme
+engagées par les préparatifs présents dans l'arbre.
 
-## État de réalisation vérifié — intégration `decor-editor` / CodPlay V2
+## Baseline initiale — intégration `decor-editor` / CodPlay V2
 
-Le contrôle du code présent établit l'état suivant. Cette section suit la
-réalisation du plan ; elle ne crée aucun contrat supplémentaire.
+Cette section conserve le constat établi avant l'implémentation des tranches
+B1–B3. Elle ne décrit pas l'état courant et ne crée aucun contrat
+supplémentaire.
 
 | Partie contrôlée | État constaté | Écart avec la cible du plan |
 | --- | --- | --- |
@@ -207,10 +208,37 @@ nombres unitless et complétées par le cas d'interpolation combinée. Aucun
 résultat d'une suite qui importe ou simule V1 ne peut faire avancer une porte
 du présent plan.
 
-Le typecheck de l'éditeur peut conserver des erreurs héritées tant que le
-code V1 concerné est retiré ; il sera requalifié uniquement après la
-reconstruction de la verticale V2. Ces erreurs ne constituent pas une preuve
-de validation ni un motif pour réintroduire un chemin V1.
+Le typecheck de l'éditeur de cette baseline pouvait conserver des erreurs
+héritées tant que le code V1 concerné était retiré ; le résultat courant est
+consigné dans le rapport de reprise dédié ci-dessous.
+
+## État courant à la pause — fin de B3 (2026-09-01)
+
+La structure des tranches suivantes est maintenant repérable dans le code,
+mais seule la partie explicitement listée ici est considérée comme travaillée.
+
+| Tranche | Réalisation présente | Limite à la reprise |
+| --- | --- | --- |
+| C1/S1 | CodPlay qualifie les longueurs structurées numériques selon la configuration `cqw`; `snapshot.get/set/clear` est exposé par l'instance et couvert par les tests ciblés. | La preuve navigateur Play/Seek/resize et la matrice complète restent à exécuter. |
+| B1 | `EditorPlayerCommandFacade` possède la référence d'instance, le `preRollMs`, les appels `telco` et les abonnements `onChange/onProgress`; `EditorCoordinationBridge` est créé au niveau de `AppLayout`. | Le port du décor n'est pas raccordé à ce stade : ce raccordement relève de D1. |
+| B2 | `scene-player-bridge` utilise `buildSceneDocV2`, `codplay.build`, preload CSS/ressources, une instance V2 et une transaction de remplacement; il transmet le port `snapshot` à la coordination. | Aucun parcours navigateur réel n'a encore validé le cycle complet, le rebuild ou l'échec de remplacement. |
+| B3 | Le contrôleur ne stocke plus `AuthorApi`, `TelcoApi`, `referenceWidthPx`, `offsetBridge` ni `PLAYER_READY`; `sequence-editor` expose un transport générique, conserve `playheadMs` comme progression auteur et adopte le temps player seulement par `PLAYHEAD.RECONCILE`; l'insertion de keyframe lit `coordination.snapshot.get()`. | Le vieux circuit `decor-editor`/`offset-editor-bridge` reste à réécrire ou supprimer dans D1/R1; le typecheck éditeur complet reste donc ouvert. |
+
+### Ce qui n'est pas engagé à cette pause
+
+- D1 n'est pas validé. Le montage de palette a été préparé pour ne plus
+  écrire directement dans un node, mais `decor-editor-bridge.ts` et
+  `offset-editor-bridge.ts` contiennent encore l'ancien raccord et ne doivent
+  pas être présentés comme le circuit V2 final.
+- D2 n'est pas engagé. Aucun nouveau contrat public de mesure n'est ajouté;
+  la mention non validée d'une `Projection.measure` ne fait pas partie de la
+  sortie B3.
+- R1 n'est pas engagé. Les modules V1 encore isolés dans
+  `packages/authoring/selection-frame` et le builder historique seront retirés
+  après la preuve D1/D2, selon l'inventaire du plan.
+
+Le détail opératoire, les commandes de validation et le point de reprise sont
+dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.md).
 
 ## Audit ciblé — façade documentaire et machines d'état
 
@@ -848,8 +876,9 @@ et le patch `Decor`.
 
 **Actions :**
 
-1. Utiliser ce document comme plan actif ; ne pas ajouter de suivi ou de
-   décision dans `2026-08-30-editor-codplay-v2-reprise-report.md`.
+1. Utiliser ce document comme plan actif ; ne pas y remplacer les contrats des
+   spécifications. Le rapport `2026-09-01-editor-v2-b3-reprise-report.md`
+   sert uniquement de point de reprise factuel.
 2. Maintenir dans une note séparée les questions non arrêtées, notamment le
    comportement éventuel d'une notification `snapshot.onChange`.
 3. Pour chaque tranche, relier les changements à une spécification V2, à un

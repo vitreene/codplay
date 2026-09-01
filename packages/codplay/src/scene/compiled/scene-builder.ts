@@ -36,6 +36,7 @@ import type {
   CompiledStrapDeclarations,
   CompiledStory,
 } from './types'
+import { qualifyStructuredLengthStyles } from './length'
 import { validateCompiledSceneSemantics } from './semantic-validator'
 
 /** Options controlling one deterministic scene compilation. */
@@ -222,7 +223,13 @@ function compilePerso(
   validationEngine: CompiledSceneValidationEngine,
 ): CompiledPerso {
   const sanitizedInitial = validationEngine.sanitizeInitial(perso.type, perso.initial)
-  const compiledInitial = extractCompiledRecord(compileMovePath(sanitizedInitial, `${scope}.initial`) as Record<string, unknown>, `${scope}.initial`, state) ?? {}
+  const compiledInitial = qualifyStructuredLengthStyles(
+    extractCompiledRecord(
+      compileMovePath(sanitizedInitial, `${scope}.initial`) as Record<string, unknown>,
+      `${scope}.initial`,
+      state,
+    ) ?? {},
+  ) as CompiledRecord
   return {
     id: perso.id,
     name: perso.name,
@@ -233,7 +240,12 @@ function compilePerso(
         const sanitizedValue = isPlainRecord(value)
           ? validationEngine.sanitizeAction(perso.type, value)
           : value
-        return [name, extractCompiledValue(compileMovePath(sanitizedValue, `${scope}.actions.${name}`), `${scope}.actions.${name}`, state)]
+        const compiledValue = extractCompiledValue(
+          compileMovePath(sanitizedValue, `${scope}.actions.${name}`),
+          `${scope}.actions.${name}`,
+          state,
+        )
+        return [name, qualifyStructuredLengthStyles(compiledValue)]
       }),
     ),
     list: extractCompiledRecord(perso.list, `${scope}.list`, state),

@@ -6,9 +6,8 @@ import type { PaletteConfig, PanelId } from './palette-panel'
 import { resolveFieldAcrossItems } from './field-state'
 import type { FieldState } from './field-state'
 import { buildPatchFromPath } from './path-patch'
-import { offsetPatchToValuesPx, offsetValuesPxToPatch } from './units'
 import type {
-  DecorPatch, DecorPreset, ItemType, OffsetEditorBridge, OrientationContext, ResolvedDecor, ZoneCard, ZoneTable,
+  DecorPatch, DecorPreset, ItemType, OrientationContext, ResolvedDecor, ZoneCard, ZoneTable,
 } from './types'
 
 // ─── Public snapshot type ────────────────────────────────────────────────────
@@ -51,14 +50,6 @@ export class DecorEditorController {
   private zonesChangeCallbacks = new Set<(zones: ZoneTable) => void>()
   private interactionEndCallbacks = new Set<() => void>()
   private snapToFirstKeyframeCallbacks = new Set<() => void>()
-  /** Pont vers l'éditeur visuel de position (spec §6) — dedit reste le seul interlocuteur de
-   *  l'app, jamais `selection-frame` importé directement. Peut arriver après construction
-   *  (`setOffsetBridge`) : le pont dépend de `authorApi`, prêt après le premier rebuild. */
-  private offsetBridge: OffsetEditorBridge | undefined
-  private unsubscribeOffsetValues: Unsubscribe | null = null
-  /** Coupe le rebouclage geste→champs→geste : une valeur reçue DU pont ne doit jamais lui être
-   *  repoussée comme si elle venait d'une saisie dedit. */
-  private applyingFromBridge = false
 
   constructor(catalogs: DecorEditorCatalogs, orientationContext: OrientationContext = 'horizontal') {
     this.catalogs = catalogs
@@ -66,15 +57,7 @@ export class DecorEditorController {
     this.actor.start()
   }
 
-  /** Câblé une fois le pont offset disponible côté hôte (peut arriver après la construction). */
-  setOffsetBridge(bridge: OffsetEditorBridge | undefined): void {
-    this.offsetBridge = bridge
-    this.syncOffsetBridge()
-  }
-
   destroy(): void {
-    this.unsubscribeOffsetValues?.()
-    this.offsetBridge?.deactivate()
     this.actor.stop()
     this.decorChangeCallbacks.clear()
     this.zonesChangeCallbacks.clear()
@@ -124,41 +107,10 @@ export class DecorEditorController {
       initialPanelId,
     })
     if (inputs[0]) this.send({ type: 'CONTEXT.SET', context: inputs[0].context })
-    this.syncOffsetBridge()
   }
 
   detach(): void {
     this.send({ type: 'ITEMS.DETACH' })
-    this.syncOffsetBridge()
-  }
-
-  /**
-   * Rebranche le pont offset sur l'item unique actuellement attaché (spec §7 bis : position hors
-   * périmètre de l'édition groupée — inerte en multi-sélection ou sans item). `'transform'` est le
-   * mode sélectionné par défaut (spec §6) ; aucun autre mode n'a encore d'éditeur visuel intégré à
-   * l'app (position/grille et attache-flex — pas encore câblés, `2026-07-16-position-bridge-
-   * reconciliation-plan.md` risque §5), donc jamais activé automatiquement ici.
-   */
-  private syncOffsetBridge(): void {
-    this.unsubscribeOffsetValues?.()
-    this.unsubscribeOffsetValues = null
-    if (this.offsetBridge === undefined) return
-    const items = this.getItems()
-    if (items.length !== 1) {
-      this.offsetBridge.deactivate()
-      return
-    }
-    this.offsetBridge.activate('transform')
-    this.unsubscribeOffsetValues = this.offsetBridge.onValues(values => {
-      const widthPx = this.offsetBridge!.containerRefWidthPx()
-      if (widthPx <= 0) return
-      this.applyingFromBridge = true
-      try {
-        this.applyPatch({ offset: offsetValuesPxToPatch(values, widthPx) })
-      } finally {
-        this.applyingFromBridge = false
-      }
-    })
   }
 
   /** No-op tant qu'aucun item n'est attaché (le contexte initial se règle au constructeur). */
@@ -206,13 +158,6 @@ export class DecorEditorController {
   applyPatch(patch: DecorPatch): void {
     this.send({ type: 'PATCH.APPLY', patch })
     this.emitDecorChange()
-    // champs → geste (spec §6) : une saisie touchant `offset` est repoussée sur l'élément via le
-    // pont — sauf si CETTE valeur vient déjà du pont (`syncOffsetBridge`), sinon boucle infinie
-    // geste→champs→geste.
-    if (patch.offset !== undefined && !this.applyingFromBridge && this.offsetBridge !== undefined) {
-      const widthPx = this.offsetBridge.containerRefWidthPx()
-      if (widthPx > 0) this.offsetBridge.apply(offsetPatchToValuesPx(patch.offset, widthPx))
-    }
   }
 
   /**

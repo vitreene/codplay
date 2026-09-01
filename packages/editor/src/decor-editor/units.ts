@@ -1,4 +1,7 @@
-import type { OffsetPatch, OffsetValuesPx } from './types'
+import type { OffsetPatch, SelectionFrameValue } from './types'
+
+/** Partial value used when projecting an existing structured offset to the frame. */
+export type OffsetValuesPx = Partial<SelectionFrameValue>
 
 /** cqw = 1% de la largeur du conteneur de référence, en px. */
 export function pxToCqw(px: number, containerWidthPx: number): number {

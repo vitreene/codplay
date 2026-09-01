@@ -22,9 +22,9 @@ export function createPlayheadOverlay(): SVGSVGElement {
   return svg
 }
 
-export function renderPlayhead(svg: SVGSVGElement, ctx: MachineContext): void {
-  const { viewport, playheadMs, layoutProfile } = ctx
-  const x = timeToPixel(playheadMs, viewport, layoutProfile)
+export function renderPlayhead(svg: SVGSVGElement, ctx: MachineContext, timeMs = ctx.playheadMs): void {
+  const { viewport, layoutProfile } = ctx
+  const x = timeToPixel(timeMs, viewport, layoutProfile)
   if (!isFinite(x)) return
   const h = svg.clientHeight || 400
 

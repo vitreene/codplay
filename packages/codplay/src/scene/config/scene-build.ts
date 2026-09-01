@@ -3,6 +3,8 @@ export const SCENE_BUILD_CONFIG = {
   rootToken: '@root',
   detachToken: '@off',
   schemaVersion: 'codplay.v2.scene.v1',
+  /** Logical unit used for structured numeric geometry at the compilation boundary. */
+  logicalLengthUnit: 'cqw',
   resourceTypeByExtension: {
     '.mp4': 'video',
     '.webm': 'video',
@@ -25,3 +27,6 @@ export const SCENE_BUILD_CONFIG = {
     '.css': 'css',
   },
 } as const
+
+/** Configured logical unit used by the compiled length contract. */
+export type LogicalLengthUnit = typeof SCENE_BUILD_CONFIG.logicalLengthUnit

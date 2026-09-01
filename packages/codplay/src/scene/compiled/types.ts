@@ -1,3 +1,5 @@
+import type { LogicalLengthUnit } from '../config/scene-build'
+
 /** JSON-compatible primitive accepted by the compiled artifact. */
 export type CompiledPrimitive = string | number | boolean | null
 
@@ -56,7 +58,7 @@ export type CompiledEmitDeclaration = Readonly<Record<string, CompiledEmitRule |
 /** Explicit logical length retained until the materializer projection boundary. */
 export type CompiledLengthValue = Readonly<{
   kind: 'length'
-  unit: 'cqw'
+  unit: LogicalLengthUnit
   value: number
 }>
 

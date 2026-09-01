@@ -4,9 +4,6 @@
 
 import type { CapsuleDef, Content, Decor, EditorScene, ItemType, OffsetData } from '../commands/types'
 import type { SequenceEditorCommand } from '../../sequence-editor/commands'
-import type { AuthorApi } from '@codplay/selection-frame'
-import type { TelcoApi } from 'codplay-v1/telco/types'
-import type { OffsetEditorBridge } from '../../decor-editor/types'
 
 // ─── Sélection ──────────────────────────────────────────────────────────────
 
@@ -43,30 +40,6 @@ export interface ControllerContext {
   zonesVisible: boolean
   /** Le type en cours de création pendant l'état `creating` — `null` en dehors de ce mode. */
   creatingType: ItemType | null
-
-  /**
-   * Posé une fois par le pont `scenePlayer` après son premier rebuild réussi (§7 étape 4) — le pont
-   * `decorEditor` en a besoin pour `subscribeToNode` (preview live) ; jamais recréé par la suite,
-   * `studio.player` reste la même instance à travers tous les rebuilds.
-   */
-  authorApi: AuthorApi | null
-  /** Largeur réelle (px) du substrat de scène rendu — conversion cqw↔px côté dedit (spec text-auto-size). */
-  referenceWidthPx: number
-  /**
-   * Posé une fois par le pont `scenePlayer`, en même temps qu'`authorApi` (§7 étape 4) — le pont
-   * `decorEditor` est le SEUL consommateur (`2026-07-16-position-bridge-reconciliation-plan.md`
-   * §Étape A) : dedit reste le seul interlocuteur de l'app pour le décor, l'offset ne doit jamais
-   * apparaître comme un pont indépendant que l'app câblerait elle-même.
-   */
-  offsetBridge: OffsetEditorBridge | null
-  /**
-   * Publié une fois, en même temps qu'`authorApi` (§7 étape 4) — `TelcoApi` existe en réalité dès la
-   * construction de `studio` (`CodPlay`'s constructeur, `2026-07-17-telco-real-transport-plan.md`
-   * §0), bien avant ce point ; publier au même instant qu'`authorApi` évite un second signal de
-   * disponibilité pour une différence négligeable. Façade transport (play/pause/seek/rewind/rate) —
-   * chaque bridge qui en a besoin l'appelle directement, jamais de relais d'événements par-dessus.
-   */
-  telco: TelcoApi | null
 }
 
 // ─── Commandes de la façade (§4.1 — vocabulaire fermé, jamais une mutation arbitraire) ─────────
@@ -141,7 +114,7 @@ export type ControllerEvent =
    * Émis juste avant tout `telco.pause()` — geste explicite (clic Play/Pause) ou pause automatique
    * en fin de scène (`sequence-editor/mount.ts::syncFromTelco`). Fait sortir l'état `playing`
    * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — entrée ET sortie au niveau du GESTE
-   * éditeur, jamais du statut brut du transport (`AuthorApi.subscribeToPlayerState`/`isPlaying`) :
+   * éditeur, jamais du statut brut du transport :
    * ce dernier est pollué par le rebuild forcé que l'entrée dans `playing` déclenche elle-même
    * (confirmé en direct, 2026-07-18 — `isPlaying` comme signal de sortie sortait de l'état avant
    * même que ce rebuild ait fini). `SEEK` (déjà un event racine) sert de second signal de sortie,
@@ -149,8 +122,6 @@ export type ControllerEvent =
    * pendant la lecture.
    */
   | { type: 'TELCO_PAUSE_REQUEST' }
-  /** §7 étape 4 — envoyé une fois par le pont `scenePlayer` (voir `ControllerContext.authorApi`/`.telco`). */
-  | { type: 'PLAYER_READY'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /**
    * Abandon de phase (Échap) — envoyé par le pont `decorEditor` quand une édition en attente
    * (`pendingCommands`) est jetée sans commit (`2026-07-17-phase-commit-selection-recovery-plan.md`
@@ -172,7 +143,6 @@ export type ControllerEmitted =
   | { type: 'seekApplied' }
   /** Émis en réponse à `TELCO_ACTION_REQUEST` — `decor-editor-bridge.ts` s'y abonne comme sur `'seek'` (même `flushNow`). */
   | { type: 'flushPending' }
-  | { type: 'authorApiReady'; authorApi: AuthorApi; referenceWidthPx: number; offsetBridge: OffsetEditorBridge; telco: TelcoApi }
   /** Réponse à `PHASE_ABORT` — `scene` est le document INCHANGÉ (rien n'a été committé). */
   | { type: 'sceneReverted'; scene: EditorScene }
   /**

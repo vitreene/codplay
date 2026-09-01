@@ -21,7 +21,7 @@ export const controllerMachine = setup({
     emitted: ControllerEmitted
   },
   actions: {
-    /** §5 — deux émetteurs (timeline, player via selection-frame) convergent ici, un seul point de vérité. */
+    /** §5 — les émetteurs de sélection convergent ici, un seul point de vérité. */
     selectItem: assign({
       selection: ({ event }) => {
         if (event.type !== 'SELECT_ITEM') return EMPTY_SELECTION
@@ -99,18 +99,6 @@ export const controllerMachine = setup({
     /** Réponse à `TELCO_ACTION_REQUEST` — même flush que `'seek'`, déclenché AVANT tout appel `telco.*` (voir `types.ts`). */
     emitFlushPending: emit(() => ({ type: 'flushPending' as const })),
 
-    /** §7 étape 4 — posé une fois par `scenePlayer`, stocké (contrairement à `seek`) : un pont `decorEditor` créé après coup doit pouvoir le lire immédiatement via `getSnapshot()`, pas seulement via l'émission. */
-    setAuthorApi: assign({
-      authorApi: ({ event }) => (event.type === 'PLAYER_READY' ? event.authorApi : null),
-      referenceWidthPx: ({ event }) => (event.type === 'PLAYER_READY' ? event.referenceWidthPx : 0),
-      offsetBridge: ({ event }) => (event.type === 'PLAYER_READY' ? event.offsetBridge : null),
-      telco: ({ event }) => (event.type === 'PLAYER_READY' ? event.telco : null),
-    }),
-    emitAuthorApiReady: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'PLAYER_READY') return
-      enqueue.emit({ type: 'authorApiReady', authorApi: event.authorApi, referenceWidthPx: event.referenceWidthPx, offsetBridge: event.offsetBridge, telco: event.telco })
-    }),
-
     /** §Étape B.6 — pure broadcast, ne mute jamais `context.scene` (rien n'a été committé pour cette phase). */
     emitSceneReverted: enqueueActions(({ context, enqueue }) => {
       if (!context.scene) return
@@ -135,10 +123,6 @@ export const controllerMachine = setup({
     zonesVisible: false,
     creatingType: null,
 
-    authorApi: null,
-    referenceWidthPx: 0,
-    offsetBridge: null,
-    telco: null,
   },
   on: {
     /** Ces événements sont valides quel que soit le mode courant — ni la sélection ni les panneaux ne dépendent du mode de geste. */
@@ -167,7 +151,6 @@ export const controllerMachine = setup({
      * dedit tout juste faite est déjà committée avant que `playing` ne désactive dedit.
      */
     TELCO_ACTION_REQUEST: { target: '.playing', actions: 'emitFlushPending' },
-    PLAYER_READY: { actions: ['setAuthorApi', 'emitAuthorApiReady'] },
     PHASE_ABORT: { actions: 'emitSceneReverted' },
   },
   states: {

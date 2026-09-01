@@ -186,10 +186,10 @@ export class SequenceEditorController {
 
   seek(timeMs: number): void { this.send({ type: 'PLAYHEAD.SET', timeMs }) }
 
-  /** Miroir du statut réel de lecture — appelé depuis `attachTelco` (`mount.ts`) sur chaque
-   * `telco.onProgress`/`.onChange`, jamais depuis une boucle locale (`2026-07-17-telco-real-
-   * transport-plan.md` §Étape D). */
-  syncPlayheadFromTelco(timelineMs: number): void { this.send({ type: 'TELCO.SYNC_PLAYHEAD', timelineMs }) }
+  /** Adopts one player time at the end of a transport handoff without emitting a seek. */
+  reconcilePlaybackTime(timelineMs: number): void {
+    this.send({ type: 'PLAYHEAD.RECONCILE', timelineMs })
+  }
 
   // ── Play range ───────────────────────────────────────────────────────────────
 
@@ -331,8 +331,8 @@ export class SequenceEditorController {
   // contenu, décor initial) qui appartient à la façade centrale (`createItem` + `assignType` +
   // `assignContent`, composées en transaction) — jamais une opération timeline. L'ancien
   // `addTrack`/`TRACK.ADD` (un item déjà entièrement formé posé en un seul appel) n'était exercé
-  // par aucun geste réel de `mount.ts`, seulement par des tests — retiré, pas migré (v1, pas de
-  // legacy à traîner pour un besoin qui ne correspond à rien de réel).
+  // par aucun geste réel de `mount.ts`, seulement par des tests — retiré, pas migré comme API
+  // publique : il n'y a pas de besoin réel à conserver ici.
 
   removeTrack(trackId: string): void {
     this.send({ type: 'TRACK.REMOVE', trackId })

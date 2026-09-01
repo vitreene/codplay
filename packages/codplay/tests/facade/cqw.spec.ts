@@ -2,9 +2,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodPlay } from '../../src'
+import { SCENE_BUILD_CONFIG } from '../../src/scene/config/scene-build'
 import type { SceneDoc } from '../../src/scene/types'
 
-/** Builds one scene carrying a logical cqw position and width. */
+/** Builds one scene carrying unitless structured geometry for CodPlay to qualify. */
 function cqwScene(): SceneDoc {
   return {
     id: 'facade-cqw-scene',
@@ -18,8 +19,8 @@ function cqwScene(): SceneDoc {
             tag: 'article',
             move: '@root',
             style: {
-              x: { kind: 'length', unit: 'cqw', value: 10 },
-              width: { kind: 'length', unit: 'cqw', value: 25 },
+              x: 10,
+              width: 25,
             },
           },
           actions: {},
@@ -67,6 +68,10 @@ describe('CodPlay facade cqw projection', () => {
     const build = codplay.build({ scene: cqwScene() })
     expect(build.ok).toBe(true)
     if (!build.ok) return
+    expect(build.compiledScene.scene.stories.main?.persos[0]?.initial.style).toMatchObject({
+      x: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 10 },
+      width: { kind: 'length', unit: SCENE_BUILD_CONFIG.logicalLengthUnit, value: 25 },
+    })
 
     const root = document.createElement('div')
     Object.defineProperty(root, 'getBoundingClientRect', {

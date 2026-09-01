@@ -6,6 +6,7 @@ import { resolveKeyframeInsertionPatch, patchToDecorArgs, type ItemVisualType } 
 import type { controllerMachine } from '../controller/controller-machine'
 import type { Command } from '../controller/types'
 import type { BridgeHandle } from './types'
+import type { EditorCoordinationBridge } from './editor-coordination-bridge'
 
 /**
  * Pont `sequenceEditor` — `2026-07-13-controller-islands-bridge-plan.md` §3.1. Module de câblage
@@ -13,12 +14,16 @@ import type { BridgeHandle } from './types'
  * par émission), donc rien qu'un `invoke`/`fromCallback` apporterait ici. Créé une fois que son
  * conteneur DOM existe, détruit uniquement au démontage complet de l'app.
  */
-export function createSequenceEditorBridge(container: HTMLElement, machine: Actor<typeof controllerMachine>): BridgeHandle {
+export function createSequenceEditorBridge(
+  container: HTMLElement,
+  machine: Actor<typeof controllerMachine>,
+  coordination: EditorCoordinationBridge,
+): BridgeHandle {
   const controller = new SequenceEditorController(machine.getSnapshot().context.scene ?? undefined)
+  coordination.attachSequenceEditor(controller)
   const handle = mountSequenceEditor(container, controller, {
-    onPlayheadChange: (timeMs) => machine.send({ type: 'SEEK', timelineMs: timeMs }),
-    onTelcoActionRequest: () => machine.send({ type: 'TELCO_ACTION_REQUEST' }),
-    onTelcoPauseRequest: () => machine.send({ type: 'TELCO_PAUSE_REQUEST' }),
+    transport: coordination.transport,
+    onPlayheadChange: (timeMs) => coordination.requestSeek(timeMs),
   })
 
   const unsubscribeCommand = controller.onCommand((commands) => {
@@ -27,22 +32,21 @@ export function createSequenceEditorBridge(container: HTMLElement, machine: Acto
 
   /**
    * `KEYFRAME.ADD` (`sequence-editor/machine.ts`) est une fonction PURE, sans accès à
-   * `authorApi`/`scene` réels — elle ne peut pas calculer l'état interpolé courant elle-même
+   * `snapshot`/`scene` réels — elle ne peut pas calculer l'état interpolé courant elle-même
    * (`2026-07-25-decor-unified-channel-plan.md` §B). Ce pont, lui, a accès aux deux : il enrichit
    * la commande `createNamedKeyframe` d'un `setDecor` séparé quand l'état affiché au moment de
-   * l'insertion diverge de la cascade héritée — « photographier » l'item, rendu trivial par
-   * `getPersoStates()` (`2026-07-25-perso-state-at-t-plan.md`, tout perso/toute propriété, jamais
-   * le node).
+   * l'insertion diverge de la cascade héritée — « photographier » l'item depuis le snapshot V2
+   * logique au temps présenté, jamais depuis un node ou une pose runtime.
    */
   function enrichIfKeyframeCreation(command: Command): Command[] {
     if (command.name !== 'createNamedKeyframe') return [command]
     const { itemId, timeMs, keyframeId } = command.args
-    const { scene, authorApi } = machine.getSnapshot().context
+    const { scene } = machine.getSnapshot().context
     const item = scene?.items.find((i) => i.id === itemId)
-    if (!scene || !authorApi || !item || item.type === 'bloc') return [command]
+    if (!scene || !item || item.type === 'bloc') return [command]
     const content = item.contentId ? scene.contents[item.contentId] : undefined
     const patch = resolveKeyframeInsertionPatch(
-      scene, item, timeMs, content, authorApi, DEFAULT_PALETTE, item.type as ItemVisualType,
+      scene, item, timeMs, content, coordination.snapshot.get(), DEFAULT_PALETTE, item.type as ItemVisualType,
     )
     if (patch === null) return [command]
     // `resolveKeyframeInsertionPatch` n'a déjà renvoyé un patch non-null qu'après avoir vérifié
@@ -69,26 +73,10 @@ export function createSequenceEditorBridge(container: HTMLElement, machine: Acto
     controller.deserialize(scene)
   })
 
-  // `context.telco` n'est publié qu'au premier `PLAYER_READY` (`2026-07-17-telco-real-transport-
-  // plan.md` §Étape A bis) — même contrainte de disponibilité tardive qu'`authorApi`/`offsetBridge`
-  // (`decor-editor-bridge.ts::ensureMounted()`) : vérifié immédiatement (rebuild déjà survenu avant
-  // la construction de ce pont) puis à chaque `authorApiReady` tant que non encore branché.
-  let telcoAttached = false
-  function ensureTelco(): void {
-    if (telcoAttached) return
-    const { telco } = machine.getSnapshot().context
-    if (!telco) return
-    telcoAttached = true
-    handle.attachTelco(telco)
-  }
-  ensureTelco()
-  const unsubscribeAuthorApiReady = machine.on('authorApiReady', () => ensureTelco())
-
   return {
     destroy(): void {
       unsubscribeCommitted.unsubscribe()
       unsubscribeLoaded.unsubscribe()
-      unsubscribeAuthorApiReady.unsubscribe()
       unsubscribeCommand()
       unsubscribeSelection()
       handle.destroy()
