@@ -56,16 +56,18 @@ export type EditorPlayerProgressListener = (progress: EditorPlayerProgress) => v
 export class EditorPlayerCommandFacade {
   private instance: CodPlayInstance | null = null
   private preRollMs = 0
+  private authorDurationMs = 0
   private unsubscribeTelcoChange: (() => void) | null = null
   private unsubscribeTelcoProgress: (() => void) | null = null
   private readonly transportListeners = new Set<EditorPlayerTransportListener>()
   private readonly progressListeners = new Set<EditorPlayerProgressListener>()
 
   /** Binds one V2 instance and replaces the previous transport observation. */
-  bind(instance: CodPlayInstance, preRollMs: number): void {
+  bind(instance: CodPlayInstance, preRollMs: number, authorDurationMs: number): void {
     this.unbind()
     this.instance = instance
     this.preRollMs = Number.isFinite(preRollMs) && preRollMs >= 0 ? preRollMs : 0
+    this.authorDurationMs = Number.isFinite(authorDurationMs) && authorDurationMs >= 0 ? authorDurationMs : 0
     this.unsubscribeTelcoChange = instance.telco.onChange((state) => {
       this.publishTransport(state)
     })
@@ -84,6 +86,7 @@ export class EditorPlayerCommandFacade {
     this.unsubscribeTelcoProgress = null
     this.instance = null
     this.preRollMs = 0
+    this.authorDurationMs = 0
   }
 
   /** Executes one transport command through the bound V2 instance only. */
@@ -92,7 +95,11 @@ export class EditorPlayerCommandFacade {
     if (instance === null) return { ok: false, code: 'PLAYER_NOT_BOUND' }
 
     if (command.type === 'seek') {
-      const expectedAuthorTime = clampAuthorTime(command.timelineMs, instance.telco.getProgress().durationMs)
+      // The V2 runtime exposes an open discovered horizon: a fresh instance may report 0 ms
+      // even though the authored EditorScene already has a longer fixed duration. Seek requests
+      // therefore clamp against the author duration supplied at bind time, never that transient
+      // runtime horizon (otherwise a rebuild silently loses the current author playhead).
+      const expectedAuthorTime = clampAuthorTime(command.timelineMs, this.authorDurationMs)
       await instance.telco.seek(expectedAuthorTime + this.preRollMs)
       const progress = this.getProgressFromInstance(instance)
       const state = this.getStateFromInstance(instance)

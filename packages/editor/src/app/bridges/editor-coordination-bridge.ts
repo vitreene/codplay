@@ -114,8 +114,8 @@ export class EditorCoordinationBridge {
   }
 
   /** Binds the current V2 player to the separate player facade. */
-  bindPlayer(instance: CodPlayInstance, preRollMs: number): void {
-    this.player.bind(instance, preRollMs)
+  bindPlayer(instance: CodPlayInstance, preRollMs: number, authorDurationMs: number): void {
+    this.player.bind(instance, preRollMs, authorDurationMs)
   }
 
   /** Removes the current V2 player binding while keeping the coordination object alive. */

@@ -131,6 +131,9 @@ la conversion et la décision de preview/commit.
   aux modèles autonomes. La façade ne crée, ne possède et ne détruit pas ce
   bridge. Le bridge de scène garde le cycle de vie de l'instance V2 et ne publie
   aux autres modules qu'un port snapshot minimal.
+- Lorsqu'une instance V2 est remplacée, un seek auteur est borné par la durée
+  auteur validée de l'`EditorScene`, puis converti avec le `preRollMs`. L'horizon
+  runtime découvert d'une instance fraîche ne peut pas ramener ce seek à zéro.
 
 ## Lecture de cohérence — readiness des tranches
 
@@ -277,6 +280,13 @@ Le typecheck éditeur, le build éditeur, la suite éditeur V2 et les tests
 Selection Frame V2 sont passés. Le contrôle de non-régression post-alignement
 a de nouveau matérialisé la scène dans Firefox, fait coïncider le cadre avec
 l'item sélectionné, puis suspendu/réaffiché le cadre sur Play/Pause.
+
+Le diagnostic et le correctif du seek de reprise sont consignés dans la
+[note V2 du 2 septembre 2026](./notes/2026-09-02-editor-v2-seek-rebuild-diagnostic.md).
+La façade de pilotage utilise désormais la durée auteur du builder lors du
+rebind d'une instance ; la régression est couverte par un test de façade et un
+test d'intégration DOM du cycle seek/reprise. Cette correction ne clôt pas la
+matrice Safari ni les extensions hors de la verticale position/taille.
 
 Le core V2 passe aussi son typecheck et sa suite complète (86 fichiers, 541
 tests), sans suite `codplay-v1`. Safari a été tenté avec `safaridriver`, mais la

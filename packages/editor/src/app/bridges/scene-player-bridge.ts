@@ -64,7 +64,7 @@ export function createScenePlayerBridge(
       return
     }
 
-    const { sceneDoc, styleSheet, rootGrid, preRollMs } = result
+    const { sceneDoc, styleSheet, rootGrid, preRollMs, durationMs } = result
     const compiled = codplay.build({ scene: sceneDoc })
     if (!compiled.ok) {
       console.error('[scenePlayer bridge] V2 compilation failed', compiled.diagnostics)
@@ -134,7 +134,7 @@ export function createScenePlayerBridge(
     activeStyleSheet = styleSheet
     activeScene = scene
     mountTarget.style.aspectRatio = `${rootGrid.cols} / ${rootGrid.rows}`
-    coordination.bindPlayer(nextInstance, preRollMs)
+    coordination.bindPlayer(nextInstance, preRollMs, durationMs)
 
     if (previousInstance !== null) codplay.instances.destroy(previousInstance.instanceId)
     previousRoot?.remove()
