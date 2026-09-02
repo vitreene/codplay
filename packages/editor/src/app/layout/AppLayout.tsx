@@ -88,8 +88,9 @@ function useClearSelectionShortcuts(controller: Actor<typeof controllerMachine>)
 /**
  * Menu reste la démonstration temporaire de l'étape 2 (`app/2026-07-10-app-construction-plan.md`)
  * — remplacé par la vraie région en dernier (`2026-07-13-controller-islands-bridge-plan.md` §7
- * étape 6). Scène, timeline, panneau sont les vraies régions (ponts §3.1/§3.2/§3.3). Chutier, telco
- * restent vides — hors périmètre de ce sous-plan.
+ * étape 6). Elle occupe provisoirement la colonne gauche de la grille principale. Scène, timeline,
+ * panneau sont les vraies régions (ponts §3.1/§3.2/§3.3) ; le chutier n'est pas encore monté et la
+ * région telco reste vide — hors périmètre de ce sous-plan.
  */
 export function AppLayout({ controller }: AppLayoutProps) {
   useClearSelectionShortcuts(controller)
@@ -104,7 +105,6 @@ export function AppLayout({ controller }: AppLayoutProps) {
       <div className="app-region app-region--menu">
         <DemoMenuRegion controller={controller} />
       </div>
-      <div className="app-region app-region--chutier" />
       <div className="app-region app-region--scene">
         <ScenePlayerRegion controller={controller} coordination={coordination} />
       </div>

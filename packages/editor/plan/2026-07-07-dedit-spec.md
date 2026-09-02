@@ -506,6 +506,31 @@ Le circuit est déterministe :
 6. en lecture, le cadre est suspendu. Un seek, un rebuild, une nouvelle sélection ou un
    redimensionnement de la racine déclenche une nouvelle projection depuis la base logique.
 
+### 6.1 Édition à un temps interpolé (contrat V2)
+
+Entre deux keyframes, `decor-editor-bridge` peut résoudre une cible avec
+`isTemporary: true`. Ce statut signifie uniquement qu'aucun décor documentaire
+ne correspond encore à l'instant ; il ne rend pas le cadre ni les panneaux
+en lecture seule.
+
+- Un geste du cadre ou une modification de palette est accepté comme preview
+  par `instance.snapshot.set()`, avec le même `DecorPatch` candidat pour le
+  cadre et les panneaux.
+- Le candidat est conservé dans le port de coordination, séparément de
+  `snapshot.get()` qui exclut la preview active. Un seek, un rebuild ou une
+  reselection à ce même temps peut donc réafficher ce candidat.
+- Aucune commande documentaire n'est émise pour cette cible temporaire.
+  La persistance intervient seulement lorsqu'un keyframe est créé à cet
+  instant : la coordination transmet le candidat, crée un décor frais et le
+  remplit dans la même transaction xState. Le nouveau keyframe devient alors
+  la cible documentaire des éditions suivantes.
+- Le temps auteur du candidat est rapproché du temps de création arrondi de
+  la timeline dans une tolérance d'un demi-pas (`50 ms` pour le pas V2 de
+  `100 ms`) ; cette tolérance ne change jamais le `timeMs` enregistré du
+  keyframe.
+- Un abandon explicite efface la preview et le candidat sans mutation du
+  document.
+
 Le bridge est une composition de l'application, pas une option du contrôleur `dedit` et
 pas une API CodPlay. Cette verticale n'expose aucune façade publique de géométrie,
 de pose ou d'accès au node du player.

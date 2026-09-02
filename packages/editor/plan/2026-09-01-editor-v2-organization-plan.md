@@ -1,8 +1,10 @@
 # Plan d'organisation — migration de l'éditeur vers CodPlay V2
 
-**Statut : En cours — C1/S1, B1–B3, D1, D2 et R1 de la verticale position/taille
-sont implémentés et vérifiés ; S2 et le contrôle Safari restent ouverts. Les
-extensions hors verticale ne sont pas engagées.**
+**Statut : En cours — C1/S1, B1–B3, D1 de base, D2 et R1 de la verticale
+position/taille sont implémentés et vérifiés ; l'édition à un temps interpolé
+(`isTemporary`) est raccordée au candidat V2 et son cas seek/rebuild est vérifié ;
+la matrice globale reste en cours avec S2 et les contrôles complémentaires dans Safari Technology Preview.
+Les extensions hors verticale ne sont pas engagées.**
 **Cible :** `ed2` avec la façade CodPlay V2.
 **Date de mise à jour :** 2026-09-02.
 
@@ -250,7 +252,7 @@ dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.
 | --- | --- | --- |
 | C1/S1 | Les nombres unitless des quatre longueurs structurées sont qualifiés en `cqw` par CodPlay ; `snapshot.get/set/clear` suit le même transport. La frontière HTML ajoute l'unité aux angles numériques avant l'application CSS. | Tests core ciblés : 4 fichiers, 37 tests ; typecheck core passé. |
 | B1–B3 | `EditorPlayerCommandFacade` est le seul appelant de `instance.telco`. `EditorCoordinationBridge` est indépendant de la façade et relie le player, `sequence-editor` et `decor-editor`. La progression auteur reste dans `sequence-editor`; la télécommande intégrée à cette interface conserve la séquence de pilotage historique. | Play/Pause/Stop, seek et réconciliation exécutés sur l'outil réel. |
-| D1 | `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés. |
+| D1 | La base de `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. L'extension V2 autorisant un geste entre deux keyframes sans décor persistant conserve son candidat dans le port de coordination jusqu'à la création du keyframe. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés sur décor existant ; le cas `isTemporary` est éditable, capturé par un décor frais à la création du KF et sélectionné après insertion. L'intégration seek hors temps → retour au temps preview est couverte par test et par le parcours Safari Technology Preview. |
 | D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas px. Le bridge d'application conserve la sélection, les unités et le cycle preview/commit. | 3 tests V2 et parcours navigateur avec cadre visible. |
 | R1 | Les bridges, tests, dépendances et chemins V1 de la verticale migrée sont retirés. `packages/authoring/selection-frame` conserve ses autres entrées historiques hors de cette verticale ; seule l'entrée `/v2` est consommée par l'éditeur. | Recherche sans import V1 dans `packages/editor/src` et `packages/editor/package.json` ; suite éditeur V2 passée. |
 
@@ -286,14 +288,61 @@ Le diagnostic et le correctif du seek de reprise sont consignés dans la
 La façade de pilotage utilise désormais la durée auteur du builder lors du
 rebind d'une instance ; la régression est couverte par un test de façade et un
 test d'intégration DOM du cycle seek/reprise. Cette correction ne clôt pas la
-matrice Safari ni les extensions hors de la verticale position/taille.
+matrice Safari Technology Preview ni les extensions hors de la verticale position/taille.
 
 Le core V2 passe aussi son typecheck et sa suite complète (86 fichiers, 541
-tests), sans suite `codplay-v1`. Safari a été tenté avec `safaridriver`, mais la
-session est refusée tant que « Allow remote automation » n'est pas activé dans
-les réglages développeur de Safari. Cette preuve reste donc à exécuter ; elle
-ne couvre pas non plus les grilles, la taille intrinsèque, les parents
-transformés, la multi-sélection ou le reparentage, qui restent hors verticale.
+tests), sans suite `codplay-v1`. Une reproduction initiale, désormais
+historique, avait montré dans Safari Technology Preview que les gardes
+`isTemporary` rendaient le cadre visible mais bloquaient le déplacement et la
+palette. Le parcours corrigé dans Safari Technology Preview autorise maintenant
+le geste au temps interpolé, conserve le candidat au seek/rebuild, crée un
+décor frais à la pose du keyframe et resélectionne ce keyframe. La matrice
+complète (lecture, seek, resize, persistance et cycle de vie) reste à clôturer
+sur le parcours final ; les grilles, la taille intrinsèque, les parents
+transformés, la multi-sélection et le reparentage restent hors verticale.
+
+### Correctif de grille de page V2 — 2026-09-02
+
+Le défaut de présentation signalé lors de la sélection d'une piste venait de
+la combinaison suivante : `.app-layout` dimensionnait la piste timeline avec
+`auto`, tandis que `.seq-infobar:empty` était masquée. Son affichage ajoutait
+alors une hauteur au track timeline, réduisait le track scène et déplaçait le
+lecteur centré. Ce chemin ne reconstruisait pas l'instance et ne concernait
+pas la lecture ou le seek.
+
+Le correctif accepté pour la grille V2 est le suivant :
+
+1. réserver la piste timeline par `--app-timeline-height` et dimensionner la
+   piste centrale avec `minmax(0, 1fr)` ;
+2. placer les boutons provisoires de `DemoMenuRegion` dans la colonne gauche
+   de la rangée principale (`menu | scène | panneau`), sans rangée pleine
+   largeur au-dessus de la scène, avec `1rem` de padding sur le conteneur, et
+   réserver le même padding `1rem` au conteneur de `DecorEditorRegion` ;
+3. conserver la zone d'information dans le flux avec une hauteur fixe de
+   24 px, y compris lorsqu'elle est vide, avec troncature horizontale si
+   nécessaire ;
+4. remettre à zéro les marges de la page et les minima intrinsèques des
+   régions afin que la grille occupe exactement la fenêtre ;
+5. dessiner un outline de présentation sur le conteneur du lecteur de scène,
+   sans modifier sa boîte ni son ratio.
+
+L'acceptation est réalisée dans Safari Technology Preview par comparaison des
+rectangles avant/après sélection et par contrôle visuel de l'outline. Le
+correctif ne modifie aucune frontière de transport, de snapshot ou de
+lifecycle V2. Il s'agit de la grille de présentation de la page ; les
+extensions de géométrie logique de grille restent une tranche distincte.
+
+Preuve enregistrée : dans Safari Technology Preview, à `1300 × 796` CSS, les
+rectangles avant et après sélection sont identiques (`menu 0,0,220,595`,
+`scene 220,0,800,595`, `player 221,73.0625,798,448.875`, `timeline y=595,h=199`,
+`infobar h=24`). Les trois boutons de test restent dans la colonne gauche
+avec le padding `1rem` (`x=17`, `y=17/43/69`, `w=186`). À `1024 × 664` CSS exposés par la fenêtre
+demandée `1024 × 768`, ils restent également identiques (`menu 0,0,220,496`,
+`scene 220,0,524,496`, `player 221,101.1875,522,293.625`, `timeline y=496,h=166`,
+`infobar h=24`). Le conteneur du décor réserve également `1rem` autour de sa
+palette. La racine
+`.editor-v2-instance-root` reste unique et identique pendant
+sélection/désélection ; la console STP ne signale ni erreur ni avertissement.
 
 ## Audit ciblé — façade documentaire et machines d'état
 
@@ -1183,8 +1232,10 @@ coordination nécessaires au cycle d'édition et de lecture.
 
 ### D1 — refaire le circuit Decor par snapshot
 
-**Statut : réalisé pour la verticale position/taille ; extensions grille,
-multi-sélection et repères complexes hors périmètre.**
+**Statut : réalisé pour la verticale position/taille, y compris l'édition à un
+temps interpolé (`isTemporary`) et sa matérialisation dans un décor frais à la
+création d'un KF ; la matrice seek/rebuild complète reste à consigner.
+Extensions grille, multi-sélection et repères complexes hors périmètre.**
 
 **Fichiers concernés :**
 
@@ -1229,6 +1280,16 @@ multi-sélection et repères complexes hors périmètre.**
    snapshot voient le même candidat avant le commit.
 9. Rejouer la scène et la lecture après `set`, seek, resize et rebuild pour
    vérifier que le cadre et le panneau lisent le même état.
+10. Autoriser un geste de cadre ou de palette lorsque `resolveTarget` indique
+    `isTemporary`. La valeur candidate reste une preview V2, sans écriture
+    documentaire. À la création d'un keyframe au temps présenté, le bridge
+    de coordination transmet cette candidate au `sequence-editor`, qui crée
+    un décor frais et le remplit dans la même transaction ; `snapshot.get()`
+    ne peut pas servir seul de capture puisqu'il exclut la preview active.
+11. Faire correspondre une création arrondie de la timeline avec le candidat
+    auteur dans une tolérance d'un demi-pas (`50 ms`), puis sélectionner le
+    keyframe capturé afin que l'édition suivante cible immédiatement son décor
+    persistant, même si le seek initial n'était pas exactement sur le pas.
 
 **Sortie :** palette et cadre utilisent le même canal de preview et la même
 base logique ; aucune lecture de node ne participe à la construction d'un
@@ -1294,6 +1355,18 @@ Ce scénario est la preuve minimale avant d'élargir la migration aux autres
    couleur et celle de la position/taille. Une preview qui modifie plusieurs
    propriétés passe par une mise à jour atomique du snapshot ; son commit
    passe par une commande xState et le rebuild restitue les deux valeurs.
+16. Entre les deux keyframes, la première sélection affiche le cadre et
+    autorise immédiatement un déplacement, un resize et une modification de
+    couleur. Ces gestes ne produisent aucune commande documentaire tant qu'il
+    n'y a pas de décor persistant à cet instant.
+17. Une création de keyframe à `t` capture le candidat accepté à `t` dans un
+    décor frais, même si le seek réel vaut `t - 12,5 ms` et que la timeline
+    arrondit le nouveau keyframe à `t`. Le keyframe est sélectionné après la
+    transaction ; une édition suivante suit alors le chemin normal de commit.
+18. Un seek hors de `t`, puis retour à `t`, restitue le candidat non committé
+    tant qu'aucun keyframe n'est créé ; Échap l'abandonne sans modifier
+    `EditorScene`. Après création du keyframe, un seek/rebuild puis retour
+    restitue le décor documenté.
 
 Les cas `rotate`, `scale`, capsule/grille et édition CSS libre ne sont pas
 nécessaires pour valider cette première verticale. Ils doivent rester
@@ -1375,10 +1448,11 @@ pas de filet de compatibilité.
 | Façade player / bridge | `instance.telco` garde le contrat V2 (`Promise<void>` + diagnostics) ; `EditorPlayerCommandFacade` exécute et observe, le bridge adapte les intentions de `sequence-editor` et vérifie les postconditions avant `SEEK_APPLIED`/handoff |
 | Lecture | animation pilotée par `telco` ; CS et édition suspendus ; sortie de lecture = une seule réconciliation player → temps auteur |
 | Édition | move et resize px, avec les autres changements du décor, → patch unitless cohérent → preview atomique → retour px |
+| Preview interpolée | `isTemporary` reste éditable ; le candidat accepté est séparé de `snapshot.get()`, survit au seek/rebuild et n'est persisté qu'avec un décor frais créé par le keyframe |
 | Persistance | commit par commande xState, rebuild, resélection et snapshot cohérents |
 | Structure | parent/enfant et reparent sans réintroduire un accès node V1 |
 | Lifecycle | destruction, remplacement d'instance et désinscription sans callback résiduel |
-| Navigateur | parcours réel de l'outil, puis typecheck, tests, build et contrôle Safari applicables |
+| Navigateur | parcours réel de l'outil, puis typecheck, tests, build et contrôle Safari Technology Preview applicables |
 
 ## Ordre de validation
 

@@ -26,6 +26,7 @@
   --seq-ruler-tick: var(--seq-border);
   --seq-label-row-hover: #374151;
   --seq-label-indent: 12px;
+  --seq-infobar-height: 24px;
 
   --seq-font: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --seq-font-size-sm: 10px;
@@ -452,9 +453,21 @@
   border-top: 1px solid var(--seq-border);
   font-size: var(--seq-font-size-sm);
   color: var(--seq-text-muted);
-  flex-shrink: 0;
+  flex: 0 0 var(--seq-infobar-height);
+  height: var(--seq-infobar-height);
+  min-height: var(--seq-infobar-height);
+  max-height: var(--seq-infobar-height);
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.seq-infobar:empty { display: none; }
+.seq-infobar:empty { background: var(--seq-surface); }
+.seq-infobar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .seq-infobar__btn {
   background: none;
   border: 1px solid var(--seq-border);
@@ -464,5 +477,6 @@
   border-radius: 3px;
   font-size: var(--seq-font-size-sm);
   font-family: var(--seq-font);
+  flex-shrink: 0;
 }
 .seq-infobar__btn:hover { border-color: var(--seq-accent); color: var(--seq-accent); }

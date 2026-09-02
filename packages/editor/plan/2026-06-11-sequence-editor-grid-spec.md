@@ -2,7 +2,9 @@
 
 **Date** : 2026-06-11  
 **Périmètre** : composant `SequenceEditorGrid` dans `packages/editor`  
-**Statut** : définition — aucun code produit
+**Statut** : En cours — le contrat V2 de stabilité de la grille hôte est fixé
+en §1.2.1 ; les autres phases de ce document restent à aligner sur le code
+effectivement livré.
 
 ---
 
@@ -32,6 +34,45 @@ Ce document **ne couvre pas** :
 - Le builder éditeur → `SceneDoc` Codplay (phase ultérieure)
 - La persistance base de données (JSON de test pour l'instant)
 - Le déplacement de l'API métier vers `packages/authoring` (phase ultérieure)
+
+### 1.2.1 Contrat V2 — stabilité de la grille hôte
+
+Cette section est normative pour l'intégration V2 de `sequence-editor` dans
+`AppLayout`. Elle ne dépend d'aucun contrat d'une version antérieure.
+
+- La grille de page réserve une piste timeline de hauteur stable via
+  `--app-timeline-height` (`clamp(160px, 25vh, 220px)`). La piste centrale
+  scène/panneau utilise `minmax(0, 1fr)` et les régions autorisent la réduction
+  (`min-height: 0`) afin que leur taille ne soit pas dictée par un contenu
+  conditionnel.
+- Les contrôles provisoires de `DemoMenuRegion` occupent la colonne gauche de
+  cette rangée principale (`menu | scène | panneau`). Ils ne créent pas de
+  rangée pleine largeur au-dessus de la scène ; leur contenu peut défiler dans
+  la colonne sans déplacer les autres régions. Le conteneur des contrôles
+  réserve `1rem` de padding sur ses quatre côtés.
+- Le conteneur de `DecorEditorRegion` réserve lui aussi `1rem` de padding sur
+  ses quatre côtés. Ce retrait appartient au layout de la page ; il ne change
+  pas les dimensions internes, les gestes ou le contrat V2 du décorateur.
+- La zone `.seq-infobar` est toujours présente dans le flux et réserve
+  `--seq-infobar-height` (24 px). Une sélection ne fait donc que remplacer son
+  contenu ; elle ne crée ni ne supprime une ligne de grille et ne modifie pas
+  la position de la scène.
+- Le texte de la zone d'information peut être tronqué par ellipse sur une
+  fenêtre étroite. Les boutons restent sur une seule ligne ; le débordement ne
+  peut pas augmenter la hauteur réservée.
+- Le conteneur `.app-region-content--scene-player` porte un `outline` de
+  présentation. Cet outline est dessiné sans participer au calcul de la boîte
+  ou du ratio de scène ; il distingue la scène même lorsqu'elle n'a pas de
+  fond propre.
+- La page remet `html`, `body` et `#app` à zéro (marges et dimensions) afin que
+  la grille occupe exactement la fenêtre exposée.
+
+Ces règles concernent uniquement la présentation. Elles ne changent ni le
+playhead, ni le seek, ni le transport, ni le cycle de vie d'une instance V2.
+L'acceptation réelle se fait dans Safari Technology Preview : charger la
+fixture `Test position + couleur`, relever les rectangles de la scène et du
+lecteur sans sélection, sélectionner une piste, puis vérifier que les
+rectangles restent identiques et que l'outline est visible.
 
 ### 1.3 Avertissement — dimensions et support multi-écran
 
@@ -464,7 +505,13 @@ interface AuthorMarker {
 
 La grille gère les références de décors selon ce protocole :
 
-**À la création d'un keyframe (`addKeyframe`)** : la grille cherche le keyframe adjacent le plus proche (précédent ou suivant) sur le même track. Si un voisin existe, le nouveau keyframe hérite de son `decorId` — les deux keyframes partagent la même entrée dans `scene.decors`. Si aucun voisin n'existe (premier keyframe du track), une entrée vide `{ id: newId, data: {} }` est créée.
+**À la création d'un keyframe (`addKeyframe`)** : en l'absence de candidat de preview fourni par
+l'intégration V2, la grille cherche le keyframe adjacent le plus proche (précédent ou suivant) sur
+le même track. Si un voisin existe, le nouveau keyframe hérite de son `decorId` — les deux
+keyframes partagent la même entrée dans `scene.decors`. Si aucun voisin n'existe (premier keyframe
+du track), une entrée vide `{ id: newId, data: {} }` est créée. La grille ne lit jamais le contenu
+du décor : lorsque `decor-editor` possède une preview `isTemporary`, le bridge de coordination peut
+remplacer cette référence par un décor frais rempli du candidat dans la transaction de création.
 
 **À la modification d'un décor (externe)** : l'éditeur de décors est responsable de vérifier si le `decorId` courant est partagé. Si oui, il doit créer une nouvelle entrée dans `scene.decors` (via `registerDecor`) et appeler `assignDecor` pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés. Cette logique copy-on-write est **hors périmètre** de la grille.
 

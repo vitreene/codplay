@@ -6,6 +6,7 @@ import type {
   CodPlaySnapshotSetResult,
 } from 'codplay'
 import type { SequenceEditorController } from '../../sequence-editor/controller'
+import type { DecorPatch } from '../../decor-editor/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import {
   EditorPlayerCommandFacade,
@@ -36,6 +37,31 @@ export type EditorCoordinationSnapshot = Readonly<{
   clear: () => void
 }>
 
+/**
+ * Candidate de décor conservé par l'intégration pendant une édition qui n'est pas encore
+ * ancrée à un keyframe. `snapshot.get()` exclut la preview active ; ce port est donc le relais
+ * V2 explicite entre `decor-editor` et la création d'un keyframe par `sequence-editor`.
+ */
+export type EditorDecorPreviewCandidate = Readonly<{
+  itemId: string
+  /** Temps auteur, dans la même référence que `Item.keyframes[].timeMs`. */
+  timeMs: number
+  patch: DecorPatch
+}>
+
+/** Port de handoff des previews de décor, sans accès à l'instance CodPlay. */
+export type EditorCoordinationDecorPreview = Readonly<{
+  /** Retourne le candidat le plus proche dans la tolérance demandée. */
+  getAt: (itemId: string, timeMs: number, toleranceMs?: number) => EditorDecorPreviewCandidate | null
+  /** Raccourci de capture pour la grille de keyframes (demi-pas de 100 ms par défaut). */
+  getForKeyframe: (itemId: string, timeMs: number) => EditorDecorPreviewCandidate | null
+  set: (candidate: EditorDecorPreviewCandidate) => void
+  clear: (itemId: string, timeMs?: number) => void
+  clearAll: () => void
+}>
+
+const KEYFRAME_PREVIEW_TOLERANCE_MS = 50
+
 type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime'>
 
 /** Internal editor handoff notification used to resynchronize decor before playback resumes. */
@@ -51,6 +77,8 @@ export type EditorSceneHostListener = (host: HTMLElement | null) => void
 export class EditorCoordinationBridge {
   readonly transport: EditorCoordinationTransport
   readonly snapshot: EditorCoordinationSnapshot
+  readonly decorPreview: EditorCoordinationDecorPreview
+  private readonly decorPreviewCandidates = new Map<string, Map<number, EditorDecorPreviewCandidate>>()
   private sequence: SequenceReconciliationPort | null = null
   private sceneHost: HTMLElement | null = null
   private readonly sceneHostListeners = new Set<EditorSceneHostListener>()
@@ -80,6 +108,13 @@ export class EditorCoordinationBridge {
       get: () => this.player.getSnapshot(),
       set: (patches) => this.player.setSnapshot(patches),
       clear: () => this.player.clearSnapshot(),
+    }
+    this.decorPreview = {
+      getAt: (itemId, timeMs, toleranceMs = 1) => this.findDecorPreview(itemId, timeMs, toleranceMs),
+      getForKeyframe: (itemId, timeMs) => this.findDecorPreview(itemId, timeMs, KEYFRAME_PREVIEW_TOLERANCE_MS),
+      set: (candidate) => this.setDecorPreview(candidate),
+      clear: (itemId, timeMs) => this.clearDecorPreview(itemId, timeMs),
+      clearAll: () => this.clearAllDecorPreviews(),
     }
   }
 
@@ -170,6 +205,7 @@ export class EditorCoordinationBridge {
 
   /** Releases bridge subscriptions and the module references it owns. */
   destroy(): void {
+    this.clearAllDecorPreviews()
     this.sequence = null
     this.sceneHost = null
     this.sceneHostListeners.clear()
@@ -180,5 +216,46 @@ export class EditorCoordinationBridge {
   private reconcilePlaybackTime(timelineMs: number): void {
     this.sequence?.reconcilePlaybackTime(timelineMs)
     for (const listener of this.playbackReconciledListeners) listener(timelineMs)
+  }
+
+  /** Stores one immutable-by-convention candidate, replacing a previous candidate at the same time. */
+  private setDecorPreview(candidate: EditorDecorPreviewCandidate): void {
+    if (!Number.isFinite(candidate.timeMs)) return
+    const byTime = this.decorPreviewCandidates.get(candidate.itemId) ?? new Map<number, EditorDecorPreviewCandidate>()
+    byTime.set(candidate.timeMs, candidate)
+    this.decorPreviewCandidates.set(candidate.itemId, byTime)
+  }
+
+  /** Finds the closest candidate without confusing an adjacent, independently edited time. */
+  private findDecorPreview(itemId: string, timeMs: number, toleranceMs: number): EditorDecorPreviewCandidate | null {
+    const byTime = this.decorPreviewCandidates.get(itemId)
+    if (!byTime || !Number.isFinite(timeMs)) return null
+    let closest: EditorDecorPreviewCandidate | null = null
+    let closestDistance = Number.POSITIVE_INFINITY
+    for (const candidate of byTime.values()) {
+      const distance = Math.abs(candidate.timeMs - timeMs)
+      if (distance <= toleranceMs && distance < closestDistance) {
+        closest = candidate
+        closestDistance = distance
+      }
+    }
+    return closest
+  }
+
+  /** Removes one candidate, or all candidates for an item when no time is supplied. */
+  private clearDecorPreview(itemId: string, timeMs?: number): void {
+    if (timeMs === undefined) {
+      this.decorPreviewCandidates.delete(itemId)
+      return
+    }
+    const byTime = this.decorPreviewCandidates.get(itemId)
+    if (!byTime) return
+    byTime.delete(timeMs)
+    if (byTime.size === 0) this.decorPreviewCandidates.delete(itemId)
+  }
+
+  /** Drops all uncommitted candidates on document replacement or bridge destruction. */
+  private clearAllDecorPreviews(): void {
+    this.decorPreviewCandidates.clear()
   }
 }

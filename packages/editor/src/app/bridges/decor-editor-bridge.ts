@@ -31,14 +31,15 @@ export type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
  * avant ce chantier. `keyframeId` non nul = décor RÉEL d'un keyframe (sélectionné explicitement OU
  * déduit de l'alignement playhead — les deux s'écrivent pareil, `2026-07-17-resolved-state-at-
  * time-notes.md`, « initialDecorId ≈ kf1 »). `isTemporary: true` = aucun décor réel ne correspond
- * à l'instant courant (entre deux kf) — jamais de cible d'écriture dans ce cas (`writeDecorId` reste
- * `null`), le décor affiché est relu depuis le snapshot logique présenté, pas dans le document.
+ * à l'instant courant (entre deux kf) : il n'y a pas encore de cible documentaire, mais la cible
+ * reste éditable par preview V2. Son candidat est conservé par la coordination jusqu'à la création
+ * d'un keyframe, qui est le seul acte le rendant persistant.
  */
 type Target = {
   itemId: string
   keyframeId: string | null
   contentId: string | null
-  /** `null` seulement quand `isTemporary` — rien à écrire tant qu'aucun keyframe n'existe à cet instant. */
+  /** `null` seulement quand `isTemporary` — la preview est alors hors document. */
   writeDecorId: string | null
   itemType: ItemVisualType
   isTemporary: boolean
@@ -302,6 +303,8 @@ export function patchDiffersFromBase(base: DecorPatch, patch: DecorPatch): boole
  * la palette — `liveStyle` (couleur, dimensions CSS) ET `liveOffset` (position/rotation/scale,
  * pilotées par le CS, jamais un champ de palette) sont toutes deux des propriétés du même perso,
  * `getPersoStates()` les fournit ensemble (`2026-07-25-perso-state-at-t-plan.md`).
+ * Quand `livePatch` est fourni, il s'agit du candidat déjà accepté par la preview V2 et il prime
+ * sur les lectures snapshot : le contrat de `snapshot.get()` exclut précisément cette preview.
  */
 export function resolveKeyframeInsertionPatch(
   scene: EditorScene,
@@ -311,13 +314,16 @@ export function resolveKeyframeInsertionPatch(
   snapshot: CodPlaySnapshot | null,
   paletteConfig: PaletteConfig,
   itemType: ItemVisualType,
+  /** Candidate déjà accepté par la preview, qui prime sur `snapshot.get()` (qui l'exclut). */
+  livePatch?: DecorPatch,
 ): DecorPatch | null {
   const alignment = resolveKeyframeAlignment(item, timelineMs)
   if (alignment.kind !== 'between') return null
   const base = resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
-  const liveStyle = resolveTemporaryPatch(snapshot, item.id, styleFieldsForItemType(paletteConfig, itemType))
-  const liveOffset = resolveTemporaryOffset(snapshot, item.id, base)
-  const patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
+  const patch = livePatch ?? mergePatch(
+    mergePatch(base, resolveTemporaryPatch(snapshot, item.id, styleFieldsForItemType(paletteConfig, itemType))),
+    resolveTemporaryOffset(snapshot, item.id, base),
+  )
   return patchDiffersFromBase(base, patch) ? patch : null
 }
 
@@ -469,12 +475,14 @@ export function createDecorEditorBridge(
   function abortPhase(): void {
     cancelIdleFlush()
     const hadPendingCommands = pendingCommands !== null
+    const hadPreview = snapshotPreviewActive
     pendingCommands = null
-    if (snapshotPreviewActive) {
+    if (hadPreview) {
       coordination.snapshot.clear()
       snapshotPreviewActive = false
     }
-    if (hadPendingCommands) machine.send({ type: 'PHASE_ABORT' })
+    coordination.decorPreview.clearAll()
+    if (hadPendingCommands || hadPreview) machine.send({ type: 'PHASE_ABORT' })
   }
 
   /**
@@ -614,13 +622,23 @@ export function createDecorEditorBridge(
     }
   }
 
-  /** Presents a patch through snapshot and records whether its candidate was accepted. */
-  function previewPatch(itemId: string, patch: DecorPatch): boolean {
+  /** Presents a patch through snapshot and optionally records its temporary candidate. */
+  function previewPatch(itemId: string, patch: DecorPatch, recordCandidate = false): boolean {
     const snapshotPatch = toSnapshotPatch(itemId, patch)
     if (snapshotPatch === null) return false
     const result = coordination.snapshot.set([snapshotPatch])
     const accepted = result?.ok === true
-    if (accepted) snapshotPreviewActive = true
+    if (accepted) {
+      snapshotPreviewActive = true
+      if (recordCandidate) {
+        const progress = coordination.transport.getProgress()
+        if (progress !== null) {
+          // The candidate belongs to the author playhead, not to a possibly stale runtime
+          // progress value while an asynchronous seek is still being acknowledged.
+          coordination.decorPreview.set({ itemId, timeMs: lastKnownTimelineMs, patch })
+        }
+      }
+    }
     return accepted
   }
 
@@ -629,7 +647,7 @@ export function createDecorEditorBridge(
     const target = frameTarget
     const base = frameGestureBasePx ?? frameValuePx
     const rootWidth = sceneRootWidthPx()
-    if (target === null || base === null || rootWidth === null || target.isTemporary) return null
+    if (target === null || base === null || rootWidth === null) return null
     frameGestureBasePx = base
     const candidate = applyFrameDelta(base, delta)
     lastPreviewAccepted = false
@@ -709,23 +727,46 @@ export function createDecorEditorBridge(
     const content = target.contentId ? scene.contents[target.contentId] : undefined
     const item = scene.items.find((i) => i.id === target.itemId)!
 
+    // A document-backed target no longer needs the temporary snapshot contribution. This also
+    // closes the preview left by a temporary edit when a freshly created keyframe is selected.
+    if (!target.isTemporary && snapshotPreviewActive) {
+      coordination.snapshot.clear()
+      snapshotPreviewActive = false
+    }
+
     // Un keyframe (explicite ou déduit de l'alignement playhead) se lit en cascade. Un décor
-    // temporaire part de la cascade précédente puis superpose l'état logique présenté par snapshot.
+    // temporaire part de la cascade précédente puis superpose soit le candidat de preview accepté,
+    // soit l'état logique présenté par snapshot. `snapshot.get()` exclut toujours la preview active.
+    const temporaryCandidate = target.isTemporary
+      ? coordination.decorPreview.getAt(target.itemId, lastKnownTimelineMs)
+      : null
     let patch: DecorPatch
     if (target.isTemporary) {
       const alignment = resolveKeyframeAlignment(item, lastKnownTimelineMs)
       const base = alignment.kind === 'between' ? resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content) : {}
-      const snapshot = coordination.snapshot.get()
-      const liveStyle = resolveTemporaryPatch(snapshot, target.itemId, styleFieldsForItemType(controller.getPaletteConfig(), target.itemType))
-      const liveOffset = resolveTemporaryOffset(snapshot, target.itemId, base)
-      patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
+      if (temporaryCandidate !== null) {
+        patch = temporaryCandidate.patch
+        // A scene rebuild destroys the runtime preview. Re-apply the accepted candidate only when
+        // the player has reached its author time; the request-side `seek` notification is too early.
+        const progress = coordination.transport.getProgress()
+        if (progress !== null && Math.abs(progress.timelineMs - temporaryCandidate.timeMs) <= 1) {
+          previewPatch(target.itemId, temporaryCandidate.patch, true)
+        }
+      } else {
+        const snapshot = coordination.snapshot.get()
+        const liveStyle = resolveTemporaryPatch(snapshot, target.itemId, styleFieldsForItemType(controller.getPaletteConfig(), target.itemType))
+        const liveOffset = resolveTemporaryOffset(snapshot, target.itemId, base)
+        patch = mergePatch(mergePatch(base, liveStyle), liveOffset)
+      }
     } else if (target.keyframeId) {
       patch = resolveEffectiveKeyframePatch(scene, item, target.keyframeId, content)
     } else {
       patch = resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content, scene)
     }
     const rootWidth = sceneRootWidthPx()
-    const logicalFrame = rootWidth === null ? null : readLogicalFrame(coordination.snapshot.get(), target.itemId, patch)
+    const logicalFrame = rootWidth === null
+      ? null
+      : readLogicalFrame(temporaryCandidate !== null ? null : coordination.snapshot.get(), target.itemId, patch)
     frameTarget = target
     frameLogicalValue = logicalFrame
     frameValuePx = rootWidth === null || logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidth)
@@ -750,18 +791,14 @@ export function createDecorEditorBridge(
     if (!scene) return
     const target = resolveTarget(scene, selection, lastKnownTimelineMs)
     if (!target) return
-    // Décor temporaire : rien à écrire — persisté
-    // seulement si l'auteur pose un keyframe à cette position, un chantier séparé, pas cette
-    // écriture-ci). Écrire dans `initialDecorId` par défaut serait FAUX — ce n'est pas ce que
-    // l'auteur regarde.
-    if (target.isTemporary || target.writeDecorId === null) {
-      console.warn('[decorEditor bridge] édition ignorée — décor temporaire (aucun keyframe à cet instant), pose un keyframe pour committer.')
-      return
-    }
     const entry = entries.find((e) => e.itemId === target.itemId)
     if (!entry) return
 
-    lastPreviewAccepted = previewPatch(entry.itemId, entry.patch)
+    // Une cible temporaire est éditable immédiatement : sa valeur reste une preview V2 et le
+    // candidat est remis à la coordination pour une éventuelle création de keyframe. Aucun
+    // `Command` documentaire ne doit être produit tant qu'aucun décor persistant n'existe.
+    lastPreviewAccepted = previewPatch(entry.itemId, entry.patch, target.isTemporary)
+    if (target.isTemporary || target.writeDecorId === null) return
 
     // Ne commet plus immédiatement — accumulé pour la fin de phase (§Étape B). `entry.patch` porte
     // déjà l'écart COMPLET de l'item (spec §4.3), offset inclus s'il est à jour (pont §Étape A) —
@@ -819,6 +856,9 @@ export function createDecorEditorBridge(
     // Un chargement de document supplante toute phase en cours — rien à committer, rien à préserver.
     cancelIdleFlush()
     pendingCommands = null
+    coordination.snapshot.clear()
+    snapshotPreviewActive = false
+    coordination.decorPreview.clearAll()
     ensureMounted()
     const selection = machine.getSnapshot().context.selection
     syncSelection(scene, selection)
@@ -828,6 +868,7 @@ export function createDecorEditorBridge(
   const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
     coordination.snapshot.clear()
     snapshotPreviewActive = false
+    coordination.decorPreview.clearAll()
     const selection = machine.getSnapshot().context.selection
     syncSelection(scene, selection)
   })
@@ -838,6 +879,13 @@ export function createDecorEditorBridge(
   const unsubscribeSeek = machine.on('seek', ({ timelineMs }) => {
     lastKnownTimelineMs = timelineMs
     flushNow()
+    // A temporary snapshot belongs to the old presented time. Keep its coordination candidate
+    // for a possible return to that time, but clear the runtime preview before the asynchronous
+    // seek so it cannot paint the old edit over the new base frame.
+    if (snapshotPreviewActive) {
+      coordination.snapshot.clear()
+      snapshotPreviewActive = false
+    }
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
   })
