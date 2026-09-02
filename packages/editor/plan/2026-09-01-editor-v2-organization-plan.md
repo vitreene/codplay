@@ -245,7 +245,7 @@ dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.
 
 | Tranche | État vérifié | Preuve disponible |
 | --- | --- | --- |
-| C1/S1 | Les nombres unitless des quatre longueurs structurées sont qualifiés en `cqw` par CodPlay ; `snapshot.get/set/clear` suit le même transport. La frontière HTML ajoute l'unité aux angles numériques avant l'application CSS. | Tests core ciblés : 3 fichiers, 21 tests ; typecheck core passé. |
+| C1/S1 | Les nombres unitless des quatre longueurs structurées sont qualifiés en `cqw` par CodPlay ; `snapshot.get/set/clear` suit le même transport. La frontière HTML ajoute l'unité aux angles numériques avant l'application CSS. | Tests core ciblés : 4 fichiers, 37 tests ; typecheck core passé. |
 | B1–B3 | `EditorPlayerCommandFacade` est le seul appelant de `instance.telco`. `EditorCoordinationBridge` est indépendant de la façade et relie le player, `sequence-editor` et `decor-editor`. La progression auteur reste dans `sequence-editor`; la télécommande intégrée à cette interface conserve la séquence de pilotage historique. | Play/Pause/Stop, seek et réconciliation exécutés sur l'outil réel. |
 | D1 | `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés. |
 | D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas px. Le bridge d'application conserve la sélection, les unités et le cycle preview/commit. | 3 tests V2 et parcours navigateur avec cadre visible. |
