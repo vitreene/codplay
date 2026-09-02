@@ -75,6 +75,7 @@ export class StructuralTimeline {
 /** Collects every compiled event boundary used by state and movement planning. */
 export function collectCompiledEventStartTimes(scene: CompiledScene): readonly number[] {
   const times = new Set<number>()
+  collectEventTimes(scene.scene.eventimes ?? [], 0, times)
   for (const story of Object.values(scene.scene.stories)) collectEventTimes(story.eventimes ?? [], 0, times)
   return [...times].sort((left, right) => left - right)
 }

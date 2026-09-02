@@ -1,10 +1,10 @@
 # Plan d'organisation — migration de l'éditeur vers CodPlay V2
 
 **Statut : En cours — C1/S1, B1–B3, D1, D2 et R1 de la verticale position/taille
-sont implémentés et vérifiés ; S2, les contrôles navigateur complémentaires et
-les extensions hors verticale restent ouverts.**
+sont implémentés et vérifiés ; S2 et le contrôle Safari restent ouverts. Les
+extensions hors verticale ne sont pas engagées.**
 **Cible :** `ed2` avec la façade CodPlay V2.
-**Date :** 2026-09-01.
+**Date de mise à jour :** 2026-09-02.
 
 Ce document est un plan d'actions. Il ne remplace pas les spécifications V2,
 ne constitue pas un rapport de reprise et n'ajoute pas de contrat public par
@@ -251,6 +251,12 @@ dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.
 | D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas px. Le bridge d'application conserve la sélection, les unités et le cycle preview/commit. | 3 tests V2 et parcours navigateur avec cadre visible. |
 | R1 | Les bridges, tests, dépendances et chemins V1 de la verticale migrée sont retirés. `packages/authoring/selection-frame` conserve ses autres entrées historiques hors de cette verticale ; seule l'entrée `/v2` est consommée par l'éditeur. | Recherche sans import V1 dans `packages/editor/src` et `packages/editor/package.json` ; suite éditeur V2 passée. |
 
+Le bridge de scène a également été aligné sur la façade CodPlay actuellement
+exposée : `instances.create()` reçoit uniquement les options publiques V2
+(`root`, `compiledScene` et `functions`). La durée et la déclaration de racine
+sont déduites par le runner à partir de la scène compilée ; l'éditeur ne passe
+plus `durationMs` ni `mountTargets`.
+
 ### Preuve live de la verticale position/taille
 
 Le serveur Vite de l'éditeur et l'outil ont été utilisés dans Firefox headless.
@@ -268,9 +274,16 @@ Le parcours réel a établi les rendez-vous suivants :
   identiques et le cadre comme l'item sont reprojetés au même rectangle px.
 
 Le typecheck éditeur, le build éditeur, la suite éditeur V2 et les tests
-Selection Frame V2 sont passés. Cette preuve ne couvre pas Safari, les grilles,
-la taille intrinsèque, les parents transformés, la multi-sélection ou le
-reparentage.
+Selection Frame V2 sont passés. Le contrôle de non-régression post-alignement
+a de nouveau matérialisé la scène dans Firefox, fait coïncider le cadre avec
+l'item sélectionné, puis suspendu/réaffiché le cadre sur Play/Pause.
+
+Le core V2 passe aussi son typecheck et sa suite complète (86 fichiers, 541
+tests), sans suite `codplay-v1`. Safari a été tenté avec `safaridriver`, mais la
+session est refusée tant que « Allow remote automation » n'est pas activé dans
+les réglages développeur de Safari. Cette preuve reste donc à exécuter ; elle
+ne couvre pas non plus les grilles, la taille intrinsèque, les parents
+transformés, la multi-sélection ou le reparentage, qui restent hors verticale.
 
 ## Audit ciblé — façade documentaire et machines d'état
 

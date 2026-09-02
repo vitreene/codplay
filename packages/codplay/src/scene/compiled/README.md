@@ -43,6 +43,8 @@ semantic coherence of the compiled artifact, and runtime freezing.
 Perso `emit/capture` declarations are part of this boundary: their event payloads
 are compiled recursively and their lifecycle functions become references in the
 external function collection.
+Scene-level and story-level `eventimes` are compiled as relative timeline
+occurrences; scene-level occurrences are replayed against every active story.
 The codec does not consult runtime capabilities or derive a global property matrix;
 service-owned property coverage remains attached to the component declarations that
 consume it.

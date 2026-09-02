@@ -413,8 +413,8 @@ export function createScene(): SceneDoc {
             actions: {},
           },
         ],
-        eventimes: [],
       },
     },
+    eventimes: [{ name: "sequence:end", startAt: SCENE_DURATION_MS }],
   };
 }

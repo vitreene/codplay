@@ -13,6 +13,7 @@ export function collectLogicalEvaluationBoundaries(
 ): readonly number[] {
   const times = new Set<number>()
   for (const story of Object.values(scene.scene.stories)) {
+    collectStoryEventBoundaries(scene.scene.eventimes ?? [], 0, story.persos, times)
     collectStoryEventBoundaries(story.eventimes ?? [], 0, story.persos, times)
   }
   for (const event of journal?.getAllEvents() ?? []) {

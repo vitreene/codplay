@@ -1047,6 +1047,9 @@ export class RuntimePlayer {
   /** Finds the earliest active terminal event crossed by one playing frame. */
   private findSequenceEndBetween(previousTimeMs: number | undefined, currentTimeMs: number): number | undefined {
     const candidates: number[] = []
+    for (const eventTimeMs of collectSequenceEndTimes(this.compiledScene.scene.eventimes ?? [], 0)) {
+      if (isSequenceEndInRange(eventTimeMs, previousTimeMs, currentTimeMs)) candidates.push(eventTimeMs)
+    }
     for (const story of Object.values(this.compiledScene.scene.stories)) {
       const trackId = resolveStoryTrackId(story)
       if (!this.trackJournal.isTrackActive(trackId)) continue

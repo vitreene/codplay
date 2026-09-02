@@ -155,6 +155,8 @@ export type SceneDoc<T extends string = CorePersoType> = Readonly<{
   initial?: AuthorRecord
   straps?: AuthorStrapDeclarations
   listen?: readonly SceneListenRule[]
+  /** Relative events shared by every story, including the terminal sequence event. */
+  eventimes?: readonly AuthorRecord[]
   state?: AuthorRecord
   tracks?: AuthorRecord
   init?: SceneLifecycleFunction

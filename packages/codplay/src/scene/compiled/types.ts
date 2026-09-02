@@ -94,7 +94,7 @@ export type CompiledPerso = Readonly<{
   emit?: CompiledEmitDeclaration
 }>
 
-/** One relative timeline occurrence in the compiled story journal. */
+/** One relative timeline occurrence in a compiled scene or story journal. */
 export type CompiledEventime = Readonly<{
   name: string
   startAt: number
@@ -126,6 +126,8 @@ export type CompiledSceneData = Readonly<{
   initial?: CompiledRecord
   straps?: CompiledStrapDeclarations
   listen: readonly CompiledListenRule[]
+  /** Relative events shared by every compiled story. */
+  eventimes?: readonly CompiledEventime[]
   state?: CompiledRecord
   tracks: CompiledRecord
   defaults?: CompiledRecord

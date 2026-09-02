@@ -1,8 +1,7 @@
 import { RuntimeEngine } from '../runtime/engine'
 import type { Diagnostic } from '../diagnostics'
-import type { MountTargetDeclaration } from '../runtime/player/pipeline'
 import { RuntimePlayer, type PlayerInitResult } from '../runtime/player'
-import { HtmlPlayerRunner, type HtmlRootTarget } from '../runtime/runner-html'
+import { HtmlPlayerRunner } from '../runtime/runner-html'
 import type {
   RuntimePreloadMediaResources,
   RuntimePreloadMetadata,
@@ -32,12 +31,10 @@ export type InstanceHost = Readonly<{
 
 /** Creates the one public HTML/DOM host used by every CodPlay V2 instance. */
 export function createInstanceHost(options: InstanceHostOptions): InstanceHost {
-  const rootTargets = resolveRootTargets(options.instance.mountTargets)
   const runner = new HtmlPlayerRunner({
     id: options.instance.instanceId,
     compiledScene: options.instance.compiledScene,
     root: options.instance.root,
-    rootTargets,
     numericLengthScale: resolveRootNumericLengthScale(options.instance.root),
     catalog: options.catalog,
     resourceMetadata: toResourceMetadata(options.resourceMetadata),
@@ -107,20 +104,4 @@ function toResourceMedia(
   media: ReadonlyMap<string, RuntimePreloadMediaResources[string]>,
 ): RuntimePreloadMediaResources {
   return Object.fromEntries(media.entries())
-}
-
-/** Converts public root declarations to the HTML runner's root-target shape. */
-function resolveRootTargets(
-  declarations: readonly MountTargetDeclaration[] | undefined,
-): readonly HtmlRootTarget[] {
-  const targets = (declarations ?? [])
-    .filter((target) => target.kind === 'root')
-    .map((target) => ({ id: target.id, storyId: target.storyId ?? '' }))
-  if (targets.some((target) => target.storyId.length === 0)) {
-    throw new Error('Every DOM root target must declare a storyId.')
-  }
-  if (targets.length === 0) {
-    throw new Error('The core DOM materializer requires at least one root mount target.')
-  }
-  return targets
 }

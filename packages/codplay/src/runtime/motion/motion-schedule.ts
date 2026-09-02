@@ -53,7 +53,10 @@ export function compileMotionSchedule(
   const effective = new Map<string, ScheduledMotionIntent>()
   for (const [storyId, story] of Object.entries(scene.scene.stories)) {
     for (const perso of story.persos) {
-      for (const event of flattenEventimes(story.eventimes ?? [])) {
+      for (const event of flattenEventimes([
+        ...(scene.scene.eventimes ?? []),
+        ...(story.eventimes ?? []),
+      ])) {
         const action = resolveAction(perso.actions[event.name], event.data)
         const itemId = `${storyId}:${perso.id}`
         const eventId = `${itemId}:${event.name}:${event.declarationPath.join('.')}`

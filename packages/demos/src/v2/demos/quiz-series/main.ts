@@ -764,6 +764,7 @@ export function createQuizSeriesFameScene(): SceneDoc {
       { on: "quiz:result:show", straps: ["quiz-result-render"] }
     ],
     stories: allStories,
+    eventimes: [{ name: "sequence:end", startAt: SCENE_DURATION_MS }],
     tracks: {
       [QUIZ_SERIES_INTERACTIVE_TRACK_ID]: {
         active: true,

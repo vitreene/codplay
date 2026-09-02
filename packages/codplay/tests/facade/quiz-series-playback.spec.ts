@@ -37,9 +37,7 @@ describe('quiz-series external playback', () => {
       instanceId: 'quiz-series-playback-test',
       compiledScene: build.compiledScene,
       functions: build.functions,
-      durationMs: 20_000,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     for (const injection of quizSeriesAutoPlayback.injections) {

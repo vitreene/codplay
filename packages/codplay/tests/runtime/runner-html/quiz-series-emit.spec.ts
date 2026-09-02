@@ -30,7 +30,6 @@ describe('quiz-series Perso.emit integration', () => {
       id: 'quiz-series-emit-test',
       compiledScene: build.compiledScene,
       root,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       functions: build.functions,
       ticker: {

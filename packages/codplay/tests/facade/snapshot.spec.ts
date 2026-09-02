@@ -48,7 +48,6 @@ function createSnapshotInstance(codplay: CodPlay, rootWidth?: number): CodPlayIn
     compiledScene: build.compiledScene,
     functions: build.functions,
     root,
-    mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
   })
 }
 

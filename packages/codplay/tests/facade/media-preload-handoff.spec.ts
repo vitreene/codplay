@@ -44,7 +44,6 @@ describe('CodPlay media preload registration', () => {
       compiledScene: build.compiledScene,
       functions: build.functions,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     expect(root.querySelector('video')).toBe(preloadedVideo)

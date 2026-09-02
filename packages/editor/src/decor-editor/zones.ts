@@ -1,6 +1,6 @@
 import type { OrientationContext, ZoneCoords, ZoneDef, ZoneTable } from './types'
 
-/** Ratio largeur/hauteur ≥ 1 → horizontal, sinon vertical (spec §3.4, pas d'hystérésis en v1). */
+/** Ratio largeur/hauteur ≥ 1 → horizontal, sinon vertical (spec §3.4, sans hystérésis). */
 export function orientationFromRatio(widthPx: number, heightPx: number): OrientationContext {
   return widthPx / heightPx >= 1 ? 'horizontal' : 'vertical'
 }

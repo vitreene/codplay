@@ -72,6 +72,7 @@ export function normalizeSceneDoc(scene: SceneDoc<string>): CanonicalSceneDoc {
     stories,
     straps: normalizeStrapDeclarations(scene.straps),
     listen: scene.listen === undefined ? [] : scene.listen.map(cloneAuthorValue) as readonly SceneListenRule[],
+    eventimes: scene.eventimes?.map(cloneAuthorValue) as SceneDoc['eventimes'],
     state: normalizeOptionalRecord(scene.state),
     tracks: normalizeOptionalRecord(scene.tracks) ?? {},
     defaults: normalizeOptionalRecord(scene.defaults),

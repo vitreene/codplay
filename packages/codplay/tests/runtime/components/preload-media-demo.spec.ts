@@ -69,7 +69,6 @@ describe('preload-media V2 demo', () => {
       id: 'v2-preload-media-demo-test',
       compiledScene: result.compiledScene,
       root,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       engine,
       resources: resources.map((resource) => resource.url),

@@ -35,7 +35,6 @@ describe('polygon V2 demo', () => {
       id: 'v2-polygon-demo-test',
       compiledScene: build.compiledScene,
       root,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       functions: build.functions,
     })

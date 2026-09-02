@@ -84,7 +84,6 @@ describe('CodPlay facade cqw projection', () => {
       compiledScene: build.compiledScene,
       functions: build.functions,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
     const node = root.querySelector<HTMLElement>('article')
     if (node === null) throw new Error('cqw facade test node is missing.')

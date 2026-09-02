@@ -36,9 +36,7 @@ describe('chrono V2 demo', () => {
       instanceId: 'chrono-demo-test',
       compiledScene: build.compiledScene,
       functions: build.functions,
-      durationMs: 20_000,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     codplay.engine.advance(0)

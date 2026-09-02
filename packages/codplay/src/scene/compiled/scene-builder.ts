@@ -169,6 +169,7 @@ function compileSceneData(
     initial: extractCompiledRecord(scene.initial, 'scene.initial', state),
     straps: compileStrapDeclarations(scene.straps, 'scene.straps', state),
     listen: scene.listen.map((rule, index) => compileListenRule(rule, `scene.listen[${index}]`, state)),
+    eventimes: scene.eventimes?.map((eventime, index) => extractCompiledValue(eventime, `scene.eventimes[${index}]`, state) as CompiledEventime),
     state: extractCompiledRecord(scene.state, 'scene.state', state),
     tracks: extractCompiledRecord(scene.tracks, 'scene.tracks', state) ?? {},
     defaults: extractCompiledRecord(scene.defaults, 'scene.defaults', state),

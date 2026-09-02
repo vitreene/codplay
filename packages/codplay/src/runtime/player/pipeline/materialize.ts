@@ -1,5 +1,6 @@
 import { cloneRecord, cloneValue, compareNumberPaths } from '../../../shared'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
+import { TRACK_GLOBAL_ID } from '../../config/track'
 import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
@@ -86,6 +87,9 @@ function materializeSceneAtBoundary(
     const track = tracks.tracks[trackId]
     if (track === undefined) throw new Error(`Materialize track is not registered: ${trackId}`)
     const events = [
+      ...(trackIsActive(journal, TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.active ?? true)
+        ? flattenEventimes(scene.scene.eventimes ?? [], TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.order ?? 0)
+        : []),
       ...(trackIsActive(journal, trackId, track.active)
         ? flattenEventimes(story.eventimes ?? [], trackId, track.order)
         : []),

@@ -297,7 +297,7 @@ sont enregistrées dans l'engine du player visible :
 
 ```ts
 const runner = new HtmlPlayerRunner({
-  // ...compiledScene, root, rootTargets et catalog
+  // ...compiledScene, root et catalog
   resources: compiledScene.requirements.resources,
 })
 ```
@@ -342,7 +342,7 @@ ne déduit aucune unité. Les unités CSS opaques et les chaînes brutes de
 const designWidth = 1440
 
 const runner = new HtmlPlayerRunner({
-  // ...compiledScene, root, rootTargets et catalog
+  // ...compiledScene, root et catalog
 })
 
 function applyViewportZoom(): void {

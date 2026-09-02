@@ -30,10 +30,10 @@ export function createScene(): SceneDoc {
 					{ name: VIDEO_START_EVENT, startAt: 2_000 },
 					{ name: IMAGE_A_SHOW_EVENT, startAt: 4_000 },
 					{ name: IMAGE_B_SHOW_EVENT, startAt: 5_000 },
-					{ name: 'sequence:end', startAt: SCENE_DURATION_MS },
 				],
 			},
 		},
+		eventimes: [{ name: 'sequence:end', startAt: SCENE_DURATION_MS }],
 	};
 }
 

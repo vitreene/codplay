@@ -117,5 +117,6 @@ export function createNestedFlipScene(): SceneDoc {
 				eventimes: [{ name: 'transfer', startAt: MOVE_START_MS }],
 			},
 		},
+		eventimes: [{ name: 'sequence:end', startAt: SCENE_DURATION_MS }],
 	};
 }

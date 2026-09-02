@@ -201,7 +201,7 @@ function sceneDoc(): SceneDoc {
           id: 'item',
           type: 'tag',
           initial: { tag: 'article', move: { target: 'outlet' }, content: 'item' },
-          actions: { moveToRoot: { move: { target: 'root-host' } } },
+          actions: { moveToRoot: { move: '@root' } },
         }],
         listen: [],
         eventimes: [{ name: 'moveToRoot', startAt: 100 }],
@@ -608,7 +608,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'persistent-detach-runner',
       compiledScene: persistentDetachCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
     })
 
@@ -636,7 +635,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'persistent-media-runner',
       compiledScene: persistentMediaCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       resources: ['/assets/persistent.mp4'],
     })
@@ -672,7 +670,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'media-source-swap-runner',
       compiledScene: mediaSourceSwapCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       resources: ['/assets/source-a.mp4', '/assets/source-b.mp4'],
     })
@@ -705,7 +702,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'audio-media-runner',
       compiledScene: audioMediaCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       resources: [source],
       resourceMetadata: { [source]: { type: 'audio', durationMs: 4_250 } },
@@ -728,7 +724,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'runner',
       compiledScene: compiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       ticker: ticker(),
     })
@@ -772,7 +767,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'perso-emit-runner',
       compiledScene: persoEmitCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       captureEventTarget: source as unknown as EventTarget,
     })
@@ -823,7 +817,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'perso-emit-keyboard-runner',
       compiledScene: persoEmitCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       captureEventTarget: source as unknown as EventTarget,
     })
@@ -858,7 +851,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'perso-emit-diagnostic-runner',
       compiledScene: persoEmitCompiledScene('missing-control'),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       captureEventTarget: source as unknown as EventTarget,
       onEmitDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
@@ -881,7 +873,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'continuous-runner',
       compiledScene: continuousCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
     })
 
@@ -923,7 +914,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'cqw-runner',
       compiledScene: cqwCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       numericLengthScale: 4,
     })
@@ -949,7 +939,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'pointer-capture-runner',
       compiledScene: built.compiledScene,
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       functions: built.functions,
       captureEventTarget: source as unknown as EventTarget,
@@ -982,7 +971,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'locked-pointer-capture-runner',
       compiledScene: built.compiledScene,
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
       functions: built.functions,
       enableInteractionLock: true,
@@ -1021,7 +1009,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'drag-fixture-runner',
       compiledScene: build.compiledScene,
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
       functions: build.functions,
       strapCollections: { scene: {}, stories: { main: s6Straps } },
@@ -1079,7 +1066,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'list-order-runner',
       compiledScene: listCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
     })
 
@@ -1104,7 +1090,6 @@ describe('HtmlPlayerRunner', () => {
       id: 'nested-list-order-runner',
       compiledScene: nestedListCompiledScene(),
       root: root as unknown as HTMLElement,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog: runtimeCatalog(),
     })
 

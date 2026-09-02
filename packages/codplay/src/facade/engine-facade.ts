@@ -327,7 +327,6 @@ export class EngineFacadeImpl implements CodPlayEngine {
         instanceId: options.instanceId,
         player,
         runner,
-        durationMs: options.durationMs,
         diagnostics,
         eventListeners,
         traceListeners,

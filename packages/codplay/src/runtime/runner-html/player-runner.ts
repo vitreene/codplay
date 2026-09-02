@@ -6,7 +6,6 @@ import type { RuntimeMaterializer } from '../materializer'
 import {
   PLAYER_LIFECYCLE_PLAYING,
   RuntimePlayer,
-  type MountTargetDeclaration,
   type PlayerInitResult,
   type PlayerLifecycleState,
   type PlayerSeekResult,
@@ -46,8 +45,8 @@ import type {
 } from '../preload'
 import type { RuntimeIdleOptions } from '../idle'
 
-/** One HTML root target mapped to the runner's supplied root element. */
-export type HtmlRootTarget = Readonly<{
+/** One instance-local root target mapped to the runner's supplied root element. */
+type HtmlRootTarget = Readonly<{
   id: string
   storyId: string
 }>
@@ -71,7 +70,6 @@ export type HtmlPlayerRunnerOptions = Readonly<{
   id: string
   compiledScene: CompiledScene
   root: HTMLElement
-  rootTargets: readonly HtmlRootTarget[]
   catalog: RuntimeCapabilityCatalog
   /** Resources already made available to the visible engine. */
   resources?: readonly string[]
@@ -171,12 +169,13 @@ export class HtmlPlayerRunner {
       idle: options.idle,
     })
     this.ownsEngine = options.engine === undefined
-    const mountTargets: readonly MountTargetDeclaration[] = options.rootTargets.map((target) => ({
+    const rootTargets = resolveRootTargets(options.compiledScene)
+    const rootDeclarations = rootTargets.map((target) => ({
       id: target.id,
-      kind: 'root',
+      kind: 'root' as const,
       storyId: target.storyId,
     }))
-    for (const target of options.rootTargets) this.nodes.targetNodes.set(target.id, options.root)
+    for (const target of rootTargets) this.nodes.targetNodes.set(target.id, options.root)
 
     const componentMaterializer = new HtmlComponentMaterializer(this.nodes, this.materializerContext)
     const materializer = new MotionMaterializer(
@@ -196,7 +195,7 @@ export class HtmlPlayerRunner {
       undefined,
       options.strapCollections,
       undefined,
-      mountTargets,
+      rootDeclarations,
       materializer,
       componentRuntime,
       options.functions,
@@ -634,6 +633,17 @@ function createDefaultTicker(): Ticker {
 /** Resolves one materialized HTML element without exposing component handles. */
 function resolveHtmlHandle(node: unknown): HTMLElement | undefined {
   return typeof HTMLElement !== 'undefined' && node instanceof HTMLElement ? node : undefined
+}
+
+/** Derives the instance-local root targets from the compiled scene manifest. */
+function resolveRootTargets(scene: CompiledScene): readonly HtmlRootTarget[] {
+  const rootNodeIds = new Set(scene.rootNodeIds)
+  return Object.values(scene.scene.stories)
+    .filter((story) => story.persos.some((perso) => rootNodeIds.has(perso.id)))
+    .map((story) => ({
+      id: `__codplay_root__${scene.scene.id}__${story.id}`,
+      storyId: story.id,
+    }))
 }
 
 /** Resolves the browser window that owns the visible HTML root. */

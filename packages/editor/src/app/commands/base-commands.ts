@@ -61,8 +61,8 @@ export function createItem(
 }
 
 /**
- * Différencie un `bloc` vers un type concret — seul cas de changement de type autorisé en v1
- * (document-model, discussion §« Tout item naît en type bloc »). Lève si l'item n'est pas un
+ * Différencie un `bloc` vers un type concret — seul cas de changement de type autorisé par le
+ * modèle actuel (discussion §« Tout item naît en type bloc »). Lève si l'item n'est pas un
  * `bloc` : ce n'est pas une commande de changement de type général.
  */
 /**
@@ -167,7 +167,7 @@ export function setCapsuleDef(scene: EditorScene, args: { itemId: string; patch:
 
 /**
  * Assigne/retire une zone à un item. Filtré côté appelant aux zones de la capsule parente
- * (document-model — le reparent cross-capsule est neutralisé en v1) ; cette commande applique la
+ * (document-model — le reparent cross-capsule n'est pas pris en charge par le modèle actuel) ; cette commande applique la
  * référence, elle ne valide pas l'appartenance de la zone à la capsule (responsabilité du module
  * qui propose les zones disponibles, pas de la façade).
  */

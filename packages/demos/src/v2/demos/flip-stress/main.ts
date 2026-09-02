@@ -381,6 +381,7 @@ function createStressScene(): SceneDoc {
 				],
 			},
 		},
+		eventimes: [{ name: 'sequence:end', startAt: SCENE_DURATION_MS }],
 	};
 }
 

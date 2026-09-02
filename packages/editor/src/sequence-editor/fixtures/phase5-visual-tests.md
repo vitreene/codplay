@@ -4,7 +4,7 @@ Accès : `npm run dev:editor` → http://localhost:5174
 
 ---
 
-## V1 — TimeRuler
+## TimeRuler
 
 **Ce que c'est**
 Bande SVG en haut de la zone temporelle. Elle affiche des graduations (traits + labels) proportionnellement espacées selon le zoom courant. L'intervalle s'adapte automatiquement pour ne jamais avoir moins de 48 px entre deux traits.
@@ -68,7 +68,7 @@ Zone temporelle principale. Pour chaque track : une barre de segment entre keyfr
 3. Cliquer le losange à t=600ms → infobar = `kf: 0.6 s  décor: decor-02`
 4. Charger `Eddy scène 02` → vérifier la densité de keyframes correspondant aux 7 eventtimes (0/1/1.5/2/3/4/5s)
 5. Zoom max → les losanges s'écartent, les bandes de transition s'élargissent proportionnellement
-6. Zoom min → les losanges se rapprochent jusqu'à se superposer (c'est normal en v1)
+6. Zoom min → les losanges se rapprochent jusqu'à se superposer (comportement attendu du modèle actuel)
 
 ---
 

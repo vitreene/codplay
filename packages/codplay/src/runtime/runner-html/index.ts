@@ -3,7 +3,6 @@ export {
   type HtmlPlayerRunnerOptions,
   type HtmlPlayerRunOptions,
   type HtmlPlayerRunResult,
-  type HtmlRootTarget,
 } from './player-runner'
 export {
   HtmlComponentMaterializer,

@@ -34,10 +34,10 @@ export function createComponentsScene(): SceneDoc {
           { name: POLYGON_MORPH_EVENT, startAt: 800 },
           { name: QUIZ_SELECT_EVENT, startAt: 1700 },
           { name: QUIZ_RESOLVE_EVENT, startAt: 2700 },
-          { name: 'components:sequence:end', startAt: SCENE_DURATION_MS },
         ],
       },
     },
+    eventimes: [{ name: 'sequence:end', startAt: SCENE_DURATION_MS }],
   }
 }
 

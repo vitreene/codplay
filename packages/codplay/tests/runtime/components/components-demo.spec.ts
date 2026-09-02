@@ -37,7 +37,6 @@ describe('V2 core components demo', () => {
       id: 'v2-components-demo-test',
       compiledScene: build.compiledScene,
       root,
-      rootTargets: [{ id: 'root-host', storyId: 'main' }],
       catalog,
     })
     expect(runner.init().ok).toBe(true)

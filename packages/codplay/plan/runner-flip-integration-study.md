@@ -878,11 +878,11 @@ frame ni une modification générale du host.
 ### Vérification manuelle Safari MCP — 2026-08-26
 
 La page testée était `http://localhost:5173/?demo=flip-list`, avec le serveur
-déjà actif sur le port `5173`. Pour rendre la validation indépendante de la
-fenêtre Safari, le layout de démo construit `CodPlay` avec
-`pauseOnDocumentHidden: false` et un scheduler de test fondé sur `setTimeout`.
-Le `TimeTicker` reste interne à la façade. La vérification peut ainsi être menée page masquée, sans
-dépendre ni de `document.hidden` ni de la suspension du `requestAnimationFrame`.
+déjà actif sur le port `5173`. Le layout de démo construit `CodPlay` avec
+`pauseOnDocumentHidden: false`; le `TimeTicker` et son scheduler de frames
+restent internes à la façade. Cette configuration permet de distinguer la
+politique de visibilité du runtime de la suspension des frames par le
+navigateur.
 
 Le contrôle a effectivement été réalisé avec `document.visibilityState === 'hidden'` :
 après activation de Play, le temps de scène a atteint environ

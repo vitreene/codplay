@@ -36,7 +36,13 @@ function scene(requirements = emptyRequirements): CompiledScene {
   return {
     schemaVersion: 'codplay.v2.scene.v1',
     createdAt: '2026-08-26T00:00:00.000Z',
-    scene: { id: 'facade-scene', stories: {}, listen: [], tracks: {} },
+    scene: {
+      id: 'facade-scene',
+      stories: {},
+      listen: [],
+      eventimes: [{ name: 'sequence:end', startAt: 1_000 }],
+      tracks: {},
+    },
     resources: { entries: [] },
     rootNodeIds: [],
     requirements,
@@ -54,9 +60,7 @@ function createInstance(
   return instances.create({
     instanceId,
     compiledScene,
-    durationMs: 1_000,
     root,
-    mountTargets: [{ id: `${instanceId}:root`, kind: 'root', storyId: 'facade-scene' }],
   })
 }
 
@@ -260,9 +264,7 @@ describe('CodPlay facade', () => {
       instanceId: 'registry-instance',
       compiledScene: build.compiledScene,
       functions: build.functions,
-      durationMs: 1_000,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     expect(root.querySelector('[data-registry-component="registered"]')).toBeNull()
@@ -340,9 +342,7 @@ describe('CodPlay facade', () => {
       instanceId: 'layout-instance',
       compiledScene: build.compiledScene,
       functions: build.functions,
-      durationMs: 1_000,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     const outlets = [...root.querySelectorAll('section > div')]
@@ -364,9 +364,7 @@ describe('CodPlay facade', () => {
       instanceId: 'motion-instance',
       compiledScene: build.compiledScene,
       functions: build.functions,
-      durationMs: 1_000,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     await instance.telco.seek(150)
@@ -740,16 +738,12 @@ describe('CodPlay facade', () => {
     codplay.instances.create({
       instanceId: 'instance-a',
       compiledScene: scene(),
-      durationMs: 1_000,
       root: document.createElement('div'),
-      mountTargets: [{ id: 'root-host-a', kind: 'root', storyId: 'facade-scene' }],
     })
     codplay.instances.create({
       instanceId: 'instance-b',
       compiledScene: scene(),
-      durationMs: 1_000,
       root: document.createElement('div'),
-      mountTargets: [{ id: 'root-host-b', kind: 'root', storyId: 'facade-scene' }],
     })
 
     codplay.destroy()

@@ -1,6 +1,5 @@
 import {
   CodPlay,
-  type CodPlayFrameScheduler,
   type CodPlayInstance,
   type CodPlayPublicEvent,
   type CodPlayTraceEvent,
@@ -23,90 +22,13 @@ type V2DemoLayoutOptions = Readonly<{
 const V2_DEMO_LOG_OPEN_STORAGE_KEY = "codplay-v2-demo-log-open";
 const V2_DEMO_LOG_ENABLED = new URLSearchParams(globalThis.location.search).get("v2-log") !== "off";
 
-/** Creates a timer scheduler that remains usable when Safari suspends animation frames. */
-// FIX setTimeout / setInterval STRICTEMENT INTERDIT !!!! interdit dans le ticker, À JETER.
-function createV2DemoFrameScheduler(): CodPlayFrameScheduler {
-  let nextRequestId = 1;
-  const pendingTimers = new Map<number, ReturnType<typeof globalThis.setTimeout>>();
-
-  return {
-    request(callback) {
-      const requestId = nextRequestId;
-      nextRequestId += 1;
-      const timerId = globalThis.setTimeout(() => {
-        pendingTimers.delete(requestId);
-        callback();
-      }, 16);
-      pendingTimers.set(requestId, timerId);
-      return requestId;
-    },
-    cancel(requestId) {
-      const timerId = pendingTimers.get(requestId);
-      if (timerId === undefined) return;
-      globalThis.clearTimeout(timerId);
-      pendingTimers.delete(requestId);
-    },
-  };
-}
-
 /** Mounts the responsive V2 frame and owns every control shared by its demos. */
 export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   mount: (module: V2DemoModule) => Promise<void>;
   destroy: () => void;
 } {
-  // FIX pourquoi ne pas créer un vrai layout html  quel est l'interet d'une variable ?
-  const layoutRoot = document.createElement("main");
-  layoutRoot.className = "v2-demo-layout";
-  layoutRoot.innerHTML = `
-    <header class="v2-demo-header">
-      <div class="v2-demo-header__copy">
-        <p class="v2-demo-eyebrow">CodPlay V2</p>
-        <h1 class="v2-demo-title"></h1>
-        <p class="v2-demo-description"></p>
-      </div>
-      <div class="v2-demo-header__tools">
-        <label class="v2-demo-selector">
-          <span>Démo</span>
-          <select class="v2-demo-selector__input"></select>
-        </label>
-        <button class="v2-demo-button v2-demo-button--secondary v2-demo-button--icon v2-demo-logs-toggle" type="button" aria-expanded="false" aria-label="Afficher les logs" title="Afficher les logs">
-          <svg class="v2-demo-button__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6 3h9l3 3v15H6V3zm2 2v14h8V7h-2V5H8zm2 5h4v1h-4zm0 3h4v1h-4zm0 3h4v1h-4z"></path>
-          </svg>
-          <span class="v2-demo-button__label">Logs</span>
-        </button>
-      </div>
-    </header>
-    <section class="v2-demo-stage" data-v2-demo-stage>
-      <div class="v2-demo-scene-slot" data-v2-demo-scene></div>
-      <aside class="v2-demo-log-layer" aria-live="polite">
-        <div class="v2-demo-log-panel" hidden>
-          <div class="v2-demo-log-panel__header">
-            <span>Journal</span>
-            <div class="v2-demo-log-panel__actions">
-              <button class="v2-demo-button v2-demo-button--secondary v2-demo-button--icon v2-demo-log-copy" type="button" aria-label="Copier le journal" title="Copier le journal">
-                <svg class="v2-demo-button__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M8 7V4h11v13h-3v3H5V7h3zm2 0h4v8h2V6h-6v1zm4 11v-1H8V9H7v9h7z"></path>
-                </svg>
-                <span class="v2-demo-button__label">Copier</span>
-              </button>
-              <button class="v2-demo-button v2-demo-button--secondary v2-demo-button--icon v2-demo-log-close" type="button" aria-label="Fermer le journal" title="Fermer le journal">
-                <svg class="v2-demo-button__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4-5.3-5.3-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3 1.4-1.4z"></path>
-                </svg>
-                <span class="v2-demo-button__label">Fermer</span>
-              </button>
-            </div>
-          </div>
-          <pre class="v2-demo-log-output"></pre>
-        </div>
-      </aside>
-    </section>
-    <footer class="v2-demo-footer">
-      <div class="v2-demo-telco" data-v2-demo-telco></div>
-    </footer>
-  `;
-  options.app.replaceChildren(layoutRoot);
+  const layoutRoot = options.app.querySelector<HTMLElement>("[data-v2-demo-layout]");
+  if (layoutRoot === null) throw new Error("Expected the V2 demo layout in index.html.");
 
   const title = layoutRoot.querySelector<HTMLElement>(".v2-demo-title")!;
   const description = layoutRoot.querySelector<HTMLElement>(".v2-demo-description")!;
@@ -160,11 +82,11 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
 
   const logLines: string[] = [];
   let logFlushScheduled = false;
-  let telcoControls: ReturnType<typeof createV2DemoTelco> | undefined;
-  let telcoPlaybackCleanup: (() => void) | undefined;
-  let traceCleanup: (() => void) | undefined;
-  let publicEventCleanup: (() => void) | undefined;
-  let sceneCleanup: (() => void) | undefined;
+  let telcoControls: ReturnType<typeof createV2DemoTelco> | null = null;
+  let telcoPlaybackCleanup: (() => void) | null = null;
+  let traceCleanup: (() => void) | null = null;
+  let publicEventCleanup: (() => void) | null = null;
+  let sceneCleanup: (() => void) | null = null;
   const loggedEventIds = new Set<string>();
 
   function flushLogs(): void {
@@ -200,28 +122,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   async function copyLogs(): Promise<void> {
     const text = logLines.join("\n");
     try {
-      if (globalThis.navigator.clipboard !== undefined) {
-        await globalThis.navigator.clipboard.writeText(text);
-        return;
-      }
+      await globalThis.navigator.clipboard.writeText(text);
     } catch {
-      // Use the local fallback below when the async clipboard is unavailable.
-    }
-
-    // Fallback useless , a retirer ; on est en 2026.
-    const fallback = document.createElement("textarea");
-    fallback.value = text;
-    fallback.setAttribute("readonly", "");
-    fallback.style.position = "fixed";
-    fallback.style.opacity = "0";
-    document.body.append(fallback);
-    fallback.select();
-    try {
-      document.execCommand("copy");
-    } catch {
-      // Clipboard permissions are optional for this non-blocking demo action.
-    } finally {
-      fallback.remove();
+      log("Copie du journal indisponible dans ce contexte.", "warn");
     }
   }
 
@@ -230,9 +133,9 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telco: CodPlayInstance["telco"],
     instance: CodPlayInstance,
     playback: V2DemoPlayback | undefined,
-  ) {
+  ): void {
     telcoPlaybackCleanup?.();
-    telcoPlaybackCleanup = undefined;
+    telcoPlaybackCleanup = null;
     telcoControls?.destroy();
     telcoControls = createV2DemoTelco(telco, { onLog: log });
     const playbackControl = playback;
@@ -282,25 +185,24 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
   }
 
   /** Releases the current runner, telco and scene-specific stage state. */
-  // FIX ces methodes de type function ou unfined son sales.
-  function unmountScene(): void {
+  const unmountScene = (): void => {
     sceneCleanup?.();
-    sceneCleanup = undefined;
+    sceneCleanup = null;
     traceCleanup?.();
-    traceCleanup = undefined;
+    traceCleanup = null;
     publicEventCleanup?.();
-    publicEventCleanup = undefined;
+    publicEventCleanup = null;
     loggedEventIds.clear();
     telcoPlaybackCleanup?.();
-    telcoPlaybackCleanup = undefined;
+    telcoPlaybackCleanup = null;
     telcoControls?.destroy();
-    telcoControls = undefined;
+    telcoControls = null;
     telcoSlot.replaceChildren();
     sceneSlot.className = "v2-demo-scene-slot";
     sceneSlot.removeAttribute("aria-label");
     sceneSlot.removeAttribute("data-codplay-scope");
     sceneSlot.replaceChildren();
-  }
+  };
 
   setLogPanelOpen(readLogPanelOpen());
   logsToggle.addEventListener("click", () => setLogPanelOpen(logPanel.hidden === true));
@@ -316,7 +218,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
       sceneSlot.className = "v2-demo-scene-slot";
       sceneSlot.setAttribute("aria-label", `Scène : ${options.active.title}`);
 
-      // FIX pourquoi createScene est une fonction ?
+      // The factory gives each mount a fresh SceneDoc and fresh closure-owned straps.
       const scene = module.createScene();
       let codplay: CodPlay;
       try {
@@ -331,7 +233,6 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
               );
             },
           },
-          frameScheduler: createV2DemoFrameScheduler(),
           pauseOnDocumentHidden: false,
         });
       } catch (error) {
@@ -387,16 +288,11 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
 
       let instance: CodPlayInstance;
       try {
-        // FIX interface create : build/scene (à compiler), root)
         instance = codplay.instances.create({
-          // FIX instanceId, compiledScene et  functions sont dans build.
           instanceId: scene.id,
           compiledScene: build.compiledScene,
           functions: build.functions,
           root: sceneSlot,
-          // FIX rien a faire ici : durationMs est defini dans la scene.  | mountTargets n'existe plus dans v2 ?
-          durationMs: module.durationMs,
-          mountTargets: [{ id: "root-host", kind: "root", storyId: "main" }],
         });
       } catch (error) {
         log(`Instance creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -416,11 +312,7 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
         });
       }
       installTelco(instance.telco, instance, module.playback);
-      const durationLabel =
-        module.durationMs === undefined ?
-          "durée ouverte (horizon découvert)"
-        : `durée=${module.durationMs}ms`;
-      log(`${options.active.title} initialisée · ${durationLabel}`);
+      log(`${options.active.title} initialisée · horizon issu des eventimes compilés`);
 
       sceneCleanup = () => {
         releaseResources();

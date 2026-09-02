@@ -105,7 +105,7 @@ function isValidActionTargetIndex(value: unknown): boolean {
 
 /** Checks the complete compiled scene payload. */
 function isValidSceneData(value: unknown): value is CompiledSceneData {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['id', 'name', 'stories', 'initial', 'straps', 'listen', 'state', 'tracks', 'defaults', 'init', 'onStart', 'onSequenceEnd'])) {
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['id', 'name', 'stories', 'initial', 'straps', 'listen', 'eventimes', 'state', 'tracks', 'defaults', 'init', 'onStart', 'onSequenceEnd'])) {
     return false
   }
   return typeof value.id === 'string'
@@ -114,6 +114,7 @@ function isValidSceneData(value: unknown): value is CompiledSceneData {
     && (value.initial === undefined || isCompiledRecord(value.initial))
     && isCompiledStrapDeclarationsOrUndefined(value.straps)
     && isCompiledListenArray(value.listen)
+    && (value.eventimes === undefined || Array.isArray(value.eventimes) && value.eventimes.every(isValidEventime))
     && (value.state === undefined || isCompiledRecord(value.state))
     && isCompiledRecord(value.tracks)
     && (value.defaults === undefined || isCompiledRecord(value.defaults))

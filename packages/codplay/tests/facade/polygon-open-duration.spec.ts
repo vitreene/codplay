@@ -38,7 +38,6 @@ describe('polygon V2 open duration', () => {
       compiledScene: build.compiledScene,
       functions: build.functions,
       root,
-      mountTargets: [{ id: 'root-host', kind: 'root', storyId: 'main' }],
     })
 
     codplay.engine.advance(0)

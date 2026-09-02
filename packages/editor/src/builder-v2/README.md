@@ -3,8 +3,8 @@
 > Statut : En cours
 > CodPlay cible : V2 foundation
 
-Cette verticale traduit `EditorScene` vers le `SceneDoc` natif de CodPlay V2. Elle ne dépend pas
-du builder V1 et ne fournit aucune compatibilité avec ses types ou son player.
+Cette verticale traduit `EditorScene` vers le `SceneDoc` natif de CodPlay V2. Elle utilise uniquement
+le transport V2 de l'éditeur vers CodPlay.
 
 L'incrément en cours couvre une scène ed2 à une story (`story-main`), sa capsule racine implicite,
 une arborescence de capsules imbriquées et les feuilles (`bloc`, `text`, `image`, `video` et
@@ -27,4 +27,5 @@ classes de placement et de la feuille CSS scoped. Le builder concatène cette fe
 La sortie signale toujours les erreurs sous forme de diagnostics et ne retourne jamais de `SceneDoc`
 partiel. `preloadManifest` reste vide à cette frontière pure : le bridge navigateur transmettra plus tard
 `styleSheet` à `codplay.preload.css.set()`, tandis que les URLs de contenu sont dérivées par
-`CodPlay.build()`. Cette verticale ne dépend pas du builder, du player ou des types V1.
+`CodPlay.build()`. Cette verticale ne dépend d'aucun builder parallèle ni d'un player détenu par
+l'éditeur.

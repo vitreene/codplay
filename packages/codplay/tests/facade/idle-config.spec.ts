@@ -25,7 +25,6 @@ function createInstance(codplay: CodPlay, idle?: false | Readonly<{
     instanceId: 'idle-instance',
     compiledScene: scene,
     root: document.createElement('div'),
-    mountTargets: [{ id: 'idle-root', kind: 'root', storyId: 'idle-facade-scene' }],
     idle,
   })
 }

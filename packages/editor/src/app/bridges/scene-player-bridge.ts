@@ -1,7 +1,7 @@
 import type { Actor } from 'xstate'
 import { CodPlay } from 'codplay'
 import type { CodPlayInstance } from 'codplay'
-import { buildSceneDocV2, EDITOR_V2_STORY_ID } from '../../builder-v2'
+import { buildSceneDocV2 } from '../../builder-v2'
 import type { EditorScene } from '../commands/types'
 import type { controllerMachine } from '../controller/controller-machine'
 import type { BridgeHandle } from './types'
@@ -110,8 +110,6 @@ export function createScenePlayerBridge(
         compiledScene: compiled.compiledScene,
         functions: compiled.functions,
         root: stagedRoot,
-        durationMs: scene.meta.durationMs,
-        mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
       })
     } catch (error) {
       discardStagedInstance(null, stagedRoot)

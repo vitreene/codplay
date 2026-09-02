@@ -16,7 +16,7 @@ import type {
   RuntimeModuleServiceDefinition,
 } from '../runtime/catalog'
 import type { RuntimeEventInsertMode } from '../runtime/config/event-insertion'
-import type { MountTargetDeclaration, StrapCollections } from '../runtime/player/pipeline'
+import type { StrapCollections } from '../runtime/player/pipeline'
 import type { RuntimeIdleEvent, RuntimeIdleOptions } from '../runtime/idle'
 import type {
   RuntimePreloadApi,
@@ -308,11 +308,8 @@ type CodPlayInstanceOptionsBase = Readonly<{
   instanceId: string
   compiledScene: CompiledScene
   functions?: CompiledFunctionCollection
-  /** Fixed duration from an authoritative media or bounded track; omitted for an open scene. */
-  durationMs?: number
   /** Optional inactivity policy overriding the engine default for this player. */
   idle?: CodPlayIdleOptions
-  mountTargets?: readonly MountTargetDeclaration[]
   /** Optional reusable straps used only by declarations that name external implementations. */
   strapCollections?: StrapCollections
 }>

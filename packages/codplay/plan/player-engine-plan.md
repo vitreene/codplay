@@ -78,7 +78,7 @@ fonctions dans `CompiledScene`; le player les invoque respectivement à
 l'initialisation, au passage `ready -> playing` et après le nettoyage terminal.
 
 La frontière V2 transmet aux callbacks la vue compilée et immuable de la scène.
-Les stories et leurs eventimes étant déjà compilés avant l'exécution, toutes les
+Les eventimes de scène et de story étant déjà compilés avant l'exécution, toutes les
 stories déclarées sont disponibles dès l'initialisation et `schedule` est
 volontairement sans effet dans cette version. Cette différence est celle de la
 frontière `SceneDoc -> CompiledScene` ; elle ne doit pas être contournée par un

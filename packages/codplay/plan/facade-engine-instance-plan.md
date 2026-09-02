@@ -561,10 +561,10 @@ dernier état de progress ; `play` reste disponible pour le replay normal.
 ### Durée ouverte et horizon découvert — portage du concept V1
 
 Le concept V1 d’horizon ouvert s’applique lorsqu’aucun média ni track borné ne
-fournit de durée autoritative. Dans ce cas, `durationMs` est omis lors de la
-création de l’instance : le player continue d’avancer avec les ticks et expose
-comme durée le maximum entre la tête courante et les événements compilés ou
-enregistrés dans le journal. Un eventime ajouté au journal étend donc
+fournit de durée autoritative. V2 ne reçoit pas de durée lors de la création de
+l’instance : le player continue d’avancer avec les ticks et expose comme durée
+le maximum entre la tête courante et les événements compilés ou enregistrés dans
+le journal. Un eventime ajouté au journal étend donc
 immédiatement l’horizon observable, tandis qu’un média ou une track bornée
 conserve la durée fixe fournie par son circuit dédié.
 

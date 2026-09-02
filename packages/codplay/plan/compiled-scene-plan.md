@@ -37,6 +37,12 @@ La table fixe `CompiledPerso.actions` permet de dériver `actionTargetIndex` à 
 compilation. Cet index ne crée aucune action et ne remplace pas les déclarations
 des persos : il évite seulement une recherche de cibles pendant une capture live.
 
+`SceneDoc.eventimes` porte les occurrences relatives de portée scène. Elles sont
+compilées dans `CompiledScene.scene.eventimes`, puis appliquées à toutes les
+stories lors de la materialisation. Une factory peut ainsi injecter un event
+`{ name: 'sequence:end', startAt }` pour déclarer la borne terminale de la scène;
+la façade ne reçoit aucune durée séparée.
+
 La tranche est conduite en deux temps complementaires :
 
 1. Avant le code, examiner le builder, le schéma, le codec, les exports et les besoins du player pour classer

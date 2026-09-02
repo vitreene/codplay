@@ -32,6 +32,32 @@ function createCatalogForFixtures(): RuntimeCapabilityCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('compiles scene-level eventimes independently from story eventimes', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
+    const result = builder.build({
+      id: 'scene-eventime-scene',
+      eventimes: [{
+        name: 'sequence:end',
+        startAt: 2_500,
+        events: [{ name: 'scene:checkpoint', startAt: 100 }],
+      }],
+      stories: {
+        main: {
+          id: 'main',
+          persos: [],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.scene.eventimes).toEqual([{
+      name: 'sequence:end',
+      startAt: 2_500,
+      events: [{ name: 'scene:checkpoint', startAt: 100 }],
+    }])
+  })
+
   it('normalizes declared style colors before extracting CompiledScene', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot(), { diagnosticOutput: vi.fn() })
     const result = builder.build({

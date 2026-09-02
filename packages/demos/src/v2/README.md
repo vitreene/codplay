@@ -32,7 +32,8 @@ layout commun utilise la façade publique CodPlay : il crée un propriétaire
 l'instance et branche sa télécommande. Le catalogue, le ticker, le runner HTML
 et le traitement du resize restent internes à CodPlay ou au layout V2. Le
 registre porte uniquement les informations d'affichage et de chargement ; la
-durée est fournie par le module de scène au moment du chargement. Le conteneur
+borne éventuelle est déclarée par un eventime `sequence:end` dans la factory de
+la scène. Le conteneur
 du player est celui du layout, avec une classe stable ; une démo ne lui ajoute
 pas de classe de structure par le registry.
 
@@ -55,12 +56,11 @@ automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
 suspend lorsqu'aucune instance ne joue. Le layout n'appelle donc pas les
 commandes générales de l'engine et ne pilote jamais directement le runner.
 
-Le layout de validation injecte à chaque propriétaire `CodPlay` un scheduler de
-test fondé sur `setTimeout`, avec `pauseOnDocumentHidden: false`. Il ne crée ni
-`TimeTicker` ni ticker de démo : CodPlay garde ces détails en interne. Cette
-configuration appartient uniquement au cadre de test des démos ; leur lecture
-ne dépend ni de `document.hidden` ni de la suspension du
-`requestAnimationFrame` lorsque Safari masque la page.
+Le layout laisse chaque propriétaire `CodPlay` utiliser le scheduler de frames
+interne, avec `pauseOnDocumentHidden: false`. Il ne crée ni `TimeTicker` ni
+ticker de démo : CodPlay garde ces détails en interne. Le markup structurel de
+la page est défini dans `index.html`; le layout TypeScript ne fait que le
+brancher aux métadonnées, à la scène et aux contrôles partagés.
 
 Le journal est une couche d'observation facultative. Son panneau est activable
 par un toggle, ses écritures sont regroupées par frame et son conteneur ne

@@ -30,7 +30,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			]);
 			return {
 				createScene: module.createScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 			};
 		},
@@ -47,7 +46,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			]);
 			return {
 				createScene: module.createComponentsScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 			};
 		},
@@ -80,7 +78,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			])
 			return {
 				createScene: module.createScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 			}
 		},
@@ -99,7 +96,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			]);
 			return {
 				createScene: module.createNestedFlipScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 			};
 		},
@@ -117,7 +113,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			const { quizSeriesAutoPlayback } = await import('./demos/quiz-series/auto-playback');
 			return {
 				createScene: module.createScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 				playback: quizSeriesAutoPlayback,
 			};
@@ -135,7 +130,6 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			])
 			return {
 				createScene: module.createScene,
-				durationMs: module.SCENE_DURATION_MS,
 				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
 			}
 		},
