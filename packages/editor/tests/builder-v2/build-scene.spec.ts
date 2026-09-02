@@ -193,6 +193,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
       height: 25,
       rotate: 15,
       scale: { x: 1.2, y: 0.9 },
+      rotationOrigin: { fx: 0.25, fy: 0.75 },
     }
     const result = buildSceneDocV2(scene)
     expect(result.ok).toBe(true)
@@ -207,6 +208,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
         rotate: 15,
         scaleX: 1.2,
         scaleY: 0.9,
+        'transform-origin': '25% 75%',
       },
     })
   })

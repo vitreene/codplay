@@ -505,13 +505,21 @@ interface AuthorMarker {
 
 La grille gère les références de décors selon ce protocole :
 
-**À la création d'un keyframe (`addKeyframe`)** : en l'absence de candidat de preview fourni par
-l'intégration V2, la grille cherche le keyframe adjacent le plus proche (précédent ou suivant) sur
-le même track. Si un voisin existe, le nouveau keyframe hérite de son `decorId` — les deux
-keyframes partagent la même entrée dans `scene.decors`. Si aucun voisin n'existe (premier keyframe
-du track), une entrée vide `{ id: newId, data: {} }` est créée. La grille ne lit jamais le contenu
-du décor : lorsque `decor-editor` possède une preview `isTemporary`, le bridge de coordination peut
-remplacer cette référence par un décor frais rempli du candidat dans la transaction de création.
+**À la création d'un keyframe (`addKeyframe`)** : la grille reste opaque au contenu du décor et
+émet seulement l'intention. Pour une insertion V2 située entre deux keyframes, le bridge de
+coordination lit l'état logique présenté exactement à `timeMs` via `snapshot.get()` : il capture
+toutes les propriétés CSS et la pose interpolées, puis superpose le candidat de preview accepté s'il
+existe (l'intervention utilisateur prime propriété par propriété, sans effacer les autres valeurs
+interpolées). Si le résultat diverge de la cascade héritée, le bridge omet le `decorId` adjacent,
+crée un décor frais et le remplit par `setDecor` dans la même transaction. Si le résultat est
+identique à la cascade, le partage du décor adjacent reste valide. L'accusé de réception du seek
+doit être obtenu avant la capture afin qu'un snapshot d'un temps précédent ne puisse pas être
+photographié. En l'absence de joueur présenté (par exemple un appel de la machine isolée), la
+grille conserve son comportement pur d'héritage.
+
+Hors d'un intervalle interpolé (avant le premier, après le dernier ou sans voisin), l'état est déjà
+celui d'un décor documentaire ; l'héritage adjacent reste donc suffisant et aucun snapshot live
+n'est requis.
 
 **À la modification d'un décor (externe)** : l'éditeur de décors est responsable de vérifier si le `decorId` courant est partagé. Si oui, il doit créer une nouvelle entrée dans `scene.decors` (via `registerDecor`) et appeler `assignDecor` pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés. Cette logique copy-on-write est **hors périmètre** de la grille.
 

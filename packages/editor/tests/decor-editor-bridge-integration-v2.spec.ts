@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import { controllerMachine } from '../src/app/controller/controller-machine'
 import { EditorCoordinationBridge } from '../src/app/bridges/editor-coordination-bridge'
@@ -46,6 +46,22 @@ function scene() {
 async function waitTurns(count = 16): Promise<void> {
   for (let i = 0; i < count; i += 1) await Promise.resolve()
 }
+
+/** Builds a pointer event whose capture lifecycle is sufficient for the V2 overlay in jsdom. */
+function pointerEvent(type: string, clientX: number, clientY: number): Event {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
+  Object.defineProperty(event, 'pointerId', { value: 1 })
+  Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
+  return event
+}
+
+beforeAll(() => {
+  if (typeof HTMLElement.prototype.setPointerCapture !== 'function') {
+    HTMLElement.prototype.setPointerCapture = function (): void {}
+    HTMLElement.prototype.hasPointerCapture = function (): boolean { return false }
+    HTMLElement.prototype.releasePointerCapture = function (): void {}
+  }
+})
 
 describe('decor-editor bridge V2 — preview interpolée et seek', () => {
   let actor: ReturnType<typeof createActor<typeof controllerMachine>> | undefined
@@ -118,5 +134,87 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     await waitTurns()
     expect(item!.getAttribute('style')).toBe(candidateStyle)
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
+  })
+
+  it('fait passer rotation, axe, preview puis commit par le circuit V2 du décor', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = scene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns()
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
+    const tip = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')
+    const pivot = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-pivot]')
+    expect(frame).not.toBeNull()
+    expect(tip).not.toBeNull()
+    expect(pivot).not.toBeNull()
+
+    // At 2.5s the interpolated item is x/y=30cqw and 20cqw wide: the default axis is (320, 320).
+    tip!.dispatchEvent(pointerEvent('pointerdown', 320, 284))
+    tip!.dispatchEvent(pointerEvent('pointermove', 356, 320))
+    tip!.dispatchEvent(pointerEvent('pointerup', 356, 320))
+
+    const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(itemNode.style.transform).toContain('rotate(90deg)')
+    expect(frame!.style.transformOrigin).toBe('50% 50%')
+
+    // The pivot drag is previewed in the same frame channel and updates the origin without a
+    // second player circuit. Move it to the top-left characteristic point.
+    pivot!.dispatchEvent(pointerEvent('pointerdown', 320, 320))
+    pivot!.dispatchEvent(pointerEvent('pointermove', 400, 240))
+    pivot!.dispatchEvent(pointerEvent('pointerup', 400, 240))
+    expect(itemNode.style.transformOrigin).toBe('0% 0%')
+    expect(coordination.decorPreview.getAt('item', 2_500)).not.toBeNull()
+    expect(actor.getSnapshot().context.scene).toBe(documentScene)
+
+    // At an exact keyframe the same modifier path targets the document decor. The explicit
+    // deselection is the phase boundary that flushes the pending patch; a temporary target above
+    // remains preview-only, as required by the V2 contract.
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns()
+    const exactFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    const exactTip = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')!
+    const exactPivot = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-pivot]')!
+    exactTip.dispatchEvent(pointerEvent('pointerdown', 160, 124))
+    exactTip.dispatchEvent(pointerEvent('pointermove', 196, 160))
+    exactTip.dispatchEvent(pointerEvent('pointerup', 196, 160))
+    exactPivot.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    exactPivot.dispatchEvent(pointerEvent('pointermove', 240, 80))
+    exactPivot.dispatchEvent(pointerEvent('pointerup', 240, 80))
+    const exactItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(exactFrame.style.transformOrigin).toBe('0% 0%')
+    expect(exactItemNode.style.transform).toContain('rotate(90deg)')
+    expect(exactItemNode.style.transformOrigin).toBe('0% 0%')
+
+    actor.send({ type: 'CLEAR_SELECTION' })
+    await waitTurns(24)
+    const committedScene = actor.getSnapshot().context.scene!
+    expect(committedScene).not.toBe(documentScene)
+    expect(committedScene.decors.first?.offset).toMatchObject({
+      rotate: 90,
+      rotationOrigin: { fx: 0, fy: 0 },
+    })
   })
 })

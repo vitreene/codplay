@@ -100,4 +100,40 @@ describe('editor V2 player interpolation', () => {
     expect(item?.style.height).toBe('136px')
     expect(item?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
   })
+
+  it('interpole aussi l’origine de rotation structurée dans la même action', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const source = interpolationScene()
+    source.decors.first!.offset!.rotationOrigin = { fx: 0.25, fy: 0.25 }
+    source.decors.second!.offset!.rotationOrigin = { fx: 0.75, fy: 0.75 }
+    const built = buildSceneDocV2(source)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-origin-interpolation',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500)
+    const snapshot = instance.snapshot.get()
+    const state = snapshot?.states.find((entry) => entry.target.persoId === 'item')?.state
+    const style = state?.style as Record<string, unknown> | undefined
+    expect(style?.['transform-origin']).toBe('50% 50%')
+
+    const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    expect(item?.style.transformOrigin).toBe('50% 50%')
+  })
 })

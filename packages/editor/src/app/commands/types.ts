@@ -136,6 +136,8 @@ export interface OffsetData {
   rotate?: number
   scale?: { x: number; y: number }
   ratio?: number | null
+  /** Rotation axis in local-box fractions; omitted means the box center. */
+  rotationOrigin?: { fx: number; fy: number }
 }
 
 export type ClassNameValue = string | string[]

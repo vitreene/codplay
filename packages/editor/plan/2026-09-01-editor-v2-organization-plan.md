@@ -3,6 +3,10 @@
 **Statut : En cours — C1/S1, B1–B3, D1 de base, D2 et R1 de la verticale
 position/taille sont implémentés et vérifiés ; l'édition à un temps interpolé
 (`isTemporary`) est raccordée au candidat V2 et son cas seek/rebuild est vérifié ;
+la capture de keyframe compose désormais le snapshot interpolé au temps exact et
+le candidat d'édition ;
+la rotation avec axe déplaçable est maintenant raccordée dans l'entrée V2 du cadre
+et dans le bridge décor ; la preuve navigateur de cette extension reste à exécuter ;
 la matrice globale reste en cours avec S2 et les contrôles complémentaires dans Safari Technology Preview.
 Les extensions hors verticale ne sont pas engagées.**
 **Cible :** `ed2` avec la façade CodPlay V2.
@@ -252,8 +256,8 @@ dans le [rapport de reprise après B3](./2026-09-01-editor-v2-b3-reprise-report.
 | --- | --- | --- |
 | C1/S1 | Les nombres unitless des quatre longueurs structurées sont qualifiés en `cqw` par CodPlay ; `snapshot.get/set/clear` suit le même transport. La frontière HTML ajoute l'unité aux angles numériques avant l'application CSS. | Tests core ciblés : 4 fichiers, 37 tests ; typecheck core passé. |
 | B1–B3 | `EditorPlayerCommandFacade` est le seul appelant de `instance.telco`. `EditorCoordinationBridge` est indépendant de la façade et relie le player, `sequence-editor` et `decor-editor`. La progression auteur reste dans `sequence-editor`; la télécommande intégrée à cette interface conserve la séquence de pilotage historique. | Play/Pause/Stop, seek et réconciliation exécutés sur l'outil réel. |
-| D1 | La base de `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. L'extension V2 autorisant un geste entre deux keyframes sans décor persistant conserve son candidat dans le port de coordination jusqu'à la création du keyframe. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés sur décor existant ; le cas `isTemporary` est éditable, capturé par un décor frais à la création du KF et sélectionné après insertion. L'intégration seek hors temps → retour au temps preview est couverte par test et par le parcours Safari Technology Preview. |
-| D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas px. Le bridge d'application conserve la sélection, les unités et le cycle preview/commit. | 3 tests V2 et parcours navigateur avec cadre visible. |
+| D1 | La base de `decor-editor-bridge` lit le snapshot, projette en px locaux, maintient une base de geste, preview par `snapshot.set()`, puis commit xState après `snapshot.clear()`. Les panneaux et le cadre ne lisent ni n'écrivent un node player. L'extension V2 autorisant un geste entre deux keyframes sans décor persistant conserve son candidat dans le port de coordination jusqu'à la création du keyframe. À l'insertion, le pont compose toutes les propriétés CSS/pose du snapshot présenté au temps exact et le candidat utilisateur par-dessus. | Move, resize, couleur + géométrie, commit, rebuild et abandon validés sur décor existant ; le cas `isTemporary` est éditable, capturé par un décor frais à la création du KF et sélectionné après insertion. L'intégration seek hors temps → retour au temps preview est couverte par test et par le parcours Safari Technology Preview. La capture sans preview, la fusion candidat + interpolation et l'attente de `SEEK_APPLIED` sont couvertes par les tests V2 et par le parcours Safari Technology Preview sans édition à `2,5 s` : troisième KF sélectionné, couleur interpolée `oklch(0.6 0.24 322.5)`, rotation `7,5°`, pose intermédiaire conservée, aucune erreur ni warning. |
+| D2 | `@codplay/selection-frame/v2` est un overlay bas niveau neutre ; il reçoit une valeur px et émet des deltas de geste (`move`/`resize` en px, `rotate` en degrés, `pivot` en fractions). Le bridge d'application conserve la sélection, les unités, l'algèbre de resize ancrée sous rotation, la compensation du déplacement d'axe et le cycle preview/commit. | Tests de l'overlay pour axe/aiguille/rotation/pivot, régressions géométriques du bridge et builder ; parcours navigateur avec cadre visible et rotation/pivot encore à rejouer. |
 | R1 | Les bridges, tests, dépendances et chemins V1 de la verticale migrée sont retirés. `packages/authoring/selection-frame` conserve ses autres entrées historiques hors de cette verticale ; seule l'entrée `/v2` est consommée par l'éditeur. | Recherche sans import V1 dans `packages/editor/src` et `packages/editor/package.json` ; suite éditeur V2 passée. |
 
 Le bridge de scène a également été aligné sur la façade CodPlay actuellement
@@ -343,6 +347,57 @@ demandée `1024 × 768`, ils restent également identiques (`menu 0,0,220,496`,
 palette. La racine
 `.editor-v2-instance-root` reste unique et identique pendant
 sélection/désélection ; la console STP ne signale ni erreur ni avertissement.
+
+### Correctif de resize ancré sous rotation V2 — 2026-09-02
+
+Le premier calcul du bridge ajoutait `dx`/`dy` directement à `width`/`height`
+et reconstruisait `x`/`y` sur les axes non tournés. Comme le cadre V2 applique
+la rotation et l'échelle autour de son centre, le côté opposé dérivait dès
+qu'un item était tourné.
+
+Le bridge projette maintenant le delta dans les axes locaux de la pose de base,
+applique la borne minimale de `4px`, puis translate le centre selon la moitié
+de la variation effectivement acceptée. Le côté opposé (ou le coin opposé)
+reste ainsi au même point visuel pour les poignées latérales et angulaires ;
+la rotation et l'échelle restent inchangées. Le calcul reste dans la frontière
+`decor-editor`/Selection Frame et n'ajoute aucun accès au player ou au core.
+
+La régression est couverte par deux tests V2 : côté opposé d'un resize latéral
+avec rotation, puis coin opposé d'un resize angulaire avec rotation et échelle.
+La vérification dans Safari Technology Preview reste à exécuter sur le parcours
+réel ; elle ne peut pas être déclarée comme preuve tant que l'automatisation
+WebDriver/Apple Events n'est pas activée dans les réglages développeur de cet
+environnement.
+
+### Extension V2 rotation et axe déplaçable — 2026-09-02
+
+La première verticale avait laissé `rotate`/`scale` hors du circuit du cadre ; la
+spécification dedit §6.0.2 arrête maintenant leur intégration V2. L'entrée
+`selection-frame/v2` compose un modifieur de rotation indépendant : il rend une
+aiguille et un pivot central par défaut, émet un delta angulaire autour d'un
+pivot figé pendant le geste, puis accepte le déplacement du pivot en fractions
+locales. Le rayon de l'aiguille est au moins
+`36px` et la variation angulaire est arrondie au degré (`Shift` : pas de `15°`),
+ce qui conserve la finesse accrue quand le pointeur s'éloigne de l'axe.
+
+`rotationOrigin` est stocké dans `Decor.offset` en fractions `[0,1]` et le
+builder le matérialise en `transform-origin`. Le déplacement du pivot compense
+la translation par l'algèbre de la pose courante pour éviter un saut visuel ;
+rotation, pivot, preview temporaire et commit empruntent ensuite exactement le
+même canal snapshot/xState que move/resize. Aucun accès de node ou contrat V1
+n'est réintroduit.
+
+Le cadre de base ne connaît pas le vocabulaire de la rotation : le modifieur
+expose `update/reset/destroy` et réserve seulement les poignées magnétisées par
+le contexte de composition. Cette frontière permet d'ajouter une future
+capacité du CS sans modifier move/resize ni le bridge décor.
+
+Les tests couvrent l'affichage et les gestes de l'overlay, la composition d'un
+modifieur indépendant, l'ancrage visuel lors du changement d'axe, la conversion
+px↔offset et le mapping builder. La preuve
+du parcours réel dans Safari Technology Preview (rotation, déplacement d'axe,
+seek/rebuild et persistance) reste obligatoire avant de déclarer cette extension
+stable ; l'automatisation est encore désactivée dans l'environnement courant.
 
 ## Audit ciblé — façade documentaire et machines d'état
 
@@ -1283,13 +1338,17 @@ Extensions grille, multi-sélection et repères complexes hors périmètre.**
 10. Autoriser un geste de cadre ou de palette lorsque `resolveTarget` indique
     `isTemporary`. La valeur candidate reste une preview V2, sans écriture
     documentaire. À la création d'un keyframe au temps présenté, le bridge
-    de coordination transmet cette candidate au `sequence-editor`, qui crée
-    un décor frais et le remplit dans la même transaction ; `snapshot.get()`
-    ne peut pas servir seul de capture puisqu'il exclut la preview active.
+    de coordination compose l'état CSS et la pose interpolés fournis par le
+    snapshot avec cette candidate (la candidate prime uniquement sur les
+    propriétés qu'elle modifie) ; il crée un décor frais et le remplit dans
+    la même transaction. `snapshot.get()` ne peut pas servir seul de capture
+    puisqu'il exclut la preview active.
 11. Faire correspondre une création arrondie de la timeline avec le candidat
-    auteur dans une tolérance d'un demi-pas (`50 ms`), puis sélectionner le
-    keyframe capturé afin que l'édition suivante cible immédiatement son décor
-    persistant, même si le seek initial n'était pas exactement sur le pas.
+    auteur dans une tolérance d'un demi-pas (`50 ms`), attendre `SEEK_APPLIED`
+    lorsque le snapshot n'est pas encore au `timeMs` du keyframe, puis
+    sélectionner le keyframe capturé afin que l'édition suivante cible
+    immédiatement son décor persistant, même si le seek initial n'était pas
+    exactement sur le pas.
 
 **Sortie :** palette et cadre utilisent le même canal de preview et la même
 base logique ; aucune lecture de node ne participe à la construction d'un
@@ -1356,30 +1415,37 @@ Ce scénario est la preuve minimale avant d'élargir la migration aux autres
    propriétés passe par une mise à jour atomique du snapshot ; son commit
    passe par une commande xState et le rebuild restitue les deux valeurs.
 16. Entre les deux keyframes, la première sélection affiche le cadre et
-    autorise immédiatement un déplacement, un resize et une modification de
-    couleur. Ces gestes ne produisent aucune commande documentaire tant qu'il
-    n'y a pas de décor persistant à cet instant.
-17. Une création de keyframe à `t` capture le candidat accepté à `t` dans un
-    décor frais, même si le seek réel vaut `t - 12,5 ms` et que la timeline
-    arrondit le nouveau keyframe à `t`. Le keyframe est sélectionné après la
-    transaction ; une édition suivante suit alors le chemin normal de commit.
+    autorise immédiatement un déplacement, un resize, une rotation autour de
+    l'axe et une modification de couleur. Ces gestes ne produisent aucune
+    commande documentaire tant qu'il n'y a pas de décor persistant à cet instant.
+17. Une création de keyframe à `t` capture l'état interpolé du snapshot au
+    temps exact `t` dans un décor frais, puis superpose le candidat accepté à
+    `t` s'il existe ; aucune propriété interpolée absente du candidat ne doit
+    disparaître. Si le seek réel vaut `t - 12,5 ms` et que la timeline arrondit
+    le nouveau keyframe à `t`, la capture attend `SEEK_APPLIED` avant de lire le
+    snapshot. Le keyframe est sélectionné après la transaction ; une édition
+    suivante suit alors le chemin normal de commit.
 18. Un seek hors de `t`, puis retour à `t`, restitue le candidat non committé
     tant qu'aucun keyframe n'est créé ; Échap l'abandonne sans modifier
     `EditorScene`. Après création du keyframe, un seek/rebuild puis retour
     restitue le décor documenté.
 
-Les cas `rotate`, `scale`, capsule/grille et édition CSS libre ne sont pas
-nécessaires pour valider cette première verticale. Ils doivent rester
-explicitement hors de son circuit tant qu'un plan dédié ne les prend pas en
-charge ; ils ne peuvent pas réintroduire une lecture de node V1.
+Dans l'état initial de cette première verticale, les cas `rotate` et `scale`
+étaient hors circuit. L'extension V2 du 2026-09-02 lève explicitement cette
+exclusion pour `rotate` et son axe ; `scale`, capsule/grille et édition CSS libre
+restent hors circuit jusqu'à leur propre plan. Aucune de ces extensions ne peut
+réintroduire une lecture de node V1.
 
 ### D2 — connecter le Selection Frame comme interface de `decor-editor`
 
-**Statut : réalisé pour l'entrée V2 consommée par l'éditeur.**
+**Statut : réalisé côté code pour l'entrée V2 consommée par l'éditeur ; preuve
+navigateur de la rotation et de l'axe encore requise.**
 
-**Fichiers traités :** `packages/authoring/selection-frame/src/v2.ts` et son
-test ; le package reste un outil bas niveau et ne devient pas le propriétaire du
-décor. Les autres entrées historiques du package sont hors de cette migration.
+**Fichiers traités :** `packages/authoring/selection-frame/src/v2.ts`,
+`src/v2/types.ts`, `src/v2/rotation-modifier.ts` et leurs tests ; le package
+reste un outil bas niveau et ne devient pas le propriétaire du décor. Les
+capacités sont montées comme des modifieurs indépendants ; les autres entrées
+historiques du package sont hors de cette migration.
 
 **Actions :**
 
@@ -1388,9 +1454,10 @@ décor. Les autres entrées historiques du package sont hors de cette migration.
 2. Fournir au cadre une `SelectionFrameValue` locale en px depuis
    `decor-editor-bridge`, après lecture du snapshot et projection dans la
    racine de scène. Aucun adaptateur de pose V1 n'est conservé.
-3. Garder les coordonnées du geste en px pour `move` et `resize`, puis
-   transmettre uniquement des deltas au bridge ; celui-ci produit les champs
-   structurés unitless du patch V2.
+3. Garder les coordonnées du geste en px pour `move` et `resize`, les degrés
+   pour `rotate` et les fractions pour `pivot`, puis transmettre uniquement des
+   deltas au bridge ; celui-ci produit les champs structurés unitless du patch
+   V2.
 4. Après chaque preview, afficher la valeur candidate fournie par
    `decor-editor` ;
    ne pas relire `snapshot.get()` pour chercher une preview absente du getter.
@@ -1448,6 +1515,7 @@ pas de filet de compatibilité.
 | Façade player / bridge | `instance.telco` garde le contrat V2 (`Promise<void>` + diagnostics) ; `EditorPlayerCommandFacade` exécute et observe, le bridge adapte les intentions de `sequence-editor` et vérifie les postconditions avant `SEEK_APPLIED`/handoff |
 | Lecture | animation pilotée par `telco` ; CS et édition suspendus ; sortie de lecture = une seule réconciliation player → temps auteur |
 | Édition | move et resize px, avec les autres changements du décor, → patch unitless cohérent → preview atomique → retour px |
+| Rotation / axe | aiguille V2 autour de `rotationOrigin`, pivot déplaçable et compensé, → patch `offset.rotate`/`offset.rotationOrigin` → preview atomique → commit/rebuild |
 | Preview interpolée | `isTemporary` reste éditable ; le candidat accepté est séparé de `snapshot.get()`, survit au seek/rebuild et n'est persisté qu'avec un décor frais créé par le keyframe |
 | Persistance | commit par commande xState, rebuild, resélection et snapshot cohérents |
 | Structure | parent/enfant et reparent sans réintroduire un accès node V1 |

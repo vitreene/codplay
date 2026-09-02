@@ -42,6 +42,8 @@ export interface OffsetPatch {
   translate?: { x: number; y: number } // cqw
   rotate?: number // degrés
   scale?: { x: number; y: number }
+  /** Rotation axis in local-box fractions; omitted means the box center. */
+  rotationOrigin?: { fx: number; fy: number }
 }
 
 // ─── Text auto-size (module non-CSS, transposé en aval — spec text-auto-size §5) ──
@@ -123,5 +125,7 @@ export interface SelectionFrameValue {
   rotate?: number
   scaleX?: number
   scaleY?: number
+  /** Rotation axis in local-box fractions; omitted means the box center. */
+  rotationOrigin?: { fx: number; fy: number }
 }
 export type Unsubscribe = () => void

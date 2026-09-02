@@ -165,6 +165,7 @@ interface OffsetPatch {
   translate?: { x: number; y: number }   // cqw
   rotate?: number                 // degrés
   scale?: { x: number; y: number }
+  rotationOrigin?: { fx: number; fy: number } // fractions de la boîte locale, défaut centre
 }
 
 interface DecorPatch {
@@ -469,6 +470,12 @@ Le cadre de sélection est une surface d'interaction de `decor-editor`. Le packa
 connaît ni le player, ni `instance.snapshot`, ni le document, ni la conversion d'unités.
 L'intégration applicative est portée par `decor-editor-bridge`.
 
+L'entrée V2 est composée de modifieurs indépendants : le cadre de base porte le déplacement et le
+redimensionnement, tandis que chaque capacité additionnelle monte ses contrôles et ses sessions
+de geste via un contexte neutre. La rotation et l'axe déplaçable sont fournis par le modifieur
+`createRotationModifier()` ; une future capacité du CS doit suivre la même frontière et rester
+réutilisable par un autre hôte, sans ajouter sa politique au bridge de décor.
+
 La première verticale V2 manipule la valeur suivante dans le repère local px de la racine
 de scène :
 
@@ -481,11 +488,14 @@ interface SelectionFrameValue {
   rotate?: number       // degrés, sans conversion d'unité
   scaleX?: number       // facteur, sans conversion d'unité
   scaleY?: number       // facteur, sans conversion d'unité
+  rotationOrigin?: { fx: number; fy: number } // fractions locales ; défaut {fx: .5, fy: .5}
 }
 
 type SelectionFrameDelta =
   | { kind: 'move'; dx: number; dy: number }
   | { kind: 'resize'; handle: string; dx: number; dy: number }
+  | { kind: 'rotate'; dr: number } // degrés depuis le début du geste
+  | { kind: 'pivot'; fx: number; fy: number } // position absolue dans la boîte locale
 ```
 
 Le circuit est déterministe :
@@ -494,9 +504,11 @@ Le circuit est déterministe :
    coordination et résout l'état logique de l'item au temps présenté ;
 2. il convertit `x/y/width/height` en px avec la largeur de la racine de scène et remet
    cette valeur au cadre ; le cadre n'effectue aucune lecture du node rendu ;
-3. pendant un geste, le cadre émet des deltas px. Le bridge conserve la base du geste,
-   calcule la valeur candidate en px et convertit cette valeur en nombres `unitless` dans
-   `offset.translate`, `offset.width` et `offset.height` ;
+3. pendant un geste, le cadre émet des deltas px pour le déplacement/redimensionnement,
+   des degrés pour la rotation et des fractions pour l'axe. Le bridge conserve la base du
+   geste, calcule la valeur candidate en px et convertit cette valeur en nombres `unitless`
+   dans `offset.translate`, `offset.width`, `offset.height`, `offset.rotate` et
+   `offset.rotationOrigin` ;
 4. le même patch de décor peut contenir des changements de style. Il est envoyé
    atomiquement à `instance.snapshot.set()` pour la preview ; `snapshot.get()` n'est pas
    utilisé pour relire cette preview ;
@@ -505,6 +517,46 @@ Le circuit est déterministe :
    sans mutation documentaire ;
 6. en lecture, le cadre est suspendu. Un seek, un rebuild, une nouvelle sélection ou un
    redimensionnement de la racine déclenche une nouvelle projection depuis la base logique.
+
+### 6.0.1 Redimensionnement avec rotation — invariant d'ancrage
+
+Le cadre V2 est rendu avec l'origine de transformation de la valeur (au centre par défaut).
+Pour un delta `resize`, le bridge reconstruit toujours la valeur depuis la base du geste :
+
+1. `dx`/`dy` sont projetés par l'inverse de la rotation et de l'échelle de la base, afin
+   d'obtenir les variations `width`/`height` dans les axes locaux de l'item ;
+2. la dimension résultante est bornée à `4px` au minimum ;
+3. le point opposé est recalculé dans la pose transformée complète (rotation, échelle et axe
+   courant), puis `x`/`y` sont reconstruits pour le maintenir exactement fixe.
+
+Ainsi, le point caractéristique opposé reste invariant dans le repère visuel transformé :
+le côté opposé pour une poignée latérale (`e`/`w`/`n`/`s`) et le coin opposé pour une
+poignée d'angle. Un déplacement tangent au côté ne modifie pas sa dimension. La rotation
+et l'échelle ne sont pas modifiées par ce geste ; la base capturée au `pointerdown` reste
+la seule source du calcul jusqu'à la fin ou l'abandon du geste.
+
+### 6.0.2 Rotation et axe déplaçable — contrat V2
+
+L'entrée V2 du cadre expose, pour chaque sélection, une aiguille de rotation et un point d'axe :
+
+- l'axe vaut `{ fx: 0.5, fy: 0.5 }` quand `rotationOrigin` est absent ; il est rendu au centre
+  de la boîte locale et l'aiguille possède une longueur minimale de `36px` ;
+- le déplacement de l'aiguille produit un delta `rotate` en degrés autour de l'axe figé au début
+  du geste. Le delta est calculé comme une variation d'angle du pointeur autour de l'axe puis
+  arrondi au degré ; un rayon plus grand transforme donc un même déplacement physique en une
+  variation angulaire plus fine. `Shift` arrondit l'angle à des pas de `15°` ;
+- le point d'axe est lui-même déplaçable dans la boîte locale. Le cadre émet sa position absolue
+  `pivot.fx/fy`, bornée dans `[0,1]`; les huit points caractéristiques sont capturés dans un
+  rayon de `8px` et la poignée de resize qui coïncide est masquée pendant ce contact ;
+- déplacer l'axe conserve la pose visuelle courante : le bridge compense `offset.translate` par
+  `(I - R·S)·(O précédent - O nouveau)`, puis persiste `rotationOrigin` dans le même écart que
+  `rotate`. Un double-clic sur l'axe rétablit le centre ;
+- `rotationOrigin` est une donnée d'`offset`, exprimée en fractions de la boîte non transformée.
+  Le builder la matérialise en `style['transform-origin']` (`<fx*100>% <fy*100>%`) ; la preview
+  passe par `snapshot.set()` et la persistance par le commit xState déjà utilisé par move/resize.
+  Aucune écriture de node, pose V1 ou deuxième canal de player n'est introduit ;
+- une rotation ou un déplacement d'axe à un temps interpolé suit le même contrat d'édition
+  temporaire (§ 6.1) : le candidat reste une preview jusqu'à la création volontaire d'un keyframe.
 
 ### 6.1 Édition à un temps interpolé (contrat V2)
 

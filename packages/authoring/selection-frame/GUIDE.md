@@ -16,12 +16,22 @@ l'uniformité des comportements de haut niveau.
 ## Entrée V2 utilisée par l'éditeur
 
 L'intégration V2 de l'éditeur importe `@codplay/selection-frame/v2`. Cette entrée fournit un
-overlay neutre de move/resize :
+overlay neutre de move/resize auquel des **modifieurs de capacité** sont montés :
 
 - `setValue(value)` reçoit une `SelectionFrameValue` en pixels locaux dans le repère de la racine
   de scène ;
-- les gestes émettent des deltas pixels (`move` ou `resize`) au callback de l'hôte ;
+- les gestes émettent des deltas pixels (`move` ou `resize`), des degrés (`rotate`) ou des
+  fractions de boîte (`pivot`) au callback de l'hôte ;
+- l'axe est au centre par défaut ; l'aiguille suit le pointeur autour d'un axe figé pendant la
+  rotation et sa longueur minimale de 36px donne une variation angulaire plus fine à distance ;
+- le pivot se déplace dans la boîte locale, magnétise les huit points caractéristiques et ne
+  connaît aucune donnée documentaire ; son candidat est remis à l'hôte comme tout autre geste ;
 - `setSuspended(true)` masque le cadre pendant la lecture ;
+- `modifiers` compose des modules indépendants dans le même cadre. La valeur par défaut installe
+  `createRotationModifier()` ; passer `modifiers: []` conserve seulement move/resize. Chaque module
+  possède son DOM, ses gestes et son cycle `update/reset/destroy`, et communique uniquement par
+  `SelectionFrameV2ModifierContext`. Un module futur (snap, contrainte, annotation…) peut donc
+  être réutilisé par un autre hôte sans copier le cadre ni le bridge `decor-editor` ;
 - le cadre ne connaît ni `instance.snapshot`, ni le player, ni le document, ni les unités
   logiques ;
 - le commit, l'abandon et la conversion px ↔ valeur logique restent sous la responsabilité de
@@ -30,6 +40,19 @@ overlay neutre de move/resize :
 Le cadre V2 ne mesure donc pas un item player et n'écrit pas dans son DOM. Les autres entrées du
 package restent disponibles pour les modules non encore migrés ; elles ne font pas partie du
 circuit V2 de l'éditeur.
+
+### Modifieurs V2
+
+Un modifieur est déclaré par `{ name, mount(context) }` et retourne un handle qui expose ses
+contrôles et sessions. Le module ne reçoit ni document, ni player, ni unités logiques : il reçoit
+la valeur locale courante, demande une preview par un `SelectionFrameDelta`, publie le candidat
+accepté avec `renderValue`, puis délègue le commit ou l'abandon à l'hôte. Le cadre de base ne
+connaît ainsi pas le vocabulaire propre à la rotation.
+
+Le modifieur actuellement fourni est `createRotationModifier()` (`v2/rotation-modifier.ts`) : il
+monte l'aiguille, l'épingle d'axe et les gestes `rotate`/`pivot`. D'autres capacités peuvent être
+ajoutées comme des modules séparés et passées dans `modifiers`, sans modifier le circuit de move,
+resize ou de persistance de l'éditeur.
 
 ## La boîte à outils bas niveau
 

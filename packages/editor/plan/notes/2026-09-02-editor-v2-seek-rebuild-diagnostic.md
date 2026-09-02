@@ -154,5 +154,33 @@ La validation ciblée finale confirme :
   frais, sélectionne le keyframe et conserve le changement ; après un seek arrière, Play reprend et
   l'item évolue de nouveau avec le temps.
 
+## Correction de capture au moment de la création du keyframe
+
+La première implémentation ne persistait le décor frais que lorsqu'un candidat de preview était
+présent. Elle ignorait donc le cas pourtant obligatoire où l'auteur ajoute un keyframe pendant une
+interpolation sans modifier l'item : le nouveau keyframe partageait alors le décor voisin au lieu
+de photographier l'état affiché. Elle remplaçait aussi entièrement le snapshot par le candidat,
+ce qui pouvait perdre une propriété interpolée que le geste utilisateur n'avait pas touchée.
+
+Le circuit V2 est maintenant explicite :
+
+- `snapshot.get()` fournit toutes les propriétés CSS résolues et la pose structurée au temps du
+  keyframe ; les propriétés de pose restent routées vers `Decor.offset` ;
+- le candidat conservé par `EditorCoordinationBridge.decorPreview`, s'il existe, est fusionné
+  par-dessus ce snapshot, propriété par propriété ;
+- la création n'est enrichie que si l'état final diverge de la cascade, avec un décor frais et un
+  `setDecor` dans la même transaction ;
+- si le double-clic a demandé un seek encore asynchrone, `sequence-editor-bridge` attend
+  `SEEK_APPLIED` et vérifie la progression auteur ainsi que la cohérence temporelle du snapshot
+  avant de photographier l'état.
+
+Les tests V2 couvrent désormais la capture sans preview, la fusion preview + interpolation et le
+cas snapshot périmé. Dans Safari Technology Preview, le même parcours « Test position + couleur »
+a été repris sans aucune intervention sur Item A : l'ajout au milieu à `2,5 s` attend bien le seek
+appliqué, crée le troisième keyframe, le sélectionne et restitue la couleur interpolée
+`oklch(0.6 0.24 322.5)`, la rotation `7,5°` et la pose intermédiaire. La console ne signale ni
+erreur ni warning ; la capture est conservée dans
+`/private/tmp/editor-kf-interpolation-capture-stp-selected.png`.
+
 La matrice globale reste ouverte pour les combinaisons hors de ce cas (S2, parcours complet de
 resize/lifecycle et extensions de structure) avant de marquer D1/R1 stabilisés.

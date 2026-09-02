@@ -158,6 +158,9 @@ export function resolveOffsetAsStyle(offset: Decor['offset']): Record<string, un
   if (offset.rotate !== undefined) style.rotate = offset.rotate
   if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
   if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
+  if (offset.rotationOrigin !== undefined) {
+    style['transform-origin'] = `${offset.rotationOrigin.fx * 100}% ${offset.rotationOrigin.fy * 100}%`
+  }
   return style
 }
 

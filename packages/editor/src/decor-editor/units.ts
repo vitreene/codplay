@@ -14,8 +14,8 @@ export function cqwToPx(cqw: number, containerWidthPx: number): number {
 
 /**
  * geste → champs (spec §6) : `OffsetValuesPx` (px, contrats actuels du cadre de sélection) →
- * `OffsetPatch` (cqw, stocké dans l'écart). `rotate`/`scale`/`anchor` ne sont pas des grandeurs
- * de longueur — ils traversent sans conversion.
+ * `OffsetPatch` (cqw, stocké dans l'écart). `rotate`/`scale`/`anchor`/`rotationOrigin` ne sont
+ * pas des grandeurs de longueur — ils traversent sans conversion.
  */
 export function offsetValuesPxToPatch(values: OffsetValuesPx, containerWidthPx: number): OffsetPatch {
   const patch: OffsetPatch = {}
@@ -28,6 +28,7 @@ export function offsetValuesPxToPatch(values: OffsetValuesPx, containerWidthPx: 
   if (values.scaleX !== undefined && values.scaleY !== undefined) {
     patch.scale = { x: values.scaleX, y: values.scaleY }
   }
+  if (values.rotationOrigin !== undefined) patch.rotationOrigin = { ...values.rotationOrigin }
   return patch
 }
 
@@ -47,5 +48,6 @@ export function offsetPatchToValuesPx(patch: OffsetPatch, containerWidthPx: numb
     values.scaleX = patch.scale.x
     values.scaleY = patch.scale.y
   }
+  if (patch.rotationOrigin !== undefined) values.rotationOrigin = { ...patch.rotationOrigin }
   return values
 }

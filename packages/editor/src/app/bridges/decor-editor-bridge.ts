@@ -1,7 +1,7 @@
 import type { Actor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
-import { createSelectionFrameV2 } from '@codplay/selection-frame/v2'
-import type { SelectionFrameDelta, SelectionFrameV2Handle } from '@codplay/selection-frame/v2'
+import { createRotationModifier, createSelectionFrameV2 } from '@codplay/selection-frame/v2'
+import type { SelectionFrameDelta, SelectionFrameHandleId, SelectionFrameV2Handle } from '@codplay/selection-frame/v2'
 import { DecorEditorController } from '../../decor-editor/controller'
 import { mountDecorEditor } from '../../decor-editor/mount'
 import { DEFAULT_PALETTE, DEFAULT_PRESETS } from '../../decor-editor/default-palette'
@@ -25,6 +25,9 @@ import { EDITOR_V2_STORY_ID } from '../../builder-v2'
  */
 
 export type ItemVisualType = 'text' | 'image' | 'media' | 'video' | 'capsule'
+
+/** Style keys emitted by CodPlay for the structured pose channel rather than CSS declarations. */
+const SNAPSHOT_OFFSET_STYLE_PROPERTIES = new Set(['x', 'y', 'width', 'height', 'rotate', 'scaleX', 'scaleY', 'transform-origin'])
 
 /**
  * `keyframeId: null` + `isTemporary: false` = décor initial de l'item (`initialDecorId`), comme
@@ -137,6 +140,24 @@ export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: 
 }
 
 /**
+ * Capture toutes les propriétés CSS résolues par le snapshot pour une création de keyframe.
+ * Les huit propriétés de pose sont exclues de `style` : le décor les porte dans `offset`, et
+ * `resolveTemporaryOffset` les reconstruit en conservant leur vocabulaire structuré. Ce chemin
+ * ne dépend donc pas de la palette (qui ne couvre qu'une partie des propriétés CSS).
+ */
+function resolveSnapshotInsertionStyle(snapshot: CodPlaySnapshot | null, itemId: string): DecorPatch {
+  const state = snapshotState(snapshot, itemId)
+  const persoState = state?.style
+  if (!persoState || typeof persoState !== 'object') return {}
+  const style: Record<string, string> = {}
+  for (const [property, raw] of Object.entries(persoState)) {
+    if (SNAPSHOT_OFFSET_STYLE_PROPERTIES.has(property)) continue
+    style[property] = formatSnapshotValue(raw)
+  }
+  return Object.keys(style).length > 0 ? { style } : {}
+}
+
+/**
  * Pose temporaire des champs structurés présents dans le snapshot V2. Un champ absent est complété
  * par `base`, jamais par un défaut arbitraire qui écraserait silencieusement l'héritage.
  */
@@ -161,12 +182,14 @@ function resolveTemporaryOffset(snapshot: CodPlaySnapshot | null, itemId: string
   const rotate = parseCqw(style.rotate) ?? base.offset?.rotate
   const scaleX = parseCqw(style.scaleX) ?? base.offset?.scale?.x
   const scaleY = parseCqw(style.scaleY) ?? base.offset?.scale?.y
+  const rotationOrigin = parseRotationOrigin(style['transform-origin']) ?? base.offset?.rotationOrigin
   const offset: OffsetPatch = {}
   if (x !== undefined || y !== undefined) offset.translate = { x: x ?? 0, y: y ?? 0 }
   if (width !== undefined) offset.width = width
   if (height !== undefined) offset.height = height
   if (rotate !== undefined) offset.rotate = rotate
   if (scaleX !== undefined || scaleY !== undefined) offset.scale = { x: scaleX ?? 1, y: scaleY ?? 1 }
+  if (rotationOrigin !== undefined) offset.rotationOrigin = rotationOrigin
   return Object.keys(offset).length > 0 ? { offset } : {}
 }
 
@@ -193,6 +216,27 @@ function formatSnapshotValue(value: unknown): string {
     }
   }
   return String(value)
+}
+
+/** Reads a CSS transform-origin percentage/keyword pair as local-box fractions. */
+function parseRotationOrigin(value: unknown): { fx: number; fy: number } | undefined {
+  if (typeof value !== 'string') return undefined
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return undefined
+  const parse = (part: string, axis: 'x' | 'y'): number | undefined => {
+    const keyword = part.toLowerCase()
+    if (keyword === 'center') return 0.5
+    if (axis === 'x' && keyword === 'left') return 0
+    if (axis === 'x' && keyword === 'right') return 1
+    if (axis === 'y' && keyword === 'top') return 0
+    if (axis === 'y' && keyword === 'bottom') return 1
+    if (!part.endsWith('%')) return undefined
+    const number = Number.parseFloat(part.slice(0, -1))
+    return Number.isFinite(number) ? Math.min(1, Math.max(0, number / 100)) : undefined
+  }
+  const fx = parse(parts[0]!, 'x')
+  const fy = parse(parts[1]!, 'y')
+  return fx === undefined || fy === undefined ? undefined : { fx, fy }
 }
 
 /**
@@ -295,16 +339,14 @@ export function patchDiffersFromBase(base: DecorPatch, patch: DecorPatch): boole
 
 /**
  * Décor à consigner pour un NOUVEAU keyframe inséré à `timelineMs` sur `item` — `null` si rien à
- * consigner (pas entre deux keyframes réels, ou état live identique à la cascade : le keyframe
- * s'ouvre vide, comportement actuel de `adjacentDecorId` inchangé). Non-null seulement si l'état
- * réellement affiché DIVERGE de la cascade — jamais un instantané complet systématique.
+ * consigner (pas entre deux keyframes réels, ou état résolu identique à la cascade : le keyframe
+ * peut alors partager le décor adjacent). Non-null lorsque l'état affiché diverge de la cascade.
  *
- * « Photographier » l'item : capture TOUTE propriété du perso, pas seulement celles éditables via
- * la palette — `liveStyle` (couleur, dimensions CSS) ET `liveOffset` (position/rotation/scale,
- * pilotées par le CS, jamais un champ de palette) sont toutes deux des propriétés du même perso,
- * `getPersoStates()` les fournit ensemble (`2026-07-25-perso-state-at-t-plan.md`).
- * Quand `livePatch` est fourni, il s'agit du candidat déjà accepté par la preview V2 et il prime
- * sur les lectures snapshot : le contrat de `snapshot.get()` exclut précisément cette preview.
+ * « Photographier » l'item : le snapshot fournit toutes les propriétés CSS interpolées et la pose
+ * structurée ; le candidat de preview, lorsqu'il existe, est fusionné par-dessus et ne remplace
+ * pas les propriétés interpolées qu'il ne modifie pas. Ainsi une intervention de l'auteur et une
+ * couleur/pose interpolée du même instant sont persistées ensemble. `snapshot.get()` exclut la
+ * preview active, d'où ce second canal explicite.
  */
 export function resolveKeyframeInsertionPatch(
   scene: EditorScene,
@@ -312,18 +354,17 @@ export function resolveKeyframeInsertionPatch(
   timelineMs: number,
   content: Content | undefined,
   snapshot: CodPlaySnapshot | null,
-  paletteConfig: PaletteConfig,
-  itemType: ItemVisualType,
   /** Candidate déjà accepté par la preview, qui prime sur `snapshot.get()` (qui l'exclut). */
   livePatch?: DecorPatch,
 ): DecorPatch | null {
   const alignment = resolveKeyframeAlignment(item, timelineMs)
   if (alignment.kind !== 'between') return null
   const base = resolveEffectiveKeyframePatch(scene, item, alignment.prevKeyframeId, content)
-  const patch = livePatch ?? mergePatch(
-    mergePatch(base, resolveTemporaryPatch(snapshot, item.id, styleFieldsForItemType(paletteConfig, itemType))),
+  const snapshotPatch = mergePatch(
+    mergePatch(base, resolveSnapshotInsertionStyle(snapshot, item.id)),
     resolveTemporaryOffset(snapshot, item.id, base),
   )
+  const patch = livePatch === undefined ? snapshotPatch : mergePatch(snapshotPatch, livePatch)
   return patchDiffersFromBase(base, patch) ? patch : null
 }
 
@@ -396,6 +437,114 @@ function buildDecorCommands(scene: EditorScene, target: Target, patch: DecorPatc
 
 /** Signal d'inactivité seulement — jamais une cadence de commit pour un geste actif (spec §4.3, `2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B.4). Exporté pour que les tests avancent les minuteurs factices sur la valeur réelle, sans dupliquer la constante. */
 export const PHASE_IDLE_FLUSH_MS = 4000
+
+/**
+ * Applies one V2 selection-frame gesture to the current local-pixel frame.
+ *
+ * Move/resize deltas are local pixels, rotation is a gesture-relative degree value and pivot is an
+ * absolute local-box fraction. Resize and pivot both rebuild the translation from a visual anchor
+ * instead of mutating the untransformed top-left: this keeps the opposite resize point fixed under
+ * rotation/scale and keeps the rendered item still while its rotation axis is moved.
+ */
+export function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
+  if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
+  if (delta.kind === 'rotate') return { ...base, rotate: (base.rotate ?? 0) + delta.dr }
+  if (delta.kind === 'pivot') return applyRotationOriginDelta(base, delta.fx, delta.fy)
+
+  const minSize = 4
+  const linear = frameLinearTransform(base)
+  const scaleX = finiteNonZeroScale(base.scaleX)
+  const scaleY = finiteNonZeroScale(base.scaleY)
+  const cosine = linear.a / scaleX
+  const sine = linear.b / scaleX
+  const localDx = (delta.dx * cosine + delta.dy * sine) / scaleX
+  const localDy = (-delta.dx * sine + delta.dy * cosine) / scaleY
+
+  const width = delta.handle.includes('e')
+    ? Math.max(minSize, base.width + localDx)
+    : delta.handle.includes('w')
+      ? Math.max(minSize, base.width - localDx)
+      : base.width
+  const height = delta.handle.includes('s')
+    ? Math.max(minSize, base.height + localDy)
+    : delta.handle.includes('n')
+      ? Math.max(minSize, base.height - localDy)
+      : base.height
+  const opposite = oppositePointForHandle(delta.handle)
+  const oldAnchor = framePoint(base, opposite.fx * base.width, opposite.fy * base.height)
+  const candidateWithoutTranslation = framePoint({ ...base, x: 0, y: 0, width, height }, opposite.fx * width, opposite.fy * height)
+
+  return {
+    ...base,
+    x: oldAnchor.x - candidateWithoutTranslation.x,
+    y: oldAnchor.y - candidateWithoutTranslation.y,
+    width,
+    height,
+  }
+}
+
+/** Returns a finite non-zero scale so local-axis projection remains defined. */
+function finiteNonZeroScale(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && Math.abs(value) > 1e-8 ? value : 1
+}
+
+/** Returns the frame's linear rotate/scale matrix in local scene coordinates. */
+function frameLinearTransform(value: SelectionFrameValue): { a: number; b: number; c: number; d: number } {
+  const angle = ((value.rotate ?? 0) * Math.PI) / 180
+  const cosine = Math.cos(angle)
+  const sine = Math.sin(angle)
+  return {
+    a: cosine * finiteNonZeroScale(value.scaleX),
+    b: sine * finiteNonZeroScale(value.scaleX),
+    c: -sine * finiteNonZeroScale(value.scaleY),
+    d: cosine * finiteNonZeroScale(value.scaleY),
+  }
+}
+
+/** Returns the effective axis fraction, with the V2 center default and a finite clamp. */
+function frameRotationOrigin(value: SelectionFrameValue): { fx: number; fy: number } {
+  const origin = value.rotationOrigin
+  const clamp = (input: number): number => Number.isFinite(input) ? Math.min(1, Math.max(0, input)) : 0.5
+  return { fx: clamp(origin?.fx ?? 0.5), fy: clamp(origin?.fy ?? 0.5) }
+}
+
+/** Maps one local-box point into the frame's scene-local visual coordinates. */
+function framePoint(value: SelectionFrameValue, localX: number, localY: number): { x: number; y: number } {
+  const origin = frameRotationOrigin(value)
+  const originX = origin.fx * value.width
+  const originY = origin.fy * value.height
+  const matrix = frameLinearTransform(value)
+  return {
+    x: value.x + originX - (matrix.a * originX + matrix.c * originY) + matrix.a * localX + matrix.c * localY,
+    y: value.y + originY - (matrix.b * originX + matrix.d * originY) + matrix.b * localX + matrix.d * localY,
+  }
+}
+
+/** Resolves the opposite characteristic point that must remain fixed during a resize. */
+function oppositePointForHandle(handle: SelectionFrameHandleId): { fx: number; fy: number } {
+  return {
+    fx: handle.includes('e') ? 0 : handle.includes('w') ? 1 : 0.5,
+    fy: handle.includes('s') ? 0 : handle.includes('n') ? 1 : 0.5,
+  }
+}
+
+/** Changes the pivot while compensating translation so the current visual pose does not jump. */
+function applyRotationOriginDelta(base: SelectionFrameValue, fx: number, fy: number): SelectionFrameValue {
+  const clamp = (input: number): number => Number.isFinite(input) ? Math.min(1, Math.max(0, input)) : 0.5
+  const nextOrigin = { fx: clamp(fx), fy: clamp(fy) }
+  const currentOrigin = frameRotationOrigin(base)
+  const previousPivot = { x: currentOrigin.fx * base.width, y: currentOrigin.fy * base.height }
+  const nextPivot = { x: nextOrigin.fx * base.width, y: nextOrigin.fy * base.height }
+  const matrix = frameLinearTransform(base)
+  const deltaX = (previousPivot.x - nextPivot.x) - (matrix.a * (previousPivot.x - nextPivot.x) + matrix.c * (previousPivot.y - nextPivot.y))
+  const deltaY = (previousPivot.y - nextPivot.y) - (matrix.b * (previousPivot.x - nextPivot.x) + matrix.d * (previousPivot.y - nextPivot.y))
+  return {
+    ...base,
+    x: base.x + deltaX,
+    y: base.y + deltaY,
+    rotationOrigin: nextOrigin,
+  }
+}
 
 export function createDecorEditorBridge(
   container: HTMLElement,
@@ -550,6 +699,9 @@ export function createDecorEditorBridge(
       rotate: readNumber(style.rotate) ?? offset?.rotate ?? 0,
       scaleX: readNumber(style.scaleX) ?? offset?.scale?.x ?? 1,
       scaleY: readNumber(style.scaleY) ?? offset?.scale?.y ?? 1,
+      rotationOrigin: parseRotationOrigin(style['transform-origin'])
+        ?? parseRotationOrigin(fallback.style?.['transform-origin'])
+        ?? offset?.rotationOrigin,
     }
   }
 
@@ -563,31 +715,13 @@ export function createDecorEditorBridge(
       rotate: value.rotate ?? 0,
       scaleX: value.scaleX ?? 1,
       scaleY: value.scaleY ?? 1,
+      rotationOrigin: value.rotationOrigin === undefined ? undefined : { ...value.rotationOrigin },
     }
   }
 
   /** Converts one local pixel frame to the unitless structured offset vocabulary. */
   function frameToOffsetPatch(value: SelectionFrameValue, rootWidthPx: number): OffsetPatch {
     return offsetValuesPxToPatch(value, rootWidthPx)
-  }
-
-  /** Applies one raw move/resize delta to the current local-pixel frame. */
-  function applyFrameDelta(base: SelectionFrameValue, delta: SelectionFrameDelta): SelectionFrameValue {
-    if (delta.kind === 'move') return { ...base, x: base.x + delta.dx, y: base.y + delta.dy }
-
-    const minSize = 4
-    let { x, y, width, height } = base
-    if (delta.handle.includes('e')) width = Math.max(minSize, base.width + delta.dx)
-    if (delta.handle.includes('w')) {
-      width = Math.max(minSize, base.width - delta.dx)
-      x = base.x + base.width - width
-    }
-    if (delta.handle.includes('s')) height = Math.max(minSize, base.height + delta.dy)
-    if (delta.handle.includes('n')) {
-      height = Math.max(minSize, base.height - delta.dy)
-      y = base.y + base.height - height
-    }
-    return { ...base, x, y, width, height }
   }
 
   /** Builds the one snapshot patch shared by palette and Selection Frame previews. */
@@ -613,6 +747,9 @@ export function createDecorEditorBridge(
       if (offset.rotate !== undefined) style.rotate = offset.rotate
       if (offset.scale?.x !== undefined) style.scaleX = offset.scale.x
       if (offset.scale?.y !== undefined) style.scaleY = offset.scale.y
+      if (offset.rotationOrigin !== undefined) {
+        style['transform-origin'] = `${offset.rotationOrigin.fx * 100}% ${offset.rotationOrigin.fy * 100}%`
+      }
     }
     if (Object.keys(style).length === 0) return null
     return {
@@ -662,6 +799,7 @@ export function createDecorEditorBridge(
       rotate: candidate.rotate ?? 0,
       scaleX: candidate.scaleX ?? 1,
       scaleY: candidate.scaleY ?? 1,
+      rotationOrigin: candidate.rotationOrigin === undefined ? undefined : { ...candidate.rotationOrigin },
     }
     return candidate
   }
@@ -674,6 +812,10 @@ export function createDecorEditorBridge(
     sceneHost = host
     selectionFrame = createSelectionFrameV2({
       sceneRoot: host,
+      // V2 capabilities are composed explicitly. Rotation remains a reusable modifier rather
+      // than becoming a branch in the neutral move/resize overlay; future CS modules can be added
+      // here without changing the editor bridge contract.
+      modifiers: [createRotationModifier()],
       onPreview: previewFrame,
       onCommit: () => {
         frameGestureBasePx = null
