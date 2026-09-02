@@ -9,6 +9,7 @@ import type {
 	AutoCapsuleOrderedChild,
 	AutoCapsuleTimingComputation
 } from "../types/internal";
+import { resolveAutoCapsuleDefaults } from "../config/default-config";
 
 function buildEventTimeByName(state: AutoCapsuleNormalizedState): Map<string, { startMs: number; endMs: number }> {
 	const eventTimeByName = new Map<string, { startMs: number; endMs: number }>();
@@ -47,7 +48,7 @@ function resolveEventDefinition(state: AutoCapsuleNormalizedState, ref: string |
  *
  * Main variables:
  * - `eventTimeByName`: generic named time anchors available to events
- * - `behavior`: event defaults inherited from the capsule type
+ * - `defaults`: effective event refs and generation policy for the capsule type
  * - `generateDefaultOutro`: effective policy for missing outro generation
  * - `resolved`: final event map produced for one child
  */
@@ -60,9 +61,8 @@ export function resolveAutoCapsuleEvents(
 	const byChildId: Record<string, AutoCapsuleResolvedChildEvents> = {};
 	const usedSyntheticEventsByChildId: Record<string, boolean> = {};
 	const eventTimeByName = buildEventTimeByName(state);
-	const behavior = state.config.types[state.capsule.type];
-	const generateDefaultOutro =
-		state.capsule.defaults?.generateDefaultOutro ?? behavior.defaultGenerateDefaultOutro;
+	const defaults = resolveAutoCapsuleDefaults(state.capsule.type, state.capsule.defaults, state.config);
+	const generateDefaultOutro = defaults.generateDefaultOutro;
 
 	for (const child of orderedChildren) {
 		const childRange = timing.byChildId[child.id];
@@ -106,10 +106,7 @@ export function resolveAutoCapsuleEvents(
 
 		if (!resolved[EVENT_ACTION.intro]) {
 			const triggerMs = childRange.startMs;
-			const ref =
-				state.capsule.defaults?.introTransitionRef ||
-				behavior.defaultIntroRef ||
-				state.config.transitions.defaultIntroRef;
+			const ref = defaults.introTransitionRef;
 			resolved[EVENT_ACTION.intro] = {
 				name: state.config.naming.buildSyntheticEventName({
 					capsuleId: state.capsule.id,
@@ -129,10 +126,7 @@ export function resolveAutoCapsuleEvents(
 
 		if (!resolved[EVENT_ACTION.outro] && generateDefaultOutro) {
 			const triggerMs = childRange.endMs;
-			const ref =
-				state.capsule.defaults?.outroTransitionRef ||
-				behavior.defaultOutroRef ||
-				state.config.transitions.defaultOutroRef;
+			const ref = defaults.outroTransitionRef;
 			resolved[EVENT_ACTION.outro] = {
 				name: state.config.naming.buildSyntheticEventName({
 					capsuleId: state.capsule.id,

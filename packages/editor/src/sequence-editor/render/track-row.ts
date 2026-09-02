@@ -72,8 +72,9 @@ export function renderTrackRows(
         clipMinMs = Math.min(clipDraw.startMs, clipDraw.currentMs)
         clipMaxMs = Math.max(clipDraw.startMs, clipDraw.currentMs)
       } else {
-        const introKf = item.keyframes.find((k) => k.name === 'intro')
-        const outroKf = item.keyframes.find((k) => k.name === 'outro')
+        const capsuleKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+        const introKf = capsuleKeyframes[0]
+        const outroKf = capsuleKeyframes.at(-1)
         if (introKf && outroKf) {
           clipMinMs = introKf.timeMs
           clipMaxMs = outroKf.timeMs

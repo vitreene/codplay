@@ -1,6 +1,6 @@
 import { setup, assign, emit } from 'xstate'
 import type {
-  EditorScene, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
+  EditorScene, Item, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
 } from './types'
 import type { Command } from '../app/controller/types'
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
@@ -206,14 +206,29 @@ function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
   return points.sort((a, b) => a.timeMs - b.timeMs)
 }
 
+/** Returns an item's timeline keyframes in the order that defines its visibility boundaries. */
+function sortTimelineKeyframes(item: Item): Keyframe[] {
+  return [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+}
+
+/** Returns the real entry/exit bounds; a single keyframe only locks the entry. */
+function timelineBoundaryKeyframes(item: Item): { first?: Keyframe; last?: Keyframe } {
+  const keyframes = sortTimelineKeyframes(item)
+  return {
+    first: keyframes[0],
+    last: keyframes.length > 1 ? keyframes.at(-1) : undefined,
+  }
+}
+
 function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | 'backward' = 'forward'): VirtualKeyframe[] {
   const result: VirtualKeyframe[] = []
   for (const capsule of scene.items) {
     if (capsule.type !== 'capsule') continue
     const children = childrenOf(scene.items, capsule.id)
     if (children.length === 0) continue
-    const introKf = capsule.keyframes.find((k) => k.name === 'intro')
-    const outroKf = capsule.keyframes.find((k) => k.name === 'outro')
+    const capsuleKeyframes = sortTimelineKeyframes(capsule)
+    const introKf = capsuleKeyframes[0]
+    const outroKf = capsuleKeyframes.at(-1)
     if (!introKf || !outroKf) continue
     const clipDurationMs = outroKf.timeMs - introKf.timeMs
     if (clipDurationMs <= 0) continue
@@ -224,12 +239,19 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
     // l'éditeur reste dans son propre référentiel temporel local). Sans cet appel partagé, cet
     // aperçu divergeait de la construction réelle : il ignorait `transitionIn.durationMs`.
     const childInputs: ChildInput[] = children.map((child) => {
-      const ci = child.keyframes.find((k) => k.name === 'intro')
-      const co = child.keyframes.find((k) => k.name === 'outro')
+      const childKeyframes = sortTimelineKeyframes(child)
+      const ci = childKeyframes[0]
+      // One real keyframe fixes the entry boundary; the capsule still computes the missing exit
+      // boundary. Treating that same keyframe as both locks would collapse the child's slot to a
+      // zero-duration range and would disagree with the established virtual-outro behavior.
+      const co = childKeyframes.length > 1 ? childKeyframes.at(-1) : undefined
       return {
         trackId: child.id,
         lockedIntroMs: TransitionTiming.lockedIntroMs(
-          ci !== undefined ? { timeMs: ci.timeMs - introKf.timeMs, transitionInDurationMs: ci.transitionIn?.durationMs } : undefined,
+          ci !== undefined ? {
+            timeMs: ci.timeMs - introKf.timeMs,
+            transitionInDurationMs: ci.transitionIn?.kind === 'named' ? ci.transitionIn.durationMs : undefined,
+          } : undefined,
         ),
         lockedOutroMs: TransitionTiming.lockedOutroMs(co !== undefined ? { timeMs: co.timeMs - introKf.timeMs } : undefined),
       }
@@ -251,12 +273,15 @@ function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | '
     for (let i = 0; i < out.children.length; i++) {
       const childOut = out.children[i]!
       const child = children[i]!
-      const hasIntro = child.keyframes.some((k) => k.name === 'intro')
-      const hasOutro = child.keyframes.some((k) => k.name === 'outro')
-      if (!hasIntro) {
+      const childKeyframes = sortTimelineKeyframes(child)
+      // The real first/last keyframes already represent the child boundaries, whether or not the
+      // author gave them the optional reserved names. A child with no real keyframe receives both
+      // virtual markers; with one real keyframe, the capsule still supplies the missing outro
+      // boundary computed by the distribution.
+      if (childKeyframes.length === 0) {
         result.push({ trackId: child.id, id: `vkf-${child.id}-intro`, timeMs: introKf.timeMs + childOut.introMs, name: 'intro', visible: childOut.visible })
-      }
-      if (!hasOutro) {
+        result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: introKf.timeMs + childOut.outroMs, name: 'outro', visible: childOut.visible })
+      } else if (childKeyframes.length === 1) {
         result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: introKf.timeMs + childOut.outroMs, name: 'outro', visible: childOut.visible })
       }
     }
@@ -540,8 +565,9 @@ export const sequenceEditorMachine = setup({
             const bounds = findParentClipBounds(event.trackId, context.scene.items, context.scene.meta.durationMs)
             const clampedMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, pointerMs))
             const item = context.scene.items.find((i) => i.id === event.trackId)
-            const intro = item?.keyframes.find((k) => k.name === 'intro')
-            const outro = item?.keyframes.find((k) => k.name === 'outro')
+            const boundaries = item === undefined ? {} : timelineBoundaryKeyframes(item)
+            const intro = boundaries.first
+            const outro = boundaries.last
 
             let commands: Command[]
             if (!intro) {
@@ -792,8 +818,9 @@ export const sequenceEditorMachine = setup({
               if (minMs >= maxMs) return { type: 'commandBatch' as const, commands: [] }
 
               const item = context.scene.items.find((it) => it.id === i.trackId)
-              const existingIntro = item?.keyframes.find((k) => k.name === 'intro')
-              const existingOutro = item?.keyframes.find((k) => k.name === 'outro')
+              const boundaries = item === undefined ? {} : timelineBoundaryKeyframes(item)
+              const existingIntro = boundaries.first
+              const existingOutro = boundaries.last
 
               // Remplace tout intro/outro existant — DEUX commandes explicites (delete puis create),
               // pas un filtre implicite sur un tableau local comme avant : `deleteKeyframe` purge

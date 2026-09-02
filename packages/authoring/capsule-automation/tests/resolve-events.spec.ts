@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION } from '../src'
+import { AutoCapsule, CAPSULE_TYPE, EVENT_ACTION, resolveAutoCapsuleDefaults } from '../src'
+
+describe('resolveAutoCapsuleDefaults — shared V2 transition policy', () => {
+  it('returns type defaults and keeps explicit capsule overrides authoritative', () => {
+    expect(resolveAutoCapsuleDefaults(CAPSULE_TYPE.card)).toMatchObject({
+      introTransitionRef: 'fade',
+      outroTransitionRef: 'fade',
+      generateDefaultOutro: true,
+    })
+    expect(resolveAutoCapsuleDefaults(CAPSULE_TYPE.rangee, {
+      introTransitionRef: 'swipe-right',
+      outroTransitionRef: 'zoom',
+      generateDefaultOutro: true,
+    })).toEqual({
+      introTransitionRef: 'swipe-right',
+      outroTransitionRef: 'zoom',
+      generateDefaultOutro: true,
+    })
+  })
+})
 
 describe('resolveAutoCapsuleEvents — resolved from a caller-provided timeRange', () => {
   it('synthesizes intro/outro at the child timeRange bounds when none are given', () => {

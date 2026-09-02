@@ -441,7 +441,7 @@ passthrough (`resolveAutoCapsuleTiming`), pas un moteur de repartition.
 
 ## Politique d'events actuelle
 
-En v1:
+Comportement V2 actuel:
 
 - un event explicite est conserve
 - si un event nomme correspond a un `eventTime`, son `triggerMs` vient de cet ancrage
@@ -462,6 +462,9 @@ Vous pouvez fournir un `config` partiel a l'initialisation pour surcharger:
 - les strategies de nommage
 - les refs par defaut `intro/outro`
 - les definitions d'events par defaut
+- `resolveAutoCapsuleDefaults(type, overrides?)`, la résolution partagée des refs et de la
+  politique de sortie par défaut (utilisable par un appelant qui doit calculer une borne avant
+  `AutoCapsule.resolve()`)
 
 Exemple:
 

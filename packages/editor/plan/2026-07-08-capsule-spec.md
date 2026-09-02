@@ -41,6 +41,12 @@ type CapsuleKind = 'carousel' | 'rangee' | 'liste' | 'grille' | 'card'
 
 `card` couvre aussi l'usage autrefois nommé `position` : une capsule `card` sans zone définie voit chaque enfant résoudre vers la zone fantôme (§3/§11), plein cadre — pas de « placement libre » ici, cette notion appartient à `grille` (coordonnées explicites sur une grille régulière, sans catalogue de zones nommées).
 
+Pour le temps, le premier et le dernier keyframes de chaque enfant, ordonnés par `timeMs`, sont
+les frontières d'entrée et de sortie. Les noms `intro`/`outro` sont des labels optionnels ; une
+transition nommée portée par ces frontières prime le défaut de la capsule. Un enfant avec un seul
+keyframe fixe son entrée et reçoit une sortie virtuelle de la distribution, afin de ne pas produire
+une fenêtre de durée nulle.
+
 **Nommage** : l'anglais fait foi pour `carousel` (pas `carrousel`) — s'applique à `CapsuleKind` et à `CAPSULE_TYPE` (capsule-automation) : un seul mot dans les deux packages, y compris dans les exemples du README capsule-automation.
 
 ## 3. `CAPSULE_TYPE` — sous-types de capsule, comportements par défaut
@@ -81,6 +87,9 @@ Toute scène ed2 a une capsule racine implicite (cf `2026-07-08-builder-plan.md`
 - Jamais visible/sélectionnable comme item, non supprimable, pas de keyframe, pas de position propre.
 - `move:'@root'` à la fois côté story et côté perso (double exigence Codplay).
 - `flip:false` systématique sur les moves de ses enfants directs.
+- Bien qu'elle ne soit pas rendue comme un item, elle résout ses défauts `card` (`fade` en entrée
+  et en sortie) sur ses enfants directs ; ces défauts bornent leur visibilité quand aucun choix
+  explicite n'est porté par leur premier/dernier keyframe.
 
 C'est la seule capsule dont l'existence est automatique — toute autre capsule est un item créé explicitement par l'auteur.
 

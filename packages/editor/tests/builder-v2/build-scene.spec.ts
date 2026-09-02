@@ -76,10 +76,159 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     })
     expect(story.eventimes).toEqual([
       { name: 'item-1-intro', startAt: 0 },
+      { name: '__auto_capsule_editor-v2-capsule_child_item-1_outro_1400', startAt: 1400 },
       { name: 'item-1-kf-kf-b', startAt: 400 },
     ])
     expect(result.preRollMs).toBe(400)
     expect(result.durationMs).toBe(3000)
+  })
+
+  it('moves the default visibility boundary with the first keyframe and keeps named entry/exit timing attached to the bounds', () => {
+    const scene = fixtureScene()
+    scene.items[0] = {
+      ...scene.items[0]!,
+      keyframes: [
+        { id: 'kf-first', timeMs: 1000, decorId: 'text-decor-a' },
+        { id: 'kf-last', timeMs: 4000, decorId: 'text-decor-b' },
+      ],
+    }
+
+    let result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    let story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    let item = story.persos.find((perso) => perso.id === 'item-1')!
+    expect(result.preRollMs).toBe(300)
+    expect(item.initial).toMatchObject({ style: { opacity: 0 } })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_intro_1000',
+      startAt: 1000,
+    })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_outro_4300',
+      startAt: 4300,
+    })
+
+    scene.items[0] = {
+      ...scene.items[0]!,
+      keyframes: [
+        { id: 'kf-first', timeMs: 2000, decorId: 'text-decor-a' },
+        { id: 'kf-last', timeMs: 4500, decorId: 'text-decor-b' },
+      ],
+    }
+    result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    item = story.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.initial).toMatchObject({ style: { opacity: 0 } })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_intro_2000',
+      startAt: 2000,
+    })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_outro_4800',
+      startAt: 4800,
+    })
+
+    scene.items[0] = {
+      ...scene.items[0]!,
+      keyframes: [
+        {
+          id: 'kf-first',
+          timeMs: 2000,
+          decorId: 'text-decor-a',
+          transitionIn: { kind: 'named', name: 'zoom', durationMs: 600 },
+        },
+        {
+          id: 'kf-last',
+          timeMs: 4500,
+          decorId: 'text-decor-b',
+          transitionOut: { kind: 'named', name: 'fade', durationMs: 500 },
+        },
+      ],
+    }
+    result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    expect(result.preRollMs).toBe(600)
+    expect(story.eventimes).toContainEqual({ name: 'item-1-intro', startAt: 2000 })
+    expect(story.eventimes).toContainEqual({ name: 'item-1-outro', startAt: 5100 })
+  })
+
+  it('inherits the parent capsule transition defaults for unnamed first/last keyframes', () => {
+    const scene = fixtureScene()
+    scene.items = [
+      {
+        id: 'capsule-a',
+        type: 'capsule',
+        parentId: null,
+        order: 'a',
+        visible: true,
+        contentId: null,
+        initialDecorId: 'root-decor',
+        keyframes: [],
+        capsule: {
+          kind: 'grille',
+          distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+          defaultTransitionIn: 'swipe-right',
+          defaultTransitionOut: 'zoom',
+        },
+      },
+      {
+        id: 'item-nested',
+        type: 'text',
+        parentId: 'capsule-a',
+        order: 'a',
+        visible: true,
+        contentId: 'text-content',
+        initialDecorId: 'text-decor-a',
+        keyframes: [
+          { id: 'kf-first', timeMs: 1000, decorId: 'text-decor-a' },
+          { id: 'kf-last', timeMs: 4000, decorId: 'text-decor-b' },
+        ],
+      },
+    ]
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    const item = story.persos.find((perso) => perso.id === 'item-nested')!
+    expect(item.initial).toMatchObject({ style: { opacity: 0, x: 250 } })
+    expect(result.preRollMs).toBe(300)
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-nested_intro_1000',
+      startAt: 1000,
+    })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-nested_outro_4300',
+      startAt: 4300,
+    })
+  })
+
+  it('keeps a no-keyframe root child visible over the complete scene clip', () => {
+    const scene = fixtureScene()
+    scene.items[0] = { ...scene.items[0]!, keyframes: [] }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const story = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!
+    const item = story.persos.find((perso) => perso.id === 'item-1')!
+    expect(result.preRollMs).toBe(0)
+    expect(item.initial).toMatchObject({ style: { opacity: 0 } })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_intro_0',
+      startAt: 0,
+    })
+    expect(story.eventimes).toContainEqual({
+      name: '__auto_capsule_editor-v2-capsule_child_item-1_outro_3000',
+      startAt: 3000,
+    })
   })
 
   it('ignores discrete CSS keyword changes without maintaining a property whitelist', () => {

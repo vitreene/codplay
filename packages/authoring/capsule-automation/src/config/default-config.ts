@@ -2,10 +2,12 @@ import { AUTO_CAPSULE_TYPE_BEHAVIORS } from "./capsule-types";
 import { DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS } from "./event-definitions";
 import { AREA_KIND } from "../types/public";
 import type {
+	AutoCapsuleDefaultsInput,
 	AutoCapsuleAreaNamingInput,
 	AutoCapsuleConfig,
 	AutoCapsuleGridNamingInput,
-	AutoCapsuleSyntheticEventNamingInput
+	AutoCapsuleSyntheticEventNamingInput,
+	AutoCapsuleType
 } from "../types/public";
 
 function buildGridClassName(input: AutoCapsuleGridNamingInput): string {
@@ -60,6 +62,32 @@ export const DEFAULT_AUTO_CAPSULE_CONFIG: AutoCapsuleConfig = {
 	},
 	defaultEventDefinitions: DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS
 };
+
+/**
+ * Resolve the effective transition defaults for one capsule instance.
+ *
+ * The same resolution is consumed by event synthesis and by upstream timing callers. Keeping it
+ * here prevents a caller from applying a different default than `AutoCapsule` when it calculates
+ * a child boundary before handing the range to the component.
+ */
+export function resolveAutoCapsuleDefaults(
+	type: AutoCapsuleType,
+	overrides?: AutoCapsuleDefaultsInput | null,
+	config: AutoCapsuleConfig = DEFAULT_AUTO_CAPSULE_CONFIG,
+): {
+	introTransitionRef: string | null;
+	outroTransitionRef: string | null;
+	generateDefaultOutro: boolean;
+} {
+	const behavior = config.types[type];
+	return {
+		introTransitionRef:
+			overrides?.introTransitionRef || behavior.defaultIntroRef || config.transitions.defaultIntroRef,
+		outroTransitionRef:
+			overrides?.outroTransitionRef || behavior.defaultOutroRef || config.transitions.defaultOutroRef,
+		generateDefaultOutro: overrides?.generateDefaultOutro ?? behavior.defaultGenerateDefaultOutro
+	};
+}
 
 /**
  * Merge a partial portable config with the default one.

@@ -19,9 +19,11 @@
  * La création de keyframe (`createNamedKeyframe`) N'appelle PAS le
  * `createKeyframe` central : le sequence-editor a besoin de choisir l'id du
  * keyframe À L'AVANCE (stable pendant tout un geste de drag, cf.
- * `CLIP.START_DRAW`) et de poser `name: 'intro'|'outro'` à la création — deux
- * besoins que `createKeyframe` central (id généré en interne, pas de champ
- * `name`) ne couvre pas. Un seul point de création ici, jamais deux voies.
+ * `CLIP.START_DRAW`) et, pour l'outillage de clip, de poser les labels optionnels
+ * `name: 'intro'|'outro'` à la création — deux besoins que `createKeyframe` central
+ * (id généré en interne, pas de champ `name`) ne couvre pas. Les labels ne définissent
+ * pas les frontières V2 ; ce sont les premier/dernier keyframes selon `timeMs`.
+ * Un seul point de création ici, jamais deux voies.
  */
 
 import type { EditorScene, Item, Keyframe, MarkerTrack, Marker, Transition, Waveform } from './types'

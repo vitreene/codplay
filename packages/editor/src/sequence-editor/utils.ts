@@ -21,7 +21,14 @@ export function computeGraduationInterval(pxPerSec: number, levels: number[], mi
   return levels[levels.length - 1]
 }
 
-/** Returns the active clip bounds of the nearest ancestor capsule, or {0, durationMs}. A single `parentId` lookup, no tree walk. */
+/**
+ * Returns the active clip bounds of the nearest ancestor capsule, or {0, durationMs}.
+ *
+ * A capsule's first and last timeline keyframes are its visibility boundaries. Their reserved
+ * names (`intro`/`outro`) remain useful labels for clip tooling but are not required for this
+ * boundary lookup. The lookup stays intentionally local to one parentId; capsule nesting is
+ * resolved by the builder/distribution layer, not by this editor helper.
+ */
 export function findParentClipBounds(
   itemId: string,
   items: Item[],
@@ -30,12 +37,13 @@ export function findParentClipBounds(
   const item = items.find((i) => i.id === itemId)
   const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { minMs: 0, maxMs: durationMs }
-  const intro = parent.keyframes.find((k) => k.name === 'intro')
-  const outro = parent.keyframes.find((k) => k.name === 'outro')
+  const keyframes = [...parent.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  const intro = keyframes[0]
+  const outro = keyframes.at(-1)
   return { minMs: intro?.timeMs ?? 0, maxMs: outro?.timeMs ?? durationMs }
 }
 
-/** Returns the intro/outro timeMs of the nearest ancestor capsule, or null if not set. Same lookup as `findParentClipBounds`, no boundary defaults. */
+/** Returns the first/last boundary times of the nearest ancestor capsule, or null if it has no keyframes. */
 export function getParentClipMarkers(
   itemId: string,
   items: Item[],
@@ -43,9 +51,10 @@ export function getParentClipMarkers(
   const item = items.find((i) => i.id === itemId)
   const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { introMs: null, outroMs: null }
+  const keyframes = [...parent.keyframes].sort((left, right) => left.timeMs - right.timeMs)
   return {
-    introMs: parent.keyframes.find((k) => k.name === 'intro')?.timeMs ?? null,
-    outroMs: parent.keyframes.find((k) => k.name === 'outro')?.timeMs ?? null,
+    introMs: keyframes[0]?.timeMs ?? null,
+    outroMs: keyframes.at(-1)?.timeMs ?? null,
   }
 }
 

@@ -50,6 +50,23 @@ function interpolationScene(): EditorScene {
   }
 }
 
+/** Builds a scene whose first/last keyframes are the item's visibility boundaries. */
+function visibilityBoundaryScene(firstTimeMs: number, lastTimeMs: number): EditorScene {
+  const scene = interpolationScene()
+  return {
+    ...scene,
+    id: `editor-v2-visibility-${firstTimeMs}-${lastTimeMs}`,
+    meta: { ...scene.meta, durationMs: 6_000 },
+    items: scene.items.map((item) => ({
+      ...item,
+      keyframes: [
+        { ...item.keyframes[0]!, id: 'boundary-first', timeMs: firstTimeMs },
+        { ...item.keyframes[1]!, id: 'boundary-last', timeMs: lastTimeMs },
+      ],
+    })),
+  }
+}
+
 describe('editor V2 player interpolation', () => {
   let codplay: CodPlay | undefined
 
@@ -82,7 +99,7 @@ describe('editor V2 player interpolation', () => {
       mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
     })
 
-    await instance.telco.seek(500)
+    await instance.telco.seek(500 + built.preRollMs)
     const snapshot = instance.snapshot.get()
     const state = snapshot?.states.find((entry) => entry.target.persoId === 'item')?.state
     const style = state?.style as Record<string, unknown> | undefined
@@ -127,7 +144,7 @@ describe('editor V2 player interpolation', () => {
       mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
     })
 
-    await instance.telco.seek(500)
+    await instance.telco.seek(500 + built.preRollMs)
     const snapshot = instance.snapshot.get()
     const state = snapshot?.states.find((entry) => entry.target.persoId === 'item')?.state
     const style = state?.style as Record<string, unknown> | undefined
@@ -135,5 +152,54 @@ describe('editor V2 player interpolation', () => {
 
     const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
     expect(item?.style.transformOrigin).toBe('50% 50%')
+  })
+
+  it('attache la visibilité au premier/dernier kf et déplace la transition d’entrée avec le premier kf', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+
+    const buildRuntime = (scene: EditorScene, instanceId: string) => {
+      const built = buildSceneDocV2(scene)
+      expect(built.ok).toBe(true)
+      if (!built.ok) throw new Error(built.diagnostics.map((diagnostic) => diagnostic.message).join('; '))
+
+      const root = document.createElement('div')
+      Object.defineProperty(root, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+      })
+      document.body.append(root)
+      const compiled = codplay!.build({ scene: built.sceneDoc })
+      expect(compiled.ok).toBe(true)
+      if (!compiled.ok) throw new Error(compiled.diagnostics.map((diagnostic) => diagnostic.message).join('; '))
+      const instance = codplay!.instances.create({
+        instanceId,
+        compiledScene: compiled.compiledScene,
+        functions: compiled.functions,
+        root,
+        mountTargets: [{ id: `${instanceId}-host`, kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+      })
+      return { built, instance }
+    }
+
+    const initial = buildRuntime(visibilityBoundaryScene(1_000, 4_000), 'editor-v2-boundary-initial')
+    expect(initial.built.preRollMs).toBe(300)
+    await initial.instance.telco.seek(950)
+    const beforeInitialState = initial.instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect((beforeInitialState?.style as Record<string, unknown> | undefined)?.opacity).toBe(0)
+    await initial.instance.telco.seek(1_300)
+    const initialState = initial.instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect((initialState?.style as Record<string, unknown> | undefined)?.opacity).toBe(1)
+    await initial.instance.telco.seek(4_600)
+    const afterInitialBoundaryState = initial.instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect((afterInitialBoundaryState?.style as Record<string, unknown> | undefined)?.opacity).toBe(0)
+
+    const moved = buildRuntime(visibilityBoundaryScene(2_000, 4_500), 'editor-v2-boundary-moved')
+    expect(moved.built.preRollMs).toBe(300)
+    await moved.instance.telco.seek(1_300)
+    const movedState = moved.instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect((movedState?.style as Record<string, unknown> | undefined)?.opacity).toBe(0)
+    await moved.instance.telco.seek(4_600)
+    const beforeMovedBoundaryState = moved.instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state
+    expect((beforeMovedBoundaryState?.style as Record<string, unknown> | undefined)?.opacity).toBe(1)
   })
 })

@@ -9,7 +9,7 @@ import {
   type CentralSelectionEcho,
 } from './machine'
 import type {
-  EditorScene, Transition, LayoutProfile, DisplayConfig, Waveform,
+  EditorScene, Item, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
 import type { Command } from '../app/controller/types'
 import { timeToPixel, pixelToTime } from './render/geometry'
@@ -46,6 +46,15 @@ function emptyScene(): EditorScene {
     decors: {},
     zones: {},
     markerTracks: {},
+  }
+}
+
+/** Returns the real entry/exit keyframes used by the V2 clip controls. */
+function timelineBoundaryKeyframes(item: Item): { first?: Item['keyframes'][number]; last?: Item['keyframes'][number] } {
+  const keyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  return {
+    first: keyframes[0],
+    last: keyframes.length > 1 ? keyframes.at(-1) : undefined,
   }
 }
 
@@ -241,8 +250,9 @@ export class SequenceEditorController {
 
   clipStartDraw(trackId: string, pointerMs: number): void {
     const item = this.getSnapshot().context.scene.items.find(i => i.id === trackId)
-    const introId = item?.keyframes.find(k => k.name === 'intro')?.id ?? ''
-    const outroId = item?.keyframes.find(k => k.name === 'outro')?.id ?? ''
+    const boundaries = item === undefined ? {} : timelineBoundaryKeyframes(item)
+    const introId = boundaries.first?.id ?? ''
+    const outroId = boundaries.last?.id ?? ''
     this.send({ type: 'CLIP.START_DRAW', trackId, pointerMs, introId, outroId })
   }
 

@@ -3,6 +3,7 @@ import {
   CAPSULE_TYPE,
   DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS,
   EVENT_ACTION,
+  resolveAutoCapsuleDefaults,
 } from '@codplay/capsule-automation'
 import type {
   AutoCapsuleChildElementArtifact,
@@ -45,19 +46,24 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
   }
 
   const rootItems = childrenOf(scene.items, null)
+  const itemById = new Map(scene.items.map((item) => [item.id, item]))
+  const rootTransitionDefaults = resolveAutoCapsuleDefaults(CAPSULE_TYPE.card)
   const preRollMs = TransitionTiming.computeScenePreRollMs(scene.items.map((item) => {
     const firstKeyframe = sortKeyframes(item)[0]
+    const parentTransitionDefaults = resolveParentTransitionDefaults(item, itemById, rootTransitionDefaults)
     return {
       firstKeyframe: firstKeyframe === undefined ? undefined : {
         timeMs: firstKeyframe.timeMs,
-        transitionInDurationMs: namedTransitionDuration(firstKeyframe.transitionIn),
+        transitionInDurationMs: resolveIntroDuration(firstKeyframe.transitionIn, parentTransitionDefaults.introTransitionRef),
       },
     }
   }))
 
   const rootResolution = resolveCapsule(rootItems, CAPSULE_TYPE.card, preRollMs, diagnostics, {
     sceneRoot: true,
+    fallbackClipDurationMs: scene.meta.durationMs,
     distribution: { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+    transitionDefaults: rootTransitionDefaults,
   })
   if (rootResolution === undefined || diagnostics.some((diagnostic) => diagnostic.level === 'error')) {
     return failure(diagnostics)
@@ -321,11 +327,19 @@ function resolveCapsule(
   capsuleType: AutoCapsuleType,
   preRollMs: number,
   diagnostics: BuilderDiagnostic[],
-  options?: Readonly<{ sceneRoot?: boolean; grid?: CapsuleDef['grid']; distribution?: CapsuleDef['distribution'] }>,
+  options?: Readonly<{
+    sceneRoot?: boolean
+    /** Duration of the implicit root clip when no child keyframe supplies an end. */
+    fallbackClipDurationMs?: number
+    grid?: CapsuleDef['grid']
+    distribution?: CapsuleDef['distribution']
+    transitionDefaults?: ReturnType<typeof resolveAutoCapsuleDefaults>
+  }>,
 ): CapsuleResolution | undefined {
   try {
     const preset = resolveCapsulePreset(capsuleType, options?.distribution)
-    const distribution = resolveCapsuleDistribution(items, preRollMs, preset)
+    const transitionDefaults = options?.transitionDefaults ?? resolveAutoCapsuleDefaults(capsuleType)
+    const distribution = resolveCapsuleDistribution(items, preRollMs, preset, transitionDefaults, options?.fallbackClipDurationMs)
     const children: AutoCapsuleChildInput[] = items.map((item, index) => {
       const timing = distribution.children.find((child) => child.trackId === item.id)
       if (timing === undefined) throw new Error(`No timing was produced for item '${item.id}'.`)
@@ -342,7 +356,7 @@ function resolveCapsule(
         type: capsuleType,
         grid: { rows: options?.grid?.rows, cols: options?.grid?.cols },
         sceneRoot: options?.sceneRoot,
-        defaults: { introTransitionRef: 'cut', outroTransitionRef: 'cut' },
+        defaults: transitionDefaults,
       },
       children,
     }, { autoResolveOnWrite: false })
@@ -387,22 +401,29 @@ function resolveCapsuleDistribution(
   items: Item[],
   preRollMs: number,
   preset: { mode: 'sequential' | 'stagger'; staggerInMs?: number; staggerOutMs?: number },
+  transitionDefaults: ReturnType<typeof resolveAutoCapsuleDefaults>,
+  fallbackClipDurationMs = 0,
 ): CapsuleDistributionOutput {
+  const authoredClipDurationMs = items.reduce((max, item) => Math.max(max, sortKeyframes(item).at(-1)?.timeMs ?? 0), 0)
   return CapsuleDistribution.compute({
-    clipDurationMs: items.reduce((max, item) => Math.max(max, sortKeyframes(item).at(-1)?.timeMs ?? 0), 0) + preRollMs,
+    clipDurationMs: Math.max(authoredClipDurationMs, fallbackClipDurationMs) + preRollMs,
     ...preset,
     children: items.map((item) => {
       const keyframes = sortKeyframes(item)
+      // A single real keyframe fixes the entry boundary; the capsule distribution supplies the
+      // missing exit boundary. Locking both sides to that same keyframe would make the item
+      // zero-duration and would diverge from the sequence-editor preview.
+      const lastKeyframe = keyframes.length > 1 ? keyframes.at(-1) : undefined
       return {
         trackId: item.id,
         lockedIntroMs: TransitionTiming.lockedIntroMs(
           keyframes[0] === undefined ? undefined : {
             timeMs: keyframes[0].timeMs,
-            transitionInDurationMs: namedTransitionDuration(keyframes[0].transitionIn),
+            transitionInDurationMs: resolveIntroDuration(keyframes[0].transitionIn, transitionDefaults.introTransitionRef),
           },
           preRollMs,
         ),
-        lockedOutroMs: TransitionTiming.lockedOutroMs(keyframes.at(-1), preRollMs),
+        lockedOutroMs: TransitionTiming.lockedOutroMs(lastKeyframe, preRollMs),
       }
     }),
   })
@@ -458,6 +479,10 @@ function buildNestedCapsulePerso(
   const resolution = resolveCapsule(childrenOf(scene.items, item.id), item.capsule.kind, preRollMs, diagnostics, {
     grid: item.capsule.grid,
     distribution: item.capsule.distribution,
+    transitionDefaults: resolveAutoCapsuleDefaults(item.capsule.kind, {
+      introTransitionRef: item.capsule.defaultTransitionIn,
+      outroTransitionRef: item.capsule.defaultTransitionOut,
+    }),
   })
   if (resolution === undefined) return undefined
   const transition = resolveTransitionActions(childArtifact)
@@ -585,9 +610,39 @@ function buildInterpolationActions(
   return actions
 }
 
-/** Extracts the duration used by a named intro when calculating the scene pre-roll. */
+/** Extracts the effective intro duration, using the parent capsule default when no override exists. */
+function resolveIntroDuration(transition: Transition | undefined, defaultRef: string | null): number | undefined {
+  if (transition === undefined) return transitionRefDuration(defaultRef)
+  if (transition.kind !== 'named') return undefined
+  return namedTransitionDuration(transition)
+}
+
+/** Extracts an explicit named duration while keeping cut/sentinel transitions instantaneous. */
 function namedTransitionDuration(transition: Transition | undefined): number | undefined {
-  return transition?.kind === 'named' ? transition.durationMs : undefined
+  if (transition?.kind !== 'named') return undefined
+  if (transition.name === '--' || transition.name === 'cut') return 0
+  return transition.durationMs
+}
+
+/** Reads a duration from the shared capsule-automation event catalog. */
+function transitionRefDuration(ref: string | null): number {
+  if (ref === null || ref === '--' || ref === 'cut') return 0
+  return Math.max(0, DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS[ref]?.durationMs ?? 0)
+}
+
+/** Resolves the transition defaults inherited by one item from its immediate capsule parent. */
+function resolveParentTransitionDefaults(
+  item: Item,
+  itemById: ReadonlyMap<string, Item>,
+  rootDefaults: ReturnType<typeof resolveAutoCapsuleDefaults>,
+): ReturnType<typeof resolveAutoCapsuleDefaults> {
+  if (item.parentId === null) return rootDefaults
+  const parent = itemById.get(item.parentId)
+  if (parent?.type !== 'capsule' || parent.capsule === undefined) return rootDefaults
+  return resolveAutoCapsuleDefaults(parent.capsule.kind, {
+    introTransitionRef: parent.capsule.defaultTransitionIn,
+    outroTransitionRef: parent.capsule.defaultTransitionOut,
+  })
 }
 
 /** Returns keyframes in the timeline order required by the pure resolver. */

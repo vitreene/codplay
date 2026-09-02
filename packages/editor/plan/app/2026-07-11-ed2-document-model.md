@@ -77,7 +77,11 @@ Un **item** est l'entité que l'auteur crée. Deux natures de données à distin
 - **décor(s)** → **decors** — géométrie et habillage (style, classes, position, zone) : un décor **initial** + un décor **par keyframe**.
 - **zone(s)** → **zones**, par **identité stable** (id, pas nom) — l'attache survit au renommage/déplacement de la zone.
 
-L'item existe sur un **intervalle**, pas à un instant : porté par ses keyframes, il entre (intro), dure, sort (outro), et son décor évolue le long de ces kf.
+L'item existe sur un **intervalle**, pas à un instant : son premier et son dernier keyframes selon
+`timeMs` bornent respectivement l'entrée et la sortie (les labels `intro`/`outro` sont optionnels),
+et son décor évolue le long de ces kf. Quand l'item est enfant d'une capsule, la distribution de la
+capsule peut fournir la borne manquante sous forme virtuelle ; la capsule racine implicite applique
+ses défauts de transition aux items directs sans être elle-même un item affiché.
 
 ---
 

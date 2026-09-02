@@ -11,17 +11,19 @@ Statut : validé — spec complète
 |---|---|
 | **kf réel** | Keyframe stocké dans `TrackNode.keyframes[]`, résulte d'une action auteur explicite |
 | **kf virtuel** | Position calculée par le module de distribution, non stockée, rendue visuellement distincte dans l'éditeur, résolue en kf concret au build |
-| **clip capsule** | Paire intro/outro de la capsule — définit quand elle apparaît dans la scène |
+| **clip capsule** | Paire de bornes premier/dernier keyframe de la capsule — définit quand elle apparaît dans la scène ; les labels `intro`/`outro` sont optionnels |
 | **distribution** | Règle par laquelle la capsule alloue son clip aux enfants |
 | **slot** | Fenêtre de temps libre entre deux bornes lockées (ou bords du clip capsule) |
-| **enfant locké** | Enfant dont au moins un kf intro ou outro est un kf réel — ses bornes sont prioritaires |
+| **enfant locké** | Enfant dont au moins une borne premier/dernier kf est réelle — ses bornes sont prioritaires |
 | **enfant libre** | Enfant sans kf réel — ses bornes sont entièrement virtuelles |
 
 ---
 
 ## 2. Modèle de clip capsule
 
-Le clip d'une capsule est défini par deux kf nommés sur sa propre ligne :
+Le clip d'une capsule est défini par le premier et le dernier kf, ordonnés par `timeMs`, sur sa
+propre ligne. Les noms réservés `intro`/`outro` restent des labels d'outillage et ne sont pas
+nécessaires pour que les bornes soient actives :
 
 ```
 intro.timeMs  →  point de départ (absolu, dans le temps de la scène)
@@ -29,7 +31,9 @@ outro.timeMs  →  fin du clip
 durée         =  outro.timeMs − intro.timeMs
 ```
 
-**La durée est ce qui est contraint** — le point de départ peut être déplacé librement.
+**La durée est ce qui est contraint** — le point de départ peut être déplacé librement. Avec un seul
+kf réel, le caller verrouille l'entrée et laisse la distribution fournir la sortie virtuelle ; il
+n'ancre pas les deux bornes au même instant.
 
 ### 2.1 Contrainte de durée minimale
 
@@ -235,7 +239,10 @@ capsule.childDefaults.transitionIn  : TransitionDef | null
 capsule.childDefaults.transitionOut : TransitionDef | null
 ```
 
-Un enfant locké peut avoir ses propres transitions (kf réels avec `transitionIn`/`transitionOut`), qui priment.
+Un enfant locké peut avoir ses propres transitions sur son premier/dernier kf réel (`transitionIn`/
+`transitionOut`), qui priment. Lorsque la borne n'a pas de transition explicite, la transition
+héritée reste attachée à la borne calculée ; déplacer le kf réel déplace donc son déclenchement sans
+changer la durée configurée.
 
 ---
 
@@ -261,7 +268,7 @@ Le runtime ne voit que des kf résolus.
 
 - Stocke les kf réels dans `TrackNode.keyframes`
 - Appelle `CapsuleDistribution.compute()` pour obtenir les kf virtuels affichés dans l'aperçu
-- Bloque le drag de l'outro capsule à `intro.timeMs + min_duration`
+- Bloque le drag de la borne de sortie capsule à `borne_entree.timeMs + min_duration`
 - Expose : `KEYFRAME.ADD`, `KEYFRAME.REMOVE`, `KEYFRAME.CLEAR_TRACK`, `KEYFRAME.CLEAR_CAPSULE`
 
 ### `CapsuleDistribution` (implémentée, `packages/authoring/scene-factory/capsule-distribution.ts`) :

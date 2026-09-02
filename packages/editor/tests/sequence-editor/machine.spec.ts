@@ -244,6 +244,30 @@ describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scè
     expect(vkfs.some((v) => v.trackId === 'child-1' && v.name === 'outro')).toBe(true)
   })
 
+  it('treats unnamed first/last child keyframes as real visibility bounds', () => {
+    const capsule = capsuleItem('cap', {
+      keyframes: [
+        { id: 'kf-cap-first', timeMs: 0, decorId: 'd0' },
+        { id: 'kf-cap-last', timeMs: 4000, decorId: 'd0' },
+      ],
+    })
+    const lockedChild = elementItem('locked-child', {
+      parentId: 'cap',
+      order: 'a',
+      keyframes: [
+        { id: 'kf-child-first', timeMs: 1000, decorId: 'd0' },
+        { id: 'kf-child-last', timeMs: 3000, decorId: 'd0' },
+      ],
+    })
+    const freeChild = elementItem('free-child', { parentId: 'cap', order: 'b' })
+    const actor = actorWithScene(baseScene([capsule, lockedChild, freeChild]))
+    const vkfs = actor.getSnapshot().context.virtualKeyframes
+
+    expect(vkfs.filter((v) => v.trackId === 'locked-child')).toHaveLength(0)
+    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'intro')).toMatchObject({ timeMs: 3000 })
+    expect(vkfs.find((v) => v.trackId === 'free-child' && v.name === 'outro')).toMatchObject({ timeMs: 4000 })
+  })
+
   it('a locked child\'s own transitionIn duration shortens its distribution slot, same formula as build-scene.ts (TransitionTiming)', () => {
     const capsule = capsuleItem('cap', {
       keyframes: [

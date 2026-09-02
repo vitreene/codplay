@@ -369,7 +369,7 @@ interface Keyframe {
 }
 ```
 
-**Par nature, un kf `intro` ne porte qu'une transition AVANT lui (`transitionIn`), un kf `outro` qu'une transition APRÈS lui (`transitionOut`)** — jamais l'inverse, jamais les deux. `intro`/`outro` sont des bornes (§2.4) : rien ne précède `intro` dans la fenêtre de l'item, rien ne suit `outro`. Un keyframe intermédiaire (ni `intro` ni `outro`) peut porter les deux : une transition entrante depuis son voisin précédent, une transition sortante vers son voisin suivant.
+**Par nature, le premier kf ne porte qu'une transition AVANT lui (`transitionIn`), le dernier qu'une transition APRÈS lui (`transitionOut`)** — jamais l'inverse, jamais les deux sur une même frontière. Les noms réservés `intro`/`outro`, lorsqu'ils sont présents, restent des labels utiles aux outils ; ils ne conditionnent pas la détection de la frontière. Un keyframe intermédiaire peut porter les deux : une transition entrante depuis son voisin précédent, une transition sortante vers son voisin suivant.
 
 `decorId` est la seule information de décor que la grille connaît. Elle ne lit pas `EditorScene.decors[decorId]`. Quand un keyframe est créé, la grille copie le `decorId` du keyframe adjacent le plus proche (voir §2.5).
 
@@ -394,7 +394,7 @@ La résolution `markerId → timeMs` est faite par le builder lors de la compila
 
 Un kf agit sur le décor ; il est précédé et/ou suivi d'une transition. Deux natures distinctes, chacune avec son propre jeu de réglages (tous facultatifs, chacun a une valeur par défaut) :
 
-**1. Transition nommée** — exclusivement sur les kf `intro`/`outro` (`kind: 'named'`) : signale la façon dont l'item apparaît/disparaît. Le nom est un preset (identique à Eddy) ; les propriétés animées (opacité, x, y, scale…) vivent dans le preset, jamais dans le décor.
+**1. Transition nommée** — sur le premier/dernier kf (`kind: 'named'`) : signale la façon dont l'item apparaît/disparaît. Le nom est un preset du catalogue V2 ; les propriétés animées (opacité, x, y, scale…) vivent dans le preset, jamais dans le décor.
    - Réglages : `durationMs`, `name` (le preset).
    - `transitionIn.durationMs = 800` sur le kf `intro` à t=5000 ms : la transition débute à t=4200 ms, se termine à t=5000 ms — l'item arrive réglé exactement au kf.
    - `transitionOut` sur le kf `outro` : débute à l'instant du kf, s'achève `durationMs` plus tard.
@@ -427,7 +427,7 @@ type EasingValue =
   | { type: 'cubic-bezier'; p1x: number; p1y: number; p2x: number; p2y: number }
 ```
 
-`transitionIn`/`transitionOut` sur les kf `intro`/`outro` utilisent `kind: 'named'`. Les kf intermédiaires utilisent `kind: 'interpolated'`, `direction` par défaut `'after'` (transition pleine, dès le kf source, comportement historique inchangé si le réglage est omis).
+`transitionIn` sur le premier kf et `transitionOut` sur le dernier utilisent `kind: 'named'`. Les kf intermédiaires utilisent `kind: 'interpolated'`, `direction` par défaut `'after'` (transition pleine, dès le kf source, si le réglage est omis).
 
 #### `Sustain` — comportement de transition indépendant du décor
 
@@ -527,17 +527,35 @@ n'est requis.
 
 Cette approche garantit que plusieurs keyframes consécutifs au même décor ne dupliquent pas inutilement les données, et que le coût de création d'un nouveau décor n'est payé que lors d'une modification réelle.
 
-### 2.4 Intro et Outro
+### 2.4 Bornes de visibilité V2
 
-Intro et Outro ne sont pas des types distincts : ce sont des **keyframes avec nom réservé** :
+Intro et outro ne sont pas des types distincts : ce sont les **premier et dernier keyframes selon
+`timeMs`** de l'item. Le nom réservé `intro`/`outro` peut être conservé pour l'outillage et la
+lecture de la timeline, mais n'est pas requis pour qu'une borne soit active :
 
-- Le premier keyframe d'un élément dont `name === 'intro'` définit le bord d'entrée
-- Le dernier dont `name === 'outro'` définit le bord de sortie
-- En dehors des bornes intro/outro, l'élément n'est pas visible (il ne reçoit pas d'events Codplay)
+- le premier keyframe définit la frontière d'entrée ;
+- le dernier keyframe définit la frontière de sortie ;
+- en dehors de ces bornes, l'item n'est pas visible et ne reçoit pas d'event de visibilité ;
+- une `transitionIn` portée par le premier kf se termine exactement à son `timeMs` ; une
+  `transitionOut` portée par le dernier commence exactement à son `timeMs`.
 
-**Assignation automatique** : si intro ou outro ne sont pas définis, l'élément est considéré présent sur toute la durée de la scène. Cela est représenté en mémoire par l'absence de keyframes intro/outro, pas par leur création automatique.
+Déplacer le premier/dernier kf déplace donc la frontière correspondante et le déclenchement de sa
+transition ; la durée de la transition reste attachée au kf déplacé. En l'absence de transition
+explicite, la capsule parente fournit ses transitions par défaut selon son type ; un choix explicite
+sur le kf prime ce défaut. Le `preRoll` technique éventuel du builder protège le début de la scène
+sans modifier le temps auteur du kf.
 
-**Héritage capsule** : si un élément est dans une capsule qui a ses propres bornes intro/outro, la fenêtre effective de l'élément est l'intersection des deux. Cela se calcule au build, pas dans le modèle éditeur.
+Un item sans keyframe est considéré présent sur toute la durée de la scène. Avec un seul keyframe,
+il fixe l'entrée ; la capsule parente peut fournir la borne de sortie virtuelle afin d'éviter une
+fenêtre de durée nulle. Cette règle conserve la matérialisation d'un item nouvellement posé tout en
+laissant deux keyframes réels exprimer deux frontières indépendantes.
+
+**Héritage capsule** : la fenêtre effective d'un item est l'intersection de ses bornes premier/
+dernier kf et de la fenêtre calculée par sa capsule parente. La capsule racine implicite n'est pas
+affichée ni sélectionnable comme item et ne porte pas de keyframes propres ; elle représente la
+scène, mais son comportement `card` fournit néanmoins les transitions par défaut aux enfants directs.
+La résolution des fenêtres et des transitions se fait au build, pas par une écriture dans le modèle
+pendant la lecture.
 
 ### 2.4 JSON de test
 

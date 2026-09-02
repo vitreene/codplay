@@ -60,8 +60,9 @@ export const EVENT_ACTION = {
 /**
  * Public event action identifier.
  *
- * Reserved values in v1 are `EVENT_ACTION.intro`, `EVENT_ACTION.outro` and `EVENT_ACTION.sustain`, but the type stays open to
- * avoid coupling the portable API to the current event implementation.
+ * The current reserved values are `EVENT_ACTION.intro`, `EVENT_ACTION.outro` and
+ * `EVENT_ACTION.sustain`, but the type stays open to avoid coupling the portable API to
+ * the event implementation.
  */
 export type AutoCapsuleEventAction = string;
 

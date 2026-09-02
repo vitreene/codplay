@@ -128,11 +128,10 @@ export function DemoMenuRegion({ controller }: DemoMenuRegionProps) {
             commands: [
               { name: 'assignType', args: { itemId, type: 'text' } },
               { name: 'assignContent', args: { itemId, content: { type: 'text', text: 'Nouvel item' } } },
-              // Sans keyframe, `CapsuleDistribution` n'a ni introMs ni outroMs à verrouiller — l'item
-              // hérite du fade-in par défaut du type `card` sans jamais recevoir l'eventime qui le
-              // déclenche (`buildTransitionEvents` lit `item.keyframes[0]`/`[…length-1]`) : il reste
-              // à `opacity:0` en permanence. Deux keyframes (bornes du clip) donnent un intro/outro
-              // résolus sur toute la durée de la scène plutôt que confondus au même instant.
+              // Sans keyframe, la capsule-root implicite fournit une fenêtre scène complète et ses
+              // transitions par défaut synthétiques. Deux keyframes restent utiles pour exprimer
+              // deux frontières auteur indépendantes : déplacer le premier/dernier KF déplace alors
+              // la borne d'entrée/sortie correspondante.
               { name: 'createKeyframe', args: { itemId, timeMs: 0 } },
               { name: 'createKeyframe', args: { itemId, timeMs: emptyScene.meta.durationMs } },
             ],

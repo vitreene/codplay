@@ -7,6 +7,8 @@ la capture de keyframe compose désormais le snapshot interpolé au temps exact 
 le candidat d'édition ;
 la rotation avec axe déplaçable est maintenant raccordée dans l'entrée V2 du cadre
 et dans le bridge décor ; la preuve navigateur de cette extension reste à exécuter ;
+les bornes de visibilité premier/dernier keyframe et l'héritage des transitions
+de capsule sont maintenant raccordés au builder et au rendu timeline ;
 la matrice globale reste en cours avec S2 et les contrôles complémentaires dans Safari Technology Preview.
 Les extensions hors verticale ne sont pas engagées.**
 **Cible :** `ed2` avec la façade CodPlay V2.
@@ -398,6 +400,39 @@ px↔offset et le mapping builder. La preuve
 du parcours réel dans Safari Technology Preview (rotation, déplacement d'axe,
 seek/rebuild et persistance) reste obligatoire avant de déclarer cette extension
 stable ; l'automatisation est encore désactivée dans l'environnement courant.
+
+### Bornes de visibilité et transitions héritées V2 — 2026-09-02
+
+Le contrat V2 de `sequence-editor` est maintenant explicite : pour un item, le
+premier et le dernier keyframes selon `timeMs` sont les frontières d'entrée et de
+sortie, même si leurs noms réservés `intro`/`outro` sont absents. Une transition
+nommée portée par le premier kf se termine à cet instant ; une transition portée
+par le dernier commence à cet instant. Déplacer une borne déplace donc son
+déclenchement, tandis que sa durée reste attachée au keyframe. Un item qui ne
+porte qu'un seul kf fixe son entrée ; la distribution conserve une sortie
+virtuelle pour éviter une fenêtre nulle.
+
+La capsule parente fournit les transitions par défaut quand le kf de bord n'en
+porte pas explicitement. La capsule racine implicite est le `card` qui représente
+la scène : elle n'est pas affichée comme item et ne possède pas de keyframes,
+mais ses défauts `fade/fade` sont résolus sur ses enfants directs. Les capsules
+explicites transmettent de la même façon leurs `defaultTransitionIn/Out` selon
+leur type ; un choix nommé sur le kf prime le défaut. `preRollMs` reste une
+réservation technique de la façade player et ne change jamais le temps auteur.
+
+Un enfant direct sans keyframe reste présent sur toute la durée `scene.meta.durationMs` ; la root
+implicite lui applique donc une fenêtre complète et non une durée nulle. Un seul kf réel fixe
+l'entrée et laisse toujours la distribution fournir la sortie virtuelle.
+
+Pour éviter deux résolutions divergentes, `resolveAutoCapsuleDefaults` est
+désormais partagé par `capsule-automation` et `buildSceneDocV2`. Le builder
+calcule les locks avec les durées effectives (défaut ou override), transmet ces
+défauts à `AutoCapsule`, et le rendu timeline cherche les bornes premier/dernier
+plutôt que les seuls noms. Les tests builder et player couvrent le déplacement
+de la première frontière, l'héritage d'une transition de capsule et la lecture
+réelle avant/après le déplacement ; les tests de la machine couvrent aussi le
+cas du kf unique. La preuve visuelle complète reste à rejouer dans Safari
+Technology Preview avant toute clôture de la matrice.
 
 ## Audit ciblé — façade documentaire et machines d'état
 
