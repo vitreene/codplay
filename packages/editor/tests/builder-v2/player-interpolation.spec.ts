@@ -154,6 +154,40 @@ describe('editor V2 player interpolation', () => {
     expect(item?.style.transformOrigin).toBe('50% 50%')
   })
 
+  it('materializes a destination-only style property without failing instance creation', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const source = interpolationScene()
+    source.decors.second!.style = { color: '#ff0000' }
+    const built = buildSceneDocV2(source)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-destination-only-style',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500 + built.preRollMs)
+    const before = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(before).not.toHaveProperty('color')
+
+    await instance.telco.seek(1_000 + built.preRollMs)
+    const atDestination = instance.snapshot.get()?.states.find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(atDestination?.color).toEqual(expect.objectContaining({ kind: 'color' }))
+  })
+
   it('attache la visibilité au premier/dernier kf et déplace la transition d’entrée avec le premier kf', async () => {
     codplay = new CodPlay({ pauseOnDocumentHidden: false })
 

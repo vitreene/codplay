@@ -105,12 +105,13 @@ Le runner possède des briques de capture (`captureHtmlPose`,
 besoins de mouvement HTML, FLIP et reparent. Elles mesurent des nœuds dans une
 transaction interne et ne constituent pas un contrat d'authoring.
 
-La première verticale éditeur position/taille ne consomme pas ces captures : elle
-lit l'état logique par `instance.snapshot`, utilise la largeur de sa racine de
-scène comme repère local et monte son cadre d'interaction dans cette racine. Le
-runner ne publie donc ni frame de sélection, ni référence DOM, ni pose de nœud à
-l'éditeur. Toute évolution de capture pour une grille, une taille intrinsèque ou
-un repère transformé devra faire l'objet d'une spécification et d'une tranche
+La verticale éditeur position/taille consomme `instance.snapshot` pour les
+préviews et les écritures logiques, mais lit `instance.presentation` lorsque le
+CS doit représenter la pose affichée d'un item animé. Ce port fournit la frame
+numérique déjà résolue par `HtmlMotionSystem` ; il ne publie ni référence DOM ni
+mesure. La largeur de la racine reste le repère de conversion de l'authoring,
+et toute évolution de capture pour une grille, une taille intrinsèque ou un
+repère transformé devra faire l'objet d'une spécification et d'une tranche
 distinctes.
 
 Le reset retire aussi les masques de source laissés par l'overlay précédent. Les

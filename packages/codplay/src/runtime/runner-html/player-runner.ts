@@ -446,6 +446,11 @@ export class HtmlPlayerRunner {
     return this.player.getCurrentTimeMs()
   }
 
+  /** Returns the latest numeric presentation frame produced by the runtime motion circuit. */
+  getPresentationFrame(): import('../motion').PresentationFrame | undefined {
+    return this.motionSystem?.getFrame()
+  }
+
   /** Subscribes transport observers to the player-owned update circuit. */
   subscribe(listener: () => void): () => void {
     return this.player.subscribeTransport(listener)

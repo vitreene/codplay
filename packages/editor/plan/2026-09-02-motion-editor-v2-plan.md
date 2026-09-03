@@ -4,6 +4,77 @@
 **Cible :** `ed2` avec la façade CodPlay V2  
 **Date :** 2026-09-02
 
+### Correction contractuelle du 2026-09-03 — source unique de la pose affichée
+
+L'invariant est désormais explicite : **le CS suit toujours la pose réellement
+présentée de l'item, sans écart**, y compris pendant un seek et une
+interpolation courbe. Le snapshot V2 reste la source logique utilisée pour
+prévisualiser et écrire une édition ; il ne décrit pas nécessairement la pose
+affichée lorsqu'un mouvement CodPlay applique une trajectoire.
+
+Le bridge ne doit donc plus projeter un snapshot sur un path pour fabriquer la
+pose courante du CS. CodPlay V2 publie une lecture numérique, en lecture seule,
+de sa `PresentationFrame` courante via la façade d'instance (`presentation`).
+Cette sortie contient uniquement des poses affines et des identifiants
+numériques : aucun nœud DOM, aucune mesure côté éditeur et aucun état de
+document ne franchissent la frontière. Le bridge utilise cette pose pour
+afficher le CS ; il conserve le snapshot logique pour les patches et les
+commits d'authoring.
+
+Cette correction remplace l'hypothèse antérieure « snapshot + lecteur ACE dans
+l'éditeur » : il ne subsiste qu'une résolution de path dans le runtime CodPlay.
+La frontière `presentation` est un port de lecture de la pose rendue, pas une
+API d'édition, de mesure ou de pilotage supplémentaire.
+
+### Correction d'interface du 2026-09-03 — projection du parcours complet
+
+La sélection d'un item à plusieurs keyframes projette désormais tous ses
+segments adjacents dans une même couche d'overlay. Un seul segment, celui que
+porte la sélection (ou le segment traversé lorsque la tête est entre deux KFs),
+est actif : son path reste opaque et porte l'unique point médian ainsi que les
+ghosts/gestes prévus. Les autres trajets restent visibles avec une opacité
+graduée, sans poignée et sans capture de pointeur. Ils demeurent des artefacts de
+positionnement hors scène ; cette vue ne crée ni KF, ni décor, ni nouveau
+lecteur de trajectoire. Une pose d'extrémité repositionnée est répercutée dans
+les deux segments qui la partagent afin que le parcours affiché reste cohérent.
+
+### Correction d'interface du 2026-09-03 — ghost de la pose initiale
+
+La projection du parcours ajoute un ghost géométrique dédié à la pose du premier
+keyframe. Il reste hors scène et complète les paths inactifs lorsque le segment
+actif est plus loin dans le parcours ; il ne porte ni poignée médiane ni CS. Un
+clic sur ce ghost sélectionne le premier keyframe et demande le seek par le
+relais habituel de l'éditeur. Si la pose initiale coïncide avec la source du
+segment actif, l'overlay n'affiche pas un second outline identique. Lorsqu'il
+est visible comme repère hors du segment actif, son outline reprend l'opacité
+des trajets inactifs (`0.28`).
+
+### Correction d'interaction du 2026-09-03 — ghosts superposés et reprise CS
+
+Le segment actif projette toujours ses deux ghosts source et cible. Le ghost
+dont la pose structurée coïncide avec l'item présenté est masqué ; l'autre reste
+visible et cliquable pour la navigation. La coïncidence est comparée sur les
+valeurs du frame (jamais sur une `getBoundingClientRect`) avec l'écart subpixel
+normal de conversion cqw/rendu (`0,5 px`, `0,1°`, tolérance d'unité `0,001`).
+Lorsque l'item est entre les deux bornes, les deux ghosts sont visibles et
+cliquables.
+
+Tous les trajets adjacents de l'item jusqu'au dernier KF sont projetés. Le path
+actif reste lisible et éditable ; les paths secondaires sont pointer-transparent
+et reçoivent une opacité graduée selon leur rang dans le parcours.
+
+Lorsqu'une édition CS est acceptée par `instance.snapshot`, le frame candidat
+est la référence de présentation jusqu'à la fin de cette phase. La lecture
+`instance.presentation` peut encore représenter la pose antérieure pendant le
+même tour synchrone ; elle ne peut donc plus remplacer ce candidat et devenir
+la base d'un repositionnement ou d'un resize. Cette priorité ne s'active que
+pour une preview qui porte effectivement une propriété de pose affine ; une
+couleur ou une autre propriété de décor laisse la pose de lecture inchangée. Le
+bridge mémorise l'item et le temps de la contribution pour ne conserver cette
+priorité que tant que la preview correspond au contexte courant ; hors preview,
+la pose visible reste lue par `PresentationFrame`, y compris pendant un seek
+entre deux KFs.
+
 Ce document prépare la feature « éditeur de mouvement ». L'implémentation est
 engagée sur le périmètre validé : déplacement intra-capsule, sans reparentage
 et sans modification du sequence-editor dans cette tranche. Il deviendra la
@@ -30,14 +101,34 @@ Le premier vertical slice est en cours :
 - l'overlay reste masqué tant qu'aucune scène/sélection ne fournit de segment,
   le point médian et le path se mettent à jour pendant le drag, et le calcul
   d'arc reste sur le petit arc (`largeArc=0`) pour éviter une contre-courbe
-  quasi fermée ;
+  quasi fermée ; lorsque plusieurs KFs existent, tous les trajets sont visibles,
+  les non-actifs en transparence légère et sans point médian ;
 - le runtime V2 consomme `pathAnchor: 'center'` pour les segments issus de
   l'éditeur : le centre affine visuel suit le tracé affiché malgré rotation ou
   redimensionnement, sans stocker une AABB ;
+- lorsque le segment actif n'est pas le premier, l'overlay projette aussi le
+  ghost géométrique de la pose du premier KF (`data-motion-ghost="initial"`) ;
+  ce repère reste hors scène, suit une éventuelle édition de l'endpoint et
+  ramène le premier KF par le circuit de seek existant ; lorsqu'il est inactif,
+  il est rendu avec l'opacité `0.28` des autres trajets secondaires ;
+- le Builder sépare désormais les propriétés de décor qui ont une borne source
+  (tween explicite) de celles qui apparaissent pour la première fois au KF
+  destination (patch direct à l'instant du KF), afin qu'aucun `{to: ...}` sans
+  source ne puisse faire échouer la reconstruction V2 ; aucune valeur CSS par
+  défaut n'est déduite ;
 - le CS ne lit pas la position DOM de l'item et ne maintient pas un lecteur de
-  path parallèle : le bridge appelle les primitives ACE pures avec le même
-  path préparé, le même easing et le même temps absolu que CodPlay, puis
-  projette la pose logique courante sur le centre présenté ;
+  path parallèle : le bridge lit la pose numérique `instance.presentation`
+  produite par la même résolution runtime que l'item, puis la convertit dans
+  le format local du CS ; le snapshot logique reste réservé aux previews et
+  aux écritures ;
+- pendant le repositionnement CS d'un KF créé, la pose de l'extrémité active
+  est propagée immédiatement à l'overlay : ghost, extrémité du path et contrôle
+  normalisé restent attachés à la nouvelle pose avant même le flush documentaire ;
+- le ghost superposé à la pose courante est masqué dans tous les modes
+  d'affichage, avec une tolérance subpixel ; le ghost opposé reste visible et
+  cliquable ; pendant une preview CS, le candidat accepté (item + temps auteur)
+  reste la base du geste suivant, même si `PresentationFrame` accuse encore
+  l'ancienne pose ;
 - l'import direct des primitives ACE par l'éditeur est explicitement un raccord
   **temp** de la première tranche, pas une surface V2 normative ; la décision
   de frontière (façade CodPlay ou bibliothèque ACE indépendante) est différée
@@ -49,16 +140,22 @@ Le premier vertical slice est en cours :
   applicatif restent explicitement dans les tranches suivantes ; aucune règle
   implicite n'est ajoutée pour ces cas.
 
-Les tests ajoutés couvrent la géométrie pure, la validation/compilation du path
-et le geste réel du bridge sous jsdom. La validation visuelle finale doit encore
-être réalisée dans **Safari Technology Preview** sur le serveur existant
-`127.0.0.1:5174`.
+Les tests ajoutés couvrent la géométrie pure, la validation/compilation du path,
+le geste réel du bridge sous jsdom et la reprise de lecture après une transaction
+de keyframe suivie immédiatement d'un rewind puis d'un Play. Le bridge attend
+la fin d'un seek déjà engagé et compare la coordonnée runtime (qui inclut le
+`preRollMs`) avant de décider qu'une réparation est inutile : un rewind brut à
+`playerTime=0` ne peut donc plus être confondu avec le temps auteur `0`, et un
+Play demandé pendant le handoff ne laisse pas le contrôleur en `playing` avec un
+runtime `ready`. Une validation visuelle ciblée de la navigation par ghosts a
+été réalisée dans **Safari Technology Preview** sur le serveur existant
+`127.0.0.1:5174`; la matrice native complète reste ouverte pour la porte P7.
 
 Un smoke test a toutefois été effectué le 2026-09-02 dans l'onglet existant de
 **Safari Technology Preview** : au lancement sans scène, le bouton
 `data-motion-path-control` et le path sont masqués ; la démo « Test position +
 couleur » se charge, la sélection affiche le CS et la surface centrale, puis
-le second KF affiche le ghost source et le path. L'endpoint du path ajouté à
+le second KF affiche les ghosts source/cible et le path. L'endpoint du path ajouté à
 la scène coïncide avec le centre mesuré de l'item actif (écart inférieur à
 `0,03 px`). Après correction de la projection HTML, un seek à `2,5 s` sur un
 arc courbé donne un centre d'item à moins de `0,10 px` du path rendu et la
@@ -77,6 +174,11 @@ les centres du CS et de l'item sont restés confondus à moins de `0,03 px`. Les
 tests d'intégration couvrent aussi un détour de seek (`500 → 250 → 500`) qui
 reproduit exactement la transform ACE de l'item et un seek interne qui ne
 reconstruit pas les extrémités du path depuis le snapshot interpolé.
+Après l'ajout des deux ghosts persistants, un clic sur la cible puis sur la
+source a ramené le playhead affiché à `5,0 s` puis `0,0 s`; à chaque borne, le
+ghost occupé par l'item a été masqué, tandis que le ghost opposé est resté
+visible et cliquable ; le ghost masqué n'intercepte donc pas les gestes du CS.
+La console Safari Technology Preview est restée sans erreur ni avertissement.
 
 ## 1. Autorité et périmètre V2
 
@@ -149,10 +251,16 @@ pointeur indique le rôle courant. Après le lâcher
 d'un déplacement :
 
 - le chemin reste visible ;
-- la pose source devient un ghost ;
+- la pose source devient un ghost géométrique ;
 - la pose cible devient active et porte le Selection Frame ;
 - les propriétés de décor et la pose cible restent éditables ;
-- un clic sur le ghost source inverse source/cible ;
+- les ghosts source et cible sont projetés à chaque état du segment ; celui dont
+  la pose coïncide avec l'item réel est masqué, tandis que l'autre reste visible
+  et cliquable pour rejoindre la borne opposée ; lorsque l'item est entre les
+  deux bornes, les deux ghosts sont visibles et cliquables ;
+- un clic sur un ghost visible source ou cible sélectionne le KF correspondant et
+  amène la tête de lecture du sequence-editor à son temps, puis le seek joueur
+  suit le même relais que le scrub de timeline ;
 - un clic sur le chemin ouvre l'édition du chemin ;
 - le point médian d'une droite peut être tiré pour former une courbe ;
 - un double-clic sur ce point remet le chemin droit.
@@ -195,10 +303,16 @@ temporelle `source → cible` pour un même item :
 3. le nouveau KF est créé à `source.timeMs + durationMs`, avec `durationMs =
    500` par défaut ;
 4. la tête de lecture se place sur le KF cible ;
-5. le source devient ghost et la cible devient l'item actif avec le CS ;
-6. l'auteur peut alors modifier normalement le décor cible (pivot, rotation,
+5. les poses source et cible deviennent des ghosts ; celui qui coïncide avec
+   l'item actif est masqué, l'autre reste visible et cliquable ;
+6. l'item actif suit la pose interpolée de l'instant demandé ; s'il est entre les
+   bornes, les deux ghosts restent visibles et cliquables ;
+7. un clic sur un ghost visible source ou cible sélectionne le KF correspondant
+   et transporte la tête de lecture du sequence-editor à son temps ; le seek
+   joueur passe par le relais habituel de cette tête ;
+8. l'auteur peut alors modifier normalement le décor cible (pivot, rotation,
    resize, couleur, aire de grille, etc.) ;
-7. la cible peut ensuite être déplacée ou supprimée par les commandes ordinaires
+9. la cible peut ensuite être déplacée ou supprimée par les commandes ordinaires
    du sequence-editor.
 
 Le segment ne change ni `parentId`, ni `order`, ni la visibilité structurelle de
@@ -267,10 +381,11 @@ modélisés par leur « top-left » : dans V2, la pose auteur reste affine
 de cette pose affine dans le repère de présentation choisi ; il ne devient pas
 une mesure de bounding box persistée ni une origine normative de CodPlay.
 
-Une capture ponctuelle d'ancre monde peut rester la couture de présentation
-prévue par le runtime pour caler un artefact d'overlay. Elle ne sert ni à
-construire la pose auteur, ni à alimenter la trajectoire à chaque frame ; les
-dimensions locales et la pose affine restent les données de référence.
+La `PresentationFrame` numérique est la couture de présentation prévue par le
+runtime pour caler un artefact d'overlay. Elle ne sert ni à construire la pose
+auteur, ni à produire un patch documentaire ; les dimensions locales et la
+pose affine restent les données de référence du rendu. Le bridge ne relit pas
+le DOM et ne réévalue pas ACE à chaque synchronisation.
 
 Le runtime HTML expose `rect.left/top` comme des valeurs AABB dérivées et peut
 encore s'en servir pour les transitions qui ne déclarent pas d'ancrage. Pour le
@@ -290,13 +405,17 @@ idle
   ├─ repositioning (pose du KF courant via le CS existant)
   └─ drawing-motion (source active, cible/ghost suit le pointeur)
        └─ target-active (lâcher validé, nouveau KF et chemin)
-            ├─ source-active (clic sur le ghost source)
+            ├─ seek-navigation (source et cible en ghosts, item actif à l'instant cherché)
+            │    ├─ source-active (clic sur le ghost source)
+            │    └─ target-active (clic sur le ghost cible)
             ├─ path-editing (clic/drag du point de contrôle)
             └─ duration-editing (poignée ou champ numérique, déplacement du KF)
 ```
 
 Le repositionnement suit directement le canal V2 existant du CS : preview logique
-par `instance.snapshot`, puis commande de décor au commit. Le déplacement ajoute
+par `instance.snapshot`, puis commande de décor au commit. Pour l'affichage, le
+CS lit la pose de l'item depuis `instance.presentation`; le snapshot n'est pas
+utilisé pour reconstruire une pose déjà présentée par CodPlay. Le déplacement ajoute
 le KF cible et sa relation de trajectoire au commit du drop ; la tête de lecture
 est ensuite alignée sur ce KF. Tant que la souris n'est pas relâchée, `Échap`
 annule le tracé et ne produit aucun KF, décor ou path. Après le drop, l'annulation
@@ -311,14 +430,18 @@ destruction.
 
 ### 4.4 Source, cible et décor
 
-Après le lâcher, la cible active reçoit le Selection Frame V2, la tête de lecture
-se place sur son `timeMs` et le source devient ghost. Le déplacement du cadre
-cible et les panneaux de décor modifient le décor de la cible par le même canal
-que toute autre édition. Le chemin de position ne doit pas écraser les
-dimensions, la rotation, l'axe, la couleur ou les autres propriétés que l'auteur
-édite à la cible : la trajectoire de translation et la pose finale du décor sont
-deux canaux distincts. La poignée de durée ne change pas la pose cible ; elle
-change l'intervalle temporel et donc le `timeMs` du KF cible.
+Après le lâcher, la cible active reçoit le Selection Frame V2 et la tête de lecture
+se place sur son `timeMs`. Les poses source et cible sont projetées comme ghosts
+géométriques hors scène ; celui qui coïncide avec l'item réel est masqué, l'autre
+reste visible et cliquable. Entre les deux bornes, les deux ghosts sont visibles
+et cliquables pour sélectionner leur KF puis déclencher le seek correspondant.
+Le déplacement du cadre cible et les panneaux de décor modifient le décor de la
+cible par le même canal que toute autre édition. Le chemin de position ne doit
+pas écraser les dimensions, la rotation, l'axe, la couleur ou les autres
+propriétés que l'auteur édite à la cible : la trajectoire de translation et la
+pose finale du décor sont deux canaux distincts. La poignée de durée ne change
+pas la pose cible ; elle change l'intervalle temporel et donc le `timeMs` du KF
+cible.
 
 Le statut temporaire continue de signifier « pas encore de décor documentaire »
 et non « lecture seule ». Si le geste crée un KF, sa capture doit conserver à la
@@ -329,15 +452,28 @@ restent la voie normative.
 
 ### 4.5 Ghost et artefacts d'authoring
 
-Le ghost et le path sont des projections de la surface d'authoring et ne
-deviennent jamais des items de scène. Pour la première tranche, le ghost est
+Les ghosts et le path sont des projections de la surface d'authoring et ne
+deviennent jamais des items de scène. Pour la première tranche, chaque ghost est
 géométrique : un outline pointillé de la boîte et de sa transformation, avec un
 fond transparent. L'outline est le signal principal, car l'item source peut
 déjà être transparent ; aucun remplissage translucide n'est requis.
-Il peut afficher le centre, les extrémités et les repères nécessaires au path,
-mais il ne porte pas le CS lorsque la cible est active. Le CS reste attaché à
-l'item actif, conformément à son contrat existant ; après un clic sur le ghost
-source, les rôles s'inversent et le CS suit le nouvel actif.
+Chaque ghost peut afficher le centre, les extrémités et les repères nécessaires
+au path, mais aucun ne porte le CS. Le CS reste attaché à l'item actif,
+conformément à son contrat existant ; après un clic sur le ghost source ou cible,
+le rôle actif et la tête de lecture suivent le KF correspondant.
+La vue multi-KF ajoute un ghost géométrique de la pose du premier KF pour garder
+un repère de départ même lorsque ce KF n'est pas une borne du segment actif. Il
+est masqué lorsqu'il coïncide avec la source active afin de ne pas dupliquer le
+ghost existant ; son clic suit le même relais de sélection/seek que les autres
+repères. Lorsqu'il est affiché comme repère inactif, son outline est translucide
+(`opacity: 0.28`) comme les paths secondaires.
+La couche SVG peut afficher plusieurs trajets du même item jusqu'au dernier KF :
+un seul path est actif et interactif, les autres sont rendus comme repères
+visuels à opacité graduée et pointer-transparent. Aucun point médian n'est créé
+pour ces trajets secondaires.
+Lorsque la tête est exactement sur une borne, le ghost de cette pose est masqué ;
+l'autre ghost reste visible et cliquable pour revenir à l'autre borne. Lorsque
+l'item est entre les bornes, les deux ghosts sont affichés et cliquables.
 
 Une projection ultérieure du contenu exact serait une extension d'overlay
 séparée. Elle ne doit ni cloner ni muter un nœud du player et n'est pas requise
@@ -355,13 +491,14 @@ motion-geometry (fonctions pures : centres, normalisation, courbe, hit-test)
         │     (zones central/bord, chemin, point de contrôle, ghost, curseurs)
         │
         ├─ decor-editor bridge
-        │     (source/cible, projection px↔unitless, snapshot, commit/abandon)
+        │     (source/cible, projection px↔unitless, présentation runtime,
+        │      snapshot, commit/abandon)
         │
         └─ sequence-editor adapter
               (création du KF cible, durée, affichage et déplacement timeline)
                          │
                          ▼
-                    builder ed2 → CodPlay V2 motion
+                    builder ed2 → CodPlay V2 motion → PresentationFrame
 ```
 
 La localisation exacte reste à arrêter après les réponses :
@@ -522,7 +659,7 @@ la règle de sélection des deux intentions validées.
 **Porte :** invariants mathématiques, limites, double-clic de remise à zéro et
 parcours temporel couverts.
 
-### P2 — Surface modulaire et gestes — Première tranche implémentée (2026-09-02)
+### P2 — Surface modulaire et gestes — Première tranche implémentée (2026-09-02), projection multi-KF et hit-test ghost ajoutés (2026-09-03)
 
 - modifieur/capacité réutilisable pour le chemin, le point de contrôle, les
   ghosts et les curseurs ;
@@ -531,6 +668,8 @@ parcours temporel couverts.
   d'usage ;
 - états drawing/source-active/target-active/path-editing sont couverts par
   l'overlay ; `duration-editing` reste différé avec la durée ;
+- projection de tous les segments adjacents : un path actif opaque avec un
+  point médian, trajets secondaires à opacité graduée sans contrôle ni capture ;
 - utilisation systématique de `gesture-session`, `overlay-pose` et
   `handle-geometry` existants ;
 - aucun accès au document ou au nœud player.
@@ -539,12 +678,14 @@ parcours temporel couverts.
 sur tablette ; la multi-sélection reste hors de cette porte et sera couverte
 dans une tranche ultérieure.
 
-### P3 — Intégration `decor-editor` — Première tranche implémentée (2026-09-02)
+### P3 — Intégration `decor-editor` — Première tranche implémentée (2026-09-02), reprise CS après repositionnement corrigée (2026-09-03)
 
 - projection des poses source/cible en px locaux puis retour unitless au bridge ;
 - preview par `snapshot.set()` et abandon par `snapshot.clear()` ;
 - édition du décor cible par le Selection Frame et les panneaux existants ;
-- bascule source/cible et maintien du chemin ;
+- projection des ghosts source/cible après le drop et à chaque seek ; le ghost
+  posé sous l'item est masqué, l'autre reste cliquable pour sélectionner le KF
+  et seek vers son temps via le playhead auteur du sequence-editor ;
 - déplacement de la tête de lecture sur le KF cible après le drop ;
 - capture d'un candidat interpolé et d'une intervention simultanée reste couverte
   par le pont existant ; le déplacement depuis un candidat temporaire est différé
@@ -587,10 +728,15 @@ possèdent aucune deuxième scène.
 - faire coexister trajectoire de position, dimensions, rotation, couleur et
   transitions de visibilité ;
 - préserver la résolution absolue identique Play/Seek, sans mesure DOM par frame ;
+- exposer par la façade V2 une `instance.presentation` numérique en lecture seule
+  (pose affine courante des items présentés), puis l'adapter au CS ; cette sortie
+  est la seule source de la pose affichée et ne contient ni nœud DOM ni état
+  documentaire ;
 - l'extension ciblée de `packages/codplay` reste limitée à la donnée de contrat
   `pathAnchor`, à sa propagation pure dans le graphe et à la couture de capture
-  HTML `layoutOrigin` nécessaire pour appliquer cette pose sans décalage ; elle
-  ne crée ni nouveau moteur de path, ni mesure DOM par frame, ni circuit V1.
+  HTML `layoutOrigin` nécessaire pour appliquer cette pose sans décalage, ainsi
+  qu'à ce port numérique de présentation ; elle ne crée ni nouveau moteur de
+  path, ni mesure DOM par frame, ni circuit V1.
 
 **Porte :** tests builder, player, Play, Seek, relecture, chevauchement et
 rebuild ; aucune instance ne doit être remplacée pour un simple play/seek.
@@ -630,11 +776,17 @@ rejouer dans **Safari Technology Preview** :
    source/cible, puis tourner/redimensionner et modifier le décor cible ;
 6. régler une durée prédéfinie puis une durée précise, vérifier que le KF et la
    tête de lecture avancent ensemble ;
-7. cliquer le ghost source et le chemin, courber puis réinitialiser le chemin ;
+7. cliquer le ghost source ou cible et le chemin, courber puis réinitialiser le chemin ;
    vérifier que la droite réapparaît sans champ `path` dans le décor cible ;
 8. modifier puis supprimer le KF dans la timeline par les commandes ordinaires ;
-9. seek avant, pendant et après le segment, puis Play/Pause ;
-10. recharger/rebuild et vérifier la persistance et l'absence de saut.
+9. seek avant, pendant et après le segment, vérifier que les ghosts source et
+   cible sont projetés, que celui sous l'item est masqué et que l'autre reste
+   cliquable pour ramener la tête à son KF, puis
+   Play/Pause ;
+10. avec au moins trois KFs, vérifier que tous les trajets restent visibles,
+    qu'un seul est opaque et porte le point médian, que le ghost de la pose
+    initiale est visible hors du segment actif, puis recharger/rebuild et vérifier
+    la persistance et l'absence de saut.
 
 Le smoke du 2026-09-02 couvre les étapes 1, 4, 5 (création et rôles), 7 (arc
 et état du décor) et une lecture jusqu'à la fin. Les étapes de geste natif,
@@ -653,13 +805,17 @@ une impression sur une frame.
 | Drag central dans la zone de déplacement | Un nouveau KF cible est créé selon `source.timeMs + durationMs` ; la tête de lecture s'y place et source/cible sont distinguées. |
 | Drag dans la bande de repositionnement | Le patch de pose du CS modifie seulement le KF courant ; aucun segment ni KF implicite n'est créé. |
 | Collision temporelle (seconde tranche) | Fusion selon les règles du décor : le plus récent surcharge les propriétés déjà définies ; si un KF est dépassé, la source est recalée selon l'ordre chronologique et la durée se déduit. La compréhension de cette interaction doit être validée visuellement avant stabilisation. |
-| Resize/rotation/pivot de la cible | Le ghost source reste stable ; le décor cible reçoit les patches par le canal V2 existant. |
+| Resize/rotation/pivot de la cible | Le ghost source reste stable ; la cible du segment suit immédiatement la preview CS, puis le décor cible reçoit le patch par le canal V2 existant. Après seek, les deux ghosts restent stables. |
+| Reposition puis resize sur le même KF | La translation acceptée par le repositionnement reste la base du resize et du commit, même si la lecture runtime est momentanément en retard ; le ghost qui coïncide avec l'item est masqué. |
+| Seek avec segment actif | Les ghosts source et cible sont projetés ; celui qui coïncide avec l'item est masqué, l'autre reste cliquable pour sélectionner son KF et déplacer le playhead auteur du sequence-editor à son `timeMs`, puis le joueur suit le relais habituel, sans recréer la trajectoire. Entre les bornes, les deux restent cliquables. |
 | Courbe | L'arc SVG passe par le point médian déplacé ; pour une droite, le champ `path` reste absent ; le double-clic supprime un éventuel path et restaure exactement la droite implicite. |
 | Durée | La poignée et le champ modifient le delta temporel ; le KF cible et la tête de lecture avancent ensemble ; la timeline et le décor affichent la même donnée. |
 | Décor porteur | Un path non rectiligne est enregistré une seule fois dans le décor du KF cible ; une droite n'ajoute aucun champ `path`, aucun path n'est copié vers le source ou les transitions de visibilité. |
 | Échap avant le drop | Le tracé est annulé sans créer de KF, de décor ni de path. |
 | Undo/redo après le drop | L'application annule/rétablit en une seule transaction la création du KF, du décor porteur et du path. |
-| Seek/Play | Même pose à même temps absolu ; pas de branche DOM historique, pas de remplacement d'instance pour une simple lecture. |
+| Seek/Play | Même pose à même temps absolu ; le CS lit la `PresentationFrame` du runtime et reste confondu avec l'item ; pas de branche DOM historique, pas de remplacement d'instance pour une simple lecture. |
+| Parcours multi-KF | Tous les segments adjacents de l'item jusqu'au dernier KF sont visibles ; un seul path actif porte le point médian, les autres suivent une opacité graduée et restent non interactifs. |
+| Ghost de pose initiale | La pose du premier KF reste visible comme outline géométrique hors scène lorsque le segment actif est ultérieur ; elle est translucide (`0.28`) lorsqu'inactive, n'ajoute ni médian ni élément de scène et son clic ramène le premier KF. |
 | Seek/rebuild pendant preview | Le candidat non persistant est annulé ou restauré suivant la règle P0, jamais écrit silencieusement dans le document. |
 | Premier/dernier KF et capsule | Les transitions de visibilité et la distribution de capsule restent conformes à leurs contrats V2 ; le chemin ne change pas les bornes par effet de bord. |
 | Parent transformé/redimensionnement | Le chemin et les ghosts restent dans le repère d'affichage décidé, sans pixels AABB persistés ; le centre visuel rendu reste aligné sur le path malgré la transformation. |
@@ -696,10 +852,10 @@ une impression sur une frame.
   cas dégénérés.
 - **Repères overlay/runtime :** le centre du path est la convention visuelle
   partagée par l'overlay et `pathAnchor: 'center'`. Le runtime conserve son
-  repère affine interne, mais dérive les mêmes centres et reconstruit l'origine
-  sans faire de `rect.left/top` une source de vérité ni les persister. Les tests
-  de rotation et redimensionnement couvrent cette couture ; aucune mesure DOM
-  n'est effectuée par frame.
+  repère affine interne, mais publie la pose numérique qu'il vient de présenter;
+  le CS la consomme directement et ne reconstruit pas un deuxième parcours. Les
+  tests de rotation, redimensionnement et seek couvrent cette couture ; aucune
+  lecture DOM n'est effectuée par l'éditeur.
 
 **Le plan reste `En cours`.** Les décisions de sémantique, de durée par défaut,
 de routage expérimental, de portage dans le décor et de réutilisation du path V2

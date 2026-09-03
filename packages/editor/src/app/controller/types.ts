@@ -94,9 +94,9 @@ export type ControllerEvent =
    * le seek asynchrone n'ait eu lieu). `decor-editor-bridge.ts` en a besoin pour re-résoudre la
    * palette après coup : lue au moment de `'seek'`, elle capturait systématiquement l'état
    * D'AVANT le seek (bug constaté en direct — la couleur d'un décor temporaire restait figée sur
-   * le keyframe précédent alors que la position, lue par le CS via son propre `frame?.sync()` dans
-   * ce même `.then()`, progressait normalement). Même rendez-vous que `frame?.sync()`
-   * (`scene-player-bridge.ts`), un consommateur de plus, pas un second appel `telco.seek()`.
+   * le keyframe précédent alors que la position progressait normalement). Le CS lit sa pose depuis
+   * la `PresentationFrame` runtime à ce même rendez-vous ; il ne relit pas le path côté éditeur et
+   * ne déclenche pas un second appel `telco.seek()`.
    */
   | { type: 'SEEK_APPLIED' }
   /**
@@ -104,20 +104,17 @@ export type ControllerEvent =
    * stop/rewind/setRate direct, `2026-07-17` remarque utilisateur : « patron commun, pas besoin de
    * dupliquer le flush ») juste AVANT l'appel `telco.*`, jamais après. Une édition dedit tout juste
    * faite peut encore être dans `pendingCommands` (commit différé, §Étape B) : sans ce signal, le
-   * document lu par le rebuild déclenché par cette action telco n'a pas encore la mutation,
-   * contrairement à un `SEEK` qui flush déjà via l'event `'seek'` (changement de sélection/lecture
-   * de tête). Root cause du "play juste après édition n'anime pas la correction" (2026-07-17, repro
-   * utilisateur en direct : play immédiat ignore l'édit, un seek puis play la voit).
+   * document et l'instance conservés pour cette action ne verraient pas la mutation, contrairement
+   * à un `SEEK` qui flush déjà via l'event `'seek'` (changement de sélection/lecture de tête). Si la
+   * scène change réellement, `sceneCommitted` déclenche ensuite le rebuild unique nécessaire ; un
+   * simple Play n'en déclenche aucun.
    */
   | { type: 'TELCO_ACTION_REQUEST' }
   /**
    * Émis juste avant tout `telco.pause()` — geste explicite (clic Play/Pause) ou pause automatique
    * en fin de scène (`sequence-editor/mount.ts::syncFromTelco`). Fait sortir l'état `playing`
    * (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — entrée ET sortie au niveau du GESTE
-   * éditeur, jamais du statut brut du transport :
-   * ce dernier est pollué par le rebuild forcé que l'entrée dans `playing` déclenche elle-même
-   * (confirmé en direct, 2026-07-18 — `isPlaying` comme signal de sortie sortait de l'état avant
-   * même que ce rebuild ait fini). `SEEK` (déjà un event racine) sert de second signal de sortie,
+   * éditeur, jamais du statut brut du transport. `SEEK` (déjà un event racine) sert de second signal de sortie,
    * géré directement dans l'état `playing` — couvre Stop (`onStopClick` → seek 0) et le scrub
    * pendant la lecture.
    */
@@ -147,7 +144,8 @@ export type ControllerEmitted =
   | { type: 'sceneReverted'; scene: EditorScene }
   /**
    * Émis à l'entrée ET à la sortie de l'état `playing` (`2026-07-17-play-mode-decor-editor-
-   * deactivation-plan.md`) — `scenePlayer` force un rebuild inconditionnel sur `active: true` (même
-   * idiome que `sceneReverted`) ; `decorEditor` désactive/réactive sa preview live.
+   * deactivation-plan.md`) — `decorEditor` suspend/réactive sa preview live ; `scenePlayer` ne
+   * remplace l'instance que lorsqu'un `sceneCommitted` l'exige et la conserve pour un simple
+   * Play/Seek.
    */
   | { type: 'playbackActiveChanged'; active: boolean }

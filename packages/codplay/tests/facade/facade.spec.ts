@@ -371,6 +371,9 @@ describe('CodPlay facade', () => {
 
     expect(root.querySelector('[data-codplay-motion-overlay]')).not.toBeNull()
     expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
+    const presentation = instance.presentation.get()
+    expect(presentation?.timeMs).toBe(150)
+    expect(presentation?.items.find((item) => item.itemId === 'main:item')).toBeDefined()
     codplay.destroy()
   })
 

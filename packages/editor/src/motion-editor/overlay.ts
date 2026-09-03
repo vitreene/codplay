@@ -15,11 +15,16 @@ import {
 export type MotionOverlayRole = 'source' | 'target'
 
 export type MotionOverlaySegment = Readonly<{
+  /** Stable segment key used to keep the inactive SVG paths mounted across refreshes. */
+  id?: string
   sourceFrame: SelectionFrameValue
   targetFrame: SelectionFrameValue
   control: MotionPoint
   path?: string
-  role: MotionOverlayRole
+  /** Only the active segment exposes its role, ghosts and path-control affordance. */
+  role?: MotionOverlayRole
+  /** Marks the one segment whose pose and path can currently be edited. */
+  active?: boolean
 }>
 
 export type MotionDrop = Readonly<{
@@ -37,6 +42,8 @@ export interface MotionOverlayCallbacks {
   onDrop: (drop: MotionDrop) => MotionOverlaySegment | null
   /** Called when the user clicks one of the two persisted pose ghosts. */
   onActivateRole: (role: MotionOverlayRole) => void
+  /** Called when the user clicks the first pose ghost of the complete item route. */
+  onActivateInitial?: () => void
   /** Called when the SVG path is selected. */
   onPathActivate: () => void
   /** Called after the midpoint has been moved or reset. */
@@ -48,6 +55,10 @@ export interface MotionOverlayCallbacks {
 export interface MotionOverlayHandle {
   /** Updates the current CS pose and central-zone availability. */
   setSelection: (frame: SelectionFrameValue | null, enabled: boolean) => void
+  /** Replaces the complete path projection, with at most one active segment. */
+  setSegments: (segments: readonly MotionOverlaySegment[]) => void
+  /** Sets or clears the first-pose ghost shared by the complete route projection. */
+  setInitialGhost: (frame: SelectionFrameValue | null) => void
   /** Sets or clears the persisted source/target projection. */
   setSegment: (segment: MotionOverlaySegment | null) => void
   /** Suspends all artefacts during playback or host teardown. */
@@ -84,12 +95,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   svg.style.position = 'absolute'
   svg.style.inset = '0'
   svg.style.pointerEvents = 'none'
-  const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('data-motion-path', '')
-  path.setAttribute('fill', 'none')
-  path.setAttribute('stroke', '#f59e0b')
-  path.setAttribute('stroke-width', '2')
-  path.setAttribute('stroke-dasharray', '6 4')
+  const path = createPathElement(doc, 'active')
   path.style.pointerEvents = 'stroke'
   path.style.cursor = 'pointer'
   svg.appendChild(path)
@@ -97,7 +103,8 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
 
   const sourceGhost = createGhost(doc, 'source')
   const targetGhost = createGhost(doc, 'target')
-  root.append(sourceGhost, targetGhost)
+  const initialGhost = createGhost(doc, 'initial')
+  root.append(sourceGhost, targetGhost, initialGhost)
 
   const moveZone = doc.createElement('div')
   moveZone.dataset.motionCentral = ''
@@ -109,6 +116,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   moveZone.style.background = 'transparent'
   moveZone.style.border = '1px solid transparent'
   moveZone.style.clipPath = 'inset(12px)'
+  moveZone.style.zIndex = '1'
   root.appendChild(moveZone)
 
   const control = doc.createElement('button')
@@ -126,6 +134,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   control.style.background = '#111827'
   control.style.pointerEvents = 'auto'
   control.style.cursor = 'crosshair'
+  control.style.zIndex = '4'
   root.appendChild(control)
 
   host.appendChild(root)
@@ -133,6 +142,9 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   let selectionFrame: SelectionFrameValue | null = null
   let selectionEnabled = false
   let segment: MotionOverlaySegment | null = null
+  let segments: MotionOverlaySegment[] = []
+  let initialFrame: SelectionFrameValue | null = null
+  const inactivePaths = new Map<string, SVGPathElement>()
   let drawing = false
   let suspended = false
   let drag: DragState | null = null
@@ -190,14 +202,22 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     moveZone.style.cursor = drawing ? 'grabbing' : 'grab'
   }
 
-  /** Draws ghosts, path and control point for one stable overlay state. */
+  /** Removes secondary paths when the overlay no longer has a valid scene projection. */
+  function clearInactivePaths(): void {
+    for (const inactivePath of inactivePaths.values()) inactivePath.remove()
+    inactivePaths.clear()
+  }
+
+  /** Draws every persisted path while keeping controls and ghosts exclusive to the active segment. */
   function render(): void {
     root.style.display = suspended ? 'none' : ''
-    if (segment === null && !drawing) {
+    if (segments.length === 0 && segment === null && !drawing) {
       sourceGhost.style.display = 'none'
       targetGhost.style.display = 'none'
+      initialGhost.style.display = 'none'
       path.style.display = 'none'
       control.style.display = 'none'
+      clearInactivePaths()
       renderMoveZone()
       return
     }
@@ -207,6 +227,11 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       : segment?.sourceFrame ?? selectionFrame
     const targetFrame = drawing ? draftTargetFrame : segment?.targetFrame
     if (sourceFrame === null || targetFrame === null || targetFrame === undefined) {
+      sourceGhost.style.display = 'none'
+      targetGhost.style.display = 'none'
+      initialGhost.style.display = 'none'
+      path.style.display = 'none'
+      clearInactivePaths()
       renderMoveZone()
       return
     }
@@ -221,12 +246,66 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     const displayPath = createDisplayArcPath(source, authoredControlPoint, target)
       ?? `M ${formatCoordinate(source.x)} ${formatCoordinate(source.y)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.y)}`
 
+    // Only segments explicitly marked inactive are projected as secondary paths. The active
+    // segment is rendered by the dedicated path/control layer below; keeping this distinction
+    // explicit prevents a missing marker from accidentally producing a second median.
+    const inactiveKeys = new Set<string>()
+    for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
+      const inactiveSegment = segments[segmentIndex]!
+      if (inactiveSegment.active !== false) continue
+      const key = inactiveSegment.id ?? `inactive-${segmentIndex}`
+      inactiveKeys.add(key)
+      const inactivePath = inactivePaths.get(key) ?? createPathElement(doc, 'inactive')
+      inactivePaths.set(key, inactivePath)
+      renderPathElement(inactivePath, inactiveSegment, false, inactivePathOpacity(segmentIndex, segments.length))
+      // Keep the dedicated active path as the first SVG child for stable overlay semantics; the
+      // secondary stroke remains pointer-transparent and cannot steal its hit target.
+      if (inactivePath.parentNode !== svg) svg.appendChild(inactivePath)
+    }
+    for (const [key, inactivePath] of inactivePaths) {
+      if (inactiveKeys.has(key)) continue
+      inactivePath.remove()
+      inactivePaths.delete(key)
+    }
+
     path.style.display = ''
     path.setAttribute('d', displayPath)
+    path.dataset.motionPathActive = ''
+    path.style.opacity = '1'
     renderFrame(sourceGhost, sourceFrame)
     renderFrame(targetGhost, targetFrame)
-    sourceGhost.style.display = drawing ? 'none' : segment?.role === 'target' ? '' : 'none'
-    targetGhost.style.display = drawing || segment?.role === 'source' ? '' : 'none'
+    if (initialFrame !== null) renderFrame(initialGhost, initialFrame)
+    // Both endpoint ghosts are projected by default. The endpoint occupied by the live item is
+    // hidden so the Selection Frame remains the only visible authoring surface at that pose; the
+    // opposite endpoint stays visible and clickable for navigation.
+    sourceGhost.style.zIndex = '2'
+    targetGhost.style.zIndex = '3'
+    // The pose comparison is structured (never DOM bounds) and tolerant to cqw/layout rounding.
+    // The current endpoint is hidden rather than merely made pointer-transparent: it is not a
+    // navigation target while the item occupies that pose.
+    const sourceIsCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, sourceFrame)
+    const targetIsCurrentPose = selectionFrame !== null && sameFramePose(selectionFrame, targetFrame)
+    // The initial pose is a route-level anchor, not a third endpoint of the active segment. When
+    // the active segment starts at the first KF it coincides with the source ghost and is hidden to
+    // avoid a duplicate outline; once a later segment is active it remains visible as a clickable
+    // navigation artefact. At the current pose it lets the CS receive gestures just like an
+    // endpoint ghost at its exact bound.
+    const initialOverlapsActive = initialFrame !== null
+      && (sameFramePose(initialFrame, sourceFrame) || sameFramePose(initialFrame, targetFrame))
+    const initialIsCurrentPose = initialFrame !== null
+      && selectionFrame !== null
+      && sameFramePose(selectionFrame, initialFrame)
+    sourceGhost.style.pointerEvents = sourceIsCurrentPose ? 'none' : 'auto'
+    targetGhost.style.pointerEvents = targetIsCurrentPose ? 'none' : 'auto'
+    initialGhost.style.zIndex = '2'
+    // A route-level initial pose is an inactive navigation reference whenever it does not
+    // coincide with the active segment. Match inactive paths' visual hierarchy without filling or
+    // tinting the item's content; the active endpoint ghosts keep their opaque outline.
+    initialGhost.style.opacity = initialOverlapsActive ? '1' : '0.28'
+    initialGhost.style.pointerEvents = initialIsCurrentPose ? 'none' : 'auto'
+    initialGhost.style.display = drawing || initialFrame === null || initialOverlapsActive ? 'none' : ''
+    sourceGhost.style.display = drawing || sourceIsCurrentPose ? 'none' : ''
+    targetGhost.style.display = drawing || targetIsCurrentPose ? 'none' : ''
     control.style.display = drawing || segment !== null ? '' : 'none'
     // The visible median is a path marker, not the raw authoring handle. It therefore remains on
     // the canonical curve at 50% traversal even when the three-point circle's authoring point is
@@ -312,6 +391,9 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       return
     }
     segment = created
+    const activeSegment = { ...created, active: true }
+    segment = activeSegment
+    segments = [activeSegment, ...segments.filter((candidate) => candidate.active === false)]
     selectionFrame = created.role === 'target' ? created.targetFrame : created.sourceFrame
     render()
   }
@@ -324,7 +406,9 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     const source = frameVisualCenter(segment.sourceFrame)
     const target = frameVisualCenter(segment.targetFrame)
     const controlPoint = midpoint(source, target)
-    segment = { ...segment, control: controlPoint, path: undefined }
+    const nextSegment = { ...segment, active: true, control: controlPoint, path: undefined }
+    segment = nextSegment
+    segments = [nextSegment, ...segments.filter((candidate) => candidate.active === false)]
     callbacks.onPathChange({ control: controlPoint })
     render()
   }
@@ -345,6 +429,11 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     event.preventDefault()
     event.stopPropagation()
     callbacks.onActivateRole('target')
+  }
+  const onInitialClick = (event: MouseEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    callbacks.onActivateInitial?.()
   }
   const onDoubleClick = (event: MouseEvent): void => resetControl(event)
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -370,6 +459,7 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
   path.addEventListener('click', onPathClick)
   sourceGhost.addEventListener('click', onSourceClick)
   targetGhost.addEventListener('click', onTargetClick)
+  initialGhost.addEventListener('click', onInitialClick)
   doc.addEventListener('keydown', onKeyDown, { capture: true })
   // The controls are created before the first scene/selection arrives. Render once so the
   // empty overlay starts fully hidden instead of exposing its default button display.
@@ -381,10 +471,29 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       selectionEnabled = enabled
       render()
     },
+    setSegments(next): void {
+      const projected = [...next]
+      const activeIndex = projected.findIndex((candidate) => candidate.active !== false)
+      segments = projected.map((candidate, index) => index === activeIndex
+        ? { ...candidate, active: true }
+        : { ...candidate, active: false })
+      segment = activeIndex < 0 ? null : segments[activeIndex]!
+      if (segment === null) delete root.dataset.motionPathActive
+      render()
+    },
+    setInitialGhost(frame): void {
+      initialFrame = frame
+      render()
+    },
     setSegment(next): void {
-      segment = next
       if (next === null) {
+        segment = null
+        segments = []
+        initialFrame = null
         delete root.dataset.motionPathActive
+      } else {
+        segment = { ...next, active: true }
+        segments = [segment]
       }
       render()
     },
@@ -401,14 +510,49 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
       path.removeEventListener('click', onPathClick)
       sourceGhost.removeEventListener('click', onSourceClick)
       targetGhost.removeEventListener('click', onTargetClick)
+      initialGhost.removeEventListener('click', onInitialClick)
       doc.removeEventListener('keydown', onKeyDown, { capture: true })
+      clearInactivePaths()
       root.remove()
     },
   }
 }
 
+/** Creates one path element with the common non-scene overlay presentation. */
+function createPathElement(doc: Document, kind: 'active' | 'inactive'): SVGPathElement {
+  const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('data-motion-path', '')
+  if (kind === 'inactive') path.setAttribute('data-motion-path-inactive', '')
+  path.setAttribute('fill', 'none')
+  path.setAttribute('stroke', '#f59e0b')
+  path.setAttribute('stroke-width', '2')
+  path.setAttribute('stroke-dasharray', '6 4')
+  path.style.pointerEvents = kind === 'active' ? 'stroke' : 'none'
+  path.style.cursor = kind === 'active' ? 'pointer' : 'default'
+  path.style.opacity = kind === 'active' ? '1' : '0.28'
+  return path
+}
+
+/** Projects one persisted segment into an SVG path without creating a control point. */
+function renderPathElement(path: SVGPathElement, segment: MotionOverlaySegment, active: boolean, opacity = active ? 1 : 0.28): void {
+  const source = frameVisualCenter(segment.sourceFrame)
+  const target = frameVisualCenter(segment.targetFrame)
+  const displayPath = createDisplayArcPath(source, segment.control, target)
+    ?? `M ${formatCoordinate(source.x)} ${formatCoordinate(source.y)} L ${formatCoordinate(target.x)} ${formatCoordinate(target.y)}`
+  path.setAttribute('d', displayPath)
+  path.style.display = ''
+  path.style.opacity = String(opacity)
+}
+
+/** Returns the graduated opacity for one non-active route segment. */
+function inactivePathOpacity(index: number, total: number): number {
+  if (total <= 1) return 0.28
+  const progress = Math.min(1, Math.max(0, index / (total - 1)))
+  return Number((0.28 + progress * 0.28).toFixed(2))
+}
+
 /** Creates one transparent geometric ghost with pointer interaction enabled. */
-function createGhost(doc: Document, role: MotionOverlayRole): HTMLElement {
+function createGhost(doc: Document, role: MotionOverlayRole | 'initial'): HTMLElement {
   const ghost = doc.createElement('div')
   ghost.dataset.motionGhost = role
   ghost.style.position = 'absolute'
@@ -420,6 +564,26 @@ function createGhost(doc: Document, role: MotionOverlayRole): HTMLElement {
   ghost.style.touchAction = 'none'
   ghost.style.display = 'none'
   return ghost
+}
+
+/** Compares two local-pixel poses without relying on a DOM bounding box. */
+function sameFramePose(left: SelectionFrameValue, right: SelectionFrameValue): boolean {
+  // The runtime presentation and the document projection can differ by a few hundredths of a
+  // pixel (cqw conversion versus the browser's layout rounding) while describing the same visible
+  // pose. A sub-pixel tolerance prevents a ghost that is visually underneath the item from
+  // stealing the CS hit-test; larger differences still leave the ghost navigable.
+  const pixelEpsilon = 0.5
+  const angleEpsilon = 0.1
+  const unitEpsilon = 0.001
+  return Math.abs(left.x - right.x) < pixelEpsilon
+    && Math.abs(left.y - right.y) < pixelEpsilon
+    && Math.abs(left.width - right.width) < pixelEpsilon
+    && Math.abs(left.height - right.height) < pixelEpsilon
+    && Math.abs((left.rotate ?? 0) - (right.rotate ?? 0)) < angleEpsilon
+    && Math.abs((left.scaleX ?? 1) - (right.scaleX ?? 1)) < unitEpsilon
+    && Math.abs((left.scaleY ?? 1) - (right.scaleY ?? 1)) < unitEpsilon
+    && Math.abs((left.rotationOrigin?.fx ?? 0.5) - (right.rotationOrigin?.fx ?? 0.5)) < unitEpsilon
+    && Math.abs((left.rotationOrigin?.fy ?? 0.5) - (right.rotationOrigin?.fy ?? 0.5)) < unitEpsilon
 }
 
 /** Formats one display coordinate independently of locale and browser CSS. */

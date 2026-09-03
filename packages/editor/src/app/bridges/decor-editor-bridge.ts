@@ -21,11 +21,10 @@ import { EDITOR_V2_STORY_ID } from '../../builder-v2'
 import { createMotionOverlay } from '../../motion-editor/overlay'
 import type { MotionOverlayHandle, MotionOverlayRole, MotionOverlaySegment } from '../../motion-editor/overlay'
 import {
-  alignFrameVisualCenterToMotionPath,
   frameVisualCenter,
   midpoint,
-  motionProgressAtTime,
   motionControlFromPath,
+  presentationPoseToSelectionFrame,
 } from '../../motion-editor/geometry'
 
 /**
@@ -610,14 +609,22 @@ export function createDecorEditorBridge(
   let sceneHost: HTMLElement | null = null
   let resizeObserver: ResizeObserver | null = null
   let frameTarget: Target | null = null
-  /** Logical frame before the presentation-only path projection. */
+  /** Logical author frame kept for snapshot/document writes. */
   let frameNaturalValuePx: SelectionFrameValue | null = null
   let frameValuePx: SelectionFrameValue | null = null
   let frameLogicalValue: SelectionFrameValue | null = null
   let frameGestureBasePx: SelectionFrameValue | null = null
   let lastPreviewAccepted = false
   let snapshotPreviewActive = false
+  /** Author-time target of the active snapshot contribution (the runtime getter excludes it). */
+  let snapshotPreviewTimeMs: number | null = null
+  let snapshotPreviewItemId: string | null = null
+  /** True only while the active snapshot also changes the affine frame used by the CS. */
+  let snapshotPreviewFrameActive = false
   let activeMotion: ActiveMotion | null = null
+  /** Coalesced root-resize projection; runs after the runtime's own resize observer. */
+  let resizeFrameRequest: number | null = null
+  let resizeProjectionQueued = false
 
   // ── Commit de fin de phase (`2026-07-17-phase-commit-selection-recovery-plan.md` §Étape B) —
   // dedit lui-même n'a aucun debounce (spec §4.3, émission continue) ; c'est ce pont, l'hôte, qui
@@ -669,10 +676,18 @@ export function createDecorEditorBridge(
     const commands = pendingCommands
     pendingCommands = null
     if (commands && commands.length > 0) {
-      coordination.snapshot.clear()
-      snapshotPreviewActive = false
+      clearSnapshotPreview()
       machine.send({ type: 'RUN_TRANSACTION', commands })
     }
+  }
+
+  /** Clears the live snapshot and its target metadata as one phase operation. */
+  function clearSnapshotPreview(): void {
+    if (snapshotPreviewActive) coordination.snapshot.clear()
+    snapshotPreviewActive = false
+    snapshotPreviewTimeMs = null
+    snapshotPreviewItemId = null
+    snapshotPreviewFrameActive = false
   }
 
   /** Échap — abandon de phase (§Étape B.6) : jette l'écart en attente sans committer, puis force le pont `scenePlayer` à rejouer le document inchangé pour effacer la preview live devenue périmée. */
@@ -682,8 +697,7 @@ export function createDecorEditorBridge(
     const hadPreview = snapshotPreviewActive
     pendingCommands = null
     if (hadPreview) {
-      coordination.snapshot.clear()
-      snapshotPreviewActive = false
+      clearSnapshotPreview()
     }
     coordination.decorPreview.clearAll()
     if (hadPendingCommands || hadPreview) machine.send({ type: 'PHASE_ABORT' })
@@ -774,6 +788,172 @@ export function createDecorEditorBridge(
     }
   }
 
+  /** Reprojects every endpoint of the active path from logical document values at one root width. */
+  function reprojectActiveMotion(scene: EditorScene, item: Item, rootWidthPx: number): void {
+    const motion = activeMotion
+    if (motion === null || motion.itemId !== item.id) return
+    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
+    const sourceKeyframe = item.keyframes.find((keyframe) => keyframe.id === motion.sourceKeyframeId)
+    const targetKeyframe = item.keyframes.find((keyframe) => keyframe.id === motion.targetKeyframeId)
+    if (sourceKeyframe === undefined || targetKeyframe === undefined) return
+    const sourceLogical = readLogicalFrame(
+      null,
+      item.id,
+      resolveEffectiveKeyframePatch(scene, item, sourceKeyframe.id, content),
+    )
+    const targetLogical = readLogicalFrame(
+      null,
+      item.id,
+      resolveEffectiveKeyframePatch(scene, item, targetKeyframe.id, content),
+    )
+    if (sourceLogical === null || targetLogical === null) return
+
+    const sourceDocumentFrame = logicalFrameToPx(sourceLogical, rootWidthPx)
+    const targetDocumentFrame = logicalFrameToPx(targetLogical, rootWidthPx)
+    // During an affine preview, frameLogicalValue is the accepted candidate for the selected KF.
+    // Keep that candidate in the new pixel repère while resolving the opposite endpoint from the
+    // document. A color-only preview has no affine candidate and therefore falls back naturally.
+    const targetSelection = frameTarget
+    const candidate = frameLogicalValue
+    const candidateFrameFor = (keyframeId: string, fallback: SelectionFrameValue): SelectionFrameValue =>
+      targetSelection?.itemId === item.id
+      && targetSelection.keyframeId === keyframeId
+      && candidate !== null
+        ? logicalFrameToPx(candidate, rootWidthPx)
+        : fallback
+    const sourceFrame = candidateFrameFor(motion.sourceKeyframeId, sourceDocumentFrame)
+    const targetFrame = candidateFrameFor(motion.targetKeyframeId, targetDocumentFrame)
+    const sourceCenter = frameVisualCenter(sourceFrame)
+    const targetCenter = frameVisualCenter(targetFrame)
+    const control = motion.path === undefined
+      ? midpoint(sourceCenter, targetCenter)
+      : motionControlFromPath(motion.path, sourceCenter, targetCenter) ?? midpoint(sourceCenter, targetCenter)
+    activeMotion = { ...motion, sourceFrame, targetFrame, control }
+  }
+
+  /** Resolves the adjacent pair represented by the current selection or playhead. */
+  function resolveMotionPair(item: Item, selectedKeyframeId: string | null, timelineMs: number): {
+    sourceKeyframe: Item['keyframes'][number]
+    targetKeyframe: Item['keyframes'][number]
+  } | null {
+    const keyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+    const selectedIndex = selectedKeyframeId === null
+      ? -1
+      : keyframes.findIndex((keyframe) => keyframe.id === selectedKeyframeId)
+    // A selected first KF owns the outgoing segment; every later KF owns the incoming segment.
+    const pairIndex = selectedIndex > 0
+      ? selectedIndex - 1
+      : selectedIndex === 0 && keyframes.length > 1
+        ? 0
+        : selectedIndex < 0
+          ? keyframes.findIndex((keyframe, index) => {
+            const next = keyframes[index + 1]
+            return next !== undefined && timelineMs > keyframe.timeMs && timelineMs < next.timeMs
+          })
+          : -1
+    if (pairIndex < 0) return null
+    const sourceKeyframe = keyframes[pairIndex]
+    const targetKeyframe = keyframes[pairIndex + 1]
+    return sourceKeyframe === undefined || targetKeyframe === undefined
+      ? null
+      : { sourceKeyframe, targetKeyframe }
+  }
+
+  /** Builds all adjacent document segments for the selected item in one shared overlay projection. */
+  function resolveMotionOverlaySegments(
+    scene: EditorScene,
+    item: Item,
+    selectedKeyframeId: string | null,
+    rootWidthPx: number,
+    currentMotion: ActiveMotion | null,
+    timelineMs: number,
+  ): MotionOverlaySegment[] {
+    const keyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+    const selectedPair = resolveMotionPair(item, selectedKeyframeId, timelineMs)
+    const activeSourceId = currentMotion?.sourceKeyframeId ?? selectedPair?.sourceKeyframe.id
+    const activeTargetId = currentMotion?.targetKeyframeId ?? selectedPair?.targetKeyframe.id
+    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
+    const segments: MotionOverlaySegment[] = []
+
+    for (let index = 0; index < keyframes.length - 1; index += 1) {
+      const sourceKeyframe = keyframes[index]!
+      const targetKeyframe = keyframes[index + 1]!
+      const sourcePatch = resolveEffectiveKeyframePatch(scene, item, sourceKeyframe.id, content)
+      const targetPatch = resolveEffectiveKeyframePatch(scene, item, targetKeyframe.id, content)
+      const sourceLogicalFrame = readLogicalFrame(null, item.id, sourcePatch)
+      const targetLogicalFrame = readLogicalFrame(null, item.id, targetPatch)
+      if (sourceLogicalFrame === null || targetLogicalFrame === null) continue
+
+      const pairIsActive = activeSourceId === sourceKeyframe.id && activeTargetId === targetKeyframe.id
+      // A repositioned endpoint is shared by its two neighbouring segments. Reuse the live
+      // endpoint pose for both projections so an inactive path never lags behind the active CS.
+      const sourceFrame = currentMotion?.sourceKeyframeId === sourceKeyframe.id
+        ? currentMotion.sourceFrame
+        : currentMotion?.targetKeyframeId === sourceKeyframe.id
+          ? currentMotion.targetFrame
+          : logicalFrameToPx(sourceLogicalFrame, rootWidthPx)
+      const targetFrame = currentMotion?.sourceKeyframeId === targetKeyframe.id
+        ? currentMotion.sourceFrame
+        : currentMotion?.targetKeyframeId === targetKeyframe.id
+          ? currentMotion.targetFrame
+          : logicalFrameToPx(targetLogicalFrame, rootWidthPx)
+      const sourceCenter = frameVisualCenter(sourceFrame)
+      const targetCenter = frameVisualCenter(targetFrame)
+      const path = pairIsActive && currentMotion !== null
+        ? currentMotion.path
+        : resolveMotionPath(scene, item, targetKeyframe.id)
+      const control = pairIsActive && currentMotion !== null
+        ? currentMotion.control
+        : path === undefined
+          ? midpoint(sourceCenter, targetCenter)
+          : motionControlFromPath(path, sourceCenter, targetCenter) ?? midpoint(sourceCenter, targetCenter)
+      const role = pairIsActive
+        ? currentMotion?.role ?? (selectedPair?.sourceKeyframe.id === sourceKeyframe.id ? 'source' : 'target')
+        : undefined
+      segments.push({
+        id: `${item.id}:${sourceKeyframe.id}->${targetKeyframe.id}`,
+        sourceFrame,
+        targetFrame,
+        control,
+        ...(path === undefined ? {} : { path }),
+        active: pairIsActive,
+        ...(role === undefined ? {} : { role }),
+      })
+    }
+    return segments
+  }
+
+  /** Resolves the first keyframe pose used by the route-level initial ghost. */
+  function resolveMotionOverlayInitialFrame(
+    scene: EditorScene,
+    item: Item,
+    rootWidthPx: number,
+    currentMotion: ActiveMotion | null,
+  ): SelectionFrameValue | null {
+    const firstKeyframe = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)[0]
+    if (firstKeyframe === undefined) return null
+    // A live CS edit can move the first endpoint before its deferred document commit. Reuse the
+    // same endpoint override as the adjacent path projection so the initial ghost never lags.
+    if (currentMotion?.sourceKeyframeId === firstKeyframe.id) return currentMotion.sourceFrame
+    if (currentMotion?.targetKeyframeId === firstKeyframe.id) return currentMotion.targetFrame
+    const content = item.contentId === null ? undefined : scene.contents[item.contentId]
+    const patch = resolveEffectiveKeyframePatch(scene, item, firstKeyframe.id, content)
+    const logicalFrame = readLogicalFrame(null, item.id, patch)
+    return logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidthPx)
+  }
+
+  /** Reads the runtime's current pose for one item when it matches the author playhead. */
+  function presentedFrameForItem(
+    itemId: string,
+    rotationOrigin: SelectionFrameValue['rotationOrigin'],
+  ): SelectionFrameValue | null {
+    const presentation = coordination.presentation.get()
+    if (presentation === null || Math.abs(presentation.timeMs - lastKnownTimelineMs) > 1) return null
+    const runtimeItemId = `${EDITOR_V2_STORY_ID}:${itemId}`
+    const item = presentation.items.find((candidate) => candidate.itemId === runtimeItemId)
+    return item === undefined ? null : presentationPoseToSelectionFrame(item.pose, rotationOrigin)
+  }
+
   /** Converts one local pixel frame to the unitless structured offset vocabulary. */
   function frameToOffsetPatch(value: SelectionFrameValue, rootWidthPx: number): OffsetPatch {
     return offsetValuesPxToPatch(value, rootWidthPx)
@@ -822,6 +1002,11 @@ export function createDecorEditorBridge(
     const accepted = result?.ok === true
     if (accepted) {
       snapshotPreviewActive = true
+      snapshotPreviewTimeMs = lastKnownTimelineMs
+      snapshotPreviewItemId = itemId
+      snapshotPreviewFrameActive = snapshotPreviewFrameActive
+        || patch.offset !== undefined
+        || Object.keys(patch.style ?? {}).some((property) => SNAPSHOT_OFFSET_STYLE_PROPERTIES.has(property))
       if (recordCandidate) {
         const progress = coordination.transport.getProgress()
         if (progress !== null) {
@@ -857,7 +1042,43 @@ export function createDecorEditorBridge(
       scaleY: candidate.scaleY ?? 1,
       rotationOrigin: candidate.rotationOrigin === undefined ? undefined : { ...candidate.rotationOrigin },
     }
+    refreshActiveMotionEndpoint(candidate)
     return candidate
+  }
+
+  /** Keeps the in-memory motion endpoint and its overlay path aligned with a live CS reposition. */
+  function refreshActiveMotionEndpoint(frame: SelectionFrameValue): void {
+    const motion = activeMotion
+    const target = frameTarget
+    if (motion === null || target === null || target.keyframeId === null) return
+    const role: MotionOverlayRole | null = target.keyframeId === motion.sourceKeyframeId
+      ? 'source'
+      : target.keyframeId === motion.targetKeyframeId
+        ? 'target'
+        : null
+    if (role === null) return
+
+    const sourceFrame = role === 'source' ? frame : motion.sourceFrame
+    const targetFrame = role === 'target' ? frame : motion.targetFrame
+    const sourceCenter = frameVisualCenter(sourceFrame)
+    const targetCenter = frameVisualCenter(targetFrame)
+    // A persisted path is normalized between its endpoints. Re-decode its control point against
+    // the new endpoint centers so moving a KF cannot leave the overlay's curve attached to the
+    // former target coordinates; a straight segment remains the implicit midpoint.
+    const control = motion.path === undefined
+      ? midpoint(sourceCenter, targetCenter)
+      : motionControlFromPath(motion.path, sourceCenter, targetCenter) ?? midpoint(sourceCenter, targetCenter)
+    const nextMotion: ActiveMotion = {
+      ...motion,
+      sourceFrame,
+      targetFrame,
+      control,
+    }
+    activeMotion = nextMotion
+    const canDraw = !target.isTemporary
+    motionOverlay?.setSelection(frame, canDraw)
+    activeMotion = nextMotion
+    syncMotionOverlay()
   }
 
   /** Builds one copy-on-write command batch for a segment-local path edit. */
@@ -940,7 +1161,7 @@ export function createDecorEditorBridge(
     activeMotion = segment
     machine.send({ type: 'RUN_TRANSACTION', commands })
     machine.send({ type: 'SELECT_ITEM', itemIds: [item.id], keyframeId: targetKeyframeId })
-    machine.send({ type: 'SEEK', timelineMs: targetTimeMs })
+    coordination.requestAuthorSeek(targetTimeMs)
     return segment
   }
 
@@ -950,98 +1171,184 @@ export function createDecorEditorBridge(
     const { scene, selection } = machine.getSnapshot().context
     const target = scene === null ? null : resolveTarget(scene, selection, lastKnownTimelineMs)
     if (target === null || frameValuePx === null) {
-      motionOverlay.setSegment(null)
+      motionOverlay.setSegments([])
+      motionOverlay.setInitialGhost(null)
       motionOverlay.setSelection(null, false)
       return
     }
     const canDraw = target.keyframeId !== null && !target.isTemporary
     let motion = activeMotion
-    // A segment projection is valid only while the selection points at one of its two endpoint
-    // keyframes. Selecting another real keyframe on the same item must not overwrite the target
-    // pose of the old segment; it starts a fresh adjacent-segment reconstruction instead.
-    if (motion !== null && (motion.itemId !== target.itemId
-      || (target.keyframeId !== motion.sourceKeyframeId && target.keyframeId !== motion.targetKeyframeId))) {
+    // A motion remains the active projection while the author seeks between its endpoints. When
+    // another real KF is selected, however, the active segment must be reconstructed from that
+    // KF's own adjacent pair; otherwise the old path would keep claiming the CS and its median.
+    const targetIsEndpoint = motion !== null && target.keyframeId !== null
+      && (target.keyframeId === motion.sourceKeyframeId || target.keyframeId === motion.targetKeyframeId)
+    const targetIsInsideMotion = motion !== null && target.keyframeId === null
+      && lastKnownTimelineMs > motion.sourceTimeMs && lastKnownTimelineMs < motion.targetTimeMs
+    if (motion !== null && (motion.itemId !== target.itemId || (!targetIsEndpoint && !targetIsInsideMotion))) {
       motion = null
       activeMotion = null
     }
-    if (motion === null && target.keyframeId !== null && scene !== null) {
-      const item = scene.items.find((candidate) => candidate.id === target.itemId)
-      const keyframe = item?.keyframes.find((candidate) => candidate.id === target.keyframeId)
-      const previous = item === undefined || keyframe === undefined
-        ? undefined
-        : [...item.keyframes]
-          .filter((candidate) => candidate.timeMs < keyframe.timeMs)
-          .sort((left, right) => right.timeMs - left.timeMs)[0]
-      const rootWidth = sceneRootWidthPx()
-      if (item !== undefined && keyframe !== undefined && previous !== undefined && rootWidth !== null) {
-        const previousPatch = resolveEffectiveKeyframePatch(scene, item, previous.id, item.contentId ? scene.contents[item.contentId] : undefined)
-        const targetPatch = resolveEffectiveKeyframePatch(scene, item, keyframe.id, item.contentId ? scene.contents[item.contentId] : undefined)
-        const previousLogicalFrame = readLogicalFrame(null, item.id, previousPatch)
-        const targetLogicalFrame = readLogicalFrame(null, item.id, targetPatch)
-        if (previousLogicalFrame !== null && targetLogicalFrame !== null) {
-          const sourceFrame = logicalFrameToPx(previousLogicalFrame, rootWidth)
-          // A seek may leave the snapshot at an interpolated instant while the selection still
-          // names the destination KF. The path endpoints are document poses, never that live
-          // snapshot; otherwise simply seeking would author a different trajectory.
-          const targetFrame = logicalFrameToPx(targetLogicalFrame, rootWidth)
-          const sourceCenter = frameVisualCenter(sourceFrame)
-          const targetCenter = frameVisualCenter(targetFrame)
-          const path = resolveMotionPath(scene, item, keyframe.id)
+    const rootWidth = sceneRootWidthPx()
+    const item = scene?.items.find((candidate) => candidate.id === target.itemId)
+    if (scene !== null && item !== undefined && rootWidth !== null) {
+      // All pixel-dependent overlay state shares this projection boundary. In particular, an
+      // active segment may have retained one endpoint from the previous root width; reproject
+      // both endpoints before deriving the complete path list so CS, ghosts and trajectories
+      // cannot mix old and new coordinate systems after a page resize.
+      reprojectActiveMotion(scene, item, rootWidth)
+      motion = activeMotion
+      let projectedSegments = resolveMotionOverlaySegments(
+        scene,
+        item,
+        target.keyframeId,
+        rootWidth,
+        motion,
+        lastKnownTimelineMs,
+      )
+
+      // A freshly selected item has no in-memory motion yet. Materialize the active pair from the
+      // same projected segment that is about to be rendered, then project once more so endpoint
+      // edits and the persisted path use one active/inactive list.
+      if (motion === null && target.keyframeId !== null) {
+        const activeSegment = projectedSegments.find((candidate) => candidate.active === true)
+        const pair = resolveMotionPair(item, target.keyframeId, lastKnownTimelineMs)
+        if (activeSegment !== undefined && pair !== null) {
           motion = activeMotion = {
             itemId: item.id,
-            sourceKeyframeId: previous.id,
-            targetKeyframeId: keyframe.id,
-            sourceTimeMs: previous.timeMs,
-            targetTimeMs: keyframe.timeMs,
-            sourceFrame,
-            targetFrame,
-            control: path === undefined ? midpoint(sourceCenter, targetCenter) : motionControlFromPath(path, sourceCenter, targetCenter) ?? midpoint(sourceCenter, targetCenter),
-            ease: resolveMotionEasing(item, previous.id, keyframe.id),
-            ...(path === undefined ? {} : { path }),
-            role: 'target',
+            sourceKeyframeId: pair.sourceKeyframe.id,
+            targetKeyframeId: pair.targetKeyframe.id,
+            sourceTimeMs: pair.sourceKeyframe.timeMs,
+            targetTimeMs: pair.targetKeyframe.timeMs,
+            sourceFrame: activeSegment.sourceFrame,
+            targetFrame: activeSegment.targetFrame,
+            control: activeSegment.control,
+            ease: resolveMotionEasing(item, pair.sourceKeyframe.id, pair.targetKeyframe.id),
+            ...(activeSegment.path === undefined ? {} : { path: activeSegment.path }),
+            role: activeSegment.role ?? 'target',
           }
+          projectedSegments = resolveMotionOverlaySegments(
+            scene,
+            item,
+            target.keyframeId,
+            rootWidth,
+            motion,
+            lastKnownTimelineMs,
+          )
         }
       }
-    }
-    if (motion !== null && motion.itemId === target.itemId && scene?.items.some((item) => item.id === target.itemId && item.keyframes.some((keyframe) => keyframe.id === motion.targetKeyframeId))) {
-      const role: MotionOverlayRole = target.keyframeId === motion.sourceKeyframeId ? 'source'
-        : target.keyframeId === motion.targetKeyframeId ? 'target'
-          : motion.role
-      // A seek between the two KFs presents an interpolated snapshot in the CS. That snapshot is
-      // not an endpoint of the authored segment, so it must never replace the source/target poses
-      // used to draw the path. Only an exact endpoint seek (or an edit committed on that endpoint)
-      // refreshes its corresponding frame; otherwise the projection remains the full segment and
-      // the active item's affine centre can be compared with the same path.
+
+      if (motion !== null && motion.itemId === target.itemId) {
+        const role: MotionOverlayRole = target.keyframeId === motion.sourceKeyframeId ? 'source'
+          : target.keyframeId === motion.targetKeyframeId ? 'target'
+            : motion.role
+      // A seek between the two KFs presents an interpolated runtime pose in the
+      // CS. That pose is display-only and must never replace the source/target
+      // document poses used to draw the path. Only an exact endpoint seek (or
+      // an edit committed on that endpoint) refreshes its corresponding frame.
       const atSourceEndpoint = target.keyframeId === motion.sourceKeyframeId
         && Math.abs(lastKnownTimelineMs - motion.sourceTimeMs) <= 1
       const atTargetEndpoint = target.keyframeId === motion.targetKeyframeId
         && Math.abs(lastKnownTimelineMs - motion.targetTimeMs) <= 1
+      // `frameValuePx` may still be the runtime pose from the previous seek. At
+      // an exact endpoint, only the natural document pose is authoritative for
+      // the segment endpoint; the runtime pose is used only for the visible CS.
+      const endpointFrame = frameNaturalValuePx ?? frameValuePx
       const nextMotion: ActiveMotion = role === 'source'
-        ? { ...motion, ...(atSourceEndpoint ? { sourceFrame: frameValuePx } : {}), role }
-        : { ...motion, ...(atTargetEndpoint ? { targetFrame: frameValuePx } : {}), role }
+        ? { ...motion, ...(atSourceEndpoint && endpointFrame !== null ? { sourceFrame: endpointFrame } : {}), role }
+        : { ...motion, ...(atTargetEndpoint && endpointFrame !== null ? { targetFrame: endpointFrame } : {}), role }
       activeMotion = nextMotion
       const naturalFrame = frameNaturalValuePx ?? frameValuePx
-      const displayedFrame = pathProjectedFrame(naturalFrame, nextMotion)
+      // A live CS edit has already been accepted by the V2 snapshot. During the same synchronous
+      // turn the presentation port may still expose the pose from before that snapshot update;
+      // reading it back here would replace the accepted translation and make the next resize start
+      // from the old position. The target/time metadata is the explicit coordination record for
+      // that in-flight edit, so keep its natural frame as the display source. Outside that
+      // candidate, the runtime presentation remains the source of the visible CS (including an
+      // explicitly selected KF while the author seeks between its endpoints).
+      const hasCurrentSnapshotPreview = snapshotPreviewActive
+        && snapshotPreviewItemId === target.itemId
+        && snapshotPreviewFrameActive
+        && snapshotPreviewTimeMs !== null
+        && Math.abs(snapshotPreviewTimeMs - lastKnownTimelineMs) <= 1
+      const displayedFrame = hasCurrentSnapshotPreview
+        ? naturalFrame
+        : presentedFrameForItem(target.itemId, naturalFrame.rotationOrigin) ?? naturalFrame
       frameValuePx = displayedFrame
       selectionFrame?.setValue(displayedFrame)
-      // `setSegment` retains this current presentation frame. The endpoint ghosts remain owned by
-      // `nextMotion`; the CS/central interaction zone follow the active item's interpolated pose.
-      motionOverlay.setSegment(nextMotion)
+      projectedSegments = resolveMotionOverlaySegments(
+        scene,
+        item,
+        target.keyframeId,
+        rootWidth,
+        nextMotion,
+        lastKnownTimelineMs,
+      )
+      // The dedicated active path keeps the median and endpoint ghosts. Every other adjacent
+      // segment is rendered by the overlay as a low-opacity, pointer-transparent path.
+      motionOverlay.setSegments(projectedSegments)
+      motionOverlay.setInitialGhost(resolveMotionOverlayInitialFrame(scene, item, rootWidth, nextMotion))
       motionOverlay.setSelection(displayedFrame, canDraw)
+      return
+      }
+
+      // A temporary/interpolated target can still display the complete route, but it has no
+      // document keyframe to receive a new path edit. Keep the selection-frame gesture disabled
+      // until the author reaches or creates a real KF.
+      motionOverlay.setSegments(projectedSegments)
+      motionOverlay.setInitialGhost(resolveMotionOverlayInitialFrame(scene, item, rootWidth, motion))
+      motionOverlay.setSelection(frameValuePx, canDraw)
       return
     }
     if (motion !== null && motion.itemId !== target.itemId) activeMotion = null
-    motionOverlay.setSegment(null)
+    motionOverlay.setSegments([])
+    motionOverlay.setInitialGhost(null)
     motionOverlay.setSelection(frameValuePx, canDraw)
   }
 
-  /** Projects the current logical CS frame onto the authored path, when the segment is curved. */
-  function pathProjectedFrame(frame: SelectionFrameValue, motion: ActiveMotion): SelectionFrameValue {
-    if (motion.path === undefined) return frame
-    const source = frameVisualCenter(motion.sourceFrame)
-    const target = frameVisualCenter(motion.targetFrame)
-    const progress = motionProgressAtTime(motion.sourceTimeMs, motion.targetTimeMs, lastKnownTimelineMs, motion.ease)
-    return alignFrameVisualCenterToMotionPath(frame, source, motion.control, target, progress)
+  /** Applies one coalesced root-resize projection after CodPlay has refreshed its presentation. */
+  function refreshProjectionAfterResize(): void {
+    resizeFrameRequest = null
+    resizeProjectionQueued = false
+    const rootWidth = sceneRootWidthPx()
+    const { scene, selection } = machine.getSnapshot().context
+    if (rootWidth === null || scene === null || selectionFrame === null) return
+
+    // A pending CS/palette phase is not in the document yet. Keep its logical candidate, but
+    // project it through the same width boundary and let syncMotionOverlay reproject both path
+    // endpoints around it. Calling syncSelection here would discard that candidate.
+    if (pendingCommands !== null && frameLogicalValue !== null) {
+      frameNaturalValuePx = logicalFrameToPx(frameLogicalValue, rootWidth)
+      frameValuePx = frameNaturalValuePx
+      selectionFrame.setValue(frameValuePx)
+      syncMotionOverlay()
+      return
+    }
+    // The runtime observer runs before this deferred callback in the same rendering turn; the
+    // presentation port therefore exposes the new scaled item pose when syncSelection reads it.
+    syncSelection(scene, selection)
+  }
+
+  /** Coalesces root-size notifications so every overlay artefact is refreshed in one pass. */
+  function scheduleProjectionAfterResize(): void {
+    if (resizeProjectionQueued) return
+    resizeProjectionQueued = true
+    const win = sceneHost?.ownerDocument.defaultView
+    if (win?.requestAnimationFrame !== undefined) {
+      resizeFrameRequest = win.requestAnimationFrame(() => refreshProjectionAfterResize())
+      return
+    }
+    queueMicrotask(refreshProjectionAfterResize)
+  }
+
+  /** Cancels a queued root-resize projection during host teardown. */
+  function cancelProjectionAfterResize(): void {
+    if (resizeFrameRequest !== null) {
+      const win = sceneHost?.ownerDocument.defaultView
+      win?.cancelAnimationFrame(resizeFrameRequest)
+    }
+    resizeFrameRequest = null
+    resizeProjectionQueued = false
   }
 
   /** Creates the frame once a scene host exists and binds it to the decor-owned callbacks. */
@@ -1072,11 +1379,27 @@ export function createDecorEditorBridge(
       onActivateRole: (role) => {
         const motion = activeMotion
         if (motion === null) return
+        // The sequence editor owns the author playhead. Navigating from a ghost must enter that
+        // owner first; its existing onPlayheadChange relay then drives the single player seek.
         const keyframeId = role === 'source' ? motion.sourceKeyframeId : motion.targetKeyframeId
         const timelineMs = role === 'source' ? motion.sourceTimeMs : motion.targetTimeMs
         activeMotion = { ...motion, role }
         machine.send({ type: 'SELECT_ITEM', itemIds: [motion.itemId], keyframeId })
-        machine.send({ type: 'SEEK', timelineMs })
+        coordination.requestAuthorSeek(timelineMs)
+      },
+      onActivateInitial: () => {
+        const { scene, selection } = machine.getSnapshot().context
+        const itemId = selection.itemIds[0]
+        const item = scene && itemId ? scene.items.find((candidate) => candidate.id === itemId) : undefined
+        const firstKeyframe = item === undefined
+          ? undefined
+          : [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)[0]
+        if (item === undefined || firstKeyframe === undefined) return
+        // Selecting the route start reconstructs the first outgoing segment through the normal
+        // bridge path; no separate player or timeline circuit is created for this artefact click.
+        activeMotion = null
+        machine.send({ type: 'SELECT_ITEM', itemIds: [item.id], keyframeId: firstKeyframe.id })
+        coordination.requestAuthorSeek(firstKeyframe.timeMs)
       },
       onPathActivate: () => {
         // The first path tranche has one control point and no secondary panel; clicking the path
@@ -1086,25 +1409,14 @@ export function createDecorEditorBridge(
       onDrawCancel: () => undefined,
     })
     if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(() => {
-        const rootWidth = sceneRootWidthPx()
-        if (rootWidth === null || selectionFrame === null) return
-        if (pendingCommands !== null && frameLogicalValue !== null) {
-          frameNaturalValuePx = logicalFrameToPx(frameLogicalValue, rootWidth)
-          frameValuePx = frameNaturalValuePx
-          selectionFrame.setValue(frameValuePx)
-          syncMotionOverlay()
-          return
-        }
-        const { scene, selection } = machine.getSnapshot().context
-        if (scene) syncSelection(scene, selection)
-      })
+      resizeObserver = new ResizeObserver(() => scheduleProjectionAfterResize())
       resizeObserver.observe(host)
     }
   }
 
   /** Removes the frame and root observer when the scene host is unavailable. */
   function unmountSelectionFrame(): void {
+    cancelProjectionAfterResize()
     resizeObserver?.disconnect()
     resizeObserver = null
     selectionFrame?.destroy()
@@ -1140,8 +1452,7 @@ export function createDecorEditorBridge(
     // A document-backed target no longer needs the temporary snapshot contribution. This also
     // closes the preview left by a temporary edit when a freshly created keyframe is selected.
     if (!target.isTemporary && snapshotPreviewActive) {
-      coordination.snapshot.clear()
-      snapshotPreviewActive = false
+      clearSnapshotPreview()
     }
 
     // Un keyframe (explicite ou déduit de l'alignement playhead) se lit en cascade. Un décor
@@ -1174,13 +1485,23 @@ export function createDecorEditorBridge(
       patch = resolveCurrentPatch(scene.decors[target.writeDecorId!] ?? { id: target.writeDecorId! }, content, scene)
     }
     const rootWidth = sceneRootWidthPx()
+    // A real KF has an authoritative document pose. The runtime snapshot is the pose currently
+    // presented by the player and may still belong to the previous KF while a selection/seek
+    // handoff is in flight; using it here makes a middle→last segment place the CS on its source.
+    // Only a target without a document KF (the temporary/interpolated route) needs that live
+    // snapshot. A candidate already contains the temporary pose and therefore also bypasses it.
+    const logicalSnapshot = target.isTemporary && temporaryCandidate === null
+      ? coordination.snapshot.get()
+      : null
     const logicalFrame = rootWidth === null
       ? null
-      : readLogicalFrame(temporaryCandidate !== null ? null : coordination.snapshot.get(), target.itemId, patch)
+      : readLogicalFrame(logicalSnapshot, target.itemId, patch)
     frameTarget = target
     frameLogicalValue = logicalFrame
     frameNaturalValuePx = rootWidth === null || logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidth)
-    frameValuePx = frameNaturalValuePx
+    frameValuePx = frameNaturalValuePx === null
+      ? null
+      : presentedFrameForItem(target.itemId, frameNaturalValuePx.rotationOrigin) ?? frameNaturalValuePx
     frameGestureBasePx = null
     selectionFrame?.setValue(frameValuePx)
     controller.attachItems([
@@ -1270,6 +1591,9 @@ export function createDecorEditorBridge(
     pendingCommands = null
     coordination.snapshot.clear()
     snapshotPreviewActive = false
+    snapshotPreviewTimeMs = null
+    snapshotPreviewItemId = null
+    snapshotPreviewFrameActive = false
     coordination.decorPreview.clearAll()
     ensureMounted()
     const selection = machine.getSnapshot().context.selection
@@ -1280,6 +1604,9 @@ export function createDecorEditorBridge(
   const unsubscribeReverted = machine.on('sceneReverted', ({ scene }) => {
     coordination.snapshot.clear()
     snapshotPreviewActive = false
+    snapshotPreviewTimeMs = null
+    snapshotPreviewItemId = null
+    snapshotPreviewFrameActive = false
     coordination.decorPreview.clearAll()
     const selection = machine.getSnapshot().context.selection
     syncSelection(scene, selection)
@@ -1295,21 +1622,20 @@ export function createDecorEditorBridge(
     // for a possible return to that time, but clear the runtime preview before the asynchronous
     // seek so it cannot paint the old edit over the new base frame.
     if (snapshotPreviewActive) {
-      coordination.snapshot.clear()
-      snapshotPreviewActive = false
+      clearSnapshotPreview()
     }
     const { scene, selection } = machine.getSnapshot().context
     if (scene) syncSelection(scene, selection)
   })
   /**
    * `'seek'` ci-dessus est émis à la DEMANDE (synchrone), avant que `telco.seek()` (asynchrone,
-   * `scene-player-bridge.ts`) n'ait réellement appliqué la position au DOM — le `syncSelection`
-   * immédiat ci-dessus capture donc systématiquement l'état D'AVANT le seek pour tout champ lu en
-   * direct sur le node (`resolveTemporaryPatch`, décor temporaire). Bug constaté en direct : la
-   * couleur d'un décor temporaire restait figée sur le keyframe précédent pendant qu'un scrub
-   * répété faisait progresser la position (celle-ci vient du CS, resynchronisé séparément via
-   * `frame?.sync()` dans ce même `.then()`). `'seekApplied'` est le rendez-vous de fin réel —
-   * un second `syncSelection` ici referme l'écart, sans nouvel appel `telco.seek()`.
+   * `scene-player-bridge.ts`) n'ait réellement appliqué la position au runtime — le
+   * `syncSelection` immédiat ci-dessus capture donc systématiquement l'état D'AVANT le seek pour
+   * tout champ lu dans le snapshot temporaire. Bug constaté en direct : la couleur d'un décor
+   * temporaire restait figée sur le keyframe précédent pendant qu'un scrub répété faisait
+   * progresser la position. Le CS, lui, est resynchronisé depuis `instance.presentation` au même
+   * rendez-vous de fin ; `'seekApplied'` referme aussi l'écart de palette sans nouvel appel
+   * `telco.seek()`.
    */
   const unsubscribeSeekApplied = machine.on('seekApplied', () => {
     const { scene, selection } = machine.getSnapshot().context
@@ -1321,15 +1647,15 @@ export function createDecorEditorBridge(
 
   /**
    * État `playing` (`2026-07-17-play-mode-decor-editor-deactivation-plan.md`) — aucune écriture de
-   * preview live pendant que `isPlaying === true`, y compris quand le rebuild forcé du pont
-   * `scenePlayer` remonte un nouvel arbre de rendu (sans ce gel, la palette pourrait réappliquer
-   * aussitôt une preview périmée pendant le remplacement de l'instance).
+   * preview live pendant que `isPlaying === true`. Le pont `scenePlayer` conserve l'instance pour
+   * un simple Play/Seek et réapplique la pose runtime avant de jouer ; le gel empêche donc la
+   * palette de réinjecter une preview périmée pendant ce handoff.
    * `mountHandle.setPreviewSuspended` — pas `controller.detach()` — préserve le panneau actif et les
    * toggles (`visualPosition`/`zoneMode`) à travers un cycle play→pause : `ITEMS.DETACH` les
    * réinitialise (vérifié dans `decor-editor/machine.ts`), ce que ce chantier ne veut pas faire pour
-   * un simple play/pause. `syncSelection` avant la reprise (pas après) : la resynchronisation se
-   * fait sur le node déjà remonté par le rebuild forcé pendant que l'écriture reste encore gelée,
-   * `setPreviewSuspended(false)` déclenche alors une seule écriture, déjà à jour.
+   * un simple play/pause. `syncSelection` à la sortie : la resynchronisation se fait sur le node
+   * dont la pose a déjà été réappliquée par le runtime, `setPreviewSuspended(false)` déclenche alors
+   * une seule écriture, déjà à jour.
    */
   const unsubscribePlaybackActive = machine.on('playbackActiveChanged', ({ active }) => {
     if (active) {
@@ -1385,6 +1711,7 @@ export function createDecorEditorBridge(
       unsubscribeInteractionEnd()
       unsubscribeSnapToFirstKeyframe()
       mountHandle?.destroy()
+      cancelProjectionAfterResize()
       resizeObserver?.disconnect()
       selectionFrame?.destroy()
       motionOverlay?.destroy()

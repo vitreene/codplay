@@ -172,12 +172,11 @@ export const controllerMachine = setup({
      * règle, un seul état macro plutôt que deux gestes indépendants à synchroniser).
      *
      * Entrée ET sortie au niveau du GESTE éditeur (`TELCO_ACTION_REQUEST`/`TELCO_PAUSE_REQUEST`/
-     * `SEEK`), jamais du statut brut du transport (`isPlaying`) — les deux ne jouent pas au même
-     * niveau : le rebuild forcé que cet état déclenche lui-même (`scene-player-bridge.ts`) produit
-     * du bruit transitoire sur ce statut, confirmé en direct (2026-07-18) — `isPlaying` comme signal
-     * de sortie faisait sortir la machine AVANT que ce rebuild n'ait fini, quel que soit
-     * l'ordonnancement. `SEEK` reste aussi un event racine (`emitSeek`, inchangé pour `idle`/
-     * `creating`) — sa présence ici ne fait qu'AJOUTER la sortie vers `idle` pour cet état précis.
+     * `SEEK`), jamais du statut brut du transport (`isPlaying`) — le statut du transport et le geste
+     * éditeur ne jouent pas au même niveau. Le pont joueur conserve l'instance pour cette entrée et
+     * réapplique la pose courante par le même seek de présentation avant de jouer. `SEEK` reste aussi
+     * un event racine (`emitSeek`, inchangé pour `idle`/`creating`) — sa présence ici ne fait
+     * qu'AJOUTER la sortie vers `idle` pour cet état précis.
      */
     playing: {
       entry: 'emitPlaybackActive',

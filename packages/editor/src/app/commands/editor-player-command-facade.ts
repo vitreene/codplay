@@ -1,5 +1,6 @@
 import type {
   CodPlayInstance,
+  CodPlayPresentationFrame,
   CodPlayProgress,
   CodPlaySnapshot,
   CodPlaySnapshotPatch,
@@ -32,6 +33,15 @@ export type EditorPlayerProgress = Readonly<{
   timelineMs: number
   durationMs: number
   playerTimeMs: number
+}>
+
+/** Runtime presentation pose adapted to the editor's author-time reference. */
+export type EditorPlayerPresentationFrame = Readonly<{
+  /** Author timeline time (without the hidden CodPlay pre-roll). */
+  timeMs: number
+  /** Runtime player time used to validate a seek handoff. */
+  playerTimeMs: number
+  items: CodPlayPresentationFrame['items']
 }>
 
 /** Result returned after one transport command has been executed and checked. */
@@ -124,6 +134,19 @@ export class EditorPlayerCommandFacade {
   /** Returns the currently presented logical snapshot without exposing the instance. */
   getSnapshot(): CodPlaySnapshot | null {
     return this.instance?.snapshot.get() ?? null
+  }
+
+  /** Returns the current numeric runtime pose in the editor author-time reference. */
+  getPresentationFrame(): EditorPlayerPresentationFrame | null {
+    const instance = this.instance
+    if (instance === null) return null
+    const frame = instance.presentation.get()
+    if (frame === null) return null
+    return {
+      timeMs: toAuthorTime(frame.timeMs, this.preRollMs),
+      playerTimeMs: frame.timeMs,
+      items: frame.items,
+    }
   }
 
   /** Applies one atomic logical preview through the bound instance snapshot port. */

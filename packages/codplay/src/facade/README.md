@@ -129,9 +129,16 @@ Pour l'édition position/taille de la verticale éditeur, `snapshot` fournit l'�
 logique. L'intégration de l'éditeur le projette en pixels locaux avec la largeur
 de la racine hôte de la scène, puis reconvertit les deltas du cadre en nombres
 unitless avant `snapshot.set()`. Ce repère appartient à l'intégration éditeur.
-La façade CodPlay n'expose pas de cadre de sélection, de mesure, de `getBCR`, de
-pose de nœud ni de handle DOM ; aucune API supplémentaire n'est nécessaire pour
-ce circuit.
+
+Lorsqu'un item est animé par le runtime, sa pose affichée peut différer de cette
+interpolation logique (par exemple lorsqu'un path courbe est appliqué). La
+façade expose donc aussi `instance.presentation.get()`, une lecture numérique
+de la `PresentationFrame` déjà résolue par CodPlay : origine affine, matrice
+linéaire, dimensions locales, représentation, segment actif et progression.
+Cette sortie ne contient ni nœud DOM, ni `getBoundingClientRect`, ni état
+documentaire et ne permet aucune écriture. Un overlay d'authoring qui doit
+coïncider avec l'item consomme cette pose ; `snapshot` reste réservé aux
+préviews et aux commits logiques.
 
 ## Frontières
 
@@ -150,7 +157,8 @@ ce circuit.
 - `CodPlay` reçoit le `frameScheduler` de l’hôte et garde `TimeTicker` interne ;
 - la façade ne crée ni DOM, ni journal, ni dispatcher parallèle ;
 - `instance.snapshot` reste une capacité logique de l'instance, sans handle DOM
-  ni opération de pose ;
+  ni opération de pose ; `instance.presentation` fournit, séparément, la pose
+  numérique courante déjà résolue par le runtime, sans handle DOM ;
 - les erreurs de pilotage et d'instance passent par les diagnostics V2 ; les
   opérations de registre et `instance.snapshot.set()` retournent leurs rejets
   structurés en plus du diagnostic correspondant.

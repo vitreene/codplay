@@ -195,4 +195,25 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
     expect(created).toBeDefined()
     expect(committed?.decors[created!.decorId]).toMatchObject({ style: { color: 'purple' } })
   })
+
+  it('répercute une navigation d’overlay dans le playhead auteur du sequence-editor', () => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: scene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const container = document.createElement('div')
+    document.body.append(container)
+    const originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    bridge = createSequenceEditorBridge(container, actor, coordination)
+    globalThis.ResizeObserver = originalResizeObserver
+
+    coordination.requestAuthorSeek(700)
+
+    expect(container.querySelector<HTMLElement>('.seq-toolbar__time')?.textContent).toBe('0.7 s')
+    expect(actor.getSnapshot().context.scene).toEqual(scene())
+  })
 })

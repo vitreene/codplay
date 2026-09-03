@@ -86,4 +86,122 @@ describe('motion overlay', () => {
     expect(changes[0]?.path).toMatch(/^M 0 0 A /)
     overlay.destroy()
   })
+
+  it('keeps both distinct endpoint ghosts visible and delegates endpoint clicks', () => {
+    const roles: string[] = []
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: (role) => roles.push(role),
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    overlay.setSelection({ ...segment.sourceFrame, x: 120, y: 80 }, true)
+    overlay.setSegment(segment)
+
+    const sourceGhost = host.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
+    const targetGhost = host.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    expect(sourceGhost.style.display).toBe('')
+    expect(targetGhost.style.display).toBe('')
+    expect(sourceGhost.style.pointerEvents).toBe('auto')
+    expect(targetGhost.style.pointerEvents).toBe('auto')
+
+    sourceGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    targetGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(roles).toEqual(['source', 'target'])
+    overlay.destroy()
+  })
+
+  it('hides the endpoint ghost occupied by the live pose', () => {
+    const roles: string[] = []
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: (role) => roles.push(role),
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    // The source ghost is brought back to the same pose by a reposition. The source artefact is
+    // hidden while the opposite endpoint remains visible and navigable.
+    overlay.setSelection(segment.sourceFrame, true)
+    overlay.setSegment({
+      ...segment,
+      sourceFrame: { ...segment.sourceFrame, width: segment.sourceFrame.width + 0.02 },
+    })
+
+    const sourceGhost = host.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
+    const targetGhost = host.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    expect(sourceGhost.style.display).toBe('none')
+    expect(sourceGhost.style.pointerEvents).toBe('none')
+    expect(targetGhost.style.display).toBe('')
+    expect(targetGhost.style.pointerEvents).toBe('auto')
+    targetGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(roles).toEqual(['target'])
+    overlay.destroy()
+  })
+
+  it('renders inactive paths as translucent, non-interactive artefacts without extra medians', () => {
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const inactive: MotionOverlaySegment = {
+      id: 'previous',
+      sourceFrame: frame,
+      targetFrame: { ...frame, x: 120, y: 80 },
+      control: { x: 70, y: 65 },
+      active: false,
+    }
+    const inactiveLater: MotionOverlaySegment = {
+      id: 'later',
+      sourceFrame: { ...frame, x: 320, y: 100 },
+      targetFrame: { ...frame, x: 420, y: 180 },
+      control: { x: 370, y: 165 },
+      active: false,
+    }
+    const active: MotionOverlaySegment = {
+      ...segment,
+      id: 'current',
+      active: true,
+    }
+    overlay.setSelection(active.targetFrame, true)
+    overlay.setSegments([inactive, active, inactiveLater])
+
+    expect(host.querySelectorAll('[data-motion-path]')).toHaveLength(3)
+    const inactivePaths = [...host.querySelectorAll<SVGPathElement>('[data-motion-path-inactive]')]
+    expect(inactivePaths).toHaveLength(2)
+    expect(inactivePaths.map((candidate) => candidate.style.opacity)).toEqual(['0.28', '0.56'])
+    expect(inactivePaths.every((candidate) => candidate.style.pointerEvents === 'none')).toBe(true)
+    expect(host.querySelectorAll('[data-motion-path-control]')).toHaveLength(1)
+    overlay.destroy()
+  })
+
+  it('keeps the first pose as a route-level ghost without duplicating the active source', () => {
+    let initialActivations = 0
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onActivateInitial: () => { initialActivations += 1 },
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const initialFrame: SelectionFrameValue = { ...frame, x: 0, y: 10 }
+    overlay.setSelection(segment.targetFrame, true)
+    overlay.setSegments([{ ...segment, id: 'current', active: true }])
+    overlay.setInitialGhost(initialFrame)
+
+    const initialGhost = host.querySelector<HTMLElement>('[data-motion-ghost="initial"]')!
+    expect(initialGhost.style.display).toBe('')
+    expect(initialGhost.style.left).toBe('0px')
+    expect(initialGhost.style.top).toBe('10px')
+    expect(initialGhost.style.opacity).toBe('0.28')
+    initialGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(initialActivations).toBe(1)
+
+    // The first segment's source is already the initial pose: only its normal source ghost is
+    // retained, so a route projection never draws two identical outlines.
+    overlay.setInitialGhost(segment.sourceFrame)
+    expect(initialGhost.style.display).toBe('none')
+    overlay.destroy()
+  })
 })

@@ -114,8 +114,12 @@ function isPlainStyleRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null
 }
 
-/** Reports whether two style values expose a numeric structure ACE can interpolate. */
+/** Reports whether two complete style values expose a numeric structure ACE can interpolate. */
 export function isInterpolableStylePair(from: unknown, to: unknown): boolean {
+  // An absent source is not an implicit CSS default. The builder has no authored value to
+  // interpolate from; callers must route that destination-only property through the discrete
+  // keyframe channel instead of emitting a V2 tween that the resolver cannot materialize.
+  if (from === undefined || to === undefined) return false
   if (typeof from !== 'string' || typeof to !== 'string') return true
   const sourceColor = isColorString(from)
   const destinationColor = isColorString(to)

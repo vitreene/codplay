@@ -104,6 +104,22 @@ Application directe du Principe A : chaque transition devient une action nommée
    **Nom d'action unique par perso, obligatoire** : un event route vers *tout* perso dont `actions` porte une clé de ce nom — un nom générique comme `'intro'` réutilisé identiquement sur plusieurs persos ferait déclencher les mauvais items en même temps (collision inter-perso). Convention proposée : `${persoId}-intro`/`${persoId}-outro` (pas une exigence Codplay, juste une convention Builder à tenir).
 5. **`ease` n'est pas fourni par capsule-automation aujourd'hui** (`AutoCapsuleEventDefinition.style` ne porte que `{from?,to}`, pas d'easing) — facultatif, absent en sortie s'il est absent en entrée. Application directe du Principe B : si un besoin réel de valeur par défaut apparaît, il s'ajoute au catalogue capsule-automation (`DEFAULT_AUTO_CAPSULE_EVENT_DEFINITIONS`) ou en réglage éditeur, jamais comme constante dans le Builder.
 
+### 6.1. Propriété de style ajoutée sans source auteur
+
+Une propriété présente dans le décor résolu du keyframe destination mais absente du décor résolu
+source n'a pas de borne `from` auteur. Le Builder **ne fabrique pas** de valeur CSS initiale et ne
+produit donc pas un tween `{to: ...}` que le runtime devrait deviner. Il déclare une action de style
+discrète séparée, déclenchée à `destination.timeMs + preRollMs`, qui pose directement la valeur au
+keyframe. Les propriétés qui ont deux valeurs source/destination complètes restent dans l'action
+interpolée normale. La séparation des actions est obligatoire lorsqu'un même segment contient à la
+fois une interpolation (débutant avant le keyframe) et une propriété destination-only (appliquée au
+keyframe), afin de ne pas leur imposer le même `startAt`.
+
+Cette règle conserve la sémantique de décor (`propriété absente = héritée` avant le keyframe,
+valeur explicite à partir du keyframe) et respecte le Principe B : aucune valeur par défaut ni
+lecture du DOM n'est introduite par le Builder. Elle évite aussi l'erreur V2
+`Resolve requires an explicit or materialized tween from.` lors d'une reconstruction/initialisation.
+
 ### 7. Feuille de style
 
 `AutoCapsule.renderStyleSheet()` → chaîne CSS → `new Blob([css], { type: 'text/css' })` → `URL.createObjectURL(blob)` → enregistré via :

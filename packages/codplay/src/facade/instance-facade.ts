@@ -22,6 +22,8 @@ import type {
   CodPlaySnapshotApi,
   CodPlaySnapshotPatch,
   CodPlaySnapshotSetResult,
+  CodPlayPresentationApi,
+  CodPlayPresentationFrame,
   CodPlayTraceListener,
   CodPlayTelco,
   CodPlayTelcoState,
@@ -48,6 +50,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
   readonly snapshot: CodPlaySnapshotApi
+  readonly presentation: CodPlayPresentationApi
   private readonly player: RuntimePlayer
   private readonly diagnostics: DiagnosticChannel
   private readonly eventListeners: Set<CodPlayEventListener>
@@ -69,6 +72,7 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.destroyTelco = telco.destroy
     this.events = createEventsFacade(this.player, this.diagnostics, this.instanceId, this.eventListeners)
     this.snapshot = createSnapshotFacade(this.player, this.diagnostics, this.instanceId, () => this.destroyed)
+    this.presentation = createPresentationFacade(options.runner, () => this.destroyed)
     this.diagnostic = {
       onDiagnostic: (listener) => this.diagnostics.onDiagnostic(listener),
       onTrace: (listener) => {
@@ -106,6 +110,40 @@ export class InstanceFacadeImpl implements CodPlayInstance {
     this.traceListeners.clear()
     this.destroyTelco()
     this.destroyHost()
+  }
+}
+
+/** Creates the read-only numeric presentation port without exposing runtime pose classes. */
+function createPresentationFacade(
+  runner: HtmlPlayerRunner,
+  isDestroyed: () => boolean,
+): CodPlayPresentationApi {
+  return {
+    get: (): CodPlayPresentationFrame | null => {
+      if (isDestroyed()) return null
+      const frame = runner.getPresentationFrame()
+      if (frame === undefined) return null
+      return {
+        timeMs: frame.timeMs,
+        items: Object.freeze([...frame.items.values()].map((item) => Object.freeze({
+          itemId: item.itemId,
+          pose: Object.freeze({
+            origin: Object.freeze({ x: item.pose.origin.x, y: item.pose.origin.y }),
+            matrix: Object.freeze({
+              a: item.pose.matrix.a,
+              b: item.pose.matrix.b,
+              c: item.pose.matrix.c,
+              d: item.pose.matrix.d,
+            }),
+            localWidth: item.pose.localWidth,
+            localHeight: item.pose.localHeight,
+          }),
+          representation: item.representation,
+          ...(item.activeSegmentId === undefined ? {} : { activeSegmentId: item.activeSegmentId }),
+          progress: item.progress,
+        }))),
+      }
+    },
   }
 }
 

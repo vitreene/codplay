@@ -1,5 +1,13 @@
 # ed2 — Désactivation de dedit pendant la lecture (état `playing`)
 
+> **Révision V2 du 2026-09-03.** Le mécanisme décrit ci-dessous reste l'autorité pour la
+> suspension/réactivation de dedit et pour les rendez-vous du contrôleur, mais son ancien
+> remplacement d'instance à l'entrée de `playing` est supersédé par
+> [`2026-09-02-motion-editor-v2-plan.md`](../2026-09-02-motion-editor-v2-plan.md) : un simple
+> Play/Seek conserve l'instance et réapplique la pose courante par le seek de présentation. Une
+> reconstruction n'est autorisée qu'après un document réellement committé (ou un chargement,
+> revert, redimensionnement nécessitant cette opération).
+
 Corrige le bug : item à 2 kf de couleurs différentes, kf2 sélectionné avant Play → couleur figée
 sur celle de kf2 toute la lecture ; kf1 sélectionné → lecture correcte.
 
@@ -31,12 +39,8 @@ Nouvel état macro XState (`controller-machine.ts`), sibling de `idle`/`creating
 où dedit est actif pendant la lecture.
 
 **Entrée et sortie reposent toutes les deux sur des gestes éditeur explicites, jamais sur
-`isPlaying` (`AuthorApi.subscribeToPlayerState`)** — première version du plan basée sur `isPlaying`,
-invalidée en implémentation : le rebuild forcé que cet état déclenche lui-même (ci-dessous) produit
-du bruit transitoire sur ce statut pendant sa propre réinitialisation, faisant sortir la machine de
-`playing` avant même que ce rebuild ait fini, quel que soit l'ordonnancement. Le statut du transport
-et le geste éditeur ne jouent pas au même niveau — piloter l'état sur le geste règle le problème par
-construction :
+`isPlaying` (`AuthorApi.subscribeToPlayerState`)**. Le statut du transport et le geste éditeur ne
+jouent pas au même niveau — piloter l'état sur le geste règle le problème par construction :
 
 - **Entrée** : `TELCO_ACTION_REQUEST` — déjà émis une seule fois, juste avant `telco.play()`,
   jamais pour pause (`sequence-editor/mount.ts::onPlayClick`).
@@ -46,12 +50,10 @@ construction :
   rien changer pour `idle`/`creating`).
 
 À l'entrée (`playbackActiveChanged: {active: true}`, émis par `entry` de l'état) :
-- `scene-player-bridge.ts` force un rebuild inconditionnel (même idiome que `sceneReverted` —
-  efface toute preview dedit périmée en remontant un node flambant neuf), puis relance
-  `telco.play()` si l'état `playing` tient toujours une fois le rebuild résolu — nécessaire, car
-  `rebuild()` (`studio.load()` + `seek`) ne joue jamais : il remonte le player en pause à la
-  position, écrasant silencieusement le `telco.play()` déjà appelé par `onPlayClick` pendant que ce
-  rebuild était encore en vol.
+- `scene-player-bridge.ts` conserve l'instance pour un simple Play/Seek et réapplique la pose
+  courante par le même `telco.seek()` avant de relancer `telco.play()`. Si le flush précédent a
+  effectivement produit une nouvelle scène, le `sceneCommitted` correspondant réalise un unique
+  rebuild puis le même handoff de lecture.
 - `decor-editor-bridge.ts` suspend l'écriture de preview (`mountHandle.setPreviewSuspended(true)` —
   pas `controller.detach()`, qui réinitialiserait le panneau actif et les toggles pour un simple
   play/pause).
@@ -73,7 +75,8 @@ patron que `sceneCommitted`/`sceneReverted` déjà dans le code.
 - `decor-editor/mount.ts` — `DecorEditorMountHandle.setPreviewSuspended(suspended)` : gèle/reprend
   `applyToAllAttachedNodes()` sans toucher `decorEditorMachine`.
 - `decor-editor-bridge.ts` — réagit à `playbackActiveChanged`.
-- `scene-player-bridge.ts` — réagit à `playbackActiveChanged` (rebuild + reprise du `play()`).
+- `scene-player-bridge.ts` — réagit à `playbackActiveChanged` (handoff de pose + reprise du `play()`),
+  et reconstruit uniquement après une scène commitée.
 - `sequence-editor/mount.ts` — `onTelcoPauseRequest` (nouvelle option), appelé dans `onPlayClick`
   (branche pause) et dans `syncFromTelco` (pause automatique en fin de scène).
 - `sequence-editor-bridge.ts` — câble `onTelcoPauseRequest` vers `TELCO_PAUSE_REQUEST`.

@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  alignFrameVisualCenterToMotionPath,
   createDisplayArcPath,
   createMotionArcPath,
   frameVisualCenter,
   isStraightMotion,
   motionControlFromPath,
   motionPathPointAtProgress,
-  motionProgressAtTime,
   midpoint,
+  presentationPoseToSelectionFrame,
 } from '../../src/motion-editor/geometry'
 
 describe('motion-editor geometry', () => {
@@ -27,6 +26,24 @@ describe('motion-editor geometry', () => {
     })
     expect(scaledCenter.x).toBeCloseTo(0)
     expect(scaledCenter.y).toBeCloseTo(60)
+  })
+
+  it('converts a runtime pose to a CS frame while preserving the presented centre', () => {
+    const frame = presentationPoseToSelectionFrame({
+      origin: { x: 100, y: 80 },
+      matrix: { a: 0, b: 2, c: -1, d: 0 },
+      localWidth: 40,
+      localHeight: 20,
+    }, { fx: 0, fy: 0 })
+
+    expect(frameVisualCenter(frame).x).toBeCloseTo(90, 6)
+    expect(frameVisualCenter(frame).y).toBeCloseTo(120, 6)
+    expect(frame.width).toBe(40)
+    expect(frame.height).toBe(20)
+    expect(frame.rotate).toBeCloseTo(90, 6)
+    expect(frame.scaleX).toBeCloseTo(2, 6)
+    expect(frame.scaleY).toBeCloseTo(1, 6)
+    expect(frame.rotationOrigin).toEqual({ fx: 0, fy: 0 })
   })
 
   it('keeps a straight segment implicit and creates a normalized SVG arc for a moved midpoint', () => {
@@ -55,34 +72,6 @@ describe('motion-editor geometry', () => {
     expect(median.x).toBeLessThan(target.x)
     expect(median.y).toBeGreaterThan(source.y)
     expect(median.x).not.toBeCloseTo(control.x, 3)
-  })
-
-  it('translates only the CS origin so its affine centre follows a curved path', () => {
-    const source = { x: 10, y: 20 }
-    const target = { x: 110, y: 20 }
-    const control = { x: 60, y: 45 }
-    const frame = { x: 45, y: 10, width: 20, height: 20, rotate: 20, scaleX: 1.5, scaleY: 0.75 }
-    const aligned = alignFrameVisualCenterToMotionPath(frame, source, control, target, 0.5)
-    const expected = motionPathPointAtProgress(source, control, target, 0.5)
-
-    expect(frameVisualCenter(aligned).x).toBeCloseTo(expected.x, 6)
-    expect(frameVisualCenter(aligned).y).toBeCloseTo(expected.y, 6)
-    expect(aligned.width).toBe(frame.width)
-    expect(aligned.height).toBe(frame.height)
-    expect(aligned.rotate).toBe(frame.rotate)
-    expect(aligned.scaleX).toBe(frame.scaleX)
-    expect(aligned.scaleY).toBe(frame.scaleY)
-  })
-
-  it('uses the same easing spelling and absolute interval as the CodPlay move', () => {
-    expect(motionProgressAtTime(0, 1_000, 0, 'linear')).toBe(0)
-    expect(motionProgressAtTime(0, 1_000, 500, 'linear')).toBeCloseTo(0.5)
-    expect(motionProgressAtTime(0, 1_000, 1_000, 'linear')).toBe(1)
-    const easedEarly = motionProgressAtTime(0, 1_000, 250, 'ease-in-out')
-    const easedLate = motionProgressAtTime(0, 1_000, 750, 'ease-in-out')
-    expect(easedEarly).toBeLessThan(0.25)
-    expect(easedLate).toBeGreaterThan(0.75)
-    expect(easedEarly + easedLate).toBeCloseTo(1, 6)
   })
 
   it('keeps an extreme handle on the minor arc instead of creating a near-circle counter-curve', () => {

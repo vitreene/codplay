@@ -441,6 +441,32 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     })
   })
 
+  it('applies a destination-only style property at its keyframe instead of emitting an unmaterializable tween', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-mid'] = { id: 'text-decor-mid', style: { 'background-color': '#ff0000' } }
+    scene.items[0] = {
+      ...scene.items[0]!,
+      keyframes: [
+        { id: 'kf-a', timeMs: 0, decorId: 'text-decor-a', transitionIn: { kind: 'named', name: 'fade', durationMs: 400 } },
+        { id: 'kf-mid', timeMs: 1500, decorId: 'text-decor-mid' },
+        { id: 'kf-b', timeMs: 2500, decorId: 'text-decor-b' },
+      ],
+    }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.actions['item-1-kf-kf-mid']).toBeUndefined()
+    expect(item.actions['item-1-kf-kf-mid-discrete']).toEqual({
+      style: { 'background-color': parseColor('#ff0000') },
+    })
+    expect(result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.eventimes).toContainEqual({
+      name: 'item-1-kf-kf-mid-discrete',
+      startAt: 1900,
+    })
+  })
+
   it('maps bloc to an empty tag and image to the V2 img component without inventing content', () => {
     const scene = fixtureScene()
     scene.items[0] = {

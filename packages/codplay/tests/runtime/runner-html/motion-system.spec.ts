@@ -126,6 +126,31 @@ describe('HtmlMotionSystem live capture handoff', () => {
     expect(frames.at(-1)?.items.get('item')?.pose.origin.x).toBe(0)
   })
 
+  it('retains the exact frame committed by the runtime for read-only overlay consumers', () => {
+    const frames: PresentationFrame[] = []
+    const host = {
+      commit: (frame: PresentationFrame): void => { frames.push(frame) },
+      prepareNaturalCapture: (): void => undefined,
+      destroy: (): void => undefined,
+    }
+    const system = new HtmlMotionSystem({
+      host: host as unknown as HtmlMotionPresentationHost,
+      boundaries: [createBoundary(0, createSnapshot(0, 'list-a', 0), createSnapshot(0, 'list-b', 100), 'move')],
+    })
+
+    system.initialize()
+    system.present(50)
+    expect(system.getFrame()).toBe(frames.at(-1))
+    expect(system.getFrame()?.items.get('item')?.pose.origin.x).toBe(50)
+
+    // Rebuilding the graph does not change the visible item until its next
+    // commit, so the last committed frame remains the truthful observation.
+    system.setBoundaries([createBoundary(0, createSnapshot(0, 'list-a', 0), createSnapshot(0, 'list-b', 200), 'replacement')])
+    expect(system.getFrame()?.items.get('item')?.pose.origin.x).toBe(50)
+    system.present(50)
+    expect(system.getFrame()?.items.get('item')?.pose.origin.x).toBe(100)
+  })
+
   it('accepts an explicit current natural layout for an active presentation', () => {
     const frames: PresentationFrame[] = []
     const host = {

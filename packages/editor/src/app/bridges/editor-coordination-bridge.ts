@@ -13,6 +13,7 @@ import {
   type EditorPlayerCommandResult,
   type EditorPlayerProgress,
   type EditorPlayerProgressListener,
+  type EditorPlayerPresentationFrame,
   type EditorPlayerTransportListener,
   type EditorPlayerTransportState,
 } from '../commands/editor-player-command-facade'
@@ -35,6 +36,11 @@ export type EditorCoordinationSnapshot = Readonly<{
   get: () => CodPlaySnapshot | null
   set: (patches: readonly CodPlaySnapshotPatch[]) => CodPlaySnapshotSetResult | null
   clear: () => void
+}>
+
+/** Numeric runtime pose port consumed by authoring overlays; it never exposes item DOM nodes. */
+export type EditorCoordinationPresentation = Readonly<{
+  get: () => EditorPlayerPresentationFrame | null
 }>
 
 /**
@@ -62,7 +68,7 @@ export type EditorCoordinationDecorPreview = Readonly<{
 
 const KEYFRAME_PREVIEW_TOLERANCE_MS = 50
 
-type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime'>
+type SequenceReconciliationPort = Pick<SequenceEditorController, 'reconcilePlaybackTime' | 'seek'>
 
 /** Internal editor handoff notification used to resynchronize decor before playback resumes. */
 export type EditorPlaybackReconciledListener = (timelineMs: number) => void
@@ -77,6 +83,7 @@ export type EditorSceneHostListener = (host: HTMLElement | null) => void
 export class EditorCoordinationBridge {
   readonly transport: EditorCoordinationTransport
   readonly snapshot: EditorCoordinationSnapshot
+  readonly presentation: EditorCoordinationPresentation
   readonly decorPreview: EditorCoordinationDecorPreview
   private readonly decorPreviewCandidates = new Map<string, Map<number, EditorDecorPreviewCandidate>>()
   private sequence: SequenceReconciliationPort | null = null
@@ -108,6 +115,9 @@ export class EditorCoordinationBridge {
       get: () => this.player.getSnapshot(),
       set: (patches) => this.player.setSnapshot(patches),
       clear: () => this.player.clearSnapshot(),
+    }
+    this.presentation = {
+      get: () => this.player.getPresentationFrame(),
     }
     this.decorPreview = {
       getAt: (itemId, timeMs, toleranceMs = 1) => this.findDecorPreview(itemId, timeMs, toleranceMs),
@@ -163,6 +173,17 @@ export class EditorCoordinationBridge {
     this.machine.send({ type: 'SEEK', timelineMs })
   }
 
+  /** Moves the sequence editor's author-owned playhead before relaying its seek to the player. */
+  requestAuthorSeek(timelineMs: number): void {
+    if (this.sequence !== null) {
+      this.sequence.seek(timelineMs)
+      return
+    }
+    // Keep non-mounted/unit-test integrations functional; the mounted sequence editor is the
+    // normal owner and emits the same `requestSeek` callback through its bridge.
+    this.requestSeek(timelineMs)
+  }
+
   /** Requests play after giving the controller the chance to flush pending document edits. */
   requestPlay(): void {
     this.machine.send({ type: 'TELCO_ACTION_REQUEST' })
@@ -179,10 +200,16 @@ export class EditorCoordinationBridge {
 
   /** Requests rewind and adopts its resulting time without an intermediate handoff. */
   requestRewind(): void {
+    // The command resolves asynchronously. Only a rewind that started while the controller was
+    // already playing may close that playback state; otherwise a quick rewind→Play sequence would
+    // let the stale rewind completion pause the newly requested playback.
+    const shouldExitPlayback = this.machine.getSnapshot().value === 'playing'
     void this.execute({ type: 'rewind' }).then((result) => {
       if (!result.ok) return
       this.reconcilePlaybackTime(result.progress.timelineMs)
-      if (this.machine.getSnapshot().value === 'playing') this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
+      if (shouldExitPlayback && this.machine.getSnapshot().value === 'playing') {
+        this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
+      }
     })
   }
 

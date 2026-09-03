@@ -7,6 +7,7 @@ import {
   type MotionGraph,
   type NaturalLayoutTimeline,
   type LayoutSnapshot,
+  type PresentationFrame,
 } from '../motion'
 import { HtmlMotionPresentationHost } from './motion-presentation-host'
 
@@ -15,6 +16,7 @@ export class HtmlMotionSystem {
   private graph: MotionGraph = buildMotionGraph([])
   private boundaries: readonly MotionBoundary[] = []
   private naturalLayoutTimeline: NaturalLayoutTimeline = buildNaturalLayoutTimeline([])
+  private currentFrame: PresentationFrame | undefined
   private initialized = false
   private readonly host: HtmlMotionPresentationHost
   private readonly resolveSourceRevision: ((itemId: string) => string | undefined) | undefined
@@ -43,6 +45,12 @@ export class HtmlMotionSystem {
     const layout = naturalLayout ?? resolveNaturalLayout(this.naturalLayoutTimeline, timeMs)
     const frame = resolvePresentationFrame(this.graph, layout, timeMs)
     this.host.commit(frame, this.resolveSourceRevision, layout)
+    this.currentFrame = frame
+  }
+
+  /** Returns the latest numeric frame committed by this runtime presenter. */
+  getFrame(): PresentationFrame | undefined {
+    return this.currentFrame
   }
 
   /** Prepares the visible author nodes before the runner captures geometry. */
@@ -75,6 +83,7 @@ export class HtmlMotionSystem {
   destroy(): void {
     this.host.destroy()
     this.initialized = false
+    this.currentFrame = undefined
   }
 
   /** Rebuilds the pure graph from the latest captured boundary data. */

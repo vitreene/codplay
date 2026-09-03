@@ -184,3 +184,57 @@ erreur ni warning ; la capture est conservée dans
 
 La matrice globale reste ouverte pour les combinaisons hors de ce cas (S2, parcours complet de
 resize/lifecycle et extensions de structure) avant de marquer D1/R1 stabilisés.
+
+## Régression Play après keyframe — correction du 2026-09-03
+
+Une régression distincte apparaissait après l'ajout d'un keyframe, puis un rewind et un Play : le
+contrôleur passait bien à `playing`, mais l'instance restait `ready` ou reprenait sans avancer
+visiblement. Le dernier handoff avait supprimé le seek systématique avant Play pour éviter une
+course avec les seeks asynchrones ; cette suppression masquait un décalage propre au contrat V2.
+
+La cause précise est la suivante : `EditorPlayerCommandFacade` expose le temps auteur en retranchant
+le `preRollMs`, alors que `telco.rewind()` du runtime revient à `playerTime=0`. Après un rewind, les
+deux lectures annoncent donc `timelineMs=0`, bien que la position runtime attendue pour le début
+auteur soit `preRollMs`. La comparaison sur le seul temps auteur concluait à tort que la pose était
+déjà alignée et lançait Play depuis le mauvais repère.
+
+Le bridge `scene-player` conserve désormais le `preRollMs` actif, attend tout seek encore engagé,
+compare `progress.playerTimeMs` à `authorTimeMs + preRollMs`, puis effectue un seek de réparation
+uniquement si ces coordonnées diffèrent. Le Play simple conserve toujours la même instance ; un
+rebuild n'est déclenché que par une scène effectivement commitée. Les callbacks de reprise derrière
+un rebuild sont identifiés par requête et invalidés lorsqu'une demande plus récente arrive.
+
+La régression est couverte par le parcours d'intégration réel des bridges `sequence-editor`/
+`decor-editor` : ajout d'un keyframe, Stop, Play immédiat, rewind pendant la lecture, puis nouvelle
+reprise avec avancement de l'horloge. Les 36 fichiers et 386 tests de l'éditeur passent, ainsi que
+le typecheck et le build de l'éditeur ; les 87 fichiers et 547 tests CodPlay passent également.
+La vérification native complète dans Safari Technology Preview reste une étape P7 à exécuter sur
+le serveur existant `127.0.0.1:5174`, sans lancer de serveur supplémentaire.
+
+## Erreur de reconstruction V2 — tween sans source (2026-09-03)
+
+La vérification MCP dans l'onglet existant de **Safari Technology Preview** a reproduit l'erreur
+que les tests de reprise Play ne couvraient pas :
+
+1. rechargement propre sur `http://127.0.0.1:5174/` ;
+2. chargement de la scène, création d'un item texte, ajout d'un keyframe intermédiaire ;
+3. dans le panneau « Typo », ajout d'une propriété `color` absente des décors précédents ;
+4. sélection/seek sur ce keyframe : la console signalait
+   `Resolve requires an explicit or materialized tween from.` depuis
+   `scene-player-bridge` → `reconstructPlayerScene` → `resolveStyleValue`.
+
+La cause est localisée dans `buildInterpolationActions` : une propriété uniquement présente à la
+destination passait par `isInterpolableStylePair(undefined, value)` et devenait
+`{to: value, duration, ease}`. Son action démarrait au début du segment, alors qu'aucune valeur
+source n'existait dans l'état logique initial ; V2 refusait à raison de matérialiser ce tween.
+
+Le Builder sépare désormais les deux cas :
+
+- paire source/destination complète : tween explicite `{from, to, duration, ease}` ;
+- propriété destination-only : action de style directe, séparée, à
+  `destination.timeMs + preRollMs`.
+
+Aucun défaut CSS n'est inventé et le runtime n'est pas assoupli. Le parcours MCP après rechargement
+produit une instance, conserve la couleur au keyframe, puis reprend Play après retour au début sans
+erreur console ; la progression observée n'est plus bloquée. La couverture automatisée ajoute le
+Builder, l'initialisation CodPlay et la matérialisation avant/après le keyframe.

@@ -7,6 +7,7 @@ import { EditorCoordinationBridge } from '../src/app/bridges/editor-coordination
 import { createScenePlayerBridge } from '../src/app/bridges/scene-player-bridge'
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
+import type { EditorPlayerPresentationFrame } from '../src/app/commands/editor-player-command-facade'
 
 /** Creates the two-keyframe scene used to exercise a temporary decor preview end to end. */
 function scene() {
@@ -249,6 +250,7 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
     expect(moveZone).not.toBeNull()
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('none')
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.style.display).toBe('')
     expect(sceneRoot.querySelector('[data-motion-path]')).not.toBeNull()
 
     // Escape cancels an unreleased trace and leaves the document untouched.
@@ -271,6 +273,7 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     expect(committedScene.decors[target!.decorId]?.offset).toMatchObject({ translate: { x: 20, y: 15 } })
     expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: target!.id })
     expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('')
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.style.display).toBe('none')
     expect(sceneRoot.querySelector('[data-selection-frame="v2"]')).not.toBeNull()
 
     // A second central drag starts from the currently active target, not from the original source.
@@ -298,10 +301,44 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     const pathBeforeSeek = sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')
     const frameBeforeSeek = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
     expect(pathBeforeSeek).toContain('A')
+    const presentationPort = coordination.presentation as unknown as {
+      get: () => EditorPlayerPresentationFrame | null
+    }
+    presentationPort.get = () => ({
+      timeMs: 750,
+      playerTimeMs: 750,
+      items: [{
+        itemId: 'story-main:item',
+        pose: {
+          origin: { x: 420, y: 300 },
+          matrix: { a: 1, b: 0, c: 0, d: 1 },
+          localWidth: 80,
+          localHeight: 80,
+        },
+        representation: 'local',
+        progress: 0.5,
+      }],
+    })
     actor.send({ type: 'SEEK', timelineMs: 750 })
     await waitTurns(24)
     expect(sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')).toBe(pathBeforeSeek)
     expect(frameBeforeSeek?.style.left).not.toBe('')
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('')
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.style.display).toBe('')
+    expect(frameBeforeSeek?.style.left).toBe('420px')
+    expect(frameBeforeSeek?.style.top).toBe('300px')
+
+
+    // Both endpoint ghosts are navigation targets. Each click selects its KF and seeks through
+    // the same controller path as a timeline click; the endpoint projections remain available.
+    const sourceGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
+    const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    sourceGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await waitTurns(24)
+    expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: target!.id })
+    targetGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await waitTurns(24)
+    expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: secondTarget!.id })
     actor.send({ type: 'SEEK', timelineMs: 1_000 })
     await waitTurns(24)
     expect(sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')).toBe(pathBeforeSeek)
@@ -317,5 +354,301 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     actor.send({ type: 'SEEK', timelineMs: 5_000 })
     await waitTurns(24)
     expect(sceneRoot.querySelector('[data-motion-path]')?.getAttribute('d')).not.toBe(pathAtSecondTarget)
+  })
+
+  it('recalcule la pose cible du segment pendant le repositionnement CS du KF créé', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = scene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns()
+
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    await waitTurns(24)
+
+    const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    const sourceGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
+    const initialTargetLeft = targetGhost.style.left
+    const initialSourceLeft = sourceGhost.style.left
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+
+    // Reposition the newly-created target directly through the existing CS move channel. The
+    // target ghost must follow this live candidate before the deferred document flush.
+    frame.dispatchEvent(pointerEvent('pointerdown', 240, 200))
+    frame.dispatchEvent(pointerEvent('pointermove', 280, 220))
+    expect(targetGhost.style.left).not.toBe(initialTargetLeft)
+    expect(sourceGhost.style.left).toBe(initialSourceLeft)
+    frame.dispatchEvent(pointerEvent('pointerup', 280, 220))
+
+    // A seek is the phase boundary that persists the CS patch. The target ghost is hidden because
+    // the item occupies that pose; the source remains the navigation artefact.
+    actor.send({ type: 'SEEK', timelineMs: 500 })
+    await waitTurns(24)
+
+    const committed = actor.getSnapshot().context.scene!
+    const item = committed.items.find((candidate) => candidate.id === 'item')!
+    const target = item.keyframes.find((keyframe) => keyframe.timeMs === 500)!
+    expect(committed.decors[target.decorId]?.offset).toMatchObject({ translate: { x: 25, y: 17.5 } })
+    expect(targetGhost.style.display).toBe('none')
+    expect(targetGhost.style.left).toBe(frame.style.left)
+    expect(sourceGhost.style.left).toBe(initialSourceLeft)
+  })
+
+  it('conserve la translation repositionnée quand un resize suit sur le même KF', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = scene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns(24)
+
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    await waitTurns(24)
+
+    const target = actor.getSnapshot().context.scene!.items.find((candidate) => candidate.id === 'item')!.keyframes.find((keyframe) => keyframe.timeMs === 500)!
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    const targetBefore = actor.getSnapshot().context.scene!.decors[target.decorId]?.offset
+    expect(targetBefore).toMatchObject({ translate: { x: 20, y: 15 }, width: 20, height: 20 })
+
+    // A stale presentation frame is possible during the asynchronous target seek. It must not
+    // replace the accepted CS candidate used as the base of the next gesture.
+    const presentationPort = coordination.presentation as unknown as {
+      get: () => EditorPlayerPresentationFrame | null
+    }
+    presentationPort.get = () => ({
+      timeMs: 500,
+      playerTimeMs: 500,
+      items: [{
+        itemId: 'story-main:item',
+        pose: {
+          origin: { x: 80, y: 80 },
+          matrix: { a: 1, b: 0, c: 0, d: 1 },
+          localWidth: 160,
+          localHeight: 160,
+        },
+        representation: 'local',
+        progress: 1,
+      }],
+    })
+
+    // Reposition on the current target KF, then resize it. The resize must start from the
+    // repositioned target pose, not from the stale source presentation.
+    frame.dispatchEvent(pointerEvent('pointerdown', 240, 200))
+    frame.dispatchEvent(pointerEvent('pointermove', 280, 220))
+    frame.dispatchEvent(pointerEvent('pointerup', 280, 220))
+    const targetAfterMove = frame.getAttribute('style')
+    const east = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-handle="e"]')!
+    east.dispatchEvent(pointerEvent('pointerdown', 300, 220))
+    east.dispatchEvent(pointerEvent('pointermove', 330, 220))
+    east.dispatchEvent(pointerEvent('pointerup', 330, 220))
+    expect(frame.getAttribute('style')).toContain('left: 200px')
+    expect(frame.getAttribute('style')).not.toBe(targetAfterMove)
+
+    actor.send({ type: 'SEEK', timelineMs: 500 })
+    await waitTurns(24)
+    const committed = actor.getSnapshot().context.scene!
+    const committedTarget = committed.items.find((candidate) => candidate.id === 'item')!.keyframes.find((keyframe) => keyframe.timeMs === 500)!
+    expect(committed.decors[committedTarget.decorId]?.offset).toMatchObject({
+      translate: { x: 25, y: 17.5 },
+      width: 23.75,
+    })
+  })
+
+  it('reprojette le CS, les ghosts et tous les paths quand la racine change de largeur', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    const resizeCallbacks: Array<() => void> = []
+    globalThis.ResizeObserver = class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(() => callback([], this as unknown as ResizeObserver))
+      }
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = scene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    let rootWidth = 800
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: rootWidth, height: rootWidth * 9 / 16, top: 0, left: 0, right: rootWidth, bottom: rootWidth * 9 / 16 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    // The runtime and decor bridges observe the same root. Give the staged player root the same
+    // measurable width so its resize callback refreshes PresentationFrame before the decor pass.
+    const playerRoot = sceneRoot.querySelector<HTMLElement>('.editor-v2-instance-root')
+    expect(playerRoot).not.toBeNull()
+    Object.defineProperty(playerRoot!, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: rootWidth, height: rootWidth * 9 / 16, top: 0, left: 0, right: rootWidth, bottom: rootWidth * 9 / 16 }),
+    })
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns(24)
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    await waitTurns(24)
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    const sourceGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')!
+    const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    const path = sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')!
+    const before = {
+      frame: { left: frame.style.left, width: frame.style.width },
+      source: { left: sourceGhost.style.left, width: sourceGhost.style.width },
+      target: { left: targetGhost.style.left, width: targetGhost.style.width },
+      path: path.getAttribute('d'),
+    }
+    expect(before.frame).toEqual({ left: '160px', width: '160px' })
+    expect(targetGhost.style.display).toBe('none')
+
+    rootWidth = 400
+    // First callback is CodPlay's runtime resize; the last one is the decor bridge projection.
+    resizeCallbacks.forEach((callback) => callback())
+    await waitTurns(24)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(frame.style.left).toBe('80px')
+    expect(frame.style.width).toBe('80px')
+    expect(sourceGhost.style.left).toBe('40px')
+    expect(sourceGhost.style.width).toBe('80px')
+    // The overlay uses the empty inline display value for a visible ghost so the
+    // stylesheet remains in charge of its layout; only `none` means hidden.
+    expect(sourceGhost.style.display).not.toBe('none')
+    expect(targetGhost.style.left).toBe('80px')
+    expect(targetGhost.style.width).toBe('80px')
+    expect(targetGhost.style.display).toBe('none')
+    expect(path.getAttribute('d')).not.toBe(before.path)
+  })
+
+  it('garde la pose du dernier KF quand le segment actif commence au KF milieu', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const baseScene = scene()
+    const documentScene = {
+      ...baseScene,
+      items: [{
+        ...baseScene.items[0]!,
+        keyframes: [
+          baseScene.items[0]!.keyframes[0]!,
+          { id: 'middle-kf', timeMs: 500, decorId: 'middle' },
+          { ...baseScene.items[0]!.keyframes[1]!, timeMs: 1_000 },
+        ],
+      }],
+      decors: {
+        ...baseScene.decors,
+        middle: { id: 'middle', offset: { translate: { x: 30, y: 30 }, width: 20, height: 20, rotate: 45 } },
+        last: {
+          ...baseScene.decors.last!,
+          offset: { translate: { x: 60, y: 60 }, width: 20, height: 20, rotate: 90 },
+          path: 'M 0 0 A 0.65 0.65 0 0 1 1 0',
+        },
+      },
+    }
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'middle-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 500 })
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 1_000 })
+    await waitTurns(24)
+
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    expect(frame.style.left).toBe('480px')
+    expect(frame.style.top).toBe('480px')
+    expect(frame.style.transform).toContain('rotate(90deg)')
+    // The selected middle→last segment is the only editable path. The preceding first→middle
+    // trajectory remains visible as a faint artefact and does not add another control point.
+    expect(sceneRoot.querySelectorAll('[data-motion-path]')).toHaveLength(2)
+    expect(sceneRoot.querySelectorAll('[data-motion-path-inactive]')).toHaveLength(1)
+    expect(sceneRoot.querySelectorAll('[data-motion-path-control]')).toHaveLength(1)
+    expect(sceneRoot.querySelector<SVGPathElement>('[data-motion-path-inactive]')?.style.opacity).toBe('0.28')
+    const initialGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="initial"]')
+    expect(initialGhost?.style.display).toBe('')
+    expect(initialGhost?.style.left).toBe('80px')
+    expect(initialGhost?.style.top).toBe('80px')
+    expect(initialGhost?.style.opacity).toBe('0.28')
+    initialGhost?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    await waitTurns(24)
+    expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: 'first-kf' })
   })
 })

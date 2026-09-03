@@ -1,6 +1,7 @@
 /** Pure geometry used by the editor motion overlay and its document adapter. */
 
-import { prepareSvgPath, prepareTween, resolvePath, resolveTweenProgress } from 'ace'
+import { prepareSvgPath, resolvePath } from 'ace'
+import type { CodPlayPresentationPose } from 'codplay'
 import type { SelectionFrameValue } from '../decor-editor/types'
 
 export type MotionPoint = Readonly<{ x: number; y: number }>
@@ -38,41 +39,58 @@ export function frameVisualCenter(frame: SelectionFrameValue): MotionPoint {
   }
 }
 
+/** Converts one runtime affine pose into the local frame vocabulary of SelectionFrameV2. */
+export function presentationPoseToSelectionFrame(
+  pose: CodPlayPresentationPose,
+  rotationOrigin?: SelectionFrameValue['rotationOrigin'],
+): SelectionFrameValue {
+  const width = finiteDimension(pose.localWidth)
+  const height = finiteDimension(pose.localHeight)
+  const rawMatrix = pose.matrix
+  const scaleX = finiteScale(Math.hypot(rawMatrix.a, rawMatrix.b))
+  const scaleY = finiteScale(Math.hypot(rawMatrix.c, rawMatrix.d))
+  const rotate = Math.atan2(rawMatrix.b, rawMatrix.a) * 180 / Math.PI
+  const radians = rotate * Math.PI / 180
+  const linear = {
+    a: Math.cos(radians) * scaleX,
+    b: Math.sin(radians) * scaleX,
+    c: -Math.sin(radians) * scaleY,
+    d: Math.cos(radians) * scaleY,
+  }
+  const origin = {
+    fx: clamp(rotationOrigin?.fx ?? 0.5),
+    fy: clamp(rotationOrigin?.fy ?? 0.5),
+  }
+  const pivotX = origin.fx * width
+  const pivotY = origin.fy * height
+  const centerX = width / 2
+  const centerY = height / 2
+  // The runtime pose is affine. SelectionFrameV2 can represent rotation and
+  // scale but not an arbitrary shear from an ancestor, so preserve the exact
+  // visual centre even when the decomposed frame is the closest representation.
+  const presentedCenter = {
+    x: pose.origin.x + rawMatrix.a * centerX + rawMatrix.c * centerY,
+    y: pose.origin.y + rawMatrix.b * centerX + rawMatrix.d * centerY,
+  }
+  const frameCenterWithoutTranslation = {
+    x: pivotX + linear.a * (centerX - pivotX) + linear.c * (centerY - pivotY),
+    y: pivotY + linear.b * (centerX - pivotX) + linear.d * (centerY - pivotY),
+  }
+  return {
+    x: presentedCenter.x - frameCenterWithoutTranslation.x,
+    y: presentedCenter.y - frameCenterWithoutTranslation.y,
+    width,
+    height,
+    rotate: Number.isFinite(rotate) ? rotate : 0,
+    scaleX,
+    scaleY,
+    rotationOrigin: origin,
+  }
+}
+
 /** Returns a frame translated by a scene-local pointer delta. */
 export function translateFrame(frame: SelectionFrameValue, dx: number, dy: number): SelectionFrameValue {
   return { ...frame, x: frame.x + dx, y: frame.y + dy }
-}
-
-/**
- * Projects a frame's affine visual centre onto one canonical motion path.
- *
- * The editor snapshot keeps the logical interpolation on the source-to-target
- * chord while CodPlay presents a curved path.  The returned frame preserves
- * every local dimension and transform and only translates its origin so the
- * visible CS follows the presentation artefact.
- */
-export function alignFrameVisualCenterToMotionPath(
-  frame: SelectionFrameValue,
-  source: MotionPoint,
-  control: MotionPoint,
-  target: MotionPoint,
-  progress: number,
-): SelectionFrameValue {
-  const current = frameVisualCenter(frame)
-  const presented = motionPathPointAtProgress(source, control, target, progress)
-  return translateFrame(frame, presented.x - current.x, presented.y - current.y)
-}
-
-/** Resolves the canonical eased progress shared by the editor projection and CodPlay V2. */
-export function motionProgressAtTime(
-  sourceTimeMs: number,
-  targetTimeMs: number,
-  timelineMs: number,
-  easing: MotionEasing = 'inOut',
-): number {
-  const duration = Math.max(1, targetTimeMs - sourceTimeMs)
-  const tween = prepareTween({ from: 0, to: 1, duration, ease: normalizeMotionEasing(easing) })
-  return resolveTweenProgress(tween, timelineMs - sourceTimeMs)
 }
 
 /** Returns the distance from a point to a segment, used by the overlay hit-test. */
@@ -272,6 +290,11 @@ function finiteScale(value: number | undefined): number {
   return value !== undefined && Number.isFinite(value) && Math.abs(value) > 1e-8 ? value : 1
 }
 
+/** Returns a finite non-negative local dimension for an external pose. */
+function finiteDimension(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
 /** Clamps one local-box fraction to a finite range. */
 function clamp(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.5
@@ -280,15 +303,4 @@ function clamp(value: number): number {
 /** Formats a path coordinate without locale-dependent output or needless precision. */
 function formatNumber(value: number): string {
   return Number(value.toFixed(4)).toString()
-}
-
-/** Normalizes the editor easing vocabulary to the ACE/CodPlay spelling. */
-function normalizeMotionEasing(easing: MotionEasing): string {
-  if (typeof easing !== 'string') return `cubic-bezier(${easing.p1x},${easing.p1y},${easing.p2x},${easing.p2y})`
-  return {
-    linear: 'linear',
-    'ease-in': 'in',
-    'ease-out': 'out',
-    'ease-in-out': 'inOut',
-  }[easing] ?? easing
 }

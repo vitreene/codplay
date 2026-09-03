@@ -303,6 +303,43 @@ export type CodPlaySnapshotApi = Readonly<{
   clear: () => void
 }>
 
+/** Linear part of one currently presented HTML pose in instance-root coordinates. */
+export type CodPlayPresentationMatrix = Readonly<{
+  a: number
+  b: number
+  c: number
+  d: number
+}>
+
+/** Numeric affine pose used by an authoring overlay; no DOM handle crosses this boundary. */
+export type CodPlayPresentationPose = Readonly<{
+  /** Affine origin of the local box in the instance-root coordinate space. */
+  origin: Readonly<{ x: number; y: number }>
+  matrix: CodPlayPresentationMatrix
+  localWidth: number
+  localHeight: number
+}>
+
+/** One item currently owned by the runtime presentation graph. */
+export type CodPlayPresentationItem = Readonly<{
+  itemId: string
+  pose: CodPlayPresentationPose
+  representation: 'source' | 'local' | 'reparent'
+  activeSegmentId?: string
+  progress: number
+}>
+
+/** Numeric presentation frame produced by the same runtime circuit as the visible item. */
+export type CodPlayPresentationFrame = Readonly<{
+  timeMs: number
+  items: readonly CodPlayPresentationItem[]
+}>
+
+/** Read-only presentation port for authoring overlays that must track rendered motion. */
+export type CodPlayPresentationApi = Readonly<{
+  get: () => CodPlayPresentationFrame | null
+}>
+
 /** Common options used to create and initialize one public instance. */
 type CodPlayInstanceOptionsBase = Readonly<{
   instanceId: string
@@ -326,6 +363,8 @@ export type CodPlayInstance = Readonly<{
   readonly events: CodPlayInstanceEvents
   readonly diagnostic: CodPlayInstanceDiagnostic
   readonly snapshot: CodPlaySnapshotApi
+  /** Current numeric runtime presentation, separate from the logical snapshot. */
+  readonly presentation: CodPlayPresentationApi
 }>
 
 /** Public instance registry owned by one CodPlay owner. */

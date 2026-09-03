@@ -568,7 +568,13 @@ function buildLeafPerso(
   return { perso: { id: item.id, name: item.id, type: 'tag', initial: { ...common, tag: 'div', ...(text === undefined ? {} : { content: text }) }, actions }, eventimes }
 }
 
-/** Builds forward interpolated decor actions between every adjacent keyframe pair. */
+/**
+ * Builds decor actions between every adjacent keyframe pair.
+ *
+ * A property present at the destination but absent from the resolved source has no authored
+ * interpolation endpoint. It therefore becomes a direct style patch at the destination KF; no
+ * CSS default is invented and no `{to: ...}` tween without a materialized `from` is emitted.
+ */
 function buildInterpolationActions(
   scene: EditorScene,
   item: Item,
@@ -608,12 +614,18 @@ function buildInterpolationActions(
     const durationMs = transition?.durationMs ?? intervalMs
     const ease = transition === undefined ? normalizeEasing(DEFAULT_EASING) : normalizeEasing(transition.easing)
     const style: Record<string, unknown> = {}
+    const discreteStyle: Record<string, unknown> = {}
     for (const [property, value] of Object.entries(diff)) {
       const from = fromStyle[property]
+      if (from === undefined) {
+        // The destination property is authored, but the source has no authored value. Applying it
+        // at the destination preserves the keyframe state without pretending that a CSS default is
+        // part of the V2 document.
+        if (value !== undefined) discreteStyle[property] = value
+        continue
+      }
       if (!isInterpolableStylePair(from, value)) continue
-      style[property] = from === undefined
-        ? { to: value, duration: durationMs, ease }
-        : { from, to: value, duration: durationMs, ease }
+      style[property] = { from, to: value, duration: durationMs, ease }
     }
 
     const startAt = durationMs <= 0
@@ -624,9 +636,10 @@ function buildInterpolationActions(
         durationMs,
         direction: transition?.direction ?? 'after',
       }) + preRollMs
+    const actionName = `${item.id}-kf-${destination.id}`
     if (Object.keys(style).length > 0 || (hasMotionPath && intervalMs > 0)) {
       actions.push({
-        name: `${item.id}-kf-${destination.id}`,
+        name: actionName,
         style,
         ...(hasMotionPath && intervalMs > 0 ? {
           move: {
@@ -644,6 +657,13 @@ function buildInterpolationActions(
           },
         } : {}),
         startAt: hasMotionPath && intervalMs > 0 ? source.timeMs + preRollMs : startAt,
+      })
+    }
+    if (Object.keys(discreteStyle).length > 0) {
+      actions.push({
+        name: `${actionName}-discrete`,
+        style: discreteStyle,
+        startAt: destination.timeMs + preRollMs,
       })
     }
   }
