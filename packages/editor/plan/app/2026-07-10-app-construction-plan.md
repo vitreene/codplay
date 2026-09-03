@@ -40,7 +40,7 @@ EditorScene {
   items:    Item[]              // à plat ; arbre dérivé de parentId + order
                                  //   — un SON est un item (type média spécifique), comme tout média
   contents: Record<id, Content> // ce que montre chaque item (source, texte, waveform, cues…)
-  decors:   Record<id, Decor>   // l'aspect VARIABLE d'un item (par kf) : style/classes/position/zone
+  decors:   Record<id, Decor>   // l'aspect VARIABLE d'un item (par kf) : style/classes/position/zone/path
                                  //   — PAS le texte (→ Content) ni la capsule (→ Item.capsule)
   zones:    Record<id, Zone>    // emprises nommées (par capsule), par id stable
   masterItemId?: id             // RÉFÉRENCE vers l'item média « master » (piste dédiée) — facultatif.
@@ -71,7 +71,7 @@ Content {                        // ce que l'item montre + infos de sa source
   text?; textAutoSize?; lang?    // texte : contenu, intention auto-size, langue
   waveform?; cues?               // média voix : forme d'onde + grains (mot ; puis phrase/phonème)
 }
-Decor   { id; style?; classes?; position?; zoneId? }   // aspect variable seulement
+Decor   { id; style?; classes?; position?; zoneId?; path? } // aspect variable ; path entrant V2, droite implicite
 Zone    { id; name; /* surfaces par orientation */ }
 Cue     { id; timeMs; text }   // un start OU end de mot ; ponctuel, aimanté
 ```

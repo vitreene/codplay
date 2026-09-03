@@ -15,6 +15,7 @@ export default defineConfig({
       { find: /^codplay\/(.*)/, replacement: resolve(__dirname, '../codplay/src/$1') },
       { find: 'codplay', replacement: resolve(__dirname, '../codplay/src/index.ts') },
       { find: '@codplay/selection-frame/v2', replacement: resolve(__dirname, '../authoring/selection-frame/src/v2.ts') },
+      { find: /^@codplay\/selection-frame\/(.*)/, replacement: resolve(__dirname, '../authoring/selection-frame/src/$1') },
       { find: '@codplay/scene-factory/capsule-distribution', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-distribution.ts') },
       { find: '@codplay/scene-factory/capsule-preset', replacement: resolve(__dirname, '../authoring/scene-factory/src/capsule-preset.ts') },
       { find: '@codplay/scene-factory/transition-timing', replacement: resolve(__dirname, '../authoring/scene-factory/src/transition-timing.ts') },

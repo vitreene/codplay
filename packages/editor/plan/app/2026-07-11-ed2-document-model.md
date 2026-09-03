@@ -74,7 +74,7 @@ Un **item** est l'entité que l'auteur crée. Deux natures de données à distin
 
 **Ce que l'item relie** (par référence, données dans les tables) :
 - **contenu** → **contents** — ce qu'il montre (voir « Content » ci-dessous : source + texte + langue + grains temporels selon le type).
-- **décor(s)** → **decors** — géométrie et habillage (style, classes, position, zone) : un décor **initial** + un décor **par keyframe**.
+- **décor(s)** → **decors** — géométrie, habillage et capacité de mouvement (style, classes, position, zone, path) : un décor **initial** + un décor **par keyframe**.
 - **zone(s)** → **zones**, par **identité stable** (id, pas nom) — l'attache survit au renommage/déplacement de la zone.
 
 L'item existe sur un **intervalle**, pas à un instant : son premier et son dernier keyframes selon
@@ -146,7 +146,7 @@ La distinction forte : un item feuille **a** un temps (ses keyframes) ; une caps
 | Responsabilité | Lieu | Ce que c'est |
 |---|---|---|
 | **contenu** (ce qui est montré) | `Content` (table `contents`) | source, texte, langue, grains temporels |
-| **aspect** (comment c'est habillé), variable dans le temps | `Decor` (table `decors`) | style, classes, position, zone — par keyframe |
+| **aspect** (comment c'est habillé), variable dans le temps | `Decor` (table `decors`) | style, classes, position, zone, path entrant — par keyframe |
 | **capacités propres au type** différencié, statiques | `Item.<typeDef>` (ex. `Item.capsule`) | ce que ce type sait faire (conteneur : distribution/grille…) |
 | **place / temps** | l'item lui-même | id, type, parent+ordre, keyframes |
 
@@ -291,6 +291,7 @@ Decor {                               // l'ASPECT variable d'un item (par keyfra
   classes?:  ClassNameValue           // classes (add/remove/remplacement, modèle runtime)
   position?: PositionData             // position/appui-flex (module non-CSS, transposé en aval)
   zoneId?:   string | null            // → zones (par id) ; null = surface pleine de la capsule
+  path?:     string                   // chemin SVG V2 du segment entrant vers ce décor ; absent = droite
   // PAS de `capsule` (réglages capsule = statiques, sur l'item : Item.capsule) ;
   // PAS de `text` (le contenu relève de Content). Voir note « Ce que Decor NE contient PAS ».
   // NB : DecorPatch (dedit) n'est PAS la référence ; la forme normative = spec du modèle
@@ -329,13 +330,14 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
 **Points de forme à noter dans ces types** :
 - **`Decor.style` reste une carte ouverte** de valeurs CSS finales ; le modèle ne type **pas** les propriétés CSS une par une (dedit décide des props gérées vs `custom`). Stockage BDD = opaque ; runtime = `Record` structuré ; le Builder convertit.
 - **`Content.cues` vs `EditorScene`** : les cues vivent dans le **content** du média (c'est la transcription de *cette* source) — il n'y a **pas** de table cues séparée dans `EditorScene`. Le `masterItemId` désigne quel item média porte le rythme ; ses cues sont dans son content.
-- **Ce que Decor NE contient PAS (nettoyé, 2026-07-12)** : ni `text`, ni `capsule`. Decor est l'**aspect variable** d'un item (par keyframe) — uniquement style/classes/position/zone.
+- **Ce que Decor NE contient PAS (nettoyé, 2026-07-12)** : ni `text`, ni `capsule`. Decor est l'**aspect variable** d'un item (par keyframe) — style/classes/position/zone et, en V2, le `path` segment-local ; le path ne devient pas une propriété de capsule ou de visibilité.
   - **`text` → Content** : le contenu textuel relève de `Content`, pas du décor (c'est *ce qui est montré*, pas *comment*). Retiré de Decor (n'y était que par héritage de `DecorPatch`).
   - **`capsule` → `Item.capsule`** : les réglages d'une capsule sont **statiques** (définis une fois, jamais keyframés) et **uniques à l'item** — leur place est sur l'item (`CapsuleDef`), pas dans la table `decors` faite pour l'aspect variable. L'ancien `CapsulePatch` est **fusionné** dans `CapsuleDef` (plus de dualité def/patch). `capsule` n'a pas vocation à bouger dans le temps → hors décor.
   - **Évolution future possible (notée, pas v1)** : un lien **Content↔Decor** *pourrait* revenir pour du **changement de contenu (texte) via l'interface** — Codplay sait gérer un changement de content. Mais ce serait alors une **référence de content pilotée par keyframe** (le décor d'un kf pointe vers un content différent), pas un champ `text` brut réintroduit dans Decor. Réservé à un besoin réel (cf. discussion : changement de content pas dans l'éditeur en v1) ; ne pas l'anticiper dans le modèle.
 - **`initialDecorId` (item) et `EditorScene.rootDecorId` (racine implicite) jouent le même rôle** — un décor de base, posé une fois, jamais keyframé. Séparés parce que la racine n'est **pas** un item (§ »racine» ci-dessus) : elle n'a donc pas de champ `initialDecorId` propre, d'où `rootDecorId` porté directement par `EditorScene`.
 - **`Item.label` est un libellé d'affichage, pas du contenu** — distinct de `Content.text` : renommer une piste dans la timeline ne change jamais ce que l'item montre. Optionnel : l'éditeur dérive un affichage par défaut (troncature de `Content.text`, nom de source, badge de type) quand absent, plutôt que d'imposer sa saisie.
 - **`markerTracks` est une table indépendante, pas liée aux items/médias** — contrairement à `Cue` (qui vit dans `Content`, parce qu'une cue est la transcription d'une source précise), un marqueur est posé librement par l'auteur sur la timeline, sans rattachement à un média. D'où sa place à côté de `zones` (autre table référencée indépendante des items), pas dans `Content`.
+- **`Decor.path` est une capacité de mouvement V2, pas une propriété de pose ou de visibilité** — il décrit le segment entrant vers le keyframe qui référence ce décor. Une absence de `path` signifie la droite source→cible implicite ; les pixels de viewport et les mesures de bounding box ne sont jamais stockés. Le champ est segment-local : il n'entre pas dans la cascade générale de `Decor` et ne se propage pas aux keyframes suivants. Lorsqu'un décor est partagé et qu'un path est édité, l'éditeur applique le copy-on-write documenté pour isoler le keyframe cible. Les transitions nommées d'entrée/sortie restent portées par le keyframe et ne sont pas remplacées par ce champ. La forme du chemin est celle du contrat CodPlay V2 (`M`/`L`/`A`, préparation `arc-length`) ; l'éditeur ne crée pas de grammaire concurrente.
 
 ---
 

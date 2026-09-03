@@ -181,6 +181,11 @@ interface DecorPatch {
   capsule?: CapsulePatch          // items capsule uniquement (§ 8)
   text?: string                   // contenu textuel (saisie dans dedit)
   custom?: string                 // mini-éditeur de code : CSS libre, responsabilité auteur
+  /**
+   * Chemin SVG CodPlay V2 du segment entrant vers le keyframe cible. Il reste absent pour une
+   * droite ; ce champ est segment-local et n'est pas fusionné par la cascade générale des décors.
+   */
+  path?: string
 }
 ```
 

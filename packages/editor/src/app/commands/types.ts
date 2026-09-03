@@ -153,6 +153,8 @@ export interface Decor {
    * propriétés de style au build (`build-scene.ts::resolveCustomAsStyle`), bien plus simple
    * (une chaîne à parser, pas plusieurs champs à convertir) mais de même nature. */
   custom?: string
+  /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
+  path?: string
 }
 
 // ─── Zone ───────────────────────────────────────────────────────────────────

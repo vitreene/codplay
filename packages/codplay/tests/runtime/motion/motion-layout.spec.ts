@@ -296,6 +296,7 @@ function createSnapshot(
 function createItem(itemId: string, x: number, targetId = 'root', targetOrder = 0): LayoutItemSnapshot {
   const localPose: RelativeMotionPose = {
     origin: [x, 0],
+    layoutOrigin: [x, 0],
     matrix: IDENTITY,
     width: 20,
     height: 20,
@@ -327,6 +328,7 @@ function createNestedItem(
     localPose: {
       ...createItem(itemId, localX, targetId).localPose,
       origin: [localX, 0],
+      layoutOrigin: [localX, 0],
     },
   }
 }

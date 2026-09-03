@@ -64,6 +64,7 @@ function useClearSelectionShortcuts(controller: Actor<typeof controllerMachine>)
       // sont montées à l'intérieur de la même région scène).
       if (target.closest('.app-region--scene') === null) return
       if (target.closest('[data-selection-frame]') !== null) return
+      if (target.closest('[data-editor-overlay]') !== null) return
 
       const scene = controller.getSnapshot().context.scene
       const clickedItemId = scene ? resolveClickedItemId(target, scene) : null

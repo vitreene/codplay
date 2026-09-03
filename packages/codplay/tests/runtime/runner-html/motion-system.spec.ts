@@ -201,6 +201,7 @@ function createBoundary(
 function createSnapshot(timeMs: number, targetId: string, x: number): LayoutSnapshot {
   const localPose: RelativeMotionPose = {
     origin: [x, 0],
+    layoutOrigin: [x, 0],
     matrix: IDENTITY_MATRIX,
     width: 20,
     height: 20,

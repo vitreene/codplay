@@ -103,6 +103,7 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
         destinationAtBoundary,
         phase,
         activeSegment.path,
+        activeSegment.pathAnchor,
       )
       graph = replaceMotionSegment(graph, operation.itemId, operation.segmentId, Object.freeze({
         ...activeSegment,
@@ -214,6 +215,7 @@ function buildMotionGraphStructure(
         // descendants can compose against its current pose.
         materializerOwned: directIntent?.targetReflow === false,
         ...(directIntent?.path === undefined ? {} : { path: directIntent.path }),
+        ...(directIntent?.pathAnchor === undefined ? {} : { pathAnchor: directIntent.pathAnchor }),
         targetReflow: directIntent?.targetReflow === true || scope.targetContainerItemIds.has(itemId),
         direct: directIntent !== undefined,
         from,
@@ -498,7 +500,7 @@ function resolveMotionPose(
       resolveParent,
       false,
     )
-    return interpolateMotionPose(from, to, keyframeInterval.progress, segment.path)
+    return interpolateMotionPose(from, to, keyframeInterval.progress, segment.path, segment.pathAnchor)
   }
 
   const from = resolveAttachment(retarget?.from ?? segment.from, layout, itemId, resolveParent, false)
@@ -509,7 +511,7 @@ function resolveMotionPose(
     resolveParent,
     !segment.materializerOwned && !segment.targetReflow,
   )
-  return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path)
+  return interpolateMotionPose(from, to, resolveSegmentProgress(segment, timeMs), segment.path, segment.pathAnchor)
 }
 
 /** Resolves a retarget parent at the boundary instead of at the mover endpoint. */
@@ -859,6 +861,7 @@ function freezeMotionGraph(
       keyframes: segment.keyframes,
       materializerOwned: segment.materializerOwned,
       path: segment.path,
+      pathAnchor: segment.pathAnchor,
     })),
   ]))
   return Object.freeze({

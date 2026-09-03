@@ -5,6 +5,7 @@ const IDENTITY_MATRIX: HtmlMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
 
 type HtmlWorldGeometry = Readonly<{
   origin: { x: number; y: number }
+  layoutOrigin: { x: number; y: number }
   matrix: HtmlMatrix
 }>
 
@@ -233,7 +234,7 @@ function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): H
 
   const parent = node.parentElement
   const parentGeometry: HtmlWorldGeometry = parent === null
-    ? { origin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX } }
+    ? { origin: { x: 0, y: 0 }, layoutOrigin: { x: 0, y: 0 }, matrix: { ...IDENTITY_MATRIX } }
     : captureWorldGeometry(parent, context)
   const localBox = measureLocalBox(node, context)
   const localWidth = localBox.width ?? 0
@@ -249,8 +250,12 @@ function captureWorldGeometry(node: Element, context: HtmlPoseCaptureContext): H
     x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLocalOrigin.x + parentGeometry.matrix.c * fallbackLocalOrigin.y,
     y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLocalOrigin.x + parentGeometry.matrix.d * fallbackLocalOrigin.y,
   }
+  const layoutOrigin = {
+    x: parentGeometry.origin.x + parentGeometry.matrix.a * fallbackLayoutOffset.x + parentGeometry.matrix.c * fallbackLayoutOffset.y,
+    y: parentGeometry.origin.y + parentGeometry.matrix.b * fallbackLayoutOffset.x + parentGeometry.matrix.d * fallbackLayoutOffset.y,
+  }
   const origin = resolveMeasuredWorldOrigin(node, matrix, localWidth, localHeight, fallbackOrigin, context)
-  const geometry: HtmlWorldGeometry = { origin, matrix }
+  const geometry: HtmlWorldGeometry = { origin, layoutOrigin, matrix }
   context.geometries.set(node, geometry)
   return geometry
 }
@@ -329,6 +334,7 @@ export function captureHtmlPose(node: Element, context = createHtmlPoseCaptureCo
   const pose = {
     rect,
     origin: { x: geometry.origin.x - scrollX, y: geometry.origin.y - scrollY },
+    layoutOrigin: { x: geometry.layoutOrigin.x - scrollX, y: geometry.layoutOrigin.y - scrollY },
     matrix: geometry.matrix,
     parentMatrix,
     rotationMatrix: extractRotationMatrix(geometry.matrix),

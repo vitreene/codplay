@@ -51,8 +51,11 @@ consume it.
 
 ## Path values
 
-An authored `move.transition.path` remains an SVG `d` string in `SceneDoc`. The
-builder converts it once into the JSON-safe `Path` object defined by ACE. The
+An authored `move.transition.path` remains an SVG `d` string in `SceneDoc`. An
+optional `move.transition.pathAnchor` declares which point of the presented
+pose follows that path (`center` for the affine visual center, `aabb` or absent
+for the default AABB anchor). The builder converts the path once into the
+JSON-safe `Path` object defined by ACE. The
 canonical syntax transformation is `prepareSvgPath`, exported from
 `src/ace/index.ts`; it is pure, deterministic, independent of the DOM and safe
 to reuse from a future strap that produces a dynamic path. A strap must return

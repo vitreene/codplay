@@ -246,8 +246,12 @@ export class HtmlMotionPresentationHost {
       parentInverse = resolvedParentInverse
       parentInverses.set(item.parentItemId, resolvedParentInverse)
     }
-    const naturalOrigin: readonly [number, number] = naturalLayout?.items.get(itemId)?.localPose.origin ?? [0, 0]
-    const matrix = resolveLocalPresentationMatrix(naturalOrigin, worldPose, parentInverse)
+    const naturalItem = naturalLayout?.items.get(itemId)
+    // The projection stylesheet replaces the authored transform entirely.
+    // Subtract only the untransformed layout slot captured for this item;
+    // subtracting localPose.origin would apply the authored transform twice.
+    const naturalLayoutOrigin: readonly [number, number] = naturalItem?.localPose.layoutOrigin ?? [0, 0]
+    const matrix = resolveLocalPresentationMatrix(naturalLayoutOrigin, worldPose, parentInverse)
     const previous = this.localTransforms.get(itemId)
     if (previous?.target === target && sameHtmlMatrix(previous.matrix, matrix)) return
     this.transientStyles.applyLocalTransform(target, matrix)

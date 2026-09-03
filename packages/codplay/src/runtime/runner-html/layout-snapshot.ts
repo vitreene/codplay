@@ -42,6 +42,7 @@ export function captureHtmlLayoutSnapshot(
     item.targetId,
     item.targetOrder,
     item.localPose.origin,
+    item.localPose.layoutOrigin,
     item.localPose.matrix,
     item.localPose.width,
     item.localPose.height,

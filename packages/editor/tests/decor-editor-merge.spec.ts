@@ -3,6 +3,11 @@ import { mergePatch, resolveDecor } from '../src/decor-editor/merge'
 import type { DecorPatch } from '../src/decor-editor/types'
 
 describe('mergePatch', () => {
+  it('keeps the motion path out of the ordinary decor cascade', () => {
+    expect(mergePatch({ path: 'M 0 0 A 1 1 0 0 1 1 0' }, {})).not.toHaveProperty('path')
+    expect(mergePatch({}, { path: 'M 0 0 A 1 1 0 0 1 1 0' })).not.toHaveProperty('path')
+  })
+
   it('propriété absente de addition.style → base intacte', () => {
     const base: DecorPatch = { style: { 'font-size': '10cqw' } }
     const result = mergePatch(base, {})

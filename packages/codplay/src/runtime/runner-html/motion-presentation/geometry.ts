@@ -40,14 +40,18 @@ export function isDefaultTransformPropertyValue(
   return translations.length <= 3 && translations.every((part) => /^0(?:[a-z%]+)?$/.test(part))
 }
 
-/** Resolves a live-node matrix by subtracting the natural origin in parent space. */
+/** Resolves a live-node matrix by subtracting its untransformed layout slot. */
 export function resolveLocalPresentationMatrix(
-  naturalOrigin: readonly [number, number],
+  naturalLayoutOrigin: readonly [number, number],
   target: HtmlPose,
   parentInverse: HtmlMatrix,
 ): HtmlMatrix {
   const targetMatrix = multiplyMatrix(parentInverse, poseAffineMatrix(target))
-  return { ...targetMatrix, e: targetMatrix.e - naturalOrigin[0], f: targetMatrix.f - naturalOrigin[1] }
+  return {
+    ...targetMatrix,
+    e: targetMatrix.e - naturalLayoutOrigin[0],
+    f: targetMatrix.f - naturalLayoutOrigin[1],
+  }
 }
 
 /** Converts one pose into the complete affine matrix of its local-box origin. */

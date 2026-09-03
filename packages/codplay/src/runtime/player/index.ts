@@ -83,7 +83,7 @@ export {
   MOVE_OPERATION_MOVE,
   MOVE_OPERATION_UNMOUNT,
 } from '../config/move'
-export type { MoveFlipMode } from '../config/move'
+export type { MoveFlipMode, MovePathAnchor } from '../config/move'
 export { diffSolvedScenes, selectEffectiveMove } from '../move'
 export type { MovePolicyResult, MoveStateDelta } from '../move'
 export { createListModuleServiceDefinition, LIST_MODULE_SERVICE_ID } from '../capabilities/list'

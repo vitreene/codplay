@@ -1,6 +1,12 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from 'vitest'
 
-import { worldDeltaToLocalDelta } from '../../../src/runtime/motion/html-pose'
+import {
+  captureHtmlPose,
+  createHtmlPoseCaptureContext,
+  worldDeltaToLocalDelta,
+} from '../../../src/runtime/motion/html-pose'
 import type { HtmlMatrix } from '../../../src/runtime/motion/html-types'
 
 describe('V2 HTML pose host math', () => {
@@ -27,4 +33,43 @@ describe('V2 HTML pose host math', () => {
     expect(worldX).toBeCloseTo(-17.57, 4)
     expect(worldY).toBeCloseTo(117.87, 4)
   })
+
+  it('keeps the untransformed slot separate from an authored transform translation', () => {
+    const root = document.createElement('main')
+    const item = document.createElement('article')
+    root.appendChild(item)
+    root.style.width = '200px'
+    root.style.height = '200px'
+    item.style.width = '20px'
+    item.style.height = '20px'
+    item.style.transform = 'matrix(1, 0, 0, 1, 80, 40)'
+    Object.defineProperties(item, {
+      offsetLeft: { configurable: true, value: 12 },
+      offsetTop: { configurable: true, value: 8 },
+    })
+    defineRect(root, { left: 0, top: 0, width: 200, height: 200 })
+    defineRect(item, { left: 92, top: 48, width: 20, height: 20 })
+
+    const context = createHtmlPoseCaptureContext()
+    captureHtmlPose(root, context)
+    const pose = captureHtmlPose(item, context)
+
+    expect(pose.layoutOrigin).toEqual({ x: 12, y: 8 })
+    expect(pose.origin).toEqual({ x: 92, y: 48 })
+  })
 })
+
+/** Installs the measured rectangle used by the explicit geometry transaction. */
+function defineRect(node: HTMLElement, rect: Readonly<{ left: number; top: number; width: number; height: number }>): void {
+  Object.defineProperty(node, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => ({
+      ...rect,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      x: rect.left,
+      y: rect.top,
+      toJSON: () => ({ ...rect }),
+    }),
+  })
+}

@@ -25,12 +25,17 @@ export type MoveOrderMode =
 /** HTML presentation strategy for one authored movement transition. */
 export type MoveFlipMode = 'local' | 'overlay-world'
 
+/** Point followed by an authored path during HTML presentation. */
+export type MovePathAnchor = 'aabb' | 'center'
+
 /** Compiled transition data carried by a move and consumed by the motion materializer. */
 export type MoveTransition = Readonly<{
   duration?: number
   ease?: CompiledValue
   path?: CompiledValue
   traversal?: PathTraversal
+  /** `center` follows the affine visual center; absent/`aabb` preserves the existing V2 AABB anchor. */
+  pathAnchor?: MovePathAnchor
 }>
 
 export type MovePolicyIssue = Readonly<{

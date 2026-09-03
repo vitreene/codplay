@@ -392,7 +392,11 @@ describe('SceneBuilder', () => {
               move: {
                 move: {
                   target: '@root',
-                  transition: { duration: 100, path: 'M 10 20 L 20 30 L 30 20' },
+                  transition: {
+                    duration: 100,
+                    path: 'M 10 20 L 20 30 L 30 20',
+                    pathAnchor: 'center',
+                  },
                 },
               },
             },
@@ -407,8 +411,12 @@ describe('SceneBuilder', () => {
     const pathValue = (path as Record<string, unknown>).move && ((path as Record<string, unknown>).move as Record<string, unknown>).transition
       ? (((path as Record<string, unknown>).move as Record<string, unknown>).transition as Record<string, unknown>).path
       : undefined
+    const transitionValue = (path as Record<string, unknown>).move && ((path as Record<string, unknown>).move as Record<string, unknown>).transition
+      ? (((path as Record<string, unknown>).move as Record<string, unknown>).transition as Record<string, unknown>)
+      : undefined
 
     expect(isPreparedPath(pathValue)).toBe(true)
+    expect(transitionValue).toMatchObject({ pathAnchor: 'center' })
     if (isPreparedPath(pathValue)) {
       expect(pathValue.kind).toBe('segments')
       expect(pathValue.segments?.[0]?.to).toEqual([0.5, 0.5])

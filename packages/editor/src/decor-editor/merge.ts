@@ -28,6 +28,10 @@ function resolveClassNamePatch(current: string, patch: ClassNameValue): string {
  */
 export function mergePatch(base: DecorPatch, addition: DecorPatch): DecorPatch {
   const result: DecorPatch = { ...base }
+  // Motion paths are segment-local document data, not a cascaded decor property. The target KF
+  // reads its own `Decor.path` directly; carrying it through this generic merge would make an arc
+  // leak into every following keyframe that inherits the ordinary decor fields.
+  delete result.path
 
   if (addition.style) {
     result.style = { ...base.style, ...addition.style }

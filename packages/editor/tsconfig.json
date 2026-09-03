@@ -8,6 +8,7 @@
       "ace": ["../codplay/src/ace/index.ts"],
       "ace/*": ["../codplay/src/ace/*"],
       "@codplay/selection-frame/v2": ["../authoring/selection-frame/src/v2.ts"],
+      "@codplay/selection-frame/*": ["../authoring/selection-frame/src/*"],
       "@codplay/capsule-automation": ["../authoring/capsule-automation/src/index.ts"],
       "@codplay/capsule-automation/*": ["../authoring/capsule-automation/src/*"],
       "@codplay/scene-factory": ["../authoring/scene-factory/src/index.ts"],

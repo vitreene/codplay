@@ -13,6 +13,7 @@ import {
   MOVE_ISSUE_LAST_INVALID_SAME_TICK,
   type MoveTransition,
   type MoveFlipMode,
+  type MovePathAnchor,
   type MoveOrderMode,
   type MovePolicyIssue,
 } from '../config/move'
@@ -150,11 +151,14 @@ function readMoveTransition(value: CompiledValue | undefined): MoveTransition | 
   if (record.path !== undefined && !isPreparedPath(record.path)) return INVALID_TRANSITION
   if (record.traversal !== undefined && record.traversal !== 'parameter' && record.traversal !== 'arc-length') return INVALID_TRANSITION
   if (record.traversal !== undefined && record.path === undefined) return INVALID_TRANSITION
+  if (record.pathAnchor !== undefined && record.pathAnchor !== 'aabb' && record.pathAnchor !== 'center') return INVALID_TRANSITION
+  if (record.pathAnchor !== undefined && record.path === undefined) return INVALID_TRANSITION
   return {
     duration: record.duration as number | undefined,
     ease: record.ease,
     path: record.path,
     traversal: record.traversal as PathTraversal | undefined,
+    pathAnchor: record.pathAnchor as MovePathAnchor | undefined,
   }
 }
 

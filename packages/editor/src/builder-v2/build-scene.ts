@@ -17,6 +17,7 @@ import { TransitionTiming } from '@codplay/scene-factory/transition-timing'
 import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-distribution'
 import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, SceneDoc } from 'codplay'
+import { prepareSvgPath } from 'ace'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
 import { DEFAULT_EASING } from '../sequence-editor/constants'
 import {
@@ -539,9 +540,14 @@ function buildLeafPerso(
     })
   }
   const initial = { ...initialStyle, ...transition.introFrom }
-  const decorActions = buildInterpolationActions(scene, item, keyframes, preRollMs)
-  const actions = { ...transition.actions }
-  for (const action of decorActions) actions[action.name] = { style: action.style }
+  const decorActions = buildInterpolationActions(scene, item, keyframes, preRollMs, diagnostics)
+  const actions: Record<string, { style?: Record<string, unknown>; move?: Record<string, unknown> }> = { ...transition.actions }
+  for (const action of decorActions) {
+    actions[action.name] = {
+      ...(Object.keys(action.style).length === 0 ? {} : { style: action.style }),
+      ...(action.move === undefined ? {} : { move: action.move }),
+    }
+  }
   const eventimes = [...transition.eventimes, ...decorActions.map((action) => ({ name: action.name, startAt: action.startAt }))]
   const common = {
     move: { target: parentPersoId },
@@ -568,15 +574,30 @@ function buildInterpolationActions(
   item: Item,
   keyframes: Keyframe[],
   preRollMs: number,
-): Array<{ name: string; style: Record<string, unknown>; startAt: number }> {
-  const actions: Array<{ name: string; style: Record<string, unknown>; startAt: number }> = []
+  diagnostics: BuilderDiagnostic[],
+): Array<{ name: string; style: Record<string, unknown>; startAt: number; move?: Record<string, unknown> }> {
+  const actions: Array<{ name: string; style: Record<string, unknown>; startAt: number; move?: Record<string, unknown> }> = []
   for (let index = 1; index < keyframes.length; index += 1) {
     const source = keyframes[index - 1]!
     const destination = keyframes[index]!
     const fromStyle = resolveKeyframeStyle(scene, item, source)
     const toStyle = resolveKeyframeStyle(scene, item, destination)
     const diff = computeStyleDiff(fromStyle, toStyle)
-    if (Object.keys(diff).length === 0) continue
+    const path = scene.decors[destination.decorId]?.path
+    const hasMotionPath = typeof path === 'string' && path.trim() !== ''
+    if (hasMotionPath) {
+      try {
+        prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+      } catch (cause) {
+        diagnostics.push(error(
+          'EDITOR_V2_MOTION_PATH_INVALID',
+          cause instanceof Error ? cause.message : 'The authored motion path is invalid.',
+          { itemId: item.id, keyframeId: destination.id, decorId: destination.decorId },
+        ))
+        continue
+      }
+    }
+    if (Object.keys(diff).length === 0 && !hasMotionPath) continue
 
     const transition = destination.transitionIn?.kind === 'interpolated'
       ? destination.transitionIn
@@ -595,8 +616,6 @@ function buildInterpolationActions(
         : { from, to: value, duration: durationMs, ease }
     }
 
-    if (Object.keys(style).length === 0) continue
-
     const startAt = durationMs <= 0
       ? destination.timeMs + preRollMs
       : TransitionTiming.interpolatedTransitionTriggerMs({
@@ -605,7 +624,28 @@ function buildInterpolationActions(
         durationMs,
         direction: transition?.direction ?? 'after',
       }) + preRollMs
-    actions.push({ name: `${item.id}-kf-${destination.id}`, style, startAt })
+    if (Object.keys(style).length > 0 || (hasMotionPath && intervalMs > 0)) {
+      actions.push({
+        name: `${item.id}-kf-${destination.id}`,
+        style,
+        ...(hasMotionPath && intervalMs > 0 ? {
+          move: {
+            target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
+            flipMode: 'local',
+            transition: {
+              duration: intervalMs,
+              ease,
+              path,
+              traversal: 'arc-length',
+              // The editor overlay is authored from affine visual centers;
+              // CodPlay must resolve the same center path at presentation time.
+              pathAnchor: 'center',
+            },
+          },
+        } : {}),
+        startAt: hasMotionPath && intervalMs > 0 ? source.timeMs + preRollMs : startAt,
+      })
+    }
   }
   return actions
 }

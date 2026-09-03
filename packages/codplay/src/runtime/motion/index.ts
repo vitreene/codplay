@@ -39,4 +39,5 @@ export type {
   OverlayStackingContext,
   PresentationFrame,
   RelativeMotionPose,
+  MovePathAnchor,
 } from './types'

@@ -8,6 +8,7 @@
  * Config, pas logique : `mergePatch` (merge.ts) lit cette liste plutôt que de coder les
  * noms en dur. Ajouter un module au décor (`types.ts`, `DecorPatch`) nécessite de
  * l'enregistrer ici aussi — sans quoi son écart serait silencieusement perdu à la fusion
- * (bug déjà rencontré une fois avec `textAutoSize`).
+ * (bug déjà rencontré une fois avec `textAutoSize`). `path` est l'exception
+ * documentée : il est segment-local et doit rester hors de cette cascade.
  */
 export const STRUCTURED_GROUPS = ['offset', 'capsule', 'textAutoSize'] as const

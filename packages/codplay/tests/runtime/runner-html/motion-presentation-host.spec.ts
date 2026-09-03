@@ -633,7 +633,7 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
             itemId: 'item',
             targetId: 'root',
             targetOrder: 0,
-            localPose: { origin: [40, 0], matrix: IDENTITY, width: 20, height: 20 },
+            localPose: { origin: [40, 0], layoutOrigin: [40, 0], matrix: IDENTITY, width: 20, height: 20 },
             rootPose: pose,
           },
         ]]),
@@ -642,6 +642,46 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
 
     expect(source.style.getPropertyValue('--codplay-motion-transform'))
       .toBe('matrix(1, 0, 0, 1, 0, 0)')
+    host.destroy()
+    root.remove()
+  })
+
+  it('subtracts the untransformed layout slot when the authored pose has a transform', () => {
+    const root = document.createElement('main')
+    const source = document.createElement('article')
+    root.appendChild(source)
+    document.body.appendChild(root)
+
+    const host = new HtmlMotionPresentationHost(root, () => source)
+    const pose = createPose(40)
+    host.commit(
+      createFrame([{ ...createItem('item'), representation: 'local', pose }]),
+      undefined,
+      {
+        timeMs: 0,
+        revision: 'layout-with-transform',
+        rootPose: createMotionRootPose(),
+        items: new Map([[
+          'item',
+          {
+            itemId: 'item',
+            targetId: 'root',
+            targetOrder: 0,
+            localPose: {
+              origin: [40, 0],
+              layoutOrigin: [0, 0],
+              matrix: IDENTITY,
+              width: 20,
+              height: 20,
+            },
+            rootPose: pose,
+          },
+        ]]),
+      },
+    )
+
+    expect(source.style.getPropertyValue('--codplay-motion-transform'))
+      .toBe('matrix(1, 0, 0, 1, 40, 0)')
     host.destroy()
     root.remove()
   })
@@ -708,6 +748,6 @@ function createPose(x: number): HtmlPose {
 }
 
 /** Creates one translation-only local pose for nested-parent assertions. */
-function localPose(x: number): { origin: readonly [number, number]; matrix: HtmlMatrix; width: number; height: number } {
-  return { origin: [x, 0], matrix: IDENTITY, width: 20, height: 20 }
+function localPose(x: number): { origin: readonly [number, number]; layoutOrigin: readonly [number, number]; matrix: HtmlMatrix; width: number; height: number } {
+  return { origin: [x, 0], layoutOrigin: [x, 0], matrix: IDENTITY, width: 20, height: 20 }
 }

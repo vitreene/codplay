@@ -262,6 +262,7 @@ function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
     presentationMode: intent.presentationMode,
     targetReflow: intent.targetReflow,
     ...(intent.path === undefined ? {} : { path: intent.path }),
+    ...(intent.pathAnchor === undefined ? {} : { pathAnchor: intent.pathAnchor }),
   })
 }
 

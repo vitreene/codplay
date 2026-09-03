@@ -82,6 +82,8 @@ export interface DecorPatch {
   text?: string // contenu textuel (saisie dans dedit)
   textAutoSize?: TextAutoSizePatch // items texte uniquement (spec text-auto-size §5)
   custom?: string // mini-éditeur de code : CSS libre, responsabilité auteur
+  /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
+  path?: string
 }
 
 /** Décor entièrement résolu (repli complet de la chaîne d'héritage). Même forme que DecorPatch. */

@@ -203,13 +203,13 @@ function enrichIfKeyframeCreation(command: Command): Command[] {
   1. **Propriété simultanée non-spatiale** (ex. couleur) — interpolation continue ajoutée en
      parallèle du move, canal `getPersoStates()`. **À intégrer.** Zéro impact sur le move.
   2. **Modifier la trajectoire** (droite → brisée / arc) — non pas capturer une position
-     intermédiaire, mais ajouter une **propriété de trajectoire déclarative au move** (géométrie en
-     unité native, dans le repère du parent — les zones de l'éditeur partagent le même parent, repère
-     unique `cqw`). **À intégrer.** Corollaire clé : la trajectoire matérialisée REND la position à
-     `t` lisible depuis la description (point sur la géométrie → `lerp`/évaluation de courbe), sans
-     jamais lire le node — c'est le canal de placement animé qui manquait, et il tombe de ce cas 2
-     sans chantier séparé. L'éditeur de trajectoire (ajout/retrait de point, droite/arc) est un détail
-     d'implémentation à créer, mais reste une **vue auteur** (édite la description, pas le rendu).
+     intermédiaire, mais éditer la description déclarative du segment. Pour l'éditeur de mouvement
+     V2, la décision du 2026-09-02 fixe le porteur canonique sur `Decor.path` du décor du KF cible
+     (unité SVG CodPlay V2, droite implicite), puis le Builder la projette vers le contrat
+     `move.transition` existant. Le path ne devient donc pas une propriété héritée du décor ni un
+     second état du move. La trajectoire matérialisée rend la position à `t` depuis cette
+     description, sans lecture du node ; l'éditeur reste une **vue auteur** (édite la description,
+     pas le rendu). Voir `2026-09-02-motion-editor-v2-plan.md` pour le détail et la portée.
   3. **Détachement** (briser A→B ; ou créer une zone C à la position courante + restructurer en
      A→C figé puis C→B) — **différé, pas maintenant.** Une fois la trajectoire du cas 2 disponible, la
      position d'ancrage de C se calcule depuis la description (point sur la trajectoire à `t`), pas

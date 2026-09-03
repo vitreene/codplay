@@ -217,4 +217,105 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
       rotationOrigin: { fx: 0, fy: 0 },
     })
   })
+
+  it('crée un KF cible depuis la zone centrale sans toucher au parent et laisse les artefacts hors scène', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = scene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'first-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 0 })
+    await waitTurns()
+
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
+    expect(moveZone).not.toBeNull()
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('none')
+    expect(sceneRoot.querySelector('[data-motion-path]')).not.toBeNull()
+
+    // Escape cancels an unreleased trace and leaves the document untouched.
+    moveZone!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    moveZone!.dispatchEvent(pointerEvent('pointermove', 220, 190))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await waitTurns(8)
+    expect(actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!.keyframes).toHaveLength(2)
+
+    moveZone!.dispatchEvent(pointerEvent('pointerdown', 160, 160))
+    moveZone!.dispatchEvent(pointerEvent('pointermove', 240, 200))
+    moveZone!.dispatchEvent(pointerEvent('pointerup', 240, 200))
+    await waitTurns(24)
+
+    const committedScene = actor.getSnapshot().context.scene!
+    const committedItem = committedScene.items.find((item) => item.id === 'item')!
+    const target = committedItem.keyframes.find((keyframe) => keyframe.timeMs === 500)
+    expect(target).toBeDefined()
+    expect(committedItem.parentId).toBe(documentScene.items[0]!.parentId)
+    expect(committedScene.decors[target!.decorId]?.offset).toMatchObject({ translate: { x: 20, y: 15 } })
+    expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: target!.id })
+    expect(sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.style.display).toBe('')
+    expect(sceneRoot.querySelector('[data-selection-frame="v2"]')).not.toBeNull()
+
+    // A second central drag starts from the currently active target, not from the original source.
+    // This keeps repeated intra-capsule moves composable while the sequence-editor remains untouched.
+    moveZone!.dispatchEvent(pointerEvent('pointerdown', 240, 200))
+    moveZone!.dispatchEvent(pointerEvent('pointermove', 300, 230))
+    moveZone!.dispatchEvent(pointerEvent('pointerup', 300, 230))
+    await waitTurns(24)
+    const secondTarget = actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!.keyframes.find((keyframe) => keyframe.timeMs === 1_000)
+    expect(secondTarget).toBeDefined()
+    expect(actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!.keyframes).toHaveLength(4)
+
+    const pathControl = sceneRoot.querySelector<HTMLElement>('[data-motion-path-control]')
+    expect(pathControl).not.toBeNull()
+    pathControl!.dispatchEvent(pointerEvent('pointerdown', 200, 180))
+    pathControl!.dispatchEvent(pointerEvent('pointermove', 200, 240))
+    pathControl!.dispatchEvent(pointerEvent('pointerup', 200, 240))
+    await waitTurns(24)
+    const pathDecorId = actor.getSnapshot().context.scene!.items.find((item) => item.id === 'item')!.keyframes.find((keyframe) => keyframe.timeMs === 1_000)!.decorId
+    expect(actor.getSnapshot().context.scene!.decors[pathDecorId]?.path).toMatch(/^M 0 0 A /)
+
+    // Seeking inside the active segment must not rebuild the path from the live interpolated
+    // snapshot. The target decor remains the authored source of the path, while the CS follows
+    // its projected point at the new time.
+    const pathBeforeSeek = sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')
+    const frameBeforeSeek = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
+    expect(pathBeforeSeek).toContain('A')
+    actor.send({ type: 'SEEK', timelineMs: 750 })
+    await waitTurns(24)
+    expect(sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')).toBe(pathBeforeSeek)
+    expect(frameBeforeSeek?.style.left).not.toBe('')
+    actor.send({ type: 'SEEK', timelineMs: 1_000 })
+    await waitTurns(24)
+    expect(sceneRoot.querySelector<SVGPathElement>('[data-motion-path]')?.getAttribute('d')).toBe(pathBeforeSeek)
+
+    pathControl!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    await waitTurns(24)
+    expect(actor.getSnapshot().context.scene!.decors[pathDecorId]?.path).toBeUndefined()
+
+    // Selecting a different keyframe on the same item reconstructs its own adjacent segment;
+    // the previous active projection must not overwrite this selection.
+    const pathAtSecondTarget = sceneRoot.querySelector('[data-motion-path]')?.getAttribute('d')
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 5_000 })
+    await waitTurns(24)
+    expect(sceneRoot.querySelector('[data-motion-path]')?.getAttribute('d')).not.toBe(pathAtSecondTarget)
+  })
 })

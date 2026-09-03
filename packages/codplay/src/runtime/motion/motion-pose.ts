@@ -1,5 +1,6 @@
 import { invertMatrix, multiplyMatrix, resolvePath, type Point } from 'ace'
 import type { HtmlMatrix, HtmlPose } from './html-types'
+import type { MovePathAnchor } from '../config/move'
 import type { RelativeMotionPose } from './types'
 
 /** Converts one world pose into the local coordinates of its parent pose. */
@@ -7,8 +8,18 @@ export function deriveRelativeMotionPose(parent: HtmlPose, child: HtmlPose): Rel
   const inverse = invertMatrix(toAffine(parent))
   if (inverse === null) throw new Error('Motion graph cannot derive a pose from a singular parent.')
   const local = multiplyMatrix(inverse, toAffine(child))
+  const childLayoutOrigin = child.layoutOrigin ?? child.origin
+  const layoutOrigin = multiplyMatrix(inverse, {
+    a: 1,
+    b: 0,
+    c: 0,
+    d: 1,
+    e: childLayoutOrigin.x,
+    f: childLayoutOrigin.y,
+  })
   return {
     origin: [local.e, local.f],
+    layoutOrigin: [layoutOrigin.e, layoutOrigin.f],
     matrix: linear(local),
     width: child.localWidth,
     height: child.localHeight,
@@ -19,6 +30,7 @@ export function deriveRelativeMotionPose(parent: HtmlPose, child: HtmlPose): Rel
 export function decomposeRootMotionPose(pose: HtmlPose): RelativeMotionPose {
   return {
     origin: [pose.origin.x, pose.origin.y],
+    layoutOrigin: [pose.layoutOrigin?.x ?? pose.origin.x, pose.layoutOrigin?.y ?? pose.origin.y],
     matrix: linear(pose.matrix),
     width: pose.localWidth,
     height: pose.localHeight,
@@ -38,6 +50,7 @@ export function interpolateMotionPose(
   to: HtmlPose,
   progress: number,
   path?: Parameters<typeof resolvePath>[0],
+  pathAnchor: MovePathAnchor = 'aabb',
 ): HtmlPose {
   const matrix: HtmlMatrix = {
     a: lerp(from.matrix.a, to.matrix.a, progress),
@@ -49,12 +62,16 @@ export function interpolateMotionPose(
   }
   const width = lerp(from.localWidth, to.localWidth, progress)
   const height = lerp(from.localHeight, to.localHeight, progress)
+  const fromAnchor = pathAnchor === 'center' ? visualCenter(from) : [from.rect.left, from.rect.top] as Point
+  const toAnchor = pathAnchor === 'center' ? visualCenter(to) : [to.rect.left, to.rect.top] as Point
   const pathPoint = path === undefined
     ? undefined
-    : resolvePath(path, [from.rect.left, from.rect.top], [to.rect.left, to.rect.top], progress)
+    : resolvePath(path, fromAnchor, toAnchor, progress)
   const origin: Point = pathPoint === undefined
     ? [lerp(from.origin.x, to.origin.x, progress), lerp(from.origin.y, to.origin.y, progress)]
-    : originFromAabb(pathPoint, matrix, width, height)
+    : pathAnchor === 'center'
+      ? originFromVisualCenter(pathPoint, matrix, width, height)
+      : originFromAabb(pathPoint, matrix, width, height)
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, to.parentMatrix, width, height)
 }
 
@@ -64,6 +81,7 @@ export function extrapolateMotionPoseAtProgress(
   destination: HtmlPose,
   progress: number,
   path?: Parameters<typeof resolvePath>[0],
+  pathAnchor: MovePathAnchor = 'aabb',
 ): HtmlPose {
   const clamped = Math.min(1 - 1e-6, Math.max(1e-6, progress))
   const inverseRemaining = 1 / (1 - clamped)
@@ -77,15 +95,19 @@ export function extrapolateMotionPoseAtProgress(
   }
   const width = (current.localWidth - destination.localWidth * clamped) * inverseRemaining
   const height = (current.localHeight - destination.localHeight * clamped) * inverseRemaining
+  const currentAnchor = pathAnchor === 'center' ? visualCenter(current) : [current.rect.left, current.rect.top] as Point
+  const destinationAnchor = pathAnchor === 'center' ? visualCenter(destination) : [destination.rect.left, destination.rect.top] as Point
   const sourceAnchor = path === undefined
     ? [
         (current.origin.x - destination.origin.x * clamped) * inverseRemaining,
         (current.origin.y - destination.origin.y * clamped) * inverseRemaining,
       ] as Point
-    : solvePathSourceAnchor(path, current.rect.left, current.rect.top, destination.rect.left, destination.rect.top, clamped)
+    : solvePathSourceAnchor(path, currentAnchor[0], currentAnchor[1], destinationAnchor[0], destinationAnchor[1], clamped)
   const origin = path === undefined
     ? sourceAnchor
-    : originFromAabb(sourceAnchor, matrix, width, height)
+    : pathAnchor === 'center'
+      ? originFromVisualCenter(sourceAnchor, matrix, width, height)
+      : originFromAabb(sourceAnchor, matrix, width, height)
   return poseFromAffine({ ...matrix, e: origin[0], f: origin[1] }, current.parentMatrix, width, height)
 }
 
@@ -161,6 +183,22 @@ function poseFromAffine(affine: HtmlMatrix, parentMatrix: HtmlMatrix, width: num
 function originFromAabb(anchor: Point, matrix: HtmlMatrix, width: number, height: number): Point {
   const bounds = transformedBounds(matrix, width, height)
   return [anchor[0] - bounds.left, anchor[1] - bounds.top]
+}
+
+/** Reads the affine visual center without measuring or deriving an AABB. */
+function visualCenter(pose: HtmlPose): Point {
+  return [
+    pose.origin.x + pose.matrix.a * pose.localWidth / 2 + pose.matrix.c * pose.localHeight / 2,
+    pose.origin.y + pose.matrix.b * pose.localWidth / 2 + pose.matrix.d * pose.localHeight / 2,
+  ]
+}
+
+/** Converts an affine visual center back to the local-box origin. */
+function originFromVisualCenter(center: Point, matrix: HtmlMatrix, width: number, height: number): Point {
+  return [
+    center[0] - matrix.a * width / 2 - matrix.c * height / 2,
+    center[1] - matrix.b * width / 2 - matrix.d * height / 2,
+  ]
 }
 
 /** Solves the virtual source AABB required to preserve a curved path phase. */

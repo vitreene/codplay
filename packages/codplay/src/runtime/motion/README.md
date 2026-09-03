@@ -160,6 +160,28 @@ Une transition de pose HTML portée par une action reste dans le graphe pour la
 composition des descendants, mais son service possède la pose du nœud auteur.
 Le host HTML ne lui applique donc pas une seconde matrice locale.
 
+La capture conserve aussi, séparément de `origin`, l'origine de la boîte de
+mise en page non transformée (`layoutOrigin`) dans chaque attachement local.
+Quand la feuille de projection remplace le `transform` auteur, le host retire
+uniquement cette origine de layout avant d'écrire la matrice temporaire. Il ne
+retire pas l'origine affine qui contient déjà le `translate`/`rotate` auteur ;
+sinon un item local serait visuellement décalé alors que sa pose affine et son
+centre de trajectoire sont corrects. Toute `RelativeMotionPose` de snapshot V2
+porte cette donnée ; seule une `HtmlPose` synthétique qui ne la fournit pas est
+normalisée par `deriveRelativeMotionPose` en prenant provisoirement `origin`.
+
+### Ancrage d'un path
+
+Une transition `move` peut déclarer `pathAnchor`. La valeur `center` est le
+contrat V2 utilisé par l'éditeur ed2 : le path est résolu entre les centres
+visuels affines des poses (`origin + matrix × dimensions locales / 2`) et chaque
+point résolu reconstruit l'origine de l'item avec sa matrice et ses dimensions
+courantes. Ainsi, rotation et redimensionnement ne décalent pas l'item par
+rapport au path affiché. `aabb` ou l'absence du champ conserve l'ancrage AABB
+des transitions V2 qui ne déclarent pas l'extension. Cette donnée est immuable
+dans le segment ; aucun bounding box ni pixel de viewport n'est écrit dans le
+décor.
+
 Un perso détaché conserve ses relations logiques `parentByPerso` et
 `targetByPerso`, sans entrer dans l'ordre des cibles ni dans la présentation DOM.
 Si un mover direct est absent au FIRST à cause d'un ancêtre détaché et que cet

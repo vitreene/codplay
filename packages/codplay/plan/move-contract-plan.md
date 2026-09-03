@@ -4,8 +4,22 @@
 
 Status: Fixe
 CodPlay version: V2 foundation
-Review: validé le 2026-08-20 pour les moves compilés; la frontière de présentation
-des moves issus d'une capture HTML est complétée dans le plan d'intégration list
+Review: validé le 2026-08-20 pour les moves compilés; extension V2 `pathAnchor`
+validée le 2026-09-02 pour l'éditeur ed2, sans réintroduire de circuit V1
+
+La porte d'implémentation de cette extension est limitée à la propagation de la
+donnée dans le schedule, le graphe et la capture HTML, puis à la reconstruction
+de l'origine affine depuis le centre. L'acceptation repose sur
+`tests/runtime/motion/motion-pose.spec.ts`, la non-régression du graphe et le
+test builder/runtime de l'éditeur ; aucun changement du sequence-editor ou du
+parentage n'est requis.
+
+La présentation HTML distingue l'origine affine capturée de l'origine de la
+boîte avant transform (`layoutOrigin`). La feuille de projection remplaçant le
+`transform` auteur, le host soustrait cette seconde valeur dans le repère du
+parent ; cela conserve le centre affine sur le path sans réappliquer le
+`translate` auteur. Cette donnée reste une couture de capture et ne fait pas
+partie du document ou du path sérialisé.
 
 ## Rôle
 
@@ -29,6 +43,8 @@ type MoveTransition = {
   ease?: TransitionEase
   path?: string
   traversal?: 'parameter' | 'arc-length'
+  /** Point mapped by the prepared path during HTML presentation. */
+  pathAnchor?: 'aabb' | 'center'
 }
 ```
 
@@ -87,7 +103,18 @@ Les propriétés de `transition` sont facultatives. Les conventions auteur sont 
 - `duration`, en millisecondes ;
 - `ease`, identifiant ou descripteur d'easing ;
 - `path`, chaîne SVG `d` ;
-- `traversal`, avec `arc-length` par défaut et `parameter` en alternative.
+- `traversal`, avec `arc-length` par défaut et `parameter` en alternative ;
+- `pathAnchor`, qui vaut `center` pour une trajectoire calée sur le centre
+  visuel affine et `aabb` (ou l'absence du champ) pour les transitions V2 qui
+  ne déclarent pas cette extension.
+
+`pathAnchor` ne change ni le parentage ni la structure du `move`. Lorsque sa
+valeur est `center`, le runner calcule les deux extrémités depuis
+`origin + matrix × (localWidth / 2, localHeight / 2)`, résout le path entre ces
+centres, puis reconstruit l'origine affine de la pose à chaque frame. Aucune
+mesure de bounding box ni coordonnée de viewport n'est persistée. Le mode
+`aabb` conserve le comportement AABB des paths compilés qui ne déclarent pas
+l'extension.
 
 Le path accepte `M`, `L` et `A`. Le compilateur normalise son départ en `[0, 0]`,
 son arrivée en `[1, 0]`, quantifie les coordonnées au centième et prépare les
@@ -172,4 +199,8 @@ sépare la remise visuelle au relâchement de la trajectoire historique.
   ancrée et le runner HTML capture le LAST géométrique à l'endpoint du move ;
 - Play et Seek évaluent le même graphe absolu au même temps ;
 - une target invalide produit un diagnostic sans placement implicite ;
-- la policy de placement ne connaît ni le DOM ni la materialisation.
+- la policy de placement ne connaît ni le DOM ni la materialisation ;
+- `pathAnchor: 'center'` est accepté uniquement avec un `path` préparé et
+  garantit que le centre affine de la pose présentée suit les extrémités et la
+  courbure de ce path ; une valeur inconnue est rejetée comme transition
+  invalide.
