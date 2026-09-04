@@ -29,3 +29,18 @@ export function cssOklchComponentsToHex(l: number, c: number, h: number): string
   const ColorCtor = Color as unknown as (input: Record<string, number>, model: string) => { hex(): string }
   return ColorCtor({ okl: l * 100, okc: c * 100, okh: h }, 'oklch').hex()
 }
+
+/** Converts a displayed CSS color to the native color input format when the format is supported. */
+export function cssColorToHex(value: string): string | null {
+  const oklch = value.match(/oklch\(\s*([\d.+-]+)\s+([\d.+-]+)\s+([\d.+-]+)(?:\s*\/\s*[\d.+-]+)?\s*\)/i)
+  if (oklch) {
+    const [, lightness, chroma, hue] = oklch
+    const result = cssOklchComponentsToHex(Number(lightness), Number(chroma), Number(hue))
+    return result
+  }
+  try {
+    return new Color(value).hex()
+  } catch {
+    return null
+  }
+}

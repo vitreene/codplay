@@ -100,7 +100,7 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
     expect(coordination.decorPreview.getForKeyframe('item-1', created!.timeMs)).toBeNull()
   })
 
-  it('capture le snapshot interpolé dans le décor frais lorsqu’aucune preview utilisateur n’existe', () => {
+  it('ne capture pas le snapshot interpolé lorsqu’aucune preview utilisateur n’existe', () => {
     actor = createActor(controllerMachine)
     actor.start()
     actor.send({ type: 'SCENE_LOADED', scene: scene() })
@@ -145,15 +145,12 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
     const created = committed?.items[0]?.keyframes.find((keyframe) => keyframe.id !== 'kf-a' && keyframe.id !== 'kf-b')
     expect(created).toBeDefined()
     expect(created?.timeMs).toBe(500)
-    expect(created?.decorId).toMatch(/^decor-/)
-    expect(committed?.decors[created!.decorId]).toMatchObject({
-      style: { color: 'purple', opacity: '0.5' },
-      offset: { translate: { x: 30, y: 30 }, width: 20, height: 20 },
-    })
-    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: created?.id })
+    expect(created?.decorId).toBe('decor-a')
+    expect(committed?.decors[created!.decorId]).toEqual(scene().decors['decor-a'])
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: [] })
   })
 
-  it('attend le seek appliqué avant de capturer un snapshot qui n’est pas encore au temps du kf', () => {
+  it('n’attend pas un snapshot quand aucune propriété utilisateur ne doit être capturée', () => {
     actor = createActor(controllerMachine)
     actor.start()
     actor.send({ type: 'SCENE_LOADED', scene: scene() })
@@ -192,7 +189,7 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
       value: () => ({ left: 0, top: 0, right: 1000, bottom: 28, width: 1000, height: 28 }),
     })
     row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 45, clientY: 14, detail: 2 }))
-    expect(actor.getSnapshot().context.scene?.items[0]?.keyframes).toHaveLength(2)
+    expect(actor.getSnapshot().context.scene?.items[0]?.keyframes).toHaveLength(3)
 
     progress.mockReturnValue({ timelineMs: 500, durationMs: 1000, playerTimeMs: 500 })
     getSnapshot.mockReturnValue(targetSnapshot)
@@ -201,7 +198,8 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
     const committed = actor.getSnapshot().context.scene
     const created = committed?.items[0]?.keyframes.find((keyframe) => keyframe.id !== 'kf-a' && keyframe.id !== 'kf-b')
     expect(created).toBeDefined()
-    expect(committed?.decors[created!.decorId]).toMatchObject({ style: { color: 'purple' } })
+    expect(created?.decorId).toBe('decor-a')
+    expect(committed?.decors[created!.decorId]).toEqual(scene().decors['decor-a'])
   })
 
   it('répercute une navigation d’overlay dans le playhead auteur du sequence-editor', () => {

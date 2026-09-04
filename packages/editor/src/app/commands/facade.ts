@@ -50,6 +50,8 @@ export function runCommandWithResult(scene: EditorScene, command: Command): { sc
     // d'écriture, deuxième bibliothèque de fonctions pures (§3bis du plan îlots) ──────────────
     case 'createNamedKeyframe':
       return { scene: sequenceEditor.createNamedKeyframe(scene, command.args) }
+    case 'setKeyframeChannel':
+      return { scene: sequenceEditor.setKeyframeChannel(scene, command.args) }
     case 'deleteKeyframe':
       return { scene: sequenceEditor.deleteKeyframe(scene, command.args) }
     case 'moveKeyframe':

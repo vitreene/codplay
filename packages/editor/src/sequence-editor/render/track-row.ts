@@ -1,5 +1,6 @@
 import type { MachineContext, VirtualKeyframe } from '../machine'
 import type { Item } from '../types'
+import { resolveKeyframeChannel } from '../types'
 import { childrenOf, getTrackRowHeight, getParentClipMarkers } from '../utils'
 import { createKeyframeHandle } from './keyframe-handle'
 import { timeToPixel, pixelToTime } from './geometry'
@@ -30,6 +31,40 @@ function getEffectiveMs(kfId: string, kfTimeMs: number, ctx: MachineContext): nu
   return kfTimeMs
 }
 
+/** Returns all keyframes in temporal order for the decoration event lane. */
+function sortTimelineKeyframes(item: Item): Item['keyframes'] {
+  return [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+}
+
+/** Returns only spatial keyframes; decoration-only points never form a movement segment. */
+function sortPoseKeyframes(item: Item): Item['keyframes'] {
+  return sortTimelineKeyframes(item).filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+}
+
+/** Reports whether a pose keyframe carries an authored decoration payload of its own. */
+function carriesDecoration(scene: MachineContext['scene'], keyframe: Item['keyframes'][number]): boolean {
+  const decor = scene.decors[keyframe.decorId]
+  if (decor === undefined) return false
+  if ((decor.style !== undefined && Object.keys(decor.style).length > 0)
+    || decor.classes !== undefined
+    || decor.custom !== undefined
+    || decor.zoneId !== undefined) return true
+  return Object.keys(decor).some((property) => !['id', 'offset', 'path'].includes(property))
+}
+
+/** Returns the decoration event chain without duplicating pose-only movement points. */
+function sortDecorationKeyframes(ctx: MachineContext, item: Item): Item['keyframes'] {
+  return sortTimelineKeyframes(item).filter((keyframe) => (
+    resolveKeyframeChannel(keyframe) === 'decor' || carriesDecoration(ctx.scene, keyframe)
+  ))
+}
+
+/** Places a channel in its lane only when the item actually needs two visible channels. */
+function channelCenter(rowHeight: number, channel: 'pose' | 'decor', dualChannel: boolean): number {
+  if (!dualChannel) return rowHeight / 2
+  return channel === 'decor' ? rowHeight / 4 : (rowHeight * 3) / 4
+}
+
 export function createTrackRowArea(): HTMLElement {
   const el = document.createElement('div')
   el.classList.add('seq-rows')
@@ -57,6 +92,12 @@ export function renderTrackRows(
   for (const item of flattenFiltered(scene.items, collapsed)) {
     const rowHeight = getTrackRowHeight(item, layoutProfile)
     const rowEl = buildTrackRow(item, rowHeight)
+    const poseKeyframes = sortPoseKeyframes(item)
+    const decorationKeyframes = sortDecorationKeyframes(ctx, item)
+    const hasPoseChannel = poseKeyframes.length > 0
+    const hasDecorChannel = item.keyframes.some((keyframe) => resolveKeyframeChannel(keyframe) === 'decor')
+    const dualChannel = hasPoseChannel && hasDecorChannel
+    if (dualChannel) rowEl.dataset.dualChannel = 'true'
 
     const svg = document.createElementNS(SVG_NS, 'svg')
     svg.classList.add('seq-row__svg')
@@ -73,7 +114,7 @@ export function renderTrackRows(
         clipMinMs = Math.min(clipDraw.startMs, clipDraw.currentMs)
         clipMaxMs = Math.max(clipDraw.startMs, clipDraw.currentMs)
       } else {
-        const capsuleKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+        const capsuleKeyframes = poseKeyframes
         const introKf = capsuleKeyframes[0]
         const outroKf = capsuleKeyframes.at(-1)
         if (introKf && outroKf) {
@@ -94,20 +135,28 @@ export function renderTrackRows(
       }
     }
 
-    // Segment bars between adjacent keyframes (positions follow active drag)
-    for (let i = 0; i < item.keyframes.length; i++) {
-      const kf = item.keyframes[i]!
-      const next = item.keyframes[i + 1]
-      if (!next) break
-      const x1 = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
-      const x2 = toPx(getEffectiveMs(next.id, next.timeMs, ctx))
-      const rect = document.createElementNS(SVG_NS, 'rect')
-      rect.setAttribute('x', String(Math.min(x1, x2)))
-      rect.setAttribute('y', String(rowHeight / 2 - 2))
-      rect.setAttribute('width', String(Math.max(0, Math.abs(x2 - x1))))
-      rect.setAttribute('height', '4')
-      rect.classList.add('seq-row__segment')
-      svg.appendChild(rect)
+    // Segment bars follow their own channel. In particular, a decor point never inserts a pose
+    // segment, so A→B remains one spatial segment until a pose KF is actually created.
+    const visualSegments = dualChannel
+      ? ([['decor', decorationKeyframes], ['pose', poseKeyframes]] as const)
+      : hasPoseChannel
+        ? ([['pose', poseKeyframes]] as const)
+        : ([['decor', decorationKeyframes]] as const)
+    for (const [channel, keyframes] of visualSegments) {
+      const center = channelCenter(rowHeight, channel, dualChannel)
+      for (let i = 0; i < keyframes.length - 1; i += 1) {
+        const kf = keyframes[i]!
+        const next = keyframes[i + 1]!
+        const x1 = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
+        const x2 = toPx(getEffectiveMs(next.id, next.timeMs, ctx))
+        const rect = document.createElementNS(SVG_NS, 'rect')
+        rect.setAttribute('x', String(Math.min(x1, x2)))
+        rect.setAttribute('y', String(center - 2))
+        rect.setAttribute('width', String(Math.max(0, Math.abs(x2 - x1))))
+        rect.setAttribute('height', '4')
+        rect.classList.add('seq-row__segment', `seq-row__segment--${channel}`)
+        svg.appendChild(rect)
+      }
     }
 
     // Transition duration bands (named = amber, interpolated = blue). Un kf FIXE le décor à son
@@ -116,11 +165,12 @@ export function renderTrackRows(
     // fait donc que d'un seul côté (règle d'exclusivité, `2026-06-11-sequence-editor-grid-spec.md`).
     for (const kf of item.keyframes) {
       const kfX = toPx(getEffectiveMs(kf.id, kf.timeMs, ctx))
+      const center = channelCenter(rowHeight, resolveKeyframeChannel(kf), dualChannel)
       if (kf.transitionIn) {
         const bandW = kf.transitionIn.durationMs * pixelsPerMs
         const band = document.createElementNS(SVG_NS, 'rect')
         band.setAttribute('x', String(kfX - Math.max(1, bandW)))
-        band.setAttribute('y', String(rowHeight / 2 - 5))
+        band.setAttribute('y', String(center - 5))
         band.setAttribute('width', String(Math.max(1, bandW)))
         band.setAttribute('height', '10')
         band.classList.add(
@@ -133,7 +183,7 @@ export function renderTrackRows(
         const bandW = kf.transitionOut.durationMs * pixelsPerMs
         const band = document.createElementNS(SVG_NS, 'rect')
         band.setAttribute('x', String(kfX))
-        band.setAttribute('y', String(rowHeight / 2 - 5))
+        band.setAttribute('y', String(center - 5))
         band.setAttribute('width', String(Math.max(1, bandW)))
         band.setAttribute('height', '10')
         band.classList.add(
@@ -144,6 +194,16 @@ export function renderTrackRows(
       }
     }
 
+    if (dualChannel) {
+      const divider = document.createElementNS(SVG_NS, 'line')
+      divider.setAttribute('x1', '0')
+      divider.setAttribute('x2', '100%')
+      divider.setAttribute('y1', String(rowHeight / 2))
+      divider.setAttribute('y2', String(rowHeight / 2))
+      divider.classList.add('seq-row__channel-divider')
+      svg.appendChild(divider)
+    }
+
     // Parent clip boundary markers + out-of-bounds detection
     const parentMarkers = getParentClipMarkers(item.id, scene.items)
 
@@ -151,7 +211,13 @@ export function renderTrackRows(
     for (const kf of item.keyframes) {
       const effectiveMs = getEffectiveMs(kf.id, kf.timeMs, ctx)
       const x = toPx(effectiveMs)
-      const handle = createKeyframeHandle(kf, x, rowHeight, layoutProfile)
+      const handle = createKeyframeHandle(
+        kf,
+        x,
+        rowHeight,
+        layoutProfile,
+        channelCenter(rowHeight, resolveKeyframeChannel(kf), dualChannel),
+      )
       const isDragging = drag?.keyframeId === kf.id && drag.trackId === item.id
 
       if (selection.keyframeId === kf.id && selection.trackId === item.id) {
@@ -186,8 +252,8 @@ export function renderTrackRows(
     const vkfsForTrack = ctx.virtualKeyframes.filter((v: VirtualKeyframe) => v.trackId === item.id)
     for (const vkf of vkfsForTrack) {
       const x = toPx(vkf.timeMs)
-      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: '' }
-      const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile)
+      const fakeKf = { id: vkf.id, timeMs: vkf.timeMs, name: vkf.name, decorId: '', channel: 'pose' as const }
+      const handle = createKeyframeHandle(fakeKf, x, rowHeight, layoutProfile, channelCenter(rowHeight, 'pose', dualChannel))
       handle.classList.add('seq-kf--virtual')
       if (!vkf.visible) handle.classList.add('seq-kf--out-of-bounds')
       if (onMaterializeVirtual) {

@@ -55,6 +55,20 @@ describe('createNamedKeyframe', () => {
     expect(s.items[0]!.keyframes.map((k) => k.id)).toEqual(['kf-1', 'kf-0'])
     expect(s.items[0]!.keyframes[0]!.name).toBe('intro')
   })
+
+  it('écrit le canal demandé et permet de promouvoir le KF sans toucher à son décor', () => {
+    const s0 = scene([item('t1')])
+    const withDecorKeyframe = commands.createNamedKeyframe(s0, {
+      itemId: 't1', keyframeId: 'kf-decor', timeMs: 1000, channel: 'decor',
+    })
+    expect(withDecorKeyframe.items[0]!.keyframes[0]!.channel).toBe('decor')
+
+    const promoted = commands.setKeyframeChannel(withDecorKeyframe, {
+      itemId: 't1', keyframeId: 'kf-decor', channel: 'pose',
+    })
+    expect(promoted.items[0]!.keyframes[0]).toMatchObject({ id: 'kf-decor', channel: 'pose' })
+    expect(promoted.items[0]!.keyframes[0]!.decorId).toBe(withDecorKeyframe.items[0]!.keyframes[0]!.decorId)
+  })
 })
 
 describe('deleteKeyframe', () => {

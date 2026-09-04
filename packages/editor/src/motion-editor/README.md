@@ -40,12 +40,12 @@ indépendante) ne doit jamais réintroduire un deuxième lecteur de trajectoire.
 
 L'overlay affiche le point médian du seul segment actif après la même préparation
 ACE que le builder (`arc-length`, précision 2). Quand l'item possède plusieurs
-keyframes, tous les segments adjacents sont néanmoins projetés simultanément :
+keyframes `pose`, tous les segments adjacents sont néanmoins projetés simultanément :
 le segment actif reste opaque et porte l'unique poignée médiane ; les autres
 trajets sont des paths SVG secondaires nettement plus discrets, avec une
 transparence forte et une couleur ambrée pâlie/désaturée, sans poignée ni
-capture de pointeur. Chaque KF réel de l'item reçoit également un ghost
-géométrique hors scène. Le ghost qui coïncide avec la pose présentée est masqué ;
+capture de pointeur. Chaque KF réel `pose` de l'item reçoit également un ghost
+géométrique hors scène ; un KF `decor` n'en reçoit aucun. Le ghost qui coïncide avec la pose présentée est masqué ;
 les autres restent visibles et cliquables. Leur bordure garde la même famille de
 couleur, devient progressivement plus claire et moins saturée, et leur opacité
 diminue selon la distance temporelle au KF courant dans la chaîne. Cette vue
@@ -58,6 +58,17 @@ Côté HTML, la projection remplace entièrement le
 `transform` auteur et s'ancre sur l'origine de layout non transformée capturée
 par CodPlay ; l'item ne reprend donc pas le `translate` auteur en double et son
 centre visuel reste sur la courbe affichée.
+
+Le rectangle exposé au CS et aux artefacts de trajectoire est le `content-box` :
+sa largeur et sa hauteur restent exactement celles de `pose.localWidth` /
+`pose.localHeight`, donc celles de `offset.width` / `offset.height` en cqw. Le
+bridge décale uniquement son origine par les insets `border-left` et
+`border-top`, projetés par la matrice affine courante ; la bordure n'est jamais
+ajoutée aux dimensions ni au tracé. Avant d'écrire un geste, cette projection
+est inversée afin que l'`offset` conserve l'origine extérieure documentée.
+Les formes CSS `border`, `border-width`, `border-style` et leurs variantes
+physiques sont résolues dans l'adaptateur éditeur, sans lecture du DOM et sans
+fermer la carte ouverte des propriétés de `Decor`.
 
 Après la création d'un segment, l'overlay projette les poses de tous les KFs de
 l'item comme ghosts géométriques hors scène. Le ghost dont la pose coïncide avec
@@ -97,7 +108,10 @@ et le path porté par le KF cible reste attaché au second segment, comme dans l
 projection obtenue après le commit.
 La surface de déplacement suit toujours la pose interpolée visible ; elle reste
 prioritaire sur le point médian si celui-ci tombe sur l'item, afin que le drag
-appelle bien la création du KF intermédiaire.
+appelle bien la création du KF intermédiaire. Lorsqu'un KF `pose` est créé au milieu
+d'un segment, la capture fige la pose affine complète exposée par le runtime — notamment
+translation, largeur et hauteur — afin que le waypoint reste stable. Les propriétés de
+décor qui accompagnent ce KF restent limitées aux valeurs effectivement modifiées.
 Dans la hiérarchie d'affichage, cette surface reste sous le CS : le corps du
 Selection Frame est pointer-transparent pour laisser passer le déplacement,
 mais ses poignées de rotation, de pivot et de redimensionnement restent

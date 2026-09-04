@@ -18,6 +18,22 @@ function resolveClassNamePatch(current: string, patch: ClassNameValue): string {
   return [...tokens].join(' ')
 }
 
+/** Merges nested record values while keeping every untouched sibling property. */
+function mergeRecordValues(base: unknown, addition: unknown): unknown {
+  if (!addition || typeof addition !== 'object' || Array.isArray(addition)) return addition
+  const baseRecord = base && typeof base === 'object' && !Array.isArray(base)
+    ? base as Record<string, unknown>
+    : {}
+  const additionRecord = addition as Record<string, unknown>
+  const result: Record<string, unknown> = { ...baseRecord }
+  for (const [key, value] of Object.entries(additionRecord)) {
+    result[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? mergeRecordValues(baseRecord[key], value)
+      : value
+  }
+  return result
+}
+
 /**
  * Fusion profonde par propriété feuille. Une clé absente dans `addition` laisse `base`
  * intacte ; une clé présente (y compris `null`) écrase la valeur de `base` — jamais de
@@ -48,13 +64,22 @@ export function mergePatch(base: DecorPatch, addition: DecorPatch): DecorPatch {
     if (group in addition) {
       const baseGroup = base[group] as Record<string, unknown> | undefined
       const additionGroup = addition[group] as Record<string, unknown> | undefined
-      result[group] = { ...baseGroup, ...additionGroup } as never
+      result[group] = mergeRecordValues(baseGroup, additionGroup) as never
     }
   }
 
   if ('zone' in addition) result.zone = addition.zone
   if ('text' in addition) result.text = addition.text
   if ('custom' in addition) result.custom = addition.custom
+
+  // The Decor contract is intentionally open. Known properties above keep their documented
+  // semantics; every future root property is retained without adding a whitelist here.
+  const knownProperties = new Set(['style', 'classes', ...STRUCTURED_GROUPS, 'zone', 'text', 'custom', 'path'])
+  const resultRecord = result as Record<string, unknown>
+  for (const [property, value] of Object.entries(addition)) {
+    if (knownProperties.has(property)) continue
+    resultRecord[property] = mergeRecordValues(resultRecord[property], value)
+  }
 
   return result
 }

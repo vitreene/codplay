@@ -605,7 +605,9 @@ describe('V2 editor position seek integration', () => {
       })
       // This is the actual sequence-editor double-click path: it first seeks to the insertion
       // time, then captures the presented frame and commits the new keyframe.
-      row!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 200, clientY: 14, detail: 2 }))
+      // The inserted KF reuses the adjacent decor when no property was edited. Advance past the
+      // insertion time before asserting that Play changes the pose.
+      row!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 20, clientY: 14, detail: 2 }))
       await waitTurns(24)
       expect(actor.getSnapshot().context.scene?.items[0]?.keyframes).toHaveLength(3)
       await waitTurns(24)
@@ -617,6 +619,8 @@ describe('V2 editor position seek integration', () => {
       expect(coordination.transport.getState()?.status).toBe('playing')
       const initialTransform = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform
 
+      // The insertion is intentionally before the destination, so advancing beyond its author
+      // time also verifies that Play continues through the newly created segment.
       now = 100
       ;[...frames.values()][0]?.()
       await waitTurns(24)
@@ -624,6 +628,9 @@ describe('V2 editor position seek integration', () => {
       ;[...frames.values()][0]?.()
       await waitTurns(24)
       expect(coordination.transport.getProgress()?.timelineMs).toBeGreaterThan(0)
+      now = 3_000
+      ;[...frames.values()][0]?.()
+      await waitTurns(24)
       expect(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')?.style.transform).not.toBe(initialTransform)
     } finally {
       Date.now = originalNow
@@ -713,7 +720,9 @@ describe('V2 editor position seek integration', () => {
         configurable: true,
         value: () => ({ left: 0, top: 0, right: 800, bottom: 28, width: 800, height: 28 }),
       })
-      row!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 200, clientY: 14, detail: 2 }))
+      // The inserted KF reuses the adjacent decor when no property was edited. Advance past the
+      // insertion time before asserting that Play changes the pose.
+      row!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 20, clientY: 14, detail: 2 }))
       await waitTurns(24)
       expect(actor.getSnapshot().context.scene?.items[0]?.keyframes).toHaveLength(3)
 
@@ -777,8 +786,10 @@ describe('V2 editor position seek integration', () => {
 
     const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame]')
     expect(selectionFrame?.style.display).not.toBe('none')
-    expect(selectionFrame?.style.left).toBe('160px')
-    expect(selectionFrame?.style.top).toBe('144px')
+    // The preset border is outside the authored content-box. The CS keeps the authored width and
+    // height, but its origin starts after the 0.6cqw left/top border (4.8px at this root width).
+    expect(selectionFrame?.style.left).toBe('164.8px')
+    expect(selectionFrame?.style.top).toBe('148.8px')
     expect(selectionFrame?.style.width).toBe('480px')
     expect(selectionFrame?.style.height).toBe('144px')
   })
@@ -832,6 +843,8 @@ describe('V2 editor position seek integration', () => {
       expect(actor.getSnapshot().value).toBe('playing')
       expect(coordination.transport.getState()?.status).toBe('playing')
       const initialTransform = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')?.style.transform
+      // The insertion is intentionally before the destination, so advancing beyond its author
+      // time also verifies that Play continues through the newly created segment.
       now = 100
       ;[...frames.values()][0]?.()
       await waitTurns(32)
@@ -839,6 +852,9 @@ describe('V2 editor position seek integration', () => {
       ;[...frames.values()][0]?.()
       await waitTurns(32)
       expect(coordination.transport.getProgress()?.timelineMs).toBeGreaterThan(0)
+      now = 3_000
+      ;[...frames.values()][0]?.()
+      await waitTurns(32)
       expect(sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item-a"]')?.style.transform).not.toBe(initialTransform)
     } finally {
       Date.now = originalNow

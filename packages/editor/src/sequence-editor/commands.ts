@@ -26,7 +26,7 @@
  * Un seul point de création ici, jamais deux voies.
  */
 
-import type { EditorScene, Item, Keyframe, MarkerTrack, Marker, Transition, Waveform } from './types'
+import type { EditorScene, Item, Keyframe, KeyframeChannel, MarkerTrack, Marker, Transition, Waveform } from './types'
 
 function requireItem(scene: EditorScene, itemId: string): Item {
   const item = scene.items.find((i) => i.id === itemId)
@@ -91,7 +91,7 @@ function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string
  */
 export function createNamedKeyframe(
   scene: EditorScene,
-  args: { itemId: string; keyframeId: string; timeMs: number; decorId?: string; name?: string },
+  args: { itemId: string; keyframeId: string; timeMs: number; decorId?: string; channel?: KeyframeChannel; name?: string },
 ): EditorScene {
   let nextScene = scene
   let decorId = args.decorId
@@ -99,10 +99,29 @@ export function createNamedKeyframe(
     decorId = decorId ?? `decor-${args.keyframeId}`
     nextScene = { ...nextScene, decors: { ...nextScene.decors, [decorId]: { id: decorId } } }
   }
-  const kf: Keyframe = { id: args.keyframeId, timeMs: args.timeMs, decorId, name: args.name }
+  const kf: Keyframe = {
+    id: args.keyframeId,
+    timeMs: args.timeMs,
+    decorId,
+    channel: args.channel ?? 'pose',
+    name: args.name,
+  }
   return updateItemInScene(nextScene, args.itemId, (item) => ({
     ...item,
     keyframes: [...item.keyframes, kf].sort((a, b) => a.timeMs - b.timeMs),
+  }))
+}
+
+/** Changes a keyframe's temporal channel without changing its authored decor payload. */
+export function setKeyframeChannel(
+  scene: EditorScene,
+  args: { itemId: string; keyframeId: string; channel: KeyframeChannel },
+): EditorScene {
+  return updateItemInScene(scene, args.itemId, (item) => ({
+    ...item,
+    keyframes: item.keyframes.map((keyframe) => (
+      keyframe.id === args.keyframeId ? { ...keyframe, channel: args.channel } : keyframe
+    )),
   }))
 }
 
@@ -279,6 +298,7 @@ export function setSceneDuration(scene: EditorScene, args: { durationMs: number;
 
 export type SequenceEditorCommand =
   | { name: 'createNamedKeyframe'; args: Parameters<typeof createNamedKeyframe>[1] }
+  | { name: 'setKeyframeChannel'; args: Parameters<typeof setKeyframeChannel>[1] }
   | { name: 'deleteKeyframe'; args: Parameters<typeof deleteKeyframe>[1] }
   | { name: 'moveKeyframe'; args: Parameters<typeof moveKeyframe>[1] }
   | { name: 'renameKeyframe'; args: Parameters<typeof renameKeyframe>[1] }

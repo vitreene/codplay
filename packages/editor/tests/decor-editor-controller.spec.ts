@@ -99,6 +99,17 @@ describe('DecorEditorController V2', () => {
     controller.destroy()
   })
 
+  it('expose les propriétés modifiées pour le rendu de la palette', () => {
+    const controller = new DecorEditorController(catalogs())
+    controller.attachItems([attachInput({ modifiedProperties: ['style.background-color', 'future.value'] })])
+    expect(controller.isPropertyModified('style.background-color')).toBe(true)
+    expect(controller.isPropertyModified('future.value')).toBe(true)
+    controller.setModifiedProperties('item-1', ['offset.translate.x'])
+    expect(controller.getModifiedProperties()).toEqual(['offset.translate.x'])
+    expect(controller.isPropertyModified('style.background-color')).toBe(false)
+    controller.destroy()
+  })
+
   it('émet l’événement de fin d’interaction sans posséder de bridge player', () => {
     const controller = new DecorEditorController(catalogs())
     const onEnd = vi.fn()

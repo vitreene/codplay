@@ -17,7 +17,11 @@ effectivement livré.
 - **Axe X** : temps absolu en millisecondes, avec règle, zoom, panoramique
 - **Axe Y** : liste ordonnée d'éléments (tracks), organisés en arbre (capsules imbriquées)
 
-Chaque élément dispose d'une ligne temporelle sur laquelle l'auteur place des **keyframes**. Un keyframe fixe l'état visuel (décor) de l'élément à un instant donné. L'interpolation entre deux keyframes produit une transition animée.
+Chaque élément dispose d'une ligne temporelle sur laquelle l'auteur place des
+**keyframes**. Cette ligne peut exposer deux canaux temporels — `pose` et
+`decor` — sans descendre au niveau d'une piste par propriété. Un keyframe fixe
+le ou les états qu'il porte à un instant donné ; l'interpolation entre deux
+keyframes adjacents d'un même canal produit la transition correspondante.
 
 ### 1.2 Périmètre de ce document
 
@@ -355,12 +359,18 @@ interface TrackNode {
 
 #### `Keyframe`
 
-Un instant nommable, lié à une référence de décor et portant des transitions optionnelles.
+Un instant nommable, lié à une référence de décor, portant un canal temporel
+explicite et des transitions optionnelles.
+
+```typescript
+type KeyframeChannel = 'pose' | 'decor'
+```
 
 ```typescript
 interface Keyframe {
   id: string
   timeMs: number
+  channel: KeyframeChannel
   name?: string              // lie ce kf à un repère nommé global
   decorId: string | null     // référence vers EditorScene.decors — opaque pour la grille
   markerId?: string          // accrochage à un AuthorMarker — optionnel
@@ -369,9 +379,50 @@ interface Keyframe {
 }
 ```
 
-**Par nature, le premier kf ne porte qu'une transition AVANT lui (`transitionIn`), le dernier qu'une transition APRÈS lui (`transitionOut`)** — jamais l'inverse, jamais les deux sur une même frontière. Les noms réservés `intro`/`outro`, lorsqu'ils sont présents, restent des labels utiles aux outils ; ils ne conditionnent pas la détection de la frontière. Un keyframe intermédiaire peut porter les deux : une transition entrante depuis son voisin précédent, une transition sortante vers son voisin suivant.
+**Par nature, le premier KF `pose` ne porte qu'une transition AVANT lui (`transitionIn`), le dernier qu'une transition APRÈS lui (`transitionOut`)** — jamais l'inverse, jamais les deux sur une même frontière. Les noms réservés `intro`/`outro`, lorsqu'ils sont présents, restent des labels utiles aux outils ; ils ne conditionnent pas la détection de la frontière. Un keyframe intermédiaire peut porter les deux : une transition entrante depuis son voisin précédent, une transition sortante vers son voisin suivant. Les transitions d'état de décor suivent séparément les événements du canal `decor`.
 
-`decorId` est la seule information de décor que la grille connaît. Elle ne lit pas `EditorScene.decors[decorId]`. Quand un keyframe est créé, la grille copie le `decorId` du keyframe adjacent le plus proche (voir §2.5).
+`decorId` est la seule information de décor que la grille connaît. Elle ne lit
+pas `EditorScene.decors[decorId]`. Le `channel` est l'information de temporalité
+que la grille connaît : la grille ne déduit jamais le canal en inspectant les
+propriétés du décor. Les documents historiques sans `channel` sont migrés en
+`pose`; les nouvelles créations le renseignent explicitement.
+
+### 2.2.1 Deux canaux dans une seule ligne d'item
+
+Le canal `pose` porte les KFs qui ordonnent la trajectoire spatiale et les
+bornes de visibilité. Le canal `decor` porte les KFs qui ne changent que l'état
+de décor et ne contribue pas à la pose tant qu'il reste sur ce canal. La liste
+des propriétés qui composent la pose reste ouverte et ne doit pas être figée
+par cette spécification : elle pourra évoluer, par exemple avec `rotation` qui
+sortirait de la pose ou `left` qui y entrerait. Un KF `pose` peut porter une
+pose complète et, en plus, des propriétés de décor sparse. La grille reste
+décor-agnostique : cette contrainte est vérifiée par le bridge et le builder,
+pas par le rendu de la grille.
+
+Un KF `pose` qui contient aussi du décor participe aux deux chaînes de
+résolution, mais n'est rendu qu'une fois, dans la zone `pose`. Tant qu'un KF
+reste `decor`, il ne devient jamais une source ou une cible de mouvement ; un
+geste de mouvement le transforme simplement en KF `pose` au même instant, en
+conservant son décor. Les transitions spatiales, les paths et les ghosts
+utilisent uniquement les KFs `pose` adjacents. Les transitions de décor utilisent
+les KFs `decor` et les KFs `pose` qui portent effectivement un état de décor.
+
+La durée de vie est calculée depuis le premier et le dernier KF `pose` réels
+(ou depuis les bornes héritées lorsqu'il n'y en a pas). Un KF `decor` est
+strictement intérieur à cette durée effective ; il ne crée pas, ne déplace pas
+et ne prolonge une borne de visibilité.
+
+La ligne reste unique dans la hiérarchie des tracks. Si les deux canaux sont
+présents, sa bande est divisée visuellement en une zone supérieure `decor` et
+une zone inférieure `pose`. Si un seul canal est présent, aucune séparation
+n'est affichée et les points restent centrés dans la ligne normale. Les
+losanges, leur couleur et leur interaction restent identiques ; la hauteur
+indique le canal uniquement dans le cas dual. Il n'y a pas de piste par
+propriété de décor.
+
+À une même date, une édition de décor enrichit le KF `pose` s'il existe déjà.
+Un geste de pose sur un KF `decor` le promeut en KF `pose` en conservant son
+patch de décor. Ces règles évitent deux points concurrents au même instant.
 
 **Accrochage à un marker (`markerId`)** :
 
@@ -390,21 +441,35 @@ Le décrochage reste dans les deux cas une action explicite : le keyframe conser
 
 La résolution `markerId → timeMs` est faite par le builder lors de la compilation vers `SceneDoc` ; dans le modèle éditeur, `timeMs` est toujours la valeur résolue et à jour.
 
-**Sémantique des transitions — deux natures, jamais confondues.**
+**Sémantique des transitions — deux natures et deux canaux, jamais confondus.**
 
-Un kf agit sur le décor ; il est précédé et/ou suivi d'une transition. Deux natures distinctes, chacune avec son propre jeu de réglages (tous facultatifs, chacun a une valeur par défaut) :
+Un kf agit sur le décor et/ou la pose ; il est précédé et/ou suivi d'une
+transition. Deux natures distinctes, chacune avec son propre jeu de réglages
+(tous facultatifs, chacun a une valeur par défaut) :
 
-**1. Transition nommée** — sur le premier/dernier kf (`kind: 'named'`) : signale la façon dont l'item apparaît/disparaît. Le nom est un preset du catalogue V2 ; les propriétés animées (opacité, x, y, scale…) vivent dans le preset, jamais dans le décor.
+**1. Transition nommée** — sur le premier/dernier KF `pose` (`kind: 'named'`) : signale la façon dont l'item apparaît/disparaît. Le nom est un preset du catalogue V2 ; les propriétés animées (opacité, x, y, scale…) vivent dans le preset, jamais dans le décor.
    - Réglages : `durationMs`, `name` (le preset).
    - `transitionIn.durationMs = 800` sur le kf `intro` à t=5000 ms : la transition débute à t=4200 ms, se termine à t=5000 ms — l'item arrive réglé exactement au kf.
    - `transitionOut` sur le kf `outro` : débute à l'instant du kf, s'achève `durationMs` plus tard.
 
-**2. Transition d'état de décor** — entre deux kf quelconques (`kind: 'interpolated'`) : par défaut automatique, couvre tout l'intervalle entre les deux. Peut être **raccourcie** : une durée limite avant OU après un kf borne la transition à une fenêtre plus courte que l'intervalle complet — le reste de l'intervalle maintient l'état du kf de départ (ou d'arrivée, selon le bord choisi).
+**2. Transition d'état de décor** — entre deux événements de décor adjacents
+(`kind: 'interpolated'`) : par défaut automatique, elle couvre tout l'intervalle
+entre les deux événements du canal `decor`. Un KF `pose` qui porte du décor est
+un événement de cette chaîne ; un KF `pose` sans décor n'entre pas dans la
+chaîne `decor`, et un KF `decor` n'entre jamais dans la chaîne `pose`. La transition peut être
+**raccourcie** : une durée limite avant OU après un événement borne la transition
+à une fenêtre plus courte que l'intervalle complet — le reste de l'intervalle
+maintient l'état de l'événement de départ (ou d'arrivée, selon le bord choisi).
    - Réglages : `durationMs`, `easing`, `direction` (`'before' | 'after'` — quel bord de l'intervalle porte la fenêtre raccourcie).
    - Exemple : kf1 à t=0, kf2 à t=5000 ms, limite de transition 2000 ms **avant** kf2 → le décor kf1 est maintenu de t=0 à t=3000 ms, la transition se joue de t=3000 ms à t=5000 ms (fin sur kf2), puis le décor kf2 est maintenu.
-   - Le builder calcule l'animation depuis le diff entre les décors adjacents ; la grille ne stocke que durée/easing/direction, jamais le diff lui-même.
+   - Le builder calcule l'animation depuis le diff entre les événements de décor adjacents ; la grille ne stocke que durée/easing/direction, jamais le diff lui-même.
 
-**Règle d'exclusivité** (inchangée) : entre deux keyframes adjacents, `transitionOut` (keyframe source) et `transitionIn` (keyframe destination) ne peuvent pas représenter le MÊME segment simultanément. L'UI l'interdit : créer l'une exige d'avoir supprimé l'autre sur ce même segment. Le modèle ne peut donc pas se trouver dans cet état — aucune logique de résolution de priorité n'est nécessaire.
+**Règle d'exclusivité** (inchangée) : entre deux keyframes adjacents d'un même
+canal, `transitionOut` (keyframe source) et `transitionIn` (keyframe destination)
+ne peuvent pas représenter le MÊME segment simultanément. L'UI l'interdit :
+créer l'une exige d'avoir supprimé l'autre sur ce même segment. Le modèle ne
+peut donc pas se trouver dans cet état — aucune logique de résolution de
+priorité n'est nécessaire.
 
 **Fusion des transitions aux bords d'une capsule.** Quand un item porte une transition d'entrée ET qu'il est le tout premier enfant d'une capsule qui a elle-même sa propre transition d'entrée, la transition PROPRE de l'item est annulée (`cut`) — la capsule anime déjà l'ensemble, l'animer une deuxième fois individuellement serait redondant. Symétrique en sortie (dernier enfant, transition de sortie capsule). Se règle par de simples presets côté `capsule-automation` (catalogue de comportement par type de capsule) — jamais une condition codée en dur dans le Builder ed2 (Principe B, `2026-07-08-builder-plan.md`).
 
@@ -427,7 +492,11 @@ type EasingValue =
   | { type: 'cubic-bezier'; p1x: number; p1y: number; p2x: number; p2y: number }
 ```
 
-`transitionIn` sur le premier kf et `transitionOut` sur le dernier utilisent `kind: 'named'`. Les kf intermédiaires utilisent `kind: 'interpolated'`, `direction` par défaut `'after'` (transition pleine, dès le kf source, si le réglage est omis).
+`transitionIn` sur le premier KF `pose` et `transitionOut` sur le dernier
+utilisent `kind: 'named'`. Les transitions d'état entre événements `decor` et
+les transitions intermédiaires de pose utilisent `kind: 'interpolated'`,
+`direction` par défaut `'after'` (transition pleine, dès la source du canal, si
+le réglage est omis).
 
 #### `Sustain` — comportement de transition indépendant du décor
 
@@ -506,14 +575,17 @@ interface AuthorMarker {
 La grille gère les références de décors selon ce protocole :
 
 **À la création d'un keyframe (`addKeyframe`)** : la grille reste opaque au contenu du décor et
-émet seulement l'intention. Pour une insertion V2 située entre deux keyframes, le bridge de
-coordination lit l'état logique présenté exactement à `timeMs` via `snapshot.get()` : il capture
-toutes les propriétés CSS et la pose interpolées, puis superpose le candidat de preview accepté s'il
-existe (l'intervention utilisateur prime propriété par propriété, sans effacer les autres valeurs
-interpolées). Si le résultat diverge de la cascade héritée, le bridge omet le `decorId` adjacent,
-crée un décor frais et le remplit par `setDecor` dans la même transaction. Si le résultat est
-identique à la cascade, le partage du décor adjacent reste valide. L'accusé de réception du seek
-doit être obtenu avant la capture afin qu'un snapshot d'un temps précédent ne puisse pas être
+émet seulement l'intention. Le bridge choisit explicitement le canal selon le geste : une insertion
+de pose crée un KF `pose` et capture la pose complète requise par la chaîne spatiale ; une édition
+de décor crée un KF `decor` avec uniquement le patch sparse modifié. Dans les deux cas, pour une
+insertion V2 située entre des keyframes, le bridge de coordination lit l'état logique présenté
+exactement à `timeMs` via `snapshot.get()` et superpose le candidat de preview accepté s'il existe.
+L'intervention utilisateur prime propriété par propriété, sans effacer les autres valeurs
+interpolées. Tant qu'il reste `decor`, le KF ne contribue pas à la résolution
+de pose ; il est transformé en KF `pose` si un geste de mouvement est effectué
+sur lui. La frontière des propriétés de pose est définie par le contrat de pose
+évolutif, et non par une liste fermée de champs `Decor`. L'accusé de réception du
+seek doit être obtenu avant la capture afin qu'un snapshot d'un temps précédent ne puisse pas être
 photographié. En l'absence de joueur présenté (par exemple un appel de la machine isolée), la
 grille conserve son comportement pur d'héritage.
 
@@ -534,15 +606,16 @@ Cette approche garantit que plusieurs keyframes consécutifs au même décor ne 
 
 ### 2.4 Bornes de visibilité V2
 
-Intro et outro ne sont pas des types distincts : ce sont les **premier et dernier keyframes selon
-`timeMs`** de l'item. Le nom réservé `intro`/`outro` peut être conservé pour l'outillage et la
-lecture de la timeline, mais n'est pas requis pour qu'une borne soit active :
+Intro et outro ne sont pas des types distincts : ce sont les **premier et dernier keyframes `pose`
+selon `timeMs`** de l'item. Le nom réservé `intro`/`outro` peut être conservé pour l'outillage et
+la lecture de la timeline, mais n'est pas requis pour qu'une borne soit active :
 
-- le premier keyframe définit la frontière d'entrée ;
-- le dernier keyframe définit la frontière de sortie ;
+- le premier KF `pose` définit la frontière d'entrée ;
+- le dernier KF `pose` définit la frontière de sortie ;
 - en dehors de ces bornes, l'item n'est pas visible et ne reçoit pas d'event de visibilité ;
-- une `transitionIn` portée par le premier kf se termine exactement à son `timeMs` ; une
-  `transitionOut` portée par le dernier commence exactement à son `timeMs`.
+- une `transitionIn` portée par le premier KF `pose` se termine exactement à son
+  `timeMs` ; une `transitionOut` portée par le dernier KF `pose` commence
+  exactement à son `timeMs`.
 
 Déplacer le premier/dernier kf déplace donc la frontière correspondante et le déclenchement de sa
 transition ; la durée de la transition reste attachée au kf déplacé. En l'absence de transition
@@ -550,13 +623,15 @@ explicite, la capsule parente fournit ses transitions par défaut selon son type
 sur le kf prime ce défaut. Le `preRoll` technique éventuel du builder protège le début de la scène
 sans modifier le temps auteur du kf.
 
-Un item sans keyframe est considéré présent sur toute la durée de la scène. Avec un seul keyframe,
-il fixe l'entrée ; la capsule parente peut fournir la borne de sortie virtuelle afin d'éviter une
+Un item sans keyframe est considéré présent sur toute la durée de la scène. Un item qui ne porte
+aucun KF `pose` conserve cette règle de présence (ou les bornes héritées de sa capsule) ; ses KFs
+`decor` restent strictement dans cette fenêtre et ne la modifient pas. Avec un seul KF `pose`, il
+fixe l'entrée ; la capsule parente peut fournir la borne de sortie virtuelle afin d'éviter une
 fenêtre de durée nulle. Cette règle conserve la matérialisation d'un item nouvellement posé tout en
-laissant deux keyframes réels exprimer deux frontières indépendantes.
+laissant deux keyframes `pose` réels exprimer deux frontières indépendantes.
 
 **Héritage capsule** : la fenêtre effective d'un item est l'intersection de ses bornes premier/
-dernier kf et de la fenêtre calculée par sa capsule parente. La capsule racine implicite n'est pas
+dernier KF `pose` et de la fenêtre calculée par sa capsule parente. La capsule racine implicite n'est pas
 affichée ni sélectionnable comme item et ne porte pas de keyframes propres ; elle représente la
 scène, mais son comportement `card` fournit néanmoins les transitions par défaut aux enfants directs.
 La résolution des fenêtres et des transitions se fait au build, pas par une écriture dans le modèle
@@ -569,11 +644,12 @@ Le sequence-editor peut projeter des bornes calculées sans les écrire dans
 capsule qui porte l'item :
 
 - pour une capsule explicite, l'intervalle de référence est son premier et son
-  dernier keyframe réels ;
+  dernier KF `pose` réels ;
 - pour la capsule racine implicite, l'intervalle est `[0, scene.durationMs]` ;
-- zéro KF réel sur l'enfant produit deux bornes virtuelles (`intro`, `outro`) ;
-- un seul KF réel fixe l'entrée et produit uniquement une sortie virtuelle ;
-- deux KFs réels ou plus ne produisent pas de borne virtuelle supplémentaire.
+- zéro KF `pose` réel sur l'enfant produit deux bornes virtuelles (`intro`, `outro`) ;
+- un seul KF `pose` réel fixe l'entrée et produit uniquement une sortie virtuelle ;
+- deux KFs `pose` réels ou plus ne produisent pas de borne virtuelle supplémentaire ;
+- les KFs `decor` ne sont jamais des bornes virtuelles et ne comptent pas dans cette distribution.
 
 Une borne virtuelle est un artefact de timeline (`VirtualKeyframe`) : elle ne
 participe ni au document, ni au player, ni à la résolution de la scène. Play,
@@ -626,6 +702,7 @@ Format de sérialisation de `EditorScene` : JSON plat, pas de classes, pas de m�
         {
           "id": "kf-01",
           "timeMs": 0,
+          "channel": "pose",
           "name": "intro",
           "decorId": "decor-01",
           "transitionOut": { "kind": "named", "name": "fade", "durationMs": 600 }
@@ -633,12 +710,14 @@ Format de sérialisation de `EditorScene` : JSON plat, pas de classes, pas de m�
         {
           "id": "kf-02",
           "timeMs": 600,
+          "channel": "pose",
           "decorId": "decor-02",
           "transitionOut": { "kind": "interpolated", "durationMs": 400, "easing": "ease-in-out" }
         },
         {
           "id": "kf-03",
           "timeMs": 9000,
+          "channel": "pose",
           "name": "outro",
           "decorId": "decor-02",
           "transitionOut": { "kind": "named", "name": "fade", "durationMs": 500 }
@@ -1008,6 +1087,12 @@ L'éditeur est structuré en CSS Grid à deux niveaux.
   height: var(--seq-track-h);   /* lu depuis LayoutProfile */
   position: relative;           /* contexte de positionnement pour le SVG inline */
 }
+
+/* Quand les deux canaux existent, le même SVG expose deux sous-zones ; il ne
+   s'agit pas de deux rows indépendantes dans l'arbre des tracks. */
+.seq-track-row--dual-channel {
+  /* Les hauteurs et la séparation sont appliquées par le profil de layout. */
+}
 ```
 
 `position: absolute` n'intervient que pour l'overlay SVG du playhead, positionné sur `.seq-timeline`.
@@ -1067,14 +1152,27 @@ Zone principale. Conteneur DOM avec scroll vertical virtuel. Contient une `Track
 
 - Entrées : `track`, `viewport`, `selection`, `capsuleGuidance?`
 - Rendu : DOM. Élément `<div>` de hauteur fixe positionnée selon son index virtuel.
-- La fenêtre active (zone entre intro et outro) est un `<div>` positionné en `position: absolute` sur l'axe X, calculé depuis `viewport`
+- La fenêtre active (zone entre intro et outro) est un `<div>` positionné en `position: absolute` sur l’axe X, calculé depuis `viewport`
 - Les keyframe handles sont des éléments SVG enfants (`<svg>` inline dans la row)
+- La row reste unique pour l'item. Si elle contient au moins un KF `pose` et un
+  KF `decor`, le même SVG est divisé en zone supérieure `decor` et zone
+  inférieure `pose`. Les KFs `decor` sont rendus en haut ; les KFs `pose` en
+  bas. Un KF `pose` qui porte du décor n'est pas dupliqué en haut.
+- Si un seul canal est présent, le SVG ne dessine aucune séparation et les
+  handles sont centrés comme dans la row historique. La hauteur totale reste
+  gouvernée par `LayoutProfile`; le profil tactile doit conserver la cible
+  minimale de ses handles lorsque la row est divisée.
+- Les segments spatiaux ne relient que les KFs `pose` adjacents. Les KFs
+  `decor` restent des points temporels, sans segment géométrique ni ghost.
 
 **`KeyframeHandle`**
 
 - Entrée : `keyframe`, `positionPx`, `isSelected`
 - SVG `<polygon>` (losange). Sélectionné → couleur d'accentuation.
 - `pointerdown` → `DRAG.START_KEYFRAME`
+- Dans une row duale, la position verticale est dérivée du `channel`, mais la
+  forme, la couleur et les événements restent identiques entre `pose` et
+  `decor`.
 
 **`PlayheadLine`**
 

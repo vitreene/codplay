@@ -6,6 +6,7 @@
   --dedit-text-muted: #9ca3af;
   --dedit-accent: #3b82f6;
   --dedit-mixed-bg: #374151;
+  --dedit-modified-outline: #f59e0b;
 
   --dedit-font: ui-sans-serif, system-ui, sans-serif;
   --dedit-font-size: 12px;
@@ -103,6 +104,14 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+
+/* Immediate indication of a value changed at the current Decor target. The registry drives this
+   class; the palette background remains an independent temporary-state signal. */
+.dedit-field__control--modified {
+  outline: 2px solid var(--dedit-modified-outline);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .dedit-field__control input[type="text"],

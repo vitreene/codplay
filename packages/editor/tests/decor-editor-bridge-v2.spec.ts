@@ -3,6 +3,8 @@ import { createActor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
 import {
   applyFrameDelta,
+  resolveEffectiveKeyframePatch,
+  resolveEffectivePosePatch,
   patchDiffersFromBase,
   resolveKeyframeAlignment,
   resolveKeyframeInsertionPatch,
@@ -79,6 +81,31 @@ describe('decor-editor bridge V2', () => {
     expect(resolveKeyframeAlignment(item, 1000)).toEqual({ kind: 'exact', keyframeId: 'kf-b' })
   })
 
+  it('ignore la pose d’un KF decor dans la résolution spatiale mais conserve son décor', () => {
+    const document = sceneWithDecors()
+    document.decors['decor-c'] = {
+      id: 'decor-c',
+      offset: { translate: { x: 90, y: 90 }, width: 80, height: 80 },
+      style: { color: 'green' },
+    }
+    const itemWithChannels: Item = {
+      ...item,
+      keyframes: [
+        { id: 'kf-a', timeMs: 0, decorId: 'decor-a', channel: 'pose' },
+        { id: 'kf-c', timeMs: 500, decorId: 'decor-c', channel: 'decor' },
+        { id: 'kf-b', timeMs: 1000, decorId: 'decor-b', channel: 'pose' },
+      ],
+    }
+
+    expect(resolveEffectivePosePatch(document, itemWithChannels, 'kf-c')).toMatchObject({
+      offset: { translate: { x: 10, y: 10 }, width: 20, height: 20 },
+    })
+    expect(resolveEffectiveKeyframePatch(document, itemWithChannels, 'kf-c', undefined)).toMatchObject({
+      style: { color: 'green' },
+      offset: { translate: { x: 10, y: 10 }, width: 20, height: 20 },
+    })
+  })
+
   it('garde le côté opposé fixe pendant un resize latéral sous rotation', () => {
     const base: SelectionFrameValue = { x: 100, y: 80, width: 200, height: 100, rotate: 30 }
     const radians = (30 * Math.PI) / 180
@@ -146,17 +173,13 @@ describe('decor-editor bridge V2', () => {
     const patch = resolveTemporaryPatch(snapshotFor({
       color: { kind: 'color', space: 'srgb', coords: [1, 0, 0], alpha: 1 },
       opacity: 0.5,
-    }), 'item-1', [
-      { path: 'style.color', kind: 'color', label: 'Texte' },
-      { path: 'style.opacity', kind: 'number', label: 'Opacité' },
-    ])
-    expect(patch).toEqual({ style: { color: 'rgba(255, 0, 0, 1)', opacity: '0.5' } })
+      'future-property': 'future-value',
+    }), 'item-1')
+    expect(patch).toEqual({ style: { color: 'rgba(255, 0, 0, 1)', opacity: '0.5', 'future-property': 'future-value' } })
   })
 
   it('ignore une autre cible dans le snapshot', () => {
-    expect(resolveTemporaryPatch(snapshotFor({ color: 'red' }), 'other-item', [
-      { path: 'style.color', kind: 'color', label: 'Texte' },
-    ])).toEqual({})
+    expect(resolveTemporaryPatch(snapshotFor({ color: 'red' }), 'other-item')).toEqual({})
   })
 
   it('capture le candidat de preview même lorsque snapshot.get() ne le restitue pas', () => {
@@ -170,7 +193,7 @@ describe('decor-editor bridge V2', () => {
     expect(patch).toEqual(candidate)
   })
 
-  it('capture les propriétés interpolées du snapshot même sans preview utilisateur', () => {
+  it('ne capture aucune propriété interpolée sans preview utilisateur', () => {
     const patch = resolveKeyframeInsertionPatch(
       sceneWithDecors(),
       item,
@@ -187,10 +210,7 @@ describe('decor-editor bridge V2', () => {
       }),
       undefined,
     )
-    expect(patch).toEqual({
-      style: { color: 'rgba(128, 64, 191, 1)', opacity: '0.5' },
-      offset: { translate: { x: 30, y: 30 }, width: 20, height: 20, rotationOrigin: { fx: 0.25, fy: 0.75 } },
-    })
+    expect(patch).toBeNull()
   })
 
   it('fusionne l’intervention utilisateur avec les propriétés interpolées absentes du candidat', () => {
@@ -209,10 +229,7 @@ describe('decor-editor bridge V2', () => {
       }),
       { style: { color: 'orange' }, offset: { translate: { x: 42, y: 18 } } },
     )
-    expect(patch).toEqual({
-      style: { color: 'orange', opacity: '0.5' },
-      offset: { translate: { x: 42, y: 18 }, width: 20, height: 20 },
-    })
+    expect(patch).toEqual({ style: { color: 'orange' }, offset: { translate: { x: 42, y: 18 } } })
   })
 
   it('conserve un path de candidat comme propriété segment-locale du KF cible', () => {

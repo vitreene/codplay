@@ -16,6 +16,16 @@ export {
 export type { MotionPoint } from './geometry'
 
 export {
+  contentBoxFrameToPoseFrame,
+  poseFrameToContentBoxFrame,
+  ZERO_CONTENT_BOX_INSETS_PX,
+} from './content-box'
+export type { ContentBoxInsetsPx } from './content-box'
+
+export { resolveBorderInsetsPx } from './border-insets'
+export type { FrameBorderInsetsPx } from './border-insets'
+
+export {
   DEFAULT_MOTION_TRANSITION_WINDOW_MS,
   resolveMotionKeyframeAlignment,
   resolveMotionLifetime,

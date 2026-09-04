@@ -99,10 +99,9 @@ export function createSequenceEditorBridge(
    * `KEYFRAME.ADD` (`sequence-editor/machine.ts`) est une fonction PURE, sans accès à
    * `snapshot`/`scene` réels — elle ne peut pas calculer l'état interpolé courant elle-même
    * (`2026-07-25-decor-unified-channel-plan.md` §B). Ce pont, lui, a accès aux deux : il enrichit
-   * la commande `createNamedKeyframe` d'un `setDecor` séparé quand l'état affiché au moment de
-   * l'insertion diverge de la cascade héritée — « photographier » l'item depuis le snapshot V2
-   * logique au temps présenté, puis superposer l'éventuel candidat d'édition, jamais depuis un
-   * node ou une pose runtime. Sans candidat, l'interpolation du snapshot est donc capturée aussi.
+   * la commande `createNamedKeyframe` d'un `setDecor` séparé quand la map de propriétés modifiées
+   * fournit un candidat d'édition, jamais depuis un node ou une pose runtime. Sans candidat,
+   * l'insertion conserve le décor adjacent et ne fige aucune valeur interpolée.
    */
   function enrichIfKeyframeCreation(command: Command, captures: KeyframeCapture[]): Command[] {
     if (command.name !== 'createNamedKeyframe') return [command]
@@ -112,9 +111,7 @@ export function createSequenceEditorBridge(
     if (!scene || !item || item.type === 'bloc') return [command]
     const content = item.contentId ? scene.contents[item.contentId] : undefined
     const candidate = coordination.decorPreview.getForKeyframe(itemId, timeMs)
-    const patch = resolveKeyframeInsertionPatch(
-      scene, item, timeMs, content, coordination.snapshot.get(), candidate?.patch,
-    )
+    const patch = resolveKeyframeInsertionPatch(scene, item, timeMs, content, coordination.snapshot.get(), candidate?.patch)
     if (patch === null) {
       captures.push({ itemId, keyframeId, candidate, persisted: false })
       return [command]
@@ -138,13 +135,14 @@ export function createSequenceEditorBridge(
     ]
   }
 
-  /** Identifies the only keyframe insertions whose state depends on a presented interpolation. */
+  /** Identifies keyframe insertions carrying a sparse user candidate that needs the target time. */
   function keyframeNeedsPresentedSnapshot(command: Command): command is Extract<Command, { name: 'createNamedKeyframe' }> {
     if (command.name !== 'createNamedKeyframe') return false
     const { scene } = machine.getSnapshot().context
     const item = scene?.items.find((candidate) => candidate.id === command.args.itemId)
     return item !== undefined && item.type !== 'bloc'
       && resolveKeyframeAlignment(item, command.args.timeMs).kind === 'between'
+      && coordination.decorPreview.getForKeyframe(command.args.itemId, command.args.timeMs) !== null
   }
 
   const unsubscribeSeekApplied = coordination.onSeekApplied(() => {

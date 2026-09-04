@@ -154,7 +154,7 @@ export function createKeyframe(scene: EditorScene, args: { itemId: string; timeM
     throw new Error(`createKeyframe: no decor '${decorId}' in scene`)
   }
 
-  const keyframe = { id: keyframeId, timeMs: args.timeMs, decorId }
+  const keyframe = { id: keyframeId, timeMs: args.timeMs, decorId, channel: 'pose' as const }
   const updated = updateItem(nextScene, args.itemId, (i) => ({ ...i, keyframes: [...i.keyframes, keyframe] }))
 
   return { scene: updated, keyframeId, decorId }

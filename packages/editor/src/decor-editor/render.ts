@@ -1,7 +1,7 @@
 import type { DecorEditorController } from './controller'
 import type { PanelField, PanelId } from './palette-panel'
 import { findPanel } from './palette-panel'
-import { hexToCssOklch, cssOklchComponentsToHex } from './color-adapter'
+import { cssColorToHex, hexToCssOklch } from './color-adapter'
 import { formatNumberForCssProperty, parseNumberFromCssValue } from './css-value-format'
 import { iconSvg } from './icons'
 
@@ -155,6 +155,8 @@ function fieldRow(
 
   const control = document.createElement('div')
   control.classList.add('dedit-field__control')
+  row.dataset.decorPropertyPath = path
+  control.dataset.decorPropertyPath = path
   row.appendChild(control)
   const updateControl = buildControl(control)
 
@@ -175,6 +177,7 @@ function fieldRow(
 
   return () => {
     updateControl()
+    control.classList.toggle('dedit-field__control--modified', controller.isPropertyModified(path))
     if (stripBtn) stripBtn.classList.toggle('dedit-strip-btn--hidden', !controller.hasOwnPatch(path))
   }
 }
@@ -262,11 +265,8 @@ function renderColorField(
   })
 }
 
-function toHexForPicker(cssOklch: string): string {
-  const match = cssOklch.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/)
-  if (!match) return '#808080'
-  const [, l, c, h] = match.map(Number)
-  return cssOklchComponentsToHex(l!, c!, h!)
+function toHexForPicker(cssColor: string): string {
+  return cssColorToHex(cssColor) ?? '#808080'
 }
 
 function renderNumberField(

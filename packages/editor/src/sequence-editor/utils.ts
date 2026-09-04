@@ -1,3 +1,4 @@
+import { resolveKeyframeChannel } from './types'
 import type { LayoutProfile, Item, SnapPoint } from './types'
 
 export function clampMs(ms: number, minMs: number, maxMs: number): number {
@@ -37,7 +38,9 @@ export function findParentClipBounds(
   const item = items.find((i) => i.id === itemId)
   const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { minMs: 0, maxMs: durationMs }
-  const keyframes = [...parent.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  const keyframes = parent.keyframes
+    .filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+    .sort((left, right) => left.timeMs - right.timeMs)
   const intro = keyframes[0]
   const outro = keyframes.at(-1)
   return { minMs: intro?.timeMs ?? 0, maxMs: outro?.timeMs ?? durationMs }
@@ -51,7 +54,9 @@ export function getParentClipMarkers(
   const item = items.find((i) => i.id === itemId)
   const parent = item?.parentId ? items.find((i) => i.id === item.parentId) : undefined
   if (!parent) return { introMs: null, outroMs: null }
-  const keyframes = [...parent.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  const keyframes = parent.keyframes
+    .filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+    .sort((left, right) => left.timeMs - right.timeMs)
   return {
     introMs: keyframes[0]?.timeMs ?? null,
     outroMs: keyframes.at(-1)?.timeMs ?? null,

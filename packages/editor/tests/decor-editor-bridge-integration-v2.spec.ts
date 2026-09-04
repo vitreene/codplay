@@ -8,6 +8,7 @@ import { createScenePlayerBridge } from '../src/app/bridges/scene-player-bridge'
 import { createDecorEditorBridge } from '../src/app/bridges/decor-editor-bridge'
 import { EditorPlayerCommandFacade } from '../src/app/commands/editor-player-command-facade'
 import type { EditorPlayerPresentationFrame } from '../src/app/commands/editor-player-command-facade'
+import type { EditorScene } from '../src/app/commands/types'
 
 /** Creates the two-keyframe scene used to exercise a temporary decor preview end to end. */
 function scene() {
@@ -35,11 +36,40 @@ function scene() {
     }],
     contents: { content: { id: 'content', type: 'text' as const, text: 'item' } },
     decors: {
-      first: { id: 'first', offset: { translate: { x: 10, y: 10 }, width: 20, height: 20 }, style: { 'background-color': '#ff0000' } },
-      last: { id: 'last', offset: { translate: { x: 50, y: 50 }, width: 20, height: 20 }, style: { 'background-color': '#0000ff' } },
+      first: { id: 'first', offset: { translate: { x: 10, y: 10 }, width: 20, height: 20 }, style: { 'background-color': 'oklch(0.628 0.2577 29.23)' } },
+      last: { id: 'last', offset: { translate: { x: 50, y: 50 }, width: 20, height: 20 }, style: { 'background-color': 'oklch(0.452 0.3132 264.05)' } },
     },
     zones: {},
     markerTracks: {},
+  }
+}
+
+/** Reproduces the menu-created text item: its initial type preset supplies border values. */
+function positionTestScene(firstBorderWidth = '0.6cqw', lastBorderWidth = '0.6cqw') {
+  const base = scene()
+  return {
+    ...base,
+    id: 'decor-border-position-test',
+    decors: {
+      first: {
+        ...base.decors.first,
+        style: {
+          ...base.decors.first.style,
+          'border-color': 'oklch(0.85 0.15 195)',
+          'border-width': firstBorderWidth,
+          'border-style': 'solid',
+        },
+      },
+      last: {
+        ...base.decors.last,
+        style: {
+          ...base.decors.last.style,
+          'border-color': 'oklch(0.85 0.15 195)',
+          'border-width': lastBorderWidth,
+          'border-style': 'solid',
+        },
+      },
+    },
   }
 }
 
@@ -64,7 +94,7 @@ beforeAll(() => {
   }
 })
 
-describe('decor-editor bridge V2 — preview interpolée et seek', () => {
+describe('decor-editor bridge V2 — projection Decor interpolée et création sparse de KF', () => {
   let actor: ReturnType<typeof createActor<typeof controllerMachine>> | undefined
   let coordination: EditorCoordinationBridge | undefined
   let sceneBridge: ReturnType<typeof createScenePlayerBridge> | undefined
@@ -85,7 +115,7 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     originalResizeObserver = undefined
   })
 
-  it('efface le snapshot au seek, conserve le candidat, puis le réapplique au retour', async () => {
+  it('affiche la valeur interpolée, signale la modification et crée un KF sparse au commit', async () => {
     originalResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = class {
       observe(): void {}
@@ -118,23 +148,204 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     expect(item).not.toBeNull()
     const colorInput = decorPanel.querySelector<HTMLInputElement>('input[type="color"]')
     expect(colorInput).not.toBeNull()
+    expect(colorInput!.value.toLowerCase()).not.toBe('#808080')
     colorInput!.value = '#00ff00'
     colorInput!.dispatchEvent(new Event('input', { bubbles: true }))
     colorInput!.dispatchEvent(new Event('change', { bubbles: true }))
     const candidateStyle = item!.getAttribute('style')
     expect(candidateStyle).toContain('oklch')
     expect(coordination.decorPreview.getAt('item', 2_500)).not.toBeNull()
+    expect(decorPanel.querySelector('.dedit-field__control[data-decor-property-path="style.background-color"]')?.classList.contains('dedit-field__control--modified')).toBe(true)
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
     actor.send({ type: 'SEEK', timelineMs: 3_500 })
     await waitTurns()
     const awayStyle = item!.getAttribute('style')
     expect(awayStyle).not.toBe(candidateStyle)
+    const committedScene = actor.getSnapshot().context.scene!
+    const committedItem = committedScene.items.find(candidate => candidate.id === 'item')!
+    const created = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
+    expect(created).toBeDefined()
+    expect(committedScene.decors[created!.decorId]?.style).toEqual({ 'background-color': 'oklch(0.8664 0.2948 142.5)' })
+    expect(committedScene.decors[created!.decorId]?.offset).toBeUndefined()
 
     actor.send({ type: 'SEEK', timelineMs: 2_500 })
     await waitTurns()
-    expect(item!.getAttribute('style')).toBe(candidateStyle)
+    expect(item!.getAttribute('style')).toContain('background-color')
+    expect(colorInput!.value.toLowerCase()).not.toBe('#808080')
+    expect(actor.getSnapshot().context.scene).not.toBe(documentScene)
+  })
+
+  it('transporte border-width depuis la palette vers le KF decor de la scène Test position', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = positionTestScene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns()
+
+    const initialFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
+    expect(initialFrame).not.toBeNull()
+    // At 800px root width, the 0.6cqw border is 4.8px. The CS follows the content-box origin
+    // while retaining the 160px authored width/height.
+    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(244.8, 6)
+    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(244.8, 6)
+    expect(initialFrame!.style.width).toBe('160px')
+    expect(initialFrame!.style.height).toBe('160px')
+
+    const borderWidthInput = decorPanel.querySelector<HTMLInputElement>(
+      '[data-decor-property-path="style.border-width"] input[type="number"]',
+    )
+    expect(borderWidthInput).not.toBeNull()
+    expect(borderWidthInput!.value).toBe('2.4')
+
+    borderWidthInput!.value = '20'
+    borderWidthInput!.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitTurns()
+
+    const candidate = coordination.decorPreview.getAt('item', 2_500)
+    expect(candidate?.patch.style?.['border-width']).toBe('5cqw')
+    expect(decorPanel.querySelector('.dedit-field__control[data-decor-property-path="style.border-width"]')
+      ?.classList.contains('dedit-field__control--modified')).toBe(true)
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
+
+    const liveItem = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(liveItem.style.getPropertyValue('border-width')).toBe('5cqw')
+    expect(liveItem.style.getPropertyValue('border-style')).toBe('solid')
+    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(280, 6)
+    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(280, 6)
+    expect(initialFrame!.style.width).toBe('160px')
+    expect(initialFrame!.style.height).toBe('160px')
+
+    actor.send({ type: 'SEEK', timelineMs: 3_500 })
+    await waitTurns(24)
+
+    const committedScene = actor.getSnapshot().context.scene!
+    const committedItem = committedScene.items.find(candidateItem => candidateItem.id === 'item')!
+    const created = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
+    expect(created?.channel).toBe('decor')
+    expect(committedScene.decors[created!.decorId]?.style?.['border-width']).toBe('5cqw')
+
+    const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
+    expect(committedItemNode?.style.getPropertyValue('border-width')).not.toBe('')
+    expect(committedItemNode?.style.getPropertyValue('border-style')).toBe('solid')
+  })
+
+  it('ne reprojette pas la bordure du KF source sur le ghost du KF cible', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = positionTestScene('0.6cqw', '2cqw')
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    await waitTurns(24)
+
+    const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')
+    expect(targetGhost).not.toBeNull()
+    // The target keeps its own 2cqw border (16px at this mocked 800px root), so its content ghost
+    // starts at the target document origin 400px + 16px, independently of source edits.
+    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(416, 6)
+
+    const borderWidthInput = decorPanel.querySelector<HTMLInputElement>(
+      '[data-decor-property-path="style.border-width"] input[type="number"]',
+    )
+    expect(borderWidthInput).not.toBeNull()
+    borderWidthInput!.value = '20'
+    borderWidthInput!.dispatchEvent(new Event('change', { bubbles: true }))
+    await waitTurns(24)
+
+    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(416, 6)
+    expect(Number.parseFloat(targetGhost!.style.top)).toBeCloseTo(416, 6)
+  })
+
+  it('sérialise la pose extérieure après un déplacement du CS content-box bordé', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene = positionTestScene()
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 140, 100))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 140, 100))
+    await waitTurns(24)
+
+    const committed = actor.getSnapshot().context.scene!
+    const committedItem = committed.items.find(candidate => candidate.id === 'item')!
+    const middle = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
+    expect(middle?.channel).toBe('pose')
+    // The displayed content origin moved from 30cqw + 4.8px by 40px. The inverse projection
+    // stores the unchanged outer-origin delta (35cqw), not the displayed content coordinate.
+    expect(committed.decors[middle!.decorId]?.offset).toMatchObject({
+      translate: { x: 35, y: 30 },
+      width: 20,
+      height: 20,
+    })
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    expect(Number.parseFloat(frame.style.left)).toBeCloseTo(284.8, 6)
+    expect(Number.parseFloat(frame.style.top)).toBeCloseTo(244.8, 6)
+    expect(frame.style.width).toBe('160px')
+    expect(frame.style.height).toBe('160px')
   })
 
   it('fait passer rotation, axe, preview puis commit par le circuit V2 du décor', async () => {
@@ -191,8 +402,8 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     expect(actor.getSnapshot().context.scene).toBe(documentScene)
 
     // At an exact keyframe the same modifier path targets the document decor. The explicit
-    // deselection is the phase boundary that flushes the pending patch; a temporary target above
-    // remains preview-only, as required by the V2 contract.
+    // deselection is the phase boundary that flushes the pending patch; the temporary color edit
+    // above has already materialized its own sparse KF when the seek crossed its phase boundary.
     actor.send({ type: 'SEEK', timelineMs: 0 })
     await waitTurns()
     const exactFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
@@ -392,6 +603,68 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     actor.send({ type: 'SEEK', timelineMs: 5_000 })
     await waitTurns(24)
     expect(sceneRoot.querySelector('[data-motion-path]')?.getAttribute('d')).not.toBe(pathAtSecondTarget)
+  })
+
+  it('promeut un KF décor en KF pose et capture sa pose complète lors d’un mouvement', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const documentScene: EditorScene = scene()
+    documentScene.items[0] = {
+      ...documentScene.items[0]!,
+      keyframes: [
+        { id: 'first-kf', timeMs: 0, decorId: 'first', channel: 'pose' },
+        { id: 'decor-kf', timeMs: 2_500, decorId: 'decor-only', channel: 'decor' },
+        { id: 'last-kf', timeMs: 5_000, decorId: 'last', channel: 'pose' },
+      ],
+    }
+    documentScene.decors['decor-only'] = {
+      id: 'decor-only',
+      style: { 'background-color': 'oklch(0.7 0.2 120)' },
+    }
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'decor-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+
+    expect(sceneRoot.querySelector('[data-motion-keyframe-id="decor-kf"]')).toBeNull()
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')!
+    expect(moveZone).not.toBeNull()
+    const initialWidth = Number.parseFloat(moveZone.style.width)
+    const initialHeight = Number.parseFloat(moveZone.style.height)
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 100, 100))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 180, 140))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 180, 140))
+    await waitTurns(24)
+
+    const committed = actor.getSnapshot().context.scene!
+    const committedItem = committed.items.find((item) => item.id === 'item')!
+    const promoted = committedItem.keyframes.find((keyframe) => keyframe.id === 'decor-kf')!
+    expect(promoted.channel).toBe('pose')
+    expect(committedItem.keyframes).toHaveLength(3)
+    expect(committed.decors[promoted.decorId]?.offset).toMatchObject({
+      width: initialWidth / 8,
+      height: initialHeight / 8,
+    })
+    expect(sceneRoot.querySelectorAll('[data-motion-path]')).toHaveLength(2)
   })
 
   it('recalcule la pose cible du segment pendant le repositionnement CS du KF matérialisé', async () => {
@@ -649,7 +922,11 @@ describe('decor-editor bridge V2 — preview interpolée et seek', () => {
     const target = actor.getSnapshot().context.scene!.items.find((candidate) => candidate.id === 'item')!.keyframes.find((keyframe) => keyframe.timeMs === 500)!
     const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const targetBefore = actor.getSnapshot().context.scene!.decors[target.decorId]?.offset
-    expect(targetBefore).toMatchObject({ width: 20, height: 20 })
+    // A newly-created pose KF freezes the complete affine waypoint. Width/height are therefore
+    // intentionally materialized even though this gesture only repositioned the item; otherwise
+    // the second half of the split route would resolve those dimensions from the wrong endpoint.
+    expect(targetBefore?.width).toBeCloseTo(20)
+    expect(targetBefore?.height).toBeCloseTo(20)
     expect(targetBefore?.translate?.x).toBeCloseTo((middleBaseLeft + 80) / 8)
     expect(targetBefore?.translate?.y).toBeCloseTo((middleBaseTop + 40) / 8)
 

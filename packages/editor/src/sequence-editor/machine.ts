@@ -2,6 +2,7 @@ import { setup, assign, emit } from 'xstate'
 import type {
   EditorScene, Item, Keyframe, LayoutProfile, DisplayConfig, Waveform, Transition, Marker,
 } from './types'
+import { resolveKeyframeChannel } from './types'
 import type { Command } from '../app/controller/types'
 import { CapsuleDistribution } from '@codplay/scene-factory/capsule-distribution'
 import { CapsulePreset } from '@codplay/scene-factory/capsule-preset'
@@ -209,7 +210,9 @@ function computeSnapGrid(scene: EditorScene): MachineSnapPoint[] {
 
 /** Returns an item's timeline keyframes in the order that defines its visibility boundaries. */
 function sortTimelineKeyframes(item: Item): Keyframe[] {
-  return [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  return [...item.keyframes]
+    .filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+    .sort((left, right) => left.timeMs - right.timeMs)
 }
 
 /** Returns the real entry/exit bounds; a single keyframe only locks the entry. */

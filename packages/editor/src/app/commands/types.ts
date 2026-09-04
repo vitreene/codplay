@@ -65,14 +65,24 @@ export interface CapsuleDef {
   behavior?: string
 }
 
+/** Timeline channel owning a keyframe's temporal meaning. */
+export type KeyframeChannel = 'pose' | 'decor'
+
 export interface Keyframe {
   id: string
   timeMs: number
   decorId: string
+  /** Explicit channel for new documents; omitted legacy records are read as pose. */
+  channel?: KeyframeChannel
   transitionIn?: Transition
   transitionOut?: Transition
   name?: string
   markerId?: string
+}
+
+/** Resolves the channel of a keyframe while keeping legacy documents readable. */
+export function resolveKeyframeChannel(keyframe: Pick<Keyframe, 'channel'>): KeyframeChannel {
+  return keyframe.channel ?? 'pose'
 }
 
 export interface Item {
@@ -155,6 +165,12 @@ export interface Decor {
   custom?: string
   /** Optional CodPlay V2 SVG path for the incoming segment; absent means straight and never cascades. */
   path?: string
+  /**
+   * Open extension surface for Decor capabilities that are specified later. The editor bridge
+   * preserves these own properties structurally; a future builder tranche must define how each
+   * capability is projected before it can become a CodPlay perso field.
+   */
+  [property: string]: unknown
 }
 
 // ─── Zone ───────────────────────────────────────────────────────────────────

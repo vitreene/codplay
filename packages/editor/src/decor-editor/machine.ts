@@ -18,6 +18,8 @@ export interface AttachedItem {
    * (ex. fond de palette plus clair) reste un choix du rendu, jamais décidé ici.
    */
   isTemporary?: boolean
+  /** Property paths changed by the user for the currently displayed target. */
+  modifiedProperties: string[]
 }
 
 export interface DecorEditorMachineContext {
@@ -42,6 +44,8 @@ export interface AttachItemEntry {
   chain: DecorPatch[]
   patch: DecorPatch
   isTemporary?: boolean
+  /** Initial property paths changed by the user for the currently displayed target. */
+  modifiedProperties?: readonly string[]
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -54,6 +58,7 @@ export type DecorEditorEvent =
   | { type: 'PANEL.SELECT'; panelId: PanelId }
   | { type: 'PATCH.APPLY'; patch: DecorPatch }
   | { type: 'PATCH.STRIP'; path: string }
+  | { type: 'MODIFIED.SET'; itemId: string; paths: readonly string[] }
   | { type: 'PRESET.APPLY'; patch: DecorPatch }
   | { type: 'ZONES.SET'; zones: ZoneTable }
   | { type: 'VISUAL_POSITION.TOGGLE'; on: boolean }
@@ -69,6 +74,7 @@ function toAttachedItems(entries: AttachItemEntry[]): AttachedItem[] {
     chain: e.chain,
     patch: e.patch,
     isTemporary: e.isTemporary,
+    modifiedProperties: [...(e.modifiedProperties ?? [])],
   }))
 }
 
@@ -174,6 +180,14 @@ export const decorEditorMachine = setup({
           // simplement à tous les items présents, ce qui est un no-op à un seul item.
           actions: assign(({ context, event }) => ({
             items: context.items.map(item => ({ ...item, patch: stripInherited(item.patch, event.path) })),
+          })),
+        },
+
+        'MODIFIED.SET': {
+          actions: assign(({ context, event }) => ({
+            items: context.items.map(item => item.itemId === event.itemId
+              ? { ...item, modifiedProperties: [...event.paths] }
+              : item),
           })),
         },
 

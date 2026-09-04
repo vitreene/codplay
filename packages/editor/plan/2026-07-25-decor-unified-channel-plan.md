@@ -1,5 +1,12 @@
 # ed2 — Canal Decor unique : plan opérationnel (reste à faire)
 
+**Relève au 2026-09-04** — la partie B décrite ici est une clôture historique de
+la capture d’insertion telle qu’elle était conçue en juillet. Le contrat actuel de
+projection ouverte, de registre des modifications et de persistance sparse est
+porté par la tranche P2-D du [plan V2 de l’éditeur de mouvement](./2026-09-02-motion-editor-v2-plan.md).
+Les signatures et exemples `styleFieldsForItemType` de ce document ne doivent pas
+être interprétés comme l’API courante.
+
 État actuel du code (déjà implémenté, vérifié) :
 - `2026-07-25-decor-unified-api-study.md` §2.2/§2.4 — `DecorLiveSession` existe, alimentée par le
   pont offset, lue par le décor temporaire ; `onDecorChange` reste l'unique écrivain.

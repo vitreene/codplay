@@ -10,6 +10,12 @@ d'intervention (2026-07-16 côté écriture, 07-17/07-18 cascade, cette session 
 jamais être résolu correctement — repart à neuf, sur la base d'un cahier des charges précis plutôt que
 d'un rafistolage supplémentaire.
 
+**Relève au 2026-09-04** — le constat ci-dessous décrit l’état du 2026-07-25 et
+reste une trace d’analyse. Pour l’état normatif et l’implémentation actuelle de la
+projection du décor interpolé, se reporter à la section P2-D du [plan V2 de
+l’éditeur de mouvement](./2026-09-02-motion-editor-v2-plan.md) et à la
+[spécification dedit](./2026-07-07-dedit-spec.md).
+
 ## 0. Définition de Décor (redonnée par l'auteur, 2026-07-25 — fait foi)
 
 - Un décor regroupe **tout ce qui peut toucher l'aspect d'un item et qui peut bouger dans le temps**

@@ -231,7 +231,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     })
   })
 
-  it('ignores discrete CSS keyword changes without maintaining a property whitelist', () => {
+  it('routes discrete CSS keyword changes through the open style channel', () => {
     const scene = fixtureScene()
     scene.decors['text-decor-a']!.style!.objectFit = 'contain'
     scene.decors['text-decor-b']!.style!.objectFit = 'cover'
@@ -242,6 +242,7 @@ describe('buildSceneDocV2 — current native editor increment', () => {
 
     const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
     expect(item.actions['item-1-kf-kf-b']?.style).not.toHaveProperty('objectFit')
+    expect(item.actions['item-1-kf-kf-b-discrete']?.style).toEqual({ objectFit: 'cover' })
   })
 
   it('is accepted by the real CodPlay V2 compiler without importing V1', () => {
@@ -464,6 +465,43 @@ describe('buildSceneDocV2 — current native editor increment', () => {
     expect(result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.eventimes).toContainEqual({
       name: 'item-1-kf-kf-mid-discrete',
       startAt: 1900,
+    })
+  })
+
+  it('keeps a decoration keyframe out of the pose route while feeding the decoration route', () => {
+    const scene = fixtureScene()
+    scene.decors['text-decor-a']!.offset = { translate: { x: 10, y: 10 }, width: 20, height: 20 }
+    scene.decors['text-decor-b']!.offset = { translate: { x: 40, y: 30 }, width: 20, height: 20 }
+    scene.decors['text-decor-c'] = { id: 'text-decor-c', style: { color: '#ff0000' } }
+    scene.items[0] = {
+      ...scene.items[0]!,
+      keyframes: [
+        { id: 'kf-a', timeMs: 0, decorId: 'text-decor-a', channel: 'pose' },
+        { id: 'kf-c', timeMs: 500, decorId: 'text-decor-c', channel: 'decor' },
+        { id: 'kf-b', timeMs: 1000, decorId: 'text-decor-b', channel: 'pose' },
+      ],
+    }
+
+    const result = buildSceneDocV2(scene)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const item = result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item-1')!
+    expect(item.actions['item-1-kf-kf-c']).toBeUndefined()
+    expect(item.actions['item-1-kf-kf-b']).toMatchObject({
+      style: {
+        x: { from: 10, to: 40, duration: 1000, ease: 'inOut' },
+        y: { from: 10, to: 30, duration: 1000, ease: 'inOut' },
+      },
+    })
+    expect(item.actions['item-1-decor-kf-kf-c']).toMatchObject({
+      style: {
+        color: { from: parseColor('#ffffff'), to: parseColor('#ff0000'), duration: 500, ease: 'inOut' },
+      },
+    })
+    expect(result.sceneDoc.stories[EDITOR_V2_STORY_ID]!.eventimes).toContainEqual({
+      name: 'item-1-decor-kf-kf-c',
+      startAt: 300,
     })
   })
 

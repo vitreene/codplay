@@ -108,6 +108,21 @@ describe('decorEditorMachine — cycle de vie', () => {
 })
 
 describe('decorEditorMachine — édition du décor (item unique)', () => {
+  it('conserve les chemins de propriétés modifiées sur l’item attaché', () => {
+    const actor = boot()
+    actor.send({
+      ...attachEvent(),
+      items: [entry({ modifiedProperties: ['style.color', 'futureModule.value'] })],
+    })
+    expect(actor.getSnapshot().context.items[0]!.modifiedProperties).toEqual([
+      'style.color',
+      'futureModule.value',
+    ])
+    actor.send({ type: 'MODIFIED.SET', itemId: 'item-1', paths: ['offset.translate.x'] })
+    expect(actor.getSnapshot().context.items[0]!.modifiedProperties).toEqual(['offset.translate.x'])
+    actor.stop()
+  })
+
   it('PATCH.APPLY fusionne dans l\'écart courant', () => {
     const actor = boot()
     actor.send(attachEvent())

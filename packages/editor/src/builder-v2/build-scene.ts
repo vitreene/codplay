@@ -18,15 +18,20 @@ import type { CapsuleDistributionOutput } from '@codplay/scene-factory/capsule-d
 import type { CapsuleKind } from '@codplay/scene-factory/capsule-preset'
 import type { PersoDoc, SceneDoc } from 'codplay'
 import { prepareSvgPath } from 'ace'
+import { resolveKeyframeChannel } from '../app/commands/types'
 import type { CapsuleDef, EditorScene, Item, Keyframe, Transition } from '../app/commands/types'
 import { DEFAULT_EASING } from '../sequence-editor/constants'
+import { resolveBorderInsetLengths } from '../motion-editor/border-insets'
 import {
   computeStyleDiff,
   hasZoneAssignment,
   isInterpolableStylePair,
   resolveInitialClassName,
   resolveInitialStyle,
+  resolveDecorChannelStyle,
+  resolveKeyframeDecorStyle,
   resolveKeyframeClassName,
+  resolveKeyframePoseStyle,
   resolveKeyframeStyle,
   resolveRootClassName,
   resolveRootStyle,
@@ -50,7 +55,7 @@ export function buildSceneDocV2(scene: EditorScene): BuildSceneV2Result {
   const itemById = new Map(scene.items.map((item) => [item.id, item]))
   const rootTransitionDefaults = resolveAutoCapsuleDefaults(CAPSULE_TYPE.card)
   const preRollMs = TransitionTiming.computeScenePreRollMs(scene.items.map((item) => {
-    const firstKeyframe = sortKeyframes(item)[0]
+    const firstKeyframe = sortPoseKeyframes(item)[0]
     const parentTransitionDefaults = resolveParentTransitionDefaults(item, itemById, rootTransitionDefaults)
     return {
       firstKeyframe: firstKeyframe === undefined ? undefined : {
@@ -207,6 +212,9 @@ function validateItemInput(
     if (keyframe.id.trim() === '') {
       diagnostics.push(error('EDITOR_V2_KEYFRAME_ID_INVALID', 'Keyframe ids must not be empty.', { itemId: item.id }))
     }
+    if (keyframe.channel !== undefined && keyframe.channel !== 'pose' && keyframe.channel !== 'decor') {
+      diagnostics.push(error('EDITOR_V2_KEYFRAME_CHANNEL_INVALID', `Keyframe channel '${String(keyframe.channel)}' is unsupported.`, { itemId: item.id, keyframeId: keyframe.id }))
+    }
     for (const transition of [keyframe.transitionIn, keyframe.transitionOut]) {
       if (transition !== undefined && (!Number.isFinite(transition.durationMs) || transition.durationMs < 0)) {
         diagnostics.push(error('EDITOR_V2_TRANSITION_DURATION_INVALID', 'Transition durations must be finite non-negative numbers.', { itemId: item.id, keyframeId: keyframe.id }))
@@ -295,6 +303,14 @@ function childrenOf(items: readonly Item[], parentId: string | null): Item[] {
 
 type V2LeafPerso = PersoDoc<'tag'> | PersoDoc<'img'> | PersoDoc<'media'>
 type V2Perso = PersoDoc<'list'> | V2LeafPerso
+type ClassNameAction = Readonly<{ add?: string; remove?: string }>
+type DecorAction = Readonly<{
+  name: string
+  style?: Record<string, unknown>
+  className?: ClassNameAction
+  startAt: number
+  move?: Record<string, unknown>
+}>
 
 type CapsuleResolution = Readonly<{
   rootArtifact: Readonly<{ className: string }>
@@ -405,12 +421,12 @@ function resolveCapsuleDistribution(
   transitionDefaults: ReturnType<typeof resolveAutoCapsuleDefaults>,
   fallbackClipDurationMs = 0,
 ): CapsuleDistributionOutput {
-  const authoredClipDurationMs = items.reduce((max, item) => Math.max(max, sortKeyframes(item).at(-1)?.timeMs ?? 0), 0)
+  const authoredClipDurationMs = items.reduce((max, item) => Math.max(max, sortPoseKeyframes(item).at(-1)?.timeMs ?? 0), 0)
   return CapsuleDistribution.compute({
     clipDurationMs: Math.max(authoredClipDurationMs, fallbackClipDurationMs) + preRollMs,
     ...preset,
     children: items.map((item) => {
-      const keyframes = sortKeyframes(item)
+      const keyframes = sortPoseKeyframes(item)
       // A single real keyframe fixes the entry boundary; the capsule distribution supplies the
       // missing exit boundary. Locking both sides to that same keyframe would make the item
       // zero-duration and would diverge from the sequence-editor preview.
@@ -432,7 +448,7 @@ function resolveCapsuleDistribution(
 
 /** Builds the capsule's explicit named transition inputs for capsule-automation. */
 function buildTransitionEvents(item: Item): Partial<Record<string, AutoCapsuleEventInput>> {
-  const keyframes = sortKeyframes(item)
+  const keyframes = sortPoseKeyframes(item)
   const events: Partial<Record<string, AutoCapsuleEventInput>> = {}
   const intro = keyframes[0]?.transitionIn
   const outro = keyframes.at(-1)?.transitionOut
@@ -516,7 +532,8 @@ function buildLeafPerso(
 ): Readonly<{ perso: V2LeafPerso; eventimes: Array<{ name: string; startAt: number }> }> {
   const content = item.contentId === null ? undefined : scene.contents[item.contentId]
   const text = item.type === 'text' ? content?.text : undefined
-  const keyframes = sortKeyframes(item)
+  const keyframes = sortPoseKeyframes(item)
+  const decorationKeyframes = sortDecorationKeyframes(scene, item)
   const firstKeyframe = keyframes[0]
   const initialStyle = firstKeyframe === undefined
     ? resolveInitialStyle(scene, item)
@@ -524,27 +541,23 @@ function buildLeafPerso(
   const initialClassName = firstKeyframe === undefined
     ? resolveInitialClassName(scene, item)
     : resolveKeyframeClassName(scene, item, firstKeyframe)
-  const lastKeyframe = keyframes.at(-1)
-  const lastClassName = lastKeyframe === undefined
-    ? initialClassName
-    : resolveKeyframeClassName(scene, item, lastKeyframe)
   const transition = resolveTransitionActions(childArtifact)
-  if (lastClassName !== initialClassName) {
-    // The class channel is discrete by contract; the current V2 builder slice keeps the initial class and
-    // reports the later authored value instead of manufacturing a class tween.
-    diagnostics.push({
-      level: 'warning',
-      code: 'EDITOR_V2_DISCRETE_CLASSES_IGNORED',
-      message: 'Class changes between keyframes are discrete and are not interpolated by the V2 builder.',
-      context: { itemId: item.id },
-    })
-  }
   const initial = { ...initialStyle, ...transition.introFrom }
-  const decorActions = buildInterpolationActions(scene, item, keyframes, preRollMs, diagnostics)
-  const actions: Record<string, { style?: Record<string, unknown>; move?: Record<string, unknown> }> = { ...transition.actions }
+  const decorActions = buildInterpolationActions(
+    scene,
+    item,
+    decorationKeyframes,
+    keyframes,
+    preRollMs,
+    diagnostics,
+    childArtifact.className,
+    initialClassName,
+  )
+  const actions: Record<string, { style?: Record<string, unknown>; className?: ClassNameAction; move?: Record<string, unknown> }> = { ...transition.actions }
   for (const action of decorActions) {
     actions[action.name] = {
-      ...(Object.keys(action.style).length === 0 ? {} : { style: action.style }),
+      ...(action.style === undefined || Object.keys(action.style).length === 0 ? {} : { style: action.style }),
+      ...(action.className === undefined ? {} : { className: action.className }),
       ...(action.move === undefined ? {} : { move: action.move }),
     }
   }
@@ -578,17 +591,94 @@ function buildLeafPerso(
 function buildInterpolationActions(
   scene: EditorScene,
   item: Item,
-  keyframes: Keyframe[],
+  decorationKeyframes: Keyframe[],
+  poseKeyframes: Keyframe[],
   preRollMs: number,
   diagnostics: BuilderDiagnostic[],
-): Array<{ name: string; style: Record<string, unknown>; startAt: number; move?: Record<string, unknown> }> {
-  const actions: Array<{ name: string; style: Record<string, unknown>; startAt: number; move?: Record<string, unknown> }> = []
-  for (let index = 1; index < keyframes.length; index += 1) {
-    const source = keyframes[index - 1]!
-    const destination = keyframes[index]!
-    const fromStyle = resolveKeyframeStyle(scene, item, source)
-    const toStyle = resolveKeyframeStyle(scene, item, destination)
+  generatedClassName: string,
+  initialClassName: string | undefined,
+): DecorAction[] {
+  // Documents written before P2-E have one implicit pose channel. Keep their single combined
+  // action shape so the native builder/runtime contract does not change during channel migration.
+  if (!item.keyframes.some((keyframe) => resolveKeyframeChannel(keyframe) === 'decor')) {
+    return buildUnifiedPoseActions(
+      scene,
+      item,
+      poseKeyframes,
+      preRollMs,
+      diagnostics,
+      generatedClassName,
+      initialClassName,
+    )
+  }
+
+  const actions: DecorAction[] = []
+  for (let index = 1; index < decorationKeyframes.length; index += 1) {
+    const source = decorationKeyframes[index - 1]!
+    const destination = decorationKeyframes[index]!
+    const sourceDecorStyle = resolveKeyframeDecorStyle(scene, item, source)
+    const targetDecorStyle = resolveKeyframeDecorStyle(scene, item, destination)
+    const borderChanged = !sameBorderInsetLengths(
+      resolveBorderInsetLengths(sourceDecorStyle),
+      resolveBorderInsetLengths(targetDecorStyle),
+    )
+    const sourceAnchorStyle = borderChanged
+      ? poseAnchorStyle(resolveKeyframePoseStyle(scene, item, source))
+      : {}
+    const targetAnchorStyle = borderChanged
+      ? poseAnchorStyle(resolveKeyframePoseStyle(scene, item, destination))
+      : {}
+    const fromStyle = { ...sourceDecorStyle, ...sourceAnchorStyle }
+    const toStyle = { ...targetDecorStyle, ...targetAnchorStyle }
+    const diff = {
+      ...computeStyleDiff(sourceDecorStyle, targetDecorStyle),
+      ...(borderChanged ? computeStyleDiff(sourceAnchorStyle, targetAnchorStyle) : {}),
+    }
+    const transition = destination.transitionIn?.kind === 'interpolated'
+      ? destination.transitionIn
+      : source.transitionOut?.kind === 'interpolated'
+        ? source.transitionOut
+        : undefined
+    const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
+    const durationMs = transition?.durationMs ?? intervalMs
+    const ease = transition === undefined ? normalizeEasing(DEFAULT_EASING) : normalizeEasing(transition.easing)
+    const startAt = durationMs <= 0
+      ? destination.timeMs + preRollMs
+      : TransitionTiming.interpolatedTransitionTriggerMs({
+        sourceKfTimeMs: source.timeMs,
+        destKfTimeMs: destination.timeMs,
+        durationMs,
+        direction: transition?.direction ?? 'after',
+      }) + preRollMs
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
+    const actionName = `${item.id}-decor-kf-${destination.id}`
+    if (Object.keys(style.interpolated).length > 0) {
+      actions.push({ name: actionName, style: style.interpolated, startAt })
+    }
+    if (Object.keys(style.discrete).length > 0) {
+      actions.push({ name: `${actionName}-discrete`, style: style.discrete, startAt: destination.timeMs + preRollMs })
+    }
+    const className = buildClassNameTransition(
+      index === 1 ? initialClassName : resolveKeyframeClassName(scene, item, source),
+      resolveKeyframeClassName(scene, item, destination),
+      generatedClassName,
+    )
+    if (className !== undefined) {
+      actions.push({ name: `${actionName}-classes`, className, startAt: destination.timeMs + preRollMs })
+    }
+  }
+
+  for (let index = 1; index < poseKeyframes.length; index += 1) {
+    const source = poseKeyframes[index - 1]!
+    const destination = poseKeyframes[index]!
+    const fromStyle = resolveKeyframePoseStyle(scene, item, source)
+    const toStyle = resolveKeyframePoseStyle(scene, item, destination)
     const diff = computeStyleDiff(fromStyle, toStyle)
+    const className = buildClassNameTransition(
+      index === 1 ? initialClassName : resolveKeyframeClassName(scene, item, source),
+      resolveKeyframeClassName(scene, item, destination),
+      generatedClassName,
+    )
     const path = scene.decors[destination.decorId]?.path
     const hasMotionPath = typeof path === 'string' && path.trim() !== ''
     if (hasMotionPath) {
@@ -603,7 +693,7 @@ function buildInterpolationActions(
         continue
       }
     }
-    if (Object.keys(diff).length === 0 && !hasMotionPath) continue
+    if (Object.keys(diff).length === 0 && !hasMotionPath && className === undefined) continue
 
     const transition = destination.transitionIn?.kind === 'interpolated'
       ? destination.transitionIn
@@ -613,21 +703,6 @@ function buildInterpolationActions(
     const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
     const durationMs = transition?.durationMs ?? intervalMs
     const ease = transition === undefined ? normalizeEasing(DEFAULT_EASING) : normalizeEasing(transition.easing)
-    const style: Record<string, unknown> = {}
-    const discreteStyle: Record<string, unknown> = {}
-    for (const [property, value] of Object.entries(diff)) {
-      const from = fromStyle[property]
-      if (from === undefined) {
-        // The destination property is authored, but the source has no authored value. Applying it
-        // at the destination preserves the keyframe state without pretending that a CSS default is
-        // part of the V2 document.
-        if (value !== undefined) discreteStyle[property] = value
-        continue
-      }
-      if (!isInterpolableStylePair(from, value)) continue
-      style[property] = { from, to: value, duration: durationMs, ease }
-    }
-
     const startAt = durationMs <= 0
       ? destination.timeMs + preRollMs
       : TransitionTiming.interpolatedTransitionTriggerMs({
@@ -636,11 +711,12 @@ function buildInterpolationActions(
         durationMs,
         direction: transition?.direction ?? 'after',
       }) + preRollMs
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
     const actionName = `${item.id}-kf-${destination.id}`
-    if (Object.keys(style).length > 0 || (hasMotionPath && intervalMs > 0)) {
+    if (Object.keys(style.interpolated).length > 0 || (hasMotionPath && intervalMs > 0)) {
       actions.push({
         name: actionName,
-        style,
+        ...(Object.keys(style.interpolated).length === 0 ? {} : { style: style.interpolated }),
         ...(hasMotionPath && intervalMs > 0 ? {
           move: {
             target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
@@ -659,15 +735,184 @@ function buildInterpolationActions(
         startAt: hasMotionPath && intervalMs > 0 ? source.timeMs + preRollMs : startAt,
       })
     }
-    if (Object.keys(discreteStyle).length > 0) {
+    if (Object.keys(style.discrete).length > 0) {
       actions.push({
         name: `${actionName}-discrete`,
-        style: discreteStyle,
+        style: style.discrete,
         startAt: destination.timeMs + preRollMs,
       })
     }
+    if (className !== undefined) {
+      actions.push({ name: `${actionName}-classes`, className, startAt: destination.timeMs + preRollMs })
+    }
   }
   return actions
+}
+
+/** Keeps only derived x/y channels needed to animate the content-box anchor. */
+function poseAnchorStyle(style: Record<string, unknown>): Record<string, unknown> {
+  const anchor: Record<string, unknown> = {}
+  if (style.x !== undefined) anchor.x = style.x
+  if (style.y !== undefined) anchor.y = style.y
+  return anchor
+}
+
+/** Compares resolved border lengths without converting logical units through a viewport. */
+function sameBorderInsetLengths(
+  source: ReturnType<typeof resolveBorderInsetLengths>,
+  destination: ReturnType<typeof resolveBorderInsetLengths>,
+): boolean {
+  return source.top.value === destination.top.value
+    && source.top.unit === destination.top.unit
+    && source.right.value === destination.right.value
+    && source.right.unit === destination.right.unit
+    && source.bottom.value === destination.bottom.value
+    && source.bottom.unit === destination.bottom.unit
+    && source.left.value === destination.left.value
+    && source.left.unit === destination.left.unit
+}
+
+/** Builds the pre-P2-E combined pose/decor action for a single-channel item. */
+function buildUnifiedPoseActions(
+  scene: EditorScene,
+  item: Item,
+  keyframes: Keyframe[],
+  preRollMs: number,
+  diagnostics: BuilderDiagnostic[],
+  generatedClassName: string,
+  initialClassName: string | undefined,
+): DecorAction[] {
+  const actions: DecorAction[] = []
+  for (let index = 1; index < keyframes.length; index += 1) {
+    const source = keyframes[index - 1]!
+    const destination = keyframes[index]!
+    const fromStyle = resolveKeyframeStyle(scene, item, source)
+    const toStyle = resolveKeyframeStyle(scene, item, destination)
+    const diff = computeStyleDiff(fromStyle, toStyle)
+    const className = buildClassNameTransition(
+      index === 1 ? initialClassName : resolveKeyframeClassName(scene, item, source),
+      resolveKeyframeClassName(scene, item, destination),
+      generatedClassName,
+    )
+    const path = scene.decors[destination.decorId]?.path
+    const hasMotionPath = typeof path === 'string' && path.trim() !== ''
+    if (hasMotionPath) {
+      try {
+        prepareSvgPath(path, { traversal: 'arc-length', precision: 2 })
+      } catch (cause) {
+        diagnostics.push(error(
+          'EDITOR_V2_MOTION_PATH_INVALID',
+          cause instanceof Error ? cause.message : 'The authored motion path is invalid.',
+          { itemId: item.id, keyframeId: destination.id, decorId: destination.decorId },
+        ))
+        continue
+      }
+    }
+    if (Object.keys(diff).length === 0 && !hasMotionPath && className === undefined) continue
+
+    const transition = destination.transitionIn?.kind === 'interpolated'
+      ? destination.transitionIn
+      : source.transitionOut?.kind === 'interpolated'
+        ? source.transitionOut
+        : undefined
+    const intervalMs = Math.max(0, destination.timeMs - source.timeMs)
+    const durationMs = transition?.durationMs ?? intervalMs
+    const ease = transition === undefined ? normalizeEasing(DEFAULT_EASING) : normalizeEasing(transition.easing)
+    const startAt = durationMs <= 0
+      ? destination.timeMs + preRollMs
+      : TransitionTiming.interpolatedTransitionTriggerMs({
+        sourceKfTimeMs: source.timeMs,
+        destKfTimeMs: destination.timeMs,
+        durationMs,
+        direction: transition?.direction ?? 'after',
+      }) + preRollMs
+    const style = buildStyleTransition(fromStyle, diff, durationMs, ease)
+    const actionName = `${item.id}-kf-${destination.id}`
+    if (Object.keys(style.interpolated).length > 0 || (hasMotionPath && intervalMs > 0)) {
+      actions.push({
+        name: actionName,
+        ...(Object.keys(style.interpolated).length === 0 ? {} : { style: style.interpolated }),
+        ...(hasMotionPath && intervalMs > 0 ? {
+          move: {
+            target: item.parentId === null ? EDITOR_V2_ROOT_PERSO_ID : item.parentId,
+            flipMode: 'local',
+            transition: {
+              duration: intervalMs,
+              ease,
+              path,
+              traversal: 'arc-length',
+              pathAnchor: 'center',
+            },
+          },
+        } : {}),
+        startAt: hasMotionPath && intervalMs > 0 ? source.timeMs + preRollMs : startAt,
+      })
+    }
+    if (Object.keys(style.discrete).length > 0) {
+      actions.push({ name: `${actionName}-discrete`, style: style.discrete, startAt: destination.timeMs + preRollMs })
+    }
+    if (className !== undefined) {
+      actions.push({ name: `${actionName}-classes`, className, startAt: destination.timeMs + preRollMs })
+    }
+  }
+  return actions
+}
+
+/** Builds the discrete class delta while preserving capsule-generated classes. */
+function buildClassNameTransition(
+  fromDecorClassName: string | undefined,
+  toDecorClassName: string | undefined,
+  generatedClassName: string,
+): ClassNameAction | undefined {
+  const from = classTokens(combineClassNames(generatedClassName, fromDecorClassName))
+  const to = classTokens(combineClassNames(generatedClassName, toDecorClassName))
+  const remove = [...from].filter((token) => !to.has(token)).join(' ')
+  const add = [...to].filter((token) => !from.has(token)).join(' ')
+  if (remove === '' && add === '') return undefined
+  return {
+    ...(add === '' ? {} : { add }),
+    ...(remove === '' ? {} : { remove }),
+  }
+}
+
+/** Combines authored and generated classes without introducing an empty class value. */
+function combineClassNames(...values: Array<string | undefined>): string | undefined {
+  const result = values.filter((value): value is string => value !== undefined && value.trim() !== '').join(' ')
+  return result === '' ? undefined : result
+}
+
+/** Splits one complete class string into stable tokens for a discrete delta. */
+function classTokens(value: string | undefined): Set<string> {
+  return new Set(value?.split(/\s+/).filter((token) => token !== '') ?? [])
+}
+
+/** Converts a resolved destination diff into interpolated and destination-only style channels. */
+function buildStyleTransition(
+  fromStyle: Record<string, unknown>,
+  diff: Record<string, unknown>,
+  durationMs: number,
+  ease: string,
+): { interpolated: Record<string, unknown>; discrete: Record<string, unknown> } {
+  const interpolated: Record<string, unknown> = {}
+  const discrete: Record<string, unknown> = {}
+  for (const [property, value] of Object.entries(diff)) {
+    const from = fromStyle[property]
+    if (from === undefined) {
+      // The destination property is authored, but the source has no authored value. Applying it
+      // at the destination preserves the keyframe state without inventing a CSS endpoint.
+      if (value !== undefined) discrete[property] = value
+      continue
+    }
+    if (!isInterpolableStylePair(from, value)) {
+      // A property with two authored endpoints still has a real destination value even when
+      // ACE cannot interpolate it (font family, text alignment, object-fit, ...). Keep it in the
+      // open discrete channel instead of dropping it behind a property whitelist.
+      if (value !== undefined) discrete[property] = value
+      continue
+    }
+    interpolated[property] = { from, to: value, duration: durationMs, ease }
+  }
+  return { interpolated, discrete }
 }
 
 /** Extracts the effective intro duration, using the parent capsule default when no override exists. */
@@ -708,6 +953,28 @@ function resolveParentTransitionDefaults(
 /** Returns keyframes in the timeline order required by the pure resolver. */
 function sortKeyframes(item: Item): Keyframe[] {
   return [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+}
+
+/** Returns only the keyframes that define the item's spatial/visibility timeline. */
+function sortPoseKeyframes(item: Item): Keyframe[] {
+  return sortKeyframes(item).filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+}
+
+/** Reports whether a keyframe contributes an authored decoration event of its own. */
+function carriesDecoration(scene: EditorScene, keyframe: Keyframe): boolean {
+  const decor = scene.decors[keyframe.decorId]
+  if (decor === undefined) return false
+  if (Object.keys(resolveDecorChannelStyle(decor)).length > 0
+    || decor.classes !== undefined
+    || decor.zoneId !== undefined) return true
+  return Object.keys(decor).some((property) => !['id', 'offset', 'path'].includes(property))
+}
+
+/** Returns the decoration event chain without letting an empty pose waypoint split its tween. */
+function sortDecorationKeyframes(scene: EditorScene, item: Item): Keyframe[] {
+  return sortKeyframes(item).filter((keyframe) => (
+    resolveKeyframeChannel(keyframe) === 'decor' || carriesDecoration(scene, keyframe)
+  ))
 }
 
 /** Normalizes the editor easing vocabulary to the V2 action spelling. */

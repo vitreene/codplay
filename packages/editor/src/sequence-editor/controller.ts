@@ -11,6 +11,7 @@ import {
 import type {
   EditorScene, Item, Transition, LayoutProfile, DisplayConfig, Waveform,
 } from './types'
+import { resolveKeyframeChannel } from './types'
 import type { Command } from '../app/controller/types'
 import { timeToPixel, pixelToTime } from './render/geometry'
 
@@ -51,7 +52,9 @@ function emptyScene(): EditorScene {
 
 /** Returns the real entry/exit keyframes used by the V2 clip controls. */
 function timelineBoundaryKeyframes(item: Item): { first?: Item['keyframes'][number]; last?: Item['keyframes'][number] } {
-  const keyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  const keyframes = [...item.keyframes]
+    .filter((keyframe) => resolveKeyframeChannel(keyframe) === 'pose')
+    .sort((left, right) => left.timeMs - right.timeMs)
   return {
     first: keyframes[0],
     last: keyframes.length > 1 ? keyframes.at(-1) : undefined,

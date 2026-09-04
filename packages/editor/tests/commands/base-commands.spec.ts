@@ -74,6 +74,7 @@ describe('assignType', () => {
     const item = next.items.find((i) => i.id === itemId)!
     const decor = next.decors[item.initialDecorId]
     expect(decor?.style?.['background-color']).toBe('oklch(0.45 0.12 235)')
+    expect(decor?.style?.['border-style']).toBe('solid')
     expect(decor?.style?.['text-align']).toBe('center')
     expect(decor?.offset?.width).toBe(80)
   })

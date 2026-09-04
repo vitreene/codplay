@@ -7,6 +7,26 @@ Cette note conserve les raisonnements et les divergences qui ont conduit au plan
 [`2026-09-02-motion-editor-v2-plan.md`](../2026-09-02-motion-editor-v2-plan.md).
 Elle ne remplace ni les spécifications V2 ni le plan d'actions.
 
+## Décision complémentaire du 2026-09-04 — deux canaux par item
+
+La trajectoire et l'habillage ne sont plus considérés comme une seule chaîne
+de KFs. Le modèle porte explicitement `channel: 'pose' | 'decor'` :
+
+- les KFs `pose` forment la chaîne spatiale et les bornes de visibilité ;
+- les KFs `decor` portent un patch d'habillage sans contribuer à la pose tant
+  qu'ils restent sur ce canal, n'interrompent jamais une trajectoire et ne
+  produisent pas de ghost ;
+- un KF `pose` peut aussi porter du décor et participe alors aux deux chaînes,
+  mais reste un seul point visuel dans la zone pose ;
+- la timeline reste une seule row par item. Elle ne se sépare en zone haute
+  `decor` et zone basse `pose` que lorsque les deux canaux sont présents. Les
+  losanges restent identiques et il n'existe pas de timeline par propriété.
+
+Exemple : avec `A pose @ 0 s`, `B pose @ 10 s` et `C decor @ 5 s`, la pose à
+`5 s` reste celle de la trajectoire `A → B`; `C` ne devient pas une cible
+spatiale. Si l'auteur déplace l'item à `5 s`, `C` est promu en KF `pose`, sa
+pose est capturée et la trajectoire devient réellement `A → C → B`.
+
 ## Décisions issues de la discussion
 
 - L'éditeur travaille dans la capsule qui reçoit l'item. La capsule fournit les
@@ -22,26 +42,30 @@ Elle ne remplace ni les spécifications V2 ni le plan d'actions.
   virtuelle. Le décor de sortie peut donc ne porter qu'une transition de
   visibilité ; son édition explicite est nécessaire pour fixer une nouvelle pose.
 - Il n'y a pas, dans cette version, deux intentions « repositionner » et
-  « déplacer ». Le geste du CS est unique : sur un KF il met à jour le décor au
-  même temps ; entre deux KFs il peut créer un KF au temps du playhead ; répété
-  sur ce KF, il met à jour ce même décor, sans remplacer ni dupliquer le KF.
+  « déplacer ». Le geste du CS est unique : sur un KF il met à jour le canal
+  `pose` au même temps ; entre deux KFs il peut créer un KF `pose` au temps du
+  playhead ; répété sur ce KF, il met à jour ce même KF, sans remplacer ni
+  dupliquer le KF. La palette crée un KF `decor` si aucun KF `pose` n'existe à
+  cet instant, ou enrichit le KF `pose` existant.
   L'ancien routage central/bord de 12 px est conservé comme module expérimental
   dormant.
 - Cette règle vaut pour toute propriété de `Decor`, pas seulement la pose : style,
-  couleur, taille, rotation, classes, zone, custom ou path peuvent constituer le
-  candidat d'un KF. La capture d'un KF créé réunit la valeur interpolée et toutes
-  les interventions du user. Le contenu reste `Content` dans le modèle V2 ; un
-  changement de contenu piloté par KF demande un contrat distinct et n'est pas
-  introduit ici.
-- Le nouveau KF porte son `Decor.path` entrant. Une droite est implicite et ne
-  s'enregistre pas. Le path, le ghost et le CS sont des artefacts d'authoring,
-  jamais des éléments de scène.
-- La chaîne visuelle expose tous les ghosts réels de l'item, pas seulement ceux
-  du segment actif. La pose courante est masquée ; les autres restent
-  cliquables. Les ghosts et trajets non actifs sont nettement plus discrets par
-  transparence et couleur ambrée pâlie/désaturée ; cette couleur et leur opacité
-  varient légèrement avec la distance temporelle au KF courant, sans changer
-  leur contrat d'interaction.
+  couleur, taille, rotation, classes, zone, custom ou toute propriété future
+  peuvent constituer le patch d'un KF. La capture d'un KF `decor` reste sparse ;
+  celle d'un KF `pose` capture en plus la pose complète requise par son waypoint.
+  Le contenu reste `Content` dans le modèle V2 ; un changement de contenu piloté
+  par KF demande un contrat distinct et n'est pas introduit ici.
+- Le nouveau KF `pose` porte son `Decor.path` entrant selon le contrat de
+  trajectoire courant. Une droite est implicite et ne s'enregistre pas. Tant
+  qu'un KF reste `decor`, il ne contribue pas à la pose ; un mouvement le
+  transforme en KF `pose` au même instant. Le path, le ghost et le CS sont des
+  artefacts d'authoring, jamais des éléments de scène.
+- La chaîne visuelle expose tous les ghosts réels des KFs `pose` de l'item, pas
+  seulement ceux du segment actif. La pose courante est masquée ; les autres
+  restent cliquables. Les KFs `decor` n'ont pas de ghost géométrique. Les ghosts
+  et trajets non actifs sont nettement plus discrets par transparence et couleur
+  ambrée pâlie/désaturée ; cette couleur et leur opacité varient légèrement avec
+  la distance temporelle au KF courant, sans changer leur contrat d'interaction.
 - La sélection automatique d'un KF intervient à la pause ou au relâchement du
   scrub, jamais à chaque seek intermédiaire ni à l'entrée de Play. Le contrôleur
   retient le KF réel le plus proche dans une tolérance de 50 ms pour l'unique
@@ -72,9 +96,10 @@ Elle ne remplace ni les spécifications V2 ni le plan d'actions.
 
 Le plan SE actuel établit que :
 
-- `Keyframe.timeMs` est documentaire et que le premier/dernier KF bornent la
-  visibilité ; un seul KF reçoit une sortie virtuelle de la capsule ;
-- la grille est décor-agnostique et ne transporte que `decorId` ;
+- `Keyframe.timeMs` est documentaire et que le premier/dernier KF `pose` bornent
+  la visibilité ; un seul KF `pose` reçoit une sortie virtuelle de la capsule ;
+- la grille est décor-agnostique et transporte `decorId` ainsi que le canal
+  explicite `pose`/`decor` ;
 - les transitions sont aujourd'hui décrites par `transitionIn`/`transitionOut`,
   avec une exclusivité par segment, et rendues par rampe/bande ;
 - `Sustain` est un comportement distinct, appliqué au-dessus du décor ;
@@ -97,10 +122,11 @@ la matérialisation reste une porte séparée.
 - Le plan SE possède un défaut général de transition de `400 ms` avec easing
   `ease-in-out`. La feature mouvement conserve provisoirement `500 ms` pour sa
   fenêtre ; le nommage d'une constante dédiée doit être explicite.
-- Le concept de transition est fixé : entre deux KFs, la transition unique est
-  portée par le décor du KF aval ; le point de début est facultatif et borne la
-  fenêtre. `transitionIn`/`transitionOut` restent réservés aux transitions
-  nommées des extrémités de visibilité.
+- Le concept de transition est fixé par canal : entre deux KFs `pose`, la
+  transition de position est portée par le KF aval ; entre deux événements de
+  décor, la transition d'habillage est portée par le canal `decor`. Le point de
+  début est facultatif et borne la fenêtre. `transitionIn`/`transitionOut`
+  restent réservés aux transitions nommées des extrémités de visibilité.
 - Les collisions temporelles, le choix d'easing visible, les options de path,
   l'orientation/taille selon la tangente, le reparentage, l'undo/redo applicatif,
   la multi-sélection et l'interface des zones de capsule restent hors de cette

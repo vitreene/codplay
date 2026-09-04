@@ -573,20 +573,49 @@ en lecture seule.
 - Un geste du cadre ou une modification de palette est accepté comme preview
   par `instance.snapshot.set()`, avec le même `DecorPatch` candidat pour le
   cadre et les panneaux.
+- La base présentée à dedit est complète : cascade du keyframe amont puis
+  état logique interpolé exposé par `snapshot.get()` après `seekApplied`.
+  La frontière snapshot → décor parcourt les propriétés présentes sans
+  whitelist ; le DOM et le style calculé ne sont pas des sources de lecture.
+- Le bridge conserve séparément cette base et une map des modifications
+  utilisateur indexée par item, temps auteur et chemin de propriété. Chaque
+  entrée conserve la valeur de base et la valeur posée. Dedit continue
+  d'émettre son patch complet ; le bridge en déduit le patch sparse destiné à
+  la preview et à la persistance. La granularité est celle de la feuille,
+  y compris pour les sous-champs d'`offset` et les groupes futurs.
 - Le candidat est conservé dans le port de coordination, séparément de
   `snapshot.get()` qui exclut la preview active. Un seek, un rebuild ou une
-  reselection à ce même temps peut donc réafficher ce candidat.
-- Aucune commande documentaire n'est émise pour cette cible temporaire.
-  La persistance intervient seulement lorsqu'un keyframe est créé à cet
-  instant : la coordination transmet le candidat, crée un décor frais et le
-  remplit dans la même transaction xState. Le nouveau keyframe devient alors
-  la cible documentaire des éditions suivantes.
+  reselection à ce même temps peut donc réafficher ce candidat. Le contrôle
+  correspondant à chaque entrée de la map porte immédiatement la classe de
+  rendu `dedit-field__control--modified`, sans que le signal temporaire ne
+  remplace la valeur par un fond ou une valeur de secours.
+- Une modification temporaire de palette est matérialisée à la frontière de
+  phase de l'éditeur (seek, changement de sélection ou inactivité) par
+  exactement un keyframe de canal `decor` au temps auteur courant et un décor
+  frais ne contenant que le patch sparse. Une propriété interpolée non touchée
+  n'est jamais assignée au nouveau décor. Une modification temporaire issue du
+  Selection Frame crée au contraire un keyframe de canal `pose`, avec la pose
+  complète nécessaire au waypoint et, le cas échéant, le patch de décor sparse
+  séparé. Le nouveau keyframe devient alors la cible documentaire des éditions
+  suivantes ; un seek seul ne crée aucun keyframe.
+- Si un KF `pose` existe déjà au temps courant, une modification de palette
+  enrichit ce KF au lieu de créer un KF `decor`. Si un KF `decor` existe déjà et
+  qu'un geste de pose est engagé à ce temps, le KF est promu en `pose` en
+  conservant son patch de décor. Ces règles empêchent deux KFs concurrents au
+  même instant.
+- Pour une cible déjà documentaire, le même calcul sparse identifie les
+  propriétés modifiées ; la matérialisation conserve les autres sous-champs
+  déjà écrits du décor sans transformer une valeur interpolée en nouvelle
+  assignation.
 - Le temps auteur du candidat est rapproché du temps de création arrondi de
   la timeline dans une tolérance d'un demi-pas (`50 ms` pour le pas V2 de
   `100 ms`) ; cette tolérance ne change jamais le `timeMs` enregistré du
   keyframe.
 - Un abandon explicite efface la preview et le candidat sans mutation du
   document.
+- La suppression interactive d'une entrée de la map (et l'action associée
+  dans l'interface) est une évolution ultérieure : elle devra faire
+  réapparaître la base interpolée sans sérialiser cette base dans le décor.
 
 Le bridge est une composition de l'application, pas une option du contrôleur `dedit` et
 pas une API CodPlay. Cette verticale n'expose aucune façade publique de géométrie,

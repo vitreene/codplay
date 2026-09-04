@@ -59,7 +59,7 @@ Un **item** est l'entité que l'auteur crée. Deux natures de données à distin
                      • parent                 (initial  (par id)
                                               + par kf)
    ── vie dans le temps (représentation timeline) ──
-   • keyframes : { timeMs, → décor, transitions in/out }
+   • keyframes : { timeMs, canal pose|decor, → décor, transitions in/out }
    • décor initial (état « intro terminée », hors kf)
    • si capsule : sous-type · distribution · grille + enfants
 ```
@@ -68,20 +68,21 @@ Un **item** est l'entité que l'auteur crée. Deux natures de données à distin
 - **id** — identité stable, de bout en bout (jusqu'au perso au build).
 - **type** — texte / image / média / vidéo / capsule ; ouvre ses propriétés, détermine le perso.
 - **sa place** — une **clé d'ordre** (parmi ses frères) + une **ref à son parent**. L'arbre est *dérivé* de ces deux-là.
-- **ses keyframes** — le cœur de sa **représentation timeline** : chaque kf porte son **instant** (`timeMs`), le **décor** qu'il vise, et ses **transitions** (intro/outro, durée, easing). C'est *quand* l'item change, et *vers quoi*.
+- **ses keyframes** — le cœur de sa **représentation timeline** : chaque kf porte son **instant** (`timeMs`), son canal (`pose` ou `decor`), le **décor** qu'il vise, et ses **transitions** (intro/outro, durée, easing). C'est *quand* l'item change, et *vers quoi*.
 - **son décor initial** — un décor de base obligatoire, hors kf, à l'état « transition d'intro terminée » (la première apparition est déjà un état enrichi).
 - **si l'item est une capsule** — son **sous-type**, sa **distribution** (séquentiel/stagger), sa **grille** : les réglages spatio-temporels poussés sur ses enfants. Ses **enfants** se déduisent de parent+ordre (l'item ne porte pas de liste d'ids).
 
 **Ce que l'item relie** (par référence, données dans les tables) :
 - **contenu** → **contents** — ce qu'il montre (voir « Content » ci-dessous : source + texte + langue + grains temporels selon le type).
-- **décor(s)** → **decors** — géométrie, habillage et capacité de mouvement (style, classes, position, zone, path) : un décor **initial** + un décor **par keyframe**.
+- **décor(s)** → **decors** — géométrie, habillage et capacité de mouvement (style, classes, position, zone, path) : un décor **initial** + un décor **par keyframe**. La timeline sépare la résolution spatiale (`pose`) de la résolution d'habillage (`decor`) sans créer une piste par propriété.
 - **zone(s)** → **zones**, par **identité stable** (id, pas nom) — l'attache survit au renommage/déplacement de la zone.
 
-L'item existe sur un **intervalle**, pas à un instant : son premier et son dernier keyframes selon
-`timeMs` bornent respectivement l'entrée et la sortie (les labels `intro`/`outro` sont optionnels),
-et son décor évolue le long de ces kf. Quand l'item est enfant d'une capsule, la distribution de la
-capsule peut fournir la borne manquante sous forme virtuelle ; la capsule racine implicite applique
-ses défauts de transition aux items directs sans être elle-même un item affiché.
+L'item existe sur un **intervalle**, pas à un instant : son premier et son dernier keyframes de
+canal `pose` selon `timeMs` bornent respectivement l'entrée et la sortie (les labels `intro`/`outro`
+sont optionnels). Les KFs `decor` évoluent à l'intérieur de cette fenêtre et ne peuvent ni l'ouvrir
+ni la prolonger. Quand l'item est enfant d'une capsule, la distribution de la capsule peut fournir
+la borne manquante sous forme virtuelle ; la capsule racine implicite applique ses défauts de
+transition aux items directs sans être elle-même un item affiché.
 
 ---
 
@@ -146,7 +147,7 @@ La distinction forte : un item feuille **a** un temps (ses keyframes) ; une caps
 | Responsabilité | Lieu | Ce que c'est |
 |---|---|---|
 | **contenu** (ce qui est montré) | `Content` (table `contents`) | source, texte, langue, grains temporels |
-| **aspect** (comment c'est habillé), variable dans le temps | `Decor` (table `decors`) | style, classes, position, zone, path entrant — par keyframe |
+| **aspect** (comment c'est habillé), variable dans le temps | `Decor` (table `decors`) | valeurs de décor ouvertes — la projection `pose`/`decor` n'est pas une whitelist de champs |
 | **capacités propres au type** différencié, statiques | `Item.<typeDef>` (ex. `Item.capsule`) | ce que ce type sait faire (conteneur : distribution/grille…) |
 | **place / temps** | l'item lui-même | id, type, parent+ordre, keyframes |
 
@@ -231,7 +232,7 @@ Item {
   visible: boolean                    // affichage dans l'éditeur (pas de rendu)
   contentId: string | null            // → contents ; null si capsule (enfants = contenu)
   initialDecorId: string              // → decors — décor de base OBLIGATOIRE (état « intro terminée »)
-  keyframes: Keyframe[]               // vie dans le temps
+  keyframes: Keyframe[]               // canaux pose/decor et vie dans le temps
   capsule?: CapsuleDef                // présent ssi type === 'capsule'
 }
 
@@ -239,15 +240,29 @@ ItemType = 'text' | 'image' | 'media' | 'video' | 'capsule'
            // + futurs types média distincts (story-média, lottie, rive, three3D),
            //   ajoutés à la disponibilité du composant Codplay — jamais fusionnés sous 'media'
 
+KeyframeChannel = 'pose' | 'decor'
+
 Keyframe {
   id: string
   timeMs: number
+  channel: KeyframeChannel             // canal explicite, jamais déduit d'une whitelist de décor
   decorId: string                     // → decors — le décor visé à cet instant
   transitionIn?:  Transition
   transitionOut?: Transition
   name?: string
   markerId?: string                   // rattachement à un marqueur (timeline)
 }
+
+// Contrat des canaux :
+// - `pose` = waypoint spatial ; son décor peut aussi porter un patch d'habillage sparse ;
+// - `decor` = habillage seul ; tant qu'il reste sur ce canal, il ne contribue pas à la pose ;
+// - un geste de mouvement transforme un KF `decor` en KF `pose` au même instant, en conservant son
+//   décor ;
+// - la liste des propriétés qui composent la pose est volontairement ouverte et évolutive, elle ne
+//   se déduit pas d'une whitelist de propriétés `Decor` ;
+// - un KF `pose` qui porte de l'habillage participe aux deux résolutions mais reste un seul point
+//   dans la timeline, affiché sur la piste pose ;
+// - les documents historiques sans `channel` sont migrés en `pose`.
 
 Transition =
   | { kind: 'named';        name: TransitionKey; durationMs: number }
@@ -291,7 +306,7 @@ Decor {                               // l'ASPECT variable d'un item (par keyfra
   classes?:  ClassNameValue           // classes (add/remove/remplacement, modèle runtime)
   position?: PositionData             // position/appui-flex (module non-CSS, transposé en aval)
   zoneId?:   string | null            // → zones (par id) ; null = surface pleine de la capsule
-  path?:     string                   // chemin SVG V2 du segment entrant vers ce décor ; absent = droite
+  path?:     string                   // chemin SVG V2 du segment entrant vers un décor de KF `pose` ; absent = droite
   // PAS de `capsule` (réglages capsule = statiques, sur l'item : Item.capsule) ;
   // PAS de `text` (le contenu relève de Content). Voir note « Ce que Decor NE contient PAS ».
   // NB : DecorPatch (dedit) n'est PAS la référence ; la forme normative = spec du modèle
@@ -337,7 +352,8 @@ Cue {                                 // repère temporel PONCTUEL, aimanté
 - **`initialDecorId` (item) et `EditorScene.rootDecorId` (racine implicite) jouent le même rôle** — un décor de base, posé une fois, jamais keyframé. Séparés parce que la racine n'est **pas** un item (§ »racine» ci-dessus) : elle n'a donc pas de champ `initialDecorId` propre, d'où `rootDecorId` porté directement par `EditorScene`.
 - **`Item.label` est un libellé d'affichage, pas du contenu** — distinct de `Content.text` : renommer une piste dans la timeline ne change jamais ce que l'item montre. Optionnel : l'éditeur dérive un affichage par défaut (troncature de `Content.text`, nom de source, badge de type) quand absent, plutôt que d'imposer sa saisie.
 - **`markerTracks` est une table indépendante, pas liée aux items/médias** — contrairement à `Cue` (qui vit dans `Content`, parce qu'une cue est la transcription d'une source précise), un marqueur est posé librement par l'auteur sur la timeline, sans rattachement à un média. D'où sa place à côté de `zones` (autre table référencée indépendante des items), pas dans `Content`.
-- **`Decor.path` est une capacité de mouvement V2, pas une propriété de pose ou de visibilité** — il décrit le segment entrant vers le keyframe qui référence ce décor. Une absence de `path` signifie la droite source→cible implicite ; les pixels de viewport et les mesures de bounding box ne sont jamais stockés. Le champ est segment-local : il n'entre pas dans la cascade générale de `Decor` et ne se propage pas aux keyframes suivants. Lorsqu'un décor est partagé et qu'un path est édité, l'éditeur applique le copy-on-write documenté pour isoler le keyframe cible. Les transitions nommées d'entrée/sortie restent portées par le keyframe et ne sont pas remplacées par ce champ. La forme du chemin est celle du contrat CodPlay V2 (`M`/`L`/`A`, préparation `arc-length`) ; l'éditeur ne crée pas de grammaire concurrente.
+- **`Decor.path` est une capacité de mouvement V2, pas une propriété de pose ou de visibilité** — il décrit le segment entrant vers le KF cible du canal `pose`. Un KF `decor` ne peut pas le porter. Une absence de `path` signifie la droite source→cible implicite ; les pixels de viewport et les mesures de bounding box ne sont jamais stockés. Le champ est segment-local : il n'entre pas dans la cascade générale de `Decor` et ne se propage pas aux keyframes suivants. Lorsqu'un décor est partagé et qu'un path est édité, l'éditeur applique le copy-on-write documenté pour isoler le keyframe cible. Les transitions nommées d'entrée/sortie restent portées par le keyframe et ne sont pas remplacées par ce champ. La forme du chemin est celle du contrat CodPlay V2 (`M`/`L`/`A`, préparation `arc-length`) ; l'éditeur ne crée pas de grammaire concurrente.
+- **Deux canaux sans timeline par propriété** — `pose` est la chaîne spatiale et `decor` est la chaîne d'habillage. Les KFs `decor` ne comptent pas dans la vie de l'item, ne deviennent pas des ghosts et ne coupent pas un trajet. Un KF `pose` peut porter en plus des valeurs de décor ; il alimente alors les deux chaînes, mais reste un seul KF documentaire et un seul point visuel.
 
 ---
 

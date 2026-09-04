@@ -1,13 +1,89 @@
 import type { Decor, EditorScene, Item, Keyframe } from '../app/commands/types'
+import { resolveKeyframeChannel } from '../app/commands/types'
 import { parseColor } from 'ace'
+import { contentBoxLayoutDisplacement } from '../motion-editor/content-box'
+import { resolveBorderInsetLengths, type BorderLength } from '../motion-editor/border-insets'
 
 /** Resolves one Decor into the style record consumed by the V2 tag component. */
 export function resolveDecorStyle(decor: Decor | undefined): Record<string, unknown> {
+  const decorStyle = resolveDecorChannelStyle(decor)
+  return {
+    ...decorStyle,
+    ...resolveContentAnchoredPoseStyle(resolvePoseChannelStyle(decor), decorStyle),
+  }
+}
+
+/** Projects structured pose translations so the authored x/y coordinates anchor the content-box. */
+export function resolveContentAnchoredPoseStyle(
+  poseStyle: Record<string, unknown>,
+  decorStyle: Record<string, unknown>,
+): Record<string, unknown> {
+  const x = finiteStyleNumber(poseStyle.x)
+  const y = finiteStyleNumber(poseStyle.y)
+  if (x === undefined && y === undefined) return poseStyle
+
+  const border = resolveBorderInsetLengths(decorStyle)
+  if (isZeroBorder(border)) return poseStyle
+
+  const width = finiteStyleNumber(poseStyle.width)
+  const height = finiteStyleNumber(poseStyle.height)
+  const frame = {
+    x: x ?? 0,
+    y: y ?? 0,
+    width: width ?? 0,
+    height: height ?? 0,
+    rotate: finiteStyleNumber(poseStyle.rotate) ?? 0,
+    scaleX: finiteStyleNumber(poseStyle.scaleX) ?? 1,
+    scaleY: finiteStyleNumber(poseStyle.scaleY) ?? 1,
+    rotationOrigin: parseStyleRotationOrigin(poseStyle['transform-origin']),
+  }
+
+  // The common CSS case is axis-aligned. It can be represented with a CSS calc even when a
+  // border is authored in px, while a rotated/scaled frame needs the same affine displacement
+  // as the editor overlay and therefore requires one common logical unit.
+  const displacement = canUseLogicalAffine(border) && width !== undefined && height !== undefined
+    ? contentBoxLayoutDisplacement(frame, {
+      top: border.top.value,
+      right: border.right.value,
+      bottom: border.bottom.value,
+      left: border.left.value,
+    })
+    : isAxisAligned(frame)
+      ? null
+      : undefined
+  if (displacement === undefined) return poseStyle
+
+  const result = { ...poseStyle }
+  if (x !== undefined) {
+    result.x = displacement === null
+      ? subtractBorderLength(x, border.left)
+      : x - displacement.x
+  }
+  if (y !== undefined) {
+    result.y = displacement === null
+      ? subtractBorderLength(y, border.top)
+      : y - displacement.y
+  }
+  return result
+}
+
+/** Resolves the open decoration payload without projecting the current pose payload. */
+export function resolveDecorChannelStyle(decor: Decor | undefined): Record<string, unknown> {
   return {
     ...resolveAuthoredStyle(decor?.style),
-    ...resolveOffsetAsStyle(decor?.offset),
     ...resolveCustomStyle(decor?.custom),
   }
+}
+
+/**
+ * Resolves the current pose projection of one Decor.
+ *
+ * `offset` is the current ed2 storage boundary for pose. It is deliberately kept behind this
+ * adapter instead of being spread as a property whitelist through the builder; a later pose
+ * contract can replace this projection without changing channel selection or decoration folding.
+ */
+export function resolvePoseChannelStyle(decor: Decor | undefined): Record<string, unknown> {
+  return resolveOffsetAsStyle(decor?.offset)
 }
 
 /** Normalizes standalone CSS colors while preserving every other authored CSS value. */
@@ -22,6 +98,46 @@ export function resolveKeyframeStyle(
   item: Item,
   keyframe: Keyframe,
 ): Record<string, unknown> {
+  const decorStyle = resolveKeyframeDecorStyle(scene, item, keyframe)
+  return {
+    ...decorStyle,
+    ...resolveKeyframePoseStyle(scene, item, keyframe),
+  }
+}
+
+/** Resolves all decoration-channel values through the keyframes up to one temporal point. */
+export function resolveKeyframeDecorStyle(
+  scene: EditorScene,
+  item: Item,
+  keyframe: Keyframe,
+): Record<string, unknown> {
+  return resolveKeyframeLayers(scene, item, keyframe)
+    .reduce<Record<string, unknown>>(
+      (style, decor) => ({ ...style, ...resolveDecorChannelStyle(decor) }),
+      {},
+    )
+}
+
+/** Resolves pose values through pose-channel keyframes while ignoring decoration-only points. */
+export function resolveKeyframePoseStyle(
+  scene: EditorScene,
+  item: Item,
+  keyframe: Keyframe,
+): Record<string, unknown> {
+  const poseStyle = resolveKeyframeLayers(scene, item, keyframe)
+    .filter((_decor, index) => index === 0 || resolveKeyframeChannel(resolveLayerKeyframe(item, keyframe, index - 1)) === 'pose')
+    .reduce<Record<string, unknown>>(
+      (style, decor) => ({ ...style, ...resolvePoseChannelStyle(decor) }),
+      {},
+    )
+  return resolveContentAnchoredPoseStyle(
+    poseStyle,
+    resolveKeyframeDecorStyle(scene, item, keyframe),
+  )
+}
+
+/** Returns the initial decor followed by authored layers through the requested keyframe. */
+function resolveKeyframeLayers(scene: EditorScene, item: Item, keyframe: Keyframe): Array<Decor | undefined> {
   const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
   const keyframeIndex = orderedKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
   const layers = [scene.decors[item.initialDecorId]]
@@ -30,16 +146,70 @@ export function resolveKeyframeStyle(
   } else {
     layers.push(scene.decors[keyframe.decorId])
   }
+  return layers
+}
 
-  return layers.reduce<Record<string, unknown>>(
-    (style, decor) => ({ ...style, ...resolveDecorStyle(decor) }),
-    {},
-  )
+/** Maps a resolved layer index back to its authored keyframe for channel filtering. */
+function resolveLayerKeyframe(item: Item, keyframe: Keyframe, layerIndex: number): Keyframe {
+  const orderedKeyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  const keyframeIndex = orderedKeyframes.findIndex((candidate) => candidate.id === keyframe.id)
+  if (keyframeIndex >= 0) return orderedKeyframes[Math.max(0, Math.min(keyframeIndex, layerIndex))]!
+  return keyframe
 }
 
 /** Resolves the item's initial decor when no keyframe exists yet. */
 export function resolveInitialStyle(scene: EditorScene, item: Item): Record<string, unknown> {
   return resolveDecorStyle(scene.decors[item.initialDecorId])
+}
+
+/** Reads one finite numeric pose value without interpreting open CSS values. */
+function finiteStyleNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/** Parses the builder's percentage transform-origin representation. */
+function parseStyleRotationOrigin(value: unknown): { fx: number; fy: number } | undefined {
+  if (typeof value !== 'string') return undefined
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return undefined
+  const parse = (part: string): number | undefined => {
+    if (part === 'center') return 0.5
+    if (!part.endsWith('%')) return undefined
+    const value = Number.parseFloat(part.slice(0, -1))
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 100)) : undefined
+  }
+  const fx = parse(parts[0]!)
+  const fy = parse(parts[1]!)
+  return fx === undefined || fy === undefined ? undefined : { fx, fy }
+}
+
+/** Reports whether the four effective borders can share the logical cqw affine unit. */
+function canUseLogicalAffine(border: ReturnType<typeof resolveBorderInsetLengths>): boolean {
+  return [border.top, border.right, border.bottom, border.left]
+    .every((length) => length.value === 0 || length.unit === 'cqw')
+}
+
+/** Reports whether no authored border contributes to the content-box displacement. */
+function isZeroBorder(border: ReturnType<typeof resolveBorderInsetLengths>): boolean {
+  return [border.top, border.right, border.bottom, border.left].every((length) => length.value === 0)
+}
+
+/** Reports whether a frame needs only an axis-aligned left/top correction. */
+function isAxisAligned(frame: {
+  rotate: number
+  scaleX: number
+  scaleY: number
+}): boolean {
+  return Math.abs(frame.rotate) <= 1e-8
+    && Math.abs(frame.scaleX - 1) <= 1e-8
+    && Math.abs(frame.scaleY - 1) <= 1e-8
+}
+
+/** Subtracts one border length from a logical cqw coordinate without converting through the DOM. */
+function subtractBorderLength(value: number, border: BorderLength): number | string {
+  if (border.value === 0) return value
+  if (border.unit === 'cqw') return value - border.value
+  return `calc(${value}cqw - ${border.value}px)`
 }
 
 /** Resolves the static class value at one keyframe without treating classes as interpolable data. */

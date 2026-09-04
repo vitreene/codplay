@@ -13,6 +13,17 @@ export type { PanelId, PanelField, PanelFieldKind, PalettePanel, PaletteConfig }
 export { orientationFromRatio, coordsForContext, updateZoneCoords } from './zones'
 export { resolveFieldAcrossItems } from './field-state'
 export type { FieldState } from './field-state'
+export {
+  applyDecorModifications,
+  applyDecorPatch,
+  cloneDecorValue,
+  collectDecorModifications,
+  modificationsFromDecorPatch,
+  modificationsToDecorPatch,
+  readDecorPath,
+  writeDecorPath,
+} from './modified-properties'
+export type { DecorModificationMap, DecorPropertyModification } from './modified-properties'
 
 export { decorEditorMachine, resolveAttachedDecor } from './machine'
 export type { AttachedItem, AttachItemEntry, DecorEditorMachineContext, DecorEditorEvent } from './machine'
@@ -20,6 +31,6 @@ export type { AttachedItem, AttachItemEntry, DecorEditorMachineContext, DecorEdi
 export { DecorEditorController } from './controller'
 export type { DecorEditorCatalogs, AttachItemInput, DecorChangeEntry, DecorEditorSnapshot, Unsubscribe } from './controller'
 
-export { hexToCssOklch, cssOklchComponentsToHex } from './color-adapter'
+export { hexToCssOklch, cssColorToHex, cssOklchComponentsToHex } from './color-adapter'
 export { createDecorEditorPalette } from './render'
 export type { DecorEditorPaletteHandle } from './render'

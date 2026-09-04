@@ -39,6 +39,8 @@ export interface AttachItemInput {
   zones: ZoneTable
   context: OrientationContext
   isTemporary?: boolean
+  /** Property paths changed by the user for the currently displayed target. */
+  modifiedProperties?: readonly string[]
 }
 
 // ─── Controller ──────────────────────────────────────────────────────────────
@@ -102,6 +104,7 @@ export class DecorEditorController {
         chain: input.chain,
         patch: input.patch,
         isTemporary: input.isTemporary,
+        modifiedProperties: input.modifiedProperties,
       })),
       zones: inputs[0]?.zones ?? [],
       initialPanelId,
@@ -177,6 +180,11 @@ export class DecorEditorController {
     this.emitDecorChange()
   }
 
+  /** Replaces the open modified-property projection used by the palette rendering layer. */
+  setModifiedProperties(itemId: string, paths: readonly string[]): void {
+    this.send({ type: 'MODIFIED.SET', itemId, paths: [...new Set(paths)] })
+  }
+
   applyPreset(name: string): void {
     const preset = this.catalogs.presets.find(p => p.name === name)
     if (!preset) return
@@ -219,6 +227,18 @@ export class DecorEditorController {
       current = (current as Record<string, unknown>)[segment]
     }
     return true
+  }
+
+  /** Returns whether the current single item has a user modification on this property path. */
+  isPropertyModified(path: string): boolean {
+    const items = this.getItems()
+    return items.length === 1 && items[0]!.modifiedProperties.includes(path)
+  }
+
+  /** Returns the current modified-property paths for the single attached item. */
+  getModifiedProperties(): string[] {
+    const items = this.getItems()
+    return items.length === 1 ? [...items[0]!.modifiedProperties] : []
   }
 
   /**

@@ -4,6 +4,12 @@
 `2026-07-25-decor-unified-api-study.md` (priorité fixée par l'auteur). Ne pas implémenter avant que ce
 chantier soit tranché.
 
+**Relève au 2026-09-04** — ce plan est conservé comme historique de la proposition
+initiale. La capture au playhead est désormais traitée par la tranche P2-D du
+[plan V2 de l’éditeur de mouvement](./2026-09-02-motion-editor-v2-plan.md) : projection
+ouverte du snapshot, registre des propriétés modifiées et patch sparse. Les anciennes
+mentions de `styleFieldsForItemType` ci-dessous ne constituent donc plus l’API actuelle.
+
 Suite de `packages/authoring/selection-frame/plan/2026-07-17-resolved-state-at-time-notes.md`
 (décor temporaire, cascade + lecture live — implémenté et validé, 2026-07-18) et de
 `2026-07-17-decor-keyframe-layering-plan.md` (cascade en lecture, jamais stockée — implémenté et

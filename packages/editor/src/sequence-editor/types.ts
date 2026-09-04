@@ -8,8 +8,9 @@
 export type {
   EditorScene, Item, ItemType, Keyframe, Content, Decor, Zone, ZoneRect, ZoneContainer, Orientation,
   MarkerTrack, Marker, CapsuleDef, CapsuleKind, OffsetData, ClassNameValue, SceneMeta, DurationSource,
-  Transition, TransitionKey, Easing, Waveform, Cue,
+  Transition, TransitionKey, Easing, Waveform, Cue, KeyframeChannel,
 } from '../app/commands/types'
+export { resolveKeyframeChannel } from '../app/commands/types'
 
 // ─── Viewport ───────────────────────────────────────────────────────────────
 
