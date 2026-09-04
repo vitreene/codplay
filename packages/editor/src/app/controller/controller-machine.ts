@@ -12,7 +12,44 @@
 import { assign, emit, enqueueActions, setup } from 'xstate'
 import { runCommand, transaction } from '../commands/facade'
 import { EMPTY_SELECTION } from './types'
-import type { ControllerContext, ControllerEmitted, ControllerEvent, EditPanel } from './types'
+import type { ControllerContext, ControllerEmitted, ControllerEvent, EditPanel, Selection } from './types'
+
+/** Maximum author-time distance for deriving a keyframe selection at a phase boundary. */
+export const KEYFRAME_SELECTION_TOLERANCE_MS = 50
+
+/**
+ * Resolves the selected item's nearest real keyframe for a released seek or pause. A keyframe is
+ * selected only for a single selected item and only inside the explicit tolerance; otherwise the
+ * item remains selected without a sticky keyframe id.
+ */
+export function resolveSelectionAtTimeline(
+  scene: ControllerContext['scene'],
+  selection: Selection,
+  timelineMs: number,
+): Selection {
+  if (!scene || selection.itemIds.length === 0 || !Number.isFinite(timelineMs)) return selection
+  if (selection.itemIds.length !== 1) return { itemIds: selection.itemIds }
+
+  const item = scene.items.find((candidate) => candidate.id === selection.itemIds[0])
+  if (!item) return { itemIds: selection.itemIds }
+
+  const keyframes = [...item.keyframes].sort((left, right) => left.timeMs - right.timeMs)
+  let nearestId: string | undefined
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (const keyframe of keyframes) {
+    if (!Number.isFinite(keyframe.timeMs)) continue
+    const distance = Math.abs(keyframe.timeMs - timelineMs)
+    if (distance < nearestDistance) {
+      nearestId = keyframe.id
+      nearestDistance = distance
+    }
+  }
+
+  if (nearestId !== undefined && nearestDistance <= KEYFRAME_SELECTION_TOLERANCE_MS) {
+    return { itemIds: selection.itemIds, keyframeId: nearestId }
+  }
+  return { itemIds: selection.itemIds }
+}
 
 export const controllerMachine = setup({
   types: {} as {
@@ -26,6 +63,14 @@ export const controllerMachine = setup({
       selection: ({ event }) => {
         if (event.type !== 'SELECT_ITEM') return EMPTY_SELECTION
         return { itemIds: event.itemIds, keyframeId: event.keyframeId }
+      },
+    }),
+    /** Re-derives the keyframe only when an author seek or pause reaches its boundary. */
+    normalizeSelectionAtTimeline: assign({
+      selection: ({ context, event }) => {
+        if (event.type !== 'SEEK_RELEASED' && event.type !== 'TELCO_PAUSE_REQUEST') return context.selection
+        if (event.timelineMs === undefined) return context.selection
+        return resolveSelectionAtTimeline(context.scene, context.selection, event.timelineMs)
       },
     }),
     clearSelection: assign({ selection: () => EMPTY_SELECTION }),
@@ -142,6 +187,7 @@ export const controllerMachine = setup({
     LOAD_SCENE: {},
     SCENE_LOADED: { actions: ['sceneLoaded', 'emitSceneLoaded'] },
     SEEK: { actions: 'emitSeek' },
+    SEEK_RELEASED: { actions: ['normalizeSelectionAtTimeline', 'emitSceneCommitted'] },
     SEEK_APPLIED: { actions: 'emitSeekApplied' },
     /**
      * Émis une seule fois, juste avant `telco.play()`, jamais pour pause (`mount.ts::onPlayClick`)
@@ -182,7 +228,9 @@ export const controllerMachine = setup({
       entry: 'emitPlaybackActive',
       exit: 'emitPlaybackInactive',
       on: {
-        TELCO_PAUSE_REQUEST: { target: 'idle' },
+        // Play does not target a keyframe. Pause is the phase boundary that derives one from the
+        // final author time, when it is close enough; otherwise only the item remains selected.
+        TELCO_PAUSE_REQUEST: { target: 'idle', actions: ['normalizeSelectionAtTimeline', 'emitSceneCommitted'] },
         SEEK: { target: 'idle', actions: 'emitSeek' },
       },
     },

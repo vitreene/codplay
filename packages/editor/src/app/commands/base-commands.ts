@@ -78,7 +78,20 @@ export function assignType(scene: EditorScene, args: { itemId: string; type: Ite
   }
   const withType = updateItem(scene, args.itemId, (i) => ({ ...i, type: args.type }))
   const preset = DEFAULT_DECOR_PRESET[args.type]
-  return preset ? setDecor(withType, { decorId: item.initialDecorId, patch: preset }) : withType
+  if (!preset) return withType
+
+  // The geometry is collected before the type is assigned (the creation gesture produces a
+  // `bloc` first). A type preset may provide a fallback size, but it must not erase the user's
+  // traced position/size while adding the visual defaults. Offset fields therefore merge with
+  // the creation decor, with authored geometry taking precedence over preset fallbacks.
+  const existingDecor = withType.decors[item.initialDecorId]
+  const patch = preset.offset === undefined
+    ? preset
+    : {
+      ...preset,
+      offset: { ...preset.offset, ...existingDecor?.offset },
+    }
+  return setDecor(withType, { decorId: item.initialDecorId, patch })
 }
 
 /** Renseigne le contenu d'un item déjà typé — crée l'entrée `Content` et la relie via `contentId`. */
@@ -176,7 +189,7 @@ export function placeInZone(scene: EditorScene, args: { itemId: string; zoneId: 
   return setDecor(scene, { decorId: item.initialDecorId, patch: { zoneId: args.zoneId } })
 }
 
-/** Retire un item et ses descendants (retire aussi leurs décors/contenus propres — pas de fuite de références orphelines). */
+/** Removes an item and its descendants while preserving decor/content references still owned by the remaining scene. */
 export function deleteItem(scene: EditorScene, args: { itemId: string }): EditorScene {
   const idsToRemove = collectDescendantIds(scene, args.itemId)
   const removedItems = scene.items.filter((i) => idsToRemove.has(i.id))
@@ -189,10 +202,23 @@ export function deleteItem(scene: EditorScene, args: { itemId: string }): Editor
     if (item.contentId) contentIdsToRemove.add(item.contentId)
   }
 
+  const remainingItems = scene.items.filter((i) => !idsToRemove.has(i.id))
+  const remainingDecorIds = new Set<string>()
+  const remainingContentIds = new Set<string>()
+  if (scene.rootDecorId !== undefined) remainingDecorIds.add(scene.rootDecorId)
+  for (const item of remainingItems) {
+    remainingDecorIds.add(item.initialDecorId)
+    for (const keyframe of item.keyframes) remainingDecorIds.add(keyframe.decorId)
+    if (item.contentId !== null) remainingContentIds.add(item.contentId)
+  }
   const decors = { ...scene.decors }
-  for (const id of decorIdsToRemove) delete decors[id]
+  for (const id of decorIdsToRemove) {
+    if (!remainingDecorIds.has(id)) delete decors[id]
+  }
   const contents = { ...scene.contents }
-  for (const id of contentIdsToRemove) delete contents[id]
+  for (const id of contentIdsToRemove) {
+    if (!remainingContentIds.has(id)) delete contents[id]
+  }
 
   return {
     ...scene,

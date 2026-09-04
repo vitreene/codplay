@@ -59,14 +59,14 @@ function baseScene(items: Item[] = []): EditorScene {
 }
 
 describe('sequenceEditorMachine — keyframes émettent des commandes, ne mutent plus scene localement', () => {
-  it('KEYFRAME.ADD émet createNamedKeyframe avec le timeMs snappé/clampé, ne touche pas scene', () => {
+  it('KEYFRAME.ADD hérite le décor initial au premier KF, avec le timeMs snappé/clampé, sans toucher scene', () => {
     const actor = actorWithScene(baseScene([elementItem('t1')]))
     const batches = collectCommands(actor)
     actor.send({ type: 'KEYFRAME.ADD', trackId: 't1', timeMs: 1234, id: 'kf-a' })
 
     expect(actor.getSnapshot().context.scene.items[0]!.keyframes).toHaveLength(0)
     expect(batches).toHaveLength(1)
-    expect(batches[0]).toEqual([{ name: 'createNamedKeyframe', args: { itemId: 't1', keyframeId: 'kf-a', timeMs: 1200, decorId: undefined } }])
+    expect(batches[0]).toEqual([{ name: 'createNamedKeyframe', args: { itemId: 't1', keyframeId: 'kf-a', timeMs: 1200, decorId: 'decor-init' } }])
   })
 
   it('KEYFRAME.ADD reuses an adjacent decorId when one exists (read-only lookup on the cached scene)', () => {
@@ -230,6 +230,26 @@ describe('sequenceEditorMachine — clip draw (capsule intro/outro)', () => {
 })
 
 describe('sequenceEditorMachine — virtual keyframes (calculées depuis la scène de boot, non affectées par le refactor émission)', () => {
+  it('applies the implicit root capsule distribution to root children', () => {
+    const emptyChild = elementItem('root-empty', { order: 'a' })
+    const singleChild = elementItem('root-single', {
+      order: 'b',
+      keyframes: [{ id: 'kf-root-single', timeMs: 2500, decorId: 'd0' }],
+    })
+    const singleAtEnd = elementItem('root-single-at-end', {
+      order: 'c',
+      keyframes: [{ id: 'kf-root-single-at-end', timeMs: 10000, decorId: 'd0' }],
+    })
+    const actor = actorWithScene(baseScene([emptyChild, singleChild, singleAtEnd]))
+    const vkfs = actor.getSnapshot().context.virtualKeyframes
+
+    expect(vkfs.find((v) => v.trackId === 'root-empty' && v.name === 'intro')).toMatchObject({ timeMs: 0 })
+    expect(vkfs.find((v) => v.trackId === 'root-empty' && v.name === 'outro')).toMatchObject({ timeMs: 10000 })
+    expect(vkfs.find((v) => v.trackId === 'root-single' && v.name === 'intro')).toBeUndefined()
+    expect(vkfs.find((v) => v.trackId === 'root-single' && v.name === 'outro')).toMatchObject({ timeMs: 10000 })
+    expect(vkfs.find((v) => v.trackId === 'root-single-at-end' && v.name === 'outro')).toBeUndefined()
+  })
+
   it('computes virtual keyframes for free children of a capsule with intro/outro + capsule.kind', () => {
     const capsule = capsuleItem('cap', {
       keyframes: [

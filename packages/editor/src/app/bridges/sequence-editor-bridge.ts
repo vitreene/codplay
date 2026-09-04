@@ -23,6 +23,7 @@ export function createSequenceEditorBridge(
   const handle = mountSequenceEditor(container, controller, {
     transport: coordination.transport,
     onPlayheadChange: (timeMs) => coordination.requestSeek(timeMs),
+    onPlayheadRelease: (timeMs) => coordination.requestSeekRelease(timeMs),
   })
 
   type KeyframeCapture = {

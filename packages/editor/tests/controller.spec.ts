@@ -115,6 +115,20 @@ describe('serialize / deserialize', () => {
     expect(ctrl.serialize()).toEqual(ONE_TRACK)
     ctrl.destroy()
   })
+
+  it('preserves a segment-local Decor.path through serialization and loading', () => {
+    const withPath = structuredClone(ONE_TRACK)
+    const item = withPath.items[0]!
+    const target = item.keyframes.at(-1)!
+    withPath.decors[target.decorId] = {
+      ...withPath.decors[target.decorId],
+      path: 'M 0 0 A 0.5 0.5 0 0 1 1 0',
+    }
+    const ctrl = new SequenceEditorController(EMPTY)
+    ctrl.deserialize(withPath)
+    expect(ctrl.serialize()).toEqual(withPath)
+    ctrl.destroy()
+  })
 })
 
 // ─── syncFromCenter — le point d'entrée de resynchronisation post-commit (jamais deserialize) ──

@@ -44,6 +44,7 @@ export function renderTrackRows(
   collapsedIds?: ReadonlySet<string>,
   onDragStart?: (trackId: string, kfId: string, e: PointerEvent) => void,
   onMaterializeVirtual?: (vkf: VirtualKeyframe) => void,
+  onVirtualDragStart?: (vkf: VirtualKeyframe, e: PointerEvent) => void,
 ): void {
   container.innerHTML = ''
 
@@ -194,6 +195,12 @@ export function renderTrackRows(
         handle.addEventListener('dblclick', (e: MouseEvent) => {
           e.stopPropagation()
           onMaterializeVirtual(vkf)
+        })
+      }
+      if (onVirtualDragStart) {
+        handle.addEventListener('pointerdown', (e: PointerEvent) => {
+          e.stopPropagation()
+          onVirtualDragStart(vkf, e)
         })
       }
       svg.appendChild(handle)

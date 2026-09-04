@@ -173,6 +173,11 @@ export class EditorCoordinationBridge {
     this.machine.send({ type: 'SEEK', timelineMs })
   }
 
+  /** Reports the end of an author scrub so the controller can derive keyframe selection once. */
+  requestSeekRelease(timelineMs: number): void {
+    this.machine.send({ type: 'SEEK_RELEASED', timelineMs })
+  }
+
   /** Moves the sequence editor's author-owned playhead before relaying its seek to the player. */
   requestAuthorSeek(timelineMs: number): void {
     if (this.sequence !== null) {
@@ -193,8 +198,18 @@ export class EditorCoordinationBridge {
   requestPause(): void {
     void this.execute({ type: 'pause' }).then((result) => {
       if (!result.ok) return
-      this.reconcilePlaybackTime(result.progress.timelineMs)
-      this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
+      const timelineMs = this.clampPauseTimeline(result.progress.timelineMs)
+      if (timelineMs === result.progress.timelineMs) {
+        this.finishPause(timelineMs)
+        return
+      }
+
+      // CodPlay may expose a capsule's virtual outro beyond the editor scene duration. Re-present
+      // the authored boundary before restoring the CS; otherwise the runtime pose is already gone
+      // while the editor overlays are asked to recover from an out-of-scene time.
+      void this.execute({ type: 'seek', timelineMs }).then((seekResult) => {
+        this.finishPause(seekResult.ok ? seekResult.progress.timelineMs : timelineMs)
+      })
     })
   }
 
@@ -208,7 +223,7 @@ export class EditorCoordinationBridge {
       if (!result.ok) return
       this.reconcilePlaybackTime(result.progress.timelineMs)
       if (shouldExitPlayback && this.machine.getSnapshot().value === 'playing') {
-        this.machine.send({ type: 'TELCO_PAUSE_REQUEST' })
+        this.machine.send({ type: 'TELCO_PAUSE_REQUEST', timelineMs: result.progress.timelineMs })
       }
     })
   }
@@ -243,6 +258,19 @@ export class EditorCoordinationBridge {
   private reconcilePlaybackTime(timelineMs: number): void {
     this.sequence?.reconcilePlaybackTime(timelineMs)
     for (const listener of this.playbackReconciledListeners) listener(timelineMs)
+  }
+
+  /** Clamps a natural pause to the authored scene boundary, excluding virtual capsule tails. */
+  private clampPauseTimeline(timelineMs: number): number {
+    const durationMs = this.machine.getSnapshot().context.scene?.meta.durationMs
+    if (durationMs === undefined || !Number.isFinite(durationMs)) return timelineMs
+    return Math.max(0, Math.min(timelineMs, durationMs))
+  }
+
+  /** Completes one pause handoff after the runtime and author playhead share one time. */
+  private finishPause(timelineMs: number): void {
+    this.reconcilePlaybackTime(timelineMs)
+    this.machine.send({ type: 'TELCO_PAUSE_REQUEST', timelineMs })
   }
 
   /** Stores one immutable-by-convention candidate, replacing a previous candidate at the same time. */

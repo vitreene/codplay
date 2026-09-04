@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createActor } from 'xstate'
 import { controllerMachine } from '../src/app/controller/controller-machine'
 import { EditorCoordinationBridge } from '../src/app/bridges/editor-coordination-bridge'
@@ -21,6 +21,29 @@ function scene() {
       second: { id: 'second', offset: { translate: { x: 50, y: 50 }, width: 20, height: 20 }, style: { 'background-color': '#0000ff' } },
     },
     zones: {}, markerTracks: {},
+  }
+}
+
+/** Creates a multi-keyframe position chain whose projected ghosts can be compared across replay. */
+function motionChainScene() {
+  const keyframes = [0, 1_000, 2_000, 3_000, 4_000].map((timeMs, index) => ({
+    id: `chain-kf-${index}`,
+    timeMs,
+    decorId: `chain-decor-${index}`,
+  }))
+  const decors = Object.fromEntries(keyframes.map((keyframe, index) => [keyframe.decorId, {
+    id: keyframe.decorId,
+    offset: { translate: { x: 10 + index * 8, y: 10 + index * 6 }, width: 20, height: 20 },
+  }]))
+  return {
+    ...scene(),
+    id: 'motion-chain-replay',
+    items: [{
+      ...scene().items[0]!,
+      initialDecorId: 'chain-decor-0',
+      keyframes,
+    }],
+    decors,
   }
 }
 
@@ -80,6 +103,22 @@ function emptyDemoScene() {
 const waitTurns = async (count = 8): Promise<void> => {
   for (let i = 0; i < count; i += 1) await Promise.resolve()
 }
+
+/** Builds a pointer event with the capture fields used by the Selection Frame gesture. */
+function pointerEvent(type: string, clientX: number, clientY: number): Event {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
+  Object.defineProperty(event, 'pointerId', { value: 1 })
+  Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
+  return event
+}
+
+beforeAll(() => {
+  if (typeof HTMLElement.prototype.setPointerCapture !== 'function') {
+    HTMLElement.prototype.setPointerCapture = function (): void {}
+    HTMLElement.prototype.hasPointerCapture = function (): boolean { return false }
+    HTMLElement.prototype.releasePointerCapture = function (): void {}
+  }
+})
 
 describe('V2 editor position seek integration', () => {
   let actor: ReturnType<typeof createActor<typeof controllerMachine>> | undefined
@@ -202,6 +241,190 @@ describe('V2 editor position seek integration', () => {
       Date.now = originalNow
       globalThis.requestAnimationFrame = originalRaf
       globalThis.cancelAnimationFrame = originalCancelRaf
+    }
+  })
+
+  it('resynchronizes every motion ghost after natural playback reaches the end', async () => {
+    const originalNow = Date.now
+    const originalRaf = globalThis.requestAnimationFrame
+    const originalCancelRaf = globalThis.cancelAnimationFrame
+    const originalResizeObserver = globalThis.ResizeObserver
+    now = 0
+    Date.now = () => now
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const id = nextFrameId++
+      frames.set(id, () => callback(now))
+      return id
+    }
+    globalThis.cancelAnimationFrame = (id: number) => { frames.delete(id) }
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    try {
+      actor = createActor(controllerMachine)
+      actor.start()
+      actor.send({ type: 'SCENE_LOADED', scene: motionChainScene() })
+      coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+      const sceneRoot = document.createElement('div')
+      Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      })
+      const timelineRoot = document.createElement('div')
+      const panelRoot = document.createElement('div')
+      document.body.append(sceneRoot, timelineRoot, panelRoot)
+      sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+      sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      await waitTurns(32)
+
+      // Reproduce a selection after the author has worked on a middle keyframe. The bridge must
+      // still resolve the complete chain when playback starts from that pose.
+      actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'chain-kf-2' })
+      actor.send({ type: 'SEEK', timelineMs: 2_000 })
+      await waitTurns(32)
+
+      const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
+      expect(selectionFrame).not.toBeNull()
+      // Leave the CS edit pending, as it is in the application until the next phase boundary. Play
+      // must flush this accepted pose before suspending the authoring overlays.
+      selectionFrame!.dispatchEvent(pointerEvent('pointerdown', 240, 200))
+      selectionFrame!.dispatchEvent(pointerEvent('pointermove', 320, 280))
+      selectionFrame!.dispatchEvent(pointerEvent('pointerup', 320, 280))
+      await waitTurns(16)
+
+      const readGhostPositions = (): Map<string, string> => new Map(
+        [...sceneRoot.querySelectorAll<HTMLElement>('[data-motion-ghost]')]
+          .flatMap((ghost) => ghost.dataset.motionKeyframeId === undefined
+            ? []
+            : [[ghost.dataset.motionKeyframeId, `${ghost.style.left}|${ghost.style.top}`] as const]),
+      )
+      const ghostPositionsBeforePlay = readGhostPositions()
+      expect(ghostPositionsBeforePlay.get('chain-kf-0')).toBe('80px|80px')
+      expect(ghostPositionsBeforePlay.get('chain-kf-4')).toBe('336px|272px')
+
+      // An endpoint ghost must use the same author-seek owner as the timeline. The visible source
+      // ghost is the persisted 1 s KF of the active 1 s → 2 s segment.
+      sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.click()
+      await waitTurns(48)
+      expect(coordination.transport.getProgress()?.timelineMs).toBe(1_000)
+      expect(timelineRoot.querySelector<HTMLElement>('.seq-toolbar__time')?.textContent).toBe('1.0 s')
+      expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: 'chain-kf-1' })
+
+      // Restore the original active segment before exercising playback/reconciliation below.
+      actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'chain-kf-2' })
+      coordination.requestAuthorSeek(2_000)
+      await waitTurns(48)
+
+      timelineRoot.querySelector<HTMLButtonElement>('button[title="Play / Pause"]')?.click()
+      await waitTurns(32)
+      expect(actor.getSnapshot().value).toBe('playing')
+      now = 100
+      ;[...frames.values()][0]?.()
+      await waitTurns(32)
+      now = 6_000
+      ;[...frames.values()][0]?.()
+      await waitTurns(64)
+
+      expect(actor.getSnapshot().value).toBe('idle')
+      expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')?.style.display).not.toBe('none')
+      expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item'] })
+      const ghostPositionsAfterPlay = readGhostPositions()
+      expect(ghostPositionsAfterPlay).toEqual(ghostPositionsBeforePlay)
+    } finally {
+      Date.now = originalNow
+      globalThis.requestAnimationFrame = originalRaf
+      globalThis.cancelAnimationFrame = originalCancelRaf
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it('keeps the complete ghost chain after creating successive displaced keyframes and playing to the end', async () => {
+    const originalNow = Date.now
+    const originalRaf = globalThis.requestAnimationFrame
+    const originalCancelRaf = globalThis.cancelAnimationFrame
+    const originalResizeObserver = globalThis.ResizeObserver
+    now = 0
+    Date.now = () => now
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const id = nextFrameId++
+      frames.set(id, () => callback(now))
+      return id
+    }
+    globalThis.cancelAnimationFrame = (id: number) => { frames.delete(id) }
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    try {
+      actor = createActor(controllerMachine)
+      actor.start()
+      actor.send({ type: 'SCENE_LOADED', scene: scene() })
+      coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+      const sceneRoot = document.createElement('div')
+      Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+      })
+      const timelineRoot = document.createElement('div')
+      const panelRoot = document.createElement('div')
+      document.body.append(sceneRoot, timelineRoot, panelRoot)
+      sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+      sequenceBridge = createSequenceEditorBridge(timelineRoot, actor, coordination)
+      decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+      await waitTurns(32)
+
+      await waitTurns(32)
+
+      // A movement-surface drop on a real KF updates that KF. To create a chain, each gesture therefore
+      // starts from an unkeyed playhead between its neighbours and is written at that exact time.
+      for (const [timeMs, dx, dy] of [[1_000, 80, 40], [2_000, 70, 35], [3_000, 60, 30]]) {
+        actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
+        actor.send({ type: 'SEEK', timelineMs: timeMs })
+        await waitTurns(32)
+        const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-central]')
+        expect(moveZone).not.toBeNull()
+        moveZone!.dispatchEvent(pointerEvent('pointerdown', 100, 100))
+        moveZone!.dispatchEvent(pointerEvent('pointermove', 100 + dx, 100 + dy))
+        moveZone!.dispatchEvent(pointerEvent('pointerup', 100 + dx, 100 + dy))
+        await waitTurns(48)
+      }
+
+      const createdItem = actor.getSnapshot().context.scene?.items.find((item) => item.id === 'item')
+      expect(createdItem?.keyframes).toHaveLength(5)
+      actor.send({ type: 'SEEK', timelineMs: 0 })
+      await waitTurns(48)
+      const readGhostPositions = (): Map<string, string> => new Map(
+        [...sceneRoot.querySelectorAll<HTMLElement>('[data-motion-ghost]')]
+          .flatMap((ghost) => ghost.dataset.motionKeyframeId === undefined
+            ? []
+            : [[ghost.dataset.motionKeyframeId, `${ghost.style.left}|${ghost.style.top}`] as const]),
+      )
+      const ghostPositionsBeforePlay = readGhostPositions()
+      expect(ghostPositionsBeforePlay.size).toBe(5)
+
+      timelineRoot.querySelector<HTMLButtonElement>('button[title="Play / Pause"]')?.click()
+      await waitTurns(48)
+      expect(actor.getSnapshot().value).toBe('playing')
+      now = 100
+      ;[...frames.values()][0]?.()
+      await waitTurns(32)
+      now = 6_000
+      ;[...frames.values()][0]?.()
+      await waitTurns(96)
+
+      expect(actor.getSnapshot().value).toBe('idle')
+      expect(sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')?.style.display).not.toBe('none')
+      expect(coordination.transport.getProgress()?.timelineMs).toBe(5_000)
+      expect(coordination.presentation.get()?.timeMs).toBe(5_000)
+      expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item'], keyframeId: 'b' })
+      expect(readGhostPositions()).toEqual(ghostPositionsBeforePlay)
+    } finally {
+      Date.now = originalNow
+      globalThis.requestAnimationFrame = originalRaf
+      globalThis.cancelAnimationFrame = originalCancelRaf
+      globalThis.ResizeObserver = originalResizeObserver
     }
   })
 
@@ -505,6 +728,59 @@ describe('V2 editor position seek integration', () => {
       globalThis.cancelAnimationFrame = originalCancelRaf
       globalThis.ResizeObserver = originalResizeObserver
     }
+  })
+
+  it('keeps a menu-created item bounded and exposes its selection frame', async () => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: emptyDemoScene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const panelRoot = document.createElement('div')
+    document.body.append(sceneRoot, panelRoot)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(panelRoot, actor, coordination)
+    await waitTurns(24)
+
+    const geometry = { translate: { x: 20, y: 18 }, width: 60, height: 18 }
+    actor.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry } } })
+    const itemId = actor.getSnapshot().context.scene?.items.at(-1)?.id
+    expect(itemId).toBeDefined()
+    actor.send({
+      type: 'RUN_TRANSACTION',
+      commands: [
+        { name: 'assignType', args: { itemId: itemId!, type: 'text' } },
+        { name: 'assignContent', args: { itemId: itemId!, content: { type: 'text', text: 'Nouvel item' } } },
+        { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 0 } },
+        { name: 'createKeyframe', args: { itemId: itemId!, timeMs: 5_000 } },
+      ],
+    })
+    actor.send({ type: 'SELECT_ITEM', itemIds: [itemId!] })
+    await waitTurns(48)
+
+    const item = actor.getSnapshot().context.scene?.items.find((candidate) => candidate.id === itemId)
+    expect(item).toBeDefined()
+    expect(actor.getSnapshot().context.scene?.decors[item!.initialDecorId]?.offset).toEqual(geometry)
+
+    const itemNode = sceneRoot.querySelector<HTMLElement>(`[data-item-id="story-main:${itemId}"]`)
+    expect(itemNode).not.toBeNull()
+    // The jsdom fixture has no layout box for the staged instance root, so the runtime's
+    // numeric-length scale falls back to 1 here. The important invariant is that authored cqw
+    // geometry reaches the item instead of the root card's full-surface stretch.
+    expect(itemNode?.style.width).toBe('60px')
+    expect(itemNode?.style.height).toBe('18px')
+
+    const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame]')
+    expect(selectionFrame?.style.display).not.toBe('none')
+    expect(selectionFrame?.style.left).toBe('160px')
+    expect(selectionFrame?.style.top).toBe('144px')
+    expect(selectionFrame?.style.width).toBe('480px')
+    expect(selectionFrame?.style.height).toBe('144px')
   })
 
   it('plays the two-item position demo after adding a keyframe, Stop, and Play', async () => {

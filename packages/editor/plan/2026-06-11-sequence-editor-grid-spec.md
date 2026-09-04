@@ -523,7 +523,12 @@ n'est requis.
 
 **À la modification d'un décor (externe)** : l'éditeur de décors est responsable de vérifier si le `decorId` courant est partagé. Si oui, il doit créer une nouvelle entrée dans `scene.decors` (via `registerDecor`) et appeler `assignDecor` pour lier le keyframe à ce nouvel id, avant d'écrire les propriétés. Cette logique copy-on-write est **hors périmètre** de la grille.
 
-**À la suppression d'un keyframe** : la grille supprime l'entrée `scene.decors[decorId]` seulement si aucun autre keyframe (dans toute la scène) ne référence ce `decorId`.
+**À la suppression d'un keyframe** : la grille supprime l'entrée `scene.decors[decorId]` seulement si
+aucun autre keyframe, aucun `initialDecorId` d'item et aucun `rootDecorId` de scène ne référence ce
+`decorId`. La même garde s'applique à la suppression d'un item ou d'une capsule : les décors et
+contenus propres aux éléments retirés sont purgés seulement lorsqu'aucun élément restant ne les
+référence. Un décor portant un `path` suit exactement cette règle ; sa portée de trajectoire reste
+celle du keyframe qui le référence, sans devenir un partage implicite vers le keyframe suivant.
 
 Cette approche garantit que plusieurs keyframes consécutifs au même décor ne dupliquent pas inutilement les données, et que le coût de création d'un nouveau décor n'est payé que lors d'une modification réelle.
 
@@ -556,6 +561,49 @@ affichée ni sélectionnable comme item et ne porte pas de keyframes propres ; e
 scène, mais son comportement `card` fournit néanmoins les transitions par défaut aux enfants directs.
 La résolution des fenêtres et des transitions se fait au build, pas par une écriture dans le modèle
 pendant la lecture.
+
+### 2.4.1 Contrat V2 — bornes virtuelles exposées par le sequence-editor (P3)
+
+Le sequence-editor peut projeter des bornes calculées sans les écrire dans
+`Item.keyframes`. La projection reprend exactement la distribution de la
+capsule qui porte l'item :
+
+- pour une capsule explicite, l'intervalle de référence est son premier et son
+  dernier keyframe réels ;
+- pour la capsule racine implicite, l'intervalle est `[0, scene.durationMs]` ;
+- zéro KF réel sur l'enfant produit deux bornes virtuelles (`intro`, `outro`) ;
+- un seul KF réel fixe l'entrée et produit uniquement une sortie virtuelle ;
+- deux KFs réels ou plus ne produisent pas de borne virtuelle supplémentaire.
+
+Une borne virtuelle est un artefact de timeline (`VirtualKeyframe`) : elle ne
+participe ni au document, ni au player, ni à la résolution de la scène. Play,
+Seek, rebuild, resize et simple sélection ne la matérialisent pas.
+
+Sa matérialisation est une action auteur explicite sur le repère affiché : un
+glisser-déposer déplace la borne puis émet la création d'un KF réel à l'instant
+calculé ; le double-clic matérialise la borne à son instant projeté. Le nom de
+la borne est ensuite conservé pour l'outillage ; l'application centrale reste
+l'unique écrivain du document. Le décor est hérité selon le protocole de
+création de KF et toute édition ultérieure met à jour ce décor sans remplacer
+le KF. Le geste est borné par l'intervalle de la capsule parente et Échap avant
+le lâcher l'annule sans écriture.
+
+Lors d'une fin naturelle, le temps auteur reste borné à `scene.meta.durationMs`,
+même si le player V2 expose encore la sortie virtuelle d'une capsule. Le pont
+de coordination re-présente cette frontière dans le player avant d'émettre la
+sortie du mode `playing`. La grille, le CS et les ghosts récupèrent ainsi la
+même `PresentationFrame` de fin ; une queue virtuelle ne peut pas réintroduire
+un temps hors scène ou une pose périmée.
+
+### 2.4.2 Sélection temporelle au relâchement
+
+Le seek continu du playhead ne modifie pas la sélection de keyframe. Au
+relâchement d'un scrub (`SEEK_RELEASED`), le contrôleur central dérive la
+sélection depuis l'item sélectionné et la position finale : le keyframe réel le
+plus proche est sélectionné dans une tolérance de `50 ms`; hors tolérance,
+`keyframeId` est absent et l'item seul reste sélectionné. Une borne virtuelle
+est exclue de cette résolution. La même dérivation se produit quand une pause
+publie le temps auteur final ; Play et ses ticks ne ciblent pas un keyframe.
 
 ### 2.4 JSON de test
 

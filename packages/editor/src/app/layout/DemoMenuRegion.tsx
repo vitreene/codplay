@@ -23,6 +23,17 @@ const emptyScene = {
 }
 
 /**
+ * Bounded fallback used by the temporary menu fixture until the real creation gesture can provide
+ * the rectangle traced by the author. `createItem` itself remains geometry-driven; this value only
+ * prevents the test button from asking the root `card` capsule for its full-surface ghost zone.
+ */
+const DEFAULT_CREATE_ITEM_GEOMETRY = {
+  translate: { x: 20, y: 18 },
+  width: 60,
+  height: 18,
+}
+
+/**
  * Un item à 2 kf, décor EXPLICITE et distinct sur chacun (déplacement + rotation + couleur) —
  * pas de dépendance au preset par défaut (`assignType` le pose, mais chaque kf écrase ses propres
  * champs, § cascade `build-scene.ts::resolveKeyframeCascadeStyle`). `laneX` sépare les items en
@@ -119,7 +130,7 @@ export function DemoMenuRegion({ controller }: DemoMenuRegionProps) {
           // l'item reste `bloc` et ne peut pas être rendu par `scenePlayer`. `createItem` ne
           // renvoie pas son id via `RUN_COMMAND` (§4 : la seule sortie du contrôleur est `scene`) ;
           // il est ajouté en fin de tableau (`base-commands.ts::createItem`), donc lisible juste après.
-          controller.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry: {} } } })
+          controller.send({ type: 'RUN_COMMAND', command: { name: 'createItem', args: { geometry: DEFAULT_CREATE_ITEM_GEOMETRY } } })
           const items = controller.getSnapshot().context.scene?.items ?? []
           const itemId = items[items.length - 1]?.id
           if (!itemId) return

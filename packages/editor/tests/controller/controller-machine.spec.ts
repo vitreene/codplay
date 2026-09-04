@@ -21,6 +21,25 @@ function sceneFixture(): EditorScene {
   }
 }
 
+function keyedSceneFixture(): EditorScene {
+  return {
+    ...sceneFixture(),
+    items: [{
+      id: 'item-1',
+      type: 'text',
+      parentId: null,
+      order: 'a',
+      visible: true,
+      contentId: null,
+      initialDecorId: 'decor-a',
+      keyframes: [
+        { id: 'kf-a', timeMs: 0, decorId: 'decor-a' },
+        { id: 'kf-b', timeMs: 1000, decorId: 'decor-b' },
+      ],
+    }],
+  }
+}
+
 describe('controllerMachine — initial state', () => {
   it('starts idle, with no scene loaded and an empty selection', () => {
     const actor = createActor(controllerMachine)
@@ -49,6 +68,35 @@ describe('controllerMachine — selection, two emitters converging on one truth 
     actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-1' })
 
     expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-1' })
+  })
+
+  it('derives the nearest keyframe only at released seek time, otherwise keeps the item alone', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: keyedSceneFixture() })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-a' })
+
+    actor.send({ type: 'SEEK_RELEASED', timelineMs: 500 })
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'] })
+
+    actor.send({ type: 'SEEK_RELEASED', timelineMs: 949 })
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'] })
+
+    actor.send({ type: 'SEEK_RELEASED', timelineMs: 950 })
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-b' })
+  })
+
+  it('does not derive a keyframe on Play, but derives it when the pause reports its final time', () => {
+    const actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: keyedSceneFixture() })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-a' })
+
+    actor.send({ type: 'TELCO_ACTION_REQUEST' })
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-a' })
+
+    actor.send({ type: 'TELCO_PAUSE_REQUEST', timelineMs: 970 })
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-b' })
   })
 
   it('CLEAR_SELECTION empties the selection', () => {

@@ -32,6 +32,14 @@ function scene(): EditorScene {
   }
 }
 
+/** Creates the minimal pointer payload used by the timeline scrub release test. */
+function pointerEvent(type: 'pointerdown' | 'pointerup', clientX: number): MouseEvent {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY: 14 })
+  Object.defineProperty(event, 'pointerId', { value: 1 })
+  Object.defineProperty(event, 'buttons', { value: type === 'pointerup' ? 0 : 1 })
+  return event
+}
+
 describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
   let actor: ReturnType<typeof createActor<typeof controllerMachine>> | undefined
   let coordination: EditorCoordinationBridge | undefined
@@ -215,5 +223,44 @@ describe('sequence-editor bridge V2 — capture de preview temporaire', () => {
 
     expect(container.querySelector<HTMLElement>('.seq-toolbar__time')?.textContent).toBe('0.7 s')
     expect(actor.getSnapshot().context.scene).toEqual(scene())
+  })
+
+  it('dérive la sélection KF au relâchement du scrub, sans la dériver pendant le déplacement', () => {
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: scene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+    const container = document.createElement('div')
+    document.body.append(container)
+    const originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+    try {
+      bridge = createSequenceEditorBridge(container, actor, coordination)
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-a' })
+    const ruler = container.querySelector<HTMLElement>('.seq-ruler-wrapper')
+    if (!ruler) throw new Error('sequence ruler missing')
+    Object.defineProperty(ruler, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 0, top: 0, right: 1000, bottom: 28, width: 1000, height: 28 }),
+    })
+
+    // Default zoom is 0.08 px/ms and the ruler margin is 6 px: x=46 is 500 ms, between both KFs.
+    ruler.dispatchEvent(pointerEvent('pointerdown', 46))
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-a' })
+    window.dispatchEvent(pointerEvent('pointerup', 46))
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'] })
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item-1'], keyframeId: 'kf-a' })
+    // x=83 is 962.5 ms, inside the 50 ms tolerance of kf-b at 1000 ms.
+    ruler.dispatchEvent(pointerEvent('pointerdown', 83))
+    window.dispatchEvent(pointerEvent('pointerup', 83))
+    expect(actor.getSnapshot().context.selection).toEqual({ itemIds: ['item-1'], keyframeId: 'kf-b' })
   })
 })

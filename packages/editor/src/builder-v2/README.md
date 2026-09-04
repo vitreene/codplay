@@ -1,10 +1,11 @@
 # Builder ed2 natif CodPlay V2
 
-> Statut : En cours
+> Statut : Fixe
 > CodPlay cible : V2 foundation
 
 Cette verticale traduit `EditorScene` vers le `SceneDoc` natif de CodPlay V2. Elle utilise uniquement
-le transport V2 de l'éditeur vers CodPlay.
+le transport V2 de l'éditeur vers CodPlay. Le contrat builder/runtime de P4 est fixe ; la validation
+des gestes réels dans Safari Technology Preview reste portée par la porte P6 du plan mouvement.
 
 L'incrément en cours couvre une scène ed2 à une story (`story-main`), sa capsule racine implicite,
 une arborescence de capsules imbriquées et les feuilles (`bloc`, `text`, `image`, `video` et

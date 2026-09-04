@@ -105,6 +105,24 @@ Actée en discussion (§« Sélection d'un décor : deux accès… ») : sélect
 - La sélection est indexée par **id stable** (`itemId`, `keyframeId?`), jamais par référence DOM — garantit qu'elle survit à un rebuild/seek qui détruit et recrée le node (propriété déjà vérifiée dans selection-frame, `handleElementNode(node | null)`).
 - Événements : `SELECT_ITEM({ itemIds, keyframeId? })`, `CLEAR_SELECTION()`.
 
+### 5.1 Sélection du keyframe au temps auteur
+
+Le `keyframeId` n'est pas une ancre temporelle permanente pendant un geste de
+seek. Les `SEEK` intermédiaires restent des relais de déplacement et ne
+recalculent pas la sélection. À la frontière de fin du geste (`SEEK_RELEASED`)
+ou lors d'une pause, le contrôleur examine les keyframes réels de l'unique item
+sélectionné :
+
+- le keyframe le plus proche est sélectionné si son écart est inférieur ou égal
+  à `50 ms` ;
+- sinon, la sélection conserve l'item et omet `keyframeId` ;
+- les bornes virtuelles ne peuvent jamais devenir une sélection de keyframe ;
+- l'entrée en Play et la progression de lecture ne visent aucun keyframe. La
+  pause utilise le temps auteur final réellement réconcilié.
+
+Cette résolution est une mise à jour d'interface portée par le contrôleur ; elle
+n'écrit ni `EditorScene`, ni keyframe, ni décor.
+
 ---
 
 ## 6. Cycle de vie multi-documents

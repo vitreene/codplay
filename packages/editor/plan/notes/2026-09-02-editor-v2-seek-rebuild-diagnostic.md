@@ -78,7 +78,7 @@ comme un item V2 distinct ; aucun correctif de code n'est appliqué dans ce diag
 ## Reproduction visuelle dans Safari Technology Preview
 
 Le serveur Vite a été ouvert dans Safari Technology Preview sur
-`http://127.0.0.1:5174/`, puis le parcours a été repris depuis un chargement propre de la démo
+`http://localhost:5174/`, puis le parcours a été repris depuis un chargement propre de la démo
 « Test position + couleur » :
 
 1. Un seek au milieu du segment affiche `2.5 s`. La sélection par un vrai `mousedown` sur Item A
@@ -209,14 +209,14 @@ La régression est couverte par le parcours d'intégration réel des bridges `se
 reprise avec avancement de l'horloge. Les 36 fichiers et 386 tests de l'éditeur passent, ainsi que
 le typecheck et le build de l'éditeur ; les 87 fichiers et 547 tests CodPlay passent également.
 La vérification native complète dans Safari Technology Preview reste une étape P7 à exécuter sur
-le serveur existant `127.0.0.1:5174`, sans lancer de serveur supplémentaire.
+le serveur existant `localhost:5174`, sans lancer de serveur supplémentaire.
 
 ## Erreur de reconstruction V2 — tween sans source (2026-09-03)
 
 La vérification MCP dans l'onglet existant de **Safari Technology Preview** a reproduit l'erreur
 que les tests de reprise Play ne couvraient pas :
 
-1. rechargement propre sur `http://127.0.0.1:5174/` ;
+1. rechargement propre sur `http://localhost:5174/` ;
 2. chargement de la scène, création d'un item texte, ajout d'un keyframe intermédiaire ;
 3. dans le panneau « Typo », ajout d'une propriété `color` absente des décors précédents ;
 4. sélection/seek sur ce keyframe : la console signalait

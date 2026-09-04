@@ -56,9 +56,20 @@ function descendantIds(items: Item[], itemId: string): string[] {
 }
 
 function pruneOrphanDecors(scene: EditorScene): EditorScene {
-  const used = new Set(scene.items.flatMap((item) => item.keyframes).map((k) => k.decorId))
+  const used = referencedDecorIds(scene)
   const decors = Object.fromEntries(Object.entries(scene.decors).filter(([id]) => used.has(id)))
   return { ...scene, decors }
+}
+
+/** Returns every decor id still owned by the scene, including initial and root references. */
+function referencedDecorIds(scene: EditorScene): Set<string> {
+  const used = new Set<string>()
+  if (scene.rootDecorId !== undefined) used.add(scene.rootDecorId)
+  for (const item of scene.items) {
+    used.add(item.initialDecorId)
+    for (const keyframe of item.keyframes) used.add(keyframe.decorId)
+  }
+  return used
 }
 
 function detachKeyframesByMarkerIds(items: Item[], markerIds: ReadonlySet<string>): Item[] {
@@ -103,7 +114,7 @@ export function deleteKeyframe(scene: EditorScene, args: { itemId: string; keyfr
     keyframes: i.keyframes.filter((k) => k.id !== args.keyframeId),
   }))
   if (!removedKf) return sceneAfterRemove
-  const stillUsed = sceneAfterRemove.items.flatMap((i) => i.keyframes).some((k) => k.decorId === removedKf.decorId)
+  const stillUsed = referencedDecorIds(sceneAfterRemove).has(removedKf.decorId)
   if (stillUsed) return sceneAfterRemove
   const decors = Object.fromEntries(Object.entries(sceneAfterRemove.decors).filter(([id]) => id !== removedKf.decorId))
   return { ...sceneAfterRemove, decors }

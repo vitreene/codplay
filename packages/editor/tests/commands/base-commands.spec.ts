@@ -50,6 +50,16 @@ describe('assignType', () => {
     expect(next.items.find((i) => i.id === itemId)?.type).toBe('text')
   })
 
+  it('keeps the creation geometry when the type preset supplies a default width', () => {
+    const geometry = { translate: { x: 20, y: 35 }, width: 60, height: 18 }
+    const { scene, itemId } = commands.createItem(emptyScene(), { geometry })
+
+    const next = commands.assignType(scene, { itemId, type: 'text' })
+    const item = next.items.find((candidate) => candidate.id === itemId)!
+
+    expect(next.decors[item.initialDecorId]?.offset).toEqual(geometry)
+  })
+
   it('rejects re-typing an item that is no longer a bloc', () => {
     const { scene, itemId } = commands.createItem(emptyScene(), { geometry: {} })
     const typed = commands.assignType(scene, { itemId, type: 'text' })
@@ -207,6 +217,46 @@ describe('deleteItem', () => {
     expect(next.items).toHaveLength(1)
     expect(next.items[0]!.id).toBe(b.itemId)
     expect(Object.keys(next.decors)).toHaveLength(1)
+  })
+
+  it('preserves a decor shared by a remaining sibling keyframe', () => {
+    const removed = commands.createItem(emptyScene(), { geometry: {} })
+    const kept = commands.createItem(removed.scene, { geometry: {} })
+    const sharedDecorId = removed.scene.items.find((item) => item.id === removed.itemId)!.initialDecorId
+    const withSharedKeyframe = {
+      ...kept.scene,
+      items: kept.scene.items.map((item) => item.id === kept.itemId
+        ? { ...item, keyframes: [{ id: 'kept-kf', timeMs: 0, decorId: sharedDecorId }] }
+        : item),
+    }
+
+    const next = commands.deleteItem(withSharedKeyframe, { itemId: removed.itemId })
+    expect(next.items).toHaveLength(1)
+    expect(next.decors[sharedDecorId]).toBeDefined()
+  })
+
+  it('preserves a decor still referenced by the scene root', () => {
+    const created = commands.createItem(emptyScene(), { geometry: {} })
+    const item = created.scene.items.find((candidate) => candidate.id === created.itemId)!
+    const rooted = { ...created.scene, rootDecorId: item.initialDecorId }
+    const next = commands.deleteItem(rooted, { itemId: created.itemId })
+    expect(next.decors[item.initialDecorId]).toBeDefined()
+    expect(next.rootDecorId).toBe(item.initialDecorId)
+  })
+
+  it('preserves content shared by a remaining item', () => {
+    const removed = commands.createItem(emptyScene(), { geometry: {} })
+    const kept = commands.createItem(removed.scene, { geometry: {} })
+    const sharedContentId = 'shared-content'
+    const withSharedContent = {
+      ...kept.scene,
+      contents: { [sharedContentId]: { id: sharedContentId, type: 'text' as const, text: 'shared' } },
+      items: kept.scene.items.map((item) => ({ ...item, contentId: sharedContentId })),
+    }
+
+    const next = commands.deleteItem(withSharedContent, { itemId: removed.itemId })
+    expect(next.items).toHaveLength(1)
+    expect(next.contents[sharedContentId]).toEqual({ id: sharedContentId, type: 'text', text: 'shared' })
   })
 })
 

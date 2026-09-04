@@ -51,6 +51,9 @@ function mountRotationModifier(context: SelectionFrameV2ModifierContext): Select
   pivotNode.style.border = '2px solid #ffffff'
   pivotNode.style.boxSizing = 'border-box'
   pivotNode.style.cursor = 'grab'
+  // The host may make the frame body pointer-transparent so a lower movement
+  // surface can receive item drags; modifier controls must remain targetable.
+  pivotNode.style.pointerEvents = 'auto'
   pivotNode.style.touchAction = 'none'
   context.frame.appendChild(pivotNode)
 
@@ -75,6 +78,9 @@ function mountRotationModifier(context: SelectionFrameV2ModifierContext): Select
   needleTip.style.border = '2px solid #0284c7'
   needleTip.style.boxSizing = 'border-box'
   needleTip.style.cursor = 'crosshair'
+  // Keep the rotation control active when the containing frame lets pointer
+  // events pass through its body to the movement surface below.
+  needleTip.style.pointerEvents = 'auto'
   needleTip.style.touchAction = 'none'
   context.frame.appendChild(needleTip)
 

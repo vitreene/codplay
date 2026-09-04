@@ -74,6 +74,21 @@
 
 Aucune interaction directe sur le contenu de la scène elle-même n'est câblée aujourd'hui (pas de déplacement/redimensionnement à la souris dans cette zone) — le cadre de sélection est visuel uniquement à ce stade.
 
+### Overlay de mouvement (item sélectionné)
+
+| Geste | Effet |
+|---|---|
+| Glisser dans la surface centrale du CS | Sur un KF réel, met à jour son décor au même `timeMs` ; entre deux KFs, crée un KF au playhead courant, puis le sélectionne |
+| Glisser à nouveau sur le KF créé | Met à jour ce même KF, sans en créer un second |
+| Clic sur un ghost réel visible | Sélectionne le KF correspondant et y amène le playhead |
+| Clic sur un trajet | Active le trajet courant ; un seul trajet reste interactif |
+| Glisser le point médian | Courbe le trajet entrant du KF cible ; double-clic sur le point = droite implicite |
+| Échap avant le relâchement | Annule le tracé en cours sans écrire de KF, décor ou path |
+
+Les ghosts et trajets non actifs restent visibles mais volontairement discrets :
+opacité basse et couleur ambrée pâlie/désaturée, avec une variation légère
+selon la distance dans la chaîne des KFs.
+
 ---
 
 ## Panneau décor (droite, dedit)
@@ -100,7 +115,7 @@ Actif seulement quand un item (ou un keyframe) est sélectionné dans la timelin
 | Bouton | Effet |
 |---|---|
 | « Charger la scène de démo » | Ne charge rien depuis un stockage — **crée** un document vide en mémoire (0 item) et le pousse dans le contrôleur central. Se désactive une fois fait. |
-| « Créer un item » | Crée un item texte, lui assigne contenu « Nouvel item » et deux keyframes (0s et durée totale de la scène) |
+| « Créer un item » | Crée un item texte dans une géométrie de test bornée, lui assigne contenu « Nouvel item » et deux keyframes (0s et durée totale de la scène), puis le sélectionne pour afficher le CS |
 
 ---
 
@@ -109,5 +124,5 @@ Actif seulement quand un item (ou un keyframe) est sélectionné dans la timelin
 - **Bande de `transitionOut`** — existe et fonctionne (`render/track-row.ts`, bande ambre/bleue de largeur = durée), inchangée depuis son introduction. Invisible dans les tests actuels seulement parce que « Créer un item » (menu temporaire) ne pose aucun `transitionOut` explicite sur les keyframes qu'il crée — pas un défaut du rendu.
 - **Bande de `transitionIn`** — n'a jamais existé, à aucune version de l'historique. Seul `transitionOut` a toujours été rendu.
 - **Kf par défaut à la sélection** — vérifié sur le tout premier commit du grid-editor (`922c7fb`) : sélectionner une piste n'a jamais déplacé la tête de lecture, à aucune version. Une intention documentée par l'utilisateur (cf discussion), jamais construite.
-- Un item nouvellement créé/sélectionné reste donc invisible tant que la tête de lecture n'a pas dépassé le point de sa transition d'entrée (conséquence directe du point précédent).
+- Un appel direct à `createItem` avec une géométrie vide reste un placement plein-cadre de la capsule `card` et ne fournit pas de cadre de sélection ; le bouton temporaire « Créer un item » fournit désormais une géométrie bornée.
 - Le décor d'un keyframe (autre que le décor initial de l'item) est édité et persisté correctement, mais n'a aucun effet visuel au rendu — `buildSceneDoc()` ne consomme pas encore `Keyframe.decorId`.

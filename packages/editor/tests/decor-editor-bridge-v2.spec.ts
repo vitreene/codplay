@@ -3,6 +3,7 @@ import { createActor } from 'xstate'
 import type { CodPlaySnapshot } from 'codplay'
 import {
   applyFrameDelta,
+  patchDiffersFromBase,
   resolveKeyframeAlignment,
   resolveKeyframeInsertionPatch,
   resolveTemporaryPatch,
@@ -211,6 +212,55 @@ describe('decor-editor bridge V2', () => {
     expect(patch).toEqual({
       style: { color: 'orange', opacity: '0.5' },
       offset: { translate: { x: 42, y: 18 }, width: 20, height: 20 },
+    })
+  })
+
+  it('conserve un path de candidat comme propriété segment-locale du KF cible', () => {
+    const path = 'M 0 0 L 10 10'
+    const patch = resolveKeyframeInsertionPatch(
+      sceneWithDecors(),
+      item,
+      500,
+      undefined,
+      null,
+      { path },
+    )
+    expect(patch?.path).toBe(path)
+    expect(patchDiffersFromBase({}, { path })).toBe(true)
+  })
+
+  it('capture chaque propriété de Decor modifiée, pas seulement la pose', () => {
+    const scene = sceneWithDecors()
+    scene.zones['zone-target'] = {
+      id: 'zone-target',
+      name: 'target',
+      surfaces: {
+        landscape: { row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+        portrait: { row: 1, col: 1, rowSpan: 1, colSpan: 1 },
+      },
+    }
+    const patch = resolveKeyframeInsertionPatch(
+      scene,
+      item,
+      500,
+      undefined,
+      null,
+      {
+        style: { color: 'green' },
+        classes: 'target-class',
+        offset: { translate: { x: 32, y: 18 }, width: 24, height: 22 },
+        zone: 'target',
+        custom: 'filter: grayscale(1);',
+        path: 'M 0 0 A 10 10 0 0 1 1 0',
+      },
+    )
+    expect(patch).toMatchObject({
+      style: { color: 'green' },
+      classes: 'target-class',
+      offset: { translate: { x: 32, y: 18 }, width: 24, height: 22 },
+      zone: 'target',
+      custom: 'filter: grayscale(1);',
+      path: 'M 0 0 A 10 10 0 0 1 1 0',
     })
   })
 

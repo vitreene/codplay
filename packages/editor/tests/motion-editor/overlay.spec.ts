@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createMotionOverlay, type MotionOverlaySegment } from '../../src/motion-editor/overlay'
-import { frameVisualCenter, motionPathPointAtProgress } from '../../src/motion-editor/geometry'
+import { createMotionOverlay, type MotionOverlayGhost, type MotionOverlaySegment } from '../../src/motion-editor/overlay'
+import { createMotionArcPath, frameVisualCenter, motionPathPointAtProgress } from '../../src/motion-editor/geometry'
 import type { SelectionFrameValue } from '../../src/decor-editor/types'
 
 const frame: SelectionFrameValue = { x: 20, y: 30, width: 100, height: 60 }
@@ -50,6 +50,102 @@ describe('motion overlay', () => {
 
     expect(host.querySelector<HTMLElement>('[data-motion-path-control]')?.style.display).toBe('none')
     expect(host.querySelector<SVGPathElement>('[data-motion-path]')?.style.display).toBe('none')
+    overlay.destroy()
+  })
+
+  it('uses one full-frame movement surface without a central or border split', () => {
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    overlay.setSelection(frame, true)
+
+    const moveZones = host.querySelectorAll<HTMLElement>('[data-motion-move-zone]')
+    expect(moveZones).toHaveLength(1)
+    expect(moveZones[0]?.style.clipPath).toBe('none')
+    expect(host.querySelector('[data-motion-border]')).toBeNull()
+    expect(moveZones[0]?.style.left).toBe(`${frame.x}px`)
+    expect(moveZones[0]?.style.width).toBe(`${frame.width}px`)
+    overlay.destroy()
+  })
+
+  it('previews a temporary middle keyframe as the two route segments that will be committed', () => {
+    const drops: Array<{ sourceFrame: SelectionFrameValue; targetFrame: SelectionFrameValue }> = []
+    const overlay = createMotionOverlay(host, {
+      onDrop: (drop) => {
+        drops.push(drop)
+        return null
+      },
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const temporaryPose = { ...frame, x: 120, y: 80 }
+    const temporarySegment: MotionOverlaySegment = {
+      ...segment,
+      sourceKeyframeId: 'source-kf',
+      targetKeyframeId: 'target-kf',
+      role: 'source',
+      isTemporary: true,
+    }
+    overlay.setSegments([temporarySegment])
+    overlay.setSelection(temporaryPose, true)
+
+    const moveZone = host.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    expect(moveZone.style.left).toBe(`${temporaryPose.x}px`)
+    expect(moveZone.style.top).toBe(`${temporaryPose.y}px`)
+    expect(moveZone.style.zIndex).toBe('5')
+    moveZone.dispatchEvent(pointerEvent('pointerdown', temporaryPose.x, temporaryPose.y))
+    moveZone.dispatchEvent(pointerEvent('pointermove', temporaryPose.x + 20, temporaryPose.y + 10))
+
+    const paths = [...host.querySelectorAll<SVGPathElement>('[data-motion-path]')]
+    expect(paths).toHaveLength(2)
+    const activePath = host.querySelector<SVGPathElement>('[data-motion-path-active]')!
+    const inactivePath = host.querySelector<SVGPathElement>('[data-motion-path-inactive]')!
+    expect(activePath.getAttribute('d')).toBe('M 70 60 L 190 120')
+    expect(inactivePath.getAttribute('d')).toBe('M 190 120 L 270 150')
+    expect(activePath.style.opacity).toBe('1')
+    expect(inactivePath.style.opacity).toBe('0.15')
+
+    moveZone.dispatchEvent(pointerEvent('pointerup', temporaryPose.x + 20, temporaryPose.y + 10))
+    expect(drops).toHaveLength(1)
+    expect(drops[0]?.sourceFrame).toEqual(temporaryPose)
+    overlay.destroy()
+  })
+
+  it('keeps an existing target path on the second half of a temporary split', () => {
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const targetFrame = { ...frame, x: 220, y: 120 }
+    const sourceCenter = frameVisualCenter(frame)
+    const targetCenter = frameVisualCenter(targetFrame)
+    const authoredControl = { x: 170, y: 20 }
+    const authoredPath = createMotionArcPath(sourceCenter, authoredControl, targetCenter)
+    expect(authoredPath).toBeDefined()
+    overlay.setSegments([{
+      sourceKeyframeId: 'source-kf',
+      targetKeyframeId: 'target-kf',
+      sourceFrame: frame,
+      targetFrame,
+      control: authoredControl,
+      path: authoredPath,
+      isTemporary: true,
+    }])
+    const temporaryPose = { ...frame, x: 120, y: 80 }
+    overlay.setSelection(temporaryPose, true)
+
+    const moveZone = host.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    moveZone.dispatchEvent(pointerEvent('pointerdown', temporaryPose.x, temporaryPose.y))
+    moveZone.dispatchEvent(pointerEvent('pointermove', temporaryPose.x + 20, temporaryPose.y + 10))
+
+    expect(host.querySelector<SVGPathElement>('[data-motion-path-active]')?.getAttribute('d')).not.toContain('A')
+    expect(host.querySelector<SVGPathElement>('[data-motion-path-inactive]')?.getAttribute('d')).toContain('A')
     overlay.destroy()
   })
 
@@ -108,6 +204,36 @@ describe('motion overlay', () => {
     sourceGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     targetGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     expect(roles).toEqual(['source', 'target'])
+    overlay.destroy()
+  })
+
+  it('routes structured endpoint ghost clicks through their keyframe ids', () => {
+    const roles: string[] = []
+    const keyframes: string[] = []
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: (role) => roles.push(role),
+      onActivateKeyframe: (keyframeId) => keyframes.push(keyframeId),
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const structuredSegment: MotionOverlaySegment = {
+      ...segment,
+      sourceKeyframeId: 'source-kf',
+      targetKeyframeId: 'target-kf',
+    }
+    overlay.setSelection({ ...segment.sourceFrame, x: 120, y: 80 }, true)
+    overlay.setSegment(structuredSegment)
+    overlay.setGhosts([
+      { id: 'source-ghost', keyframeId: 'source-kf', frame: segment.sourceFrame, chainDistance: 0 },
+      { id: 'target-ghost', keyframeId: 'target-kf', frame: segment.targetFrame, chainDistance: 0 },
+    ])
+
+    host.querySelector<HTMLElement>('[data-motion-ghost="source"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    host.querySelector<HTMLElement>('[data-motion-ghost="target"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+    expect(keyframes).toEqual(['source-kf', 'target-kf'])
+    expect(roles).toEqual([])
     overlay.destroy()
   })
 
@@ -170,9 +296,60 @@ describe('motion overlay', () => {
     expect(host.querySelectorAll('[data-motion-path]')).toHaveLength(3)
     const inactivePaths = [...host.querySelectorAll<SVGPathElement>('[data-motion-path-inactive]')]
     expect(inactivePaths).toHaveLength(2)
-    expect(inactivePaths.map((candidate) => candidate.style.opacity)).toEqual(['0.28', '0.56'])
+    expect(inactivePaths.map((candidate) => candidate.style.opacity)).toEqual(['0.15', '0.15'])
+    expect(inactivePaths.every((candidate) => candidate.style.stroke !== '#f59e0b')).toBe(true)
     expect(inactivePaths.every((candidate) => candidate.style.pointerEvents === 'none')).toBe(true)
     expect(host.querySelectorAll('[data-motion-path-control]')).toHaveLength(1)
+    overlay.destroy()
+  })
+
+  it('renders every item keyframe ghost with a chain-distance colour and click target', () => {
+    const activated: string[] = []
+    const overlay = createMotionOverlay(host, {
+      onDrop: () => null,
+      onActivateRole: () => undefined,
+      onActivateKeyframe: (keyframeId) => activated.push(keyframeId),
+      onPathActivate: () => undefined,
+      onPathChange: () => undefined,
+    })
+    const frames = [0, 1, 2, 3, 4].map((index) => ({ ...frame, x: index * 120 }))
+    const ghosts: MotionOverlayGhost[] = frames.map((ghostFrame, index) => ({
+      id: `ghost-${index}`,
+      keyframeId: `kf-${index}`,
+      frame: ghostFrame,
+      chainDistance: Math.abs(index - 2),
+      ...(index === 0 ? { isInitial: true } : {}),
+    }))
+    overlay.setSelection(frames[2]!, true)
+    overlay.setSegments([{
+      ...segment,
+      sourceKeyframeId: 'kf-1',
+      targetKeyframeId: 'kf-2',
+      sourceFrame: frames[1]!,
+      targetFrame: frames[2]!,
+      active: true,
+    }])
+    overlay.setGhosts(ghosts)
+
+    const renderedGhosts = [...host.querySelectorAll<HTMLElement>('[data-motion-ghost]')]
+    expect(renderedGhosts).toHaveLength(5)
+    expect(host.querySelector<HTMLElement>('[data-motion-keyframe-id="kf-2"]')?.style.display).toBe('none')
+    for (const keyframeId of ['kf-0', 'kf-1', 'kf-3', 'kf-4']) {
+      expect(host.querySelector<HTMLElement>(`[data-motion-keyframe-id="${keyframeId}"]`)?.style.display).not.toBe('none')
+    }
+
+    const nearest = host.querySelector<HTMLElement>('[data-motion-keyframe-id="kf-1"]')!
+    const nearbyInactive = host.querySelector<HTMLElement>('[data-motion-keyframe-id="kf-3"]')!
+    const farther = host.querySelector<HTMLElement>('[data-motion-keyframe-id="kf-4"]')!
+    expect(nearest.dataset.motionGhostDistance).toBe('1')
+    expect(farther.dataset.motionGhostDistance).toBe('2')
+    expect(nearest.style.opacity).toBe('1')
+    expect(nearbyInactive.style.opacity).toBe('0.18')
+    expect(farther.style.opacity).toBe('0.16')
+    expect(nearbyInactive.style.borderColor).not.toBe(farther.style.borderColor)
+
+    farther.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(activated).toEqual(['kf-4'])
     overlay.destroy()
   })
 
@@ -194,7 +371,7 @@ describe('motion overlay', () => {
     expect(initialGhost.style.display).toBe('')
     expect(initialGhost.style.left).toBe('0px')
     expect(initialGhost.style.top).toBe('10px')
-    expect(initialGhost.style.opacity).toBe('0.28')
+    expect(initialGhost.style.opacity).toBe('0.16')
     initialGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     expect(initialActivations).toBe(1)
 

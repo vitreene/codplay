@@ -15,6 +15,23 @@ export {
 } from './geometry'
 export type { MotionPoint } from './geometry'
 
+export {
+  DEFAULT_MOTION_TRANSITION_WINDOW_MS,
+  resolveMotionKeyframeAlignment,
+  resolveMotionLifetime,
+  resolveMotionTransitionWindow,
+  sortMotionKeyframes,
+} from './timing'
+export type {
+  MotionInheritedLifetime,
+  MotionKeyframeAlignment,
+  MotionKeyframeReference,
+  MotionLifetime,
+  MotionLifetimeBoundary,
+  MotionTimingDefinition,
+  MotionTransitionWindow,
+} from './timing'
+
 export { createMotionOverlay } from './overlay'
 export type {
   MotionDrop,

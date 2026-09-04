@@ -14,6 +14,7 @@ import {
 import { LAYOUT_PROFILE_DEFAULT } from './layout-profile'
 import { DISPLAY_CONFIG_DEFAULT } from './display-config'
 import { childrenOf, findParentClipBounds } from './utils'
+import { resolveMotionLifetime } from '../motion-editor/timing'
 
 /**
  * §"unicité de la source" (`2026-07-13-controller-islands-bridge-plan.md` §3bis, tranché
@@ -220,71 +221,107 @@ function timelineBoundaryKeyframes(item: Item): { first?: Keyframe; last?: Keyfr
   }
 }
 
+/** Adds the distribution-computed virtual bounds for one capsule interval. */
+function appendVirtualKeyframes(
+  result: VirtualKeyframe[],
+  children: Item[],
+  clipStartMs: number,
+  clipDurationMs: number,
+  capsuleType: Parameters<typeof CapsulePreset.resolve>[0]['capsuleType'],
+  distribution: Parameters<typeof CapsulePreset.resolve>[0]['distribution'],
+  capsuleOrder: 'forward' | 'backward',
+): void {
+  if (children.length === 0 || clipDurationMs <= 0) return
+
+  // Même formule que `build-scene.ts::resolveCapsule()` (`TransitionTiming`,
+  // `@codplay/scene-factory`) — sans `preRollMs` (concept Builder/player, invisible ici par
+  // conception, l'éditeur reste dans son propre référentiel temporel local).
+  const childInputs: ChildInput[] = children.map((child) => {
+    const childKeyframes = sortTimelineKeyframes(child)
+    const ci = childKeyframes[0]
+    // One real keyframe fixes the entry boundary; the capsule still computes the missing exit
+    // boundary. Treating that same keyframe as both locks would collapse the child's slot to a
+    // zero-duration range and would disagree with the established virtual-outro behavior.
+    const co = childKeyframes.length > 1 ? childKeyframes.at(-1) : undefined
+    return {
+      trackId: child.id,
+      lockedIntroMs: TransitionTiming.lockedIntroMs(
+        ci !== undefined ? {
+          timeMs: ci.timeMs - clipStartMs,
+          transitionInDurationMs: ci.transitionIn?.kind === 'named' ? ci.transitionIn.durationMs : undefined,
+        } : undefined,
+      ),
+      lockedOutroMs: TransitionTiming.lockedOutroMs(co !== undefined ? { timeMs: co.timeMs - clipStartMs } : undefined),
+    }
+  })
+
+  let preset: ReturnType<typeof CapsulePreset.resolve>
+  try {
+    preset = CapsulePreset.resolve({ capsuleType, distribution })
+  } catch {
+    return
+  }
+  const out = CapsuleDistribution.compute({
+    clipDurationMs,
+    ...preset,
+    order: capsuleOrder,
+    children: childInputs,
+  })
+
+  for (let i = 0; i < out.children.length; i++) {
+    const childOut = out.children[i]!
+    const child = children[i]!
+    const childKeyframes = sortTimelineKeyframes(child)
+    const lifetime = resolveMotionLifetime(childKeyframes, {
+      introTimeMs: clipStartMs + childOut.introMs,
+      outroTimeMs: clipStartMs + childOut.outroMs,
+    })
+    if (lifetime === null) continue
+
+    // Real first/last keyframes own the corresponding boundary. Only inherited boundaries are
+    // rendered as virtual handles; a virtual outro coinciding with a real KF is not duplicated.
+    if (lifetime.intro.kind === 'virtual') {
+      result.push({ trackId: child.id, id: `vkf-${child.id}-intro`, timeMs: lifetime.intro.timeMs, name: 'intro', visible: childOut.visible })
+    }
+    if (lifetime.outro.kind === 'virtual'
+      && !childKeyframes.some((keyframe) => keyframe.timeMs === lifetime.outro.timeMs)) {
+      result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: lifetime.outro.timeMs, name: 'outro', visible: childOut.visible })
+    }
+  }
+}
+
 function computeVirtualKeyframes(scene: EditorScene, capsuleOrder: 'forward' | 'backward' = 'forward'): VirtualKeyframe[] {
   const result: VirtualKeyframe[] = []
+
+  // The scene root is an implicit `card` capsule. It has no item of its own, but its direct
+  // children still receive the same virtual-bound projection as children of an explicit capsule.
+  // The builder uses a stagger distribution with zero offsets for this root level.
+  appendVirtualKeyframes(
+    result,
+    childrenOf(scene.items, null),
+    0,
+    scene.meta.durationMs,
+    'card',
+    { mode: 'stagger', staggerInMs: 0, staggerOutMs: 0 },
+    capsuleOrder,
+  )
+
   for (const capsule of scene.items) {
-    if (capsule.type !== 'capsule') continue
+    if (capsule.type !== 'capsule' || !capsule.capsule) continue
     const children = childrenOf(scene.items, capsule.id)
-    if (children.length === 0) continue
     const capsuleKeyframes = sortTimelineKeyframes(capsule)
     const introKf = capsuleKeyframes[0]
     const outroKf = capsuleKeyframes.at(-1)
     if (!introKf || !outroKf) continue
-    const clipDurationMs = outroKf.timeMs - introKf.timeMs
-    if (clipDurationMs <= 0) continue
-    if (!capsule.capsule) continue
-
-    // Même formule que `build-scene.ts`'s `resolveCapsule()` (`TransitionTiming`, `@codplay/
-    // scene-factory`) — sans `preRollMs` (concept Builder/player, invisible ici par conception,
-    // l'éditeur reste dans son propre référentiel temporel local). Sans cet appel partagé, cet
-    // aperçu divergeait de la construction réelle : il ignorait `transitionIn.durationMs`.
-    const childInputs: ChildInput[] = children.map((child) => {
-      const childKeyframes = sortTimelineKeyframes(child)
-      const ci = childKeyframes[0]
-      // One real keyframe fixes the entry boundary; the capsule still computes the missing exit
-      // boundary. Treating that same keyframe as both locks would collapse the child's slot to a
-      // zero-duration range and would disagree with the established virtual-outro behavior.
-      const co = childKeyframes.length > 1 ? childKeyframes.at(-1) : undefined
-      return {
-        trackId: child.id,
-        lockedIntroMs: TransitionTiming.lockedIntroMs(
-          ci !== undefined ? {
-            timeMs: ci.timeMs - introKf.timeMs,
-            transitionInDurationMs: ci.transitionIn?.kind === 'named' ? ci.transitionIn.durationMs : undefined,
-          } : undefined,
-        ),
-        lockedOutroMs: TransitionTiming.lockedOutroMs(co !== undefined ? { timeMs: co.timeMs - introKf.timeMs } : undefined),
-      }
-    })
-
-    let preset: ReturnType<typeof CapsulePreset.resolve>
-    try {
-      preset = CapsulePreset.resolve({ capsuleType: capsule.capsule.kind, distribution: capsule.capsule.distribution })
-    } catch {
-      continue
-    }
-    const out = CapsuleDistribution.compute({
-      clipDurationMs,
-      ...preset,
-      order: capsuleOrder,
-      children: childInputs,
-    })
-
-    for (let i = 0; i < out.children.length; i++) {
-      const childOut = out.children[i]!
-      const child = children[i]!
-      const childKeyframes = sortTimelineKeyframes(child)
-      // The real first/last keyframes already represent the child boundaries, whether or not the
-      // author gave them the optional reserved names. A child with no real keyframe receives both
-      // virtual markers; with one real keyframe, the capsule still supplies the missing outro
-      // boundary computed by the distribution.
-      if (childKeyframes.length === 0) {
-        result.push({ trackId: child.id, id: `vkf-${child.id}-intro`, timeMs: introKf.timeMs + childOut.introMs, name: 'intro', visible: childOut.visible })
-        result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: introKf.timeMs + childOut.outroMs, name: 'outro', visible: childOut.visible })
-      } else if (childKeyframes.length === 1) {
-        result.push({ trackId: child.id, id: `vkf-${child.id}-outro`, timeMs: introKf.timeMs + childOut.outroMs, name: 'outro', visible: childOut.visible })
-      }
-    }
+    appendVirtualKeyframes(
+      result,
+      children,
+      introKf.timeMs,
+      outroKf.timeMs - introKf.timeMs,
+      capsule.capsule.kind,
+      capsule.capsule.distribution,
+      capsuleOrder,
+    )
   }
   return result
 }
@@ -474,7 +511,12 @@ export const sequenceEditorMachine = setup({
           actions: emit(({ context, event }) => {
             const timeMs = Math.round(Math.max(0, Math.min(event.timeMs, context.scene.meta.durationMs)) / TIME_STEP_MS) * TIME_STEP_MS
             const item = context.scene.items.find((i) => i.id === event.trackId)
-            const decorId = event.decorId ?? (item ? adjacentDecorId(item.keyframes, timeMs) : undefined)
+            // An item without a real KF still has an initial decor. Materialising its virtual
+            // intro (or placing the first KF directly) must inherit that decor instead of
+            // creating an empty, unrelated one. Once a real KF exists, the adjacent decor keeps
+            // the established copy-on-write/inheritance protocol.
+            const decorId = event.decorId
+              ?? (item ? adjacentDecorId(item.keyframes, timeMs) ?? item.initialDecorId : undefined)
             return {
               type: 'commandBatch' as const,
               commands: [{ name: 'createNamedKeyframe', args: { itemId: event.trackId, keyframeId: event.id ?? freshId('kf'), timeMs, decorId } }],

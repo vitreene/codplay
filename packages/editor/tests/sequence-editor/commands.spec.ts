@@ -79,6 +79,32 @@ describe('deleteKeyframe', () => {
     const s = commands.deleteKeyframe(s0, { itemId: 't1', keyframeId: 'kf-1' })
     expect(s.decors['d1']).toBeDefined()
   })
+
+  it('keeps a keyframe decor still referenced by the item initial decor', () => {
+    const s0 = scene([
+      item('t1', {
+        initialDecorId: 'd1',
+        keyframes: [{ id: 'kf-1', timeMs: 0, decorId: 'd1' }],
+      }),
+    ])
+    s0.decors['d1'] = { id: 'd1' }
+    const s = commands.deleteKeyframe(s0, { itemId: 't1', keyframeId: 'kf-1' })
+    expect(s.items[0]!.keyframes).toHaveLength(0)
+    expect(s.decors['d1']).toBeDefined()
+  })
+
+  it('keeps the initial decor when clearing the item keyframes', () => {
+    const s0 = scene([
+      item('t1', {
+        initialDecorId: 'd1',
+        keyframes: [{ id: 'kf-1', timeMs: 0, decorId: 'd1' }],
+      }),
+    ])
+    s0.decors['d1'] = { id: 'd1' }
+    const s = commands.clearItemKeyframes(s0, { itemId: 't1' })
+    expect(s.items[0]!.keyframes).toHaveLength(0)
+    expect(s.decors['d1']).toBeDefined()
+  })
 })
 
 describe('moveKeyframe', () => {
@@ -93,6 +119,22 @@ describe('moveKeyframe', () => {
     ])
     const s = commands.moveKeyframe(s0, { itemId: 't1', keyframeId: 'kf-1', timeMs: 300 })
     expect(s.items[0]!.keyframes.map((k) => k.id)).toEqual(['kf-2', 'kf-1'])
+  })
+
+  it('keeps a target decor path attached when moving its keyframe across another keyframe', () => {
+    const s0 = scene([
+      item('t1', {
+        keyframes: [
+          { id: 'kf-source', timeMs: 100, decorId: 'd1' },
+          { id: 'kf-target', timeMs: 200, decorId: 'd2' },
+        ],
+      }),
+    ])
+    s0.decors['d1'] = { id: 'd1' }
+    s0.decors['d2'] = { id: 'd2', path: 'M 0 0 A 0.5 0.5 0 0 1 1 0' }
+    const s = commands.moveKeyframe(s0, { itemId: 't1', keyframeId: 'kf-target', timeMs: 50 })
+    expect(s.items[0]!.keyframes.map((keyframe) => keyframe.id)).toEqual(['kf-target', 'kf-source'])
+    expect(s.decors[s.items[0]!.keyframes[0]!.decorId]!.path).toBe('M 0 0 A 0.5 0.5 0 0 1 1 0')
   })
 })
 

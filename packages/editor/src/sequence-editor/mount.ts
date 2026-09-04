@@ -10,6 +10,7 @@ import { createPlayheadOverlay, renderPlayhead } from './render/playhead-line'
 import { createCueRow, renderCueRow } from './render/cue-row'
 import { createMarkerTrackRows, renderMarkerTrackRows } from './render/marker-row'
 import { createWaveformRow, renderWaveformRow } from './render/waveform-row'
+import { findParentClipBounds } from './utils'
 
 /**
  * Un `<button>` dont le `textContent` est un glyphe Unicode seul (▶/■/≫/⊡/×) expose ce nœud texte
@@ -30,6 +31,8 @@ export interface MountSequenceEditorOptions {
   transport?: SequenceEditorTransport
   /** Notifié à chaque changement de playhead auteur — le bridge décide comment le player se déplace. */
   onPlayheadChange?: (timeMs: number) => void
+  /** Notifié une fois au relâchement d'un scrub auteur, avec la dernière position du playhead. */
+  onPlayheadRelease?: (timeMs: number) => void
 }
 
 /** Transport state intentionally reduced to the values needed by sequence-editor. */
@@ -347,6 +350,66 @@ export function mountSequenceEditor(
     ctrl.dragStartKeyframe(trackId, kfId)
   }
 
+  /** Materializes one projected boundary at a bounded author time. */
+  function materializeVirtualKeyframe(vkf: VirtualKeyframe, requestedTimeMs = vkf.timeMs): void {
+    const ctx = ctrl.getSnapshot().context
+    const bounds = findParentClipBounds(vkf.trackId, ctx.scene.items, ctx.scene.meta.durationMs)
+    const timeMs = Math.max(bounds.minMs, Math.min(bounds.maxMs, requestedTimeMs))
+    const id = ctrl.addKeyframe(vkf.trackId, timeMs)
+    ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
+  }
+
+  let cancelVirtualKeyframeDrag: (() => void) | null = null
+
+  /** Drags a virtual boundary before materializing it; a click remains a non-writing gesture. */
+  function startVirtualKeyframeDrag(vkf: VirtualKeyframe, e: PointerEvent): void {
+    cancelVirtualKeyframeDrag?.()
+    const pointerId = e.pointerId
+    const startClientX = e.clientX
+    const rect = timeline.getBoundingClientRect()
+    let moved = false
+
+    function cleanup(): void {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
+      if (moved) dragOverlay.classList.remove('active')
+      if (cancelVirtualKeyframeDrag === cleanup) cancelVirtualKeyframeDrag = null
+    }
+
+    function onMove(ev: PointerEvent): void {
+      if (ev.pointerId !== pointerId) return
+      if (!moved && Math.abs(ev.clientX - startClientX) <= 4) return
+      moved = true
+      dragOverlay.classList.add('active')
+      ev.preventDefault()
+    }
+
+    function onUp(ev: PointerEvent): void {
+      if (ev.pointerId !== pointerId) return
+      cleanup()
+      if (!moved) return
+      const requestedTimeMs = ctrl.pixelToMs(ev.clientX - rect.left)
+      materializeVirtualKeyframe(vkf, requestedTimeMs)
+    }
+
+    function onCancel(ev: PointerEvent): void {
+      if (ev.pointerId !== pointerId) return
+      cleanup()
+    }
+
+    function onKeyDown(ev: KeyboardEvent): void {
+      if (ev.key === 'Escape') cleanup()
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
+    cancelVirtualKeyframeDrag = cleanup
+  }
+
   // ── Marker drag ────────────────────────────────────────────────────────────────
 
   function startMarkerDrag(markerId: string): void {
@@ -417,6 +480,11 @@ export function mountSequenceEditor(
         const inMs = Math.min(startMs, curMs)
         const outMs = Math.max(startMs, curMs)
         ctrl.setPlayRange(inMs, outMs)
+      } else {
+        // The pointerup position is authoritative when the last pointermove was coalesced by the
+        // browser. The release notification is sent only after this final author seek.
+        ctrl.seek(ctrl.pixelToMs(ev.clientX - rect.left + timeline.scrollLeft))
+        options.onPlayheadRelease?.(ctrl.getPlayheadMs())
       }
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -450,6 +518,7 @@ export function mountSequenceEditor(
     // revenue à 0). `ctrl.seek(0)` met à jour l'état local puis laisse le diff de `render()` émettre
     // `onPlayheadChange`/`SEEK` tout seul — même relais que le scrub, `scene-player-bridge.ts` inchangé.
     ctrl.seek(0)
+    options.onPlayheadRelease?.(ctrl.getPlayheadMs())
   }
   btnStop.addEventListener('click', onStopClick)
 
@@ -576,9 +645,9 @@ export function mountSequenceEditor(
         collapsedCapsuleIds,
         startKeyframeDrag,
         (vkf: VirtualKeyframe) => {
-          const id = ctrl.addKeyframe(vkf.trackId, vkf.timeMs)
-          ctrl.renameKeyframe(vkf.trackId, id, vkf.name)
+          materializeVirtualKeyframe(vkf)
         },
+        startVirtualKeyframeDrag,
       )
     }
     renderCueRow(cueRow, ctx)
@@ -700,6 +769,7 @@ export function mountSequenceEditor(
 
   return {
     destroy(): void {
+      cancelVirtualKeyframeDrag?.()
       unsubscribe()
       ro.disconnect()
       document.removeEventListener('keydown', onKeyDown)

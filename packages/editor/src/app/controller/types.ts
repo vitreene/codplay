@@ -89,6 +89,12 @@ export type ControllerEvent =
   /** §7 étape 5 — relais pur, `playheadMs` reste possédé par `sequence-editor` (seul écrivain, jamais stocké ici). */
   | { type: 'SEEK'; timelineMs: number }
   /**
+   * Fin explicite d'un scrub auteur (`pointerup`). Le seek continu reste un simple relais ; cette
+   * frontière permet au contrôleur de dériver la sélection du keyframe sans la faire varier pendant
+   * le geste.
+   */
+  | { type: 'SEEK_RELEASED'; timelineMs: number }
+  /**
    * Envoyé par `scenePlayer` une fois que `telco.seek()` (asynchrone) a réellement fini d'appliquer
    * la position au DOM — jamais au moment de la demande (`SEEK`/`'seek'`, synchrone, émis AVANT que
    * le seek asynchrone n'ait eu lieu). `decor-editor-bridge.ts` en a besoin pour re-résoudre la
@@ -118,7 +124,7 @@ export type ControllerEvent =
    * géré directement dans l'état `playing` — couvre Stop (`onStopClick` → seek 0) et le scrub
    * pendant la lecture.
    */
-  | { type: 'TELCO_PAUSE_REQUEST' }
+  | { type: 'TELCO_PAUSE_REQUEST'; timelineMs?: number }
   /**
    * Abandon de phase (Échap) — envoyé par le pont `decorEditor` quand une édition en attente
    * (`pendingCommands`) est jetée sans commit (`2026-07-17-phase-commit-selection-recovery-plan.md`
