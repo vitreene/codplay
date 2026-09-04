@@ -177,7 +177,12 @@ export function resolveTemporaryPatch(snapshot: CodPlaySnapshot | null, itemId: 
  * Pose temporaire des champs structurés présents dans le snapshot V2. Un champ absent est complété
  * par `base`, jamais par un défaut arbitraire qui écraserait silencieusement l'héritage.
  */
-function resolveTemporaryOffset(snapshot: CodPlaySnapshot | null, itemId: string, base: DecorPatch): DecorPatch {
+function resolveTemporaryOffset(
+  snapshot: CodPlaySnapshot | null,
+  itemId: string,
+  base: DecorPatch,
+  rootWidthPx: number | null,
+): DecorPatch {
   const state = snapshotState(snapshot, itemId)
   const persoState = state?.style
   if (!persoState || typeof persoState !== 'object') return {}
@@ -191,14 +196,37 @@ function resolveTemporaryOffset(snapshot: CodPlaySnapshot | null, itemId: string
     return Number.isFinite(parsed) ? parsed : undefined
   }
   const style = persoState as Record<string, unknown>
-  const x = parseCqw(style.x) ?? base.offset?.translate?.x
-  const y = parseCqw(style.y) ?? base.offset?.translate?.y
+  let x = parseCqw(style.x) ?? base.offset?.translate?.x
+  let y = parseCqw(style.y) ?? base.offset?.translate?.y
   const width = parseCqw(style.width) ?? base.offset?.width
   const height = parseCqw(style.height) ?? base.offset?.height
   const rotate = parseCqw(style.rotate) ?? base.offset?.rotate
   const scaleX = parseCqw(style.scaleX) ?? base.offset?.scale?.x
   const scaleY = parseCqw(style.scaleY) ?? base.offset?.scale?.y
   const rotationOrigin = parseRotationOrigin(style['transform-origin']) ?? base.offset?.rotationOrigin
+
+  // The live snapshot exposes the runtime border-box `x/y`, while the temporary Decor base must
+  // remain content-box anchored. Normalize that base before the sparse user edit is compared;
+  // otherwise a border-only edit makes the editor believe the interpolated pose itself changed
+  // and the next sync puts the Selection Frame back on the source endpoint.
+  if (rootWidthPx !== null && x !== undefined && y !== undefined && width !== undefined && height !== undefined) {
+    const runtimeFrame: SelectionFrameValue = {
+      x: cqwToPx(x, rootWidthPx),
+      y: cqwToPx(y, rootWidthPx),
+      width: cqwToPx(width, rootWidthPx),
+      height: cqwToPx(height, rootWidthPx),
+      rotate: rotate ?? 0,
+      scaleX: scaleX ?? 1,
+      scaleY: scaleY ?? 1,
+      rotationOrigin,
+    }
+    const contentFrame = poseFrameToContentBoxFrame(
+      runtimeFrame,
+      resolveBorderInsetsPx(style, rootWidthPx),
+    )
+    x = pxToCqw(contentFrame.x, rootWidthPx)
+    y = pxToCqw(contentFrame.y, rootWidthPx)
+  }
   const offset: OffsetPatch = {}
   if (x !== undefined || y !== undefined) offset.translate = { x: x ?? 0, y: y ?? 0 }
   if (width !== undefined) offset.width = width
@@ -663,6 +691,8 @@ export function createDecorEditorBridge(
   /** True when the logical frame belongs to the current temporary author time, not a stale fallback. */
   let frameLogicalProjectionCurrent = false
   let frameGestureBasePx: SelectionFrameValue | null = null
+  /** Keeps a just-released CS pose authoritative while the player presentation catches up. */
+  let frameCommitCandidatePx: SelectionFrameValue | null = null
   /** Current border geometry used only to move between the outer pose origin and content-box origin. */
   let frameBorderInsetsPx: FrameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
   /** Synchronous candidate used while a controller change is being converted to a snapshot. */
@@ -676,6 +706,8 @@ export function createDecorEditorBridge(
   let snapshotPreviewItemId: string | null = null
   /** True only while the active snapshot also changes the affine frame used by the CS. */
   let snapshotPreviewFrameActive = false
+  /** Makes the runtime presentation authoritative for the visible CS during an active seek. */
+  let seekProjectionActive = false
   let activeMotion: ActiveMotion | null = null
   /** Coalesced root-resize projection; runs after the runtime's own resize observer. */
   let resizeFrameRequest: number | null = null
@@ -737,7 +769,7 @@ export function createDecorEditorBridge(
     const snapshot = presentedSnapshotAt(timeMs)
     return mergePatch(
       mergePatch(previous, resolveTemporaryPatch(snapshot, item.id)),
-      resolveTemporaryOffset(snapshot, item.id, previous),
+      resolveTemporaryOffset(snapshot, item.id, previous, sceneRootWidthPx()),
     )
   }
 
@@ -1013,15 +1045,22 @@ export function createDecorEditorBridge(
     // converting a runtime border-box presentation back to this author frame.
     const sourceDocumentFrame = logicalFrameToPx(sourceLogical, rootWidthPx)
     const targetDocumentFrame = logicalFrameToPx(targetLogical, rootWidthPx)
-    // During an affine preview, frameLogicalValue is the accepted candidate for the selected KF.
-    // Keep that candidate in the new pixel repère while resolving the opposite endpoint from the
-    // document. A color-only preview has no affine candidate and therefore falls back naturally.
+    // During an affine preview, frameNaturalValuePx is the accepted pixel candidate for the
+    // selected KF. Keep that candidate in the new pixel repère while resolving the opposite
+    // endpoint from the document. `frameLogicalValue` is cqw and must not cross this boundary.
     const targetSelection = selectedTarget
-    const candidate = frameLogicalValue
+    const candidate = frameNaturalValuePx
+    const selectedKeyframeTimeMs = targetSelection.keyframeId === null
+      ? null
+      : item.keyframes.find((keyframe) => keyframe.id === targetSelection.keyframeId)?.timeMs ?? null
+    const selectedTargetIsAtTimeline = selectedKeyframeTimeMs !== null
+      && Math.abs(selectedKeyframeTimeMs - lastKnownTimelineMs) <= 1
     const candidateContentFrameFor = (keyframeId: string, fallback: SelectionFrameValue): SelectionFrameValue =>
       targetSelection?.itemId === item.id
       && !targetSelection.isTemporary
       && targetSelection.keyframeId === keyframeId
+      && selectedTargetIsAtTimeline
+      && frameLogicalProjectionCurrent
       && candidate !== null
         ? candidate
         : fallback
@@ -1217,10 +1256,7 @@ export function createDecorEditorBridge(
         ? currentMotion.sourceFrame
         : currentMotion?.targetKeyframeId === keyframe.id
           ? currentMotion.targetFrame
-          : poseFrameToContentBoxFrame(
-            logicalFrameToPx(logicalFrame, rootWidthPx),
-            resolveFrameBorderInsets(null, item.id, patch, rootWidthPx),
-          )
+          : logicalFrameToPx(logicalFrame, rootWidthPx)
       const chainDistance = anchorIndices.length === 0
         ? index
         : Math.min(...anchorIndices.map((anchorIndex) => Math.abs(index - anchorIndex)))
@@ -1278,6 +1314,19 @@ export function createDecorEditorBridge(
         style['transform-origin'] = `${offset.rotationOrigin.fx * 100}% ${offset.rotationOrigin.fy * 100}%`
       }
     }
+    // Decor.offset.x/y are author coordinates on the content-box. The runtime element is laid
+    // out from the border-box, so a live snapshot must receive the inverse anchor projection as
+    // well; otherwise changing only border-width moves the content during the preview.
+    const rootWidth = sceneRootWidthPx()
+    const contentFrame = previewContentFrameOverride
+      ?? (frameTarget?.isTemporary === true ? frameValuePx : frameNaturalValuePx)
+      ?? frameValuePx
+    const insets = previewBorderInsetsOverride ?? frameBorderInsetsPx
+    if (rootWidth !== null && contentFrame !== null && hasVisibleBorder(insets)) {
+      const runtimeFrame = contentBoxFrameToPoseFrame(contentFrame, insets)
+      style.x = pxToCqw(runtimeFrame.x, rootWidth)
+      style.y = pxToCqw(runtimeFrame.y, rootWidth)
+    }
     if (Object.keys(style).length === 0) return null
     return {
       target: { storyId: EDITOR_V2_STORY_ID, persoId: itemId },
@@ -1317,28 +1366,33 @@ export function createDecorEditorBridge(
     if (target === null || base === null || rootWidth === null) return null
     frameGestureBasePx = base
     const candidate = applyFrameDelta(base, delta)
-    const basePoseFrame = contentBoxFrameToPoseFrame(base, frameBorderInsetsPx)
-    const candidatePoseFrame = contentBoxFrameToPoseFrame(candidate, frameBorderInsetsPx)
     lastPreviewAccepted = false
-    const baseOffset = frameToOffsetPatch(basePoseFrame, rootWidth)
-    const candidateOffset = frameToOffsetPatch(candidatePoseFrame, rootWidth)
+    const baseOffset = frameToOffsetPatch(base, rootWidth)
+    const candidateOffset = frameToOffsetPatch(candidate, rootWidth)
     const frameModifications = modificationsFromDecorPatch(
       { offset: baseOffset },
       { offset: candidateOffset },
     )
-    controller.applyPatch(modificationsToDecorPatch(frameModifications))
+    previewContentFrameOverride = candidate
+    previewBorderInsetsOverride = frameBorderInsetsPx
+    try {
+      controller.applyPatch(modificationsToDecorPatch(frameModifications))
+    } finally {
+      previewContentFrameOverride = null
+      previewBorderInsetsOverride = null
+    }
     if (!lastPreviewAccepted) return base
     frameValuePx = candidate
-    frameNaturalValuePx = candidatePoseFrame
+    frameNaturalValuePx = candidate
     frameLogicalValue = {
-      x: pxToCqw(candidatePoseFrame.x, rootWidth),
-      y: pxToCqw(candidatePoseFrame.y, rootWidth),
-      width: pxToCqw(candidatePoseFrame.width, rootWidth),
-      height: pxToCqw(candidatePoseFrame.height, rootWidth),
-      rotate: candidatePoseFrame.rotate ?? 0,
-      scaleX: candidatePoseFrame.scaleX ?? 1,
-      scaleY: candidatePoseFrame.scaleY ?? 1,
-      rotationOrigin: candidatePoseFrame.rotationOrigin === undefined ? undefined : { ...candidatePoseFrame.rotationOrigin },
+      x: pxToCqw(candidate.x, rootWidth),
+      y: pxToCqw(candidate.y, rootWidth),
+      width: pxToCqw(candidate.width, rootWidth),
+      height: pxToCqw(candidate.height, rootWidth),
+      rotate: candidate.rotate ?? 0,
+      scaleX: candidate.scaleX ?? 1,
+      scaleY: candidate.scaleY ?? 1,
+      rotationOrigin: candidate.rotationOrigin === undefined ? undefined : { ...candidate.rotationOrigin },
     }
     refreshActiveMotionEndpoint(candidate)
     return candidate
@@ -1411,12 +1465,12 @@ export function createDecorEditorBridge(
     syncMotionOverlay()
   }
 
-  /** Applies one movement-surface drop to the real KF at the playhead, or creates one between real KFs. */
+  /** Commits one pose gesture to the real KF at the playhead, or creates one between real KFs. */
   function commitMotionDrop(drop: { sourceFrame: SelectionFrameValue; targetFrame: SelectionFrameValue }): MotionOverlaySegment | null {
     // A previous palette/CS phase may still be waiting for its host-level flush. Finish it before
     // resolving the drop so this gesture cannot be overwritten by an older pending command.
-    // The current temporary movement itself is committed below from the same sparse registry; do
-    // not let the generic phase flush create an intermediate KF before the motion transaction.
+    // The current temporary pose gesture itself is committed below from the same sparse registry;
+    // do not let the generic phase flush create an intermediate Decor KF before that transaction.
     const currentTemporaryEdit = pendingTemporaryDecorCommit !== null
       && pendingTemporaryDecorCommit.itemId === frameTarget?.itemId
       && Math.abs(pendingTemporaryDecorCommit.timeMs - lastKnownTimelineMs) <= 1
@@ -1431,16 +1485,16 @@ export function createDecorEditorBridge(
     const rootWidth = sceneRootWidthPx()
     if (rootWidth === null) return null
 
-    const targetPoseFrame = contentBoxFrameToPoseFrame(drop.targetFrame, frameBorderInsetsPx)
-    const sourcePoseFrame = contentBoxFrameToPoseFrame(drop.sourceFrame, frameBorderInsetsPx)
-    const targetOffset = frameToOffsetPatch(targetPoseFrame, rootWidth)
+    // Movement-surface frames are already content-box frames. Persist those author coordinates;
+    // the builder derives the border-box layout translation at runtime.
+    const targetOffset = frameToOffsetPatch(drop.targetFrame, rootWidth)
     // A pose gesture is the explicit exception to sparse Decor capture: the new waypoint must
     // freeze the complete frame, otherwise its missing width/rotation/etc. would keep resolving
     // from a different pose and the two resulting trajectory segments would not be stable.
     const capturedPosePatch: DecorPatch = { offset: targetOffset }
     const gestureOffsetPatch = modificationsToDecorPatch(
       modificationsFromDecorPatch(
-        { offset: frameToOffsetPatch(sourcePoseFrame, rootWidth) },
+        { offset: frameToOffsetPatch(drop.sourceFrame, rootWidth) },
         { offset: targetOffset },
       ),
     )
@@ -1512,6 +1566,21 @@ export function createDecorEditorBridge(
     coordination.requestAuthorSeek(targetTimeMs)
     syncMotionOverlay()
     return activeSegment
+  }
+
+  /** Commits every Selection Frame affine gesture through the pose-KF path immediately. */
+  function commitSelectionFrameDrop(targetFrame: SelectionFrameValue): void {
+    const sourceFrame = frameGestureBasePx ?? frameValuePx
+    frameCommitCandidatePx = targetFrame
+    try {
+      if (sourceFrame !== null) {
+        commitMotionDrop({ sourceFrame, targetFrame })
+      }
+    } finally {
+      frameCommitCandidatePx = null
+      frameGestureBasePx = null
+    }
+    controller.notifyInteractionEnd()
   }
 
   /** Synchronizes the artefact layer with the current CS selection without entering the document. */
@@ -1608,7 +1677,7 @@ export function createDecorEditorBridge(
       // the segment endpoint; the runtime pose is used only for the visible CS.
       const naturalFrame = frameNaturalValuePx === null
         ? frameValuePx
-        : poseFrameToContentBoxFrame(frameNaturalValuePx, frameBorderInsetsPx)
+        : frameNaturalValuePx
       const endpointFrame = naturalFrame
       const nextMotion: ActiveMotion = role === 'source'
         ? { ...motion, ...(atSourceEndpoint && endpointFrame !== null ? { sourceFrame: endpointFrame } : {}), role }
@@ -1626,20 +1695,21 @@ export function createDecorEditorBridge(
         && snapshotPreviewFrameActive
         && snapshotPreviewTimeMs !== null
         && Math.abs(snapshotPreviewTimeMs - lastKnownTimelineMs) <= 1
-      const displayedFrame = hasCurrentSnapshotPreview
-        ? naturalFrame
-        : (() => {
-          // A bordered logical frame is already the exact content-box geometry. Reusing the
-          // runtime presentation here would reintroduce its border-box AABB origin error; the
-          // presentation port remains the source for borderless or non-current logical frames.
-          const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
-          const presentedPose = useLogicalContentFrame
-            ? null
-            : presentedFrameForItem(target.itemId, naturalFrame.rotationOrigin)
-          return presentedPose === null
-            ? naturalFrame
-            : poseFrameToContentBoxFrame(presentedPose, frameBorderInsetsPx)
-        })()
+      const displayedFrame = frameCommitCandidatePx
+        ?? (hasCurrentSnapshotPreview
+          ? naturalFrame
+          : (() => {
+            // A current bordered logical frame is already the exact content-box geometry. For a
+            // borderless frame, retain the runtime presentation so ancestor transforms and an
+            // interpolated seek remain visible in the CS.
+            const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
+            const presentedPose = useLogicalContentFrame
+              ? null
+              : presentedFrameForItem(target.itemId, naturalFrame.rotationOrigin)
+            return presentedPose === null
+              ? naturalFrame
+              : poseFrameToContentBoxFrame(presentedPose, frameBorderInsetsPx)
+          })())
       frameValuePx = displayedFrame
       selectionFrame?.setValue(displayedFrame)
       projectedSegments = resolveMotionOverlaySegments(
@@ -1720,7 +1790,7 @@ export function createDecorEditorBridge(
         frameBorderInsetsPx = resolveFrameBorderInsets(snapshot, target.itemId, patch, rootWidth)
       }
       frameNaturalValuePx = logicalFrameToPx(frameLogicalValue, rootWidth)
-      frameValuePx = poseFrameToContentBoxFrame(frameNaturalValuePx, frameBorderInsetsPx)
+      frameValuePx = frameNaturalValuePx
       selectionFrame.setValue(frameValuePx)
       syncMotionOverlay()
       return
@@ -1780,10 +1850,7 @@ export function createDecorEditorBridge(
       // here without changing the editor bridge contract.
       modifiers: [createRotationModifier()],
       onPreview: previewFrame,
-      onCommit: () => {
-        frameGestureBasePx = null
-        controller.notifyInteractionEnd()
-      },
+      onCommit: commitSelectionFrameDrop,
       onCancel: () => {
         frameGestureBasePx = null
         abortPhase()
@@ -1853,8 +1920,12 @@ export function createDecorEditorBridge(
     frameValuePx = null
     frameLogicalValue = null
     frameLogicalProjectionCurrent = false
+    seekProjectionActive = false
     frameGestureBasePx = null
+    frameCommitCandidatePx = null
     frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
+    previewContentFrameOverride = null
+    previewBorderInsetsOverride = null
     activeMotion = null
   }
 
@@ -1866,8 +1937,12 @@ export function createDecorEditorBridge(
       frameValuePx = null
       frameLogicalValue = null
       frameLogicalProjectionCurrent = false
+      seekProjectionActive = false
       frameGestureBasePx = null
+      frameCommitCandidatePx = null
       frameBorderInsetsPx = ZERO_CONTENT_BOX_INSETS_PX
+      previewContentFrameOverride = null
+      previewBorderInsetsOverride = null
       selectionFrame?.setValue(null)
       motionOverlay?.setSegment(null)
       motionOverlay?.setSelection(null, false)
@@ -1920,43 +1995,64 @@ export function createDecorEditorBridge(
       decorEditStates.set(decorEditStateKey(target.itemId, lastKnownTimelineMs), { base: patch, modifications: new Map() })
     }
     const rootWidth = sceneRootWidthPx()
-    // A real KF has an authoritative document pose. The runtime snapshot is the pose currently
-    // presented by the player and may still belong to the previous KF while a selection/seek
-    // handoff is in flight; using it here makes a middle→last segment place the CS on its source.
-    // Only a target without a document KF (the temporary/interpolated route) needs that live
-    // snapshot. A candidate already contains the temporary pose and therefore also bypasses it.
-    const currentLogicalSnapshot = target.isTemporary
+    const targetKeyframeTimeMs = target.keyframeId === null
+      ? null
+      : item.keyframes.find((keyframe) => keyframe.id === target.keyframeId)?.timeMs ?? null
+    const targetIsAtTimeline = targetKeyframeTimeMs === null
+      || Math.abs(targetKeyframeTimeMs - lastKnownTimelineMs) <= 1
+    // A real KF remains the document target for the trajectory, but an explicit selection can be
+    // stale while the author scrubs. In that case the runtime snapshot is also the CS source; this
+    // is essential for bordered items because the document endpoint alone would leave the frame on
+    // the last visited KF. A temporary target uses the same snapshot unless it already has a live
+    // candidate of its own.
+    const readsPresentedSnapshot = target.isTemporary || (seekProjectionActive && !targetIsAtTimeline)
+    const currentLogicalSnapshot = readsPresentedSnapshot
       ? presentedSnapshotAt(lastKnownTimelineMs)
       : null
-    const logicalSnapshot = target.isTemporary && temporaryCandidate === null
-      ? currentLogicalSnapshot
-      : null
+    const logicalSnapshot = target.isTemporary && temporaryCandidate !== null
+      ? null
+      : currentLogicalSnapshot
     const posePatch = target.keyframeId === null
       ? patch
       : resolveEffectivePosePatch(scene, item, target.keyframeId, target.contentId === null ? undefined : scene.contents[target.contentId])
-    const logicalFrame = rootWidth === null
+    const resolvedBorderInsets = rootWidth === null
+      ? ZERO_CONTENT_BOX_INSETS_PX
+      : resolveFrameBorderInsets(logicalSnapshot, target.itemId, patch, rootWidth)
+    const logicalFrameFromState = rootWidth === null
       ? null
       : readLogicalFrame(logicalSnapshot, target.itemId, posePatch)
+    const logicalFrame = logicalFrameFromState !== null
+      && logicalSnapshot !== null
+      && rootWidth !== null
+      ? restoreSnapshotContentFrame(
+        logicalSnapshot,
+        target.itemId,
+        logicalFrameFromState,
+        resolvedBorderInsets,
+        rootWidth,
+      )
+      : logicalFrameFromState
     frameTarget = target
     frameLogicalValue = logicalFrame
     // An exact KF is always document-authoritative. For a temporary target, the logical projection
     // is authoritative only when the snapshot belongs to the current author time; otherwise the
     // presentation port remains the safe fallback for parent transforms and stale seek handoffs.
-    frameLogicalProjectionCurrent = !target.isTemporary || currentLogicalSnapshot !== null
+    frameLogicalProjectionCurrent = logicalSnapshot !== null
+      || (!target.isTemporary && (!seekProjectionActive || targetIsAtTimeline))
     frameNaturalValuePx = rootWidth === null || logicalFrame === null ? null : logicalFrameToPx(logicalFrame, rootWidth)
-    frameBorderInsetsPx = rootWidth === null
-      ? ZERO_CONTENT_BOX_INSETS_PX
-      : resolveFrameBorderInsets(logicalSnapshot, target.itemId, patch, rootWidth)
+    frameBorderInsetsPx = resolvedBorderInsets
     frameValuePx = frameNaturalValuePx === null
       ? null
-      : (() => {
-        const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
-        const presentedPose = useLogicalContentFrame
-          ? null
-          : presentedFrameForItem(target.itemId, frameNaturalValuePx.rotationOrigin)
-        const poseFrame = presentedPose ?? frameNaturalValuePx
-        return poseFrameToContentBoxFrame(poseFrame, frameBorderInsetsPx)
-      })()
+      : frameCommitCandidatePx
+        ?? (() => {
+          const useLogicalContentFrame = frameLogicalProjectionCurrent && hasVisibleBorder(frameBorderInsetsPx)
+          const presentedPose = useLogicalContentFrame
+            ? null
+            : presentedFrameForItem(target.itemId, frameNaturalValuePx.rotationOrigin)
+          return presentedPose === null
+            ? frameNaturalValuePx
+            : poseFrameToContentBoxFrame(presentedPose, frameBorderInsetsPx)
+        })()
     frameGestureBasePx = null
     selectionFrame?.setValue(frameValuePx)
     controller.attachItems([
@@ -1982,6 +2078,11 @@ export function createDecorEditorBridge(
     if (!target) return
     const entry = entries.find((e) => e.itemId === target.itemId)
     if (!entry) return
+    // Selection Frame edits use the pose channel. Keep their sparse registry and live preview,
+    // but do not arm the generic Decor-KF flush; `commitSelectionFrameDrop` captures the affine
+    // pose synchronously on pointer release. A palette edit already pending before the gesture is
+    // left intact so the pose commit can merge its sparse decoration patch.
+    const isFramePoseGesture = frameGestureBasePx !== null
 
     const editKey = decorEditStateKey(target.itemId, lastKnownTimelineMs)
     const currentState = decorEditStates.get(editKey)
@@ -2001,32 +2102,33 @@ export function createDecorEditorBridge(
     // A temporary target is previewed through the runtime snapshot and kept in the open registry;
     // its sparse patch is committed as one new KF at the phase boundary. No interpolated value is
     // copied into the candidate merely because it was visible in the palette.
-    lastPreviewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary)
     const rootWidth = sceneRootWidthPx()
-    if (lastPreviewAccepted && rootWidth !== null && frameValuePx !== null) {
-      const nextBorderInsets = resolveFrameBorderInsets(null, entry.itemId, entry.patch, rootWidth)
-      const borderChanged = nextBorderInsets.top !== frameBorderInsetsPx.top
-        || nextBorderInsets.right !== frameBorderInsetsPx.right
-        || nextBorderInsets.bottom !== frameBorderInsetsPx.bottom
-        || nextBorderInsets.left !== frameBorderInsetsPx.left
-      if (borderChanged) {
-        // Keep the document's outer pose fixed while the content-box origin moves with the new
-        // border. This also covers a border edit made while the runtime presentation is between
-        // keyframes: invert the currently displayed content frame, then reapply the new inset.
-        const outerFrame = contentBoxFrameToPoseFrame(frameValuePx, frameBorderInsetsPx)
-        frameBorderInsetsPx = nextBorderInsets
-        frameValuePx = poseFrameToContentBoxFrame(outerFrame, frameBorderInsetsPx)
-        selectionFrame?.setValue(frameValuePx)
-        syncMotionOverlay()
-      } else {
-        frameBorderInsetsPx = nextBorderInsets
-      }
+    const nextBorderInsets = rootWidth === null
+      ? null
+      : resolveFrameBorderInsets(null, entry.itemId, entry.patch, rootWidth)
+    // A border edit changes the runtime border-box translation derived by the builder. Keep the
+    // authored content frame fixed for this synchronous snapshot as well as for the later build.
+    previewBorderInsetsOverride = nextBorderInsets
+    try {
+      lastPreviewAccepted = previewPatch(entry.itemId, sparsePatch, target.isTemporary)
+    } finally {
+      previewBorderInsetsOverride = null
+    }
+    if (lastPreviewAccepted && nextBorderInsets !== null) {
+      frameBorderInsetsPx = nextBorderInsets
+      // The frame itself is content-box anchored, so a border change must not replace its value.
+      // The path and ghosts are also content-box anchored and therefore do not need a new
+      // projection. Keeping the current frame value avoids a stale presentation read during the
+      // synchronous snapshot update from replacing the visible interpolated pose.
+      if (frameValuePx !== null) selectionFrame?.setValue(frameValuePx)
     }
     if (target.isTemporary) {
-      pendingTemporaryDecorCommit = { itemId: entry.itemId, timeMs: lastKnownTimelineMs }
-      // Palette changes keep the existing host phase contract. Movement creation is handled by
-      // `commitMotionDrop`, which materializes a pose KF synchronously on pointer release.
-      armIdleFlush()
+      if (!isFramePoseGesture) {
+        pendingTemporaryDecorCommit = { itemId: entry.itemId, timeMs: lastKnownTimelineMs }
+        // Palette changes keep the existing host phase contract. Movement creation is handled by
+        // `commitMotionDrop`, which materializes a pose KF synchronously on pointer release.
+        armIdleFlush()
+      }
       return
     }
     if (target.writeDecorId === null) return
@@ -2035,7 +2137,7 @@ export function createDecorEditorBridge(
     // materialized only by `buildDecorCommands`, so a partial nested offset never erases a value
     // authored earlier on the same Decor.
     const commands = buildDecorCommands(scene, target, sparsePatch)
-    if (commands.length > 0) {
+    if (!isFramePoseGesture && commands.length > 0) {
       pendingCommands = commands
       armIdleFlush()
     }
@@ -2073,6 +2175,9 @@ export function createDecorEditorBridge(
     // nouvelle cible, quelle que soit l'origine (timeline, clic hors CS, etc.).
     if (key !== lastSelectionKey) {
       flushNow()
+      // A deliberate selection (timeline item/KF or ghost) re-establishes its own target. A seek
+      // without a selection change must keep following the runtime time instead of the last KF.
+      seekProjectionActive = false
     } else if (scene !== lastObservedScene && pendingCommands !== null) {
       // Signal 5 — mutation externe du document (ex. édition timeline) survenue pendant une phase
       // décor en cours : notre propre flush vide `pendingCommands` AVANT d'émettre son propre
@@ -2095,6 +2200,8 @@ export function createDecorEditorBridge(
     snapshotPreviewTimeMs = null
     snapshotPreviewItemId = null
     snapshotPreviewFrameActive = false
+    seekProjectionActive = false
+    frameCommitCandidatePx = null
     coordination.decorPreview.clearAll()
     ensureMounted()
     const selection = machine.getSnapshot().context.selection
@@ -2110,6 +2217,8 @@ export function createDecorEditorBridge(
     snapshotPreviewTimeMs = null
     snapshotPreviewItemId = null
     snapshotPreviewFrameActive = false
+    seekProjectionActive = false
+    frameCommitCandidatePx = null
     coordination.decorPreview.clearAll()
     const selection = machine.getSnapshot().context.selection
     syncSelection(scene, selection)
@@ -2120,6 +2229,9 @@ export function createDecorEditorBridge(
   // un seek qui ne flush rien (rien en attente) laisserait la palette affichant l'instant précédent.
   const unsubscribeSeek = machine.on('seek', ({ timelineMs }) => {
     lastKnownTimelineMs = timelineMs
+    // The controller intentionally retains the last explicit KF until scrub release. The visual
+    // CS must nevertheless follow the time being sought, including when that selection is stale.
+    seekProjectionActive = true
     flushNow()
     // A temporary snapshot belongs to the old presented time. Keep its coordination candidate
     // for a possible return to that time, but clear the runtime preview before the asynchronous
@@ -2222,6 +2334,7 @@ export function createDecorEditorBridge(
       motionOverlay?.destroy()
       motionOverlay = null
       frameGestureBasePx = null
+      frameCommitCandidatePx = null
       controller.destroy()
     },
   }

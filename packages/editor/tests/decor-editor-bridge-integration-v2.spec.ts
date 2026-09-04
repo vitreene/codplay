@@ -206,10 +206,10 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     const initialFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')
     expect(initialFrame).not.toBeNull()
-    // At 800px root width, the 0.6cqw border is 4.8px. The CS follows the content-box origin
-    // while retaining the 160px authored width/height.
-    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(244.8, 6)
-    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(244.8, 6)
+    // At 800px root width, the authored offset is the content-box origin. The builder places the
+    // border-box before it, so the CS remains at 240px while retaining the 160px content size.
+    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(240, 6)
+    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(240, 6)
     expect(initialFrame!.style.width).toBe('160px')
     expect(initialFrame!.style.height).toBe('160px')
 
@@ -232,8 +232,10 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const liveItem = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
     expect(liveItem.style.getPropertyValue('border-width')).toBe('5cqw')
     expect(liveItem.style.getPropertyValue('border-style')).toBe('solid')
-    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(280, 6)
-    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(280, 6)
+    // Increasing the border changes only the border-box origin/size; the content-box anchor stays
+    // at the same authored coordinates.
+    expect(Number.parseFloat(initialFrame!.style.left)).toBeCloseTo(240, 6)
+    expect(Number.parseFloat(initialFrame!.style.top)).toBeCloseTo(240, 6)
     expect(initialFrame!.style.width).toBe('160px')
     expect(initialFrame!.style.height).toBe('160px')
 
@@ -249,6 +251,44 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const committedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')
     expect(committedItemNode?.style.getPropertyValue('border-width')).not.toBe('')
     expect(committedItemNode?.style.getPropertyValue('border-style')).toBe('solid')
+  })
+
+  it('fait suivre le CS au seek intermédiaire malgré le dernier KF sélectionné', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    actor.send({ type: 'SCENE_LOADED', scene: positionTestScene() })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns()
+
+    // The controller deliberately keeps the explicit KF selection during a scrub. The visual CS
+    // must nevertheless use the runtime pose at the sought time, including for a bordered item.
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 5_000 })
+    await waitTurns(24)
+    const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
+    expect(frame.style.left).toBe('400px')
+    expect(frame.style.top).toBe('400px')
+
+    actor.send({ type: 'SEEK', timelineMs: 2_500 })
+    await waitTurns(24)
+    expect(frame.style.left).toBe('240px')
+    expect(frame.style.top).toBe('240px')
   })
 
   it('ne reprojette pas la bordure du KF source sur le ghost du KF cible', async () => {
@@ -280,9 +320,9 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
 
     const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')
     expect(targetGhost).not.toBeNull()
-    // The target keeps its own 2cqw border (16px at this mocked 800px root), so its content ghost
-    // starts at the target document origin 400px + 16px, independently of source edits.
-    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(416, 6)
+    // The target keeps its own 2cqw border, but the ghost is content-box anchored and therefore
+    // starts at the target document origin (400px), independently of source edits.
+    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(400, 6)
 
     const borderWidthInput = decorPanel.querySelector<HTMLInputElement>(
       '[data-decor-property-path="style.border-width"] input[type="number"]',
@@ -292,8 +332,8 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     borderWidthInput!.dispatchEvent(new Event('change', { bubbles: true }))
     await waitTurns(24)
 
-    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(416, 6)
-    expect(Number.parseFloat(targetGhost!.style.top)).toBeCloseTo(416, 6)
+    expect(Number.parseFloat(targetGhost!.style.left)).toBeCloseTo(400, 6)
+    expect(Number.parseFloat(targetGhost!.style.top)).toBeCloseTo(400, 6)
   })
 
   it('sérialise la pose extérieure après un déplacement du CS content-box bordé', async () => {
@@ -334,16 +374,16 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     const committedItem = committed.items.find(candidate => candidate.id === 'item')!
     const middle = committedItem.keyframes.find(keyframe => keyframe.timeMs === 2_500)
     expect(middle?.channel).toBe('pose')
-    // The displayed content origin moved from 30cqw + 4.8px by 40px. The inverse projection
-    // stores the unchanged outer-origin delta (35cqw), not the displayed content coordinate.
+    // The displayed content origin moved from 30cqw by 40px. The persisted pose remains in the
+    // content-box coordinate system, so the new offset is 35cqw.
     expect(committed.decors[middle!.decorId]?.offset).toMatchObject({
       translate: { x: 35, y: 30 },
       width: 20,
       height: 20,
     })
     const frame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
-    expect(Number.parseFloat(frame.style.left)).toBeCloseTo(284.8, 6)
-    expect(Number.parseFloat(frame.style.top)).toBeCloseTo(244.8, 6)
+    expect(Number.parseFloat(frame.style.left)).toBeCloseTo(280, 6)
+    expect(Number.parseFloat(frame.style.top)).toBeCloseTo(240, 6)
     expect(frame.style.width).toBe('160px')
     expect(frame.style.height).toBe('160px')
   })
@@ -388,23 +428,45 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     tip!.dispatchEvent(pointerEvent('pointermove', 356, 320))
     tip!.dispatchEvent(pointerEvent('pointerup', 356, 320))
 
+    // A Selection Frame rotation is a pose gesture: the middle waypoint is materialized on the
+    // release itself, without waiting for the generic Decor phase idle flush.
+    const rotatedScene = actor.getSnapshot().context.scene!
+    const rotatedItem = rotatedScene.items.find((candidate) => candidate.id === 'item')!
+    const rotatedKeyframe = rotatedItem.keyframes.find((keyframe) => keyframe.timeMs === 2_500)
+    expect(rotatedKeyframe?.channel).toBe('pose')
+    expect(rotatedScene.decors[rotatedKeyframe!.decorId]?.offset?.rotate).toBe(90)
+    expect(rotatedItem.keyframes.filter((keyframe) => keyframe.timeMs === 2_500)).toHaveLength(1)
+
+    await waitTurns(24)
     const itemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
     expect(itemNode.style.transform).toContain('rotate(90deg)')
     expect(frame!.style.transformOrigin).toBe('50% 50%')
 
     // The pivot drag is previewed in the same frame channel and updates the origin without a
     // second player circuit. Move it to the top-left characteristic point.
+    // The pose transaction is synchronous; wait for the scene/player echo before starting the
+    // next gesture so the pivot is mounted on the newly-created waypoint.
+    await waitTurns(24)
     pivot!.dispatchEvent(pointerEvent('pointerdown', 320, 320))
     pivot!.dispatchEvent(pointerEvent('pointermove', 400, 240))
     pivot!.dispatchEvent(pointerEvent('pointerup', 400, 240))
-    expect(itemNode.style.transformOrigin).toBe('0% 0%')
-    expect(coordination.decorPreview.getAt('item', 2_500)).not.toBeNull()
-    expect(actor.getSnapshot().context.scene).toBe(documentScene)
+    await waitTurns(24)
+    const pivotedItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(pivotedItemNode.style.transformOrigin).toBe('0% 0%')
+    expect(coordination.decorPreview.getAt('item', 2_500)).toBeNull()
+    const middleAfterPivot = actor.getSnapshot().context.scene!.items[0]!.keyframes.find(
+      (keyframe) => keyframe.timeMs === 2_500,
+    )!
+    expect(middleAfterPivot.channel).toBe('pose')
+    expect(actor.getSnapshot().context.scene!.decors[middleAfterPivot.decorId]?.offset).toMatchObject({
+      rotate: 90,
+      rotationOrigin: { fx: 0, fy: 0 },
+    })
+    expect(actor.getSnapshot().context.scene).not.toBe(documentScene)
 
-    // At an exact keyframe the same modifier path targets the document decor. The explicit
-    // deselection is the phase boundary that flushes the pending patch; the temporary color edit
-    // above has already materialized its own sparse KF when the seek crossed its phase boundary.
+    // At an exact keyframe the same modifier path updates the existing pose KF immediately.
     actor.send({ type: 'SEEK', timelineMs: 0 })
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'] })
     await waitTurns()
     const exactFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame="v2"]')!
     const exactTip = sceneRoot.querySelector<HTMLElement>('[data-selection-frame-needle-tip]')!
@@ -412,9 +474,11 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     exactTip.dispatchEvent(pointerEvent('pointerdown', 160, 124))
     exactTip.dispatchEvent(pointerEvent('pointermove', 196, 160))
     exactTip.dispatchEvent(pointerEvent('pointerup', 196, 160))
+    await waitTurns(24)
     exactPivot.dispatchEvent(pointerEvent('pointerdown', 160, 160))
     exactPivot.dispatchEvent(pointerEvent('pointermove', 240, 80))
     exactPivot.dispatchEvent(pointerEvent('pointerup', 240, 80))
+    await waitTurns(24)
     const exactItemNode = sceneRoot.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
     expect(exactFrame.style.transformOrigin).toBe('0% 0%')
     expect(exactItemNode.style.transform).toContain('rotate(90deg)')
@@ -881,6 +945,83 @@ describe('decor-editor bridge V2 — projection Decor interpolée et création s
     distantGhost.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     await waitTurns(24)
     expect(actor.getSnapshot().context.selection).toMatchObject({ itemIds: ['item'], keyframeId: 'chain-kf-4' })
+  })
+
+  it('reprend l’endpoint de trajectoire pour déplacer le KF terminal', async () => {
+    originalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver
+
+    actor = createActor(controllerMachine)
+    actor.start()
+    const baseScene = scene()
+    const documentScene = {
+      ...baseScene,
+      decors: {
+        ...baseScene.decors,
+        last: {
+          ...baseScene.decors.last!,
+          path: 'M 0 0 A 0.65 0.65 0 0 1 1 0',
+        },
+      },
+    }
+    actor.send({ type: 'SCENE_LOADED', scene: documentScene })
+    coordination = new EditorCoordinationBridge(actor, new EditorPlayerCommandFacade())
+
+    const sceneRoot = document.createElement('div')
+    Object.defineProperty(sceneRoot, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    const decorPanel = document.createElement('div')
+    document.body.append(sceneRoot, decorPanel)
+    sceneBridge = createScenePlayerBridge(sceneRoot, actor, coordination)
+    decorBridge = createDecorEditorBridge(decorPanel, actor, coordination)
+    await waitTurns(24)
+
+    actor.send({ type: 'SELECT_ITEM', itemIds: ['item'], keyframeId: 'last-kf' })
+    actor.send({ type: 'SEEK', timelineMs: 5_000 })
+    await waitTurns(24)
+
+    // Simulate a presentation handoff whose visible item frame is not the endpoint retained by
+    // the active incoming trajectory. The movement surface must remain attached to that endpoint.
+    const presentationPort = coordination.presentation as unknown as {
+      get: () => EditorPlayerPresentationFrame | null
+    }
+    presentationPort.get = () => ({
+      timeMs: 5_000,
+      playerTimeMs: 5_000,
+      items: [{
+        itemId: 'story-main:item',
+        pose: {
+          origin: { x: 120, y: 120 },
+          matrix: { a: 1, b: 0, c: 0, d: 1 },
+          localWidth: 160,
+          localHeight: 160,
+        },
+        representation: 'local',
+        progress: 1,
+      }],
+    })
+    actor.send({ type: 'SEEK', timelineMs: 5_000 })
+    await waitTurns(24)
+
+    const moveZone = sceneRoot.querySelector<HTMLElement>('[data-motion-move-zone]')!
+    const targetGhost = sceneRoot.querySelector<HTMLElement>('[data-motion-ghost="target"]')!
+    expect(moveZone.style.left).toBe(targetGhost.style.left)
+    expect(moveZone.style.top).toBe(targetGhost.style.top)
+
+    moveZone.dispatchEvent(pointerEvent('pointerdown', 0, 0))
+    moveZone.dispatchEvent(pointerEvent('pointermove', 40, 0))
+    moveZone.dispatchEvent(pointerEvent('pointerup', 40, 0))
+
+    const committed = actor.getSnapshot().context.scene!
+    const committedItem = committed.items.find((candidate) => candidate.id === 'item')!
+    const terminal = committedItem.keyframes.find((keyframe) => keyframe.id === 'last-kf')!
+    expect(committed.decors[terminal.decorId]?.path).toBe('M 0 0 A 0.65 0.65 0 0 1 1 0')
+    expect(committed.decors[terminal.decorId]?.offset?.translate?.x).toBeCloseTo(55)
   })
 
   it('conserve la translation repositionnée quand un resize suit sur le même KF', async () => {

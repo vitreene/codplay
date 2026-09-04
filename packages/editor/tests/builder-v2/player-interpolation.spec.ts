@@ -118,6 +118,60 @@ describe('editor V2 player interpolation', () => {
     expect(item?.style.backgroundColor).toBe(`rgb(${parseColor('#800080').coords.map((value) => Math.round(value * 255)).join(', ')})`)
   })
 
+  it('keeps the content-box anchor fixed while border-width itself interpolates', async () => {
+    codplay = new CodPlay({ pauseOnDocumentHidden: false })
+    const source = interpolationScene()
+    source.decors.first!.offset = { translate: { x: 20, y: 15 }, width: 30, height: 20 }
+    source.decors.first!.style = { 'border-width': '0.6cqw', 'border-style': 'solid' }
+    source.decors.second!.offset = { translate: { x: 20, y: 15 }, width: 30, height: 20 }
+    source.decors.second!.style = { 'border-width': '5cqw', 'border-style': 'solid' }
+    const built = buildSceneDocV2(source)
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const itemDoc = built.sceneDoc.stories[EDITOR_V2_STORY_ID]!.persos.find((perso) => perso.id === 'item')!
+    expect(itemDoc.initial).toMatchObject({ style: { x: 19.4, y: 14.4 } })
+    expect(itemDoc.actions['item-kf-second-kf']).toMatchObject({
+      style: {
+        x: { from: 19.4, to: 15 },
+        y: { from: 14.4, to: 10 },
+        'border-width': { from: '0.6cqw', to: '5cqw' },
+      },
+    })
+
+    const root = document.createElement('div')
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 800, height: 450, x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 450 }),
+    })
+    document.body.append(root)
+    const compiled = codplay.build({ scene: built.sceneDoc })
+    expect(compiled.ok).toBe(true)
+    if (!compiled.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'editor-v2-player-border-anchor',
+      compiledScene: compiled.compiledScene,
+      functions: compiled.functions,
+      root,
+      mountTargets: [{ id: 'root-host', kind: 'root', storyId: EDITOR_V2_STORY_ID }],
+    })
+
+    await instance.telco.seek(500 + built.preRollMs)
+    const snapshotStyle = instance.snapshot.get()?.states
+      .find((entry) => entry.target.persoId === 'item')?.state.style as Record<string, unknown> | undefined
+    expect(snapshotStyle?.x).toMatchObject({ kind: 'length', value: 17.2 })
+    expect(snapshotStyle?.y).toMatchObject({ kind: 'length', value: 12.2 })
+    expect(Number.parseFloat(String(snapshotStyle?.['border-width']))).toBeCloseTo(2.8)
+
+    const item = root.querySelector<HTMLElement>('[data-item-id="story-main:item"]')!
+    expect(item.style.transform).toBe('translate(137.6px, 97.6px)')
+    expect(item.style.borderWidth).toBe('2.8000000000000003cqw')
+    // 137.6px layout origin + 22.4px border inset = 160px = 20cqw.
+    const layoutX = item.style.transform.match(/^translate\(([-\d.]+)px/)?.[1]
+    expect(layoutX).toBeDefined()
+    expect(Number.parseFloat(layoutX!) + (2.8 / 100) * 800).toBeCloseTo(160)
+  })
+
   it('interpole aussi l’origine de rotation structurée dans la même action', async () => {
     codplay = new CodPlay({ pauseOnDocumentHidden: false })
     const source = interpolationScene()

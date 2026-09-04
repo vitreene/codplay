@@ -26,10 +26,10 @@ Le path affiché est préparé par les primitives ACE du runtime (`prepareSvgPat
 `resolvePath`) avec les paramètres du builder (`arc-length`, précision 2). Le CS
 ne lit ni le DOM de l'item ni un second état de trajectoire : le bridge consomme
 `instance.presentation`, c'est-à-dire la pose affine numérique déjà résolue et
-commitée par CodPlay pour l'item visible. Le snapshot reste réservé à la pose
-logique des previews et des écritures. Une lecture de la position DOM ou une
-projection locale du snapshot pourrait diverger après un seek ou une
-reconstruction et n'est donc pas utilisée pour le CS.
+commitée par CodPlay pour l'item visible. Pendant un seek, si une sélection
+explicite pointe encore vers un KF ancien, le snapshot présenté au même temps
+peut aussi servir à convertir exactement une translation border-box en content-box
+; cette lecture ne remplace ni la sélection de trajectoire ni ses endpoints.
 
 L'import actuel des primitives de construction d'arc depuis l'éditeur, via
 l'alias interne `ace` vers `packages/codplay/src/ace`, est un raccord **temp** de
@@ -62,13 +62,21 @@ centre visuel reste sur la courbe affichée.
 Le rectangle exposé au CS et aux artefacts de trajectoire est le `content-box` :
 sa largeur et sa hauteur restent exactement celles de `pose.localWidth` /
 `pose.localHeight`, donc celles de `offset.width` / `offset.height` en cqw. Le
-bridge décale uniquement son origine par les insets `border-left` et
-`border-top`, projetés par la matrice affine courante ; la bordure n'est jamais
-ajoutée aux dimensions ni au tracé. Avant d'écrire un geste, cette projection
-est inversée afin que l'`offset` conserve l'origine extérieure documentée.
+bridge restaure l'origine content-box quand il lit la translation border-box du
+snapshot runtime, puis reconstruit la translation border-box à partir de cette
+origine pendant la preview. La bordure n'est jamais ajoutée aux dimensions ni au
+tracé : elle peut faire varier le rectangle extérieur et sa translation CSS,
+mais les bords internes restent confondus avec le CS. Un geste du CS travaille
+déjà dans ce repère content-box et sérialise directement l'`offset` correspondant.
 Les formes CSS `border`, `border-width`, `border-style` et leurs variantes
 physiques sont résolues dans l'adaptateur éditeur, sans lecture du DOM et sans
 fermer la carte ouverte des propriétés de `Decor`.
+
+Lors d'un seek intermédiaire, la sélection explicite du dernier KF peut rester
+présente jusqu'au relâchement du scrub. Elle conserve alors le path actif, mais
+ne verrouille pas le CS : le frame courant est repris depuis la présentation
+runtime (ou le snapshot au même temps pour la conversion de bordure). Les
+endpoints documentaires ne sont jamais remplacés par cette valeur d'affichage.
 
 Après la création d'un segment, l'overlay projette les poses de tous les KFs de
 l'item comme ghosts géométriques hors scène. Le ghost dont la pose coïncide avec
@@ -112,6 +120,16 @@ appelle bien la création du KF intermédiaire. Lorsqu'un KF `pose` est créé a
 d'un segment, la capture fige la pose affine complète exposée par le runtime — notamment
 translation, largeur et hauteur — afin que le waypoint reste stable. Les propriétés de
 décor qui accompagnent ce KF restent limitées aux valeurs effectivement modifiées.
+Sur un KF cible en fin de segment, la surface reprend l'endpoint du segment actif pour
+initialiser le déplacement ; elle ne recalcule pas le point de départ depuis une
+présentation éventuellement décalée de l'item. Le path déjà porté par le KF cible reste
+ainsi la trajectoire de référence après le déplacement.
+Le commit du Selection Frame route aussi la rotation et le pivot par ce même chemin `pose` :
+`offset.translate` porte le déplacement (et la compensation d'ancrage), `offset.width` /
+`offset.height` le redimensionnement, `offset.rotate` la rotation et `offset.rotationOrigin` le
+pivot. Ces opérations matérialisent le KF dès la libération du pointeur ; elles ne passent pas par
+le flush d'inactivité du canal `decor`. Les champs de palette (`style.*`, `classes`, `zone`,
+`custom` et les propriétés racine futures) restent, eux, des modifications `decor` sparse.
 Dans la hiérarchie d'affichage, cette surface reste sous le CS : le corps du
 Selection Frame est pointer-transparent pour laisser passer le déplacement,
 mais ses poignées de rotation, de pivot et de redimensionnement restent

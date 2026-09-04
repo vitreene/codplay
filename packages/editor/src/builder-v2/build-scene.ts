@@ -629,7 +629,6 @@ function buildInterpolationActions(
       ? poseAnchorStyle(resolveKeyframePoseStyle(scene, item, destination))
       : {}
     const fromStyle = { ...sourceDecorStyle, ...sourceAnchorStyle }
-    const toStyle = { ...targetDecorStyle, ...targetAnchorStyle }
     const diff = {
       ...computeStyleDiff(sourceDecorStyle, targetDecorStyle),
       ...(borderChanged ? computeStyleDiff(sourceAnchorStyle, targetAnchorStyle) : {}),
@@ -897,6 +896,14 @@ function buildStyleTransition(
   const discrete: Record<string, unknown> = {}
   for (const [property, value] of Object.entries(diff)) {
     const from = fromStyle[property]
+    // Structured x/y channels are qualified as logical lengths by CodPlay. A CSS `calc()` that
+    // mixes cqw with px cannot be represented by that channel's tween resolver, even though it is
+    // valid CSS. Keep the authored endpoint as a discrete value; this preserves the open Decor
+    // property and avoids teaching the core runtime about an editor-only border projection.
+    if ((property === 'x' || property === 'y') && (isCssCalc(from) || isCssCalc(value))) {
+      if (value !== undefined) discrete[property] = value
+      continue
+    }
     if (from === undefined) {
       // The destination property is authored, but the source has no authored value. Applying it
       // at the destination preserves the keyframe state without inventing a CSS endpoint.
@@ -913,6 +920,11 @@ function buildStyleTransition(
     interpolated[property] = { from, to: value, duration: durationMs, ease }
   }
   return { interpolated, discrete }
+}
+
+/** Identifies a raw CSS calculation that cannot be encoded as a structured logical length tween. */
+function isCssCalc(value: unknown): boolean {
+  return typeof value === 'string' && /^\s*calc\(/i.test(value)
 }
 
 /** Extracts the effective intro duration, using the parent capsule default when no override exists. */

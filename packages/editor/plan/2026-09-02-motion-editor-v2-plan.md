@@ -149,8 +149,10 @@ chaque chaîne reste ordonnée et continue dans son propre domaine.
 Le CS, les ghosts et les chemins utilisent le `content-box` exposé par la pose
 runtime : la bordure n'entre ni dans `width/height` ni dans le calcul des
 dimensions du tracé. Le bridge projette l'inset physique gauche/haut dans la
-matrice affine pour placer l'origine du contenu, puis applique la conversion
-inverse avant de sérialiser un `offset`. Les variantes ouvertes `border`,
+matrice affine pour placer l'origine du contenu. Les `offset.x/y` restent dans
+ce repère content-box ; le builder dérive la translation border-box nécessaire
+au runtime et le bridge restaure ce repère lors de la lecture d'un snapshot.
+Les variantes ouvertes `border`,
 `border-width`, `border-style` et leurs déclarations physiques sont résolues
 par un adaptateur pur de l'éditeur ; le core CodPlay et la carte ouverte de
 `Decor` ne sont pas modifiés.
@@ -413,10 +415,10 @@ Ordre d'exécution de la tranche P2-D :
    comme besoin CodPlay séparé ; aucune whitelist ou compatibilité silencieuse n’est
    acceptée dans l’éditeur.
 21. Le CS et les artefacts géométriques coïncident avec le `content-box` : la
-    bordure n’augmente ni `width/height` ni les dimensions du path, l’origine
-    gauche/haut est toutefois décalée par l’inset de bordure projeté par la
-    matrice affine. Un geste inverse ce décalage avant d’écrire l’`offset`, ce
-    qui conserve l’équivalence CS ↔ `offset.width/height`.
+    bordure n'augmente ni `width/height` ni les dimensions du path. Les
+    `offset.x/y` et `offset.width/height` restent le repère de contenu ; seule
+    la translation CSS border-box est dérivée pour le runtime, de sorte qu'une
+    variation de bordure ne désynchronise ni CS, ni bords internes, ni ghosts.
 22. Un KF `decor` placé entre deux KFs `pose` ne change ni les extrémités, ni le
    tracé, ni le ghost de la transition `pose` ; le mouvement continue directement
    de `A` vers `B`.
@@ -478,6 +480,12 @@ Ordre d'exécution de la tranche P2-D :
   leurs zones se recouvrent. Le drag de l’item atteint ainsi le commit qui crée
   le KF au playhead et projette réellement `A → C → B`, au lieu d’être absorbé
   par l’édition du path.
+- Amélioration de base de déplacement au 2026-09-04 : sur le KF cible en fin de
+  trajectoire, la surface unique reprend l’endpoint du segment actif comme base
+  du geste. Elle ne dépend plus d’une présentation éventuellement décalée de
+  l’item ; le `path` du KF cible reste donc la référence de la trajectoire après
+  le déplacement. La régression d’intégration couvre la divergence entre ces
+  deux cadres et vérifie la persistance de l’offset et du path.
 - Hiérarchie CS au 2026-09-04 : la couche du `Selection Frame` passe au-dessus
   de l’overlay de déplacement. Le corps du CS reste pointer-transparent afin
   que la surface unique conserve le geste de déplacement, tandis que ses
@@ -547,6 +555,22 @@ Ordre d'exécution de la tranche P2-D :
   et build Vite passent, ainsi que `git diff --check`. L’intégration vérifie le décalage immédiat
   du CS lors d’une modification de bordure et la sérialisation inverse d’un déplacement ; la
   validation native du geste reste soumise à la porte P6 existante.
+- Correctif final border/content-box au 2026-09-04 : la base d'une édition temporaire normalise
+  la translation border-box du snapshot runtime vers le content-box avant de comparer le patch
+  décor sparse. Pendant la preview, le builder reconstruit la translation CSS depuis l'ancre
+  content-box courante ; une modification de `border-width` peut donc agrandir le border-box,
+  sans déplacer le contenu, le CS ou les ghosts. En Safari Technology Preview, au playhead
+  `2,5 s`, le style est passé de `translate(38.628px, 168.808px) + border 3px` à
+  `translate(15.66px, 145.84px) + border 26px`, avec l'ancre content-box/CS maintenue à
+  `41.76px / 171.94px`, avant le flush d'inactivité. La preview ne doit pas être évaluée après
+  les 4 s de flush, qui matérialisent normalement le KF décor en attente.
+- Correction de régression seek/CS au 2026-09-04 : une sélection explicite d'un KF reste l'ancre
+  du path pendant le scrub, mais ne verrouille plus le CS sur son endpoint. Quand le temps recherché
+  diffère de ce KF, le bridge reprend la pose runtime du temps courant (et, pour un item bordé, le
+  snapshot du même temps pour reconvertir le border-box en content-box) sans modifier les endpoints
+  documentaires. Le scénario `5 000 ms → 2 500 ms` sur `Test position` vérifie le retour du CS de
+  `400/400 px` à `240/240 px` et la conservation du path. La suite éditeur compte maintenant
+  `43 fichiers / 454 tests`.
 - Décision d’architecture du 2026-09-04 : un item peut désormais exposer deux
   canaux temporels, `pose` et `decor`, sans descendre au niveau d’une timeline
   par propriété. Les KFs `pose` seuls forment la chaîne de trajectoire et les
@@ -558,6 +582,13 @@ Ordre d'exécution de la tranche P2-D :
   maintenant alignés, et les tests de non-régression couvrent ce contrat ;
   P2-E reste `En cours` uniquement jusqu’à la validation native Safari et la
   clôture P2/P6.
+- Correctif rotation CS au 2026-09-04 : le `onCommit` du Selection Frame est maintenant relié au
+  même chemin de geste `pose` que le déplacement. Ainsi `offset.translate` (déplacement et
+  compensation de pivot), `offset.width/height` (resize), `offset.rotate` (rotation) et
+  `offset.rotationOrigin` (pivot) sont capturés au relâchement, sans attendre le flush d'inactivité
+  et sans créer de KF `decor`. Les propriétés de palette (`style.*`, `classes`, `zone`, `custom` et
+  les propriétés racine futures) restent des patches `decor` sparse ; le test d'intégration vérifie
+  qu'une rotation à `2 500 ms` produit immédiatement un unique KF `pose` portant `offset.rotate`.
 - Le résolveur pur `resolveMotionTransitionWindow` formalise la fenêtre de
   mouvement : `500 ms` par défaut, clampée à l’intervalle source→cible, ou
   positionnée juste avant la cible avec `direction: 'before'`. Son branchement

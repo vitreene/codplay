@@ -116,6 +116,10 @@ export function createMotionArcPath(source: MotionPoint, control: MotionPoint, t
 
 /** Returns an SVG arc in scene coordinates for drawing the overlay path. */
 export function createDisplayArcPath(source: MotionPoint, control: MotionPoint, target: MotionPoint): string | undefined {
+  // A midpoint is the implicit straight trajectory. Treat near-collinear floating-point results
+  // as straight as well; endpoint reprojection can otherwise turn the same route into a tiny arc
+  // when the active KF is materialized.
+  if (isStraightMotion(source, control, target)) return undefined
   const prepared = prepareCanonicalMotionPath(source, control, target)
   if (prepared === undefined || prepared.kind !== 'segments' || prepared.segments === undefined || prepared.segments.length !== 1) return undefined
   const segment = prepared.segments[0]

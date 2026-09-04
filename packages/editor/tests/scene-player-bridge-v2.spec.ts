@@ -786,10 +786,10 @@ describe('V2 editor position seek integration', () => {
 
     const selectionFrame = sceneRoot.querySelector<HTMLElement>('[data-selection-frame]')
     expect(selectionFrame?.style.display).not.toBe('none')
-    // The preset border is outside the authored content-box. The CS keeps the authored width and
-    // height, but its origin starts after the 0.6cqw left/top border (4.8px at this root width).
-    expect(selectionFrame?.style.left).toBe('164.8px')
-    expect(selectionFrame?.style.top).toBe('148.8px')
+    // The CS is aligned on the authored content-box. The preset border is outside that frame and
+    // must not shift its left/top origin.
+    expect(selectionFrame?.style.left).toBe('160px')
+    expect(selectionFrame?.style.top).toBe('144px')
     expect(selectionFrame?.style.width).toBe('480px')
     expect(selectionFrame?.style.height).toBe('144px')
   })

@@ -200,10 +200,11 @@ export function createMotionOverlay(host: HTMLElement, callbacks: MotionOverlayC
     // lands on SelectionFrameV2 and performs a normal reposition instead of materializing a KF.
     if (segment?.isTemporary === true) return selectionFrame ?? segment.targetFrame
     if (segment?.role === 'source') return segment.sourceFrame
-    // During a seek the active item is the interpolated presentation between the endpoint
-    // ghosts. `selectionFrame` is refreshed by the bridge from that presentation; falling back
-    // to the target keeps the post-drop state deterministic before the first refresh.
-    if (segment?.role === 'target') return selectionFrame ?? segment.targetFrame
+    // A terminal KF owns the incoming transition. Its movement surface must start from the
+    // trajectory endpoint, not from a presentation frame that may still describe the item
+    // before the transition handoff. The bridge keeps this endpoint in the active segment and
+    // refreshes the Selection Frame separately for display.
+    if (segment?.role === 'target') return segment.targetFrame
     return selectionFrame
   }
 
