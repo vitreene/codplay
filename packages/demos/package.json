@@ -16,6 +16,7 @@
     "@codplay/capsule-automation": "*",
     "@codplay/editor": "*",
     "@codplay/remote": "*",
+    "@codplay/scene-factory": "*",
     "@codplay/selection-frame": "*",
     "codplay": "*",
     "codplay-v1": "*"

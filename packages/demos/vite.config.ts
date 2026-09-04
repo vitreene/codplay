@@ -20,6 +20,11 @@ export default defineConfig({
       allow: ['..', TH_ROOT],
     },
   },
+  // The V2 server starts from the shared V2 layout only. Legacy HTML pages
+  // remain build targets, but must not enter this development dependency scan.
+  optimizeDeps: {
+    entries: [resolve(__dirname, 'index.html')],
+  },
   build: {
     rollupOptions: {
       input: {

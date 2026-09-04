@@ -134,6 +134,22 @@ export const V2_DEMO_REGISTRY: readonly V2DemoDefinition[] = [
 			}
 		},
 	},
+	{
+		id: 'position',
+		path: '?demo=position',
+		title: 'Positions — six mouvements',
+		description: 'Source, cible, reparenting, paths capturés et trajectoires live composent une progression jusqu’au flip-stress.',
+		load: async () => {
+			const [module, stylesheet] = await Promise.all([
+				import('./demos/position/main'),
+				import('./demos/position/style.css?url'),
+			])
+			return {
+				createScene: module.createScene,
+				stylesheetUrl: resolveStylesheetUrl(stylesheet.default),
+			}
+		},
+	},
 ];
 
 /** Resolves one selected V2 demo and falls back to the first registered entry. */
