@@ -1,4 +1,4 @@
-import type { PersoDoc } from 'codplay'
+import type { PersoDoc, StoryDoc } from 'codplay'
 import type {
   AuthorCaptureInitFunction,
   AuthorCaptureTrackFunction,
@@ -12,6 +12,10 @@ import {
   POSITION_LIVE_TARGET_DRAG_EVENT,
   POSITION_LIVE_TARGET_RELEASED_EVENT,
   POSITION_LIVE_TARGET_SETTLED_EVENT,
+  POSITION_LIVE_BOUNCE_STRAP,
+  POSITION_LIVE_SOURCE_COMMIT_STRAP,
+  POSITION_LIVE_TARGET_COMMIT_STRAP,
+  POSITION_STORY_FOUR_ID,
   POSITION_NAMESPACE,
 } from './constants'
 import { createViewRoot } from './carousel'
@@ -36,8 +40,8 @@ const LIVE_BOUNCES: readonly Readonly<{ offsetMs: number; target: AnchorRole }>[
   { offsetMs: 4_100, target: 'source' },
 ]
 
-/** Creates the fourth lesson with draggable anchors and live-calculated moves. */
-export function createStoryFour(): readonly PersoDoc[] {
+/** Creates story 4 with draggable anchors and live-calculated moves. */
+export function createStoryFour(): StoryDoc {
   const view = createViewRoot(3, `
     <section class="position-view__frame position-view__frame--lesson">
       <div class="position-live-stage" data-part="${STAGE_TARGET}">
@@ -50,23 +54,43 @@ export function createStoryFour(): readonly PersoDoc[] {
       </div>
     </section>
   `)
-  return [
-    view,
-    createStoryFourAnchor('source'),
-    createStoryFourAnchor('target'),
-    {
-      id: 'position-view-four-item',
-      type: 'tag',
-      initial: {
-        tag: 'span',
-        content: 'item',
-        className: 'position-item position-item--lime',
-        move: { target: SOURCE_CONTAINER },
-      },
-      // Every live transfer is a move supplied by the story event circuit.
-      actions: { [POSITION_LIVE_ITEM_MOVE_EVENT]: true },
+  return {
+    id: POSITION_STORY_FOUR_ID,
+    state: {
+      liveSourceX: 0,
+      liveSourceY: 0,
+      liveTargetX: 0,
+      liveTargetY: 0,
     },
-  ]
+    straps: {
+      [POSITION_LIVE_SOURCE_COMMIT_STRAP]: createAnchorCommitStrap('source'),
+      [POSITION_LIVE_TARGET_COMMIT_STRAP]: createAnchorCommitStrap('target'),
+      [POSITION_LIVE_BOUNCE_STRAP]: createLiveBounceStrap(),
+    },
+    listen: [
+      { on: POSITION_LIVE_SOURCE_RELEASED_EVENT, straps: [POSITION_LIVE_SOURCE_COMMIT_STRAP] },
+      { on: POSITION_LIVE_TARGET_RELEASED_EVENT, straps: [POSITION_LIVE_TARGET_COMMIT_STRAP] },
+      { on: POSITION_LIVE_SOURCE_SETTLED_EVENT, straps: [POSITION_LIVE_BOUNCE_STRAP] },
+      { on: POSITION_LIVE_TARGET_SETTLED_EVENT, straps: [POSITION_LIVE_BOUNCE_STRAP] },
+    ],
+    persos: [
+      view,
+      createStoryFourAnchor('source'),
+      createStoryFourAnchor('target'),
+      {
+        id: 'position-view-four-item',
+        type: 'tag',
+        initial: {
+          tag: 'span',
+          content: 'item',
+          className: 'position-item position-item--lime',
+          move: { target: SOURCE_CONTAINER },
+        },
+        // Every live transfer is a move supplied by the story event circuit.
+        actions: { [POSITION_LIVE_ITEM_MOVE_EVENT]: true },
+      },
+    ],
+  }
 }
 
 /** Creates one draggable source or target anchor for the live lesson. */
@@ -192,7 +216,6 @@ export function createAnchorCommitStrap(role: AnchorRole): StrapFunction {
 /** Calculates one immediate two-second rebound after a live anchor release. */
 export function createLiveBounceStrap(): StrapFunction {
   return ({ event, state }) => {
-    if (state.storyPaused === true) return undefined
     const data = readRecord(event.data)
     const targetRole: AnchorRole = data?.anchorRole === 'source'
       ? 'target'

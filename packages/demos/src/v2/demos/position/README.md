@@ -3,7 +3,8 @@
 > Statut : En cours
 > Version CodPlay : V2 foundation
 
-Cette scène présente six vues de position dans un carousel `AutoCapsule` :
+Cette scène présente une story `main` qui porte le shell du carousel et six
+`StoryDoc` de position, une story par étape :
 
 1. source, cible et reparenting d’un item ;
 2. déplacement indépendant de la source et de la cible ;
@@ -19,23 +20,22 @@ uniquement après une interaction de flèche (ou `Entrée`).
 Les réglages de timing et de placement du carousel sont résolus par
 `CapsulePreset`, `CapsuleDistribution` et `AutoCapsule`.
 
-Le premier `move` est porté par un eventime de la story : il commence à `1 s`
-et dure `2 s`. Tous les reparentings des items suivent cette même durée et
-passent par un `move`. Pour les autres vues, le strap de navigation ajoute les
-occurrences au track de la story. Chaque occurrence contient un `move` complet
-dans `event.data`, car un eventime planifié n'est pas repassé dans `listen` au
-moment où il devient actif.
+Le premier `move` est porté par l’eventime de `position-story-one` : il
+commence à `1 s` et dure `2 s`. Pour les autres stories, le strap de navigation
+ajoute au track l’eventime correspondant à la story activée. Chaque occurrence
+contient un `move` complet dans `event.data` ; l’action du perso ne fait que
+déclarer qu’elle répond à cet event.
 
 ## Organisation auteur
 
 - `main.ts` assemble uniquement la `SceneDoc` ;
-- `story.ts` assemble la story unique et son état ;
+- `main.ts` déclare aussi la story `main`, limitée au shell et au clavier ;
 - `carousel.ts` contient le carousel et les contrôles communs ;
-- `story-one.ts` à `story-six.ts` contiennent chacun une vue, ses persos et
-  son plan de mouvement ;
+- `story-one.ts` à `story-six.ts` contiennent chacun un `StoryDoc`, ses persos,
+  ses actions et, lorsque nécessaire, son circuit `listen` / `straps` ;
 - `story-animation.ts` distribue le plan de la vue active ;
-- `straps.ts` relie le clavier, les captures et les plans aux événements de la
-  story ;
+- `straps.ts` relie uniquement le clavier et la navigation globale aux
+  événements de la scène ;
 - `constants.ts`, `types.ts` et `shared.ts` isolent respectivement les
   identifiants, les formes de données et les fonctions communes.
 

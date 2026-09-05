@@ -41,26 +41,37 @@ donc modifier la position mesurée. `move` est le déclencheur du recalcul ; il 
 faut pas observer séparément `target`, `className` ou `style`, ni étendre
 `diffSolvedScenes` pour cela.
 
+La validation de la démo `position` établit aussi une contrainte du
+présentateur HTML : plusieurs frontières de `move` peuvent être actives au
+même instant tout en appartenant à des conteneurs locaux différents. Les
+FIRST/LAST restent propres à chaque item, mais le host ne doit pas réduire ces
+conteneurs à une seule racine courante. Sinon la couche d’un item actif est
+déplacée dans le dernier conteneur capturé et pollue la présentation d’une
+autre story.
+
 ## Placement de l’overlay
 
-La racine de scène et le conteneur de mouvement sont deux repères différents :
+La racine de scène et les conteneurs de mouvement sont deux repères différents :
 
 ```text
 racine de scène (cycle de vie du runner)
-└── conteneur local de mouvement (items source/cible)
+├── conteneur local de mouvement A (items source/cible)
+│   ├── items auteur
+│   └── [data-codplay-motion-overlay]
+└── conteneur local de mouvement B (items source/cible)
     ├── items auteur
     └── [data-codplay-motion-overlay]
 ```
 
-Le code actuel appelle `ensureHtmlOverlayLayer(this.root)` ; dans le chemin V2,
-`this.root` est le `sceneSlot`. L’overlay devient donc un enfant de la scène
-entière. Ce point doit être corrigé.
+Le host doit conserver une couche par conteneur local actif. Dans le chemin V2,
+la couche n’est pas enfant du `sceneSlot`, mais enfant direct du conteneur local
+de mouvement correspondant à l’item présenté.
 
 Le runner doit conserver la racine de scène pour son cycle de vie, mais fournir
-au `HtmlMotionPresentationHost` le conteneur local de mouvement. La couche doit
-être créée comme enfant direct de ce conteneur, au-dessus de ses items, avec le
-même repère géométrique pour la capture et la projection. Elle ne doit pas être
-enfant du layout général ni couvrir les contrôles voisins.
+au `HtmlMotionPresentationHost` le conteneur local de mouvement de chaque
+snapshot. Le host conserve les couches locales nécessaires, chacune au-dessus
+de ses items et dans son propre repère géométrique. Aucune ne doit être enfant
+du layout général ni couvrir les contrôles voisins.
 
 Cette modification implique de vérifier :
 
@@ -69,12 +80,13 @@ Cette modification implique de vérifier :
 - la conversion des poses lorsque le conteneur local n’est pas la racine de
   scène ;
 - le masquage automatique de l’overlay avec son conteneur ;
-- la suppression de la couche au teardown général du runner.
+- la suppression de chaque couche au teardown général du runner ;
+- la coexistence de couches locales lorsque deux stories ont un `move` actif.
 
-L’implémentation associe à chaque snapshot un identifiant runner-local du
-conteneur capturé. Le host retrouve cet élément à la présentation et change de
-couche lorsque la frontière active change de conteneur ; les ressources
-temporaires sont alors libérées avant d’être recréées dans le nouveau conteneur.
+L’implémentation associe à chaque item de snapshot l’identifiant runner-local et
+la pose de son conteneur capturé. Le host retrouve chaque conteneur à la
+présentation, maintient les couches locales nécessaires et ne libère une couche
+que lorsqu’elle ne contient plus de ressource active.
 
 ## Mise en œuvre
 
@@ -125,14 +137,15 @@ Modifier le host et son initialisation pour séparer :
 - `motionContainer` : parent DOM direct de la couche overlay et repère local
   des poses présentées.
 
-La couche reste unique pour le conteneur de mouvement concerné, est insérée
-après les items auteur et reste au-dessus d’eux. Si plusieurs conteneurs locaux
-doivent être présentés simultanément, cette décision doit être validée avant
-de généraliser le host ; ne pas la résoudre par une couche globale.
+Chaque couche reste unique pour son conteneur de mouvement, est insérée après
+les items auteur et reste au-dessus d’eux. Les couches de conteneurs différents
+coexistent sans se remplacer.
 
 Réalisé pour le host HTML : les frontières capturent le plus petit ancêtre
 commun des nœuds d’item et de leurs cibles, stockent sa clé runner-local et
-insèrent l’overlay directement dans ce conteneur.
+insèrent l’overlay directement dans ce conteneur. La correction complète ce
+raccord en conservant la clé et la pose du conteneur par item afin que deux
+racines locales actives restent isolées.
 
 ## Critères d’acceptation
 
@@ -144,6 +157,8 @@ insèrent l’overlay directement dans ce conteneur.
 - le retarget conserve les temps et les invariants du contrat `move` ;
 - l’overlay est enfant du conteneur local de mouvement, pas du `sceneSlot` ;
 - l’overlay est au-dessus des items du conteneur, mais pas du reste de la scène ;
+- deux mouvements actifs dans deux conteneurs locaux conservent chacun leur
+  couche et leur repère FIRST/LAST ;
 - le masquage du conteneur masque aussi l’overlay ;
 - le teardown retire l’overlay temporaire sans détruire les nœuds auteur ;
 - Play, Seek, resize, replay et persistence n’utilisent pas d’histoire parallèle.

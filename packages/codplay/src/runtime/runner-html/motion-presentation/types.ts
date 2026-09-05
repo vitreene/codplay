@@ -4,6 +4,8 @@ import type { HtmlMatrix } from '../../motion/html-types'
 export type OverlayResource = {
   source: HTMLElement
   ghost: HTMLElement
+  motionRoot: Element
+  motionRootKey?: string
   revision?: string
   /** Tracks the exclusive source/projection visibility state between frames. */
   sourceHidden: boolean

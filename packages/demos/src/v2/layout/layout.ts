@@ -133,11 +133,12 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     telco: CodPlayInstance["telco"],
     instance: CodPlayInstance,
     playback: V2DemoPlayback | undefined,
+    onReload: () => void | Promise<void>,
   ): void {
     telcoPlaybackCleanup?.();
     telcoPlaybackCleanup = null;
     telcoControls?.destroy();
-    telcoControls = createV2DemoTelco(telco, { onLog: log });
+    telcoControls = createV2DemoTelco(telco, { onLog: log, onReload });
     const playbackControl = playback;
     if (playbackControl !== undefined) {
       const playbackLabel = playbackControl.label;
@@ -211,114 +212,116 @@ export function createV2DemoLayout(options: V2DemoLayoutOptions): {
     void copyLogs();
   });
 
-  return {
-    /** Mounts only the scene supplied by a lazily loaded demo module. */
-    async mount(module) {
-      unmountScene();
-      sceneSlot.className = "v2-demo-scene-slot";
-      sceneSlot.setAttribute("aria-label", `Scène : ${options.active.title}`);
+  /** Mounts only the scene supplied by a lazily loaded demo module. */
+  async function mount(module: V2DemoModule): Promise<void> {
+    unmountScene();
+    sceneSlot.className = "v2-demo-scene-slot";
+    sceneSlot.setAttribute("aria-label", `Scène : ${options.active.title}`);
 
-      // The factory gives each mount a fresh SceneDoc and fresh closure-owned straps.
-      const scene = module.createScene();
-      let codplay: CodPlay;
-      try {
-        codplay = new CodPlay({
-          engine: {
-            diagnosticOutput: (diagnostic) => {
-              if (!V2_DEMO_LOG_ENABLED) return;
-              console.log("[CodPlay V2 diagnostic]", diagnostic);
-              log(
-                `${diagnostic.code}: ${diagnostic.message}`,
-                diagnostic.severity === "warning" ? "warn" : "error",
-              );
-            },
+    // The factory gives each mount a fresh SceneDoc and fresh closure-owned straps.
+    const scene = module.createScene();
+    let codplay: CodPlay;
+    try {
+      codplay = new CodPlay({
+        engine: {
+          diagnosticOutput: (diagnostic) => {
+            if (!V2_DEMO_LOG_ENABLED) return;
+            console.log("[CodPlay V2 diagnostic]", diagnostic);
+            log(
+              `${diagnostic.code}: ${diagnostic.message}`,
+              diagnostic.severity === "warning" ? "warn" : "error",
+            );
           },
-          pauseOnDocumentHidden: false,
-        });
-      } catch (error) {
-        log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-        return;
-      }
-      const build = codplay.build({ scene });
-      if (!build.ok) {
-        if (build.diagnostics.errors.length === 0) log("SceneDoc build failed.", "error");
-        codplay.destroy();
-        return;
-      }
-
-      const preload = codplay.preload;
-      const stylesheetManifest: CompiledResourceManifest = {
-        entries: [
-          {
-            url: module.stylesheetUrl,
-            type: "css",
-            policy: { cache: "default", priority: "high" },
-          },
-        ],
-      };
-      const preloadManifest: RuntimePreloadManifestInput =
-        module.preloadManifest === undefined ?
-          [stylesheetManifest, build.compiledScene.resources]
-        : [stylesheetManifest, build.compiledScene.resources, module.preloadManifest];
-      const preloadUrls = [
-        ...new Set(
-          [
-            ...stylesheetManifest.entries,
-            ...build.compiledScene.resources.entries,
-            ...(module.preloadManifest?.entries ?? []),
-          ].map((entry) => entry.url),
-        ),
-      ];
-      const releaseResources = (): void => preload.release(preloadUrls);
-      const preloadResult = await preload.load({
-        manifest: preloadManifest,
-        options: { mode: module.preloadMode ?? "author", container: sceneSlot },
+        },
+        pauseOnDocumentHidden: false,
       });
-      if (!preloadResult.ok) {
-        log(`Ressources de démo indisponibles : ${preloadResult.error.message}`, "error");
-        releaseResources();
-        codplay.destroy();
-        return;
-      }
+    } catch (error) {
+      log(`Engine creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+      return;
+    }
+    const build = codplay.build({ scene });
+    if (!build.ok) {
+      if (build.diagnostics.errors.length === 0) log("SceneDoc build failed.", "error");
+      codplay.destroy();
+      return;
+    }
 
-      codplay.resources.register(preloadResult.data);
-      for (const warning of preloadResult.data.warnings ?? []) {
-        log(`${warning.code}: ${warning.message}`, "warn");
-      }
+    const preload = codplay.preload;
+    const stylesheetManifest: CompiledResourceManifest = {
+      entries: [
+        {
+          url: module.stylesheetUrl,
+          type: "css",
+          policy: { cache: "default", priority: "high" },
+        },
+      ],
+    };
+    const preloadManifest: RuntimePreloadManifestInput =
+      module.preloadManifest === undefined ?
+        [stylesheetManifest, build.compiledScene.resources]
+      : [stylesheetManifest, build.compiledScene.resources, module.preloadManifest];
+    const preloadUrls = [
+      ...new Set(
+        [
+          ...stylesheetManifest.entries,
+          ...build.compiledScene.resources.entries,
+          ...(module.preloadManifest?.entries ?? []),
+        ].map((entry) => entry.url),
+      ),
+    ];
+    const releaseResources = (): void => preload.release(preloadUrls);
+    const preloadResult = await preload.load({
+      manifest: preloadManifest,
+      options: { mode: module.preloadMode ?? "author", container: sceneSlot },
+    });
+    if (!preloadResult.ok) {
+      log(`Ressources de démo indisponibles : ${preloadResult.error.message}`, "error");
+      releaseResources();
+      codplay.destroy();
+      return;
+    }
 
-      let instance: CodPlayInstance;
-      try {
-        instance = codplay.instances.create({
-          instanceId: scene.id,
-          compiledScene: build.compiledScene,
-          functions: build.functions,
-          root: sceneSlot,
-        });
-      } catch (error) {
-        log(`Instance creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-        releaseResources();
-        codplay.destroy();
-        return;
-      }
+    codplay.resources.register(preloadResult.data);
+    for (const warning of preloadResult.data.warnings ?? []) {
+      log(`${warning.code}: ${warning.message}`, "warn");
+    }
 
-      if (V2_DEMO_LOG_ENABLED) {
-        traceCleanup = instance.diagnostic.onTrace((event) => {
-          loggedEventIds.add(event.eventId);
-          log(formatTraceEvent(event));
-        });
-        publicEventCleanup = instance.events.onEvent((event) => {
-          if (loggedEventIds.has(event.eventId)) return;
-          log(formatPublicEvent(event));
-        });
-      }
-      installTelco(instance.telco, instance, module.playback);
-      log(`${options.active.title} initialisée · horizon issu des eventimes compilés`);
+    let instance: CodPlayInstance;
+    try {
+      instance = codplay.instances.create({
+        instanceId: scene.id,
+        compiledScene: build.compiledScene,
+        functions: build.functions,
+        root: sceneSlot,
+      });
+    } catch (error) {
+      log(`Instance creation failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+      releaseResources();
+      codplay.destroy();
+      return;
+    }
 
-      sceneCleanup = () => {
-        releaseResources();
-        codplay.destroy();
-      };
-    },
+    if (V2_DEMO_LOG_ENABLED) {
+      traceCleanup = instance.diagnostic.onTrace((event) => {
+        loggedEventIds.add(event.eventId);
+        log(formatTraceEvent(event));
+      });
+      publicEventCleanup = instance.events.onEvent((event) => {
+        if (loggedEventIds.has(event.eventId)) return;
+        log(formatPublicEvent(event));
+      });
+    }
+    installTelco(instance.telco, instance, module.playback, () => mount(module));
+    log(`${options.active.title} initialisée · horizon issu des eventimes compilés`);
+
+    sceneCleanup = () => {
+      releaseResources();
+      codplay.destroy();
+    };
+  }
+
+  return {
+    mount,
     destroy() {
       unmountScene();
       if (logFlushScheduled) logFlushScheduled = false;

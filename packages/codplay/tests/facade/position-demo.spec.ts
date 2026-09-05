@@ -57,8 +57,17 @@ describe('position V2 demo', () => {
     const build = codplay.build({ scene: createScene() })
     expect(build.ok).toBe(true)
     if (!build.ok) return
-    const storyTwoSource = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-two-source')
-    const storyTwoTarget = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-two-target')
+    expect(Object.keys(build.compiledScene.scene.stories)).toEqual([
+      'main',
+      'position-story-one',
+      'position-story-two',
+      'position-story-three',
+      'position-story-four',
+      'position-story-five',
+      'position-story-six',
+    ])
+    const storyTwoSource = build.compiledScene.scene.stories['position-story-two']?.persos.find((perso) => perso.id === 'position-view-two-source')
+    const storyTwoTarget = build.compiledScene.scene.stories['position-story-two']?.persos.find((perso) => perso.id === 'position-view-two-target')
     expect(storyTwoSource?.actions['position:demo:view:2:source:shift']).toMatchObject({
       style: { translateY: { from: 0, to: 50, duration: 3_650 } },
     })
@@ -67,14 +76,21 @@ describe('position V2 demo', () => {
     })
     expect(storyTwoSource?.actions['position:demo:view:2:source:shift']).not.toHaveProperty('style.y')
     expect(storyTwoTarget?.actions['position:demo:view:2:target:shift']).not.toHaveProperty('style.y')
-    const firstItem = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-one-item')
-    const liveItem = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-four-item')
-    expect(firstItem?.actions['position:demo:view:1:move']).toMatchObject({
-      move: {
-        target: 'position:view-one:target',
-        transition: { duration: POSITION_MOVE_DURATION_MS },
+    const firstStory = build.compiledScene.scene.stories['position-story-one']
+    const firstItem = firstStory?.persos.find((perso) => perso.id === 'position-view-one-item')
+    const liveItem = build.compiledScene.scene.stories['position-story-four']?.persos.find((perso) => perso.id === 'position-view-four-item')
+    expect(firstStory?.eventimes?.[0]).toMatchObject({
+      name: 'position:demo:view:1:move',
+      startAt: FIRST_VIEW_MOVE_OFFSET_MS,
+      data: {
+        move: {
+          target: 'position:view-one:target',
+          flipMode: 'overlay-world',
+          transition: { duration: POSITION_MOVE_DURATION_MS },
+        },
       },
     })
+    expect(firstItem?.actions['position:demo:view:1:move']).toBe(true)
     expect(liveItem?.actions['position:demo:live:bounce:1']).toBeUndefined()
     expect(liveItem?.actions['position:demo:live:item:move']).toBe(true)
 
@@ -119,7 +135,7 @@ describe('position V2 demo', () => {
     })
     expect(viewTwoMove?.data).not.toHaveProperty('move.transition.traversal')
     expect(viewTwoMove?.data).not.toHaveProperty('move.transition.pathAnchor')
-    const viewTwoItem = root.querySelector<HTMLElement>('[data-item-id="main:position-view-two-item"]')
+    const viewTwoItem = root.querySelector<HTMLElement>('[data-item-id="position-story-two:position-view-two-item"]')
     const viewTwoSource = root.querySelector<HTMLElement>('.position-anchor--source .position-node__outlet')
     const viewTwoTarget = root.querySelector<HTMLElement>('.position-anchor--target .position-node__outlet')
     expect(viewTwoItem).not.toBeNull()
@@ -235,9 +251,8 @@ describe('position V2 demo', () => {
         },
       },
     })
-    const nestedItem = root.querySelector<HTMLElement>('[data-item-id="main:position-view-five-item"]')
     const nestedTarget = root.querySelector<HTMLElement>('.position-nested-parent--target .position-nested-parent__item-mount')
-    expect(nestedTarget?.contains(nestedItem)).toBe(true)
+    expect(nestedTarget?.querySelector<HTMLElement>('[data-item-id="position-story-five:position-view-five-item"]')).not.toBeNull()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
@@ -254,9 +269,8 @@ describe('position V2 demo', () => {
         },
       })
     }
-    const conclusionItemB = root.querySelector<HTMLElement>('[data-item-id="main:position-view-six-item-b"]')
     const conclusionTargetD = root.querySelector<HTMLElement>('.position-conclusion-node--d')
-    expect(conclusionTargetD?.contains(conclusionItemB)).toBe(true)
+    expect(conclusionTargetD?.querySelector<HTMLElement>('[data-item-id="position-story-six:position-view-six-item-b"]')).not.toBeNull()
     const conclusionViews = root.querySelectorAll('.position-view')
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(conclusionViews[5]?.classList.contains('position-view--visible')).toBe(true)
@@ -281,7 +295,7 @@ describe('position V2 demo', () => {
     })
     codplay.engine.advance(0)
     await instance.telco.play()
-    const item = root.querySelector<HTMLElement>('[data-item-id="main:position-view-one-item"]')
+    const item = root.querySelector<HTMLElement>('[data-item-id="position-story-one:position-view-one-item"]')
     expect(item).not.toBeNull()
     if (item === null) return
     const source = root.querySelector<HTMLElement>('.position-node--source .position-node__outlet')

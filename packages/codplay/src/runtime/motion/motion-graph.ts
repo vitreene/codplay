@@ -339,14 +339,18 @@ export function resolvePresentationFrame(
     const base = layout.items.get(itemId)
     const pose = resolvePose(itemId)
     if (base === undefined || pose === undefined) continue
-    const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
+    const track = graph.tracksByItem.get(itemId)
+    const segment = findActiveSegment(track, timeMs)
     const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
     const overlayStacking = resolveOverlayStackingContext(base, segment)
+    const motionRoot = resolvePresentationMotionRoot(base, track, segment, timeMs)
     items.set(itemId, {
       itemId,
       ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
       targetId: base.targetId,
       targetOrder: base.targetOrder,
+      ...(motionRoot?.motionRootKey === undefined ? {} : { motionRootKey: motionRoot.motionRootKey }),
+      ...(motionRoot?.motionRootPose === undefined ? {} : { motionRootPose: motionRoot.motionRootPose }),
       ...(overlayStacking === undefined ? {} : { overlayStacking }),
       pose,
       representation: segment === undefined
@@ -598,6 +602,10 @@ function createAttachment(
       ? decomposeRootMotionPose(visualPose)
       : deriveRelativeMotionPose(parentPose, visualPose),
     fallbackRootPose: decomposeRootMotionPose(visualPose),
+    ...(snapshot.motionRootKey === undefined ? {} : { motionRootKey: snapshot.motionRootKey }),
+    ...(snapshot.motionRootPose === undefined && contextSnapshot.rootPose === undefined
+      ? {}
+      : { motionRootPose: snapshot.motionRootPose ?? contextSnapshot.rootPose }),
     context: createAttachmentContext(snapshot, contextSnapshot),
   })
 }
@@ -614,8 +622,37 @@ function createStaticAttachment(
     targetOrder: snapshot.targetOrder,
     localPose: snapshot.localPose,
     fallbackRootPose: decomposeRootMotionPose(fallbackSnapshot.rootPose),
+    ...(snapshot.motionRootKey === undefined && contextSnapshot.rootKey === undefined
+      ? {}
+      : { motionRootKey: snapshot.motionRootKey ?? contextSnapshot.rootKey }),
+    ...(snapshot.motionRootPose === undefined && contextSnapshot.rootPose === undefined
+      ? {}
+      : { motionRootPose: snapshot.motionRootPose ?? contextSnapshot.rootPose }),
     context: createAttachmentContext(snapshot, contextSnapshot),
   })
+}
+
+/** Resolves the local HTML root that owns one currently presented item. */
+function resolvePresentationMotionRoot(
+  base: LayoutItemSnapshot,
+  track: ItemMotionTrack | undefined,
+  segment: MotionSegment | undefined,
+  timeMs: number,
+): Readonly<{ motionRootKey?: string; motionRootPose?: HtmlPose }> | undefined {
+  if (segment !== undefined) {
+    const retarget = resolveSegmentRetarget(segment, timeMs)
+    const attachment = retarget?.to ?? segment.from
+    if (attachment.motionRootKey !== undefined || attachment.motionRootPose !== undefined) return attachment
+  }
+  const endpoint = findMotionEndpoint(track, timeMs)
+  if (endpoint !== undefined) {
+    const attachment = endpoint.side === 'from'
+      ? endpoint.segment.from
+      : resolveSegmentRetarget(endpoint.segment, timeMs)?.to ?? endpoint.segment.to
+    if (attachment.motionRootKey !== undefined || attachment.motionRootPose !== undefined) return attachment
+  }
+  if (base.motionRootKey !== undefined || base.motionRootPose !== undefined) return base
+  return undefined
 }
 
 /** Builds one segment's measured pose intervals from the same player captures. */

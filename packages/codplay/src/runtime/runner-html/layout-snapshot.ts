@@ -77,6 +77,8 @@ export function captureHtmlLayoutSnapshot(
       targetOrder,
       localPose,
       rootPose: composeMotionPose(rootCoordinatePose, rootLocalPose),
+      ...(rootKey === undefined ? {} : { motionRootKey: rootKey }),
+      motionRootPose: hostRootPose,
     }))
   }
 }

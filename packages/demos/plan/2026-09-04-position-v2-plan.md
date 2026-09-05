@@ -11,8 +11,9 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 ## Décisions retenues
 
-- La démo reste une seule `SceneDoc` avec une story `main`. Le carousel est un
-  `AutoCapsule` de type `carousel`, et ses intervalles sont calculés par
+- La démo reste une seule `SceneDoc`, avec une story `main` qui porte le shell
+  du carousel et six `StoryDoc` qui portent chacun une étape. Le carousel est
+  un `AutoCapsule` de type `carousel`, et ses intervalles sont calculés par
   `CapsulePreset` puis `CapsuleDistribution`.
 - Le carousel utilise les événements `intro` et `outro` produits par
   `AutoCapsule`, mais ne les inscrit pas comme changements temporels
@@ -35,9 +36,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 - Les règles CSS produites par `AutoCapsule` restent dans le dossier de la
   démo. Le layout partagé ne connaît ni le carousel `position`, ni ses classes
   de projection.
-- Chaque vue est isolée dans `story-one.ts` à `story-six.ts`. `story.ts`
-  assemble la story, `main.ts` assemble uniquement la scène, et
-  `constants.ts`, `types.ts` et `shared.ts` isolent les éléments transverses.
+- Chaque story est isolée dans `story-one.ts` à `story-six.ts`. Les trois
+  premières sont des objets `StoryDoc` écrits directement ; `main.ts` assemble
+  la scène et déclare la story `main`. `constants.ts`, `types.ts` et `shared.ts`
+  isolent les éléments transverses.
 - Espace produit un comportement de story : le strap bascule l'état, arrête
   les tweens courants par événement et relance la séquence visuelle de la vue
   courante par événement. Il ne pilote ni l'horloge du player ni `telco`.
@@ -67,13 +69,15 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 ## Travaux
 
-1. Construire les six vues et leur groupe story-local dans
+1. Construire les six `StoryDoc` et leur groupe story-local dans
    `src/v2/demos/position/`.
 2. Corriger et tester les `move` déclenchés par les eventimes de chaque vue,
    notamment les payloads dynamiques et les unités du drag de la vue 4.
-3. Garder le code lisible pour un auteur : une vue par fichier, les fonctions
-   communes dans `shared.ts`, les constantes dans `constants.ts`, et un
-   assemblage séparé pour la story et la scène.
+3. Garder le code lisible pour un auteur : une story par fichier, les fonctions
+   mathématiques communes dans `shared.ts`, les constantes dans `constants.ts`,
+   et l’assemblage de la `SceneDoc` dans `main.ts`. Les trois premières stories
+   doivent exposer directement leurs objets de scène, sans fabrique de
+   construction.
 4. Déclarer la démo dans le registre V2, documenter son circuit réel et borner
    le scan de démarrage à l'entrée du layout V2.
 5. Représenter ensuite les trajectoires réelles, sans changer le circuit de
@@ -142,12 +146,11 @@ imbriqués sont montrés dans six vues réunies par un carousel.
   projection des transformations comme des valeurs logiques `cqw`, ce qui
   amplifiait le drag. Les déplacements d'ancre sont désormais émis en chaînes
   `px` et le style DOM vérifié suit exactement le déplacement reçu.
-- Décision appliquée : tous les reparentings d'items utilisent le même helper
-  `createPositionMoveData` et une durée de `2 000 ms`; les plans des six vues
-  transportent le `move` complet dans `event.data` lorsqu'ils sont ajoutés à
-  la story.
-- Réorganisation appliquée : `main.ts` ne contient plus que l'assemblage de la
-  scène ; `story-one.ts` à `story-six.ts` portent les vues et leurs plans, et
+- Décision appliquée : tous les reparentings d'items utilisent un `move`
+  explicite et une durée de `2 000 ms`; les plans des six stories transportent
+  le `move` complet dans `event.data` lorsqu'ils sont ajoutés à la scène.
+- Réorganisation appliquée : `main.ts` assemble la scène et la story `main` ;
+  `story-one.ts` à `story-six.ts` portent chacune un `StoryDoc`, et
   `carousel.ts`, `straps.ts`, `story-animation.ts`, `constants.ts`, `types.ts`
   et `shared.ts` portent les responsabilités transverses.
 - Validé par `tests/facade/position-demo.spec.ts` : progression manuelle,

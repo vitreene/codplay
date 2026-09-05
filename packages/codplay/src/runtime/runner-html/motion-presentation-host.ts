@@ -5,6 +5,7 @@ import {
   composeMotionPose,
   createMotionRootPose,
   decomposeRootMotionPose,
+  type ItemPresentation,
   type LayoutItemSnapshot,
   type LayoutSnapshot,
   type PresentationFrame,
@@ -35,6 +36,17 @@ import type {
 /** Resolves the DOM container recorded by one HTML layout snapshot. */
 type HtmlMotionRootResolver = (rootKey: string | undefined) => Element | undefined
 
+/** Identity used to retain one presentation layer per local motion root. */
+type MotionRootToken = string | Element
+
+/** Mutable resources retained for one local motion root. */
+type MotionRootState = {
+  root: Element
+  key?: string
+  overlayLayer?: HTMLElement
+  overlayOrder: readonly string[]
+}
+
 /** Commits one complete motion frame without owning temporal state. */
 export class HtmlMotionPresentationHost {
   private readonly resources = new Map<string, OverlayResource>()
@@ -46,15 +58,12 @@ export class HtmlMotionPresentationHost {
   }>>()
   private readonly localTransforms = new Map<string, LocalTransformResource>()
   private readonly hiddenDescendantClones = new Set<HTMLElement>()
-  private overlayOrder: readonly string[] = []
   private hiddenDescendantKey = ''
+  private readonly motionRoots = new Map<MotionRootToken, MotionRootState>()
   private readonly root: Element
   private readonly resolveHandle: (itemId: string) => HTMLElement | undefined
   private readonly resolveMotionRoot: HtmlMotionRootResolver
   private readonly transientStyles: HtmlMotionStyleLayer
-  private overlayLayer: HTMLElement | undefined
-  private motionRoot: Element
-  private motionRootKey: string | undefined
   private elementPathCache = new WeakMap<HTMLElement, WeakMap<HTMLElement, readonly number[] | undefined>>()
 
   /** Creates one item-indexed overlay resource host. */
@@ -66,7 +75,6 @@ export class HtmlMotionPresentationHost {
     this.root = root
     this.resolveHandle = resolveHandle
     this.resolveMotionRoot = resolveMotionRoot
-    this.motionRoot = root
     this.transientStyles = createHtmlMotionStyleLayer(root)
   }
 
@@ -88,6 +96,7 @@ export class HtmlMotionPresentationHost {
     this.localTargets.clear()
     this.localSizes.clear()
     this.localTransforms.clear()
+    for (const state of this.motionRoots.values()) state.overlayOrder = []
     this.clearElementPathCache()
   }
 
@@ -107,12 +116,13 @@ export class HtmlMotionPresentationHost {
     for (const resource of this.resources.values()) this.release(resource)
     this.resources.clear()
     this.clearHiddenDescendantClones()
-    this.overlayOrder = []
     this.hiddenDescendantKey = ''
-    removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
-    this.overlayLayer = undefined
-    this.motionRoot = this.root
-    this.motionRootKey = undefined
+    for (const state of this.motionRoots.values()) {
+      removeElement(state.overlayLayer ?? findOverlayLayer(state.root))
+      state.overlayLayer = undefined
+      state.overlayOrder = []
+    }
+    this.motionRoots.clear()
     this.clearElementPathCache()
   }
 
@@ -122,9 +132,6 @@ export class HtmlMotionPresentationHost {
     resolveRevision?: OverlayRevisionResolver,
     naturalLayout?: LayoutSnapshot,
   ): void {
-    const motionRoot = this.resolveMotionRoot(naturalLayout?.rootKey) ?? this.root
-    this.selectMotionRoot(motionRoot, naturalLayout?.rootKey)
-    if (!isMeasurableHtmlElement(this.motionRoot)) return
     const directOverlayItemIds = new Set([...frame.items.values()]
       .filter((item) => item.representation === 'reparent')
       .map((item) => item.itemId))
@@ -153,11 +160,27 @@ export class HtmlMotionPresentationHost {
     }
 
     const orderedActiveItemIds = orderOverlayStack(frame, activeItemIds, naturalLayout)
+    const activeByRoot = new Map<MotionRootToken, string[]>()
     for (const itemId of orderedActiveItemIds) {
-      this.ensureOverlay(itemId, resolveRevision?.(itemId))
+      const item = frame.items.get(itemId)
+      if (item === undefined) continue
+      const rootState = this.resolveRootState(item, naturalLayout)
+      if (!isMeasurableHtmlElement(rootState.root)) continue
+      const itemIds = activeByRoot.get(this.rootToken(rootState)) ?? []
+      itemIds.push(itemId)
+      activeByRoot.set(this.rootToken(rootState), itemIds)
+      this.ensureOverlay(itemId, resolveRevision?.(itemId), rootState)
     }
-    const overlayLayer = this.resources.size === 0 ? undefined : this.getOverlayLayer()
-    if (overlayLayer !== undefined) this.reconcileOverlayOrder(overlayLayer, orderedActiveItemIds)
+    for (const [token, state] of this.motionRoots) {
+      const itemIds = activeByRoot.get(token) ?? []
+      if (itemIds.length === 0) {
+        removeElement(state.overlayLayer ?? findOverlayLayer(state.root))
+        state.overlayLayer = undefined
+        state.overlayOrder = []
+        continue
+      }
+      this.reconcileOverlayOrder(state, itemIds)
+    }
 
     const hiddenKey = orderedActiveItemIds.join('\u0000')
     if (hiddenKey !== this.hiddenDescendantKey) {
@@ -167,34 +190,30 @@ export class HtmlMotionPresentationHost {
     }
 
     if (activeItemIds.size === 0) {
-      removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
-      this.overlayLayer = undefined
-      this.overlayOrder = []
       this.hiddenDescendantKey = ''
     }
 
-    const rootPose = naturalLayout?.rootPose ?? createMotionRootPose()
-    const overlayInverse = activeItemIds.size === 0
-      ? undefined
-      : invertMatrix({ ...rootPose.matrix, e: 0, f: 0 })
-    if (overlayInverse === null) {
-      throw new Error('Motion overlay root matrix is singular.')
-    }
     const orderedLocalItemIds = orderParentFirst(frame, localItemIds, naturalLayout)
-    const localParentInverses = new Map<string | undefined, HtmlMatrix>()
-    const localParentPoses = new Map<string | undefined, HtmlPose>()
+    const localParentInverses = new Map<string, HtmlMatrix>()
+    const localParentPoses = new Map<string, HtmlPose>()
     for (const itemId of orderedLocalItemIds) this.prepareLocal(itemId, frame, directOverlayItemIds, naturalLayout)
-    for (const itemId of orderedLocalItemIds) {
-      this.applyLocal(itemId, frame, rootPose, naturalLayout, localParentInverses, localParentPoses)
-    }
+    for (const itemId of orderedLocalItemIds) this.applyLocal(
+      itemId,
+      frame,
+      naturalLayout,
+      localParentInverses,
+      localParentPoses,
+    )
 
-    const overlayPose = rootPose
     for (const itemId of activeItemIds) {
       const item = frame.items.get(itemId)
       const resource = this.resources.get(itemId)
       if (item === undefined || resource === undefined) continue
+      const rootPose = this.resolveItemRootPose(item, naturalLayout)
+      const overlayInverse = invertMatrix({ ...rootPose.matrix, e: 0, f: 0 })
+      if (overlayInverse === null) throw new Error('Motion overlay root matrix is singular.')
       const worldPose = composeMotionPose(rootPose, decomposeRootMotionPose(item.pose))
-      if (overlayInverse !== undefined) applyGhostPose(resource, overlayPose, overlayInverse, worldPose)
+      applyGhostPose(resource, rootPose, overlayInverse, worldPose)
     }
     this.showOverlayResources(activeItemIds)
   }
@@ -239,28 +258,33 @@ export class HtmlMotionPresentationHost {
   private applyLocal(
     itemId: string,
     frame: PresentationFrame,
-    rootPose: HtmlPose,
     naturalLayout: LayoutSnapshot | undefined,
-    parentInverses: Map<string | undefined, HtmlMatrix>,
-    parentPoses: Map<string | undefined, HtmlPose>,
+    parentInverses: Map<string, HtmlMatrix>,
+    parentPoses: Map<string, HtmlPose>,
   ): void {
     const target = this.localTargets.get(itemId)
     const item = frame.items.get(itemId)
     if (target === undefined || item === undefined) return
+    const rootPose = this.resolveItemRootPose(item, naturalLayout)
     const worldPose = composeMotionPose(rootPose, decomposeRootMotionPose(item.pose))
-    let parentInverse = parentInverses.get(item.parentItemId)
+    const parentCacheKey = this.parentCacheKey(item.parentItemId, item, naturalLayout)
+    let parentInverse = parentInverses.get(parentCacheKey)
     if (parentInverse === undefined) {
       const parentLayoutPose = this.resolveParentLayoutPose(
         item.parentItemId,
         frame,
         naturalLayout,
         parentPoses,
+        item.motionRootKey,
       )
-      const parentPose = composeMotionPose(rootPose, decomposeRootMotionPose(parentLayoutPose))
+      const parentPose = composeMotionPose(
+        this.resolveParentRootPose(item.parentItemId, frame, naturalLayout, rootPose),
+        decomposeRootMotionPose(parentLayoutPose),
+      )
       const resolvedParentInverse = invertMatrix(poseAffineMatrix(parentPose))
       if (resolvedParentInverse === null) throw new Error('Motion local parent matrix is singular.')
       parentInverse = resolvedParentInverse
-      parentInverses.set(item.parentItemId, resolvedParentInverse)
+      parentInverses.set(parentCacheKey, resolvedParentInverse)
     }
     const naturalItem = naturalLayout?.items.get(itemId)
     // The projection stylesheet replaces the authored transform entirely.
@@ -279,27 +303,29 @@ export class HtmlMotionPresentationHost {
     parentItemId: string | undefined,
     frame: PresentationFrame,
     naturalLayout: LayoutSnapshot | undefined,
-    cache: Map<string | undefined, HtmlPose>,
+    cache: Map<string, HtmlPose>,
+    motionRootKey?: string,
   ): HtmlPose {
-    const cached = cache.get(parentItemId)
+    const cacheKey = `${motionRootKey ?? ''}:${parentItemId ?? ''}`
+    const cached = cache.get(cacheKey)
     if (cached !== undefined) return cached
 
     if (parentItemId === undefined) {
       const root = createMotionRootPose()
-      cache.set(parentItemId, root)
+      cache.set(cacheKey, root)
       return root
     }
 
     const presentedParent = frame.items.get(parentItemId)
     if (presentedParent !== undefined) {
-      cache.set(parentItemId, presentedParent.pose)
+      cache.set(cacheKey, presentedParent.pose)
       return presentedParent.pose
     }
 
     const naturalParent = naturalLayout?.items.get(parentItemId)
     if (naturalParent === undefined) {
       const root = createMotionRootPose()
-      cache.set(parentItemId, root)
+      cache.set(cacheKey, root)
       return root
     }
 
@@ -316,7 +342,7 @@ export class HtmlMotionPresentationHost {
     }
 
     if (presentedAncestor === undefined) {
-      cache.set(parentItemId, naturalParent.rootPose)
+      cache.set(cacheKey, naturalParent.rootPose)
       return naturalParent.rootPose
     }
 
@@ -324,7 +350,7 @@ export class HtmlMotionPresentationHost {
     for (let index = chain.length - 1; index >= 0; index -= 1) {
       resolved = composeMotionPose(resolved, chain[index]!.localPose)
     }
-    cache.set(parentItemId, resolved)
+    cache.set(cacheKey, resolved)
     return resolved
   }
 
@@ -357,13 +383,24 @@ export class HtmlMotionPresentationHost {
   }
 
   /** Reuses or creates one ghost for the current author materialization. */
-  private ensureOverlay(itemId: string, revision: string | undefined): void {
+  private ensureOverlay(
+    itemId: string,
+    revision: string | undefined,
+    rootState: MotionRootState,
+  ): void {
     const source = this.resolveHandle(itemId)
     if (source === undefined) return
     const previous = this.resources.get(itemId)
     if (previous !== undefined && previous.source === source) {
       const unchanged = revision === undefined || previous.revision === revision
       this.ensureSourceHidden(previous)
+      if (previous.motionRoot !== rootState.root || previous.motionRootKey !== rootState.key) {
+        this.ensurePresentationHidden(previous)
+        this.getOverlayLayer(rootState).appendChild(previous.ghost)
+        previous.motionRoot = rootState.root
+        previous.motionRootKey = rootState.key
+        previous.lastMatrix = undefined
+      }
       if (unchanged) return
 
       this.ensurePresentationHidden(previous)
@@ -397,7 +434,7 @@ export class HtmlMotionPresentationHost {
       this.release(previous)
     }
 
-    const overlayLayer = this.getOverlayLayer()
+    const overlayLayer = this.getOverlayLayer(rootState)
     // Hide the source before inserting its projection. This keeps the two
     // representations mutually exclusive even at the insertion boundary.
     this.transientStyles.applyHidden(source)
@@ -410,6 +447,8 @@ export class HtmlMotionPresentationHost {
     const resource: OverlayResource = {
       source,
       ghost,
+      motionRoot: rootState.root,
+      ...(rootState.key === undefined ? {} : { motionRootKey: rootState.key }),
       revision,
       sourceHidden: true,
       presentationHidden: true,
@@ -421,31 +460,81 @@ export class HtmlMotionPresentationHost {
     this.synchronizeGhostTransformProperties(resource)
   }
 
-  /** Returns the one overlay layer owned by this host, creating it only once. */
-  private getOverlayLayer(): HTMLElement {
-    if (this.overlayLayer !== undefined) return this.overlayLayer
-    this.overlayLayer = ensureHtmlOverlayLayer(this.motionRoot)
-    return this.overlayLayer
+  /** Returns the overlay layer owned by one local motion root. */
+  private getOverlayLayer(rootState: MotionRootState): HTMLElement {
+    if (rootState.overlayLayer !== undefined) return rootState.overlayLayer
+    rootState.overlayLayer = ensureHtmlOverlayLayer(rootState.root)
+    return rootState.overlayLayer
   }
 
-  /** Moves the transient presentation ownership to the snapshot's local root. */
-  private selectMotionRoot(root: Element, rootKey: string | undefined): void {
-    if (this.motionRoot === root && this.motionRootKey === rootKey) return
+  /** Reconciles one local root's overlay order without mixing other roots. */
+  private reconcileOverlayOrder(rootState: MotionRootState, orderedItemIds: readonly string[]): void {
+    if (sameStringArray(rootState.overlayOrder, orderedItemIds)) return
+    const layer = this.getOverlayLayer(rootState)
+    for (const itemId of orderedItemIds) {
+      const resource = this.resources.get(itemId)
+      if (resource !== undefined) layer.appendChild(resource.ghost)
+    }
+    rootState.overlayOrder = [...orderedItemIds]
+  }
 
-    this.clearHiddenDescendantClones()
-    for (const target of this.localTargets.values()) this.transientStyles.clearLocal(target)
-    this.localTargets.clear()
-    this.localSizes.clear()
-    this.localTransforms.clear()
-    for (const resource of this.resources.values()) this.release(resource)
-    this.resources.clear()
-    removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
-    this.overlayLayer = undefined
-    this.overlayOrder = []
-    this.hiddenDescendantKey = ''
-    this.clearElementPathCache()
-    this.motionRoot = root
-    this.motionRootKey = rootKey
+  /** Resolves or creates the state associated with one captured local root. */
+  private resolveRootState(item: ItemPresentation, naturalLayout?: LayoutSnapshot): MotionRootState {
+    const naturalItem = naturalLayout?.items.get(item.itemId)
+    const key = item.motionRootKey ?? naturalItem?.motionRootKey ?? naturalLayout?.rootKey
+    const root = this.resolveMotionRoot(key) ?? this.root
+    const token = this.rootToken({ root, key })
+    const existing = this.motionRoots.get(token)
+    if (existing !== undefined) return existing
+    const state: MotionRootState = {
+      root,
+      ...(key === undefined ? {} : { key }),
+      overlayOrder: [],
+    }
+    this.motionRoots.set(token, state)
+    return state
+  }
+
+  /** Returns the stable map key used by one local root state. */
+  private rootToken(state: Pick<MotionRootState, 'root' | 'key'>): MotionRootToken {
+    return state.key ?? state.root
+  }
+
+  /** Resolves the world pose of the local root used by one frame item. */
+  private resolveItemRootPose(
+    item: ItemPresentation,
+    naturalLayout?: LayoutSnapshot,
+  ): HtmlPose {
+    const naturalItem = naturalLayout?.items.get(item.itemId)
+    return item.motionRootPose
+      ?? naturalItem?.motionRootPose
+      ?? naturalLayout?.rootPose
+      ?? createMotionRootPose()
+  }
+
+  /** Resolves the root pose used by a local item's rendered parent. */
+  private resolveParentRootPose(
+    parentItemId: string | undefined,
+    frame: PresentationFrame,
+    naturalLayout: LayoutSnapshot | undefined,
+    fallback: HtmlPose,
+  ): HtmlPose {
+    if (parentItemId === undefined) return fallback
+    const presentedParent = frame.items.get(parentItemId)
+    if (presentedParent?.motionRootPose !== undefined) return presentedParent.motionRootPose
+    const naturalParent = naturalLayout?.items.get(parentItemId)
+    return naturalParent?.motionRootPose ?? fallback
+  }
+
+  /** Separates cached local-parent inverses belonging to different roots. */
+  private parentCacheKey(
+    parentItemId: string | undefined,
+    item: ItemPresentation,
+    naturalLayout?: LayoutSnapshot,
+  ): string {
+    const naturalItem = naturalLayout?.items.get(item.itemId)
+    const rootKey = item.motionRootKey ?? naturalItem?.motionRootKey ?? naturalLayout?.rootKey ?? 'scene'
+    return `${rootKey}:${parentItemId ?? '<root>'}`
   }
 
   /** Reuses one descendant path until an author template changes structurally. */
@@ -479,16 +568,6 @@ export class HtmlMotionPresentationHost {
     ghost.style.boxSizing = 'border-box'
     ghost.style.transformOrigin = '0 0'
     ghost.style.zIndex = '20'
-  }
-
-  /** Reorders existing ghosts only when the resolved parent-first order changed. */
-  private reconcileOverlayOrder(layer: HTMLElement, orderedItemIds: readonly string[]): void {
-    if (sameStringArray(this.overlayOrder, orderedItemIds)) return
-    for (const itemId of orderedItemIds) {
-      const resource = this.resources.get(itemId)
-      if (resource !== undefined) layer.appendChild(resource.ghost)
-    }
-    this.overlayOrder = [...orderedItemIds]
   }
 
   /** Neutralizes only non-default author transform longhands that would compose with the pose matrix. */

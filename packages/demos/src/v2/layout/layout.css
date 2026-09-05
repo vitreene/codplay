@@ -115,6 +115,8 @@ select {
 
 .v2-demo-stage {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -125,8 +127,8 @@ select {
 }
 
 .v2-demo-scene-slot {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 0%;
   min-width: 0;
   min-height: 0;
 }

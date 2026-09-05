@@ -26,6 +26,10 @@ export type LayoutItemSnapshot = Readonly<{
   targetOrder: number
   localPose: RelativeMotionPose
   rootPose: HtmlPose
+  /** Runner-local identity of the HTML motion container used for this item. */
+  motionRootKey?: string
+  /** World pose of the HTML motion container used for this item. */
+  motionRootPose?: HtmlPose
 }>
 
 /** Complete layout state measured without transient movement presentations. */
@@ -78,6 +82,10 @@ export type MotionAttachment = Readonly<{
   localPose: RelativeMotionPose
   /** Root-relative fallback used only if the historical parent is unavailable. */
   fallbackRootPose: RelativeMotionPose
+  /** Runner-local identity of the container in which this attachment was captured. */
+  motionRootKey?: string
+  /** World pose of the container in which this attachment was captured. */
+  motionRootPose?: HtmlPose
   /** FIRST/LAST item and ancestor poses captured for this attachment. */
   context?: ReadonlyMap<string, LayoutItemSnapshot>
 }>
@@ -166,6 +174,10 @@ export type ItemPresentation = Readonly<{
   targetId: string
   /** Structural sibling order of the item's natural geometry relation. */
   targetOrder: number
+  /** Runner-local identity of the container used to present this item. */
+  motionRootKey?: string
+  /** World pose of the container used to present this item. */
+  motionRootPose?: HtmlPose
   /** Extra endpoint relation used by the reparent overlay stacking graph. */
   overlayStacking?: OverlayStackingContext
   pose: HtmlPose

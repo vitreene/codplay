@@ -3,7 +3,13 @@ export const POSITION_NAMESPACE = 'position:demo'
 
 /** Stable scene and story identities consumed by the V2 demo layout. */
 export const POSITION_SCENE_ID = 'position-v2-scene'
-export const POSITION_STORY_ID = 'main'
+export const POSITION_MAIN_STORY_ID = 'main'
+export const POSITION_STORY_ONE_ID = 'position-story-one'
+export const POSITION_STORY_TWO_ID = 'position-story-two'
+export const POSITION_STORY_THREE_ID = 'position-story-three'
+export const POSITION_STORY_FOUR_ID = 'position-story-four'
+export const POSITION_STORY_FIVE_ID = 'position-story-five'
+export const POSITION_STORY_SIX_ID = 'position-story-six'
 
 /** Shared carousel targets mounted by the story shell. */
 export const POSITION_CAROUSEL_ID = 'position-carousel'
@@ -42,6 +48,14 @@ export const POSITION_VIEW_TWO_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:2:m
 /** Fixed story-one, story-five and story-six move events. */
 export const POSITION_VIEW_ONE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:1:move`
 export const POSITION_VIEW_FIVE_ITEM_MOVE_EVENT = `${POSITION_NAMESPACE}:view:5:move`
+
+/** Straps owned by the position scene or by its individual stories. */
+export const POSITION_KEYBOARD_NAVIGATION_STRAP = `${POSITION_NAMESPACE}:keyboard:navigate`
+export const POSITION_KEYBOARD_TOGGLE_STRAP = `${POSITION_NAMESPACE}:keyboard:toggle`
+export const POSITION_PATH_COMMIT_STRAP = `${POSITION_NAMESPACE}:path:commit`
+export const POSITION_LIVE_SOURCE_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:source:commit`
+export const POSITION_LIVE_TARGET_COMMIT_STRAP = `${POSITION_NAMESPACE}:live:target:commit`
+export const POSITION_LIVE_BOUNCE_STRAP = `${POSITION_NAMESPACE}:live:bounce:calculate`
 
 /** Number and timing of the authored carousel views. */
 export const VIEW_IDS = [

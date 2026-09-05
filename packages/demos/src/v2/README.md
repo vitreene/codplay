@@ -56,6 +56,11 @@ automatiquement son ticker partagé lorsqu'une instance passe en lecture et le
 suspend lorsqu'aucune instance ne joue. Le layout n'appelle donc pas les
 commandes générales de l'engine et ne pilote jamais directement le runner.
 
+Le layout ajoute à cette télécommande un bouton « Recharger la scène » (flèche
+circulaire). Il remonte la démo courante avec une nouvelle instance CodPlay afin
+de vider aussi les eventimes injectés par l'utilisateur ; `rewind` ne fait qu'un
+seek à zéro et ne supprime pas le journal.
+
 Le layout laisse chaque propriétaire `CodPlay` utiliser le scheduler de frames
 interne, avec `pauseOnDocumentHidden: false`. Il ne crée ni `TimeTicker` ni
 ticker de démo : CodPlay garde ces détails en interne. Le markup structurel de

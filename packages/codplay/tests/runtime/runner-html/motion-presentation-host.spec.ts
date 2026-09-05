@@ -75,6 +75,53 @@ describe('HtmlMotionPresentationHost overlay resources', () => {
     root.remove()
   })
 
+  it('keeps simultaneous reparent overlays in their own local roots', () => {
+    const root = document.createElement('main')
+    const firstRoot = document.createElement('section')
+    const secondRoot = document.createElement('section')
+    const firstSource = document.createElement('article')
+    const secondSource = document.createElement('article')
+    firstRoot.appendChild(firstSource)
+    secondRoot.appendChild(secondSource)
+    root.append(firstRoot, secondRoot)
+    document.body.appendChild(root)
+
+    const handles = new Map([
+      ['first', firstSource],
+      ['second', secondSource],
+    ])
+    const roots = new Map([
+      ['first-root', firstRoot],
+      ['second-root', secondRoot],
+    ])
+    const host = new HtmlMotionPresentationHost(
+      root,
+      (itemId) => handles.get(itemId),
+      (rootKey) => roots.get(rootKey ?? ''),
+    )
+    host.commit(createFrame([
+      { ...createItem('first'), motionRootKey: 'first-root', motionRootPose: createPose(0) },
+      { ...createItem('second'), motionRootKey: 'second-root', motionRootPose: createPose(100) },
+    ]))
+
+    const firstLayer = firstRoot.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    const secondLayer = secondRoot.querySelector<HTMLElement>('[data-codplay-motion-overlay]')
+    expect(firstLayer?.querySelector('[data-codplay-motion-item="first"]')).not.toBeNull()
+    expect(firstLayer?.querySelector('[data-codplay-motion-item="second"]')).toBeNull()
+    expect(secondLayer?.querySelector('[data-codplay-motion-item="second"]')).not.toBeNull()
+    expect(secondLayer?.querySelector('[data-codplay-motion-item="first"]')).toBeNull()
+
+    host.commit(createFrame([
+      { ...createItem('second'), motionRootKey: 'second-root', motionRootPose: createPose(100) },
+    ]))
+    expect(firstRoot.querySelector('[data-codplay-motion-overlay]')).toBeNull()
+    expect(firstSource.hasAttribute('data-codplay-motion-hidden')).toBe(false)
+    expect(secondRoot.querySelector('[data-codplay-motion-item="second"]')).not.toBeNull()
+
+    host.destroy()
+    root.remove()
+  })
+
   it('updates stable template content without creating a replacement node', () => {
     const root = document.createElement('main')
     const source = document.createElement('article')

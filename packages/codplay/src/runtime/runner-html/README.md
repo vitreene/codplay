@@ -93,8 +93,9 @@ réutilisés. Pour une frontière HTML, le runner résout le plus petit ancêtre
 commun aux éléments source/cible et capture ce conteneur comme repère local ; la
 couche `[data-codplay-motion-overlay]` est son enfant direct. Elle reste donc
 au-dessus des items de ce conteneur et est masquée avec lui, sans devenir un
-enfant du `sceneSlot` ou des contrôles voisins. Les overlays ne servent pas
-d'arbre de mesure. « Jouer » un point de capture
+enfant du `sceneSlot` ou des contrôles voisins. Si plusieurs conteneurs locaux
+ont un `move` actif, chaque conteneur conserve sa propre couche et sa propre
+pose de projection. Les overlays ne servent pas d'arbre de mesure. « Jouer » un point de capture
 signifie ici résoudre et matérialiser l'état de la scène ; cela n'appelle pas
 `play()`, ne joue pas les médias, ne recharge pas les sources et ne détruit pas
 les composants. Le reset est synchrone : aucun frame du navigateur ne

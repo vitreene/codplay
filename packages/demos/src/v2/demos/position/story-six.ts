@@ -1,5 +1,5 @@
-import type { PersoDoc } from 'codplay'
-import { POSITION_NAMESPACE } from './constants'
+import type { PersoDoc, StoryDoc } from 'codplay'
+import { POSITION_NAMESPACE, POSITION_STORY_SIX_ID } from './constants'
 import { createViewRoot } from './carousel'
 import { createPositionMoveData } from './shared'
 import type { StoryAnimationOccurrence } from './types'
@@ -78,8 +78,8 @@ const CONCLUSION_TRANSFERS: readonly ConclusionTransfer[] = [
   },
 ]
 
-/** Creates the final conclusion view with several simultaneous item paths. */
-export function createStorySix(): readonly PersoDoc[] {
+/** Creates story 6, the final conclusion with several simultaneous item paths. */
+export function createStorySix(): StoryDoc {
   const view = createViewRoot(5, `
     <section class="position-view__frame position-view__frame--conclusion">
       <div class="position-conclusion-network">
@@ -138,7 +138,10 @@ export function createStorySix(): readonly PersoDoc[] {
       actions: actionsByItem.get(itemId) ?? {},
     })
   }
-  return [view, ...items]
+  return {
+    id: POSITION_STORY_SIX_ID,
+    persos: [view, ...items],
+  }
 }
 
 /** Schedules the eight two-second reparentings of the conclusion network. */

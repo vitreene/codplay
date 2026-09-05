@@ -1,5 +1,8 @@
-import type { PersoDoc } from 'codplay'
-import { POSITION_VIEW_FIVE_ITEM_MOVE_EVENT } from './constants'
+import type { PersoDoc, StoryDoc } from 'codplay'
+import {
+  POSITION_STORY_FIVE_ID,
+  POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
+} from './constants'
 import { createViewRoot } from './carousel'
 import { createCircularArcPath, createPositionMoveData } from './shared'
 import type { AnchorRole, StoryAnimationOccurrence } from './types'
@@ -9,8 +12,8 @@ const TARGET_MOUNT_TARGET = 'position:view-five:target:mount'
 const SOURCE_ITEM_TARGET = 'position:view-five:source:item'
 const TARGET_ITEM_TARGET = 'position:view-five:target:item'
 
-/** Creates the fifth lesson with one item crossing nested source/target parents. */
-export function createStoryFive(): readonly PersoDoc[] {
+/** Creates story 5 with one item crossing nested source/target parents. */
+export function createStoryFive(): StoryDoc {
   const view = createViewRoot(4, `
     <section class="position-view__frame position-view__frame--lesson">
       <div class="position-nested-stage">
@@ -30,23 +33,26 @@ export function createStoryFive(): readonly PersoDoc[] {
       </div>
     </section>
   `)
-  return [
-    view,
-    createNestedParent('source'),
-    createNestedParent('target'),
-    {
-      id: 'position-view-five-item',
-      type: 'tag',
-      initial: {
-        tag: 'span',
-        content: 'item',
-        className: 'position-item position-item--rose',
-        move: { target: SOURCE_ITEM_TARGET },
+  return {
+    id: POSITION_STORY_FIVE_ID,
+    persos: [
+      view,
+      createNestedParent('source'),
+      createNestedParent('target'),
+      {
+        id: 'position-view-five-item',
+        type: 'tag',
+        initial: {
+          tag: 'span',
+          content: 'item',
+          className: 'position-item position-item--rose',
+          move: { target: SOURCE_ITEM_TARGET },
+        },
+        // Nested source-to-target reparent; the event data carries the move.
+        actions: { [POSITION_VIEW_FIVE_ITEM_MOVE_EVENT]: true },
       },
-      // Nested source-to-target reparent; the event data carries the move.
-      actions: { [POSITION_VIEW_FIVE_ITEM_MOVE_EVENT]: true },
-    },
-  ]
+    ],
+  }
 }
 
 /** Creates one nested parent layout for the fifth lesson. */

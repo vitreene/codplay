@@ -46,7 +46,9 @@ temps absolu `t`.
 - `ItemMotionTrack` contient les segments chronologiques d'un élément ;
 - `MotionAttachment` décrit le parent, la cible, la pose locale, le contexte de
   positions FIRST/LAST de l'item et de ses ancêtres, ainsi qu'un fallback vers
-  la racine uniquement si ce contexte est réellement absent ;
+  la racine uniquement si ce contexte est réellement absent. Il conserve aussi
+  le repère local capturé lorsque plusieurs conteneurs HTML ont des moves
+  simultanés ;
 - `MotionGraph.presentationItemIds` liste uniquement les éléments qui possèdent
   une trajectoire à présenter ;
 - `PresentationFrame` contient la pose et la représentation demandées pour ces
@@ -100,6 +102,13 @@ que la scène et les valeurs courantes viennent du pipeline canonique.
 permet de retrouver le conteneur DOM de présentation au moment du commit. Il ne
 transporte aucune référence DOM dans le graphe de mouvement et n'ajoute aucun
 contrat auteur.
+
+Chaque `LayoutItemSnapshot` et chaque attachement conservent, lorsque le runner
+le fournit, la clé et la pose du conteneur local de l'item. Cette donnée ne
+change ni le calcul FIRST/LAST ni le ciblage des events : elle empêche seulement
+le présentateur HTML de projeter deux items actifs dans le même overlay lorsque
+leurs conteneurs sont distincts. Le graphe reste unique et la frame reste
+résolue sans lecture du DOM.
 
 La préparation du graphe est terminée avant la première présentation. Elle
 enregistre d'abord tous les propriétaires de trajectoire, y compris ceux qui

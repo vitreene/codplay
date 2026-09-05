@@ -12,6 +12,8 @@
 ## Implementation process
 
 - Ask the user questions when implementation certainty is below 95%.
+- Before any analysis or modification, reread the applicable specifications and contracts in the repository; do not rely on conversation summaries or assumptions.
+- Do not add a rule to a specification merely to record this working instruction or to compensate for not having reread it. Update specifications only when the contract or decision itself has been explicitly agreed and documenting that change is part of the task.
 - Respect established specs strictly. Do not patch behavior opportunistically when the implementation diverges from the spec.
 - If a gap, ambiguity, or design failure is discovered, stop and discuss how to enrich or correct the spec before changing the implementation.
 - Demos exist to validate the project and reveal missing pieces; they must not hide gaps or be made to work at all costs.
