@@ -94,6 +94,24 @@ function motionSceneDoc(): SceneDoc {
   }
 }
 
+/** Declares the same move without a compiled eventime for live-discovery coverage. */
+function liveMotionSceneDoc(): SceneDoc {
+  const scene = motionSceneDoc()
+  const story = scene.stories.main
+  if (story === undefined) throw new Error('Live motion test story is missing.')
+  return {
+    ...scene,
+    id: 'facade-live-motion-scene',
+    eventimes: [{ name: 'sequence:end', startAt: 1_000 }],
+    stories: {
+      main: {
+        ...story,
+        eventimes: [],
+      },
+    },
+  }
+}
+
 /** Creates a scheduler spy that remains behind the public CodPlay boundary. */
 function createManualFrameScheduler(): CodPlayFrameScheduler & {
   requestCount: () => number
@@ -369,11 +387,48 @@ describe('CodPlay facade', () => {
 
     await instance.telco.seek(150)
 
-    expect(root.querySelector('[data-codplay-motion-overlay]')).not.toBeNull()
+    const overlay = root.querySelector('[data-codplay-motion-overlay]')
+    expect(overlay).not.toBeNull()
     expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
+    expect(overlay?.parentElement).toBe(root.querySelector('section'))
     const presentation = instance.presentation.get()
     expect(presentation?.timeMs).toBe(150)
     expect(presentation?.items.find((item) => item.itemId === 'main:item')).toBeDefined()
+    codplay.destroy()
+  })
+
+  it('discovers a move carried by an eventime appended after initialization', async () => {
+    const codplay = createCodPlay()
+    const build = codplay.build({ scene: liveMotionSceneDoc() })
+
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const root = document.createElement('div')
+    const instance = codplay.instances.create({
+      instanceId: 'live-motion-instance',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    expect(root.querySelector('[data-codplay-motion-overlay]')).toBeNull()
+    await instance.events.emit(
+      { name: 'unrelated:event', visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    expect(root.querySelector('[data-codplay-motion-overlay]')).toBeNull()
+    await instance.events.emit(
+      { name: 'transfer', visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(1)
+
+    const overlay = root.querySelector('[data-codplay-motion-overlay]')
+    expect(overlay).not.toBeNull()
+    expect(root.querySelector('[data-codplay-motion-item="main:item"]')).not.toBeNull()
+    expect(overlay?.parentElement).toBe(root.querySelector('section'))
     codplay.destroy()
   })
 

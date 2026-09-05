@@ -32,6 +32,9 @@ import type {
   OverlayRevisionResolver,
 } from './motion-presentation'
 
+/** Resolves the DOM container recorded by one HTML layout snapshot. */
+type HtmlMotionRootResolver = (rootKey: string | undefined) => Element | undefined
+
 /** Commits one complete motion frame without owning temporal state. */
 export class HtmlMotionPresentationHost {
   private readonly resources = new Map<string, OverlayResource>()
@@ -47,14 +50,23 @@ export class HtmlMotionPresentationHost {
   private hiddenDescendantKey = ''
   private readonly root: Element
   private readonly resolveHandle: (itemId: string) => HTMLElement | undefined
+  private readonly resolveMotionRoot: HtmlMotionRootResolver
   private readonly transientStyles: HtmlMotionStyleLayer
   private overlayLayer: HTMLElement | undefined
+  private motionRoot: Element
+  private motionRootKey: string | undefined
   private elementPathCache = new WeakMap<HTMLElement, WeakMap<HTMLElement, readonly number[] | undefined>>()
 
   /** Creates one item-indexed overlay resource host. */
-  constructor(root: Element, resolveHandle: (itemId: string) => HTMLElement | undefined) {
+  constructor(
+    root: Element,
+    resolveHandle: (itemId: string) => HTMLElement | undefined,
+    resolveMotionRoot: HtmlMotionRootResolver = () => root,
+  ) {
     this.root = root
     this.resolveHandle = resolveHandle
+    this.resolveMotionRoot = resolveMotionRoot
+    this.motionRoot = root
     this.transientStyles = createHtmlMotionStyleLayer(root)
   }
 
@@ -97,8 +109,10 @@ export class HtmlMotionPresentationHost {
     this.clearHiddenDescendantClones()
     this.overlayOrder = []
     this.hiddenDescendantKey = ''
-    removeElement(this.overlayLayer ?? findOverlayLayer(this.root))
+    removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
     this.overlayLayer = undefined
+    this.motionRoot = this.root
+    this.motionRootKey = undefined
     this.clearElementPathCache()
   }
 
@@ -108,7 +122,9 @@ export class HtmlMotionPresentationHost {
     resolveRevision?: OverlayRevisionResolver,
     naturalLayout?: LayoutSnapshot,
   ): void {
-    if (!isMeasurableHtmlElement(this.root)) return
+    const motionRoot = this.resolveMotionRoot(naturalLayout?.rootKey) ?? this.root
+    this.selectMotionRoot(motionRoot, naturalLayout?.rootKey)
+    if (!isMeasurableHtmlElement(this.motionRoot)) return
     const directOverlayItemIds = new Set([...frame.items.values()]
       .filter((item) => item.representation === 'reparent')
       .map((item) => item.itemId))
@@ -151,7 +167,7 @@ export class HtmlMotionPresentationHost {
     }
 
     if (activeItemIds.size === 0) {
-      removeElement(this.overlayLayer ?? findOverlayLayer(this.root))
+      removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
       this.overlayLayer = undefined
       this.overlayOrder = []
       this.hiddenDescendantKey = ''
@@ -408,8 +424,28 @@ export class HtmlMotionPresentationHost {
   /** Returns the one overlay layer owned by this host, creating it only once. */
   private getOverlayLayer(): HTMLElement {
     if (this.overlayLayer !== undefined) return this.overlayLayer
-    this.overlayLayer = ensureHtmlOverlayLayer(this.root)
+    this.overlayLayer = ensureHtmlOverlayLayer(this.motionRoot)
     return this.overlayLayer
+  }
+
+  /** Moves the transient presentation ownership to the snapshot's local root. */
+  private selectMotionRoot(root: Element, rootKey: string | undefined): void {
+    if (this.motionRoot === root && this.motionRootKey === rootKey) return
+
+    this.clearHiddenDescendantClones()
+    for (const target of this.localTargets.values()) this.transientStyles.clearLocal(target)
+    this.localTargets.clear()
+    this.localSizes.clear()
+    this.localTransforms.clear()
+    for (const resource of this.resources.values()) this.release(resource)
+    this.resources.clear()
+    removeElement(this.overlayLayer ?? findOverlayLayer(this.motionRoot))
+    this.overlayLayer = undefined
+    this.overlayOrder = []
+    this.hiddenDescendantKey = ''
+    this.clearElementPathCache()
+    this.motionRoot = root
+    this.motionRootKey = rootKey
   }
 
   /** Reuses one descendant path until an author template changes structurally. */

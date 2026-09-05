@@ -84,10 +84,10 @@ Les deux utilisent les mêmes `MotionBoundary` et le même graphe. Ainsi, un
 la frontière logique persistée sans conserver une branche spéciale de capture.
 
 Le planning est compilé à l'initialisation du journal visible, après une capture
-live terminée et après un resize. Il contient les transitions `move.transition`
-et les transitions d'action qui produisent une pose géométrique. La géométrie
-naturelle est capturée aux frontières FIRST/LAST correspondantes ou après une
-invalidation structurelle explicite, puis conservée comme donnée.
+live terminée et après un resize. Un append live réveille le runner ; si le
+planning contient alors un nouvel intent issu de `move`, la géométrie naturelle
+est recapturée aux frontières FIRST/LAST correspondantes et conservée comme
+donnée. Un append sans `move` ne reconstruit pas le graphe.
 
 Pour chaque frontière, la capture présente successivement les scènes résolues
 par le player aux points `before`, `afterStart`, aux fins intermédiaires de
@@ -95,6 +95,11 @@ propriétés et à `after`, sur le même DOM auteur. Elle mesure alors ces état
 ne conserve que leurs poses. Le planning HTML ne relit pas une transition CSS
 parallèle : le résolveur d'action ne fournit que les temps à capturer, tandis
 que la scène et les valeurs courantes viennent du pipeline canonique.
+
+`LayoutSnapshot.rootKey` est un identifiant opaque, local au runner HTML, qui
+permet de retrouver le conteneur DOM de présentation au moment du commit. Il ne
+transporte aucune référence DOM dans le graphe de mouvement et n'ajoute aucun
+contrat auteur.
 
 La préparation du graphe est terminée avant la première présentation. Elle
 enregistre d'abord tous les propriétaires de trajectoire, y compris ceux qui

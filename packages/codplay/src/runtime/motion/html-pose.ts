@@ -358,10 +358,10 @@ function readComputedStyle(node: Element, context: HtmlPoseCaptureContext): CSSS
 }
 
 /** Creates the overlay layer scoped to one motion presentation root. */
-export function ensureHtmlOverlayLayer(sceneRoot: Element): HTMLElement {
-  const existing = Array.from(sceneRoot.children).find((child) => child.getAttribute('data-codplay-motion-overlay') !== null)
+export function ensureHtmlOverlayLayer(motionRoot: Element): HTMLElement {
+  const existing = Array.from(motionRoot.children).find((child) => child.getAttribute('data-codplay-motion-overlay') !== null)
   if (existing instanceof HTMLElement) return existing
-  const layer = sceneRoot.ownerDocument.createElement('div')
+  const layer = motionRoot.ownerDocument.createElement('div')
   layer.setAttribute('data-codplay-motion-overlay', '')
   layer.style.position = 'absolute'
   layer.style.left = '0'
@@ -370,6 +370,6 @@ export function ensureHtmlOverlayLayer(sceneRoot: Element): HTMLElement {
   layer.style.height = '100%'
   layer.style.pointerEvents = 'none'
   layer.style.zIndex = '20'
-  sceneRoot.appendChild(layer)
+  motionRoot.appendChild(layer)
   return layer
 }

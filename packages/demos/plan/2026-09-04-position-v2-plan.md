@@ -110,9 +110,10 @@ imbriqués sont montrés dans six vues réunies par un carousel.
 
 - Story 2 : les deux conteneurs sont montés dans la même grille que la story 1
   et conservent ses dimensions de carte. Le `move` de l'item change bien
-  d'outlet et porte `flipMode: 'overlay-world'` afin que le reparenting soit
-  présenté par l'overlay pendant les `2 000 ms` de transition. L'amplitude des
-  ancres est limitée à `2` unités numériques CodPlay au lieu de `32`.
+  d'outlet et porte `flipMode: 'overlay-world'` pour demander à CodPlay une
+  présentation par overlay pendant les `2 000 ms` de transition. Le mouvement
+  vertical des ancres utilise le canal `translateY`, comme les tweens ordinaires
+  des autres démos V2, avec une amplitude de `50` unités numériques CodPlay.
 - Validation ciblée : le test façade vérifie le payload `move`, le changement
   d'outlet avant/après la transition et la présence des deux conteneurs dans la
   grille de la story 2. La vérification visuelle de l'overlay reste à faire

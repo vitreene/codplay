@@ -57,6 +57,16 @@ describe('position V2 demo', () => {
     const build = codplay.build({ scene: createScene() })
     expect(build.ok).toBe(true)
     if (!build.ok) return
+    const storyTwoSource = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-two-source')
+    const storyTwoTarget = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-two-target')
+    expect(storyTwoSource?.actions['position:demo:view:2:source:shift']).toMatchObject({
+      style: { translateY: { from: 0, to: 50, duration: 3_650 } },
+    })
+    expect(storyTwoTarget?.actions['position:demo:view:2:target:shift']).toMatchObject({
+      style: { translateY: { from: 0, to: -50, duration: 3_650 } },
+    })
+    expect(storyTwoSource?.actions['position:demo:view:2:source:shift']).not.toHaveProperty('style.y')
+    expect(storyTwoTarget?.actions['position:demo:view:2:target:shift']).not.toHaveProperty('style.y')
     const firstItem = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-one-item')
     const liveItem = build.compiledScene.scene.stories.main?.persos.find((perso) => perso.id === 'position-view-four-item')
     expect(firstItem?.actions['position:demo:view:1:move']).toMatchObject({
@@ -77,12 +87,12 @@ describe('position V2 demo', () => {
     const trace: Array<{ name: string; timeMs: number; data?: Readonly<Record<string, unknown>> }> = []
     const stopTrace = instance.diagnostic.onTrace((event) => trace.push({ name: event.name, timeMs: event.timeMs, data: event.data }))
 
-    codplay.engine.advance(0)
+    codplay.engine.advance(6_000)
     await instance.telco.play()
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
 
-    codplay.engine.advance(6_000)
+    codplay.engine.advance(0)
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
 

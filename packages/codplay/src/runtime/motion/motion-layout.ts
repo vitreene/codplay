@@ -32,6 +32,7 @@ export function buildNaturalLayoutTimeline(
   const directMotionItemIds = new Set(boundaries.flatMap((boundary) => boundary.intents.map((intent) => intent.itemId)))
   const currentItems = new Map<string, LayoutItemSnapshot>()
   let currentRootPose = createMotionRootPose()
+  let currentRootKey: string | undefined
   let currentRevision = 'empty'
 
   for (const event of events) {
@@ -51,6 +52,7 @@ export function buildNaturalLayoutTimeline(
         event.boundary.before.timeMs,
         event.boundary.before.revision,
         event.boundary.before.rootPose ?? currentRootPose,
+        event.boundary.before.rootKey ?? currentRootKey,
         currentItems,
       ))
       applyCommittedBoundaryStartSnapshot(event.boundary, currentItems, boundaryItemIds)
@@ -66,12 +68,13 @@ export function buildNaturalLayoutTimeline(
       )
     }
     if (event.snapshot.rootPose !== undefined) currentRootPose = event.snapshot.rootPose
+    if (event.snapshot.rootKey !== undefined) currentRootKey = event.snapshot.rootKey
     currentRevision = event.snapshot.revision
 
     const startAt = entries.length === 0 ? Number.NEGATIVE_INFINITY : event.timeMs
     entries.push({
       startAt,
-      snapshot: createSnapshot(event.timeMs, currentRevision, currentRootPose, currentItems),
+      snapshot: createSnapshot(event.timeMs, currentRevision, currentRootPose, currentRootKey, currentItems),
     })
   }
 
@@ -215,7 +218,7 @@ export function resolveNaturalLayout(
   timeMs: number,
 ): LayoutSnapshot {
   if (timeline.entries.length === 0) {
-    return createSnapshot(timeMs, `${timeMs}:empty`, createMotionRootPose(), new Map())
+    return createSnapshot(timeMs, `${timeMs}:empty`, createMotionRootPose(), undefined, new Map())
   }
 
   let low = 0
@@ -239,7 +242,7 @@ export function resolveNaturalLayoutBefore(
     if (boundarySnapshot !== undefined) return boundarySnapshot
   }
   if (timeline.entries.length === 0) {
-    return createSnapshot(timeMs, `${timeMs}:empty`, createMotionRootPose(), new Map())
+    return createSnapshot(timeMs, `${timeMs}:empty`, createMotionRootPose(), undefined, new Map())
   }
 
   let low = 0
@@ -294,12 +297,14 @@ function createSnapshot(
   timeMs: number,
   revision: string,
   rootPose: LayoutSnapshot['rootPose'],
+  rootKey: LayoutSnapshot['rootKey'],
   items: ReadonlyMap<string, LayoutItemSnapshot>,
 ): LayoutSnapshot {
   return Object.freeze({
     timeMs,
     revision: `${revision}:${timeMs}`,
     rootPose,
+    ...(rootKey === undefined ? {} : { rootKey }),
     items: new Map(items),
   })
 }

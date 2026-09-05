@@ -175,6 +175,7 @@ export class RuntimePlayer {
   private readonly diagnosticOutput: DiagnosticOutput | undefined
   private readonly publicEventListener: ((event: RuntimeTrackEvent) => void) | undefined
   private readonly traceEventListener: ((event: RuntimeTrackEvent) => void) | undefined
+  private readonly journalChangeListener: (() => void) | undefined
   private readonly idleMonitor: RuntimeIdleMonitor
   private readonly observedPublicEventIds = new Set<string>()
   private readonly transportListeners = new Set<() => void>()
@@ -197,6 +198,7 @@ export class RuntimePlayer {
     publicEventListener?: (event: RuntimeTrackEvent) => void,
     idle?: RuntimeIdleOptions,
     traceEventListener?: (event: RuntimeTrackEvent) => void,
+    journalChangeListener?: () => void,
   ) {
     this.id = id
     this.engine = engine
@@ -213,6 +215,7 @@ export class RuntimePlayer {
     this.diagnosticOutput = diagnosticOutput
     this.publicEventListener = publicEventListener
     this.traceEventListener = traceEventListener
+    this.journalChangeListener = journalChangeListener
     this.idleMonitor = new RuntimeIdleMonitor(
       idle === undefined ? engine.getIdleOptions() : resolveRuntimeIdleOptions(idle),
     )
@@ -614,6 +617,7 @@ export class RuntimePlayer {
       this.synchronizeStateStore(this.currentTimeMs, false)
     }
     this.notifyTraceEvents(appended.data.events)
+    this.journalChangeListener?.()
     return appended.data
   }
 

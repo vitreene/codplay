@@ -50,10 +50,12 @@ conserve jamais un arbre DOM historique et ne rejoue pas une branche spéciale
 de capture.
 
 Le planning de mouvement est compilé à l'initialisation du journal visible,
-après une capture live terminée et après un resize. Il contient les transitions
-`move.transition` et les transitions d'action qui modifient une pose. La boucle
-de frame résout le graphe conservé et l'état de présentation du materializer ;
-elle ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
+après une capture live terminée et après un resize. Si un eventime est ensuite
+ajouté au journal, le raccord interne du player réveille le runner ; celui-ci
+compare les intents issus de `move`, recapture uniquement lorsqu'un nouvel
+intent existe, puis remplace les frontières du même graphe. La boucle de frame
+résout alors le graphe conservé et l'état de présentation du materializer ; elle
+ne relit pas la géométrie du DOM et ne reconstruit pas le planning à chaque
 frame.
 
 ## Organisation interne
@@ -87,7 +89,12 @@ Le runner ne construit pas un second arbre HTML pour le FLIP. Lorsqu'un
 4. conserve uniquement les instantanés numériques immuables.
 
 Les overlays existants restent en dehors de la mise en page normale et sont
-réutilisés. Ils ne servent pas d'arbre de mesure. « Jouer » un point de capture
+réutilisés. Pour une frontière HTML, le runner résout le plus petit ancêtre DOM
+commun aux éléments source/cible et capture ce conteneur comme repère local ; la
+couche `[data-codplay-motion-overlay]` est son enfant direct. Elle reste donc
+au-dessus des items de ce conteneur et est masquée avec lui, sans devenir un
+enfant du `sceneSlot` ou des contrôles voisins. Les overlays ne servent pas
+d'arbre de mesure. « Jouer » un point de capture
 signifie ici résoudre et matérialiser l'état de la scène ; cela n'appelle pas
 `play()`, ne joue pas les médias, ne recharge pas les sources et ne détruit pas
 les composants. Le reset est synchrone : aucun frame du navigateur ne
@@ -218,7 +225,7 @@ source change.
 ### Mode reparent
 
 Le mode `reparent` masque le nœud auteur et crée une représentation indexée dans
-l'overlay racine. Il est obligatoire lorsque la cible ou le parent logique
+l'overlay local du conteneur capturé. Il est obligatoire lorsque la cible ou le parent logique
 change, notamment lors d'un transfert entre deux listes. `flipMode:
 'overlay-world'` peut aussi le demander explicitement.
 
@@ -229,14 +236,17 @@ ancêtre overlay reçoit ses slots dans le ghost de cet ancêtre et ne possède 
 de ressource indépendante. Seul un descendant ayant lui-même une représentation
 `reparent` reçoit un ghost séparé.
 
-La matrice inverse de la racine est calculée une fois par frame de présentation
-et réutilisée. Les dimensions d'un ghost stable ne sont écrites que lorsqu'elles
-changent ; la matrice de pose reste la seule écriture par frame.
+La matrice inverse du conteneur local est calculée une fois par frame de
+présentation et réutilisée. Les dimensions d'un ghost stable ne sont écrites que
+lorsqu'elles changent ; la matrice de pose reste la seule écriture par frame.
 
 ## Cycle de vie
 
 - `init()` initialise les composants visibles, capture les frontières seulement
   lorsqu'un mouvement existe, puis construit le graphe immuable ;
+- l'ajout live d'un eventime ne modifie pas la scène compilée : le journal
+  signale sa nouvelle révision, le runner vérifie la présence d'un `move`, et le
+  même cœur de capture reconstruit les frontières avant la prochaine frame ;
 - `play()` et `seek(t)` présentent le graphe à un temps logique absolu ;
 - `resize()` prépare la géométrie naturelle, invalide les captures, reconstruit
   le graphe et réapplique la frame courante sans recréer les overlays stables ;

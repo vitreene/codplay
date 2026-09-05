@@ -21,6 +21,7 @@ export function captureHtmlLayoutSnapshot(
   nodes: ReadonlyMap<string, unknown>,
   scene: SolvedScene,
   selection?: ReadonlySet<string>,
+  rootKey?: string,
 ): LayoutSnapshot {
   if (!isMeasurableHtmlElement(root)) return emptySnapshot(scene)
   const captureContext = createHtmlPoseCaptureContext()
@@ -47,7 +48,13 @@ export function captureHtmlLayoutSnapshot(
     item.localPose.width,
     item.localPose.height,
   ]))}`
-  return Object.freeze({ timeMs: scene.timeMs, revision, rootPose: hostRootPose, items })
+  return Object.freeze({
+    timeMs: scene.timeMs,
+    revision,
+    rootPose: hostRootPose,
+    ...(rootKey === undefined ? {} : { rootKey }),
+    items,
+  })
 
   /** Captures parents before children so every local relation uses one snapshot. */
   function visit(itemId: string): void {

@@ -17,6 +17,10 @@ import { buildSolvedGraph, type SolvedPerso, type SolvedScene } from '../player'
 import { resolveStyleTweenTiming, type StyleTweenTiming } from '../player/pipeline'
 import { isPlainRecord } from '../../shared'
 import type { CompiledRecord } from '../../scene/compiled'
+import type {
+  HtmlMotionContainerResolution,
+  HtmlMotionContainerSceneInput,
+} from './motion-container'
 
 const HTML_LAYOUT_PROPERTIES = new Set([
   'position',
@@ -65,8 +69,9 @@ export function captureCurrentHtmlMotionLayout(
   nodes: ReadonlyMap<string, unknown>,
   scene: SolvedScene,
   itemIds: ReadonlySet<string>,
+  rootKey?: string,
 ): LayoutSnapshot {
-  return captureHtmlLayoutSnapshot(root, nodes, scene, itemIds)
+  return captureHtmlLayoutSnapshot(root, nodes, scene, itemIds, rootKey)
 }
 
 /** Resolves one HTML action transition that contributes to a geometric pose. */
@@ -105,6 +110,7 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   nodes: ReadonlyMap<string, unknown>
   intents: readonly ScheduledMotionIntent[]
   includePersistOnly: boolean
+  resolveMotionContainer?: (input: HtmlMotionContainerSceneInput) => HtmlMotionContainerResolution
 }>): readonly MotionBoundary[] {
   const currentScene = input.player.getSolvedScene()
   if (currentScene === undefined || input.intents.length === 0) return []
@@ -140,16 +146,23 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
           : collectBoundarySelection(beforeScene, afterStartScene, group.intents),
         ...keyScenes.map(({ scene }) => collectBoundarySelection(beforeScene, scene, group.intents)),
       )
+      const motionContainer = input.resolveMotionContainer?.({
+        root: input.root,
+        scenes: [beforeScene, ...(afterStartScene === undefined ? [] : [afterStartScene]), afterScene],
+        itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
+      })
+      const captureRoot = motionContainer?.element ?? input.root
+      const rootKey = motionContainer?.key
 
       input.player.presentSceneForGeometryCapture(beforeScene)
-      let before = captureCurrentHtmlMotionLayout(input.root, input.nodes, beforeScene, selection)
+      let before = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, beforeScene, selection, rootKey)
       const afterStart = afterStartScene === undefined
         ? undefined
-        : captureStartLayout(afterStartScene, selection)
+        : captureStartLayout(afterStartScene, selection, captureRoot, rootKey)
       const keyframes: LayoutSnapshot[] = []
       for (const { scene } of keyScenes) {
         input.player.presentSceneForGeometryCapture(scene)
-        keyframes.push(captureCurrentHtmlMotionLayout(input.root, input.nodes, scene, selection))
+        keyframes.push(captureCurrentHtmlMotionLayout(captureRoot, input.nodes, scene, selection, rootKey))
       }
       input.player.presentSceneForGeometryCapture(afterScene)
       const missingSourceItemIds = group.structural
@@ -162,12 +175,12 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
           // LAST-mounted ancestors on the same persistent author nodes. It
           // creates no analysis DOM and is restored before LAST is captured.
           input.player.presentSceneForGeometryCapture(sourceScene)
-          const source = captureCurrentHtmlMotionLayout(input.root, input.nodes, sourceScene, selection)
+          const source = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, sourceScene, selection, rootKey)
           before = mergeLayoutSnapshots(before, source, missingSourceItemIds)
           input.player.presentSceneForGeometryCapture(afterScene)
         }
       }
-      const after = captureCurrentHtmlMotionLayout(input.root, input.nodes, afterScene, selection)
+      const after = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, afterScene, selection, rootKey)
       const intents = group.intents.map(toMotionIntent)
       boundaries.push(Object.freeze({
         id: `boundary:${group.startAt}:${group.endAt}:${intents.map((intent) => intent.id).join(',')}`,
@@ -191,9 +204,11 @@ export function captureHtmlMotionBoundaries(input: Readonly<{
   function captureStartLayout(
     scene: SolvedScene,
     selection: ReadonlySet<string>,
+    root: Element,
+    rootKey: string | undefined,
   ): LayoutSnapshot {
     input.player.presentSceneForGeometryCapture(scene)
-    return captureCurrentHtmlMotionLayout(input.root, input.nodes, scene, selection)
+    return captureCurrentHtmlMotionLayout(root, input.nodes, scene, selection, rootKey)
   }
 }
 
@@ -227,17 +242,26 @@ export function captureHtmlLiveMotionBoundary(input: Readonly<{
   nodes: ReadonlyMap<string, unknown>
   first: LayoutSnapshot
   intents: readonly ScheduledMotionIntent[]
+  resolveMotionContainer?: (input: HtmlMotionContainerSceneInput) => HtmlMotionContainerResolution
 }>): readonly MotionBoundary[] {
   const afterScene = input.player.getSolvedScene()
   if (afterScene === undefined || input.intents.length === 0) return []
   const boundaries: MotionBoundary[] = []
   for (const group of groupMotionIntents(input.intents)) {
+    const beforeScene = input.player.resolveSceneBeforeBoundary(group.startAt, false)
+    const motionContainer = input.resolveMotionContainer?.({
+      root: input.root,
+      scenes: [beforeScene, afterScene],
+      itemIds: [...new Set(group.intents.map((intent) => intent.itemId))],
+    })
+    const captureRoot = motionContainer?.element ?? input.root
+    const rootKey = motionContainer?.key ?? input.first.rootKey
     const selection = collectBoundarySelection(
-      input.player.resolveSceneBeforeBoundary(group.startAt, false),
+      beforeScene,
       afterScene,
       group.intents,
     )
-    const after = captureCurrentHtmlMotionLayout(input.root, input.nodes, afterScene, selection)
+    const after = captureCurrentHtmlMotionLayout(captureRoot, input.nodes, afterScene, selection, rootKey)
     const intents = group.intents.map(toMotionIntent)
     boundaries.push(Object.freeze({
       id: `boundary:live:${group.startAt}:${group.endAt}:${intents.map((intent) => intent.id).join(',')}`,

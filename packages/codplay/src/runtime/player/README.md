@@ -93,6 +93,13 @@ pendant la fermeture courante ; une reconstruction ultérieure peut l'inclure.
 `actionTargetIndex` produit par le builder. Les références directes sont
 préparées à la construction ; une action live ne fait que lire cet index.
 
+Après l'ajout d'un eventime au journal, le player appelle un raccord interne du
+runner. Ce raccord ne mesure rien et n'ajoute aucune API publique : le runner
+recompile le planning et ne recapture que si les données de l'eventime
+introduisent effectivement un `move`. Ainsi, un eventime sans `move` ne crée pas
+de graphe, tandis qu'un `move` ajouté après `init()` suit le même chemin de
+capture que `resize()` et reste disponible pour Play, Seek et replay.
+
 ## Actions temporelles
 
 `ActionSequence` est développé pendant `materialize` en actions directes

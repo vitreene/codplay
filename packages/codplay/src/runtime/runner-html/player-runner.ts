@@ -2,7 +2,7 @@ import { RuntimeEngine, type Ticker } from '../engine'
 import { TimeTicker } from '../time'
 import { RuntimeComponentRuntime } from '../components'
 import { RuntimeCapabilityCatalog } from '../catalog'
-import type { RuntimeMaterializer } from '../materializer'
+import type { RuntimeMaterializer, RuntimeMaterializerSceneContext } from '../materializer'
 import {
   PLAYER_LIFECYCLE_PLAYING,
   RuntimePlayer,
@@ -12,6 +12,7 @@ import {
   type RuntimeEventDispatchResult,
   type RuntimeEventInput,
   type StrapCollections,
+  type SolvedScene,
 } from '../player'
 import { HtmlPointerCaptureSourceAdapter } from '../capture'
 import type { RuntimeCaptureState } from '../capture'
@@ -33,6 +34,7 @@ import {
   captureHtmlMotionBoundaries,
   resolveHtmlMotionActionTransition,
 } from './motion-capture'
+import { HtmlMotionContainerResolver } from './motion-container'
 import type {
   RuntimePreloadApi,
   RuntimePreloadManifestInput,
@@ -134,12 +136,20 @@ export class HtmlPlayerRunner {
   private motionSystem: HtmlMotionSystem | undefined = undefined
   private replayMotionBoundaries: readonly MotionBoundary[] = []
   private presentationMotionBoundaries: readonly MotionBoundary[] = []
-  private readonly liveFirstLayouts = new Map<string, { timeMs: number; snapshot: LayoutSnapshot }>()
+  private motionJournalRevision = -1
+  private motionDiscoveryEnabled = false
+  private rebuildingMotion = false
+  private readonly liveFirstLayouts = new Map<string, {
+    timeMs: number
+    snapshot: LayoutSnapshot
+    before: SolvedScene
+  }>()
   private readonly captureSourceAdapter: HtmlPointerCaptureSourceAdapter
   private readonly emitSourceAdapter: HtmlPersoEmitSourceAdapter
   private readonly materializerContext: HtmlMaterializerRuntimeContext
   private readonly interactionLockEnabled: boolean
   private readonly interactionRoot: HTMLElement
+  private readonly motionContainerResolver: HtmlMotionContainerResolver
   private readonly initialPointerEvents: string
   private readonly initialInert: boolean
   private materializationEpoch = 0
@@ -151,6 +161,11 @@ export class HtmlPlayerRunner {
   constructor(options: HtmlPlayerRunnerOptions) {
     this.defaultTicker = options.ticker
     this.interactionRoot = options.root
+    this.motionContainerResolver = new HtmlMotionContainerResolver(
+      options.root,
+      this.nodes.persoNodes,
+      this.nodes.targetNodes,
+    )
     this.interactionLockEnabled = options.enableInteractionLock === true
     this.initialPointerEvents = options.root.style.pointerEvents
     this.initialInert = options.root.hasAttribute('inert')
@@ -180,7 +195,7 @@ export class HtmlPlayerRunner {
     const componentMaterializer = new HtmlComponentMaterializer(this.nodes, this.materializerContext)
     const materializer = new MotionMaterializer(
       componentMaterializer,
-      (timeMs) => this.presentMotion(timeMs),
+      (scene, context) => this.presentMotion(scene, context),
     )
     const componentRuntime = createComponentRuntime(
       options.catalog,
@@ -203,6 +218,7 @@ export class HtmlPlayerRunner {
       options.onPublicEvent,
       options.idle,
       options.onTrace,
+      () => this.rebuildMotionBoundaries(),
     )
     this.stopTerminalObservation = this.player.subscribeTransport(() => {
       if (this.ownsEngine && this.player.hasSequenceEnded()) this.engine.pause()
@@ -237,54 +253,22 @@ export class HtmlPlayerRunner {
       onDiagnostic: options.onEmitDiagnostic,
     })
 
-    const compiledIntents = compileMotionSchedule(options.compiledScene, undefined, {
-      resolveActionTransition: resolveHtmlMotionActionTransition,
-    })
-    if (compiledIntents.length === 0) {
-      this.motionSystem = undefined
-      return
-    }
-    this.motionSystem = this.createMotionSystem()
   }
 
   /** Initializes the visible player and captures motion boundaries when required. */
   init(): PlayerInitResult {
     const visible = this.player.init()
     if (!visible.ok) return visible
-    if (this.motionSystem === undefined) {
-      this.syncInteractionLock()
-      this.captureSourceAdapter.attach()
-      this.emitSourceAdapter.attach()
-      return visible
-    }
+    this.motionDiscoveryEnabled = true
     try {
-      this.motionSystem.prepareGeometryCapture()
-      const intents = compileMotionSchedule(
-        this.player.compiledScene,
-        this.player.trackJournal,
-        {
-          includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-          resolveActionTransition: resolveHtmlMotionActionTransition,
-        },
-      )
-      const boundaries = captureHtmlMotionBoundaries({
-        player: this.player,
-        root: this.interactionRoot,
-        nodes: this.nodes.persoNodes,
-        intents,
-        includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-      })
-      this.replayMotionBoundaries = boundaries
-      this.presentationMotionBoundaries = boundaries
-      this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
-      this.motionSystem.initialize()
-      this.presentMotion(this.player.getCurrentTimeMs())
+      this.rebuildMotionBoundaries(true)
+      this.motionSystem?.present(this.player.getCurrentTimeMs())
       this.syncInteractionLock()
       this.captureSourceAdapter.attach()
       this.emitSourceAdapter.attach()
       return visible
     } catch (error) {
-      this.motionSystem.destroy()
+      this.motionSystem?.destroy()
       this.player.destroy()
       return {
         ok: false,
@@ -388,47 +372,11 @@ export class HtmlPlayerRunner {
   resize(numericLengthScale?: number): void {
     if (numericLengthScale !== undefined) this.materializerContext.numericLengthScale = numericLengthScale
     this.materializationEpoch += 1
-    if (this.motionSystem !== undefined && this.player.getSolvedScene() !== undefined) {
-      this.motionSystem.prepareGeometryCapture()
-      try {
-        const replayIntents = compileMotionSchedule(
-          this.player.compiledScene,
-          this.player.trackJournal,
-          {
-            includePersistOnly: true,
-            resolveActionTransition: resolveHtmlMotionActionTransition,
-          },
-        )
-        this.replayMotionBoundaries = captureHtmlMotionBoundaries({
-          player: this.player,
-          root: this.interactionRoot,
-          nodes: this.nodes.persoNodes,
-          intents: replayIntents,
-          includePersistOnly: true,
-        })
-        const presentationIntents = compileMotionSchedule(
-          this.player.compiledScene,
-          this.player.trackJournal,
-          {
-            includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-            resolveActionTransition: resolveHtmlMotionActionTransition,
-          },
-        )
-        this.presentationMotionBoundaries = captureHtmlMotionBoundaries({
-          player: this.player,
-          root: this.interactionRoot,
-          nodes: this.nodes.persoNodes,
-          intents: presentationIntents,
-          includePersistOnly: this.player.includesPersistOnlyInCurrent(),
-        })
-        this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
-      } finally {
-        this.player.refresh()
-      }
+    if (this.player.getSolvedScene() !== undefined) {
+      this.rebuildMotionBoundaries(true)
+      this.player.refresh()
       return
     }
-    if (this.player.getSolvedScene() !== undefined) this.player.refresh()
-    else this.presentMotion(this.player.getCurrentTimeMs())
   }
 
   /** Returns the current host materialization epoch for diagnostics. */
@@ -481,7 +429,76 @@ export class HtmlPlayerRunner {
       before,
       new Set(Object.keys(before.persos)),
     )
-    this.liveFirstLayouts.set(captureId, { timeMs, snapshot })
+    this.liveFirstLayouts.set(captureId, { timeMs, snapshot, before })
+  }
+
+  /** Rebuilds geometry only after the journal exposes a new effective move. */
+  private rebuildMotionBoundaries(force = false): void {
+    if (!this.motionDiscoveryEnabled && !force) return
+    if (this.rebuildingMotion) return
+
+    const journalRevision = this.player.trackJournal.getRevision()
+    if (!force && journalRevision === this.motionJournalRevision) return
+
+    const replayIntents = compileMotionSchedule(
+      this.player.compiledScene,
+      this.player.trackJournal,
+      {
+        includePersistOnly: true,
+        resolveActionTransition: resolveHtmlMotionActionTransition,
+      },
+    )
+    const presentationIntents = compileMotionSchedule(
+      this.player.compiledScene,
+      this.player.trackJournal,
+      {
+        includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+        resolveActionTransition: resolveHtmlMotionActionTransition,
+      },
+    )
+    if (replayIntents.length === 0 && presentationIntents.length === 0) {
+      this.motionJournalRevision = journalRevision
+      return
+    }
+    if (!force && !hasNewMotionIntent(replayIntents, this.replayMotionBoundaries)) {
+      // Journal revisions also cover non-motion events. They do not invalidate
+      // a captured motion graph when no new move intent was introduced.
+      this.motionJournalRevision = journalRevision
+      return
+    }
+
+    this.rebuildingMotion = true
+    try {
+      this.motionSystem?.prepareGeometryCapture()
+      const replayBoundaries = captureHtmlMotionBoundaries({
+        player: this.player,
+        root: this.interactionRoot,
+        nodes: this.nodes.persoNodes,
+        intents: replayIntents,
+        includePersistOnly: true,
+        resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
+      })
+      const presentationBoundaries = captureHtmlMotionBoundaries({
+        player: this.player,
+        root: this.interactionRoot,
+        nodes: this.nodes.persoNodes,
+        intents: presentationIntents,
+        includePersistOnly: this.player.includesPersistOnlyInCurrent(),
+        resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
+      })
+
+      this.replayMotionBoundaries = replayBoundaries
+      this.presentationMotionBoundaries = presentationBoundaries
+
+      const initialize = this.motionSystem === undefined
+      const motionSystem = this.motionSystem ?? this.createMotionSystem()
+      this.motionSystem = motionSystem
+      motionSystem.setBoundaries(this.presentationMotionBoundaries)
+      if (initialize) motionSystem.initialize()
+      this.motionJournalRevision = journalRevision
+    } finally {
+      this.rebuildingMotion = false
+    }
   }
 
   /** Completes the same graph boundary after the normal capture event circuit. */
@@ -512,6 +529,23 @@ export class HtmlPlayerRunner {
     const liveIntents = currentIntents.filter((intent) => (
       intent.startAt === first.timeMs && !knownIntentIds.has(intent.id)
     ))
+    let firstSnapshot = first.snapshot
+    const currentScene = this.player.getSolvedScene()
+    if (currentScene !== undefined && liveIntents.length > 0) {
+      const liveContainer = this.motionContainerResolver.resolve({
+        root: this.interactionRoot,
+        scenes: [first.before, currentScene],
+        itemIds: [...new Set(liveIntents.map((intent) => intent.itemId))],
+      })
+      this.player.presentSceneForGeometryCapture(first.before)
+      firstSnapshot = captureCurrentHtmlMotionLayout(
+        liveContainer.element,
+        this.nodes.persoNodes,
+        first.before,
+        new Set(Object.keys(first.before.persos)),
+        liveContainer.key,
+      )
+    }
 
     this.replayMotionBoundaries = captureHtmlMotionBoundaries({
       player: this.player,
@@ -519,6 +553,7 @@ export class HtmlPlayerRunner {
       nodes: this.nodes.persoNodes,
       intents: replayIntents,
       includePersistOnly: true,
+      resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
     })
     let presentationBoundaries = captureHtmlMotionBoundaries({
       player: this.player,
@@ -526,14 +561,16 @@ export class HtmlPlayerRunner {
       nodes: this.nodes.persoNodes,
       intents: currentIntents,
       includePersistOnly: false,
+      resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
     })
     if (liveIntents.length > 0) {
       const liveBoundaries = captureHtmlLiveMotionBoundary({
         player: this.player,
         root: this.interactionRoot,
         nodes: this.nodes.persoNodes,
-        first: first.snapshot,
+        first: firstSnapshot,
         intents: liveIntents,
+        resolveMotionContainer: (containerInput) => this.motionContainerResolver.resolve(containerInput),
       })
       const liveIntentIds = new Set(liveIntents.map((intent) => intent.id))
       presentationBoundaries = [
@@ -546,13 +583,18 @@ export class HtmlPlayerRunner {
     this.motionSystem = motionSystem
     motionSystem.setBoundaries(this.presentationMotionBoundaries)
     motionSystem.initialize()
-    this.presentMotion(this.player.getCurrentTimeMs())
+    this.motionJournalRevision = this.player.trackJournal.getRevision()
+    motionSystem.present(this.player.getCurrentTimeMs())
   }
 
-  private presentMotion(timeMs: number): void {
+  /** Presents one materialized scene and discovers newly journaled move actions. */
+  private presentMotion(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
+    if (this.motionDiscoveryEnabled && context.phase !== 'geometry-capture') {
+      this.rebuildMotionBoundaries()
+    }
     const motionSystem = this.motionSystem
     if (motionSystem === undefined) return
-    motionSystem.present(timeMs)
+    motionSystem.present(scene.timeMs)
   }
 
   /** Creates the one optional HTML motion presenter for this visible root. */
@@ -560,6 +602,7 @@ export class HtmlPlayerRunner {
     const motionHost = new HtmlMotionPresentationHost(
       this.interactionRoot,
       (itemId) => resolveHtmlHandle(this.nodes.persoNodes.get(itemId)),
+      (rootKey) => this.motionContainerResolver.resolveByKey(rootKey),
     )
     return new HtmlMotionSystem({
       host: motionHost,
@@ -585,6 +628,7 @@ export class HtmlPlayerRunner {
   /** Releases visual, component, and clock resources. */
   destroy(): void {
     if (this.ownsEngine) this.engine.stop()
+    this.motionDiscoveryEnabled = false
     this.stopTerminalObservation()
     this.captureSourceAdapter.destroy()
     this.emitSourceAdapter.destroy()
@@ -594,6 +638,7 @@ export class HtmlPlayerRunner {
     this.nodes.persoNodes.clear()
     this.nodes.persoParts.clear()
     this.nodes.targetNodes.clear()
+    this.motionContainerResolver.clear()
     this.restoreInteractionLock()
   }
 
@@ -613,6 +658,15 @@ export class HtmlPlayerRunner {
     if (this.initialInert) this.interactionRoot.setAttribute('inert', '')
     else this.interactionRoot.removeAttribute('inert')
   }
+}
+
+/** Checks whether a journal revision introduced a motion intent absent from the captured graph. */
+function hasNewMotionIntent(
+  intents: readonly Readonly<{ id: string }>[],
+  boundaries: readonly MotionBoundary[],
+): boolean {
+  const knownIds = new Set(boundaries.flatMap((boundary) => boundary.intents.map((intent) => intent.id)))
+  return intents.some((intent) => !knownIds.has(intent.id))
 }
 
 /** Creates one component runtime around the visible node registry. */

@@ -35,6 +35,8 @@ export type LayoutSnapshot = Readonly<{
   items: ReadonlyMap<string, LayoutItemSnapshot>
   /** Root pose captured with the same transaction, when the host exposes one. */
   rootPose?: HtmlPose
+  /** Runner-local identity of the DOM container used as the pose reference. */
+  rootKey?: string
 }>
 
 /** One direct movement intent declared at a structural boundary. */

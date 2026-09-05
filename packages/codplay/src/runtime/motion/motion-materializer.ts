@@ -8,10 +8,13 @@ export class MotionMaterializer implements RuntimeMaterializer {
   readonly id: string
   readonly context: unknown
   private readonly base: RuntimeMaterializer
-  private readonly presentMotion: (timeMs: number) => void
+  private readonly presentMotion: (scene: SolvedScene, context: RuntimeMaterializerSceneContext) => void
 
   /** Creates the single materialization boundary shared by Play and Seek. */
-  constructor(base: RuntimeMaterializer, presentMotion: (timeMs: number) => void) {
+  constructor(
+    base: RuntimeMaterializer,
+    presentMotion: (scene: SolvedScene, context: RuntimeMaterializerSceneContext) => void,
+  ) {
     this.base = base
     this.id = base.id
     this.context = base.context
@@ -33,7 +36,7 @@ export class MotionMaterializer implements RuntimeMaterializer {
   materializeScene(scene: SolvedScene, context: RuntimeMaterializerSceneContext = { moveDeltas: [] }): void {
     this.base.materializeScene(scene, context)
     if (context.phase === 'geometry-capture') return
-    this.presentMotion(scene.timeMs)
+    this.presentMotion(scene, context)
   }
 
   /** Forwards an external transient-structure invalidation to the base host. */
