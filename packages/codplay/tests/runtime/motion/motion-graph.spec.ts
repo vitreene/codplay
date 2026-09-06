@@ -29,6 +29,20 @@ type ItemDefinition = Readonly<{
 }>
 
 describe('motion graph', () => {
+  it('keeps pre-reset motion available before the boundary and drops it after reset', () => {
+    const before = snapshot(0, [item('item', 'root', 0)])
+    const after = snapshot(100, [item('item', 'root', 100)])
+    const graph = buildMotionGraph(
+      [boundary('move', 0, before, after, [intent('item', 0, 100)])],
+      { resetTimesByItem: new Map([['item', [{ timeMs: 50, eventSeq: 1 }]]]) },
+    )
+    const beforeFrame = resolvePresentationFrame(graph, after, 25)
+
+    expect(originX(beforeFrame, 'item')).toBeCloseTo(25)
+    expect(originX(resolvePresentationFrame(graph, snapshot(75, [item('item', 'root', 0)]), 75), 'item'))
+      .toBeCloseTo(0)
+  })
+
   it('resolves one reparented item between independently moving source and destination parents', () => {
     const initial = snapshot(0, [
       item('Q', 'root', 0),

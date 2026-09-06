@@ -705,11 +705,11 @@ façade :
   `story`/`scene`/`track` au niveau de l'instance ; elle ne change pas la forme
   de l'eventime.
 
-Le dispatcher interne actuel fournit seulement un point de comparaison : son
-`RuntimeEventInput` porte encore `storyId`, `trackId` et l'ancien booléen
-`cascade`, puis résout une cible story vers `story.trackId ?? storyId`, ou une
-cible globale vers le track global. Ce nom interne est un écart à résorber ; il
-ne constitue pas l'API CodPlay et ne doit pas réapparaître dans le contrat.
+Le dispatcher interne reçoit encore `storyId` et `trackId` comme adresse déjà
+résolue, puis résout une cible story vers `story.trackId ?? storyId`, ou une
+cible globale vers le track global. L’entrée ne transporte plus le booléen V1
+`cascade` : la visibilité V2 nommée est la seule information de visibilité
+conservée avec l’event.
 
 L'entrée publique ciblée est `engine.events.emit(input)`. `input` porte
 `instanceId`, l'eventime racine et la cible de la scène. L'engine
@@ -779,8 +779,7 @@ d'un eventime futur au moment de son injection.
 
 Écart actuel à résorber : `RuntimePlayerEmitInput`, dans
 `src/runtime/player/capture/types.ts`, reprend encore `RuntimeEventInput` et
-porte directement `storyId`, `trackId`, l'ancien booléen `cascade` et
-`applyAtMs`. Il n'y a donc
+porte directement `storyId`, `trackId` et `applyAtMs`. Il n'y a donc
 pas encore d'enveloppe publique d'adressage ; la façade devra séparer cette
 adresse du contenu eventime avant de traduire vers le dispatcher.
 

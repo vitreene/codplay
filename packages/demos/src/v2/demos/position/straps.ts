@@ -36,9 +36,10 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
         {
           update: { currentView: next },
           events: [
-            { name: POSITION_TWEEN_STOP_EVENT, cascade: true },
-            { name: CAROUSEL_EVENTS[current].outro, cascade: true },
-            { name: CAROUSEL_EVENTS[next].intro, cascade: true },
+            { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
+            { name: CAROUSEL_EVENTS[current].reset, visibility: 'scene' },
+            { name: CAROUSEL_EVENTS[current].outro, visibility: 'scene' },
+            { name: CAROUSEL_EVENTS[next].intro, visibility: 'scene' },
           ],
         },
         planStoryAnimation(next as ViewIndex, context.planned, state),
@@ -52,7 +53,7 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
         const output: readonly StrapReturnValue[] = [
           {
             update: { storyPaused: false },
-            events: [{ name: POSITION_STORY_RESUMED_EVENT, cascade: true }],
+            events: [{ name: POSITION_STORY_RESUMED_EVENT, visibility: 'scene' }],
           },
           planStoryAnimation(current as ViewIndex, context.planned, state),
         ]
@@ -61,8 +62,8 @@ export function createPositionSceneStraps(): Readonly<Record<string, StrapFuncti
       return {
         update: { storyPaused: true },
         events: [
-          { name: POSITION_TWEEN_STOP_EVENT, cascade: true },
-          { name: POSITION_STORY_PAUSED_EVENT, cascade: true },
+          { name: POSITION_TWEEN_STOP_EVENT, visibility: 'scene' },
+          { name: POSITION_STORY_PAUSED_EVENT, visibility: 'scene' },
         ],
       }
     },

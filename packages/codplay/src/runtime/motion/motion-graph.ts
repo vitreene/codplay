@@ -22,6 +22,8 @@ import type {
   MotionSegment,
   OverlayStackingContext,
   PresentationFrame,
+  MotionResetBoundary,
+  MotionResetTimesByItem,
 } from './types'
 import type { HtmlPose } from './html-types'
 import { buildNaturalLayoutTimeline, resolveNaturalLayoutBefore } from './motion-layout'
@@ -38,10 +40,19 @@ type MotionBuildOperation = Readonly<{
   segmentId: string
 }>
 
+/** Optional logical reset barriers used while rebuilding one motion graph. */
+export type MotionGraphOptions = Readonly<{
+  resetTimesByItem?: MotionResetTimesByItem
+}>
+
 /** Builds one complete immutable motion graph from chronological layout boundaries. */
-export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionGraph {
+export function buildMotionGraph(
+  boundaries: readonly MotionBoundary[],
+  options: MotionGraphOptions = {},
+): MotionGraph {
+  const resetTimesByItem = normalizeResetTimes(options.resetTimesByItem)
   const naturalLayoutTimeline = buildNaturalLayoutTimeline(boundaries)
-  const { graph: structureGraph, operations } = buildMotionGraphStructure(boundaries)
+  const { graph: structureGraph, operations } = buildMotionGraphStructure(boundaries, resetTimesByItem)
   let graph = structureGraph
 
   // Resolve all geometry only after every future segment is present. This is
@@ -139,13 +150,14 @@ export function buildMotionGraph(boundaries: readonly MotionBoundary[]): MotionG
 /** Plans all segment owners before resolving any segment geometry. */
 function buildMotionGraphStructure(
   boundaries: readonly MotionBoundary[],
+  resetTimesByItem: MotionResetTimesByItem,
 ): Readonly<{
   graph: MotionGraph
   operations: readonly MotionBuildOperation[]
 }> {
   const mutableTracks = new Map<string, MotionSegment[]>()
   const presentationItemIds = new Set<string>()
-  let graph = freezeMotionGraph(mutableTracks, presentationItemIds)
+  let graph = freezeMotionGraph(mutableTracks, presentationItemIds, resetTimesByItem)
   const operations: MotionBuildOperation[] = []
 
   for (const boundary of [...boundaries].sort((left, right) => left.timeMs - right.timeMs)) {
@@ -174,7 +186,11 @@ function buildMotionGraphStructure(
       const timing = directIntent ?? transition
       const activeSegment = directIntent === undefined
         && !isReparented(before, after)
-        ? findContinuingSegment(graph.tracksByItem.get(itemId), boundary.timeMs)
+        ? findContinuingSegment(
+          graph.tracksByItem.get(itemId),
+          boundary.timeMs,
+          latestResetAt(resetTimesByItem, itemId, boundary.timeMs),
+        )
         : undefined
       if (activeSegment !== undefined) {
         operations.push({
@@ -191,6 +207,7 @@ function buildMotionGraphStructure(
       }
 
       const segmentId = `${boundary.id}:${itemId}`
+      const eventSeq = directIntent?.eventSeq ?? transition.eventSeq
       const from = createAttachment(
         before,
         before.rootPose,
@@ -204,6 +221,7 @@ function buildMotionGraphStructure(
         id: segmentId,
         itemId,
         startAt: boundary.timeMs,
+        ...(eventSeq === undefined ? {} : { eventSeq }),
         endAt: boundary.timeMs + (timing.delay ?? 0) + timing.duration,
         duration: timing.duration,
         delay: timing.delay ?? 0,
@@ -237,11 +255,11 @@ function buildMotionGraphStructure(
         segmentId,
       })
     }
-    graph = freezeMotionGraph(mutableTracks, presentationItemIds)
+    graph = freezeMotionGraph(mutableTracks, presentationItemIds, resetTimesByItem)
   }
 
   return Object.freeze({
-    graph: freezeMotionGraph(mutableTracks, presentationItemIds),
+    graph: freezeMotionGraph(mutableTracks, presentationItemIds, resetTimesByItem),
     operations: Object.freeze(operations),
   })
 }
@@ -340,10 +358,11 @@ export function resolvePresentationFrame(
     const pose = resolvePose(itemId)
     if (base === undefined || pose === undefined) continue
     const track = graph.tracksByItem.get(itemId)
-    const segment = findActiveSegment(track, timeMs)
+    const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
+    const segment = findActiveSegment(track, timeMs, resetAt)
     const progress = segment === undefined ? 1 : resolveSegmentProgress(segment, timeMs)
     const overlayStacking = resolveOverlayStackingContext(base, segment)
-    const motionRoot = resolvePresentationMotionRoot(base, track, segment, timeMs)
+    const motionRoot = resolvePresentationMotionRoot(base, track, segment, timeMs, resetAt)
     items.set(itemId, {
       itemId,
       ...(base.parentItemId === undefined ? {} : { parentItemId: base.parentItemId }),
@@ -432,9 +451,10 @@ function resolveMotionItem(
   }
   const pose = resolveMotionPose(graph, layout, itemId, timeMs, resolveParent, context)
   if (pose === undefined) return undefined
-  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs)
+  const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
+  const segment = findActiveSegment(graph.tracksByItem.get(itemId), timeMs, resetAt)
   const endpoint = segment === undefined
-    ? findMotionEndpoint(graph.tracksByItem.get(itemId), timeMs)
+    ? findMotionEndpoint(graph.tracksByItem.get(itemId), timeMs, resetAt)
     : undefined
   const progress = segment === undefined
     ? endpoint?.side === 'from' ? 0 : 1
@@ -471,9 +491,10 @@ function resolveMotionPose(
 ): HtmlPose | undefined {
   const base = context?.get(itemId) ?? layout.items.get(itemId)
   const track = graph.tracksByItem.get(itemId)
-  const segment = findActiveSegment(track, timeMs)
+  const resetAt = latestResetAt(graph.resetTimesByItem, itemId, timeMs)
+  const segment = findActiveSegment(track, timeMs, resetAt)
   if (segment === undefined) {
-    const endpoint = findMotionEndpoint(track, timeMs)
+    const endpoint = findMotionEndpoint(track, timeMs, resetAt)
     if (endpoint !== undefined) {
       const attachment = endpoint.side === 'from'
         ? endpoint.segment.from
@@ -638,13 +659,14 @@ function resolvePresentationMotionRoot(
   track: ItemMotionTrack | undefined,
   segment: MotionSegment | undefined,
   timeMs: number,
+  resetAt?: MotionResetBoundary,
 ): Readonly<{ motionRootKey?: string; motionRootPose?: HtmlPose }> | undefined {
   if (segment !== undefined) {
     const retarget = resolveSegmentRetarget(segment, timeMs)
     const attachment = retarget?.to ?? segment.from
     if (attachment.motionRootKey !== undefined || attachment.motionRootPose !== undefined) return attachment
   }
-  const endpoint = findMotionEndpoint(track, timeMs)
+  const endpoint = findMotionEndpoint(track, timeMs, resetAt)
   if (endpoint !== undefined) {
     const attachment = endpoint.side === 'from'
       ? endpoint.segment.from
@@ -766,10 +788,15 @@ function selectBoundaryTransition(intents: readonly MotionIntent[]): MotionInten
 }
 
 /** Finds the latest segment owning one item at the requested time. */
-function findActiveSegment(track: ItemMotionTrack | undefined, timeMs: number): MotionSegment | undefined {
+function findActiveSegment(
+  track: ItemMotionTrack | undefined,
+  timeMs: number,
+  resetAt?: MotionResetBoundary,
+): MotionSegment | undefined {
   if (track === undefined) return undefined
   for (let index = track.segments.length - 1; index >= 0; index -= 1) {
     const segment = track.segments[index]!
+    if (resetAt !== undefined && !isAfterReset(segment, resetAt)) continue
     if (timeMs >= segment.startAt && timeMs <= segment.endAt) return segment
   }
   return undefined
@@ -779,22 +806,32 @@ function findActiveSegment(track: ItemMotionTrack | undefined, timeMs: number): 
 function findMotionEndpoint(
   track: ItemMotionTrack | undefined,
   timeMs: number,
+  resetAt?: MotionResetBoundary,
 ): Readonly<{ segment: MotionSegment; side: 'from' | 'to' }> | undefined {
   if (track === undefined || track.segments.length === 0) return undefined
-  const first = track.segments[0]!
+  const segments = resetAt === undefined
+    ? track.segments
+    : track.segments.filter((segment) => isAfterReset(segment, resetAt))
+  if (segments.length === 0) return undefined
+  const first = segments[0]!
   if (timeMs < first.startAt) return { segment: first, side: 'from' }
-  for (let index = track.segments.length - 1; index >= 0; index -= 1) {
-    const segment = track.segments[index]!
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]!
     if (timeMs > segment.endAt) return { segment, side: 'to' }
   }
   return undefined
 }
 
 /** Selects an active segment that still has a future destination to retarget. */
-function findContinuingSegment(track: ItemMotionTrack | undefined, timeMs: number): MotionSegment | undefined {
+function findContinuingSegment(
+  track: ItemMotionTrack | undefined,
+  timeMs: number,
+  resetAt?: MotionResetBoundary,
+): MotionSegment | undefined {
   if (track === undefined) return undefined
   for (let index = track.segments.length - 1; index >= 0; index -= 1) {
     const segment = track.segments[index]!
+    if (resetAt !== undefined && !isAfterReset(segment, resetAt)) continue
     if (timeMs >= segment.startAt && timeMs < segment.endAt) return segment
   }
   return undefined
@@ -868,19 +905,20 @@ function replaceMotionSegment(
 
   const presentationItemIds = new Set(graph.presentationItemIds)
   if (segments.length === 0) presentationItemIds.delete(itemId)
-  return freezeMotionGraph(tracks, presentationItemIds)
+  return freezeMotionGraph(tracks, presentationItemIds, graph.resetTimesByItem)
 }
 
 /** Freezes mutable planner tracks into the public graph contract. */
 function freezeMotionGraph(
   tracks: ReadonlyMap<string, readonly MotionSegment[]>,
   presentationItemIds: ReadonlySet<string>,
+  resetTimesByItem: MotionResetTimesByItem,
 ): MotionGraph {
   const tracksByItem = new Map<string, ItemMotionTrack>()
   for (const [itemId, segments] of tracks) {
     tracksByItem.set(itemId, Object.freeze({ itemId, segments: Object.freeze([...segments]) }))
   }
-  const revision = JSON.stringify([...tracksByItem].map(([itemId, track]) => [
+  const revision = JSON.stringify({ tracks: [...tracksByItem].map(([itemId, track]) => [
     itemId,
     track.segments.map((segment) => ({
       id: segment.id,
@@ -892,6 +930,7 @@ function freezeMotionGraph(
       presentationMode: segment.presentationMode,
       targetReflow: segment.targetReflow,
       direct: segment.direct,
+      eventSeq: segment.eventSeq,
       from: segment.from,
       to: segment.to,
       retargets: segment.retargets,
@@ -900,10 +939,50 @@ function freezeMotionGraph(
       path: segment.path,
       pathAnchor: segment.pathAnchor,
     })),
-  ]))
+  ]), resets: [...resetTimesByItem] })
   return Object.freeze({
     revision,
     tracksByItem,
+    resetTimesByItem,
     presentationItemIds: Object.freeze([...presentationItemIds]),
   })
+}
+
+/** Clones reset barriers into the immutable graph-owned representation. */
+function normalizeResetTimes(resetTimesByItem: MotionResetTimesByItem | undefined): MotionResetTimesByItem {
+  const normalized = new Map<string, readonly MotionResetBoundary[]>()
+  for (const [itemId, times] of resetTimesByItem ?? []) {
+    const valid = [...times]
+      .filter((boundary) => Number.isFinite(boundary.timeMs) && Number.isFinite(boundary.eventSeq))
+      .sort((left, right) => left.timeMs - right.timeMs || left.eventSeq - right.eventSeq)
+      .filter((boundary, index, boundaries) => index === 0
+        || boundary.timeMs !== boundaries[index - 1]!.timeMs
+        || boundary.eventSeq !== boundaries[index - 1]!.eventSeq)
+    if (valid.length > 0) normalized.set(itemId, Object.freeze(valid))
+  }
+  return normalized
+}
+
+/** Returns the latest reset barrier not later than one logical time. */
+function latestResetAt(
+  resetTimesByItem: MotionResetTimesByItem,
+  itemId: string,
+  timeMs: number,
+): MotionResetBoundary | undefined {
+  const times = resetTimesByItem.get(itemId)
+  if (times === undefined) return undefined
+  let latest: MotionResetBoundary | undefined
+  for (const resetAt of times) {
+    if (resetAt.timeMs > timeMs) break
+    latest = resetAt
+  }
+  return latest
+}
+
+/** Tests whether a motion segment starts after an ordered reset boundary. */
+function isAfterReset(segment: MotionSegment, reset: MotionResetBoundary): boolean {
+  return segment.startAt > reset.timeMs
+    || (segment.startAt === reset.timeMs
+      && segment.eventSeq !== undefined
+      && segment.eventSeq > reset.eventSeq)
 }

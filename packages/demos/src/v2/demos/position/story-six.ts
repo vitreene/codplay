@@ -4,7 +4,7 @@ import {
   POSITION_STORY_END_EVENT,
   POSITION_STORY_SIX_ID,
 } from './constants'
-import { createViewRoot } from './carousel'
+import { CAROUSEL_EVENTS, createViewRoot } from './carousel'
 import type { StoryAnimationOccurrence } from './types'
 
 type ContentId = 'qa' | 'qb' | 'qc' | 'qd' | 'qe' | 'qf' | 'ka' | 'kb' | 'kc' | 'kd' | 'ke' | 'kf'
@@ -178,6 +178,7 @@ export function createStorySix(): StoryDoc {
 
   return {
     id: POSITION_STORY_SIX_ID,
+    listen: [{ on: CAROUSEL_EVENTS[5].reset, reset: true }],
     eventimes: [],
     persos: [
       view,

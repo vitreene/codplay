@@ -32,6 +32,26 @@ function createCatalogForFixtures(): RuntimeCapabilityCatalog {
 }
 
 describe('SceneBuilder', () => {
+  it('preserves a story reset listen capability in the compiled scene', () => {
+    const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
+    const result = builder.build({
+      id: 'story-reset-scene',
+      stories: {
+        main: {
+          id: 'main',
+          listen: [{ on: 'navigation:reset', reset: true }],
+          persos: [],
+        },
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.compiledScene.scene.stories.main?.listen).toEqual([
+      expect.objectContaining({ on: 'navigation:reset', reset: true }),
+    ])
+  })
+
   it('compiles scene-level eventimes independently from story eventimes', () => {
     const builder = new SceneBuilder(createCoreRuntimeCatalog().validationSnapshot())
     const result = builder.build({

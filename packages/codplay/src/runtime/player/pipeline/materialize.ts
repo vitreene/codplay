@@ -1,10 +1,15 @@
 import { cloneRecord, cloneValue, compareNumberPaths } from '../../../shared'
 import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY } from '../../config/strap-scope'
 import { TRACK_GLOBAL_ID } from '../../config/track'
-import type { CompiledEventime, CompiledRecord, CompiledScene, CompiledValue } from '../../../scene/compiled'
+import type {
+  CompiledEventime,
+  CompiledRecord,
+  CompiledScene,
+  CompiledValue,
+} from '../../../scene/compiled'
 import { isActionSequence, isTweenAction, planActionSequenceSteps } from './action-sequence'
 import { resolveActionDefinition } from './action-resolution'
-import type { RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
+import type { RuntimeStoryResetBoundary, RuntimeTrackEvent, RuntimeTrackJournal } from './track-journal'
 import { buildTrackRegistry, resolveStoryTrackId } from './tracks'
 import type { MaterializedAction, MaterializedPerso, MaterializedScene } from './types'
 
@@ -86,6 +91,12 @@ function materializeSceneAtBoundary(
     const trackId = resolveStoryTrackId(story)
     const track = tracks.tracks[trackId]
     if (track === undefined) throw new Error(`Materialize track is not registered: ${trackId}`)
+    const reset = journal?.getLatestStoryReset(
+      storyId,
+      timeMs,
+      includeBoundary,
+      options.includePersistOnly !== false,
+    )
     const events = [
       ...(trackIsActive(journal, TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.active ?? true)
         ? flattenEventimes(scene.scene.eventimes ?? [], TRACK_GLOBAL_ID, tracks.tracks[TRACK_GLOBAL_ID]?.order ?? 0)
@@ -101,6 +112,7 @@ function materializeSceneAtBoundary(
         options.includePersistOnly !== false,
       ),
     ]
+      .filter((event) => reset === undefined || isAfterStoryReset(event, reset))
     for (const perso of story.persos) {
       const key = `${storyId}:${perso.id}`
       const actions = materializePersoActions(events, perso.actions, timeMs, includeBoundary)
@@ -310,6 +322,7 @@ function getLiveEventsForStory(
   includePersistOnly: boolean,
 ): readonly FlattenedEventime[] {
   if (journal === undefined) return []
+  const reset = journal.getLatestStoryReset(storyId, timeMs, includeBoundary, includePersistOnly)
   return journal.getEventsForStory(storyId)
     .filter((event) => {
       const track = journal.registry.tracks[event.trackId]
@@ -318,6 +331,7 @@ function getLiveEventsForStory(
         && track !== undefined
         && journal.isTrackActive(event.trackId)
     })
+    .filter((event) => reset === undefined || isAfterStoryResetEvent(event, reset))
     .map((event) => toFlattenedLiveEvent(event, event.trackId, journal.registry.tracks[event.trackId]?.order ?? 0))
 }
 
@@ -332,6 +346,25 @@ function toFlattenedLiveEvent(event: RuntimeTrackEvent, trackId: string, trackOr
     eventSeq: event.eventSeq,
     declarationPath: [Number.MAX_SAFE_INTEGER, event.eventSeq],
   }
+}
+
+/** Tests whether a compiled or live event occurs after one story reset. */
+function isAfterStoryReset(
+  event: FlattenedEventime,
+  reset: RuntimeStoryResetBoundary,
+): boolean {
+  if (event.startAt > reset.applyAtMs) return true
+  if (event.startAt < reset.applyAtMs) return false
+  return event.eventSeq !== undefined && event.eventSeq > reset.eventSeq
+}
+
+/** Tests whether one live event occurs after one story reset. */
+function isAfterStoryResetEvent(
+  event: RuntimeTrackEvent,
+  reset: RuntimeStoryResetBoundary,
+): boolean {
+  return event.applyAtMs > reset.applyAtMs
+    || (event.applyAtMs === reset.applyAtMs && event.eventSeq > reset.eventSeq)
 }
 
 /** Reads the mutable track activity layer without mutating compiled metadata. */

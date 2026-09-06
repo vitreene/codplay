@@ -12,6 +12,8 @@ export type ScheduledMotionIntent = Readonly<{
   itemId: string
   declarationPath: readonly number[]
   startAt: number
+  /** Journal order retained for same-time reset ordering. */
+  eventSeq?: number
   duration: number
   delay: number
   endAt: number
@@ -86,6 +88,7 @@ export function compileMotionSchedule(
       const targets = scene.actionTargetIndex[event.name] ?? []
       for (const target of targets) {
         if (!event.cascade && event.storyId !== target.storyId) continue
+        if (event.storyId === target.storyId && journal.isStoryResetEvent(target.storyId, event)) continue
         const story = scene.scene.stories[target.storyId]
         const perso = story?.persos.find((candidate) => candidate.id === target.persoId)
         const action = resolveAction(perso?.actions[event.name], event.data)
@@ -101,6 +104,7 @@ export function compileMotionSchedule(
           itemId,
           declarationPath,
           startAt: event.applyAtMs,
+          eventSeq: event.eventSeq,
           transition,
         }))
       }
@@ -140,6 +144,7 @@ function createMotionIntent(input: Readonly<{
   itemId: string
   declarationPath: readonly number[]
   startAt: number
+  eventSeq?: number
   transition: Readonly<{
     duration: number
     delay?: number
@@ -163,6 +168,7 @@ function createMotionIntent(input: Readonly<{
     itemId: input.itemId,
     declarationPath: Object.freeze([...input.declarationPath]),
     startAt: input.startAt,
+    ...(input.eventSeq === undefined ? {} : { eventSeq: input.eventSeq }),
     duration: input.transition.duration,
     delay,
     endAt: input.startAt + endOffsetMs,

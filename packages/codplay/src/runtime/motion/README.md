@@ -150,6 +150,15 @@ pose visuelle déjà résolue. Sa phase, sa trajectoire et sa date de fin resten
 inchangées. Aucun segment actif n'est redémarré à zéro, annulé globalement ou
 remplacé par un simple point final.
 
+### Frontière de reset
+
+Le journal fournit au graphe les frontières de reset par identifiant d'item.
+Avant une frontière, les segments antérieurs restent disponibles pour un seek
+historique. À partir de la frontière, ils ne sont plus sélectionnés ; le runner
+libère alors les overlays et styles transitoires de la story concernée avant de
+présenter son état initial. Les nœuds auteur restent montés et la résolution ne
+fait aucune lecture supplémentaire du DOM.
+
 ## Résolution
 
 La résolution est pure et limitée aux éléments qui possèdent une trajectoire :

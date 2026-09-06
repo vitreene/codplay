@@ -7,6 +7,7 @@ import {
   type MotionGraph,
   type NaturalLayoutTimeline,
   type LayoutSnapshot,
+  type MotionResetTimesByItem,
   type PresentationFrame,
 } from '../motion'
 import { HtmlMotionPresentationHost } from './motion-presentation-host'
@@ -16,6 +17,7 @@ export class HtmlMotionSystem {
   private graph: MotionGraph = buildMotionGraph([])
   private boundaries: readonly MotionBoundary[] = []
   private naturalLayoutTimeline: NaturalLayoutTimeline = buildNaturalLayoutTimeline([])
+  private resetTimesByItem: MotionResetTimesByItem = new Map()
   private currentFrame: PresentationFrame | undefined
   private initialized = false
   private readonly host: HtmlMotionPresentationHost
@@ -74,6 +76,18 @@ export class HtmlMotionSystem {
     if (this.initialized) this.rebuild()
   }
 
+  /** Replaces the logical reset barriers used by the immutable motion graph. */
+  setResetTimesByItem(resetTimesByItem: MotionResetTimesByItem): void {
+    this.resetTimesByItem = resetTimesByItem
+    if (this.initialized) this.rebuild()
+  }
+
+  /** Removes selected transient HTML resources before a story reset is shown. */
+  clearTransientPresentation(itemIds?: ReadonlySet<string>): void {
+    this.host.clearTransientPresentation(itemIds)
+    this.currentFrame = undefined
+  }
+
   /** Invalidates the graph after a new boundary capture or host geometry change. */
   invalidate(): void {
     if (this.initialized) this.rebuild()
@@ -88,7 +102,9 @@ export class HtmlMotionSystem {
 
   /** Rebuilds the pure graph from the latest captured boundary data. */
   private rebuild(): void {
-    this.graph = buildMotionGraph(this.boundaries)
+    this.graph = buildMotionGraph(this.boundaries, {
+      resetTimesByItem: this.resetTimesByItem,
+    })
     this.naturalLayoutTimeline = buildNaturalLayoutTimeline(this.boundaries)
   }
 }

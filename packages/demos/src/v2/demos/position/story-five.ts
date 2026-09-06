@@ -7,7 +7,7 @@ import {
   POSITION_STORY_FIVE_ID,
   POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
 } from './constants'
-import { createViewRoot } from './carousel'
+import { CAROUSEL_EVENTS, createViewRoot } from './carousel'
 
 const SOURCE_CONTAINER = 'position:view-five:source'
 const TARGET_CONTAINER = 'position:view-five:target'
@@ -53,6 +53,7 @@ export function createStoryFive(): StoryDoc {
   `, 'position-story-five-frame')
   return {
     id: POSITION_STORY_FIVE_ID,
+    listen: [{ on: CAROUSEL_EVENTS[4].reset, reset: true }],
     persos: [
       view,
       {
@@ -182,21 +183,21 @@ export function planStoryFiveAnimation(
 ): readonly PlannedStrapOccurrence[] {
   const qShifts = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: Q_SHIFT_EVENT, cascade: true } }],
+    [{ event: { name: Q_SHIFT_EVENT, visibility: 'scene' } }],
   ).map((occurrence) => ({
     ...occurrence,
     offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
   }))
   const kShifts = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: K_SHIFT_EVENT, cascade: true } }],
+    [{ event: { name: K_SHIFT_EVENT, visibility: 'scene' } }],
   ).map((occurrence) => ({
     ...occurrence,
     offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS + occurrence.offsetMs,
   }))
   const qReturns = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: Q_RETURN_EVENT, cascade: true } }],
+    [{ event: { name: Q_RETURN_EVENT, visibility: 'scene' } }],
   ).map((occurrence) => ({
     ...occurrence,
     offsetMs: STORY_FIVE_Q_OSCILLATION_START_OFFSET_MS
@@ -205,7 +206,7 @@ export function planStoryFiveAnimation(
   }))
   const kReturns = planned.repeat(
     { eachMs: STORY_FIVE_OSCILLATION_DURATION_MS, times: STORY_FIVE_OSCILLATION_REPEAT_COUNT },
-    [{ event: { name: K_RETURN_EVENT, cascade: true } }],
+    [{ event: { name: K_RETURN_EVENT, visibility: 'scene' } }],
   ).map((occurrence) => ({
     ...occurrence,
     offsetMs: STORY_FIVE_K_OSCILLATION_START_OFFSET_MS
@@ -214,10 +215,10 @@ export function planStoryFiveAnimation(
   }))
   return [
     ...planned.wait(STORY_FIVE_SOURCE_VERTICAL_SHIFT_OFFSET_MS, {
-      event: { name: SOURCE_VERTICAL_SHIFT_EVENT, cascade: true },
+      event: { name: SOURCE_VERTICAL_SHIFT_EVENT, visibility: 'scene' },
     }),
     ...planned.wait(STORY_FIVE_TARGET_VERTICAL_SHIFT_OFFSET_MS, {
-      event: { name: TARGET_VERTICAL_SHIFT_EVENT, cascade: true },
+      event: { name: TARGET_VERTICAL_SHIFT_EVENT, visibility: 'scene' },
     }),
     ...qShifts,
     ...kShifts,
@@ -226,7 +227,7 @@ export function planStoryFiveAnimation(
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        cascade: true,
+        visibility: 'scene',
         data: {
           move: {
             target: K_CONTAINER,
@@ -242,7 +243,7 @@ export function planStoryFiveAnimation(
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        cascade: true,
+        visibility: 'scene',
         data: {
           move: {
             target: Q_CONTAINER,
@@ -258,7 +259,7 @@ export function planStoryFiveAnimation(
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 2, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        cascade: true,
+        visibility: 'scene',
         data: {
           move: {
             target: K_CONTAINER,
@@ -274,7 +275,7 @@ export function planStoryFiveAnimation(
     ...planned.wait(STORY_FIVE_ITEM_MOVE_OFFSET_MS + STORY_FIVE_ITEM_MOVE_INTERVAL_MS * 3, {
       event: {
         name: POSITION_VIEW_FIVE_ITEM_MOVE_EVENT,
-        cascade: true,
+        visibility: 'scene',
         data: {
           move: {
             target: Q_CONTAINER,
@@ -288,7 +289,7 @@ export function planStoryFiveAnimation(
       },
     }),
     ...planned.wait(STORY_FIVE_END_OFFSET_MS, {
-      event: { name: POSITION_STORY_END_EVENT, cascade: true },
+      event: { name: POSITION_STORY_END_EVENT, visibility: 'scene' },
     }),
   ]
 }

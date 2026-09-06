@@ -262,6 +262,7 @@ function compileListenRule(
 ): CompiledListenRule {
   return {
     on: rule.on,
+    reset: rule.reset,
     transform: rule.transform?.map((fn, index) => extractFunction(fn as unknown as AuthorFunction, `${scope}.transform[${index}]`, state)),
     emit: rule.emit?.map((value, index) => extractCompiledValue(value, `${scope}.emit[${index}]`, state) as CompiledRecord),
     straps: rule.straps,

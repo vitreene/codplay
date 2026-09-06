@@ -75,9 +75,10 @@ export const POSITION_CAPSULE = createPositionCapsule()
 
 /** Resolves the generated entry/exit event names for each carousel child. */
 function resolveCarouselEventNames(): readonly CarouselEventNames[] {
-  return POSITION_CAPSULE.children.map((child) => ({
+  return POSITION_CAPSULE.children.map((child, index) => ({
     intro: child.events.intro!.name,
     outro: child.events.outro!.name,
+    reset: `${POSITION_NAMESPACE}:view:${index + 1}:reset`,
   }))
 }
 

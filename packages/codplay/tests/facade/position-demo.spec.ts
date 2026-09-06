@@ -8,6 +8,7 @@ import {
   POSITION_STORY_END_EVENT,
 } from '../../../demos/src/v2/demos/position/constants'
 import { createScene } from '../../../demos/src/v2/demos/position/main'
+import { CAROUSEL_EVENTS } from '../../../demos/src/v2/demos/position/carousel'
 
 /** Creates a scheduler whose frame advancement stays under test control. */
 function createManualScheduler(): CodPlayFrameScheduler {
@@ -78,6 +79,20 @@ describe('position V2 demo', () => {
       'position-story-five',
       'position-story-six',
     ])
+    expect(build.compiledScene.scene.stories.main?.listen).toEqual([])
+    for (const [index, storyId] of [
+      'position-story-one',
+      'position-story-two',
+      'position-story-three',
+      'position-story-four',
+      'position-story-five',
+      'position-story-six',
+    ].entries()) {
+      expect(build.compiledScene.scene.stories[storyId]?.listen).toContainEqual({
+        on: CAROUSEL_EVENTS[index]!.reset,
+        reset: true,
+      })
+    }
     const storyTwoSource = build.compiledScene.scene.stories['position-story-two']?.persos.find((perso) => perso.id === 'position-view-two-source')
     const storyTwoTarget = build.compiledScene.scene.stories['position-story-two']?.persos.find((perso) => perso.id === 'position-view-two-target')
     const storyFive = build.compiledScene.scene.stories['position-story-five']
@@ -190,19 +205,24 @@ describe('position V2 demo', () => {
       functions: build.functions,
       root,
     })
-    const trace: Array<{ name: string; timeMs: number; data?: Readonly<Record<string, unknown>> }> = []
-    const stopTrace = instance.diagnostic.onTrace((event) => trace.push({ name: event.name, timeMs: event.timeMs, data: event.data }))
+    const trace: Array<{
+      name: string
+      timeMs: number
+      visibility?: 'story' | 'scene' | 'public'
+      data?: Readonly<Record<string, unknown>>
+    }> = []
+    const stopTrace = instance.diagnostic.onTrace((event) => trace.push({
+      name: event.name,
+      timeMs: event.timeMs,
+      visibility: event.visibility,
+      data: event.data,
+    }))
 
-    codplay.engine.advance(6_000)
+    codplay.engine.advance(0)
     await instance.telco.play()
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
-    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
-    expect(root.querySelectorAll('.position-view')[5]?.classList.contains('position-view--visible')).toBe(true)
-
-    for (let index = 5; index > 0; index -= 1) {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
-      await flushDomEvent()
-    }
+    expect(root.querySelector('.position-carousel-status')?.textContent).toBe('01 / 06')
+    expect(root.querySelectorAll('.position-view')[0]?.classList.contains('position-view--visible')).toBe(true)
 
     codplay.engine.advance(0)
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
@@ -219,6 +239,7 @@ describe('position V2 demo', () => {
 
     codplay.engine.advance(7_400)
     const viewTwoMove = trace.filter((event) => event.name === 'position:demo:view:2:move').at(-1)
+    expect(viewTwoMove?.visibility).toBe('scene')
     expect(viewTwoMove?.data).toMatchObject({
       move: {
         target: 'position:view-two:target',
@@ -251,7 +272,7 @@ describe('position V2 demo', () => {
     expect(root.querySelectorAll('.position-view--visible')).toHaveLength(1)
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('03 / 06')
 
-    codplay.engine.advance(9_000)
+    codplay.engine.advance(12_000)
     const scheduledPathMove = trace.filter((event) => event.name === 'position:demo:path:item:move').at(-1)
     expect(scheduledPathMove?.data).toMatchObject({
       move: {
@@ -296,7 +317,7 @@ describe('position V2 demo', () => {
     await flushDomEvent()
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('04 / 06')
 
-    codplay.engine.advance(14_000)
+    codplay.engine.advance(26_000)
     const scheduledLiveMoves = trace.filter((event) => event.name === 'position:demo:live:item:move')
     expect(scheduledLiveMoves.length).toBeGreaterThanOrEqual(20)
     const liveBounceMove = scheduledLiveMoves.at(-20)
@@ -338,7 +359,7 @@ describe('position V2 demo', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('05 / 06')
-    codplay.engine.advance(16_000)
+    codplay.engine.advance(42_000)
     const viewFiveSourceCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--source')
     const viewFiveTargetCard = root.querySelector<HTMLElement>('.position-view--visible .position-node--target')
     const viewFiveSourceContainer = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--q')
@@ -358,14 +379,14 @@ describe('position V2 demo', () => {
         },
       },
     })
-    expect(viewFiveMove?.data).not.toHaveProperty('move.transition.path')
+    expect(viewFiveMoves.at(-1)?.data).not.toHaveProperty('move.transition.path')
     const nestedSource = root.querySelector<HTMLElement>('.position-view--visible .position-nested-container--q')
     expect(nestedSource?.querySelector<HTMLElement>('.position-item')).not.toBeNull()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
     await flushDomEvent()
     expect(root.querySelector('.position-carousel-status')?.textContent).toBe('06 / 06')
-    codplay.engine.advance(30_000)
+    codplay.engine.advance(52_000)
     expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-q')).toHaveLength(1)
     expect(trace.filter((event) => event.name === 'position:demo:conclusion:transfer-k')).toHaveLength(1)
     expect(trace.filter((event) => event.name.startsWith('position:demo:conclusion:exchange-'))).toHaveLength(12)
@@ -429,6 +450,48 @@ describe('position V2 demo', () => {
     expect(target?.contains(item)).toBe(true)
   })
 
+  it('resets every position story when its view exits, without resetting main', async () => {
+    const root = document.createElement('main')
+    document.body.append(root)
+    codplay = new CodPlay({
+      frameScheduler: createManualScheduler(),
+      pauseOnDocumentHidden: false,
+    })
+    const build = codplay.build({ scene: createScene() })
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const instance = codplay.instances.create({
+      instanceId: 'position-story-reset-navigation-test',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+    const trace: Array<{ name: string; visibility?: 'story' | 'scene' | 'public' }> = []
+    const stopTrace = instance.diagnostic.onTrace((event) => trace.push({ name: event.name, visibility: event.visibility }))
+
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(FIRST_VIEW_MOVE_OFFSET_MS + POSITION_MOVE_DURATION_MS + 1)
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+    await flushDomEvent()
+    const firstView = root.querySelectorAll('.position-view')[0]
+    expect(firstView?.querySelector('.position-node--source .position-node__outlet .position-item')).not.toBeNull()
+    for (let index = 0; index < 5; index += 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }))
+      await flushDomEvent()
+    }
+    for (let index = 5; index > 0; index -= 1) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }))
+      await flushDomEvent()
+    }
+
+    for (const event of CAROUSEL_EVENTS) {
+      expect(trace).toContainEqual({ name: event.reset, visibility: 'scene' })
+    }
+    expect(build.compiledScene.scene.stories.main?.listen).toEqual([])
+    stopTrace()
+  }, 15_000)
+
   it('keeps story five to two cards, two moving containers and one reparented item', async () => {
     const root = document.createElement('main')
     document.body.append(root)
@@ -470,7 +533,7 @@ describe('position V2 demo', () => {
     expect(q?.contains(item ?? null)).toBe(true)
   })
 
-  it('keeps the selected story end available after a backward then forward seek', async () => {
+  it('keeps the active story end available across backward and forward seek', async () => {
     const root = document.createElement('main')
     document.body.append(root)
     codplay = new CodPlay({
@@ -490,18 +553,16 @@ describe('position V2 demo', () => {
     codplay.engine.advance(0)
     await instance.telco.play()
     codplay.engine.advance(1)
-    codplay.engine.advance(10_000)
-    await instance.telco.pause()
-
-    const reached = instance.telco.getProgress()
-    expect(reached.timelineMs).toBeGreaterThanOrEqual(10_000)
-    expect(reached.durationMs).toBeGreaterThanOrEqual(9_650)
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 1, durationMs: 3_000 })
 
     await instance.telco.seek(3_000)
-    expect(instance.telco.getProgress()).toEqual({ timelineMs: 3_000, durationMs: 9_650 })
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 3_000, durationMs: 3_000 })
 
-    await instance.telco.seek(9_650)
-    expect(instance.telco.getProgress()).toEqual({ timelineMs: 9_650, durationMs: 9_650 })
+    await instance.telco.seek(1_000)
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 1_000, durationMs: 3_000 })
+
+    await instance.telco.seek(3_000)
+    expect(instance.telco.getProgress()).toEqual({ timelineMs: 3_000, durationMs: 3_000 })
   })
 
   it('keeps a position story overlay inside that story root', async () => {

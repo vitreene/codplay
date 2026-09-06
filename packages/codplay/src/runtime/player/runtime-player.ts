@@ -592,7 +592,6 @@ export class RuntimePlayer {
         applyAtMs: this.currentTimeMs,
         trackId: resolvedTarget.trackId,
         storyId: resolvedTarget.storyId,
-        cascade: resolvedTarget.cascade,
         visibility: normalized.eventime.visibility,
         data: normalized.eventime.data,
         mode: normalized.mode,
@@ -605,7 +604,6 @@ export class RuntimePlayer {
     const appended = this.trackJournal.appendAnchoredEventimes({
       trackId: resolvedTarget.trackId,
       storyId: resolvedTarget.storyId,
-      cascade: resolvedTarget.cascade,
       anchorMs: this.currentTimeMs,
       eventimes: [normalized.eventime],
       mode: normalized.mode,
@@ -618,6 +616,23 @@ export class RuntimePlayer {
     }
     this.notifyTraceEvents(appended.data.events)
     this.journalChangeListener?.()
+    const resetStoryIds = normalized.mode === EVENT_INSERT_MODE_PERSIST_ONLY
+      ? []
+      : this.resolvePresentedResetStoryIds(appended.data.events)
+    if (resetStoryIds.length > 0 && this.solvedScene !== undefined) {
+      const previousSolvedScene = this.solvedScene
+      const nextSolvedScene = this.reconstructScene(this.currentTimeMs, this.includePersistOnlyInCurrent)
+      const moveDeltas = diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+      this.synchronizeStateStoreFromScene(nextSolvedScene)
+      notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
+      this.solvedScene = nextSolvedScene
+      this.materializeScene(nextSolvedScene, {
+        previousScene: previousSolvedScene,
+        moveDeltas,
+        resetStoryIds,
+      })
+      this.notifyTransportObservers()
+    }
     return appended.data
   }
 
@@ -673,9 +688,16 @@ export class RuntimePlayer {
       const moveDeltas = previousSolvedScene === undefined
         ? []
         : diffSolvedScenes(previousSolvedScene, nextSolvedScene)
+      const resetStoryIds = this.resolvePresentedResetStoryIds(result.events)
       notifyModuleMoveDeltas(this.moduleServiceInstances, previousSolvedScene, nextSolvedScene, new Set(), moveDeltas)
       this.solvedScene = nextSolvedScene
-      this.materializeScene(nextSolvedScene, { previousScene: previousSolvedScene, moveDeltas })
+      this.materializeScene(nextSolvedScene, {
+        previousScene: previousSolvedScene,
+        moveDeltas,
+        ...(resetStoryIds.length === 0
+          ? {}
+          : { resetStoryIds }),
+      })
       this.notifyTransportObservers()
       if (this.state === PLAYER_LIFECYCLE_PLAYING && sequenceEndTime !== undefined) {
         this.finalizeSequenceEnd(sequenceEndTime)
@@ -820,7 +842,6 @@ export class RuntimePlayer {
           name: event.name,
           applyAtMs: event.applyAtMs,
           storyId: event.cascade === true ? undefined : entry.storyId,
-          cascade: event.cascade,
           data: event.data,
           mode: event.mode,
           meta,
@@ -832,7 +853,6 @@ export class RuntimePlayer {
           name: event.name,
           applyAtMs: event.applyAtMs,
           storyId: event.cascade === true ? undefined : entry.storyId,
-          cascade: event.cascade,
           data: event.data,
           mode: event.mode,
           meta,
@@ -984,6 +1004,20 @@ export class RuntimePlayer {
         // Trace observers are diagnostic context consumers and must not break the event circuit.
       }
     }
+  }
+
+  /** Selects reset boundaries that are effective at the current presentation head. */
+  private resolvePresentedResetStoryIds(events: readonly RuntimeTrackEvent[]): readonly string[] {
+    const storyIds = new Set<string>()
+    for (const event of events) {
+      if (event.applyAtMs > this.currentTimeMs
+        || event.mode === EVENT_INSERT_MODE_PERSIST_ONLY
+        || !this.trackJournal.isTrackActive(event.trackId)) continue
+      for (const storyId of Object.keys(this.compiledScene.scene.stories)) {
+        if (this.trackJournal.isStoryResetEvent(storyId, event)) storyIds.add(storyId)
+      }
+    }
+    return [...storyIds]
   }
 
   /** Reapplies active capture actions through the normal component update path. */
@@ -1380,10 +1414,10 @@ export class RuntimePlayer {
 function resolveEventimeTarget(
   scene: CompiledScene,
   target: RuntimePlayerEventimeTarget,
-): Readonly<{ trackId: string; storyId?: string; cascade: boolean }> {
+): Readonly<{ trackId: string; storyId?: string }> {
   if (target.scope === 'scene') {
     if (target.storyId !== undefined) throw new Error('Scene eventime target must not contain storyId.')
-    return { trackId: target.trackId ?? TRACK_GLOBAL_ID, cascade: true }
+    return { trackId: target.trackId ?? TRACK_GLOBAL_ID }
   }
   if (target.storyId === undefined) throw new Error('Story eventime target requires storyId.')
   const story = scene.scene.stories[target.storyId]
@@ -1391,7 +1425,6 @@ function resolveEventimeTarget(
   return {
     trackId: target.trackId ?? story.trackId ?? story.id,
     storyId: story.id,
-    cascade: false,
   }
 }
 

@@ -28,9 +28,7 @@ export type RuntimeEventInput = Readonly<{
   trackId?: string
   storyId?: string
   data?: CompiledRecord
-  /** Routes the event through scene rules and global materialization. */
-  cascade?: boolean
-  /** Named V2 event visibility; preferred over the legacy internal cascade flag. */
+  /** Named V2 event visibility retained with the journaled event. */
   visibility?: CompiledEventime['visibility']
   /** Opaque context available to transforms and straps. */
   context?: Readonly<Record<string, unknown>>
@@ -51,12 +49,14 @@ export type RuntimeEventDispatchIssue = Readonly<{
   depth?: number
 }>
 
-/** Complete result of one live event and all its declared cascades. */
+/** Complete result of one live event and all its declared emissions. */
 export type RuntimeEventDispatchResult = Readonly<{
   ok: boolean
   events: readonly RuntimeTrackEvent[]
   straps: readonly ListenStrapExecution[]
   issues: readonly RuntimeEventDispatchIssue[]
+  /** Stories whose selected listen rule projected a reset boundary. */
+  resetStoryIds?: readonly string[]
 }>
 
 /** Dependencies of the deterministic event router. */
@@ -76,7 +76,6 @@ type DispatchScope = 'scene' | 'story'
 type DispatchTarget = Readonly<{
   trackId: string
   storyId?: string
-  cascade: boolean
   visibility?: CompiledEventime['visibility']
 }>
 
@@ -92,6 +91,7 @@ type DispatchAccumulator = {
   events: RuntimeTrackEvent[]
   straps: ListenStrapExecution[]
   issues: RuntimeEventDispatchIssue[]
+  resetStoryIds: string[]
 }
 
 /**
@@ -135,6 +135,7 @@ export class RuntimeEventDispatcher {
       events: [],
       straps: [],
       issues: [],
+      resetStoryIds: [],
     }
     if (input.name.trim().length === 0) {
       accumulator.ok = false
@@ -145,7 +146,10 @@ export class RuntimeEventDispatcher {
       return accumulator
     }
     await this.route(input, 0, accumulator)
-    return accumulator
+    return {
+      ...accumulator,
+      resetStoryIds: Object.freeze([...new Set(accumulator.resetStoryIds)]),
+    }
   }
 
   /** Routes one event, appends it once, then processes its matching rules. */
@@ -166,6 +170,7 @@ export class RuntimeEventDispatcher {
 
     const target = this.resolveTarget(input, accumulator, depth)
     if (target === undefined) return
+    const selection = this.selectPipeline(input, target)
     const appended = this.journal.appendLiveEvent({
       eventId: input.eventId ?? this.createGeneratedEventId(),
       trackId: target.trackId,
@@ -173,7 +178,6 @@ export class RuntimeEventDispatcher {
       name: input.name,
       applyAtMs: input.applyAtMs,
       data: input.data,
-      cascade: target.cascade,
       visibility: input.visibility,
       context: input.context,
       meta: input.meta,
@@ -191,7 +195,8 @@ export class RuntimeEventDispatcher {
     }
     accumulator.events.push(appended.data)
 
-    await this.processAppendedEvent(input, target, appended.data, depth, accumulator)
+    this.collectResetStoryIds(appended.data, accumulator)
+    await this.processAppendedEvent(input, target, appended.data, depth, accumulator, selection)
   }
 
   /** Processes one journaled event without appending it a second time. */
@@ -201,6 +206,7 @@ export class RuntimeEventDispatcher {
     appended: RuntimeTrackEvent,
     depth: number,
     accumulator: DispatchAccumulator,
+    selectedPipeline?: PipelineSelection,
   ): Promise<void> {
     if (isTrackControlEvent(input.name)) {
       const control = this.journal.applyControlEvent(input.name, input.data)
@@ -215,7 +221,7 @@ export class RuntimeEventDispatcher {
       }
     }
 
-    const selection = this.selectPipeline(input, target)
+    const selection = selectedPipeline ?? this.selectPipeline(input, target)
     if (selection === undefined) return
     const event: ListenEventInput = {
       eventId: appended.eventId,
@@ -225,7 +231,6 @@ export class RuntimeEventDispatcher {
       trackId: appended.trackId,
       storyId: appended.storyId,
       data: appended.data,
-      cascade: appended.cascade,
       context: appended.context,
       meta: appended.meta,
       visibility: appended.visibility,
@@ -320,7 +325,6 @@ export class RuntimeEventDispatcher {
       trackId: event.trackId,
       storyId: event.storyId,
       data: event.data,
-      cascade: event.cascade,
       visibility: event.visibility,
       context: event.context,
       meta: event.meta,
@@ -328,11 +332,21 @@ export class RuntimeEventDispatcher {
     }
     const target: DispatchTarget = {
       trackId: event.trackId,
-      storyId: event.visibility === undefined || event.visibility === 'story' ? event.storyId : undefined,
-      cascade: event.visibility === undefined && event.cascade === true,
+      storyId: event.visibility === 'scene' || event.visibility === 'public'
+        ? undefined
+        : event.storyId,
       visibility: event.visibility,
     }
-    await this.processAppendedEvent(input, target, event, depth, accumulator)
+    const selection = this.selectPipeline(input, target)
+    this.collectResetStoryIds(event, accumulator)
+    await this.processAppendedEvent(input, target, event, depth, accumulator, selection)
+  }
+
+  /** Reports every story whose reset listener intercepts one journaled event. */
+  private collectResetStoryIds(event: RuntimeTrackEvent, accumulator: DispatchAccumulator): void {
+    for (const storyId of Object.keys(this.scene.scene.stories)) {
+      if (this.journal.isStoryResetEvent(storyId, event)) accumulator.resetStoryIds.push(storyId)
+    }
   }
 
   /** Resolves the declared storage track without creating a runtime track. */
@@ -367,20 +381,17 @@ export class RuntimeEventDispatcher {
         return {
           trackId: input.trackId ?? resolveStoryTrackId(story),
           storyId: story.id,
-          cascade: false,
           visibility: input.visibility,
         }
       }
       return {
         trackId: input.trackId ?? TRACK_GLOBAL_ID,
         storyId: undefined,
-        cascade: false,
         visibility: input.visibility,
       }
     }
-    const localStory = input.storyId !== undefined && input.cascade !== true
-    if (localStory) {
-      const story = this.scene.scene.stories[input.storyId!]
+    if (input.storyId !== undefined) {
+      const story = this.scene.scene.stories[input.storyId]
       if (story === undefined) {
         accumulator.ok = false
         accumulator.issues.push({
@@ -394,19 +405,19 @@ export class RuntimeEventDispatcher {
       return {
         trackId: input.trackId ?? resolveStoryTrackId(story),
         storyId: story.id,
-        cascade: false,
+        visibility: input.visibility,
       }
     }
     return {
       trackId: input.trackId ?? TRACK_GLOBAL_ID,
       storyId: undefined,
-      cascade: true,
+      visibility: input.visibility,
     }
   }
 
   /** Chooses story rules first, then scene rules, without mixing scopes. */
   private selectPipeline(input: RuntimeEventInput, target: DispatchTarget): PipelineSelection | undefined {
-    if (target.storyId !== undefined && target.cascade === false) {
+    if (target.storyId !== undefined) {
       const story = this.scene.scene.stories[target.storyId]
       const storyRules = story?.listen.filter((rule) => rule.on === input.name) ?? []
       if (storyRules.length > 0) {
@@ -437,15 +448,15 @@ export class RuntimeEventDispatcher {
   ): Promise<void> {
     for (const output of outputs) {
       const visibility = output.visibility ?? input.visibility
-      const cascade = visibility === undefined ? output.cascade === true : false
       await this.route({
         name: output.name,
         applyAtMs: output.applyAtMs,
         data: output.data,
         storyId: visibility === 'story'
           ? selection.storyId
-          : cascade ? undefined : selection.scope === 'story' ? selection.storyId : undefined,
-        cascade,
+          : visibility === 'scene' || visibility === 'public'
+            ? undefined
+            : selection.scope === 'story' ? selection.storyId : undefined,
         visibility,
         context: output.context ?? input.context,
         meta: output.meta ?? input.meta,

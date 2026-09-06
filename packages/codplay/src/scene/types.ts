@@ -108,6 +108,8 @@ export type AuthorListenTransform = (event: AuthorListenEvent) => readonly Autho
 /** One authoring listen declaration. */
 export type SceneListenRule = Readonly<{
   on: string
+  /** Projects the intercepted event as the initial state of this story. */
+  reset?: boolean
   transform?: readonly AuthorListenTransform[]
   emit?: readonly Readonly<Record<string, unknown>>[]
   straps?: readonly string[]

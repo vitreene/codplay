@@ -44,6 +44,9 @@ export const POSITION_STORY_THREE: StoryDoc = {
     },
   },
   listen: [{
+    on: CAROUSEL_EVENTS[2].reset,
+    reset: true,
+  }, {
     on: POSITION_PATH_CAPTURE_EVENT,
     transform: [(event) => {
       const captureState = readRecord(readRecord(event.data)?.captureState)

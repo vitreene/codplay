@@ -1,6 +1,7 @@
 export {
   buildMotionGraph,
   resolvePresentationFrame,
+  type MotionGraphOptions,
 } from './motion-graph'
 export {
   compileMotionSchedule,
@@ -32,6 +33,8 @@ export type {
   MotionAttachment,
   MotionBoundary,
   MotionGraph,
+  MotionResetBoundary,
+  MotionResetTimesByItem,
   MotionIntent,
   MotionKeyframe,
   MotionPresentationMode,

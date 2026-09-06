@@ -233,8 +233,9 @@ function isCompiledCaptureDeclaration(value: unknown): boolean {
 /** Checks one compiled listen array and its function references. */
 function isCompiledListenArray(value: unknown): value is readonly CompiledListenRule[] {
   return Array.isArray(value) && value.every((rule) => {
-    if (!isPlainRecord(rule) || !hasOnlyKeys(rule, ['on', 'transform', 'emit', 'straps'])) return false
+    if (!isPlainRecord(rule) || !hasOnlyKeys(rule, ['on', 'reset', 'transform', 'emit', 'straps'])) return false
     return typeof rule.on === 'string'
+      && (rule.reset === undefined || typeof rule.reset === 'boolean')
       && (rule.transform === undefined || Array.isArray(rule.transform) && rule.transform.every(isFunctionReference))
       && (rule.emit === undefined || Array.isArray(rule.emit) && rule.emit.every(isCompiledRecord))
       && (rule.straps === undefined || isStringArray(rule.straps))

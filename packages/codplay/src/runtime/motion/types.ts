@@ -48,6 +48,8 @@ export type MotionIntent = Readonly<{
   id: string
   itemId: string
   startAt: number
+  /** Journal order used when a live move shares its time with a reset. */
+  eventSeq?: number
   duration: number
   delay?: number
   ease: string
@@ -108,6 +110,8 @@ export type MotionSegment = Readonly<{
   id: string
   itemId: string
   startAt: number
+  /** Journal order of the live event that created this segment. */
+  eventSeq?: number
   endAt: number
   duration: number
   delay: number
@@ -141,10 +145,21 @@ export type ItemMotionTrack = Readonly<{
   segments: readonly MotionSegment[]
 }>
 
+/** One ordered reset boundary used by motion projection. */
+export type MotionResetBoundary = Readonly<{
+  timeMs: number
+  eventSeq: number
+}>
+
+/** Reset boundaries indexed by the logical item they affect. */
+export type MotionResetTimesByItem = ReadonlyMap<string, readonly MotionResetBoundary[]>
+
 /** Immutable timeline graph resolved identically by Play and Seek. */
 export type MotionGraph = Readonly<{
   revision: string
   tracksByItem: ReadonlyMap<string, ItemMotionTrack>
+  /** Reset barriers keep pre-reset trajectories available for backward seek. */
+  resetTimesByItem: MotionResetTimesByItem
   /** Prepared sovereign trajectory owners; unrelated layout items are never visited per frame. */
   presentationItemIds: readonly string[]
 }>

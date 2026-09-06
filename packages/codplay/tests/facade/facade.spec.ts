@@ -79,10 +79,10 @@ function createInstance(
 function motionSceneDoc(): SceneDoc {
   return {
     id: 'facade-motion-scene',
-    stories: {
-      main: {
-        id: 'main',
-        persos: [{
+      stories: {
+        main: {
+          id: 'main',
+          persos: [{
           id: 'layout',
           type: 'layout',
           initial: {
@@ -97,10 +97,10 @@ function motionSceneDoc(): SceneDoc {
           actions: {
             transfer: { move: { target: 'target', transition: { duration: 100, ease: 'linear' } } },
           },
-        }],
-        listen: [],
-        eventimes: [{ name: 'transfer', startAt: 100 }],
-      },
+          }],
+          listen: [{ on: 'navigation:reset', reset: true }],
+          eventimes: [{ name: 'transfer', startAt: 100 }],
+        },
     },
   }
 }
@@ -440,6 +440,39 @@ describe('CodPlay facade', () => {
     expect(overlay).not.toBeNull()
     expect(overlay?.children).toHaveLength(1)
     expect(overlay?.parentElement).toBe(root.querySelector('section'))
+    codplay.destroy()
+  })
+
+  it('clears the current story overlay when its reset event reaches the player head', async () => {
+    const codplay = createCodPlay()
+    const build = codplay.build({ scene: liveMotionSceneDoc() })
+
+    expect(build.ok).toBe(true)
+    if (!build.ok) return
+    const root = document.createElement('div')
+    const instance = codplay.instances.create({
+      instanceId: 'live-motion-reset-instance',
+      compiledScene: build.compiledScene,
+      functions: build.functions,
+      root,
+    })
+
+    await instance.events.emit(
+      { name: 'transfer', visibility: 'public' },
+      { scope: 'story', storyId: 'main' },
+    )
+    codplay.engine.advance(0)
+    await instance.telco.play()
+    codplay.engine.advance(1)
+    expect(findTestOverlayLayer(root)).not.toBeUndefined()
+
+    await instance.events.emit(
+      { name: 'navigation:reset' },
+      { scope: 'story', storyId: 'main' },
+    )
+
+    expect(findTestOverlayLayer(root)).toBeUndefined()
+    expect(instance.telco.getProgress().timelineMs).toBe(1)
     codplay.destroy()
   })
 

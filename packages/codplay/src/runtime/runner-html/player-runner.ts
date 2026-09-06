@@ -19,7 +19,12 @@ import type { RuntimeCaptureState } from '../capture'
 import { HtmlPersoEmitSourceAdapter } from './perso-emit-source-adapter'
 import type { Diagnostic } from '../../diagnostics'
 import { compileMotionSchedule, MotionMaterializer } from '../motion'
-import type { LayoutSnapshot, MotionBoundary, PresentationFrame } from '../motion'
+import type {
+  LayoutSnapshot,
+  MotionBoundary,
+  MotionResetTimesByItem,
+  PresentationFrame,
+} from '../motion'
 import type { CompiledFunctionCollection, CompiledScene } from '../../scene/compiled'
 import type { RuntimeTrackEvent } from '../player/pipeline'
 import {
@@ -138,6 +143,7 @@ export class HtmlPlayerRunner {
   private replayMotionBoundaries: readonly MotionBoundary[] = []
   private presentationMotionBoundaries: readonly MotionBoundary[] = []
   private motionJournalRevision = -1
+  private motionResetSignature = ''
   private motionDiscoveryEnabled = false
   private rebuildingMotion = false
   private readonly liveFirstLayouts = new Map<string, {
@@ -354,6 +360,7 @@ export class HtmlPlayerRunner {
     try {
       if (this.motionSystem !== undefined) {
         this.presentationMotionBoundaries = this.replayMotionBoundaries
+        this.motionSystem.setResetTimesByItem(this.resolveMotionResetTimes(true))
         this.motionSystem.setBoundaries(this.presentationMotionBoundaries)
       }
       const result = this.player.seek(timeMs)
@@ -444,6 +451,9 @@ export class HtmlPlayerRunner {
     if (this.rebuildingMotion) return
 
     const journalRevision = this.player.trackJournal.getRevision()
+    const resetTimesByItem = this.resolveMotionResetTimes(this.player.includesPersistOnlyInCurrent())
+    const resetSignature = JSON.stringify([...resetTimesByItem])
+    const resetChanged = resetSignature !== this.motionResetSignature
     if (!force && journalRevision === this.motionJournalRevision) return
 
     const replayIntents = compileMotionSchedule(
@@ -463,10 +473,16 @@ export class HtmlPlayerRunner {
       },
     )
     if (replayIntents.length === 0 && presentationIntents.length === 0) {
+      const motionSystem = this.motionSystem
+      if (motionSystem !== undefined && (force || resetChanged)) {
+        motionSystem.setResetTimesByItem(resetTimesByItem)
+        motionSystem.setBoundaries([])
+      }
       this.motionJournalRevision = journalRevision
+      this.motionResetSignature = resetSignature
       return
     }
-    if (!force && !hasNewMotionIntent(replayIntents, this.replayMotionBoundaries)) {
+    if (!force && !resetChanged && !hasNewMotionIntent(replayIntents, this.replayMotionBoundaries)) {
       // Journal revisions also cover non-motion events. They do not invalidate
       // a captured motion graph when no new move intent was introduced.
       this.motionJournalRevision = journalRevision
@@ -499,9 +515,11 @@ export class HtmlPlayerRunner {
       const initialize = this.motionSystem === undefined
       const motionSystem = this.motionSystem ?? this.createMotionSystem()
       this.motionSystem = motionSystem
+      motionSystem.setResetTimesByItem(resetTimesByItem)
       motionSystem.setBoundaries(this.presentationMotionBoundaries)
       if (initialize) motionSystem.initialize()
       this.motionJournalRevision = journalRevision
+      this.motionResetSignature = resetSignature
     } finally {
       this.rebuildingMotion = false
     }
@@ -596,6 +614,7 @@ export class HtmlPlayerRunner {
     this.presentationMotionBoundaries = Object.freeze(presentationBoundaries)
     const motionSystem = this.motionSystem ?? this.createMotionSystem()
     this.motionSystem = motionSystem
+    motionSystem.setResetTimesByItem(this.resolveMotionResetTimes(false))
     motionSystem.setBoundaries(this.presentationMotionBoundaries)
     motionSystem.initialize()
     this.motionJournalRevision = this.player.trackJournal.getRevision()
@@ -604,12 +623,36 @@ export class HtmlPlayerRunner {
 
   /** Presents one materialized scene and discovers newly journaled move actions. */
   private presentMotion(scene: SolvedScene, context: RuntimeMaterializerSceneContext): void {
+    const resetStoryIds = context.resetStoryIds ?? []
+    if (resetStoryIds.length > 0 && this.motionSystem !== undefined) {
+      this.motionSystem.clearTransientPresentation(this.resolveMotionItemIds(scene, resetStoryIds))
+    }
     if (this.motionDiscoveryEnabled && context.phase !== 'geometry-capture') {
-      this.rebuildMotionBoundaries()
+      this.rebuildMotionBoundaries(resetStoryIds.length > 0)
     }
     const motionSystem = this.motionSystem
     if (motionSystem === undefined) return
     motionSystem.present(scene.timeMs)
+  }
+
+  /** Collects logical item identities belonging to the stories just reset. */
+  private resolveMotionItemIds(scene: SolvedScene, storyIds: readonly string[]): ReadonlySet<string> {
+    const selectedStories = new Set(storyIds)
+    return new Set(Object.values(scene.persos)
+      .filter((perso) => selectedStories.has(perso.storyId))
+      .map((perso) => perso.key))
+  }
+
+  /** Collects every journal reset boundary for the current motion view. */
+  private resolveMotionResetTimes(includePersistOnly: boolean): MotionResetTimesByItem {
+    const resetTimes = new Map<string, readonly { timeMs: number; eventSeq: number }[]>()
+    for (const [storyId, story] of Object.entries(this.player.compiledScene.scene.stories)) {
+      const boundaries = this.player.trackJournal.getStoryResetBoundaries(storyId, includePersistOnly)
+        .map((boundary) => ({ timeMs: boundary.applyAtMs, eventSeq: boundary.eventSeq }))
+      if (boundaries.length === 0) continue
+      for (const perso of story.persos) resetTimes.set(`${storyId}:${perso.id}`, boundaries)
+    }
+    return resetTimes
   }
 
   /** Creates the one optional HTML motion presenter for this visible root. */

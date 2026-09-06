@@ -38,7 +38,7 @@ describe('CompiledSceneCodec', () => {
             id: 'main',
             persos: [],
             straps: ['portable-story-strap'],
-            listen: [],
+            listen: [{ on: 'navigation:reset', reset: true }],
           },
         },
       },
@@ -50,6 +50,9 @@ describe('CompiledSceneCodec', () => {
     if (decoded.ok) {
       expect(decoded.value.scene.straps).toEqual({ 'scene-local': { ref: 'fn:scene-local' } })
       expect(decoded.value.scene.stories.main?.straps).toEqual(['portable-story-strap'])
+      expect(decoded.value.scene.stories.main?.listen).toEqual([
+        { on: 'navigation:reset', reset: true },
+      ])
     }
   })
 

@@ -328,6 +328,7 @@ function toMotionIntent(intent: ScheduledMotionIntent): MotionIntent {
     id: intent.id,
     itemId: intent.itemId,
     startAt: intent.startAt,
+    ...(intent.eventSeq === undefined ? {} : { eventSeq: intent.eventSeq }),
     duration: intent.duration,
     delay: intent.delay,
     ease: intent.ease,

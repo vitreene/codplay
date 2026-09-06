@@ -14,6 +14,8 @@ export type RuntimeMaterializerSceneContext = Readonly<{
    * persistent author materialization without triggering playback side effects.
    */
   phase?: 'normal' | 'geometry-capture'
+  /** Stories whose event projection just crossed a reset boundary. */
+  resetStoryIds?: readonly string[]
 }>
 
 /** Single materializer boundary consumed by the component runtime and player. */

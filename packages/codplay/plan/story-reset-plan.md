@@ -2,7 +2,7 @@
 
 ## Statut
 
-> Status: A relire — proposition, aucune implémentation autorisée
+> Status: En cours — implémentation autorisée le 2026-09-06
 > CodPlay version: V2 foundation
 
 Ce plan est séparé de
@@ -37,7 +37,7 @@ Ajouter une opération story-scoped `story.reset()` qui :
 - faire un remount de la démo pour simuler le résultat ;
 - réinitialiser implicitement une autre story ou l’état de scène.
 
-## Contrat à valider avant implémentation
+## Décisions retenues pour l’implémentation
 
 1. **Interception et capacité de scène.** Fixer l’eventime dont le contenu
    sans cible déclenche la capacité `story.reset()`, puis respecter le circuit
@@ -45,7 +45,9 @@ Ajouter une opération story-scoped `story.reset()` qui :
    une notation de capacité, pas une méthode de façade. La portée vient de
    l’intercepteur concerné, jamais d’un champ `target` ajouté à l’eventime.
    L’adresse séparée éventuellement fournie par l’API d’injection ne fait pas
-   partie de cette capacité.
+   partie de cette capacité. La capacité est déclarée sur la règle `listen` de
+   la story par `reset: true`; elle reste donc attachée à l’interception et
+   peut être associée à n’importe quel nom d’événement.
 2. **Événement.** Définir le record de reset, son identifiant interne, sa
    visibilité de trace et son ordre avec les événements compilés ou runtime au
    même temps, sans introduire de ciblage dans l’eventime.
@@ -55,12 +57,13 @@ Ajouter une opération story-scoped `story.reset()` qui :
    intercepté l’événement, puis application des faits postérieurs à `R`.
 4. **Captures temporaires.** Décider comment sont clôturées ou invalidées les
    captures ouvertes et les émissions différées appartenant à la story.
-5. **Discontinuité motion.** Valider qu’un reset ne produit aucune animation
+5. **Discontinuité motion.** Un reset ne produit aucune animation
    entre l’ancienne pose et l’état initial ; l’overlay de la story est retiré
    puis le nouvel état est présenté immédiatement.
 
-Tant que ces cinq points ne sont pas validés, le statut reste `A relire` et
-aucun fichier de `packages/codplay/src` ou de la démo n’est modifié.
+Ces décisions autorisent l’implémentation dans `packages/codplay/src`. Elles ne
+créent ni méthode de façade, ni cycle de vie de story, ni nouveau circuit
+événementiel.
 
 ## Mise en œuvre ordonnée
 
@@ -105,7 +108,8 @@ temporaire à cet endroit. Aucun parentage de la scène générale n’est intro
 
 ### 4. Capacité de scène et circuit événementiel
 
-- brancher la capacité `story.reset()` sur l’événement de scène validé ;
+- compiler et exécuter `listen.reset: true` uniquement lorsqu’il s’agit d’une
+  règle de story sélectionnée par l’événement ;
 - laisser les règles `listen` des stories sélectionner l’événement par nom,
   puis laisser les actions des persos l’évaluer sans lui ajouter de cible ;
 - l’ancrer sur le temps logique courant sans appeler la télécommande ;
@@ -140,6 +144,59 @@ La validation navigateur doit exécuter le reset pendant le `move` de la démo,
 puis vérifier le DOM présenté et la trace runtime dans Safari. Un test isolé
 de materialization ne suffira pas à valider cette intégration.
 
+## État de l’implémentation — 2026-09-06
+
+Le cœur CodPlay V2 est implémenté :
+
+- `listen.reset: true` est compilé et conservé par le codec ;
+- `RuntimeTrackJournal` conserve les frontières ordonnées sans supprimer les
+  faits antérieurs ;
+- la reconstruction applique l’état initial de la story puis les faits
+  postérieurs à sa dernière frontière ;
+- `RuntimePlayer.emit()` et `RuntimePlayer.emitEventime()` transmettent la
+  frontière à la présentation courante ;
+- le runner HTML invalide le graphe et les ressources motion de la story
+  concernée, sans remount ni modification de l’horloge.
+
+La navigation du carousel `position` est maintenant raccordée :
+
+- chaque story `position-story-one` à `position-story-six` écoute son événement
+  reset de sortie avec `listen: [{ on, reset: true }]` ;
+- le strap de navigation diffuse cet événement reset avant l’outro de la vue,
+  puis diffuse l’outro et l’intro ;
+- les événements reset de sortie sont des événements de portée `scene`, sans
+  `storyId`, et sont isolés par leur nom ; `main` ne déclare aucune règle reset ;
+- l’outro reste séparé du reset afin de conserver le masquage horizontal de la
+  vue sortante.
+
+Le runtime reconnaît cette forme diffusée : un événement de portée `scene` sans
+`storyId` est comparé aux règles `listen.reset` de chaque story, et seule la
+story dont le nom d’événement correspond reçoit une frontière.
+
+Le bouton de reload de la télécommande reste inchangé et hors de cette feature.
+La validation Safari Technology Preview du reset dans le carousel reste à
+faire sur le chemin navigateur complet. Le plan reste donc `En cours`.
+
+### Validation de la tranche — 2026-09-06
+
+- `position-demo.spec.ts` : **6 tests passants** ; les assertions vérifient le
+  carousel manuel, les six resets de sortie, l’overlay local et la
+  reconstruction après seek ;
+- suite ciblée runtime/facade/scene : **8 fichiers, 134 tests passants** ;
+- suite complète du package CodPlay : **89 fichiers, 565 tests passants** ;
+- build `@codplay/demos` : passant ;
+- audit de la source V2 `position` et de ses assertions : aucune occurrence de
+  `cascade`, aucune trace de debug et aucun ancien symbole `viewFiveMove` ; les
+  événements de la démo portent la visibilité V2 nommée `scene` ;
+- `git diff --check` : passant ;
+- typecheck CodPlay : encore bloqué par les imports V1 absents de
+  `packages/authoring/scene-factory` ; le typecheck des démos remonte en plus
+  des erreurs déjà présentes dans `packages/codplay-v1` et `packages/demos/src/v1` ;
+- Safari Technology Preview : la page V2 charge, le bouton `Lire` puis
+  `ArrowRight` font passer le carousel à `02 / 06`, sans erreur console ni
+  requête HTTP en échec ; l’exercice détaillé du reset dans le journal
+  navigateur reste à faire, donc le plan reste `En cours`.
+
 ### 6. Application au carousel de la démo `position`
 
 - avant l’action utilisateur `précédent`, `suivant` ou `Entrée`, identifier
@@ -162,8 +219,7 @@ de materialization ne suffira pas à valider cette intégration.
 
 ## Critères de sortie
 
-Le plan ne pourra passer à `En cours` qu’après validation explicite du contrat
-de l’étape 1 à 4. Il ne pourra passer à `Fini` qu’après :
+Le plan ne pourra passer à `Fini` qu’après :
 
 - spécification du contrat story reset mise à jour ;
 - tests runtime, circuit événementiel, motion et navigateur passants ;

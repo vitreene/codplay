@@ -405,6 +405,107 @@ describe('RuntimePlayer', () => {
     player.destroy()
   })
 
+  it('projects a story reset emitted at the current eventime head without changing the clock', async () => {
+    const resetScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [{ on: 'navigation:reset', reset: true }],
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: { className: 'initial' },
+              actions: {
+                'item:move': null,
+                'item:old': { className: { add: 'old' } },
+              },
+            }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('eventime-story-reset-instance', engine, resetScene)
+
+    expect(player.init().ok).toBe(true)
+    const oldEvent = await player.emit({
+      name: 'item:old',
+      storyId: 'main',
+      applyAtMs: 10,
+    })
+    expect(oldEvent.ok).toBe(true)
+    expect(player.seek(20).ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toContain('old')
+
+    const reset = await player.emitEventime(
+      { name: 'navigation:reset' },
+      { scope: 'story', storyId: 'main' },
+    )
+
+    expect(reset.events).toHaveLength(1)
+    expect(reset.events[0]?.data).toBeUndefined()
+    expect(player.getCurrentTimeMs()).toBe(20)
+    expect(player.getLifecycleState()).toBe('ready')
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toBe('initial')
+
+    expect(player.seek(10).ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toContain('old')
+    expect(player.seek(20).ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toBe('initial')
+    expect(player.trackJournal.getAllEvents()).toHaveLength(2)
+    player.destroy()
+  })
+
+  it('projects a story reset selected by the live event circuit', async () => {
+    const resetScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            id: 'main',
+            listen: [{ on: 'navigation:reset', reset: true }],
+            persos: [{
+              id: 'item',
+              type: 'tag',
+              initial: { className: 'initial' },
+              actions: {
+                'item:old': { className: { add: 'old' } },
+              },
+            }],
+          },
+        },
+      },
+    }
+    const engine = new RuntimeEngine(new RuntimeCapabilityCatalog())
+    const player = new RuntimePlayer('live-story-reset-instance', engine, resetScene)
+
+    expect(player.init().ok).toBe(true)
+    expect((await player.emit({
+      name: 'item:old',
+      storyId: 'main',
+      applyAtMs: 10,
+    })).ok).toBe(true)
+    expect(player.seek(20).ok).toBe(true)
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toContain('old')
+
+    const reset = await player.emit({
+      name: 'navigation:reset',
+      storyId: 'main',
+      applyAtMs: 20,
+    })
+
+    expect(reset.ok).toBe(true)
+    expect(reset.resetStoryIds).toEqual(['main'])
+    expect(player.getCurrentTimeMs()).toBe(20)
+    expect(player.getSolvedScene()?.persos['main:item']?.state.className).toBe('initial')
+    expect(player.trackJournal.getAllEvents()).toHaveLength(2)
+    player.destroy()
+  })
+
   it('does not terminalize sequence:end when seek only crosses its boundary', () => {
     const terminalScene: CompiledScene = {
       ...scene,

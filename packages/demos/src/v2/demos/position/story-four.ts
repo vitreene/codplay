@@ -19,7 +19,7 @@ import {
   POSITION_STORY_FOUR_ID,
   POSITION_NAMESPACE,
 } from './constants'
-import { createViewRoot } from './carousel'
+import { CAROUSEL_EVENTS, createViewRoot } from './carousel'
 import {
   clamp,
   createCircularArcPath,
@@ -67,6 +67,7 @@ export function createStoryFour(): StoryDoc {
       [POSITION_LIVE_TARGET_COMMIT_STRAP]: createAnchorCommitStrap('target'),
     },
     listen: [
+      { on: CAROUSEL_EVENTS[3].reset, reset: true },
       { on: POSITION_LIVE_SOURCE_RELEASED_EVENT, straps: [POSITION_LIVE_SOURCE_COMMIT_STRAP] },
       { on: POSITION_LIVE_TARGET_RELEASED_EVENT, straps: [POSITION_LIVE_TARGET_COMMIT_STRAP] },
     ],
@@ -194,7 +195,7 @@ export function planStoryFourAnimation(
       return {
         event: {
           name: POSITION_LIVE_ITEM_MOVE_EVENT,
-          cascade: true,
+          visibility: 'scene',
           data: createLiveBounceMoveData(targetRole, sourcePoint, targetPoint),
         },
       }
@@ -206,7 +207,7 @@ export function planStoryFourAnimation(
   return [
     ...moves,
     ...planned.wait(LIVE_BOUNCE_END_OFFSET_MS, {
-      event: { name: POSITION_STORY_END_EVENT, cascade: true },
+      event: { name: POSITION_STORY_END_EVENT, visibility: 'scene' },
     }),
   ]
 }

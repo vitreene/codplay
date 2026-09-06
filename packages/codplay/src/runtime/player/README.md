@@ -70,6 +70,11 @@ epsilon numérique. Un événement à `0 ms` possède donc un état initial rée
 `RuntimeTrackJournal`, choisit les règles de story avant le fallback de scène,
 exécute les transforms et les straps attendus, persiste les sorties sur leurs
 tracks et ne réinjecte que les `emit` déclarés, avec une profondeur bornée.
+L'entrée V2 du dispatcher ne transporte pas le booléen V1 `cascade` : l'adresse
+interne est déjà portée par `storyId`/`trackId` et la visibilité de l'event reste
+nommée. Le booléen historique des événements de capture est converti à la
+frontière de capture avant cette entrée et ne fait pas partie du circuit V2
+ordinaire.
 
 Un seul allocateur d'identifiants est partagé par les dispatchers ; un événement
 de début et son événement de fin ne peuvent donc pas entrer en collision.
@@ -99,6 +104,28 @@ recompile le planning et ne recapture que si les données de l'eventime
 introduisent effectivement un `move`. Ainsi, un eventime sans `move` ne crée pas
 de graphe, tandis qu'un `move` ajouté après `init()` suit le même chemin de
 capture que `resize()` et reste disponible pour Play, Seek et replay.
+
+### Reset événementiel d'une story
+
+Une règle `listen` portée par une story peut marquer un nom d'event avec
+`reset: true`. Quand cet eventime est adressé à cette story, le journal conserve
+l'occurrence et sa séquence d'insertion comme frontière de projection. À cette
+frontière, la story repart de son état initial compilé, puis reçoit seulement
+les mises à jour et actions postérieures ; aucun fait antérieur n'est effacé.
+
+La cible ne fait pas partie des données de l'event : la portée et le `storyId`
+restent dans l'argument séparé de `events.emit()`. Le reset ne rembobine pas
+l'horloge, ne change pas l'état `playing`/`paused`, ne remonte pas les
+composants et ne touche ni l'état de scène ni les autres stories. Le runner
+HTML libère les ressources motion transitoires de cette story et présente son
+état initial sans transition. Un seek avant la frontière relit normalement les
+faits antérieurs ; un eventime futur reste journalisé et prend effet lorsque la
+tête de lecture l’atteint.
+
+Un événement de portée `scene`, sans `storyId`, est aussi reconnu par les règles
+`listen.reset` des stories dont le nom correspond exactement. Cette interception
+reste limitée au reset ; les autres règles de story ne sont pas exécutées par ce
+chemin.
 
 ## Actions temporelles
 

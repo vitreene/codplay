@@ -30,7 +30,7 @@ export function planStoryAnimation(
   return createStoryAnimationPlan(index).flatMap((occurrence) => planned.wait(occurrence.offsetMs, {
     event: {
       name: occurrence.name,
-      cascade: true,
+      visibility: 'scene',
       ...(occurrence.data === undefined ? {} : { data: occurrence.data }),
     },
   }))

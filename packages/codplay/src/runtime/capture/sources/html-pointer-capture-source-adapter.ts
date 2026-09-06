@@ -280,7 +280,6 @@ export class HtmlPointerCaptureSourceAdapter {
         name: event.name,
         applyAtMs: this.player.getCurrentTimeMs(),
         storyId: event.cascade === true ? undefined : storyId,
-        cascade: event.cascade,
         data: event.data,
         mode: event.mode,
       })

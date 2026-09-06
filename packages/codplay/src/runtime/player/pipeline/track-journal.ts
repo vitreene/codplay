@@ -8,7 +8,7 @@ import { STRAP_SCOPE_SCENE, STRAP_SCOPE_STORY, type StrapScope } from '../../con
 import { TRACK_GLOBAL_ID } from '../../config/track'
 import type { RuntimeEventInsertMode } from '../../config/event-insertion'
 import { isPlainRecord } from '../../../shared'
-import type { CompiledEventime, CompiledRecord, CompiledScene } from '../../../scene/compiled'
+import type { CompiledEventime, CompiledListenRule, CompiledRecord, CompiledScene } from '../../../scene/compiled'
 import { buildTrackRegistry, createStrapTrackId, type MaterializedTrackRegistry } from './tracks'
 import type { StrapEvent, StrapExecutionResult } from './strap-executor'
 
@@ -33,6 +33,12 @@ export type RuntimeTrackEvent = Readonly<{
   mode?: RuntimeEventInsertMode
   /** Named visibility retained for public event observation. */
   visibility?: CompiledEventime['visibility']
+}>
+
+/** One story reset boundary retained by the runtime journal. */
+export type RuntimeStoryResetBoundary = Readonly<{
+  applyAtMs: number
+  eventSeq: number
 }>
 
 /** Input used to append one live event without creating a track. */
@@ -102,6 +108,7 @@ export type StrapOutputAppendResult = Readonly<{
 
 /** Runtime journal layered over the immutable compiled track registry. */
 export class RuntimeTrackJournal {
+  private readonly scene: CompiledScene
   readonly registry: MaterializedTrackRegistry
   private readonly activeTrackIds: Map<string, boolean>
   private readonly eventsByTrack = new Map<string, RuntimeTrackEvent[]>()
@@ -112,6 +119,7 @@ export class RuntimeTrackJournal {
 
   /** Creates a mutable live journal from one immutable compiled scene. */
   constructor(scene: CompiledScene) {
+    this.scene = scene
     this.registry = buildTrackRegistry(scene)
     this.activeTrackIds = new Map(
       Object.values(this.registry.tracks).map((track) => [track.id, track.active]),
@@ -305,6 +313,42 @@ export class RuntimeTrackJournal {
     )
   }
 
+  /** Reports whether one journal event is the reset capability of a story. */
+  isStoryResetEvent(storyId: string, event: RuntimeTrackEvent): boolean {
+    const addressedToStory = event.storyId === storyId
+      || (event.storyId === undefined && event.visibility === 'scene')
+    return addressedToStory
+      && isStoryResetEvent(this.scene.scene.stories[storyId]?.listen ?? [], event)
+  }
+
+  /** Returns the latest reset intercepted by one story before a logical time. */
+  getLatestStoryReset(
+    storyId: string,
+    timeMs: number,
+    includeBoundary = true,
+    includePersistOnly = true,
+  ): RuntimeStoryResetBoundary | undefined {
+    const boundaries = this.getStoryResetBoundaries(storyId, includePersistOnly)
+      .filter((boundary) => boundary.applyAtMs < timeMs
+        || (includeBoundary && boundary.applyAtMs === timeMs))
+    return boundaries.at(-1)
+  }
+
+  /** Returns every active reset boundary retained for one story. */
+  getStoryResetBoundaries(
+    storyId: string,
+    includePersistOnly = true,
+  ): readonly RuntimeStoryResetBoundary[] {
+    const story = this.scene.scene.stories[storyId]
+    if (story === undefined || !story.listen.some((rule) => rule.reset === true)) return []
+    return this.getAllEvents()
+      .filter((event) => this.isStoryResetEvent(storyId, event))
+      .filter((event) => includePersistOnly || event.mode !== 'persist-only')
+      .filter((event) => this.isTrackActive(event.trackId))
+      .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
+      .map((event) => ({ applyAtMs: event.applyAtMs, eventSeq: event.eventSeq }))
+  }
+
   /** Returns every runtime event exactly once in journal storage order. */
   getAllEvents(): readonly RuntimeTrackEvent[] {
     return [...this.eventsByTrack.values()].flatMap((events) => events)
@@ -328,6 +372,9 @@ export class RuntimeTrackJournal {
     includeBoundary = true,
     includePersistOnly = true,
   ): readonly RuntimeTrackEvent[] {
+    const reset = scope === STRAP_SCOPE_STORY && storyId !== undefined
+      ? this.getLatestStoryReset(storyId, timeMs, includeBoundary, includePersistOnly)
+      : undefined
     return this.getAllEvents()
       .filter((event) => event.update !== undefined
         && event.stateScope === scope
@@ -335,6 +382,7 @@ export class RuntimeTrackJournal {
         && this.isTrackActive(event.trackId)
         && (event.applyAtMs < timeMs || (includeBoundary && event.applyAtMs === timeMs))
         && (scope !== STRAP_SCOPE_STORY || event.storyId === storyId))
+      .filter((event) => reset === undefined || isAfterStoryReset(event, reset))
       .sort((left, right) => left.applyAtMs - right.applyAtMs || left.eventSeq - right.eventSeq)
   }
 
@@ -408,6 +456,20 @@ export class RuntimeTrackJournal {
       mode,
     })
   }
+}
+
+/** Tests whether one journal event is a reset trigger for one story. */
+function isStoryResetEvent(
+  rules: readonly CompiledListenRule[],
+  event: RuntimeTrackEvent,
+): boolean {
+  return rules.some((rule) => rule.reset === true && rule.on === event.name)
+}
+
+/** Tests whether one event belongs strictly after a reset boundary. */
+function isAfterStoryReset(event: RuntimeTrackEvent, reset: RuntimeStoryResetBoundary): boolean {
+  return event.applyAtMs > reset.applyAtMs
+    || (event.applyAtMs === reset.applyAtMs && event.eventSeq > reset.eventSeq)
 }
 
 /** Flattens relative runtime eventimes against one absolute anchor. */

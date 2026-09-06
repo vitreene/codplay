@@ -78,6 +78,8 @@ export interface CompiledRecord {
 /** One compiled listen declaration after function extraction. */
 export type CompiledListenRule = Readonly<{
   on: string
+  /** Projects the intercepted event as the initial state of this story. */
+  reset?: boolean
   transform?: readonly CompiledFunctionReference[]
   emit?: readonly CompiledRecord[]
   straps?: readonly string[]

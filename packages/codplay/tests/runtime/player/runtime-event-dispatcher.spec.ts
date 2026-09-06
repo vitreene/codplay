@@ -17,7 +17,7 @@ const scene: CompiledScene = {
     id: 'runtime-dispatcher-scene',
     listen: [{
       on: 'global:start',
-      emit: [{ name: 'global:done', cascade: true }],
+      emit: [{ name: 'global:done', visibility: 'scene' }],
     }],
     tracks: {},
     stories: {
@@ -100,6 +100,69 @@ describe('runtime event dispatch', () => {
     expect(storyCalls).toBe(1)
   })
 
+  it('reports a story reset selected by listen without putting a target in event data', async () => {
+    const resetScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            listen: [{ on: 'navigation:reset', reset: true }],
+          },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(resetScene)
+    const dispatcher = new RuntimeEventDispatcher({ scene: resetScene, journal })
+
+    const result = await dispatcher.dispatch({
+      name: 'navigation:reset',
+      storyId: 'main',
+      applyAtMs: 120,
+      data: { reason: 'keyboard' },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.resetStoryIds).toEqual(['main'])
+    expect(journal.getEvents('main')[0]).toMatchObject({
+      name: 'navigation:reset',
+      storyId: 'main',
+      data: { reason: 'keyboard' },
+    })
+  })
+
+  it('reports a scene-visible story reset without a story target', async () => {
+    const resetScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            listen: [{ on: 'carousel:view:one:reset', reset: true }],
+          },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(resetScene)
+    const dispatcher = new RuntimeEventDispatcher({ scene: resetScene, journal })
+
+    const result = await dispatcher.dispatch({
+      name: 'carousel:view:one:reset',
+      applyAtMs: 120,
+      visibility: 'scene',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.resetStoryIds).toEqual(['main'])
+    expect(journal.getEvents('global')[0]).toMatchObject({
+      name: 'carousel:view:one:reset',
+      storyId: undefined,
+      visibility: 'scene',
+    })
+  })
+
   it('journals source, strap, and recursive listen emissions for replay', async () => {
     let strapCalls = 0
     const journal = new RuntimeTrackJournal(scene)
@@ -165,17 +228,18 @@ describe('runtime event dispatch', () => {
     expect(strapCalls).toBe(1)
   })
 
-  it('cascades global emissions to story materialization without duplicating tracks', async () => {
+  it('routes scene-visible emissions to story materialization without duplicating tracks', async () => {
     const journal = new RuntimeTrackJournal(scene)
     const dispatcher = new RuntimeEventDispatcher({ scene, journal })
 
     const result = await dispatcher.dispatch({ name: 'global:start', applyAtMs: 40 })
 
     expect(result.ok).toBe(true)
-    expect(result.events.map((event) => [event.name, event.trackId, event.cascade])).toEqual([
-      ['global:start', 'global', true],
-      ['global:done', 'global', true],
+    expect(result.events.map((event) => [event.name, event.trackId, event.visibility])).toEqual([
+      ['global:start', 'global', undefined],
+      ['global:done', 'global', 'scene'],
     ])
+    expect(result.events.every((event) => !Object.hasOwn(event, 'cascade'))).toBe(true)
     const resolved = resolveScene(materializeScene(scene, 41, journal))
     expect(resolved.persos['main:root']?.state.className).toEqual(
       expect.stringContaining('global'),

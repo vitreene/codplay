@@ -108,8 +108,37 @@ export class HtmlMotionPresentationHost {
     this.root.removeAttribute('data-codplay-motion-seek')
   }
 
-  /** Releases every transient presentation resource, including overlay DOM. */
-  clearTransientPresentation(): void {
+  /** Releases every or selected transient presentation resource, including overlay DOM. */
+  clearTransientPresentation(itemIds?: ReadonlySet<string>): void {
+    if (itemIds !== undefined) {
+      this.clearHiddenDescendantClones()
+      this.hiddenDescendantKey = ''
+      for (const itemId of itemIds) {
+        const resource = this.resources.get(itemId)
+        if (resource !== undefined) {
+          this.release(resource)
+          this.resources.delete(itemId)
+        }
+        const target = this.localTargets.get(itemId)
+        if (target !== undefined && !this.isLocalTargetStillUsed(itemId, target)) {
+          this.transientStyles.clearLocal(target)
+        }
+        this.localTargets.delete(itemId)
+        this.localSizes.delete(itemId)
+        this.localTransforms.delete(itemId)
+      }
+      for (const state of this.motionRoots.values()) {
+        const overlayOrder = state.overlayOrder.filter((itemId) => !itemIds.has(itemId))
+        state.overlayOrder = overlayOrder
+        if (overlayOrder.length > 0) continue
+        const hasResource = [...this.resources.values()].some((resource) => resource.motionRoot === state.root)
+        if (hasResource) continue
+        removeElement(state.overlayLayer)
+        state.overlayLayer = undefined
+      }
+      this.clearElementPathCache()
+      return
+    }
     this.prepareNaturalCapture()
     for (const resource of this.resources.values()) this.release(resource)
     this.resources.clear()
@@ -122,6 +151,14 @@ export class HtmlMotionPresentationHost {
     }
     this.motionRoots.clear()
     this.clearElementPathCache()
+  }
+
+  /** Checks whether a local target is still used by another presented item. */
+  private isLocalTargetStillUsed(itemId: string, target: HTMLElement): boolean {
+    for (const [otherItemId, otherTarget] of this.localTargets) {
+      if (otherItemId !== itemId && otherTarget === target) return true
+    }
+    return false
   }
 
   /** Applies exactly the source/overlay representation declared by one frame. */

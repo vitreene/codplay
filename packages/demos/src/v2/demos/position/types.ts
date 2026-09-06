@@ -13,6 +13,7 @@ export type PositionPoint = Readonly<{ x: number; y: number }>
 export type CarouselEventNames = Readonly<{
   intro: string
   outro: string
+  reset: string
 }>
 
 /** One move event appended when a story view becomes active. */

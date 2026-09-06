@@ -67,6 +67,27 @@ RuntimePlayer.seek(t)
   le `RuntimeStateStore` est reconcilie depuis la materialisation;
 - Play et Seek consomment le meme `RuntimeTrackJournal`.
 
+## Reset événementiel d’une story
+
+Une règle `listen` portée par une story peut déclarer `reset: true` pour un
+nom d’événement. Lorsque cet événement est adressé à cette story, le
+`RuntimeTrackJournal` conserve l’occurrence et l’utilise comme frontière de
+projection : à cette frontière, la story repart de son état initial, puis les
+faits strictement postérieurs sont rejoués dans l’ordre journalisé.
+
+Un événement de portée `scene`, sans `storyId`, peut également être intercepté
+par toute story dont la règle `reset` correspond exactement à son nom. Cette
+forme sert aux événements diffusés par une scène, notamment lorsqu’un nom
+distinct est émis pour la sortie de chaque story ; elle ne déclenche pas les
+autres règles `listen` des stories et n’ajoute aucune cible à l’événement.
+
+L’événement ne contient aucune cible. L’adresse éventuelle de la story reste
+dans l’argument séparé de l’injection `events.emit()`. Le reset ne rembobine
+pas l’horloge, ne modifie pas `playing`/`paused`, n’efface aucun fait et ne
+touche ni l’état de scène ni les autres stories. Le runner HTML reçoit la
+portée de la frontière pour libérer les ressources motion temporaires de cette
+story sans remonter ses nœuds auteur.
+
 ## Limite du contrat live
 
 Le contrat `live` a evolue pour rester compatible avec `f(t)`. Il ne doit pas etre

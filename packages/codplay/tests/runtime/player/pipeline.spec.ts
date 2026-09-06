@@ -171,6 +171,115 @@ describe('materialize -> resolve -> solve', () => {
     expect(liveActions?.filter((action) => action.eventId !== undefined).map((action) => action.eventSeq)).toEqual([0, 1])
   })
 
+  it('projects one story from its reset boundary without erasing prior facts', () => {
+    const resetScene: CompiledScene = {
+      ...scene,
+      scene: {
+        ...scene.scene,
+        state: { sceneValue: 'kept' },
+        tracks: { main: { active: true }, other: { active: true } },
+        stories: {
+          main: {
+            ...scene.scene.stories.main!,
+            state: { count: 0 },
+            listen: [{ on: 'story:reset', reset: true }],
+            eventimes: [{ name: 'compiled-before-reset', startAt: 15 }],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'initial' },
+              actions: {
+                'old:event': { className: { add: 'old' } },
+                'compiled-before-reset': { className: { add: 'compiled-old' } },
+                'after:event': { className: { add: 'after' } },
+              },
+            }],
+          },
+          other: {
+            id: 'other',
+            state: { untouched: true },
+            listen: [{ on: 'story:reset', reset: true }],
+            persos: [{
+              id: 'root',
+              type: 'tag',
+              initial: { className: 'other-initial' },
+              actions: { 'other:event': { className: { add: 'other-after' } } },
+            }],
+          },
+        },
+      },
+    }
+    const journal = new RuntimeTrackJournal(resetScene)
+    expect(journal.appendLiveEvent({
+      eventId: 'old-state',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'runtime:state:update',
+      applyAtMs: 10,
+      update: { count: 1 },
+      stateScope: STRAP_SCOPE_STORY,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'old-event',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'old:event',
+      applyAtMs: 20,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'reset',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'story:reset',
+      applyAtMs: 50,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'after-state',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'runtime:state:update',
+      applyAtMs: 50,
+      update: { count: 2 },
+      stateScope: STRAP_SCOPE_STORY,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'after-event',
+      trackId: 'main',
+      storyId: 'main',
+      name: 'after:event',
+      applyAtMs: 60,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'other-event',
+      trackId: 'other',
+      storyId: 'other',
+      name: 'other:event',
+      applyAtMs: 60,
+    })).toMatchObject({ ok: true })
+    expect(journal.appendLiveEvent({
+      eventId: 'other-reset',
+      trackId: 'other',
+      storyId: 'other',
+      name: 'story:reset',
+      applyAtMs: 70,
+    })).toMatchObject({ ok: true })
+
+    const beforeReset = resolveScene(materializeScene(resetScene, 40, journal))
+    expect(beforeReset.persos['main:root']?.state.className).toContain('old')
+    expect(materializeScene(resetScene, 40, journal).storyStates.main).toMatchObject({ count: 1 })
+
+    const afterReset = resolveScene(materializeScene(resetScene, 60, journal))
+    expect(afterReset.persos['main:root']?.state.className).toBe('initial after')
+    expect(materializeScene(resetScene, 60, journal).storyStates.main).toMatchObject({ count: 2 })
+    expect(afterReset.persos['other:root']?.state.className).toBe('other-initial other-after')
+    expect(materializeScene(resetScene, 60, journal).sceneState).toMatchObject({ sceneValue: 'kept' })
+    expect(journal.getStoryResetBoundaries('main')).toEqual([{ applyAtMs: 50, eventSeq: 2 }])
+    expect(journal.getStoryResetBoundaries('other')).toEqual([{ applyAtMs: 70, eventSeq: 6 }])
+    expect(journal.getEvents('main').map((event) => event.eventId)).toEqual([
+      'old-state', 'old-event', 'reset', 'after-state', 'after-event',
+    ])
+  })
+
   it('controls declared track activity without creating tracks', () => {
     const journal = new RuntimeTrackJournal(scene)
     const initialRevision = journal.getRevision()

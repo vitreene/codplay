@@ -137,6 +137,43 @@ Les stories sont les branches d’exécution d’une scène.
 | `init?: AuthorFunction` | Non | Fonction d’initialisation de la story. |
 | `disabled?: boolean` | Non | Désactive la story lors de la compilation. Ce marqueur auteur n’est pas conservé comme propriété runtime de la story compilée. |
 
+### Reset événementiel d’une story
+
+Une règle `listen` de story peut déclarer `reset: true` :
+
+```ts
+const story = {
+  id: 'demo',
+  listen: [{ on: 'demo:navigation', reset: true }],
+  persos: [],
+}
+```
+
+Lorsque l’eventime `demo:navigation` est adressé à cette story, CodPlay ajoute
+une frontière au journal à l’instant logique courant et projette cette story
+depuis son état initial. Les faits antérieurs restent dans le journal ; seuls
+les faits strictement postérieurs à la frontière sont repris. L’eventime ne
+contient pas de cible : l’adresse de la story est fournie séparément par
+l’API d’injection :
+
+```ts
+await instance.events.emit(
+  { name: 'demo:navigation' },
+  { scope: 'story', storyId: 'demo' },
+)
+```
+
+Un événement de portée `scene`, sans `storyId`, peut aussi déclencher cette
+capacité lorsqu’une règle de story correspond exactement à son nom. Les
+événements de sortie du carousel peuvent ainsi porter un nom distinct par
+story, sans cible ajoutée à leur contenu.
+
+Ce mécanisme n’est ni une méthode de façade `story.reset()`, ni un remount, ni
+une commande de transport : l’horloge, les autres stories et les nœuds montés
+restent inchangés. Les présentations motion temporaires de la story sont
+retirées par le runner HTML ; un seek antérieur peut toujours relire les faits
+antérieurs.
+
 ## Propriétés d’un `PersoDoc`
 
 Un perso représente une entité pilotée par un composant.
